@@ -73,7 +73,7 @@ hsaKmtCreateQueue(
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	struct queue *q = malloc(sizeof(struct queue));
+	struct queue *q = (struct queue *)malloc(sizeof(*q));
 	if (q == NULL)
 	{
 		return HSAKMT_STATUS_NO_MEMORY;
@@ -89,7 +89,7 @@ hsaKmtCreateQueue(
 	switch (Type)
 	{
 	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
-	case HSA_QUEUE_SDMA: free(q); return HSAKMT_STATUS_NOT_IMPLEMENTED;
+	case HSA_QUEUE_SDMA: args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA; break;
 	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
 	default: free(q); return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
