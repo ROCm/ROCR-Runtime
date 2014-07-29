@@ -18,7 +18,7 @@ CFLAGS += -std=gnu99 -ggdb -pthread -fvisibility=hidden -O2
 LDFLAGS += -lrt -pthread -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER)
 
 OBJS = debug.o globals.o memory.o perfctr.o time.o version.o \
-    events.o openclose.o queues.o topology.o
+    events.o openclose.o queues.o topology.o fmm.o
 
 .PHONY: all lnx lnx64a clean
 

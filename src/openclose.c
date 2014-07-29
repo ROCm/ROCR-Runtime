@@ -30,6 +30,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include "fmm.h"
 
 static const char kfd_device_name[] = "/dev/kfd";
 
@@ -49,7 +50,10 @@ hsaKmtOpenKFD(void)
 		{
 			kfd_fd = fd;
 			kfd_open_count = 1;
-			result = HSAKMT_STATUS_SUCCESS;
+
+			result = fmm_init_process_apertures();
+			if (result != HSAKMT_STATUS_SUCCESS)
+				close(fd);
 		}
 		else
 		{
