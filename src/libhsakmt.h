@@ -67,6 +67,7 @@ uint16_t get_device_id_by_node(HSAuint32 node_id);
 extern int kfd_ioctl(int cmdcode, void* data);
 
 /* Void pointer arithmetic (or remove -Wpointer-arith to allow void pointers arithmetic) */
+#define VOID_PTR_ADD32(ptr,n) (void*)((uint32_t*)(ptr) + n)/*ptr + offset*/
 #define VOID_PTR_ADD(ptr,n) (void*)((uint8_t*)(ptr) + n)/*ptr + offset*/
 #define VOID_PTR_SUB(ptr,n) (void*)((uint8_t*)(ptr) - n)/*ptr - offset*/
 #define VOID_PTRS_SUB(ptr1,ptr2) (uint64_t)((uint8_t*)(ptr1) - (uint8_t*)(ptr2)) /*ptr1 - ptr2*/
