@@ -33,7 +33,29 @@ hsaKmtGetClockCounters(
     HsaClockCounters* Counters //OUT
     )
 {
+	HSAKMT_STATUS result;
+	uint32_t gpu_id;
+	struct kfd_ioctl_get_clock_counters_args args;
+	int err;
+
 	CHECK_KFD_OPEN();
 
-	return HSAKMT_STATUS_NOT_SUPPORTED;
+	result = validate_nodeid(NodeId, &gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	args.gpu_id = gpu_id;
+
+	err = kfd_ioctl(KFD_IOC_GET_CLOCK_COUNTERS, &args);
+	if (err < 0) {
+		result = HSAKMT_STATUS_ERROR;
+	} else {
+		/* At this point the result is already HSAKMT_STATUS_SUCCESS */
+		Counters->GPUClockCounter = args.gpu_clock_counter;
+		Counters->CPUClockCounter = args.cpu_clock_counter;
+		Counters->SystemClockCounter = args.system_clock_counter;
+		Counters->SystemClockFrequencyHz = args.system_clock_freq;
+	}
+
+	return result;
 }
