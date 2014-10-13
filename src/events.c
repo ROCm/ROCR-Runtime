@@ -25,9 +25,17 @@
 
 #include "libhsakmt.h"
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include "linux/kfd_ioctl.h"
+
+static bool IsSystemEventType(HSA_EVENTTYPE type)
+{
+	// Debug events behave as signal events.
+	return (type != HSA_EVENTTYPE_SIGNAL && type != HSA_EVENTTYPE_DEBUG_EVENT);
+}
 
 HSAKMT_STATUS
 HSAKMTAPI
@@ -51,6 +59,30 @@ hsaKmtCreateEvent(
 		return HSAKMT_STATUS_ERROR;
 	}
 
+	memset(e, 0, sizeof(*e));
+
+	struct kfd_ioctl_create_event_args args;
+	memset(&args, 0, sizeof(args));
+
+	args.event_type = EventDesc->EventType;
+	args.auto_reset = !ManualReset;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) == -1)
+		return HSAKMT_STATUS_ERROR;
+
+	e->EventId = args.event_id;
+	e->EventData.HWData1 = args.event_id;
+	e->EventData.HWData2 = args.event_trigger_address;
+	e->EventData.HWData3 = args.event_trigger_data;
+
+	if (IsSignaled && !IsSystemEventType(e->EventData.EventType)) {
+		struct kfd_ioctl_set_event_args set_args;
+		memset(&set_args, 0, sizeof(set_args));
+		set_args.event_id = args.event_id;
+
+		kmtIoctl(kfd_fd, AMDKFD_IOC_SET_EVENT, &set_args);
+	}
+
 	*Event = e;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -64,6 +96,14 @@ hsaKmtDestroyEvent(
 {
 	CHECK_KFD_OPEN();
 
+	struct kfd_ioctl_destroy_event_args args;
+	memset(&args, 0, sizeof(args));
+
+	args.event_id = Event->EventId;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) == -1)
+		return HSAKMT_STATUS_ERROR;
+
 	free(Event);
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -76,6 +116,19 @@ hsaKmtSetEvent(
     )
 {
 	CHECK_KFD_OPEN();
+
+	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
+	if (IsSystemEventType(Event->EventData.EventType))
+		return HSAKMT_STATUS_ERROR;
+
+	struct kfd_ioctl_set_event_args args;
+	memset(&args, 0, sizeof(args));
+
+	args.event_id = Event->EventId;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SET_EVENT, &args) == -1)
+		return HSAKMT_STATUS_ERROR;
+
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -86,6 +139,19 @@ hsaKmtResetEvent(
     )
 {
 	CHECK_KFD_OPEN();
+
+	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
+	if (IsSystemEventType(Event->EventData.EventType))
+		return HSAKMT_STATUS_ERROR;
+
+	struct kfd_ioctl_reset_event_args args;
+	memset(&args, 0, sizeof(args));
+
+	args.event_id = Event->EventId;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_RESET_EVENT, &args) == -1)
+		return HSAKMT_STATUS_ERROR;
+
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -96,6 +162,7 @@ hsaKmtQueryEventState(
     )
 {
 	CHECK_KFD_OPEN();
+
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -106,36 +173,7 @@ hsaKmtWaitOnEvent(
     HSAuint32   Milliseconds    //IN
     )
 {
-	CHECK_KFD_OPEN();
-
-	if (Milliseconds == HSA_EVENTTIMEOUT_INFINITE)
-	{
-		while (1) { pause(); }
-	}
-	else if (Milliseconds != HSA_EVENTTIMEOUT_IMMEDIATE)
-	{
-		struct timespec req;
-
-		req.tv_sec = Milliseconds / 1000;
-		req.tv_nsec = (long)(Milliseconds % 1000) * 1000000;
-
-		while (1)
-		{
-			struct timespec rem;
-
-			int err = nanosleep(&req, &rem);
-			if (err == -1 && errno == EINTR)
-			{
-				req = rem;
-			}
-			else
-			{
-				break; // success or other error
-			}
-		}
-	}
-
-	return HSAKMT_STATUS_WAIT_TIMEOUT;
+	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
 }
 
 HSAKMT_STATUS
@@ -149,5 +187,32 @@ hsaKmtWaitOnMultipleEvents(
 {
 	CHECK_KFD_OPEN();
 
-	return hsaKmtWaitOnEvent(NULL, Milliseconds);
+	uint32_t *event_ids = malloc(NumEvents * sizeof(uint32_t));
+	for (HSAuint32 i = 0; i < NumEvents; i++) {
+		event_ids[i] = Events[i]->EventId;
+	}
+
+	struct kfd_ioctl_wait_events_args args;
+	memset(&args, 0, sizeof(args));
+
+	args.wait_for_all = WaitOnAll;
+	args.timeout = Milliseconds;
+	args.num_events = NumEvents;
+	args.events_ptr = (uint64_t)(uintptr_t)event_ids;
+
+	HSAKMT_STATUS result;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1) {
+		result = HSAKMT_STATUS_ERROR;
+	}
+	else if (args.wait_result == KFD_IOC_WAIT_RESULT_TIMEOUT) {
+		result = HSAKMT_STATUS_WAIT_TIMEOUT;
+	}
+	else {
+		result = HSAKMT_STATUS_SUCCESS;
+	}
+
+	free(event_ids);
+
+	return result;
 }
