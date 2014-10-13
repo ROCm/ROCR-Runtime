@@ -45,8 +45,8 @@
 #define INIT_GPUs_MEM {[0 ... (NUM_OF_SUPPORTED_GPUS-1)] = INIT_GPU_MEM}
 struct vm_object{
 	void* start;
-	HSAuint64 size;
-	HSAuint64 handle; // opaque
+	uint64_t size;
+	uint64_t handle; // opaque
 	struct vm_object* next;
 	struct vm_object* prev;
 };
@@ -74,7 +74,7 @@ typedef struct {
 } aperture_t;
 
 typedef struct{
-	HSAuint32 gpu_id;
+	uint32_t gpu_id;
 	aperture_t lds_aperture;
 	manageble_aperture_t scratch_aperture;
 	manageble_aperture_t gpuvm_aperture;
@@ -183,7 +183,7 @@ static vm_object_t* vm_find_object_by_address(manageble_aperture_t* app, void* a
 
 	// Look up the appropriate address range containing the given address
 	while(cur){
-		if(cur->start == address && cur->size == size)
+		if(cur->start == address && (cur->size == size || size == 0))
 			break;
 		cur = cur->next;
 	};
@@ -213,98 +213,66 @@ static bool aperture_is_valid(void* app_base, void* app_limit){
 /*
  * Assumes that fmm_mutex is locked on entry.
  */
-static int aperture_release(manageble_aperture_t* app, void* address, uint64_t MemorySizeInBytes){
-	int rc = -1;
+static void aperture_release_area(manageble_aperture_t* app, void* address, uint64_t MemorySizeInBytes){
 	vm_area_t* area;
 
 	area = vm_find(app, address);
-	vm_object_t* object = vm_find_object_by_address(app, address, MemorySizeInBytes);
-	if (object && area){
-		vm_remove_object(app, object);
-		if (VOID_PTRS_SUB(area->end, area->start) + 1 > MemorySizeInBytes){ // the size of the released block is less than the size of area
-			if (area->start == address){ // shrink from the start
+	if(area) {
+		if(VOID_PTRS_SUB(area->end, area->start) + 1 > MemorySizeInBytes) { // the size of the released block is less than the size of area
+			if(area->start == address) { // shrink from the start
 				area->start = VOID_PTR_ADD(area->start,MemorySizeInBytes);
-			} else if (VOID_PTRS_SUB(area->end, address) + 1 == MemorySizeInBytes){ // shrink from the end
+			} else if(VOID_PTRS_SUB(area->end, address) + 1 == MemorySizeInBytes) { // shrink from the end
 				area->end = VOID_PTR_SUB(area->end, MemorySizeInBytes);
 			} else { // split the area
 				vm_split_area(app, area, address, MemorySizeInBytes);
 			}
-			rc = 0;
-		} else if (VOID_PTRS_SUB(area->end, area->start) + 1 == MemorySizeInBytes){ // the size of the released block is exactly the same as the size of area
+		} else if(VOID_PTRS_SUB(area->end, area->start) + 1 == MemorySizeInBytes) { // the size of the released block is exactly the same as the size of area
 			vm_remove_area(app, area);
-			rc = 0;
-		} else {
-			//Inconsistent data. Fail it?
-			rc = -1;
 		}
 	}
-
-	return rc;
 }
 
 /*
  * returns allocated address or NULL. Assumes, that fmm_mutex is locked on entry.
  */
-static void* aperture_allocate(manageble_aperture_t* app, uint64_t MemorySizeInBytes){
+static void* aperture_allocate_area(manageble_aperture_t* app, uint64_t MemorySizeInBytes, uint64_t offset){
 	vm_area_t* cur, *next, *new_area, *start;
-	vm_object_t* new_object;
 	void* new_address = NULL;
 	next = NULL;
 	new_area = NULL;
 
 	cur = app->vm_ranges;
-	if (cur){ // not empty
+	if(cur) { // not empty
 
 		// Look up the appropriate address space "hole" or end of the list
-		while(cur){
+		while (cur) {
 			next = cur->next;
 
 			// End of the list reached
-			if (!next)
+			if(!next)
 				break;
 
 			// address space "hole"
-			if ((VOID_PTRS_SUB(next->start,cur->end) >= MemorySizeInBytes))
+			if((VOID_PTRS_SUB(next->start,cur->end) >= MemorySizeInBytes))
 				break;
 
 			cur = next;
 		};
 
 		// If the new range is inside the reserved aperture
-		if (VOID_PTRS_SUB(app->limit, cur->end) + 1 >= MemorySizeInBytes){
+		if(VOID_PTRS_SUB(app->limit, cur->end) + 1 >= MemorySizeInBytes) {
 			// cur points to the last inspected element: the tail of the list or the found "hole"
 			// Just extend the existing region
 			new_address = VOID_PTR_ADD(cur->end, 1);
 			cur->end = VOID_PTR_ADD(cur->end, MemorySizeInBytes);
-		} else
-			new_address = NULL;
+		} else new_address = NULL;
 
 	} else { // empty - create the first area
-		start = (void*)app->base;
+		start = VOID_PTR_ADD(app->base, offset); // Some offset from the base
 		new_area = vm_create_and_init_area(start, VOID_PTR_ADD(start, (MemorySizeInBytes - 1)));
-		if (new_area){
+		if(new_area) {
 			app->vm_ranges = new_area;
 			new_address = new_area->start;
-		}
-	}
-
-	// Allocate new object
-	if (new_address){
-		new_object = vm_create_and_init_object(new_address, MemorySizeInBytes, 0);
-		if (new_object){
-			if (app->vm_objects == NULL){ // empty list
-				// Update head
-				app->vm_objects = new_object;
-			} else {
-				// Add it before the first element
-				vm_add_object_before(app->vm_objects, new_object);
-				// Update head
-				app->vm_objects = new_object;
-			}
-		} else{
-			// Failed to allocate object: remove just allocated range and return NULL
-			aperture_release(app, new_address, MemorySizeInBytes);
-			new_address = NULL;
 		}
 	}
 
@@ -312,6 +280,29 @@ static void* aperture_allocate(manageble_aperture_t* app, uint64_t MemorySizeInB
 
 }
 
+/*
+ * returns 0 on success. Assumes, that fmm_mutex is locked on entry.
+ */
+static int aperture_allocate_object(manageble_aperture_t* app, void* new_address, uint64_t handle, uint64_t MemorySizeInBytes){
+	vm_object_t* new_object;
+
+	// Allocate new object
+	new_object = vm_create_and_init_object(new_address, MemorySizeInBytes, handle);
+	if(!new_object)
+		return -1;
+
+	if(app->vm_objects == NULL ) { // empty list
+		// Update head
+		app->vm_objects = new_object;
+	} else {
+		// Add it before the first element
+		vm_add_object_before(app->vm_objects, new_object);
+		// Update head
+		app->vm_objects = new_object;
+	}
+
+	return 0;
+}
 
 
 static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id){
@@ -387,21 +378,12 @@ void fmm_print(uint32_t gpu_id){
 
 
 void* fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes){
-
-	void* mem = NULL;
-	int32_t i = gpu_mem_find_by_gpu_id(gpu_id);
-
-	// If not found or aperture isn't properly initialized/supported
-	if(i < 0 || !aperture_is_valid(gpu_mem[i].scratch_aperture.base, gpu_mem[i].scratch_aperture.limit))
-		return NULL;
-
-        pthread_mutex_lock(&gpu_mem[i].scratch_aperture.fmm_mutex);
-	mem = aperture_allocate(&gpu_mem[i].scratch_aperture, MemorySizeInBytes);
-        pthread_mutex_unlock(&gpu_mem[i].scratch_aperture.fmm_mutex);
-
-	return mem;
+	// Not supported yet
+	return NULL;
 }
 
+// The offset from GPUVM aperture base address to ensure that address 0 (after base subtraction) won't be used
+#define GPUVM_APP_OFFSET 0x10000
 void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes){
 
 	void* mem = NULL;
@@ -409,37 +391,88 @@ void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes){
 
 	// If not found or aperture isn't properly initialized/supported
 	if(i < 0 || !aperture_is_valid(gpu_mem[i].gpuvm_aperture.base, gpu_mem[i].gpuvm_aperture.limit))
-		return NULL;
+		return NULL ;
 
+	// Allocate address space
 	pthread_mutex_lock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
-	mem = aperture_allocate(&gpu_mem[i].gpuvm_aperture, MemorySizeInBytes);
-        pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+	mem = aperture_allocate_area(&gpu_mem[i].gpuvm_aperture, MemorySizeInBytes, GPUVM_APP_OFFSET);
+	pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
 
 	return mem;
 }
 
+void* fmm_open_graphic_handle(uint32_t gpu_id,
+		int32_t graphic_device_handle,
+		uint32_t graphic_handle,
+		uint64_t MemorySizeInBytes){
 
-int fmm_release(void* address, uint64_t MemorySizeInBytes){
+	void* mem = NULL;
+	int32_t i = gpu_mem_find_by_gpu_id(gpu_id);
+	struct kfd_ioctl_open_graphic_handle_args open_graphic_handle_args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
+
+	// If not found or aperture isn't properly initialized/supported
+	if (i < 0 || !aperture_is_valid(gpu_mem[i].gpuvm_aperture.base, gpu_mem[i].gpuvm_aperture.limit))
+		return NULL;
+
+	pthread_mutex_lock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+	// Allocate address space
+	mem = aperture_allocate_area(&gpu_mem[i].gpuvm_aperture, MemorySizeInBytes, GPUVM_APP_OFFSET);
+	if (!mem)
+		goto out;
+
+	// Allocate local memory
+	open_graphic_handle_args.gpu_id = gpu_id;
+	open_graphic_handle_args.graphic_device_fd = graphic_device_handle;
+	open_graphic_handle_args.graphic_handle = graphic_handle;
+	open_graphic_handle_args.va_addr = VOID_PTRS_SUB(mem, gpu_mem[i].gpuvm_aperture.base);
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_OPEN_GRAPHIC_HANDLE, &open_graphic_handle_args))
+		goto release_area;
+
+	// Allocate object
+	if (aperture_allocate_object(&gpu_mem[i].gpuvm_aperture, mem, open_graphic_handle_args.handle, MemorySizeInBytes))
+		goto release_mem;
+
+	pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+
+	// That's all. Just return the new address
+	return mem;
+
+release_mem:
+	unmap_args.handle = open_graphic_handle_args.handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
+release_area:
+	aperture_release_area(&gpu_mem[i].gpuvm_aperture, mem, MemorySizeInBytes);
+out:
+	pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+
+	return NULL ;
+}
+
+
+void fmm_release(void* address, uint64_t MemorySizeInBytes){
 
 	uint32_t i;
-	int32_t rc = -1;
+	bool found = false;
 
-	for(i = 0; i < NUM_OF_SUPPORTED_GPUS; i++){
+	for (i = 0; i < NUM_OF_SUPPORTED_GPUS && !found; i++) {
 		if(gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 
-		if (address >= gpu_mem[i].gpuvm_aperture.base && address <= gpu_mem[i].gpuvm_aperture.limit){
-	        pthread_mutex_lock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
-			rc = aperture_release(&gpu_mem[i].gpuvm_aperture, address, MemorySizeInBytes);
-	        pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+		if(address >= gpu_mem[i].gpuvm_aperture.base && address <= gpu_mem[i].gpuvm_aperture.limit) {
+			found = true;
+			pthread_mutex_lock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
+			aperture_release_area(&gpu_mem[i].gpuvm_aperture, address, MemorySizeInBytes);
+			pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
 			fmm_print(gpu_mem[i].gpu_id);
-		} else if (address >= gpu_mem[i].scratch_aperture.base && address <= gpu_mem[i].scratch_aperture.limit)
-	        pthread_mutex_lock(&gpu_mem[i].scratch_aperture.fmm_mutex);
-			rc = aperture_release(&gpu_mem[i].scratch_aperture, address, MemorySizeInBytes);
-			pthread_mutex_unlock(&gpu_mem[i].scratch_aperture.fmm_mutex);
+
+		}
 	}
 
-	return rc;
+	// If memory address isn't inside of any defined aperture - it refers to the system memory
+	if (!found) {
+		free(address);
+	}
 }
 
 HSAKMT_STATUS fmm_init_process_apertures(){
@@ -483,4 +516,107 @@ HSAuint64 fmm_get_aperture_base(aperture_type_e aperture_type, HSAuint32 gpu_id)
 		return 0;
 	}
 
+}
+
+
+static bool _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t* aperture, void* address, uint64_t size, uint64_t* gpuvm_address) {
+
+	struct kfd_ioctl_map_memory_to_gpu_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
+
+	// Check that address space was previously reserved
+	if (vm_find(aperture, address) == NULL)
+		return false;
+
+	// Allocate local memory
+	args.gpu_id = gpu_id;
+	args.size = size;
+	args.va_addr = VOID_PTRS_SUB(address, aperture->base); //va_addr is 40 bit GPUVM address
+	if(kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
+		return false;
+
+	// Allocate object
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	if (aperture_allocate_object(aperture, address, args.handle, size))
+		goto err_object_allocation_failed;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	*gpuvm_address = args.va_addr;
+
+	return true;
+
+err_object_allocation_failed:
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	unmap_args.handle = args.handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
+
+	*gpuvm_address = 0;
+	return false;
+}
+
+bool fmm_map_to_gpu(void* address, uint64_t size, uint64_t* gpuvm_address) {
+
+	int32_t i;
+	uint64_t pi;
+
+	// Find an aperture the requested address belongs to
+	for(i = 0; i < NUM_OF_SUPPORTED_GPUS; i++){
+		if(gpu_mem[i].gpu_id != NON_VALID_GPU_ID){
+			if ((address>= gpu_mem[i].gpuvm_aperture.base) && (address<= gpu_mem[i].gpuvm_aperture.limit)) {
+				// map it
+				return _fmm_map_to_gpu(gpu_mem[i].gpu_id, &gpu_mem[i].gpuvm_aperture, address, size, gpuvm_address);
+			}
+		}
+	}
+
+	// If address isn't Local memory address, we assume that this is
+	// system memory address accessed through IOMMU.
+	// Thus we "prefetch" it
+	for(pi = 0; pi < size / PAGE_SIZE; pi++) {
+		((char*)address)[pi*PAGE_SIZE] = 0;
+	}
+	return true;
+}
+
+static bool _fmm_unmap_from_gpu(manageble_aperture_t* aperture, void* address) {
+
+	vm_object_t* object;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+
+	// Find the object to retrieve the handle
+	object = vm_find_object_by_address(aperture, address, 0);
+	if (!object)
+		goto err;
+
+	args.handle = object->handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+
+	vm_remove_object(aperture, object);
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return true;
+
+err:
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return false;
+
+}
+
+bool fmm_unmap_from_gpu(void* address) {
+
+	int32_t i;
+
+	// Find the aperture the requested address belongs to
+	for(i = 0; i < NUM_OF_SUPPORTED_GPUS; i++){
+		if(gpu_mem[i].gpu_id != NON_VALID_GPU_ID){
+			if ((address>= gpu_mem[i].gpuvm_aperture.base) && (address<= gpu_mem[i].gpuvm_aperture.limit)) {
+				// unmap it
+				return _fmm_unmap_from_gpu(&gpu_mem[i].gpuvm_aperture, address);
+			}
+		}
+	}
+
+	return true;
 }

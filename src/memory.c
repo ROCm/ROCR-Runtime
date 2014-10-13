@@ -115,6 +115,13 @@ hsaKmtAllocMemory(
 		else
 			return HSAKMT_STATUS_NO_MEMORY;
 	}
+	else if(!MemFlags.ui32.HostAccess && MemFlags.ui32.NonPaged){
+	    *MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes);
+	    if (*MemoryAddress)
+	        return HSAKMT_STATUS_SUCCESS;
+	    else
+	        return HSAKMT_STATUS_NO_MEMORY;
+	}
 	else
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
@@ -127,17 +134,10 @@ hsaKmtFreeMemory(
     HSAuint64   SizeInBytes         //IN
     )
 {
-	HSAKMT_STATUS hsa_status = HSAKMT_STATUS_SUCCESS;
 	CHECK_KFD_OPEN();
 
-	if (fmm_is_inside_some_aperture(MemoryAddress)){
-		if (fmm_release( MemoryAddress, SizeInBytes))
-			hsa_status = HSAKMT_STATUS_INVALID_PARAMETER;
-	}
-	else
-		free(MemoryAddress);
-
-	return hsa_status;
+	fmm_release( MemoryAddress, SizeInBytes);
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS
@@ -173,13 +173,16 @@ hsaKmtMapMemoryToGPU(
 {
 	CHECK_KFD_OPEN();
 
-	// We don't support GPUVM in the stub, there should never be a request for a GPUVA.
 	if (AlternateVAGPU)
-	{
 		*AlternateVAGPU = 0;
+
+	if (fmm_map_to_gpu(MemoryAddress, MemorySizeInBytes, AlternateVAGPU)){
+		return HSAKMT_STATUS_SUCCESS;
+	}
+	else {
+		return HSAKMT_STATUS_NOT_IMPLEMENTED;
 	}
 
-	return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS
@@ -189,6 +192,56 @@ hsaKmtUnmapMemoryToGPU(
     )
 {
 	CHECK_KFD_OPEN();
+	if (fmm_unmap_from_gpu(MemoryAddress))
+		return HSAKMT_STATUS_SUCCESS;
+	else
+		return HSAKMT_STATUS_NOT_IMPLEMENTED;
 
-	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtMapGraphicHandle(
+                HSAuint32          NodeId,			//IN
+                HSAuint64          GraphicDeviceHandle,		//IN
+                HSAuint64          GraphicResourceHandle,	//IN
+                HSAuint64          GraphicResourceOffset,	//IN
+                HSAuint64          GraphicResourceSize,		//IN
+                HSAuint64*         FlatMemoryAddress            //OUT
+                )
+{
+	CHECK_KFD_OPEN();
+	HSAKMT_STATUS result;
+	uint32_t gpu_id;
+	void *graphic_handle;
+
+	if (GraphicResourceOffset != 0)
+		return HSAKMT_STATUS_NOT_IMPLEMENTED;
+
+	result = validate_nodeid(NodeId, &gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	graphic_handle = fmm_open_graphic_handle(gpu_id,
+						GraphicDeviceHandle,
+						GraphicResourceHandle,
+						GraphicResourceSize);
+
+	*FlatMemoryAddress = PORT_VPTR_TO_UINT64(graphic_handle);
+
+	if (*FlatMemoryAddress)
+		return HSAKMT_STATUS_SUCCESS;
+	else
+		return HSAKMT_STATUS_NO_MEMORY;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtUnmapGraphicHandle(
+                HSAuint32          NodeId,			//IN
+                HSAuint64          FlatMemoryAddress,           //IN
+                HSAuint64 	   SizeInBytes			//IN
+                )
+{
+	return hsaKmtUnmapMemoryToGPU(PORT_UINT64_TO_VPTR(FlatMemoryAddress));
 }
