@@ -411,6 +411,35 @@ hsaKmtUnmapMemoryToGPU(
 
 HSAKMT_STATUS
 HSAKMTAPI
+hsaKmtMapGraphicHandle(
+                HSAuint32          NodeId,                              //IN
+                HSAuint64          GraphicDeviceHandle,                 //IN
+                HSAuint64          GraphicResourceHandle,               //IN
+                HSAuint64          GraphicResourceOffset,               //IN
+                HSAuint64          GraphicResourceSize,                 //IN
+                HSAuint64*         FlatMemoryAddress            //OUT
+                );
+
+
+/**
+  Stub for Unmap Graphic Handle
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtUnmapGraphicHandle(
+                HSAuint32          NodeId,                      //IN
+                HSAuint64          FlatMemoryAddress,           //IN
+                HSAuint64              SizeInBytes              //IN
+                );
+
+
+/**
+  Notifies the kernel driver that a process wants to use GPU debugging facilities
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
 hsaKmtDbgRegister(
     HSAuint32       NodeId      //IN
     );

@@ -40,6 +40,8 @@ hsaKmtPmcReleaseTraceAccess;
 hsaKmtPmcStartTrace;
 hsaKmtPmcQueryTrace;
 hsaKmtPmcStopTrace;
+hsaKmtMapGraphicHandle;
+hsaKmtUnmapGraphicHandle;
 
 local: *;
 };
