@@ -7,3 +7,4 @@
 !.mailmap
 patches-*
 build/
+outgoing/
