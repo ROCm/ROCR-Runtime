@@ -24,6 +24,9 @@
  */
 
 #include "libhsakmt.h"
+#include <stdlib.h>
+#include <string.h>
+#include "linux/kfd_ioctl.h"
 
 HSAKMT_STATUS
 HSAKMTAPI
@@ -33,8 +36,14 @@ hsaKmtGetVersion(
 {
 	CHECK_KFD_OPEN();
 
-	VersionInfo->KernelInterfaceMajorVersion = HSAKMT_VERSION_MAJOR;
-	VersionInfo->KernelInterfaceMinorVersion = HSAKMT_VERSION_MINOR;
+	struct kfd_ioctl_get_version_args args;
+	memset(&args, 0, sizeof(args));
+
+	if (kfd_ioctl(KFD_IOC_GET_VERSION, &args) == -1)
+		return HSAKMT_STATUS_ERROR;
+
+	VersionInfo->KernelInterfaceMajorVersion = args.major_version;
+	VersionInfo->KernelInterfaceMinorVersion = args.minor_version;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
