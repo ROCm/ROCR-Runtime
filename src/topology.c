@@ -52,6 +52,7 @@ static node_t *node = NULL;
 
 static HSAKMT_STATUS topology_take_snapshot(void);
 static HSAKMT_STATUS topology_drop_snapshot(void);
+static int get_cpu_stepping(uint16_t* stepping);
 
 static void
 free_node(node_t *n)
@@ -192,7 +193,9 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	char path[256];
 	long long unsigned int  prop_val;
 	uint32_t i, prog;
+	uint16_t stepping = 0, fw_version = 0;
     int read_size;
+
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
@@ -289,8 +292,8 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 			props->NumSIMDPerCU = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"max_slots_scratch_cu") == 0)
 			props->MaxSlotsScratchCU = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"engine_id") == 0)
-			props->EngineId = (uint32_t)prop_val;
+		else if (strcmp(prop_name,"fw_version") == 0)
+			fw_version = (uint16_t)prop_val;
 		else if (strcmp(prop_name,"vendor_id") == 0)
 			props->VendorId = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"device_id") == 0)
@@ -303,7 +306,11 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 			props->MaxEngineClockMhzCCompute = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"local_mem_size") == 0)
 			props->LocalMemSize = (uint32_t)prop_val;
+
 	}
+
+	get_cpu_stepping(&stepping);
+	props->EngineId = ((stepping << 16) | fw_version);
 
 err2:
 	free(read_buf);
@@ -929,4 +936,42 @@ uint16_t get_device_id_by_node(HSAuint32 node_id)
         return 0;
 
     return node[node_id].node.DeviceId;
+}
+
+static int get_cpu_stepping(uint16_t* stepping)
+{
+	int ret;
+	FILE* fd = fopen("/proc/cpuinfo", "r");
+	if (!fd)
+		return -1;
+
+	char* read_buf = malloc(PAGE_SIZE);
+	if (!read_buf) {
+		ret = -1;
+		goto err1;
+	}
+
+	int read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
+		ret = -2;
+		goto err2;
+	}
+
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if(read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE-1;
+	read_buf[read_size] = 0;
+
+	*stepping = 0;
+
+	char* p = strstr(read_buf, "stepping");
+	if (p)
+		sscanf(p , "stepping\t: %hu\n", stepping);
+
+err2:
+	free(read_buf);
+err1:
+	fclose(fd);
+
+	return ret;
 }
