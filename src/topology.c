@@ -698,6 +698,20 @@ validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 }
 
 HSAKMT_STATUS
+gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id){
+	uint64_t node_idx;
+	for(node_idx = 0; node_idx < system->NumNodes; node_idx++){
+		if (node[node_idx].gpu_id == gpu_id){
+			*node_id = node_idx;
+			return HSAKMT_STATUS_SUCCESS;
+		}
+	}
+
+	return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+}
+
+HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtAcquireSystemProperties(
     HsaSystemProperties*  SystemProperties    //OUT

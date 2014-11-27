@@ -71,6 +71,7 @@ hsaKmtCreateEvent(
 		return HSAKMT_STATUS_ERROR;
 
 	e->EventId = args.event_id;
+	e->EventData.EventType = EventDesc->EventType;
 	e->EventData.HWData1 = args.event_id;
 	e->EventData.HWData2 = args.event_trigger_address;
 	e->EventData.HWData3 = args.event_trigger_data;
@@ -187,9 +188,10 @@ hsaKmtWaitOnMultipleEvents(
 {
 	CHECK_KFD_OPEN();
 
-	uint32_t *event_ids = malloc(NumEvents * sizeof(uint32_t));
+	struct kfd_event_data *event_data = malloc(NumEvents * sizeof(struct kfd_event_data));
 	for (HSAuint32 i = 0; i < NumEvents; i++) {
-		event_ids[i] = Events[i]->EventId;
+		event_data[i].event_id = Events[i]->EventId;
+		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
 	}
 
 	struct kfd_ioctl_wait_events_args args;
@@ -198,7 +200,7 @@ hsaKmtWaitOnMultipleEvents(
 	args.wait_for_all = WaitOnAll;
 	args.timeout = Milliseconds;
 	args.num_events = NumEvents;
-	args.events_ptr = (uint64_t)(uintptr_t)event_ids;
+	args.events_ptr = (uint64_t)(uintptr_t)event_data;
 
 	HSAKMT_STATUS result;
 
@@ -210,9 +212,21 @@ hsaKmtWaitOnMultipleEvents(
 	}
 	else {
 		result = HSAKMT_STATUS_SUCCESS;
+		for (HSAuint32 i = 0; i < NumEvents; i++) {
+			if (Events[i]->EventData.EventType == HSA_EVENTTYPE_MEMORY) {
+				Events[i]->EventData.EventData.MemoryAccessFault.VirtualAddress = event_data[i].memory_exception_data.va;
+				result = gpuid_to_nodeid(event_data[i].memory_exception_data.gpu_id, &Events[i]->EventData.EventData.MemoryAccessFault.NodeId);
+				if (result != HSAKMT_STATUS_SUCCESS)
+					goto out;
+				Events[i]->EventData.EventData.MemoryAccessFault.Failure.NotPresent = event_data[i].memory_exception_data.failure.NotPresent;
+				Events[i]->EventData.EventData.MemoryAccessFault.Failure.ReadOnly = event_data[i].memory_exception_data.failure.ReadOnly;
+				Events[i]->EventData.EventData.MemoryAccessFault.Failure.NoExecute = event_data[i].memory_exception_data.failure.NoExecute;
+				Events[i]->EventData.EventData.MemoryAccessFault.Flags = HSA_EVENTID_MEMORY_FATAL_PROCESS;
+			}
+		}
 	}
-
-	free(event_ids);
+out:
+	free(event_data);
 
 	return result;
 }
