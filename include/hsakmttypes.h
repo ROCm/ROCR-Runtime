@@ -620,6 +620,7 @@ typedef enum _HSA_EVENTTYPE
     HSA_EVENTTYPE_DEBUG_EVENT                = 5, //GPU signal for debugging
     HSA_EVENTTYPE_PROFILE_EVENT              = 6, //GPU signal for profiling
     HSA_EVENTTYPE_QUEUE_EVENT                = 7, //GPU signal queue idle state (EOP pm4)
+    HSA_EVENTTYPE_MEMORY                     = 8, //GPU signal for signaling memory access faults and memory subsystem issues
     //...
     HSA_EVENTTYPE_MAXID,
     HSA_EVENTTYPE_TYPE_SIZE                  = 0xFFFFFFFF
@@ -675,20 +676,54 @@ typedef struct _HsaDeviceStateChange
     HSA_EVENTTYPE_DEVICESTATECHANGE_FLAGS Flags;    // event flags
 } HsaDeviceStateChange;
 
+//
+// Sub-definitions for various event types: Memory exception
+//
+
+typedef enum _HSA_EVENTID_MEMORYFLAGS
+{
+    HSA_EVENTID_MEMORY_RECOVERABLE           = 0, //access fault, recoverable after page adjustment
+    HSA_EVENTID_MEMORY_FATAL_PROCESS         = 1, //memory access requires process context destruction, unrecoverable
+    HSA_EVENTID_MEMORY_FATAL_VM              = 2, //memory access requires all GPU VA context destruction, unrecoverable
+} HSA_EVENTID_MEMORYFLAGS;
+
+typedef struct _HsaAccessAttributeFailure
+{
+    unsigned int NotPresent  : 1;  // Page not present or supervisor privilege 
+    unsigned int ReadOnly    : 1;  // Write access to a read-only page
+    unsigned int NoExecute   : 1;  // Execute access to a page marked NX
+    unsigned int GpuAccess   : 1;  // Host access only
+    unsigned int ECC         : 1;  // ECC failure (if supported by HW)
+    unsigned int Reserved    : 27; // must be 0
+} HsaAccessAttributeFailure;
+
+// data associated with HSA_EVENTID_MEMORY
+typedef struct _HsaMemoryAccessFault
+{
+    HSAuint32                       NodeId;             // H-NUMA node that contains the device where the memory access occurred
+    HSAuint64                       VirtualAddress;     // virtual address this occurred on
+    HsaAccessAttributeFailure	    Failure;            // failure attribute
+    HSA_EVENTID_MEMORYFLAGS         Flags;              // event flags
+} HsaMemoryAccessFault;
 
 typedef struct _HsaEventData
 {
     HSA_EVENTTYPE   EventType;      //event type
+
     union
     {
         // return data associated with HSA_EVENTTYPE_SIGNAL and other events
-        HsaSyncVar        SyncVar;
+        HsaSyncVar              SyncVar;
 
         // data associated with HSA_EVENTTYPE_NODE_CHANGE
-        HsaNodeChange     NodeChangeState;
+        HsaNodeChange           NodeChangeState;
 
         // data associated with HSA_EVENTTYPE_DEVICE_STATE_CHANGE
-        HsaDeviceStateChange DeviceState;
+        HsaDeviceStateChange    DeviceState;
+
+        // data associated with HSA_EVENTTYPE_MEMORY
+        HsaMemoryAccessFault    MemoryAccessFault;
+
     } EventData;
 
     // the following data entries are internal to the KFD & thunk itself.
