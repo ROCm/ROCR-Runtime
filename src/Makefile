@@ -46,7 +46,7 @@ clean:
 	rm -rf $(BUILD_ROOT)
 
 #Rule
-$(BUILDDIR)/%.o: %.c
+$(BUILDDIR)/%.o: %.c ../include/hsakmt.h ../include/hsakmttypes.h ../include/linux/kfd_ioctl.h
 	@echo Compiling $^
 	@mkdir -p $(dir $@)
 	gcc $(CFLAGS) -c $< -o $@
