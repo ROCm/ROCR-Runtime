@@ -26,8 +26,12 @@
 #include "libhsakmt.h"
 #include "linux/kfd_ioctl.h"
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <assert.h>
+#include <sys/types.h>
+#include <sys/mman.h>
+#include <fcntl.h>
 #include "fmm.h"
 
 HSAKMT_STATUS
@@ -97,6 +101,7 @@ hsaKmtAllocMemory(
 	CHECK_KFD_OPEN();
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
+	int err;
 
 	result = validate_nodeid(PreferredNode, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
@@ -108,23 +113,28 @@ hsaKmtAllocMemory(
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
-	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged){
-	    int err = posix_memalign(MemoryAddress, page_size, SizeInBytes);
-		if (err == 0)
-			return HSAKMT_STATUS_SUCCESS;
-		else
+	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged) {
+		err = posix_memalign(MemoryAddress, page_size, SizeInBytes);
+		if (err != 0)
 			return HSAKMT_STATUS_NO_MEMORY;
+		if (MemFlags.ui32.ExecAccess) {
+			err = mprotect(*MemoryAddress, SizeInBytes, PROT_READ | PROT_WRITE | PROT_EXEC);
+			if (err != 0) {
+				free(*MemoryAddress);
+				return err;
+			}
+		}
+		return HSAKMT_STATUS_SUCCESS;
 	}
-	else if(!MemFlags.ui32.HostAccess && MemFlags.ui32.NonPaged){
-	    *MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes);
-	    if (*MemoryAddress)
-	        return HSAKMT_STATUS_SUCCESS;
-	    else
-	        return HSAKMT_STATUS_NO_MEMORY;
-	}
-	else
-		return HSAKMT_STATUS_INVALID_PARAMETER;
 
+	if(!MemFlags.ui32.HostAccess && MemFlags.ui32.NonPaged){
+	    *MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes);
+		if (*MemoryAddress == NULL)
+			return HSAKMT_STATUS_NO_MEMORY;
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	return HSAKMT_STATUS_INVALID_PARAMETER;
 }
 
 HSAKMT_STATUS
