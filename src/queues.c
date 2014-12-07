@@ -94,7 +94,7 @@ struct queue
 {
 	uint32_t queue_id;
 	uint32_t wptr;
-	uint32_t rptr;
+	uint32_t *rptr;
 	void *eop_buffer;
 	void *ctx_save_restore;
 };
@@ -107,6 +107,29 @@ struct process_doorbells
 };
 
 struct process_doorbells doorbells[] = {[0 ... (NUM_OF_SUPPORTED_GPUS-1)] = {.need_mmap = true, .doorbells = NULL, .doorbells_mutex = PTHREAD_MUTEX_INITIALIZER}};
+
+static uint32_t *nc_rptr_page = NULL;
+
+static void* alloc_nc_page(void)
+{
+	void *ptr;
+	if (nc_rptr_page)
+		return nc_rptr_page;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_NC_PAGE_ALLOC, &ptr) == 0) {
+		nc_rptr_page = ptr;
+		return ptr;
+	}
+	return NULL;
+
+}
+
+static void free_nc_page(void *page_addr)
+{
+	if (page_addr)
+		if (kmtIoctl(kfd_fd, AMDKFD_IOC_NC_PAGE_FREE, page_addr) == 0)
+				page_addr = NULL;
+}
 
 static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 {
@@ -227,10 +250,18 @@ hsaKmtCreateQueue(
 	default: free_queue(q); return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
-	if (Type != HSA_QUEUE_COMPUTE_AQL)
-	{
+	if (Type != HSA_QUEUE_COMPUTE_AQL) {
 		QueueResource->QueueRptrValue = (uintptr_t)&q->rptr;
 		QueueResource->QueueWptrValue = (uintptr_t)&q->wptr;
+
+		/* CZ A0 workaround */
+		if (dev_info->eop_buffer_size > 0) {
+			if (alloc_nc_page() == NULL) {
+				free_queue(q);
+				return HSAKMT_STATUS_NO_MEMORY;
+			}
+			QueueResource->Queue_read_ptr = (HSAuint32 *)nc_rptr_page;
+		}
 	}
 
 	args.read_pointer_address = QueueResource->QueueRptrValue;
@@ -249,6 +280,13 @@ hsaKmtCreateQueue(
 	}
 
 	q->queue_id = args.queue_id;
+	if (Type != HSA_QUEUE_COMPUTE_AQL &&
+			dev_info->eop_buffer_size > 0)
+	{
+		q->rptr = &nc_rptr_page[args.queue_id];
+		QueueResource->Queue_read_ptr = (HSAuint32 *)&nc_rptr_page[args.queue_id];
+		*q->rptr = 0;
+	}
 
 	pthread_mutex_lock(&doorbells[NodeId].doorbells_mutex);
 
@@ -335,6 +373,8 @@ hsaKmtDestroyQueue(
 	}
 	else
 	{
+		if (nc_rptr_page != NULL)
+			free_nc_page((void *)nc_rptr_page);
 		free_queue(q);
 		return HSAKMT_STATUS_SUCCESS;
 	}
