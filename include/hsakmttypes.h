@@ -420,7 +420,8 @@ typedef struct _HsaMemFlags
                                           // when setting this entry to 1. Scratch allocation may fail due to limited
                                           // resources. Application code is required to work without any allocation.
                                           // Allocation fails on any node without GPU function.
-            unsigned int Reserved    : 22;
+			unsigned int ExecAccess  : 1;
+			unsigned int Reserved    : 21;
         } ui32;
         HSAuint32 Value;
     };
