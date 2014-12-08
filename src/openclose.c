@@ -33,6 +33,8 @@
 #include "fmm.h"
 
 static const char kfd_device_name[] = "/dev/kfd";
+static const char tmp_file[] = "/var/lock/.amd_hsa_thunk_lock";
+int amd_hsa_thunk_lock_fd = 0;
 
 HSAKMT_STATUS
 HSAKMTAPI
@@ -59,6 +61,11 @@ hsaKmtOpenKFD(void)
 		{
 			result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
 		}
+
+		amd_hsa_thunk_lock_fd = open(tmp_file,
+				O_CREAT | //create the file if it's not present.
+				O_RDWR, //only need write access for the internal locking semantics.
+				S_IRUSR | S_IWUSR); //permissions on the file, 600 here.
 	}
 	else
 	{
@@ -84,6 +91,12 @@ hsaKmtCloseKFD(void)
 		if (--kfd_open_count == 0)
 		{
 			close(kfd_fd);
+
+			if (amd_hsa_thunk_lock_fd > 0) {
+				close(amd_hsa_thunk_lock_fd);
+				unlink(tmp_file);
+			}
+
 		}
 
 		result = HSAKMT_STATUS_SUCCESS;

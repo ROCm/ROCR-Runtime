@@ -27,6 +27,7 @@
 #include "libhsakmt.h"
 #include "pmc_table.h"
 #include "linux/kfd_ioctl.h"
+#include <unistd.h>
 
 #define BITS_PER_BYTE                   CHAR_BIT
 
@@ -42,6 +43,8 @@ struct perf_trace {
     uint32_t  gpu_id;
     enum perf_trace_state state;
 };
+
+extern int amd_hsa_thunk_lock_fd;
 
 static HsaCounterProperties *counter_props[MAX_NODES] = {NULL};
 
@@ -248,7 +251,15 @@ hsaKmtPmcAcquireTraceAccess(
     if (trace->magic4cc != HSA_PERF_MAGIC4CC)
         return HSAKMT_STATUS_INVALID_HANDLE;
 
-    return HSAKMT_STATUS_SUCCESS;
+    if (amd_hsa_thunk_lock_fd > 0) {
+	if (lockf( amd_hsa_thunk_lock_fd, F_TLOCK, 0 ) != 0)
+	    return HSAKMT_STATUS_ERROR;
+	else
+	   return HSAKMT_STATUS_SUCCESS;
+    }
+    else {
+	    return HSAKMT_STATUS_ERROR;
+    }
 }
 
 
@@ -274,7 +285,16 @@ hsaKmtPmcReleaseTraceAccess(
     if (trace->magic4cc != HSA_PERF_MAGIC4CC)
         return HSAKMT_STATUS_INVALID_HANDLE;
 
-    return HSAKMT_STATUS_SUCCESS;
+    if (amd_hsa_thunk_lock_fd > 0) {
+	if (lockf( amd_hsa_thunk_lock_fd, F_ULOCK, 0 ) != 0)
+	    return HSAKMT_STATUS_ERROR;
+	else
+	   return HSAKMT_STATUS_SUCCESS;
+    }
+    else {
+	    return HSAKMT_STATUS_ERROR;
+    }
+
 }
 
 
