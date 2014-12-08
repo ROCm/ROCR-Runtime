@@ -1,6 +1,6 @@
 .PHONY: all clean lnx64a lnx
 
-all: lnx lnx64a
+all: lnx64a
 
 lnx64a:
 	$(MAKE) -C src lnx64a
