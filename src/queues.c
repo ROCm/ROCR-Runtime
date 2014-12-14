@@ -124,11 +124,11 @@ static void* alloc_nc_page(void)
 
 }
 
-static void free_nc_page(void *page_addr)
+static void free_nc_page(void **page_addr)
 {
-	if (page_addr)
-		if (kmtIoctl(kfd_fd, AMDKFD_IOC_NC_PAGE_FREE, page_addr) == 0)
-				page_addr = NULL;
+	if (*page_addr)
+		if (kmtIoctl(kfd_fd, AMDKFD_IOC_NC_PAGE_FREE, *page_addr) == 0)
+				*page_addr = NULL;
 }
 
 static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
@@ -374,7 +374,8 @@ hsaKmtDestroyQueue(
 	else
 	{
 		if (nc_rptr_page != NULL)
-			free_nc_page((void *)nc_rptr_page);
+			free_nc_page((void **)&nc_rptr_page);
+
 		free_queue(q);
 		return HSAKMT_STATUS_SUCCESS;
 	}
