@@ -68,7 +68,7 @@ hsaKmtSetMemoryPolicy(
 	args.alternate_aperture_base = (uintptr_t)MemoryAddressAlternate;
 	args.alternate_aperture_size = MemorySizeInBytes;
 
-	int err = kfd_ioctl(KFD_IOC_SET_MEMORY_POLICY, &args);
+	int err = kfd_ioctl(AMDKFD_IOC_SET_MEMORY_POLICY, &args);
 
 	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 }

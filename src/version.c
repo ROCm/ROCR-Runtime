@@ -39,7 +39,7 @@ hsaKmtGetVersion(
 	struct kfd_ioctl_get_version_args args;
 	memset(&args, 0, sizeof(args));
 
-	if (kfd_ioctl(KFD_IOC_GET_VERSION, &args) == -1)
+	if (kfd_ioctl(AMDKFD_IOC_GET_VERSION, &args) == -1)
 		return HSAKMT_STATUS_ERROR;
 
 	VersionInfo->KernelInterfaceMajorVersion = args.major_version;
