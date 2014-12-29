@@ -446,7 +446,7 @@ HSAKMT_STATUS fmm_init_process_apertures(){
 	struct kfd_ioctl_get_process_apertures_args args;
 	uint8_t node_id;
 
-	if (0 == kfd_ioctl(KFD_IOC_GET_PROCESS_APERTURES, (void*)&args)){
+	if (0 == kfd_ioctl(AMDKFD_IOC_GET_PROCESS_APERTURES, (void*)&args)){
 		for(node_id = 0; node_id < args.num_of_nodes; node_id++){
 			gpu_mem[node_id].gpu_id = args.process_apertures[node_id].gpu_id;
 			gpu_mem[node_id].lds_aperture.base = PORT_UINT64_TO_VPTR(args.process_apertures[node_id].lds_base);

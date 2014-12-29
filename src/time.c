@@ -46,7 +46,7 @@ hsaKmtGetClockCounters(
 
 	args.gpu_id = gpu_id;
 
-	err = kfd_ioctl(KFD_IOC_GET_CLOCK_COUNTERS, &args);
+	err = kfd_ioctl(AMDKFD_IOC_GET_CLOCK_COUNTERS, &args);
 	if (err < 0) {
 		result = HSAKMT_STATUS_ERROR;
 	} else {
