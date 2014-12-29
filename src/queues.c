@@ -107,7 +107,7 @@ hsaKmtCreateQueue(
 	args.queue_percentage = QueuePercentage;
 	args.queue_priority = Priority;
 
-	err = kfd_ioctl(AMDKFD_IOC_CREATE_QUEUE, &args);
+	err = kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
 
 	if (err == -1)
 	{
@@ -166,7 +166,7 @@ hsaKmtUpdateQueue(
 	arg.queue_percentage = QueuePercentage;
 	arg.queue_priority = Priority;
 
-	int err = kfd_ioctl(AMDKFD_IOC_UPDATE_QUEUE, &arg);
+	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_UPDATE_QUEUE, &arg);
 	if (err == -1)
 	{
 		return HSAKMT_STATUS_ERROR;
@@ -193,7 +193,7 @@ hsaKmtDestroyQueue(
 
 	args.queue_id = q->queue_id;
 
-	int err = kfd_ioctl(AMDKFD_IOC_DESTROY_QUEUE, &args);
+	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_QUEUE, &args);
 
 	if (err == -1)
 	{
