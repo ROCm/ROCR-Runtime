@@ -110,8 +110,3 @@ hsaKmtCloseKFD(void)
 
 	return result;
 }
-
-extern int kfd_ioctl(int cmdcode, void* data)
-{
-	return ioctl(kfd_fd, cmdcode, data);
-}
