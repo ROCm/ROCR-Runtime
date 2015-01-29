@@ -190,7 +190,7 @@ hsaKmtMapMemoryToGPU(
 		return HSAKMT_STATUS_SUCCESS;
 	}
 	else {
-		return HSAKMT_STATUS_NOT_IMPLEMENTED;
+		return HSAKMT_STATUS_ERROR;
 	}
 
 }
@@ -205,7 +205,7 @@ hsaKmtUnmapMemoryToGPU(
 	if (fmm_unmap_from_gpu(MemoryAddress))
 		return HSAKMT_STATUS_SUCCESS;
 	else
-		return HSAKMT_STATUS_NOT_IMPLEMENTED;
+		return HSAKMT_STATUS_ERROR;
 
 }
 
