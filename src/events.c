@@ -67,8 +67,11 @@ hsaKmtCreateEvent(
 	args.event_type = EventDesc->EventType;
 	args.auto_reset = !ManualReset;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) == -1)
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
+		free(e);
+		*Event = NULL;
 		return HSAKMT_STATUS_ERROR;
+	}
 
 	e->EventId = args.event_id;
 	e->EventData.EventType = EventDesc->EventType;
@@ -97,13 +100,17 @@ hsaKmtDestroyEvent(
 {
 	CHECK_KFD_OPEN();
 
+	if (!Event)
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
 	struct kfd_ioctl_destroy_event_args args;
 	memset(&args, 0, sizeof(args));
 
 	args.event_id = Event->EventId;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) == -1)
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) != 0) {
 		return HSAKMT_STATUS_ERROR;
+	}
 
 	free(Event);
 
@@ -117,6 +124,9 @@ hsaKmtSetEvent(
     )
 {
 	CHECK_KFD_OPEN();
+
+	if (!Event)
+		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
 	if (IsSystemEventType(Event->EventData.EventType))
@@ -141,6 +151,9 @@ hsaKmtResetEvent(
 {
 	CHECK_KFD_OPEN();
 
+	if (!Event)
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
 	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
 	if (IsSystemEventType(Event->EventData.EventType))
 		return HSAKMT_STATUS_ERROR;
@@ -164,6 +177,9 @@ hsaKmtQueryEventState(
 {
 	CHECK_KFD_OPEN();
 
+	if (!Event)
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -174,6 +190,9 @@ hsaKmtWaitOnEvent(
     HSAuint32   Milliseconds    //IN
     )
 {
+	if (!Event)
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
 	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
 }
 
@@ -187,6 +206,9 @@ hsaKmtWaitOnMultipleEvents(
     )
 {
 	CHECK_KFD_OPEN();
+
+	if (!Events)
+		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	struct kfd_event_data *event_data = malloc(NumEvents * sizeof(struct kfd_event_data));
 	for (HSAuint32 i = 0; i < NumEvents; i++) {
