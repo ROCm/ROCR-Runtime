@@ -117,7 +117,7 @@ hsaKmtAllocMemory(
 		err = posix_memalign(MemoryAddress, page_size, SizeInBytes);
 		if (err != 0)
 			return HSAKMT_STATUS_NO_MEMORY;
-		if (MemFlags.ui32.ExecAccess) {
+		if (MemFlags.ui32.ExecuteAccess) {
 			err = mprotect(*MemoryAddress, SizeInBytes, PROT_READ | PROT_WRITE | PROT_EXEC);
 			if (err != 0) {
 				free(*MemoryAddress);
