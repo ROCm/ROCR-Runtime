@@ -420,7 +420,7 @@ typedef struct _HsaMemFlags
                                           // when setting this entry to 1. Scratch allocation may fail due to limited
                                           // resources. Application code is required to work without any allocation.
                                           // Allocation fails on any node without GPU function.
-	    unsigned int AtomicAccessFull: 1; // default = 0: If set, the memory will be allocated and mapped to allow 
+            unsigned int AtomicAccessFull: 1; // default = 0: If set, the memory will be allocated and mapped to allow 
                                               // atomic ops processing. On AMD APU, this will use the ATC path on system 
                                               // memory, irrespective of the NonPaged flag setting (= if NonPaged is set, 
                                               // the memory is pagelocked but mapped through IOMMUv2 instead of GPUVM). 
@@ -440,6 +440,7 @@ typedef struct _HsaMemFlags
                                            // for executable code (e.g. queue memory) by the host CPU or the device. 
                                            // Influences the page attribute setting within the allocation
             unsigned int Reserved    : 19;
+
         } ui32;
         HSAuint32 Value;
     };
@@ -720,7 +721,7 @@ typedef struct _HsaMemoryAccessFault
 {
     HSAuint32                       NodeId;             // H-NUMA node that contains the device where the memory access occurred
     HSAuint64                       VirtualAddress;     // virtual address this occurred on
-    HsaAccessAttributeFailure	    Failure;            // failure attribute
+    HsaAccessAttributeFailure       Failure;            // failure attribute
     HSA_EVENTID_MEMORYFLAGS         Flags;              // event flags
 } HsaMemoryAccessFault;
 

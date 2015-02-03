@@ -382,7 +382,6 @@ hsaKmtDeregisterMemory(
 
 /**
   Ensures that the memory is resident and can be accessed by GPU
-  Not implemented yet
 */
 
 HSAKMT_STATUS
@@ -395,7 +394,6 @@ hsaKmtMapMemoryToGPU(
 
 /**
   Releases the residency of the memory
-  Not implemented yet
 */
 
 HSAKMT_STATUS
@@ -584,6 +582,20 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtPmcStopTrace(
     HSATraceId  TraceId     //IN
+    );
+
+/**
+  Sets trap handler and trap buffer to be used for all queues associated with the specified NodeId within this process context
+*/
+
+HSAKMT_STATUS 
+HSAKMTAPI 
+hsaKmtSetTrapHandler(
+    HSAuint32           NodeId,                   //IN
+    void*               TrapHandlerBaseAddress,   //IN
+    HSAuint64           TrapHandlerSizeInBytes,   //IN
+    void*               TrapBufferBaseAddress,    //IN
+    HSAuint64           TrapBufferSizeInBytes     //IN
     );
 
 #ifdef __cplusplus
