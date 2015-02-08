@@ -129,6 +129,9 @@ hsaKmtDbgWavefrontControl(
 
 	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
 
+	/* save variable content pointer for kfd */
+	args->content_ptr = (void *)run_ptr;
+
 	/* insert items, and increment pointer accordingly */
 
 	*((HSA_DBG_WAVEOP*)run_ptr)   =  Operand;
@@ -220,10 +223,13 @@ hsaKmtDbgAddressWatch(
 	args->gpu_id = gpu_id;
 	args->buf_size_in_bytes = buff_size;
 
+
 	/* increment pointer to the start of the non fixed part */
 
 	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
 
+	/* save variable content pointer for kfd */
+	args->content_ptr = (void *)run_ptr;
 	/* insert items, and increment pointer accordingly */
 
 	*((HSAuint32*)run_ptr) =  NumWatchPoints;
