@@ -313,13 +313,7 @@ struct kfd_ioctl_open_graphic_handle_args {
 #define AMDKFD_IOC_OPEN_GRAPHIC_HANDLE		\
 		AMDKFD_IOWR(0x13, struct kfd_ioctl_open_graphic_handle_args)
 
-#define AMDKFD_IOC_NC_PAGE_ALLOC		\
-		AMDKFD_IOWR(0x14, unsigned long)
-
-#define AMDKFD_IOC_NC_PAGE_FREE			\
-		AMDKFD_IOWR(0x15, unsigned long)
-
 #define AMDKFD_COMMAND_START			0x01
-#define AMDKFD_COMMAND_END			0x16
+#define AMDKFD_COMMAND_END			0x14
 
 #endif
