@@ -56,8 +56,8 @@ void* fmm_open_graphic_handle(uint32_t gpu_id,
 void fmm_print(uint32_t node);
 bool fmm_is_inside_some_aperture(void* address);
 void fmm_release(void* address, HSAuint64 MemorySizeInBytes);
-bool fmm_map_to_gpu(void* address, uint64_t size, uint64_t* gpuvm_address);
-bool fmm_unmap_from_gpu(void* address);
+int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address);
+int fmm_unmap_from_gpu(void *address);
 
 /* Topology interface*/
 HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);
