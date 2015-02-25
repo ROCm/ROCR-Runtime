@@ -1,0 +1,13 @@
+# Generated Makefile lnx
+
+CAL_DEPTH = ..$(BUILD_DIR_DEPTH)/
+LLVM_DEPTH = ..$(BUILD_DIR_DEPTH)/
+OPENCL_DEPTH = ..$(BUILD_DIR_DEPTH)/../../../..
+SCLIB_DEPTH = ..$(BUILD_DIR_DEPTH)/
+MODULE_DEPTH = ../..$(BUILD_DIR_DEPTH)
+COMPONENT_DEPTH = $(MODULE_DEPTH)
+
+OPENCL_TARGET = lnx
+SCLIB_TARGET = lnx
+
+include $(MODULE_DEPTH)/build/Makefile.BitionicSort
