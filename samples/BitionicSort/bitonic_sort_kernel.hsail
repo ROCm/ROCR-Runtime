@@ -1,0 +1,97 @@
+version 0:20140528:$full:$large;
+extension "amd:gcn";
+extension "IMAGE";
+
+decl prog function &abort()();
+
+prog kernel &__OpenCL_bitonicSort_kernel(
+	kernarg_u64 %__global_offset_0,
+	kernarg_u64 %__global_offset_1,
+	kernarg_u64 %__global_offset_2,
+	kernarg_u64 %__printf_buffer,
+	kernarg_u64 %__vqueue_pointer,
+	kernarg_u64 %__aqlwrap_pointer,
+	kernarg_u64 %theArray,
+	kernarg_u32 %stage,
+	kernarg_u32 %passOfStage,
+	kernarg_u32 %direction)
+{
+	pragma  "AMD RTI", "ARGSTART:__OpenCL_bitonicSort_kernel";
+	pragma  "AMD RTI", "version:3:1:104";
+	pragma  "AMD RTI", "device:generic";
+	pragma  "AMD RTI", "uniqueid:1024";
+	pragma  "AMD RTI", "memory:private:0";
+	pragma  "AMD RTI", "memory:region:0";
+	pragma  "AMD RTI", "memory:local:0";
+	pragma  "AMD RTI", "value:__global_offset_0:u64:1:1:0";
+	pragma  "AMD RTI", "value:__global_offset_1:u64:1:1:16";
+	pragma  "AMD RTI", "value:__global_offset_2:u64:1:1:32";
+	pragma  "AMD RTI", "pointer:__printf_buffer:u8:1:1:48:uav:7:1:RW:0:0:0";
+	pragma  "AMD RTI", "value:__vqueue_pointer:u64:1:1:64";
+	pragma  "AMD RTI", "value:__aqlwrap_pointer:u64:1:1:80";
+	pragma  "AMD RTI", "pointer:theArray:u32:1:1:96:uav:7:4:RW:0:0:0";
+	pragma  "AMD RTI", "value:stage:u32:1:1:112";
+	pragma  "AMD RTI", "constarg:7:stage";
+	pragma  "AMD RTI", "value:passOfStage:u32:1:1:128";
+	pragma  "AMD RTI", "constarg:8:passOfStage";
+	pragma  "AMD RTI", "value:direction:u32:1:1:144";
+	pragma  "AMD RTI", "constarg:9:direction";
+	pragma  "AMD RTI", "function:1:0";
+	pragma  "AMD RTI", "memory:64bitABI";
+	pragma  "AMD RTI", "privateid:8";
+	pragma  "AMD RTI", "enqueue_kernel:0";
+	pragma  "AMD RTI", "kernel_index:0";
+	pragma  "AMD RTI", "reflection:0:size_t";
+	pragma  "AMD RTI", "reflection:1:size_t";
+	pragma  "AMD RTI", "reflection:2:size_t";
+	pragma  "AMD RTI", "reflection:3:size_t";
+	pragma  "AMD RTI", "reflection:4:size_t";
+	pragma  "AMD RTI", "reflection:5:size_t";
+	pragma  "AMD RTI", "reflection:6:uint*";
+	pragma  "AMD RTI", "reflection:7:uint";
+	pragma  "AMD RTI", "reflection:8:uint";
+	pragma  "AMD RTI", "reflection:9:uint";
+	pragma  "AMD RTI", "ARGEND:__OpenCL_bitonicSort_kernel";
+
+@__OpenCL_bitonicSort_kernel_entry:
+	// BB#0:                                // %entry
+	workitemabsid_u32	$s0, 0;
+	cvt_u64_u32	$d0, $s0;
+	ld_kernarg_align(8)_width(all)_u64	$d1, [%__global_offset_0];
+	add_u64	$d0, $d0, $d1;
+	cvt_u32_u64	$s1, $d0;
+	ld_kernarg_align(4)_width(all)_u32	$s2, [%stage];
+	shl_u32	$s0, 1, $s2;
+	and_b32	$s0, $s1, $s0;
+	ld_kernarg_align(4)_width(all)_u32	$s3, [%direction];
+	sub_u32	$s4, 1, $s3;
+	cmp_eq_b1_s32	$c0, $s0, 0;
+	cmov_b32	$s0, $c0, $s3, $s4;
+	ld_kernarg_align(4)_width(all)_u32	$s3, [%passOfStage];
+	sub_u32	$s4, $s2, $s3;
+	shl_u32	$s2, 1, $s4;
+	add_u32	$s3, $s2, 4294967295;
+	and_b32	$s3, $s1, $s3;
+	shr_u32	$s1, $s1, $s4;
+	mul_u32	$s1, $s2, $s1;
+	shl_u32	$s1, $s1, 1;
+	ld_kernarg_align(8)_width(all)_u64	$d1, [%theArray];
+	add_u32	$s3, $s1, $s3;
+	cvt_u64_u32	$d0, $s3;
+	shl_u64	$d0, $d0, 2;
+	add_u64	$d0, $d1, $d0;
+	ld_global_align(4)_u32	$s1, [$d0];
+	add_u32	$s2, $s3, $s2;
+	cvt_u64_u32	$d2, $s2;
+	shl_u64	$d2, $d2, 2;
+	add_u64	$d1, $d1, $d2;
+	ld_global_align(4)_u32	$s3, [$d1];
+	max_u32	$s2, $s1, $s3;
+	min_u32	$s1, $s1, $s3;
+	cmp_eq_b1_s32	$c0, $s0, 0;
+	cmov_b32	$s0, $c0, $s1, $s2;
+	cmov_b32	$s1, $c0, $s2, $s1;
+	st_global_align(4)_u32	$s1, [$d0];
+	st_global_align(4)_u32	$s0, [$d1];
+	ret;
+};
