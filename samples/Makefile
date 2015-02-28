@@ -7,6 +7,7 @@ SUBDIRS += DwtHarr1D
 SUBDIRS += BitionicSort
 SUBDIRS += BinarySearch
 SUBDIRS += BlackScholes
+SUBDIRS += FloydWarshall 
 SUBDIRS += MatrixTranspose
 SUBDIRS += MatrixMultiplication
 
