@@ -1,7 +1,7 @@
 include $(OPENCL_DEPTH)/runtimenew/runtimedefs
 
 # Executable containing all the API core tests
-EXE_TARGET = DwtHarr1D
+EXE_TARGET = BitionicSort
 
 #
 # Makefile construct to copy executable to Dist folder
@@ -77,12 +77,13 @@ LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime/samples/common"
 UTIL_BUILD=build/$(OS_TYPE)/util/$(UTIL_EXT)/$(BUILD_DIR)
 #LLLIBS += $(OPENCL_DEPTH)/runtime/core/$(UTIL_BUILD)/util$(UTIL_EXT)$(LIB_EXT)
 
+LIBELF_DIR=build/$(OS_TYPE)/$(BUILD_DIR)
 RUNTIME_BUILD=build/$(OS_TYPE)/$(CORE_LIB)/$(BUILD_DIR)
 ifdef ATI_OS_LINUX
     GCXXOPTS := $(filter-out -fno-exceptions,$(GCXXOPTS))
     LFLAGS += -L$(DIST_LIB_DEST) -lpthread $(LIBSTDCXX) -lm -ldl -lrt
-    LFLAGS += -L$(OPENCL_PATH)/compiler/lib/$(FULL_BUILD_DIR_OCLHSA) -lamdhsacl$(CMPILERBITS)
-    LFLAGS += -L$(OPENCL_DEPTH)/runtime/core/$(RUNTIME_BUILD) -lhsa-runtime$(LIB_SUFFIX)
+    LFLAGS += -L$(OPENCL_DEPTH)/contrib/elftoolchain/libelf/$(LIBELF_DIR) -lelf
+	LFLAGS += -L$(OPENCL_DEPTH)/runtime/core/$(RUNTIME_BUILD) -lhsa-runtime$(LIB_SUFFIX)
     LFLAGS += -L$(OPENCL_DEPTH)/runtime/tools/$(RUNTIME_BUILD) -lhsa-runtime-tools$(LIB_SUFFIX)
 else
     LLLIBS += $(OPENCL_PATH)/compiler/lib/$(FULL_BUILD_DIR_OCLHSA)/$(LIB_PREFIX)amdhsacl$(CMPILERBITS)$(DYN_LIB_EXT)
