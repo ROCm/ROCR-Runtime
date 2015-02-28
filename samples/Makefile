@@ -6,6 +6,7 @@ SUBDIRS = NBody
 SUBDIRS += DwtHarr1D
 SUBDIRS += BitionicSort
 SUBDIRS += BinarySearch
+SUBDIRS += BlackScholes
 SUBDIRS += MatrixTranspose
 SUBDIRS += MatrixMultiplication
 
