@@ -2,6 +2,11 @@ OPENCL_DEPTH = ../..
 
 include $(OPENCL_DEPTH)/runtimenew/runtimedefs
 
-SUBDIRS = MatrixTranspose MatrixMultiplication DwtHarr1D BitionicSort NBody
+SUBDIRS = NBody
+SUBDIRS += DwtHarr1D
+SUBDIRS += BitionicSort
+SUBDIRS += BinarySearch
+SUBDIRS += MatrixTranspose
+SUBDIRS += MatrixMultiplication
 
 include $(OPENCL_DEPTH)/runtimenew/runtimerules
