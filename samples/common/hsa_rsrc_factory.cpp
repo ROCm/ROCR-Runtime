@@ -12,6 +12,7 @@
 #include "hsa.h"
 #include "elf_utils.h"
 #include "hsa_rsrc_factory.hpp"
+#include "hsa_ext_alt_finalize.h"
 
 using namespace std;
 
@@ -232,7 +233,7 @@ uint8_t* HsaRsrcFactory::AllocateMemory(AgentInfo *agent_info, size_t size) {
 //
 bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
                                      const char *brig_path, char *kernel_name,
-                                     hsa_ext_code_descriptor_t **code_desc) {
+                                     hsa_executable_symbol_t *code_desc) {
 
   // Load BRIG, encapsulated in an ELF container, into a BRIG module.
   status_t build_err;
@@ -245,6 +246,67 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   hsa_ext_brig_code_section_offset32_t kernel_symbol;
   status = hsa_find_symbol_offset(brig_obj, kernel_name, &kernel_symbol);
   check("Error in Finding the Symbol Offset for the Kernel", status);
+
+  // Copy handle of Brig object
+  hsa_ext_alt_module_t brig_module_v3;
+  brig_module_v3.handle = uint64_t(brig_obj);
+  
+  // Create hsail program.
+  hsa_ext_alt_program_t hsailProgram;
+  status = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
+                                         HSA_PROFILE_FULL,
+                                         HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
+                                         NULL, &hsailProgram);
+  check("Error in creating program object", status);
+
+  // Add hsail module.
+  status = hsa_ext_alt_program_add_module(hsailProgram, brig_module_v3);
+  check("Error in adding module to program object", status);
+
+  // Finalize hsail program.
+  hsa_isa_t isa;
+  memset(&isa, 0, sizeof(hsa_isa_t));
+
+  hsa_ext_alt_control_directives_t control_directives;
+  memset(&control_directives, 0, sizeof(hsa_ext_alt_control_directives_t));
+
+  hsa_code_object_t code_object;
+  status = hsa_ext_alt_program_finalize(hsailProgram,
+                                           isa,
+                                           0,
+                                           control_directives,
+                                           NULL, //"-g -O0 -dump-isa",
+                                           HSA_CODE_OBJECT_TYPE_PROGRAM,
+                                           &code_object);
+  check("Error in finalizing program object", status);
+
+  //status = hsa_ext_alt_program_destroy(hsailProgram);
+  //check("Error in destroying program object", status);
+
+  // Create executable.
+  hsa_executable_t hsaExecutable;
+  status = hsa_executable_create(HSA_PROFILE_FULL,
+                          HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
+  check("Error in creating executable object", status);
+
+  // Load code object.
+  status = hsa_executable_load_code_object(hsaExecutable, agent_info->dev_id, code_object, "");
+  check("Error in loading executable object", status);
+
+  // Freeze executable.
+  status = hsa_executable_freeze(hsaExecutable, "");
+  check("Error in freezing executable object", status);
+
+  // Get symbol handle.
+  hsa_executable_symbol_t kernelSymbol;
+  status = hsa_executable_get_symbol(hsaExecutable, "",
+                             kernel_name, agent_info->dev_id, 0, &kernelSymbol);
+  
+  // Update output parameter
+  *code_desc = kernelSymbol;
+  return true;
+
+  /**
 
   // Create Hsa Program
   hsa_ext_program_handle_t program;
@@ -278,6 +340,7 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   check("Error Querying the Kernel Descriptor Address", status);
 
   return true;
+  **/
 }
 
 // Add an instance of AgentInfo representing a Hsa Gpu agent
