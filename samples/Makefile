@@ -11,7 +11,7 @@ SUBDIRS += FloydWarshall
 SUBDIRS += FastWalshTransform
 SUBDIRS += MatrixTranspose
 SUBDIRS += MatrixMultiplication
-#SUBDIRS += MonteCarloAsian
-#SUBDIRS += SimpleConvolution
+SUBDIRS += MonteCarloAsian
+SUBDIRS += SimpleConvolution
 
 include $(OPENCL_DEPTH)/runtimenew/runtimerules
