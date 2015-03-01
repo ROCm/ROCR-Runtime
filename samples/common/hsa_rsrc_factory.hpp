@@ -181,7 +181,7 @@ class HsaRsrcFactory {
   //
   bool LoadAndFinalize(AgentInfo *agent_info,
                        const char *brig_path, char *kernel_name,
-                       hsa_ext_code_descriptor_t **code_desc);
+                       hsa_executable_symbol_t *code_desc);
 
   // Add an instance of AgentInfo representing a Hsa Gpu agent
   void AddAgentInfo(AgentInfo *agent_info);
