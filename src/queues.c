@@ -222,7 +222,7 @@ hsaKmtCreateQueue(
 	switch (Type)
 	{
 	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
-	case HSA_QUEUE_SDMA: args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA; break;
+	case HSA_QUEUE_SDMA: free_queue(q); return HSAKMT_STATUS_UNAVAILABLE;
 	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
 	default: free_queue(q); return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
