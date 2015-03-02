@@ -61,57 +61,70 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	err = (hsa_status_t)create_brig_module_from_brig_file(hsa_brig_file_name, &local_brig_module);
 	check(Creating the brig module from vector_copy.brig, err);
 
-	/*  
-	 * Create hsa program.
-	 */
-	hsa_ext_program_handle_t local_hsa_program;
-	err = hsa_ext_program_create(&device, 1, HSA_EXT_BRIG_MACHINE_LARGE, HSA_EXT_BRIG_PROFILE_FULL, &local_hsa_program);
-	check(Creating the hsa program, err);
+      // Copy handle of Brig object
+      hsa_ext_alt_module_t brig_module_v3;
+      brig_module_v3.handle = uint64_t(local_brig_module);
+      // Create hsail program.
+      hsa_ext_alt_program_t local_hsa_program;
+      err = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
+											 HSA_PROFILE_FULL,
+											 HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
+											 NULL, &local_hsa_program);
+      check("Error in creating program object", err);
+	  
+	// Add hsail module.
+	err = hsa_ext_alt_program_add_module(local_hsa_program, brig_module_v3);
+	check("Error in adding module to program object", err);
 
-	/*  
-	 * Add the BRIG module to hsa program.
-	 */
-	hsa_ext_brig_module_handle_t local_module;
-	err = hsa_ext_add_module(local_hsa_program, local_brig_module, &local_module);
-	check(Adding the local brig module to the program, err);
+	// Finalize hsail program.
+	hsa_isa_t isa;
+	memset(&isa, 0, sizeof(hsa_isa_t));
+	
+	hsa_ext_alt_control_directives_t control_directives;
+	memset(&control_directives, 0, sizeof(hsa_ext_alt_control_directives_t));
+	
+	hsa_code_object_t code_object;
+	err = hsa_ext_alt_program_finalize(local_hsa_program,
+											 isa,
+											 0,
+											 control_directives,
+											 NULL, //"-g -O0 -dump-isa",
+											 HSA_CODE_OBJECT_TYPE_PROGRAM,
+											 &code_object);
+	check("Error in finalizing program object", err);
+	
+	//status = hsa_ext_alt_program_destroy(hsailProgram);
+	//check("Error in destroying program object", status);
+	
+	// Create executable.
+	hsa_executable_t hsaExecutable;
+	err = hsa_executable_create(HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
+	check("Error in creating executable object", err);
+	
+	// Load code object.
+	err = hsa_executable_load_code_object(hsaExecutable, device, code_object, "");
+	check("Error in loading executable object", err);
+	
+	// Freeze executable.
+	err = hsa_executable_freeze(hsaExecutable, "");
+	check("Error in freezing executable object", err);
+	
+	// Get symbol handle.
+	hsa_executable_symbol_t kernelSymbol;
+	err = hsa_executable_get_symbol(hsaExecutable, "",  hsa_kernel_name, device, 0, &kernelSymbol);
+	check("get symbol handle", err);
+	
+	// Get code handle.
+	uint64_t codeHandle;
+	err = hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &codeHandle);
+	check("Get code handle", err);
 
-	/*  
-	 * Construct finalization request list.
-	 */
-	hsa_ext_finalization_request_t local_finalization_request_list;
-	local_finalization_request_list.module = local_module;
-	local_finalization_request_list.program_call_convention = 0;
-	//char kernel_name[128] = "&__OpenCL_matrixTranspose_kernel";
-	err = find_symbol_offset(local_brig_module, hsa_kernel_name, &local_finalization_request_list.symbol);
-	check(Finding the symbol offset for the kernel, err);
-
-	/*  
-	 * Finalize the hsa program.
-	 */
-	err = hsa_ext_finalize_program(local_hsa_program, device, 1, &local_finalization_request_list, NULL, NULL, 0, NULL, 0); 
-	check(Finalizing the program, err);
-
-	/*  
-	 * Destroy the brig module. The program was successfully created the kernel
-	 * symbol was found and the program was finalized, so it is no longer needed.
-	 */
-	destroy_brig_module(local_brig_module);
-
-	/*  
-	 *  Get the hsa code descriptor address.
-	 */
-	hsa_ext_code_descriptor_t *local_hsa_code_descriptor;
-	err = hsa_ext_query_kernel_descriptor_address(local_hsa_program, local_module, local_finalization_request_list.symbol, &local_hsa_code_descriptor);
-	check(Querying the kernel descriptor address, err);
-
-	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	/*
 	 * Create a signal to wait for the dispatch to finish.
 	 */
 	hsa_signal_t local_signal;
 	err=hsa_signal_create(1, 0, NULL, &local_signal);
 	check(Creating a HSA signal, err);
-
 
 	/* Initialize the dispatch packet */
 	hsa_kernel_dispatch_packet_t local_dispatch_packet;
@@ -131,6 +144,7 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	local_dispatch_packet.header |= HSA_PACKET_TYPE_KERNEL_DISPATCH;
 	local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
 	local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+	local_dispatch_packet.kernel_object = codeHandle;
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/*
@@ -144,17 +158,15 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	check(Finding a kernarg memory region, err);
 	void* local_kernel_arg_buffer = NULL;
 
-	size_t local_kernel_arg_buffer_size = local_hsa_code_descriptor->kernarg_segment_byte_size;
-
+       size_t local_kernel_arg_buffer_size;
+	hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
+	
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
 	err = hsa_memory_allocate(local_kernarg_region, local_kernel_arg_buffer_size, &local_kernel_arg_buffer);
 	check(Allocating kernel argument memory buffer, err);
 	memcpy(local_kernel_arg_buffer, kernel_args, kernel_args_size);
-
-	local_dispatch_packet.kernel_object = local_hsa_code_descriptor->code.handle;
-	// Assume our kernel receives no arguments
 	local_dispatch_packet.kernarg_address = local_kernel_arg_buffer;
 
 	/*
@@ -201,9 +213,12 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 
 	err=hsa_signal_destroy(local_signal);
 	check(Destroying the local_signal, err);
+	
+	err = hsa_executable_destroy(hsaExecutable); 
+	check(Destroying the hsaExecutable, err)
 
-	err=hsa_ext_program_destroy(local_hsa_program);
-	check(Destroying the program, err);
+	err = hsa_code_object_destroy(code_object);
+	check(Destroying the code_object, err);
 
 	err=hsa_queue_destroy(local_command_queue);
 	check(Destroying the queue, err);
