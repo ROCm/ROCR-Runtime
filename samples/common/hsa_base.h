@@ -5,6 +5,7 @@
 #include <vector>
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
+#include "hsa_ext_alt_finalize.h"
 #include "elf_utils.h"
 #include "hsatimer.h"
 #include "utilities.h"
