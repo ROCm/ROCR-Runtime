@@ -627,7 +627,7 @@ static void __fmm_release(uint32_t gpu_id, void *address,
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
 	/* Find the object to retrieve the handle */
-	object = vm_find_object_by_address(aperture, address, 0);
+	object = vm_find_object_by_address(aperture, address, MemorySizeInBytes);
 	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return;
@@ -654,7 +654,7 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 		if (address >= gpu_mem[i].gpuvm_aperture.base &&
 			address <= gpu_mem[i].gpuvm_aperture.limit) {
 			found = true;
-			__fmm_release(i, address, MemorySizeInBytes);
+			__fmm_release(gpu_mem[i].gpu_id, address, MemorySizeInBytes);
 			fmm_print(gpu_mem[i].gpu_id);
 		}
 	}
