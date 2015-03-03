@@ -59,19 +59,19 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	//char file_name[128] = "transpose_kernel.brig";
 	hsa_ext_brig_module_t* local_brig_module;
 	err = (hsa_status_t)create_brig_module_from_brig_file(hsa_brig_file_name, &local_brig_module);
-	check(Creating the brig module from vector_copy.brig, err);
+	check(Creating the brig module from the input brig file, err);
 
-      // Copy handle of Brig object
-      hsa_ext_alt_module_t brig_module_v3;
-      brig_module_v3.handle = uint64_t(local_brig_module);
-      // Create hsail program.
-      hsa_ext_alt_program_t local_hsa_program;
-      err = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
-											 HSA_PROFILE_FULL,
-											 HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
-											 NULL, &local_hsa_program);
-      check("Error in creating program object", err);
-	  
+	// Copy handle of Brig object
+	hsa_ext_alt_module_t brig_module_v3;
+	brig_module_v3.handle = uint64_t(local_brig_module);
+	// Create hsail program.
+	hsa_ext_alt_program_t local_hsa_program;
+	err = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
+			HSA_PROFILE_FULL,
+			HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
+			NULL, &local_hsa_program);
+	check("Error in creating program object", err);
+
 	// Add hsail module.
 	err = hsa_ext_alt_program_add_module(local_hsa_program, brig_module_v3);
 	check("Error in adding module to program object", err);
@@ -79,41 +79,41 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	// Finalize hsail program.
 	hsa_isa_t isa;
 	memset(&isa, 0, sizeof(hsa_isa_t));
-	
+
 	hsa_ext_alt_control_directives_t control_directives;
 	memset(&control_directives, 0, sizeof(hsa_ext_alt_control_directives_t));
-	
+
 	hsa_code_object_t code_object;
 	err = hsa_ext_alt_program_finalize(local_hsa_program,
-											 isa,
-											 0,
-											 control_directives,
-											 NULL, //"-g -O0 -dump-isa",
-											 HSA_CODE_OBJECT_TYPE_PROGRAM,
-											 &code_object);
+			isa,
+			0,
+			control_directives,
+			NULL, //"-g -O0 -dump-isa",
+			HSA_CODE_OBJECT_TYPE_PROGRAM,
+			&code_object);
 	check("Error in finalizing program object", err);
-	
+
 	//status = hsa_ext_alt_program_destroy(hsailProgram);
 	//check("Error in destroying program object", status);
-	
+
 	// Create executable.
 	hsa_executable_t hsaExecutable;
 	err = hsa_executable_create(HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
 	check("Error in creating executable object", err);
-	
+
 	// Load code object.
 	err = hsa_executable_load_code_object(hsaExecutable, device, code_object, "");
 	check("Error in loading executable object", err);
-	
+
 	// Freeze executable.
 	err = hsa_executable_freeze(hsaExecutable, "");
 	check("Error in freezing executable object", err);
-	
+
 	// Get symbol handle.
 	hsa_executable_symbol_t kernelSymbol;
 	err = hsa_executable_get_symbol(hsaExecutable, "",  hsa_kernel_name, device, 0, &kernelSymbol);
 	check("get symbol handle", err);
-	
+
 	// Get code handle.
 	uint64_t codeHandle;
 	err = hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &codeHandle);
@@ -158,9 +158,9 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	check(Finding a kernarg memory region, err);
 	void* local_kernel_arg_buffer = NULL;
 
-       size_t local_kernel_arg_buffer_size;
+	size_t local_kernel_arg_buffer_size;
 	hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
-	
+
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
@@ -173,7 +173,7 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	 * Register the memory region for the argument buffer.
 	 */
 	err = hsa_memory_register(kernel_args, kernel_args_size);
-	
+
 	check(Registering the argument buffer, err);
 
 	/*	
@@ -191,11 +191,11 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	 * Increment the write index and ring the doorbell to dispatch the kernel.
 	 */
 	hsa_queue_store_write_index_relaxed(local_command_queue, index+1);
-	
+
 #ifdef TIME
-	 PerfTimer perf_timer_0;
-	 int timer_idx_0 = perf_timer_0.CreateTimer();
-        perf_timer_0.StartTimer(timer_idx_0);
+	PerfTimer perf_timer_0;
+	int timer_idx_0 = perf_timer_0.CreateTimer();
+	perf_timer_0.StartTimer(timer_idx_0);
 #endif
 	hsa_signal_store_release(local_command_queue->doorbell_signal, index);
 
@@ -213,11 +213,11 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 
 	err=hsa_signal_destroy(local_signal);
 	check(Destroying the local_signal, err);
-	
+
 	err = hsa_executable_destroy(hsaExecutable); 
 	check(Destroying the hsaExecutable, err)
 
-	err = hsa_code_object_destroy(code_object);
+		err = hsa_code_object_destroy(code_object);
 	check(Destroying the code_object, err);
 
 	err=hsa_queue_destroy(local_command_queue);
