@@ -14,6 +14,9 @@
 #include "hsa_rsrc_factory.hpp"
 #include "hsa_ext_alt_finalize.h"
 
+#include "hsailUtil/assemble.hpp"
+#include "hsailUtil/common.hpp"
+
 using namespace std;
 
 // Provide access to command line arguments passed in by user
@@ -236,6 +239,7 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
                                      hsa_executable_symbol_t *code_desc) {
 
   // Load BRIG, encapsulated in an ELF container, into a BRIG module.
+  /*
   status_t build_err;
   hsa_ext_brig_module_t *brig_obj;
   build_err = (status_t)create_brig_module_from_brig_file(brig_path, &brig_obj);
@@ -246,12 +250,15 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   hsa_ext_brig_code_section_offset32_t kernel_symbol;
   status = hsa_find_symbol_offset(brig_obj, kernel_name, &kernel_symbol);
   check("Error in Finding the Symbol Offset for the Kernel", status);
+  */
 
   // Copy handle of Brig object
   hsa_ext_alt_module_t brig_module_v3;
-  brig_module_v3.handle = uint64_t(brig_obj);
+  ModuleCreateFromHsailTextFile(brig_path, &brig_module_v3);
+  //brig_module_v3.handle = uint64_t(brig_obj);
   
   // Create hsail program.
+  hsa_status_t status;
   hsa_ext_alt_program_t hsailProgram;
   status = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
                                          HSA_PROFILE_FULL,
