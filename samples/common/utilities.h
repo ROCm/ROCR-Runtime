@@ -6,7 +6,6 @@
 
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
-#include "elf_utils.h"
 
 #include <string.h>
 #include<iostream>
@@ -190,7 +189,8 @@ hsa_status_t get_global_region(hsa_region_t region, void* data);
  * If the symbol is found the function returns HSA_STATUS_SUCCESS, 
  * otherwise it returns HSA_STATUS_ERROR.
  */
-hsa_status_t find_symbol_offset(hsa_ext_brig_module_t* brig_module, char* symbol_name, hsa_ext_brig_code_section_offset32_t* offset);
+ 
+//hsa_status_t find_symbol_offset(hsa_ext_brig_module_t* brig_module, char* symbol_name, hsa_ext_brig_code_section_offset32_t* offset);
 
 /*
  * Determines if the given agent is of type HSA_DEVICE_TYPE_GPU

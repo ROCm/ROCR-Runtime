@@ -22,7 +22,9 @@
 
 #define check(msg, status) \
 if (status != HSA_STATUS_SUCCESS) { \
-    printf("%s\n", msg); \
+    const char *emsg = 0; \
+    hsa_status_string(status, &emsg); \
+    printf("%s: %s\n", msg, emsg ? emsg : "<unknown error>"); \
     exit(1); \
 }
 

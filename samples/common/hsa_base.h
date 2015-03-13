@@ -5,8 +5,6 @@
 #include <vector>
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
-#include "hsa_ext_alt_finalize.h"
-#include "elf_utils.h"
 #include "hsatimer.h"
 #include "utilities.h"
 
@@ -14,14 +12,15 @@ class HSA{
     public:
 	    HSA();
 	    ~HSA();
-
+#if 0
 	public:
 	    void SetBrigFileAndKernelName(char *brig_file_name, char *kernel_name);
 	    bool HsaInit();
         void Close();
 	double Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size);
-
+#endif
 	public:
+		#if 0
 		hsa_status_t err;
 		uint32_t queue_size;
 		hsa_agent_t device;
@@ -37,6 +36,7 @@ class HSA{
 		hsa_ext_code_descriptor_t *hsa_code_descriptor;
 		hsa_kernel_dispatch_packet_t dispatch_packet; // needs to be set manually each time	
 		hsa_region_t hsa_kernarg_region;
+		#endif
 };
 
 
