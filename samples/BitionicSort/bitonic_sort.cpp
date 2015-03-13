@@ -196,10 +196,12 @@ void BitonicSort::SetStages(uint num_of_stage, uint pass_of_stage)
 
 int main(int argc, char *argv[])
 {
-	char file_name[128] = "bitonic_sort_kernel.brig";
+	//char file_name[128] = "bitonic_sort_kernel.brig";
+	char file_name[128] = "bitonic_sort_kernel.hsail";
 	char kernel_name[128] = "&__OpenCL_bitonicSort_kernel";
 	BitonicSort bitonic;
-	bitonic.SetBrigFileAndKernelName(file_name, kernel_name);
+	//bitonic.SetBrigFileAndKernelName(file_name, kernel_name);
+	bitonic.GetHsailNameAndKernelName(file_name, kernel_name);
 	bitonic.InitlizeData();
 	bitonic.HsaInit();
 

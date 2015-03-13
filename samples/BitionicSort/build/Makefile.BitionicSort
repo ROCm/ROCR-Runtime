@@ -1,4 +1,5 @@
-include $(OPENCL_DEPTH)/runtimenew/runtimedefs
+include $(OPENCL_DEPTH)/hsadefs
+
 
 # Executable containing all the API core tests
 EXE_TARGET = BitionicSort
@@ -52,14 +53,18 @@ ifdef ATI_OS_LINUX
     GCXXOPTS := $(filter-out -fno-rtti,$(GCXXOPTS))
     GCXXOPTS := $(filter-out -fno-exceptions,$(GCXXOPTS))
     LFLAGS += -L$(DIST_LIB_DEST) -lpthread $(LIBSTDCXX) -lm -ldl -lrt -lstdc++ 
+    #LFLAGS += -L$(DIST_LIB_DEST) -lpthread $(LIBSTDCXX) -lm -ldl -lrt
 endif
 
 #LCINCS := $(INCSWITCH) "$(OPENCL_DEPTH)/contrib/gtest-1.6.0/include"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime"
+LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime/samples"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/contrib/elftoolchain/libelf"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/contrib/elftoolchain/common"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime/inc"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/compiler/finalizer/Interface"
+LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/compiler/finalizer/HSAIL/hsail-tools/libHSAIL"
+LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/$(FULL_BUILD_DIR)"
 LCINCS += $(INCSWITCH) "$(OPENCL_PATH)/compiler/lib/include"
 LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime/samples/common"
 
@@ -77,20 +82,23 @@ LCINCS += $(INCSWITCH) "$(OPENCL_DEPTH)/runtime/samples/common"
 UTIL_BUILD=build/$(OS_TYPE)/util/$(UTIL_EXT)/$(BUILD_DIR)
 #LLLIBS += $(OPENCL_DEPTH)/runtime/core/$(UTIL_BUILD)/util$(UTIL_EXT)$(LIB_EXT)
 
+
 LIBELF_DIR=build/$(OS_TYPE)/$(BUILD_DIR)
 RUNTIME_BUILD=build/$(OS_TYPE)/$(CORE_LIB)/$(BUILD_DIR)
 ifdef ATI_OS_LINUX
     GCXXOPTS := $(filter-out -fno-exceptions,$(GCXXOPTS))
     LFLAGS += -L$(DIST_LIB_DEST) -lpthread $(LIBSTDCXX) -lm -ldl -lrt
     LFLAGS += -L$(OPENCL_DEPTH)/contrib/elftoolchain/libelf/$(LIBELF_DIR) -lelf
-	LFLAGS += -L$(OPENCL_DEPTH)/runtime/core/$(RUNTIME_BUILD) -lhsa-runtime$(LIB_SUFFIX)
+    LFLAGS += -L$(OPENCL_DEPTH)/runtime/core/$(RUNTIME_BUILD) -lhsa-runtime$(LIB_SUFFIX)
     LFLAGS += -L$(OPENCL_DEPTH)/runtime/tools/$(RUNTIME_BUILD) -lhsa-runtime-tools$(LIB_SUFFIX)
+    LLLIBS = $(OPENCL_DEPTH)/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/$(FULL_BUILD_DIR)/libhsail$(LIB_EXT)
 else
-    LLLIBS += $(OPENCL_PATH)/compiler/lib/$(FULL_BUILD_DIR_OCLHSA)/$(LIB_PREFIX)amdhsacl$(CMPILERBITS)$(DYN_LIB_EXT)
+		# Verify the extension of libelf is valid i.e. is not dll but instead is "lib"
+    #LLLIBS += -L$(OPENCL_DEPTH)/contrib/elftoolchain/libelf/$(LIBELF_DIR)/libelf
     LLLIBS += $(OPENCL_DEPTH)/runtime/core/$(RUNTIME_BUILD)/hsa-runtime$(LIB_SUFFIX)$(LIB_EXT)
     LLLIBS += $(OPENCL_DEPTH)/runtime/tools/$(RUNTIME_BUILD)/hsa-runtime-tools$(LIB_SUFFIX)$(LIB_EXT)
 endif
 
 
-include $(OPENCL_DEPTH)/runtimenew/runtimerules
+include $(OPENCL_DEPTH)/hsarules
 
