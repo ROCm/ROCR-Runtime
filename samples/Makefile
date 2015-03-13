@@ -3,7 +3,7 @@ OPENCL_DEPTH = ../..
 include $(OPENCL_DEPTH)/hsadefs
 
 SUBDIRS = NBody
-#SUBDIRS += DwtHarr1D
+SUBDIRS += DwtHarr1D
 SUBDIRS += BitionicSort
 SUBDIRS += BinarySearch
 SUBDIRS += BlackScholes
