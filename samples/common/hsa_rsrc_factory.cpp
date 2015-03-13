@@ -10,9 +10,11 @@
 #include <string>
 
 #include "hsa.h"
-#include "elf_utils.h"
 #include "hsa_rsrc_factory.hpp"
-#include "hsa_ext_alt_finalize.h"
+#include "hsa_ext_finalize.h"
+
+#include "assemble.hpp"
+#include "common.hpp"
 
 using namespace std;
 
@@ -69,40 +71,6 @@ static hsa_status_t get_gpu_agents(hsa_agent_t agent, void *data) {
   // Save the instance of AgentInfo
   rsrcFactory->AddAgentInfo(agent_info);
   return HSA_STATUS_SUCCESS;
-}
-
-// Finds the specified symbols offset in the specified brig_module.
-// If the symbol is found the function returns HSA_STATUS_SUCCESS, 
-// otherwise it returns HSA_STATUS_ERROR.
-hsa_status_t hsa_find_symbol_offset(hsa_ext_brig_module_t *brig_module, 
-                                    char *symbol_name,
-                                    hsa_ext_brig_code_section_offset32_t *offset) {
-  
-  // Get the data section 
-  hsa_ext_brig_section_header_t *data_hdr = brig_module->section[HSA_EXT_BRIG_SECTION_DATA];
-  
-  // Get the code section
-  hsa_ext_brig_section_header_t* code_hdr = brig_module->section[HSA_EXT_BRIG_SECTION_CODE];
-
-  // First entry into the BRIG code section
-  BrigCodeOffset32_t code_offset = code_hdr->header_byte_count;
-  BrigBase* code_entry = (BrigBase*) ((char*)code_hdr + code_offset);
-  while (code_offset != code_hdr->byte_count) {
-    if (code_entry->kind == BRIG_KIND_DIRECTIVE_KERNEL) {
-
-      // Now find the data in the data section
-      BrigDirectiveExecutable* directive_kernel = (BrigDirectiveExecutable*) (code_entry);
-      BrigDataOffsetString32_t data_name_offset = directive_kernel->name;
-      BrigData* data_entry = (BrigData*)((char*) data_hdr + data_name_offset);
-      if (!strncmp(symbol_name, (char*) data_entry->bytes, strlen(symbol_name))) {
-        *offset = code_offset;
-        return HSA_STATUS_SUCCESS;
-      }
-    }
-    code_offset += code_entry->byteCount;
-    code_entry = (BrigBase*) ((char*)code_hdr + code_offset);
-  }
-  return HSA_STATUS_ERROR;
 }
 
 // Definitions for Static Data members of the class
@@ -235,7 +203,9 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
                                      const char *brig_path, char *kernel_name,
                                      hsa_executable_symbol_t *code_desc) {
 
+  hsa_status_t status;
   // Load BRIG, encapsulated in an ELF container, into a BRIG module.
+  /*
   status_t build_err;
   hsa_ext_brig_module_t *brig_obj;
   build_err = (status_t)create_brig_module_from_brig_file(brig_path, &brig_obj);
@@ -246,32 +216,36 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   hsa_ext_brig_code_section_offset32_t kernel_symbol;
   status = hsa_find_symbol_offset(brig_obj, kernel_name, &kernel_symbol);
   check("Error in Finding the Symbol Offset for the Kernel", status);
+  */
 
   // Copy handle of Brig object
-  hsa_ext_alt_module_t brig_module_v3;
-  brig_module_v3.handle = uint64_t(brig_obj);
+  hsa_ext_module_t brig_module_v3;
+  status = ModuleCreateFromHsailTextFile(brig_path, &brig_module_v3);
+  check("Error in creating module from hsail text", status);
   
   // Create hsail program.
-  hsa_ext_alt_program_t hsailProgram;
-  status = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
+  hsa_ext_program_t hsailProgram;
+  status = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE,
                                          HSA_PROFILE_FULL,
                                          HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
                                          NULL, &hsailProgram);
   check("Error in creating program object", status);
 
   // Add hsail module.
-  status = hsa_ext_alt_program_add_module(hsailProgram, brig_module_v3);
+  status = hsa_ext_program_add_module(hsailProgram, brig_module_v3);
   check("Error in adding module to program object", status);
 
   // Finalize hsail program.
-  hsa_isa_t isa;
-  memset(&isa, 0, sizeof(hsa_isa_t));
+  hsa_isa_t isa = {0};
+  status = hsa_agent_get_info(agent_info->dev_id, HSA_AGENT_INFO_ISA, &isa);
+  std::cout << "Value of device Isa Id: " << isa.handle << std::endl;
+  check("Error in getting Id of Isa supported by agent", status);
 
-  hsa_ext_alt_control_directives_t control_directives;
-  memset(&control_directives, 0, sizeof(hsa_ext_alt_control_directives_t));
+  hsa_ext_control_directives_t control_directives;
+  memset(&control_directives, 0, sizeof(hsa_ext_control_directives_t));
 
   hsa_code_object_t code_object;
-  status = hsa_ext_alt_program_finalize(hsailProgram,
+  status = hsa_ext_program_finalize(hsailProgram,
                                            isa,
                                            0,
                                            control_directives,
@@ -280,7 +254,7 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
                                            &code_object);
   check("Error in finalizing program object", status);
 
-  //status = hsa_ext_alt_program_destroy(hsailProgram);
+  //status = hsa_ext_program_destroy(hsailProgram);
   //check("Error in destroying program object", status);
 
   // Create executable.

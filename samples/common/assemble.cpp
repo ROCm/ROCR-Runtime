@@ -8,11 +8,12 @@
 #include <utility>
 #include "assemble.hpp"
 #include "hsa.h"
-#include "hsa_ext_alt_finalize.h"
+#include "hsa_ext_finalize.h"
 #include "HSAILDisassembler.h"
 #include "HSAILParser.h"
 #include "HSAILScanner.h"
 #include "HSAILValidator.h"
+#include "HSAILBrigObjectFile.h"
 
 namespace {
   std::unordered_map<uint64_t, uint64_t> mod2con;
@@ -20,7 +21,7 @@ namespace {
 
 hsa_status_t ModuleCreateFromHsailTextFile(
   const char *hsail_text_filename,
-  hsa_ext_alt_module_t *module
+  hsa_ext_module_t *module
 ) {
   if (!hsail_text_filename) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -41,9 +42,28 @@ hsa_status_t ModuleCreateFromHsailTextFile(
   return ModuleCreateFromHsailString(hsail_string.c_str(), module);
 }
 
+hsa_status_t ModuleCreateFromBrigFile(
+  const char *filename,
+  hsa_ext_module_t *module
+) {
+  HSAIL_ASM::BrigContainer *brig_container = new HSAIL_ASM::BrigContainer;
+  std::stringstream ss;
+  int rc = HSAIL_ASM::BrigIO::load(*brig_container, HSAIL_ASM::FILE_FORMAT_AUTO, HSAIL_ASM::BrigIO::fileReadingAdapter(filename, ss));
+  if (rc != 0) { return static_cast<hsa_status_t>(HSA_EXT_STATUS_ERROR_INVALID_MODULE); }
+  auto insert_status = mod2con.insert(
+    std::make_pair<uint64_t, uint64_t>(
+      reinterpret_cast<uint64_t>(brig_container->getBrigModule()),
+      reinterpret_cast<uint64_t>(brig_container)
+    )
+  );
+  assert(insert_status.second);
+  module->handle = reinterpret_cast<uint64_t>(brig_container->getBrigModule());
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t ModuleCreateFromHsailString(
   const char *hsail_string,
-  hsa_ext_alt_module_t *module
+  hsa_ext_module_t *module
 ) {
   if (!hsail_string || !module) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -63,7 +83,7 @@ hsa_status_t ModuleCreateFromHsailString(
     hsail_parser.parseSource();
   } catch (const SyntaxError) {
     delete brig_container;
-    return static_cast<hsa_status_t>(HSA_EXT_ALT_STATUS_ERROR_INVALID_MODULE);
+    return static_cast<hsa_status_t>(HSA_EXT_STATUS_ERROR_INVALID_MODULE);
   }
 
   try {
@@ -84,11 +104,11 @@ hsa_status_t ModuleCreateFromHsailString(
 }
 
 hsa_status_t ModuleDestroy(
-  hsa_ext_alt_module_t module
+  hsa_ext_module_t module
 ) {
   auto find_status = mod2con.find(module.handle);
   if (find_status == mod2con.end()) {
-    return static_cast<hsa_status_t>(HSA_EXT_ALT_STATUS_ERROR_INVALID_MODULE);
+    return static_cast<hsa_status_t>(HSA_EXT_STATUS_ERROR_INVALID_MODULE);
   }
 
   HSAIL_ASM::BrigContainer *brig_container =
@@ -101,7 +121,7 @@ hsa_status_t ModuleDestroy(
 }
 
 hsa_status_t ModuleValidate(
-  hsa_ext_alt_module_t module,
+  hsa_ext_module_t module,
   uint32_t *result
 ) {
   if (!result) {
@@ -110,7 +130,7 @@ hsa_status_t ModuleValidate(
 
   auto find_status = mod2con.find(module.handle);
   if (find_status == mod2con.end()) {
-    return static_cast<hsa_status_t>(HSA_EXT_ALT_STATUS_ERROR_INVALID_MODULE);
+    return static_cast<hsa_status_t>(HSA_EXT_STATUS_ERROR_INVALID_MODULE);
   }
 
   HSAIL_ASM::BrigContainer *brig_container =
@@ -123,7 +143,7 @@ hsa_status_t ModuleValidate(
 }
 
 hsa_status_t ModuleDisassemble(
-  hsa_ext_alt_module_t module,
+  hsa_ext_module_t module,
   const char *hsail_text_filename
 ) {
   if (!hsail_text_filename) {
@@ -132,7 +152,7 @@ hsa_status_t ModuleDisassemble(
 
   auto find_status = mod2con.find(module.handle);
   if (find_status == mod2con.end()) {
-    return static_cast<hsa_status_t>(HSA_EXT_ALT_STATUS_ERROR_INVALID_MODULE);
+    return static_cast<hsa_status_t>(HSA_EXT_STATUS_ERROR_INVALID_MODULE);
   }
 
   HSAIL_ASM::BrigContainer *brig_container =

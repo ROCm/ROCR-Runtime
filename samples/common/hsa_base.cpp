@@ -1,10 +1,12 @@
 #include "hsa_base.h"
 
+#if 0
 void HSA::SetBrigFileAndKernelName(char * brig_file_name, char *kernel_name)
 {
 	strcpy(hsa_brig_file_name, brig_file_name);
 	strcpy(hsa_kernel_name, kernel_name);
 }
+#endif
 
 HSA::HSA()
 {
@@ -16,7 +18,7 @@ HSA::~HSA()
 
 }
 
-
+#if 0
 bool HSA::HsaInit()
 {
 	err = hsa_init();
@@ -62,29 +64,29 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	check(Creating the brig module from the input brig file, err);
 
 	// Copy handle of Brig object
-	hsa_ext_alt_module_t brig_module_v3;
+	hsa_ext_module_t brig_module_v3;
 	brig_module_v3.handle = uint64_t(local_brig_module);
 	// Create hsail program.
-	hsa_ext_alt_program_t local_hsa_program;
-	err = hsa_ext_alt_program_create(HSA_MACHINE_MODEL_LARGE,
+	hsa_ext_program_t local_hsa_program;
+	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE,
 			HSA_PROFILE_FULL,
 			HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO,
 			NULL, &local_hsa_program);
 	check("Error in creating program object", err);
 
 	// Add hsail module.
-	err = hsa_ext_alt_program_add_module(local_hsa_program, brig_module_v3);
+	err = hsa_ext_program_add_module(local_hsa_program, brig_module_v3);
 	check("Error in adding module to program object", err);
 
 	// Finalize hsail program.
 	hsa_isa_t isa;
 	memset(&isa, 0, sizeof(hsa_isa_t));
 
-	hsa_ext_alt_control_directives_t control_directives;
-	memset(&control_directives, 0, sizeof(hsa_ext_alt_control_directives_t));
+	hsa_ext_control_directives_t control_directives;
+	memset(&control_directives, 0, sizeof(hsa_ext_control_directives_t));
 
 	hsa_code_object_t code_object;
-	err = hsa_ext_alt_program_finalize(local_hsa_program,
+	err = hsa_ext_program_finalize(local_hsa_program,
 			isa,
 			0,
 			control_directives,
@@ -93,7 +95,7 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 			&code_object);
 	check("Error in finalizing program object", err);
 
-	//status = hsa_ext_alt_program_destroy(hsailProgram);
+	//status = hsa_ext_program_destroy(hsailProgram);
 	//check("Error in destroying program object", status);
 
 	// Create executable.
@@ -158,13 +160,14 @@ double HSA::Run(int dim, int group_x, int group_y, int group_z, int s_size, int 
 	check(Finding a kernarg memory region, err);
 	void* local_kernel_arg_buffer = NULL;
 
-	size_t local_kernel_arg_buffer_size;
-	hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
+	//size_t local_kernel_arg_buffer_size;
+	//hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
 
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
-	err = hsa_memory_allocate(local_kernarg_region, local_kernel_arg_buffer_size, &local_kernel_arg_buffer);
+	//err = hsa_memory_allocate(local_kernarg_region, local_kernel_arg_buffer_size, &local_kernel_arg_buffer);
+	err = hsa_memory_allocate(local_kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
 	check(Allocating kernel argument memory buffer, err);
 	memcpy(local_kernel_arg_buffer, kernel_args, kernel_args_size);
 	local_dispatch_packet.kernarg_address = local_kernel_arg_buffer;
@@ -237,4 +240,6 @@ void HSA::Close()
 	err=hsa_shut_down();
 	check(Shutting down the runtime, err);
 }
+
+#endif
 

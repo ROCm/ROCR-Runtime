@@ -81,7 +81,7 @@ int FillRandom(
     return 0;
 }
 
-
+#if 0
 //get a memory region that can be used for global memory allocations.
 hsa_status_t get_global_region(hsa_region_t region, void* data) 
 {
@@ -143,6 +143,7 @@ hsa_status_t find_symbol_offset(hsa_ext_brig_module_t* brig_module,
 	}   
 	return HSA_STATUS_ERROR;
 }
+#endif
 
 /*
  * Determines if the given agent is of type HSA_DEVICE_TYPE_GPU
@@ -166,6 +167,7 @@ hsa_status_t find_gpu(hsa_agent_t agent, void *data)
 	}   
 	return HSA_STATUS_SUCCESS;
 }
+
 
 /*
  * Determines if a memory region can be used for kernarg
