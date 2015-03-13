@@ -7,20 +7,19 @@
 
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
-#include "elf_utils.h"
 #include "utilities.h"
 
 #include <string.h>
 #include<iostream>
 using namespace std;
 
-#include "hsa_base.h"
+#include "hsa_base_test.h"
 
 
 #define  GROUP_SIZE 256 
 
 
-class BitonicSort : public HSA
+class BitonicSort : public HSA_TEST
 {
 	public:
 		BitonicSort();
