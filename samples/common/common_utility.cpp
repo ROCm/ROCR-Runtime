@@ -16,7 +16,7 @@ double CalcMedian(vector<double> scores)
 
 double CalcMean(vector<double> scores)
 {
-	double mean;
+	double mean = 0;
 	size_t size = scores.size();
 
        for (int i=0; i<size; ++i)

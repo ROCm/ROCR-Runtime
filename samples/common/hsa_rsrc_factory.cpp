@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <x86intrin.h>
 #include <string.h>
 #include <cassert>
 
@@ -81,6 +80,13 @@ uint32_t HsaRsrcFactory::num_workitems_;
 uint32_t HsaRsrcFactory::kernel_loop_count_;
 bool HsaRsrcFactory::print_debug_info_ = false;
 
+char* HsaRsrcFactory::num_cus_key_ = "num_cus";
+char* HsaRsrcFactory::brig_path_key_ = "brig_path";
+char* HsaRsrcFactory::num_waves_key_ = "waves_per_cu";
+char* HsaRsrcFactory::num_workitems_key_ = "workitems_per_wave";
+char* HsaRsrcFactory::print_debug_key_ = "print_debug";
+char* HsaRsrcFactory::kernel_loop_count_key_ = "kernel_loop_count";
+
 // Constructor of the class
 HsaRsrcFactory::HsaRsrcFactory( ) {
 
@@ -106,7 +112,7 @@ HsaRsrcFactory::~HsaRsrcFactory( ) {
 // @return uint32_t Number of Gpu agents on platform
 //
 uint32_t HsaRsrcFactory::GetCountOfGpuAgents( ) {
-  return gpu_list_.size();
+  return uint32_t(gpu_list_.size());
 }
 
 // Get the AgentInfo handle of a Gpu device
@@ -120,7 +126,7 @@ uint32_t HsaRsrcFactory::GetCountOfGpuAgents( ) {
 bool HsaRsrcFactory::GetGpuAgentInfo(uint32_t idx, AgentInfo **agent_info) {
 
   // Determine if request is valid
-  uint32_t size = gpu_list_.size();
+  uint32_t size = uint32_t(gpu_list_.size());
   if (idx >= size) {
     return false;
   }
@@ -238,7 +244,6 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   // Finalize hsail program.
   hsa_isa_t isa = {0};
   status = hsa_agent_get_info(agent_info->dev_id, HSA_AGENT_INFO_ISA, &isa);
-  std::cout << "Value of device Isa Id: " << isa.handle << std::endl;
   check("Error in getting Id of Isa supported by agent", status);
 
   hsa_ext_control_directives_t control_directives;
@@ -326,7 +331,7 @@ void HsaRsrcFactory::AddAgentInfo(AgentInfo *agent_info) {
 bool HsaRsrcFactory::PrintGpuAgents( ) {
 
   AgentInfo *agent_info;
-  int size = gpu_list_.size();
+  int size = uint32_t(gpu_list_.size());
   for (int idx = 0; idx < size; idx++) {
     agent_info = gpu_list_[idx];
     std::cout << std::endl;

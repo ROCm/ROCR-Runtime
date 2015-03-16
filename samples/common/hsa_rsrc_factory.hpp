@@ -4,7 +4,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <x86intrin.h>
 #include <string.h>
 
 #include <iostream>
@@ -231,32 +230,32 @@ class HsaRsrcFactory {
   // Records the file path where Brig file is located.
   // Value is available only after an instance has been built.
   static char* brig_path_;
-  static constexpr char* brig_path_key_ = "brig_path";
+  static char* brig_path_key_;
 
   // Records the number of Compute units present on system.
   // Value is available only after an instance has been built.
   static uint32_t num_cus_;
-  static constexpr char* num_cus_key_ = "num_cus";
+  static char* num_cus_key_;
 
   // Records the number of waves that can be launched per Compute unit
   // Value is available only after an instance has been built.
   static uint32_t num_waves_;
-  static constexpr char* num_waves_key_ = "waves_per_cu";
+  static char* num_waves_key_;
 
   // Records the number of work-items that can be packed into a wave
   // Value is available only after an instance has been built.
   static uint32_t num_workitems_;
-  static constexpr char* num_workitems_key_ = "workitems_per_wave";
+  static char* num_workitems_key_;
 
   // Records the number of times kernel loop body should run. Value
   // is available only after an instance has been built.
   static uint32_t kernel_loop_count_;
-  static constexpr char* kernel_loop_count_key_ = "kernel_loop_count";
+  static char* kernel_loop_count_key_;
 
   // Records the number of times kernel loop body should run. Value
   // is available only after an instance has been built.
   static bool print_debug_info_;
-  static constexpr char* print_debug_key_ = "print_debug";
+  static char* print_debug_key_;
 
   // Print the various fields of Hsa Gpu Agents
   bool PrintGpuAgents( );
