@@ -29,7 +29,10 @@
 #include <time.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/mman.h>
 #include "linux/kfd_ioctl.h"
+
+static HSAuint64 *events_page = NULL;
 
 static bool IsSystemEventType(HSA_EVENTTYPE type)
 {
@@ -73,10 +76,22 @@ hsaKmtCreateEvent(
 		return HSAKMT_STATUS_ERROR;
 	}
 
+	if (events_page == NULL && args.event_page_offset > 0) {
+		events_page = mmap(NULL, 4096, PROT_WRITE | PROT_READ,
+				MAP_SHARED, kfd_fd, args.event_page_offset);
+		if (events_page == NULL) {
+			hsaKmtDestroyEvent(e);
+			return HSAKMT_STATUS_ERROR;
+		}
+	}
+
+	if (args.event_page_offset > 0 && args.event_slot_index < 256)
+		e->EventData.HWData2 = (HSAuint64)&events_page[args.event_slot_index];
+
 	e->EventId = args.event_id;
 	e->EventData.EventType = EventDesc->EventType;
 	e->EventData.HWData1 = args.event_id;
-	e->EventData.HWData2 = args.event_trigger_address;
+
 	e->EventData.HWData3 = args.event_trigger_data;
 
 	if (IsSignaled && !IsSystemEventType(e->EventData.EventType)) {
