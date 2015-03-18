@@ -99,6 +99,18 @@ else
     LLLIBS += $(OPENCL_DEPTH)/runtime/tools/$(RUNTIME_BUILD)/hsa-runtime-tools$(LIB_SUFFIX)$(LIB_EXT)
 endif
 
+#
+# Copy the Hsa ample to Hsa distribution folder
+#
+ifdef ATI_OS_LINUX
+  LOCAL_TARGETS = inst_sample_copy
+endif
+inst_sample_copy:
+	$(MKDIR) $(DIST_BIN_DEST)/../../samples/$(OS_TYPE)
+	-$(RM) $(DIST_BIN_DEST)/../../samples/$(OS_TYPE)/bitonic_sort_kernel.hsail
+	$(CP) $(BUILD_DIR)/$(EXE_TARGET) $(DIST_BIN_DEST)/../../samples/$(OS_TYPE)
+	$(CP) $(COMPONENT_DEPTH)/bitonic_sort_kernel.hsail $(DIST_BIN_DEST)/../../samples/$(OS_TYPE)
+
 
 include $(OPENCL_DEPTH)/hsarules
 
