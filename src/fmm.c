@@ -547,6 +547,9 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		aperture_release_area(aperture, mem, MemorySizeInBytes);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
+
+		/* Assign NULL to mem to indicate failure to calling function */
+		mem = NULL;
 	}
 
 	return mem;
