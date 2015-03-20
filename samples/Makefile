@@ -4,7 +4,7 @@ include $(OPENCL_DEPTH)/hsadefs
 
 SUBDIRS = NBody
 SUBDIRS += DwtHarr1D
-SUBDIRS += BitionicSort
+SUBDIRS += BitonicSort
 SUBDIRS += BinarySearch
 SUBDIRS += BlackScholes
 SUBDIRS += FloydWarshall 
