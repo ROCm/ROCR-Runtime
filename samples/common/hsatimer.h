@@ -8,23 +8,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <intrin.h>
+#include <x86intrin.h>
 #include <string.h>
+
 #include <iostream>
 #include <vector>
 #include <string>
 using namespace std;
 
-#if defined(__GNUC__)
-  #include <sys/time.h>
-  #include <x86intrin.h>
-#else
-  #if defined(_MSC_VER)
-    #include <time.h>
-    #include <windows.h>
-    #include <intrin.h>
-  #endif // _MSC_VER
-#endif // __GNUC__
+#include <sys/time.h>
 
 #define HSA_FAILURE  1
 #define HSA_SUCCESS 0
