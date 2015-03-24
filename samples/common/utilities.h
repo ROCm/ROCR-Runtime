@@ -11,7 +11,24 @@
 #include<iostream>
 using namespace std;
 
+
+
 #define HSA_ARGUMENT_ALIGN_BYTES 16
+
+#if defined(_MSC_VER)
+  #define ALIGNED_(x) __declspec(align(x))
+
+#pragma warning(disable: 4800)
+#pragma warning(disable: 4305) // truncation from 'double' to 'const float'
+#pragma warning(disable: 4267) // conversion from 'size_t' to 'int', possible loss of data
+
+typedef unsigned int uint;
+
+#else
+  #if defined(__GNUC__)
+    #define ALIGNED_(x) __attribute__ ((aligned(x)))
+  #endif // __GNUC__
+#endif // _MSC_VER
 
 #define SDK_FAILURE 1
 #define SDK_SUCCESS 0
