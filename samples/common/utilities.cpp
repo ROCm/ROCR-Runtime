@@ -48,7 +48,6 @@ T RoundToPowerOf2(T val)
     return val;
 }
 
-
 template<typename T> 
 int FillRandom(
          T * arrayPtr, 
@@ -56,7 +55,7 @@ int FillRandom(
          const int height,
          const T rangeMin,
          const T rangeMax,
-         unsigned int seed=123)
+         unsigned int seed)
 {
     if(!arrayPtr)
     {
