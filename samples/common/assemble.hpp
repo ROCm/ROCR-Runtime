@@ -5,9 +5,10 @@
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
 
-
-#ifdef __cplusplus
-extern "C" {
+#if defined(_MSC_VER)
+  #ifdef __cplusplus
+  extern "C" {
+  #endif
 #endif
 
 hsa_status_t ModuleCreateFromHsailTextFile(
@@ -39,8 +40,10 @@ hsa_status_t ModuleDisassemble(
   const char *hsail_text_filename
 );
 
-#ifdef __cplusplus
-}
+#if defined(_MSC_VER)
+  #ifdef __cplusplus
+  }
+  #endif
 #endif
 
 
