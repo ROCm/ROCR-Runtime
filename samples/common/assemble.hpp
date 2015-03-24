@@ -5,6 +5,11 @@
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
 
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 hsa_status_t ModuleCreateFromHsailTextFile(
   const char *hsail_text_filename,
   hsa_ext_module_t *module
@@ -33,5 +38,10 @@ hsa_status_t ModuleDisassemble(
   hsa_ext_module_t module,
   const char *hsail_text_filename
 );
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // ASSEMBLE_HPP_
