@@ -2,21 +2,27 @@
 #define __MYTIME__
 
 // Will use AMD timer and general Linux timer based on users' need --> compilation flag
-
 // need to consider platform is Windows or Linux
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
-#include <x86intrin.h>
 #include <string.h>
-
 #include <iostream>
 #include <vector>
 #include <string>
 using namespace std;
 
-#include <sys/time.h>
+#if defined(_MSC_VER)
+  #include <time.h>
+  #include <windows.h>
+  #include <intrin.h>
+#else
+  #if defined(__GNUC__)
+    #include <sys/time.h>
+    #include <x86intrin.h>
+  #endif // __GNUC__
+#endif //_MSC_VER
 
 #define HSA_FAILURE  1
 #define HSA_SUCCESS 0
