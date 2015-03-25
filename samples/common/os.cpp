@@ -6,8 +6,8 @@
 #include <stdio.h>
 
 void SetEnv(const char* env_var_name, const char* env_var_value) {
-  bool err = SetEnvironmentVariable(env_var_name, env_var_value);
-  if(false == err){
+  BOOL err = SetEnvironmentVariable(env_var_name, env_var_value);
+  if(FALSE == err){
 	  printf("Set environment variable failed!\n");
 	  exit(1);
   }
