@@ -1,23 +1,23 @@
-#include "hsa_base_test.h"
+#include "hsa_base_util.h"
 
-void HSA_TEST::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
+void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
 {
 	strcpy(hail_file_name, file_name);
 	strcpy(hsa_kernel_name, kernel_name);
 }
 
-HSA_TEST::HSA_TEST()
+HSA_UTIL::HSA_UTIL()
 {
 
 }
 
-HSA_TEST::~HSA_TEST()
+HSA_UTIL::~HSA_UTIL()
 {
 
 }
 
 
-bool HSA_TEST::HsaInit()
+bool HSA_UTIL::HsaInit()
 {
 	err = hsa_init();
 	check(Initializing the hsa runtime, err);
@@ -44,7 +44,7 @@ bool HSA_TEST::HsaInit()
 	return true;
 }
 
-double HSA_TEST::Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size)
+double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size)
 {
 	hsa_queue_t* local_command_queue;
 	/*  
@@ -141,7 +141,7 @@ double HSA_TEST::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	 */
 	hsa_signal_t local_signal;
 	err=hsa_signal_create(1, 0, NULL, &local_signal);
-	check(Creating a HSA_TEST signal, err);
+	check(Creating a HSA_UTIL signal, err);
 
 	/* Initialize the dispatch packet */
 	hsa_kernel_dispatch_packet_t local_dispatch_packet;
@@ -253,7 +253,7 @@ double HSA_TEST::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 }
 
 
-void HSA_TEST::Close()
+void HSA_UTIL::Close()
 {
 	err=hsa_shut_down();
 	check(Shutting down the runtime, err);
