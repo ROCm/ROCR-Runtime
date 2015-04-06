@@ -1,5 +1,5 @@
-#ifndef __HSA_BASE__
-#define __HSA_BASE__
+#ifndef __HSA_UTIL__
+#define __HSA_UTIL__
 
 
 #include <vector>
@@ -13,10 +13,10 @@
 
 
 
-class HSA_TEST{
+class HSA_UTIL{
     public:
-	    HSA_TEST();
-	    ~HSA_TEST();
+	    HSA_UTIL();
+	    ~HSA_UTIL();
 
 	public:
 	    void GetHsailNameAndKernelName(char *hail_file_name, char *kernel_name);
