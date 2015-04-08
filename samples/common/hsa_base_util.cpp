@@ -175,7 +175,6 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	check(Finding a kernarg memory region, err);
 	void* local_kernel_arg_buffer = NULL;
 
-
 	//size_t local_kernel_arg_buffer_size;
 	//hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
 
@@ -191,8 +190,8 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	/*
 	 * Register the memory region for the argument buffer.
 	 */
-	//err = hsa_memory_register(kernel_args, kernel_args_size); ////////////////????????????????????
-	//check(Registering the argument buffer, err); /////////////???????????????
+	//err = hsa_memory_register(kernel_args, kernel_args_size);
+	//check(Registering the argument buffer, err);
 
 	/*	
 	 * Obtain the current queue write index.
@@ -229,8 +228,8 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	 * Cleanup all allocated resources.
 	 */
 
-    err = hsa_memory_free(local_kernel_arg_buffer);
-    check(Deallocate memory, err);
+        err = hsa_memory_free(local_kernel_arg_buffer);
+        check(Deallocate memory, err);
 
 	err=hsa_signal_destroy(local_signal);
 	check(Destroying the local_signal, err);
