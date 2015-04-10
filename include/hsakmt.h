@@ -364,7 +364,8 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemory(
     void*       MemoryAddress,      //IN (page-aligned)
-    HSAuint64   MemorySizeInBytes   //IN (page-aligned)
+    HSAuint64   MemorySizeInBytes,  //IN (page-aligned)
+    int ExecuteAccess
     );
 
 
