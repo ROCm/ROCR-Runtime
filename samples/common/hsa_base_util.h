@@ -34,12 +34,11 @@ class HSA_UTIL{
 
 		hsa_queue_t* command_queue;
 		hsa_signal_t hsa_signal;
-		//hsa_ext_brig_module_t* brig_module;
-		//hsa_ext_brig_module_handle_t module;
-		//hsa_ext_program_handle_t hsa_program;
-		//hsa_ext_code_descriptor_t *hsa_code_descriptor;
-		hsa_kernel_dispatch_packet_t dispatch_packet; // needs to be set manually each time	
+		hsa_kernel_dispatch_packet_t dispatch_packet; 	
 		hsa_region_t hsa_kernarg_region;
+
+		PerfTimer base_timer;
+		int base_kernel_timer_idx;
 };
 
 

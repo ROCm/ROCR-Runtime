@@ -1,5 +1,6 @@
 #include "hsa_base_util.h"
 
+
 void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
 {
 	strcpy(hail_file_name, file_name);
@@ -8,7 +9,7 @@ void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
 
 HSA_UTIL::HSA_UTIL()
 {
-
+    	base_kernel_timer_idx = base_timer.CreateTimer();
 }
 
 HSA_UTIL::~HSA_UTIL()
@@ -53,46 +54,21 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &local_command_queue);
 	check(Creating the queue, err);
 
-/*
-	hsa_ext_brig_module_t* local_brig_module;
-	err = (hsa_status_t)create_brig_module_from_brig_file(hsa_brig_file_name, &local_brig_module);
-	check(Creating the brig module from the input brig file, err);
-*/
        hsa_ext_module_t local_module;
 	err = ModuleCreateFromHsailTextFile(hail_file_name, &local_module);
        check(Module cration from hsail string, err);
 
-/*
-       uint32_t validationResult;
-       err = ModuleValidate(local_module, &validationResult);
-       check(Module validation, err);
-       if (0 != validationResult ) 
-	{
-          printf("HSAIL module is invalid\n");
-          return SDK_FAILURE;
-       }
-*/
-	// Copy handle of Brig object
-	//hsa_ext_alt_module_t brig_module_v3;
-	//rig_module_v3.handle = uint64_t(local_module);
 	// Create hsail program.
-	
 	hsa_ext_program_t local_hsa_program;
 	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &local_hsa_program);
 	check("Error in creating program object", err);
 
 	// Add hsail module.
-	cout << "hsail file name = " << hail_file_name << endl;
-	
+	//cout << "hsail file name = " << hail_file_name << endl;
 	err = hsa_ext_program_add_module(local_hsa_program, local_module);
 	check("Error in adding module to program object", err);
 
 	// Finalize hsail program.
-	/*
-	hsa_isa_t isa;
-	memset(&isa, 0, sizeof(hsa_isa_t));
-    */
-
         hsa_isa_t isa = {0};
         err = hsa_agent_get_info(device, HSA_AGENT_INFO_ISA, &isa);
         check("Get hsa agent info isa", err);
@@ -109,9 +85,6 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 			HSA_CODE_OBJECT_TYPE_PROGRAM,
 			&code_object);
 	check("Error in finalizing program object", err);
-
-	//status = hsa_ext_alt_program_destroy(hsailProgram);
-	//check("Error in destroying program object", status);
 
 	// Create executable.
 	hsa_executable_t hsaExecutable;
@@ -175,23 +148,13 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	check(Finding a kernarg memory region, err);
 	void* local_kernel_arg_buffer = NULL;
 
-	//size_t local_kernel_arg_buffer_size;
-	//hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &local_kernel_arg_buffer_size);
-
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
-	//err = hsa_memory_allocate(local_kernarg_region, local_kernel_arg_buffer_size, kernel_args_size);
 	err = hsa_memory_allocate(local_kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
 	check(Allocating kernel argument memory buffer, err);
 	memcpy(local_kernel_arg_buffer, kernel_args, kernel_args_size);
 	local_dispatch_packet.kernarg_address = local_kernel_arg_buffer;
-
-	/*
-	 * Register the memory region for the argument buffer.
-	 */
-	//err = hsa_memory_register(kernel_args, kernel_args_size);
-	//check(Registering the argument buffer, err);
 
 	/*	
 	 * Obtain the current queue write index.
@@ -204,16 +167,14 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	const uint32_t queueMask = local_command_queue->size - 1;
 	((hsa_kernel_dispatch_packet_t*)(local_command_queue->base_address))[index&queueMask]=local_dispatch_packet;
 
+#ifdef TIME
+	base_timer.StartTimer(base_kernel_timer_idx);
+#endif
+
 	/*	
 	 * Increment the write index and ring the doorbell to dispatch the kernel.
 	 */
 	hsa_queue_store_write_index_relaxed(local_command_queue, index+1);
-
-#ifdef TIME
-	PerfTimer perf_timer_0;
-	int timer_idx_0 = perf_timer_0.CreateTimer();
-	perf_timer_0.StartTimer(timer_idx_0);
-#endif
 	hsa_signal_store_release(local_command_queue->doorbell_signal, index);
 
 	/*	
@@ -222,7 +183,7 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	while (hsa_signal_wait_acquire(local_signal, HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX, HSA_WAIT_STATE_ACTIVE)  != 0);
 
 #ifdef TIME
-	perf_timer_0.StopTimer(timer_idx_0);
+	base_timer.StopTimer(base_kernel_timer_idx);
 #endif
 	/*
 	 * Cleanup all allocated resources.
@@ -237,14 +198,15 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	err = hsa_executable_destroy(hsaExecutable); 
 	check(Destroying the hsaExecutable, err)
 
-		err = hsa_code_object_destroy(code_object);
+	err = hsa_code_object_destroy(code_object);
 	check(Destroying the code_object, err);
 
 	err=hsa_queue_destroy(local_command_queue);
 	check(Destroying the queue, err);
 
 #ifdef TIME
-	double ret = perf_timer_0.ReadTimer(timer_idx_0);
+	double ret = base_timer.ReadTimer(base_kernel_timer_idx);
+       cout << "Kernel exec time = " << ret << " seconds" << endl;
 #endif
 
 	return 0;
