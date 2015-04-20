@@ -9,7 +9,10 @@ void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
 
 HSA_UTIL::HSA_UTIL()
 {
-    	base_kernel_timer_idx = base_timer.CreateTimer();
+#ifdef TIME
+    	base_kernel_time_idx = base_timer.CreateTimer();
+	base_setup_time_idx = base_timer.CreateTimer();
+#endif
 }
 
 HSA_UTIL::~HSA_UTIL()
@@ -20,8 +23,12 @@ HSA_UTIL::~HSA_UTIL()
 
 bool HSA_UTIL::HsaInit()
 {
-	err = hsa_init();
-	check(Initializing the hsa runtime, err);
+#ifdef TIME
+       base_timer.StartTimer(base_setup_time_idx);
+#endif
+
+ 	err = hsa_init();
+ 	check(Initializing the hsa runtime, err);
 
 	/* 
 	 * Iterate over the agents and pick the gpu agent using 
@@ -42,30 +49,22 @@ bool HSA_UTIL::HsaInit()
 	err = hsa_agent_get_info(device, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &queue_size);
 	check(Querying the device maximum queue size, err);
 
-	return true;
-}
-
-double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size)
-{
-	hsa_queue_t* local_command_queue;
 	/*  
 	 * Create a queue using the maximum size.
 	 */
-	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &local_command_queue);
+	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &command_queue);
 	check(Creating the queue, err);
 
-       hsa_ext_module_t local_module;
-	err = ModuleCreateFromHsailTextFile(hail_file_name, &local_module);
+	err = ModuleCreateFromHsailTextFile(hail_file_name, &module);
        check(Module cration from hsail string, err);
 
 	// Create hsail program.
-	hsa_ext_program_t local_hsa_program;
-	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &local_hsa_program);
+	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &hsa_program);
 	check("Error in creating program object", err);
 
 	// Add hsail module.
 	//cout << "hsail file name = " << hail_file_name << endl;
-	err = hsa_ext_program_add_module(local_hsa_program, local_module);
+	err = hsa_ext_program_add_module(hsa_program, module);
 	check("Error in adding module to program object", err);
 
 	// Finalize hsail program.
@@ -76,8 +75,7 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	hsa_ext_control_directives_t control_directives;
 	memset(&control_directives, 0, sizeof(hsa_ext_control_directives_t));
 
-	hsa_code_object_t code_object;
-	err = hsa_ext_program_finalize(local_hsa_program,
+	err = hsa_ext_program_finalize(hsa_program,
 			isa,
 			0,
 			control_directives,
@@ -87,7 +85,6 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	check("Error in finalizing program object", err);
 
 	// Create executable.
-	hsa_executable_t hsaExecutable;
 	err = hsa_executable_create(HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
 	check("Error in creating executable object", err);
 
@@ -105,9 +102,22 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	check("get symbol handle", err);
 
 	// Get code handle.
-	uint64_t codeHandle;
+	
 	err = hsa_executable_symbol_get_info(kernelSymbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &codeHandle);
 	check("Get code handle", err);
+
+#ifdef TIME
+	base_timer.StopTimer(base_setup_time_idx);
+#endif
+
+	return true;
+}
+
+double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size)
+{
+#ifdef TIME
+		base_timer.StartTimer(base_kernel_time_idx);
+#endif
 
 	/*
 	 * Create a signal to wait for the dispatch to finish.
@@ -159,23 +169,19 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	/*	
 	 * Obtain the current queue write index.
 	 */
-	uint64_t index = hsa_queue_load_write_index_relaxed(local_command_queue);
+	uint64_t index = hsa_queue_load_write_index_relaxed(command_queue);
 
 	/*	
 	 * Write the aql packet at the calculated queue index address.
 	 */
-	const uint32_t queueMask = local_command_queue->size - 1;
-	((hsa_kernel_dispatch_packet_t*)(local_command_queue->base_address))[index&queueMask]=local_dispatch_packet;
-
-#ifdef TIME
-	base_timer.StartTimer(base_kernel_timer_idx);
-#endif
+	const uint32_t queueMask = command_queue->size - 1;
+	((hsa_kernel_dispatch_packet_t*)(command_queue->base_address))[index&queueMask]=local_dispatch_packet;
 
 	/*	
 	 * Increment the write index and ring the doorbell to dispatch the kernel.
 	 */
-	hsa_queue_store_write_index_relaxed(local_command_queue, index+1);
-	hsa_signal_store_release(local_command_queue->doorbell_signal, index);
+	hsa_queue_store_write_index_relaxed(command_queue, index+1);
+	hsa_signal_store_release(command_queue->doorbell_signal, index);
 
 	/*	
 	 * Wait on the dispatch signal until all kernel are finished.
@@ -183,8 +189,9 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	while (hsa_signal_wait_acquire(local_signal, HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX, HSA_WAIT_STATE_ACTIVE)  != 0);
 
 #ifdef TIME
-	base_timer.StopTimer(base_kernel_timer_idx);
+	base_timer.StopTimer(base_kernel_time_idx);
 #endif
+
 	/*
 	 * Cleanup all allocated resources.
 	 */
@@ -195,27 +202,30 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	err=hsa_signal_destroy(local_signal);
 	check(Destroying the local_signal, err);
 
+	return 0;
+}
+
+double HSA_UTIL::GetKernelTime()
+{
+    return base_timer.ReadTimer(base_kernel_time_idx);
+}
+
+double HSA_UTIL::GetSetupTime()
+{
+    return base_timer.ReadTimer(base_setup_time_idx);
+}
+
+void HSA_UTIL::Close()
+{
 	err = hsa_executable_destroy(hsaExecutable); 
 	check(Destroying the hsaExecutable, err)
 
 	err = hsa_code_object_destroy(code_object);
 	check(Destroying the code_object, err);
 
-	err=hsa_queue_destroy(local_command_queue);
+	err=hsa_queue_destroy(command_queue);
 	check(Destroying the queue, err);
 
-#ifdef TIME
-	double ret = base_timer.ReadTimer(base_kernel_timer_idx);
-       cout << "Kernel exec time = " << ret << " seconds" << endl;
-#endif
-
-	return 0;
-
-}
-
-
-void HSA_UTIL::Close()
-{
 	err=hsa_shut_down();
 	check(Shutting down the runtime, err);
 }
