@@ -170,23 +170,11 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemory(
 	void		*MemoryAddress,		/* IN (page-aligned) */
-	HSAuint64	MemorySizeInBytes,	/* IN (page-aligned) */
-	int ExecuteAccess
+	HSAuint64	MemorySizeInBytes	/* IN (page-aligned) */
 )
 {
 	CHECK_KFD_OPEN();
 
-	int err;
-	/* for CZ ib execution */
-	if (ExecuteAccess) {
-		err = mprotect(MemoryAddress, MemorySizeInBytes,
-				PROT_READ | PROT_WRITE | PROT_EXEC);
-
-		if (err != 0) {
-			free(MemoryAddress);
-			return err;
-		}
-	}
 	return HSAKMT_STATUS_SUCCESS;
 }
 
