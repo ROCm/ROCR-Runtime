@@ -34,7 +34,7 @@ hsa_status_t FindHostRegion(hsa_region_t region, void *data) {
 
   bool is_host_region = false;
   hsa_status_t hsa_error_code = hsa_region_get_info(
-      region, (hsa_region_info_t)HSA_EXT_AMD_REGION_INFO_HOST_ACCESS,
+      region, (hsa_region_info_t)HSA_AMD_REGION_INFO_HOST_ACCESSIBLE,
       &is_host_region);
   if (hsa_error_code != HSA_STATUS_SUCCESS) {
     return hsa_error_code;
