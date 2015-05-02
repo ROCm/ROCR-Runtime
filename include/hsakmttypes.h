@@ -168,7 +168,10 @@ typedef union
         unsigned int WatchPointsSupported: 1;	 // Indicates if Watchpoints are available on the node.
         unsigned int WatchPointsTotalBits: 4;    // ld(Watchpoints) available. To determine the number use 2^value
 
-        unsigned int Reserved            : 20;
+        unsigned int DoorbellType        : 2;    // 0: This node has pre-1.0 doorbell characteristic
+                                                 // 1: This node has 1.0 doorbell characteristic
+                                                 // 2,3: reserved for future use
+        unsigned int Reserved            : 18;
     } ui32;
 } HSA_CAPABILITY;
 
