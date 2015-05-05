@@ -846,7 +846,7 @@ hsaKmtGetNodeMemoryProperties(
 	}
 
 	/*Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE*/
-	if (i < NumBanks){
+	if ((i < NumBanks) && (node[NodeId].node.LocalMemSize > 0)) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
 		MemoryProperties[i].SizeInBytes = node[NodeId].node.LocalMemSize;
 		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_GPUVM, gpu_id);
