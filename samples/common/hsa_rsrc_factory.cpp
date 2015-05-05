@@ -278,7 +278,7 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
 
   // Get symbol handle.
   hsa_executable_symbol_t kernelSymbol;
-  status = hsa_executable_get_symbol(hsaExecutable, "",
+  status = hsa_executable_get_symbol(hsaExecutable, NULL,
                              kernel_name, agent_info->dev_id, 0, &kernelSymbol);
   
   // Update output parameter
