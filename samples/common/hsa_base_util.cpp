@@ -98,7 +98,7 @@ bool HSA_UTIL::HsaInit()
 
 	// Get symbol handle.
 	hsa_executable_symbol_t kernelSymbol;
-	err = hsa_executable_get_symbol(hsaExecutable, "",  hsa_kernel_name, device, 0, &kernelSymbol);
+	err = hsa_executable_get_symbol(hsaExecutable, NULL,  hsa_kernel_name, device, 0, &kernelSymbol);
 	check("get symbol handle", err);
 
 	// Get code handle.
