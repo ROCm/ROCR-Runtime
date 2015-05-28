@@ -8,8 +8,8 @@
 #include "hsa_ext_amd.h"
 #include "hsatimer.h"
 #include "utilities.h"
-#include "assemble.hpp"
 #include "common.hpp"
+#include "HSAILTool.h"
 
 
 
@@ -35,6 +35,7 @@ class HSA_UTIL{
 		char hsa_kernel_name[128];
 
 		hsa_queue_t* command_queue;
+		HSAIL_ASM::Tool tool;
 		hsa_ext_module_t module;
 		hsa_ext_program_t hsa_program;
 		hsa_executable_t hsaExecutable;

@@ -55,8 +55,11 @@ bool HSA_UTIL::HsaInit()
 	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &command_queue);
 	check(Creating the queue, err);
 
-	err = ModuleCreateFromHsailTextFile(hail_file_name, &module);
-       check(Module cration from hsail string, err);
+        if (!tool.assembleFromFile(hail_file_name)) {
+          std::cout << tool.output();
+          return false;
+        }
+        module = tool.brigModule();
 
 	// Create hsail program.
 	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &hsa_program);

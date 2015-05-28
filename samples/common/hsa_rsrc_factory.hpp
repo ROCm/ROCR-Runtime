@@ -13,6 +13,7 @@
 #include "hsatimer.h"
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
+#include "HSAILTool.h"
 
 
 #define HSA_ARGUMENT_ALIGN_BYTES 16
@@ -270,6 +271,7 @@ class HsaRsrcFactory {
   // Maps an index for the user argument
   static uint32_t GetArgIndex(char *arg_value);
 
+  HSAIL_ASM::Tool tool;
 };
 
 #endif  //  HSA_RSRC_FACTORY_H_
