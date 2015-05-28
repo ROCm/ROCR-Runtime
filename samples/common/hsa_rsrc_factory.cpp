@@ -12,7 +12,6 @@
 #include "hsa_rsrc_factory.hpp"
 #include "hsa_ext_finalize.h"
 
-#include "assemble.hpp"
 #include "common.hpp"
 
 using namespace std;
@@ -226,8 +225,11 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
 
   // Copy handle of Brig object
   hsa_ext_module_t brig_module_v3;
-  status = ModuleCreateFromHsailTextFile(brig_path, &brig_module_v3);
-  check("Error in creating module from hsail text", status);
+  if (!tool.assembleFromFile(brig_path)) {
+    std::cout << tool.output();
+    return false;
+  }
+  brig_module_v3 = tool.brigModule();
   
   // Create hsail program.
   hsa_ext_program_t hsailProgram;
