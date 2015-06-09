@@ -90,6 +90,7 @@ typedef struct {
 	uint32_t gpu_id;
 	aperture_t lds_aperture;
 	manageble_aperture_t scratch_aperture;
+	manageble_aperture_t scratch_physical;
 	manageble_aperture_t gpuvm_aperture;
 } gpu_mem_t;
 
@@ -410,7 +411,6 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 	args.gpu_id = gpu_id;
 	args.size = MemorySizeInBytes;
 
-	/* va_addr is 40 bit GPUVM address */
 	args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
@@ -500,11 +500,45 @@ void fmm_print(uint32_t gpu_id)
 }
 #endif
 
-
 void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
-	/* Not supported yet */
-	return NULL;
+	manageble_aperture_t *aperture;
+	manageble_aperture_t *aperture_phy;
+	struct kfd_ioctl_alloc_memory_of_gpu_args args;
+	int32_t gpu_mem_id;
+	void *mem = NULL;
+
+	/* Retrieve gpu_mem id according to gpu_id */
+	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+	if (gpu_mem_id < 0)
+		return NULL;
+
+	aperture = &gpu_mem[gpu_mem_id].scratch_aperture;
+	aperture_phy = &gpu_mem[gpu_mem_id].scratch_physical;
+
+	/* Check that aperture is properly initialized/supported */
+	if (!aperture_is_valid(aperture->base, aperture->limit))
+		return NULL;
+
+	/* Allocate address space */
+	mem = mmap(0, MemorySizeInBytes + 16 * PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); 
+	if (mem == NULL)
+		return NULL;
+
+	/* Allocate memory from amdkfd */
+	args.gpu_id = gpu_id;
+	args.size = MemorySizeInBytes;
+
+	/* va_addr is 40 bit GPUVM address */ 
+	args.va_addr = (((uint64_t)mem) >> 16) + 1;
+
+	aperture_phy->base = mem;
+	aperture_phy->limit = (void*)(((uint64_t)mem) + MemorySizeInBytes + 16 * PAGE_SIZE);
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_SCRATCH, &args))
+		return NULL;
+
+	return (void*)(((((uint64_t)mem) >> 16) + 1) << 16);
 }
 
 /*
@@ -653,8 +687,13 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 	for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS && !found ; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
+		if (address >= gpu_mem[i].scratch_physical.base && 
+			address <= gpu_mem[i].scratch_physical.limit){ 
+				munmap(gpu_mem[i].scratch_physical.base,(uint64_t)gpu_mem[i].scratch_physical.limit - (uint64_t)gpu_mem[i].scratch_physical.base);
+				return;
+			}
 
-		if (address >= gpu_mem[i].gpuvm_aperture.base &&
+		if (address >= gpu_mem[i].gpuvm_aperture.base && 
 			address <= gpu_mem[i].gpuvm_aperture.limit) {
 			found = true;
 			__fmm_release(gpu_mem[i].gpu_id, address, MemorySizeInBytes);
@@ -704,6 +743,36 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+HSAuint64 fmm_get_aperture_limit(aperture_type_e aperture_type, HSAuint32 gpu_id)
+{
+	int32_t slot = gpu_mem_find_by_gpu_id(gpu_id);
+
+	if (slot < 0)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	switch (aperture_type) {
+	case FMM_GPUVM:
+		return aperture_is_valid(gpu_mem[slot].gpuvm_aperture.base,
+				gpu_mem[slot].gpuvm_aperture.limit) ?
+					PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.limit) : 0;
+		break;
+
+	case FMM_SCRATCH:
+		return aperture_is_valid(gpu_mem[slot].scratch_aperture.base,
+				gpu_mem[slot].scratch_aperture.limit) ?
+					PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.limit) : 0;
+		break;
+
+	case FMM_LDS:
+		return aperture_is_valid(gpu_mem[slot].lds_aperture.base,
+				gpu_mem[slot].lds_aperture.limit) ?
+					PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.limit) : 0;
+		break;
+
+	default:
+		return 0;
+	}
+}
 HSAuint64 fmm_get_aperture_base(aperture_type_e aperture_type, HSAuint32 gpu_id)
 {
 	int32_t slot = gpu_mem_find_by_gpu_id(gpu_id);

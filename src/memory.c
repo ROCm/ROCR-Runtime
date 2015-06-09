@@ -124,7 +124,7 @@ hsaKmtAllocMemory(
 	if ((SizeInBytes & (page_size-1)) && !MemFlags.ui32.GDSMemory)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged) {
+	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
 		err = posix_memalign(MemoryAddress, page_size, SizeInBytes);
 		if (err != 0)
 			return HSAKMT_STATUS_NO_MEMORY;
@@ -143,6 +143,14 @@ hsaKmtAllocMemory(
 
 	if (!MemFlags.ui32.HostAccess && MemFlags.ui32.NonPaged) {
 		*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes);
+
+		if (*MemoryAddress == NULL)
+			return HSAKMT_STATUS_NO_MEMORY;
+
+		return HSAKMT_STATUS_SUCCESS;
+	}
+	if (MemFlags.ui32.HostAccess && MemFlags.ui32.Scratch ) { 
+		*MemoryAddress = fmm_allocate_scratch(gpu_id, SizeInBytes);
 
 		if (*MemoryAddress == NULL)
 			return HSAKMT_STATUS_NO_MEMORY;

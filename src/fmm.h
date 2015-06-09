@@ -63,4 +63,5 @@ int fmm_unmap_from_gpu(void *address);
 HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);
 HSAKMT_STATUS fmm_node_removed(HSAuint32 gpu_id);
 HSAuint64 fmm_get_aperture_base(aperture_type_e aperture_type, HSAuint32 gpu_id);
+HSAuint64 fmm_get_aperture_limit(aperture_type_e aperture_type, HSAuint32 gpu_id);
 #endif /* FMM_H_ */
