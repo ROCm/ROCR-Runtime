@@ -33,7 +33,7 @@
 #include "fmm.h"
 #define PAGE_SIZE 4096
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
-#define NUM_OF_HEAPS 2
+#define NUM_OF_HEAPS 3
 /* SYSFS related */
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
@@ -850,6 +850,14 @@ hsaKmtGetNodeMemoryProperties(
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
 		MemoryProperties[i].SizeInBytes = node[NodeId].node.LocalMemSize;
 		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_GPUVM, gpu_id);
+		i++;
+	}
+
+	/*Add SCRATCH*/
+	if (i < NumBanks){
+		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_SCRATCH;
+		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_SCRATCH, gpu_id);
+		MemoryProperties[i].SizeInBytes = fmm_get_aperture_limit(FMM_SCRATCH, gpu_id) - MemoryProperties[i].VirtualBaseAddress;
 		i++;
 	}
 
