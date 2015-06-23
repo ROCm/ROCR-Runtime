@@ -319,6 +319,18 @@ hsaKmtDestroyQueue(
     );
 
 /**
+  Set cu mask for a queue
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetQueueCUMask(
+    HSA_QUEUEID         QueueId,        //IN
+    HSAuint32           CUMaskCount,    //IN
+    HSAuint32*          QueueCUMask     //IN
+    );
+
+/**
   Allows an HSA process to set/change the default and alternate memory coherency, before starting to dispatch. 
 */
 
