@@ -20,6 +20,7 @@ hsaKmtWaitOnMultipleEvents;
 hsaKmtCreateQueue;
 hsaKmtUpdateQueue;
 hsaKmtDestroyQueue;
+hsaKmtSetQueueCUMask;
 hsaKmtSetMemoryPolicy;
 hsaKmtAllocMemory;
 hsaKmtFreeMemory;

@@ -339,3 +339,33 @@ hsaKmtDestroyQueue(
 		return HSAKMT_STATUS_SUCCESS;
 	}
 }
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetQueueCUMask(
+    HSA_QUEUEID         QueueId,        //IN
+    HSAuint32           CUMaskCount,    //IN
+    HSAuint32*          QueueCUMask     //IN
+    )
+{
+	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
+	struct kfd_ioctl_set_cu_mask_args args;
+
+	CHECK_KFD_OPEN();
+
+	if (CUMaskCount == 0 || QueueCUMask == NULL)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	memset(&args, 0, sizeof(args));
+	args.queue_id = q->queue_id;
+	args.num_cu_mask = CUMaskCount;
+	args.cu_mask_ptr = (uintptr_t)QueueCUMask;
+
+	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_CU_MASK, &args);
+	if (err == -1)
+	{
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
