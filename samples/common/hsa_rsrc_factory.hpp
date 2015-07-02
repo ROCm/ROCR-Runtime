@@ -42,6 +42,7 @@ typedef uint8_t BrigLinkage8_t;
 typedef uint8_t BrigExecutableModifier8_t;
 typedef BrigDataOffset32_t BrigDataOffsetString32_t;
 
+/*
 enum BrigKinds {
   BRIG_KIND_NONE = 0x0000,
   BRIG_KIND_DIRECTIVE_BEGIN = 0x1000,
@@ -80,6 +81,7 @@ struct BrigData {
   uint32_t byteCount;
   uint8_t bytes[1];
 };
+*/
 
 // Provide access to command line arguments passed in by user
 extern uint32_t hsa_cmdline_arg_cnt;
