@@ -79,8 +79,9 @@ hsaKmtCreateEvent(
 	if (events_page == NULL && args.event_page_offset > 0) {
 		events_page = mmap(NULL, KFD_SIGNAL_EVENT_LIMIT * 8, PROT_WRITE | PROT_READ,
 				MAP_SHARED, kfd_fd, args.event_page_offset);
-		if (events_page == NULL) {
+		if (events_page == MAP_FAILED) {
 			hsaKmtDestroyEvent(e);
+			events_page = NULL;
 			return HSAKMT_STATUS_ERROR;
 		}
 	}
