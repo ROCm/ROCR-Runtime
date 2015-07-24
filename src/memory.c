@@ -121,7 +121,8 @@ hsaKmtAllocMemory(
 
 	/* The required size should be page aligned (GDS?) */
 	page_size = PageSizeFromFlags(MemFlags.ui32.PageSize);
-	if ((SizeInBytes & (page_size-1)) && !MemFlags.ui32.GDSMemory)
+	if ((!MemoryAddress) || (!SizeInBytes) ||
+	    (SizeInBytes & (page_size-1)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
