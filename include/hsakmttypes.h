@@ -148,6 +148,17 @@ typedef struct _HsaSystemProperties
     HSAuint32    PlatformRev;      // HSA platform revision, reflects Platform Table Revision ID
 } HsaSystemProperties;
 
+typedef union 
+{
+    HSAuint32 Value;
+    struct 
+    {
+        unsigned int uCode    : 10;  // ucode packet processor version
+        unsigned int Major    :  6;  // GFXIP Major engine version
+        unsigned int Minor    :  8;  // GFXIP Minor engine version
+        unsigned int Stepping :  8;  // GFXIP Stepping info
+    };
+} HSA_ENGINE_ID;
 
 typedef union
 {
@@ -223,7 +234,7 @@ typedef struct _HsaNodeProperties
     HSAuint32       MaxSlotsScratchCU; // Number of temp. memory ("scratch") wave slots available to access,
                                        // may be 0 if HW has no restrictions
 
-    HSAuint32       EngineId;          // Identifier (rev) of teh GPU uEngine or Firmware, may be 0
+    HSA_ENGINE_ID   EngineId;          // Identifier (rev) of the GPU uEngine or Firmware, may be 0
 
     HSAuint16       VendorId;          // GPU vendor id; 0 on latency (= CPU)-only nodes
     HSAuint16       DeviceId;          // GPU device id; 0 on latency (= CPU)-only nodes

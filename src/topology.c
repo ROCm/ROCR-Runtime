@@ -52,7 +52,44 @@ static node_t *node = NULL;
 
 static HSAKMT_STATUS topology_take_snapshot(void);
 static HSAKMT_STATUS topology_drop_snapshot(void);
-static int get_cpu_stepping(uint16_t* stepping);
+//static int get_cpu_stepping(uint16_t* stepping);
+
+static struct hsa_gfxip_table {
+	unsigned short device_id;	// Device ID
+	unsigned char major;		// GFXIP Major engine version
+	unsigned char minor;		// GFXIP Minor engine version
+	unsigned char stepping;		// GFXIP Stepping info
+} gfxip_lookup_table[] = {
+	/* Kaveri Family */
+	{ 0x1304, 7, 0, 0 },
+	{ 0x1305, 7, 0, 0 },
+	{ 0x1306, 7, 0, 0 },
+	{ 0x1307, 7, 0, 0 },
+	{ 0x1309, 7, 0, 0 },
+	{ 0x130A, 7, 0, 0 },
+	{ 0x130B, 7, 0, 0 },
+	{ 0x130C, 7, 0, 0 },
+	{ 0x130D, 7, 0, 0 },
+	{ 0x130E, 7, 0, 0 },
+	{ 0x130F, 7, 0, 0 },
+	{ 0x1310, 7, 0, 0 },
+	{ 0x1311, 7, 0, 0 },
+	{ 0x1312, 7, 0, 0 },
+	{ 0x1313, 7, 0, 0 },
+	{ 0x1315, 7, 0, 0 },
+	{ 0x1316, 7, 0, 0 },
+	{ 0x1317, 7, 0, 0 },
+	{ 0x1318, 7, 0, 0 },
+	{ 0x131B, 7, 0, 0 },
+	{ 0x131C, 7, 0, 0 },
+	{ 0x131D, 7, 0, 0 },
+	/* Carrizo Family */
+	{ 0x9870, 8, 0, 1 },
+	{ 0x9874, 8, 0, 1 },
+	{ 0x9875, 8, 0, 1 },
+	{ 0x9876, 8, 0, 1 },
+	{ 0x9877, 8, 0, 1 }
+};
 
 static void
 free_node(node_t *n)
@@ -192,8 +229,8 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	char prop_name[256];
 	char path[256];
 	long long unsigned int  prop_val;
-	uint32_t i, prog;
-	uint16_t stepping = 0, fw_version = 0;
+	uint32_t i, prog, table_size;
+	uint16_t fw_version = 0;
     int read_size;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -309,8 +346,22 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 
 	}
 
-	get_cpu_stepping(&stepping);
-	props->EngineId = ((stepping << 16) | fw_version);
+//	get_cpu_stepping(&stepping);
+	props->EngineId.uCode = fw_version & 0x3ff;
+	props->EngineId.Major = 0;
+	props->EngineId.Minor = 0;
+	props->EngineId.Stepping = 0;
+	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
+	for (i=0; i<table_size; i++) {
+		if(gfxip_lookup_table[i].device_id == props->DeviceId) {
+			props->EngineId.Major = gfxip_lookup_table[i].major & 0x3f;
+			props->EngineId.Minor = gfxip_lookup_table[i].minor;
+			props->EngineId.Stepping = gfxip_lookup_table[i].stepping;
+			break;
+		}
+	}
+	assert(props->EngineId.Major);
+	//TODO: error handler when Device ID lookup fails
 
 err2:
 	free(read_buf);
@@ -960,6 +1011,7 @@ uint16_t get_device_id_by_node(HSAuint32 node_id)
     return node[node_id].node.DeviceId;
 }
 
+#if 0
 static int get_cpu_stepping(uint16_t* stepping)
 {
 	int ret;
@@ -997,3 +1049,4 @@ err1:
 
 	return ret;
 }
+#endif
