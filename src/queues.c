@@ -34,23 +34,40 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
+#define TONGA_PAGE_SIZE 0x9000
+
 /* 1024 doorbells, 4 bytes each doorbell */
 #define DOORBELLS_PAGE_SIZE	1024 * 4
 
+enum asic_family_type {
+	CHIP_KAVERI = 0,
+	CHIP_CARRIZO,
+	CHIP_TONGA
+};
+
 struct device_info
 {
+	enum asic_family_type asic_family;
 	uint32_t ctx_save_restore_size;
 	uint32_t eop_buffer_size;
 };
 
 struct device_info kaveri_device_info = {
+	.asic_family = CHIP_KAVERI,
 	.ctx_save_restore_size = 0,
 	.eop_buffer_size = 0,
 };
 
 struct device_info carrizo_device_info = {
+	.asic_family = CHIP_CARRIZO,
 	.ctx_save_restore_size = 2756608,
 	.eop_buffer_size = 4096,
+};
+
+struct device_info tonga_device_info = {
+	.asic_family = CHIP_TONGA,
+	.ctx_save_restore_size = TONGA_PAGE_SIZE,
+	.eop_buffer_size = TONGA_PAGE_SIZE,
 };
 
 struct device_id
@@ -87,6 +104,8 @@ struct device_id supported_devices[] = {
 	{ 0x9875, &carrizo_device_info },	/* Carrizo */
 	{ 0x9876, &carrizo_device_info },	/* Carrizo */
 	{ 0x9877, &carrizo_device_info },	/* Carrizo */
+	{ 0x6939, &tonga_device_info },
+	{ 0x692b, &tonga_device_info },
 	{ 0, NULL }
 };
 
@@ -97,6 +116,7 @@ struct queue
 	uint32_t rptr;
 	void *eop_buffer;
 	void *ctx_save_restore;
+	enum asic_family_type type;
 };
 
 struct process_doorbells
@@ -121,7 +141,7 @@ static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 	return NULL;
 }
 
-static void free_queue(struct queue *q)
+static void free_queue_cpu(struct queue *q)
 {
 	if (q->eop_buffer)
 		free(q->eop_buffer);
@@ -130,7 +150,7 @@ static void free_queue(struct queue *q)
 	free(q);
 }
 
-static void* allocate_exec_aligned_memory(uint32_t size, uint32_t align)
+static void* allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
 {
 	void *ptr;
 	int retval;
@@ -149,13 +169,89 @@ static void* allocate_exec_aligned_memory(uint32_t size, uint32_t align)
 	return ptr;
 }
 
+void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align)
+{
+	void *mem;
+	HSAuint64 gpu_va;
+	HsaMemFlags flags;
+	HSAKMT_STATUS ret;
+
+	flags.Value = 0;
+	flags.ui32.HostAccess = 1;
+	flags.ui32.ExecuteAccess = 1;
+	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
+
+	size += align - (size % align);
+
+	ret = hsaKmtAllocMemory(0, size, flags, &mem);
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		return NULL;
+	}
+	if (hsaKmtMapMemoryToGPU(mem, size, &gpu_va) != HSAKMT_STATUS_SUCCESS) {
+		hsaKmtFreeMemory(mem, size);
+		return NULL;
+	}
+
+	return mem;
+}
+
+void free_exec_aligned_memory_gpu(void *addr, uint32_t size)
+{
+	size += TONGA_PAGE_SIZE - (size % TONGA_PAGE_SIZE);
+
+	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS) {
+		hsaKmtFreeMemory(addr, size);
+	}
+}
+
+static void* allocate_exec_aligned_memory(uint32_t size, uint32_t align, enum asic_family_type type)
+{
+	if (type == CHIP_TONGA)
+		return allocate_exec_aligned_memory_gpu(size, TONGA_PAGE_SIZE);
+	return allocate_exec_aligned_memory_cpu(size, align);
+}
+
+static void release_exec_aligned_memory_gpu(void *addr, uint32_t size)
+{
+	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS)
+		hsaKmtFreeMemory(addr, (HSAuint64)size);
+}
+
+static void release_exec_aligned_memory(void *addr, uint32_t size, enum asic_family_type type)
+{
+	if (type == CHIP_TONGA)
+		release_exec_aligned_memory_gpu(addr, TONGA_PAGE_SIZE);
+	else
+		free(addr);
+}
+
+static void free_queue_gpu(struct queue *q)
+{
+	if (q->eop_buffer) {
+		hsaKmtUnmapMemoryToGPU(q->eop_buffer);
+		hsaKmtFreeMemory(q->eop_buffer, TONGA_PAGE_SIZE);
+	}
+	if (q->ctx_save_restore) {
+		hsaKmtUnmapMemoryToGPU(q->ctx_save_restore);
+		hsaKmtFreeMemory(q->ctx_save_restore, TONGA_PAGE_SIZE);
+	}
+	release_exec_aligned_memory((void *)q, sizeof(*q), q->type);
+}
+
+static void free_queue(struct queue *q, enum asic_family_type type)
+{
+	if (type == CHIP_TONGA)
+		return free_queue_gpu(q);
+	return free_queue_cpu(q);
+}
+
 static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
 								struct kfd_ioctl_create_queue_args *args)
 {
 	if (dev_info) {
 		if (dev_info->eop_buffer_size > 0) {
 			q->eop_buffer =
-					allocate_exec_aligned_memory(dev_info->eop_buffer_size, PAGE_SIZE);
+					allocate_exec_aligned_memory(dev_info->eop_buffer_size, PAGE_SIZE, dev_info->asic_family);
 			if (q->eop_buffer == NULL) {
 				return HSAKMT_STATUS_NO_MEMORY;
 			}
@@ -165,7 +261,7 @@ static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
 		if (dev_info->ctx_save_restore_size > 0) {
 			args->ctx_save_restore_size = dev_info->ctx_save_restore_size;
 			q->ctx_save_restore =
-					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size, PAGE_SIZE);
+					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size, PAGE_SIZE, dev_info->asic_family);
 			if (q->ctx_save_restore == NULL) {;
 				return HSAKMT_STATUS_NO_MEMORY;
 			}
@@ -201,30 +297,35 @@ hsaKmtCreateQueue(
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	struct queue *q = malloc(sizeof(*q));
+	dev_id = get_device_id_by_node(NodeId);
+	dev_info = get_device_info_by_dev_id(dev_id);
+
+	struct queue *q = allocate_exec_aligned_memory(sizeof (*q),
+			PAGE_SIZE, dev_info->asic_family);
 	if (q == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
+
 	memset(q, 0, sizeof(*q));
 
 	struct kfd_ioctl_create_queue_args args;
 	memset(&args, 0, sizeof(args));
 
-	dev_id = get_device_id_by_node(NodeId);
-	dev_info = get_device_info_by_dev_id(dev_id);
 	args.gpu_id = gpu_id;
+
+	q->type = dev_info->asic_family;
 
 	err = handle_concrete_asic(dev_info, q, &args);
 	if (err != HSAKMT_STATUS_SUCCESS) {
-		free_queue(q);
+		free_queue(q, dev_info->asic_family);
 		return err;
 	}
 
 	switch (Type)
 	{
 	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
-	case HSA_QUEUE_SDMA: free_queue(q); return HSAKMT_STATUS_UNAVAILABLE;
+	case HSA_QUEUE_SDMA: free_queue(q, dev_info->asic_family); return HSAKMT_STATUS_UNAVAILABLE;
 	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
-	default: free_queue(q); return HSAKMT_STATUS_INVALID_PARAMETER;
+	default: free_queue(q, dev_info->asic_family); return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
 	if (Type != HSA_QUEUE_COMPUTE_AQL)
@@ -244,7 +345,7 @@ hsaKmtCreateQueue(
 
 	if (err == -1)
 	{
-		free_queue(q);
+		free_queue(q, dev_info->asic_family);
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -259,7 +360,7 @@ hsaKmtCreateQueue(
 		if (ptr == MAP_FAILED) {
 			pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 			hsaKmtDestroyQueue(q->queue_id);
-			free_queue(q);
+			free_queue(q, dev_info->asic_family);
 			return HSAKMT_STATUS_ERROR;
 		}
 
@@ -321,7 +422,7 @@ hsaKmtDestroyQueue(
 	struct kfd_ioctl_destroy_queue_args args;
 
 	if (q == NULL)
-			return (HSAKMT_STATUS_INVALID_PARAMETER);
+		return (HSAKMT_STATUS_INVALID_PARAMETER);
 
 	memset(&args, 0, sizeof(args));
 
@@ -335,7 +436,7 @@ hsaKmtDestroyQueue(
 	}
 	else
 	{
-		free_queue(q);
+		free_queue(q, q->type);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 }

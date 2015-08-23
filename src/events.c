@@ -30,7 +30,9 @@
 #include <errno.h>
 #include <unistd.h>
 #include <sys/mman.h>
+#include <stdio.h>
 #include "linux/kfd_ioctl.h"
+#include "fmm.h"
 
 static HSAuint64 *events_page = NULL;
 
@@ -69,6 +71,15 @@ hsaKmtCreateEvent(
 
 	args.event_type = EventDesc->EventType;
 	args.auto_reset = !ManualReset;
+
+	/* dGPU code */
+	if (is_dgpu && events_page == NULL) {
+		events_page = allocate_exec_aligned_memory_gpu(KFD_SIGNAL_EVENT_LIMIT * 8, 0x9000);
+		if (!events_page) {
+			return HSAKMT_STATUS_ERROR;
+		}
+		fmm_get_handle(events_page, &args.event_page_offset);
+	}
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
 		free(e);

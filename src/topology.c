@@ -59,36 +59,40 @@ static struct hsa_gfxip_table {
 	unsigned char major;		// GFXIP Major engine version
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
+	unsigned char is_dgpu;		// Predicat for dGPU devices
 } gfxip_lookup_table[] = {
 	/* Kaveri Family */
-	{ 0x1304, 7, 0, 0 },
-	{ 0x1305, 7, 0, 0 },
-	{ 0x1306, 7, 0, 0 },
-	{ 0x1307, 7, 0, 0 },
-	{ 0x1309, 7, 0, 0 },
-	{ 0x130A, 7, 0, 0 },
-	{ 0x130B, 7, 0, 0 },
-	{ 0x130C, 7, 0, 0 },
-	{ 0x130D, 7, 0, 0 },
-	{ 0x130E, 7, 0, 0 },
-	{ 0x130F, 7, 0, 0 },
-	{ 0x1310, 7, 0, 0 },
-	{ 0x1311, 7, 0, 0 },
-	{ 0x1312, 7, 0, 0 },
-	{ 0x1313, 7, 0, 0 },
-	{ 0x1315, 7, 0, 0 },
-	{ 0x1316, 7, 0, 0 },
-	{ 0x1317, 7, 0, 0 },
-	{ 0x1318, 7, 0, 0 },
-	{ 0x131B, 7, 0, 0 },
-	{ 0x131C, 7, 0, 0 },
-	{ 0x131D, 7, 0, 0 },
+	{ 0x1304, 7, 0, 0, 0 },
+	{ 0x1305, 7, 0, 0, 0 },
+	{ 0x1306, 7, 0, 0, 0 },
+	{ 0x1307, 7, 0, 0, 0 },
+	{ 0x1309, 7, 0, 0, 0 },
+	{ 0x130A, 7, 0, 0, 0 },
+	{ 0x130B, 7, 0, 0, 0 },
+	{ 0x130C, 7, 0, 0, 0 },
+	{ 0x130D, 7, 0, 0, 0 },
+	{ 0x130E, 7, 0, 0, 0 },
+	{ 0x130F, 7, 0, 0, 0 },
+	{ 0x1310, 7, 0, 0, 0 },
+	{ 0x1311, 7, 0, 0, 0 },
+	{ 0x1312, 7, 0, 0, 0 },
+	{ 0x1313, 7, 0, 0, 0 },
+	{ 0x1315, 7, 0, 0, 0 },
+	{ 0x1316, 7, 0, 0, 0 },
+	{ 0x1317, 7, 0, 0, 0 },
+	{ 0x1318, 7, 0, 0, 0 },
+	{ 0x131B, 7, 0, 0, 0 },
+	{ 0x131C, 7, 0, 0, 0 },
+	{ 0x131D, 7, 0, 0, 0 },
 	/* Carrizo Family */
-	{ 0x9870, 8, 0, 1 },
-	{ 0x9874, 8, 0, 1 },
-	{ 0x9875, 8, 0, 1 },
-	{ 0x9876, 8, 0, 1 },
-	{ 0x9877, 8, 0, 1 }
+	{ 0x9870, 8, 0, 1, 0 },
+	{ 0x9874, 8, 0, 1, 0 },
+	{ 0x9875, 8, 0, 1, 0 },
+	{ 0x9876, 8, 0, 1, 0 },
+	{ 0x9877, 8, 0, 1, 0 },
+	/* Tonga Family */
+	{ 0x6939, 8, 0, 0, 1 },
+	{ 0x692b, 8, 0, 0, 1 }
 };
 
 static void
@@ -203,7 +207,7 @@ err1:
 	return ret;
 }
 
-static HSAKMT_STATUS
+HSAKMT_STATUS
 topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id) {
 	FILE *fd;
 	char path[256];
@@ -222,7 +226,25 @@ topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id) {
 	return ret;
 }
 
-static HSAKMT_STATUS
+bool topology_is_dgpu(uint16_t gpu_id)
+{
+	uint32_t i, table_size;
+
+	if (is_dgpu)
+		return is_dgpu;
+
+	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
+	for (i=0; i<table_size; i++) {
+		if(gfxip_lookup_table[i].device_id == gpu_id && gfxip_lookup_table[i].is_dgpu == 1) {
+			is_dgpu = true;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+HSAKMT_STATUS
 topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id) {
 	FILE *fd;
 	char *read_buf, *p;
