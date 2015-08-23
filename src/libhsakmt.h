@@ -34,6 +34,7 @@
 extern int kfd_fd;
 extern unsigned long kfd_open_count;
 extern pthread_mutex_t hsakmt_mutex;
+extern bool is_dgpu;
 
 #undef HSAKMTAPI
 #define HSAKMTAPI __attribute__((visibility ("default")))
@@ -64,6 +65,15 @@ extern pthread_mutex_t hsakmt_mutex;
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
 uint16_t get_device_id_by_node(HSAuint32 node_id);
+
+HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id);
+HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id);
+bool topology_is_dgpu(uint16_t gpu_id);
+
+HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
+
+void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align);
+void free_exec_aligned_memory_gpu(void *addr, uint32_t size);
 
 extern int kmtIoctl(int fd, unsigned long request, void *arg);
 

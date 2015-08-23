@@ -31,3 +31,4 @@ int kfd_fd;
 unsigned long kfd_open_count;
 unsigned long system_properties_count;
 pthread_mutex_t hsakmt_mutex = PTHREAD_MUTEX_INITIALIZER;
+bool is_dgpu = false;

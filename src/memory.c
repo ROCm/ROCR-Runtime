@@ -86,7 +86,7 @@ hsaKmtSetMemoryPolicy(
 	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 }
 
-static HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags)
+HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags)
 {
 	switch (pageSizeFlags) {
 	case HSA_PAGE_SIZE_4KB: return 4*1024;
@@ -109,9 +109,8 @@ hsaKmtAllocMemory(
 )
 {
 	HSAKMT_STATUS result;
-	HSAuint64 page_size;
 	uint32_t gpu_id;
-	int err;
+	HSAuint64 page_size;
 
 	CHECK_KFD_OPEN();
 
@@ -119,26 +118,18 @@ hsaKmtAllocMemory(
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	/* The required size should be page aligned (GDS?) */
 	page_size = PageSizeFromFlags(MemFlags.ui32.PageSize);
+
 	if ((!MemoryAddress) || (!SizeInBytes) ||
-	    (SizeInBytes & (page_size-1)))
+	    (SizeInBytes & (page_size-1))) {
 		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
 
 	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
-		err = posix_memalign(MemoryAddress, page_size, SizeInBytes);
-		if (err != 0)
-			return HSAKMT_STATUS_NO_MEMORY;
-
-		if (MemFlags.ui32.ExecuteAccess) {
-			err = mprotect(*MemoryAddress, SizeInBytes,
-					PROT_READ | PROT_WRITE | PROT_EXEC);
-
-			if (err != 0) {
-				free(*MemoryAddress);
-				return err;
-			}
-		}
+		*MemoryAddress = fmm_allocate_host(gpu_id, SizeInBytes, MemFlags,
+				get_device_id_by_node(PreferredNode));
+		if (*MemoryAddress == NULL)
+			return HSAKMT_STATUS_ERROR;
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -224,6 +215,7 @@ hsaKmtUnmapMemoryToGPU(
 )
 {
 	CHECK_KFD_OPEN();
+
 	if (!fmm_unmap_from_gpu(MemoryAddress))
 		return HSAKMT_STATUS_SUCCESS;
 	else
