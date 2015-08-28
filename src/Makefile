@@ -26,9 +26,16 @@ OBJS = debug.o globals.o memory.o perfctr.o time.o version.o \
 # Default target
 all: lnx lnx64a
 
-BUILD_ROOT = ../build
-BUILDDIR = $(BUILD_ROOT)/$(MAKECMDGOALS)
+# To relocate build output, set "O=target/dir/"
+# otherwise it defaults to a local directory
 
+ifdef O
+  BUILD_ROOT := $(O)
+else
+  BUILD_ROOT := ../build
+endif
+
+BUILDDIR = $(BUILD_ROOT)/$(MAKECMDGOALS)
 TARGET = $(addprefix $(BUILDDIR)/,$(OBJS))
 
 $(BUILDDIR)/$(LIB_NAME).$(LIB_MAJOR_VER): $(TARGET)
