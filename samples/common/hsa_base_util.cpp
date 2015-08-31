@@ -113,6 +113,13 @@ bool HSA_UTIL::HsaInit()
 	base_timer.StopTimer(base_setup_time_idx);
 #endif
 
+
+	//hsa_region_t local_kernarg_region;
+	kernarg_region.handle = 0;
+	hsa_agent_iterate_regions(device, get_kernarg, &kernarg_region);
+	err = (kernarg_region.handle== 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+	check(Finding a kernarg memory region, err);
+
 	return true;
 }
 
@@ -153,18 +160,22 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	/*
 	 * Find a memory region that supports kernel arguments.
 	 */
-	hsa_region_t local_kernarg_region;
-	local_kernarg_region.handle = 0;
 
-	hsa_agent_iterate_regions(device, get_kernarg, &local_kernarg_region);
-	err = (local_kernarg_region.handle== 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+
+/*
+	kernarg_region.handle = 0;
+
+	hsa_agent_iterate_regions(device, get_kernarg, &kernarg_region);
+	err = (kernarg_region.handle== 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
 	check(Finding a kernarg memory region, err);
-	void* local_kernel_arg_buffer = NULL;
+	
+*/
 
+        void* local_kernel_arg_buffer = NULL;
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
-	err = hsa_memory_allocate(local_kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
+	err = hsa_memory_allocate(kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
 	check(Allocating kernel argument memory buffer, err);
 	memcpy(local_kernel_arg_buffer, kernel_args, kernel_args_size);
 	local_dispatch_packet.kernarg_address = local_kernel_arg_buffer;
