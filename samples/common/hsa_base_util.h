@@ -30,6 +30,7 @@ class HSA_UTIL{
 		hsa_status_t err;
 		uint32_t queue_size;
 		hsa_agent_t device;
+                hsa_region_t kernarg_region;
 
 		char hail_file_name[128];
 		char hsa_kernel_name[128];
