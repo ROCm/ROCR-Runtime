@@ -397,7 +397,7 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 
 	args.flags = flags;
 	args.va_addr = (uint64_t)mem;
-	if (!mmap_offset && !is_dgpu)
+	if (flags == KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE)
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU_NEW, &args))
@@ -576,6 +576,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
+	uint32_t flags;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -584,9 +585,16 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 
 	aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 
+	flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
+	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
+		flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
+		/* Alignment is needed to match a workaround for a VI HW bug in the kernel */
+		MemorySizeInBytes = (MemorySizeInBytes + 0x7fffULL) & ~0x7fffULL;
+	}
+
 	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
 			aperture, GPUVM_APP_OFFSET, NULL,
-			KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
+			flags);
 }
 
 static void* fmm_allocate_host_cpu(uint32_t gpu_id,
@@ -628,7 +636,8 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 
 	aperture = &gpu_mem[gpu_mem_id].dgpu_aperture;
 
-	MemorySizeInBytes += 0x8000 - (MemorySizeInBytes % 0x8000);
+	/* Alignment is needed to match a workaround for a VI HW bug in the kernel */
+	MemorySizeInBytes = (MemorySizeInBytes + 0x7fffULL) & ~0x7fffULL;
 
 	mem =  __fmm_allocate_device(gpu_id, MemorySizeInBytes,
 			aperture, 0, &mmap_offset,
@@ -789,17 +798,6 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 		gpu_mem[node_id].gpu_id =
 			args.process_apertures[node_id].gpu_id;
 
-
-		if (topology_sysfs_get_node_props(node_id, &props, &gpu_id) ==
-				HSAKMT_STATUS_SUCCESS) {
-			if (topology_is_dgpu(props.DeviceId)) {
-				dgpu_mem_init(node_id, &gpu_mem[node_id].dgpu_aperture.base,
-						&gpu_mem[node_id].dgpu_aperture.limit);
-				set_dgpu_aperture(node_id, (uint64_t)gpu_mem[node_id].dgpu_aperture.base,
-						(uint64_t)gpu_mem[node_id].dgpu_aperture.limit);
-			}
-		}
-
 		gpu_mem[node_id].lds_aperture.base =
 			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].lds_base);
 
@@ -817,6 +815,21 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 
 		gpu_mem[node_id].scratch_aperture.limit =
 			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].scratch_limit);
+
+		if (topology_sysfs_get_node_props(node_id, &props, &gpu_id) ==
+			HSAKMT_STATUS_SUCCESS) {
+			if (topology_is_dgpu(props.DeviceId)) {
+				dgpu_mem_init(node_id, &gpu_mem[node_id].dgpu_aperture.base,
+						&gpu_mem[node_id].dgpu_aperture.limit);
+				set_dgpu_aperture(node_id, (uint64_t)gpu_mem[node_id].dgpu_aperture.base,
+						(uint64_t)gpu_mem[node_id].dgpu_aperture.limit);
+				gpu_mem[node_id].gpuvm_aperture.base = gpu_mem[node_id].dgpu_aperture.limit;
+				gpu_mem[node_id].gpuvm_aperture.limit = (void *)VOID_PTRS_SUB(gpu_mem[node_id].dgpu_aperture.limit,
+						gpu_mem[node_id].dgpu_aperture.base);
+				gpu_mem[node_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[node_id].gpuvm_aperture.limit,
+						(unsigned long)gpu_mem[node_id].gpuvm_aperture.base);
+			}
+		}
 	}
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -935,7 +948,11 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
-	*gpuvm_address = VOID_PTRS_SUB(object->start, aperture->base);
+	if (gpuvm_address) {
+		*gpuvm_address = (uint64_t)object->start;
+		if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)))
+			*gpuvm_address = VOID_PTRS_SUB(object->start, aperture->base);
+	}
 
 	return 0;
 
