@@ -382,9 +382,10 @@ static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
 static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 						uint64_t MemorySizeInBytes,
 						manageble_aperture_t *aperture,
-						uint64_t *mmap_offset)
+						uint64_t *mmap_offset,
+						uint32_t flags)
 {
-	struct kfd_ioctl_alloc_memory_of_gpu_args args;
+	struct kfd_ioctl_alloc_memory_of_gpu_new_args args;
 	struct kfd_ioctl_free_memory_of_gpu_args free_args;
 
 	if (!mem)
@@ -394,11 +395,12 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 	args.gpu_id = gpu_id;
 	args.size = MemorySizeInBytes;
 
+	args.flags = flags;
 	args.va_addr = (uint64_t)mem;
-	if (!mmap_offset)
+	if (!mmap_offset && !is_dgpu)
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU_NEW, &args))
 		return -1;
 
 	/* Allocate object */
@@ -530,7 +532,8 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 }
 
 static void* __fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
-		manageble_aperture_t *aperture, uint64_t offset, uint64_t *mmap_offset)
+		manageble_aperture_t *aperture, uint64_t offset, uint64_t *mmap_offset,
+		uint32_t flags)
 {
 	void *mem = NULL;
 	/* Check that aperture is properly initialized/supported */
@@ -548,7 +551,7 @@ static void* __fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 	 * itself
 	 */
 	if (fmm_allocate_memory_in_device(gpu_id, mem,
-			MemorySizeInBytes, aperture, mmap_offset)) {
+			MemorySizeInBytes, aperture, mmap_offset, flags)) {
 		/*
 		 * allocation of memory in device failed.
 		 * Release region in aperture
@@ -582,7 +585,8 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 
 	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
-			aperture, GPUVM_APP_OFFSET, NULL);
+			aperture, GPUVM_APP_OFFSET, NULL,
+			KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
 }
 
 static void* fmm_allocate_host_cpu(uint32_t gpu_id,
@@ -627,7 +631,8 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 	MemorySizeInBytes += 0x8000 - (MemorySizeInBytes % 0x8000);
 
 	mem =  __fmm_allocate_device(gpu_id, MemorySizeInBytes,
-			aperture, 0, &mmap_offset);
+			aperture, 0, &mmap_offset,
+			KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST);
 
 	void *ret = mmap(mem, MemorySizeInBytes,
 			PROT_READ | PROT_WRITE | PROT_EXEC,
