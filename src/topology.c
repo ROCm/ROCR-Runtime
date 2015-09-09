@@ -230,9 +230,6 @@ bool topology_is_dgpu(uint16_t gpu_id)
 {
 	uint32_t i, table_size;
 
-	if (is_dgpu)
-		return is_dgpu;
-
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
 	for (i=0; i<table_size; i++) {
 		if(gfxip_lookup_table[i].device_id == gpu_id && gfxip_lookup_table[i].is_dgpu == 1) {
@@ -1031,6 +1028,20 @@ uint16_t get_device_id_by_node(HSAuint32 node_id)
         return 0;
 
     return node[node_id].node.DeviceId;
+}
+
+uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
+{
+	unsigned int i;
+	if (!node || !system)
+		return 0;
+
+	for (i = 0; i < system->NumNodes; i++) {
+		if (node[i].gpu_id == gpu_id)
+			return node[i].node.DeviceId;
+	}
+
+	return 0;
 }
 
 #if 0
