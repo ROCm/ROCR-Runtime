@@ -42,6 +42,13 @@ static bool IsSystemEventType(HSA_EVENTTYPE type)
 	return (type != HSA_EVENTTYPE_SIGNAL && type != HSA_EVENTTYPE_DEBUG_EVENT);
 }
 
+void CleanupEvent(void)
+{
+	// Release is handled during aperture cleanup.
+	free_exec_aligned_memory_gpu(events_page, KFD_SIGNAL_EVENT_LIMIT * 8);
+	events_page = NULL;
+}
+
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtCreateEvent(
