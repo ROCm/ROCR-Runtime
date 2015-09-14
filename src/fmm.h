@@ -43,7 +43,9 @@ typedef struct {
 	void* start_address;
 } aperture_properties_t;
 
+void CleanupEvent(void);
 HSAKMT_STATUS fmm_init_process_apertures(void);
+HSAKMT_STATUS fmm_cleanup_process_apertures(void);
 /*
  * Memory interface
  */
