@@ -319,12 +319,8 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
 		if (strcmp(prop_name,"cpu_cores_count") == 0)
 			props->NumCPUCores = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"simd_count") == 0) {
-			if ((uint32_t)prop_val == 0)
-				props->NumFComputeCores = (uint32_t)1;
-			else
-				props->NumFComputeCores = (uint32_t)prop_val;
-		}
+		else if (strcmp(prop_name,"simd_count") == 0)
+			props->NumFComputeCores = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"mem_banks_count") == 0)
 			props->NumMemoryBanks = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"caches_count") == 0)
@@ -368,7 +364,7 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		else if (strcmp(prop_name,"max_engine_clk_ccompute") == 0)
 			props->MaxEngineClockMhzCCompute = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"local_mem_size") == 0)
-			props->LocalMemSize = (HSAuint64)prop_val;
+			props->LocalMemSize = (uint32_t)prop_val;
 
 	}
 
