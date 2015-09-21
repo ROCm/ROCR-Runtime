@@ -98,7 +98,6 @@ typedef struct {
 static gpu_mem_t gpu_mem[] = INIT_GPUs_MEM;
 
 static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit);
-static HSAKMT_STATUS dgpu_mem_release(void);
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
 static void __fmm_release(uint32_t gpu_id, void *address,
 				uint64_t MemorySizeInBytes, manageble_aperture_t *aperture);
@@ -310,7 +309,7 @@ static void *aperture_allocate_area(manageble_aperture_t *app,
 				break;
 
 			/* address space "hole" */
-			if (((VOID_PTRS_SUB(next->start, cur->end) - 1) >=
+			if ((VOID_PTRS_SUB(next->start, cur->end) >=
 							MemorySizeInBytes))
 				break;
 
@@ -318,7 +317,7 @@ static void *aperture_allocate_area(manageble_aperture_t *app,
 		};
 
 		/* If the new range is inside the reserved aperture */
-		if (VOID_PTRS_SUB(app->limit, cur->end) >=
+		if (VOID_PTRS_SUB(app->limit, cur->end) + 1 >=
 				MemorySizeInBytes) {
 			/*
 			 * cur points to the last inspected element: the tail
@@ -572,7 +571,6 @@ static void* __fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 #define GPUVM_APP_OFFSET 0x10000
 void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
-	MemorySizeInBytes += 0x8000 - (MemorySizeInBytes % 0x8000);
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
 
@@ -618,7 +616,6 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
 	uint64_t mmap_offset;
-	static size_t total_mem = 0;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -639,9 +636,6 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 		__fmm_release(gpu_id, mem, MemorySizeInBytes, aperture);
 		return NULL;
 	}
-
-	total_mem += MemorySizeInBytes;
-	printf("total_mem: %lu\n", total_mem);
 
 	return ret;
 }
@@ -762,7 +756,6 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 		if (address >= gpu_mem[i].dgpu_aperture.base &&
 			address <= gpu_mem[i].dgpu_aperture.limit) {
 			found = true;
-			MemorySizeInBytes += 0x8000 - (MemorySizeInBytes % 0x8000);
 			__fmm_release(gpu_mem[i].gpu_id, address,
 					MemorySizeInBytes, &gpu_mem[i].dgpu_aperture);
 			fmm_print(gpu_mem[i].gpu_id);
@@ -821,32 +814,6 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].scratch_limit);
 	}
 
-	return HSAKMT_STATUS_SUCCESS;
-}
-
-HSAKMT_STATUS fmm_cleanup_process_apertures(void)
-{
-	uint32_t i;
-	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
-	struct kfd_ioctl_free_memory_of_gpu_args free_args;
-
-	for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS; i++) {
-		vm_object_t *cur = gpu_mem[i].dgpu_aperture.vm_objects;
-		pthread_mutex_lock(&gpu_mem[i].dgpu_aperture.fmm_mutex);
-		while (cur) {
-			unmap_args.handle = cur->handle;
-			kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
-			free_args.handle = cur->handle;
-			kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &free_args);
-			aperture_release_area(&gpu_mem[i].dgpu_aperture, cur->start, cur->size);
-			vm_object_t* temp = cur;
-			cur = temp->next;
-			vm_remove_object(&gpu_mem[i].dgpu_aperture, temp);
-		};
-		pthread_mutex_unlock(&gpu_mem[i].dgpu_aperture.fmm_mutex);
-	}
-
-	dgpu_mem_release();
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -1093,7 +1060,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	bool found;
 	HSAKMT_STATUS ret;
 	void *addr, *ret_addr;
-	HSAuint64 max_len;
+	uint32_t max_len;
 	long long unsigned int temp;
 	uint32_t gpu_id;
 	HsaNodeProperties props;
@@ -1110,7 +1077,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	max_len = props.LocalMemSize;
+	max_len = (uint32_t)props.LocalMemSize;
 	found = false;
 
 	for (addr = (void *)PAGE_SIZE, ret_addr = NULL;
@@ -1141,20 +1108,6 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	}
 
 	return HSAKMT_STATUS_ERROR;
-}
-
-static HSAKMT_STATUS dgpu_mem_release(void)
-{
-	size_t max_len;
-	if (is_dgpu_mem_init) {
-		max_len = (size_t)dgpu_shared_aperture_limit -
-			(size_t)dgpu_shared_aperture_base;
-		munmap(dgpu_shared_aperture_base, max_len);
-		is_dgpu_mem_init = false;
-		dgpu_shared_aperture_base = NULL;
-		dgpu_shared_aperture_limit = NULL;
-	}
-	return HSAKMT_STATUS_SUCCESS;
 }
 
 bool fmm_get_handle(void *address, uint64_t *handle)

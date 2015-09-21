@@ -30,7 +30,6 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdio.h>
 #include "fmm.h"
 
 static const char kfd_device_name[] = "/dev/kfd";
@@ -91,9 +90,6 @@ hsaKmtCloseKFD(void)
 	{
 		if (--kfd_open_count == 0)
 		{
-			printf("cleanup aperture\n");
-			CleanupEvent();
-			fmm_cleanup_process_apertures();
 			close(kfd_fd);
 
 			if (amd_hsa_thunk_lock_fd > 0) {
