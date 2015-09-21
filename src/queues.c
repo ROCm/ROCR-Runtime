@@ -49,18 +49,21 @@ struct device_info
 {
 	enum asic_family_type asic_family;
 	uint32_t ctx_save_restore_size;
+	uint32_t ctl_stack_size;
 	uint32_t eop_buffer_size;
 };
 
 struct device_info kaveri_device_info = {
 	.asic_family = CHIP_KAVERI,
 	.ctx_save_restore_size = 0,
+	.ctl_stack_size = 0,
 	.eop_buffer_size = 0,
 };
 
 struct device_info carrizo_device_info = {
 	.asic_family = CHIP_CARRIZO,
-	.ctx_save_restore_size = 2756608,
+	.ctx_save_restore_size = 2756608 + 4096,
+	.ctl_stack_size = 4096,
 	.eop_buffer_size = 4096,
 };
 
@@ -164,7 +167,6 @@ static void* allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
 		free(ptr);
 		return NULL;
 	}
-
 	memset(ptr, 0, size);
 	return ptr;
 }
@@ -260,6 +262,7 @@ static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
 		}
 		if (dev_info->ctx_save_restore_size > 0) {
 			args->ctx_save_restore_size = dev_info->ctx_save_restore_size;
+			args->ctl_stack_size = dev_info->ctl_stack_size;
 			q->ctx_save_restore =
 					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size, PAGE_SIZE, dev_info->asic_family);
 			if (q->ctx_save_restore == NULL) {;
@@ -470,3 +473,35 @@ hsaKmtSetQueueCUMask(
 
 	return HSAKMT_STATUS_SUCCESS;
 }
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetTrapHandler(
+	HSAuint32	Node,
+	void *TrapHandlerBaseAddress,
+	HSAuint64	TrapHandlerSizeInBytes,
+	void *TrapBufferBaseAddress,
+	HSAuint64 TrapBufferSizeInBytes
+)
+{
+	struct kfd_ioctl_set_trap_handler_args args;
+	HSAKMT_STATUS result;
+	uint32_t gpu_id;
+
+	CHECK_KFD_OPEN();
+
+	result = validate_nodeid(Node, &gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	memset(&args, 0, sizeof(args));
+
+	args.gpu_id = gpu_id;
+	args.tba_addr = (uintptr_t)TrapHandlerBaseAddress;
+	args.tma_addr = (uintptr_t)TrapBufferBaseAddress;
+
+	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_TRAP_HANDLER, &args);
+
+	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
+}
+
