@@ -482,6 +482,8 @@ void fmm_print(uint32_t gpu_id)
 		manageble_aperture_print(&gpu_mem[i].gpuvm_aperture);
 		printf("Scratch aperture:\n");
 		manageble_aperture_print(&gpu_mem[i].scratch_aperture);
+		printf("dGPU aperture:\n");
+		manageble_aperture_print(&gpu_mem[i].dgpu_aperture);
 	}
 }
 #else
@@ -583,13 +585,18 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	if (gpu_mem_id < 0)
 		return NULL;
 
-	aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
-
-	flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
 		flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
 		/* Alignment is needed to match a workaround for a VI HW bug in the kernel */
 		MemorySizeInBytes = (MemorySizeInBytes + 0x7fffULL) & ~0x7fffULL;
+		/*
+		 * TODO: Once VA limit is raised from 0x200000000 (8GB) use gpuvm_aperture.
+		 * In that way the host access range won't be used for local memory
+		 */
+		aperture = &gpu_mem[gpu_mem_id].dgpu_aperture;
+	} else {
+		flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
+		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 	}
 
 	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
@@ -1076,13 +1083,36 @@ static void *reserve_address(void *addr, long long unsigned int len)
 }
 
 #define ADDRESS_RANGE_LIMIT_MASK 0xFFFFFFFFFF
+#define AMDGPU_SYSFS_VM_SIZE "/sys/module/amdgpu/parameters/vm_size"
+
+/*
+ * TODO: Provide a cleaner interface via topology
+ */
+static HSAKMT_STATUS get_dgpu_vm_limit(uint32_t *vm_size_in_gb)
+{
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	fd = fopen(AMDGPU_SYSFS_VM_SIZE, "r");
+	if (!fd)
+		return HSAKMT_STATUS_ERROR;
+	if (fscanf(fd, "%ul", vm_size_in_gb) != 1) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto err;
+	}
+
+err:
+	fclose(fd);
+	return ret;
+}
 
 static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 {
 	bool found;
 	HSAKMT_STATUS ret;
 	void *addr, *ret_addr;
-	HSAuint64 max_len;
+	HSAuint64 max_len, max_vm_limit;
+	uint32_t max_vm_limit_in_gb;
 	long long unsigned int temp;
 	uint32_t gpu_id;
 	HsaNodeProperties props;
@@ -1122,9 +1152,19 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 		if (base)
 			*base = ret_addr;
 		dgpu_shared_aperture_base = ret_addr;
+
+		ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
+		if (ret != HSAKMT_STATUS_SUCCESS) {
+			printf("Error! Unable to find vm_size for gGPU\n");
+			return ret;
+		}
+		max_vm_limit = (HSAuint64)max_vm_limit_in_gb << 30;
+		if (((long long unsigned int)ret_addr + max_len) < max_vm_limit)
+			max_vm_limit = ((long long unsigned int)ret_addr + max_len);
+
 		if (limit)
-			*limit = (void *)((long long unsigned int)ret_addr + max_len);
-		dgpu_shared_aperture_limit = (void *)((long long unsigned int)ret_addr + max_len);
+			*limit = (void *)max_vm_limit;
+		dgpu_shared_aperture_limit = (void *)max_vm_limit;
 		is_dgpu_mem_init = true;
 		return HSAKMT_STATUS_SUCCESS;
 	}
