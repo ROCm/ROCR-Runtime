@@ -370,7 +370,7 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		else if (strcmp(prop_name,"max_engine_clk_ccompute") == 0)
 			props->MaxEngineClockMhzCCompute = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"local_mem_size") == 0)
-			props->LocalMemSize = (uint32_t)prop_val;
+			props->LocalMemSize = prop_val;
 
 	}
 

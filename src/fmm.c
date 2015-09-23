@@ -1082,7 +1082,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	bool found;
 	HSAKMT_STATUS ret;
 	void *addr, *ret_addr;
-	uint32_t max_len;
+	HSAuint64 max_len;
 	long long unsigned int temp;
 	uint32_t gpu_id;
 	HsaNodeProperties props;
@@ -1099,7 +1099,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	max_len = (uint32_t)props.LocalMemSize;
+	max_len = props.LocalMemSize;
 	found = false;
 
 	for (addr = (void *)PAGE_SIZE, ret_addr = NULL;
