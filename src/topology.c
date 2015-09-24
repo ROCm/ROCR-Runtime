@@ -375,20 +375,20 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	}
 
 //	get_cpu_stepping(&stepping);
-	props->EngineId.uCode = fw_version & 0x3ff;
-	props->EngineId.Major = 0;
-	props->EngineId.Minor = 0;
-	props->EngineId.Stepping = 0;
+	props->EngineId.ui32.uCode = fw_version & 0x3ff;
+	props->EngineId.ui32.Major = 0;
+	props->EngineId.ui32.Minor = 0;
+	props->EngineId.ui32.Stepping = 0;
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
 	for (i=0; i<table_size; i++) {
 		if(gfxip_lookup_table[i].device_id == props->DeviceId) {
-			props->EngineId.Major = gfxip_lookup_table[i].major & 0x3f;
-			props->EngineId.Minor = gfxip_lookup_table[i].minor;
-			props->EngineId.Stepping = gfxip_lookup_table[i].stepping;
+			props->EngineId.ui32.Major = gfxip_lookup_table[i].major & 0x3f;
+			props->EngineId.ui32.Minor = gfxip_lookup_table[i].minor;
+			props->EngineId.ui32.Stepping = gfxip_lookup_table[i].stepping;
 			break;
 		}
 	}
-	assert(props->EngineId.Major);
+	assert(props->EngineId.ui32.Major);
 	//TODO: error handler when Device ID lookup fails
 
 err2:
