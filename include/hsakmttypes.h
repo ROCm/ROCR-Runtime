@@ -157,7 +157,7 @@ typedef union
         unsigned int Major    :  6;  // GFXIP Major engine version
         unsigned int Minor    :  8;  // GFXIP Minor engine version
         unsigned int Stepping :  8;  // GFXIP Stepping info
-    };
+    }ui32;
 } HSA_ENGINE_ID;
 
 typedef union
