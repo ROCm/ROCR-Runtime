@@ -1119,9 +1119,9 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 
 	if (is_dgpu_mem_init) {
 		if (base)
-			base = dgpu_shared_aperture_base;
+			*base = dgpu_shared_aperture_base;
 		if (limit)
-			limit = dgpu_shared_aperture_limit;
+			*limit = dgpu_shared_aperture_limit;
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
