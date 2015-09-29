@@ -453,7 +453,10 @@ typedef struct _HsaMemFlags
             unsigned int ExecuteAccess: 1; // default = 0: Identifies if memory is primarily used for data or accessed 
                                            // for executable code (e.g. queue memory) by the host CPU or the device. 
                                            // Influences the page attribute setting within the allocation
-            unsigned int Reserved    : 19;
+            unsigned int CoarseGrain : 1;  // default = 0: Memory is assigned explicitly to one agent at a time and does
+                                           // not need to be accessed in a cache-coherent way. Memory consistency needs
+                                           // to be enforced at synchronization points at dispatch boundaries.
+            unsigned int Reserved    : 18;
 
         } ui32;
         HSAuint32 Value;
