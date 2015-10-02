@@ -107,8 +107,15 @@ struct device_id supported_devices[] = {
 	{ 0x9875, &carrizo_device_info },	/* Carrizo */
 	{ 0x9876, &carrizo_device_info },	/* Carrizo */
 	{ 0x9877, &carrizo_device_info },	/* Carrizo */
-	{ 0x6939, &tonga_device_info },
+	{ 0x6920, &tonga_device_info },
+	{ 0x6921, &tonga_device_info },
+	{ 0x6928, &tonga_device_info },
+	{ 0x6929, &tonga_device_info },
 	{ 0x692b, &tonga_device_info },
+	{ 0x692f, &tonga_device_info },
+	{ 0x6930, &tonga_device_info },
+	{ 0x6938, &tonga_device_info },
+	{ 0x6939, &tonga_device_info },
 	{ 0, NULL }
 };
 
