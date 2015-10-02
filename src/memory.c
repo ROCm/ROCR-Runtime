@@ -50,6 +50,13 @@ hsaKmtSetMemoryPolicy(
 
 	CHECK_KFD_OPEN();
 
+	if (is_dgpu)
+		/* This is a legacy API useful on Kaveri only. On dGPU
+		 * the alternate aperture is setup and used
+		 * automatically for coherent allocations. Don't let
+		 * app override it. */
+		return HSAKMT_STATUS_NOT_IMPLEMENTED;
+
 	result = validate_nodeid(Node, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
