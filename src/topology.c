@@ -396,7 +396,8 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		props->EngineId.ui32.Minor = hsa_gfxip->minor;
 		props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
 	}
-	assert(props->EngineId.ui32.Major);
+	if (props->NumFComputeCores)
+		assert(props->EngineId.ui32.Major);
 	//TODO: error handler when Device ID lookup fails
 
 err2:
