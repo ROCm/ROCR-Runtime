@@ -55,7 +55,7 @@ static HSAKMT_STATUS topology_drop_snapshot(void);
 //static int get_cpu_stepping(uint16_t* stepping);
 
 static struct hsa_gfxip_table {
-	unsigned short device_id;	// Device ID
+	uint16_t device_id;		// Device ID
 	unsigned char major;		// GFXIP Major engine version
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
@@ -235,18 +235,27 @@ topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id) {
 	return ret;
 }
 
-bool topology_is_dgpu(uint16_t gpu_id)
+static const struct hsa_gfxip_table* find_hsa_gfxip_device(uint16_t device_id)
 {
 	uint32_t i, table_size;
 
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
 	for (i=0; i<table_size; i++) {
-		if(gfxip_lookup_table[i].device_id == gpu_id && gfxip_lookup_table[i].is_dgpu == 1) {
-			is_dgpu = true;
-			return true;
-		}
+		if(gfxip_lookup_table[i].device_id == device_id)
+			return &gfxip_lookup_table[i];
 	}
+	return NULL;
+}
 
+bool topology_is_dgpu(uint16_t gpu_id)
+{
+	const struct hsa_gfxip_table* hsa_gfxip =
+				find_hsa_gfxip_device(gpu_id);
+
+	if (hsa_gfxip && hsa_gfxip->is_dgpu) {
+		is_dgpu = true;
+		return true;
+	}
 	return false;
 }
 
@@ -257,9 +266,10 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	char prop_name[256];
 	char path[256];
 	long long unsigned int  prop_val;
-	uint32_t i, prog, table_size;
+	uint32_t i, prog;
 	uint16_t fw_version = 0;
-    int read_size;
+	int read_size;
+	const struct hsa_gfxip_table* hsa_gfxip;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -280,12 +290,12 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		goto err1;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
-    p = memchr(read_buf, '\n', read_size);
+	p = memchr(read_buf, '\n', read_size);
 	if ((!p) || ((p-read_buf) > HSA_PUBLIC_NAME_SIZE)) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
@@ -306,19 +316,19 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
         return HSAKMT_STATUS_ERROR;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
-    /* Since we're using the buffer as a string, we make sure the string terminates */
-    if(read_size >= PAGE_SIZE)
-        read_size = PAGE_SIZE-1;
-    read_buf[read_size] = 0;
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if(read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE-1;
+	read_buf[read_size] = 0;
 
 	/*
-     * Read the node properties
+	 * Read the node properties
 	 */
 	prog = 0;
 	p = read_buf;
@@ -379,14 +389,12 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	props->EngineId.ui32.Major = 0;
 	props->EngineId.ui32.Minor = 0;
 	props->EngineId.ui32.Stepping = 0;
-	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
-	for (i=0; i<table_size; i++) {
-		if(gfxip_lookup_table[i].device_id == props->DeviceId) {
-			props->EngineId.ui32.Major = gfxip_lookup_table[i].major & 0x3f;
-			props->EngineId.ui32.Minor = gfxip_lookup_table[i].minor;
-			props->EngineId.ui32.Stepping = gfxip_lookup_table[i].stepping;
-			break;
-		}
+
+	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
+	if (hsa_gfxip) {
+		props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
+		props->EngineId.ui32.Minor = hsa_gfxip->minor;
+		props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
 	}
 	assert(props->EngineId.ui32.Major);
 	//TODO: error handler when Device ID lookup fails
