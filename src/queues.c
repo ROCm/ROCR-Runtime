@@ -42,8 +42,12 @@
 enum asic_family_type {
 	CHIP_KAVERI = 0,
 	CHIP_CARRIZO,
-	CHIP_TONGA
+	CHIP_TONGA,
+	CHIP_FIJI
 };
+
+#define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_FIJI)
+#define IS_DGPU(chip) ((chip) >= CHIP_TONGA && (chip) <= CHIP_FIJI)
 
 struct device_info
 {
@@ -69,6 +73,12 @@ struct device_info carrizo_device_info = {
 
 struct device_info tonga_device_info = {
 	.asic_family = CHIP_TONGA,
+	.ctx_save_restore_size = TONGA_PAGE_SIZE,
+	.eop_buffer_size = TONGA_PAGE_SIZE,
+};
+
+struct device_info fiji_device_info = {
+	.asic_family = CHIP_FIJI,
 	.ctx_save_restore_size = TONGA_PAGE_SIZE,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 };
@@ -116,6 +126,7 @@ struct device_id supported_devices[] = {
 	{ 0x6930, &tonga_device_info },
 	{ 0x6938, &tonga_device_info },
 	{ 0x6939, &tonga_device_info },
+	{ 0x7300, &fiji_device_info },
 	{ 0, NULL }
 };
 
@@ -215,7 +226,7 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size)
 
 static void* allocate_exec_aligned_memory(uint32_t size, uint32_t align, enum asic_family_type type)
 {
-	if (type == CHIP_TONGA)
+	if (IS_DGPU(type))
 		return allocate_exec_aligned_memory_gpu(size, TONGA_PAGE_SIZE);
 	return allocate_exec_aligned_memory_cpu(size, align);
 }
@@ -228,7 +239,7 @@ static void release_exec_aligned_memory_gpu(void *addr, uint32_t size)
 
 static void release_exec_aligned_memory(void *addr, uint32_t size, enum asic_family_type type)
 {
-	if (type == CHIP_TONGA)
+	if (IS_DGPU(type))
 		release_exec_aligned_memory_gpu(addr, TONGA_PAGE_SIZE);
 	else
 		free(addr);
@@ -249,7 +260,7 @@ static void free_queue_gpu(struct queue *q)
 
 static void free_queue(struct queue *q, enum asic_family_type type)
 {
-	if (type == CHIP_TONGA)
+	if (IS_DGPU(type))
 		return free_queue_gpu(q);
 	return free_queue_cpu(q);
 }
