@@ -34,8 +34,6 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-#define TONGA_PAGE_SIZE 0x9000
-
 /* 1024 doorbells, 4 bytes each doorbell */
 #define DOORBELLS_PAGE_SIZE	1024 * 4
 
@@ -201,7 +199,7 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align)
 	flags.ui32.ExecuteAccess = 1;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 
-	size += align - (size % align);
+	size = ALIGN_UP(size, align);
 
 	ret = hsaKmtAllocMemory(0, size, flags, &mem);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
@@ -215,9 +213,9 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align)
 	return mem;
 }
 
-void free_exec_aligned_memory_gpu(void *addr, uint32_t size)
+void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 {
-	size += TONGA_PAGE_SIZE - (size % TONGA_PAGE_SIZE);
+	size = ALIGN_UP(size, align);
 
 	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS) {
 		hsaKmtFreeMemory(addr, size);

@@ -49,11 +49,14 @@ extern bool is_dgpu;
 	do { if (kfd_open_count == 0) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
 
 #define PAGE_SIZE 4096
+/* VI HW bug requires this virtual address alignment */
+#define TONGA_PAGE_SIZE 0x8000
 
 #define CHECK_PAGE_MULTIPLE(x) \
 	do { if ((uint64_t)PORT_VPTR_TO_UINT64(x) % PAGE_SIZE) return HSAKMT_STATUS_INVALID_PARAMETER; } while(0)
 
-#define PAGE_ALIGN_UP(x) (((uint64_t)(x) + PAGE_SIZE - 1) & ~(uint64_t)(PAGE_SIZE-1))
+#define ALIGN_UP(x,align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
+#define PAGE_ALIGN_UP(x) ALIGN_UP(x,PAGE_SIZE)
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
 
 /*
@@ -74,7 +77,7 @@ bool topology_is_dgpu(uint16_t gpu_id);
 HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
 void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align);
-void free_exec_aligned_memory_gpu(void *addr, uint32_t size);
+void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align);
 
 extern int kmtIoctl(int fd, unsigned long request, void *arg);
 
