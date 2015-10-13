@@ -42,6 +42,7 @@
 #define INIT_MANAGEBLE_APERTURE(base_value, limit_value) {	\
 	.base = (void *) base_value,				\
 	.limit = (void *) limit_value,				\
+	.align = PAGE_SIZE,					\
 	.vm_ranges = NULL,					\
 	.vm_objects = NULL,					\
 	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER			\
@@ -78,6 +79,7 @@ typedef struct vm_area vm_area_t;
 typedef struct {
 	void *base;
 	void *limit;
+	uint64_t align;
 	vm_area_t *vm_ranges;
 	vm_object_t *vm_objects;
 	pthread_mutex_t fmm_mutex;
@@ -103,6 +105,8 @@ typedef struct {
 } gpu_mem_t;
 
 static gpu_mem_t gpu_mem[] = INIT_GPUs_MEM;
+static void *dgpu_shared_aperture_base = NULL;
+static void *dgpu_shared_aperture_limit = NULL;
 
 static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit);
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
@@ -224,6 +228,8 @@ static vm_object_t *vm_find_object_by_address(manageble_aperture_t *app,
 {
 	vm_object_t *cur = app->vm_objects;
 
+	size = ALIGN_UP(size, app->align);
+
 	/* Look up the appropriate address range containing the given address */
 	while (cur) {
 		if (cur->start == address && (cur->size == size || size == 0))
@@ -264,6 +270,8 @@ static void aperture_release_area(manageble_aperture_t *app, void *address,
 	vm_area_t *area;
 	uint64_t SizeOfRegion;
 
+	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
+
 	area = vm_find(app, address);
 	if (!area)
 		return;
@@ -301,6 +309,8 @@ static void *aperture_allocate_area(manageble_aperture_t *app,
 
 	next = NULL;
 	new_area = NULL;
+
+	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
 
 	cur = app->vm_ranges;
 	if (cur) { /* not empty */
@@ -358,6 +368,8 @@ static int aperture_allocate_object(manageble_aperture_t *app,
 {
 	vm_object_t *new_object;
 
+	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
+
 	/* Allocate new object */
 	new_object = vm_create_and_init_object(new_address,
 						MemorySizeInBytes,
@@ -400,7 +412,7 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 
 	/* Allocate memory from amdkfd */
 	args.gpu_id = gpu_id;
-	args.size = MemorySizeInBytes;
+	args.size = ALIGN_UP(MemorySizeInBytes, aperture->align);
 
 	args.flags = flags;
 	args.va_addr = (uint64_t)mem;
@@ -596,8 +608,6 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
 		flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
-		/* Alignment is needed to match a workaround for a VI HW bug in the kernel */
-		MemorySizeInBytes = (MemorySizeInBytes + 0x7fffULL) & ~0x7fffULL;
 		/*
 		 * TODO: Once VA limit is raised from 0x200000000 (8GB) use gpuvm_aperture.
 		 * In that way the host access range won't be used for local memory
@@ -654,10 +664,6 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 		aperture = &gpu_mem[gpu_mem_id].dgpu_aperture;
 	else
 		aperture = &gpu_mem[gpu_mem_id].dgpu_alt_aperture; /* coherent */
-
-	/* Alignment is needed to match a workaround for a VI HW bug in the kernel */
-	/* FIXME: this breaks fmm_release! */
-	MemorySizeInBytes = (MemorySizeInBytes + 0x7fffULL) & ~0x7fffULL;
 
 	mem =  __fmm_allocate_device(gpu_id, MemorySizeInBytes,
 			aperture, 0, &mmap_offset,
@@ -806,6 +812,14 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 		}
 	}
 
+	if (found &&
+	    address >= dgpu_shared_aperture_base &&
+	    address <= dgpu_shared_aperture_limit) {
+		/* Remove any CPU mapping, but keep the address range reserved */
+		mmap(address, MemorySizeInBytes, PROT_READ | PROT_WRITE,
+		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
+	}
+
 	/*
 	 * If memory address isn't inside of any defined aperture - it refers
 	 * to the system memory
@@ -872,6 +886,7 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 						&gpu_mem[node_id].dgpu_aperture.limit);
 				set_dgpu_aperture(node_id, (uint64_t)gpu_mem[node_id].dgpu_aperture.base,
 						(uint64_t)gpu_mem[node_id].dgpu_aperture.limit);
+				gpu_mem[node_id].dgpu_aperture.align = TONGA_PAGE_SIZE;
 
 				/* Place GPUVM aperture after dGPU aperture
 				 * (FK: I think this is broken but leaving it for now) */
@@ -880,6 +895,7 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 						gpu_mem[node_id].dgpu_aperture.base);
 				gpu_mem[node_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[node_id].gpuvm_aperture.limit,
 						(unsigned long)gpu_mem[node_id].gpuvm_aperture.base);
+				gpu_mem[node_id].gpuvm_aperture.align = TONGA_PAGE_SIZE;
 
 				/* Use the first 1/4 of the dGPU aperture as
 				 * alternate aperture for coherent access.
@@ -900,6 +916,7 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 					fprintf(stderr, "Error! Failed to set alt aperture for node %d\n", node_id);
 					ret = HSAKMT_STATUS_ERROR;
 				}
+				gpu_mem[node_id].dgpu_alt_aperture.align = TONGA_PAGE_SIZE;
 			}
 		}
 	}
@@ -1129,8 +1146,6 @@ int fmm_unmap_from_gpu(void *address)
 
 /* Tonga dGPU specific functions */
 static bool is_dgpu_mem_init = false;
-static void *dgpu_shared_aperture_base = NULL;
-static void *dgpu_shared_aperture_limit = NULL;
 
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit)
 {
@@ -1208,9 +1223,9 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	max_len = props.LocalMemSize;
 	found = false;
 
-	for (addr = (void *)PAGE_SIZE, ret_addr = NULL;
+	for (addr = (void *)TONGA_PAGE_SIZE, ret_addr = NULL;
 		ret_addr != addr;
-		addr = (void *)((unsigned long)addr + 0x8000))
+		addr = (void *)((unsigned long)addr + TONGA_PAGE_SIZE))
 	{
 		ret_addr = reserve_address(addr, max_len);
 		if (!ret_addr)
