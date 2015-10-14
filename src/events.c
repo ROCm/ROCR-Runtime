@@ -70,11 +70,14 @@ hsaKmtCreateEvent(
 	memset(&args, 0, sizeof(args));
 
 	args.event_type = EventDesc->EventType;
+	args.node_id = EventDesc->NodeId;
 	args.auto_reset = !ManualReset;
 
 	/* dGPU code */
 	if (is_dgpu && events_page == NULL) {
-		events_page = allocate_exec_aligned_memory_gpu(KFD_SIGNAL_EVENT_LIMIT * 8, TONGA_PAGE_SIZE);
+		events_page = allocate_exec_aligned_memory_gpu(KFD_SIGNAL_EVENT_LIMIT * 8,
+			TONGA_PAGE_SIZE,
+			args.node_id);
 		if (!events_page) {
 			return HSAKMT_STATUS_ERROR;
 		}

@@ -187,7 +187,7 @@ static void* allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
 	return ptr;
 }
 
-void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align)
+void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t NodeId)
 {
 	void *mem;
 	HSAuint64 gpu_va;
@@ -201,7 +201,7 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align)
 
 	size = ALIGN_UP(size, align);
 
-	ret = hsaKmtAllocMemory(0, size, flags, &mem);
+	ret = hsaKmtAllocMemory(NodeId, size, flags, &mem);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
 		return NULL;
 	}
@@ -222,10 +222,13 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 	}
 }
 
-static void* allocate_exec_aligned_memory(uint32_t size, uint32_t align, enum asic_family_type type)
+static void* allocate_exec_aligned_memory(uint32_t size,
+					uint32_t align,
+					enum asic_family_type type,
+					uint32_t NodeId)
 {
 	if (IS_DGPU(type))
-		return allocate_exec_aligned_memory_gpu(size, TONGA_PAGE_SIZE);
+		return allocate_exec_aligned_memory_gpu(size, TONGA_PAGE_SIZE, NodeId);
 	return allocate_exec_aligned_memory_cpu(size, align);
 }
 
@@ -264,12 +267,16 @@ static void free_queue(struct queue *q, enum asic_family_type type)
 }
 
 static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
-								struct kfd_ioctl_create_queue_args *args)
+								struct kfd_ioctl_create_queue_args *args,
+								uint32_t NodeId)
 {
 	if (dev_info) {
 		if (dev_info->eop_buffer_size > 0) {
 			q->eop_buffer =
-					allocate_exec_aligned_memory(dev_info->eop_buffer_size, PAGE_SIZE, dev_info->asic_family);
+					allocate_exec_aligned_memory(dev_info->eop_buffer_size,
+					PAGE_SIZE,
+					dev_info->asic_family,
+					NodeId);
 			if (q->eop_buffer == NULL) {
 				return HSAKMT_STATUS_NO_MEMORY;
 			}
@@ -280,7 +287,10 @@ static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
 			args->ctx_save_restore_size = dev_info->ctx_save_restore_size;
 			args->ctl_stack_size = dev_info->ctl_stack_size;
 			q->ctx_save_restore =
-					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size, PAGE_SIZE, dev_info->asic_family);
+					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size,
+					PAGE_SIZE,
+					dev_info->asic_family,
+					NodeId);
 			if (q->ctx_save_restore == NULL) {;
 				return HSAKMT_STATUS_NO_MEMORY;
 			}
@@ -320,7 +330,8 @@ hsaKmtCreateQueue(
 	dev_info = get_device_info_by_dev_id(dev_id);
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof (*q),
-			PAGE_SIZE, dev_info->asic_family);
+			PAGE_SIZE, dev_info->asic_family,
+			NodeId);
 	if (q == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
 
@@ -333,7 +344,7 @@ hsaKmtCreateQueue(
 
 	q->type = dev_info->asic_family;
 
-	err = handle_concrete_asic(dev_info, q, &args);
+	err = handle_concrete_asic(dev_info, q, &args, NodeId);
 	if (err != HSAKMT_STATUS_SUCCESS) {
 		free_queue(q, dev_info->asic_family);
 		return err;
