@@ -92,6 +92,9 @@ typedef struct {
 
 typedef struct {
 	uint32_t gpu_id;
+	uint32_t device_id;
+	uint32_t node_id;
+	uint64_t local_mem_size;
 	aperture_t lds_aperture;
 	manageble_aperture_t scratch_aperture;
 	manageble_aperture_t scratch_physical;
@@ -108,7 +111,7 @@ static gpu_mem_t gpu_mem[] = INIT_GPUs_MEM;
 static void *dgpu_shared_aperture_base = NULL;
 static void *dgpu_shared_aperture_limit = NULL;
 
-static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit);
+static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
 static void __fmm_release(uint32_t gpu_id, void *address,
 				uint64_t MemorySizeInBytes, manageble_aperture_t *aperture);
@@ -845,79 +848,104 @@ static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_po
 HSAKMT_STATUS fmm_init_process_apertures(void)
 {
 	struct kfd_ioctl_get_process_apertures_args args;
-	uint8_t node_id;
+	uint32_t i = 0;
+	int32_t gpu_mem_id =0;
 	uint32_t gpu_id;
+	HsaSystemProperties sys_props;
 	HsaNodeProperties props;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	ret = topology_sysfs_get_system_props(&sys_props);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	/* Initialize gpu_mem[] from sysfs topology. This is necessary because this function
+	 * gets called before hsaKmtAcquireSystemProperties() is called.*/
+	while (i < sys_props.NumNodes) {
+		ret = topology_sysfs_get_node_props(i, &props, &gpu_id);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			return ret;
+		i++;
+		/* Skip non-GPU nodes */
+		if (gpu_id == 0)
+			continue;
+
+		gpu_mem[gpu_mem_id].gpu_id = gpu_id;
+		gpu_mem[gpu_mem_id].local_mem_size = props.LocalMemSize;
+		gpu_mem[gpu_mem_id].device_id = props.DeviceId;
+		gpu_mem[gpu_mem_id].node_id = i;
+		gpu_mem_id++;
+	}
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES, (void *) &args))
 		return HSAKMT_STATUS_ERROR;
 
-	for (node_id = 0 ; node_id < args.num_of_nodes ; node_id++) {
-		gpu_mem[node_id].gpu_id =
-			args.process_apertures[node_id].gpu_id;
+	for (i = 0 ; i < args.num_of_nodes ; i++) {
+		/* Map Kernel process device data node i <--> gpu_mem_id which indexes into gpu_mem[]
+		 * based on gpu_id */
+		gpu_mem_id = gpu_mem_find_by_gpu_id(args.process_apertures[i].gpu_id);
+		if (gpu_mem_id < 0)
+			return HSAKMT_STATUS_ERROR;
 
-		gpu_mem[node_id].lds_aperture.base =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].lds_base);
+		gpu_mem[gpu_mem_id].lds_aperture.base =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].lds_base);
 
-		gpu_mem[node_id].lds_aperture.limit =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].lds_limit);
+		gpu_mem[gpu_mem_id].lds_aperture.limit =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].lds_limit);
 
-		gpu_mem[node_id].gpuvm_aperture.base =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].gpuvm_base);
+		gpu_mem[gpu_mem_id].gpuvm_aperture.base =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].gpuvm_base);
 
-		gpu_mem[node_id].gpuvm_aperture.limit =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].gpuvm_limit);
+		gpu_mem[gpu_mem_id].gpuvm_aperture.limit =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].gpuvm_limit);
 
-		gpu_mem[node_id].scratch_aperture.base =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].scratch_base);
+		gpu_mem[gpu_mem_id].scratch_aperture.base =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].scratch_base);
 
-		gpu_mem[node_id].scratch_aperture.limit =
-			PORT_UINT64_TO_VPTR(args.process_apertures[node_id].scratch_limit);
+		gpu_mem[gpu_mem_id].scratch_aperture.limit =
+			PORT_UINT64_TO_VPTR(args.process_apertures[i].scratch_limit);
 
-		if (topology_sysfs_get_node_props(node_id, &props, &gpu_id) ==
-			HSAKMT_STATUS_SUCCESS) {
-			if (topology_is_dgpu(props.DeviceId)) {
-				uintptr_t alt_base;
-				uint64_t alt_size;
-				int err;
+		if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+			uintptr_t alt_base;
+			uint64_t alt_size;
+			int err;
 
-				dgpu_mem_init(node_id, &gpu_mem[node_id].dgpu_aperture.base,
-						&gpu_mem[node_id].dgpu_aperture.limit);
-				set_dgpu_aperture(node_id, (uint64_t)gpu_mem[node_id].dgpu_aperture.base,
-						(uint64_t)gpu_mem[node_id].dgpu_aperture.limit);
-				gpu_mem[node_id].dgpu_aperture.align = TONGA_PAGE_SIZE;
+			dgpu_mem_init(gpu_mem_id, &gpu_mem[gpu_mem_id].dgpu_aperture.base,
+					&gpu_mem[gpu_mem_id].dgpu_aperture.limit);
+			/* Set kernel process dgpu aperture. */
+			set_dgpu_aperture(i, (uint64_t)gpu_mem[gpu_mem_id].dgpu_aperture.base,
+				(uint64_t)gpu_mem[gpu_mem_id].dgpu_aperture.limit);
+			gpu_mem[gpu_mem_id].dgpu_aperture.align = TONGA_PAGE_SIZE;
 
-				/* Place GPUVM aperture after dGPU aperture
-				 * (FK: I think this is broken but leaving it for now) */
-				gpu_mem[node_id].gpuvm_aperture.base = VOID_PTR_ADD(gpu_mem[node_id].dgpu_aperture.limit, 1);
-				gpu_mem[node_id].gpuvm_aperture.limit = (void *)VOID_PTRS_SUB(gpu_mem[node_id].dgpu_aperture.limit,
-						gpu_mem[node_id].dgpu_aperture.base);
-				gpu_mem[node_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[node_id].gpuvm_aperture.limit,
-						(unsigned long)gpu_mem[node_id].gpuvm_aperture.base);
-				gpu_mem[node_id].gpuvm_aperture.align = TONGA_PAGE_SIZE;
+			/* Place GPUVM aperture after dGPU aperture
+				* (FK: I think this is broken but leaving it for now) */
+			gpu_mem[gpu_mem_id].gpuvm_aperture.base = VOID_PTR_ADD(gpu_mem[gpu_mem_id].dgpu_aperture.limit, 1);
+			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = (void *)VOID_PTRS_SUB(gpu_mem[gpu_mem_id].dgpu_aperture.limit,
+					gpu_mem[gpu_mem_id].dgpu_aperture.base);
+			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[gpu_mem_id].gpuvm_aperture.limit,
+				(unsigned long)gpu_mem[gpu_mem_id].gpuvm_aperture.base);
+			gpu_mem[gpu_mem_id].gpuvm_aperture.align = TONGA_PAGE_SIZE;
 
-				/* Use the first 1/4 of the dGPU aperture as
-				 * alternate aperture for coherent access.
-				 * Base and size must be 64KB aligned. */
-				alt_base = (uintptr_t)gpu_mem[node_id].dgpu_aperture.base;
-				alt_size = (VOID_PTRS_SUB(gpu_mem[node_id].dgpu_aperture.limit,
-							  gpu_mem[node_id].dgpu_aperture.base) + 1) >> 2;
-				alt_base = (alt_base + 0xffff) & ~0xffffULL;
-				alt_size = (alt_size + 0xffff) & ~0xffffULL;
-				gpu_mem[node_id].dgpu_alt_aperture.base = (void *)alt_base;
-				gpu_mem[node_id].dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
-				gpu_mem[node_id].dgpu_aperture.base = VOID_PTR_ADD(gpu_mem[node_id].dgpu_alt_aperture.limit, 1);
-				err = fmm_set_memory_policy(gpu_id,
-							    KFD_IOC_CACHE_POLICY_NONCOHERENT,
-							    KFD_IOC_CACHE_POLICY_COHERENT,
-							    alt_base, alt_size);
-				if (err != 0) {
-					fprintf(stderr, "Error! Failed to set alt aperture for node %d\n", node_id);
-					ret = HSAKMT_STATUS_ERROR;
-				}
-				gpu_mem[node_id].dgpu_alt_aperture.align = TONGA_PAGE_SIZE;
+			/* Use the first 1/4 of the dGPU aperture as
+				* alternate aperture for coherent access.
+				* Base and size must be 64KB aligned. */
+			alt_base = (uintptr_t)gpu_mem[gpu_mem_id].dgpu_aperture.base;
+			alt_size = (VOID_PTRS_SUB(gpu_mem[gpu_mem_id].dgpu_aperture.limit,
+				gpu_mem[gpu_mem_id].dgpu_aperture.base) + 1) >> 2;
+			alt_base = (alt_base + 0xffff) & ~0xffffULL;
+			alt_size = (alt_size + 0xffff) & ~0xffffULL;
+			gpu_mem[gpu_mem_id].dgpu_alt_aperture.base = (void *)alt_base;
+			gpu_mem[gpu_mem_id].dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
+			gpu_mem[gpu_mem_id].dgpu_aperture.base = VOID_PTR_ADD(gpu_mem[gpu_mem_id].dgpu_alt_aperture.limit, 1);
+			err = fmm_set_memory_policy(gpu_mem[gpu_mem_id].gpu_id,
+							KFD_IOC_CACHE_POLICY_NONCOHERENT,
+							KFD_IOC_CACHE_POLICY_COHERENT,
+							alt_base, alt_size);
+			if (err != 0) {
+				fprintf(stderr, "Error! Failed to set alt aperture for GPU [0x%x]\n", gpu_mem[gpu_mem_id].gpu_id);
+				ret = HSAKMT_STATUS_ERROR;
 			}
+			gpu_mem[gpu_mem_id].dgpu_alt_aperture.align = TONGA_PAGE_SIZE;
 		}
 	}
 
@@ -1197,7 +1225,7 @@ err:
 	return ret;
 }
 
-static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
+static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limit)
 {
 	bool found;
 	HSAKMT_STATUS ret;
@@ -1205,8 +1233,6 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 	HSAuint64 max_len, max_vm_limit;
 	uint32_t max_vm_limit_in_gb;
 	long long unsigned int temp;
-	uint32_t gpu_id;
-	HsaNodeProperties props;
 
 	if (is_dgpu_mem_init) {
 		if (base)
@@ -1216,11 +1242,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint8_t node_id, void **base, void **limit)
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	ret = topology_sysfs_get_node_props(node_id, &props, &gpu_id);
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
-
-	max_len = props.LocalMemSize;
+	max_len = gpu_mem[gpu_mem_id].local_mem_size;
 	found = false;
 
 	for (addr = (void *)TONGA_PAGE_SIZE, ret_addr = NULL;
