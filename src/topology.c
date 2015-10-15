@@ -139,7 +139,7 @@ err:
 	return ret;
 }
 
-static HSAKMT_STATUS
+HSAKMT_STATUS
 topology_sysfs_get_system_props(HsaSystemProperties *props) {
 	FILE *fd;
 	DIR *dirp;
