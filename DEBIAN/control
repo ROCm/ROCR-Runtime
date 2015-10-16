@@ -1,0 +1,8 @@
+Package: libhsakmt
+Architecture: amd64
+Maintainer: Advanced Micro Devices Inc.
+Depends:
+Priority: optional
+Version: 1.6.0
+Description: Thunk library for AMD KFD
+

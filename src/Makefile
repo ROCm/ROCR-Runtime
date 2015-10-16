@@ -48,6 +48,14 @@ lnx: CFLAGS += -m32
 lnx: LDFLAGS += -m32
 lnx: $(BUILDDIR)/$(LIB_NAME)
 
+PACKAGE_DIR = $(BUILDDIR)/libhsakmt
+INSTALL_DIR = $(PACKAGE_DIR)/usr/lib/x86_64-linux-gnu
+deb: lnx64a
+	@mkdir -p $(INSTALL_DIR)
+	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR)
+	@cp -r ../DEBIAN $(PACKAGE_DIR)
+	@fakeroot dpkg-deb --build $(PACKAGE_DIR) $(BUILDDIR)/libhsakmt.deb
+
 lnx64a: $(BUILDDIR)/$(LIB_NAME)
 
 clean:
