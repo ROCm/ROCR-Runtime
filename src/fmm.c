@@ -304,64 +304,64 @@ static void aperture_release_area(manageble_aperture_t *app, void *address,
  * returns allocated address or NULL. Assumes, that fmm_mutex is locked
  * on entry.
  */
-static void *aperture_allocate_area(manageble_aperture_t *app,
-					uint64_t MemorySizeInBytes,
-					uint64_t offset)
+static void *aperture_allocate_area_aligned(manageble_aperture_t *app,
+					    uint64_t MemorySizeInBytes,
+					    uint64_t offset,
+					    uint64_t align)
 {
-	vm_area_t *cur, *next, *new_area, *start;
-	void *new_address = NULL;
-
-	next = NULL;
-	new_area = NULL;
+	vm_area_t *cur, *next;
+	void *start;
 
 	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
 
-	cur = app->vm_ranges;
-	if (cur) { /* not empty */
-		/*
-		 * Look up the appropriate address space "hole" or end of
-		 * the list
-		 */
-		while (cur) {
-			next = cur->next;
+	if (align < app->align)
+		align = app->align;
 
-			/* End of the list reached */
-			if (!next)
-				break;
+	/* Find a big enough "hole" in the address space */
+	cur = NULL;
+	next = app->vm_ranges;
+	start = (void *)ALIGN_UP((uint64_t)VOID_PTR_ADD(app->base, offset),
+				 align);
+	while (next) {
+		if (next->start > start &&
+		    VOID_PTRS_SUB(next->start, start) >= MemorySizeInBytes)
+			break;
 
-			/* address space "hole" */
-			if ((VOID_PTRS_SUB(next->start, cur->end) >=
-							MemorySizeInBytes))
-				break;
+		cur = next;
+		next = next->next;
+		start = (void *)ALIGN_UP((uint64_t)cur->end + 1, align);
+	}
+	if (!next && VOID_PTRS_SUB(app->limit, start) + 1 < MemorySizeInBytes)
+		/* No hole found and not enough space after the last area */
+		return NULL;
 
-			cur = next;
-		};
-
-		/* If the new range is inside the reserved aperture */
-		if (VOID_PTRS_SUB(app->limit, cur->end) + 1 >=
-				MemorySizeInBytes) {
-			/*
-			 * cur points to the last inspected element: the tail
-			 * of the list or the found "hole".
-			 * Just extend the existing region
-			 */
-			new_address = VOID_PTR_ADD(cur->end, 1);
-			cur->end = VOID_PTR_ADD(cur->end, MemorySizeInBytes);
-		} else {
-			new_address = NULL;
-		}
-	} else { /* empty - create the first area */
-		/* Some offset from the base */
-		start = VOID_PTR_ADD(app->base, offset);
+	if (cur && VOID_PTR_ADD(cur->end, 1) == start) {
+		/* extend existing area */
+		cur->end = VOID_PTR_ADD(start, MemorySizeInBytes-1);
+	} else {
+		vm_area_t *new_area;
+		/* create a new area between cur and next */
 		new_area = vm_create_and_init_area(start,
 				VOID_PTR_ADD(start, (MemorySizeInBytes - 1)));
-		if (new_area) {
+		if (!new_area)
+			return NULL;
+		new_area->next = next;
+		new_area->prev = cur;
+		if (cur)
+			cur->next = new_area;
+		else
 			app->vm_ranges = new_area;
-			new_address = new_area->start;
-		}
+		if (next)
+			next->prev = new_area;
 	}
 
-	return new_address;
+	return start;
+}
+static void *aperture_allocate_area(manageble_aperture_t *app,
+				    uint64_t MemorySizeInBytes,
+				    uint64_t offset)
+{
+	return aperture_allocate_area_aligned(app, MemorySizeInBytes, offset, app->align);
 }
 
 /* returns 0 on success. Assumes, that fmm_mutex is locked on entry */
