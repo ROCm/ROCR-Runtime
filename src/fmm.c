@@ -116,6 +116,9 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
 static void __fmm_release(uint32_t gpu_id, void *address,
 				uint64_t MemorySizeInBytes, manageble_aperture_t *aperture);
+static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
+				       manageble_aperture_t *aperture,
+				       void *address);
 
 static vm_area_t *vm_create_and_init_area(void *start, void *end)
 {
@@ -505,6 +508,8 @@ void fmm_print(uint32_t gpu_id)
 		manageble_aperture_print(&gpu_mem[i].gpuvm_aperture);
 		printf("Scratch aperture:\n");
 		manageble_aperture_print(&gpu_mem[i].scratch_aperture);
+		printf("Scratch backing memory:\n");
+		manageble_aperture_print(&gpu_mem[i].scratch_physical);
 		printf("dGPU aperture:\n");
 		manageble_aperture_print(&gpu_mem[i].dgpu_aperture);
 		printf("dGPU alt aperture:\n");
@@ -517,45 +522,111 @@ void fmm_print(uint32_t gpu_id)
 }
 #endif
 
+static void fmm_release_scratch(uint32_t gpu_id)
+{
+	int32_t gpu_mem_id;
+	uint64_t size;
+	vm_object_t *obj;
+	manageble_aperture_t *aperture;
+
+	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+	if (gpu_mem_id < 0)
+		return;
+
+	aperture = &gpu_mem[gpu_mem_id].scratch_physical;
+
+	size = VOID_PTRS_SUB(aperture->limit, aperture->base) + 1;
+
+	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+		/* unmap and remove all remaining objects */
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		while ((obj = aperture->vm_objects)) {
+			void *obj_addr = obj->start;
+			pthread_mutex_unlock(&aperture->fmm_mutex);
+
+			_fmm_unmap_from_gpu_scratch(gpu_id, aperture, obj_addr);
+
+			pthread_mutex_lock(&aperture->fmm_mutex);
+		}
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+
+		/* release address space */
+		pthread_mutex_lock(&gpu_mem[gpu_mem_id].dgpu_aperture.fmm_mutex);
+		aperture_release_area(&gpu_mem[gpu_mem_id].dgpu_aperture,
+				      gpu_mem[gpu_mem_id].scratch_physical.base,
+				      size);
+		pthread_mutex_unlock(&gpu_mem[gpu_mem_id].dgpu_aperture.fmm_mutex);
+	} else
+		/* release address space */
+		munmap(gpu_mem[gpu_mem_id].scratch_physical.base, size);
+
+	/* invalidate scratch backing aperture */
+	gpu_mem[gpu_mem_id].scratch_physical.base = NULL;
+	gpu_mem[gpu_mem_id].scratch_physical.limit = NULL;
+}
+
+#define SCRATCH_ALIGN 0x10000
 void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
-	manageble_aperture_t *aperture;
 	manageble_aperture_t *aperture_phy;
 	struct kfd_ioctl_alloc_memory_of_gpu_args args;
 	int32_t gpu_mem_id;
 	void *mem = NULL;
+	uint64_t aligned_size = ALIGN_UP(MemorySizeInBytes, SCRATCH_ALIGN);
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
 		return NULL;
 
-	aperture = &gpu_mem[gpu_mem_id].scratch_aperture;
 	aperture_phy = &gpu_mem[gpu_mem_id].scratch_physical;
-
-	/* Check that aperture is properly initialized/supported */
-	if (!aperture_is_valid(aperture->base, aperture->limit))
+	if (aperture_phy->base != NULL || aperture_phy->limit != NULL)
+		/* Scratch was already allocated for this GPU */
 		return NULL;
 
-	/* Allocate address space */
-	mem = mmap(0, MemorySizeInBytes + 16 * PAGE_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS, -1, 0); 
-	if (mem == NULL)
-		return NULL;
+	/* Allocate address space for scratch backing, 64KB aligned */
+	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+		pthread_mutex_lock(&gpu_mem[gpu_mem_id].dgpu_aperture.fmm_mutex);
+		mem = aperture_allocate_area_aligned(
+			&gpu_mem[gpu_mem_id].dgpu_aperture,
+			aligned_size, 0, SCRATCH_ALIGN);
+		pthread_mutex_unlock(&gpu_mem[gpu_mem_id].dgpu_aperture.fmm_mutex);
+	} else {
+		uint64_t aligned_padded_size = aligned_size +
+			SCRATCH_ALIGN - PAGE_SIZE;
+		void *padded_end, *aligned_start, *aligned_end;
+		mem = mmap(0, aligned_padded_size,
+			   PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS,
+			   -1, 0);
+		if (mem == NULL)
+			return NULL;
+		/* align start and unmap padding */
+		padded_end = VOID_PTR_ADD(mem, aligned_padded_size);
+		aligned_start = (void *)ALIGN_UP((uint64_t)mem, SCRATCH_ALIGN);
+		aligned_end = VOID_PTR_ADD(aligned_start, aligned_size);
+		if (aligned_start > mem)
+			munmap(mem, VOID_PTRS_SUB(aligned_start, mem));
+		if (aligned_end < padded_end)
+			munmap(aligned_end,
+			       VOID_PTRS_SUB(padded_end, aligned_end));
+		mem = aligned_start;
+	}
 
-	/* Allocate memory from amdkfd */
+	/* Remember scratch backing aperture for later */
+	aperture_phy->base = mem;
+	aperture_phy->limit = VOID_PTR_ADD(mem, aligned_size-1);
+
+	/* Allocate memory from amdkfd (just programs SH_HIDDEN_PRIVATE_BASE) */
 	args.gpu_id = gpu_id;
 	args.size = MemorySizeInBytes;
+	args.va_addr = ((uint64_t)mem) >> 16;
 
-	/* va_addr is 40 bit GPUVM address */ 
-	args.va_addr = (((uint64_t)mem) >> 16) + 1;
-
-	aperture_phy->base = mem;
-	aperture_phy->limit = (void*)(((uint64_t)mem) + MemorySizeInBytes + 16 * PAGE_SIZE);
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_SCRATCH, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_SCRATCH, &args)) {
+		fmm_release_scratch(gpu_id);
 		return NULL;
+	}
 
-	return (void*)(((((uint64_t)mem) >> 16) + 1) << 16);
+	return mem;
 }
 
 static void* __fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
@@ -793,10 +864,10 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 		if (address >= gpu_mem[i].scratch_physical.base && 
-			address <= gpu_mem[i].scratch_physical.limit){ 
-				munmap(gpu_mem[i].scratch_physical.base,(uint64_t)gpu_mem[i].scratch_physical.limit - (uint64_t)gpu_mem[i].scratch_physical.base);
-				return;
-			}
+			address <= gpu_mem[i].scratch_physical.limit) {
+			fmm_release_scratch(gpu_mem[i].gpu_id);
+			return;
+		}
 
 		if (address >= gpu_mem[i].gpuvm_aperture.base && 
 			address <= gpu_mem[i].gpuvm_aperture.limit) {
@@ -920,6 +991,10 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 
 			dgpu_mem_init(gpu_mem_id, &gpu_mem[gpu_mem_id].dgpu_aperture.base,
 					&gpu_mem[gpu_mem_id].dgpu_aperture.limit);
+
+			/* Set proper alignment for scratch backing aperture */
+			gpu_mem[gpu_mem_id].scratch_physical.align = TONGA_PAGE_SIZE;
+
 			/* Set kernel process dgpu aperture. */
 			set_dgpu_aperture(i, (uint64_t)gpu_mem[gpu_mem_id].dgpu_aperture.base,
 				(uint64_t)gpu_mem[gpu_mem_id].dgpu_aperture.limit);
@@ -1049,6 +1124,49 @@ err_object_not_found:
 	return -1;
 }
 
+static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *aperture,
+				   void *address, uint64_t size)
+{
+	int32_t gpu_mem_id;
+	uint64_t offset;
+	void *mem;
+	int ret;
+
+	/* Retrieve gpu_mem id according to gpu_id */
+	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+	if (gpu_mem_id < 0)
+		return -1;
+
+        if (!topology_is_dgpu(gpu_mem[gpu_mem_id].device_id))
+		return 0; /* Nothing to do on APU */
+
+	/* sanity check the address */
+	if (address < aperture->base ||
+	    VOID_PTR_ADD(address, size -1) > aperture->limit)
+		return -1;
+
+	/* allocate object within the scratch backing aperture */
+	offset = VOID_PTRS_SUB(address, aperture->base);
+	mem = __fmm_allocate_device(gpu_id, size, aperture, offset, NULL,
+				    KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
+	if (mem == NULL)
+		return -1;
+	if (mem != address) {
+		fprintf(stderr, "Got unexpected address for scratch mapping.\n"
+			"  expected: %p\n"
+			"  got:      %p\n", address, mem);
+		__fmm_release(gpu_id, mem, size, aperture);
+		return -1;
+	}
+
+	/* map to GPU */
+	ret = _fmm_map_to_gpu_gtt(gpu_id, aperture, address, size);
+	if (ret != 0)
+		__fmm_release(gpu_id, mem, size, aperture);
+
+	return ret;
+}
+
 static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 				void *address, uint64_t size,
 				uint64_t *gpuvm_address)
@@ -1097,6 +1215,12 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
+
+		if ((address >= gpu_mem[i].scratch_physical.base) &&
+			(address <= gpu_mem[i].scratch_physical.limit))
+			return _fmm_map_to_gpu_scratch(gpu_mem[i].gpu_id,
+						       &gpu_mem[i].scratch_physical,
+						       address, size);
 
 		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
 			(address <= gpu_mem[i].gpuvm_aperture.limit))
@@ -1151,6 +1275,48 @@ err:
 	return -1;
 }
 
+static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
+				       manageble_aperture_t *aperture,
+				       void *address)
+{
+	int32_t gpu_mem_id;
+	vm_object_t *object;
+	uint64_t size;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+
+	/* Retrieve gpu_mem id according to gpu_id */
+	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+	if (gpu_mem_id < 0)
+		return -1;
+
+        if (!topology_is_dgpu(gpu_mem[gpu_mem_id].device_id))
+		return 0; /* Nothing to do on APU */
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+
+	/* Find the object to retrieve the handle and size */
+	object = vm_find_object_by_address(aperture, address, 0);
+	if (!object)
+		goto err;
+
+	size = object->size;
+
+	/* unmap from GPU */
+	args.handle = object->handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* free object in scratch backing aperture */
+	__fmm_release(gpu_id, address, size, aperture);
+
+	return 0;
+
+err:
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return -1;
+}
+
 int fmm_unmap_from_gpu(void *address)
 {
 	int32_t i;
@@ -1159,6 +1325,12 @@ int fmm_unmap_from_gpu(void *address)
 	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
+
+		if ((address >= gpu_mem[i].scratch_physical.base) &&
+			(address <= gpu_mem[i].scratch_physical.limit))
+			return _fmm_unmap_from_gpu_scratch(gpu_mem[i].gpu_id,
+							   &gpu_mem[i].gpuvm_aperture,
+							   address);
 
 		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
 			(address <= gpu_mem[i].gpuvm_aperture.limit))
