@@ -1230,9 +1230,8 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 	bool found;
 	HSAKMT_STATUS ret;
 	void *addr, *ret_addr;
-	HSAuint64 max_len, max_vm_limit;
+	HSAuint64 len, vm_limit, max_vm_limit, min_vm_size;
 	uint32_t max_vm_limit_in_gb;
-	long long unsigned int temp;
 
 	if (is_dgpu_mem_init) {
 		if (base)
@@ -1242,47 +1241,72 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	max_len = gpu_mem[gpu_mem_id].local_mem_size;
+	ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		fprintf(stderr,
+			"Unable to find vm_size for dGPU, assuming 64GB.\n");
+		max_vm_limit_in_gb = 64;
+	}
+	max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
+	min_vm_size = (HSAuint64)4 << 30;
+
 	found = false;
 
-	for (addr = (void *)TONGA_PAGE_SIZE, ret_addr = NULL;
-		ret_addr != addr;
-		addr = (void *)((unsigned long)addr + TONGA_PAGE_SIZE))
-	{
-		ret_addr = reserve_address(addr, max_len);
-		if (!ret_addr)
+	for (len = max_vm_limit+1; !found && len >= min_vm_size; len >>= 1) {
+		for (addr = (void *)TONGA_PAGE_SIZE, ret_addr = NULL;
+		     (HSAuint64)addr + (len >> 1) < max_vm_limit;
+		     addr = (void *)((HSAuint64)addr + TONGA_PAGE_SIZE)) {
+			ret_addr = reserve_address(addr, len);
+			if (!ret_addr)
+				break;
+			if ((HSAuint64)ret_addr + (len>>1) < max_vm_limit)
+				/* At least half the returned address
+				 * space is GPU addressable, we'll
+				 * take it */
+				break;
+			munmap (ret_addr, len);
+		}
+		if (!ret_addr) {
+			fprintf(stderr,
+				"Failed to reserve %uGB for SVM ...\n",
+				(unsigned)(len >> 30));
 			continue;
-		temp = (long long unsigned int)ret_addr + max_len;
-		if (temp < ADDRESS_RANGE_LIMIT_MASK) {
+		}
+		if ((HSAuint64)ret_addr + min_vm_size - 1 > max_vm_limit) {
+			/* addressable size is less than the minimum */
+			fprintf(stderr,
+				"Got %uGB for SVM at %p with only %dGB usable ...\n",
+				(unsigned)(len >> 30), ret_addr,
+				(int)(((HSAint64)max_vm_limit -
+				       (HSAint64)ret_addr) >> 30));
+			munmap(ret_addr, len);
+			continue;
+		} else
 			found = true;
-			break;
-		}
-		else
-			munmap(ret_addr, max_len);
 	}
 
-	if (found) {
-		if (base)
-			*base = ret_addr;
-		dgpu_shared_aperture_base = ret_addr;
-
-		ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
-		if (ret != HSAKMT_STATUS_SUCCESS) {
-			fprintf(stderr, "Error! Unable to find vm_size for gGPU\n");
-			return ret;
-		}
-		max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
-		if (((long long unsigned int)ret_addr + max_len - 1) < max_vm_limit)
-			max_vm_limit = ((long long unsigned int)ret_addr + max_len - 1);
-
-		if (limit)
-			*limit = (void *)max_vm_limit;
-		dgpu_shared_aperture_limit = (void *)max_vm_limit;
-		is_dgpu_mem_init = true;
-		return HSAKMT_STATUS_SUCCESS;
+	if (!found) {
+		fprintf(stderr,
+			"Failed to reserve SVM address range. Giving up.\n");
+		return HSAKMT_STATUS_ERROR;
 	}
 
-	return HSAKMT_STATUS_ERROR;
+	vm_limit = (HSAuint64)ret_addr + len - 1;
+	if (vm_limit > max_vm_limit) {
+		/* trim the tail that's not GPU-addressable */
+		munmap((void *)(max_vm_limit + 1), vm_limit - max_vm_limit);
+		vm_limit = max_vm_limit;
+	}
+
+	if (base)
+		*base = ret_addr;
+	dgpu_shared_aperture_base = ret_addr;
+	if (limit)
+		*limit = (void *)vm_limit;
+	dgpu_shared_aperture_limit = (void *)vm_limit;
+	is_dgpu_mem_init = true;
+
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 bool fmm_get_handle(void *address, uint64_t *handle)
