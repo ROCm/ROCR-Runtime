@@ -447,7 +447,7 @@ topology_sysfs_get_mem_props(uint32_t node_id, uint32_t mem_id, HsaMemoryPropert
 		if (strcmp(prop_name,"heap_type") == 0)
 			props->HeapType = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"size_in_bytes") == 0)
-			props->SizeInBytes = prop_val;
+			props->SizeInBytes = (uint64_t)prop_val;
 		else if (strcmp(prop_name,"flags") == 0)
 			props->Flags.MemoryProperty = (uint32_t)prop_val;
 		else if (strcmp(prop_name,"width") == 0)
