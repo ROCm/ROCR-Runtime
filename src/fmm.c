@@ -30,6 +30,7 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <sys/mman.h>
+#include <sys/time.h>
 
 #define NON_VALID_GPU_ID 0
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
@@ -657,23 +658,30 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
 	uint64_t mmap_offset;
+	uint32_t ioc_flags;
+	uint32_t size;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
 		return NULL;
 
+	size = MemorySizeInBytes;
+	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST;
 	if (flags.ui32.CoarseGrain)
 		aperture = &gpu_mem[gpu_mem_id].dgpu_aperture;
 	else
 		aperture = &gpu_mem[gpu_mem_id].dgpu_alt_aperture; /* coherent */
+	if (flags.ui32.AQLQueueMemory) {
+		size = MemorySizeInBytes * 2;
+		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
+	}
 
-	mem =  __fmm_allocate_device(gpu_id, MemorySizeInBytes,
+	mem =  __fmm_allocate_device(gpu_id, size,
 			aperture, 0, &mmap_offset,
-			KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST);
+			ioc_flags);
 
 	/* FIXME: host memory allocated in this way should be mapped on all GPUs */
-
 	void *ret = mmap(mem, MemorySizeInBytes,
 			PROT_READ | PROT_WRITE | PROT_EXEC,
 		       MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);

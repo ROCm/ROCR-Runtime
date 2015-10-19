@@ -182,7 +182,8 @@ typedef union
         unsigned int DoorbellType        : 2;    // 0: This node has pre-1.0 doorbell characteristic
                                                  // 1: This node has 1.0 doorbell characteristic
                                                  // 2,3: reserved for future use
-        unsigned int Reserved            : 18;
+        unsigned int AQLQueueDoubleMap    : 1;	 // The unit needs a VA “double map”
+        unsigned int Reserved            : 17;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -458,7 +459,10 @@ typedef struct _HsaMemFlags
                                            // 1: memory consistency needs to be enforced at
                                            // synchronization points at dispatch or other software
                                            // enforced synchronization boundaries.
-            unsigned int Reserved    : 18;
+            unsigned int AQLQueueMemory: 1; // default = 0; If 1: The caller indicates that the memory will be used as AQL queue memory.
+					    // The KFD will ensure that the memory returned is allocated in the optimal memory location
+					    // and optimal alignment requirements
+            unsigned int Reserved    : 17;
 
         } ui32;
         HSAuint32 Value;
