@@ -133,6 +133,21 @@ hsaKmtAllocMemory(
 	}
 
 	if (MemFlags.ui32.HostAccess && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
+		if (gpu_id == 0 && PreferredNode == 0) {
+			/* HACK: Currently we need a GPU node for
+			 * system memory allocations on dGPUs and
+			 * MapMemoryToGPU will always map to the same
+			 * GPU used for allocation. Therefore we need
+			 * to allocate system memory from node 1 if
+			 * we're running on a dGPU (indicated by node
+			 * 0 being a CPU with gpu_id==0). This will be
+			 * cleaned up when multi-GPU support is
+			 * implemented. */
+			PreferredNode = 1;
+			result = validate_nodeid(PreferredNode, &gpu_id);
+			if (result != HSAKMT_STATUS_SUCCESS)
+				return result;
+		}
 		*MemoryAddress = fmm_allocate_host(gpu_id, SizeInBytes, MemFlags,
 				get_device_id_by_node(PreferredNode));
 		if (*MemoryAddress == NULL)
