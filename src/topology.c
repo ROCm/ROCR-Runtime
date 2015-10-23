@@ -33,7 +33,9 @@
 #include "fmm.h"
 #define PAGE_SIZE 4096
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
-#define NUM_OF_HEAPS 3
+/* Number of memory banks added by thunk on top of topology */
+#define NUM_OF_IGPU_HEAPS 3
+#define NUM_OF_DGPU_HEAPS 2
 /* SYSFS related */
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
@@ -877,8 +879,13 @@ hsaKmtGetNodeProperties(
 		return err;
 
 	*NodeProperties = node[NodeId].node;
-	NodeProperties->NumMemoryBanks += NUM_OF_HEAPS;
-
+	/* For CPU only node don't add any additional GPU memory banks. */
+	if (gpu_id) {
+		if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)))
+			NodeProperties->NumMemoryBanks += NUM_OF_DGPU_HEAPS;
+		else
+			NodeProperties->NumMemoryBanks += NUM_OF_IGPU_HEAPS;
+	}
 	err = HSAKMT_STATUS_SUCCESS;
 
 out:
@@ -921,10 +928,16 @@ hsaKmtGetNodeMemoryProperties(
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
+	memset(MemoryProperties, 0, NumBanks * sizeof(HsaMemoryProperties));
+
 	for (i = 0; i < MIN(node[NodeId].node.NumMemoryBanks, NumBanks); i++) {
 		assert(node[NodeId].mem);
 		MemoryProperties[i] = node[NodeId].mem[i];
 	}
+
+	/* The following memory banks does not apply to CPU only node */
+	if (gpu_id == 0)
+		goto out;
 
 	/*Add LDS*/
 	if (i < NumBanks &&
@@ -935,8 +948,10 @@ hsaKmtGetNodeMemoryProperties(
 		i++;
 	}
 
-	/* Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE*/
-	if (i < NumBanks &&
+	/* Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE.
+	 * For dGPU the topology node contains Local Memory and it is added by the for loop above */
+	if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)) &&
+		i < NumBanks &&
 		node[NodeId].node.LocalMemSize > 0 &&
 		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
