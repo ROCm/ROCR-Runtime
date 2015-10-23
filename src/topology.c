@@ -247,10 +247,10 @@ static const struct hsa_gfxip_table* find_hsa_gfxip_device(uint16_t device_id)
 	return NULL;
 }
 
-bool topology_is_dgpu(uint16_t gpu_id)
+bool topology_is_dgpu(uint16_t device_id)
 {
 	const struct hsa_gfxip_table* hsa_gfxip =
-				find_hsa_gfxip_device(gpu_id);
+				find_hsa_gfxip_device(device_id);
 
 	if (hsa_gfxip && hsa_gfxip->is_dgpu) {
 		is_dgpu = true;
