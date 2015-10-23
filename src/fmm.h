@@ -65,6 +65,6 @@ bool fmm_get_handle(void *address, uint64_t *handle);
 /* Topology interface*/
 HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);
 HSAKMT_STATUS fmm_node_removed(HSAuint32 gpu_id);
-HSAuint64 fmm_get_aperture_base(aperture_type_e aperture_type, HSAuint32 gpu_id);
-HSAuint64 fmm_get_aperture_limit(aperture_type_e aperture_type, HSAuint32 gpu_id);
+HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
+		HSAuint64 *aperture_base, HSAuint64 *aperture_limit);
 #endif /* FMM_H_ */
