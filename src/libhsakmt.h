@@ -73,7 +73,7 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id);
 HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id);
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
-bool topology_is_dgpu(uint16_t gpu_id);
+bool topology_is_dgpu(uint16_t device_id);
 
 HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
