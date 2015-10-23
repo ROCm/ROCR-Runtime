@@ -894,8 +894,9 @@ hsaKmtGetNodeMemoryProperties(
     HsaMemoryProperties*  MemoryProperties    //OUT
     )
 {
-	HSAKMT_STATUS err;
+	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 	uint32_t i, gpu_id;
+	HSAuint64 aperture_limit;
 
 	if (!MemoryProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -918,7 +919,7 @@ hsaKmtGetNodeMemoryProperties(
 
 	err = validate_nodeid(NodeId, &gpu_id);
 	if (err != HSAKMT_STATUS_SUCCESS)
-		return err;
+		goto out;
 
 	for (i = 0; i < MIN(node[NodeId].node.NumMemoryBanks, NumBanks); i++) {
 		assert(node[NodeId].mem);
@@ -926,30 +927,32 @@ hsaKmtGetNodeMemoryProperties(
 	}
 
 	/*Add LDS*/
-	if (i < NumBanks){
+	if (i < NumBanks &&
+		fmm_get_aperture_base_and_limit(FMM_LDS, gpu_id,
+				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_LDS;
 		MemoryProperties[i].SizeInBytes = node[NodeId].node.LDSSizeInKB * 1024;
-		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_LDS, gpu_id);
 		i++;
 	}
 
-	/*Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE*/
-	if ((i < NumBanks) && (node[NodeId].node.LocalMemSize > 0)) {
+	/* Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE*/
+	if (i < NumBanks &&
+		node[NodeId].node.LocalMemSize > 0 &&
+		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
+				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
 		MemoryProperties[i].SizeInBytes = node[NodeId].node.LocalMemSize;
-		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_GPUVM, gpu_id);
 		i++;
 	}
 
 	/*Add SCRATCH*/
-	if (i < NumBanks){
+	if (i < NumBanks &&
+		fmm_get_aperture_base_and_limit(FMM_SCRATCH, gpu_id,
+				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_SCRATCH;
-		MemoryProperties[i].VirtualBaseAddress = fmm_get_aperture_base(FMM_SCRATCH, gpu_id);
-		MemoryProperties[i].SizeInBytes = fmm_get_aperture_limit(FMM_SCRATCH, gpu_id) - MemoryProperties[i].VirtualBaseAddress;
+		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
 		i++;
 	}
-
-	err = HSAKMT_STATUS_SUCCESS;
 
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);

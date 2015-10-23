@@ -1035,8 +1035,10 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 	return ret;
 }
 
-HSAuint64 fmm_get_aperture_limit(aperture_type_e aperture_type, HSAuint32 gpu_id)
+HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
+			HSAuint64 *aperture_base, HSAuint64 *aperture_limit)
 {
+	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 	int32_t slot = gpu_mem_find_by_gpu_id(gpu_id);
 
 	if (slot < 0)
@@ -1044,56 +1046,34 @@ HSAuint64 fmm_get_aperture_limit(aperture_type_e aperture_type, HSAuint32 gpu_id
 
 	switch (aperture_type) {
 	case FMM_GPUVM:
-		return aperture_is_valid(gpu_mem[slot].gpuvm_aperture.base,
-				gpu_mem[slot].gpuvm_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.limit) : 0;
+		if (aperture_is_valid(gpu_mem[slot].gpuvm_aperture.base,
+			gpu_mem[slot].gpuvm_aperture.limit)) {
+			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.base);
+			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.limit);
+		}
 		break;
 
 	case FMM_SCRATCH:
-		return aperture_is_valid(gpu_mem[slot].scratch_aperture.base,
-				gpu_mem[slot].scratch_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.limit) : 0;
+		if (aperture_is_valid(gpu_mem[slot].scratch_aperture.base,
+			gpu_mem[slot].scratch_aperture.limit)) {
+			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.base);
+			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.limit);
+		}
 		break;
 
 	case FMM_LDS:
-		return aperture_is_valid(gpu_mem[slot].lds_aperture.base,
-				gpu_mem[slot].lds_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.limit) : 0;
+		if (aperture_is_valid(gpu_mem[slot].lds_aperture.base,
+			gpu_mem[slot].lds_aperture.limit)) {
+			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.base);
+			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.limit);
+		}
 		break;
 
 	default:
-		return 0;
+		err = HSAKMT_STATUS_ERROR;
 	}
-}
-HSAuint64 fmm_get_aperture_base(aperture_type_e aperture_type, HSAuint32 gpu_id)
-{
-	int32_t slot = gpu_mem_find_by_gpu_id(gpu_id);
 
-	if (slot < 0)
-		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	switch (aperture_type) {
-	case FMM_GPUVM:
-		return aperture_is_valid(gpu_mem[slot].gpuvm_aperture.base,
-				gpu_mem[slot].gpuvm_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.base) : 0;
-		break;
-
-	case FMM_SCRATCH:
-		return aperture_is_valid(gpu_mem[slot].scratch_aperture.base,
-				gpu_mem[slot].scratch_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.base) : 0;
-		break;
-
-	case FMM_LDS:
-		return aperture_is_valid(gpu_mem[slot].lds_aperture.base,
-				gpu_mem[slot].lds_aperture.limit) ?
-					PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.base) : 0;
-		break;
-
-	default:
-		return 0;
-	}
+	return err;
 }
 
 static int _fmm_map_to_gpu_gtt(uint32_t gpu_id, manageble_aperture_t *aperture,
