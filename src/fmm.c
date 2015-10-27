@@ -1309,7 +1309,7 @@ int fmm_unmap_from_gpu(void *address)
 		if ((address >= gpu_mem[i].scratch_physical.base) &&
 			(address <= gpu_mem[i].scratch_physical.limit))
 			return _fmm_unmap_from_gpu_scratch(gpu_mem[i].gpu_id,
-							   &gpu_mem[i].gpuvm_aperture,
+							   &gpu_mem[i].scratch_physical,
 							   address);
 
 		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
