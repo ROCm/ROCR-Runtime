@@ -49,12 +49,19 @@ lnx: LDFLAGS += -m32
 lnx: $(BUILDDIR)/$(LIB_NAME)
 
 PACKAGE_DIR = $(BUILDDIR)/libhsakmt
-INSTALL_DIR = $(PACKAGE_DIR)/usr/lib/x86_64-linux-gnu
+INSTALL_DIR_DEB = $(PACKAGE_DIR)/usr/lib/x86_64-linux-gnu
+INSTALL_DIR_RPM = $(PACKAGE_DIR)/usr/lib64
+
 deb: lnx64a
-	@mkdir -p $(INSTALL_DIR)
-	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR)
+	@mkdir -p $(INSTALL_DIR_DEB)
+	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR_DEB)
 	@cp -r ../DEBIAN $(PACKAGE_DIR)
 	@fakeroot dpkg-deb --build $(PACKAGE_DIR) $(BUILDDIR)/libhsakmt.deb
+
+rpm: lnx64a
+	mkdir -p $(INSTALL_DIR_RPM)
+	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR_RPM)
+	@rpmbuild --define '_topdir $(BUILD_ROOT)/rpm' -ba $(THUNK_ROOT)/RPM/libhsakmt.spec
 
 lnx64a: $(BUILDDIR)/$(LIB_NAME)
 
