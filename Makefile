@@ -5,6 +5,9 @@ all: lnx64a
 deb:
 	$(MAKE) -C src deb
 
+rpm:
+	$(MAKE) -C src rpm
+
 lnx64a:
 	$(MAKE) -C src lnx64a
 
