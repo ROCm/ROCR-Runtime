@@ -18,13 +18,12 @@ for AMD KFD
 %setup -T -D -c -n %{name}
 
 %install
-mkdir -p $RPM_BUILD_ROOT
-cp -R %{thunkroot}/build/rpm/libhsakmt/usr $RPM_BUILD_ROOT
-
-find $RPM_BUILD_ROOT \! -type d | sed "s|$RPM_BUILD_ROOT||"> fw.list
+cp -R %{thunkroot}/build/rpm/libhsakmt $RPM_BUILD_ROOT
+find $RPM_BUILD_ROOT \! -type d | sed "s|$RPM_BUILD_ROOT||"> thunk.list
 
 %clean
 rm -rf $RPM_BUILD_ROOT
 
-%files -f fw.list
+%files -f thunk.list
+
 %defattr(-,root,root,-)
