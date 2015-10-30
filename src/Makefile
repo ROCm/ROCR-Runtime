@@ -13,7 +13,12 @@ CFLAGS += -Wformat-security -Wswitch-default -Wundef \
 	  -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes    \
 	  -Wmissing-declarations -Wredundant-decls                 \
 	  -Wunreachable-code
-CFLAGS += -std=gnu99 -ggdb -pthread -fvisibility=hidden -O2
+CFLAGS += -std=gnu99 -pthread -fvisibility=hidden -O2
+
+# If this is not a release build, add debug-specific flags
+ifneq ($(REL),1)
+  CFLAGS += -ggdb
+endif
 
 LDFLAGS += -lrt -pthread -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER)
 
