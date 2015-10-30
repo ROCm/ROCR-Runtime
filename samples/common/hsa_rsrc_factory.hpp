@@ -93,6 +93,9 @@ typedef struct {
 
   // Handle of Agent
   hsa_agent_t dev_id;
+  
+  // Agent type - Cpu = 0, Gpu = 1 or Dsp = 2
+  uint32_t dev_type;
 
   // Name of Agent whose length is less than 64
   char name[64];
@@ -103,8 +106,15 @@ typedef struct {
   // Max size of Queue buffer
   uint32_t max_queue_size;
 
+  // Hsail profile supported by agent
+  hsa_profile_t profile;
+
+  // Memory region supporting kernel parameters
+  hsa_region_t coarse_region;
+
   // Memory region supporting kernel arguments
   hsa_region_t kernarg_region;
+
 } AgentInfo;
 
 class HsaRsrcFactory {
@@ -133,6 +143,7 @@ class HsaRsrcFactory {
   // @return bool true if successful, false otherwise
   //
   bool GetGpuAgentInfo(uint32_t idx, AgentInfo **agent_info);
+  bool GetCpuAgentInfo(uint32_t idx, AgentInfo **agent_info);
 
   // Create a Queue object and return its handle. The queue object is expected
   // to support user requested number of Aql dispatch packets.
@@ -168,7 +179,21 @@ class HsaRsrcFactory {
   //
   // @return uint8_t* Pointer to buffer, null if allocation fails.
   //
+  uint8_t* AllocateLocalMemory(AgentInfo *agent_info, size_t size);
   uint8_t* AllocateMemory(AgentInfo *agent_info, size_t size);
+
+  bool TransferData(uint8_t *dest_buff, uint8_t *src_buff,
+                    uint32_t length, bool host_to_dev);
+
+  // Allocate memory tp pass kernel parameters.
+  //
+  // @param agent_info Agent from whose memory region to allocate
+  //
+  // @param size Size of memory in terms of bytes
+  //
+  // @return uint8_t* Pointer to buffer, null if allocation fails.
+  //
+  uint8_t* AllocateSysMemory(AgentInfo *agent_info, size_t size);
 
   // Loads an Assembled Brig file and Finalizes it into Device Isa
   //
