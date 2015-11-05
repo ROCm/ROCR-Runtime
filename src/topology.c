@@ -25,9 +25,12 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <dirent.h>
 #include <malloc.h>
 #include <string.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -40,6 +43,8 @@
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
 #define KFD_SYSFS_PATH_NODES "/sys/devices/virtual/kfd/kfd/topology/nodes"
+#define MAX_CPU_CORES	32
+#define MAX_CACHES	128
 
 typedef struct {
 	uint32_t gpu_id;
@@ -49,7 +54,7 @@ typedef struct {
 	HsaIoLinkProperties *link;
 } node_t;
 
-static HsaSystemProperties *system = NULL;
+static HsaSystemProperties *_system = NULL;
 static node_t *node = NULL;
 
 static HSAKMT_STATUS topology_take_snapshot(void);
@@ -122,6 +127,57 @@ free_node(node_t *n)
 		free((n)->link);
 }
 
+/* num_subdirs - find the number of sub-directories in the specified path
+ *	@dirpath - directory path to find sub-directories underneath
+ *	@prefix - only count sub-directory names starting with prefix.
+ *		Use blank string, "", to count all.
+ *	Return - number of sub-directories
+ */
+static int num_subdirs(char *dirpath, char *prefix)
+{
+	int count = 0;
+	DIR *dirp;
+	struct dirent *dir;
+	int prefix_len = strlen(prefix);
+
+	dirp = opendir(dirpath);
+	if(dirp) {
+		while ((dir = readdir(dirp)) != 0) {
+			if ((strcmp(dir->d_name, ".") == 0) ||
+				(strcmp(dir->d_name, "..") == 0))
+				continue;
+			if (prefix_len &&
+				strncmp(dir->d_name, prefix, prefix_len))
+				continue;
+			count++;
+		}
+		closedir(dirp);
+	}
+
+	return count;
+}
+
+/* read_file - Read the content of a file
+ *	@file - file to read
+ *	@buf - [OUT] buffer containing data read from the file
+ *	@buf_sz - buffer size
+ *	Return - data size in the returning buffer
+ */
+static size_t read_file(char *file, char *buf, size_t buf_sz)
+{
+	int fd;
+	size_t len = 0;
+
+	memset(buf, 0, buf_sz);
+
+	if ((fd = open(file, O_RDONLY)) < 0)
+		return 0;
+	len = read(fd, buf, buf_sz);
+	close(fd);
+
+	return len;
+}
+
 static HSAKMT_STATUS
 topology_sysfs_get_generation(uint32_t *gen) {
 	FILE *fd;
@@ -144,13 +200,11 @@ err:
 HSAKMT_STATUS
 topology_sysfs_get_system_props(HsaSystemProperties *props) {
 	FILE *fd;
-	DIR *dirp;
 	char *read_buf, *p;
 	char prop_name[256];
 	long long unsigned int prop_val;
-	uint32_t node_count, prog;
-	struct dirent *dir;
-    int read_size;
+	uint32_t prog;
+	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 
@@ -191,25 +245,11 @@ topology_sysfs_get_system_props(HsaSystemProperties *props) {
 	}
 
 	/*
-	 * Discover the number of nodes
+	 * Discover the number of nodes:
+	 * Assuming that inside nodes folder there are only folders
+	 * which represent the node numbers
 	 */
-	node_count = 0;
-	dirp = opendir(KFD_SYSFS_PATH_NODES);
-	if(dirp) {
-		/*
-		 * Assuming that inside nodes folder there are only folders
-		 * which represent the node numbers
-		 */
-		while ((dir = readdir(dirp)) != 0) {
-			if ((strcmp(dir->d_name, ".") == 0) ||
-					(strcmp(dir->d_name, "..") == 0))
-				continue;
-			node_count++;
-		}
-		closedir(dirp);
-	}
-	props->NumNodes = node_count;
-
+	props->NumNodes = num_subdirs(KFD_SYSFS_PATH_NODES, "");
 
 err2:
 	free(read_buf);
@@ -465,6 +505,137 @@ err1:
 	return ret;
 }
 
+/* topology_get_cpu_cache_props - get CPU cache properties and fill in the
+ *		cache entry of the node's table
+ *	@tbl - the node table to fill up
+ *	Return - HSAKMT_STATUS_SUCCESS in success or error number in failure
+ */
+static HSAKMT_STATUS
+topology_get_cpu_cache_props(node_t *tbl)
+{
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	char *token, *str;
+	uint32_t apicid[MAX_CPU_CORES];
+	int num_cpus = 0, num_caches = 0;
+	char path[256], buf[256], cache_paths[MAX_CACHES][256];
+	int i, j, n;
+	const char SYSDIR[] = "/sys/devices/system/cpu";
+	unsigned long ul;
+
+	if (tbl == NULL)
+		return HSAKMT_STATUS_ERROR;
+
+	/* Get apicid info from /proc/cpuinfo for ProcessorIdLow */
+	if (!(fd = fopen("/proc/cpuinfo", "r")))
+		return HSAKMT_STATUS_ERROR;
+
+	while (fgets(buf, 256, fd) != NULL) {
+		/* /proc/cpuinfo lists in format - property : value */
+		token = strtok_r(buf, ":", &str);
+		if (strncmp(token, "apicid", 6) == 0) {
+			if (num_cpus >= MAX_CPU_CORES) {
+				printf("MAX_CPU_CORES %d is not enough.", MAX_CPU_CORES);
+				fclose(fd);
+				return HSAKMT_STATUS_ERROR;
+			}
+			apicid[num_cpus++] = atoi(str);
+		}
+	}
+	fclose(fd);
+
+	/* Get cache data from /sys/devices/system/cpu/cpuX/cache/indexY
+	 * 1. Calculate how many caches
+	 * 2. Fill up cache properties
+	 */
+
+	for (i=0; i<num_cpus; i++) {
+		snprintf(path, 256, "%s/cpu%d/cache", SYSDIR, i);
+		n = num_subdirs(path, "index");
+		for (j=0; j<n; j++) {
+			/* One cache may be listed more than once under
+			 * different CPUs if it's shared by CPUs. From
+			 * shared_cpu_list we find shared CPUs.
+			 */
+			snprintf(path, 256,
+				"%s/cpu%d/cache/index%d/shared_cpu_list",
+				SYSDIR, i, j);
+			read_file(path, buf, sizeof(buf));
+			/* It's listed as N1,N2,... or N1-Nx if more than one
+			 * CPU shares this cache. We'll only count the cache
+			 * listed under CPU N1. Any cache listed at CPU N2, N3,
+			 * ... Nx, is duplicated and should be ignored.
+			 */
+			str = strtok(buf, ",-");
+			if (atoi(str) != i) /* this is not CPU N1 */
+				continue; /* cache has been listed at CPU N1 */
+			if (num_caches >= MAX_CACHES) {
+				printf("MAX_CACHES %d is not enough!\n", MAX_CACHES);
+				return HSAKMT_STATUS_ERROR;
+			}
+			snprintf(cache_paths[num_caches++], 256,
+				"%s/cpu%d/cache/index%d", SYSDIR, i, j);
+		}
+	}
+
+	tbl->node.NumCaches = num_caches;
+	tbl->cache = calloc(tbl->node.NumCaches * sizeof(HsaCacheProperties), 1);
+	if (!tbl->cache)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	for (i=0; i<num_caches; i++) {
+		/* cache level */
+		snprintf(path, 256, "%s/level", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		tbl->cache[i].CacheLevel = atoi(buf);
+		/* cache size */
+		snprintf(path, 256, "%s/size", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		tbl->cache[i].CacheSize = (atoi(buf));
+		/* cache line size in bytes */
+		snprintf(path, 256, "%s/coherency_line_size", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		tbl->cache[i].CacheLineSize = (atoi(buf));
+		/* cache lines per tag */
+		snprintf(path, 256, "%s/physical_line_partition", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		tbl->cache[i].CacheLinesPerTag = (atoi(buf));
+		/* cache associativity */
+		snprintf(path, 256, "%s/ways_of_associativity", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		tbl->cache[i].CacheAssociativity = (atoi(buf));
+		/* cache type */
+		tbl->cache[i].CacheType.ui32.CPU = 1;
+		snprintf(path, 256, "%s/type", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		if (buf[0] == 'D')
+			tbl->cache[i].CacheType.ui32.Data = 1;
+		else if (buf[0] == 'I')
+			tbl->cache[i].CacheType.ui32.Instruction = 1;
+		/* sibling map */
+		snprintf(path, 256, "%s/shared_cpu_map", cache_paths[i]);
+		read_file(path, buf, sizeof(buf));
+		ul = strtol(buf, NULL, 16);
+		j = 0;
+		while (!(ul & (1 << j)))
+			j++; // the lowest processor id in shared map
+		tbl->cache[i].ProcessorIdLow = apicid[j];
+		j = num_cpus;
+		while (j-- > 0) {
+			if (ul & (1<<j)) {
+				/* Use the lowest-process-id item as offset */
+				n = apicid[j] - tbl->cache[i].ProcessorIdLow;
+				/* Use array instead of bitmask so the software
+				 * is endian-worry free
+				 */
+				tbl->cache[i].SiblingMap[n] = 1;
+			}
+		}
+	}
+
+	return ret;
+}
+
 static HSAKMT_STATUS
 topology_sysfs_get_cache_props(uint32_t node_id, uint32_t cache_id, HsaCacheProperties *props) {
 	FILE *fd;
@@ -676,6 +847,16 @@ retry:
 					}
 				}
 			}
+			else if (!temp_nodes[i].gpu_id) { /* This is a CPU node */
+				/* Get info from /proc/cpuinfo and /sys/devices/system */
+				ret = topology_get_cpu_cache_props(&temp_nodes[i]);
+				if (ret != HSAKMT_STATUS_SUCCESS) {
+					for (j=0; j <= i; j++)
+						free_node(&temp_nodes[j]);
+					free(temp_nodes);
+					goto err;
+				}
+			}
 
 			if (temp_nodes[i].node.NumIOLinks) {
 				temp_nodes[i].link = calloc(temp_nodes[i].node.NumIOLinks * sizeof(HsaIoLinkProperties), 1);
@@ -720,9 +901,9 @@ retry:
 		goto retry;
 	}
 
-	if (!system) {
-		system = malloc(sizeof(HsaSystemProperties));
-		if (!system) {
+	if (!_system) {
+		_system = malloc(sizeof(HsaSystemProperties));
+		if (!_system) {
 			if (temp_nodes) {
 				for (j=0; j < sys_props.NumNodes; j++)
 					free_node(&temp_nodes[j]);
@@ -732,7 +913,7 @@ retry:
 		}
 	}
 
-	*system = sys_props;
+	*_system = sys_props;
 	if (node)
 		free(node);
 	node = temp_nodes;
@@ -750,7 +931,7 @@ topology_drop_snapshot(void)
 {
 	HSAKMT_STATUS err;
 
-	if (!!system != !!node) {
+	if (!!_system != !!node) {
 		printf("Probable inconsistency?\n");
 		err = HSAKMT_STATUS_SUCCESS;
 		goto out;
@@ -760,7 +941,7 @@ topology_drop_snapshot(void)
 		uint64_t nodeid;
 
 		/* Remove state */
-		for (nodeid = 0; nodeid < system->NumNodes; nodeid++) {
+		for (nodeid = 0; nodeid < _system->NumNodes; nodeid++) {
 			free_node(&node[nodeid]);
 		}
 
@@ -768,8 +949,8 @@ topology_drop_snapshot(void)
 		node = NULL;
 	}
 
-	free(system);
-	system = NULL;
+	free(_system);
+	_system = NULL;
 	err = HSAKMT_STATUS_SUCCESS;
 
 out:
@@ -779,7 +960,7 @@ out:
 HSAKMT_STATUS
 validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 {
-    if (nodeid >= MAX_NODES || !node || !system || system->NumNodes <= nodeid)
+    if (nodeid >= MAX_NODES || !node || !_system || _system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 	if (gpu_id)
 		*gpu_id = node[nodeid].gpu_id;
@@ -790,7 +971,7 @@ validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 HSAKMT_STATUS
 gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id){
 	uint64_t node_idx;
-	for(node_idx = 0; node_idx < system->NumNodes; node_idx++){
+	for(node_idx = 0; node_idx < _system->NumNodes; node_idx++){
 		if (node[node_idx].gpu_id == gpu_id){
 			*node_id = node_idx;
 			return HSAKMT_STATUS_SUCCESS;
@@ -819,9 +1000,9 @@ hsaKmtAcquireSystemProperties(
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
-	assert(system);
+	assert(_system);
 
-	*SystemProperties = *system;
+	*SystemProperties = *_system;
 	err = HSAKMT_STATUS_SUCCESS;
 
 out:
@@ -863,13 +1044,13 @@ hsaKmtGetNodeProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (system == NULL) {
+	if (_system == NULL) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(system);
+		assert(_system);
 		goto out;
 	}
 
-	if (NodeId >= system->NumNodes) {
+	if (NodeId >= _system->NumNodes) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -912,14 +1093,14 @@ hsaKmtGetNodeMemoryProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (system == NULL) {
+	if (_system == NULL) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(system);
+		assert(_system);
 		goto out;
 	}
 
 	/* Check still necessary */
-	if (NodeId >= system->NumNodes ) {
+	if (NodeId >= _system->NumNodes ) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -993,13 +1174,13 @@ hsaKmtGetNodeCacheProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (system == NULL) {
+	if (_system == NULL) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(system);
+		assert(_system);
 		goto out;
 	}
 
-	if (NodeId >= system->NumNodes || NumCaches > node[NodeId].node.NumCaches) {
+	if (NodeId >= _system->NumNodes || NumCaches > node[NodeId].node.NumCaches) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -1035,13 +1216,13 @@ hsaKmtGetNodeIoLinkProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (system == NULL) {
+	if (_system == NULL) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(system);
+		assert(_system);
 		goto out;
 	}
 
-	if (NodeId >= system->NumNodes || NumIoLinks > node[NodeId].node.NumIOLinks) {
+	if (NodeId >= _system->NumNodes || NumIoLinks > node[NodeId].node.NumIOLinks) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -1060,7 +1241,7 @@ out:
 
 uint16_t get_device_id_by_node(HSAuint32 node_id)
 {
-    if (!node || !system || system->NumNodes <= node_id)
+    if (!node || !_system || _system->NumNodes <= node_id)
         return 0;
 
     return node[node_id].node.DeviceId;
@@ -1069,10 +1250,10 @@ uint16_t get_device_id_by_node(HSAuint32 node_id)
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 {
 	unsigned int i;
-	if (!node || !system)
+	if (!node || !_system)
 		return 0;
 
-	for (i = 0; i < system->NumNodes; i++) {
+	for (i = 0; i < _system->NumNodes; i++) {
 		if (node[i].gpu_id == gpu_id)
 			return node[i].node.DeviceId;
 	}
