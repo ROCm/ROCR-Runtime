@@ -69,7 +69,7 @@ HSAKMT_STATUS fmm_node_removed(HSAuint32 gpu_id);
 HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
 		HSAuint64 *aperture_base, HSAuint64 *aperture_limit);
 
-HSAKMT_STATUS fmm_register_memory(void *address, uint32_t size_in_bytes,
+HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
                                   uint32_t *gpu_id_array,
                                   uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_deregister_memory(void *address);

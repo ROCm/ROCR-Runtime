@@ -374,8 +374,8 @@ hsaKmtFreeMemory(
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemory(
-    void*       MemoryAddress,      //IN (page-aligned)
-    HSAuint64   MemorySizeInBytes   //IN (page-aligned)
+    void*       MemoryAddress,      //IN (cache-aligned)
+    HSAuint64   MemorySizeInBytes   //IN (cache-aligned)
     );
 
 
@@ -386,8 +386,8 @@ hsaKmtRegisterMemory(
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemoryToNodes(
-    void        *MemoryAddress,     // IN (page-aligned)
-    HSAuint64   MemorySizeInBytes,  // IN (page-aligned)
+    void        *MemoryAddress,     // IN (cache-aligned)
+    HSAuint64   MemorySizeInBytes,  // IN (cache-aligned)
     HSAuint64   NumberOfNodes,      // IN
     HSAuint32*  NodeArray           // IN
     );

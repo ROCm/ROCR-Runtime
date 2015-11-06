@@ -47,6 +47,7 @@
 
 struct vm_object {
 	void *start;
+	void *userptr;
 	uint64_t size;
 	uint64_t handle; /* opaque */
 	struct vm_object *next;
@@ -174,6 +175,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 
 	if (object) {
 		object->start = start;
+		object->userptr = NULL;
 		object->size = size;
 		object->handle = handle;
 		object->next = object->prev = NULL;
@@ -276,6 +278,21 @@ static vm_object_t *vm_find_object_by_address(manageble_aperture_t *app,
 	/* Look up the appropriate address range containing the given address */
 	while (cur) {
 		if (cur->start == address && (cur->size == size || size == 0))
+			break;
+		cur = cur->next;
+	};
+
+	return cur; /* NULL if not found */
+}
+
+static vm_object_t *vm_find_object_by_userptr(manageble_aperture_t *app,
+						void *address)
+{
+	vm_object_t *cur = app->vm_objects;
+
+	/* Look up the appropriate address range containing the given address */
+	while (cur) {
+		if (cur->userptr == address)
 			break;
 		cur = cur->next;
 	};
@@ -462,6 +479,8 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 	args.va_addr = (uint64_t)mem;
 	if (flags == KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE)
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
+	if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
+		args.mmap_offset = *mmap_offset;
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU_NEW, &args))
 		return -1;
@@ -1217,7 +1236,8 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 	if (object->device_ids_array_size > 0) {
 		args.device_ids_array = object->device_ids_array;
 		args.device_ids_array_size = object->device_ids_array_size;
-	} else if (object->flags & KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST) {
+	} else if ((object->flags & KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST) ||
+		   (object->flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)) {
 		/* Only enable multi-GPU mapping on host memory for now */
 		args.device_ids_array = all_gpu_id_array;
 		args.device_ids_array_size = all_gpu_id_array_size;
@@ -1344,6 +1364,38 @@ err_object_not_found:
 	return -1;
 }
 
+static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
+				   uint64_t *gpuvm_addr)
+{
+	manageble_aperture_t *aperture;
+	vm_object_t *obj;
+	void *svm_addr;
+	HSAuint64 svm_size;
+	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
+	int ret;
+
+	aperture = &svm.dgpu_aperture;
+
+	/* Find the start address in SVM space for GPU mapping */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_userptr(aperture, addr);
+	if (obj == NULL) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_ERROR;
+	}
+	svm_addr = obj->start;
+	svm_size = obj->size;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* Map and return the GPUVM address adjusted by the offset
+	 * from the start of the page */
+	ret = _fmm_map_to_gpu_gtt(aperture, svm_addr, svm_size);
+	if (ret == 0 && gpuvm_addr)
+		*gpuvm_addr = (uint64_t)svm_addr + page_offset;
+
+	return ret;
+}
+
 int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 {
 	uint32_t i;
@@ -1379,10 +1431,18 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 		return _fmm_map_to_gpu_gtt(&svm.dgpu_alt_aperture,
 						address, size);
 
+	/*
+	 * If address isn't an SVM memory address, we assume that this
+	 * is system memory address. On dGPU we need to map it,
+	 * assuming it was previously registered.
+	 */
+	if (is_dgpu)
+		/* TODO: support mixed APU and dGPU configurations */
+		return _fmm_map_to_gpu_userptr(address, size, gpuvm_address);
 
 	/*
-	 * If address isn't Local memory address, we assume that this is
-	 * system memory address accessed through IOMMU. Thus we "prefetch" it
+	 * On an APU a system memory address is accessed through
+	 * IOMMU. Thus we "prefetch" it.
 	 */
 	for (pi = 0; pi < size / PAGE_SIZE; pi++)
 		((char *) address)[pi * PAGE_SIZE] = 0;
@@ -1406,7 +1466,8 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address)
 	if (object->device_ids_array_size > 0) {
 		args.device_ids_array = object->device_ids_array;
 		args.device_ids_array_size = object->device_ids_array_size;
-	} else if (object->flags & KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST) {
+	} else if ((object->flags & KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST) ||
+		   (object->flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)) {
 		/* Only enable multi-GPU mapping on host memory for now */
 		args.device_ids_array = all_gpu_id_array;
 		args.device_ids_array_size = all_gpu_id_array_size;
@@ -1468,6 +1529,28 @@ err:
 	return -1;
 }
 
+static int _fmm_unmap_from_gpu_userptr(void *addr)
+{
+	manageble_aperture_t *aperture;
+	vm_object_t *obj;
+	void *svm_addr;
+
+	aperture = &svm.dgpu_aperture;
+
+	/* Find the start address in SVM space for GPU unmapping */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_userptr(aperture, addr);
+	if (obj == NULL) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_ERROR;
+	}
+	svm_addr = obj->start;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* Unmap */
+	return _fmm_unmap_from_gpu(aperture, svm_addr);
+}
+
 int fmm_unmap_from_gpu(void *address)
 {
 	uint32_t i;
@@ -1501,6 +1584,13 @@ int fmm_unmap_from_gpu(void *address)
 		return _fmm_unmap_from_gpu(&svm.dgpu_alt_aperture,
 							address);
 
+	/*
+	 * If address isn't an SVM address, we assume that this is
+	 * system memory address.
+	 */
+	if (is_dgpu)
+		/* TODO: support mixed APU and dGPU configurations */
+		return _fmm_unmap_from_gpu_userptr(address);
 
 	return 0;
 }
@@ -1693,27 +1783,83 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	return found;
 }
 
-HSAKMT_STATUS fmm_register_memory(void *address, uint32_t size_in_bytes,
+static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_object_t **obj_ret)
+{
+	int32_t i;
+	HSAuint32 gpu_id;
+	manageble_aperture_t *aperture;
+	void *svm_addr = NULL;
+	vm_object_t *obj;
+	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
+	HSAuint64 aligned_addr = (HSAuint64)addr - page_offset;
+	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
+
+	/* Find first dGPU for creating the userptr BO */
+	i = find_first_dgpu(&gpu_id);
+	if (i < 0)
+		return HSAKMT_STATUS_ERROR;
+	aperture = &svm.dgpu_aperture;
+
+	/* Check if this address was already registered */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_userptr(aperture, addr);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (obj != NULL)
+		return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
+
+	/* Allocate BO, userptr address is passed in mmap_offset */
+	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture, 0,
+					 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR);
+	if (svm_addr == NULL)
+		return HSAKMT_STATUS_ERROR;
+
+	/* Find the object and set its userptr address */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_address(aperture, svm_addr, size);
+	if (obj == NULL) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_ERROR;
+	}
+	obj->userptr = addr;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (obj_ret)
+		*obj_ret = obj;
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 				  uint32_t *gpu_id_array,
 				  uint32_t gpu_id_array_size)
 {
 	manageble_aperture_t *aperture;
 	vm_object_t *object = NULL;
+	HSAKMT_STATUS ret;
 
 	if (gpu_id_array_size > 0 && gpu_id_array == NULL)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	/*
-	 * Object can be found only on SVM aperture as you can't map
-	 * non SVM object on different device.
-	 */
-	aperture = &svm.dgpu_aperture;
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	object = vm_find_object_by_address(aperture, address, 0);
-	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if ((address >= svm.dgpu_aperture.base) &&
+	    (address <= svm.dgpu_aperture.limit))
+		aperture = &svm.dgpu_aperture;
+	else if ((address >= svm.dgpu_alt_aperture.base) &&
+		 (address <= svm.dgpu_alt_aperture.limit))
+		aperture = &svm.dgpu_alt_aperture;
+	else {
+		/*
+		 * If address isn't SVM address, we assume that this
+		 * is system memory address.
+		 */
+		ret = fmm_register_user_memory(address, size_in_bytes, &object);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			return ret;
+		if (gpu_id_array_size == 0)
+			return HSAKMT_STATUS_SUCCESS;
+		aperture = &svm.dgpu_aperture;
+		/* fall through */
+	}
 
 	if (!object) {
-		aperture = &svm.dgpu_alt_aperture;
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		object = vm_find_object_by_address(aperture, address, 0);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1732,29 +1878,64 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint32_t size_in_bytes,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
+{
+	manageble_aperture_t *aperture;
+	vm_object_t *obj;
+	void *svm_addr;
+	HSAuint64 size;
+
+	aperture = &svm.dgpu_aperture;
+
+	/* Find the size and start address in SVM space */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_userptr(aperture, addr);
+	if (obj == NULL) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+	}
+	svm_addr = obj->start;
+	size = obj->size;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* Destroy BO */
+	__fmm_release(svm_addr, size, aperture);
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS fmm_deregister_memory(void *address)
 {
 	manageble_aperture_t *aperture;
 	vm_object_t *object = NULL;
 
-	/*
-	 * Object can be found only on SVM aperture as you can't map
-	 * non SVM object on different device.
-	 */
-	aperture = &svm.dgpu_aperture;
+	if ((address >= svm.dgpu_aperture.base) &&
+	    (address <= svm.dgpu_aperture.limit))
+		aperture = &svm.dgpu_aperture;
+	else if ((address >= svm.dgpu_alt_aperture.base) &&
+		 (address <= svm.dgpu_alt_aperture.limit))
+		aperture = &svm.dgpu_alt_aperture;
+	else {
+		/*
+		 * If address isn't SVM address, we assume that this
+		 * is system memory address. If the userptr object had
+		 * a device_ids_array, it will be freed by
+		 * __fmm_release. Also the object will be
+		 * removed. Therefore we can short-circuit the rest of
+		 * the function below.
+		 */
+		return fmm_deregister_user_memory(address);
+	}
+
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	object = vm_find_object_by_address(aperture, address, 0);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
-	if (!object) {
-		aperture = &svm.dgpu_alt_aperture;
-		pthread_mutex_lock(&aperture->fmm_mutex);
-		object = vm_find_object_by_address(aperture, address, 0);
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-	}
-
 	if (!object || object->device_ids_array_size <= 0)
 		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+
+	if (object->userptr)
+		return fmm_deregister_user_memory(object->userptr);
 
 	free(object->device_ids_array);
 	object->device_ids_array = NULL;
