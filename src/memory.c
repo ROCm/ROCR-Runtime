@@ -188,21 +188,25 @@ hsaKmtFreeMemory(
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemory(
-	void		*MemoryAddress,		/* IN (page-aligned) */
-	HSAuint64	MemorySizeInBytes	/* IN (page-aligned) */
+	void		*MemoryAddress,		/* IN (cache-aligned) */
+	HSAuint64	MemorySizeInBytes	/* IN (cache-aligned) */
 )
 {
 	CHECK_KFD_OPEN();
 
-        /* No-op for APU, TODO for dGPU */
-	return HSAKMT_STATUS_SUCCESS;
+	if (!is_dgpu)
+		/* TODO: support mixed APU and dGPU configurations */
+		return HSAKMT_STATUS_SUCCESS;
+
+	return fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+                                   NULL, 0);
 }
 
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRegisterMemoryToNodes(
-	void		*MemoryAddress,		/* IN (page-aligned) */
-	HSAuint64	MemorySizeInBytes,	/* IN (page-aligned) */
+	void		*MemoryAddress,		/* IN (cache-aligned) */
+	HSAuint64	MemorySizeInBytes,	/* IN (cache-aligned) */
 	HSAuint64	NumberOfNodes,		/* IN */
 	HSAuint32*	NodeArray		/* IN */
 )
@@ -211,16 +215,20 @@ hsaKmtRegisterMemoryToNodes(
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
+	if (!is_dgpu)
+		/* TODO: support mixed APU and dGPU configurations */
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
 	ret = validate_nodeid_array(&gpu_id_array,
 			NumberOfNodes, NodeArray);
 
-	if (ret == HSAKMT_STATUS_SUCCESS)
+	if (ret == HSAKMT_STATUS_SUCCESS) {
 		ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 					  gpu_id_array,
 					  NumberOfNodes*sizeof(uint32_t));
-
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		free(gpu_id_array);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			free(gpu_id_array);
+	}
 
 	return ret;
 }
