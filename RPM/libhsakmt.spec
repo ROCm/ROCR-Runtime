@@ -1,6 +1,6 @@
 %define name        libhsakmt
 %define version     1.6.0
-%define thunkroot   %{getenv:THUNK_ROOT}
+%define thunkroot   %{getenv:OUT_DIR}
 
 Name:       %{name}
 Version:    %{version}
@@ -18,7 +18,7 @@ for AMD KFD
 %setup -T -D -c -n %{name}
 
 %install
-cp -R %thunkroot/build/rpm/libhsakmt $RPM_BUILD_ROOT
+cp -R %thunkroot/build/build_thunk.sh/rpm/libhsakmt $RPM_BUILD_ROOT
 find $RPM_BUILD_ROOT \! -type d | sed "s|$RPM_BUILD_ROOT||"> thunk.list
 
 %clean
