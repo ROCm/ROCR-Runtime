@@ -754,7 +754,7 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 
 	/* FIXME: host memory allocated in this way should be mapped on all GPUs */
 	void *ret = mmap(mem, MemorySizeInBytes,
-			PROT_READ | PROT_WRITE | PROT_EXEC,
+			PROT_READ | PROT_WRITE,
 		       MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
 	if (ret == MAP_FAILED) {
 		__fmm_release(gpu_id, mem, MemorySizeInBytes, aperture);
@@ -898,7 +898,7 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 	    address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
 		/* Remove any CPU mapping, but keep the address range reserved */
-		mmap(address, MemorySizeInBytes, PROT_READ | PROT_WRITE,
+		mmap(address, MemorySizeInBytes, PROT_NONE,
 		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
 	}
 
@@ -1353,7 +1353,7 @@ static void *reserve_address(void *addr, long long unsigned int len)
 	if (len <= 0)
 		return NULL;
 
-	ret_addr = mmap(addr, len, PROT_READ | PROT_WRITE,
+	ret_addr = mmap(addr, len, PROT_NONE,
 				 MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
 	if (addr == MAP_FAILED)
 		return NULL;
