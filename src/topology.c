@@ -43,8 +43,8 @@
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
 #define KFD_SYSFS_PATH_NODES "/sys/devices/virtual/kfd/kfd/topology/nodes"
-#define MAX_CPU_CORES	32
-#define MAX_CACHES	128
+#define MAX_CPU_CORES	128
+#define MAX_CACHES	256
 
 typedef struct {
 	uint32_t gpu_id;
@@ -505,6 +505,119 @@ err1:
 	return ret;
 }
 
+
+/* parse_sysfs_cache -
+ *	@sys_path - cache path in sysfs
+ *	@prop - [OUT] HSA cache property to fill up
+ *	@apicid - an array where contains each processor's apicid
+ *	Return - HSAKMT_STATUS_SUCCESS in success or an error number in failure
+ */
+static HSAKMT_STATUS
+parse_sysfs_cache(char *sys_path, HsaCacheProperties *prop, uint32_t *apicid)
+{
+	char file[256], buf[256];
+	int i, j, n, cpu;
+	int last; /* the last valid entry in array, which is n-1 if n items */
+	unsigned long map[32];
+	char *token, *str;
+
+	/* cache level */
+	snprintf(file, 256, "%s/level", sys_path);
+	read_file(file, buf, sizeof(buf));
+	prop->CacheLevel = atoi(buf);
+
+	/* cache size */
+	snprintf(file, 256, "%s/size", sys_path);
+	read_file(file, buf, sizeof(buf));
+	prop->CacheSize = (atoi(buf));
+
+	/* cache line size in bytes */
+	snprintf(file, 256, "%s/coherency_line_size", sys_path);
+	read_file(file, buf, sizeof(buf));
+	prop->CacheLineSize = (atoi(buf));
+
+	/* cache lines per tag */
+	snprintf(file, 256, "%s/physical_line_partition", sys_path);
+	read_file(file, buf, sizeof(buf));
+	prop->CacheLinesPerTag = (atoi(buf));
+
+	/* cache associativity */
+	snprintf(file, 256, "%s/ways_of_associativity", sys_path);
+	read_file(file, buf, sizeof(buf));
+	prop->CacheAssociativity = (atoi(buf));
+
+	/* cache type */
+	prop->CacheType.ui32.CPU = 1;
+	snprintf(file, 256, "%s/type", sys_path);
+	read_file(file, buf, sizeof(buf));
+	if (buf[0] == 'D')
+		prop->CacheType.ui32.Data = 1;
+	else if (buf[0] == 'I')
+		prop->CacheType.ui32.Instruction = 1;
+
+	/* sibling map */
+	snprintf(file, 256, "%s/shared_cpu_map", sys_path);
+	read_file(file, buf, sizeof(buf));
+	/* Data in shared_cpu_map can be XXXXXXXX when the system doesn't have
+	 * more than 32 processors; it also can be XXXXXXXX,XXXXXXXX,XX .... to
+	 * represent more than 32 processors. We'll parse each XXXXXXXX and
+	 * store them into map[].
+	 * Say shared_cpu_map is "Nn-1,Nn-2,...,N2,N1,N0\n". Because strtok_r()
+	 * parses Nn-1 first, map[] will store data in a reversed order:
+	 * map[0]=Nn-1, map[1]=Nn-2, ... map[n-2]=N1, map[n-1]=N0
+	 */
+	str = (char *)&buf[0];
+	for (last = 0; last < 32; last++) { /* declared map[32] */
+		token = strtok_r(str, ",", &str);
+		map[last] = strtol(token, NULL, 16);
+		if (token[strlen(token)-1] == '\n') /* this is N0 */
+			break;
+	}
+	if (last >= 32) {
+		printf("Fail to parse shared_cpu_map. Increase map[].\n");
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	/* Lower processor ID doesn't always have lower apicid.
+	 * Search the lowest apicid for ProcIdLow
+	 */
+	prop->ProcessorIdLow = 0xffffffff;
+	for (i = last; i >= 0; i--) { /* N0 is stored in map[count] */
+		if (!map[i])
+			continue;
+		j = 32;
+		while (j-- > 0) {
+			if (map[i] & (1<<j)) {
+				cpu = 32 * (last - i) + j;
+				if (apicid[cpu] < prop->ProcessorIdLow)
+					prop->ProcessorIdLow = apicid[cpu];
+			}
+		}
+	}
+	/* Now fill in SiblingMap using ProcIdLow as the offset */
+	for (i = last; i >= 0; i--) {
+		j = 32;
+		while (j-- > 0) {
+			if (map[i] & (1<<j)) {
+				cpu = 32 * (last - i) + j;
+				/* Use the lowest-process-id item as offset */
+				n = apicid[cpu] - prop->ProcessorIdLow;
+				/* Use array instead of bitmask so the software
+				 * is endian-worry free
+				 */
+				if (n < HSA_CPU_SIBLINGS)
+					prop->SiblingMap[n] = 1;
+				else {
+					printf("Increase HSA_CPU_SIBLINGS.\n");
+					return HSAKMT_STATUS_ERROR;
+				}
+			}
+		}
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 /* topology_get_cpu_cache_props - get CPU cache properties and fill in the
  *		cache entry of the node's table
  *	@tbl - the node table to fill up
@@ -521,7 +634,6 @@ topology_get_cpu_cache_props(node_t *tbl)
 	char path[256], buf[256], cache_paths[MAX_CACHES][256];
 	int i, j, n;
 	const char SYSDIR[] = "/sys/devices/system/cpu";
-	unsigned long ul;
 
 	if (tbl == NULL)
 		return HSAKMT_STATUS_ERROR;
@@ -544,11 +656,9 @@ topology_get_cpu_cache_props(node_t *tbl)
 	}
 	fclose(fd);
 
-	/* Get cache data from /sys/devices/system/cpu/cpuX/cache/indexY
-	 * 1. Calculate how many caches
-	 * 2. Fill up cache properties
-	 */
+	/* Get cache data from /sys/devices/system/cpu/cpuX/cache/indexY */
 
+	/*  1. Calculate how many caches */
 	for (i=0; i<num_cpus; i++) {
 		snprintf(path, 256, "%s/cpu%d/cache", SYSDIR, i);
 		n = num_subdirs(path, "index");
@@ -578,58 +688,21 @@ topology_get_cpu_cache_props(node_t *tbl)
 		}
 	}
 
+	/* 2. Allocate number of caches for the table */
 	tbl->node.NumCaches = num_caches;
 	tbl->cache = calloc(tbl->node.NumCaches * sizeof(HsaCacheProperties), 1);
 	if (!tbl->cache)
 		return HSAKMT_STATUS_NO_MEMORY;
 
+	/* 3. Fill up cache properties */
 	for (i=0; i<num_caches; i++) {
-		/* cache level */
-		snprintf(path, 256, "%s/level", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		tbl->cache[i].CacheLevel = atoi(buf);
-		/* cache size */
-		snprintf(path, 256, "%s/size", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		tbl->cache[i].CacheSize = (atoi(buf));
-		/* cache line size in bytes */
-		snprintf(path, 256, "%s/coherency_line_size", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		tbl->cache[i].CacheLineSize = (atoi(buf));
-		/* cache lines per tag */
-		snprintf(path, 256, "%s/physical_line_partition", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		tbl->cache[i].CacheLinesPerTag = (atoi(buf));
-		/* cache associativity */
-		snprintf(path, 256, "%s/ways_of_associativity", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		tbl->cache[i].CacheAssociativity = (atoi(buf));
-		/* cache type */
-		tbl->cache[i].CacheType.ui32.CPU = 1;
-		snprintf(path, 256, "%s/type", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		if (buf[0] == 'D')
-			tbl->cache[i].CacheType.ui32.Data = 1;
-		else if (buf[0] == 'I')
-			tbl->cache[i].CacheType.ui32.Instruction = 1;
-		/* sibling map */
-		snprintf(path, 256, "%s/shared_cpu_map", cache_paths[i]);
-		read_file(path, buf, sizeof(buf));
-		ul = strtol(buf, NULL, 16);
-		j = 0;
-		while (!(ul & (1 << j)))
-			j++; // the lowest processor id in shared map
-		tbl->cache[i].ProcessorIdLow = apicid[j];
-		j = num_cpus;
-		while (j-- > 0) {
-			if (ul & (1<<j)) {
-				/* Use the lowest-process-id item as offset */
-				n = apicid[j] - tbl->cache[i].ProcessorIdLow;
-				/* Use array instead of bitmask so the software
-				 * is endian-worry free
-				 */
-				tbl->cache[i].SiblingMap[n] = 1;
-			}
+		ret = parse_sysfs_cache(cache_paths[i],
+					&tbl->cache[i],
+					&apicid[0]);
+		if (ret != HSAKMT_STATUS_SUCCESS) {
+			printf("Failed to parse cache properties.\n");
+			free(tbl->cache);
+			return ret;
 		}
 	}
 
