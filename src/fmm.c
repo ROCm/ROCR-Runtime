@@ -1441,8 +1441,10 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 				       (HSAint64)ret_addr) >> 30));
 			munmap(ret_addr, len);
 			continue;
-		} else
+		} else {
 			found = true;
+			break;
+		}
 	}
 
 	if (!found) {
