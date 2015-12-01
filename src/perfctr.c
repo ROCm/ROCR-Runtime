@@ -48,6 +48,8 @@ extern int amd_hsa_thunk_lock_fd;
 
 static HsaCounterProperties *counter_props[MAX_NODES] = {NULL};
 
+void __attribute__ ((destructor)) perfctr_release_global_resources(void);
+
 static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 {
     int rc = 0;
@@ -367,4 +369,15 @@ hsaKmtPmcStopTrace(
     trace->state = PERF_TRACE_STATE__STOPPED;
 
     return HSAKMT_STATUS_SUCCESS;
+}
+
+void perfctr_release_global_resources(void)
+{
+	int i;
+
+	for (i=0; i<MAX_NODES; i++)
+		if (counter_props[i] != NULL) {
+			free(counter_props[i]);
+			counter_props[i] = NULL;
+		}
 }
