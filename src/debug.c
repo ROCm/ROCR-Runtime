@@ -28,6 +28,9 @@
 #include <stdlib.h>
 #include <string.h>
 
+static bool is_device_debugged[MAX_NODES] = {false};
+int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
+
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtDbgRegister(
@@ -47,9 +50,10 @@ hsaKmtDbgRegister(
 	args.gpu_id = gpu_id;
 	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
 
-	if (err == 0)
+	if (err == 0) {
+		is_device_debugged[NodeId] = true;
 		result = HSAKMT_STATUS_SUCCESS;
-	else
+	} else
 		result = HSAKMT_STATUS_ERROR;
 
 	return (result);
@@ -75,9 +79,10 @@ hsaKmtDbgUnregister(
 	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
 	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
-	if (err == 0)
+	if (err == 0) {
+		is_device_debugged[NodeId] = false;
 		result = HSAKMT_STATUS_SUCCESS;
-	else
+	} else
 		result = HSAKMT_STATUS_ERROR;
 
 	return (result);
@@ -276,4 +281,10 @@ hsaKmtDbgAddressWatch(
 }
 
 /* =============================================================================== */
-
+int debug_get_reg_status(uint32_t node_id, bool* is_debugged)
+{
+	if ( node_id >= MAX_NODES)
+		return -1;
+	else
+		return (is_device_debugged[node_id]);
+}

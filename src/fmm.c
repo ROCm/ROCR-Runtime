@@ -131,6 +131,7 @@ static svm_t svm = {
 	INIT_MANAGEBLE_APERTURE(0, 0)
 };
 
+extern int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
 static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
 static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
 static void __fmm_release(void *address,
