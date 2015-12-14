@@ -968,16 +968,16 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			return ret;
-		i++;
-		/* Skip non-GPU nodes */
-		if (gpu_id == 0)
-			continue;
 
-		gpu_mem[gpu_mem_id].gpu_id = gpu_id;
-		gpu_mem[gpu_mem_id].local_mem_size = props.LocalMemSize;
-		gpu_mem[gpu_mem_id].device_id = props.DeviceId;
-		gpu_mem[gpu_mem_id].node_id = i;
-		gpu_mem_id++;
+		/* Skip non-GPU nodes */
+		if (gpu_id != 0) {
+			gpu_mem[gpu_mem_id].gpu_id = gpu_id;
+			gpu_mem[gpu_mem_id].local_mem_size = props.LocalMemSize;
+			gpu_mem[gpu_mem_id].device_id = props.DeviceId;
+			gpu_mem[gpu_mem_id].node_id = i;
+			gpu_mem_id++;
+		}
+		i++;
 	}
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES, (void *) &args))
