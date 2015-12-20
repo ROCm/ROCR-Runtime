@@ -1133,9 +1133,11 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 {
 	int32_t gpu_mem_id;
 	uint64_t offset;
-	void *mem;
+	void *mem = NULL;
 	int ret;
-
+	bool is_debugger = 0;
+	void *mmap_ret = NULL;
+	uint64_t mmap_offset = 0;
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
@@ -1149,18 +1151,38 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 	    VOID_PTR_ADD(address, size -1) > aperture->limit)
 		return -1;
 
+	debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
 	/* allocate object within the scratch backing aperture */
-	offset = VOID_PTRS_SUB(address, aperture->base);
-	mem = __fmm_allocate_device(gpu_id, size, aperture, offset, NULL,
-				    KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
-	if (mem == NULL)
-		return -1;
-	if (mem != address) {
-		fprintf(stderr, "Got unexpected address for scratch mapping.\n"
-			"  expected: %p\n"
-			"  got:      %p\n", address, mem);
-		__fmm_release(mem, size, aperture);
-		return -1;
+	if (!is_debugger) {
+		offset = VOID_PTRS_SUB(address, aperture->base);
+		mem = __fmm_allocate_device(gpu_id, size, aperture, offset,
+				NULL, KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
+		if (mem == NULL)
+			return -1;
+
+		if (mem != address) {
+			fprintf(stderr,
+				"Got unexpected address for scratch mapping.\n"
+				"  expected: %p\n"
+				"  got:      %p\n", address, mem);
+			__fmm_release(mem, size, aperture);
+			return -1;
+		}
+	} else {
+		fmm_allocate_memory_in_device(gpu_id,
+					address,
+					size,
+					aperture,
+					&mmap_offset,
+					KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST);
+		mmap_ret = mmap(address, size,
+				PROT_READ | PROT_WRITE,
+				MAP_SHARED | MAP_FIXED,
+				kfd_fd, mmap_offset);
+		if (mmap_ret == MAP_FAILED) {
+			__fmm_release(mem, size, aperture);
+			return -1;
+		}
 	}
 
 	/* map to GPU */

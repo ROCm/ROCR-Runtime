@@ -285,6 +285,8 @@ int debug_get_reg_status(uint32_t node_id, bool* is_debugged)
 {
 	if ( node_id >= MAX_NODES)
 		return -1;
-	else
-		return (is_device_debugged[node_id]);
+	else  {
+		*is_debugged = is_device_debugged[node_id];
+		return 0;
+	}
 }
