@@ -195,8 +195,21 @@ hsaKmtRegisterMemory(
 	HSAuint64	MemorySizeInBytes	/* IN (page-aligned) */
 )
 {
+	uint32_t *NodesArray;
+	uint32_t NodesArraySize;
+
 	CHECK_KFD_OPEN();
 
+	/*
+	 * Build NodesArray from all dGPU nodes.
+	 */
+	NodesArraySize = fmm_build_nodes_array(&NodesArray, NULL, 0);
+	if (!NodesArray)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	if (fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+			NodesArray, NodesArraySize) != 0)
+		return HSAKMT_STATUS_ERROR;
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -207,6 +220,8 @@ hsaKmtDeregisterMemory(
 )
 {
 	CHECK_KFD_OPEN();
+
+	fmm_deregister_memory(MemoryAddress);
 
 	return HSAKMT_STATUS_SUCCESS;
 }

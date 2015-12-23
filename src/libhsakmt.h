@@ -77,7 +77,8 @@ bool topology_is_dgpu(uint16_t device_id);
 
 HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
-void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t NodeId);
+void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
+		uint32_t NodeId, bool peer_to_peer);
 void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align);
 
 extern int kmtIoctl(int fd, unsigned long request, void *arg);

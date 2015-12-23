@@ -77,7 +77,7 @@ hsaKmtCreateEvent(
 	if (is_dgpu && events_page == NULL) {
 		events_page = allocate_exec_aligned_memory_gpu(KFD_SIGNAL_EVENT_LIMIT * 8,
 			TONGA_PAGE_SIZE,
-			args.node_id);
+			args.node_id, true);
 		if (!events_page) {
 			return HSAKMT_STATUS_ERROR;
 		}
@@ -143,7 +143,6 @@ hsaKmtDestroyEvent(
 	}
 
 	free(Event);
-
 	return HSAKMT_STATUS_SUCCESS;
 }
 

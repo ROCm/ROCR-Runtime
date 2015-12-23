@@ -66,6 +66,11 @@ struct vm_object {
 	uint64_t handle; /* opaque */
 	struct vm_object *next;
 	struct vm_object *prev;
+	/*
+	 * Nodes to map on SVM mGPU
+	 */
+	uint32_t *device_ids_array;
+	uint32_t device_ids_array_size;
 };
 typedef struct vm_object vm_object_t;
 
@@ -165,6 +170,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->size = size;
 		object->handle = handle;
 		object->next = object->prev = NULL;
+		object->device_ids_array_size = 0;
 	}
 
 	return object;
@@ -698,7 +704,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
-	uint32_t flags;
+	uint32_t flags, offset;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -712,13 +718,15 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 		 * In that way the host access range won't be used for local memory
 		 */
 		aperture = &svm.dgpu_aperture;
+		offset = 0;
 	} else {
 		flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
+		offset = GPUVM_APP_OFFSET;
 	}
 
 	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
-			aperture, GPUVM_APP_OFFSET, NULL,
+			aperture, offset, NULL,
 			flags);
 }
 
@@ -812,7 +820,7 @@ void *fmm_open_graphic_handle(uint32_t gpu_id,
 	void *mem = NULL;
 	int32_t i = gpu_mem_find_by_gpu_id(gpu_id);
 	struct kfd_ioctl_open_graphic_handle_args open_graphic_handle_args;
-	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
+	struct kfd_ioctl_unmap_memory_from_gpu_new_args unmap_args;
 
 	/* If not found or aperture isn't properly initialized/supported */
 	if (i < 0 || !aperture_is_valid(gpu_mem[i].gpuvm_aperture.base,
@@ -850,7 +858,9 @@ void *fmm_open_graphic_handle(uint32_t gpu_id,
 
 release_mem:
 	unmap_args.handle = open_graphic_handle_args.handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
+	unmap_args.device_ids_array = NULL;
+	unmap_args.device_ids_array_size = 0;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &unmap_args);
 release_area:
 	aperture_release_area(&gpu_mem[i].gpuvm_aperture, mem,
 				MemorySizeInBytes);
@@ -1113,7 +1123,7 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 				void *address, uint64_t size)
 {
-	struct kfd_ioctl_map_memory_to_gpu_args args;
+	struct kfd_ioctl_map_memory_to_gpu_new_args args;
 	vm_object_t *object;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1125,7 +1135,9 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 	}
 
 	args.handle = object->handle;
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
+	args.device_ids_array = object->device_ids_array;
+	args.device_ids_array_size = object->device_ids_array_size;
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU_NEW, &args))
 		goto err_map_ioctl_failed;
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1207,7 +1219,7 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 				void *address, uint64_t size,
 				uint64_t *gpuvm_address)
 {
-	struct kfd_ioctl_map_memory_to_gpu_args args;
+	struct kfd_ioctl_map_memory_to_gpu_new_args args;
 	vm_object_t *object;
 
 	/* Check that address space was previously reserved */
@@ -1222,7 +1234,9 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 		goto err_object_not_found;
 
 	args.handle = object->handle;
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
+	args.device_ids_array = object->device_ids_array;
+	args.device_ids_array_size = object->device_ids_array_size;
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU_NEW, &args))
 		goto err_map_ioctl_failed;
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1291,7 +1305,7 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address)
 {
 	vm_object_t *object;
-	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_new_args args;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
@@ -1301,7 +1315,9 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address)
 		goto err;
 
 	args.handle = object->handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+	args.device_ids_array = object->device_ids_array;
+	args.device_ids_array_size = object->device_ids_array_size;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &args);
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -1318,7 +1334,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	int32_t gpu_mem_id;
 	vm_object_t *object;
 	uint64_t size;
-	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_new_args args;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -1339,7 +1355,9 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 
 	/* unmap from GPU */
 	args.handle = object->handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+	args.device_ids_array = object->device_ids_array;
+	args.device_ids_array_size = object->device_ids_array_size;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &args);
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -1589,4 +1607,109 @@ void fmm_release_global_resources(void)
 	}
 	dgpu_shared_aperture_base = NULL;
 	dgpu_shared_aperture_limit = NULL;
+}
+
+int fmm_register_memory(void *address, uint32_t size_in_bytes,
+		uint32_t *nodes_arr, uint32_t nodes_arr_size)
+{
+	bool found = false;
+	manageble_aperture_t *aperture;
+	vm_object_t *object;
+
+	/*
+	 * Object can be found only on SVM aperture as you can't map
+	 * non SVM object on different device.
+	 */
+	aperture = &svm.dgpu_aperture;
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	/* Find the object to retrieve the handle */
+	object = vm_find_object_by_address(aperture, address, 0);
+	if (object)
+		found = true;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (!found) {
+		aperture = &svm.dgpu_alt_aperture;
+
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		/* Find the object to retrieve the handle */
+		object = vm_find_object_by_address(aperture, address, 0);
+		if (object)
+			found = true;
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+	}
+
+	if (!object)
+		return 1;
+
+	object->device_ids_array = nodes_arr;
+	object->device_ids_array_size = nodes_arr_size * sizeof(uint32_t);
+
+	return 0;
+}
+
+void fmm_deregister_memory(void *address)
+{
+	bool found = false;
+	manageble_aperture_t *aperture;
+	vm_object_t *object;
+
+	/*
+	 * Object can be found only on SVM aperture as you can't map
+	 * non SVM object on different device.
+	 */
+	aperture = &svm.dgpu_aperture;
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	/* Find the object to retrieve the handle */
+	object = vm_find_object_by_address(aperture, address, 0);
+	if (object)
+		found = true;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (!found) {
+		aperture = &svm.dgpu_alt_aperture;
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		/* Find the object to retrieve the handle */
+		object = vm_find_object_by_address(aperture, address, 0);
+		if (object)
+			found = true;
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+	}
+
+	if (!object || object->device_ids_array_size <= 0)
+		return;
+
+	free(object->device_ids_array);
+	object->device_ids_array = NULL;
+	object->device_ids_array_size = 0;
+}
+
+int fmm_build_nodes_array(uint32_t **array, uint32_t *nodes, uint32_t nodes_num)
+{
+	uint32_t i, *arr;
+	if (!nodes) {
+		nodes_num = 0;
+		for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS; i++) {
+			if (gpu_mem[i].gpu_id == 0)
+				continue;
+			nodes_num++;
+		}
+	}
+
+	arr = (uint32_t *)malloc(sizeof(uint32_t) * nodes_num);
+	if (!array)
+		return 1;
+
+	memset(arr, 0, sizeof(uint32_t) * nodes_num);
+
+	nodes_num = 0;
+	for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS; i++) {
+		if (gpu_mem[i].gpu_id == 0)
+			continue;
+		arr[nodes_num] = gpu_mem[i].gpu_id;
+		nodes_num++;
+	}
+
+	*array = arr;
+	return nodes_num;
 }
