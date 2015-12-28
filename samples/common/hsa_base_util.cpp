@@ -1,4 +1,5 @@
 #include "hsa_base_util.h"
+#include "HSAILAmdExt.h"
 
 
 void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
@@ -55,6 +56,7 @@ bool HSA_UTIL::HsaInit()
 	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &command_queue);
 	check(Creating the queue, err);
 
+        amd::hsail::registerExtensions();
         if (!tool.assembleFromFile(hail_file_name)) {
           std::cout << tool.output();
           return false;

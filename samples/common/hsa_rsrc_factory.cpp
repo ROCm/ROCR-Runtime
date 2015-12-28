@@ -11,6 +11,7 @@
 #include "hsa.h"
 #include "hsa_rsrc_factory.hpp"
 #include "hsa_ext_finalize.h"
+#include "HSAILAmdExt.h"
 
 #include "common.hpp"
 
@@ -316,6 +317,8 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
   status = hsa_find_symbol_offset(brig_obj, kernel_name, &kernel_symbol);
   check("Error in Finding the Symbol Offset for the Kernel", status);
   */
+
+  amd::hsail::registerExtensions();
 
   // Copy handle of Brig object
   hsa_ext_module_t brig_module_v3;
