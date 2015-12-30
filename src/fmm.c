@@ -28,6 +28,7 @@
 #include "libhsakmt.h"
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 #include <inttypes.h>
 #include <sys/mman.h>
 #include <sys/time.h>
@@ -768,7 +769,7 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 		aperture = &svm.dgpu_alt_aperture; /* coherent */
 	if (flags.ui32.AQLQueueMemory) {
 		size = MemorySizeInBytes * 2;
-		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
 	}
 
 	mem =  __fmm_allocate_device(gpu_id, size,
@@ -782,6 +783,14 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 	if (ret == MAP_FAILED) {
 		__fmm_release(mem, MemorySizeInBytes, aperture);
 		return NULL;
+	}
+
+	if (flags.ui32.AQLQueueMemory) {
+		uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
+		memset(ret, 0, MemorySizeInBytes);
+		mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
+			PROT_READ | PROT_WRITE,
+		       MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
 	}
 
 	return ret;
@@ -863,7 +872,7 @@ static void __fmm_release(void *address,
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
 	/* Find the object to retrieve the handle */
-	object = vm_find_object_by_address(aperture, address, MemorySizeInBytes);
+	object = vm_find_object_by_address(aperture, address, 0);
 	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return;
@@ -930,8 +939,9 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 	 * If memory address isn't inside of any defined aperture - it refers
 	 * to the system memory
 	 */
-	if (!found)
+	if (!found) {
 		free(address);
+	}
 }
 
 static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_policy,
