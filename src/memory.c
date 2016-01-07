@@ -195,22 +195,48 @@ hsaKmtRegisterMemory(
 	HSAuint64	MemorySizeInBytes	/* IN (page-aligned) */
 )
 {
-	uint32_t *NodesArray;
-	uint32_t NodesArraySize;
-
 	CHECK_KFD_OPEN();
 
-	/*
-	 * Build NodesArray from all dGPU nodes.
-	 */
-	NodesArraySize = fmm_build_nodes_array(&NodesArray, NULL, 0);
-	if (!NodesArray)
+        /* No-op for APU, TODO for dGPU */
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterMemoryToNodes(
+	void		*MemoryAddress,		/* IN (page-aligned) */
+	HSAuint64	MemorySizeInBytes,	/* IN (page-aligned) */
+	HSAuint64	NumberOfNodes,		/* IN */
+	HSAuint32*	NodeArray		/* IN */
+)
+{
+	CHECK_KFD_OPEN();
+	uint32_t *gpu_id_array;
+	unsigned i;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	if (NumberOfNodes == 0 || NodeArray == NULL)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (fmm_register_memory(MemoryAddress, MemorySizeInBytes,
-			NodesArray, NodesArraySize) != 0)
-		return HSAKMT_STATUS_ERROR;
-	return HSAKMT_STATUS_SUCCESS;
+	/* Translate Node IDs to gpu_ids */
+	gpu_id_array = malloc(NumberOfNodes * sizeof(uint32_t));
+	if (gpu_id_array == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+        for (i = 0; i < NumberOfNodes; i++) {
+		ret = validate_nodeid(NodeArray[i], &gpu_id_array[i]);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			break;
+	}
+
+	if (ret == HSAKMT_STATUS_SUCCESS)
+		ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+					  gpu_id_array,
+					  NumberOfNodes*sizeof(uint32_t));
+
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		free(gpu_id_array);
+
+	return ret;
 }
 
 HSAKMT_STATUS
@@ -221,9 +247,7 @@ hsaKmtDeregisterMemory(
 {
 	CHECK_KFD_OPEN();
 
-	fmm_deregister_memory(MemoryAddress);
-
-	return HSAKMT_STATUS_SUCCESS;
+	return fmm_deregister_memory(MemoryAddress);
 }
 
 HSAKMT_STATUS

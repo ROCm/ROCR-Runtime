@@ -207,8 +207,10 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 		return NULL;
 	}
 
-	if (peer_to_peer) {
-		if (hsaKmtRegisterMemory(mem, size) != HSAKMT_STATUS_SUCCESS) {
+	if (!peer_to_peer) {
+		uint32_t nodes_array[1] = {NodeId};
+		if (hsaKmtRegisterMemoryToNodes(mem, size, 1, nodes_array)
+		    != HSAKMT_STATUS_SUCCESS) {
 			hsaKmtFreeMemory(mem, size);
 			return NULL;
 		}
@@ -229,7 +231,6 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS) {
 		hsaKmtFreeMemory(addr, size);
 	}
-	hsaKmtDeregisterMemory(addr);
 }
 
 static void* allocate_exec_aligned_memory(uint32_t size,
@@ -246,7 +247,6 @@ static void release_exec_aligned_memory_gpu(void *addr, uint32_t size)
 {
 	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS)
 		hsaKmtFreeMemory(addr, (HSAuint64)size);
-	hsaKmtDeregisterMemory(addr);
 }
 
 static void release_exec_aligned_memory(void *addr, uint32_t size, enum asic_family_type type)

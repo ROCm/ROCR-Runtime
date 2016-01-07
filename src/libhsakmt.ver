@@ -25,6 +25,7 @@ hsaKmtSetMemoryPolicy;
 hsaKmtAllocMemory;
 hsaKmtFreeMemory;
 hsaKmtRegisterMemory;
+hsaKmtRegisterMemoryToNodes;
 hsaKmtDeregisterMemory;
 hsaKmtMapMemoryToGPU;
 hsaKmtUnmapMemoryToGPU;
