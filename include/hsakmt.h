@@ -369,7 +369,6 @@ hsaKmtFreeMemory(
 
 /**
   Registers with KFD a memory buffer that may be accessed by the GPU
-  This function will never be required for Linux
 */
 
 HSAKMT_STATUS
@@ -381,8 +380,21 @@ hsaKmtRegisterMemory(
 
 
 /**
+  Registers with KFD a memory buffer that may be accessed by specific GPUs
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterMemoryToNodes(
+    void        *MemoryAddress,     // IN (page-aligned)
+    HSAuint64   MemorySizeInBytes,  // IN (page-aligned)
+    HSAuint64   NumberOfNodes,      // IN
+    HSAuint32*  NodeArray           // IN
+    );
+
+
+/**
   Unregisters with KFD a memory buffer
-  This function will never be required for Linux
 */
 
 HSAKMT_STATUS
