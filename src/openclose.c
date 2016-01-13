@@ -41,26 +41,29 @@ HSAKMTAPI
 hsaKmtOpenKFD(void)
 {
 	HSAKMT_STATUS result;
+	int fd;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	if (kfd_open_count == 0)
 	{
-		int fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
+		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
-		if (fd != -1)
-		{
+		if (fd != -1) {
 			kfd_fd = fd;
 			kfd_open_count = 1;
-
-			result = fmm_init_process_apertures();
-			if (result != HSAKMT_STATUS_SUCCESS)
-				close(fd);
-		}
-		else
-		{
+		} else {
 			result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
+			goto open_failed;
 		}
+
+		result = fmm_init_process_apertures();
+		if (result != HSAKMT_STATUS_SUCCESS)
+			goto init_process_aperture_failed;
+
+		result = init_process_doorbells();
+		if (result != HSAKMT_STATUS_SUCCESS)
+			goto init_doorbell_failed;
 
 		amd_hsa_thunk_lock_fd = open(tmp_file,
 				O_CREAT | //create the file if it's not present.
@@ -73,6 +76,14 @@ hsaKmtOpenKFD(void)
 		result = HSAKMT_STATUS_SUCCESS;
 	}
 
+	pthread_mutex_unlock(&hsakmt_mutex);
+	return result;
+
+init_doorbell_failed:
+	fmm_destroy_process_apertures();
+init_process_aperture_failed:
+	close(fd);
+open_failed:
 	pthread_mutex_unlock(&hsakmt_mutex);
 
 	return result;
@@ -90,6 +101,8 @@ hsaKmtCloseKFD(void)
 	{
 		if (--kfd_open_count == 0)
 		{
+			destroy_process_doorbells();
+			fmm_destroy_process_apertures();
 			close(kfd_fd);
 
 			if (amd_hsa_thunk_lock_fd > 0) {

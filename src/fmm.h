@@ -44,6 +44,8 @@ typedef struct {
 } aperture_properties_t;
 
 HSAKMT_STATUS fmm_init_process_apertures(void);
+void fmm_destroy_process_apertures(void);
+
 /*
  * Memory interface
  */

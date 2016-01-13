@@ -145,7 +145,39 @@ struct process_doorbells
 	pthread_mutex_t doorbells_mutex;
 };
 
-struct process_doorbells doorbells[] = {[0 ... (NUM_OF_SUPPORTED_GPUS-1)] = {.need_mmap = true, .doorbells = NULL, .doorbells_mutex = PTHREAD_MUTEX_INITIALIZER}};
+static struct process_doorbells *doorbells;
+
+HSAKMT_STATUS init_process_doorbells(void)
+{
+	HsaSystemProperties sys_props;
+	unsigned int i;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	ret = topology_sysfs_get_system_props(&sys_props);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	/* doorbells[] is accessed using Topology NodeId. This means doorbells[0],
+	 * which corresponds to CPU only Node, might not be used */
+	doorbells = malloc(sys_props.NumNodes * sizeof(struct process_doorbells));
+	if (doorbells == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	for (i = 0; i < sys_props.NumNodes; i++) {
+		doorbells[i].need_mmap = true;
+		doorbells[i].doorbells = NULL;
+		pthread_mutex_init(&doorbells[i].doorbells_mutex, NULL);
+	}
+	return ret;
+}
+
+void destroy_process_doorbells(void)
+{
+	if (doorbells) {
+		free(doorbells);
+		doorbells = NULL;
+	}
+}
 
 static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 {
