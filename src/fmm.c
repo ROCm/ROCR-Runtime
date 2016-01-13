@@ -1067,17 +1067,23 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			uintptr_t alt_base;
 			uint64_t alt_size;
 			int err;
+			uint64_t vm_alignment = PAGE_SIZE;
+
+			if (gpu_mem[gpu_mem_id].device_id >= 0x6920 &&
+			    gpu_mem[gpu_mem_id].device_id <= 0x6939)
+				/* Workaround for Tonga GPUVM HW bug */
+				vm_alignment = TONGA_PAGE_SIZE;
 
 			dgpu_mem_init(gpu_mem_id, &svm.dgpu_aperture.base,
 					&svm.dgpu_aperture.limit);
 
 			/* Set proper alignment for scratch backing aperture */
-			gpu_mem[gpu_mem_id].scratch_physical.align = TONGA_PAGE_SIZE;
+			gpu_mem[gpu_mem_id].scratch_physical.align = vm_alignment;
 
 			/* Set kernel process dgpu aperture. */
 			set_dgpu_aperture(i, (uint64_t)svm.dgpu_aperture.base,
 				(uint64_t)svm.dgpu_aperture.limit);
-			svm.dgpu_aperture.align = TONGA_PAGE_SIZE;
+			svm.dgpu_aperture.align = vm_alignment;
 
 			/* Place GPUVM aperture after dGPU aperture
 				* (FK: I think this is broken but leaving it for now) */
@@ -1086,7 +1092,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 					svm.dgpu_aperture.base);
 			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[gpu_mem_id].gpuvm_aperture.limit,
 				(unsigned long)gpu_mem[gpu_mem_id].gpuvm_aperture.base);
-			gpu_mem[gpu_mem_id].gpuvm_aperture.align = TONGA_PAGE_SIZE;
+			gpu_mem[gpu_mem_id].gpuvm_aperture.align = vm_alignment;
 
 			/* Use the first 1/4 of the dGPU aperture as
 				* alternate aperture for coherent access.
@@ -1107,7 +1113,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				fprintf(stderr, "Error! Failed to set alt aperture for GPU [0x%x]\n", gpu_mem[gpu_mem_id].gpu_id);
 				ret = HSAKMT_STATUS_ERROR;
 			}
-			svm.dgpu_alt_aperture.align = TONGA_PAGE_SIZE;
+			svm.dgpu_alt_aperture.align = vm_alignment;
 		}
 	}
 

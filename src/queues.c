@@ -135,7 +135,7 @@ struct queue
 	uint32_t rptr;
 	void *eop_buffer;
 	void *ctx_save_restore;
-	enum asic_family_type type;
+	const struct device_info *dev_info;
 };
 
 struct process_doorbells
@@ -266,20 +266,15 @@ static void* allocate_exec_aligned_memory(uint32_t size,
 					uint32_t NodeId)
 {
 	if (IS_DGPU(type))
-		return allocate_exec_aligned_memory_gpu(size, TONGA_PAGE_SIZE, NodeId, false);
+		return allocate_exec_aligned_memory_gpu(size, align, NodeId, false);
 	return allocate_exec_aligned_memory_cpu(size, align);
 }
 
-static void release_exec_aligned_memory_gpu(void *addr, uint32_t size)
-{
-	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS)
-		hsaKmtFreeMemory(addr, (HSAuint64)size);
-}
-
-static void release_exec_aligned_memory(void *addr, uint32_t size, enum asic_family_type type)
+static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
+				     enum asic_family_type type)
 {
 	if (IS_DGPU(type))
-		release_exec_aligned_memory_gpu(addr, TONGA_PAGE_SIZE);
+		free_exec_aligned_memory_gpu(addr, size, align);
 	else
 		free(addr);
 }
@@ -288,30 +283,31 @@ static void free_queue_gpu(struct queue *q)
 {
 	if (q->eop_buffer) {
 		hsaKmtUnmapMemoryToGPU(q->eop_buffer);
-		hsaKmtFreeMemory(q->eop_buffer, TONGA_PAGE_SIZE);
+		hsaKmtFreeMemory(q->eop_buffer, q->dev_info->eop_buffer_size);
 	}
 	if (q->ctx_save_restore) {
 		hsaKmtUnmapMemoryToGPU(q->ctx_save_restore);
-		hsaKmtFreeMemory(q->ctx_save_restore, TONGA_PAGE_SIZE);
+		hsaKmtFreeMemory(q->ctx_save_restore, q->dev_info->ctx_save_restore_size);
 	}
-	release_exec_aligned_memory((void *)q, sizeof(*q), q->type);
+	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
 }
 
-static void free_queue(struct queue *q, enum asic_family_type type)
+static void free_queue(struct queue *q)
 {
-	if (IS_DGPU(type))
+	if (IS_DGPU(q->dev_info->asic_family))
 		return free_queue_gpu(q);
 	return free_queue_cpu(q);
 }
 
-static int handle_concrete_asic(struct device_info *dev_info, struct queue *q,
-								struct kfd_ioctl_create_queue_args *args,
-								uint32_t NodeId)
+static int handle_concrete_asic(struct queue *q,
+				struct kfd_ioctl_create_queue_args *args,
+				uint32_t NodeId)
 {
+	const struct device_info *dev_info = q->dev_info;
 	if (dev_info) {
 		if (dev_info->eop_buffer_size > 0) {
 			q->eop_buffer =
-					allocate_exec_aligned_memory(dev_info->eop_buffer_size,
+					allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
 					PAGE_SIZE,
 					dev_info->asic_family,
 					NodeId);
@@ -380,11 +376,11 @@ hsaKmtCreateQueue(
 
 	args.gpu_id = gpu_id;
 
-	q->type = dev_info->asic_family;
+	q->dev_info = dev_info;
 
-	err = handle_concrete_asic(dev_info, q, &args, NodeId);
+	err = handle_concrete_asic(q, &args, NodeId);
 	if (err != HSAKMT_STATUS_SUCCESS) {
-		free_queue(q, dev_info->asic_family);
+		free_queue(q);
 		return err;
 	}
 
@@ -393,7 +389,7 @@ hsaKmtCreateQueue(
 	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
 	case HSA_QUEUE_SDMA: args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA; break;
 	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
-	default: free_queue(q, dev_info->asic_family); return HSAKMT_STATUS_INVALID_PARAMETER;
+	default: free_queue(q); return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
 	if (Type != HSA_QUEUE_COMPUTE_AQL)
@@ -413,7 +409,7 @@ hsaKmtCreateQueue(
 
 	if (err == -1)
 	{
-		free_queue(q, dev_info->asic_family);
+		free_queue(q);
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -428,7 +424,7 @@ hsaKmtCreateQueue(
 		if (ptr == MAP_FAILED) {
 			pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 			hsaKmtDestroyQueue(q->queue_id);
-			free_queue(q, dev_info->asic_family);
+			free_queue(q);
 			return HSAKMT_STATUS_ERROR;
 		}
 
@@ -504,7 +500,7 @@ hsaKmtDestroyQueue(
 	}
 	else
 	{
-		free_queue(q, q->type);
+		free_queue(q);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 }
