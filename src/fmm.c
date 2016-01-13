@@ -36,11 +36,6 @@
 #define NON_VALID_GPU_ID 0
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
-#define INIT_APERTURE(base_value, limit_value) {		\
-	.base = (void *) base_value,				\
-	.limit = (void *) limit_value				\
-	}
-
 #define INIT_MANAGEBLE_APERTURE(base_value, limit_value) {	\
 	.base = (void *) base_value,				\
 	.limit = (void *) limit_value,				\
@@ -49,16 +44,6 @@
 	.vm_objects = NULL,					\
 	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER			\
 	}
-
-#define INIT_GPU_MEM {						\
-	.gpu_id = NON_VALID_GPU_ID,				\
-	.lds_aperture = INIT_APERTURE(0, 0),			\
-	.scratch_physical = INIT_MANAGEBLE_APERTURE(0, 0),	\
-	.scratch_aperture = INIT_MANAGEBLE_APERTURE(0, 0),	\
-	.gpuvm_aperture =  INIT_MANAGEBLE_APERTURE(0, 0),	\
-}
-
-#define INIT_GPUs_MEM {[0 ... (NUM_OF_SUPPORTED_GPUS-1)] = INIT_GPU_MEM}
 
 struct vm_object {
 	void *start;
@@ -128,7 +113,8 @@ typedef struct {
 
 /* The other apertures are specific to each GPU. gpu_mem_t manages GPU
 * specific memory apertures. */
-static gpu_mem_t gpu_mem[] = INIT_GPUs_MEM;
+static gpu_mem_t *gpu_mem;
+static unsigned int gpu_mem_count;
 
 static void *dgpu_shared_aperture_base = NULL;
 static void *dgpu_shared_aperture_limit = NULL;
@@ -431,9 +417,9 @@ static int aperture_allocate_object(manageble_aperture_t *app,
 
 static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
 {
-	int32_t i;
+	uint32_t i;
 
-	for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS ; i++)
+	for (i = 0 ; i < gpu_mem_count ; i++)
 		if (gpu_mem[i].gpu_id == gpu_id)
 			return i;
 
@@ -486,9 +472,9 @@ err_object_allocation_failed:
 
 bool fmm_is_inside_some_aperture(void *address)
 {
-	int32_t i;
+	uint32_t i;
 
-	for (i = 0 ; i < NUM_OF_SUPPORTED_GPUS ; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 		if ((address >= gpu_mem[i].lds_aperture.base) &&
@@ -912,7 +898,7 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 	uint32_t i;
 	bool found = false;
 
-	for (i = 0; i < NUM_OF_SUPPORTED_GPUS && !found; i++) {
+	for (i = 0; i < gpu_mem_count && !found; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 		if (address >= gpu_mem[i].scratch_physical.base &&
@@ -993,20 +979,35 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	/* Initialize gpu_mem[] from sysfs topology. This is necessary because this function
+	/* Trade off - sys_props.NumNodes includes GPU nodes + CPU Node. So in
+	 *	systems with CPU node, slightly more memory is allocated than
+	 *	necessary*/
+	gpu_mem = (gpu_mem_t *)calloc(sys_props.NumNodes * sizeof(gpu_mem_t), 1);
+	if (gpu_mem == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	/* Initialize gpu_mem[] from sysfs topology. Rest of the members are set to
+	 * 0 by calloc. This is necessary because this function
 	 * gets called before hsaKmtAcquireSystemProperties() is called.*/
+	gpu_mem_count = 0;
 	while (i < sys_props.NumNodes) {
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id);
 		if (ret != HSAKMT_STATUS_SUCCESS)
-			return ret;
+			goto sysfs_parse_failed;
 
 		/* Skip non-GPU nodes */
 		if (gpu_id != 0) {
-			gpu_mem[gpu_mem_id].gpu_id = gpu_id;
-			gpu_mem[gpu_mem_id].local_mem_size = props.LocalMemSize;
-			gpu_mem[gpu_mem_id].device_id = props.DeviceId;
-			gpu_mem[gpu_mem_id].node_id = i;
-			gpu_mem_id++;
+			gpu_mem[gpu_mem_count].gpu_id = gpu_id;
+			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
+			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
+			gpu_mem[gpu_mem_count].node_id = i;
+			gpu_mem[gpu_mem_count].scratch_physical.align = PAGE_SIZE;
+			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_physical.fmm_mutex, NULL);
+			gpu_mem[gpu_mem_count].scratch_aperture.align = PAGE_SIZE;
+			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_aperture.fmm_mutex, NULL);
+			gpu_mem[gpu_mem_count].gpuvm_aperture.align = PAGE_SIZE;
+			pthread_mutex_init(&gpu_mem[gpu_mem_count].gpuvm_aperture.fmm_mutex, NULL);
+			gpu_mem_count++;
 		}
 		i++;
 	}
@@ -1014,12 +1015,14 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 	/* The ioctl will also return Number of Nodes if args.kfd_process_device_apertures_ptr
 	* is set to NULL. This is not required since Number of nodes is already known. Kernel
 	* will fill in the apertures in kfd_process_device_apertures_ptr */
-	process_apertures = malloc(gpu_mem_id * sizeof(struct kfd_process_device_apertures));
-	if (process_apertures == NULL)
-		return HSAKMT_STATUS_NO_MEMORY;
+	process_apertures = malloc(gpu_mem_count * sizeof(struct kfd_process_device_apertures));
+	if (process_apertures == NULL) {
+		ret = HSAKMT_STATUS_NO_MEMORY;
+		goto sysfs_parse_failed;
+	}
 
 	args.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures;
-	args.num_of_nodes = gpu_mem_id;
+	args.num_of_nodes = gpu_mem_count;
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW, (void *)&args)) {
 		ret = HSAKMT_STATUS_ERROR;
@@ -1114,10 +1117,24 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 		}
 	}
 
+	free(process_apertures);
+	return ret;
+
 get_aperture_ioctl_failed:
 invalid_gpu_id :
 	free(process_apertures);
+sysfs_parse_failed:
+	fmm_destroy_process_apertures();
 	return ret;
+}
+
+void fmm_destroy_process_apertures(void)
+{
+	if (gpu_mem) {
+		free(gpu_mem);
+		gpu_mem = NULL;
+	}
+	gpu_mem_count = 0;
 }
 
 HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
@@ -1308,11 +1325,11 @@ err_object_not_found:
 
 int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 {
-	int32_t i;
+	uint32_t i;
 	uint64_t pi;
 
 	/* Find an aperture the requested address belongs to */
-	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 
@@ -1432,10 +1449,10 @@ err:
 
 int fmm_unmap_from_gpu(void *address)
 {
-	int32_t i;
+	uint32_t i;
 
 	/* Find the aperture the requested address belongs to */
-	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 
@@ -1608,7 +1625,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 
 bool fmm_get_handle(void *address, uint64_t *handle)
 {
-	int32_t i;
+	uint32_t i;
 	manageble_aperture_t *aperture;
 	vm_object_t *object;
 	bool found;
@@ -1617,7 +1634,7 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	aperture = NULL;
 
 	/* Find the aperture the requested address belongs to */
-	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 
