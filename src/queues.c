@@ -147,23 +147,18 @@ struct process_doorbells
 
 static struct process_doorbells *doorbells;
 
-HSAKMT_STATUS init_process_doorbells(void)
+HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 {
-	HsaSystemProperties sys_props;
 	unsigned int i;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	ret = topology_sysfs_get_system_props(&sys_props);
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
-
 	/* doorbells[] is accessed using Topology NodeId. This means doorbells[0],
 	 * which corresponds to CPU only Node, might not be used */
-	doorbells = malloc(sys_props.NumNodes * sizeof(struct process_doorbells));
+	doorbells = malloc(NumNodes * sizeof(struct process_doorbells));
 	if (doorbells == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
 
-	for (i = 0; i < sys_props.NumNodes; i++) {
+	for (i = 0; i < NumNodes; i++) {
 		doorbells[i].need_mmap = true;
 		doorbells[i].doorbells = NULL;
 		pthread_mutex_init(&doorbells[i].doorbells_mutex, NULL);

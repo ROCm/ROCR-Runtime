@@ -30,6 +30,7 @@
 #include <sys/ioctl.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <stdio.h>
 #include "fmm.h"
 
 static const char kfd_device_name[] = "/dev/kfd";
@@ -42,6 +43,7 @@ hsaKmtOpenKFD(void)
 {
 	HSAKMT_STATUS result;
 	int fd;
+	HsaSystemProperties sys_props;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
@@ -57,13 +59,23 @@ hsaKmtOpenKFD(void)
 			goto open_failed;
 		}
 
-		result = fmm_init_process_apertures();
+		result = topology_sysfs_get_system_props(&sys_props);
+		if (result != HSAKMT_STATUS_SUCCESS)
+			goto topology_sysfs_failed;
+
+		result = fmm_init_process_apertures(sys_props.NumNodes);
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto init_process_aperture_failed;
 
-		result = init_process_doorbells();
+		result = init_process_doorbells(sys_props.NumNodes);
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto init_doorbell_failed;
+
+		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
+			printf("Insufficient Memory. Debugging unavailable\n");
+
+		if (init_counter_props(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
+			printf("Insufficient Memory. Performance Counter information unavailable\n");
 
 		amd_hsa_thunk_lock_fd = open(tmp_file,
 				O_CREAT | //create the file if it's not present.
@@ -82,6 +94,7 @@ hsaKmtOpenKFD(void)
 init_doorbell_failed:
 	fmm_destroy_process_apertures();
 init_process_aperture_failed:
+topology_sysfs_failed:
 	close(fd);
 open_failed:
 	pthread_mutex_unlock(&hsakmt_mutex);
@@ -101,6 +114,8 @@ hsaKmtCloseKFD(void)
 	{
 		if (--kfd_open_count == 0)
 		{
+			destroy_counter_props();
+			destroy_device_debugging_memory();
 			destroy_process_doorbells();
 			fmm_destroy_process_apertures();
 			close(kfd_fd);

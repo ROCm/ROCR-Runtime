@@ -28,8 +28,28 @@
 #include <stdlib.h>
 #include <string.h>
 
-static bool is_device_debugged[MAX_NODES] = {false};
+static bool *is_device_debugged;
 int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
+
+HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
+{
+	unsigned int i;
+
+	is_device_debugged = malloc(NumNodes * sizeof(bool));
+	if (is_device_debugged == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	for (i = 0; i < NumNodes; i++)
+		is_device_debugged[i] = false;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+void destroy_device_debugging_memory(void)
+{
+	if (is_device_debugged)
+		free(is_device_debugged);
+}
 
 HSAKMT_STATUS
 HSAKMTAPI
@@ -40,6 +60,9 @@ hsaKmtDbgRegister(
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	CHECK_KFD_OPEN();
+
+	if (is_device_debugged == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
 
 	result = validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
@@ -70,6 +93,9 @@ hsaKmtDbgUnregister(
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	CHECK_KFD_OPEN();
+
+	if (is_device_debugged == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
 
 	result = validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
@@ -283,7 +309,8 @@ hsaKmtDbgAddressWatch(
 /* =============================================================================== */
 int debug_get_reg_status(uint32_t node_id, bool* is_debugged)
 {
-	if ( node_id >= MAX_NODES)
+	*is_debugged = NULL;
+	if (is_device_debugged == NULL)
 		return -1;
 	else  {
 		*is_debugged = is_device_debugged[node_id];
