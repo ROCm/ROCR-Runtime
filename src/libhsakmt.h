@@ -59,12 +59,6 @@ extern bool is_dgpu;
 #define PAGE_ALIGN_UP(x) ALIGN_UP(x,PAGE_SIZE)
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
 
-/*
- * Even though the toplogy code doesn't limit us to maximum number of nodes,
- * the current HSA spec says the maximum is 8 nodes
- */
-#define MAX_NODES 8
-
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
 uint16_t get_device_id_by_node(HSAuint32 node_id);
@@ -80,8 +74,12 @@ HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 		uint32_t NodeId, bool peer_to_peer);
 void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align);
-HSAKMT_STATUS init_process_doorbells(void);
+HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes);
 void destroy_process_doorbells(void);
+HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes);
+void destroy_device_debugging_memory(void);
+HSAKMT_STATUS init_counter_props(unsigned int NumNodes);
+void destroy_counter_props(void);
 
 extern int kmtIoctl(int fd, unsigned long request, void *arg);
 

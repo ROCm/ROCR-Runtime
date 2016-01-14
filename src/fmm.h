@@ -43,7 +43,7 @@ typedef struct {
 	void* start_address;
 } aperture_properties_t;
 
-HSAKMT_STATUS fmm_init_process_apertures(void);
+HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes);
 void fmm_destroy_process_apertures(void);
 
 /*

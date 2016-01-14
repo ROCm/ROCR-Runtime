@@ -46,9 +46,34 @@ struct perf_trace {
 
 extern int amd_hsa_thunk_lock_fd;
 
-static HsaCounterProperties *counter_props[MAX_NODES] = {NULL};
+static HsaCounterProperties **counter_props;
+static unsigned int counter_props_count;
 
-void __attribute__ ((destructor)) perfctr_release_global_resources(void);
+HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
+{
+	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties*));
+	if (counter_props == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	counter_props_count = NumNodes;
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+void destroy_counter_props(void)
+{
+	unsigned int i;
+
+	if (counter_props == NULL)
+		return;
+
+	for (i = 0; i<counter_props_count; i++)
+		if (counter_props[i] != NULL) {
+			free(counter_props[i]);
+			counter_props[i] = NULL;
+		}
+
+	free(counter_props);
+}
 
 static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 {
@@ -79,6 +104,9 @@ hsaKmtPmcGetCounterProperties(
     uint32_t total_counters = 0;
     uint32_t total_concurrent = 0;
     struct perf_counter_block block = {0};
+
+	if (counter_props == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
 
     if (CounterProperties == NULL)
         return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -156,6 +184,9 @@ hsaKmtPmcRegisterTrace(
     uint64_t min_buf_size = 0;
     uint32_t concurrent_counters[PERFCOUNTER_BLOCKID__MAX] = {0};
     struct perf_trace *trace = NULL;
+
+	if (counter_props == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
 
     if (Counters == NULL || TraceRoot == NULL || NumberOfCounters == 0)
         return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -369,15 +400,4 @@ hsaKmtPmcStopTrace(
     trace->state = PERF_TRACE_STATE__STOPPED;
 
     return HSAKMT_STATUS_SUCCESS;
-}
-
-void perfctr_release_global_resources(void)
-{
-	int i;
-
-	for (i=0; i<MAX_NODES; i++)
-		if (counter_props[i] != NULL) {
-			free(counter_props[i]);
-			counter_props[i] = NULL;
-		}
 }

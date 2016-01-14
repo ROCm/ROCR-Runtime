@@ -964,25 +964,20 @@ static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_po
 	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
 }
 
-HSAKMT_STATUS fmm_init_process_apertures(void)
+HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	struct kfd_ioctl_get_process_apertures_new_args args;
 	uint32_t i = 0;
 	int32_t gpu_mem_id =0;
 	uint32_t gpu_id;
-	HsaSystemProperties sys_props;
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures * process_apertures;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	ret = topology_sysfs_get_system_props(&sys_props);
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
-
-	/* Trade off - sys_props.NumNodes includes GPU nodes + CPU Node. So in
+	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 *	systems with CPU node, slightly more memory is allocated than
 	 *	necessary*/
-	gpu_mem = (gpu_mem_t *)calloc(sys_props.NumNodes * sizeof(gpu_mem_t), 1);
+	gpu_mem = (gpu_mem_t *)calloc(NumNodes, sizeof(gpu_mem_t));
 	if (gpu_mem == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
 
@@ -990,7 +985,7 @@ HSAKMT_STATUS fmm_init_process_apertures(void)
 	 * 0 by calloc. This is necessary because this function
 	 * gets called before hsaKmtAcquireSystemProperties() is called.*/
 	gpu_mem_count = 0;
-	while (i < sys_props.NumNodes) {
+	while (i < NumNodes) {
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
@@ -1240,9 +1235,9 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 	    VOID_PTR_ADD(address, size -1) > aperture->limit)
 		return -1;
 
-	debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
+	ret = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
 	/* allocate object within the scratch backing aperture */
-	if (!is_debugger) {
+	if (!ret && !is_debugger) {
 		offset = VOID_PTRS_SUB(address, aperture->base);
 		mem = __fmm_allocate_device(gpu_id, size, aperture, offset,
 				NULL, KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);

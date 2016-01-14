@@ -1033,7 +1033,7 @@ out:
 HSAKMT_STATUS
 validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 {
-    if (nodeid >= MAX_NODES || !node || !_system || _system->NumNodes <= nodeid)
+    if (!node || !_system || _system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 	if (gpu_id)
 		*gpu_id = node[nodeid].gpu_id;
