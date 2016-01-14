@@ -66,49 +66,50 @@ static struct hsa_gfxip_table {
 	unsigned char major;		// GFXIP Major engine version
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
-	unsigned char is_dgpu;		// Predicat for dGPU devices
+	unsigned char is_dgpu;		// Predicate for dGPU devices
+	const char* marketing_name;	// Marketing Name of the device
 } gfxip_lookup_table[] = {
 	/* Kaveri Family */
-	{ 0x1304, 7, 0, 0, 0 },
-	{ 0x1305, 7, 0, 0, 0 },
-	{ 0x1306, 7, 0, 0, 0 },
-	{ 0x1307, 7, 0, 0, 0 },
-	{ 0x1309, 7, 0, 0, 0 },
-	{ 0x130A, 7, 0, 0, 0 },
-	{ 0x130B, 7, 0, 0, 0 },
-	{ 0x130C, 7, 0, 0, 0 },
-	{ 0x130D, 7, 0, 0, 0 },
-	{ 0x130E, 7, 0, 0, 0 },
-	{ 0x130F, 7, 0, 0, 0 },
-	{ 0x1310, 7, 0, 0, 0 },
-	{ 0x1311, 7, 0, 0, 0 },
-	{ 0x1312, 7, 0, 0, 0 },
-	{ 0x1313, 7, 0, 0, 0 },
-	{ 0x1315, 7, 0, 0, 0 },
-	{ 0x1316, 7, 0, 0, 0 },
-	{ 0x1317, 7, 0, 0, 0 },
-	{ 0x1318, 7, 0, 0, 0 },
-	{ 0x131B, 7, 0, 0, 0 },
-	{ 0x131C, 7, 0, 0, 0 },
-	{ 0x131D, 7, 0, 0, 0 },
+	{ 0x1304, 7, 0, 0, 0, "Spectre" },
+	{ 0x1305, 7, 0, 0, 0, "Spectre" },
+	{ 0x1306, 7, 0, 0, 0, "Spectre" },
+	{ 0x1307, 7, 0, 0, 0, "Spectre" },
+	{ 0x1309, 7, 0, 0, 0, "Spectre" },
+	{ 0x130A, 7, 0, 0, 0, "Spectre" },
+	{ 0x130B, 7, 0, 0, 0, "Spectre" },
+	{ 0x130C, 7, 0, 0, 0, "Spectre" },
+	{ 0x130D, 7, 0, 0, 0, "Spectre" },
+	{ 0x130E, 7, 0, 0, 0, "Spectre" },
+	{ 0x130F, 7, 0, 0, 0, "Spectre" },
+	{ 0x1310, 7, 0, 0, 0, "Spectre" },
+	{ 0x1311, 7, 0, 0, 0, "Spectre" },
+	{ 0x1312, 7, 0, 0, 0, "Spooky" },
+	{ 0x1313, 7, 0, 0, 0, "Spectre" },
+	{ 0x1315, 7, 0, 0, 0, "Spectre" },
+	{ 0x1316, 7, 0, 0, 0, "Spooky" },
+	{ 0x1317, 7, 0, 0, 0, "Spooky" },
+	{ 0x1318, 7, 0, 0, 0, "Spectre" },
+	{ 0x131B, 7, 0, 0, 0, "Spectre" },
+	{ 0x131C, 7, 0, 0, 0, "Spectre" },
+	{ 0x131D, 7, 0, 0, 0, "Spectre" },
 	/* Carrizo Family */
-	{ 0x9870, 8, 0, 1, 0 },
-	{ 0x9874, 8, 0, 1, 0 },
-	{ 0x9875, 8, 0, 1, 0 },
-	{ 0x9876, 8, 0, 1, 0 },
-	{ 0x9877, 8, 0, 1, 0 },
+	{ 0x9870, 8, 0, 1, 0, "Carrizo" },
+	{ 0x9874, 8, 0, 1, 0, "Carrizo" },
+	{ 0x9875, 8, 0, 1, 0, "Carrizo" },
+	{ 0x9876, 8, 0, 1, 0, "Carrizo" },
+	{ 0x9877, 8, 0, 1, 0, "Carrizo" },
 	/* Tonga Family */
-	{ 0x6920, 8, 0, 2, 1 },
-	{ 0x6921, 8, 0, 2, 1 },
-	{ 0x6928, 8, 0, 2, 1 },
-	{ 0x6929, 8, 0, 2, 1 },
-	{ 0x692B, 8, 0, 2, 1 },
-	{ 0x692F, 8, 0, 2, 1 },
-	{ 0x6930, 8, 0, 2, 1 },
-	{ 0x6938, 8, 0, 2, 1 },
-	{ 0x6939, 8, 0, 2, 1 },
+	{ 0x6920, 8, 0, 2, 1, "Tonga" },
+	{ 0x6921, 8, 0, 2, 1, "Tonga" },
+	{ 0x6928, 8, 0, 2, 1, "Tonga" },
+	{ 0x6929, 8, 0, 2, 1, "Tonga" },
+	{ 0x692B, 8, 0, 2, 1, "Tonga" },
+	{ 0x692F, 8, 0, 2, 1, "Tonga" },
+	{ 0x6930, 8, 0, 2, 1, "Tonga" },
+	{ 0x6938, 8, 0, 2, 1, "Tonga" },
+	{ 0x6939, 8, 0, 2, 1, "Tonga" },
 	/* Fiji */
-	{ 0x7300, 8, 0, 3, 1 }
+	{ 0x7300, 8, 0, 3, 1, "Fiji" }
 };
 
 static void
@@ -320,35 +321,9 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	/* Retrieve the GPU ID */
 	ret = topology_sysfs_get_gpu_id(node_id, gpu_id);
 
-	/* Retrieve the marketing name of the node */
-	snprintf(path, 256, "%s/%d/name", KFD_SYSFS_PATH_NODES, node_id);
-	fd = fopen(path, "r");
-	if (!fd)
-		return HSAKMT_STATUS_ERROR;
-
 	read_buf = malloc(PAGE_SIZE);
-	if (!read_buf) {
-		ret = HSAKMT_STATUS_NO_MEMORY;
-		goto err1;
-	}
-
-	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-	if (read_size <= 0) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto err2;
-	}
-	p = memchr(read_buf, '\n', read_size);
-	if ((!p) || ((p-read_buf) > HSA_PUBLIC_NAME_SIZE)) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto err2;
-	}
-	/*
-	 * Convert UTF8 to UTF16
-	 */
-	for (i = 0; (i < HSA_PUBLIC_NAME_SIZE) && (read_buf[i] != '\n'); i++)
-		props->MarketingName[i] = read_buf[i];
-	props->MarketingName[i] = 0;
-	fclose(fd);
+	if (!read_buf)
+		return HSAKMT_STATUS_NO_MEMORY;
 
 	/* Retrieve the node properties */
 	snprintf(path, 256, "%s/%d/properties", KFD_SYSFS_PATH_NODES, node_id);
@@ -361,7 +336,7 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
 	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
-		goto err2;
+		goto err;
 	}
 
 	/* Since we're using the buffer as a string, we make sure the string terminates */
@@ -437,14 +412,22 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
 		props->EngineId.ui32.Minor = hsa_gfxip->minor;
 		props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
+
+		if (!hsa_gfxip->marketing_name) {
+			ret = HSAKMT_STATUS_ERROR;
+			goto err;
+		}
+
+		/* Retrieve the marketing name of the node, convert UTF8 to UTF16 */
+		for (i = 0; hsa_gfxip->marketing_name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
+			props->MarketingName[i] = hsa_gfxip->marketing_name[i];
+		props->MarketingName[i] = 0;
 	}
 	if (props->NumFComputeCores)
 		assert(props->EngineId.ui32.Major);
-	//TODO: error handler when Device ID lookup fails
 
-err2:
+err:
 	free(read_buf);
-err1:
 	fclose(fd);
 	return ret;
 }
