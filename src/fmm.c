@@ -922,6 +922,13 @@ static void __fmm_release(void *address,
 	if (object->device_ids_array_size > 0)
 		free(object->device_ids_array);
 
+	if (address >= dgpu_shared_aperture_base &&
+	    address <= dgpu_shared_aperture_limit) {
+		/* Remove any CPU mapping, but keep the address range reserved */
+		mmap(address, object->size, PROT_NONE,
+		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
+	}
+
 	args.handle = object->handle;
 	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
 
@@ -969,14 +976,6 @@ void fmm_release(void *address, uint64_t MemorySizeInBytes)
 					MemorySizeInBytes, &svm.dgpu_alt_aperture);
 			fmm_print(gpu_mem[i].gpu_id);
 		}
-	}
-
-	if (found &&
-	    address >= dgpu_shared_aperture_base &&
-	    address <= dgpu_shared_aperture_limit) {
-		/* Remove any CPU mapping, but keep the address range reserved */
-		mmap(address, MemorySizeInBytes, PROT_NONE,
-		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
 	}
 
 	/*
