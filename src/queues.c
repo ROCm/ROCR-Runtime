@@ -64,20 +64,23 @@ struct device_info kaveri_device_info = {
 
 struct device_info carrizo_device_info = {
 	.asic_family = CHIP_CARRIZO,
-	.ctx_save_restore_size = 2756608 + 4096,
+	.ctx_save_restore_size = PAGE_ALIGN_UP(2756608 + 4096),
 	.ctl_stack_size = 4096,
 	.eop_buffer_size = 4096,
 };
 
 struct device_info tonga_device_info = {
 	.asic_family = CHIP_TONGA,
-	.ctx_save_restore_size = TONGA_PAGE_SIZE,
+	.ctx_save_restore_size = PAGE_ALIGN_UP(8269824 + PAGE_ALIGN_UP(6152)),
+	.ctl_stack_size = PAGE_ALIGN_UP(6152),
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 };
 
 struct device_info fiji_device_info = {
 	.asic_family = CHIP_FIJI,
-	.ctx_save_restore_size = TONGA_PAGE_SIZE,
+	/*SR size = work group ctx data  + ctl stack size*/
+	.ctx_save_restore_size = PAGE_ALIGN_UP(20674560 +  PAGE_ALIGN_UP(15368)),
+	.ctl_stack_size = PAGE_ALIGN_UP(15368),
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 };
 
@@ -317,10 +320,30 @@ static int handle_concrete_asic(struct queue *q,
 			args->eop_buffer_address = (uintptr_t)q->eop_buffer;
 			args->eop_buffer_size = dev_info->eop_buffer_size;
 		}
-		if (dev_info->ctx_save_restore_size > 0) {
+		if (args->queue_type != KFD_IOC_QUEUE_TYPE_SDMA &&
+			dev_info->ctx_save_restore_size > 0) {
 			args->ctx_save_restore_size = dev_info->ctx_save_restore_size;
 			args->ctl_stack_size = dev_info->ctl_stack_size;
-			q->ctx_save_restore =
+			if (IS_DGPU(dev_info->asic_family)) {
+				void *mem;
+				HsaMemFlags flags;
+				HSAKMT_STATUS ret;
+				HSAuint64 size = dev_info->ctx_save_restore_size;
+				flags.Value = 0;
+				flags.ui32.NonPaged = 1; /* device memory*/
+
+				ret = hsaKmtAllocMemory(NodeId, size, flags, &mem);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					return ret;
+				ret = hsaKmtMapMemoryToGPU(mem, size, NULL);
+				if (ret != HSAKMT_STATUS_SUCCESS) {
+					hsaKmtFreeMemory(mem, size);
+					return ret;
+				}
+				q->ctx_save_restore = mem;
+
+			} else
+				q->ctx_save_restore =
 					allocate_exec_aligned_memory(dev_info->ctx_save_restore_size,
 					PAGE_SIZE,
 					dev_info->asic_family,
@@ -378,18 +401,12 @@ hsaKmtCreateQueue(
 
 	q->dev_info = dev_info;
 
-	err = handle_concrete_asic(q, &args, NodeId);
-	if (err != HSAKMT_STATUS_SUCCESS) {
-		free_queue(q);
-		return err;
-	}
-
 	switch (Type)
 	{
 	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
 	case HSA_QUEUE_SDMA: args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA; break;
 	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
-	default: free_queue(q); return HSAKMT_STATUS_INVALID_PARAMETER;
+	default: return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
 	if (Type != HSA_QUEUE_COMPUTE_AQL)
@@ -397,6 +414,13 @@ hsaKmtCreateQueue(
 		QueueResource->QueueRptrValue = (uintptr_t)&q->rptr;
 		QueueResource->QueueWptrValue = (uintptr_t)&q->wptr;
 	}
+
+	err = handle_concrete_asic(q, &args, NodeId);
+	if (err != HSAKMT_STATUS_SUCCESS) {
+		free_queue(q);
+		return err;
+	}
+
 
 	args.read_pointer_address = QueueResource->QueueRptrValue;
 	args.write_pointer_address = QueueResource->QueueWptrValue;
