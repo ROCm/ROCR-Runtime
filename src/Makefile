@@ -20,7 +20,7 @@ ifneq ($(REL),1)
   CFLAGS += -ggdb
 endif
 
-LDFLAGS += -lrt -pthread -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER)
+LDFLAGS += -lrt -pthread -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER) -Wl,-z,nodelete
 
 OBJS = debug.o globals.o memory.o perfctr.o time.o version.o \
     events.o openclose.o queues.o topology.o fmm.o pmc_table.o \
