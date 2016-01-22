@@ -130,7 +130,7 @@ void run_rdma_tests(HSAuint32 Node, HsaMemoryProperties *MemoryProperty)
 
     ret = ioctl(rdma_fd, AMD2P2PTEST_IOCTL_GET_PAGE_SIZE, &get_page_size);
 
-    if (ret < 0)
+    if (ret != 0)
     {
         fprintf(stderr,
                 "AMD2P2PTEST_IOCTL_GET_PAGE_SIZE error (errno=%d/%s)\n",
@@ -146,7 +146,7 @@ void run_rdma_tests(HSAuint32 Node, HsaMemoryProperties *MemoryProperty)
 
     ret = ioctl(rdma_fd, AMD2P2PTEST_IOCTL_GET_PAGES, &get_cpu_ptr);
 
-    if (ret < 0)
+    if (ret != 0)
     {
         fprintf(stderr, "AMD2P2PTEST_IOCTL_GET_PAGES error (errno=%d/%s)\n",
                          ret, strerror(ret));

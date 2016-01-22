@@ -183,8 +183,7 @@ static int ioctl_get_page_size(struct file *filp, unsigned long arg)
 	params.page_size = page_size;
 	MSG_INFO("Page size %llx\n", params.page_size);
 
-	if (result && copy_to_user((void *)arg, &params,
-						sizeof(params))) {
+	if (copy_to_user((void *)arg, &params, sizeof(params))) {
 		MSG_ERR("copy_to_user failed on user pointer %p\n",
 						(void *)arg);
 
