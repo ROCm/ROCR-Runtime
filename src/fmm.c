@@ -136,7 +136,6 @@ static void __fmm_release(void *address,
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageble_aperture_t *aperture,
 				       void *address);
-void __attribute__ ((destructor)) fmm_release_global_resources(void);
 
 static vm_area_t *vm_create_and_init_area(void *start, void *end)
 {
@@ -1665,24 +1664,6 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 
 
 	return found;
-}
-
-void fmm_release_global_resources(void)
-{
-	uint64_t len;
-
-	if (dgpu_shared_aperture_base) {
-		len = (uint64_t)dgpu_shared_aperture_limit
-			- (uint64_t)dgpu_shared_aperture_base + 1;
-		munmap(dgpu_shared_aperture_base, len);
-	}
-	dgpu_shared_aperture_base = NULL;
-	dgpu_shared_aperture_limit = NULL;
-
-	if (all_gpu_id_array != NULL)
-		free(all_gpu_id_array);
-	all_gpu_id_array = NULL;
-	all_gpu_id_array_size = 0;
 }
 
 HSAKMT_STATUS fmm_register_memory(void *address, uint32_t size_in_bytes,
