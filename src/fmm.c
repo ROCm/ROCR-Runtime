@@ -130,7 +130,7 @@ static uint32_t *all_gpu_id_array = NULL;
 
 extern int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
 static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
-static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit);
+static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit);
 static void __fmm_release(void *address,
 				uint64_t MemorySizeInBytes, manageble_aperture_t *aperture);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
@@ -1081,7 +1081,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_id].scratch_physical.align = vm_alignment;
 
 			/* Set kernel process dgpu aperture. */
-			set_dgpu_aperture(i, (uint64_t)svm.dgpu_aperture.base,
+			set_dgpu_aperture(process_apertures[i].gpu_id,
+				(uint64_t)svm.dgpu_aperture.base,
 				(uint64_t)svm.dgpu_aperture.limit);
 			svm.dgpu_aperture.align = vm_alignment;
 
@@ -1487,11 +1488,11 @@ int fmm_unmap_from_gpu(void *address)
 /* Tonga dGPU specific functions */
 static bool is_dgpu_mem_init = false;
 
-static int set_dgpu_aperture(uint32_t node_id, uint64_t base, uint64_t limit)
+static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit)
 {
 	struct kfd_ioctl_set_process_dgpu_aperture_args args;
 
-	args.node_id = node_id;
+	args.gpu_id = gpu_id;
 	args.dgpu_base = base;
 	args.dgpu_limit = limit;
 
