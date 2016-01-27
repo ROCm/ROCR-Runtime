@@ -22,7 +22,7 @@ The packages subdirectory contains the Debian and rpm packages for installing th
 
 To install the package on Ubuntu execute the following command:
 
-	`dpkg -i hsa-runtime-dev-1.0.0-Linux.deb`
+	`dpkg -i hsa-runtime-dev-1.0.0-amd64.deb`
 
 For Fedora execute the following command:
 
