@@ -11,18 +11,22 @@ This repository includes the user-mode API interfaces and libraries necessary fo
 
 The HSA core runtime source code for Boltzmann is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
-#### Binaries for Ubuntu
+#### Binaries for Ubuntu & Fedora
 
-The ubuntu subdirectory contains the hsa-runtime-dev-1.0.0-Linux.deb debian package. This file contains the following:
+The packages subdirectory contains the debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
 
 * HSA, libHSAIL and AMD internal include files to support application development on the HSA runtime for Boltzmann
 * A 64-bit version of AMD's HSA core runtime for Boltzmann
 * A 64-bit version of AMD's finalizer extension for Boltzmann
 * A 64-bit version of AMD's runtime tools library
 
-To install the package execute the following command:
+To install the package on ubuntu execute the following command:
 
 	`dpkg -i hsa-runtime-dev-1.0.0-Linux.deb`
+
+For Fedora execute the following command:
+
+        `rpm -i hsa-runtime-1.0-0.fc22.x86_64.rpm`
 
 The contents are installed in /opt/hsa by default.
  
