@@ -1,10 +1,10 @@
 ### HSA Runtime API and runtime for Boltzmann
 
-This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Currently supported agents include only the AMD/ATI Fiji family of discreet GPUs. Reference source code for the core runtime is also available.
+This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Currently supported agents include only the AMD/ATI Fiji(c) family of discreet GPUs. Reference source code for the core runtime is also available.
 
 #### Initial Target Platform Requirements
 
-* CPU: Intell Haswell or Newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
+* CPU: Intel(c) Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
 * GPU: Fiji ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
 
 #### Source code
@@ -13,14 +13,14 @@ The HSA core runtime source code for Boltzmann is located in the src subdirector
 
 #### Binaries for Ubuntu & Fedora
 
-The packages subdirectory contains the debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
+The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
 
 * HSA, libHSAIL and AMD internal include files to support application development on the HSA runtime for Boltzmann
 * A 64-bit version of AMD's HSA core runtime for Boltzmann
 * A 64-bit version of AMD's finalizer extension for Boltzmann
 * A 64-bit version of AMD's runtime tools library
 
-To install the package on ubuntu execute the following command:
+To install the package on Ubuntu execute the following command:
 
 	`dpkg -i hsa-runtime-dev-1.0.0-Linux.deb`
 
@@ -46,7 +46,7 @@ The capabilities expressed by the HSA Runtime API are:
 
 The HSA runtime provides direct access to the graphics hardware to give the programmer more control of the execution. Some examples of low level hardware access  is  the support of one or more user mode queues provides programmers with a low-latency kernel dispatch interface, allowing them to develop customized dispatch algorithms specific to their application.
 
-The HSA Architected Queuing Language is an open standard, defined by the HSA Foundation, specifying the packet syntax used to control supported AMD/ATI Radeon. graphics devices. The AQL language supports several packet types, including packets that can command the hardware to automatically resolve inter-packet dependencies (barrier AND & barrier OR packet), kernel dispatch packets and agent dispatch packets.
+The HSA Architected Queuing Language is an open standard, defined by the HSA Foundation, specifying the packet syntax used to control supported AMD/ATI Radeon (c) graphics devices. The AQL language supports several packet types, including packets that can command the hardware to automatically resolve inter-packet dependencies (barrier AND & barrier OR packet), kernel dispatch packets and agent dispatch packets.
 
 In addition to user mode queues and AQL, the HSA runtime exposes various virtual address ranges that can be accessed by one or more of the system's graphics devices, and possibly the host. The exposed virtual address ranges either support a fine grained or a coarse grained access. Updates to memory in a fine grained region are immediately visible to all devices that can access it, but only one device can have access to a coarse grained allocation at a time. Ownership of a coarse grained region can be changed using the HSA runtime memory APIs, but this transfer of ownership must be explicitly done by the host application.
 
