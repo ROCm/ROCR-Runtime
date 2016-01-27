@@ -1,0 +1,14 @@
+include $(CORE_DEPTH)/make/coredefs
+
+include $(CORE_DEPTH)/make/Makefile.$(CORE_OS_PLATFORM).core
+
+LCXXINCS += -I$(CORE_DEPTH)/util
+
+CPPFILES += os_linux.cpp
+
+LIB_TARGET = utillnx
+
+CORE_SRCDIR = $(CORE_DEPTH)/util/lnx
+SRCPATH    = $(CORE_SRCDIR)
+
+include $(CORE_DEPTH)/make/corerules
