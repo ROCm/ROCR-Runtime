@@ -50,6 +50,7 @@ Programmers should consult the HSA Runtime Programmer's Reference Manual for a f
 
 #### Known Issues
 
+* The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference. 
 * Targeted platforms only support SDMA for 2 Boltzmann processes. Running additional Boltzmann processes may fail. Disable SDMA by setting the HSA_ENABLE_SDMA environment variable to 0.
  
 #### Disclaimer
