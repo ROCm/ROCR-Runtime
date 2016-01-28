@@ -63,6 +63,8 @@ HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
 uint16_t get_device_id_by_node(HSAuint32 node_id);
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id);
+HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
+		uint32_t NumberOfNodes, uint32_t *NodeArray);
 
 HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id);
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id);

@@ -28,6 +28,7 @@ hsaKmtRegisterMemory;
 hsaKmtRegisterMemoryToNodes;
 hsaKmtDeregisterMemory;
 hsaKmtMapMemoryToGPU;
+hsaKmtMapMemoryToGPUNodes;
 hsaKmtUnmapMemoryToGPU;
 hsaKmtDbgRegister;
 hsaKmtDbgUnregister;

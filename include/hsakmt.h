@@ -417,6 +417,21 @@ hsaKmtMapMemoryToGPU(
     );
 
 /**
+  Ensures that the memory is resident and can be accessed by GPUs
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtMapMemoryToGPUNodes(
+    void*           MemoryAddress,         //IN (page-aligned)
+    HSAuint64       MemorySizeInBytes,     //IN (page-aligned)
+    HSAuint64*      AlternateVAGPU,        //OUT (page-aligned)
+     HsaMemMapFlags    MemMapFlags,               //IN
+    HSAuint64       NumberOfNodes,         //IN
+    HSAuint32*      NodeArray              //IN
+    );
+
+/**
   Releases the residency of the memory
 */
 
