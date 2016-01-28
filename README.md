@@ -28,7 +28,7 @@ To install the package on Ubuntu execute the following command:
 
 For Fedora execute the following command:
 
-        `rpm -i hsa-runtime-1.0-0.fc22.x86_64.rpm`
+        `rpm -i hsa-runtime-dev-1.0-0.fc22.x86_64.rpm`
 
 The contents are installed in /opt/hsa by default.
  
