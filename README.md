@@ -57,7 +57,7 @@ Programmers should consult the HSA Runtime Programmer's Reference Manual for a f
 #### Known Issues
 
 * The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference. 
-* Targeted platforms only support SDMA for 2 Boltzmann processes. Running additional Boltzmann processes may fail. Disable SDMA by setting the HSA_ENABLE_SDMA environment variable to 0.
+* Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifths simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
  
 #### Disclaimer
 
