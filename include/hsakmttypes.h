@@ -476,7 +476,7 @@ typedef struct _HsaMemMapFlags
         struct
         {
             unsigned int Reserved1      :  1; //
-            unsigned int CachePolicy    :  4; // see HSA_CACHING_TYPE
+            unsigned int CachePolicy    :  2; // see HSA_CACHING_TYPE
             unsigned int ReadOnly       :  1; // memory is not modified while mapped
             	    	    	    	      // allows migration scale-out
 	    unsigned int PageSize	    :  2; // see HSA_PAGE_SIZE, hint to use
@@ -492,7 +492,7 @@ typedef struct _HsaMemMapFlags
 						  // may trigger eviction of nonessential
 						  // data from the memory, reduces latency
 						  // “cleanup hint” only, may be ignored
-            unsigned int Reserved       : 21;
+            unsigned int Reserved       : 23;
         };
         HSAuint32 Value;
     };

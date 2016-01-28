@@ -212,21 +212,10 @@ hsaKmtRegisterMemoryToNodes(
 {
 	CHECK_KFD_OPEN();
 	uint32_t *gpu_id_array;
-	unsigned i;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	if (NumberOfNodes == 0 || NodeArray == NULL)
-		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	/* Translate Node IDs to gpu_ids */
-	gpu_id_array = malloc(NumberOfNodes * sizeof(uint32_t));
-	if (gpu_id_array == NULL)
-		return HSAKMT_STATUS_NO_MEMORY;
-        for (i = 0; i < NumberOfNodes; i++) {
-		ret = validate_nodeid(NodeArray[i], &gpu_id_array[i]);
-		if (ret != HSAKMT_STATUS_SUCCESS)
-			break;
-	}
+	ret = validate_nodeid_array(&gpu_id_array,
+			NumberOfNodes, NodeArray);
 
 	if (ret == HSAKMT_STATUS_SUCCESS)
 		ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
@@ -267,6 +256,36 @@ hsaKmtMapMemoryToGPU(
 		return HSAKMT_STATUS_SUCCESS;
 	else
 		return HSAKMT_STATUS_ERROR;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtMapMemoryToGPUNodes(
+    void*           MemoryAddress,         //IN (page-aligned)
+    HSAuint64       MemorySizeInBytes,     //IN (page-aligned)
+    HSAuint64*      AlternateVAGPU,        //OUT (page-aligned)
+    HsaMemMapFlags  MemMapFlags,           //IN
+    HSAuint64       NumberOfNodes,         //IN
+    HSAuint32*      NodeArray              //IN
+)
+{
+	uint32_t *gpu_id_array;
+	HSAKMT_STATUS ret;
+
+	ret = validate_nodeid_array(&gpu_id_array,
+				NumberOfNodes, NodeArray);
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		free(gpu_id_array);
+		return ret;
+	}
+
+	ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+			gpu_id_array, NumberOfNodes);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	return fmm_map_to_gpu(MemoryAddress,
+			MemorySizeInBytes, AlternateVAGPU);
 }
 
 HSAKMT_STATUS

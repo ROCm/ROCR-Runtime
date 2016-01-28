@@ -1317,6 +1317,30 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 	return 0;
 }
 
+HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
+		uint32_t NumberOfNodes, uint32_t *NodeArray)
+{
+	HSAKMT_STATUS ret;
+	unsigned int i;
+
+	if (NumberOfNodes == 0 || NodeArray == NULL || gpu_id_array == NULL)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	/* Translate Node IDs to gpu_ids */
+	*gpu_id_array = malloc(NumberOfNodes * sizeof(uint32_t));
+	if (*gpu_id_array == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+        for (i = 0; i < NumberOfNodes; i++) {
+		ret = validate_nodeid(NodeArray[i], gpu_id_array[i]);
+		if (ret != HSAKMT_STATUS_SUCCESS) {
+			free(gpu_id_array);
+			break;
+		}
+	}
+
+        return ret;
+}
+
 #if 0
 static int get_cpu_stepping(uint16_t* stepping)
 {
