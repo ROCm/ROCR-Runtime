@@ -1,6 +1,8 @@
 ### HSA Runtime API and runtime for Boltzmann
 
-This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Currently supported agents include only the AMD/ATI Fiji(c) family of discreet GPUs. Reference source code for the core runtime is also available.
+This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Reference source code for the core runtime is also available.
+
+Only the AMD/ATI Fiji(c) family of discreet GPUs are currently supported.
 
 #### Initial Target Platform Requirements
 
@@ -11,7 +13,7 @@ This repository includes the user-mode API interfaces and libraries necessary fo
 
 The HSA core runtime source code for Boltzmann is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
-#### Binaries for Ubuntu & Fedora
+#### Binaries for Ubuntu & Fedora and Installation Instructions
 
 The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
 
