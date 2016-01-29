@@ -1,5 +1,5 @@
 %define name        libhsakmt
-%define version     1.6.0
+%define version     1.8.1
 %define thunkroot   %{getenv:OUT_DIR}
 
 Name:       %{name}
