@@ -3,6 +3,6 @@ Architecture: amd64
 Maintainer: Advanced Micro Devices Inc.
 Depends:
 Priority: optional
-Version: 1.6.0
+Version: 1.8.1
 Description: Thunk library for AMD KFD
 
