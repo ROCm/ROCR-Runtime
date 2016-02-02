@@ -2,7 +2,7 @@
 
 This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Reference source code for the core runtime is also available.
 
-Only the AMD/ATI Fiji(c) family of discreet GPUs are currently supported.
+Only the AMD/ATI Fiji(c) family of discrete GPUs are currently supported.
 
 #### Initial Target Platform Requirements
 
