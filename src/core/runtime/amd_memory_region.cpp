@@ -115,6 +115,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, uint32_t node_id,
                            const HsaMemoryProperties& mem_props)
     : core::MemoryRegion(fine_grain, full_profile),
       node_id_(node_id),
+      owner_(NULL),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0) {

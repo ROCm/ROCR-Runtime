@@ -72,7 +72,7 @@ template <typename T, size_t Align=0>
 class Shared : public BaseShared {
  public:
   Shared() {
-    assert(allocate_ != NULL && free_ != NULL &&
+    assert(allocate_ != nullptr && free_ != nullptr &&
            "Shared object allocator is not set");
     static_assert((__alignof(T) <= Align) || (Align == 0),
                   "Align is less than alignof(T)");
@@ -86,7 +86,7 @@ class Shared : public BaseShared {
   }
 
   virtual ~Shared() {
-    assert(allocate_ != NULL && free_ != NULL &&
+    assert(allocate_ != nullptr && free_ != nullptr &&
            "Shared object allocator is not set");
 
     if (IsSharedObjectAllocationValid()) {

@@ -17,7 +17,7 @@ The HSA core runtime source code for Boltzmann is located in the src subdirector
 
 The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
 
-* HSA, libHSAIL and AMD internal include files to support application development on the HSA runtime for Boltzmann
+* HSA include files to support application development on the HSA runtime for Boltzmann
 * A 64-bit version of AMD's HSA core runtime for Boltzmann
 * A 64-bit version of AMD's finalizer extension for Boltzmann
 * A 64-bit version of AMD's runtime tools library
@@ -53,6 +53,14 @@ The HSA Architected Queuing Language is an open standard, defined by the HSA Fou
 In addition to user mode queues and AQL, the HSA runtime exposes various virtual address ranges that can be accessed by one or more of the system's graphics devices, and possibly the host. The exposed virtual address ranges either support a fine grained or a coarse grained access. Updates to memory in a fine grained region are immediately visible to all devices that can access it, but only one device can have access to a coarse grained allocation at a time. Ownership of a coarse grained region can be changed using the HSA runtime memory APIs, but this transfer of ownership must be explicitly done by the host application.
 
 Programmers should consult the HSA Runtime Programmer's Reference Manual for a full description of the HSA Runtime APIs, AQL and the HSA memory policy.
+
+#### Sample
+
+The simplest way to check if the kernel, runtime and base development environment are installed correctly is to run a simple sample. A modified version of the vector_copy sample was taken from the HSA-Runtime-AMD repository and added to the ROCR repository to facilitate this. Build the sample and run it, using this series of commands:
+
+cd ROCR-Runtime/sample && make && ./vector_copy
+
+If the sample runs without generating errors, the installation is complete.
 
 #### Known Issues
 

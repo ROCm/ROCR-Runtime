@@ -162,6 +162,8 @@ class Runtime {
     return system_deallocator_;
   }
 
+  void InitStgBuffer();
+
  protected:
   Runtime();
 
@@ -175,7 +177,7 @@ class Runtime {
 
   void Unload();  // for dll detatch and KFD close
 
-  void InitStgBuffer();
+  
   void DestroyStgBuffer();
 
   struct AllocationRegion {

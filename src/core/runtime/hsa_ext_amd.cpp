@@ -187,7 +187,7 @@ hsa_status_t HSA_API
 
   std::vector<core::Signal*> dep_signal_list(num_dep_signals);
   if (num_dep_signals > 0) {
-    for (size_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < num_dep_signals; ++i) {
       core::Signal* dep_signal_obj = core::Signal::Convert(dep_signals[i]);
       IS_VALID(dep_signal_obj);
       dep_signal_list[i] = dep_signal_obj;

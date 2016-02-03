@@ -610,8 +610,6 @@ void Runtime::Load() {
 
   // Load tools libraries
   LoadTools();
-
-  InitStgBuffer();
 }
 
 void Runtime::Unload() {

@@ -43,6 +43,6 @@
 #include "core/common/shared.h"
 
 namespace core {
-std::function<void*(size_t, size_t)> BaseShared::allocate_=NULL;
-std::function<void(void*)> BaseShared::free_=NULL;
+std::function<void*(size_t, size_t)> BaseShared::allocate_=nullptr;
+std::function<void(void*)> BaseShared::free_=nullptr;
 }

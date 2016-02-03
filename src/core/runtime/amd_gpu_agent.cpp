@@ -192,17 +192,26 @@ hsa_status_t GpuAgent::IterateRegion(
 }
 
 hsa_status_t GpuAgent::InitDma() {
+  // Try create SDMA blit first.
   std::string sdma_enable = os::GetEnvVar("HSA_ENABLE_SDMA");
 
   if (sdma_enable != "0" && compute_capability_.version_major() == 8 &&
       compute_capability_.version_minor() == 0 &&
       compute_capability_.version_stepping() == 3) {
     blit_ = new BlitSdma();
-  } else {
-    blit_ = new BlitKernel();
+
+    if (blit_->Initialize(*this) == HSA_STATUS_SUCCESS) {
+      return HSA_STATUS_SUCCESS;
+    }
+
+    // Fall back to blit kernel if SDMA is unavailable.
+    blit_->Destroy();
+    delete blit_;
+    blit_ = NULL;
   }
 
-  assert(blit_ != NULL);
+  assert(blit_ == NULL);
+  blit_ = new BlitKernel();
 
   if (blit_->Initialize(*this) != HSA_STATUS_SUCCESS) {
     blit_->Destroy();

@@ -306,6 +306,7 @@ void Load() {
 
   // Build topology table.
   BuildTopology();
+  core::Runtime::runtime_singleton_->InitStgBuffer();
 }
 
 // Releases internal resources and unloads DLLs
