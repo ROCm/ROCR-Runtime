@@ -129,6 +129,9 @@ typedef struct {
 	/* used for coherent (fine-grain) system memory on dGPU,
 	 * This aperture is shared by all dGPUs */
 	manageble_aperture_t dgpu_alt_aperture;
+
+	/* whether to use userptr for paged memory */
+	bool userptr_for_paged_mem;
 } svm_t;
 
 /* The other apertures are specific to each GPU. gpu_mem_t manages GPU
@@ -141,7 +144,8 @@ static void *dgpu_shared_aperture_limit = NULL;
 
 static svm_t svm = {
 	INIT_MANAGEBLE_APERTURE(0, 0),
-	INIT_MANAGEBLE_APERTURE(0, 0)
+	INIT_MANAGEBLE_APERTURE(0, 0),
+	true
 };
 
 /* On APU, for memory allocated on the system memory that GPU doesn't access
@@ -1104,7 +1108,7 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		return NULL;
 
 	size = MemorySizeInBytes;
-	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST;
+	ioc_flags = 0;
 	if (flags.ui32.CoarseGrain)
 		aperture = &svm.dgpu_aperture;
 	else
@@ -1114,9 +1118,69 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
 	}
 
-	mem =  __fmm_allocate_device(gpu_id, size,
-			aperture, 0, &mmap_offset,
-			ioc_flags, &vm_obj);
+	/* Paged memory is allocated as a userptr mapping, non-paged
+	 * memory is allocated from KFD */
+	if (!flags.ui32.NonPaged && svm.userptr_for_paged_mem) {
+		/* Allocate address space */
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		mem = aperture_allocate_area(aperture, size, 0);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		if (mem == NULL)
+			return NULL;
+
+		/* Map anonymous pages */
+		if (mmap(mem, MemorySizeInBytes, PROT_READ | PROT_WRITE,
+			 MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0)
+		    == MAP_FAILED) {
+			/* Release address space */
+			pthread_mutex_lock(&aperture->fmm_mutex);
+			aperture_release_area(aperture, mem, size);
+			pthread_mutex_unlock(&aperture->fmm_mutex);
+			return NULL;
+		}
+
+		/* Create userptr BO */
+		mmap_offset = (uint64_t)mem;
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_USERPTR;
+		vm_obj = fmm_allocate_memory_in_device(gpu_id, mem, size,
+						       aperture, &mmap_offset,
+						       ioc_flags);
+		if (!vm_obj) {
+			/* Release address space */
+			pthread_mutex_lock(&aperture->fmm_mutex);
+			aperture_release_area(aperture, mem, size);
+			pthread_mutex_unlock(&aperture->fmm_mutex);
+			/* Remove any CPU mapping, but keep the
+			 * address range reserved */
+			mmap(mem, MemorySizeInBytes, PROT_NONE,
+			     MAP_ANONYMOUS | MAP_NORESERVE |
+			     MAP_PRIVATE | MAP_FIXED, -1, 0);
+			return NULL;
+		}
+	} else {
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST;
+		mem =  __fmm_allocate_device(gpu_id, size,
+					     aperture, 0, &mmap_offset,
+					     ioc_flags, &vm_obj);
+
+		if (mem && flags.ui32.HostAccess) {
+			void *ret = mmap(mem, MemorySizeInBytes,
+					 PROT_READ | PROT_WRITE,
+					 MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
+			if (ret == MAP_FAILED) {
+				__fmm_release(mem, aperture);
+				return NULL;
+			}
+
+			if (flags.ui32.AQLQueueMemory) {
+				uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
+				memset(ret, 0, MemorySizeInBytes);
+				mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
+				     PROT_READ | PROT_WRITE,
+				     MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
+			}
+		}
+	}
 
 	if (mem && vm_obj) {
 		/* Store memory allocation flags, not ioc flags */
@@ -1125,24 +1189,6 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		vm_obj->node_id = node_id;
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
-
-	if (flags.ui32.HostAccess) {
-		void *ret = mmap(mem, MemorySizeInBytes,
-				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
-		if (ret == MAP_FAILED) {
-			__fmm_release(mem, aperture);
-			return NULL;
-		}
-		if (flags.ui32.AQLQueueMemory) {
-			uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
-			memset(ret, 0, MemorySizeInBytes);
-			mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
-			     PROT_READ | PROT_WRITE,
-			     MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
-		}
-	}
-
 
 	return mem;
 }
@@ -1334,12 +1380,18 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	struct kfd_process_device_apertures * process_apertures;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache;
+	char *pagedUserptr;
 	struct pci_access *pacc;
 
 	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
 	disableCache = getenv("HSA_DISABLE_CACHE");
 	if (disableCache && strcmp(disableCache, "0") == 0)
 		disableCache = NULL;
+
+	/* If HSA_USERPTR_FOR_PAGED_MEM unset or set to a non-0 value,
+	 * enable userptr for all paged memory allocations */
+	pagedUserptr = getenv("HSA_USERPTR_FOR_PAGED_MEM");
+	svm.userptr_for_paged_mem = (!pagedUserptr || strcmp(pagedUserptr, "0"));
 
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 *	systems with CPU node, slightly more memory is allocated than

@@ -83,7 +83,7 @@ hsaKmtCreateEvent(
 
 	if (is_dgpu && events_page == NULL) {
 		events_page = allocate_exec_aligned_memory_gpu(
-			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0);
+			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0, true);
 		if (!events_page) {
 			pthread_mutex_unlock(&hsakmt_mutex);
 			return HSAKMT_STATUS_ERROR;
