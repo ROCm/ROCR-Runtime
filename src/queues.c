@@ -397,7 +397,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 }
 
 void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
-				       uint32_t NodeId)
+				       uint32_t NodeId, bool nonPaged)
 {
 	void *mem;
 	HSAuint64 gpu_va;
@@ -407,6 +407,7 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.Value = 0;
 	flags.ui32.HostAccess = 1;
 	flags.ui32.ExecuteAccess = 1;
+	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 
 	size = ALIGN_UP(size, align);
@@ -448,7 +449,8 @@ static void* allocate_exec_aligned_memory(uint32_t size,
 					uint32_t NodeId)
 {
 	if (IS_DGPU(type))
-		return allocate_exec_aligned_memory_gpu(size, align, NodeId);
+		return allocate_exec_aligned_memory_gpu(size, align, NodeId,
+							false);
 	return allocate_exec_aligned_memory_cpu(size, align);
 }
 
