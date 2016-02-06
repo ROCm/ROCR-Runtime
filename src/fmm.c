@@ -137,6 +137,23 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageble_aperture_t *aperture,
 				       void *address);
 
+static int32_t find_first_dgpu(HSAuint32 *gpu_id) {
+	int32_t i;
+
+	*gpu_id = NON_VALID_GPU_ID;
+
+	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
+		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
+			continue;
+		if (!topology_is_dgpu(gpu_mem[i].device_id))
+			continue;
+		*gpu_id = gpu_mem[i].gpu_id;
+		return i;
+	}
+
+	return -1;
+}
+
 static vm_area_t *vm_create_and_init_area(void *start, void *end)
 {
 	vm_area_t *area = (vm_area_t *) malloc(sizeof(vm_area_t));
@@ -720,6 +737,8 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
 			aperture, offset, NULL,
 			flags);
+	/* TODO: honor host access mem flag and map to user mode VM if
+	 * needed */
 }
 
 static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
@@ -746,19 +765,19 @@ static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-static void* fmm_allocate_host_gpu(uint32_t gpu_id,
-		uint64_t MemorySizeInBytes, HsaMemFlags flags)
+static void* fmm_allocate_host_gpu(uint64_t MemorySizeInBytes,
+				   HsaMemFlags flags)
 {
 	void *mem;
 	manageble_aperture_t *aperture;
-	int32_t gpu_mem_id;
 	uint64_t mmap_offset;
 	uint32_t ioc_flags;
 	uint32_t size;
+	int32_t i;
+	uint32_t gpu_id;
 
-	/* Retrieve gpu_mem id according to gpu_id */
-	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
-	if (gpu_mem_id < 0)
+	i = find_first_dgpu(&gpu_id);
+	if (i < 0)
 		return NULL;
 
 	size = MemorySizeInBytes;
@@ -776,30 +795,31 @@ static void* fmm_allocate_host_gpu(uint32_t gpu_id,
 			aperture, 0, &mmap_offset,
 			ioc_flags);
 
-	/* FIXME: host memory allocated in this way should be mapped on all GPUs */
-	void *ret = mmap(mem, MemorySizeInBytes,
-			PROT_READ | PROT_WRITE,
-		       MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
-	if (ret == MAP_FAILED) {
-		__fmm_release(mem, MemorySizeInBytes, aperture);
-		return NULL;
+	if (flags.ui32.HostAccess) {
+		void *ret = mmap(mem, MemorySizeInBytes,
+				 PROT_READ | PROT_WRITE,
+				 MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
+		if (ret == MAP_FAILED) {
+			__fmm_release(mem, MemorySizeInBytes, aperture);
+			return NULL;
+		}
+		if (flags.ui32.AQLQueueMemory) {
+			uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
+			memset(ret, 0, MemorySizeInBytes);
+			mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
+			     PROT_READ | PROT_WRITE,
+			     MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
+		}
 	}
 
-	if (flags.ui32.AQLQueueMemory) {
-		uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
-		memset(ret, 0, MemorySizeInBytes);
-		mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
-			PROT_READ | PROT_WRITE,
-		       MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
-	}
 
-	return ret;
+	return mem;
 }
 
-void* fmm_allocate_host(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags, uint16_t dev_id)
+void* fmm_allocate_host(uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
-	if (topology_is_dgpu(dev_id))
-		return fmm_allocate_host_gpu(gpu_id, MemorySizeInBytes, flags);
+	if (is_dgpu)
+		return fmm_allocate_host_gpu(MemorySizeInBytes, flags);
 	return fmm_allocate_host_cpu(MemorySizeInBytes, flags);
 }
 
