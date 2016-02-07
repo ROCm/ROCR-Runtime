@@ -73,10 +73,9 @@ hsaKmtDbgRegister(
 	args.gpu_id = gpu_id;
 	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
 
-	if (err == 0) {
-		is_device_debugged[NodeId] = true;
+	if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
-	} else
+	else
 		result = HSAKMT_STATUS_ERROR;
 
 	return (result);
@@ -105,10 +104,9 @@ hsaKmtDbgUnregister(
 	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
 	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
-	if (err == 0) {
-		is_device_debugged[NodeId] = false;
+	if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
-	} else
+	else
 		result = HSAKMT_STATUS_ERROR;
 
 	return (result);
