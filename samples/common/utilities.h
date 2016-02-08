@@ -66,6 +66,16 @@ typedef uint8_t BrigExecutableModifier8_t;
 
 typedef BrigDataOffset32_t BrigDataOffsetString32_t;
 
+typedef struct {
+  // memory region accessed by GPU only
+  hsa_region_t coarse_region;
+
+  // system memory access by gpu and cpu
+  hsa_region_t kernarg_region;
+
+} MemRegion;
+
+
 /*
 enum BrigKinds {
 	BRIG_KIND_NONE = 0x0000,
@@ -221,6 +231,6 @@ hsa_status_t find_gpu(hsa_agent_t agent, void *data);
  * Determines if a memory region can be used for kernarg
  * allocations.
  */
-hsa_status_t get_kernarg(hsa_region_t region, void* data);
+hsa_status_t get_memory_region(hsa_region_t region, void* data);
 
 #endif

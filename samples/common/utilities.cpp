@@ -172,15 +172,22 @@ hsa_status_t find_gpu(hsa_agent_t agent, void *data)
  * Determines if a memory region can be used for kernarg
  * allocations.
  */
-hsa_status_t get_kernarg(hsa_region_t region, void* data) 
+hsa_status_t get_memory_region(hsa_region_t region, void* data) 
 {
 	hsa_region_global_flag_t flags;
 	hsa_region_get_info(region, HSA_REGION_INFO_GLOBAL_FLAGS, &flags);
+
+	MemRegion *my_mem_region = (MemRegion *)data;
+	
+	if (flags & HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED) {
+             my_mem_region->coarse_region = region;
+       }
+	
 	if (flags & HSA_REGION_GLOBAL_FLAG_KERNARG) 
 	{
-		hsa_region_t* ret = (hsa_region_t*) data;
-		*ret = region;
+		my_mem_region->kernarg_region= region;
 	}   
+	
 	return HSA_STATUS_SUCCESS;
 }
 

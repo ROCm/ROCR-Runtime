@@ -2,9 +2,10 @@
 #include "HSAILAmdExt.h"
 
 
-void HSA_UTIL::GetHsailNameAndKernelName(char * file_name, char *kernel_name)
+void HSA_UTIL::GetHsailNameAndKernelName(char * file_name_full, char *file_name_base, char *kernel_name)
 {
-	strcpy(hail_file_name, file_name);
+	strcpy(hail_file_name_full, file_name_full);
+	strcpy(hail_file_name_base, file_name_base);
 	strcpy(hsa_kernel_name, kernel_name);
 }
 
@@ -56,19 +57,30 @@ bool HSA_UTIL::HsaInit()
 	err = hsa_queue_create(device, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &command_queue);
 	check(Creating the queue, err);
 
+	profile = hsa_profile_t(108);
+       hsa_agent_get_info(device, HSA_AGENT_INFO_PROFILE, &profile);
+
+       if (profile == HSA_PROFILE_BASE) 
+	{
+	    memset(hail_file_name_full, 0, sizeof(char)*128);
+           cout << "Loading base profile!!!" << endl;
+           strcpy(hail_file_name_full, hail_file_name_base); //overwrite full hsail file name with base 
+       } 
+   
         amd::hsail::registerExtensions();
-        if (!tool.assembleFromFile(hail_file_name)) {
+        if (!tool.assembleFromFile(hail_file_name_full)) 
+	{
           std::cout << tool.output();
           return false;
         }
         module = tool.brigModule();
 
 	// Create hsail program.
-	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_FULL, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &hsa_program);
+	err = hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, profile, HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL, &hsa_program);
 	check("Error in creating program object", err);
 
 	// Add hsail module.
-	//cout << "hsail file name = " << hail_file_name << endl;
+	//cout << "hsail file name = " << hail_file_name_full << endl;
 	err = hsa_ext_program_add_module(hsa_program, module);
 	check("Error in adding module to program object", err);
 
@@ -90,7 +102,7 @@ bool HSA_UTIL::HsaInit()
 	check("Error in finalizing program object", err);
 
 	// Create executable.
-	err = hsa_executable_create(HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
+	err = hsa_executable_create(profile, HSA_EXECUTABLE_STATE_UNFROZEN, "", &hsaExecutable);
 	check("Error in creating executable object", err);
 
 	// Load code object.
@@ -117,9 +129,11 @@ bool HSA_UTIL::HsaInit()
 
 
 	//hsa_region_t local_kernarg_region;
-	kernarg_region.handle = 0;
-	hsa_agent_iterate_regions(device, get_kernarg, &kernarg_region);
-	err = (kernarg_region.handle== 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+	mem_region.kernarg_region.handle = 0;
+	mem_region.coarse_region.handle = 0;
+
+	hsa_agent_iterate_regions(device, get_memory_region, &mem_region);
+	err = (mem_region.kernarg_region.handle== 0) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
 	check(Finding a kernarg memory region, err);
 
 	return true;
@@ -177,7 +191,7 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	/*
 	 * Allocate the kernel argument buffer from the correct region.
 	 */
-	err = hsa_memory_allocate(kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
+	err = hsa_memory_allocate(mem_region.kernarg_region, kernel_args_size, &local_kernel_arg_buffer);
 	check(Allocating kernel argument memory buffer, err);
 	memcpy(local_kernel_arg_buffer, kernel_args, kernel_args_size);
 	local_dispatch_packet.kernarg_address = local_kernel_arg_buffer;
@@ -245,4 +259,51 @@ void HSA_UTIL::Close()
 	err=hsa_shut_down();
 	check(Shutting down the runtime, err);
 }
+
+void* HSA_UTIL::AllocateLocalMemory(size_t size) 
+{
+  void *buffer = NULL;
+
+  // Allocate in local memory only if it is available
+  if (mem_region.coarse_region.handle != 0) 
+  {
+      cout << "Allocating in local memory" << endl;
+      err = hsa_memory_allocate(mem_region.coarse_region, size, (void **)&buffer);
+      check(hsa memory allocation in local memory, err);
+
+      // register agent
+      err = hsa_memory_assign_agent(buffer, device, HSA_ACCESS_PERMISSION_RW);
+      return (err == HSA_STATUS_SUCCESS) ? buffer : NULL;
+  }
+
+  // Allocate in system memory if local memory is not available
+  cout << "Allocating in system memory" << endl;
+  err = hsa_memory_allocate(mem_region.kernarg_region, size, (void **)&buffer);
+  return (err == HSA_STATUS_SUCCESS) ? buffer : NULL;
+}
+
+void* HSA_UTIL::AllocateSysMemory( size_t size)
+{
+    void *buffer = NULL;
+    err = hsa_memory_allocate(mem_region.kernarg_region, size, (void **)&buffer);
+    return (err == HSA_STATUS_SUCCESS) ? buffer : NULL;
+}
+
+bool HSA_UTIL::TransferData(void *dest, void *src, uint length, bool host_to_dev) 
+{
+
+  hsa_status_t status;
+
+  void *buffer = (host_to_dev) ? dest : src;
+  err = hsa_memory_assign_agent(buffer, device, HSA_ACCESS_PERMISSION_RW);
+  if (err != HSA_STATUS_SUCCESS) 
+  {
+      return false;
+  }
+  err = hsa_memory_copy(dest, src, length);  // first is dest, second is src 
+  return (err == HSA_STATUS_SUCCESS);
+
+}
+
+
 
