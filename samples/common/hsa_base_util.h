@@ -11,28 +11,36 @@
 #include "common.hpp"
 #include "HSAILTool.h"
 
-
-
 class HSA_UTIL{
     public:
 	    HSA_UTIL();
 	    ~HSA_UTIL();
 
 	public:
-	    void GetHsailNameAndKernelName(char *hail_file_name, char *kernel_name);
+	    void GetHsailNameAndKernelName(char *hail_file_name_full, char *hail_file_name_base, char *kernel_name);
 	    bool HsaInit();
         void Close();
 	double GetKernelTime();
 	double GetSetupTime();
+	void* AllocateLocalMemory(size_t size) ;
+	void* AllocateSysMemory(size_t size);
+	bool TransferData(void *dest, void *src, uint length, bool host_to_dev) ;
+	
 	double Run(int dim, int group_x, int group_y, int group_z, int s_size, int grid_x, int grid_y, int grid_z, void* kernel_args, int kernel_args_size);
 
 	public:
 		hsa_status_t err;
 		uint32_t queue_size;
 		hsa_agent_t device;
-                hsa_region_t kernarg_region;
+		MemRegion mem_region;
+              //hsa_region_t kernarg_region;
+		// Memory region supporting kernel parameters
+             // hsa_region_t coarse_region;
+		// Hsail profile supported by agent
+              hsa_profile_t profile;
 
-		char hail_file_name[128];
+		char hail_file_name_full[128];
+		char hail_file_name_base[128];
 		char hsa_kernel_name[128];
 
 		hsa_queue_t* command_queue;
