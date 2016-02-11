@@ -1331,9 +1331,9 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 	if (*gpu_id_array == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
         for (i = 0; i < NumberOfNodes; i++) {
-		ret = validate_nodeid(NodeArray[i], gpu_id_array[i]);
+		ret = validate_nodeid(NodeArray[i], *gpu_id_array + i);
 		if (ret != HSAKMT_STATUS_SUCCESS) {
-			free(gpu_id_array);
+			free(*gpu_id_array);
 			break;
 		}
 	}

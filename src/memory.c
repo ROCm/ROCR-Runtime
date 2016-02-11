@@ -271,10 +271,8 @@ hsaKmtMapMemoryToGPUNodes(
 
 	ret = validate_nodeid_array(&gpu_id_array,
 				NumberOfNodes, NodeArray);
-	if (ret != HSAKMT_STATUS_SUCCESS) {
-		free(gpu_id_array);
+	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
-	}
 
 	ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 			gpu_id_array, NumberOfNodes);
