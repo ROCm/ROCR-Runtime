@@ -134,6 +134,12 @@ class HsaRsrcFactory {
   //
   uint32_t GetCountOfGpuAgents( );
 
+  // Get the count of Hsa Cpu Agents available on the platform
+  //
+  // @return uint32_t Number of Cpu agents on platform
+  //
+  uint32_t GetCountOfCpuAgents( );
+
   // Get the AgentInfo handle of a Gpu device
   //
   // @param idx Gpu Agent at specified index
@@ -143,6 +149,15 @@ class HsaRsrcFactory {
   // @return bool true if successful, false otherwise
   //
   bool GetGpuAgentInfo(uint32_t idx, AgentInfo **agent_info);
+
+  // Get the AgentInfo handle of a Cpu device
+  //
+  // @param idx Cpu Agent at specified index
+  //
+  // @param agent_info Output parameter updated with AgentInfo
+  //
+  // @return bool true if successful, false otherwise
+  //
   bool GetCpuAgentInfo(uint32_t idx, AgentInfo **agent_info);
 
   // Create a Queue object and return its handle. The queue object is expected
@@ -213,7 +228,7 @@ class HsaRsrcFactory {
                        hsa_executable_symbol_t *code_desc);
 
   // Add an instance of AgentInfo representing a Hsa Gpu agent
-  void AddAgentInfo(AgentInfo *agent_info);
+  void AddAgentInfo(AgentInfo *agent_info, bool gpu);
 
   // Returns the file path where brig files is located
   static char* GetBrigPath( );
@@ -254,6 +269,9 @@ class HsaRsrcFactory {
  
   // Used to maintain a list of Hsa Gpu Agent Info
   std::vector<AgentInfo *> gpu_list_;
+ 
+  // Used to maintain a list of Hsa Cpu Agent Info
+  std::vector<AgentInfo *> cpu_list_;
 
   // Records the file path where Brig file is located.
   // Value is available only after an instance has been built.
