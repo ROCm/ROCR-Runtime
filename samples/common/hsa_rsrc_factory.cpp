@@ -63,7 +63,7 @@ static hsa_status_t get_hsa_agents(hsa_agent_t agent, void *data) {
     AgentInfo *agent_info = reinterpret_cast<AgentInfo *>(malloc(sizeof(AgentInfo)));
     agent_info->dev_id = agent;
     agent_info->dev_type = HSA_DEVICE_TYPE_CPU;
-    rsrcFactory->AddAgentInfo(agent_info);
+    rsrcFactory->AddAgentInfo(agent_info, false);
     return HSA_STATUS_SUCCESS;
   }
   
@@ -87,7 +87,7 @@ static hsa_status_t get_hsa_agents(hsa_agent_t agent, void *data) {
   hsa_agent_iterate_regions(agent, find_memregions, agent_info);
 
   // Save the instance of AgentInfo
-  rsrcFactory->AddAgentInfo(agent_info);
+  rsrcFactory->AddAgentInfo(agent_info, true);
   return HSA_STATUS_SUCCESS;
 }
 
@@ -134,6 +134,14 @@ uint32_t HsaRsrcFactory::GetCountOfGpuAgents( ) {
   return uint32_t(gpu_list_.size());
 }
 
+// Get the count of Hsa Cpu Agents available on the platform
+//
+// @return uint32_t Number of Cpu agents on platform
+//
+uint32_t HsaRsrcFactory::GetCountOfCpuAgents( ) {
+  return uint32_t(cpu_list_.size());
+}
+
 // Get the AgentInfo handle of a Gpu device
 //
 // @param idx Gpu Agent at specified index
@@ -151,32 +159,28 @@ bool HsaRsrcFactory::GetGpuAgentInfo(uint32_t idx, AgentInfo **agent_info) {
   }
 
   // Copy AgentInfo from specified index
-  AgentInfo *agent = NULL;
-  for (int indx = 0; indx < size; indx++) {
-    agent = gpu_list_[indx];
-    if (agent->dev_type == HSA_DEVICE_TYPE_GPU) {
-      *agent_info = agent;
-    }
-  }
+  *agent_info = gpu_list_[idx];
   return true;
 }
 
+// Get the AgentInfo handle of a Cpu device
+//
+// @param idx Cpu Agent at specified index
+//
+// @param agent_info Output parameter updated with AgentInfo
+//
+// @return bool true if successful, false otherwise
+//
 bool HsaRsrcFactory::GetCpuAgentInfo(uint32_t idx, AgentInfo **agent_info) {
 
   // Determine if request is valid
-  uint32_t size = uint32_t(gpu_list_.size());
+  uint32_t size = uint32_t(cpu_list_.size());
   if (idx >= size) {
     return false;
   }
 
   // Copy AgentInfo from specified index
-  AgentInfo *agent = NULL;
-  for (int indx = 0; indx < size; indx++) {
-    agent = gpu_list_[indx];
-    if (agent->dev_type == HSA_DEVICE_TYPE_CPU) {
-      *agent_info = agent;
-    }
-  }
+  *agent_info = cpu_list_[idx];
   return true;
 }
 
@@ -235,7 +239,11 @@ uint8_t* HsaRsrcFactory::AllocateLocalMemory(AgentInfo *agent_info, size_t size)
   if (agent_info->coarse_region.handle != 0) {
     std::cout << "Allocating in local memory" << std::endl;
     status = hsa_memory_allocate(agent_info->coarse_region, size, (void **)&buffer);
-    return (status == HSA_STATUS_SUCCESS) ? buffer : NULL;
+    if (status == HSA_STATUS_SUCCESS) {
+      status = hsa_memory_assign_agent(buffer, agent_info->dev_id, HSA_ACCESS_PERMISSION_RW);
+      return (status == HSA_STATUS_SUCCESS) ? buffer : NULL;
+    }
+    return NULL;
   }
 
   // Allocate in system memory if local memory is not available
@@ -264,14 +272,6 @@ bool HsaRsrcFactory::TransferData(uint8_t *dest_buff, uint8_t *src_buff,
                                   uint32_t length, bool host_to_dev) {
 
   hsa_status_t status;
-
-  AgentInfo *agent_info;
-  GetGpuAgentInfo(0, &agent_info);
-  void *buffer = (host_to_dev) ? dest_buff : src_buff;
-  status = hsa_memory_assign_agent(buffer, agent_info->dev_id, HSA_ACCESS_PERMISSION_RW);
-  if (status != HSA_STATUS_SUCCESS) {
-      return false;
-  }
   status = hsa_memory_copy(dest_buff, src_buff, length);
   return (status == HSA_STATUS_SUCCESS);
 
@@ -423,8 +423,16 @@ bool HsaRsrcFactory::LoadAndFinalize(AgentInfo *agent_info,
 }
 
 // Add an instance of AgentInfo representing a Hsa Gpu agent
-void HsaRsrcFactory::AddAgentInfo(AgentInfo *agent_info) {
-  gpu_list_.push_back(agent_info);
+void HsaRsrcFactory::AddAgentInfo(AgentInfo *agent_info, bool gpu) {
+  
+  // Add input to Gpu list
+  if (gpu) {
+    gpu_list_.push_back(agent_info);
+    return;
+  }
+
+  // Add input to Cpu list
+  cpu_list_.push_back(agent_info);
 }
 
 // Print the various fields of Hsa Gpu Agents
