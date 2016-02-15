@@ -74,10 +74,13 @@ hsaKmtCreateEvent(
 	args.auto_reset = !ManualReset;
 
 	/* dGPU code */
+	pthread_mutex_lock(&hsakmt_mutex);
+
 	if (is_dgpu && events_page == NULL) {
 		events_page = allocate_exec_aligned_memory_gpu(
 			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0);
 		if (!events_page) {
+			pthread_mutex_unlock(&hsakmt_mutex);
 			return HSAKMT_STATUS_ERROR;
 		}
 		fmm_get_handle(events_page, &args.event_page_offset);
@@ -86,6 +89,7 @@ hsaKmtCreateEvent(
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
 		free(e);
 		*Event = NULL;
+		pthread_mutex_unlock(&hsakmt_mutex);
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -93,11 +97,14 @@ hsaKmtCreateEvent(
 		events_page = mmap(NULL, KFD_SIGNAL_EVENT_LIMIT * 8, PROT_WRITE | PROT_READ,
 				MAP_SHARED, kfd_fd, args.event_page_offset);
 		if (events_page == MAP_FAILED) {
-			hsaKmtDestroyEvent(e);
 			events_page = NULL;
+			pthread_mutex_unlock(&hsakmt_mutex);
+			hsaKmtDestroyEvent(e);
 			return HSAKMT_STATUS_ERROR;
 		}
 	}
+
+	pthread_mutex_unlock(&hsakmt_mutex);
 
 	if (args.event_page_offset > 0 && args.event_slot_index < KFD_SIGNAL_EVENT_LIMIT)
 		e->EventData.HWData2 = (HSAuint64)&events_page[args.event_slot_index];
