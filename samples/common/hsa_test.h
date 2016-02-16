@@ -7,6 +7,9 @@
 
 #include "hsa.h"
 #include "hsa_ext_amd.h"
+#include "hsa_ext_finalize.h"
+
+#include "HSAILTool.h"
 
 class HsaTest {
  public:
@@ -63,6 +66,42 @@ class HsaTest {
     size_t alloc_alignment;
     bool all_accessible;
   } PoolProps;
+
+  class Kernel {
+   public:
+    Kernel(hsa_agent_t agent, std::string hsail_file);
+
+    virtual ~Kernel();
+
+    uint64_t GetCodeHandle(const char* kernel_name);
+
+   protected:
+    virtual void Initialize();
+
+    virtual void Cleanup();
+
+    bool CreateProgramFromHsailFile();
+
+    bool CreateCodeObjectAndExecutable();
+
+    HSAIL_ASM::Tool tool_;
+
+    hsa_agent_t agent_;
+    hsa_profile_t profile_;
+
+    hsa_ext_program_t program_;
+    hsa_code_object_t code_object_;
+    hsa_executable_t executable_;
+
+    std::string hsail_file_;
+  };
+
+  virtual void* AllocateSystemMemory(bool fine_grain, size_t size);
+  virtual void* AllocateLocalMemory(hsa_agent_t agent, size_t size);
+  virtual void FreeMemory(void* ptr);
+
+  virtual void LaunchPacket(hsa_queue_t& queue, hsa_packet_type_t type,
+                            void* packet);
 
   virtual void PrintAgentInfo(AgentProps& prop);
   virtual void PrintPoolInfo(PoolProps& prop);
