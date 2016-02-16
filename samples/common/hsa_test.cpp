@@ -1,13 +1,12 @@
 #include "hsa_test.h"
 
+#include <atomic>
 #include <iostream>
 
 #define PRINT_ATTRIBUTE(attribute, value, metric) \
   std::cout << #attribute " = " << value << " " << metric << std::endl;
 
-static size_t ToMB(size_t size) {
-  return (size / (1024 * 1024));
-}
+static size_t ToMB(size_t size) { return (size / (1024 * 1024)); }
 
 HsaTest::HsaTest(const char* test_name) : test_name_(test_name) {
   std::cout << "Running " << test_name_ << std::endl;
@@ -135,6 +134,203 @@ HsaTest::PoolProps::PoolProps(hsa_amd_memory_pool_t pool) {
                                (void*)&alloc_alignment);
   hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL,
                                (void*)&all_accessible);
+}
+
+HsaTest::Kernel::Kernel(hsa_agent_t agent, std::string hsail_text)
+    : agent_(agent), hsail_file_(hsail_text) {
+  program_.handle = 0;
+  code_object_.handle = 0;
+  executable_.handle = 0;
+
+  AgentProps prop(agent_);
+  profile_ = prop.profile;
+
+  Initialize();
+}
+
+HsaTest::Kernel::~Kernel() { Cleanup(); }
+
+uint64_t HsaTest::Kernel::GetCodeHandle(const char* kernel_name) {
+  hsa_executable_symbol_t kernel_symbol = {0};
+  if (HSA_STATUS_SUCCESS != hsa_executable_get_symbol(executable_, NULL,
+                                                      kernel_name, agent_, 0,
+                                                      &kernel_symbol)) {
+    return 0;
+  }
+
+  uint64_t code_handle = 0;
+  if (HSA_STATUS_SUCCESS !=
+      hsa_executable_symbol_get_info(kernel_symbol,
+                                     HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
+                                     &code_handle)) {
+    return 0;
+  }
+
+  return code_handle;
+}
+
+void HsaTest::Kernel::Initialize() {
+  CreateProgramFromHsailFile();
+  CreateCodeObjectAndExecutable();
+}
+
+void HsaTest::Kernel::Cleanup() {
+  if (executable_.handle != 0) {
+    hsa_executable_destroy(executable_);
+    executable_.handle = 0;
+  }
+
+  if (code_object_.handle != 0) {
+    hsa_code_object_destroy(code_object_);
+    code_object_.handle = 0;
+  }
+
+  if (program_.handle != 0) {
+    hsa_ext_program_destroy(program_);
+    program_.handle = 0;
+  }
+}
+
+bool HsaTest::Kernel::CreateProgramFromHsailFile() {
+  if (HSA_STATUS_SUCCESS !=
+      hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, profile_,
+                             HSA_DEFAULT_FLOAT_ROUNDING_MODE_ZERO, NULL,
+                             &program_)) {
+    return false;
+  }
+
+  if (!tool_.assembleFromFile(hsail_file_.c_str())) {
+    return false;
+  }
+
+  hsa_ext_module_t module = tool_.brigModule();
+  if (HSA_STATUS_SUCCESS != hsa_ext_program_add_module(program_, module)) {
+    return false;
+  }
+
+  return true;
+}
+
+bool HsaTest::Kernel::CreateCodeObjectAndExecutable() {
+  hsa_isa_t isa = {0};
+  if (HSA_STATUS_SUCCESS !=
+      hsa_agent_get_info(agent_, HSA_AGENT_INFO_ISA, &isa)) {
+    return false;
+  }
+
+  hsa_ext_control_directives_t control_directives = {0};
+  if (HSA_STATUS_SUCCESS !=
+      hsa_ext_program_finalize(program_, isa, 0, control_directives, "",
+                               HSA_CODE_OBJECT_TYPE_PROGRAM, &code_object_)) {
+    return false;
+  }
+
+  if (HSA_STATUS_SUCCESS != hsa_executable_create(profile_,
+                                                  HSA_EXECUTABLE_STATE_UNFROZEN,
+                                                  "", &executable_)) {
+    return false;
+  }
+
+  if (HSA_STATUS_SUCCESS !=
+      hsa_executable_load_code_object(executable_, agent_, code_object_, "")) {
+    return false;
+  }
+
+  if (HSA_STATUS_SUCCESS != hsa_executable_freeze(executable_, "")) {
+    return false;
+  }
+
+  return true;
+}
+
+void* HsaTest::AllocateSystemMemory(bool fine_grain, size_t size) {
+  if (cpus_.size() == 0) {
+    return NULL;
+  }
+
+  hsa_amd_memory_pool_t pool = (fine_grain) ? global_fine_[cpus_[0].handle]
+                                            : global_coarse_[cpus_[0].handle];
+
+  void* ptr = NULL;
+  if (HSA_STATUS_SUCCESS != hsa_amd_memory_pool_allocate(pool, size, 0, &ptr)) {
+    return NULL;
+  }
+
+  return ptr;
+}
+
+void* HsaTest::AllocateLocalMemory(hsa_agent_t agent, size_t size) {
+  if (gpus_.size() == 0) {
+    return NULL;
+  }
+
+  hsa_amd_memory_pool_t pool = global_coarse_[agent.handle];
+
+  void* ptr = NULL;
+  if (HSA_STATUS_SUCCESS != hsa_amd_memory_pool_allocate(pool, size, 0, &ptr)) {
+    return NULL;
+  }
+
+  return ptr;
+}
+
+void HsaTest::FreeMemory(void* ptr) { hsa_amd_memory_pool_free(ptr); }
+
+void HsaTest::LaunchPacket(hsa_queue_t& queue, hsa_packet_type_t type,
+                           void* packet) {
+  uint32_t queue_bitmask = queue.size - 1;
+  const uint64_t write_index = hsa_queue_add_write_index_acq_rel(&queue, 1);
+
+  static const uint16_t kInvalidPacketHeader = HSA_PACKET_TYPE_INVALID;
+
+  if (type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
+    hsa_kernel_dispatch_packet_t* dispatch_packet =
+        reinterpret_cast<hsa_kernel_dispatch_packet_t*>(packet);
+    const uint16_t temp_header = dispatch_packet->header;
+    dispatch_packet->header = kInvalidPacketHeader;
+
+    // Populate queue buffer.
+    hsa_kernel_dispatch_packet_t* queue_buffer =
+        reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue.base_address);
+    queue_buffer[write_index & queue_bitmask] = *dispatch_packet;
+
+    // Enable packet.
+    std::atomic_thread_fence(std::memory_order_release);
+    queue_buffer[write_index & queue_bitmask].header = temp_header;
+    dispatch_packet->header = temp_header;
+  } else if (type == HSA_PACKET_TYPE_BARRIER_AND) {
+    hsa_barrier_and_packet_t* barrier_and_packet =
+        reinterpret_cast<hsa_barrier_and_packet_t*>(packet);
+    const uint16_t temp_header = barrier_and_packet->header;
+    barrier_and_packet->header = kInvalidPacketHeader;
+
+    // Populate queue buffer.
+    hsa_barrier_and_packet_t* queue_buffer =
+        reinterpret_cast<hsa_barrier_and_packet_t*>(queue.base_address);
+    queue_buffer[write_index & queue_bitmask] = *barrier_and_packet;
+
+    // Enable packet.
+    std::atomic_thread_fence(std::memory_order_release);
+    queue_buffer[write_index & queue_bitmask].header = temp_header;
+    barrier_and_packet->header = temp_header;
+  } else if (type == HSA_PACKET_TYPE_BARRIER_OR) {
+    hsa_barrier_or_packet_t* barrier_or_packet =
+        reinterpret_cast<hsa_barrier_or_packet_t*>(packet);
+    const uint16_t temp_header = barrier_or_packet->header;
+    barrier_or_packet->header = kInvalidPacketHeader;
+
+    // Populate queue buffer.
+    hsa_barrier_or_packet_t* queue_buffer =
+        reinterpret_cast<hsa_barrier_or_packet_t*>(queue.base_address);
+    queue_buffer[write_index & queue_bitmask] = *barrier_or_packet;
+
+    // Enable packet.
+    std::atomic_thread_fence(std::memory_order_release);
+    queue_buffer[write_index & queue_bitmask].header = temp_header;
+    barrier_or_packet->header = temp_header;
+  }
+
+  hsa_signal_store_release(queue.doorbell_signal, write_index);
 }
 
 void HsaTest::PrintAgentInfo(AgentProps& prop) {
