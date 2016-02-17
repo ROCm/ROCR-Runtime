@@ -50,7 +50,7 @@ void fmm_destroy_process_apertures(void);
  * Memory interface
  */
 void* fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes);
-void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes);
+void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags);
 void* fmm_allocate_host(uint64_t MemorySizeInBytes, HsaMemFlags flags);
 void* fmm_open_graphic_handle(uint32_t gpu_id,
         int32_t graphic_device_handle,

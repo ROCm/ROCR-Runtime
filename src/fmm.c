@@ -728,36 +728,54 @@ static void* __fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
  * (after base subtraction) won't be used
  */
 #define GPUVM_APP_OFFSET 0x10000
-void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes)
+void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
-	uint32_t flags, offset;
+	uint32_t ioc_flags, offset;
+	uint64_t size, mmap_offset;
+	void *mem;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
 		return NULL;
 
+	size = MemorySizeInBytes;
+
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
-		flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
+		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
 		/*
 		 * TODO: Once VA limit is raised from 0x200000000 (8GB) use gpuvm_aperture.
 		 * In that way the host access range won't be used for local memory
 		 */
 		aperture = &svm.dgpu_aperture;
 		offset = 0;
+		if (flags.ui32.AQLQueueMemory) {
+			size = MemorySizeInBytes * 2;
+			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
+		}
 	} else {
-		flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
+		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 		offset = GPUVM_APP_OFFSET;
 	}
 
-	return __fmm_allocate_device(gpu_id, MemorySizeInBytes,
-			aperture, offset, NULL,
-			flags);
-	/* TODO: honor host access mem flag and map to user mode VM if
-	 * needed */
+	mem = __fmm_allocate_device(gpu_id, size,
+			aperture, offset, &mmap_offset,
+			ioc_flags);
+
+	if (mem && flags.ui32.HostAccess) {
+		void *ret = mmap(mem, MemorySizeInBytes,
+				 PROT_READ | PROT_WRITE,
+				 MAP_SHARED | MAP_FIXED, kfd_fd , mmap_offset);
+		if (ret == MAP_FAILED) {
+			__fmm_release(mem, MemorySizeInBytes, aperture);
+			return NULL;
+		}
+	}
+
+	return mem;
 }
 
 static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,

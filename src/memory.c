@@ -142,7 +142,7 @@ hsaKmtAllocMemory(
 	}
 
 	if (gpu_id && MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes);
+		*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes, MemFlags);
 
 		if (*MemoryAddress == NULL)
 			return HSAKMT_STATUS_NO_MEMORY;
