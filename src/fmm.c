@@ -1832,7 +1832,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 
 	/* Find the object and set its userptr address */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_address(aperture, svm_addr, size);
+	obj = vm_find_object_by_address(aperture, svm_addr, aligned_size);
 	if (obj == NULL) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_ERROR;
