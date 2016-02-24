@@ -282,13 +282,8 @@ hsaKmtMapMemoryToGPUNodes(
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
-			gpu_id_array, NumberOfNodes*sizeof(uint32_t));
-	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
-
-	return fmm_map_to_gpu(MemoryAddress,
-			MemorySizeInBytes, AlternateVAGPU);
+	return fmm_map_to_gpu_nodes(MemoryAddress, MemorySizeInBytes,
+			gpu_id_array, NumberOfNodes * sizeof(uint32_t), AlternateVAGPU);
 }
 
 HSAKMT_STATUS
