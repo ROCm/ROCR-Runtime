@@ -181,7 +181,7 @@ hsaKmtFreeMemory(
 {
 	CHECK_KFD_OPEN();
 
-	fmm_release(MemoryAddress, SizeInBytes);
+	fmm_release(MemoryAddress);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
