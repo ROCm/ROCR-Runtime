@@ -168,8 +168,10 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	local_dispatch_packet.grid_size_y = grid_y;
 	local_dispatch_packet.grid_size_z = grid_z;
 	local_dispatch_packet.header |= HSA_PACKET_TYPE_KERNEL_DISPATCH;
-	local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
-	local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+	//local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
+	//local_dispatch_packet.header |= HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+	local_dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
+	local_dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
 	local_dispatch_packet.kernel_object = codeHandle;
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
