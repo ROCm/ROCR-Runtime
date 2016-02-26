@@ -776,7 +776,7 @@ topology_sysfs_get_iolink_props(uint32_t node_id, uint32_t iolink_id, HsaIoLinkP
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
-	snprintf(path, 256, "%s/%d/io_link/%d/properties", KFD_SYSFS_PATH_NODES, node_id, iolink_id);
+	snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, node_id, iolink_id);
 	fd = fopen(path, "r");
 	if (!fd) {
 		return HSAKMT_STATUS_ERROR;
