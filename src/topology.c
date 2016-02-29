@@ -128,6 +128,16 @@ free_node(node_t *n)
 		free((n)->link);
 }
 
+static void free_nodes(node_t *temp_nodes, int size)
+{
+	int i;
+	if (temp_nodes) {
+		for (i = 0; i < size; i++)
+			free_node(&temp_nodes[i]);
+		free(temp_nodes);
+	}
+}
+
 /* num_subdirs - find the number of sub-directories in the specified path
  *	@dirpath - directory path to find sub-directories underneath
  *	@prefix - only count sub-directory names starting with prefix.
@@ -838,7 +848,7 @@ err1:
 HSAKMT_STATUS
 topology_take_snapshot(void)
 {
-	uint32_t gen_start, gen_end, i, j, mem_id, cache_id, link_id;
+	uint32_t gen_start, gen_end, i, mem_id, cache_id, link_id;
 	HsaSystemProperties sys_props;
 	node_t *temp_nodes = 0;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -859,26 +869,20 @@ retry:
 					&temp_nodes[i].node,
 					&temp_nodes[i].gpu_id);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
-				for (j=0; j < i; j++)
-					free_node(&temp_nodes[j]);
-				free(temp_nodes);
+				free_nodes(temp_nodes, i);
 				goto err;
 			}
 			if (temp_nodes[i].node.NumMemoryBanks) {
 				temp_nodes[i].mem = calloc(temp_nodes[i].node.NumMemoryBanks * sizeof(HsaMemoryProperties), 1);
 				if (!temp_nodes[i].mem) {
 					ret = HSAKMT_STATUS_NO_MEMORY;
-					for (j=0; j <= i; j++)
-						free_node(&temp_nodes[j]);
-					free(temp_nodes);
+					free_nodes(temp_nodes, i + 1);
 					goto err;
 				}
 				for (mem_id = 0; mem_id < temp_nodes[i].node.NumMemoryBanks; mem_id++) {
 					ret = topology_sysfs_get_mem_props(i, mem_id, &temp_nodes[i].mem[mem_id]);
 					if (ret != HSAKMT_STATUS_SUCCESS) {
-						for (j=0; j <= i; j++)
-							free_node(&temp_nodes[j]);
-						free(temp_nodes);
+						free_nodes(temp_nodes, i + 1);
 						goto err;
 					}
 				}
@@ -888,17 +892,13 @@ retry:
 				temp_nodes[i].cache = calloc(temp_nodes[i].node.NumCaches * sizeof(HsaCacheProperties), 1);
 				if (!temp_nodes[i].cache) {
 					ret = HSAKMT_STATUS_NO_MEMORY;
-					for (j=0; j <= i; j++)
-						free_node(&temp_nodes[j]);
-					free(temp_nodes);
+					free_nodes(temp_nodes, i + 1);
 					goto err;
 				}
 				for (cache_id = 0; cache_id < temp_nodes[i].node.NumCaches; cache_id++) {
 					ret = topology_sysfs_get_cache_props(i, cache_id, &temp_nodes[i].cache[cache_id]);
 					if (ret != HSAKMT_STATUS_SUCCESS) {
-						for (j=0; j <= i; j++)
-							free_node(&temp_nodes[j]);
-						free(temp_nodes);
+						free_nodes(temp_nodes, i + 1);
 						goto err;
 					}
 				}
@@ -907,9 +907,7 @@ retry:
 				/* Get info from /proc/cpuinfo and /sys/devices/system */
 				ret = topology_get_cpu_cache_props(&temp_nodes[i]);
 				if (ret != HSAKMT_STATUS_SUCCESS) {
-					for (j=0; j <= i; j++)
-						free_node(&temp_nodes[j]);
-					free(temp_nodes);
+					free_nodes(temp_nodes, i + 1);
 					goto err;
 				}
 			}
@@ -918,17 +916,13 @@ retry:
 				temp_nodes[i].link = calloc(temp_nodes[i].node.NumIOLinks * sizeof(HsaIoLinkProperties), 1);
 				if (!temp_nodes[i].link) {
 					ret = HSAKMT_STATUS_NO_MEMORY;
-					for (j=0; j <= i; j++)
-						free_node(&temp_nodes[j]);
-					free(temp_nodes);
+					free_nodes(temp_nodes, i + 1);
 					goto err;
 				}
 				for (link_id = 0; link_id < temp_nodes[i].node.NumIOLinks; link_id++) {
 					ret = topology_sysfs_get_iolink_props(i, link_id, &temp_nodes[i].link[link_id]);
 					if (ret != HSAKMT_STATUS_SUCCESS) {
-						for (j=0; j <= i; j++)
-							free_node(&temp_nodes[j]);
-						free(temp_nodes);
+						free_nodes(temp_nodes, i+1);
 						goto err;
 					}
 				}
@@ -939,32 +933,20 @@ retry:
 
 	ret = topology_sysfs_get_generation(&gen_end);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
-		if (temp_nodes) {
-			for (j=0; j < sys_props.NumNodes; j++)
-				free_node(&temp_nodes[j]);
-			free(temp_nodes);
-		}
+		free_nodes(temp_nodes, sys_props.NumNodes);
 		goto err;
 	}
 
 	if (gen_start != gen_end) {
-		if (temp_nodes) {
-			for (j=0; j < sys_props.NumNodes; j++)
-				free_node(&temp_nodes[j]);
-			free(temp_nodes);
-			temp_nodes = 0;
-		}
+		free_nodes(temp_nodes, sys_props.NumNodes);
+		temp_nodes = 0;
 		goto retry;
 	}
 
 	if (!_system) {
 		_system = malloc(sizeof(HsaSystemProperties));
 		if (!_system) {
-			if (temp_nodes) {
-				for (j=0; j < sys_props.NumNodes; j++)
-					free_node(&temp_nodes[j]);
-				free(temp_nodes);
-			}
+			free_nodes(temp_nodes, sys_props.NumNodes);
 			return HSAKMT_STATUS_NO_MEMORY;
 		}
 	}
@@ -994,14 +976,8 @@ topology_drop_snapshot(void)
 	}
 
 	if (node) {
-		uint64_t nodeid;
-
 		/* Remove state */
-		for (nodeid = 0; nodeid < _system->NumNodes; nodeid++) {
-			free_node(&node[nodeid]);
-		}
-
-		free(node);
+		free_nodes(node, _system->NumNodes);
 		node = NULL;
 	}
 
