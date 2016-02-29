@@ -45,6 +45,7 @@ hsaKmtPmcQueryTrace;
 hsaKmtPmcStopTrace;
 hsaKmtMapGraphicHandle;
 hsaKmtUnmapGraphicHandle;
+hsaKmtSetTrapHandler;
 
 local: *;
 };
