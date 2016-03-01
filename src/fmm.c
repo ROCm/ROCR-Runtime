@@ -99,14 +99,11 @@ typedef struct {
 	manageble_aperture_t scratch_physical; /* For dGPU, scratch physical
 				is allocated from dgpu_aperture. When requested by RT, each
 				GPU will get a differnt range */
-	manageble_aperture_t gpuvm_aperture; /* used for device mem on APU and for Gfx interop,
-						unusable on dGPU with small-ish VA range */
-	/* TODO: Merge gpuvm and dgpu apertures. When we have bigger
-	 * VA range, we can add a new invisible aperture for invisible
-	 * device mem on dGPU. */
+	manageble_aperture_t gpuvm_aperture; /* used for GPUVM on APU, outside
+					      * the canonical address range */
 } gpu_mem_t;
 
-/* The main structure for GPU Memory Management */
+/* The main structure for dGPU Shared Virtual Memory Management */
 typedef struct {
 	/* used for non-coherent system and invisible device mem on dGPU.
 	 * This aperture is shared by all dGPUs */
@@ -751,10 +748,6 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
 		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
-		/*
-		 * TODO: Once VA limit is raised from 0x200000000 (8GB) use gpuvm_aperture.
-		 * In that way the host access range won't be used for local memory
-		 */
 		aperture = &svm.dgpu_aperture;
 		offset = 0;
 		if (flags.ui32.AQLQueueMemory) {
@@ -1036,6 +1029,15 @@ static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_po
 	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
 }
 
+static uint32_t get_vm_alignment(uint32_t device_id)
+{
+	if (device_id >= 0x6920 && device_id <= 0x6939) /* Tonga */
+		return TONGA_PAGE_SIZE;
+	if (device_id >= 0x9870 && device_id <= 0x9877) /* Carrizo */
+		return TONGA_PAGE_SIZE;
+	return PAGE_SIZE;
+}
+
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	struct kfd_ioctl_get_process_apertures_new_args args;
@@ -1072,7 +1074,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_physical.fmm_mutex, NULL);
 			gpu_mem[gpu_mem_count].scratch_aperture.align = PAGE_SIZE;
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_aperture.fmm_mutex, NULL);
-			gpu_mem[gpu_mem_count].gpuvm_aperture.align = PAGE_SIZE;
+			gpu_mem[gpu_mem_count].gpuvm_aperture.align =
+				get_vm_alignment(props.DeviceId);
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].gpuvm_aperture.fmm_mutex, NULL);
 			gpu_mem_count++;
 		}
@@ -1140,12 +1143,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			uintptr_t alt_base;
 			uint64_t alt_size;
 			int err;
-			uint64_t vm_alignment = PAGE_SIZE;
-
-			if (gpu_mem[gpu_mem_id].device_id >= 0x6920 &&
-			    gpu_mem[gpu_mem_id].device_id <= 0x6939)
-				/* Workaround for Tonga GPUVM HW bug */
-				vm_alignment = TONGA_PAGE_SIZE;
+			uint64_t vm_alignment = get_vm_alignment(
+				gpu_mem[gpu_mem_id].device_id);
 
 			dgpu_mem_init(gpu_mem_id, &svm.dgpu_aperture.base,
 					&svm.dgpu_aperture.limit);
@@ -1159,14 +1158,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				(uint64_t)svm.dgpu_aperture.limit);
 			svm.dgpu_aperture.align = vm_alignment;
 
-			/* Place GPUVM aperture after dGPU aperture
-				* (FK: I think this is broken but leaving it for now) */
-			gpu_mem[gpu_mem_id].gpuvm_aperture.base = VOID_PTR_ADD(svm.dgpu_aperture.limit, 1);
-			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = (void *)VOID_PTRS_SUB(svm.dgpu_aperture.limit,
-					svm.dgpu_aperture.base);
-			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = VOID_PTR_ADD(gpu_mem[gpu_mem_id].gpuvm_aperture.limit,
-				(unsigned long)gpu_mem[gpu_mem_id].gpuvm_aperture.base);
-			gpu_mem[gpu_mem_id].gpuvm_aperture.align = vm_alignment;
+			/* Non-canonical per-ASIC GPUVM aperture does
+			 * not exist on dGPUs in GPUVM64 address mode */
+			gpu_mem[gpu_mem_id].gpuvm_aperture.base = NULL;
+			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = NULL;
 
 			/* Use the first 1/4 of the dGPU aperture as
 				* alternate aperture for coherent access.
