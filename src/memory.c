@@ -294,6 +294,12 @@ hsaKmtUnmapMemoryToGPU(
 {
 	CHECK_KFD_OPEN();
 
+	if (MemoryAddress == NULL) {
+		/* Workaround for runtime bug */
+		fprintf(stderr, "FIXME: Unmapping NULL pointer\n");
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
 	if (!fmm_unmap_from_gpu(MemoryAddress))
 		return HSAKMT_STATUS_SUCCESS;
 	else
