@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -72,6 +72,7 @@ const uint32_t kAmdQueueAlignBytes = 0x40;
 HsaEvent* HwAqlCommandProcessor::queue_event_ = NULL;
 volatile uint32_t HwAqlCommandProcessor::queue_count_ = 0;
 KernelMutex HwAqlCommandProcessor::queue_lock_;
+int HwAqlCommandProcessor::rtti_id_;
 
 void* HwAqlCommandProcessor::operator new(size_t size) {
   // Align base to 64B to enforce amd_queue_ member alignment.
@@ -147,7 +148,7 @@ HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
   memset(&amd_queue_, 0, sizeof(amd_queue_));
 
   // Initialize and map a HW AQL queue.
-  HsaQueueResource queue_rsrc = { 0 };
+  HsaQueueResource queue_rsrc = {0};
   queue_rsrc.Queue_read_ptr_aql = (uint64_t*)&amd_queue_.read_dispatch_id;
   queue_rsrc.Queue_write_ptr_aql =
       (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;

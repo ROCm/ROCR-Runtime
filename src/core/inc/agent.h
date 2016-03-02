@@ -51,10 +51,10 @@
 
 #include "core/inc/runtime.h"
 #include "core/inc/checked.h"
+#include "core/inc/compute_capability.h"
 #include "core/inc/queue.h"
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
-#include "core/runtime/compute_capability.hpp"
 
 namespace core {
 class Signal;

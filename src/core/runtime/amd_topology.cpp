@@ -300,20 +300,24 @@ void BuildTopology() {
       NULL);
 }
 
-void Load() {
-  // Open KFD
-  if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) return;
+bool Load() {
+  // Open connection to kernel driver.
+  if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
+    return false;
+  }
 
   // Build topology table.
   BuildTopology();
-  core::Runtime::runtime_singleton_->InitStgBuffer();
+
+  return true;
 }
 
-// Releases internal resources and unloads DLLs
-void Unload() {
+bool Unload() {
   hsaKmtReleaseSystemProperties();
 
-  // Close KFD
+  // Close connection to kernel driver.
   hsaKmtCloseKFD();
+
+  return true;
 }
-}  // namespace
+}  // namespace amd

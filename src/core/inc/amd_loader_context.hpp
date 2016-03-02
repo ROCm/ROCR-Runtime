@@ -65,9 +65,7 @@ public:
 
   void* SegmentAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset) override;
 
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   void* SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset) override;
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 
   bool SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size) override;
 

@@ -61,13 +61,18 @@ class CpuAgent : public core::Agent {
 
   ~CpuAgent();
 
+  hsa_status_t VisitRegion(bool include_peer,
+                           hsa_status_t (*callback)(hsa_region_t region,
+                                                    void* data),
+                           void* data) const;
+
   void RegisterMemoryProperties(core::MemoryRegion& region);
 
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
-                             void* data) const;
+                             void* data) const override;
 
-  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const;
+  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
 
   /// @brief Api to create an Aql queue
   ///
@@ -106,7 +111,8 @@ class CpuAgent : public core::Agent {
   hsa_status_t QueueCreate(size_t size, hsa_queue_type_t queue_type,
                            core::HsaEventCallback event_callback, void* data,
                            uint32_t private_segment_size,
-                           uint32_t group_segment_size, core::Queue** queue);
+                           uint32_t group_segment_size,
+                           core::Queue** queue) override;
 
   __forceinline HSAuint32 node_id() const { return node_id_; }
 
@@ -116,11 +122,16 @@ class CpuAgent : public core::Agent {
     return cache_props_[idx];
   }
 
-  const std::vector<const core::MemoryRegion*>& regions() const {
+  const std::vector<const core::MemoryRegion*>& regions() const override {
     return regions_;
   }
 
  private:
+  hsa_status_t VisitRegion(
+      const std::vector<const core::MemoryRegion*>& regions,
+      hsa_status_t (*callback)(hsa_region_t region, void* data),
+      void* data) const;
+
   const HSAuint32 node_id_;
 
   const HsaNodeProperties properties_;
@@ -128,6 +139,8 @@ class CpuAgent : public core::Agent {
   std::vector<HsaCacheProperties> cache_props_;
 
   std::vector<const core::MemoryRegion*> regions_;
+
+  std::vector<const core::MemoryRegion*> peer_regions_;
 
   DISALLOW_COPY_AND_ASSIGN(CpuAgent);
 };

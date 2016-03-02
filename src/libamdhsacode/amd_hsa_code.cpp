@@ -47,6 +47,7 @@
 #include <fstream>
 #include <sstream>
 #include <cstdlib>
+#include <algorithm>
 
 
 #ifndef _WIN32

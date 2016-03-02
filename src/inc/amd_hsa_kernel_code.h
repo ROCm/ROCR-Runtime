@@ -265,9 +265,7 @@ typedef struct amd_runtime_loader_debug_info_s {
   const char *kernel_name;
   const void *owning_segment;
   hsa_profile_t profile;
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   uint64_t gpuva;
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 } amd_runtime_loader_debug_info_t;
 
 #endif // AMD_HSA_KERNEL_CODE_H

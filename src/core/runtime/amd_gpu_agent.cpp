@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -54,9 +54,9 @@
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/amd_hw_aql_command_processor.h"
 #include "core/inc/interrupt_signal.h"
-#include "core/runtime/isa.hpp"
+#include "core/inc/isa.h"
 
-#include "inc/hsa_ext_image.h"
+#include "hsa_ext_image.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -88,6 +88,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
       compute_capability_.version_stepping() == 0) {
     is_kv_device_ = true;
   }
+
+  current_coherency_type_ = (profile_ == HSA_PROFILE_FULL)
+                                ? HSA_AMD_COHERENCY_TYPE_COHERENT
+                                : HSA_AMD_COHERENCY_TYPE_NONCOHERENT;
 
   max_queues_ =
       static_cast<uint32_t>(atoi(os::GetEnvVar("HSA_MAX_QUEUES").c_str()));
@@ -130,7 +134,13 @@ void GpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
   assert((!amd_region->IsGDS()) &&
          ("Memory region should only be global, group or scratch"));
 
-  regions_.push_back(amd_region);
+  if (amd_region->IsSystem()) {
+    peer_regions_.push_back(amd_region);
+  } else {
+    assert((node_id() == amd_region->node_id()) &&
+           ("region should be local to the gpu (fb, lds, or scratch."));
+    regions_.push_back(amd_region);
+  }
 
   if (amd_region->IsScratch()) {
     HsaMemFlags flags;
@@ -171,17 +181,43 @@ void GpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
 hsa_status_t GpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
-  const size_t num_mems = regions().size();
+  return VisitRegion(true, callback, data);
+}
 
-  for (size_t j = 0; j < num_mems; ++j) {
-    const MemoryRegion* amd_region =
-        reinterpret_cast<const MemoryRegion*>(regions()[j]);
+hsa_status_t GpuAgent::VisitRegion(bool include_peer,
+                                   hsa_status_t (*callback)(hsa_region_t region,
+                                                            void* data),
+                                   void* data) const {
+  if (include_peer) {
+    // Only expose system, local, and LDS memory of the blit agent.
+    if (this == core::Runtime::runtime_singleton_->blit_agent()) {
+      hsa_status_t stat = VisitRegion(regions_, callback, data);
+      if (stat != HSA_STATUS_SUCCESS) {
+        return stat;
+      }
+    }
 
-    // Skip memory regions other than host, gpu local, or LDS.
+    // Also expose system region accessible by this agent.
+    return VisitRegion(peer_regions_, callback, data);
+  }
+
+  // Only expose system, local, and LDS memory of this agent.
+  return VisitRegion(regions_, callback, data);
+}
+
+hsa_status_t GpuAgent::VisitRegion(
+    const std::vector<const core::MemoryRegion*>& regions,
+    hsa_status_t (*callback)(hsa_region_t region, void* data),
+    void* data) const {
+  for (const core::MemoryRegion* region : regions) {
+    const amd::MemoryRegion* amd_region =
+        reinterpret_cast<const amd::MemoryRegion*>(region);
+
+    // Only expose system, local, and LDS memory.
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
         amd_region->IsLDS()) {
-      hsa_region_t hsa_region = core::MemoryRegion::Convert(amd_region);
-      hsa_status_t status = callback(hsa_region, data);
+      hsa_region_t region_handle = core::MemoryRegion::Convert(region);
+      hsa_status_t status = callback(region_handle, data);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
@@ -243,7 +279,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size,
   // is an interrupt signal object. Remove this when SDMA handle interrupt
   // packet properly.
   if (out_signal.EopEvent() != NULL) {
-    reinterpret_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
+    static_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
   }
 
   return blit_->SubmitLinearCopyCommand(dst, src, size, dep_signals,
@@ -427,9 +463,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = static_cast<uint32_t>(
           1 << properties_.Capability.ui32.WatchPointsTotalBits);
       break;
-	case HSA_AMD_AGENT_INFO_BDFID:
-	  *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
-	  break;
+    case HSA_AMD_AGENT_INFO_BDFID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -509,7 +545,6 @@ void GpuAgent::TranslateTime(core::Signal* signal,
 }
 
 uint64_t GpuAgent::TranslateTime(uint64_t tick) {
-
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
   SyncClocks();
 
@@ -523,6 +558,8 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 }
 
 bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
+  if (!is_kv_device_) return true;
+
   ScopedAcquire<KernelMutex> Lock(&lock_);
 
   if (ape1_base_ == 0 && ape1_size_ == 0) {
@@ -561,4 +598,5 @@ void GpuAgent::SyncClocks() {
   HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id_, &t1_);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
+
 }  // namespace

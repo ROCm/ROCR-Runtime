@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -65,6 +65,12 @@ class InterruptSignal : public Signal {
  public:
   static HsaEvent* CreateEvent();
   static void DestroyEvent(HsaEvent* evt);
+
+  /// @brief Determines if a Signal* can be safely converted to an
+  /// InterruptSignal* via static_cast.
+  static __forceinline bool IsType(Signal* ptr) {
+    return ptr->IsType(&rtti_id_);
+  }
 
   explicit InterruptSignal(hsa_signal_value_t initial_value,
                            HsaEvent* use_event = NULL);
@@ -169,6 +175,9 @@ class InterruptSignal : public Signal {
   /// @brief prevent throwing exceptions
   void operator delete(void* ptr) { free(ptr); }
 
+ protected:
+  bool _IsA(rtti_t id) const { return id == &rtti_id_; }
+
  private:
   /// @variable KFD event on which the interrupt signal is based on.
   HsaEvent* event_;
@@ -177,15 +186,18 @@ class InterruptSignal : public Signal {
   /// closes or not.
   bool free_event_;
 
+  // TODO(bwicakso) : work around for SDMA async copy. Bypass waiting on EOP
+  // event because SDMA copy does not handle interrupt yet.
+  bool wait_on_event_;
+
+  /// Used to obtain a globally unique value (address) for rtti.
+  static int rtti_id_;
+
   /// @brief Notify driver of signal value change if necessary.
   __forceinline void SetEvent() {
     std::atomic_signal_fence(std::memory_order_seq_cst);
     if (InWaiting()) hsaKmtSetEvent(event_);
   }
-
-  // TODO(bwicakso) : work around for SDMA async copy. Bypass waiting on EOP
-  // event because SDMA copy does not handle interrupt yet.
-  bool wait_on_event_;
 
   DISALLOW_COPY_AND_ASSIGN(InterruptSignal);
 };

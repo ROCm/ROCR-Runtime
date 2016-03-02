@@ -46,8 +46,9 @@
 #include <cstdint>
 #include <ostream>
 #include <string>
-#include "core/runtime/compute_capability.hpp"
+
 #include "core/inc/agent.h"
+#include "core/inc/compute_capability.h"
 #include "core/inc/hsa_internal.h"
 #include "core/inc/amd_hsa_code.hpp"
 

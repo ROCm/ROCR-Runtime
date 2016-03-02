@@ -85,9 +85,7 @@ class SegmentMemory {
 public:
   virtual ~SegmentMemory() {}
   virtual void* Address(size_t offset = 0) const = 0;
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   virtual void* HostAddress(size_t offset = 0) const = 0;
-#endif // HSART_NO_LARGE_BAR_SUPPORT
   virtual bool Allocated() const = 0;
   virtual bool Allocate(size_t size, size_t align, bool zero) = 0;
   virtual bool Copy(size_t offset, const void *src, size_t size) = 0;
@@ -109,10 +107,8 @@ public:
 
   void* Address(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)ptr_ + offset; }
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   void* HostAddress(size_t offset = 0) const override
     { assert(false); return nullptr; }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
   bool Allocated() const override
     { return nullptr != ptr_; }
 
@@ -181,10 +177,8 @@ public:
 
   void* Address(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)ptr_ + offset; }
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   void* HostAddress(size_t offset = 0) const override
     { assert(false); return nullptr; }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
   bool Allocated() const override
     { return nullptr != ptr_; }
 
@@ -274,10 +268,8 @@ public:
 
   void* Address(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)ptr_ + offset; }
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   void* HostAddress(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)host_ptr_ + offset; }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
   bool Allocated() const override
     { return nullptr != ptr_; }
 
@@ -370,10 +362,6 @@ bool RegionMemory::Freeze() {
     memcpy(ptr_, host_ptr_, size_);
   }
 
-#ifndef HSART_NO_LARGE_BAR_SUPPORT
-  HSA::hsa_memory_free(host_ptr_);
-  host_ptr_ = nullptr;
-#endif
   return true;
 }
 
@@ -515,7 +503,6 @@ void* LoaderContext::SegmentAddress(amdgpu_hsa_elf_segment_t segment, // not use
   return ((SegmentMemory*)seg)->Address(offset);
 }
 
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
 void* LoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, // not used.
                                         hsa_agent_t agent,                // not used.
                                         void* seg,
@@ -524,7 +511,6 @@ void* LoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, // not
   assert(nullptr != seg);
   return ((SegmentMemory*)seg)->HostAddress(offset);
 }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 
 bool LoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t segment, // not used.
                                   hsa_agent_t agent,                // not used.

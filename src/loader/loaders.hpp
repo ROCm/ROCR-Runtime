@@ -50,7 +50,7 @@ namespace loader {
   class OfflineLoaderContext : public amd::hsa::loader::Context {
   private:
     hsa_isa_t invalid;
-    hsa_isa_t gfx700, gfx701, gfx800, gfx801, gfx802, gfx803, gfx804, gfx805;
+    hsa_isa_t gfx700, gfx701, gfx800, gfx801, gfx802, gfx803, gfx804, gfx810;
     hsa_isa_t reserved;
     std::ostream& out;
     typedef std::set<void*> PointerSet;
@@ -71,9 +71,7 @@ namespace loader {
 
     void* SegmentAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset) override;
 
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
     void* SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset) override;
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 
     bool SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size) override;
 

@@ -68,13 +68,25 @@ struct ScratchInfo {
 class GpuAgentInt : public core::Agent {
  public:
   GpuAgentInt() : core::Agent(core::Agent::DeviceType::kAmdGpuDevice) {}
-  virtual bool current_coherency_type(hsa_amd_coherency_type_t type) = 0;
-  virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
+
+  virtual hsa_status_t VisitRegion(bool include_peer,
+                                   hsa_status_t (*callback)(hsa_region_t region,
+                                                            void* data),
+                                   void* data) const = 0;
+
   virtual void TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) = 0;
+
   virtual uint64_t TranslateTime(uint64_t tick) = 0;
+
+  virtual bool current_coherency_type(hsa_amd_coherency_type_t type) = 0;
+
+  virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
+
   virtual HSAuint32 node_id() const = 0;
+
   virtual bool is_kv_device() const = 0;
+
   virtual hsa_profile_t profile() const = 0;
 };
 
@@ -86,23 +98,28 @@ class GpuAgent : public GpuAgentInt {
 
   ~GpuAgent();
 
-  virtual void RegisterMemoryProperties(core::MemoryRegion& region);
+  hsa_status_t InitDma();
+
+  void RegisterMemoryProperties(core::MemoryRegion& region);
+
+  hsa_status_t VisitRegion(bool include_peer,
+                           hsa_status_t (*callback)(hsa_region_t region,
+                                                    void* data),
+                           void* data) const override;
 
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
-                             void* data) const;
+                             void* data) const override;
 
-  hsa_status_t InitDma();
-
-  hsa_status_t DmaCopy(void* dst, const void* src, size_t size);
+  hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
 
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size,
                        std::vector<core::Signal*>& dep_signals,
-                       core::Signal& out_signal);
+                       core::Signal& out_signal) override;
 
-  hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count);
+  hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
 
-  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const;
+  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
 
   /// @brief Api to create an Aql queue
   ///
@@ -141,7 +158,8 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t QueueCreate(size_t size, hsa_queue_type_t queue_type,
                            core::HsaEventCallback event_callback, void* data,
                            uint32_t private_segment_size,
-                           uint32_t group_segment_size, core::Queue** queue);
+                           uint32_t group_segment_size,
+                           core::Queue** queue) override;
 
   void AcquireQueueScratch(ScratchInfo& scratch) {
     if (scratch.size == 0) {
@@ -166,6 +184,10 @@ class GpuAgent : public GpuAgentInt {
   }
 
   void ReleaseQueueScratch(void* base) {
+    if (base == NULL) {
+      return;
+    }
+
     ScopedAcquire<KernelMutex> lock(&sclock_);
     if (profile_ == HSA_PROFILE_BASE) {
       if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
@@ -176,19 +198,19 @@ class GpuAgent : public GpuAgentInt {
   }
 
   void TranslateTime(core::Signal* signal,
-                     hsa_amd_profiling_dispatch_time_t& time);
+                     hsa_amd_profiling_dispatch_time_t& time) override;
 
-  uint64_t TranslateTime(uint64_t tick);
+  uint64_t TranslateTime(uint64_t tick) override;
 
   uint16_t GetMicrocodeVersion() const;
 
-  bool current_coherency_type(hsa_amd_coherency_type_t type);
+  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
 
-  hsa_amd_coherency_type_t current_coherency_type() const {
+  hsa_amd_coherency_type_t current_coherency_type() const override {
     return current_coherency_type_;
   }
 
-  __forceinline HSAuint32 node_id() const { return node_id_; }
+  __forceinline HSAuint32 node_id() const override { return node_id_; }
 
   __forceinline const HsaNodeProperties& properties() const {
     return properties_;
@@ -200,15 +222,20 @@ class GpuAgent : public GpuAgentInt {
     return cache_props_[idx];
   }
 
-  __forceinline bool is_kv_device() const { return is_kv_device_; }
+  __forceinline bool is_kv_device() const override { return is_kv_device_; }
 
-  __forceinline hsa_profile_t profile() const { return profile_; }
+  __forceinline hsa_profile_t profile() const override { return profile_; }
 
-  const std::vector<const core::MemoryRegion*>& regions() const {
+  const std::vector<const core::MemoryRegion*>& regions() const override {
     return regions_;
   }
 
  protected:
+  hsa_status_t VisitRegion(
+      const std::vector<const core::MemoryRegion*>& regions,
+      hsa_status_t (*callback)(hsa_region_t region, void* data),
+      void* data) const;
+
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
@@ -237,6 +264,8 @@ class GpuAgent : public GpuAgentInt {
   std::vector<HsaCacheProperties> cache_props_;
 
   std::vector<const core::MemoryRegion*> regions_;
+
+  std::vector<const core::MemoryRegion*> peer_regions_;
 
   bool is_kv_device_;
 
