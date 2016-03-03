@@ -845,6 +845,29 @@ err1:
 	return ret;
 }
 
+/* topology_create_reverse_io_link - Create io_links from the given CPU
+ *	NUMA node to all the GPUs attached to that node
+ */
+static void topology_create_reverse_io_link(uint32_t cpu_node,
+			const HsaSystemProperties *sys_props, node_t *temp_nodes)
+{
+	unsigned int gpu_node;
+	HsaIoLinkProperties *props = temp_nodes[cpu_node].link;
+
+	for (gpu_node = 0; gpu_node < sys_props->NumNodes; gpu_node++) {
+		if (temp_nodes[gpu_node].gpu_id != 0) {
+			/* Check if this GPU is connected to the give cpu_node,
+			 * if so create an io_link */
+			if (temp_nodes[gpu_node].link->NodeTo == cpu_node) {
+				props->NodeFrom = cpu_node;
+				props->NodeTo = gpu_node;
+				props->Weight = temp_nodes[gpu_node].link->Weight;
+				props++;
+			}
+		}
+	}
+}
+
 HSAKMT_STATUS
 topology_take_snapshot(void)
 {
@@ -928,6 +951,47 @@ retry:
 				}
 			}
 
+		}
+	}
+
+	/* The Kernel only creates one way direct link -
+	 * GPU(PCI_BUS) --> Parent NUMA Node. Create the reverse direct
+	 * io_link here. [NUMA node] --> GPU */
+
+	for (i = 0; i < sys_props.NumNodes; i++) {
+	/* For each CPU Node, compute the number of direct io_links it has.
+	 * For that, parse all the GPU Nodes, find the CPU Parent node to
+	 * which it has a direct link to. And increment NumIOLinks for that
+	 * CPU node */
+		if (temp_nodes[i].gpu_id != 0) {
+			if (temp_nodes[i].link) {
+				if (temp_nodes[i].link->NodeTo < sys_props.NumNodes)
+					temp_nodes[temp_nodes[i].link->NodeTo].node.NumIOLinks++;
+				else
+					printf("Node [%d] has io_link to invalid Node [%d]\n",
+					i, temp_nodes[i].link->NodeTo);
+			}
+			else
+				printf("GPU [0x%x] is missing its direct IO LINK\n",
+						temp_nodes[i].gpu_id);
+		}
+	}
+
+	/* Create the reverse io_link for all the CPU nodes */
+	for (i = 0; i < sys_props.NumNodes; i++) {
+		if (temp_nodes[i].gpu_id == 0) {
+			if (temp_nodes[i].link) {
+				printf("Node [%d] has unexpected io_link. Skipping.\n", i);
+				continue;
+			}
+			temp_nodes[i].link = calloc(temp_nodes[i].node.NumIOLinks,
+				sizeof(HsaIoLinkProperties));
+			if (!temp_nodes[i].link) {
+				ret = HSAKMT_STATUS_NO_MEMORY;
+				free_nodes(temp_nodes, i + 1);
+				goto err;
+			}
+			topology_create_reverse_io_link(i, &sys_props, temp_nodes);
 		}
 	}
 
