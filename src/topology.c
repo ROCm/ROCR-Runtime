@@ -845,6 +845,34 @@ err1:
 	return ret;
 }
 
+/* topology_get_free_io_link_slot_for_node - For the given node_id, find the next
+ *   available free slot to add an io_link
+ */
+static HsaIoLinkProperties * topology_get_free_io_link_slot_for_node(uint32_t node_id,
+			const HsaSystemProperties *sys_props, node_t *temp_nodes)
+{
+	HsaIoLinkProperties *props;
+
+	if (node_id >= sys_props->NumNodes) {
+		printf("Invalid node [%d]\n", node_id);
+		return NULL;
+	}
+
+	props = temp_nodes[node_id].link;
+	if (!props) {
+		printf("Error. No io_link reported for Node [%d]\n", node_id);
+		return NULL;
+	}
+
+	if (temp_nodes[node_id].node.NumIOLinks >= sys_props->NumNodes - 1) {
+		printf("Error. No more space for io_link for Node [%d]\n", node_id);
+		return NULL;
+	}
+
+	return &props[temp_nodes[node_id].node.NumIOLinks];
+}
+
+
 /* topology_create_reverse_io_link - Create io_links from the given CPU
  *	NUMA node to all the GPUs attached to that node
  */
@@ -852,17 +880,21 @@ static void topology_create_reverse_io_link(uint32_t cpu_node,
 			const HsaSystemProperties *sys_props, node_t *temp_nodes)
 {
 	unsigned int gpu_node;
-	HsaIoLinkProperties *props = temp_nodes[cpu_node].link;
+	HsaIoLinkProperties *props;
 
 	for (gpu_node = 0; gpu_node < sys_props->NumNodes; gpu_node++) {
 		if (temp_nodes[gpu_node].gpu_id != 0) {
 			/* Check if this GPU is connected to the give cpu_node,
 			 * if so create an io_link */
 			if (temp_nodes[gpu_node].link->NodeTo == cpu_node) {
+				props = topology_get_free_io_link_slot_for_node(cpu_node,
+					sys_props, temp_nodes);
+				if (!props)
+					return;
 				props->NodeFrom = cpu_node;
 				props->NodeTo = gpu_node;
 				props->Weight = temp_nodes[gpu_node].link->Weight;
-				props++;
+				temp_nodes[cpu_node].node.NumIOLinks++;
 			}
 		}
 	}
@@ -935,12 +967,19 @@ retry:
 				}
 			}
 
+			/* To simplify, allocate maximum needed memory for io_links for each node. This
+			 * removes the need for realloc when indirect and QPI links are added later */
+			temp_nodes[i].link = calloc(sys_props.NumNodes - 1, sizeof(HsaIoLinkProperties));
+			if (!temp_nodes[i].link) {
+				ret = HSAKMT_STATUS_NO_MEMORY;
+				free_nodes(temp_nodes, i + 1);
+				goto err;
+			}
+
 			if (temp_nodes[i].node.NumIOLinks) {
-				temp_nodes[i].link = calloc(temp_nodes[i].node.NumIOLinks * sizeof(HsaIoLinkProperties), 1);
-				if (!temp_nodes[i].link) {
-					ret = HSAKMT_STATUS_NO_MEMORY;
-					free_nodes(temp_nodes, i + 1);
-					goto err;
+				if (temp_nodes[i].gpu_id == 0) {
+					printf("Warning. Not expecting CPU Node [%d] to have [%d] io_links.\n",
+						i, temp_nodes[i].node.NumIOLinks);
 				}
 				for (link_id = 0; link_id < temp_nodes[i].node.NumIOLinks; link_id++) {
 					ret = topology_sysfs_get_iolink_props(i, link_id, &temp_nodes[i].link[link_id]);
@@ -958,35 +997,11 @@ retry:
 	 * GPU(PCI_BUS) --> Parent NUMA Node. Create the reverse direct
 	 * io_link here. [NUMA node] --> GPU */
 
-	for (i = 0; i < sys_props.NumNodes; i++) {
-	/* For each CPU Node, compute the number of direct io_links it has.
-	 * For that, parse all the GPU Nodes, find the CPU Parent node to
-	 * which it has a direct link to. And increment NumIOLinks for that
-	 * CPU node */
-		if (temp_nodes[i].gpu_id != 0) {
-			if (temp_nodes[i].link) {
-				if (temp_nodes[i].link->NodeTo < sys_props.NumNodes)
-					temp_nodes[temp_nodes[i].link->NodeTo].node.NumIOLinks++;
-				else
-					printf("Node [%d] has io_link to invalid Node [%d]\n",
-					i, temp_nodes[i].link->NodeTo);
-			}
-			else
-				printf("GPU [0x%x] is missing its direct IO LINK\n",
-						temp_nodes[i].gpu_id);
-		}
-	}
-
 	/* Create the reverse io_link for all the CPU nodes */
 	for (i = 0; i < sys_props.NumNodes; i++) {
 		if (temp_nodes[i].gpu_id == 0) {
-			if (temp_nodes[i].link) {
-				printf("Node [%d] has unexpected io_link. Skipping.\n", i);
-				continue;
-			}
-			temp_nodes[i].link = calloc(temp_nodes[i].node.NumIOLinks,
-				sizeof(HsaIoLinkProperties));
 			if (!temp_nodes[i].link) {
+				printf("Unexpected NULL pointer. Node [%d].link\n", i);
 				ret = HSAKMT_STATUS_NO_MEMORY;
 				free_nodes(temp_nodes, i + 1);
 				goto err;
