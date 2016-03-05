@@ -26,6 +26,7 @@ hsaKmtAllocMemory;
 hsaKmtFreeMemory;
 hsaKmtRegisterMemory;
 hsaKmtRegisterMemoryToNodes;
+hsaKmtRegisterGraphicsHandleToNodes;
 hsaKmtDeregisterMemory;
 hsaKmtMapMemoryToGPU;
 hsaKmtMapMemoryToGPUNodes;
