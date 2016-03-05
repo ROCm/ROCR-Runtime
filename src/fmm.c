@@ -32,6 +32,7 @@
 #include <inttypes.h>
 #include <sys/mman.h>
 #include <sys/time.h>
+#include <errno.h>
 
 #define NON_VALID_GPU_ID 0
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
@@ -63,6 +64,8 @@ struct vm_object {
 	 */
 	uint32_t *mapped_device_id_array;
 	uint32_t mapped_device_id_array_size;
+	/* Metadata of imported graphics buffers */
+	void *metadata;
 };
 typedef struct vm_object vm_object_t;
 
@@ -184,6 +187,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->registered_device_id_array_size = 0;
 		object->mapped_device_id_array_size = 0;
 		object->flags = flags;
+		object->metadata = NULL;
 	}
 
 	return object;
@@ -424,11 +428,11 @@ static void *aperture_allocate_area(manageble_aperture_t *app,
 }
 
 /* returns 0 on success. Assumes, that fmm_mutex is locked on entry */
-static int aperture_allocate_object(manageble_aperture_t *app,
-					void *new_address,
-					uint64_t handle,
-					uint64_t MemorySizeInBytes,
-					uint32_t flags)
+static vm_object_t *aperture_allocate_object(manageble_aperture_t *app,
+					     void *new_address,
+					     uint64_t handle,
+					     uint64_t MemorySizeInBytes,
+					     uint32_t flags)
 {
 	vm_object_t *new_object;
 
@@ -439,7 +443,7 @@ static int aperture_allocate_object(manageble_aperture_t *app,
 					       MemorySizeInBytes,
 					       handle, flags);
 	if (!new_object)
-		return -1;
+		return NULL;
 
 	/* check for non-empty list */
 	if (app->vm_objects != NULL)
@@ -448,7 +452,7 @@ static int aperture_allocate_object(manageble_aperture_t *app,
 
 	app->vm_objects = new_object; /* Update head */
 
-	return 0;
+	return new_object;
 }
 
 static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
@@ -490,8 +494,8 @@ static int fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 
 	/* Allocate object */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	if (aperture_allocate_object(aperture, mem, args.handle,
-				     MemorySizeInBytes, flags))
+	if (!aperture_allocate_object(aperture, mem, args.handle,
+				      MemorySizeInBytes, flags))
 		goto err_object_allocation_failed;
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -894,7 +898,7 @@ void *fmm_open_graphic_handle(uint32_t gpu_id,
 		goto release_area;
 
 	/* Allocate object */
-	if (aperture_allocate_object(&gpu_mem[i].gpuvm_aperture, mem,
+	if (!aperture_allocate_object(&gpu_mem[i].gpuvm_aperture, mem,
 					open_graphic_handle_args.handle,
 					MemorySizeInBytes, 0))
 		goto release_mem;
@@ -952,6 +956,8 @@ static void __fmm_release(void *address, manageble_aperture_t *aperture)
 		free(object->mapped_device_id_array);
 		object->mapped_device_id_array_size = 0;
 	}
+	if (object->metadata)
+		free(object->metadata);
 
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
@@ -2011,6 +2017,104 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+#define GRAPHICS_METADATA_DEFAULT_SIZE 64
+HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
+					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
+					   uint32_t *gpu_id_array,
+					   uint32_t gpu_id_array_size)
+{
+	struct kfd_ioctl_get_dmabuf_info_args infoArgs;
+	struct kfd_ioctl_import_dmabuf_args importArgs;
+	struct kfd_ioctl_free_memory_of_gpu_args freeArgs;
+	manageble_aperture_t *aperture;
+	vm_object_t *obj;
+	void *metadata;
+	void *mem, *aperture_base;
+	int32_t gpu_mem_id;
+	uint64_t offset;
+	int r;
+	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
+
+	infoArgs.dmabuf_fd = GraphicsResourceHandle;
+	infoArgs.metadata_size = GRAPHICS_METADATA_DEFAULT_SIZE;
+	metadata = calloc(infoArgs.metadata_size, 1);
+	if (!metadata)
+		return HSAKMT_STATUS_NO_MEMORY;
+	infoArgs.metadata_ptr = (uint64_t)metadata;
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
+	if (r && infoArgs.metadata_size > GRAPHICS_METADATA_DEFAULT_SIZE) {
+		/* Try again with bigger metadata */
+		free(metadata);
+		metadata = calloc(infoArgs.metadata_size, 1);
+		if (!metadata)
+			return HSAKMT_STATUS_NO_MEMORY;
+		infoArgs.metadata_ptr = (uint64_t)metadata;
+		r = kmtIoctl(kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
+	}
+
+	if (r)
+		goto error_free_metadata;
+
+	/* Choose aperture based on GPU and allocate virtual address */
+	gpu_mem_id = gpu_mem_find_by_gpu_id(infoArgs.gpu_id);
+	if (gpu_mem_id < 0)
+		goto error_free_metadata;
+	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+		aperture = &svm.dgpu_aperture;
+		aperture_base = NULL;
+		offset = 0;
+	} else {
+		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
+		aperture_base = aperture->base;
+		offset = GPUVM_APP_OFFSET;
+	}
+	if (!aperture_is_valid(aperture->base, aperture->limit))
+		goto error_free_metadata;
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	mem = aperture_allocate_area(aperture, infoArgs.size, offset);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (mem == NULL)
+		goto error_free_metadata;
+
+	/* Import DMA buffer */
+	importArgs.va_addr = VOID_PTRS_SUB(mem, aperture_base);
+	importArgs.gpu_id = infoArgs.gpu_id;
+	importArgs.dmabuf_fd = GraphicsResourceHandle;
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IMPORT_DMABUF, (void *)&importArgs);
+	if (r)
+		goto error_release_aperture;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = aperture_allocate_object(aperture, mem, importArgs.handle,
+				       infoArgs.size, infoArgs.flags);
+	if (obj) {
+		obj->metadata = metadata;
+		obj->registered_device_id_array = gpu_id_array;
+		obj->registered_device_id_array_size = gpu_id_array_size;
+	}
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (!obj)
+		goto error_release_buffer;
+
+	GraphicsResourceInfo->MemoryAddress = mem;
+	GraphicsResourceInfo->SizeInBytes = infoArgs.size;
+	GraphicsResourceInfo->Metadata = (void *)(unsigned long)infoArgs.metadata_ptr;
+	GraphicsResourceInfo->MetadataSizeInBytes = infoArgs.metadata_size;
+        GraphicsResourceInfo->Reserved = 0;
+
+	return HSAKMT_STATUS_SUCCESS;
+
+error_release_buffer:
+	freeArgs.handle = importArgs.handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
+error_release_aperture:
+	aperture_release_area(aperture, mem, infoArgs.size);
+error_free_metadata:
+	free(metadata);
+
+	return status;
+}
+
 static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 {
 	manageble_aperture_t *aperture;
@@ -2037,8 +2141,9 @@ static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 
 HSAKMT_STATUS fmm_deregister_memory(void *address)
 {
-	manageble_aperture_t *aperture;
+	manageble_aperture_t *aperture = NULL;
 	vm_object_t *object = NULL;
+	unsigned i;
 
 	if ((address >= svm.dgpu_aperture.base) &&
 	    (address <= svm.dgpu_aperture.limit))
@@ -2046,11 +2151,25 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 	else if ((address >= svm.dgpu_alt_aperture.base) &&
 		 (address <= svm.dgpu_alt_aperture.limit))
 		aperture = &svm.dgpu_alt_aperture;
-	else {
-		/*
-		 * If address isn't SVM address, we assume that this
-		 * is system memory address. If the userptr object had
-		 * a registered_device_id_array, it will be freed by
+	else
+		for (i = 0; i < gpu_mem_count; i++) {
+			if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
+			    address >= gpu_mem[i].gpuvm_aperture.base &&
+			    address <= gpu_mem[i].gpuvm_aperture.limit) {
+				aperture = &gpu_mem[i].gpuvm_aperture;
+				break;
+			}
+		}
+
+	if (!aperture) {
+		/* If address isn't found in any aperture, we assume
+		 * that this is system memory address. On APUs, there
+		 * is nothing to do (for now).
+		 */
+		if (!is_dgpu)
+			return HSAKMT_STATUS_SUCCESS;
+		/* If the userptr object had a
+		 * registered_device_id_array, it will be freed by
 		 * __fmm_release. Also the object will be
 		 * removed. Therefore we can short-circuit the rest of
 		 * the function below.
@@ -2059,18 +2178,34 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 	}
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
+
 	object = vm_find_object_by_address(aperture, address, 0);
-	pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	if (!object || object->registered_device_id_array_size <= 0)
+	if (!object) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+	}
 
-	if (object->userptr)
+	if (object->userptr) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return fmm_deregister_user_memory(object->userptr);
+	} else if (object->metadata) {
+		/* An object with metadata is an imported graphics
+		 * buffer. Deregistering it means releasing the buffer. */
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		__fmm_release(address, aperture);
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	if (object->registered_device_id_array_size <= 0) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+	}
 
 	free(object->registered_device_id_array);
 	object->registered_device_id_array = NULL;
 	object->registered_device_id_array_size = 0;
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	return HSAKMT_STATUS_SUCCESS;
 }

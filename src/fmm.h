@@ -72,6 +72,10 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
                                   uint32_t *gpu_id_array,
                                   uint32_t gpu_id_array_size);
+HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
+					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
+					   uint32_t *gpu_id_array,
+					   uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_deregister_memory(void *address);
 HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint32_t *nodes_to_map, uint32_t nodes_to_map_size, uint64_t *gpuvm_address);

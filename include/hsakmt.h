@@ -394,6 +394,20 @@ hsaKmtRegisterMemoryToNodes(
 
 
 /**
+  Registers with KFD a graphics buffer and returns graphics metadata
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterGraphicsHandleToNodes(
+    HSAuint64       GraphicsResourceHandle,        //IN
+    HsaGraphicsResourceInfo *GraphicsResourceInfo, //OUT
+    HSAuint64       NumberOfNodes,                 //IN
+    HSAuint32*      NodeArray                      //IN
+    );
+
+
+/**
   Unregisters with KFD a memory buffer
 */
 

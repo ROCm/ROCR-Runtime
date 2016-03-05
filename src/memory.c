@@ -235,6 +235,33 @@ hsaKmtRegisterMemoryToNodes(
 
 HSAKMT_STATUS
 HSAKMTAPI
+hsaKmtRegisterGraphicsHandleToNodes(
+	HSAuint64	GraphicsResourceHandle,	       /* IN */
+	HsaGraphicsResourceInfo *GraphicsResourceInfo, /* OUT */
+	HSAuint64	NumberOfNodes,		       /* IN */
+	HSAuint32*	NodeArray		       /* IN */
+)
+{
+	CHECK_KFD_OPEN();
+	uint32_t *gpu_id_array;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	ret = validate_nodeid_array(&gpu_id_array,
+			NumberOfNodes, NodeArray);
+
+	if (ret == HSAKMT_STATUS_SUCCESS) {
+		ret = fmm_register_graphics_handle(
+			GraphicsResourceHandle, GraphicsResourceInfo,
+			gpu_id_array,NumberOfNodes*sizeof(uint32_t));
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			free(gpu_id_array);
+	}
+
+	return ret;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
 hsaKmtDeregisterMemory(
 	void		*MemoryAddress		/* IN */
 )
