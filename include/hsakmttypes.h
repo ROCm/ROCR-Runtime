@@ -493,7 +493,7 @@ typedef struct _HsaMemMapFlags
 						  // data from the memory, reduces latency
 						  // “cleanup hint” only, may be ignored
             unsigned int Reserved       : 23;
-        };
+        } ui32;
         HSAuint32 Value;
     };
 } HsaMemMapFlags;
