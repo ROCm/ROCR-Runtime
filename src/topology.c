@@ -872,6 +872,29 @@ static HsaIoLinkProperties * topology_get_free_io_link_slot_for_node(uint32_t no
 	return &props[temp_nodes[node_id].node.NumIOLinks];
 }
 
+/* topology_add_io_link_for_node - If a free slot is available,
+ *  add io_link for the given Node.
+ *  TODO: Add other members of HsaIoLinkProperties
+ */
+static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_id,
+		const HsaSystemProperties *sys_props, node_t *temp_nodes,
+		HSA_IOLINKTYPE IoLinkType, uint32_t NodeTo,
+		uint32_t Weight)
+{
+	HsaIoLinkProperties *props;
+	props = topology_get_free_io_link_slot_for_node(node_id,
+		sys_props, temp_nodes);
+	if (!props)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	props->IoLinkType = IoLinkType;
+	props->NodeFrom = node_id;
+	props->NodeTo = NodeTo;
+	props->Weight = Weight;
+	temp_nodes[node_id].node.NumIOLinks++;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
 
 /* topology_create_reverse_io_link - Create io_links from the given CPU
  *	NUMA node to all the GPUs attached to that node
@@ -880,22 +903,76 @@ static void topology_create_reverse_io_link(uint32_t cpu_node,
 			const HsaSystemProperties *sys_props, node_t *temp_nodes)
 {
 	unsigned int gpu_node;
-	HsaIoLinkProperties *props;
+	HSAKMT_STATUS ret;
 
 	for (gpu_node = 0; gpu_node < sys_props->NumNodes; gpu_node++) {
 		if (temp_nodes[gpu_node].gpu_id != 0) {
 			/* Check if this GPU is connected to the give cpu_node,
 			 * if so create an io_link */
 			if (temp_nodes[gpu_node].link->NodeTo == cpu_node) {
-				props = topology_get_free_io_link_slot_for_node(cpu_node,
-					sys_props, temp_nodes);
-				if (!props)
+				ret = topology_add_io_link_for_node(cpu_node, sys_props,
+					temp_nodes, HSA_IOLINKTYPE_PCIEXPRESS,
+					gpu_node, temp_nodes[gpu_node].link->Weight);
+				if (ret != HSAKMT_STATUS_SUCCESS) {
+					printf("Error [%d]. Failed to create reverse io_links from Node [%d]\n",
+						ret, cpu_node);
 					return;
-				props->NodeFrom = cpu_node;
-				props->NodeTo = gpu_node;
-				props->Weight = temp_nodes[gpu_node].link->Weight;
-				temp_nodes[cpu_node].node.NumIOLinks++;
+				}
 			}
+		}
+	}
+}
+
+/* topology_create_indirect_gpu_links - For the given cpu_node,
+ *  find all nodes connected to it and create io_links
+ *  among them */
+static void topology_create_indirect_gpu_links(uint32_t cpu_node,
+		const HsaSystemProperties *sys_props, node_t *temp_nodes)
+{
+	unsigned int i, j;
+	HSAKMT_STATUS ret;
+	HSA_IOLINKTYPE IoLinkType;
+	HsaIoLinkProperties *props = temp_nodes[cpu_node].link;
+
+
+	if (!props || temp_nodes[cpu_node].node.NumIOLinks == 0) {
+		printf("CPU Node [%d] has no GPU connected\n", cpu_node);
+		return;
+	}
+
+	/* props is the list of io_links cpu_node is connected to.
+	 * Make an indirect io_links from props[i].NodeTo --> props[j].NodeTo
+	 * and props[j].NodeTo --> props[i].NodeTo */
+	for (i = 0; i < temp_nodes[cpu_node].node.NumIOLinks - 1; i++)
+	{
+		for (j = i + 1; j < temp_nodes[cpu_node].node.NumIOLinks; j++) {
+			/* Ignore CPU <--> CPU node connected as it is handled by QPI
+			 * link function */
+			if (temp_nodes[props[i].NodeTo].gpu_id == 0 &&
+				temp_nodes[props[j].NodeTo].gpu_id == 0)
+				continue;
+
+			/* The link is from GPU to non-parent NUMA node. So set link type
+			 * to HT */
+			if (temp_nodes[props[i].NodeTo].gpu_id == 0 ||
+				temp_nodes[props[j].NodeTo].gpu_id == 0)
+				IoLinkType = HSA_IOLINKTYPE_HYPERTRANSPORT;
+			else
+				IoLinkType = HSA_IOLINKTYPE_PCIEXPRESS;
+
+			ret = topology_add_io_link_for_node(props[i].NodeTo,
+				sys_props, temp_nodes, IoLinkType,
+				props[j].NodeTo, props[i].Weight + props[j].Weight);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+				printf("Error [%d]. Failed to add io_link from Node [%d]->[%d]\n",
+				ret, i, j);
+
+			ret = topology_add_io_link_for_node(props[j].NodeTo,
+				sys_props, temp_nodes, IoLinkType,
+				props[i].NodeTo, props[i].Weight + props[j].Weight);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+				printf("Error [%d]. Failed to add io_link from Node [%d]->[%d]\n",
+				ret, j, i);
 		}
 	}
 }
@@ -1009,6 +1086,16 @@ retry:
 			topology_create_reverse_io_link(i, &sys_props, temp_nodes);
 		}
 	}
+
+	/* Create In-direct links for GPUs. Connect all the (Peer-to-Peer) GPUs
+	 * that belong to same NUMA node.
+	 * For each CPU (NUMA) node, interconnect all the GPUs. */
+	for (i = 0; i < sys_props.NumNodes; i++) {
+		if (temp_nodes[i].gpu_id == 0) {
+			topology_create_indirect_gpu_links(i, &sys_props, temp_nodes);
+		}
+	}
+
 
 	ret = topology_sysfs_get_generation(&gen_end);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
