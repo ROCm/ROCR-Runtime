@@ -781,7 +781,8 @@ typedef struct _HsaAccessAttributeFailure
     unsigned int NoExecute   : 1;  // Execute access to a page marked NX
     unsigned int GpuAccess   : 1;  // Host access only
     unsigned int ECC         : 1;  // ECC failure (if supported by HW)
-    unsigned int Reserved    : 27; // must be 0
+    unsigned int Imprecise   : 1;  // Can't determine the exact fault address
+    unsigned int Reserved    : 26; // must be 0
 } HsaAccessAttributeFailure;
 
 // data associated with HSA_EVENTID_MEMORY
