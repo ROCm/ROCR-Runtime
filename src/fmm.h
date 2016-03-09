@@ -34,6 +34,7 @@ typedef enum {
 	FMM_GPUVM = FMM_FIRST_APERTURE_TYPE,
 	FMM_LDS,
 	FMM_SCRATCH,
+	FMM_SVM,
 	FMM_LAST_APERTURE_TYPE
 } aperture_type_e;
 

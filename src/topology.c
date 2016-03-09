@@ -38,7 +38,7 @@
 #define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
 /* Number of memory banks added by thunk on top of topology */
 #define NUM_OF_IGPU_HEAPS 3
-#define NUM_OF_DGPU_HEAPS 2
+#define NUM_OF_DGPU_HEAPS 3
 /* SYSFS related */
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
@@ -1291,6 +1291,7 @@ hsaKmtGetNodeMemoryProperties(
 	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 	uint32_t i, gpu_id;
 	HSAuint64 aperture_limit;
+	bool nodeIsDGPU;
 
 	if (!MemoryProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -1326,6 +1327,8 @@ hsaKmtGetNodeMemoryProperties(
 	if (gpu_id == 0)
 		goto out;
 
+	nodeIsDGPU = topology_is_dgpu(get_device_id_by_gpu_id(gpu_id));
+
 	/*Add LDS*/
 	if (i < NumBanks &&
 		fmm_get_aperture_base_and_limit(FMM_LDS, gpu_id,
@@ -1337,9 +1340,7 @@ hsaKmtGetNodeMemoryProperties(
 
 	/* Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE.
 	 * For dGPU the topology node contains Local Memory and it is added by the for loop above */
-	if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)) &&
-		i < NumBanks &&
-		node[NodeId].node.LocalMemSize > 0 &&
+	if (!nodeIsDGPU && i < NumBanks && node[NodeId].node.LocalMemSize > 0 &&
 		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
@@ -1352,6 +1353,16 @@ hsaKmtGetNodeMemoryProperties(
 		fmm_get_aperture_base_and_limit(FMM_SCRATCH, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_SCRATCH;
+		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
+		i++;
+	}
+
+	/* On dGPUs add SVM aperture */
+	if (nodeIsDGPU && i < NumBanks &&
+	    fmm_get_aperture_base_and_limit(
+		    FMM_SVM, gpu_id, &MemoryProperties[i].VirtualBaseAddress,
+		    &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
+		MemoryProperties[i].HeapType = HSA_HEAPTYPE_DEVICE_SVM;
 		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
 		i++;
 	}

@@ -1246,6 +1246,16 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 		}
 		break;
 
+	case FMM_SVM:
+		/* Report single SVM aperture, starting at base of
+		 * fine-grained, ending at limit of coarse-grained */
+		if (aperture_is_valid(svm.dgpu_alt_aperture.base,
+				      svm.dgpu_aperture.limit)) {
+			*aperture_base = PORT_VPTR_TO_UINT64(svm.dgpu_alt_aperture.base);
+			*aperture_limit = PORT_VPTR_TO_UINT64(svm.dgpu_aperture.limit);
+		}
+		break;
+
 	default:
 		err = HSAKMT_STATUS_ERROR;
 	}
