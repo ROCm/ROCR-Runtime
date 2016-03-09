@@ -277,6 +277,11 @@ hsaKmtMapMemoryToGPUNodes(
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret;
 
+	if (!is_dgpu && NumberOfNodes == 1)
+		return hsaKmtMapMemoryToGPU(MemoryAddress,
+				MemorySizeInBytes,
+				AlternateVAGPU);
+
 	ret = validate_nodeid_array(&gpu_id_array,
 				NumberOfNodes, NodeArray);
 	if (ret != HSAKMT_STATUS_SUCCESS)
