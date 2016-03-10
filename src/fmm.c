@@ -1787,6 +1787,9 @@ err:
 	return ret;
 }
 
+#define DGPU_APERTURE_ADDR_MIN 0x1000000 /* Leave at least 16MB for kernel */
+#define DGPU_APERTURE_ADDR_INC 0x200000	 /* Search in huge-page increments */
+
 static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limit)
 {
 	bool found;
@@ -1815,9 +1818,9 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 	found = false;
 
 	for (len = max_vm_limit+1; !found && len >= min_vm_size; len >>= 1) {
-		for (addr = (void *)TONGA_PAGE_SIZE, ret_addr = NULL;
+		for (addr = (void *)DGPU_APERTURE_ADDR_MIN, ret_addr = NULL;
 		     (HSAuint64)addr + (len >> 1) < max_vm_limit;
-		     addr = (void *)((HSAuint64)addr + TONGA_PAGE_SIZE)) {
+		     addr = (void *)((HSAuint64)addr + DGPU_APERTURE_ADDR_INC)) {
 			ret_addr = reserve_address(addr, len);
 			if (!ret_addr)
 				break;
