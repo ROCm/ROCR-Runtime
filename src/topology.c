@@ -952,6 +952,14 @@ static void topology_create_indirect_gpu_links(uint32_t cpu_node,
 				temp_nodes[props[j].NodeTo].gpu_id == 0)
 				continue;
 
+			/* For the given cpu_node, connect to or from the GPUs that are
+			 * connected directly to it via PCIEXPRESS */
+			if ((temp_nodes[props[i].NodeTo].gpu_id != 0 &&
+				props[i].IoLinkType != HSA_IOLINKTYPE_PCIEXPRESS) ||
+				(temp_nodes[props[j].NodeTo].gpu_id != 0 &&
+				props[j].IoLinkType != HSA_IOLINKTYPE_PCIEXPRESS))
+				continue;
+
 			/* The link is from GPU to non-parent NUMA node. So set link type
 			 * to HT */
 			if (temp_nodes[props[i].NodeTo].gpu_id == 0 ||
