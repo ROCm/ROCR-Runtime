@@ -365,7 +365,13 @@ typedef enum _HSA_IOLINKTYPE {
     HSA_IOLINKTYPE_PCIEXPRESS     = 2,
     HSA_IOLINKTYPE_AMBA           = 3,
     HSA_IOLINKTYPE_MIPI           = 4,
-    HSA_IOLINKTYPE_OTHER          = 5,
+    HSA_IOLINK_TYPE_QPI_1_1       = 5,
+    HSA_IOLINK_TYPE_RESERVED1     = 6,
+    HSA_IOLINK_TYPE_RESERVED2     = 7,
+    HSA_IOLINK_TYPE_RAPID_IO      = 8,
+    HSA_IOLINK_TYPE_INFINIBAND    = 9,
+    HSA_IOLINK_TYPE_RESERVED3     = 10,
+    HSA_IOLINKTYPE_OTHER          = 11,
     HSA_IOLINKTYPE_NUMIOLINKTYPES,
     HSA_IOLINKTYPE_SIZE           = 0xFFFFFFFF
 } HSA_IOLINKTYPE;
@@ -382,7 +388,8 @@ typedef union
                                              // memory accesses across must not be set to "host cacheable"!
         unsigned int NoAtomics32bit    : 1;  // The link doesn't support 32bit-wide atomic transactions
         unsigned int NoAtomics64bit    : 1;  // The link doesn't support 64bit-wide atomic transactions
-        unsigned int Reserved          :28;
+        unsigned int NoPeerToPeerDMA   : 1;  // The link doesn't allow device P2P access
+        unsigned int Reserved          :27;
     } ui32;
 } HSA_LINKPROPERTY;
 
