@@ -908,6 +908,20 @@ err1:
 	return ret;
 }
 
+/* topology_get_numa_node_link_tye - Return NUMA node interconnect based
+ *  on processor vendor
+ */
+static HSA_IOLINKTYPE topology_get_numa_node_link_tye(void)
+{
+	if (processor_vendor == GENUINE_INTEL)
+		return HSA_IOLINK_TYPE_QPI_1_1;
+	else if (processor_vendor == AUTHENTIC_AMD)
+		return HSA_IOLINKTYPE_HYPERTRANSPORT;
+	else
+		return HSA_IOLINKTYPE_UNDEFINED;
+
+}
+
 /* topology_get_free_io_link_slot_for_node - For the given node_id, find the next
  *   available free slot to add an io_link
  */
@@ -957,6 +971,39 @@ static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_id,
 	temp_nodes[node_id].node.NumIOLinks++;
 
 	return HSAKMT_STATUS_SUCCESS;
+}
+
+/* topology_create_qpi_links - Create QPI or HT links among all NUMA nodes
+ *	For now, assume all the nodes are interconnected with same Weight (=1)
+ */
+static void topology_create_qpi_links(const HsaSystemProperties *sys_props,
+		node_t *temp_nodes)
+{
+	unsigned int i, j;
+	HSAKMT_STATUS ret;
+
+	/* Find all CPU Nodes and connect each other via HT or QPI io_link */
+	for (i = 0; i < sys_props->NumNodes - 1; i++) {
+		for (j = i + 1; j < sys_props->NumNodes; j++) {
+			if (temp_nodes[i].gpu_id == 0 &&
+				temp_nodes[j].gpu_id == 0) {
+				ret = topology_add_io_link_for_node(i,
+					sys_props, temp_nodes, topology_get_numa_node_link_tye(),
+					j,  1);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					printf("Error [%d]. Failed to add QPI link from Node [%d]->[%d]\n",
+					ret, i, j);
+
+				ret = topology_add_io_link_for_node(j,
+					sys_props, temp_nodes, topology_get_numa_node_link_tye(),
+					i, 1);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					printf("Error [%d]. Failed to add QPI link from Node [%d]->[%d]\n",
+					ret, j, i);
+
+			}
+		}
+	}
 }
 
 /* topology_create_reverse_io_link - Create io_links from the given CPU
@@ -1024,10 +1071,10 @@ static void topology_create_indirect_gpu_links(uint32_t cpu_node,
 				continue;
 
 			/* The link is from GPU to non-parent NUMA node. So set link type
-			 * to HT */
+			 * to HT or QPI */
 			if (temp_nodes[props[i].NodeTo].gpu_id == 0 ||
 				temp_nodes[props[j].NodeTo].gpu_id == 0)
-				IoLinkType = HSA_IOLINKTYPE_HYPERTRANSPORT;
+				IoLinkType = topology_get_numa_node_link_tye();
 			else
 				IoLinkType = HSA_IOLINKTYPE_PCIEXPRESS;
 
@@ -1159,6 +1206,10 @@ retry:
 		}
 	}
 
+	/* Create QPI or HT links among CPU (NUMA) nodes. For now assume
+	* all nodes are interconnected with same weight */
+	topology_create_qpi_links(&sys_props, temp_nodes);
+
 	/* Create In-direct links for GPUs. Connect all the (Peer-to-Peer) GPUs
 	 * that belong to same NUMA node.
 	 * For each CPU (NUMA) node, interconnect all the GPUs. */
@@ -1167,7 +1218,6 @@ retry:
 			topology_create_indirect_gpu_links(i, &sys_props, temp_nodes);
 		}
 	}
-
 
 	ret = topology_sysfs_get_generation(&gen_end);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
