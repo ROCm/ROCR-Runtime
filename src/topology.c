@@ -31,6 +31,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <ctype.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -43,6 +44,7 @@
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
 #define KFD_SYSFS_PATH_NODES "/sys/devices/virtual/kfd/kfd/topology/nodes"
+#define PROC_CPUINFO_PATH "/proc/cpuinfo"
 #define MAX_CPU_CORES	128
 #define MAX_CACHES	256
 
@@ -56,6 +58,18 @@ typedef struct {
 
 static HsaSystemProperties *_system = NULL;
 static node_t *node = NULL;
+
+static int processor_vendor;
+/* Supported System Vendors */
+enum SUPPORTED_PROCESSOR_VENDORS {
+	GENUINE_INTEL = 0,
+	AUTHENTIC_AMD
+};
+/* Adding newline to make the search easier */
+static const char *supported_processor_vendor_name[] = {
+	"GenuineIntel\n",
+	"AuthenticAMD\n"
+};
 
 static HSAKMT_STATUS topology_take_snapshot(void);
 static HSAKMT_STATUS topology_drop_snapshot(void);
@@ -310,6 +324,55 @@ bool topology_is_dgpu(uint16_t device_id)
 		return true;
 	}
 	return false;
+}
+
+static int topology_search_processor_vendor(const char *processor_name)
+{
+	unsigned int i;
+	for (i = 0; i < ARRAY_LEN(supported_processor_vendor_name); i++) {
+		if (!strcmp(processor_name, supported_processor_vendor_name[i]))
+			return i;
+	}
+	return -1;
+}
+
+/* topology_set_processor_vendor - Parse /proc/cpuinfo and
+ *  to find processor vendor and set global variable processor_vendor
+ *
+ *  cat /proc/cpuinfo format is - "token       : Value"
+ *  where token = "vendor_id" and
+ *        Value = indicates System Vendor
+ */
+static void topology_set_processor_vendor(void)
+{
+	FILE *fd;
+	char read_buf[256];
+	const char *p;
+
+	fd = fopen(PROC_CPUINFO_PATH, "r");
+	if (!fd) {
+		printf("Failed to open [%s]. Setting Processor Vendor to %s",
+			PROC_CPUINFO_PATH, supported_processor_vendor_name[GENUINE_INTEL]);
+		processor_vendor = GENUINE_INTEL;
+		return;
+	}
+
+	while (fgets(read_buf, sizeof(read_buf), fd) != NULL) {
+		if (!strncmp("vendor_id", read_buf, sizeof("vendor_id") - 1)) {
+			p = strrchr(read_buf, ':');
+			p++; // remove separor ':'
+			for (; isspace(*p); p++); /* remove white space */
+			processor_vendor = topology_search_processor_vendor(p);
+			if (processor_vendor != -1) {
+				fclose(fd);
+				return;
+			}
+		}
+	}
+	fclose(fd);
+	printf("Failed to get Processor Vendor. Setting to %s",
+		supported_processor_vendor_name[GENUINE_INTEL]);
+	processor_vendor = GENUINE_INTEL;
 }
 
 HSAKMT_STATUS
@@ -993,6 +1056,7 @@ topology_take_snapshot(void)
 	node_t *temp_nodes = 0;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
+	topology_set_processor_vendor();
 retry:
 	ret = topology_sysfs_get_generation(&gen_start);
 	if (ret != HSAKMT_STATUS_SUCCESS)

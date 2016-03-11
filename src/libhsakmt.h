@@ -58,6 +58,7 @@ extern bool is_dgpu;
 #define ALIGN_UP(x,align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
 #define PAGE_ALIGN_UP(x) ALIGN_UP(x,PAGE_SIZE)
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
+#define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);

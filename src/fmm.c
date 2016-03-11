@@ -35,7 +35,6 @@
 #include <errno.h>
 
 #define NON_VALID_GPU_ID 0
-#define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
 #define INIT_MANAGEBLE_APERTURE(base_value, limit_value) {	\
 	.base = (void *) base_value,				\
