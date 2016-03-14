@@ -1,7 +1,7 @@
 #ifndef GET_INFO_H
 #define GET_INFO_H
 
-#include "common/hsa_test.h"
+#include "samples/common/hsa_test.h"
 
 class GetInfo : public HsaTest {
  public:

@@ -243,6 +243,30 @@ bool HsaTest::Kernel::CreateCodeObjectAndExecutable() {
   return true;
 }
 
+void HsaTest::GetGpuPeer(hsa_agent_t master,
+                         std::vector<hsa_agent_t>& gpu_peers) {
+  AgentProps master_prop(master);
+  for (hsa_agent_t agent : gpus_) {
+    AgentProps agent_prop(agent);
+    if (master.handle == agent.handle ||
+        agent_prop.device_type != HSA_DEVICE_TYPE_GPU) {
+      continue;
+    }
+
+    hsa_amd_memory_pool_t peer_local_pool = global_coarse_[agent.handle];
+
+    hsa_amd_memory_pool_access_t access =
+        HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+    if (HSA_STATUS_SUCCESS == hsa_amd_agent_memory_pool_get_info(
+                                  master, peer_local_pool,
+                                  HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS,
+                                  (void*)&access) &&
+        access != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) {
+      gpu_peers.push_back(agent);
+    }
+  }
+}
+
 void* HsaTest::AllocateSystemMemory(bool fine_grain, size_t size) {
   if (cpus_.size() == 0) {
     return NULL;
@@ -421,6 +445,27 @@ void HsaTest::PrintAgentInfo(AgentProps& prop) {
 
   PRINT_ATTRIBUTE(HSA_AGENT_INFO_VERSION_MAJOR, prop.version_major, "");
   PRINT_ATTRIBUTE(HSA_AGENT_INFO_VERSION_MINOR, prop.version_minor, "");
+}
+
+void HsaTest::PrintPeers(hsa_agent_t agent) {
+  std::cout << "Peer GPUs: ";
+  std::vector<hsa_agent_t> gpu_peers;
+  GetGpuPeer(agent, gpu_peers);
+  if (gpu_peers.size() > 0) {
+    for (hsa_agent_t peer_agent : gpu_peers) {
+      // Get the index of the peer in gpus_.
+      size_t peer_idx = 0;
+      for (; peer_idx < gpus_.size(); ++peer_idx) {
+        if (peer_agent.handle == gpus_[peer_idx].handle) {
+          std::cout << "GPU[" << peer_idx << "] ";
+          break;
+        }
+      }
+    }
+    std::cout << std::endl;
+  } else {
+    std::cout << "No peer GPUs\n";
+  }
 }
 
 void HsaTest::PrintPoolInfo(PoolProps& prop) {
