@@ -17,6 +17,7 @@ void GetInfo::Run() {
     std::cout << "------------------------------------------------\n";
     AgentProps prop(cpu);
     PrintAgentInfo(prop);
+    PrintPeers(cpu);
     std::cout << "------------------------------------------------\n";
 
     hsa_amd_memory_pool_t global_fine = global_fine_[cpu.handle];
@@ -48,6 +49,7 @@ void GetInfo::Run() {
     std::cout << "------------------------------------------------\n";
     AgentProps prop(gpu);
     PrintAgentInfo(prop);
+    PrintPeers(gpu);
     std::cout << "------------------------------------------------\n";
 
     hsa_amd_memory_pool_t global_coarse = global_coarse_[gpu.handle];
