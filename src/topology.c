@@ -326,6 +326,68 @@ bool topology_is_dgpu(uint16_t device_id)
 	return false;
 }
 
+static HSAKMT_STATUS
+topology_get_cpu_model_name(HsaNodeProperties *props) {
+	FILE *fd;
+	char read_buf[256], cpu_model_name[128];
+	const char *p;
+	uint32_t i, apic_id;
+
+	if (!props)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	fd = fopen(PROC_CPUINFO_PATH, "r");
+	if (!fd) {
+		printf("Failed to open [%s]. Unable to get CPU Model Name",
+			PROC_CPUINFO_PATH);
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	while (fgets(read_buf, sizeof(read_buf), fd) != NULL) {
+		/* Get the model name first, in case matching
+		 * apic IDs are also present in the file
+		 */
+		if (!strncmp("model name", read_buf, sizeof("model name") - 1)) {
+			p = strrchr(read_buf, ':');
+			if (!p)
+				goto err;
+
+			p++; // remove separator ':'
+			for (; isspace(*p); p++); /* remove white space */
+
+			/* Extract model name from string */
+			for (i = 0; i < sizeof(cpu_model_name) - 1 && p[i] != '\n'; i++)
+				cpu_model_name[i] = p[i];
+			cpu_model_name[i] = '\0';
+		}
+
+		if (!strncmp("apicid", read_buf, sizeof("apicid") - 1)) {
+			p = strrchr(read_buf, ':');
+			if (!p)
+				goto err;
+
+			p++; // remove separator ':'
+			for (; isspace(*p); p++); /* remove white space */
+
+			/* Extract apic_id from remaining chars */
+			apic_id = atoi(p);
+
+			/* Set CPU model name only if corresponding apic id */
+			if (props->CComputeIdLo == apic_id) {
+				/* Convert from UTF8 to UTF16 */
+				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
+					props->MarketingName[i] = cpu_model_name[i];
+				props->MarketingName[i] = '\0';
+			}
+		}
+	}
+	fclose(fd);
+	return HSAKMT_STATUS_SUCCESS;
+err:
+	fclose(fd);
+	return HSAKMT_STATUS_ERROR;
+}
+
 static int topology_search_processor_vendor(const char *processor_name)
 {
 	unsigned int i;
@@ -495,6 +557,19 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		for (i = 0; hsa_gfxip->marketing_name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 			props->MarketingName[i] = hsa_gfxip->marketing_name[i];
 		props->MarketingName[i] = 0;
+	} else {
+		/* Is CPU node */
+		if (!props->NumFComputeCores || !props->DeviceId) {
+			ret = topology_get_cpu_model_name(props);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+			{
+				printf("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
+				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
+			}
+		} else {
+			ret = HSAKMT_STATUS_ERROR;
+			goto err;
+		}
 	}
 	if (props->NumFComputeCores)
 		assert(props->EngineId.ui32.Major);
