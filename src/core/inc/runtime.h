@@ -84,12 +84,15 @@ extern bool g_use_interrupt_wait;
 /// - monitor asynchronous event from agent.
 class Runtime {
  public:
+<<<<<<< HEAD
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
     uint32_t num_hop;
     hsa_amd_memory_pool_link_info_t info;
   };
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   /// @brief Open connection to kernel driver and increment reference count.
   /// @retval True if the connection to kernel driver is successfully opened.
   static bool Acquire();
@@ -119,6 +122,7 @@ class Runtime {
   /// @brief Delete all region objects in ::regions_.
   void DestroyMemoryRegions();
 
+<<<<<<< HEAD
   /// @brief Set the number of links connecting the agents in the platform.
   void SetLinkCount(size_t num_link);
 
@@ -139,6 +143,9 @@ class Runtime {
   const LinkInfo& GetLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
   /// @brief Invoke the user provided call back for each agent in the agent list.
+=======
+  /// @brief Call the user provided call back for each agent in the agent list.
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   ///
   /// @param [in] callback User provided callback function.
   /// @param [in] data User provided pointer as input for @p callback.
@@ -216,8 +223,13 @@ class Runtime {
   /// @brief Fill the first @p count of uint32_t in ptr with value.
   ///
   /// @param [in] ptr Memory address to be filled.
+<<<<<<< HEAD
   /// @param [in] value The value/pattern that will be used to set @p ptr.
   /// @param [in] count Number of uint32_t element to be set.
+=======
+  /// @param [in] value The value/pattern that will be used to see @p ptr.
+  /// @param [in] count Number of uint32_t element to be set to the value.
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   ///
   /// @retval ::HSA_STATUS_SUCCESS if memory fill is successful and completed.
   hsa_status_t FillMemory(void* ptr, uint32_t value, size_t count);
@@ -385,12 +397,15 @@ class Runtime {
   hsa_status_t CopyMemoryHostAlloc(void* dst, const void* src, size_t size,
                                    bool dst_malloc);
 
+<<<<<<< HEAD
   /// @brief Get the index of ::link_matrix_.
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
   /// @retval Index in ::link_matrix_.
   uint32_t GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   // Mutex object to protect multithreaded access to ::Acquire and ::Release.
   KernelMutex kernel_lock_;
 

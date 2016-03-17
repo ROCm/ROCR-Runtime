@@ -115,6 +115,12 @@ class MemoryRegion : public core::MemoryRegion {
                                 hsa_amd_agent_memory_pool_info_t attribute,
                                 void* value) const;
 
+<<<<<<< HEAD
+=======
+  hsa_amd_memory_pool_access_t GetPoolAccessType(
+      const core::Agent& agent) const;
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t AllowAccess(uint32_t num_agents, const hsa_agent_t* agents,
                            const void* ptr, size_t size) const;
 

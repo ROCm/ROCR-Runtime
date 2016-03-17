@@ -79,6 +79,7 @@ bool MemoryRegion::RegisterMemory(void* ptr, size_t size, size_t num_nodes,
 }
 
 void MemoryRegion::DeregisterMemory(void* ptr) { hsaKmtDeregisterMemory(ptr); }
+<<<<<<< HEAD
 
 bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
                                          void* ptr, size_t size,
@@ -91,6 +92,21 @@ bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
   const HSAKMT_STATUS status =
       hsaKmtMapMemoryToGPUNodes(ptr, size, alternate_va, map_flag, num_node,
                                 const_cast<uint32_t*>(nodes));
+=======
+
+bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
+                                         void* ptr, size_t size,
+                                         uint64_t* alternate_va,
+                                         HsaMemMapFlags map_flag) {
+  assert(num_node > 0);
+  assert(nodes != NULL);
+
+  // TODO(bwicakso): hsaKmtMapMemoryToGPUNodes is currently broken.
+  *alternate_va = 0;
+  const HSAKMT_STATUS status = hsaKmtMapMemoryToGPU(ptr, size, alternate_va);
+      //hsaKmtMapMemoryToGPUNodes(ptr, size, alternate_va, map_flag, num_node,
+      //                          const_cast<uint32_t*>(nodes));
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   return (status == HSAKMT_STATUS_SUCCESS);
 }
@@ -172,6 +188,21 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
   *address = AllocateKfdMemory(mem_flag_, node_id_, size);
 
   if (*address != NULL) {
+<<<<<<< HEAD
+=======
+    // Register all possible GPU that may access the memory.
+    // TODO(bwicakso): remove HSA profile check when KFD support memory
+    // registration on APU.
+    if (!full_profile() &&
+        core::Runtime::runtime_singleton_->gpu_ids().size() > 0) {
+      if (!RegisterMemory(*address, size,
+                          core::Runtime::runtime_singleton_->gpu_ids().size(),
+                          &core::Runtime::runtime_singleton_->gpu_ids()[0])) {
+        return HSA_STATUS_ERROR;
+      }
+    }
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so 
@@ -207,6 +238,10 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
         (!full_profile() || IsLocalMemory() || IsScratch());
 
     if (require_pinning && !is_resident) {
+<<<<<<< HEAD
+=======
+      DeregisterMemory(*address);
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
       FreeKfdMemory(*address, size);
       *address = NULL;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -368,6 +403,7 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
 hsa_status_t MemoryRegion::GetAgentPoolInfo(
     const core::Agent& agent, hsa_amd_agent_memory_pool_info_t attribute,
     void* value) const {
+<<<<<<< HEAD
   const uint32_t node_id_from =
       (agent.device_type() == core::Agent::kAmdCpuDevice)
           ? reinterpret_cast<const amd::CpuAgent&>(agent).node_id()
@@ -412,6 +448,18 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
       if (link_info.num_hop > 0) {
         memcpy(value, &link_info.info, sizeof(hsa_amd_memory_pool_link_info_t));
       }
+=======
+  switch (attribute) {
+    case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
+      *((hsa_amd_memory_pool_access_t*)value) = GetPoolAccessType(agent);
+      break;
+    case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
+      *((uint32_t*)value) = 1;  // TODO(bwicakso): more info needed from kfd.
+      break;
+    case HSA_AMD_AGENT_MEMORY_POOL_INFO_LINK_INFO:
+      // TODO(bwicakso): more info needed from kfd.
+      memset(value, 0, sizeof(hsa_amd_memory_pool_link_info_t));
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -419,6 +467,33 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   return HSA_STATUS_SUCCESS;
 }
 
+<<<<<<< HEAD
+=======
+hsa_amd_memory_pool_access_t MemoryRegion::GetPoolAccessType(
+    const core::Agent& agent) const {
+  /**
+   *  ---------------------------------------------------
+   *  |              |CPU        |GPU (owner)|GPU (peer) |
+   *  ---------------------------------------------------
+   *  |system memory |allowed    |disallowed |disallowed |
+   *  ---------------------------------------------------
+   *  |fb private    |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   *  |fb public     |disallowed |allowed    |disallowed |
+   *  ---------------------------------------------------
+   *  |others        |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   */
+  return (((IsSystem()) &&
+           (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
+          (&agent == owner_))
+             ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
+             : (IsSystem() || IsPublic())
+                   ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
+                   : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+}
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
                                        const hsa_agent_t* agents,
                                        const void* ptr, size_t size) const {
@@ -472,6 +547,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
              ? HSA_STATUS_SUCCESS
              : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
+<<<<<<< HEAD
 
 hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
                                       bool& result) const {
@@ -485,6 +561,21 @@ hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
+=======
+
+hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
+                                      bool& result) const {
+  // TODO(bwicakso): not implemented yet.
+  result = false;
+  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+}
+
+hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
+  // TODO(bwicakso): not implemented yet.
+  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+}
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
                                 void* host_ptr, size_t size,
                                 void** agent_ptr) const {

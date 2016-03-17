@@ -57,7 +57,10 @@
 #include "core/inc/isa.h"
 
 #include "hsa_ext_image.h"
+<<<<<<< HEAD
 #include "sp3.h"
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -245,6 +248,7 @@ hsa_status_t GpuAgent::IterateRegion(
     void* data) const {
   return VisitRegion(true, callback, data);
 }
+<<<<<<< HEAD
 
 hsa_status_t GpuAgent::VisitRegion(bool include_peer,
                                    hsa_status_t (*callback)(hsa_region_t region,
@@ -259,6 +263,22 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
       }
     }
 
+=======
+
+hsa_status_t GpuAgent::VisitRegion(bool include_peer,
+                                   hsa_status_t (*callback)(hsa_region_t region,
+                                                            void* data),
+                                   void* data) const {
+  if (include_peer) {
+    // Only expose system, local, and LDS memory of the blit agent.
+    if (this == core::Runtime::runtime_singleton_->blit_agent()) {
+      hsa_status_t stat = VisitRegion(regions_, callback, data);
+      if (stat != HSA_STATUS_SUCCESS) {
+        return stat;
+      }
+    }
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
     // Also expose system region accessible by this agent.
     return VisitRegion(peer_regions_, callback, data);
   }
@@ -671,11 +691,17 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 }
 
 bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
+<<<<<<< HEAD
   if (!is_kv_device_) {
     return true;
   }
 
   ScopedAcquire<KernelMutex> Lock(&coherency_lock_);
+=======
+  if (!is_kv_device_) return true;
+
+  ScopedAcquire<KernelMutex> Lock(&lock_);
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   if (ape1_base_ == 0 && ape1_size_ == 0) {
     static const size_t kApe1Alignment = 64 * 1024;
@@ -714,6 +740,7 @@ void GpuAgent::SyncClocks() {
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
 
+<<<<<<< HEAD
 void GpuAgent::BindTrapHandler() {
 #ifdef __linux__ // No raw string literal support in VS builds right now
   const char* src_sp3 = R"(
@@ -797,4 +824,6 @@ void GpuAgent::BindTrapHandler() {
 #endif
 }
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 }  // namespace
