@@ -193,6 +193,7 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   //-------------------------
   // implementation specific
   //-------------------------
+  typedef void* rtti_t;
 
   /// @brief Returns the address of the value.
   virtual hsa_signal_value_t* ValueLocation() const = 0;
@@ -211,6 +212,8 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
                           hsa_wait_state_t wait_hint,
                           hsa_signal_value_t* satisfying_value);
 
+  __forceinline bool IsType(rtti_t id) { return _IsA(id); }
+
   /// @brief Allows special case interaction with signal destruction cleanup.
   void Retain() { atomic::Increment(&retained_); }
   void Release() { atomic::Decrement(&retained_); }
@@ -228,6 +231,12 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   amd_signal_t& signal_;
 
  protected:
+  /// @brief Simple RTTI type checking helper
+  /// Returns true if the object can be converted to the query type via
+  /// static_cast.
+  /// Do not use directly.  Use IsType in the desired derived type instead.
+  virtual bool _IsA(rtti_t id) const = 0;
+
   /// @variable  Indicates if signal is valid or not.
   volatile bool invalid_;
 

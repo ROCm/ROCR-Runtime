@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -54,9 +54,10 @@
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/amd_hw_aql_command_processor.h"
 #include "core/inc/interrupt_signal.h"
-#include "core/runtime/isa.hpp"
+#include "core/inc/isa.h"
 
-#include "inc/hsa_ext_image.h"
+#include "hsa_ext_image.h"
+#include "sp3.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -70,8 +71,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       blit_(NULL),
       cache_props_(cache_props),
-      is_kv_device_(false),
       profile_(profile),
+      is_kv_device_(false),
+      trap_code_buf_(NULL),
+      trap_code_buf_size_(0),
       ape1_base_(0),
       ape1_size_(0) {
   HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id_, &t0_);
@@ -89,6 +92,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
     is_kv_device_ = true;
   }
 
+  current_coherency_type_ = (profile_ == HSA_PROFILE_FULL)
+                                ? HSA_AMD_COHERENCY_TYPE_COHERENT
+                                : HSA_AMD_COHERENCY_TYPE_NONCOHERENT;
+
   max_queues_ =
       static_cast<uint32_t>(atoi(os::GetEnvVar("HSA_MAX_QUEUES").c_str()));
 #if !defined(HSA_LARGE_MODEL) || !defined(__linux__)
@@ -102,6 +109,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
   }
   max_queues_ = std::min(128U, max_queues_);
 #endif
+
+  // Bind the second-level trap handler to this node.
+  BindTrapHandler();
 }
 
 GpuAgent::~GpuAgent() {
@@ -121,6 +131,10 @@ GpuAgent::~GpuAgent() {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
 
+  if (trap_code_buf_ != NULL) {
+    ReleaseShader(trap_code_buf_, trap_code_buf_size_);
+  }
+
   regions_.clear();
 }
 
@@ -130,7 +144,13 @@ void GpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
   assert((!amd_region->IsGDS()) &&
          ("Memory region should only be global, group or scratch"));
 
-  regions_.push_back(amd_region);
+  if (amd_region->IsSystem()) {
+    peer_regions_.push_back(amd_region);
+  } else {
+    assert((node_id() == amd_region->node_id()) &&
+           ("region should be local to the gpu (fb, lds, or scratch."));
+    regions_.push_back(amd_region);
+  }
 
   if (amd_region->IsScratch()) {
     HsaMemFlags flags;
@@ -145,43 +165,121 @@ void GpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
     // Scratch length is: waves/CU * threads/wave * queues * #CUs *
     // scratch/thread
     const uint32_t num_cu =
-        properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+      properties_.NumFComputeCores / properties_.NumSIMDPerCU;
     queue_scratch_len_ = 0;
     queue_scratch_len_ = AlignUp(32 * 64 * num_cu * scratch_per_thread_, 65536);
-    size_t scratchLen = queue_scratch_len_ * max_queues_;
+    size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
     // For 64-bit linux use max queues unless otherwise specified
-    if ((scratchLen == 0) || (scratchLen > 4294967296))
-      scratchLen = 4294967296;  // 4GB apeture max
+    if ((max_scratch_len == 0) || (max_scratch_len > 4294967296)) {
+      max_scratch_len = 4294967296;  // 4GB apeture max
+    }
 #endif
 
-    void* scratchBase;
+    void* scratch_base;
     HSAKMT_STATUS err =
-        hsaKmtAllocMemory(node_id_, scratchLen, flags, &scratchBase);
+        hsaKmtAllocMemory(node_id_, max_scratch_len, flags, &scratch_base);
     assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Scratch) failed");
-    assert(IsMultipleOf(scratchBase, 0x1000) &&
+    assert(IsMultipleOf(scratch_base, 0x1000) &&
            "Scratch base is not page aligned!");
 
     scratch_pool_. ~SmallHeap();
-    new (&scratch_pool_) SmallHeap(scratchBase, scratchLen);
+    new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
   }
+}
+
+void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
+                              void*& code_buf, size_t& code_buf_size) {
+#ifdef __linux__ // No VS builds of libsp3 available right now
+  // Assemble source string with libsp3.
+  sp3_context* sp3 = sp3_new();
+
+  switch (compute_capability_.version_major()) {
+    case 7:
+      sp3_setasic(sp3, "CI");
+      break;
+    case 8:
+      sp3_setasic(sp3, "VI");
+      break;
+    default:
+      assert(false && "SP3 assembly not supported on this agent");
+  }
+
+  sp3_parse_string(sp3, src_sp3);
+  sp3_shader* code_sp3_meta = sp3_compile(sp3, func_name);
+
+  // Allocate a GPU-visible buffer for the trap shader.
+  HsaMemFlags code_buf_flags = {0};
+  code_buf_flags.ui32.HostAccess = 1;
+  code_buf_flags.ui32.ExecuteAccess = 1;
+  code_buf_flags.ui32.NoSubstitute = 1;
+
+  size_t code_size = code_sp3_meta->size * sizeof(uint32_t);
+  code_buf_size = AlignUp(code_size, 0x1000);
+
+  HSAKMT_STATUS err =
+      hsaKmtAllocMemory(node_id_, code_buf_size, code_buf_flags, &code_buf);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Trap) failed");
+
+  err = hsaKmtMapMemoryToGPU(code_buf, code_buf_size, NULL);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtMapMemoryToGPU(Trap) failed");
+
+  // Copy trap handler code into the GPU-visible buffer.
+  memset(code_buf, 0, code_buf_size);
+  memcpy(code_buf, code_sp3_meta->data, code_size);
+
+  // Release SP3 resources.
+  sp3_free_shader(code_sp3_meta);
+  sp3_close(sp3);
+#endif
+}
+
+void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) {
+  hsaKmtUnmapMemoryToGPU(code_buf);
+  hsaKmtFreeMemory(code_buf, code_buf_size);
 }
 
 hsa_status_t GpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
-  const size_t num_mems = regions().size();
+  return VisitRegion(true, callback, data);
+}
 
-  for (size_t j = 0; j < num_mems; ++j) {
-    const MemoryRegion* amd_region =
-        reinterpret_cast<const MemoryRegion*>(regions()[j]);
+hsa_status_t GpuAgent::VisitRegion(bool include_peer,
+                                   hsa_status_t (*callback)(hsa_region_t region,
+                                                            void* data),
+                                   void* data) const {
+  if (include_peer) {
+    // Only expose system, local, and LDS memory of the blit agent.
+    if (this == core::Runtime::runtime_singleton_->blit_agent()) {
+      hsa_status_t stat = VisitRegion(regions_, callback, data);
+      if (stat != HSA_STATUS_SUCCESS) {
+        return stat;
+      }
+    }
 
-    // Skip memory regions other than host, gpu local, or LDS.
+    // Also expose system region accessible by this agent.
+    return VisitRegion(peer_regions_, callback, data);
+  }
+
+  // Only expose system, local, and LDS memory of this agent.
+  return VisitRegion(regions_, callback, data);
+}
+
+hsa_status_t GpuAgent::VisitRegion(
+    const std::vector<const core::MemoryRegion*>& regions,
+    hsa_status_t (*callback)(hsa_region_t region, void* data),
+    void* data) const {
+  for (const core::MemoryRegion* region : regions) {
+    const amd::MemoryRegion* amd_region =
+        reinterpret_cast<const amd::MemoryRegion*>(region);
+
+    // Only expose system, local, and LDS memory.
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
         amd_region->IsLDS()) {
-      hsa_region_t hsa_region = core::MemoryRegion::Convert(amd_region);
-      hsa_status_t status = callback(hsa_region, data);
+      hsa_region_t region_handle = core::MemoryRegion::Convert(region);
+      hsa_status_t status = callback(region_handle, data);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
@@ -243,7 +341,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size,
   // is an interrupt signal object. Remove this when SDMA handle interrupt
   // packet properly.
   if (out_signal.EopEvent() != NULL) {
-    reinterpret_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
+    static_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
   }
 
   return blit_->SubmitLinearCopyCommand(dst, src, size, dep_signals,
@@ -427,9 +525,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = static_cast<uint32_t>(
           1 << properties_.Capability.ui32.WatchPointsTotalBits);
       break;
-	case HSA_AMD_AGENT_INFO_BDFID:
-	  *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
-	  break;
+    case HSA_AMD_AGENT_INFO_BDFID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -443,25 +541,36 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
                                    uint32_t group_segment_size,
                                    core::Queue** queue) {
   // AQL queues must be a power of two in length.
-  if (!IsPowerOfTwo(size)) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (!IsPowerOfTwo(size)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
 
   // Enforce max size
-  if (size > maxAqlSize_) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (size > maxAqlSize_) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
 
   // Allocate scratch memory
   ScratchInfo scratch;
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
   if (core::g_use_interrupt_wait) {
-    if (private_segment_size == UINT_MAX)
+    if (private_segment_size == UINT_MAX) {
       private_segment_size =
           (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
-    if (private_segment_size > 262128) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    scratch.size_per_thread = AlignUp(private_segment_size, 16);
-    if (scratch.size_per_thread > 262128)
+    }
+
+    if (private_segment_size > 262128) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    uint32_t CUs = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-    // TODO: Replace constants with proper topology data.
-    scratch.size = scratch.size_per_thread * 32 * 64 * CUs;
+    }
+
+    scratch.size_per_thread = AlignUp(private_segment_size, 16);
+    if (scratch.size_per_thread > 262128) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+
+    const uint32_t num_cu =
+        properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+    scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
   } else {
     scratch.size = queue_scratch_len_;
     scratch.size_per_thread = scratch_per_thread_;
@@ -473,7 +582,9 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
   scratch.queue_base = NULL;
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);
-    if (scratch.queue_base == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    if (scratch.queue_base == NULL) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
   }
 
   // Create an HW AQL queue
@@ -490,11 +601,49 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
+void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
+  if (scratch.size == 0) {
+    scratch.size = queue_scratch_len_;
+    scratch.size_per_thread = scratch_per_thread_;
+  }
+
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  scratch.queue_base = scratch_pool_.alloc(scratch.size);
+  scratch.queue_process_offset =
+      uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+
+  if ((scratch.queue_base != NULL) && (profile_ == HSA_PROFILE_BASE)) {
+    HSAuint64 alternate_va;
+    if (HSAKMT_STATUS_SUCCESS !=
+        hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va)) {
+      assert(false && "Map scratch subrange failed!");
+      scratch_pool_.free(scratch.queue_base);
+      scratch.queue_base = NULL;
+    }
+  }
+}
+
+void GpuAgent::ReleaseQueueScratch(void* base) {
+  if (base == NULL) {
+    return;
+  }
+
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  if (profile_ == HSA_PROFILE_BASE) {
+    if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
+      assert(false && "Unmap scratch subrange failed!");
+    }
+  }
+  scratch_pool_.free(base);
+}
+
 void GpuAgent::TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) {
   // Ensure interpolation
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
-  if (t1_.GPUClockCounter < signal->signal_.end_ts) SyncClocks();
+  if (t1_.GPUClockCounter < signal->signal_.end_ts) {
+    SyncClocks();
+  }
 
   time.start = uint64_t(
       (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /
@@ -509,7 +658,6 @@ void GpuAgent::TranslateTime(core::Signal* signal,
 }
 
 uint64_t GpuAgent::TranslateTime(uint64_t tick) {
-
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
   SyncClocks();
 
@@ -523,7 +671,11 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 }
 
 bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
-  ScopedAcquire<KernelMutex> Lock(&lock_);
+  if (!is_kv_device_) {
+    return true;
+  }
+
+  ScopedAcquire<KernelMutex> Lock(&coherency_lock_);
 
   if (ape1_base_ == 0 && ape1_size_ == 0) {
     static const size_t kApe1Alignment = 64 * 1024;
@@ -561,4 +713,88 @@ void GpuAgent::SyncClocks() {
   HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id_, &t1_);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
+
+void GpuAgent::BindTrapHandler() {
+#ifdef __linux__ // No raw string literal support in VS builds right now
+  const char* src_sp3 = R"(
+    var s_trap_info_lo = ttmp0
+    var s_trap_info_hi = ttmp1
+    var s_tmp0         = ttmp2
+    var s_tmp1         = ttmp3
+    var s_tmp2         = ttmp4
+    var s_tmp3         = ttmp5
+
+    shader TrapHandler
+      type(CS)
+
+      // Retrieve the queue inactive signal.
+      s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0
+      s_waitcnt            lgkmcnt(0)
+
+      // Mask all but one lane of the wavefront.
+      s_mov_b64            exec, 0x1
+
+      // Set queue signal value to unhandled exception error.
+      s_add_u32            s_tmp0, s_tmp0, 0x8
+      s_addc_u32           s_tmp1, s_tmp1, 0x0
+      v_mov_b32            v0, s_tmp0
+      v_mov_b32            v1, s_tmp1
+      v_mov_b32            v2, 0x80000000
+      v_mov_b32            v3, 0x0
+      flat_atomic_swap_x2  v[0:1], v[0:1], v[2:3]
+      s_waitcnt            vmcnt(0)
+
+      // Skip event if the signal was already set to unhandled exception.
+      v_cmp_eq_u64         vcc, v[0:1], v[2:3]
+      s_cbranch_vccnz      L_SIGNAL_DONE
+
+      // Check for a non-NULL signal event mailbox.
+      s_load_dwordx2       [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x8
+      s_waitcnt            lgkmcnt(0)
+      s_and_b64            [s_tmp2, s_tmp3], [s_tmp2, s_tmp3], [s_tmp2, s_tmp3]
+      s_cbranch_scc0       L_SIGNAL_DONE
+
+      // Load the signal event value.
+      s_add_u32            s_tmp0, s_tmp0, 0x10
+      s_addc_u32           s_tmp1, s_tmp1, 0x0
+      s_load_dword         s_tmp0, [s_tmp0, s_tmp1], 0x0
+      s_waitcnt            lgkmcnt(0)
+
+      // Write the signal event value to the mailbox.
+      v_mov_b32            v0, s_tmp2
+      v_mov_b32            v1, s_tmp3
+      v_mov_b32            v2, s_tmp0
+      flat_store_dword     v[0:1], v2
+      s_waitcnt            vmcnt(0)
+
+      // Send an interrupt to trigger event notification.
+      s_sendmsg            sendmsg(MSG_INTERRUPT)
+
+    L_SIGNAL_DONE:
+      // Halt wavefront and exit trap.
+      s_sethalt            1
+      s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
+    end
+  )";
+
+  if (compute_capability_.version_major() == 7) {
+    // No trap handler support on Gfx7, soft error.
+    return;
+  }
+
+  // Disable trap handler on Carrizo until KFD is fixed.
+  if (profile_ == HSA_PROFILE_FULL) {
+    return;
+  }
+
+  // Assemble the trap handler source code.
+  AssembleShader(src_sp3, "TrapHandler", trap_code_buf_, trap_code_buf_size_);
+
+  // Bind the trap handler to this node.
+  HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id_, trap_code_buf_,
+                                           trap_code_buf_size_, NULL, 0);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
+#endif
+}
+
 }  // namespace

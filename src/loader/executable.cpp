@@ -52,7 +52,6 @@ using namespace amd::hsa::common;
 
 namespace {
 
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
 bool IsBasePm4(hsa_profile_t profile) {
   if (profile == HSA_PROFILE_FULL) { return false; }
   char *emulate_aql = getenv("HSA_EMULATE_AQL");
@@ -61,7 +60,6 @@ bool IsBasePm4(hsa_profile_t profile) {
   if (nullptr == tools_lib) { return false; }
   return "1" == std::string(emulate_aql) && 0 != std::string(tools_lib).size();
 }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 
 } // namespace anonymous
 
@@ -768,6 +766,8 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
 hsa_status_t ExecutableImpl::LoadSegment(hsa_agent_t agent, code::Segment* s)
 {
   assert(s->type() < PT_LOOS + AMDGPU_HSA_SEGMENT_LAST);
+  if (s->memSize() == 0)
+    return HSA_STATUS_SUCCESS;
   amdgpu_hsa_elf_segment_t segment = (amdgpu_hsa_elf_segment_t)(s->type() - PT_LOOS);
   Segment *new_seg = nullptr;
   bool need_alloc = true;
@@ -867,7 +867,6 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
 
       // \todo kzhuravl 11/17/15 This is a temporary rt hack: needs to be
       // removed when large bar is supported.
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
       if (IsBasePm4(profile_)) {
         kernel_symbol->debug_info.gpuva = kernel_symbol->address;
         Segment *kernel_symbol_segment = SymbolSegment(agent, sym);
@@ -878,7 +877,6 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
             kernel_symbol_segment->Ptr(),
             kernel_symbol_segment->Offset(sym->VAddr()));
       }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
       symbol = kernel_symbol;
 
       // \todo kzhuravl 10/15/15 This is a debugger backdoor: needs to be

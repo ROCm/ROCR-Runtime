@@ -104,6 +104,7 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
       if (system_prop != mem_props.end()) {
         MemoryRegion* system_region_fine =
             new MemoryRegion(true, is_apu_node, node_id, *system_prop);
+        system_region_fine->owner(cpu);
 
         core::Runtime::runtime_singleton_->RegisterMemoryRegion(
             system_region_fine);
@@ -113,6 +114,7 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
           // if such partitioning exists.
           MemoryRegion* system_region_coarse =
               new MemoryRegion(false, is_apu_node, node_id, *system_prop);
+          system_region_coarse->owner(cpu);
 
           core::Runtime::runtime_singleton_->RegisterMemoryRegion(
               system_region_coarse);
@@ -205,6 +207,62 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   return gpu;
 }
 
+void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
+  // Register connectivity links for this agent to the runtime.
+  if (num_link == 0) {
+    return;
+  }
+
+  std::vector<HsaIoLinkProperties> links(num_link);
+  if (HSAKMT_STATUS_SUCCESS !=
+      hsaKmtGetNodeIoLinkProperties(node_id, num_link, &links[0])) {
+    return;
+  }
+
+  for (HsaIoLinkProperties io_link : links) {
+    // Populate link info with thunk property.
+    hsa_amd_memory_pool_link_info_t link_info = {0};
+
+    if (io_link.Flags.ui32.Override == 1) {
+      if (io_link.Flags.ui32.NoPeerToPeerDMA == 1) {
+        // Ignore this link since peer to peer is not allowed.
+        continue;
+      }
+      link_info.atomic_support_32bit = (io_link.Flags.ui32.NoAtomics32bit == 0);
+      link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
+      link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
+    } else {
+      // TODO(bwicakso): decipher HSA_IOLINKTYPE to fill out the atomic
+      // and coherent information.
+    }
+
+    switch (io_link.IoLinkType) {
+      case HSA_IOLINKTYPE_HYPERTRANSPORT:
+        link_info.link_type = HSA_AMD_LINK_INFO_TYPE_HYPERTRANSPORT;
+        break;
+      case HSA_IOLINKTYPE_PCIEXPRESS:
+        link_info.link_type = HSA_AMD_LINK_INFO_TYPE_PCIE;
+        break;
+      case HSA_IOLINK_TYPE_QPI_1_1:
+        link_info.link_type = HSA_AMD_LINK_INFO_TYPE_QPI;
+        break;
+      case HSA_IOLINK_TYPE_INFINIBAND:
+        link_info.link_type = HSA_AMD_LINK_INFO_TYPE_INFINBAND;
+        break;
+      default:
+        break;
+    }
+
+    link_info.max_bandwidth = io_link.MaximumBandwidth;
+    link_info.max_latency = io_link.MaximumLatency;
+    link_info.min_bandwidth = io_link.MinimumBandwidth;
+    link_info.min_latency = io_link.MinimumLatency;
+
+    core::Runtime::runtime_singleton_->RegisterLinkInfo(
+        io_link.NodeFrom, io_link.NodeTo, io_link.Weight, link_info);
+  }
+}
+
 /// @brief Calls Kfd thunk to get the snapshot of the topology of the system,
 /// which includes associations between, node, devices, memory and caches.
 void BuildTopology() {
@@ -230,6 +288,8 @@ void BuildTopology() {
     return;
   }
 
+  core::Runtime::runtime_singleton_->SetLinkCount(props.NumNodes);
+
   // Discover agents on every node in the platform.
   for (HSAuint32 node_id = 0; node_id < props.NumNodes; node_id++) {
     HsaNodeProperties node_prop = {0};
@@ -241,6 +301,8 @@ void BuildTopology() {
     const GpuAgent* gpu = DiscoverGpu(node_id, node_prop);
 
     assert(!(cpu == NULL && gpu == NULL));
+
+    RegisterLinkInfo(node_id, node_prop.NumIOLinks);
   }
 
   // Create system memory region if it does not exist yet.
@@ -300,20 +362,24 @@ void BuildTopology() {
       NULL);
 }
 
-void Load() {
-  // Open KFD
-  if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) return;
+bool Load() {
+  // Open connection to kernel driver.
+  if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
+    return false;
+  }
 
   // Build topology table.
   BuildTopology();
-  core::Runtime::runtime_singleton_->InitStgBuffer();
+
+  return true;
 }
 
-// Releases internal resources and unloads DLLs
-void Unload() {
+bool Unload() {
   hsaKmtReleaseSystemProperties();
 
-  // Close KFD
+  // Close connection to kernel driver.
   hsaKmtCloseKFD();
+
+  return true;
 }
-}  // namespace
+}  // namespace amd

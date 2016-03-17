@@ -48,7 +48,7 @@
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/host_queue.h"
 
-#include "inc/hsa_ext_image.h"
+#include "hsa_ext_image.h"
 
 namespace amd {
 CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
@@ -69,14 +69,28 @@ void CpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
   regions_.push_back(amd_region);
 }
 
-hsa_status_t CpuAgent::IterateRegion(
+hsa_status_t CpuAgent::VisitRegion(bool include_peer,
+                                   hsa_status_t (*callback)(hsa_region_t region,
+                                                            void* data),
+                                   void* data) const {
+  // First traverse the region owned by this agent.
+  const hsa_status_t stat = VisitRegion(regions_, callback, data);
+
+  // Then traverse the region of its peers.
+  if (stat == HSA_STATUS_SUCCESS && include_peer) {
+    return VisitRegion(peer_regions_, callback, data);
+  }
+
+  return stat;
+}
+
+hsa_status_t CpuAgent::VisitRegion(
+    const std::vector<const core::MemoryRegion*>& regions,
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
-  const size_t num_mems = regions().size();
-
-  for (size_t j = 0; j < num_mems; ++j) {
-    hsa_region_t region = core::MemoryRegion::Convert(regions()[j]);
-    hsa_status_t status = callback(region, data);
+  for (const core::MemoryRegion* region : regions) {
+    hsa_region_t region_handle = core::MemoryRegion::Convert(region);
+    hsa_status_t status = callback(region_handle, data);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }
@@ -85,19 +99,26 @@ hsa_status_t CpuAgent::IterateRegion(
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t CpuAgent::IterateRegion(
+    hsa_status_t (*callback)(hsa_region_t region, void* data),
+    void* data) const {
+  return VisitRegion(true, callback, data);
+}
+
 hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t kNameSize = 64;  // agent, and vendor name size limit
 
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
-      // TODO: hardcode for now.
+      // TODO: hardcode for now, wait until SWDEV-88894 implemented
       std::memset(value, 0, kNameSize);
-      std::memcpy(value, "Kaveri CPU", sizeof("Kaveri CPU"));
+      std::memcpy(value, "CPU Device", sizeof("CPU Device"));
       break;
     case HSA_AGENT_INFO_VENDOR_NAME:
+	  // TODO: hardcode for now, wait until SWDEV-88894 implemented
       std::memset(value, 0, kNameSize);
-      std::memcpy(value, "AMD", sizeof("AMD"));
+      std::memcpy(value, "CPU", sizeof("CPU"));
       break;
     case HSA_AGENT_INFO_FEATURE:
       *((hsa_agent_feature_t*)value) = static_cast<hsa_agent_feature_t>(0);
@@ -243,4 +264,4 @@ hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
   return HSA_STATUS_ERROR;
 }
 
-}  // namespace
+}  // namespace amd

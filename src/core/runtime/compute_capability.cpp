@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "compute_capability.hpp"
+#include "core/inc/compute_capability.h"
 
 #include <cstdint>
 #include <ostream>

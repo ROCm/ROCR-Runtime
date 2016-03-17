@@ -50,9 +50,29 @@
 #include "core/inc/agent.h"
 #include "core/inc/memory_region.h"
 
+#include "inc/hsa_ext_amd.h"
+
 namespace amd {
 class MemoryRegion : public core::MemoryRegion {
  public:
+  /// @brief Convert this object into hsa_region_t.
+  static __forceinline hsa_region_t Convert(MemoryRegion* region) {
+    const hsa_region_t region_handle = {
+        static_cast<uint64_t>(reinterpret_cast<uintptr_t>(region))};
+    return region_handle;
+  }
+
+  static __forceinline const hsa_region_t Convert(const MemoryRegion* region) {
+    const hsa_region_t region_handle = {
+        static_cast<uint64_t>(reinterpret_cast<uintptr_t>(region))};
+    return region_handle;
+  }
+
+  /// @brief  Convert hsa_region_t into amd::MemoryRegion *.
+  static __forceinline MemoryRegion* Convert(hsa_region_t region) {
+    return reinterpret_cast<MemoryRegion*>(region.handle);
+  }
+
   /// @brief Allocate agent accessible memory (system / local memory).
   static void* AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id,
                                  size_t size);
@@ -60,14 +80,16 @@ class MemoryRegion : public core::MemoryRegion {
   /// @brief Free agent accessible memory (system / local memory).
   static void FreeKfdMemory(void* ptr, size_t size);
 
-  static bool RegisterHostMemory(void* ptr, size_t size, size_t num_nodes,
-                                 uint32_t* nodes);
+  static bool RegisterMemory(void* ptr, size_t size, size_t num_nodes,
+                             const uint32_t* nodes);
 
-  static void DeregisterHostMemory(void* ptr);
+  static void DeregisterMemory(void* ptr);
 
   /// @brief Pin memory.
-  static bool MakeKfdMemoryResident(void* ptr, size_t size,
-                                    uint64_t* alternate_va);
+  static bool MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
+                                    void* ptr, size_t size,
+                                    uint64_t* alternate_va,
+                                    HsaMemMapFlags map_flag);
 
   /// @brief Unpin memory.
   static void MakeKfdMemoryUnresident(void* ptr);
@@ -79,9 +101,31 @@ class MemoryRegion : public core::MemoryRegion {
 
   hsa_status_t Allocate(size_t size, void** address) const;
 
+  hsa_status_t Allocate(bool restrict_access, size_t size,
+                        void** address) const;
+
   hsa_status_t Free(void* address, size_t size) const;
 
   hsa_status_t GetInfo(hsa_region_info_t attribute, void* value) const;
+
+  hsa_status_t GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
+                           void* value) const;
+
+  hsa_status_t GetAgentPoolInfo(const core::Agent& agent,
+                                hsa_amd_agent_memory_pool_info_t attribute,
+                                void* value) const;
+
+  hsa_status_t AllowAccess(uint32_t num_agents, const hsa_agent_t* agents,
+                           const void* ptr, size_t size) const;
+
+  hsa_status_t CanMigrate(const MemoryRegion& dst, bool& result) const;
+
+  hsa_status_t Migrate(uint32_t flag, const void* ptr) const;
+
+  hsa_status_t Lock(uint32_t num_agents, const hsa_agent_t* agents,
+                    void* host_ptr, size_t size, void** agent_ptr) const;
+
+  hsa_status_t Unlock(void* host_ptr) const;
 
   HSAuint64 GetBaseAddress() const { return mem_props_.VirtualBaseAddress; }
 
@@ -95,6 +139,10 @@ class MemoryRegion : public core::MemoryRegion {
   __forceinline bool IsLocalMemory() const {
     return ((mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE) ||
             (mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC));
+  }
+
+  __forceinline bool IsPublic() const {
+    return (mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC);
   }
 
   __forceinline bool IsSystem() const {
@@ -121,6 +169,10 @@ class MemoryRegion : public core::MemoryRegion {
     return false;
   }
 
+  __forceinline uint32_t node_id() const {
+    return node_id_;
+  }
+
   __forceinline core::Agent* owner() const {
     // Return NULL if it is system memory region.
     // Return non NULL on lds, scratch, local memory region.
@@ -132,6 +184,14 @@ class MemoryRegion : public core::MemoryRegion {
     owner_ = o;
   }
 
+  __forceinline uint32_t BusWidth() const {
+    return static_cast<uint32_t>(mem_props_.Width);
+  }
+
+  __forceinline uint32_t MaxMemCloc() const {
+    return static_cast<uint32_t>(mem_props_.MemoryClockMax);
+  }
+
  private:
   uint32_t node_id_;
 
@@ -140,6 +200,8 @@ class MemoryRegion : public core::MemoryRegion {
   const HsaMemoryProperties mem_props_;
 
   HsaMemFlags mem_flag_;
+
+  HsaMemMapFlags map_flag_;
 
   size_t max_single_alloc_size_;
 

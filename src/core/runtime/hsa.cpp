@@ -48,6 +48,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/host_queue.h"
+#include "core/inc/isa.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/queue.h"
 #include "core/inc/signal.h"
@@ -55,7 +56,6 @@
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/amd_load_map.h"
 #include "core/inc/amd_loader_context.hpp"
-#include "core/runtime/isa.hpp"
 
 using namespace amd::hsa::code;
 
@@ -706,21 +706,12 @@ hsa_status_t hsa_memory_register(void* address, size_t size) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-#ifndef __linux__
-  if (!core::Runtime::runtime_singleton_->Register(address, size))
-    return HSA_STATUS_ERROR;
-#endif
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t hsa_memory_deregister(void* address, size_t size) {
   IS_OPEN();
 
-#ifndef __linux__
-  if (core::Runtime::runtime_singleton_->Deregister(address))
-    return HSA_STATUS_SUCCESS;
-  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-#endif
   return HSA_STATUS_SUCCESS;
 }
 
@@ -762,8 +753,7 @@ hsa_status_t hsa_memory_assign_agent(void* ptr,
   const core::Agent* agent = core::Agent::Convert(agent_handle);
   IS_VALID(agent);
 
-  return core::Runtime::runtime_singleton_->AssignMemoryToAgent(ptr, *agent,
-                                                                access);
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t hsa_memory_copy(void* dst, const void* src, size_t size) {
@@ -798,6 +788,8 @@ hsa_status_t
 
   core::Signal* ret;
 
+  bool useshost = true;
+
   if (num_consumers > 0) {
     IS_BAD_PTR(consumers);
 
@@ -808,9 +800,14 @@ hsa_status_t
     if (consumer_set.size() != num_consumers) {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
+
+    useshost =
+        (consumer_set.find(
+            core::Runtime::runtime_singleton_->host_agent()->public_handle()) !=
+        consumer_set.end());
   }
 
-  if (core::g_use_interrupt_wait) {
+  if (core::g_use_interrupt_wait && useshost) {
     ret = new core::InterruptSignal(initial_value);
   } else {
     ret = new core::DefaultSignal(initial_value);
