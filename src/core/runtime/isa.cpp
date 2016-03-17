@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "core/runtime/isa.hpp"
+#include "core/inc/isa.h"
 
 #include <cstdint>
 #include <ostream>
@@ -53,8 +53,9 @@
 #include <sstream>
 #include <stdexcept>
 
-#include "core/runtime/compute_capability.hpp"
+#include "core/inc/compute_capability.h"
 #include "core/inc/hsa_internal.h"
+
 #include "hsa_ext_amd.h"
 
 namespace {

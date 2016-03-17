@@ -205,17 +205,35 @@ int main(int argc, char **argv) {
     check(Creating the queue, err);
 
     /*
+     * Obtain the agent's machine model
+     */
+    hsa_machine_model_t machine_model;
+    err = hsa_agent_get_info(agent, HSA_AGENT_INFO_MACHINE_MODEL, &machine_model);
+    check("Obtaining machine model",err);
+
+    /*
+     * Obtain the agent's profile
+     */
+    hsa_profile_t profile;
+    err = hsa_agent_get_info(agent, HSA_AGENT_INFO_PROFILE, &profile);
+    check("Getting agent profile",err);
+
+    /*
      * Load the BRIG binary.
      */
     hsa_ext_module_t module;
-    load_module_from_file("vector_copy.brig",&module);
+    if(HSA_PROFILE_FULL == profile) {
+        load_module_from_file("vector_copy_full.brig",&module);
+    } else {
+        load_module_from_file("vector_copy_base.brig",&module);
+    }
 
     /*
      * Create hsa program.
      */
     hsa_ext_program_t program;
     memset(&program,0,sizeof(hsa_ext_program_t));
-    err = table_1_00.hsa_ext_program_create(HSA_MACHINE_MODEL_LARGE, HSA_PROFILE_BASE, HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, NULL, &program);
+    err = table_1_00.hsa_ext_program_create(machine_model, profile, HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, NULL, &program);
     check(Create the program, err);
 
     /*
@@ -250,7 +268,7 @@ int main(int argc, char **argv) {
      * Create the empty executable.
      */
     hsa_executable_t executable;
-    err = hsa_executable_create(HSA_PROFILE_BASE, HSA_EXECUTABLE_STATE_UNFROZEN, "", &executable);
+    err = hsa_executable_create(profile, HSA_EXECUTABLE_STATE_UNFROZEN, "", &executable);
     check(Create the executable, err);
 
     /*

@@ -46,11 +46,11 @@
 namespace amd {
 /// @brief Initializes the runtime.
 /// Should not be called directly, must be called only from Runtime::Acquire()
-void Load();
+bool Load();
 
 /// @brief Shutdown/cleanup of runtime.
 /// Should not be called directly, must be called only from Runtime::Release()
-void Unload();
+bool Unload();
 }  // namespace
 
 #endif  // header guard

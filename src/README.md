@@ -15,6 +15,8 @@ libamdhsacode - HSAIL/Finalizer runtime interface.
 
 loader - Used to load code objects.
 
+utils - Utilities required to build the core runtime.
+
 #### Build environment
 
 CMake build framework is used to build the HSA runtime. The minimum version is 2.8.
@@ -54,6 +56,18 @@ repository execute:
 mkdir build && cd build && cmake ../src && make
 
 The name of the core hsa runtime is libhsa-runtime64.so.1.
+
+#### External requirements
+
+The core runtime requires the sp3.a library to be able to compiler
+on x86_64 architechtures. The binaries for the sp3.a librariy can
+be found on the amd-codexl-analyzer GitHub repository:
+
+https://github.com/GPUOpen-Tools/amd-codexl-analyzer
+
+The x86_64 library and associated header files have been added to
+this code base for convenience, but are still subject to the 
+AMD copyright license.
 
 #### Specs
 

@@ -82,7 +82,7 @@ namespace loader {
     gfx802.handle = 802;
     gfx803.handle = 803;
     gfx804.handle = 804;
-    gfx805.handle = 805;
+    gfx810.handle = 810;
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -102,8 +102,8 @@ namespace loader {
       return gfx803;
     } else if (sname == "AMD:AMDGPU:8:0:4") {
       return gfx804;
-    } else if (sname == "AMD:AMDGPU:8:0:5") {
-      return gfx805;
+    } else if (sname == "AMD:AMDGPU:8:1:0") {
+      return gfx810;
     } else {
       assert(0);
       return invalid;
@@ -150,13 +150,11 @@ namespace loader {
       return (char*) seg + offset;
   }
 
-#ifdef HSART_NO_LARGE_BAR_SUPPORT
   void* OfflineLoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset)
   {
       out << "SegmentHostAddress: " << segment << ": " << " ptr=" << seg << " offset=" << offset << std::endl;
       return (char*) seg + offset;
   }
-#endif // HSART_NO_LARGE_BAR_SUPPORT
 
   bool OfflineLoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size)
   {

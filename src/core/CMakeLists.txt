@@ -4,22 +4,22 @@
 ## Open Source License (NCSA)
 ## 
 ## Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-## 
+##
 ## Developed by:
-## 
+##
 ##                 AMD Research and AMD HSA Software Development
-## 
+##
 ##                 Advanced Micro Devices, Inc.
-## 
+##
 ##                 www.amd.com
-## 
+##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
 ## of this software and associated documentation files (the "Software"), to
 ## deal with the Software without restriction, including without limitation
 ## the rights to use, copy, modify, merge, publish, distribute, sublicense,
 ## and#or sell copies of the Software, and to permit persons to whom the
 ## Software is furnished to do so, subject to the following conditions:
-## 
+##
 ##  - Redistributions of source code must retain the above copyright notice,
 ##    this list of conditions and the following disclaimers.
 ##  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 ##    nor the names of its contributors may be used to endorse or promote
 ##    products derived from this Software without specific prior written
 ##    permission.
-## 
+##
 ## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 ## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 ## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -64,6 +64,18 @@ endif ()
 
 if ( NOT EXISTS $ENV{HSATHK_BUILD_LIB_PATH}/libhsakmt.so.1 )
     MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_LIB_PATH is not set to point to the location where KFD Thunk library libhsakmt.so.1 could be found." )
+endif ()
+
+if ( EXISTS $ENV{LIBSP3_BUILD_INC_PATH}/sp3.h )
+  set ( LIBSP3_BUILD_INC_PATH $ENV{LIBSP3_BUILD_INC_PATH} )
+else ()
+  set ( LIBSP3_BUILD_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
+endif ()
+
+if ( EXISTS $ENV{LIBSP3_BUILD_LIB_PATH}/libsp3.a )
+  set ( LIBSP3_BUILD_LIB_PATH $ENV{LIBSP3_BUILD_LIB_PATH} )
+else ()
+  set ( LIBSP3_BUILD_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
 endif ()
 
 MESSAGE ( ------IS64BIT: ${IS64BIT} )
@@ -106,7 +118,6 @@ set ( CORE_SRCS ${CORE_SRCS} runtime/amd_cpu_agent.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_gpu_agent.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_hw_aql_command_processor.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_memory_region.cpp )
-set ( CORE_SRCS ${CORE_SRCS} runtime/amd_memory_registration.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_topology.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/compute_capability.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/default_signal.cpp )
@@ -119,7 +130,6 @@ set ( CORE_SRCS ${CORE_SRCS} runtime/interrupt_signal.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/isa.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_loader_context.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_load_map.cpp )
-set ( CORE_SRCS ${CORE_SRCS} runtime/memory_database.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/runtime.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/signal.cpp )
 set ( CORE_SRCS ${CORE_SRCS} common/hsa_table_interface.cpp )
@@ -130,9 +140,11 @@ include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/.. )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/../inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
 include_directories ( $ENV{HSATHK_BUILD_INC_PATH} )
+include_directories ( ${LIBSP3_BUILD_INC_PATH} )
 
 ## Library path(s).
 link_directories ( $ENV{HSATHK_BUILD_LIB_PATH} )
+link_directories ( ${LIBSP3_BUILD_LIB_PATH} )
 
 add_library ( ${CORE_RUNTIME_TARGET} SHARED ${CORE_SRCS} )
 
@@ -147,6 +159,7 @@ target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE amdhsaloader
   PRIVATE amdhsacode
   PRIVATE hsakmt
+  PRIVATE sp3
   dl pthread rt
 )
 

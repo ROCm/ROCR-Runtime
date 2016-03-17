@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -44,9 +44,11 @@
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
+#include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/signal.h"
+#include "core/inc/interrupt_signal.h"
 
 template <class T>
 struct ValidityError;
@@ -62,6 +64,11 @@ struct ValidityError<core::Agent*> {
 
 template <>
 struct ValidityError<core::MemoryRegion*> {
+  enum { value = HSA_STATUS_ERROR_INVALID_REGION };
+};
+
+template <>
+struct ValidityError<amd::MemoryRegion*> {
   enum { value = HSA_STATUS_ERROR_INVALID_REGION };
 };
 
@@ -167,12 +174,11 @@ hsa_status_t HSA_API
 }
 
 hsa_status_t HSA_API
-    hsa_amd_memory_async_copy(void* dst, const void* src, size_t size,
-                              hsa_agent_t copy_agent, uint32_t num_dep_signals,
+    hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle,
+                              const void* src, hsa_agent_t src_agent_handle,
+                              size_t size, uint32_t num_dep_signals,
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal) {
-  // TODO(bwicakso): intermittent soft hang when interrupt signal is used on
-  // the completion signal. The SDMA interrupt packet is not handled yet.
   if (dst == NULL || src == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -182,8 +188,11 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  core::Agent* agent = core::Agent::Convert(copy_agent);
-  IS_VALID(agent);
+  core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
+  IS_VALID(dst_agent);
+
+  core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
+  IS_VALID(src_agent);
 
   std::vector<core::Signal*> dep_signal_list(num_dep_signals);
   if (num_dep_signals > 0) {
@@ -199,7 +208,8 @@ hsa_status_t HSA_API
 
   if (size > 0) {
     return core::Runtime::runtime_singleton_->CopyMemory(
-        *agent, dst, src, size, dep_signal_list, *out_signal_obj);
+        dst, *dst_agent, src, *src_agent, size, dep_signal_list,
+        *out_signal_obj);
   }
 
   return HSA_STATUS_SUCCESS;
@@ -245,8 +255,10 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API hsa_amd_profiling_convert_tick_to_system_domain(
-    hsa_agent_t agent_handle, uint64_t agent_tick, uint64_t* system_tick) {
+hsa_status_t HSA_API
+    hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent_handle,
+                                                    uint64_t agent_tick,
+                                                    uint64_t* system_tick) {
   IS_OPEN();
 
   IS_BAD_PTR(system_tick);
@@ -294,9 +306,21 @@ hsa_status_t HSA_API
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   IS_VALID(signal);
   IS_BAD_PTR(handler);
-
+  if (!core::InterruptSignal::IsType(signal))
+    return HSA_STATUS_ERROR_INVALID_SIGNAL;
   return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
       hsa_signal, cond, value, handler, arg);
+}
+
+hsa_status_t HSA_API
+    hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
+  IS_OPEN();
+
+  IS_BAD_PTR(callback);
+  static const hsa_signal_t null_signal = {0};
+  return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+      null_signal, HSA_SIGNAL_CONDITION_EQ, 0, (hsa_amd_signal_handler)callback,
+      arg);
 }
 
 hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
@@ -331,56 +355,165 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  std::vector<HSAuint32> nodes(num_agent);
-  for (int i = 0; i < num_agent; ++i) {
-    core::Agent* agent = core::Agent::Convert(agents[i]);
-    if (agent == NULL || !agent->IsValid()) {
-      return HSA_STATUS_ERROR_INVALID_AGENT;
-    }
+  amd::MemoryRegion* system_region = amd::MemoryRegion::Convert(
+      core::Runtime::runtime_singleton_->system_region());
 
-    nodes[i] = reinterpret_cast<amd::GpuAgentInt*>(agent)->node_id();
-  }
-
-  if (reinterpret_cast<amd::MemoryRegion*>(
-          core::MemoryRegion::Convert(
-              core::Runtime::runtime_singleton_->system_region()))
-          ->full_profile()) {
-    // For APU, any host pointer is always accessible by the gpu.
-    *agent_ptr = host_ptr;
-    return HSA_STATUS_SUCCESS;
-  }
-
-  const size_t num_node = nodes.size();
-  uint32_t* node_array = (num_node > 0) ? &nodes[0] : NULL;
-  if (amd::MemoryRegion::RegisterHostMemory(host_ptr, size, num_node,
-                                            node_array)) {
-    uint64_t alternate_va = 0;
-    if (amd::MemoryRegion::MakeKfdMemoryResident(host_ptr, size,
-                                                 &alternate_va)) {
-      assert(alternate_va != 0);
-      *agent_ptr = reinterpret_cast<void*>(alternate_va);
-      return HSA_STATUS_SUCCESS;
-    }
-    amd::MemoryRegion::DeregisterHostMemory(host_ptr);
-  }
-
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
 }
 
 hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr) {
   IS_OPEN();
 
-  if (reinterpret_cast<amd::MemoryRegion*>(
-          core::MemoryRegion::Convert(
-              core::Runtime::runtime_singleton_->system_region()))
-          ->full_profile()) {
-    return HSA_STATUS_SUCCESS;
+  amd::MemoryRegion* system_region = amd::MemoryRegion::Convert(
+    core::Runtime::runtime_singleton_->system_region());
+
+  return system_region->Unlock(host_ptr);
+}
+
+hsa_status_t HSA_API
+    hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
+                                 hsa_amd_memory_pool_info_t attribute,
+                                 void* value) {
+  IS_OPEN();
+  IS_BAD_PTR(value);
+
+  hsa_region_t region = {memory_pool.handle};
+  const amd::MemoryRegion* mem_region = amd::MemoryRegion::Convert(region);
+  if (mem_region == NULL) {
+    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
 
-  if (host_ptr != NULL) {
-    amd::MemoryRegion::MakeKfdMemoryUnresident(host_ptr);
-    amd::MemoryRegion::DeregisterHostMemory(host_ptr);
+  return mem_region->GetPoolInfo(attribute, value);
+}
+
+hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
+    hsa_agent_t agent_handle,
+    hsa_status_t (*callback)(hsa_amd_memory_pool_t memory_pool, void* data),
+    void* data) {
+  IS_OPEN();
+  IS_BAD_PTR(callback);
+  const core::Agent* agent = core::Agent::Convert(agent_handle);
+  IS_VALID(agent);
+
+  if (agent->device_type() == core::Agent::kAmdCpuDevice) {
+    return reinterpret_cast<const amd::CpuAgent*>(agent)->VisitRegion(
+        false, reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
+                                                 void* data)>(callback),
+        data);
   }
 
-  return HSA_STATUS_SUCCESS;
+  return reinterpret_cast<const amd::GpuAgentInt*>(agent)->VisitRegion(
+      false,
+      reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool, void* data)>(
+          callback),
+      data);
+}
+
+hsa_status_t HSA_API
+    hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, size_t size,
+                                 uint32_t flags, void** ptr) {
+  IS_OPEN();
+
+  if (size == 0 || ptr == NULL) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  hsa_region_t region = {memory_pool.handle};
+  const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
+
+  if (mem_region == NULL || !mem_region->IsValid()) {
+    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
+  }
+
+  return core::Runtime::runtime_singleton_->AllocateMemory(true, mem_region,
+                                                           size, ptr);
+}
+
+hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr) {
+  return HSA::hsa_memory_free(ptr);
+}
+
+hsa_status_t HSA_API
+    hsa_amd_agents_allow_access(uint32_t num_agents, const hsa_agent_t* agents,
+                                const uint32_t* flags, const void* ptr) {
+  IS_OPEN();
+
+  if (num_agents == 0 || agents == NULL || flags != NULL || ptr == NULL) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  return core::Runtime::runtime_singleton_->AllowAccess(num_agents, agents,
+                                                        ptr);
+}
+
+hsa_status_t HSA_API
+    hsa_amd_memory_pool_can_migrate(hsa_amd_memory_pool_t src_memory_pool,
+                                    hsa_amd_memory_pool_t dst_memory_pool,
+                                    bool* result) {
+  IS_OPEN();
+
+  if (result == NULL) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  hsa_region_t src_region_handle = {src_memory_pool.handle};
+  const amd::MemoryRegion* src_mem_region =
+      amd::MemoryRegion::Convert(src_region_handle);
+
+  if (src_mem_region == NULL || !src_mem_region->IsValid()) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
+  }
+
+  hsa_region_t dst_region_handle = {dst_memory_pool.handle};
+  const amd::MemoryRegion* dst_mem_region =
+      amd::MemoryRegion::Convert(dst_region_handle);
+
+  if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
+  }
+
+  return src_mem_region->CanMigrate(*dst_mem_region, *result);
+}
+
+hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
+                                            hsa_amd_memory_pool_t memory_pool,
+                                            uint32_t flags) {
+  IS_OPEN();
+
+  if (ptr == NULL || flags != 0) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  hsa_region_t dst_region_handle = {memory_pool.handle};
+  const amd::MemoryRegion* dst_mem_region =
+      amd::MemoryRegion::Convert(dst_region_handle);
+
+  if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
+  }
+
+  return dst_mem_region->Migrate(flags, ptr);
+}
+
+hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
+    hsa_agent_t agent_handle, hsa_amd_memory_pool_t memory_pool,
+    hsa_amd_agent_memory_pool_info_t attribute, void* value) {
+  IS_OPEN();
+
+  if (value == NULL) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  const core::Agent* agent = core::Agent::Convert(agent_handle);
+  IS_VALID(agent);
+
+  hsa_region_t region_handle = {memory_pool.handle};
+  const amd::MemoryRegion* mem_region =
+      amd::MemoryRegion::Convert(region_handle);
+
+  if (mem_region == NULL || !mem_region->IsValid()) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
+  }
+
+  return mem_region->GetAgentPoolInfo(*agent, attribute, value);
 }
