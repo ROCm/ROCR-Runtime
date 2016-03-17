@@ -66,17 +66,27 @@ void CpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
   assert((amd_region->IsSystem()) &&
          ("Memory region should only be system memory"));
 
-  regions_.push_back(amd_region);
+  if (node_id() == amd_region->node_id()) {
+    regions_.push_back(amd_region);
+  }
+  else {
+    peer_regions_.push_back(amd_region);
+  }
 }
 
 hsa_status_t CpuAgent::VisitRegion(bool include_peer,
                                    hsa_status_t (*callback)(hsa_region_t region,
                                                             void* data),
                                    void* data) const {
+<<<<<<< HEAD
   // First traverse the region owned by this agent.
   const hsa_status_t stat = VisitRegion(regions_, callback, data);
 
   // Then traverse the region of its peers.
+=======
+  const hsa_status_t stat = VisitRegion(regions_, callback, data);
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   if (stat == HSA_STATUS_SUCCESS && include_peer) {
     return VisitRegion(peer_regions_, callback, data);
   }

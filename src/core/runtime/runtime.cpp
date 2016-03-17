@@ -89,7 +89,10 @@ class RuntimeCleanup {
     loaded = false;
   }
 };
+<<<<<<< HEAD
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 static RuntimeCleanup cleanup_at_unload_;
 
 bool Runtime::Acquire() {
@@ -121,12 +124,18 @@ bool Runtime::Acquire() {
 
 bool Runtime::Release() {
   ScopedAcquire<KernelMutex> lock(&kernel_lock_);
+<<<<<<< HEAD
   if (ref_count_ == 0) {
     return false;
   }
 
   if (ref_count_ == 1) {
     // Release all registered memory, then unload backends
+=======
+  if (ref_count_ == 0) return false;
+  if (ref_count_ == 1)  // Release all registered memory, then unload backends
+  {
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
     Unload();
   }
 
@@ -258,6 +267,7 @@ void Runtime::DestroyMemoryRegions() {
   system_region_coarse_.handle = 0;
 }
 
+<<<<<<< HEAD
 void Runtime::SetLinkCount(size_t num_link) {
   const uint32_t last_index = GetIndexLinkInfo(0, num_link);
   link_matrix_.resize(last_index);
@@ -285,6 +295,8 @@ uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
   return ((node_id_max * (node_id_max + 1) / 2) + node_id_min);
 }
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
                                                             void* data),
                                    void* data) {
@@ -387,6 +399,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   return blit_agent_->DmaCopy(dst, src, size);
 }
+<<<<<<< HEAD
 
 hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
                                           size_t size, bool dst_malloc) {
@@ -400,6 +413,21 @@ hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
   hsa_status_t stat =
       system_region->Lock(1, &blit_agent, usrptr, size, &agent_ptr);
 
+=======
+
+hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
+                                          size_t size, bool dst_malloc) {
+  void* usrptr = (dst_malloc) ? dst : const_cast<void*>(src);
+  void* agent_ptr = NULL;
+
+  hsa_agent_t blit_agent = core::Agent::Convert(blit_agent_);
+
+  amd::MemoryRegion* system_region = amd::MemoryRegion::Convert(
+      core::Runtime::runtime_singleton_->system_region());
+  hsa_status_t stat =
+      system_region->Lock(1, &blit_agent, usrptr, size, &agent_ptr);
+
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
   }
@@ -453,6 +481,8 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
                                   const hsa_agent_t* agents, const void* ptr) {
   const amd::MemoryRegion* amd_region = NULL;
   size_t alloc_size = 0;
+<<<<<<< HEAD
+=======
 
   {
     ScopedAcquire<KernelMutex> lock(&memory_lock_);
@@ -669,6 +699,245 @@ void Runtime::Load() {
   // Load interrupt enable option
   std::string interrupt = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
   g_use_interrupt_wait = (interrupt != "0");
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
+
+  {
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+
+<<<<<<< HEAD
+    std::map<const void*, AllocationRegion>::const_iterator it =
+        allocation_map_.find(ptr);
+=======
+  if (!amd::Load()) {
+    return;
+  }
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
+
+    if (it == allocation_map_.end()) {
+      return HSA_STATUS_ERROR;
+    }
+
+    amd_region = reinterpret_cast<const amd::MemoryRegion*>(it->second.region);
+    alloc_size = it->second.size;
+  }
+
+  return amd_region->AllowAccess(num_agents, agents, ptr, alloc_size);
+}
+
+<<<<<<< HEAD
+hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
+  switch (attribute) {
+    case HSA_SYSTEM_INFO_VERSION_MAJOR:
+      *((uint16_t*)value) = HSA_VERSION_MAJOR;
+      break;
+    case HSA_SYSTEM_INFO_VERSION_MINOR:
+      *((uint16_t*)value) = HSA_VERSION_MINOR;
+      break;
+    case HSA_SYSTEM_INFO_TIMESTAMP: {
+      HsaClockCounters clocks;
+      hsaKmtGetClockCounters(0, &clocks);
+      *((uint64_t*)value) = clocks.SystemClockCounter;
+      break;
+    }
+    case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
+      assert(sys_clock_freq_ != 0 &&
+             "Use of HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY before HSA "
+             "initialization completes.");
+      *(uint64_t*)value = sys_clock_freq_;
+      break;
+    }
+    case HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT:
+      *((uint64_t*)value) = 0xFFFFFFFFFFFFFFFF;
+      break;
+    case HSA_SYSTEM_INFO_ENDIANNESS:
+#if defined(HSA_LITTLE_ENDIAN)
+      *((hsa_endianness_t*)value) = HSA_ENDIANNESS_LITTLE;
+#else
+      *((hsa_endianness_t*)value) = HSA_ENDIANNESS_BIG;
+#endif
+      break;
+    case HSA_SYSTEM_INFO_MACHINE_MODEL:
+#if defined(HSA_LARGE_MODEL)
+      *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_LARGE;
+#else
+      *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_SMALL;
+#endif
+      break;
+    case HSA_SYSTEM_INFO_EXTENSIONS:
+      memset(value, 0, sizeof(uint8_t) * 128);
+=======
+void Runtime::Unload() {
+  UnloadTools();
+  UnloadExtensions();
+
+  amd::hsa::loader::Loader::Destroy(loader_);
+  loader_ = nullptr;
+  DestroyAgents();
+  CloseTools();
+
+  async_events_control_.Shutdown();
+
+  DestroyMemoryRegions();
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
+
+      if (extensions_.table.hsa_ext_program_finalize_fn != NULL) {
+        *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
+      }
+
+      if (extensions_.table.hsa_ext_image_create_fn != NULL) {
+        *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
+      }
+
+      *((uint8_t*)value) |= 1 << HSA_EXTENSION_AMD_PROFILER;
+
+      break;
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+<<<<<<< HEAD
+uint32_t Runtime::GetQueueId() { return atomic::Increment(&queue_count_); }
+
+hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
+                                            hsa_signal_condition_t cond,
+                                            hsa_signal_value_t value,
+                                            hsa_amd_signal_handler handler,
+                                            void* arg) {
+  // Asyncronous signal handler is only supported when KFD events are on.
+  if (!core::g_use_interrupt_wait) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  // Indicate that this signal is in use.
+  if (signal.handle != 0) hsa_signal_handle(signal)->Retain();
+
+  ScopedAcquire<KernelMutex> scope_lock(&async_events_control_.lock);
+
+  // Lazy initializer
+  if (async_events_control_.async_events_thread_ == NULL) {
+    // Create monitoring thread control signal
+    auto err = HSA::hsa_signal_create(0, 0, NULL, &async_events_control_.wake);
+    if (err != HSA_STATUS_SUCCESS) {
+      assert(false && "Asyncronous events control signal creation error.");
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+    async_events_.PushBack(async_events_control_.wake, HSA_SIGNAL_CONDITION_NE,
+                           0, NULL, NULL);
+
+    // Start event monitoring thread
+    async_events_control_.exit = false;
+    async_events_control_.async_events_thread_ =
+        os::CreateThread(AsyncEventsLoop, NULL);
+    if (async_events_control_.async_events_thread_ == NULL) {
+      assert(false && "Asyncronous events thread creation error.");
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+  }
+
+  new_async_events_.PushBack(signal, cond, value, handler, arg);
+
+  hsa_signal_handle(async_events_control_.wake)->StoreRelease(1);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+void Runtime::AsyncEventsLoop(void*) {
+  auto& async_events_control_ = runtime_singleton_->async_events_control_;
+  auto& async_events_ = runtime_singleton_->async_events_;
+  auto& new_async_events_ = runtime_singleton_->new_async_events_;
+
+  while (!async_events_control_.exit) {
+    // Wait for a signal
+    hsa_signal_value_t value;
+    uint32_t index = hsa_amd_signal_wait_any(
+        uint32_t(async_events_.Size()), &async_events_.signal_[0],
+        &async_events_.cond_[0], &async_events_.value_[0], uint64_t(-1),
+        HSA_WAIT_STATE_BLOCKED, &value);
+
+    // Reset the control signal
+    if (index == 0) {
+      hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
+    } else if (index != -1) {
+      // No error or timout occured, process the handler
+      assert(async_events_.handler_[index] != NULL);
+      bool keep =
+          async_events_.handler_[index](value, async_events_.arg_[index]);
+      if (!keep) {
+        hsa_signal_handle(async_events_.signal_[index])->Release();
+        async_events_.CopyIndex(index, async_events_.Size() - 1);
+        async_events_.PopBack();
+      }
+    }
+
+    // Check for dead signals
+    index = 0;
+    while (index != async_events_.Size()) {
+      if (!hsa_signal_handle(async_events_.signal_[index])->IsValid()) {
+        hsa_signal_handle(async_events_.signal_[index])->Release();
+        async_events_.CopyIndex(index, async_events_.Size() - 1);
+        async_events_.PopBack();
+        continue;
+      }
+      index++;
+    }
+
+    // Insert new signals and find plain functions
+    typedef std::pair<void (*)(void*), void*> func_arg_t;
+    std::vector<func_arg_t> functions;
+    {
+      ScopedAcquire<KernelMutex> scope_lock(&async_events_control_.lock);
+      for (size_t i = 0; i < new_async_events_.Size(); i++) {
+        if (new_async_events_.signal_[i].handle == 0) {
+          functions.push_back(
+              func_arg_t((void (*)(void*))new_async_events_.handler_[i],
+                         new_async_events_.arg_[i]));
+          continue;
+        }
+        async_events_.PushBack(
+            new_async_events_.signal_[i], new_async_events_.cond_[i],
+            new_async_events_.value_[i], new_async_events_.handler_[i],
+            new_async_events_.arg_[i]);
+      }
+      new_async_events_.Clear();
+    }
+
+    // Call plain functions
+    for (size_t i = 0; i < functions.size(); i++)
+      functions[i].first(functions[i].second);
+    functions.clear();
+  }
+
+  // Release wait count of all pending signals
+  for (size_t i = 1; i < async_events_.Size(); i++)
+    hsa_signal_handle(async_events_.signal_[i])->Release();
+  async_events_.Clear();
+
+  for (size_t i = 0; i < new_async_events_.Size(); i++)
+    hsa_signal_handle(new_async_events_.signal_[i])->Release();
+  new_async_events_.Clear();
+}
+
+Runtime::Runtime()
+    : host_agent_(NULL),
+      blit_agent_(NULL),
+      queue_count_(0),
+      sys_clock_freq_(0),
+      ref_count_(0) {
+  system_region_.handle = 0;
+  system_region_coarse_.handle = 0;
+
+  start_svm_address_ = 0;
+#if defined(HSA_LARGE_MODEL)
+  end_svm_address_ = UINT64_MAX;
+#else
+  end_svm_address_ = UINT32_MAX;
+#endif
+}
+
+void Runtime::Load() {
+  // Load interrupt enable option
+  std::string interrupt = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
+  g_use_interrupt_wait = (interrupt != "0");
 
   // Default system allocator is fine grain memory allocator using C malloc.
   system_allocator_ = [](size_t size, size_t alignment) -> void * {
@@ -706,6 +975,8 @@ void Runtime::Unload() {
   amd::Unload();
 }
 
+=======
+>>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 void Runtime::LoadExtensions() {
 // Load finalizer and extension library
 #ifdef HSA_LARGE_MODEL
