@@ -1052,6 +1052,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures * process_apertures;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	char *disableCache;
+
+	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
+	disableCache = getenv("HSA_DISABLE_CACHE");
+	if (disableCache && strcmp(disableCache, "0") == 0)
+		disableCache = NULL;
 
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 *	systems with CPU node, slightly more memory is allocated than
@@ -1180,9 +1186,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			svm.dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
 			svm.dgpu_aperture.base = VOID_PTR_ADD(svm.dgpu_alt_aperture.limit, 1);
 			err = fmm_set_memory_policy(gpu_mem[gpu_mem_id].gpu_id,
-							KFD_IOC_CACHE_POLICY_NONCOHERENT,
-							KFD_IOC_CACHE_POLICY_COHERENT,
-							alt_base, alt_size);
+						    disableCache ?
+						    KFD_IOC_CACHE_POLICY_COHERENT :
+						    KFD_IOC_CACHE_POLICY_NONCOHERENT,
+						    KFD_IOC_CACHE_POLICY_COHERENT,
+						    alt_base, alt_size);
 			if (err != 0) {
 				fprintf(stderr, "Error! Failed to set alt aperture for GPU [0x%x]\n", gpu_mem[gpu_mem_id].gpu_id);
 				ret = HSAKMT_STATUS_ERROR;
