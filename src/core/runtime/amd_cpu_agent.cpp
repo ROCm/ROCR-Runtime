@@ -51,26 +51,79 @@
 #include "hsa_ext_image.h"
 
 namespace amd {
-CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
-                   const std::vector<HsaCacheProperties>& cache_props)
-    : core::Agent(kAmdCpuDevice),
-      node_id_(node),
-      properties_(node_props),
-      cache_props_(cache_props) {}
+CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
+    : core::Agent(node, kAmdCpuDevice), properties_(node_props) {
+  InitRegionList();
 
-CpuAgent::~CpuAgent() { regions_.clear(); }
+  InitCacheList();
+}
 
-void CpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
-  MemoryRegion* amd_region = reinterpret_cast<MemoryRegion*>(&region);
+CpuAgent::~CpuAgent() {
+  std::for_each(regions_.begin(), regions_.end(), DeleteObject());
+  regions_.clear();
+}
 
-  assert((amd_region->IsSystem()) &&
-         ("Memory region should only be system memory"));
+void CpuAgent::InitRegionList() {
+  const bool is_apu_node = (properties_.NumFComputeCores > 0);
 
-  if (node_id() == amd_region->node_id()) {
-    regions_.push_back(amd_region);
+  std::vector<HsaMemoryProperties> mem_props(properties_.NumMemoryBanks);
+  if (HSAKMT_STATUS_SUCCESS ==
+      hsaKmtGetNodeMemoryProperties(node_id(), properties_.NumMemoryBanks,
+                                    &mem_props[0])) {
+    std::vector<HsaMemoryProperties>::iterator system_prop =
+        std::find_if(mem_props.begin(), mem_props.end(),
+                     [](HsaMemoryProperties prop) -> bool {
+          return (prop.SizeInBytes > 0 && prop.HeapType == HSA_HEAPTYPE_SYSTEM);
+        });
+
+    if (system_prop != mem_props.end()) {
+      MemoryRegion* system_region_fine =
+          new MemoryRegion(true, is_apu_node, this, *system_prop);
+
+      regions_.push_back(system_region_fine);
+
+      if (!is_apu_node) {
+        MemoryRegion* system_region_coarse =
+            new MemoryRegion(false, is_apu_node, this, *system_prop);
+
+        regions_.push_back(system_region_coarse);
+      }
+    } else {
+      HsaMemoryProperties system_props;
+      std::memset(&system_props, 0, sizeof(HsaMemoryProperties));
+
+      const uintptr_t system_base = os::GetUserModeVirtualMemoryBase();
+      const size_t system_physical_size = os::GetUsablePhysicalHostMemorySize();
+      assert(system_physical_size != 0);
+
+      system_props.HeapType = HSA_HEAPTYPE_SYSTEM;
+      system_props.SizeInBytes = (HSAuint64)system_physical_size;
+      system_props.VirtualBaseAddress = (HSAuint64)(system_base);
+
+      MemoryRegion* system_region =
+          new MemoryRegion(true, is_apu_node, this, system_props);
+
+      regions_.push_back(system_region);
+    }
   }
-  else {
-    peer_regions_.push_back(amd_region);
+}
+
+void CpuAgent::InitCacheList() {
+  // Get CPU cache information.
+  cache_props_.resize(properties_.NumCaches);
+  if (HSAKMT_STATUS_SUCCESS !=
+      hsaKmtGetNodeCacheProperties(node_id(), properties_.CComputeIdLo,
+                                   properties_.NumCaches, &cache_props_[0])) {
+    cache_props_.clear();
+  } else {
+    // Only store CPU D-cache.
+    for (size_t cache_id = 0; cache_id < cache_props_.size(); ++cache_id) {
+      const HsaCacheType type = cache_props_[cache_id].CacheType;
+      if (type.ui32.CPU != 1 || type.ui32.Instruction == 1) {
+        cache_props_.erase(cache_props_.begin() + cache_id);
+        --cache_id;
+      }
+    }
   }
 }
 
@@ -78,20 +131,19 @@ hsa_status_t CpuAgent::VisitRegion(bool include_peer,
                                    hsa_status_t (*callback)(hsa_region_t region,
                                                             void* data),
                                    void* data) const {
-<<<<<<< HEAD
-  // First traverse the region owned by this agent.
-  const hsa_status_t stat = VisitRegion(regions_, callback, data);
-
-  // Then traverse the region of its peers.
-=======
-  const hsa_status_t stat = VisitRegion(regions_, callback, data);
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
-  if (stat == HSA_STATUS_SUCCESS && include_peer) {
-    return VisitRegion(peer_regions_, callback, data);
+  if (!include_peer) {
+    return VisitRegion(regions_, callback, data);
   }
 
-  return stat;
+  // Expose all system regions in the system.
+  hsa_status_t stat = VisitRegion(
+      core::Runtime::runtime_singleton_->system_regions_fine(), callback, data);
+  if (stat != HSA_STATUS_SUCCESS) {
+    return stat;
+  }
+
+  return VisitRegion(core::Runtime::runtime_singleton_->system_regions_coarse(),
+                     callback, data);
 }
 
 hsa_status_t CpuAgent::VisitRegion(
@@ -126,7 +178,7 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       std::memcpy(value, "CPU Device", sizeof("CPU Device"));
       break;
     case HSA_AGENT_INFO_VENDOR_NAME:
-	  // TODO: hardcode for now, wait until SWDEV-88894 implemented
+      // TODO: hardcode for now, wait until SWDEV-88894 implemented
       std::memset(value, 0, kNameSize);
       std::memcpy(value, "CPU", sizeof("CPU"));
       break;
@@ -186,7 +238,7 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AGENT_INFO_NODE:
       // TODO: associate with OS NUMA support (numactl / GetNumaProcessorNode).
-      *((uint32_t*)value) = node_id_;
+      *((uint32_t*)value) = node_id();
       break;
     case HSA_AGENT_INFO_DEVICE:
       *((hsa_device_type_t*)value) = HSA_DEVICE_TYPE_CPU;
@@ -249,15 +301,15 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = properties_.MaxEngineClockMhzCCompute;
       break;
     case HSA_AMD_AGENT_INFO_DRIVER_NODE_ID:
-      *((uint32_t*)value) = node_id_;
+      *((uint32_t*)value) = node_id();
       break;
     case HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS:
       *((uint32_t*)value) = static_cast<uint32_t>(
           1 << properties_.Capability.ui32.WatchPointsTotalBits);
       break;
-	case HSA_AMD_AGENT_INFO_BDFID:
-	  *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
-	  break;
+    case HSA_AMD_AGENT_INFO_BDFID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

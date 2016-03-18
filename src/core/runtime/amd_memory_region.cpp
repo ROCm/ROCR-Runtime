@@ -79,7 +79,6 @@ bool MemoryRegion::RegisterMemory(void* ptr, size_t size, size_t num_nodes,
 }
 
 void MemoryRegion::DeregisterMemory(void* ptr) { hsaKmtDeregisterMemory(ptr); }
-<<<<<<< HEAD
 
 bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
                                          void* ptr, size_t size,
@@ -92,21 +91,6 @@ bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
   const HSAKMT_STATUS status =
       hsaKmtMapMemoryToGPUNodes(ptr, size, alternate_va, map_flag, num_node,
                                 const_cast<uint32_t*>(nodes));
-=======
-
-bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
-                                         void* ptr, size_t size,
-                                         uint64_t* alternate_va,
-                                         HsaMemMapFlags map_flag) {
-  assert(num_node > 0);
-  assert(nodes != NULL);
-
-  // TODO(bwicakso): hsaKmtMapMemoryToGPUNodes is currently broken.
-  *alternate_va = 0;
-  const HSAKMT_STATUS status = hsaKmtMapMemoryToGPU(ptr, size, alternate_va);
-      //hsaKmtMapMemoryToGPUNodes(ptr, size, alternate_va, map_flag, num_node,
-      //                          const_cast<uint32_t*>(nodes));
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   return (status == HSAKMT_STATUS_SUCCESS);
 }
@@ -115,11 +99,10 @@ void MemoryRegion::MakeKfdMemoryUnresident(void* ptr) {
   hsaKmtUnmapMemoryToGPU(ptr);
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, uint32_t node_id,
+MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
+                           core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, full_profile),
-      node_id_(node_id),
-      owner_(NULL),
+    : core::MemoryRegion(fine_grain, full_profile, owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0) {
@@ -185,33 +168,19 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
 
   size = AlignUp(size, kPageSize_);
 
-  *address = AllocateKfdMemory(mem_flag_, node_id_, size);
+  *address = AllocateKfdMemory(mem_flag_, owner()->node_id(), size);
 
   if (*address != NULL) {
-<<<<<<< HEAD
-=======
-    // Register all possible GPU that may access the memory.
-    // TODO(bwicakso): remove HSA profile check when KFD support memory
-    // registration on APU.
-    if (!full_profile() &&
-        core::Runtime::runtime_singleton_->gpu_ids().size() > 0) {
-      if (!RegisterMemory(*address, size,
-                          core::Runtime::runtime_singleton_->gpu_ids().size(),
-                          &core::Runtime::runtime_singleton_->gpu_ids()[0])) {
-        return HSA_STATUS_ERROR;
-      }
-    }
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
-    // restricted allocation, only CPU is allowed to access by default, so 
+    // restricted allocation, only CPU is allowed to access by default, so
     // no need to map
     // For local memory, only map it to the owning GPU. Mapping to other GPU,
     // if the access is allowed, is performed on AllowAccess.
     HsaMemMapFlags map_flag = map_flag_;
     size_t map_node_count = 1;
-    const uint32_t* map_node_id = &node_id_;
+    const uint32_t owner_node_id = owner()->node_id();
+    const uint32_t* map_node_id = &owner_node_id;
 
     if (IsSystem()) {
       if (!restrict_access) {
@@ -238,10 +207,6 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
         (!full_profile() || IsLocalMemory() || IsScratch());
 
     if (require_pinning && !is_resident) {
-<<<<<<< HEAD
-=======
-      DeregisterMemory(*address);
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
       FreeKfdMemory(*address, size);
       *address = NULL;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -403,16 +368,8 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
 hsa_status_t MemoryRegion::GetAgentPoolInfo(
     const core::Agent& agent, hsa_amd_agent_memory_pool_info_t attribute,
     void* value) const {
-<<<<<<< HEAD
-  const uint32_t node_id_from =
-      (agent.device_type() == core::Agent::kAmdCpuDevice)
-          ? reinterpret_cast<const amd::CpuAgent&>(agent).node_id()
-          : reinterpret_cast<const amd::GpuAgentInt&>(agent).node_id();
-
-  const uint32_t node_id_to =
-      (owner_->device_type() == core::Agent::kAmdCpuDevice)
-          ? reinterpret_cast<const amd::CpuAgent*>(owner_)->node_id()
-          : reinterpret_cast<const amd::GpuAgentInt*>(owner_)->node_id();
+  const uint32_t node_id_from = agent.node_id();
+  const uint32_t node_id_to = owner()->node_id();
 
   const core::Runtime::LinkInfo link_info =
       core::Runtime::runtime_singleton_->GetLinkInfo(node_id_from, node_id_to);
@@ -435,7 +392,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
       *((hsa_amd_memory_pool_access_t*)value) =
           (((IsSystem()) &&
             (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
-           (&agent == owner_))
+           (agent.node_id() == owner()->node_id()))
               ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
               : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
                     ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
@@ -448,18 +405,6 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
       if (link_info.num_hop > 0) {
         memcpy(value, &link_info.info, sizeof(hsa_amd_memory_pool_link_info_t));
       }
-=======
-  switch (attribute) {
-    case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
-      *((hsa_amd_memory_pool_access_t*)value) = GetPoolAccessType(agent);
-      break;
-    case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
-      *((uint32_t*)value) = 1;  // TODO(bwicakso): more info needed from kfd.
-      break;
-    case HSA_AMD_AGENT_MEMORY_POOL_INFO_LINK_INFO:
-      // TODO(bwicakso): more info needed from kfd.
-      memset(value, 0, sizeof(hsa_amd_memory_pool_link_info_t));
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -467,33 +412,6 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   return HSA_STATUS_SUCCESS;
 }
 
-<<<<<<< HEAD
-=======
-hsa_amd_memory_pool_access_t MemoryRegion::GetPoolAccessType(
-    const core::Agent& agent) const {
-  /**
-   *  ---------------------------------------------------
-   *  |              |CPU        |GPU (owner)|GPU (peer) |
-   *  ---------------------------------------------------
-   *  |system memory |allowed    |disallowed |disallowed |
-   *  ---------------------------------------------------
-   *  |fb private    |never      |allowed    |never      |
-   *  ---------------------------------------------------
-   *  |fb public     |disallowed |allowed    |disallowed |
-   *  ---------------------------------------------------
-   *  |others        |never      |allowed    |never      |
-   *  ---------------------------------------------------
-   */
-  return (((IsSystem()) &&
-           (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
-          (&agent == owner_))
-             ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
-             : (IsSystem() || IsPublic())
-                   ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
-                   : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
-}
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
                                        const hsa_agent_t* agents,
                                        const void* ptr, size_t size) const {
@@ -515,8 +433,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
     }
 
     if (agent->device_type() == core::Agent::kAmdGpuDevice) {
-      whitelist_nodes.push_back(
-          reinterpret_cast<const amd::GpuAgentInt*>(agent)->node_id());
+      whitelist_nodes.push_back(agent->node_id());
     } else {
       cpu_in_list = true;
     }
@@ -532,9 +449,9 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   // If this is a local memory region, the owning gpu always needs to be in
   // the whitelist.
   if (IsPublic() &&
-      std::find(whitelist_nodes.begin(), whitelist_nodes.end(), node_id_) ==
-          whitelist_nodes.end()) {
-    whitelist_nodes.push_back(node_id_);
+      std::find(whitelist_nodes.begin(), whitelist_nodes.end(),
+                owner()->node_id()) == whitelist_nodes.end()) {
+    whitelist_nodes.push_back(owner()->node_id());
   }
 
   HsaMemMapFlags map_flag = map_flag_;
@@ -547,7 +464,6 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
              ? HSA_STATUS_SUCCESS
              : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
-<<<<<<< HEAD
 
 hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
                                       bool& result) const {
@@ -561,21 +477,6 @@ hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
-=======
-
-hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
-                                      bool& result) const {
-  // TODO(bwicakso): not implemented yet.
-  result = false;
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-}
-
-hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
-  // TODO(bwicakso): not implemented yet.
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-}
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
                                 void* host_ptr, size_t size,
                                 void** agent_ptr) const {
@@ -601,8 +502,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
       }
 
       if (agent->device_type() == core::Agent::kAmdGpuDevice) {
-        whitelist_nodes.push_back(
-            reinterpret_cast<amd::GpuAgentInt*>(agent)->node_id());
+        whitelist_nodes.push_back(agent->node_id());
       }
     }
   }
@@ -615,25 +515,13 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
   }
 
   // Call kernel driver to register and pin the memory.
-
-  // Adjust the address and size to be cacheline aligned to satisfy the
-  // requirement from kernel driver.
-  static const size_t kCacheAlignment = 64;
-  const uintptr_t cache_offset =
-      reinterpret_cast<uintptr_t>(host_ptr) & (kCacheAlignment - 1);
-  host_ptr =
-      reinterpret_cast<void*>(reinterpret_cast<char*>(host_ptr) - cache_offset);
-  size = AlignUp((cache_offset + size), kCacheAlignment);
-
   if (RegisterMemory(host_ptr, size, whitelist_nodes.size(),
                      &whitelist_nodes[0])) {
     uint64_t alternate_va = 0;
     if (MakeKfdMemoryResident(whitelist_nodes.size(), &whitelist_nodes[0],
                               host_ptr, size, &alternate_va, map_flag_)) {
       assert(alternate_va != 0);
-      // Adjust the offset of the agent ptr in case host ptr is not cacheline
-      // aligned.
-      *agent_ptr = reinterpret_cast<void*>(alternate_va + cache_offset);
+      *agent_ptr = reinterpret_cast<void*>(alternate_va);
       return HSA_STATUS_SUCCESS;
     }
     amd::MemoryRegion::DeregisterMemory(host_ptr);
@@ -651,9 +539,6 @@ hsa_status_t MemoryRegion::Unlock(void* host_ptr) const {
   if (full_profile()) {
     return HSA_STATUS_SUCCESS;
   }
-
-  static const size_t kCacheAlignment = 64;
-  host_ptr = AlignDown(host_ptr, kCacheAlignment);
 
   MakeKfdMemoryUnresident(host_ptr);
   DeregisterMemory(host_ptr);

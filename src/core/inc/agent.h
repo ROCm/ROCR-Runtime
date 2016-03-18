@@ -51,7 +51,7 @@
 
 #include "core/inc/runtime.h"
 #include "core/inc/checked.h"
-#include "core/inc/compute_capability.h"
+#include "core/inc/isa.h"
 #include "core/inc/queue.h"
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
@@ -65,8 +65,8 @@ typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
 class MemoryRegion;
 
 // Agent is intended to be an pure interface class and may be wrapped or
-// replaced by tools libraries. All funtions other than Convert, device_type,
-// and public_handle must be virtual.
+// replaced by tools libraries. All funtions other than Convert, node_id,
+// device_type, and public_handle must be virtual.
 class Agent : public Checked<0xF6BC25EB17E6F917> {
  public:
   // @brief Convert agent object into hsa_agent_t.
@@ -106,15 +106,16 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Agent class contructor.
   //
   // @param [in] type CPU or GPU or other.
-  explicit Agent(DeviceType type)
-      : compute_capability_(), device_type_(uint32_t(type)) {
+  explicit Agent(uint32_t node_id, DeviceType type)
+      : node_id_(node_id), device_type_(uint32_t(type)) {
     public_handle_ = Convert(this);
   }
 
   // @brief Agent class contructor.
   //
   // @param [in] type CPU or GPU or other.
-  explicit Agent(uint32_t type) : compute_capability_(), device_type_(type) {
+  explicit Agent(uint32_t node_id, uint32_t type)
+      : node_id_(node_id), device_type_(type) {
     public_handle_ = Convert(this);
   }
 
@@ -219,6 +220,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Returns an array of regions owned by the agent.
   virtual const std::vector<const core::MemoryRegion*>& regions() const = 0;
 
+  // @details Returns the agent's instruction set architecture.
+  virtual const Isa* isa() const = 0;
+
   // @brief Returns the device type (CPU/GPU/Others).
   __forceinline uint32_t device_type() const { return device_type_; }
 
@@ -227,10 +231,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @details Only matters when tools library need to intercept HSA calls.
   __forceinline hsa_agent_t public_handle() const { return public_handle_; }
 
-  // @details Returns the agent's compute capability.
-  __forceinline const ComputeCapability& compute_capability() const {
-    return compute_capability_;
-  }
+  // @brief Returns node id associated with this agent.
+  __forceinline uint32_t node_id() const { return node_id_; }
 
  protected:
   // Intention here is to have a polymorphic update procedure for public_handle_
@@ -241,17 +243,21 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
                                               hsa_agent_t handle) {
     agent->do_set_public_handle(handle);
   }
+
   virtual void do_set_public_handle(hsa_agent_t handle) {
     public_handle_ = handle;
   }
+
   hsa_agent_t public_handle_;
-  ComputeCapability compute_capability_;
 
  private:
-  // Forbid copying and moving of this object
-  DISALLOW_COPY_AND_ASSIGN(Agent);
+  // @brief Node id.
+  const uint32_t node_id_;
 
   const uint32_t device_type_;
+
+  // Forbid copying and moving of this object
+  DISALLOW_COPY_AND_ASSIGN(Agent);
 };
 }  // namespace core
 

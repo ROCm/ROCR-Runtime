@@ -69,9 +69,9 @@ struct ScratchInfo {
 class GpuAgentInt : public core::Agent {
  public:
   // @brief Constructor
-  GpuAgentInt() : core::Agent(core::Agent::DeviceType::kAmdGpuDevice) {}
+  GpuAgentInt(uint32_t node_id)
+      : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
-<<<<<<< HEAD
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
   //
@@ -83,14 +83,11 @@ class GpuAgentInt : public core::Agent {
   //
   // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
   // region returns ::HSA_STATUS_SUCCESS.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   virtual hsa_status_t VisitRegion(bool include_peer,
                                    hsa_status_t (*callback)(hsa_region_t region,
                                                             void* data),
                                    void* data) const = 0;
 
-<<<<<<< HEAD
   // @brief Carve scratch memory from scratch pool.
   //
   // @param [out] scratch Structure to be populated with the carved memory
@@ -128,9 +125,6 @@ class GpuAgentInt : public core::Agent {
   // @retval Coherency type.
   virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
 
-  // @brief Returns node id associated with this agent.
-  virtual HSAuint32 node_id() const = 0;
-
   // @brief Query if agent represent Kaveri GPU.
   //
   // @retval true if agent is Kaveri GPU.
@@ -139,21 +133,6 @@ class GpuAgentInt : public core::Agent {
   // @brief Query the agent HSA profile.
   //
   // @retval HSA profile.
-=======
-  virtual void TranslateTime(core::Signal* signal,
-                             hsa_amd_profiling_dispatch_time_t& time) = 0;
-
-  virtual uint64_t TranslateTime(uint64_t tick) = 0;
-
-  virtual bool current_coherency_type(hsa_amd_coherency_type_t type) = 0;
-
-  virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
-
-  virtual HSAuint32 node_id() const = 0;
-
-  virtual bool is_kv_device() const = 0;
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   virtual hsa_profile_t profile() const = 0;
 };
 
@@ -164,40 +143,17 @@ class GpuAgent : public GpuAgentInt {
   // @param [in] node Node id. Each CPU in different socket will get distinct
   // id.
   // @param [in] node_props Node property.
-  // @param [in] cache_props Array of data cache properties. The array index
-  // represent the cache level.
-  // @param [in] HSA profile of the agent.
-  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
-           const std::vector<HsaCacheProperties>& cache_props,
-           hsa_profile_t profile);
+  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props);
 
   // @brief GPU agent destructor.
   ~GpuAgent();
 
-<<<<<<< HEAD
   // @brief Initialize DMA queue.
   //
   // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
   hsa_status_t InitDma();
 
-  // @brief Add a region object to ::regions_ if @p region is owned by this
-  // agent. Add a region object to ::peer_regions_ if @p region is owned by
-  // the peer agent.
-  //
-  // @param [in] region Region object to be added into the list.
-  void RegisterMemoryProperties(core::MemoryRegion& region);
-
   uint16_t GetMicrocodeVersion() const;
-=======
-  hsa_status_t InitDma();
-
-  void RegisterMemoryProperties(core::MemoryRegion& region);
-
-  hsa_status_t VisitRegion(bool include_peer,
-                           hsa_status_t (*callback)(hsa_region_t region,
-                                                    void* data),
-                           void* data) const override;
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   // @brief Assembles SP3 shader source into executable code.
   //
@@ -225,10 +181,7 @@ class GpuAgent : public GpuAgentInt {
                                                       void* data),
                              void* data) const override;
 
-<<<<<<< HEAD
   // @brief Override from core::Agent.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
 
   // @brief Override from core::Agent.
@@ -236,7 +189,6 @@ class GpuAgent : public GpuAgentInt {
                        std::vector<core::Signal*>& dep_signals,
                        core::Signal& out_signal) override;
 
-<<<<<<< HEAD
   // @brief Override from core::Agent.
   hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
 
@@ -244,52 +196,11 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
 
   // @brief Override from core::Agent.
-=======
-  hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
-
-  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
-
-  /// @brief Api to create an Aql queue
-  ///
-  /// @param size Size of Queue in terms of Aql packet size
-  ///
-  /// @param type of Queue Single Writer or Multiple Writer
-  ///
-  /// @param callback Callback function to register in case Quee
-  /// encounters an error
-  ///
-  /// @param data Application data that is passed to @p callback on every
-  /// iteration.May be NULL.
-  ///
-  /// @param private_segment_size Hint indicating the maximum
-  /// expected private segment usage per work - item, in bytes.There may
-  /// be performance degradation if the application places a Kernel
-  /// Dispatch packet in the queue and the corresponding private segment
-  /// usage exceeds @p private_segment_size.If the application does not
-  /// want to specify any particular value for this argument, @p
-  /// private_segment_size must be UINT32_MAX.If the queue does not
-  /// support Kernel Dispatch packets, this argument is ignored.
-  ///
-  /// @param group_segment_size Hint indicating the maximum expected
-  /// group segment usage per work - group, in bytes.There may be
-  /// performance degradation if the application places a Kernel Dispatch
-  /// packet in the queue and the corresponding group segment usage
-  /// exceeds @p group_segment_size.If the application does not want to
-  /// specify any particular value for this argument, @p
-  /// group_segment_size must be UINT32_MAX.If the queue does not
-  /// support Kernel Dispatch packets, this argument is ignored.
-  ///
-  /// @parm queue Output parameter updated with a pointer to the
-  /// queue being created
-  ///
-  /// @return hsa_status
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t QueueCreate(size_t size, hsa_queue_type_t queue_type,
                            core::HsaEventCallback event_callback, void* data,
                            uint32_t private_segment_size,
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
-<<<<<<< HEAD
 
   // @brief Override from amd::GpuAgentInt.
   void AcquireQueueScratch(ScratchInfo& scratch) override;
@@ -300,71 +211,19 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from amd::GpuAgentInt.
   void TranslateTime(core::Signal* signal,
                      hsa_amd_profiling_dispatch_time_t& time) override;
-=======
-
-  void AcquireQueueScratch(ScratchInfo& scratch) {
-    if (scratch.size == 0) {
-      scratch.size = queue_scratch_len_;
-      scratch.size_per_thread = scratch_per_thread_;
-    }
-    ScopedAcquire<KernelMutex> lock(&sclock_);
-    scratch.queue_base = scratch_pool_.alloc(scratch.size);
-    scratch.queue_process_offset =
-        uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
-
-    if ((scratch.queue_base != NULL) && (profile_ == HSA_PROFILE_BASE)) {
-      HSAuint64 alternate_va;
-      if (HSAKMT_STATUS_SUCCESS != hsaKmtMapMemoryToGPU(scratch.queue_base,
-                                                        scratch.size,
-                                                        &alternate_va)) {
-        assert(false && "Map scratch subrange failed!");
-        scratch_pool_.free(scratch.queue_base);
-        scratch.queue_base = NULL;
-      }
-    }
-  }
-
-  void ReleaseQueueScratch(void* base) {
-    if (base == NULL) {
-      return;
-    }
-
-    ScopedAcquire<KernelMutex> lock(&sclock_);
-    if (profile_ == HSA_PROFILE_BASE) {
-      if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
-        assert(false && "Unmap scratch subrange failed!");
-      }
-    }
-    scratch_pool_.free(base);
-  }
-
-  void TranslateTime(core::Signal* signal,
-                     hsa_amd_profiling_dispatch_time_t& time) override;
-
-  uint64_t TranslateTime(uint64_t tick) override;
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   // @brief Override from amd::GpuAgentInt.
   uint64_t TranslateTime(uint64_t tick) override;
 
-<<<<<<< HEAD
   // @brief Override from amd::GpuAgentInt.
   bool current_coherency_type(hsa_amd_coherency_type_t type) override;
 
   // @brief Override from amd::GpuAgentInt.
-=======
-  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_amd_coherency_type_t current_coherency_type() const override {
     return current_coherency_type_;
   }
 
-<<<<<<< HEAD
   // Getter & setters.
-=======
-  __forceinline HSAuint32 node_id() const override { return node_id_; }
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   // @brief Returns node property.
   __forceinline const HsaNodeProperties& properties() const {
@@ -381,20 +240,13 @@ class GpuAgent : public GpuAgentInt {
     return cache_props_[idx];
   }
 
-<<<<<<< HEAD
   // @brief Override from core::Agent.
-=======
-  __forceinline bool is_kv_device() const override { return is_kv_device_; }
-
-  __forceinline hsa_profile_t profile() const override { return profile_; }
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   const std::vector<const core::MemoryRegion*>& regions() const override {
     return regions_;
   }
 
-  // @brief Override from amd::GpuAgentInt.
-  __forceinline HSAuint32 node_id() const override { return node_id_; }
+  // @brief OVerride from core::Agent.
+  const core::Isa* isa() const override { return isa_; }
 
   // @brief Override from amd::GpuAgentInt.
   __forceinline bool is_kv_device() const override { return is_kv_device_; }
@@ -403,11 +255,6 @@ class GpuAgent : public GpuAgentInt {
   __forceinline hsa_profile_t profile() const override { return profile_; }
 
  protected:
-  hsa_status_t VisitRegion(
-      const std::vector<const core::MemoryRegion*>& regions,
-      hsa_status_t (*callback)(hsa_region_t region, void* data),
-      void* data) const;
-
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
@@ -429,9 +276,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Binds the second-level trap handler to this node.
   void BindTrapHandler();
-
-  // @brief Distinct id for a given GPU node.
-  const HSAuint32 node_id_;
 
   // @brief Node properties.
   const HsaNodeProperties properties_;
@@ -459,7 +303,7 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Mutex to protect access to scratch pool.
   KernelMutex scratch_lock_;
-  
+
   // @brief Mutex to protect access to ::t1_.
   KernelMutex t1_lock_;
 
@@ -474,14 +318,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
 
-<<<<<<< HEAD
-  // @brief Array of regions owned by peer agents and accessible by this agent.
-  std::vector<const core::MemoryRegion*> peer_regions_;
-=======
-  std::vector<const core::MemoryRegion*> peer_regions_;
-
-  bool is_kv_device_;
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
+  core::Isa* isa_;
 
   // @brief HSA profile.
   hsa_profile_t profile_;
@@ -493,7 +330,17 @@ class GpuAgent : public GpuAgentInt {
   size_t trap_code_buf_size_;
 
  private:
-   // @brief Alternative aperture base address. Only on KV.
+  // @brief Query the driver to get the region list owned by this agent.
+  void InitRegionList();
+
+  // @brief Reserve memory for scratch pool to be used by AQL queue of this
+  // agent.
+  void InitScratchPool();
+
+  // @brief Query the driver to get the cache properties.
+  void InitCacheList();
+
+  // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
   // @brief Alternative aperture size. Only on KV.

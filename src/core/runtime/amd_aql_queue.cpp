@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "core/inc/amd_hw_aql_command_processor.h"
+#include "core/inc/amd_aql_queue.h"
 
 #ifdef __linux__
 #include <fcntl.h>
@@ -69,24 +69,21 @@ namespace amd {
 // Queue::amd_queue_ is cache-aligned for performance.
 const uint32_t kAmdQueueAlignBytes = 0x40;
 
-HsaEvent* HwAqlCommandProcessor::queue_event_ = NULL;
-volatile uint32_t HwAqlCommandProcessor::queue_count_ = 0;
-KernelMutex HwAqlCommandProcessor::queue_lock_;
-int HwAqlCommandProcessor::rtti_id_;
+HsaEvent* AqlQueue::queue_event_ = NULL;
+volatile uint32_t AqlQueue::queue_count_ = 0;
+KernelMutex AqlQueue::queue_lock_;
+int AqlQueue::rtti_id_;
 
-void* HwAqlCommandProcessor::operator new(size_t size) {
+void* AqlQueue::operator new(size_t size) {
   // Align base to 64B to enforce amd_queue_ member alignment.
   return _aligned_malloc(size, kAmdQueueAlignBytes);
 }
 
-void HwAqlCommandProcessor::operator delete(void* ptr) { _aligned_free(ptr); }
+void AqlQueue::operator delete(void* ptr) { _aligned_free(ptr); }
 
-HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
-                                             size_t req_size_pkts,
-                                             HSAuint32 node_id,
-                                             ScratchInfo& scratch,
-                                             core::HsaEventCallback callback,
-                                             void* err_data, bool is_kv)
+AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
+                   ScratchInfo& scratch, core::HsaEventCallback callback,
+                   void* err_data, bool is_kv)
     : Queue(),
       Signal(0),
       ring_buf_(NULL),
@@ -105,7 +102,7 @@ HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
   hsa_status_t stat = agent_->GetInfo(HSA_AGENT_INFO_PROFILE, &agent_profile_);
   assert(stat == HSA_STATUS_SUCCESS);
 
-  const core::ComputeCapability& compute_cap = agent_->compute_capability();
+  const core::Isa* isa = agent_->isa();
 
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
@@ -114,7 +111,7 @@ HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
   // This allows the HW to accept (doorbell == last_doorbell + queue_size).
   // This workaround is required for GFXIP 7 and GFXIP 8 ASICs.
   queue_full_workaround_ =
-      (compute_cap.version_major() == 7 || compute_cap.version_major() == 8)
+      (isa->GetMajorVersion() == 7 || isa->GetMajorVersion() == 8)
           ? 1
           : 0;
 
@@ -302,7 +299,9 @@ HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
       if (queue_event_ == NULL) {
         assert(queue_count_ == 1 &&
                "Inconsistency in queue event reference counting found.\n");
-        queue_event_ = core::InterruptSignal::CreateEvent();
+
+        queue_event_ =
+            core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
         if (queue_event_ == NULL) return;
       }
     }
@@ -330,7 +329,7 @@ HwAqlCommandProcessor::HwAqlCommandProcessor(GpuAgent* agent,
   SignalGuard.Dismiss();
 }
 
-HwAqlCommandProcessor::~HwAqlCommandProcessor() {
+AqlQueue::~AqlQueue() {
   if (!IsValid()) {
     return;
   }
@@ -352,74 +351,70 @@ HwAqlCommandProcessor::~HwAqlCommandProcessor() {
 #endif
 }
 
-uint64_t HwAqlCommandProcessor::LoadReadIndexAcquire() {
+uint64_t AqlQueue::LoadReadIndexAcquire() {
   return atomic::Load(&amd_queue_.read_dispatch_id, std::memory_order_acquire);
 }
 
-uint64_t HwAqlCommandProcessor::LoadReadIndexRelaxed() {
+uint64_t AqlQueue::LoadReadIndexRelaxed() {
   return atomic::Load(&amd_queue_.read_dispatch_id, std::memory_order_relaxed);
 }
 
-uint64_t HwAqlCommandProcessor::LoadWriteIndexAcquire() {
+uint64_t AqlQueue::LoadWriteIndexAcquire() {
   return atomic::Load(&amd_queue_.write_dispatch_id, std::memory_order_acquire);
 }
 
-uint64_t HwAqlCommandProcessor::LoadWriteIndexRelaxed() {
+uint64_t AqlQueue::LoadWriteIndexRelaxed() {
   return atomic::Load(&amd_queue_.write_dispatch_id, std::memory_order_relaxed);
 }
 
-void HwAqlCommandProcessor::StoreWriteIndexRelaxed(uint64_t value) {
+void AqlQueue::StoreWriteIndexRelaxed(uint64_t value) {
   atomic::Store(&amd_queue_.write_dispatch_id, value,
                 std::memory_order_relaxed);
 }
 
-void HwAqlCommandProcessor::StoreWriteIndexRelease(uint64_t value) {
+void AqlQueue::StoreWriteIndexRelease(uint64_t value) {
   atomic::Store(&amd_queue_.write_dispatch_id, value,
                 std::memory_order_release);
 }
 
-uint64_t HwAqlCommandProcessor::CasWriteIndexAcqRel(uint64_t expected,
-                                                    uint64_t value) {
+uint64_t AqlQueue::CasWriteIndexAcqRel(uint64_t expected, uint64_t value) {
   return atomic::Cas(&amd_queue_.write_dispatch_id, value, expected,
                      std::memory_order_acq_rel);
 }
-uint64_t HwAqlCommandProcessor::CasWriteIndexAcquire(uint64_t expected,
-                                                     uint64_t value) {
+uint64_t AqlQueue::CasWriteIndexAcquire(uint64_t expected, uint64_t value) {
   return atomic::Cas(&amd_queue_.write_dispatch_id, value, expected,
                      std::memory_order_acquire);
 }
-uint64_t HwAqlCommandProcessor::CasWriteIndexRelaxed(uint64_t expected,
-                                                     uint64_t value) {
+uint64_t AqlQueue::CasWriteIndexRelaxed(uint64_t expected, uint64_t value) {
   return atomic::Cas(&amd_queue_.write_dispatch_id, value, expected,
                      std::memory_order_relaxed);
 }
-uint64_t HwAqlCommandProcessor::CasWriteIndexRelease(uint64_t expected,
-                                                     uint64_t value) {
+uint64_t AqlQueue::CasWriteIndexRelease(uint64_t expected, uint64_t value) {
   return atomic::Cas(&amd_queue_.write_dispatch_id, value, expected,
                      std::memory_order_release);
 }
 
-uint64_t HwAqlCommandProcessor::AddWriteIndexAcqRel(uint64_t value) {
+uint64_t AqlQueue::AddWriteIndexAcqRel(uint64_t value) {
   return atomic::Add(&amd_queue_.write_dispatch_id, value,
                      std::memory_order_acq_rel);
 }
 
-uint64_t HwAqlCommandProcessor::AddWriteIndexAcquire(uint64_t value) {
+uint64_t AqlQueue::AddWriteIndexAcquire(uint64_t value) {
   return atomic::Add(&amd_queue_.write_dispatch_id, value,
                      std::memory_order_acquire);
 }
 
-uint64_t HwAqlCommandProcessor::AddWriteIndexRelaxed(uint64_t value) {
+uint64_t AqlQueue::AddWriteIndexRelaxed(uint64_t value) {
   return atomic::Add(&amd_queue_.write_dispatch_id, value,
                      std::memory_order_relaxed);
 }
 
-uint64_t HwAqlCommandProcessor::AddWriteIndexRelease(uint64_t value) {
+uint64_t AqlQueue::AddWriteIndexRelease(uint64_t value) {
   return atomic::Add(&amd_queue_.write_dispatch_id, value,
                      std::memory_order_release);
 }
 
-void HwAqlCommandProcessor::StoreRelaxed(hsa_signal_value_t value) {
+void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
   // Acquire spinlock protecting the legacy doorbell.
   while (atomic::Cas(&amd_queue_.legacy_doorbell_lock, 1U, 0U,
                      std::memory_order_acquire) != 0) {
@@ -481,12 +476,12 @@ void HwAqlCommandProcessor::StoreRelaxed(hsa_signal_value_t value) {
                 std::memory_order_release);
 }
 
-void HwAqlCommandProcessor::StoreRelease(hsa_signal_value_t value) {
+void AqlQueue::StoreRelease(hsa_signal_value_t value) {
   std::atomic_thread_fence(std::memory_order_release);
   StoreRelaxed(value);
 }
 
-uint32_t HwAqlCommandProcessor::ComputeRingBufferMinPkts() {
+uint32_t AqlQueue::ComputeRingBufferMinPkts() {
   // From CP_HQD_PQ_CONTROL.QUEUE_SIZE specification:
   //   Size of the primary queue (PQ) will be: 2^(HQD_QUEUE_SIZE+1) DWs.
   //   Min Size is 7 (2^8 = 256 DWs) and max size is 29 (2^30 = 1 G-DW)
@@ -508,7 +503,7 @@ uint32_t HwAqlCommandProcessor::ComputeRingBufferMinPkts() {
   return uint32_t(min_bytes / sizeof(core::AqlPacket));
 }
 
-uint32_t HwAqlCommandProcessor::ComputeRingBufferMaxPkts() {
+uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
   // From CP_HQD_PQ_CONTROL.QUEUE_SIZE specification:
   //   Size of the primary queue (PQ) will be: 2^(HQD_QUEUE_SIZE+1) DWs.
   //   Min Size is 7 (2^8 = 256 DWs) and max size is 29 (2^30 = 1 G-DW)
@@ -522,8 +517,7 @@ uint32_t HwAqlCommandProcessor::ComputeRingBufferMaxPkts() {
   return uint32_t(max_bytes / sizeof(core::AqlPacket));
 }
 
-void HwAqlCommandProcessor::AllocRegisteredRingBuffer(
-    uint32_t queue_size_pkts) {
+void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
   if (agent_profile_ == HSA_PROFILE_FULL) {
     // Compute the physical and virtual size of the queue.
     uint32_t ring_buf_phys_size_bytes =
@@ -701,7 +695,7 @@ void HwAqlCommandProcessor::AllocRegisteredRingBuffer(
   }
 }
 
-void HwAqlCommandProcessor::FreeRegisteredRingBuffer() {
+void AqlQueue::FreeRegisteredRingBuffer() {
   if (agent_profile_ == HSA_PROFILE_FULL) {
 #ifdef __linux__
     munmap(ring_buf_, ring_buf_alloc_bytes_);
@@ -720,15 +714,14 @@ void HwAqlCommandProcessor::FreeRegisteredRingBuffer() {
   ring_buf_alloc_bytes_ = 0;
 }
 
-hsa_status_t HwAqlCommandProcessor::Inactivate() {
+hsa_status_t AqlQueue::Inactivate() {
   int32_t active = atomic::Exchange((volatile int32_t*)&active_, 0);
   if (active == 1) hsaKmtDestroyQueue(this->queue_id_);
   return HSA_STATUS_SUCCESS;
 }
 
-bool HwAqlCommandProcessor::DynamicScratchHandler(hsa_signal_value_t error_code,
-                                                  void* arg) {
-  HwAqlCommandProcessor* queue = (HwAqlCommandProcessor*)arg;
+bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
+  AqlQueue* queue = (AqlQueue*)arg;
 
   if ((error_code & 1) == 1) {
     // Insufficient scratch - recoverable
@@ -833,7 +826,7 @@ bool HwAqlCommandProcessor::DynamicScratchHandler(hsa_signal_value_t error_code,
       queue->errors_callback_(HSA_STATUS_ERROR_INVALID_ISA,
                               queue->public_handle(), queue->errors_data_);
     return false;
-  } else if ((error_code & 0x80000000) == 0x80000000) { // Debug trap
+  } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
     queue->Inactivate();
     if (queue->errors_callback_ != NULL)
       queue->errors_callback_(HSA_STATUS_ERROR_EXCEPTION,
@@ -853,8 +846,8 @@ bool HwAqlCommandProcessor::DynamicScratchHandler(hsa_signal_value_t error_code,
   return true;
 }
 
-hsa_status_t HwAqlCommandProcessor::SetCUMasking(
-    const uint32_t num_cu_mask_count, const uint32_t* cu_mask) {
+hsa_status_t AqlQueue::SetCUMasking(const uint32_t num_cu_mask_count,
+                                    const uint32_t* cu_mask) {
   HSAKMT_STATUS ret = hsaKmtSetQueueCUMask(
       queue_id_, num_cu_mask_count,
       reinterpret_cast<HSAuint32*>(const_cast<uint32_t*>(cu_mask)));

@@ -46,6 +46,7 @@
 #define HSA_RUNTIME_EXT_AMD_H_
 
 #include "hsa.h"
+#include "hsa_ext_image.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -999,9 +1000,7 @@ hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
  * the same input @p host_ptr may give different locked @p agent_ptr and when it does, they
  * are not necessarily coherent (i.e. accessing either @p agent_ptr is not equivalent).
  *
- * @param[in] host_ptr A buffer allocated by C/C++ or OS allocator. The address
- * of the host pointer needs to be aligned with the
- * HSA_AMD_AGENT_INFO_CACHELINE_SIZE property of each agent in @p agents.
+ * @param[in] host_ptr A buffer allocated by C/C++ or OS allocator.
  *
  * @param[in] size The size to be locked.
  *
@@ -1069,6 +1068,113 @@ hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr);
  */
 hsa_status_t HSA_API
     hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count);
+
+/**
+ * @brief Maps an interop object into the HSA flat address space and establishes
+ * memory residency.  The metadata pointer is valid during the lifetime of the
+ * map (until hsa_amd_interop_unmap_buffer is called).
+ * Multiple calls to hsa_amd_interop_map_buffer with the same interop_handle
+ * result in multiple mappings with potentially different addresses and
+ * different metadata pointers.  Concurrent operations on these addresses are
+ * not coherent.  Memory must be fenced to system scope to ensure consistency,
+ * between mappings and with any views of this buffer in the originating
+ * software stack.
+ *
+ * @param[in] num_agents Number of agents which require access to the memory
+ *
+ * @param[in] agents List of accessing agents.
+ *
+ * @param[in] interop_handle Handle of interop buffer (dmabuf handle in Linux)
+ *
+ * @param [in] flags Reserved, must be 0
+ *
+ * @param[out] size Size in bytes of the mapped object
+ *
+ * @param[out] ptr Base address of the mapped object
+ *
+ * @param[out] metadata_size Size of metadata in bytes, may be NULL
+ *
+ * @param[out] metadata Pointer to metadata, may be NULL
+ * 
+ * @retval HSA_STATUS_SUCCESS if successfully mapped
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT all other errors
+ */
+hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,   
+                                        hsa_agent_t* agents,       
+                                        int interop_handle,    
+                                        uint32_t flags,        
+                                        size_t* size,          
+                                        void** ptr,            
+                                        size_t* metadata_size, 
+                                        const void** metadata);
+
+/**
+ * @brief Removes a previously mapped interop object from HSA's flat address space.
+ * Ends lifetime for the mapping's associated metadata pointer.
+ */
+hsa_status_t HSA_API hsa_amd_interop_unmap_buffer(void* ptr);
+
+/**
+ * @brief Encodes an opaque vendor specific image format.  The length of data
+ * depends on the underlying format.  This structure must not be copied as its
+ * true length can not be determined.
+ */
+typedef struct hsa_amd_image_descriptor_s {
+  /*
+  Version number of the descriptor
+  */
+  uint32_t version;
+  
+  /*
+  Vendor and device PCI IDs for the format as VENDOR_ID<<16|DEVICE_ID.
+  */
+  uint32_t deviceID;
+
+  /*
+  Start of vendor specific data.
+  */
+  uint32_t data[0];
+} hsa_amd_image_descriptor_t;
+
+/**
+ * @brief Creates an image from an opaque vendor specific image format.
+ * Does not modify data at image_data.  Intended initially for
+ * accessing interop images.
+ *
+ * @param agent[in] Agent on which to create the image
+ *
+ * @param[in] image_descriptor[in] Vendor specific image format
+ *
+ * @param[in] image_data Pointer to image backing store
+ *
+ * @param[in] access_permission Access permissions for the image object
+ *
+ * @param[out] image Created image object.
+ *
+ * @retval HSA_STATUS_SUCCESS Image created successfully
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT Bad or mismatched descriptor,
+ * null image_data, or mismatched access_permission.
+ */
+hsa_status_t HSA_API hsa_amd_image_create(
+    hsa_agent_t agent,
+    const hsa_ext_image_descriptor_t *image_descriptor,
+    const hsa_amd_image_descriptor_t *image_layout,
+    const void *image_data,
+    hsa_access_permission_t access_permission,
+    hsa_ext_image_t *image
+);
 
 #ifdef __cplusplus
 }  // end extern "C" block

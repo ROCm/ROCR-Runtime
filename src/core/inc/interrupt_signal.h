@@ -63,7 +63,7 @@ namespace core {
 /// signaling.
 class InterruptSignal : public Signal {
  public:
-  static HsaEvent* CreateEvent();
+  static HsaEvent* CreateEvent(HSA_EVENTTYPE type, bool manual_reset);
   static void DestroyEvent(HsaEvent* evt);
 
   /// @brief Determines if a Signal* can be safely converted to an

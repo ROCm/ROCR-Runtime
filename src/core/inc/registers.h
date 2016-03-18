@@ -41,9 +41,9 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // This file is used only for open source cmake builds, if we hardcode the
-// register values in amd_hw_aql_command_processor.cpp then this file won't
-// be required. For now we are using this file where register details are 
-// spelled out in the structs/unions below.
+// register values in amd_aql_queue.cpp then this file won't be required. For
+// now we are using this file where register details are  spelled out in the
+// structs/unions below.
 #ifndef HSA_RUNTME_CORE_INC_REGISTERS_H_
 #define HSA_RUNTME_CORE_INC_REGISTERS_H_
 

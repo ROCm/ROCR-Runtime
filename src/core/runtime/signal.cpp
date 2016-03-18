@@ -118,6 +118,21 @@ uint32_t Signal::WaitAny(uint32_t signal_count, hsa_signal_t* hsa_signals,
     for (uint32_t i = 0; i < signal_count; i++) {
       if (signals[i]->invalid_) return uint32_t(-1);
 
+      // Handling special event.
+      if (signals[i]->EopEvent() != NULL) {
+        const HSA_EVENTTYPE event_type =
+            signals[i]->EopEvent()->EventData.EventType;
+        if (event_type == HSA_EVENTTYPE_MEMORY) {
+          const HsaMemoryAccessFault& fault =
+              signals[i]->EopEvent()->EventData.EventData.MemoryAccessFault;
+          const uint32_t* failure =
+              reinterpret_cast<const uint32_t*>(&fault.Failure);
+          if (*failure != 0) {
+            return i;
+          }
+        }
+      }
+
       value =
           atomic::Load(&signals[i]->signal_.value, std::memory_order_relaxed);
 

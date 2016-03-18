@@ -736,7 +736,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion != 1) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+  if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
 
   hsa_status_t status;
 
@@ -744,7 +744,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   loaded_code_objects.push_back((LoadedCodeObjectImpl*)objects.back());
 
   for (size_t i = 0; i < code->DataSegmentCount(); ++i) {
-    status = LoadSegment(agent, code->DataSegment(i));
+    status = LoadSegment(agent, code->DataSegment(i), majorVersion, code->Machine());
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
 
@@ -763,7 +763,17 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadSegment(hsa_agent_t agent, code::Segment* s)
+hsa_status_t ExecutableImpl::LoadSegment(hsa_agent_t agent, code::Segment* s,
+                                         uint32_t majorVersion, uint16_t machine)
+{
+  if (majorVersion >= 2)
+    return LoadSegmentV2(agent, s, machine);
+  else
+    return LoadSegmentV1(agent, s);
+
+}
+
+hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent, code::Segment* s)
 {
   assert(s->type() < PT_LOOS + AMDGPU_HSA_SEGMENT_LAST);
   if (s->memSize() == 0)
@@ -1120,6 +1130,39 @@ hsa_status_t ExecutableImpl::Freeze(const char *options) {
   }
 
   state_ = HSA_EXECUTABLE_STATE_FROZEN;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::LoadSegmentV2(hsa_agent_t agent, code::Segment* s, uint16_t machine)
+{
+  amdgpu_hsa_elf_segment_t segment;
+
+  if (s->memSize() == 0)
+    return HSA_STATUS_SUCCESS;
+
+  // FIXME: Should support EM_HSA_VENDOR
+  if (machine == EM_AMDGPU) {
+    if (s->flags() & PF_X)
+      segment = AMDGPU_HSA_SEGMENT_CODE_AGENT;
+    else if (s->flags() & PF_W)
+      segment = AMDGPU_HSA_SEGMENT_GLOBAL_AGENT;
+    else {
+      assert (s->flags() & PF_R);
+      segment = AMDGPU_HSA_SEGMENT_READONLY_AGENT;
+    }
+  } else { // EM_HSA_SHARED
+    segment = AMDGPU_HSA_SEGMENT_GLOBAL_PROGRAM;
+  }
+
+  void* ptr = context_->SegmentAlloc(segment, agent, s->memSize(), s->align(), true);
+  if (!ptr) { return HSA_STATUS_ERROR_OUT_OF_RESOURCES; }
+
+  Segment *new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr());
+  new_seg->Copy(s->vaddr(), s->data(), s->imageSize());
+  objects.push_back(new_seg);
+  assert(new_seg);
+
+  loaded_code_objects.back()->LoadedSegments().push_back(new_seg);
   return HSA_STATUS_SUCCESS;
 }
 
