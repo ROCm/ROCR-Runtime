@@ -54,6 +54,7 @@
 namespace core {
 struct ExtTableInternal : public ExtTable {
   decltype(::hsa_amd_image_get_info_max_dim)* hsa_amd_image_get_info_max_dim_fn;
+  decltype(::hsa_amd_image_create)* hsa_amd_image_create_fn;
 };
 
 class ExtensionEntryPoints {

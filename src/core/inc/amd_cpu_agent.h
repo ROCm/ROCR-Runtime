@@ -62,15 +62,11 @@ class CpuAgent : public core::Agent {
   // @param [in] node Node id. Each CPU in different socket will get distinct
   // id.
   // @param [in] node_props Node property.
-  // @param [in] cache_props Array of data cache properties. The array index
-  // represent the cache level.
-  CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
-           const std::vector<HsaCacheProperties>& cache_props);
+  CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props);
 
   // @brief CpuAgent destructor.
   ~CpuAgent();
 
-<<<<<<< HEAD
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
   //
@@ -82,79 +78,25 @@ class CpuAgent : public core::Agent {
   //
   // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
   // region returns ::HSA_STATUS_SUCCESS.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t VisitRegion(bool include_peer,
                            hsa_status_t (*callback)(hsa_region_t region,
                                                     void* data),
                            void* data) const;
-
-<<<<<<< HEAD
-  // @brief Add a region object to ::regions_ if @p region is owned by this
-  // agent. Add a region object to ::peer_regions_ if @p region is owned by
-  // the peer agent.
-  //
-  // @param [in] region Region object to be added into the list.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
-  void RegisterMemoryProperties(core::MemoryRegion& region);
 
   // @brief Override from core::Agent.
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
                              void* data) const override;
 
-<<<<<<< HEAD
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
 
   // @brief Override from core::Agent.
-=======
-  hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
-
-  /// @brief Api to create an Aql queue
-  ///
-  /// @param size Size of Queue in terms of Aql packet size
-  ///
-  /// @param type of Queue Single Writer or Multiple Writer
-  ///
-  /// @param callback Callback function to register in case Quee
-  /// encounters an error
-  ///
-  /// @param data Application data that is passed to @p callback on every
-  /// iteration.May be NULL.
-  ///
-  /// @param private_segment_size Hint indicating the maximum
-  /// expected private segment usage per work - item, in bytes.There may
-  /// be performance degradation if the application places a Kernel
-  /// Dispatch packet in the queue and the corresponding private segment
-  /// usage exceeds @p private_segment_size.If the application does not
-  /// want to specify any particular value for this argument, @p
-  /// private_segment_size must be UINT32_MAX.If the queue does not
-  /// support Kernel Dispatch packets, this argument is ignored.
-  ///
-  /// @param group_segment_size Hint indicating the maximum expected
-  /// group segment usage per work - group, in bytes.There may be
-  /// performance degradation if the application places a Kernel Dispatch
-  /// packet in the queue and the corresponding group segment usage
-  /// exceeds @p group_segment_size.If the application does not want to
-  /// specify any particular value for this argument, @p
-  /// group_segment_size must be UINT32_MAX.If the queue does not
-  /// support Kernel Dispatch packets, this argument is ignored.
-  ///
-  /// @parm queue Output parameter updated with a pointer to the
-  /// queue being created
-  ///
-  /// @return hsa_status
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t QueueCreate(size_t size, hsa_queue_type_t queue_type,
                            core::HsaEventCallback event_callback, void* data,
                            uint32_t private_segment_size,
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
-
-  // @brief Returns node id associated with this agent.
-  __forceinline HSAuint32 node_id() const { return node_id_; }
 
   // @brief Returns number of data caches.
   __forceinline size_t num_cache() const { return cache_props_.size(); }
@@ -166,16 +108,21 @@ class CpuAgent : public core::Agent {
     return cache_props_[idx];
   }
 
-<<<<<<< HEAD
   // @brief Override from core::Agent.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   const std::vector<const core::MemoryRegion*>& regions() const override {
     return regions_;
   }
 
+  // @brief OVerride from core::Agent.
+  const core::Isa* isa() const override { return NULL; }
+
  private:
-<<<<<<< HEAD
+  // @brief Query the driver to get the region list owned by this agent.
+  void InitRegionList();
+
+  // @brief Query the driver to get the cache properties.
+  void InitCacheList();
+
   // @brief Invoke the user provided callback for every region in @p regions.
   //
   // @param [in] regions Array of region object.
@@ -184,18 +131,10 @@ class CpuAgent : public core::Agent {
   //
   // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
   // region returns ::HSA_STATUS_SUCCESS.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t VisitRegion(
       const std::vector<const core::MemoryRegion*>& regions,
       hsa_status_t (*callback)(hsa_region_t region, void* data),
       void* data) const;
-
-<<<<<<< HEAD
-  // @brief Node id.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
-  const HSAuint32 node_id_;
 
   // @brief Node property.
   const HsaNodeProperties properties_;
@@ -206,12 +145,6 @@ class CpuAgent : public core::Agent {
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
-
-<<<<<<< HEAD
-  // @brief Array of regions owned by peer agents and accessible by this agent.
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
-  std::vector<const core::MemoryRegion*> peer_regions_;
 
   DISALLOW_COPY_AND_ASSIGN(CpuAgent);
 };

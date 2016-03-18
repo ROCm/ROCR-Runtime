@@ -300,9 +300,13 @@ hsa_region_t RegionMemory::AgentLocal(hsa_agent_t agent)
     invalid_region : core::MemoryRegion::Convert(*agent_local_region);
 }
 
-hsa_region_t RegionMemory::System()
-{
-  return core::Runtime::runtime_singleton_->system_region();
+hsa_region_t RegionMemory::System() {
+  const core::MemoryRegion* default_system_region =
+      core::Runtime::runtime_singleton_->system_regions_fine()[0];
+
+  assert(default_system_region != NULL);
+
+  return core::MemoryRegion::Convert(default_system_region);
 }
 
 bool RegionMemory::Allocate(size_t size, size_t align, bool zero)

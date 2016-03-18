@@ -373,12 +373,8 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
                    static_cast<uint64_t>(max_single_fill_size_)));
 
   const amd::GpuAgent& amd_gpu_agent = static_cast<const amd::GpuAgent&>(agent);
-  const core::ComputeCapability compute_capability =
-      amd_gpu_agent.compute_capability();
 
-  if (compute_capability.version_major() != 8 &&
-      compute_capability.version_minor() != 0 &&
-      compute_capability.version_stepping() != 3) {
+  if (amd_gpu_agent.isa()->version() != core::Isa::Version(8, 0, 3)) {
     assert(false && "Only for Fiji currently");
     return HSA_STATUS_ERROR;
   }

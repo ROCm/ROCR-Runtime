@@ -45,18 +45,22 @@
 
 namespace core {
 
-HsaEvent* InterruptSignal::CreateEvent() {
+HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
   HsaEventDescriptor event_descriptor;
-#ifdef __linux__
-  event_descriptor.EventType = HSA_EVENTTYPE_SIGNAL;
-#else
-  event_descriptor.EventType = HSA_EVENTTYPE_QUEUE_EVENT;
-#endif
+  event_descriptor.EventType = type;
   event_descriptor.SyncVar.SyncVar.UserData = NULL;
   event_descriptor.SyncVar.SyncVarSize = sizeof(hsa_signal_value_t);
   event_descriptor.NodeId = 0;
+
   HsaEvent* ret = NULL;
-  hsaKmtCreateEvent(&event_descriptor, false, false, &ret);
+  if (HSAKMT_STATUS_SUCCESS ==
+      hsaKmtCreateEvent(&event_descriptor, manual_reset, false, &ret)) {
+    if (type == HSA_EVENTTYPE_MEMORY) {
+      memset(&ret->EventData.EventData.MemoryAccessFault.Failure, 0,
+             sizeof(HsaAccessAttributeFailure));
+    }
+  }
+
   return ret;
 }
 
@@ -71,7 +75,7 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
     event_ = use_event;
     free_event_ = false;
   } else {
-    event_ = CreateEvent();
+    event_ = CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
     free_event_ = true;
   }
 
@@ -83,7 +87,6 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
     signal_.event_mailbox_ptr = 0;
   }
   signal_.kind = AMD_SIGNAL_KIND_USER;
-  HSA::hsa_memory_register(this, sizeof(InterruptSignal));
 
   wait_on_event_ = true;
 }
@@ -94,7 +97,6 @@ InterruptSignal::~InterruptSignal() {
   while (InUse())
     ;
   if (free_event_) hsaKmtDestroyEvent(event_);
-  HSA::hsa_memory_deregister(this, sizeof(InterruptSignal));
 }
 
 hsa_signal_value_t InterruptSignal::LoadRelaxed() {

@@ -138,7 +138,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
   size_t fill_akc_size = 0;
   size_t fill_akc_offset = 0;
 
-  switch (agent.compute_capability().version_major()) {
+  switch (agent.isa()->GetMajorVersion()) {
     case 7:
       copy_raw_obj_mem = kVectorCopyKvObject;
       copy_akc_size = HSA_VECTOR_COPY_KV_AKC_SIZE;
@@ -246,7 +246,10 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
 hsa_status_t BlitKernel::Destroy(void) {
   std::lock_guard<std::mutex> guard(lock_);
-  FenceRelease(0, 0, HSA_FENCE_SCOPE_NONE);
+
+  if (queue_ != NULL) {
+    HSA::hsa_queue_destroy(queue_);
+  }
 
   if (kernarg_async_ != NULL) {
     core::Runtime::runtime_singleton_->system_deallocator()(kernarg_async_);
@@ -258,10 +261,6 @@ hsa_status_t BlitKernel::Destroy(void) {
 
   if (completion_signal_.handle != 0) {
     HSA::hsa_signal_destroy(completion_signal_);
-  }
-
-  if (queue_ != NULL) {
-    HSA::hsa_queue_destroy(queue_);
   }
 
   return HSA_STATUS_SUCCESS;

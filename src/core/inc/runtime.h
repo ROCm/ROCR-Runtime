@@ -84,15 +84,12 @@ extern bool g_use_interrupt_wait;
 /// - monitor asynchronous event from agent.
 class Runtime {
  public:
-<<<<<<< HEAD
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
     uint32_t num_hop;
     hsa_amd_memory_pool_link_info_t info;
   };
 
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   /// @brief Open connection to kernel driver and increment reference count.
   /// @retval True if the connection to kernel driver is successfully opened.
   static bool Acquire();
@@ -100,6 +97,9 @@ class Runtime {
   /// @brief Checks if connection to kernel driver is opened.
   /// @retval True if the connection to kernel driver is opened.
   static bool IsOpen();
+
+  // @brief Callback handler for VM fault access.
+  static bool VMFaultHandler(hsa_signal_value_t val, void* arg);
 
   /// @brief Singleton object of the runtime.
   static Runtime* runtime_singleton_;
@@ -115,14 +115,6 @@ class Runtime {
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
 
-  /// @brief Insert memory region into memory region list ::regions_.
-  /// @param [in] region Pointer to region object.
-  void RegisterMemoryRegion(MemoryRegion* region);
-
-  /// @brief Delete all region objects in ::regions_.
-  void DestroyMemoryRegions();
-
-<<<<<<< HEAD
   /// @brief Set the number of links connecting the agents in the platform.
   void SetLinkCount(size_t num_link);
 
@@ -142,10 +134,8 @@ class Runtime {
   /// @retval The link information between source and destination nodes.
   const LinkInfo& GetLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
-  /// @brief Invoke the user provided call back for each agent in the agent list.
-=======
-  /// @brief Call the user provided call back for each agent in the agent list.
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
+  /// @brief Invoke the user provided call back for each agent in the agent
+  /// list.
   ///
   /// @param [in] callback User provided callback function.
   /// @param [in] data User provided pointer as input for @p callback.
@@ -223,13 +213,8 @@ class Runtime {
   /// @brief Fill the first @p count of uint32_t in ptr with value.
   ///
   /// @param [in] ptr Memory address to be filled.
-<<<<<<< HEAD
   /// @param [in] value The value/pattern that will be used to set @p ptr.
   /// @param [in] count Number of uint32_t element to be set.
-=======
-  /// @param [in] value The value/pattern that will be used to see @p ptr.
-  /// @param [in] count Number of uint32_t element to be set to the value.
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   ///
   /// @retval ::HSA_STATUS_SUCCESS if memory fill is successful and completed.
   hsa_status_t FillMemory(void* ptr, uint32_t value, size_t count);
@@ -276,7 +261,17 @@ class Runtime {
                                      hsa_signal_value_t value,
                                      hsa_amd_signal_handler handler, void* arg);
 
-  const std::vector<Agent*>& agents() { return agents_; }
+  hsa_status_t InteropMap(uint32_t num_agents, Agent** agents,
+                          int interop_handle, uint32_t flags, size_t* size,
+                          void** ptr, size_t* metadata_size,
+                          const void** metadata);
+
+  hsa_status_t InteropUnmap(void* ptr);
+
+  const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
+
+  const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
+
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
@@ -284,9 +279,13 @@ class Runtime {
 
   Agent* host_agent() { return host_agent_; }
 
-  hsa_region_t system_region() { return system_region_; }
+  const std::vector<const MemoryRegion*>& system_regions_fine() const {
+    return system_regions_fine_;
+  }
 
-  hsa_region_t system_region_coarse() { return system_region_coarse_; }
+  const std::vector<const MemoryRegion*>& system_regions_coarse() const {
+    return system_regions_coarse_;
+  }
 
   amd::hsa::loader::Loader* loader() { return loader_; }
 
@@ -382,6 +381,9 @@ class Runtime {
   /// @brief Close tool libraries.
   void CloseTools();
 
+  // @brief Binds virtual memory access fault handler to this node.
+  void BindVmFaultHandler();
+
   /// @brief Blocking memory copy from src to dst. One of the src or dst
   /// is user pointer. A particular setup need to be made if the DMA queue
   /// for the memory copy belongs to a dGPU agent. E.g: pin the user pointer
@@ -397,15 +399,12 @@ class Runtime {
   hsa_status_t CopyMemoryHostAlloc(void* dst, const void* src, size_t size,
                                    bool dst_malloc);
 
-<<<<<<< HEAD
   /// @brief Get the index of ::link_matrix_.
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
   /// @retval Index in ::link_matrix_.
   uint32_t GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   // Mutex object to protect multithreaded access to ::Acquire and ::Release.
   KernelMutex kernel_lock_;
 
@@ -415,23 +414,23 @@ class Runtime {
   // Array containing tools library handles.
   std::vector<os::LibHandle> tool_libs_;
 
-  // Agent list containing all compatible agents in the platform.
-  std::vector<Agent*> agents_;
+  // Agent list containing all CPU agents in the platform.
+  std::vector<Agent*> cpu_agents_;
+
+  // Agent list containing all compatible GPU agents in the platform.
+  std::vector<Agent*> gpu_agents_;
 
   // Agent list containing all compatible gpu agent ids in the platform.
   std::vector<uint32_t> gpu_ids_;
 
-  // Region list containing all physical memory region in the platform.
-  std::vector<MemoryRegion*> regions_;
+  // List of all fine grain system memory region in the platform.
+  std::vector<const MemoryRegion*> system_regions_fine_;
+
+  // List of all coarse grain system memory region in the platform.
+  std::vector<const MemoryRegion*> system_regions_coarse_;
 
   // Matrix of IO link.
   std::vector<LinkInfo> link_matrix_;
-
-  // Shared fine grain system memory region
-  hsa_region_t system_region_;
-
-  // Shared coarse grain system memory region
-  hsa_region_t system_region_coarse_;
 
   // Loader instance.
   amd::hsa::loader::Loader* loader_;
@@ -479,6 +478,12 @@ class Runtime {
 
   // System clock frequency.
   uint64_t sys_clock_freq_;
+
+  // @brief AMD HSA event to monitor for virtual memory access fault.
+  HsaEvent* vm_fault_event_;
+
+  // @brief HSA signal to contain the VM fault event.
+  Signal* vm_fault_signal_;
 
   // Holds reference count to runtime object.
   volatile uint32_t ref_count_;

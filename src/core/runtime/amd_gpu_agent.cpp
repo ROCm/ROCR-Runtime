@@ -44,60 +44,56 @@
 
 #include <algorithm>
 #include <atomic>
-#include <vector>
 #include <cstring>
 #include <climits>
+#include <vector>
 
+#include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
-#include "core/inc/runtime.h"
 #include "core/inc/amd_memory_region.h"
-#include "core/inc/amd_hw_aql_command_processor.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
+#include "core/inc/runtime.h"
+
+#include "utils/sp3/sp3.h"
 
 #include "hsa_ext_image.h"
-<<<<<<< HEAD
-#include "sp3.h"
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 
 namespace amd {
-GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
-                   const std::vector<HsaCacheProperties>& cache_props,
-                   hsa_profile_t profile)
-    : node_id_(node),
+GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
+    : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       blit_(NULL),
-      cache_props_(cache_props),
-      profile_(profile),
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
       ape1_base_(0),
       ape1_size_(0) {
-  HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id_, &t0_);
+  const bool is_apu_node = (properties_.NumCPUCores > 0);
+  profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
+
+  HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id(), &t0_);
   t1_ = t0_;
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
-  // Set compute_capability_ via node property, only on GPU device.
-  compute_capability_.Initialize(node_props.EngineId.ui32.Major,
-                                 node_props.EngineId.ui32.Minor,
-                                 node_props.EngineId.ui32.Stepping);
+  // Set instruction set architecture via node property, only on GPU device.
+  isa_ = (core::Isa*)core::IsaRegistry::GetIsa(core::Isa::Version(
+      node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
+      node_props.EngineId.ui32.Stepping));
   // Check if the device is Kaveri, only on GPU device.
-  if (compute_capability_.version_major() == 7 &&
-      compute_capability_.version_minor() == 0 &&
-      compute_capability_.version_stepping() == 0) {
+  if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
+      isa_->GetStepping() == 0) {
     is_kv_device_ = true;
   }
 
-  current_coherency_type_ = (profile_ == HSA_PROFILE_FULL)
-                                ? HSA_AMD_COHERENCY_TYPE_COHERENT
-                                : HSA_AMD_COHERENCY_TYPE_NONCOHERENT;
+  current_coherency_type((profile_ == HSA_PROFILE_FULL)
+                             ? HSA_AMD_COHERENCY_TYPE_COHERENT
+                             : HSA_AMD_COHERENCY_TYPE_NONCOHERENT);
 
   max_queues_ =
       static_cast<uint32_t>(atoi(os::GetEnvVar("HSA_MAX_QUEUES").c_str()));
@@ -112,6 +108,15 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props,
   }
   max_queues_ = std::min(128U, max_queues_);
 #endif
+
+  // Populate region list.
+  InitRegionList();
+
+  // Reserve memory for scratch.
+  InitScratchPool();
+
+  // Populate cache list.
+  InitCacheList();
 
   // Bind the second-level trap handler to this node.
   BindTrapHandler();
@@ -138,67 +143,17 @@ GpuAgent::~GpuAgent() {
     ReleaseShader(trap_code_buf_, trap_code_buf_size_);
   }
 
+  std::for_each(regions_.begin(), regions_.end(), DeleteObject());
   regions_.clear();
-}
-
-void GpuAgent::RegisterMemoryProperties(core::MemoryRegion& region) {
-  MemoryRegion* amd_region = reinterpret_cast<MemoryRegion*>(&region);
-
-  assert((!amd_region->IsGDS()) &&
-         ("Memory region should only be global, group or scratch"));
-
-  if (amd_region->IsSystem()) {
-    peer_regions_.push_back(amd_region);
-  } else {
-    assert((node_id() == amd_region->node_id()) &&
-           ("region should be local to the gpu (fb, lds, or scratch."));
-    regions_.push_back(amd_region);
-  }
-
-  if (amd_region->IsScratch()) {
-    HsaMemFlags flags;
-    flags.Value = 0;
-    flags.ui32.Scratch = 1;
-    flags.ui32.HostAccess = 1;
-
-    scratch_per_thread_ = atoi(os::GetEnvVar("HSA_SCRATCH_MEM").c_str());
-    if (scratch_per_thread_ == 0)
-      scratch_per_thread_ = DEFAULT_SCRATCH_BYTES_PER_THREAD;
-
-    // Scratch length is: waves/CU * threads/wave * queues * #CUs *
-    // scratch/thread
-    const uint32_t num_cu =
-      properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-    queue_scratch_len_ = 0;
-    queue_scratch_len_ = AlignUp(32 * 64 * num_cu * scratch_per_thread_, 65536);
-    size_t max_scratch_len = queue_scratch_len_ * max_queues_;
-
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
-    // For 64-bit linux use max queues unless otherwise specified
-    if ((max_scratch_len == 0) || (max_scratch_len > 4294967296)) {
-      max_scratch_len = 4294967296;  // 4GB apeture max
-    }
-#endif
-
-    void* scratch_base;
-    HSAKMT_STATUS err =
-        hsaKmtAllocMemory(node_id_, max_scratch_len, flags, &scratch_base);
-    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Scratch) failed");
-    assert(IsMultipleOf(scratch_base, 0x1000) &&
-           "Scratch base is not page aligned!");
-
-    scratch_pool_. ~SmallHeap();
-    new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
-  }
 }
 
 void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
                               void*& code_buf, size_t& code_buf_size) {
-#ifdef __linux__ // No VS builds of libsp3 available right now
+#ifdef __linux__  // No VS builds of libsp3 available right now
   // Assemble source string with libsp3.
   sp3_context* sp3 = sp3_new();
 
-  switch (compute_capability_.version_major()) {
+  switch (isa_->GetMajorVersion()) {
     case 7:
       sp3_setasic(sp3, "CI");
       break;
@@ -222,7 +177,7 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   code_buf_size = AlignUp(code_size, 0x1000);
 
   HSAKMT_STATUS err =
-      hsaKmtAllocMemory(node_id_, code_buf_size, code_buf_flags, &code_buf);
+      hsaKmtAllocMemory(node_id(), code_buf_size, code_buf_flags, &code_buf);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Trap) failed");
 
   err = hsaKmtMapMemoryToGPU(code_buf, code_buf_size, NULL);
@@ -243,12 +198,107 @@ void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) {
   hsaKmtFreeMemory(code_buf, code_buf_size);
 }
 
+void GpuAgent::InitRegionList() {
+  const bool is_apu_node = (properties_.NumCPUCores > 0);
+
+  std::vector<HsaMemoryProperties> mem_props(properties_.NumMemoryBanks);
+  if (HSAKMT_STATUS_SUCCESS ==
+      hsaKmtGetNodeMemoryProperties(node_id(), properties_.NumMemoryBanks,
+                                    &mem_props[0])) {
+    for (uint32_t mem_idx = 0; mem_idx < properties_.NumMemoryBanks;
+         ++mem_idx) {
+      // Ignore the one(s) with unknown size.
+      if (mem_props[mem_idx].SizeInBytes == 0) {
+        continue;
+      }
+
+      switch (mem_props[mem_idx].HeapType) {
+        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
+        case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
+          if (!is_apu_node) {
+            mem_props[mem_idx].VirtualBaseAddress = 0;
+          }
+        case HSA_HEAPTYPE_GPU_LDS:
+        case HSA_HEAPTYPE_GPU_SCRATCH:
+        case HSA_HEAPTYPE_DEVICE_SVM: {
+          MemoryRegion* region =
+              new MemoryRegion(false, false, this, mem_props[mem_idx]);
+
+          regions_.push_back(region);
+          break;
+        }
+        default:
+          continue;
+      }
+    }
+  }
+}
+
+void GpuAgent::InitScratchPool() {
+  HsaMemFlags flags;
+  flags.Value = 0;
+  flags.ui32.Scratch = 1;
+  flags.ui32.HostAccess = 1;
+
+  scratch_per_thread_ = atoi(os::GetEnvVar("HSA_SCRATCH_MEM").c_str());
+  if (scratch_per_thread_ == 0)
+    scratch_per_thread_ = DEFAULT_SCRATCH_BYTES_PER_THREAD;
+
+  // Scratch length is: waves/CU * threads/wave * queues * #CUs *
+  // scratch/thread
+  const uint32_t num_cu =
+      properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+  queue_scratch_len_ = 0;
+  queue_scratch_len_ = AlignUp(32 * 64 * num_cu * scratch_per_thread_, 65536);
+  size_t max_scratch_len = queue_scratch_len_ * max_queues_;
+
+#if defined(HSA_LARGE_MODEL) && defined(__linux__)
+  // For 64-bit linux use max queues unless otherwise specified
+  if ((max_scratch_len == 0) || (max_scratch_len > 4294967296)) {
+    max_scratch_len = 4294967296;  // 4GB apeture max
+  }
+#endif
+
+  void* scratch_base;
+  HSAKMT_STATUS err =
+      hsaKmtAllocMemory(node_id(), max_scratch_len, flags, &scratch_base);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Scratch) failed");
+  assert(IsMultipleOf(scratch_base, 0x1000) &&
+         "Scratch base is not page aligned!");
+
+  scratch_pool_. ~SmallHeap();
+  if (HSAKMT_STATUS_SUCCESS == err) {
+    new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
+  } else {
+    new (&scratch_pool_) SmallHeap(NULL, 0);
+  }
+}
+
+void GpuAgent::InitCacheList() {
+  // Get GPU cache information.
+  // Similar to getting CPU cache but here we use FComputeIdLo.
+  cache_props_.resize(properties_.NumCaches);
+  if (HSAKMT_STATUS_SUCCESS !=
+      hsaKmtGetNodeCacheProperties(node_id(), properties_.FComputeIdLo,
+                                   properties_.NumCaches, &cache_props_[0])) {
+    cache_props_.clear();
+  } else {
+    // Only store GPU D-cache.
+    for (size_t cache_id = 0; cache_id < cache_props_.size(); ++cache_id) {
+      const HsaCacheType type = cache_props_[cache_id].CacheType;
+      if (type.ui32.HSACU != 1 || type.ui32.Instruction == 1) {
+        cache_props_.erase(cache_props_.begin() + cache_id);
+        --cache_id;
+      }
+    }
+  }
+}
+
 hsa_status_t GpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
   return VisitRegion(true, callback, data);
 }
-<<<<<<< HEAD
 
 hsa_status_t GpuAgent::VisitRegion(bool include_peer,
                                    hsa_status_t (*callback)(hsa_region_t region,
@@ -256,31 +306,25 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
                                    void* data) const {
   if (include_peer) {
     // Only expose system, local, and LDS memory of the blit agent.
-    if (this == core::Runtime::runtime_singleton_->blit_agent()) {
+    if (this->node_id() ==
+        core::Runtime::runtime_singleton_->blit_agent()->node_id()) {
       hsa_status_t stat = VisitRegion(regions_, callback, data);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
       }
     }
 
-=======
-
-hsa_status_t GpuAgent::VisitRegion(bool include_peer,
-                                   hsa_status_t (*callback)(hsa_region_t region,
-                                                            void* data),
-                                   void* data) const {
-  if (include_peer) {
-    // Only expose system, local, and LDS memory of the blit agent.
-    if (this == core::Runtime::runtime_singleton_->blit_agent()) {
-      hsa_status_t stat = VisitRegion(regions_, callback, data);
-      if (stat != HSA_STATUS_SUCCESS) {
-        return stat;
-      }
+    // Also expose system regions accessible by this agent.
+    hsa_status_t stat =
+        VisitRegion(core::Runtime::runtime_singleton_->system_regions_fine(),
+                    callback, data);
+    if (stat != HSA_STATUS_SUCCESS) {
+      return stat;
     }
 
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
-    // Also expose system region accessible by this agent.
-    return VisitRegion(peer_regions_, callback, data);
+    return VisitRegion(
+        core::Runtime::runtime_singleton_->system_regions_coarse(), callback,
+        data);
   }
 
   // Only expose system, local, and LDS memory of this agent.
@@ -313,9 +357,8 @@ hsa_status_t GpuAgent::InitDma() {
   // Try create SDMA blit first.
   std::string sdma_enable = os::GetEnvVar("HSA_ENABLE_SDMA");
 
-  if (sdma_enable != "0" && compute_capability_.version_major() == 8 &&
-      compute_capability_.version_minor() == 0 &&
-      compute_capability_.version_stepping() == 3) {
+  if (sdma_enable != "0" && isa_->GetMajorVersion() == 8 &&
+      isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 3) {
     blit_ = new BlitSdma();
 
     if (blit_->Initialize(*this) == HSA_STATUS_SUCCESS) {
@@ -389,14 +432,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AGENT_INFO_NAME:
       // TODO(bwicakso): hardcode for now.
       std::memset(value, 0, kNameSize);
-      if (compute_capability_.version_major() == 7) {
+      if (isa_->GetMajorVersion() == 7) {
         std::memcpy(value, "Kaveri", sizeof("Kaveri"));
-      } else if (compute_capability_.version_major() == 8) {
-        if (compute_capability_.version_minor() == 0 &&
-            compute_capability_.version_stepping() == 2) {
+      } else if (isa_->GetMajorVersion() == 8) {
+        if (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 2) {
           std::memcpy(value, "Tonga", sizeof("Tonga"));
-        } else if (compute_capability_.version_minor() == 0 &&
-                   compute_capability_.version_stepping() == 3) {
+        } else if (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 3) {
           std::memcpy(value, "Fiji", sizeof("Fiji"));
         } else {
           std::memcpy(value, "Carrizo", sizeof("Carrizo"));
@@ -467,7 +508,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AGENT_INFO_NODE:
       // TODO: associate with OS NUMA support (numactl / GetNumaProcessorNode).
-      *((uint32_t*)value) = node_id_;
+      *((uint32_t*)value) = node_id();
       break;
     case HSA_AGENT_INFO_DEVICE:
       *((hsa_device_type_t*)value) = HSA_DEVICE_TYPE_GPU;
@@ -479,7 +520,8 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       ((uint32_t*)value)[0] = 16 * 1024;
       break;
     case HSA_AGENT_INFO_ISA:
-      return core::Isa::Create(agent, (hsa_isa_t*)value);
+      *((hsa_isa_t*)value) = core::Isa::Handle(isa_);
+      break;
     case HSA_AGENT_INFO_EXTENSIONS:
       memset(value, 0, sizeof(uint8_t) * 128);
 
@@ -539,7 +581,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = properties_.MaxEngineClockMhzFCompute;
       break;
     case HSA_AMD_AGENT_INFO_DRIVER_NODE_ID:
-      *((uint32_t*)value) = node_id_;
+      *((uint32_t*)value) = node_id();
       break;
     case HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS:
       *((uint32_t*)value) = static_cast<uint32_t>(
@@ -608,8 +650,8 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
   }
 
   // Create an HW AQL queue
-  HwAqlCommandProcessor* hw_queue = new HwAqlCommandProcessor(
-      this, size, node_id_, scratch, event_callback, data, is_kv_device_);
+  AqlQueue* hw_queue = new AqlQueue(this, size, node_id(), scratch,
+                                    event_callback, data, is_kv_device_);
   if (hw_queue && hw_queue->IsValid()) {
     // return queue
     *queue = hw_queue;
@@ -691,17 +733,12 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 }
 
 bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
-<<<<<<< HEAD
   if (!is_kv_device_) {
+    current_coherency_type_ = type;
     return true;
   }
 
   ScopedAcquire<KernelMutex> Lock(&coherency_lock_);
-=======
-  if (!is_kv_device_) return true;
-
-  ScopedAcquire<KernelMutex> Lock(&lock_);
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 
   if (ape1_base_ == 0 && ape1_size_ == 0) {
     static const size_t kApe1Alignment = 64 * 1024;
@@ -722,7 +759,7 @@ bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
     type1 = HSA_CACHING_CACHED;
   }
 
-  if (hsaKmtSetMemoryPolicy(node_id_, type0, type1,
+  if (hsaKmtSetMemoryPolicy(node_id(), type0, type1,
                             reinterpret_cast<void*>(ape1_base_),
                             ape1_size_) != HSAKMT_STATUS_SUCCESS) {
     return false;
@@ -736,13 +773,12 @@ uint16_t GpuAgent::GetMicrocodeVersion() const {
 }
 
 void GpuAgent::SyncClocks() {
-  HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id_, &t1_);
+  HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id(), &t1_);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
 
-<<<<<<< HEAD
 void GpuAgent::BindTrapHandler() {
-#ifdef __linux__ // No raw string literal support in VS builds right now
+#ifdef __linux__  // No raw string literal support in VS builds right now
   const char* src_sp3 = R"(
     var s_trap_info_lo = ttmp0
     var s_trap_info_hi = ttmp1
@@ -804,7 +840,7 @@ void GpuAgent::BindTrapHandler() {
     end
   )";
 
-  if (compute_capability_.version_major() == 7) {
+  if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
     return;
   }
@@ -818,12 +854,10 @@ void GpuAgent::BindTrapHandler() {
   AssembleShader(src_sp3, "TrapHandler", trap_code_buf_, trap_code_buf_size_);
 
   // Bind the trap handler to this node.
-  HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id_, trap_code_buf_,
+  HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
                                            trap_code_buf_size_, NULL, 0);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
 #endif
 }
 
-=======
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
 }  // namespace

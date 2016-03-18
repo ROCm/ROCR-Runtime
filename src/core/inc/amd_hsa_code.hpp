@@ -164,12 +164,12 @@ namespace code {
       amd::elf::Symbol* elfSym() { return elfsym; }
       std::string Name() const { return elfsym ? elfsym->name() : ""; }
       Section* GetSection() { return elfsym->section(); }
-      uint64_t SectionOffset() const { return elfsym->value(); }
-      uint64_t VAddr() const { return elfsym->section()->addr() + elfsym->value(); }
+      virtual uint64_t SectionOffset() const { return elfsym->value(); }
+      virtual uint64_t VAddr() const { return elfsym->section()->addr() + elfsym->value(); }
       uint32_t Index() const { return elfsym ? elfsym->index() : 0; }
       bool IsDeclaration() const;
       bool IsDefinition() const;
-      bool IsAgent() const;
+      virtual bool IsAgent() const;
       virtual hsa_symbol_kind_t Kind() const = 0;
       hsa_symbol_linkage_t Linkage() const;
       hsa_variable_allocation_t Allocation() const;
@@ -229,6 +229,8 @@ namespace code {
       amd::elf::Section* debugAbbrev;
 
       bool PullElf();
+      bool PullElfV1();
+      bool PullElfV2();
 
       void AddAmdNote(uint32_t type, const void* desc, uint32_t desc_size);
       template <typename S>
@@ -261,6 +263,7 @@ namespace code {
       amd::elf::Section* HsaText() { assert(hsatext); return hsatext; }
       const amd::elf::Section* HsaText() const { assert(hsatext); return hsatext; }
       amd::elf::SymbolTable* Symtab() { assert(img); return img->symtab(); }
+      uint16_t Machine() { return img->Machine(); }
 
       AmdHsaCode(bool combineDataSegments = true);
       virtual ~AmdHsaCode();
@@ -397,6 +400,24 @@ namespace code {
     public:
       AmdHsaCode* FromHandle(hsa_code_object_t handle);
       bool Destroy(hsa_code_object_t handle);
+    };
+
+    class KernelSymbolV2 : public KernelSymbol {
+    private:
+    public:
+      explicit KernelSymbolV2(amd::elf::Symbol* elfsym_, const amd_kernel_code_t* akc);
+      bool IsAgent() const override { return true; }
+      uint64_t SectionOffset() const override { return elfsym->value() - elfsym->section()->addr(); }
+      uint64_t VAddr() const override { return elfsym->value(); }
+    };
+
+    class VariableSymbolV2 : public VariableSymbol {
+    private:
+    public:
+      explicit VariableSymbolV2(amd::elf::Symbol* elfsym_) : VariableSymbol(elfsym_) { }
+      bool IsAgent() const override { return false; }
+      uint64_t SectionOffset() const override { return elfsym->value() - elfsym->section()->addr(); }
+      uint64_t VAddr() const override { return elfsym->value(); }
     };
 }
 }

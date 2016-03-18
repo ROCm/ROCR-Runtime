@@ -301,6 +301,19 @@ namespace code {
 
     bool AmdHsaCode::PullElf()
     {
+      uint32_t majorVersion, minorVersion;
+      if (!GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
+        return false;
+      }
+      if (majorVersion >= 2) {
+        return PullElfV2();
+      } else {
+        return PullElfV1();
+      }
+    }
+
+    bool AmdHsaCode::PullElfV1()
+    {
       for (size_t i = 0; i < img->segmentCount(); ++i) {
         Segment* s = img->segment(i);
         if (s->type() == PT_AMDGPU_HSA_LOAD_GLOBAL_PROGRAM ||
@@ -1259,6 +1272,65 @@ namespace code {
         codeMap.erase(i);
         return true;
       }
+
+    bool AmdHsaCode::PullElfV2()
+    {
+      for (size_t i = 0; i < img->segmentCount(); ++i) {
+        Segment* s = img->segment(i);
+        if (s->type() == PT_LOAD) {
+          dataSegments.push_back(s);
+        }
+      }
+      for (size_t i = 0; i < img->sectionCount(); ++i) {
+        Section* sec = img->section(i);
+        if (!sec) { continue; }
+        if ((sec->type() == SHT_PROGBITS || sec->type() == SHT_NOBITS) &&
+            !(sec->flags() & SHF_EXECINSTR)) {
+          dataSections.push_back(sec);
+        } else if (sec->type() == SHT_RELA) {
+          relocationSections.push_back(sec->asRelocationSection());
+        }
+        if (sec->Name() == ".text") {
+          hsatext = sec;
+        }
+      }
+      for (size_t i = 0; i < img->symtab()->symbolCount(); ++i) {
+        amd::elf::Symbol* elfsym = img->symtab()->symbol(i);
+        Symbol* sym = 0;
+        switch (elfsym->type()) {
+        case STT_AMDGPU_HSA_KERNEL: {
+          amd::elf::Section* sec = elfsym->section();
+          amd_kernel_code_t akc;
+          if (!sec) {
+            out << "Failed to find section for symbol " << elfsym->name() << std::endl;
+            return false;
+          }
+          if (!(sec->flags() & (SHF_ALLOC | SHF_EXECINSTR))) {
+            out << "Invalid code section for symbol " << elfsym->name() << std::endl;
+            return false;
+          }
+          if (!sec->getData(elfsym->value() - sec->addr(), &akc, sizeof(amd_kernel_code_t))) {
+            out << "Failed to get AMD Kernel Code for symbol " << elfsym->name() << std::endl;
+            return false;
+          }
+          sym = new KernelSymbolV2(elfsym, &akc);
+          break;
+        }
+        case STT_OBJECT:
+        case STT_COMMON:
+          sym = new VariableSymbolV2(elfsym);
+          break;
+        default:
+          break; // Skip unknown symbols.
+        }
+        if (sym) { symbols.push_back(sym); }
+      }
+
+      return true;
+    }
+
+    KernelSymbolV2::KernelSymbolV2(amd::elf::Symbol* elfsym_, const amd_kernel_code_t* akc) :
+      KernelSymbol(elfsym_, akc) { }
 }
 }
 }

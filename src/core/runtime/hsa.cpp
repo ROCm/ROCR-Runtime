@@ -1100,7 +1100,13 @@ hsa_status_t hsa_isa_from_name(const char* name, hsa_isa_t* isa) {
   IS_BAD_PTR(name);
   IS_BAD_PTR(isa);
 
-  return core::Isa::Create(name, isa);
+  const core::Isa* isa_object = core::IsaRegistry::GetIsa(name);
+  if (!isa_object) {
+    return HSA_STATUS_ERROR_INVALID_ISA_NAME;
+  }
+
+  *isa = core::Isa::Handle(isa_object);
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t hsa_isa_get_info(hsa_isa_t isa, hsa_isa_info_t attribute,
@@ -1108,10 +1114,15 @@ hsa_status_t hsa_isa_get_info(hsa_isa_t isa, hsa_isa_info_t attribute,
   IS_OPEN();
   IS_BAD_PTR(value);
 
-  core::Isa* isa_object = core::Isa::Object(isa);
+  if (index != 0) {
+    return HSA_STATUS_ERROR_INVALID_INDEX;
+  }
+
+  const core::Isa* isa_object = core::Isa::Object(isa);
   IS_VALID(isa_object);
 
-  return isa_object->GetInfo(attribute, index, value);
+  return isa_object->GetInfo(attribute, value) ?
+    HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_INVALID_ARGUMENT;
 }
 
 hsa_status_t hsa_isa_compatible(hsa_isa_t code_object_isa,
@@ -1119,13 +1130,14 @@ hsa_status_t hsa_isa_compatible(hsa_isa_t code_object_isa,
   IS_OPEN();
   IS_BAD_PTR(result);
 
-  core::Isa* code_object_isa_object = core::Isa::Object(code_object_isa);
+  const core::Isa* code_object_isa_object = core::Isa::Object(code_object_isa);
   IS_VALID(code_object_isa_object);
 
-  core::Isa* agent_isa_object = core::Isa::Object(agent_isa);
+  const core::Isa* agent_isa_object = core::Isa::Object(agent_isa);
   IS_VALID(agent_isa_object);
 
-  return code_object_isa_object->IsCompatible(*agent_isa_object, result);
+  *result = code_object_isa_object->IsCompatible(agent_isa_object);
+  return HSA_STATUS_SUCCESS;
 }
 
 //-----------------------------------------------------------------------------

@@ -94,7 +94,7 @@ class MemoryRegion : public core::MemoryRegion {
   /// @brief Unpin memory.
   static void MakeKfdMemoryUnresident(void* ptr);
 
-  MemoryRegion(bool fine_grain, bool full_profile, uint32_t node_id,
+  MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
                const HsaMemoryProperties& mem_props);
 
   ~MemoryRegion();
@@ -115,12 +115,6 @@ class MemoryRegion : public core::MemoryRegion {
                                 hsa_amd_agent_memory_pool_info_t attribute,
                                 void* value) const;
 
-<<<<<<< HEAD
-=======
-  hsa_amd_memory_pool_access_t GetPoolAccessType(
-      const core::Agent& agent) const;
-
->>>>>>> 85ad07b87d1513e094d206ed8d5f49946f86991f
   hsa_status_t AllowAccess(uint32_t num_agents, const hsa_agent_t* agents,
                            const void* ptr, size_t size) const;
 
@@ -168,26 +162,7 @@ class MemoryRegion : public core::MemoryRegion {
   }
 
   __forceinline bool IsSvm() const {
-    // TODO(bwicakso): uncomment this when available.
-    //return mem_props_.HeapType == HSA_HEAPTYPE_DEVICE_SVM;
-
-    // TODO(bwicakso): remove this when SVM memory prop is available.
-    return false;
-  }
-
-  __forceinline uint32_t node_id() const {
-    return node_id_;
-  }
-
-  __forceinline core::Agent* owner() const {
-    // Return NULL if it is system memory region.
-    // Return non NULL on lds, scratch, local memory region.
-    return owner_;
-  }
-
-  __forceinline void owner(core::Agent* o) {
-    assert(o != NULL);
-    owner_ = o;
+    return mem_props_.HeapType == HSA_HEAPTYPE_DEVICE_SVM;
   }
 
   __forceinline uint32_t BusWidth() const {
@@ -199,10 +174,6 @@ class MemoryRegion : public core::MemoryRegion {
   }
 
  private:
-  uint32_t node_id_;
-
-  core::Agent* owner_;
-
   const HsaMemoryProperties mem_props_;
 
   HsaMemFlags mem_flag_;

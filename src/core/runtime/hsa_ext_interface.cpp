@@ -182,6 +182,7 @@ void ExtensionEntryPoints::InitTable() {
   table.hsa_ext_sampler_create_fn = hsa_ext_null;
   table.hsa_ext_sampler_destroy_fn = hsa_ext_null;
   table.hsa_amd_image_get_info_max_dim_fn = hsa_ext_null;
+  table.hsa_amd_image_create_fn = hsa_ext_null;
 }
 
 void ExtensionEntryPoints::Unload() {
@@ -356,6 +357,15 @@ bool ExtensionEntryPoints::Load(std::string library_name) {
         (decltype(::hsa_amd_image_get_info_max_dim)*)ptr;
   }
 
+  ptr = os::GetExportAddress(lib, "hsa_amd_image_create_impl");
+  if (ptr != NULL) {
+    assert(table.hsa_amd_image_create_fn ==
+               (decltype(::hsa_amd_image_create)*)hsa_ext_null &&
+           "Duplicate load of extension import.");
+    table.hsa_amd_image_create_fn =
+        (decltype(::hsa_amd_image_create)*)ptr;
+  }
+
   core::hsa_internal_api_table_.extension_backup=table;
   core::hsa_internal_api_table_.table.std_exts_=&core::hsa_internal_api_table_.extension_backup;
   
@@ -506,4 +516,15 @@ hsa_status_t hsa_amd_image_get_info_max_dim(hsa_agent_t component,
                                             void* value) {
   return core::Runtime::runtime_singleton_->extensions_.table
       .hsa_amd_image_get_info_max_dim_fn(component, attribute, value);
+}
+
+hsa_status_t hsa_amd_image_create(
+  hsa_agent_t agent,
+  const hsa_ext_image_descriptor_t *image_descriptor,
+  const hsa_amd_image_descriptor_t *image_layout,
+  const void *image_data,
+  hsa_access_permission_t access_permission,
+  hsa_ext_image_t *image) {
+    return core::Runtime::runtime_singleton_->extensions_.table
+      .hsa_amd_image_create_fn(agent, image_descriptor, image_layout, image_data, access_permission, image);
 }

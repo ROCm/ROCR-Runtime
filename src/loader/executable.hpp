@@ -404,7 +404,9 @@ private:
     hsa_agent_t agent,
     int32_t call_convention);
 
-  hsa_status_t LoadSegment(hsa_agent_t agent, amd::hsa::code::Segment* seg);
+  hsa_status_t LoadSegment(hsa_agent_t agent, code::Segment* s, uint32_t majorVersion, uint16_t machine);
+  hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* seg);
+  hsa_status_t LoadSegmentV2(hsa_agent_t agent, amd::hsa::code::Segment* seg, uint16_t machine);
   hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);

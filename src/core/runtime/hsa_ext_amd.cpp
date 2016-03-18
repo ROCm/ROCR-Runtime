@@ -350,13 +350,9 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  static const size_t kCacheAlignment = 64;
-  if (!IsMultipleOf(host_ptr, kCacheAlignment)) {
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-
-  amd::MemoryRegion* system_region = amd::MemoryRegion::Convert(
-      core::Runtime::runtime_singleton_->system_region());
+  const amd::MemoryRegion* system_region =
+      reinterpret_cast<const amd::MemoryRegion*>(
+          core::Runtime::runtime_singleton_->system_regions_fine()[0]);
 
   return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
 }
@@ -364,8 +360,9 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
 hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr) {
   IS_OPEN();
 
-  amd::MemoryRegion* system_region = amd::MemoryRegion::Convert(
-    core::Runtime::runtime_singleton_->system_region());
+  const amd::MemoryRegion* system_region =
+      reinterpret_cast<const amd::MemoryRegion*>(
+          core::Runtime::runtime_singleton_->system_regions_fine()[0]);
 
   return system_region->Unlock(host_ptr);
 }
@@ -516,4 +513,43 @@ hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
   }
 
   return mem_region->GetAgentPoolInfo(*agent, attribute, value);
+}
+
+hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
+                                        hsa_agent_t* agents, int interop_handle,
+                                        uint32_t flags, size_t* size,
+                                        void** ptr, size_t* metadata_size,
+                                        const void** metadata) {
+  IS_OPEN();
+  IS_BAD_PTR(agents);
+  IS_BAD_PTR(size);
+  IS_BAD_PTR(ptr);
+  if (flags != 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (num_agents == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  core::Agent* short_agents[64];
+  core::Agent** core_agents = short_agents;
+  if (num_agents > 64) {
+    core_agents = new core::Agent* [num_agents];
+    if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  for (int i = 0; i < num_agents; i++) {
+    core::Agent* device = core::Agent::Convert(agents[i]);
+    IS_VALID(device);
+    core_agents[i] = device;
+  }
+
+  auto ret = core::Runtime::runtime_singleton_->InteropMap(
+      num_agents, core_agents, interop_handle, flags, size, ptr, metadata_size,
+      metadata);
+
+  if (num_agents > 64) delete[] core_agents;
+  return ret;
+}
+
+hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
+  IS_OPEN();
+  if (ptr != NULL) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
+  return HSA_STATUS_SUCCESS;
 }

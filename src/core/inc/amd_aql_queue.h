@@ -52,19 +52,18 @@ namespace amd {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
-class HwAqlCommandProcessor : public core::Queue, public core::Signal {
+class AqlQueue : public core::Queue, public core::Signal {
  public:
   static __forceinline bool IsType(core::Signal* signal) {
     return signal->IsType(&rtti_id_);
   }
 
   // Acquires/releases queue resources and requests HW schedule/deschedule.
-  HwAqlCommandProcessor(GpuAgent* agent, size_t req_size_pkts,
-                        HSAuint32 node_id, ScratchInfo& scratch,
-                        core::HsaEventCallback callback, void* err_data,
-                        bool is_kv = false);
+  AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
+           ScratchInfo& scratch, core::HsaEventCallback callback,
+           void* err_data, bool is_kv = false);
 
-  ~HwAqlCommandProcessor();
+  ~AqlQueue();
 
   /// @brief Indicates if queue is valid or not
   bool IsValid() const { return valid_; }
@@ -407,7 +406,7 @@ class HwAqlCommandProcessor : public core::Queue, public core::Signal {
   static int rtti_id_;
 
   // Forbid copying and moving of this object
-  DISALLOW_COPY_AND_ASSIGN(HwAqlCommandProcessor);
+  DISALLOW_COPY_AND_ASSIGN(AqlQueue);
 };
 }  // namespace amd
 #endif  // header guard
