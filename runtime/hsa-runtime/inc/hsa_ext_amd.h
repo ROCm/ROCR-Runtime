@@ -1176,28 +1176,6 @@ hsa_status_t HSA_API hsa_amd_image_create(
     hsa_ext_image_t *image
 );
 
-/**
- * @brief Queries equivalent kernel host address given kernel device address.
- *
- * @param[in] kernel_device_address Kernel device address to query equivalent
- * kernel host address for.
- *
- * @param[out] kernel_host_address Pointer to an application-allocated buffer
- * where to store equivalend kernel host address.
- *
- * @retval HSA_STATUS_SUCCESS The function has been executed successfully.
- *
- * @retval HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
- * initialized.
- *
- * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p kernel_device_address is
- * invalid, or @p kernel_device_address is already a kernel host address, or
- * @p kernel_host_address is NULL.
- */
-hsa_status_t HSA_API hsa_amd_query_kernel_host_address(
-  uint64_t kernel_device_address,
-  uint64_t *kernel_host_address);
-
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

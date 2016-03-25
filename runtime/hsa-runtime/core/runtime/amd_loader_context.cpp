@@ -108,7 +108,7 @@ public:
   void* Address(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)ptr_ + offset; }
   void* HostAddress(size_t offset = 0) const override
-    { return nullptr; }
+    { return this->Address(offset); }
   bool Allocated() const override
     { return nullptr != ptr_; }
 
@@ -178,7 +178,7 @@ public:
   void* Address(size_t offset = 0) const override
     { assert(this->Allocated()); return (char*)ptr_ + offset; }
   void* HostAddress(size_t offset = 0) const override
-    { return nullptr; }
+    { return this->Address(offset); }
   bool Allocated() const override
     { return nullptr != ptr_; }
 
