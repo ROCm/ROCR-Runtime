@@ -553,13 +553,3 @@ hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   if (ptr != NULL) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
   return HSA_STATUS_SUCCESS;
 }
-
-hsa_status_t HSA_API hsa_amd_query_kernel_host_address(
-  uint64_t kernel_device_address,
-  uint64_t *kernel_host_address) {
-  IS_OPEN();
-  IS_BAD_PTR(kernel_host_address);
-
-  *kernel_host_address = core::Runtime::runtime_singleton_->loader()->FindHostAddress(kernel_device_address);
-  return *kernel_host_address == 0 ? HSA_STATUS_ERROR_INVALID_ARGUMENT : HSA_STATUS_SUCCESS;
-}
