@@ -178,7 +178,14 @@ int main(int argc, char **argv) {
      */
     hsa_agent_t agent;
     err = hsa_iterate_agents(get_gpu_agent, &agent);
-    if(err == HSA_STATUS_INFO_BREAK) { err = HSA_STATUS_SUCCESS; }
+    if(err == HSA_STATUS_INFO_BREAK) { 
+        err = HSA_STATUS_SUCCESS; 
+    } else {
+        /*
+         * No GPU agent was found.
+         */
+        err = HSA_STATUS_ERROR; 
+    }
     check(Getting a gpu agent, err);
 
     /*
