@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -55,7 +55,11 @@ namespace loader {
   private:
     hsa_isa_t invalid;
     hsa_isa_t gfx700, gfx701, gfx800, gfx801, gfx802, gfx803, gfx804, gfx810;
+#if defined(GFX9_BUILD)
+    hsa_isa_t gfx900, gfx901;
+#else
     hsa_isa_t reserved;
+#endif // GFX9_BUILD
     std::ostream& out;
     typedef std::set<void*> PointerSet;
     PointerSet pointers;

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -87,6 +87,10 @@ namespace loader {
     gfx803.handle = 803;
     gfx804.handle = 804;
     gfx810.handle = 810;
+#if defined(GFX9_BUILD)
+    gfx900.handle = 900;
+    gfx901.handle = 901;
+#endif // GFX9_BUILD
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -108,6 +112,12 @@ namespace loader {
       return gfx804;
     } else if (sname == "AMD:AMDGPU:8:1:0") {
       return gfx810;
+#if defined(GFX9_BUILD)
+    } else if (sname == "AMD:AMDGPU:9:0:0") {
+      return gfx900;
+    } else if (sname == "AMD:AMDGPU:9:0:1") {
+      return gfx901;
+#endif // GFX_BUILD
     } else {
       assert(0);
       return invalid;

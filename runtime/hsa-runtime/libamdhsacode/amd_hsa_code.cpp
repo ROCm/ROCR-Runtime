@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,6 +53,9 @@
 #include <cstdlib>
 #include <algorithm>
 
+#ifdef SP3_STATIC_LIB
+#include "sp3.h"
+#endif // SP3_STATIC_LIB
 
 #ifndef _WIN32
 #define _alloca alloca
@@ -1230,7 +1233,241 @@ namespace code {
 
     void AmdHsaCode::PrintDisassembly(std::ostream& out, const unsigned char *isa, size_t size, uint32_t isa_offset)
     {
+    #ifdef SP3_STATIC_LIB
+      // Default asic is ci.
+      std::string asic = "CI";
+      std::string vendor_name, architecture_name;
+      uint32_t major_version, minor_version, stepping;
+      if (GetNoteIsa(vendor_name, architecture_name, &major_version, &minor_version, &stepping)) {
+        if (major_version == 7) {
+          asic = "CI";
+        } else if (major_version == 8) {
+          asic = "VI";
+        } else if (major_version == 9) {
+          asic = "GREENLAND";
+        } else {
+          assert(!"unknown compute capability");
+        }
+      }
+
+      struct sp3_context *dis_state = sp3_new();
+      sp3_setasic(dis_state, asic.c_str());
+
+      sp3_vma *dis_vma = sp3_vm_new_ptr(0, size / 4, (const uint32_t*)isa);
+
+      std::vector<uint32_t> comments(HsaText()->size() / 4, 0);
+      for (size_t i = 0; i < SymbolCount(); ++i) {
+        Symbol* sym = GetSymbol(i);
+        if (sym->IsKernelSymbol() && sym->IsDefinition()) {
+          comments[sym->SectionOffset() / 4] = COMMENT_AMD_KERNEL_CODE_T_BEGIN;
+          comments[(sym->SectionOffset() + 252) / 4] = COMMENT_AMD_KERNEL_CODE_T_END;
+          amd_kernel_code_t kernel_code;
+          HsaText()->getData(sym->SectionOffset(), &kernel_code, sizeof(amd_kernel_code_t));
+          comments[(kernel_code.kernel_code_entry_byte_offset + sym->SectionOffset()) / 4] = COMMENT_KERNEL_ISA_BEGIN;
+        }
+      }
+      sp3_vma *comment_vma = sp3_vm_new_ptr(0, comments.size(), (const uint32_t*)comments.data());
+      sp3_setcomments(dis_state, comment_vma, CommentTopCallBack, CommentRightCallBack, this);
+
+      // When isa_offset == 0 disassembly full hsatext section.
+      // Otherwise disassembly only from this offset till endpgm instruction.
+      char *text = sp3_disasm(
+        dis_state,
+        dis_vma,
+        isa_offset / 4,
+        nullptr,
+        SP3_SHTYPE_CS,
+        nullptr,
+        (unsigned)(size / 4),
+        isa_offset == 0 ? SP3DIS_FORCEVALID | SP3DIS_COMMENTS : SP3DIS_COMMENTS);
+
+      enum class IsaState {
+        UNKNOWN,
+        AMD_KERNEL_CODE_T_BEGIN,
+        AMD_KERNEL_CODE_T,
+        AMD_KERNEL_CODE_T_END,
+        ISA_BEGIN,
+        ISA,
+        PADDING,
+      };
+
+      std::string line;
+      char *text_ptr = text;
+      IsaState state = IsaState::UNKNOWN;
+
+      uint32_t offset = 0;
+      uint32_t padding_end = 0;
+      std::string padding;
+
+      while (text_ptr && text_ptr[0] != '\0') {
+        line.clear();
+        while (text_ptr[0] != '\0' && text_ptr[0] != '\n') {
+          line.push_back(text_ptr[0]);
+          ++text_ptr;
+        }
+        ltrim(line);
+        if (text_ptr[0] == '\n') {
+          ++text_ptr;
+        }
+        switch (state) {
+        case IsaState::UNKNOWN:
+          assert(line != "// amd_kernel_code_t end");
+          padding.clear();
+          if (line == "// amd_kernel_code_t begin") {
+            state = IsaState::AMD_KERNEL_CODE_T_BEGIN;
+          } else if (line == "// isa begin") {
+            state = IsaState::ISA_BEGIN;
+          } else if (line == "end") {
+            out << line << std::endl;
+          } else if (line.find("v_cndmask_b32  v0, s0, v0, vcc") != std::string::npos) {
+            padding += "  " + line + "\n";
+            offset = ParseInstructionOffset(line);
+            padding_end = ParseInstructionOffset(line);
+            state = IsaState::PADDING;
+          } else if (line != "shader (null)") {
+            out << "  " << line << std::endl;
+          }
+          break;
+
+        case IsaState::AMD_KERNEL_CODE_T_BEGIN:
+          assert(line != "// amd_kernel_code_t begin");
+          assert(line != "// amd_kernel_code_t end");
+          assert(line != "// isa begin");
+          assert(line != "end");
+          padding.clear();
+          offset = ParseInstructionOffset(line);
+          state = IsaState::AMD_KERNEL_CODE_T;
+          break;
+
+        case IsaState::AMD_KERNEL_CODE_T:
+          assert(line != "// amd_kernel_code_t begin");
+          assert(line != "// isa begin");
+          assert(line != "end");
+          assert(padding.empty());
+          if (line == "// amd_kernel_code_t end") {
+            state = IsaState::AMD_KERNEL_CODE_T_END;
+          }
+          break;
+
+        case IsaState::AMD_KERNEL_CODE_T_END:
+          assert(line != "// amd_kernel_code_t begin");
+          assert(line != "// amd_kernel_code_t end");
+          assert(line != "// isa begin");
+          assert(line != "end");
+          assert(padding.empty());
+          for (size_t i = 0; i < SymbolCount(); ++i) {
+            Symbol* sym = GetSymbol(i);
+            if (sym->IsKernelSymbol() && sym->IsDefinition() && sym->SectionOffset() == offset) {
+              std::ostream::fmtflags flags = out.flags();
+              char fill = out.fill();
+              out << "  //" << std::endl;
+              out << "  // amd_kernel_code_t for " << sym->Name()
+                  << " (" << std::hex << std::setw(12) << std::setfill('0') << std::right << offset
+                  << " - " << std::setw(12) << (offset + 256) << ')' << std::endl;
+              out << "  //" << std::endl;
+              out << std::setfill(fill);
+              out.flags(flags);
+              break;
+            }
+          }
+          state = IsaState::UNKNOWN;
+          break;
+
+        case IsaState::ISA_BEGIN:
+          assert(line != "// amd_kernel_code_t begin");
+          assert(line != "// amd_kernel_code_t end");
+          assert(line != "// isa begin");
+          padding.clear();
+          offset = ParseInstructionOffset(line);
+          for (size_t i = 0; i < SymbolCount(); ++i) {
+            Symbol* sym = GetSymbol(i);
+            if (sym->IsKernelSymbol() && sym->IsDefinition()) {
+              amd_kernel_code_t kernel_code;
+              HsaText()->getData(sym->SectionOffset(), &kernel_code, sizeof(amd_kernel_code_t));
+              if ((sym->SectionOffset() + kernel_code.kernel_code_entry_byte_offset) == offset) {
+                out << "  //" << std::endl;
+                out << "  // " << sym->Name() << ':' << std::endl;
+                out << "  //" << std::endl;
+                break;
+              }
+            }
+          }
+          if (line == "end") {
+            out << line << std::endl;
+            state = IsaState::UNKNOWN;
+          } else {
+            out << "  " << line << std::endl;
+            state = IsaState::ISA;
+          }
+          break;
+
+        case IsaState::ISA:
+          assert(line != "// amd_kernel_code_t end");
+          if (!padding.empty()) {
+            out << padding;
+            out.flush();
+            padding.clear();
+          }
+          if (line == "// amd_kernel_code_t begin") {
+            state = IsaState::AMD_KERNEL_CODE_T_BEGIN;
+          } else if (line == "// isa begin") {
+            state = IsaState::ISA_BEGIN;
+          } else if (line == "end") {
+            out << line << std::endl;
+            state = IsaState::UNKNOWN;
+          } else if (line.find("v_cndmask_b32  v0, s0, v0, vcc") != std::string::npos) {
+            padding += "  " + line + "\n";
+            offset = ParseInstructionOffset(line);
+            padding_end = offset;
+            state = IsaState::PADDING;
+          } else {
+            out << "  " << line << std::endl;
+          }
+          break;
+
+        case IsaState::PADDING:
+          assert(line != "// amd_kernel_code_t end");
+          if (line.find("v_cndmask_b32  v0, s0, v0, vcc") != std::string::npos) {
+            padding += "  " + line + "\n";
+            padding_end = ParseInstructionOffset(line);
+          } else if (line == "// amd_kernel_code_t begin" || line == "// isa begin" || line == "end") {
+              padding.clear();
+              std::ostream::fmtflags flags = out.flags();
+              char fill = out.fill();
+              out << "  //" << std::endl;
+              out << "  // padding ("
+                  << std::hex << std::setw(12) << std::setfill('0') << std::right << offset
+                  << " - " << std::setw(12) << (padding_end + 4) << ')' << std::endl;
+              out << "  //" << std::endl;
+              out << std::setfill(fill);
+              out.flags(flags);
+              if (line == "// amd_kernel_code_t begin") {
+                state = IsaState::AMD_KERNEL_CODE_T_BEGIN;
+              } else if (line == "// isa begin") {
+                state = IsaState::ISA_BEGIN;
+              } else if (line == "end") {
+                out << line << std::endl;
+                state = IsaState::UNKNOWN;
+              }
+          } else {
+            padding += "  " + line + "\n";
+            state = IsaState::ISA;
+          }
+          break;
+
+        default:
+          assert(false);
+          break;
+        }
+      }
+
+      sp3_free(text);
+      sp3_close(dis_state);
+      sp3_vm_free(dis_vma);
+      sp3_vm_free(comment_vma);
+    #else
       PrintRawData(out, isa, size);
+    #endif // SP3_STATIC_LIB
       out << std::dec;
     }
 
