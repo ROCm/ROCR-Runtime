@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -54,19 +54,6 @@
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
-namespace {
-
-bool IsBasePm4(hsa_profile_t profile) {
-  if (profile == HSA_PROFILE_FULL) { return false; }
-  char *emulate_aql = getenv("HSA_EMULATE_AQL");
-  if (nullptr == emulate_aql) { return false; }
-  char *tools_lib = getenv("HSA_TOOLS_LIB");
-  if (nullptr == tools_lib) { return false; }
-  return "1" == std::string(emulate_aql) && 0 != std::string(tools_lib).size();
-}
-
-} // namespace anonymous
-
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -114,6 +101,23 @@ hsa_status_t AmdHsaCodeLoader::IterateExecutables(
   }
 
   return HSA_STATUS_SUCCESS;
+}
+
+uint64_t AmdHsaCodeLoader::FindHostAddress(uint64_t device_address)
+{
+  if (device_address == 0) {
+    return 0;
+  }
+  std::lock_guard<std::mutex> lock(executables_mutex);
+  for (auto &exec : executables) {
+    if (exec != nullptr) {
+      uint64_t host_address = exec->FindHostAddress(device_address);
+      if (host_address != 0) {
+        return host_address;
+      }
+    }
+  }
+  return 0;
 }
 
 //===----------------------------------------------------------------------===//
@@ -669,6 +673,23 @@ hsa_status_t ExecutableImpl::IterateLoadedCodeObjects(
   return HSA_STATUS_SUCCESS;
 }
 
+uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
+{
+  for (auto &obj : loaded_code_objects) {
+    assert(obj);
+    for (auto &seg : obj->LoadedSegments()) {
+      assert(seg);
+      uint64_t paddr = (uint64_t)(uintptr_t)seg->Address(seg->VAddr());
+      if (paddr <= device_address && device_address < paddr + seg->Size()) {
+        void *haddr = context_->SegmentHostAddress(
+          seg->ElfSegment(), seg->Agent(), seg->Ptr(), device_address - paddr);
+        return nullptr == haddr ? 0 : (uint64_t)(uintptr_t)haddr;
+      }
+    }
+  }
+  return 0;
+}
+
 #define HSAERRCHECK(hsc)                                                       \
   if (hsc != HSA_STATUS_SUCCESS) {                                             \
     assert(false);                                                             \
@@ -741,6 +762,18 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+
+  uint32_t codeHsailMajor;
+  uint32_t codeHsailMinor;
+  hsa_profile_t codeProfile;
+  hsa_machine_model_t codeMachineModel;
+  hsa_default_float_rounding_mode_t codeRoundingMode;
+  if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor, &codeProfile, &codeMachineModel, &codeRoundingMode)) {
+    codeProfile = HSA_PROFILE_FULL;
+  }
+  if (profile_ != codeProfile) {
+    return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+  }
 
   hsa_status_t status;
 
@@ -861,6 +894,13 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
       bool is_dynamic_callstack =
         AMD_HSA_BITS_GET(akc.kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK) ? true : false;
 
+      uint64_t size = sym->Size();
+
+      if (!size && sym->SectionOffset() < sym->GetSection()->size()) {
+        // ORCA Runtime relies on symbol size equal to size of kernel ISA. If symbol size is 0 in ELF,
+        // calculate end of segment - symbol value.
+        size = sym->GetSection()->size() - sym->SectionOffset();
+      }
       KernelSymbol *kernel_symbol = new KernelSymbol(true,
                                       sym->Name(),
                                       sym->Linkage(),
@@ -870,27 +910,13 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
                                       group_segment_size,
                                       private_segment_size,
                                       is_dynamic_callstack,
-                                      sym->Size(),
+                                      size,
                                       256,
                                       address);
       kernel_symbol->debug_info.elf_raw = code->ElfData();
       kernel_symbol->debug_info.elf_size = code->ElfSize();
       kernel_symbol->debug_info.kernel_name = kernel_symbol->name.c_str();
       kernel_symbol->debug_info.owning_segment = (void*)SymbolSegment(agent, sym)->Address(sym->GetSection()->addr());
-      kernel_symbol->debug_info.profile = profile_;
-
-      // \todo kzhuravl 11/17/15 This is a temporary rt hack: needs to be
-      // removed when large bar is supported.
-      if (IsBasePm4(profile_)) {
-        kernel_symbol->debug_info.gpuva = kernel_symbol->address;
-        Segment *kernel_symbol_segment = SymbolSegment(agent, sym);
-        kernel_symbol->address =
-          (uint64_t) (uintptr_t) context_->SegmentHostAddress(
-            kernel_symbol_segment->ElfSegment(),
-            kernel_symbol_segment->Agent(),
-            kernel_symbol_segment->Ptr(),
-            kernel_symbol_segment->Offset(sym->VAddr()));
-      }
       symbol = kernel_symbol;
 
       // \todo kzhuravl 10/15/15 This is a debugger backdoor: needs to be

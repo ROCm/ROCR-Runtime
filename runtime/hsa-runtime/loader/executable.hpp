@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -393,6 +393,8 @@ public:
       void *data),
     void *data);
 
+  uint64_t FindHostAddress(uint64_t device_address) override;
+
   Context* context() { return context_; }
   size_t id() { return id_; }
 
@@ -456,6 +458,8 @@ public:
       hsa_executable_t executable,
       void *data),
     void *data) override;
+
+  uint64_t FindHostAddress(uint64_t device_address) override;
 };
 
 } // namespace loader
