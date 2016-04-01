@@ -726,8 +726,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
     return false;
   }
 
-  std::string print_vm_message = os::GetEnvVar("HSA_ENABLE_VM_FAULT_MESSAGE");
-  if (print_vm_message == "1") {
+  if (runtime_singleton_->flag().enable_vm_fault_message()) {
     HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
 
     const HsaMemoryAccessFault& fault =
@@ -744,6 +743,8 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
       reason += "Host access only";
     } else if (fault.Failure.ECC == 1) {
       reason += "ECC failure (if supported by HW)";
+    } else {
+      reason += "Unknown";
     }
 
     fprintf(stderr,
@@ -778,9 +779,9 @@ Runtime::Runtime()
 }
 
 void Runtime::Load() {
-  // Load interrupt enable option
-  std::string interrupt = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
-  g_use_interrupt_wait = (interrupt != "0");
+  flag_.Refresh();
+
+  g_use_interrupt_wait = flag_.enable_interrupt();
 
   if (!amd::Load()) {
     return;
@@ -893,7 +894,7 @@ void Runtime::LoadTools() {
   hsa_api_table_.LinkExts(&extensions_.table);
 
   // Load tool libs
-  std::string tool_names = os::GetEnvVar("HSA_TOOLS_LIB");
+  std::string tool_names = flag_.tools_lib_names();
   if (tool_names != "") {
     std::vector<std::string> names = parse_tool_names(tool_names);
     std::vector<const char*> failed;
@@ -954,7 +955,7 @@ void Runtime::UnloadTools() {
 void Runtime::CloseTools() {
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
-  if (os::GetEnvVar("HSA_RUNNING_UNDER_VALGRIND") != "1") {
+  if (!flag_.running_valgrind()) {
     for (int i = 0; i < tool_libs_.size(); i++) os::CloseLib(tool_libs_[i]);
   }
   tool_libs_.clear();

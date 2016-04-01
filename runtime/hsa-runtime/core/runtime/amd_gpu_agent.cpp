@@ -96,8 +96,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
                              ? HSA_AMD_COHERENCY_TYPE_COHERENT
                              : HSA_AMD_COHERENCY_TYPE_NONCOHERENT);
 
-  max_queues_ =
-      static_cast<uint32_t>(atoi(os::GetEnvVar("HSA_MAX_QUEUES").c_str()));
+  max_queues_ = core::Runtime::runtime_singleton_->flag().max_queues();
 #if !defined(HSA_LARGE_MODEL) || !defined(__linux__)
   if (max_queues_ == 0) {
     max_queues_ = 10;
@@ -249,7 +248,8 @@ void GpuAgent::InitScratchPool() {
   flags.ui32.Scratch = 1;
   flags.ui32.HostAccess = 1;
 
-  scratch_per_thread_ = atoi(os::GetEnvVar("HSA_SCRATCH_MEM").c_str());
+  scratch_per_thread_ =
+      core::Runtime::runtime_singleton_->flag().scratch_mem_size();
   if (scratch_per_thread_ == 0)
     scratch_per_thread_ = DEFAULT_SCRATCH_BYTES_PER_THREAD;
 
@@ -388,10 +388,9 @@ core::Blit* GpuAgent::CreateBlitKernel() {
 
 hsa_status_t GpuAgent::InitDma() {
   // Try create SDMA blit first.
-  std::string sdma_enable = os::GetEnvVar("HSA_ENABLE_SDMA");
-
-  if (sdma_enable != "0" && isa_->GetMajorVersion() == 8 &&
-      isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 3) {
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+      isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0 &&
+      isa_->GetStepping() == 3) {
     blit_h2d_ = CreateBlitSdma();
     blit_d2h_ = CreateBlitSdma();
 
