@@ -274,7 +274,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   assert(amd_queue_.group_segment_aperture_base_hi != NULL &&
          "No group region found.");
 
-  if (os::GetEnvVar("HSA_CHECK_FLAT_SCRATCH") == "1") {
+  if (core::Runtime::runtime_singleton_->flag().check_flat_scratch()) {
     assert(amd_queue_.private_segment_aperture_base_hi != NULL &&
            "No private region found.");
   }

@@ -194,7 +194,7 @@ void ExtensionEntryPoints::Unload() {
   }
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
-  if (os::GetEnvVar("HSA_RUNNING_UNDER_VALGRIND") != "1") {
+  if (!core::Runtime::runtime_singleton_->flag().running_valgrind()) {
     for (int i = 0; i < libs_.size(); i++) {
       os::CloseLib(libs_[i]);
     }

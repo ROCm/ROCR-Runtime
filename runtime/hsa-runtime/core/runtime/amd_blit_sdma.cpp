@@ -676,10 +676,25 @@ void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
     // Otherwise the CP may read invalid packets.
     if (atomic::Load(&cached_commit_offset_, std::memory_order_acquire) ==
         current_offset) {
+      if (core::Runtime::runtime_singleton_->flag().sdma_wait_idle()) {
+        // TODO(bwicakso): remove when sdma wpointer issue is resolved.
+        // Wait until the SDMA engine finish processing all packets before
+        // updating the wptr and doorbell.
+        while (atomic::Load(queue_resource_.Queue_read_ptr,
+                            std::memory_order_acquire) != current_offset) {
+          os::YieldThread();
+        }
+      }
+
       // Update write pointer and doorbel register.
       atomic::Store(queue_resource_.Queue_write_ptr, new_offset);
-      atomic::Store(queue_resource_.Queue_DoorBell, new_offset,
-                    std::memory_order_release);
+
+      std::atomic_thread_fence(std::memory_order_release);
+
+      atomic::Store(queue_resource_.Queue_DoorBell, new_offset);
+
+      std::atomic_thread_fence(std::memory_order_release);
+
       atomic::Store(&cached_commit_offset_, new_offset);
       break;
     }

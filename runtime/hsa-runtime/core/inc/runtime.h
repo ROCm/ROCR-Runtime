@@ -54,9 +54,10 @@
 #include "core/inc/agent.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
-#include "core/util/utils.h"
+#include "core/util/flag.h"
 #include "core/util/locks.h"
 #include "core/util/os.h"
+#include "core/util/utils.h"
 
 #include "core/inc/amd_loader_context.hpp"
 #include "amd_hsa_code.hpp"
@@ -301,6 +302,8 @@ class Runtime {
     return system_deallocator_;
   }
 
+  const Flag& flag() const { return flag_; }
+
   ExtensionEntryPoints extensions_;
 
  protected:
@@ -487,6 +490,9 @@ class Runtime {
 
   // Holds reference count to runtime object.
   volatile uint32_t ref_count_;
+
+  // Track environment variables.
+  Flag flag_;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is

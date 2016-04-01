@@ -77,8 +77,9 @@ bool IsDebuggerRegistered()
 {
   return false;
   // Leaving code commented as it will be used later on
-  // return (("1" == os::GetEnvVar("HSA_EMULATE_AQL")) &&
-  //         (0 != os::GetEnvVar("HSA_TOOLS_LIB").size()));
+  //return ((core::Runtime::runtime_singleton_->flag().emulate_aql()) &&
+  //        (0 !=
+  //         core::Runtime::runtime_singleton_->flag().tools_lib_names().size()));
 }
 
 class SegmentMemory {
