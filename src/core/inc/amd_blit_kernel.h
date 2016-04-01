@@ -103,17 +103,19 @@ class BlitKernel : public core::Blit {
                                                size_t count) override;
 
  private:
-  struct __ALIGNED__(16) KernelCopyArgs {
-    const void* src;
-    void* dst;
-    uint64_t size;
-    uint32_t use_vector;
-  };
+  union KernelArgs {
+    struct __ALIGNED__(16) KernelCopyArgs {
+      const void* src;
+      void* dst;
+      uint64_t size;
+      uint32_t use_vector;
+    } copy;
 
-  struct __ALIGNED__(16) KernelFillArgs {
-    void* ptr;
-    uint64_t num;
-    uint32_t value;
+    struct __ALIGNED__(16) KernelFillArgs {
+      void* ptr;
+      uint64_t num;
+      uint32_t value;
+    } fill;
   };
 
   /// Reserve a slot in the queue buffer. The call will wait until the queue
@@ -132,7 +134,7 @@ class BlitKernel : public core::Blit {
   void PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
                      uint32_t grid_size_x, hsa_signal_t completion_signal);
 
-  KernelCopyArgs* ObtainAsyncKernelCopyArg();
+  KernelArgs* ObtainAsyncKernelCopyArg();
 
   /// Handles to the vector copy kernel.
   uint64_t copy_code_handle_;
@@ -151,8 +153,7 @@ class BlitKernel : public core::Blit {
   volatile uint64_t cached_index_;
 
   /// Pointer to the kernel argument buffer.
-  void* kernarg_;
-  KernelCopyArgs* kernarg_async_;
+  KernelArgs* kernarg_async_;
   uint32_t kernarg_async_mask_;
   volatile uint32_t kernarg_async_counter_;
 

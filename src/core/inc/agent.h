@@ -144,13 +144,19 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // On memory copy completion, the value of out_signal is decremented.
   //
   // @param [in] dst Memory address of the destination.
+  // @param [in] dst_agent Agent that owns the memory pool associated with @p
+  // dst.
   // @param [in] src Memory address of the source.
+  // @param [in] src_agent Agent that owns the memory pool associated with @p
+  // src.
   // @param [in] size Copy size in bytes.
   // @param [in] dep_signals Array of signal dependency.
   // @param [in] out_signal Completion signal.
   //
   // @retval HSA_STATUS_SUCCESS The memory copy is finished and successful.
-  virtual hsa_status_t DmaCopy(void* dst, const void* src, size_t size,
+  virtual hsa_status_t DmaCopy(void* dst, core::Agent& dst_agent,
+                               const void* src, core::Agent& src_agent,
+                               size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
     return HSA_STATUS_ERROR;

@@ -57,12 +57,18 @@
 
 namespace core {
 struct AqlPacket {
+
   union {
     hsa_kernel_dispatch_packet_t dispatch;
     hsa_barrier_and_packet_t barrier_and;
     hsa_barrier_or_packet_t barrier_or;
     hsa_agent_dispatch_packet_t agent;
   };
+
+  uint8_t type() {
+    return ((dispatch.header >> HSA_PACKET_HEADER_TYPE) &
+                      ((1 << HSA_PACKET_HEADER_WIDTH_TYPE) - 1));
+  }
 
   bool IsValid() {
     const uint8_t packet_type = dispatch.header >> HSA_PACKET_HEADER_TYPE;

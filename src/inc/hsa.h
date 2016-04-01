@@ -457,7 +457,14 @@ typedef enum {
    * Images extension.
    */
   HSA_EXTENSION_IMAGES = 1,
-  HSA_EXTENSION_AMD_PROFILER = 2
+  /**
+   * Profiler extension.
+   */
+  HSA_EXTENSION_AMD_PROFILER = 2,
+  /**
+   * Loaded code object extension.
+   */
+  HSA_EXTENSION_AMD_LOADED_CODE_OBJECT = 3
 } hsa_extension_t;
 
 /**
