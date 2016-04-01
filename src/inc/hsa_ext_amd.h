@@ -1139,7 +1139,7 @@ typedef struct hsa_amd_image_descriptor_s {
   /*
   Start of vendor specific data.
   */
-  uint32_t data[0];
+  uint32_t data[1];
 } hsa_amd_image_descriptor_t;
 
 /**

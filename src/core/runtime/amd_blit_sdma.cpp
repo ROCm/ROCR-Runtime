@@ -656,17 +656,7 @@ char* BlitSdma::AcquireWriteAddress(uint32_t cmd_size) {
 
     if (end_offset >= queue_size_) {
       // Queue buffer is not enough to contain the new command.
-
-      // The safe space for the new command is the start of the queue buffer to
-      // the last read address.
-      if (atomic::Load(queue_resource_.Queue_read_ptr,
-                       std::memory_order_acquire) < cmd_size) {
-        // There is no safe space to use currently.
-        return NULL;
-      }
-
       WrapQueue(cmd_size);
-
       continue;
     }
 
@@ -688,9 +678,9 @@ void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
         current_offset) {
       // Update write pointer and doorbel register.
       atomic::Store(queue_resource_.Queue_write_ptr, new_offset);
-      atomic::Store(queue_resource_.Queue_DoorBell, new_offset);
-      atomic::Store(&cached_commit_offset_, new_offset,
+      atomic::Store(queue_resource_.Queue_DoorBell, new_offset,
                     std::memory_order_release);
+      atomic::Store(&cached_commit_offset_, new_offset);
       break;
     }
   }
@@ -722,8 +712,10 @@ void BlitSdma::WrapQueue(uint32_t cmd_size) {
       return;
     }
 
+    // Only one thread can wrap the queue.
     std::lock_guard<std::mutex> guard(wrap_lock_);
 
+    // Close reservation to queue temporarily by "making" it full.
     if (atomic::Cas(&cached_reserve_offset_, queue_size_ + 1, curent_offset,
                     std::memory_order_release) == curent_offset) {
       // Wait till all reserved packets are commited.

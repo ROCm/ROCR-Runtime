@@ -54,8 +54,8 @@
 #include "core/inc/signal.h"
 #include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
-#include "core/inc/amd_load_map.h"
 #include "core/inc/amd_loader_context.hpp"
+#include "inc/hsa_ven_amd_loaded_code_object.h"
 
 using namespace amd::hsa::code;
 
@@ -169,7 +169,8 @@ hsa_status_t
   IS_OPEN();
 
   if ((extension > HSA_EXTENSION_AMD_PROFILER &&
-         extension != AMD_EXTENSION_LOAD_MAP) || result == NULL) {
+        extension != HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) ||
+      (result == NULL)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -244,16 +245,14 @@ hsa_status_t
           hsa_ext_program_iterate_modules;
 
       return HSA_STATUS_SUCCESS;
-    } else if (extension == AMD_EXTENSION_LOAD_MAP) {
+    } else if (extension == HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) {
       // Currently there is only version 1.00.
-      amd_load_map_1_00_pfn_t* amd_table =
-          reinterpret_cast<amd_load_map_1_00_pfn_t*>(table);
-      amd_table->amd_executable_load_code_object = amd_executable_load_code_object;
-      amd_table->amd_iterate_executables = amd_iterate_executables;
-      amd_table->amd_executable_iterate_loaded_code_objects = amd_executable_iterate_loaded_code_objects;
-      amd_table->amd_loaded_code_object_get_info = amd_loaded_code_object_get_info;
-      amd_table->amd_loaded_code_object_iterate_loaded_segments = amd_loaded_code_object_iterate_loaded_segments;
-      amd_table->amd_loaded_segment_get_info = amd_loaded_segment_get_info;
+      hsa_ven_amd_loaded_code_object_1_00_pfn_t* ext_table =
+        reinterpret_cast<hsa_ven_amd_loaded_code_object_1_00_pfn_t*>(table);
+      ext_table->hsa_ven_amd_loaded_code_object_query_host_address =
+        hsa_ven_amd_loaded_code_object_query_host_address;
+
+      return HSA_STATUS_SUCCESS;
     } else {
       // TODO: other extensions are not yet implemented.
       return HSA_STATUS_ERROR;
@@ -1401,9 +1400,14 @@ hsa_status_t
                                     hsa_agent_t agent,
                                     hsa_code_object_t code_object,
                                     const char* options) {
+  IS_OPEN();
+
   amd_loaded_code_object_t loaded_code_object = {0};
-  return amd_executable_load_code_object(
-    executable, agent, code_object, options, &loaded_code_object);
+  amd::hsa::loader::Executable *exec = amd::hsa::loader::Executable::Object(executable);
+  if (!exec) {
+    return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
+  }
+  return exec->LoadCodeObject(agent, code_object, options, &loaded_code_object);
 }
 
 hsa_status_t 

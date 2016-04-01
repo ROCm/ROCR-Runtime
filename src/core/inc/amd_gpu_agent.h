@@ -185,7 +185,8 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
 
   // @brief Override from core::Agent.
-  hsa_status_t DmaCopy(void* dst, const void* src, size_t size,
+  hsa_status_t DmaCopy(void* dst, core::Agent& dst_agent, const void* src,
+                       core::Agent& src_agent, size_t size,
                        std::vector<core::Signal*>& dep_signals,
                        core::Signal& out_signal) override;
 
@@ -258,6 +259,16 @@ class GpuAgent : public GpuAgentInt {
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
+  // @brief Create SDMA blit object.
+  //
+  // @retval NULL if SDMA blit creation and initialization failed.
+  core::Blit* CreateBlitSdma();
+
+  // @brief Create Kernel blit object.
+  //
+  // @retval NULL if Kernel blit creation and initialization failed.
+  core::Blit* CreateBlitKernel();
+
   // @brief Invoke the user provided callback for every region in @p regions.
   //
   // @param [in] regions Array of region object.
@@ -295,8 +306,12 @@ class GpuAgent : public GpuAgentInt {
   // @brief Default scratch size per work item.
   size_t scratch_per_thread_;
 
-  // @brief Blit object to handle memory copy/fill.
-  core::Blit* blit_;
+  // @brief Blit object to handle memory copy from system to device memory.
+  core::Blit* blit_h2d_;
+
+  // @brief Blit object to handle memory copy from device to system, device to
+  // device, and memory fill.
+  core::Blit* blit_d2h_;
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;

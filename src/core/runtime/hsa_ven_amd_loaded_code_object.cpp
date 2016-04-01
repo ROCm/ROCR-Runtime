@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,55 +40,32 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "amd_hsa_locks.hpp"
+#include "hsa_ven_amd_loaded_code_object.h"
 
-namespace amd {
-namespace hsa {
-namespace common {
+#include "core/inc/amd_hsa_loader.hpp"
+#include "core/inc/runtime.h"
 
-void ReaderWriterLock::ReaderLock()
-{
-  internal_lock_.lock();
-  while (0 < writers_count_) {
-    readers_condition_.wait(internal_lock_);
+using namespace core;
+
+hsa_status_t hsa_ven_amd_loaded_code_object_query_host_address(
+  const void *device_address,
+  const void **host_address) {
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
-  readers_count_ += 1;
-  internal_lock_.unlock();
-}
-
-void ReaderWriterLock::ReaderUnlock()
-{
-  internal_lock_.lock();
-  readers_count_ -= 1;
-  if (0 == readers_count_ && 0 < writers_waiting_) {
-    writers_condition_.notify_one();
+  if (nullptr == device_address) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
-  internal_lock_.unlock();
-}
-
-void ReaderWriterLock::WriterLock()
-{
-  internal_lock_.lock();
-  writers_waiting_ += 1;
-  while (0 < readers_count_ || 0 < writers_count_) {
-    writers_condition_.wait(internal_lock_);
+  if (nullptr == host_address) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
-  writers_count_ += 1;
-  writers_waiting_ -= 1;
-  internal_lock_.unlock();
-}
 
-void ReaderWriterLock::WriterUnlock()
-{
-  internal_lock_.lock();
-  writers_count_ -= 1;
-  if (0 < writers_waiting_) {
-    writers_condition_.notify_one();
+  uint64_t udaddr = reinterpret_cast<uint64_t>(device_address);
+  uint64_t uhaddr = Runtime::runtime_singleton_->loader()->FindHostAddress(udaddr);
+  if (0 == uhaddr) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
-  readers_condition_.notify_all();
-  internal_lock_.unlock();
-}
 
-} // namespace common
-} // namespace hsa
-} // namespace amd
+  *host_address = reinterpret_cast<void*>(uhaddr);
+  return HSA_STATUS_SUCCESS;
+}

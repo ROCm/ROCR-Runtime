@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,55 +40,56 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "amd_hsa_locks.hpp"
+// HSA AMD extension for loaded code objects.
 
-namespace amd {
-namespace hsa {
-namespace common {
+#ifndef HSA_VEN_AMD_LOADED_CODE_OBJECT_H
+#define HSA_VEN_AMD_LOADED_CODE_OBJECT_H
 
-void ReaderWriterLock::ReaderLock()
-{
-  internal_lock_.lock();
-  while (0 < writers_count_) {
-    readers_condition_.wait(internal_lock_);
-  }
-  readers_count_ += 1;
-  internal_lock_.unlock();
-}
+#include "hsa.h"
 
-void ReaderWriterLock::ReaderUnlock()
-{
-  internal_lock_.lock();
-  readers_count_ -= 1;
-  if (0 == readers_count_ && 0 < writers_waiting_) {
-    writers_condition_.notify_one();
-  }
-  internal_lock_.unlock();
-}
+#ifdef __cplusplus
+extern "C" {
+#endif // __cplusplus
 
-void ReaderWriterLock::WriterLock()
-{
-  internal_lock_.lock();
-  writers_waiting_ += 1;
-  while (0 < readers_count_ || 0 < writers_count_) {
-    writers_condition_.wait(internal_lock_);
-  }
-  writers_count_ += 1;
-  writers_waiting_ -= 1;
-  internal_lock_.unlock();
-}
+/**
+ * @brief Records loaded code object's host address in @p host_address given
+ * loaded code object's device address. Recorded host address points to host
+ * accessible memory, which is identical to memory pointed to by device address.
+ * If device address already points to host accessible memory, then device
+ * address is recorded in @p host_address.
+ *
+ * @param[in] device_address Device address.
+ *
+ * @param[out] host_address Pointer to application-allocated buffer, where to
+ * record host address.
+ *
+ * @retval HSA_STATUS_SUCCESS Function has been executed successfully.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED Runtime has not been initialized.
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p device address is invalid/null,
+ * or @p host address is null.
+ */
+hsa_status_t HSA_API hsa_ven_amd_loaded_code_object_query_host_address(
+  const void *device_address,
+  const void **host_address);
 
-void ReaderWriterLock::WriterUnlock()
-{
-  internal_lock_.lock();
-  writers_count_ -= 1;
-  if (0 < writers_waiting_) {
-    writers_condition_.notify_one();
-  }
-  readers_condition_.notify_all();
-  internal_lock_.unlock();
-}
+/**
+ * @brief Extension's version.
+ */
+#define hsa_ven_amd_loaded_code_object 001000
 
-} // namespace common
-} // namespace hsa
-} // namespace amd
+/**
+ * @brief Extension's function table.
+ */
+typedef struct hsa_ven_amd_loaded_code_object_1_00_pfn_s {
+  hsa_status_t (*hsa_ven_amd_loaded_code_object_query_host_address)(
+    const void *device_address,
+    const void **host_address);
+} hsa_ven_amd_loaded_code_object_1_00_pfn_t;
+
+#ifdef __cplusplus
+} // extern "C"
+#endif // __cplusplus
+
+#endif // HSA_VEN_AMD_LOADED_CODE_OBJECT_H

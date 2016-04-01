@@ -73,7 +73,6 @@ BlitKernel::BlitKernel()
       fill_code_handle_(0),
       queue_(NULL),
       cached_index_(0),
-      kernarg_(NULL),
       kernarg_async_(NULL),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
@@ -170,11 +169,9 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
       break;
   }
 
-  static const size_t kKernArgSize =
-      std::max(sizeof(KernelCopyArgs), sizeof(KernelFillArgs));
   const size_t total_alloc_size = AlignUp(
       AlignUp(copy_akc_size, 256) + AlignUp(copy_aligned_akc_size, 256) +
-          AlignUp(fill_akc_size, 256) + AlignUp(kKernArgSize, 16),
+          AlignUp(fill_akc_size, 256),
       4096);
 
   amd_kernel_code_t *code_ptr = nullptr;
@@ -208,17 +205,14 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
   code_ptr->runtime_loader_kernel_symbol = 0;
   akc_arg += fill_akc_size;
 
-  akc_arg = AlignUp(akc_arg, 16);
-  kernarg_ = akc_arg;
-
   status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
 
-  kernarg_async_ = reinterpret_cast<KernelCopyArgs*>(
+  kernarg_async_ = reinterpret_cast<KernelArgs*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          kRequiredQueueSize * AlignUp(sizeof(KernelCopyArgs), 16), 16));
+          kRequiredQueueSize * AlignUp(sizeof(KernelArgs), 16), 16));
 
   kernarg_async_mask_ = kRequiredQueueSize - 1;
 
@@ -273,72 +267,19 @@ static bool IsSystemMemory(void* address) {
 
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
                                                  size_t size) {
-  assert(copy_code_handle_ != 0);
-
+  // Protect completion_signal_.
   std::lock_guard<std::mutex> guard(lock_);
 
   HSA::hsa_signal_store_relaxed(completion_signal_, 1);
 
-  const size_t kAlignmentChar = 1;
-  const size_t kAlignmentUin32 = 4;
-  const size_t kAlignmentVec4 = 16;
-  const size_t copy_granule =
-      (IsMultipleOf(dst, kAlignmentVec4) && IsMultipleOf(src, kAlignmentVec4) &&
-       IsMultipleOf(size, kAlignmentVec4))
-          ? kAlignmentVec4
-          : (IsMultipleOf(dst, kAlignmentUin32) &&
-             IsMultipleOf(src, kAlignmentUin32) &&
-             IsMultipleOf(size, kAlignmentUin32))
-                ? kAlignmentUin32
-                : kAlignmentChar;
+  std::vector<core::Signal*> dep_signals(0);
 
-  size = size / copy_granule;
+  hsa_status_t stat = SubmitLinearCopyCommand(
+      dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
 
-  const uint32_t num_copy_packet = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(size) / kMaxCopyCount));
-
-  // Reserve write index for copy + fence packet.
-  uint64_t write_index = AcquireWriteIndex(num_copy_packet);
-
-  const uint32_t last_copy_index = num_copy_packet - 1;
-  size_t total_copy_count = 0;
-  for (uint32_t i = 0; i < num_copy_packet; ++i) {
-    // Setup arguments.
-    const uint32_t copy_count = static_cast<uint32_t>(
-        std::min((size - total_copy_count), kMaxCopyCount));
-
-    void* cur_dst = static_cast<char*>(dst) + (total_copy_count * copy_granule);
-    const void* cur_src =
-        static_cast<const char*>(src) + (total_copy_count * copy_granule);
-
-    KernelCopyArgs* args = ObtainAsyncKernelCopyArg();
-    assert(args != NULL);
-    assert(IsMultipleOf(args, 16));
-
-    args->src = cur_src;
-    args->dst = cur_dst;
-    args->size = copy_count;
-    args->use_vector = (copy_granule == kAlignmentVec4) ? 1 : 0;
-
-    const uint32_t grid_size_x =
-        AlignUp(static_cast<uint32_t>(copy_count), kGroupSize);
-
-    // This assert to make sure kMaxCopySize is not changed to a number that
-    // could cause overflow to packet.grid_size_x.
-    assert(grid_size_x >= copy_count);
-
-    hsa_signal_t signal = {(i == last_copy_index) ? completion_signal_.handle
-                                                  : 0};
-    PopulateQueue(write_index + i, ((copy_granule == kAlignmentChar)
-                                        ? copy_code_handle_
-                                        : copy_aligned_code_handle_),
-                  args, grid_size_x, signal);
-
-    total_copy_count += copy_count;
+  if (stat != HSA_STATUS_SUCCESS) {
+    return stat;
   }
-
-  // Launch copy packet.
-  ReleaseWriteIndex(write_index, num_copy_packet);
 
   // Wait for the packet to finish.
   if (HSA::hsa_signal_wait_acquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
@@ -354,7 +295,8 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     void* dst, const void* src, size_t size,
     std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
-  (copy_code_handle_ != 0);
+  assert(copy_code_handle_ != 0);
+
   const size_t kAlignmentChar = 1;
   const size_t kAlignmentUin32 = 4;
   const size_t kAlignmentVec4 = 16;
@@ -422,14 +364,14 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     const void* cur_src =
         static_cast<const char*>(src) + (total_copy_count * copy_granule);
 
-    KernelCopyArgs* args = ObtainAsyncKernelCopyArg();
+    KernelArgs* args = ObtainAsyncKernelCopyArg();
     assert(args != NULL);
-    assert(IsMultipleOf(args, 16));
+    assert(IsMultipleOf(&args->copy, 16));
 
-    args->src = cur_src;
-    args->dst = cur_dst;
-    args->size = copy_count;
-    args->use_vector = (copy_granule == kAlignmentVec4) ? 1 : 0;
+    args->copy.src = cur_src;
+    args->copy.dst = cur_dst;
+    args->copy.size = copy_count;
+    args->copy.use_vector = (copy_granule == kAlignmentVec4) ? 1 : 0;
 
     const uint32_t grid_size_x =
         AlignUp(static_cast<uint32_t>(copy_count), kGroupSize);
@@ -471,25 +413,21 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   // Reserve write index for copy + fence packet.
   uint64_t write_index = AcquireWriteIndex(num_fill_packet);
 
-  KernelFillArgs* args = reinterpret_cast<KernelFillArgs*>(kernarg_);
-
-  if (args == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
   const uint32_t last_fill_index = num_fill_packet - 1;
   size_t total_fill_count = 0;
   for (uint32_t i = 0; i < num_fill_packet; ++i) {
-    assert(IsMultipleOf(&args[i], 16));
-
     // Setup arguments.
     const uint32_t fill_count = static_cast<uint32_t>(
         std::min((num - total_fill_count), kMaxFillCount));
     void* cur_ptr = static_cast<char*>(ptr) + total_fill_count;
 
-    args[i].ptr = cur_ptr;
-    args[i].num = fill_count;
-    args[i].value = value;
+    KernelArgs* args = ObtainAsyncKernelCopyArg();
+    assert(args != NULL);
+    assert(IsMultipleOf(&args->fill, 16));
+
+    args->fill.ptr = cur_ptr;
+    args->fill.num = fill_count;
+    args->fill.value = value;
 
     const uint32_t grid_size_x =
         AlignUp(static_cast<uint32_t>(fill_count), kGroupSize);
@@ -507,7 +445,6 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   }
 
   // Launch fill packet.
-  // Launch copy packet.
   ReleaseWriteIndex(write_index, num_fill_packet);
 
   // Wait for the packet to finish.
@@ -636,10 +573,10 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
   queue_buffer[index & queue_bitmask_].header = kDispatchPacketHeader;
 }
 
-BlitKernel::KernelCopyArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
+BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
   const uint32_t index =
       atomic::Add(&kernarg_async_counter_, 1U, std::memory_order_acquire);
-  KernelCopyArgs* arg = &kernarg_async_[index & kernarg_async_mask_];
+  KernelArgs* arg = &kernarg_async_[index & kernarg_async_mask_];
   assert(IsMultipleOf(arg, 16));
   return arg;
 }

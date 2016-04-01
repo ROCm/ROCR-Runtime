@@ -48,7 +48,6 @@
 #include "hsa.h"
 #include "hsa_ext_image.h"
 #include "amd_hsa_elf.h"
-#include "amd_load_map.h"
 #include <string>
 #include <mutex>
 #include <vector>
@@ -72,6 +71,30 @@ enum hsa_ext_symbol_info_t {
 typedef uint32_t hsa_symbol_info32_t;
 typedef hsa_executable_symbol_t hsa_symbol_t;
 typedef hsa_executable_symbol_info_t hsa_symbol_info_t;
+
+/// @brief Loaded code object handle.
+typedef struct amd_loaded_code_object_s {
+  uint64_t handle;
+} amd_loaded_code_object_t;
+
+/// @brief Loaded code object attributes.
+enum amd_loaded_code_object_info_t {
+  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE = 0,
+  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE = 1
+};
+
+/// @brief Loaded segment handle.
+typedef struct amd_loaded_segment_s {
+  uint64_t handle;
+} amd_loaded_segment_t;
+
+/// @brief Loaded segment attributes.
+enum amd_loaded_segment_info_t {
+  AMD_LOADED_SEGMENT_INFO_TYPE = 0,
+  AMD_LOADED_SEGMENT_INFO_ELF_BASE_ADDRESS = 1,
+  AMD_LOADED_SEGMENT_INFO_LOAD_BASE_ADDRESS = 2,
+  AMD_LOADED_SEGMENT_INFO_SIZE = 3
+};
 
 namespace amd {
 namespace hsa {
@@ -294,6 +317,8 @@ public:
       void *data),
     void *data) = 0;
 
+  virtual uint64_t FindHostAddress(uint64_t device_address) = 0;
+
 protected:
   Executable() {}
 
@@ -330,13 +355,20 @@ public:
   /// @p options
   virtual Executable* CreateExecutable(hsa_profile_t profile, const char *options) = 0;
 
+  /// @brief Destroys @p executable
   virtual void DestroyExecutable(Executable *executable) = 0;
 
+  /// @brief Invokes @p callback for each created executable
   virtual hsa_status_t IterateExecutables(
     hsa_status_t (*callback)(
       hsa_executable_t executable,
       void *data),
     void *data) = 0;
+
+  /// @brief Returns host address given @p device_address. If @p device_address
+  /// is already host address, returns null pointer. If @p device_address is
+  /// invalid address, returns null pointer.
+  virtual uint64_t FindHostAddress(uint64_t device_address) = 0;
 
 protected:
   /// @brief Default constructor.
