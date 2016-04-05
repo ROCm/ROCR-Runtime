@@ -48,6 +48,7 @@ class HSA_UTIL{
 		hsa_ext_module_t module;
 		hsa_ext_program_t hsa_program;
 		hsa_executable_t hsaExecutable;
+	  hsa_executable_symbol_t kernelSymbol;
 		hsa_code_object_t code_object;
 		uint64_t codeHandle;
 		hsa_signal_t hsa_signal;
