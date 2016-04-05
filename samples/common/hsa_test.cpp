@@ -151,22 +151,30 @@ HsaTest::Kernel::Kernel(hsa_agent_t agent, std::string hsail_text)
 HsaTest::Kernel::~Kernel() { Cleanup(); }
 
 uint64_t HsaTest::Kernel::GetCodeHandle(const char* kernel_name) {
-  hsa_executable_symbol_t kernel_symbol = {0};
+  kernel_symbol_ = {0};
   if (HSA_STATUS_SUCCESS != hsa_executable_get_symbol(executable_, NULL,
                                                       kernel_name, agent_, 0,
-                                                      &kernel_symbol)) {
+                                                      &kernel_symbol_)) {
     return 0;
   }
 
   uint64_t code_handle = 0;
   if (HSA_STATUS_SUCCESS !=
-      hsa_executable_symbol_get_info(kernel_symbol,
+      hsa_executable_symbol_get_info(kernel_symbol_,
                                      HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
                                      &code_handle)) {
     return 0;
   }
 
   return code_handle;
+}
+
+hsa_status_t HsaTest::Kernel::GetScratchSize(uint32_t* size) {
+
+  hsa_status_t status;
+  status = hsa_executable_symbol_get_info(kernel_symbol_,
+               HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE, size);
+  return status;
 }
 
 void HsaTest::Kernel::Initialize() {

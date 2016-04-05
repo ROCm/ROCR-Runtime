@@ -114,7 +114,6 @@ bool HSA_UTIL::HsaInit()
 	check("Error in freezing executable object", err);
 
 	// Get symbol handle.
-	hsa_executable_symbol_t kernelSymbol;
 	err = hsa_executable_get_symbol(hsaExecutable, NULL,  hsa_kernel_name, device, 0, &kernelSymbol);
 	check("get symbol handle", err);
 
@@ -173,6 +172,14 @@ double HSA_UTIL::Run(int dim, int group_x, int group_y, int group_z, int s_size,
 	local_dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
 	local_dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
 	local_dispatch_packet.kernel_object = codeHandle;
+
+  // Specify amount of private segment size (in bytes) that is needed per work-item
+  // Retrieve the amount of private memory needed
+  uint32_t private_mem_size = 0;
+  hsa_executable_symbol_get_info(kernelSymbol,
+                        HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE, &private_mem_size);
+  local_dispatch_packet.private_segment_size = private_mem_size;
+
 	///////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	/*

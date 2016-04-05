@@ -74,6 +74,7 @@ class HsaTest {
     virtual ~Kernel();
 
     uint64_t GetCodeHandle(const char* kernel_name);
+    hsa_status_t GetScratchSize(uint32_t* size);
 
    protected:
     virtual void Initialize();
@@ -92,6 +93,7 @@ class HsaTest {
     hsa_ext_program_t program_;
     hsa_code_object_t code_object_;
     hsa_executable_t executable_;
+    hsa_executable_symbol_t kernel_symbol_;
 
     std::string hsail_file_;
   };
