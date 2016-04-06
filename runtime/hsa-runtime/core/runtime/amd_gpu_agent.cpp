@@ -437,7 +437,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  // TODO(bwicakso): temporarily disable wait on thunk event if the out_signal
+  // TODO: temporarily disable wait on thunk event if the out_signal
   // is an interrupt signal object. Remove this when SDMA handle interrupt
   // packet properly.
   if (out_signal.EopEvent() != NULL) {
@@ -466,7 +466,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
-      // TODO(bwicakso): hardcode for now.
+      // TODO: hardcode for now.
       std::memset(value, 0, kNameSize);
       if (isa_->GetMajorVersion() == 7) {
         std::memcpy(value, "Kaveri", sizeof("Kaveri"));
@@ -567,7 +567,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       if (profile_ == HSA_PROFILE_FULL &&
           extensions.table.hsa_ext_image_create_fn != NULL) {
-        // TODO(bwicakso): only APU supports images currently.
+        // TODO: only APU supports images currently.
         *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
       }
 

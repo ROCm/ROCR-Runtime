@@ -677,7 +677,7 @@ void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
     if (atomic::Load(&cached_commit_offset_, std::memory_order_acquire) ==
         current_offset) {
       if (core::Runtime::runtime_singleton_->flag().sdma_wait_idle()) {
-        // TODO(bwicakso): remove when sdma wpointer issue is resolved.
+        // TODO: remove when sdma wpointer issue is resolved.
         // Wait until the SDMA engine finish processing all packets before
         // updating the wptr and doorbell.
         while (atomic::Load(queue_resource_.Queue_read_ptr,

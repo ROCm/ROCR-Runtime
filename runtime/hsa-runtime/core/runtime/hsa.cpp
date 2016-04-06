@@ -254,7 +254,6 @@ hsa_status_t
 
       return HSA_STATUS_SUCCESS;
     } else {
-      // TODO: other extensions are not yet implemented.
       return HSA_STATUS_ERROR;
     }
   }
@@ -375,7 +374,6 @@ hsa_status_t hsa_queue_create(
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
-  // TODO: private_segment_size and group_segment_size.
   core::Queue* cmd_queue = NULL;
   status = agent->QueueCreate(size, type, callback, data, private_segment_size,
                               group_segment_size, &cmd_queue);
@@ -1318,7 +1316,7 @@ hsa_status_t hsa_code_object_get_symbol(hsa_code_object_t code_object,
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  // TODO(kzhuravl): module_name is NULL until spec is changed, waiting for
+  // TODO: module_name is NULL until spec is changed, waiting for
   // Mario.
   return code->GetSymbol(NULL, symbol_name, symbol);
 }
@@ -1374,7 +1372,7 @@ hsa_status_t
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  // @todo(spec): why did we make it possible to create frozen executable?
+  // TODO: why did we make it possible to create frozen executable?
   if (HSA_EXECUTABLE_STATE_FROZEN == executable_state) {
     exec->Freeze(NULL);
   }

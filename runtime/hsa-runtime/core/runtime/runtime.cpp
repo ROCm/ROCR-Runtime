@@ -219,7 +219,7 @@ void Runtime::RegisterAgent(Agent* agent) {
         end_svm_address_ = start_svm_address_ + svm_region->GetPhysicalSize();
 
         // Bind VM fault handler when we detect the first GPU agent.
-        // TODO(bwicakso): validate if it works on APU.
+        // TODO: validate if it works on APU.
         BindVmFaultHandler();
       } else {
         start_svm_address_ = 0;

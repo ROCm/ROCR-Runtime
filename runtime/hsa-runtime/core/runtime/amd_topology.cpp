@@ -112,7 +112,7 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
       link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
       link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
     } else {
-      // TODO(bwicakso): decipher HSA_IOLINKTYPE to fill out the atomic
+      // TODO: decipher HSA_IOLINKTYPE to fill out the atomic
       // and coherent information.
     }
 

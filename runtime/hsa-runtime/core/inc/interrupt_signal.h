@@ -165,7 +165,7 @@ class InterruptSignal : public Signal {
   /// @brief See base class Signal.
   __forceinline HsaEvent* EopEvent() { return event_; }
 
-  // TODO(bwicakso) : work around for SDMA async copy. Bypass waiting on EOP
+  // TODO: work around for SDMA async copy. Bypass waiting on EOP
   // event because SDMA copy does not handle interrupt yet.
   __forceinline void DisableWaitEvent() { wait_on_event_ = false; }
 
@@ -186,7 +186,7 @@ class InterruptSignal : public Signal {
   /// closes or not.
   bool free_event_;
 
-  // TODO(bwicakso) : work around for SDMA async copy. Bypass waiting on EOP
+  // TODO: work around for SDMA async copy. Bypass waiting on EOP
   // event because SDMA copy does not handle interrupt yet.
   bool wait_on_event_;
 
