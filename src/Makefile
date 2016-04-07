@@ -1,5 +1,6 @@
 # Include directories
-INCLUDES += ../include
+INCLUDE_DIR := ../include
+INCLUDES += $(INCLUDE_DIR)
 CFLAGS += $(foreach DIR,$(INCLUDES),-I$(DIR))
 
 LIB_NAME = libhsakmt.so
@@ -39,6 +40,7 @@ ifdef O
 else
   BUILD_ROOT := ../build
 endif
+BUILD_ROOT := $(abspath $(BUILD_ROOT))
 
 BUILDDIR = $(BUILD_ROOT)/$(MAKECMDGOALS)
 TARGET = $(addprefix $(BUILDDIR)/,$(OBJS))
@@ -54,18 +56,29 @@ lnx: LDFLAGS += -m32
 lnx: $(BUILDDIR)/$(LIB_NAME)
 
 PACKAGE_DIR = $(BUILDDIR)/libhsakmt
-INSTALL_DIR_DEB = $(PACKAGE_DIR)/usr/lib/x86_64-linux-gnu
-INSTALL_DIR_RPM = $(PACKAGE_DIR)/usr/lib64
+DEBIAN_DIR = ../DEBIAN
+LDCONF_FILE = $(DEBIAN_DIR)/x86_64-libhsakmt.conf
+LDCONF_INSTALL_DIR = $(PACKAGE_DIR)/etc/ld.so.conf.d
+INSTALL_LIB_DIR = $(PACKAGE_DIR)/opt/rocm/lib
+INSTALL_INCLUDE_DIR = $(PACKAGE_DIR)/opt/rocm/include/libhsakmt
 
 deb: lnx64a
-	@mkdir -p $(INSTALL_DIR_DEB)
-	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR_DEB)
-	@cp -r ../DEBIAN $(PACKAGE_DIR)
+	@mkdir -p $(INSTALL_LIB_DIR)
+	@mkdir -p $(INSTALL_INCLUDE_DIR)
+	@mkdir -p $(LDCONF_INSTALL_DIR)
+	@cp -r $(INCLUDE_DIR)/* $(INSTALL_INCLUDE_DIR)
+	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_LIB_DIR)
+	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
+	@cp -r $(DEBIAN_DIR) $(PACKAGE_DIR)
 	@fakeroot dpkg-deb --build $(PACKAGE_DIR) $(BUILDDIR)/libhsakmt.deb
 
 rpm: lnx64a
-	mkdir -p $(INSTALL_DIR_RPM)
-	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_DIR_RPM)
+	@mkdir -p $(INSTALL_LIB_DIR)
+	@mkdir -p $(INSTALL_INCLUDE_DIR)
+	@mkdir -p $(LDCONF_INSTALL_DIR)
+	@cp -r $(INCLUDE_DIR)/* $(INSTALL_INCLUDE_DIR)
+	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_LIB_DIR)
+	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
 	@rpmbuild --define '_topdir $(BUILD_ROOT)/rpm' -ba $(THUNK_ROOT)/RPM/libhsakmt.spec
 
 lnx64a: $(BUILDDIR)/$(LIB_NAME)
