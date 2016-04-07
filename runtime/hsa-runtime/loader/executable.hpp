@@ -230,6 +230,7 @@ public:
 
   ExecutableImpl* Owner() const { return owner; }
   hsa_agent_t Agent() const { return agent; }
+  virtual void Print(std::ostream& out) = 0;
   virtual void Destroy() = 0;
 
   virtual ~ExecutableObject() { }
@@ -259,6 +260,8 @@ public:
       amd_loaded_segment_t loaded_segment,
       void *data),
     void *data) override;
+
+  void Print(std::ostream& out) override;
 
   void Destroy() override {}
 };
@@ -291,6 +294,7 @@ public:
 
   bool IsAddressInSegment(uint64_t addr);
   void Copy(uint64_t addr, const void* src, size_t size);
+  void Print(std::ostream& out) override;
   void Destroy() override;
 };
 
@@ -301,6 +305,7 @@ private:
 public:
   Sampler(ExecutableImpl *owner, hsa_agent_t agent, hsa_ext_sampler_t samp_)
     : ExecutableObject(owner, agent), samp(samp_) { }
+  void Print(std::ostream& out) override;
   void Destroy() override;
 };
 
@@ -311,6 +316,7 @@ private:
 public:
   Image(ExecutableImpl *owner, hsa_agent_t agent, hsa_ext_image_t img_)
     : ExecutableObject(owner, agent), img(img_) { }
+  void Print(std::ostream& out) override;
   void Destroy() override;
 };
 
@@ -394,6 +400,9 @@ public:
     void *data);
 
   uint64_t FindHostAddress(uint64_t device_address) override;
+
+  void Print(std::ostream& out) override;
+  bool PrintToFile(const std::string& filename) override;
 
   Context* context() { return context_; }
   size_t id() { return id_; }

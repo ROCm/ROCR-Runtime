@@ -47,6 +47,7 @@
 #include <iomanip>
 #include <cassert>
 #include <algorithm>
+#include <sstream>
 #ifdef _WIN32
 #include <Windows.h>
 #include <io.h>
@@ -1028,6 +1029,21 @@ bool IsNotSpace(char c) {
 void ltrim(std::string &str) {
   str.erase(str.begin(), std::find_if(str.begin(), str.end(), IsNotSpace));
 }
+
+std::string DumpFileName(const std::string& dir, const char* prefix, const char* ext, unsigned n, unsigned i)
+{
+  std::ostringstream ss;
+  if (!dir.empty()) {
+    ss << dir << "/";
+  }
+  ss <<
+    prefix <<
+    std::setfill('0') << std::setw(3) << n;
+  if (i) { ss << "_" << i; }
+  if (ext) { ss << "." << ext; }
+  return ss.str();
+}
+
 
 }
 }
