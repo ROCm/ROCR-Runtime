@@ -187,6 +187,8 @@ inline uint32_t alignUp(uint32_t num, uint32_t align)
   return (num + align - 1) & ~(align - 1);
 }
 
+std::string DumpFileName(const std::string& dir, const char* prefix, const char* ext, unsigned n, unsigned i = 0);
+
 }
 }
 
