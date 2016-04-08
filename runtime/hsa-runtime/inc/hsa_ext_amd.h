@@ -99,7 +99,16 @@ typedef enum hsa_amd_agent_info_s {
    * Agent BDF_ID, named LocationID in thunk. The type of this attribute is
    * uint16_t.
    */
-  HSA_AMD_AGENT_INFO_BDFID = 0xA006
+  HSA_AMD_AGENT_INFO_BDFID = 0xA006,
+  /**
+   * Memory Interface width, the return value type is uint32_t.
+   * This attribute is deprecated. Use
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_WIDTH = 0xA007,
+  /**
+   * Max Memory Clock, the return value type is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY = 0xA008
 } hsa_amd_agent_info_t;
 
 /**
@@ -116,11 +125,13 @@ typedef enum hsa_amd_region_info_s {
    */
   HSA_AMD_REGION_INFO_BASE = 0xA001,
   /**
-   * Memory Interface width, the return value type is uint32_t
+   * Memory Interface width, the return value type is uint32_t.
+   * This attribute is deprecated. Use HSA_AMD_AGENT_INFO_MEMORY_WIDTH.
    */
   HSA_AMD_REGION_INFO_BUS_WIDTH = 0xA002,
   /**
-   * Max Memory Clock, the return value type is uint32_t
+   * Max Memory Clock, the return value type is uint32_t.
+   * This attribute is deprecated. Use HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY.
    */
   HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY = 0xA003
 } hsa_amd_region_info_t;
