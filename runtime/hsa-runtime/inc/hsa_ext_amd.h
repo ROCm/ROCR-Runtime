@@ -49,7 +49,7 @@
 #include "hsa_ext_image.h"
 
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 0 
+#define HSA_AMD_INTERFACE_VERSION_MINOR 0
 
 #ifdef __cplusplus
 extern "C" {
