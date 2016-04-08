@@ -811,7 +811,7 @@ static void* fmm_allocate_host_gpu(uint64_t MemorySizeInBytes,
 	manageble_aperture_t *aperture;
 	uint64_t mmap_offset;
 	uint32_t ioc_flags;
-	uint32_t size;
+	uint64_t size;
 	int32_t i;
 	uint32_t gpu_id;
 
