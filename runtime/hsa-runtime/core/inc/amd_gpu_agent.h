@@ -134,6 +134,16 @@ class GpuAgentInt : public core::Agent {
   //
   // @retval HSA profile.
   virtual hsa_profile_t profile() const = 0;
+
+  // @brief Query the agent memory bus width in bit.
+  //
+  // @retval Bus width in bit.
+  virtual uint32_t memory_bus_width() const = 0;
+
+  // @brief Query the agent memory maximum frequency in MHz.
+  //
+  // @retval Bus width in MHz.
+  virtual uint32_t memory_max_frequency() const = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -255,6 +265,16 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from amd::GpuAgentInt.
   __forceinline hsa_profile_t profile() const override { return profile_; }
 
+  // @brief Override from amd::GpuAgentInt.
+  __forceinline uint32_t memory_bus_width() const override {
+    return memory_bus_width_;
+  }
+
+  // @brief Override from amd::GpuAgentInt.
+  __forceinline uint32_t memory_max_frequency() const override {
+    return memory_max_frequency_;
+  }
+
  protected:
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
@@ -343,6 +363,12 @@ class GpuAgent : public GpuAgentInt {
   void* trap_code_buf_;
 
   size_t trap_code_buf_size_;
+
+  // @brief The GPU memory bus width in bit.
+  uint32_t memory_bus_width_;
+
+  // @brief The GPU memory maximum frequency in MHz.
+  uint32_t memory_max_frequency_;
 
  private:
   // @brief Query the driver to get the region list owned by this agent.

@@ -73,6 +73,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
+      memory_bus_width_(0),
+      memory_max_frequency_(0),
       ape1_base_(0),
       ape1_size_(0) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
@@ -226,6 +228,9 @@ void GpuAgent::InitRegionList() {
           if (!is_apu_node) {
             mem_props[mem_idx].VirtualBaseAddress = 0;
           }
+
+          memory_bus_width_ = mem_props[mem_idx].Width;
+          memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH:
         case HSA_HEAPTYPE_DEVICE_SVM: {
@@ -235,6 +240,12 @@ void GpuAgent::InitRegionList() {
           regions_.push_back(region);
           break;
         }
+        case HSA_HEAPTYPE_SYSTEM:
+          if (is_apu_node) {
+            memory_bus_width_ = mem_props[mem_idx].Width;
+            memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
+          }
+          break;
         default:
           continue;
       }
@@ -625,6 +636,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_BDFID:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      break;
+    case HSA_AMD_AGENT_INFO_MEMORY_WIDTH:
+      *((uint32_t*)value) = memory_bus_width_;
+      break;
+    case HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY:
+      *((uint32_t*)value) = memory_max_frequency_;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
