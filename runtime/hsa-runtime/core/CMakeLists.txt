@@ -97,6 +97,20 @@ add_definitions ( -DHSA_EXPORT=1 )
 add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
 
+if ( DEFINED BUILDID )
+    add_definitions ( -DROCR_BUILD_ID=${BUILDID})
+else ( NOT DEFINED BUILDID)
+    ## get date information based on UTC - full date
+    execute_process(COMMAND date --utc +%F WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE)
+    ## get commit information
+    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
+    ## check dirty tree status
+    execute_process(COMMAND "git diff --shortstat 2> /dev/null|grep \"0 files changed\"|wc -l" WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_CLEAN_TREE OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set  ( BUILD_ID "${ROCR_BUILD_COMMIT}.${ROCR_BUILD_TIME}.${ROCR_CLEAN_TREE}")
+    add_definitions ( -DROCR_BUILD_ID=${BUILD_ID})
+endif ()
+
+
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-deprecated-declarations -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
 

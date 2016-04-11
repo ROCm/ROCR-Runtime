@@ -64,6 +64,8 @@
 #define HSA_VERSION_MAJOR 1
 #define HSA_VERSION_MINOR 0
 
+const char rocrbuildid[] = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
+
 namespace core {
 bool g_use_interrupt_wait = true;
 
