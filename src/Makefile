@@ -1,3 +1,6 @@
+# Our directory
+THUNK_ROOT ?= $(abspath ../)
+
 # Include directories
 INCLUDE_DIR := ../include
 INCLUDES += $(INCLUDE_DIR)
@@ -59,26 +62,36 @@ PACKAGE_DIR = $(BUILDDIR)/libhsakmt
 DEBIAN_DIR = ../DEBIAN
 LDCONF_FILE = $(DEBIAN_DIR)/x86_64-libhsakmt.conf
 LDCONF_INSTALL_DIR = $(PACKAGE_DIR)/etc/ld.so.conf.d
-INSTALL_LIB_DIR = $(PACKAGE_DIR)/opt/rocm/lib
-INSTALL_INCLUDE_DIR = $(PACKAGE_DIR)/opt/rocm/include/libhsakmt
+ROCM_ROOT = $(PACKAGE_DIR)/opt/rocm
+ROCM_LIB = $(ROCM_ROOT)/lib
+ROCM_INCLUDE = $(ROCM_ROOT)/include
+INSTALL_LIB_DIR = libhsakmt/lib
+INSTALL_INCLUDE_DIR = libhsakmt/include/libhsakmt
+export PACKAGE_DIR
 
-deb: lnx64a
-	@mkdir -p $(INSTALL_LIB_DIR)
-	@mkdir -p $(INSTALL_INCLUDE_DIR)
-	@mkdir -p $(LDCONF_INSTALL_DIR)
-	@cp -r $(INCLUDE_DIR)/* $(INSTALL_INCLUDE_DIR)
-	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_LIB_DIR)
-	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
+package-common: lnx64a
+	@mkdir -p $(PACKAGE_DIR)
 	@cp -r $(DEBIAN_DIR) $(PACKAGE_DIR)
+
+	@mkdir -p $(LDCONF_INSTALL_DIR)
+	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
+
+	@mkdir -p $(ROCM_ROOT)/$(INSTALL_LIB_DIR)
+	@cp $(BUILDDIR)/$(LIB_NAME).$(LIB_MAJOR_VER) $(ROCM_ROOT)/$(INSTALL_LIB_DIR)
+
+	@mkdir -p $(ROCM_ROOT)/$(INSTALL_INCLUDE_DIR)
+	@cp -r $(INCLUDE_DIR)/* $(ROCM_ROOT)/$(INSTALL_INCLUDE_DIR)
+
+	@mkdir -p $(ROCM_LIB)
+	@ln -fs ../$(INSTALL_LIB_DIR)/$(LIB_NAME).$(LIB_MAJOR_VER) $(ROCM_LIB)/$(LIB_NAME)
+
+	@mkdir -p $(ROCM_INCLUDE)
+	ln -fs ../$(INSTALL_INCLUDE_DIR) $(ROCM_INCLUDE)/
+
+deb: package-common
 	@fakeroot dpkg-deb --build $(PACKAGE_DIR) $(BUILDDIR)/libhsakmt.deb
 
-rpm: lnx64a
-	@mkdir -p $(INSTALL_LIB_DIR)
-	@mkdir -p $(INSTALL_INCLUDE_DIR)
-	@mkdir -p $(LDCONF_INSTALL_DIR)
-	@cp -r $(INCLUDE_DIR)/* $(INSTALL_INCLUDE_DIR)
-	@cp $(BUILDDIR)/libhsakmt.so* $(INSTALL_LIB_DIR)
-	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
+rpm: package-common
 	@rpmbuild --define '_topdir $(BUILD_ROOT)/rpm' -ba $(THUNK_ROOT)/RPM/libhsakmt.spec
 
 lnx64a: $(BUILDDIR)/$(LIB_NAME)
