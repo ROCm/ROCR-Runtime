@@ -59,9 +59,9 @@ include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core/inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode)
-include_directories($ENV{HSATHK_BUILD_INC_PATH})
+include_directories(${HSATHK_BUILD_INC_PATH})
 
-link_directories ($ENV{HSATHK_BUILD_LIB_PATH})
+link_directories (${HSATHK_BUILD_LIB_PATH})
 
 add_subdirectory(libamdhsacode)
 add_subdirectory(loader)

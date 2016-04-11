@@ -43,17 +43,20 @@ can be obtained from the ROCT-Thunk-Interface repository, available here:
 https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface
  
 Specify the directory containing libhsakmt.so.1 and hsakmt.h using the following 
-environment variables:
+cmake variables:
 
 HSATHK_BUILD_INC_PATH - Set to the dirctory containing hsakmt.h.
 
 HSATHK_BUILD_LIB_PATH - Set to the directory containing libhsakmt.so.1
 
-After setting these variables, create a build directory and invoke cmake on
-the top level CMakeLists.txt file. For example, from the top level ROCR
-repository execute:
+For example, from the top level ROCR repository execute:
 
-mkdir build && cd build && cmake ../src && make
+    mkdir build
+    cd build
+    cmake -D HSATHK_BUILD_INC_PATH=<location of hsakmt.h> \
+          -D HSATHK_BUILD_LIB_PATH=<location of libhsakmt.so> \
+          ../src
+    make
 
 The name of the core hsa runtime is libhsa-runtime64.so.1.
 
