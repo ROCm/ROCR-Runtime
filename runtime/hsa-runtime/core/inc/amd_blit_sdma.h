@@ -210,8 +210,6 @@ class BlitSdma : public core::Blit {
 
   /// Max total fill count supported by the queue.
   size_t max_total_fill_size_;
-
-  std::mutex wrap_lock_;
 };
 }  // namespace amd
 
