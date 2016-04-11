@@ -650,13 +650,20 @@ char* BlitSdma::AcquireWriteAddress(uint32_t cmd_size) {
   }
 
   while (true) {
-    uint32_t curr_offset =
+    const uint32_t curr_offset =
         atomic::Load(&cached_reserve_offset_, std::memory_order_acquire);
     const uint32_t end_offset = curr_offset + cmd_size;
 
     if (end_offset >= queue_size_) {
       // Queue buffer is not enough to contain the new command.
       WrapQueue(cmd_size);
+      continue;
+    }
+
+    const uint32_t curr_read_ptr_val =
+        atomic::Load(queue_resource_.Queue_read_ptr, std::memory_order_acquire);
+    if (curr_offset < curr_read_ptr_val && end_offset > curr_read_ptr_val) {
+      // Queue is wrapping and there is not enough space to recycle.
       continue;
     }
 
@@ -720,6 +727,8 @@ void BlitSdma::WrapQueue(uint32_t cmd_size) {
   // Re-determine the offset into queue buffer where NOOP instructions
   // should be written.
   while (true) {
+    const uint32_t full_offset = queue_size_ + 1;
+
     uint32_t curent_offset =
         atomic::Load(&cached_reserve_offset_, std::memory_order_acquire);
     const uint32_t end_offset = curent_offset + cmd_size;
@@ -727,11 +736,13 @@ void BlitSdma::WrapQueue(uint32_t cmd_size) {
       return;
     }
 
-    // Only one thread can wrap the queue.
-    std::lock_guard<std::mutex> guard(wrap_lock_);
+    if (curent_offset == full_offset) {
+      // Another thread is already wrapping the queue.
+      continue;
+    }
 
     // Close reservation to queue temporarily by "making" it full.
-    if (atomic::Cas(&cached_reserve_offset_, queue_size_ + 1, curent_offset,
+    if (atomic::Cas(&cached_reserve_offset_, full_offset, curent_offset,
                     std::memory_order_release) == curent_offset) {
       // Wait till all reserved packets are commited.
       while (atomic::Load(&cached_commit_offset_, std::memory_order_acquire) !=
@@ -746,12 +757,6 @@ void BlitSdma::WrapQueue(uint32_t cmd_size) {
 
       // Update write and doorbell registers to execute NOOP instructions.
       UpdateWriteAndDoorbellRegister(curent_offset, 0);
-
-      // Wait till queue wrapped.
-      while (atomic::Load(queue_resource_.Queue_read_ptr,
-                          std::memory_order_acquire) != 0) {
-        os::YieldThread();
-      }
 
       // Open access to queue.
       atomic::Store(&cached_reserve_offset_, 0U, std::memory_order_release);
