@@ -46,10 +46,14 @@
 #include <cstddef>
 #include <cstring>
 #include <iostream>
+#include <atomic>
+#include <fstream>
 #include <libelf.h>
 #include "amd_hsa_elf.h"
 #include "amd_hsa_kernel_code.h"
 #include "amd_hsa_code.hpp"
+#include "amd_hsa_code_util.hpp"
+#include "amd_options.hpp"
 
 using namespace amd::hsa;
 using namespace amd::hsa::common;
@@ -57,6 +61,68 @@ using namespace amd::hsa::common;
 namespace amd {
 namespace hsa {
 namespace loader {
+
+class LoaderOptions {
+public:
+  explicit LoaderOptions(std::ostream &error = std::cerr);
+
+  const amd::options::NoArgOption* Help() const { return &help; }
+  const amd::options::NoArgOption* DumpCode() const { return &dump_code; }
+  const amd::options::NoArgOption* DumpIsa() const { return &dump_isa; }
+  const amd::options::NoArgOption* DumpExec() const { return &dump_exec; }
+  const amd::options::NoArgOption* DumpAll() const { return &dump_all; }
+  const amd::options::ValueOption<std::string>* DumpDir() const { return &dump_dir; }
+
+  bool ParseOptions(const std::string& options);
+  void Reset();
+  void PrintHelp(std::ostream& out) const;
+
+private:
+  /// @brief Copy constructor - not available.
+  LoaderOptions(const LoaderOptions&);
+
+  /// @brief Assignment operator - not available.
+  LoaderOptions& operator=(const LoaderOptions&);
+
+  amd::options::NoArgOption help;
+  amd::options::NoArgOption dump_code;
+  amd::options::NoArgOption dump_isa;
+  amd::options::NoArgOption dump_exec;
+  amd::options::NoArgOption dump_all;
+  amd::options::ValueOption<std::string> dump_dir;
+  amd::options::OptionParser option_parser;
+};
+
+LoaderOptions::LoaderOptions(std::ostream& error) :
+  help("help", "print help"),
+  dump_code("dump-code", "Dump finalizer output code object"),
+  dump_isa("dump-isa", "Dump finalizer output to ISA text file"),
+  dump_exec("dump-exec", "Dump executable to text file"),
+  dump_all("dump-all", "Dump all finalizer input and output (as above)"),
+  dump_dir("dump-dir", "Dump directory"),
+  option_parser(false, error)
+{
+  option_parser.AddOption(&help);
+  option_parser.AddOption(&dump_code);
+  option_parser.AddOption(&dump_isa);
+  option_parser.AddOption(&dump_exec);
+  option_parser.AddOption(&dump_all);
+  option_parser.AddOption(&dump_dir);
+}
+
+bool LoaderOptions::ParseOptions(const std::string& options) {
+  return option_parser.ParseOptions(options.c_str());
+}
+
+void LoaderOptions::Reset() {
+  option_parser.Reset();
+}
+
+void LoaderOptions::PrintHelp(std::ostream& out) const {
+  option_parser.PrintHelp(out);
+}
+
+static const char *LOADER_DUMP_PREFIX = "amdcode";
 
 Loader* Loader::Create(Context* context)
 {
@@ -430,6 +496,11 @@ hsa_status_t LoadedCodeObjectImpl::IterateLoadedSegments(
   return HSA_STATUS_SUCCESS;
 }
 
+void LoadedCodeObjectImpl::Print(std::ostream& out)
+{
+  out << "Code Object" << std::endl;
+}
+
 bool Segment::GetInfo(amd_loaded_segment_info_t attribute, void *value)
 {
   assert(value);
@@ -488,6 +559,16 @@ void Segment::Copy(uint64_t addr, const void* src, size_t size)
   if (size > 0) {
     owner->context()->SegmentCopy(segment, agent, ptr, Offset(addr), src, size);
   }
+}
+
+void Segment::Print(std::ostream& out)
+{
+  out << "Segment" << std::endl
+    << "    Type: " << AmdHsaElfSegmentToString(segment)
+    << "    Size: " << size
+    << "    VAddr: " << vaddr << std::endl
+    << "    Ptr: " << std::hex << ptr << std::dec
+    << std::endl;
 }
 
 void Segment::Destroy()
@@ -721,6 +802,12 @@ hsa_status_t ExecutableImpl::GetInfo(
   return HSA_STATUS_SUCCESS;
 }
 
+static uint32_t NextLoaderDumpNum()
+{
+  static std::atomic_uint_fast32_t dumpN(1);
+  return dumpN++;
+}
+
 hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
@@ -742,10 +829,39 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_FROZEN_EXECUTABLE;
   }
 
+  LoaderOptions loaderOptions;
+  if (options && !loaderOptions.ParseOptions(options)) {
+    return HSA_STATUS_ERROR;
+  }
+
+  const char *options_append = getenv("LOADER_OPTIONS_APPEND");
+  if (options_append && !loaderOptions.ParseOptions(options_append)) {
+    return HSA_STATUS_ERROR;
+  }
+
   code.reset(new code::AmdHsaCode());
 
   if (!code->InitAsHandle(code_object)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
+  uint32_t dumpNum = 0;
+  if (loaderOptions.DumpAll()->is_set() ||
+      loaderOptions.DumpExec()->is_set() ||
+      loaderOptions.DumpCode()->is_set() ||
+      loaderOptions.DumpIsa()->is_set()) {
+    dumpNum = NextLoaderDumpNum();
+  }
+
+  if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpCode()->is_set()) {
+    if (!code->SaveToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "co", dumpNum))) {
+      // Ignore error.
+    }
+  }
+  if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpIsa()->is_set()) {
+    if (!code->PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "isa", dumpNum))) {
+      // Ignore error.
+    }
   }
 
   std::string codeIsa;
@@ -796,6 +912,13 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   code.reset();
+
+  if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpExec()->is_set()) {
+    if (!PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "exec", dumpNum))) {
+      // Ignore error.
+    }
+  }
+
   if (nullptr != loaded_code_object) { *loaded_code_object = LoadedCodeObject::Handle(loaded_code_objects.back()); }
   return HSA_STATUS_SUCCESS;
 }
@@ -1194,6 +1317,30 @@ hsa_status_t ExecutableImpl::LoadSegmentV2(hsa_agent_t agent, code::Segment* s, 
 
   loaded_code_objects.back()->LoadedSegments().push_back(new_seg);
   return HSA_STATUS_SUCCESS;
+}
+
+void ExecutableImpl::Print(std::ostream& out)
+{
+  out << "AMD Executable" << std::endl;
+  out << "  Id: " << id()
+      << "  Profile: " << HsaProfileToString(profile())
+      << std::endl << std::endl;
+  out << "Loaded Objects (total " << objects.size() << ")" << std::endl;
+  size_t i = 0;
+  for (ExecutableObject* o : objects) {
+    out << "Loaded Object " << i++ << ": ";
+    o->Print(out);
+    out << std::endl;
+  }
+  out << "End AMD Executable" << std::endl;
+}
+
+bool ExecutableImpl::PrintToFile(const std::string& filename)
+{
+  std::ofstream out(filename);
+  if (out.fail()) { return false; }
+  Print(out);
+  return out.fail();
 }
 
 } // namespace loader

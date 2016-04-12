@@ -50,7 +50,7 @@ endif ()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules")
 
 ## Process environment variables.
-if ( "$ENV{HSATHK_BUILD_TARGET_BITS}" STREQUAL 32 )
+if ( DEFINED HSATHK_BUILD_TARGET_BITS AND "${HSATHK_BUILD_TARGET_BITS}" STREQUAL 32 )
     set ( ONLY64STR "" )
     set ( IS64BIT 0 )
 else ()
@@ -58,22 +58,22 @@ else ()
     set ( IS64BIT 1 )
 endif ()
 
-if ( NOT EXISTS $ENV{HSATHK_BUILD_INC_PATH}/hsakmt.h )
+if ( NOT EXISTS ${HSATHK_BUILD_INC_PATH}/hsakmt.h )
     MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_INC_PATH is not set to point to the location where KFD Thunk header file hsakmt.h (and rest of the thunk headers) could be found." )
 endif ()
 
-if ( NOT EXISTS $ENV{HSATHK_BUILD_LIB_PATH}/libhsakmt.so.1 )
+if ( NOT EXISTS ${HSATHK_BUILD_LIB_PATH}/libhsakmt.so.1 )
     MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_LIB_PATH is not set to point to the location where KFD Thunk library libhsakmt.so.1 could be found." )
 endif ()
 
-if ( EXISTS $ENV{LIBSP3_BUILD_INC_PATH}/sp3.h )
-  set ( LIBSP3_BUILD_INC_PATH $ENV{LIBSP3_BUILD_INC_PATH} )
+if ( EXISTS ${LIBSP3_BUILD_INC_PATH}/sp3.h )
+  set ( LIBSP3_BUILD_INC_PATH ${LIBSP3_BUILD_INC_PATH} )
 else ()
   set ( LIBSP3_BUILD_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
 endif ()
 
-if ( EXISTS $ENV{LIBSP3_BUILD_LIB_PATH}/libsp3.a )
-  set ( LIBSP3_BUILD_LIB_PATH $ENV{LIBSP3_BUILD_LIB_PATH} )
+if ( EXISTS ${LIBSP3_BUILD_LIB_PATH}/libsp3.a )
+  set ( LIBSP3_BUILD_LIB_PATH ${LIBSP3_BUILD_LIB_PATH} )
 else ()
   set ( LIBSP3_BUILD_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
 endif ()
@@ -96,6 +96,20 @@ add_definitions ( -D__linux__ )
 add_definitions ( -DHSA_EXPORT=1 )
 add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
+
+if ( DEFINED BUILDID )
+    add_definitions ( -DROCR_BUILD_ID=${BUILDID})
+else ( NOT DEFINED BUILDID)
+    ## get date information based on UTC - full date
+    execute_process(COMMAND date --utc +%F WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE)
+    ## get commit information
+    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
+    ## check dirty tree status
+    execute_process(COMMAND git diff --shortstat COMMAND wc -l WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_DIRTY_TREE  OUTPUT_STRIP_TRAILING_WHITESPACE)
+    set  ( BUILD_ID "${ROCR_BUILD_COMMIT}.${ROCR_BUILD_TIME}.${ROCR_DIRTY_TREE}")
+    add_definitions ( -DROCR_BUILD_ID=${BUILD_ID})
+endif ()
+
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-deprecated-declarations -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
@@ -138,11 +152,11 @@ set ( CORE_SRCS ${CORE_SRCS} common/hsa_table_interface.cpp )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/.. )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/../inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
-include_directories ( $ENV{HSATHK_BUILD_INC_PATH} )
+include_directories ( ${HSATHK_BUILD_INC_PATH} )
 include_directories ( ${LIBSP3_BUILD_INC_PATH} )
 
 ## Library path(s).
-link_directories ( $ENV{HSATHK_BUILD_LIB_PATH} )
+link_directories ( ${HSATHK_BUILD_LIB_PATH} )
 link_directories ( ${LIBSP3_BUILD_LIB_PATH} )
 
 add_library ( ${CORE_RUNTIME_TARGET} SHARED ${CORE_SRCS} )

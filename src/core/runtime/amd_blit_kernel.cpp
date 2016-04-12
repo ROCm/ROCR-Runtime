@@ -216,8 +216,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   kernarg_async_mask_ = kRequiredQueueSize - 1;
 
-  // TODO(bwicakso): remove this code when execute permission level is not
-  // mandatory.
+  // TODO: remove this code when execute permission level is not mandatory.
   if (((amd::GpuAgent&)agent).profile() == HSA_PROFILE_FULL) {
 #if defined(_WIN32) || defined(_WIN64)
 #define NOMINMAX

@@ -319,6 +319,9 @@ public:
 
   virtual uint64_t FindHostAddress(uint64_t device_address) = 0;
 
+  virtual void Print(std::ostream& out) = 0;
+  virtual bool PrintToFile(const std::string& filename) = 0;
+
 protected:
   Executable() {}
 
