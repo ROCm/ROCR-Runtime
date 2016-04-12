@@ -73,6 +73,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
+      memory_bus_width_(0),
+      memory_max_frequency_(0),
       ape1_base_(0),
       ape1_size_(0) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
@@ -96,8 +98,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
                              ? HSA_AMD_COHERENCY_TYPE_COHERENT
                              : HSA_AMD_COHERENCY_TYPE_NONCOHERENT);
 
-  max_queues_ =
-      static_cast<uint32_t>(atoi(os::GetEnvVar("HSA_MAX_QUEUES").c_str()));
+  max_queues_ = core::Runtime::runtime_singleton_->flag().max_queues();
 #if !defined(HSA_LARGE_MODEL) || !defined(__linux__)
   if (max_queues_ == 0) {
     max_queues_ = 10;
@@ -227,6 +228,9 @@ void GpuAgent::InitRegionList() {
           if (!is_apu_node) {
             mem_props[mem_idx].VirtualBaseAddress = 0;
           }
+
+          memory_bus_width_ = mem_props[mem_idx].Width;
+          memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH:
         case HSA_HEAPTYPE_DEVICE_SVM: {
@@ -236,6 +240,12 @@ void GpuAgent::InitRegionList() {
           regions_.push_back(region);
           break;
         }
+        case HSA_HEAPTYPE_SYSTEM:
+          if (is_apu_node) {
+            memory_bus_width_ = mem_props[mem_idx].Width;
+            memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
+          }
+          break;
         default:
           continue;
       }
@@ -249,7 +259,8 @@ void GpuAgent::InitScratchPool() {
   flags.ui32.Scratch = 1;
   flags.ui32.HostAccess = 1;
 
-  scratch_per_thread_ = atoi(os::GetEnvVar("HSA_SCRATCH_MEM").c_str());
+  scratch_per_thread_ =
+      core::Runtime::runtime_singleton_->flag().scratch_mem_size();
   if (scratch_per_thread_ == 0)
     scratch_per_thread_ = DEFAULT_SCRATCH_BYTES_PER_THREAD;
 
@@ -388,10 +399,9 @@ core::Blit* GpuAgent::CreateBlitKernel() {
 
 hsa_status_t GpuAgent::InitDma() {
   // Try create SDMA blit first.
-  std::string sdma_enable = os::GetEnvVar("HSA_ENABLE_SDMA");
-
-  if (sdma_enable != "0" && isa_->GetMajorVersion() == 8 &&
-      isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 3) {
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+      isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0 &&
+      isa_->GetStepping() == 3) {
     blit_h2d_ = CreateBlitSdma();
     blit_d2h_ = CreateBlitSdma();
 
@@ -438,7 +448,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  // TODO(bwicakso): temporarily disable wait on thunk event if the out_signal
+  // TODO: temporarily disable wait on thunk event if the out_signal
   // is an interrupt signal object. Remove this when SDMA handle interrupt
   // packet properly.
   if (out_signal.EopEvent() != NULL) {
@@ -467,7 +477,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
-      // TODO(bwicakso): hardcode for now.
+      // TODO: hardcode for now.
       std::memset(value, 0, kNameSize);
       if (isa_->GetMajorVersion() == 7) {
         std::memcpy(value, "Kaveri", sizeof("Kaveri"));
@@ -568,7 +578,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       if (profile_ == HSA_PROFILE_FULL &&
           extensions.table.hsa_ext_image_create_fn != NULL) {
-        // TODO(bwicakso): only APU supports images currently.
+        // TODO: only APU supports images currently.
         *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
       }
 
@@ -626,6 +636,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_BDFID:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      break;
+    case HSA_AMD_AGENT_INFO_MEMORY_WIDTH:
+      *((uint32_t*)value) = memory_bus_width_;
+      break;
+    case HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY:
+      *((uint32_t*)value) = memory_max_frequency_;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

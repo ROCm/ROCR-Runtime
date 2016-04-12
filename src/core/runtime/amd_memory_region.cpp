@@ -467,13 +467,13 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
 hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
                                       bool& result) const {
-  // TODO(bwicakso): not implemented yet.
+  // TODO: not implemented yet.
   result = false;
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
 hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
-  // TODO(bwicakso): not implemented yet.
+  // TODO: not implemented yet.
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
