@@ -1,8 +1,8 @@
-Package: libhsakmt
+Package: hsakmt-rocm-dev
 Architecture: amd64
 Maintainer: Advanced Micro Devices Inc.
 Depends:
 Priority: optional
-Version: 2.0.0
+Version: $version
 Description: Thunk library for AMD KFD
 

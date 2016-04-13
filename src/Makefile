@@ -9,6 +9,12 @@ CFLAGS += $(foreach DIR,$(INCLUDES),-I$(DIR))
 LIB_NAME = libhsakmt.so
 LIB_MAJOR_VER = 1
 
+PACKAGE_MAJOR_VER = 2
+PACKAGE_MINOR_VER = 0
+PACKAGE_PATCH_VER ?= 0
+PACKAGE_VER = $(PACKAGE_MAJOR_VER).$(PACKAGE_MINOR_VER).$(PACKAGE_PATCH_VER)
+export PACKAGE_VER
+
 # Compiler options
 CFLAGS += -fPIC # Position-independent code required to build shared library
 CFLAGS += -W -Wall -Wextra -Werror -Wno-unused-parameter
@@ -71,7 +77,6 @@ export PACKAGE_DIR
 
 package-common: lnx64a
 	@mkdir -p $(PACKAGE_DIR)
-	@cp -r $(DEBIAN_DIR) $(PACKAGE_DIR)
 
 	@mkdir -p $(LDCONF_INSTALL_DIR)
 	@cp -r $(LDCONF_FILE) $(LDCONF_INSTALL_DIR)
@@ -89,7 +94,10 @@ package-common: lnx64a
 	ln -fs ../$(INSTALL_INCLUDE_DIR) $(ROCM_INCLUDE)/
 
 deb: package-common
-	@fakeroot dpkg-deb --build $(PACKAGE_DIR) $(BUILDDIR)/libhsakmt.deb
+	@mkdir -p $(PACKAGE_DIR)/DEBIAN
+	@sed 's/\$$version/$(PACKAGE_VER)/g' $(DEBIAN_DIR)/control > $(PACKAGE_DIR)/DEBIAN/control
+	@fakeroot dpkg-deb --build $(PACKAGE_DIR) \
+		$(BUILDDIR)/hsakmt-dev-$(PACKAGE_VER)-amd64.deb
 
 rpm: package-common
 	@rpmbuild --define '_topdir $(BUILD_ROOT)/rpm' -ba $(THUNK_ROOT)/RPM/libhsakmt.spec

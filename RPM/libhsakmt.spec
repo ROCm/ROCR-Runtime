@@ -1,5 +1,5 @@
-%define name        libhsakmt
-%define version     2.0.0
+%define name        hsakmt-rocm-dev
+%define version     %{getenv:PACKAGE_VER}
 %define packageroot %{getenv:PACKAGE_DIR}
 
 Name:       %{name}
