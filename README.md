@@ -37,7 +37,7 @@ For Fedora execute the following commands:
         sudo rpm -i packages/fedora/hsa-rocr-dev-1.0-0-22.fc22.x86_64.rpm
         sudo rpm -i packages/fedora/hsa-ext-rocr-dev-1.0-0-22.fc22.x86_64.rpm
 
-The contents are installed in /opt/hsa by default.
+The contents are installed in /opt/rocm by default.
  
 #### Infrastructure
 
