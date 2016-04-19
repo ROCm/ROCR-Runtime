@@ -15,7 +15,7 @@ The HSA core runtime source code for Boltzmann is located in the src subdirector
 
 #### Binaries for Ubuntu & Fedora and Installation Instructions
 
-The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. They include:
+Pre-built binaries are available for installation from the ROCm package repository. For ROCR, they include:
 
 Core runtime package:
 
@@ -27,17 +27,12 @@ Runtime extension package:
 * A 64-bit version of AMD's finalizer extension for Boltzmann
 * A 64-bit version of AMD's runtime tools library
 
-To install the packages on Ubuntu execute the following commands:
+The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default. 
+The core runtime package depends on the hsakmt-roct-dev package
 
-        sudo dpkg -i packages/ubuntu/hsa-rocr-dev-1.0.0-amd64.deb
-        sudo dpkg -i packages/ubuntu/hsa-ext-rocr-dev-1.0.0-amd64.deb
+Installation instructions can be found in the ROCm manifest repository README.md:
 
-For Fedora execute the following commands:
-
-        sudo rpm -i packages/fedora/hsa-rocr-dev-1.0-0-22.fc22.x86_64.rpm
-        sudo rpm -i packages/fedora/hsa-ext-rocr-dev-1.0-0-22.fc22.x86_64.rpm
-
-The contents are installed in /opt/rocm by default.
+https://github.com/RadeonOpenCompute/ROCm
  
 #### Infrastructure
 
