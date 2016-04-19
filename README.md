@@ -15,20 +15,27 @@ The HSA core runtime source code for Boltzmann is located in the src subdirector
 
 #### Binaries for Ubuntu & Fedora and Installation Instructions
 
-The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. These files contain:
+The packages subdirectory contains the Debian and rpm packages for installing the runtime on Ubuntu and Fedora platforms. They include:
+
+Core runtime package:
 
 * HSA include files to support application development on the HSA runtime for Boltzmann
 * A 64-bit version of AMD's HSA core runtime for Boltzmann
+
+Runtime extension package:
+
 * A 64-bit version of AMD's finalizer extension for Boltzmann
 * A 64-bit version of AMD's runtime tools library
 
-To install the package on Ubuntu execute the following command:
+To install the packages on Ubuntu execute the following commands:
 
-        sudo dpkg -i packages/ubuntu/hsa-runtime-dev-1.0.0-amd64.deb
+        sudo dpkg -i packages/ubuntu/hsa-rocr-dev-1.0.0-amd64.deb
+        sudo dpkg -i packages/ubuntu/hsa-ext-rocr-dev-1.0.0-amd64.deb
 
-For Fedora execute the following command:
+For Fedora execute the following commands:
 
-        sudo rpm -i packages/fedora/hsa-runtime-dev-1.0-0.fc22.x86_64.rpm
+        sudo rpm -i packages/fedora/hsa-rocr-dev-1.0-0-22.fc22.x86_64.rpm
+        sudo rpm -i packages/fedora/hsa-ext-rocr-dev-1.0-0-22.fc22.x86_64.rpm
 
 The contents are installed in /opt/hsa by default.
  
@@ -73,4 +80,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2015 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2016 Advanced Micro Devices, Inc. All rights reserved.
