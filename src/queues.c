@@ -39,13 +39,15 @@
 
 enum asic_family_type {
 	CHIP_KAVERI = 0,
+	CHIP_HAWAII,
 	CHIP_CARRIZO,
 	CHIP_TONGA,
 	CHIP_FIJI
 };
 
 #define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_FIJI)
-#define IS_DGPU(chip) ((chip) >= CHIP_TONGA && (chip) <= CHIP_FIJI)
+#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_FIJI) || \
+		       (chip) == CHIP_HAWAII)
 
 struct device_info
 {
@@ -57,6 +59,13 @@ struct device_info
 
 struct device_info kaveri_device_info = {
 	.asic_family = CHIP_KAVERI,
+	.ctx_save_restore_size = 0,
+	.ctl_stack_size = 0,
+	.eop_buffer_size = 0,
+};
+
+struct device_info hawaii_device_info = {
+	.asic_family = CHIP_HAWAII,
 	.ctx_save_restore_size = 0,
 	.ctl_stack_size = 0,
 	.eop_buffer_size = 0,
@@ -90,6 +99,7 @@ struct device_id
 	struct device_info *dev_info;
 };
 
+/* TODO: unify this with the device list in topology.c */
 struct device_id supported_devices[] = {
 	{ 0x1304, &kaveri_device_info },	/* Kaveri */
 	{ 0x1305, &kaveri_device_info },	/* Kaveri */
@@ -113,6 +123,18 @@ struct device_id supported_devices[] = {
 	{ 0x131B, &kaveri_device_info },	/* Kaveri */
 	{ 0x131C, &kaveri_device_info },	/* Kaveri */
 	{ 0x131D, &kaveri_device_info },	/* Kaveri */
+	{ 0x67A0, &hawaii_device_info },	/* Hawaii */
+	{ 0x67A1, &hawaii_device_info },	/* Hawaii */
+	{ 0x67A2, &hawaii_device_info },	/* Hawaii */
+	{ 0x67A8, &hawaii_device_info },	/* Hawaii */
+	{ 0x67A9, &hawaii_device_info },	/* Hawaii */
+	{ 0x67AA, &hawaii_device_info },	/* Hawaii */
+	{ 0x67B0, &hawaii_device_info },	/* Hawaii */
+	{ 0x67B1, &hawaii_device_info },	/* Hawaii */
+	{ 0x67B8, &hawaii_device_info },	/* Hawaii */
+	{ 0x67B9, &hawaii_device_info },	/* Hawaii */
+	{ 0x67BA, &hawaii_device_info },	/* Hawaii */
+	{ 0x67BE, &hawaii_device_info },	/* Hawaii */
 	{ 0x9870, &carrizo_device_info },	/* Carrizo */
 	{ 0x9874, &carrizo_device_info },	/* Carrizo */
 	{ 0x9875, &carrizo_device_info },	/* Carrizo */
