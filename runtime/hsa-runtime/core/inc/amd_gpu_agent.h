@@ -165,20 +165,24 @@ class GpuAgent : public GpuAgentInt {
 
   uint16_t GetMicrocodeVersion() const;
 
-  // @brief Assembles SP3 shader source into executable code.
+  // @brief Assembles SP3 shader source into ISA or AQL code object.
   //
   // @param [in] src_sp3 SP3 shader source text representation.
   // @param [in] func_name Name of the SP3 function to assemble.
-  // @param [out] code_buf Executable code buffer.
-  // @param [out] code_buf_size Size of executable code buffer in bytes.
-  void AssembleShader(const char* src_sp3, const char* func_name,
-                      void*& code_buf, size_t& code_buf_size);
+  // @param [in] assemble_target ISA or AQL assembly target.
+  // @param [out] code_buf Code object buffer.
+  // @param [out] code_buf_size Size of code object buffer in bytes.
+  enum class AssembleTarget { ISA, AQL };
 
-  // @brief Frees executable code created by AssembleShader.
+  void AssembleShader(const char* src_sp3, const char* func_name,
+                      AssembleTarget assemble_target, void*& code_buf,
+                      size_t& code_buf_size) const;
+
+  // @brief Frees code object created by AssembleShader.
   //
-  // @param [in] code_buf Executable code buffer.
-  // @param [in] code_buf_size Size of executable code buffer in bytes.
-  void ReleaseShader(void* code_buf, size_t code_buf_size);
+  // @param [in] code_buf Code object buffer.
+  // @param [in] code_buf_size Size of code object buffer in bytes.
+  void ReleaseShader(void* code_buf, size_t code_buf_size) const;
 
   // @brief Override from core::Agent.
   hsa_status_t VisitRegion(bool include_peer,

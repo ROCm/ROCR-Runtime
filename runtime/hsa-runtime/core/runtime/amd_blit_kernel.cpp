@@ -43,40 +43,486 @@
 #include "core/inc/amd_blit_kernel.h"
 
 #include <algorithm>
-#include <climits>
-#include <cmath>
-#include <cstring>
+#include <sstream>
+#include <string>
 
-#if defined(_WIN32) || defined(_WIN64)
-#define NOMINMAX
-#include <windows.h>
-#else
-#include <sys/mman.h>
-#endif
-
-#include "core/inc/amd_blit_kernel_kv.h"
-#include "core/inc/amd_blit_kernel_vi.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/hsa_internal.h"
 #include "core/util/utils.h"
 
 namespace amd {
-const uint32_t BlitKernel::kGroupSize = 256;
-const size_t BlitKernel::kMaxCopyCount = AlignDown(UINT32_MAX, kGroupSize);
-const size_t BlitKernel::kMaxFillCount = AlignDown(UINT32_MAX, kGroupSize);
-
 static const uint16_t kInvalidPacketHeader = HSA_PACKET_TYPE_INVALID;
+
+static std::string kBlitKernelSource(R"(
+  // Compatibility function for GFXIP 7.
+
+  function s_load_dword_offset(byte_offset)
+    if kGFXIPVersion == 7
+      return byte_offset / 4
+    else
+      return byte_offset
+    end
+  end
+
+  // Memory copy for all cases except:
+  //  (src_addr & 0x3) != (dst_addr & 0x3)
+  //
+  // Kernel argument buffer:
+  //   [DW  0, 1]  Phase 1 src start address
+  //   [DW  2, 3]  Phase 1 dst start address
+  //   [DW  4, 5]  Phase 2 src start address
+  //   [DW  6, 7]  Phase 2 dst start address
+  //   [DW  8, 9]  Phase 3 src start address
+  //   [DW 10,11]  Phase 3 dst start address
+  //   [DW 12,13]  Phase 4 src start address
+  //   [DW 14,15]  Phase 4 dst start address
+  //   [DW 16,17]  Phase 4 src end address
+  //   [DW 18,19]  Phase 4 dst end address
+  //   [DW 20   ]  Total number of workitems
+
+  var kCopyAlignedVecWidth = 4
+  var kCopyAlignedUnroll = 1
+
+  shader CopyAligned
+    type(CS)
+    user_sgpr_count(2)
+    sgpr_count(32)
+    vgpr_count(8 + (kCopyAlignedUnroll * kCopyAlignedVecWidth))
+
+    // Retrieve kernel arguments.
+    s_load_dwordx4          s[4:7], s[0:1], s_load_dword_offset(0x0)
+    s_load_dwordx4          s[8:11], s[0:1], s_load_dword_offset(0x10)
+    s_load_dwordx4          s[12:15], s[0:1], s_load_dword_offset(0x20)
+    s_load_dwordx4          s[16:19], s[0:1], s_load_dword_offset(0x30)
+    s_load_dwordx4          s[20:23], s[0:1], s_load_dword_offset(0x40)
+    s_load_dword            s24, s[0:1], s_load_dword_offset(0x50)
+    s_waitcnt               lgkmcnt(0)
+
+    // Compute workitem id.
+    s_lshl_b32              s2, s2, 0x6
+    v_add_u32               v0, vcc, s2, v0
+
+    // =====================================================
+    // Phase 1: Byte copy up to 0x100 destination alignment.
+    // =====================================================
+
+    // Compute phase source address.
+    v_mov_b32               v3, s5
+    v_add_u32               v2, vcc, v0, s4
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s7
+    v_add_u32               v4, vcc, v0, s6
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+  L_COPY_ALIGNED_PHASE_1_LOOP:
+    // Mask off lanes (or branch out) after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[8:9]
+    s_cbranch_vccz          L_COPY_ALIGNED_PHASE_1_DONE
+    s_and_b64               exec, exec, vcc
+
+    // Load from/advance the source address.
+    flat_load_ubyte         v1, v[2:3]
+    s_waitcnt               vmcnt(0)
+    v_add_u32               v2, vcc, v2, s24
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Write to/advance the destination address.
+    flat_store_byte         v[4:5], v1
+    v_add_u32               v4, vcc, v4, s24
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+    // Repeat until branched out.
+    s_branch                L_COPY_ALIGNED_PHASE_1_LOOP
+
+  L_COPY_ALIGNED_PHASE_1_DONE:
+    // Restore EXEC mask for all lanes.
+    s_mov_b64               exec, 0xFFFFFFFFFFFFFFFF
+
+    // ========================================================
+    // Phase 2: Unrolled dword[x4] copy up to last whole block.
+    // ========================================================
+
+    // Compute unrolled dword[x4] stride across all threads.
+    if kCopyAlignedVecWidth == 4
+      s_lshl_b32            s25, s24, 0x4
+    else
+      s_lshl_b32            s25, s24, 0x2
+    end
+
+    // Compute phase source address.
+    if kCopyAlignedVecWidth == 4
+      v_lshlrev_b32         v1, 0x4, v0
+    else
+      v_lshlrev_b32         v1, 0x2, v0
+    end
+
+    v_mov_b32               v3, s9
+    v_add_u32               v2, vcc, v1, s8
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s11
+    v_add_u32               v4, vcc, v1, s10
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+  L_COPY_ALIGNED_PHASE_2_LOOP:
+    // Branch out after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[12:13]
+    s_cbranch_vccz          L_COPY_ALIGNED_PHASE_2_DONE
+
+    // Load from/advance the source address.
+    for var i = 0; i < kCopyAlignedUnroll; i ++
+      if kCopyAlignedVecWidth == 4
+        flat_load_dwordx4   v[8 + (i * 4)], v[2:3]
+      else
+        flat_load_dword     v[8 + i], v[2:3]
+      end
+
+      v_add_u32             v2, vcc, v2, s25
+      v_addc_u32            v3, vcc, v3, 0x0, vcc
+    end
+
+    // Write to/advance the destination address.
+    s_waitcnt               vmcnt(0)
+
+    for var i = 0; i < kCopyAlignedUnroll; i ++
+      if kCopyAlignedVecWidth == 4
+        flat_store_dwordx4  v[4:5], v[8 + (i * 4)]
+      else
+        flat_store_dword    v[4:5], v[8 + i]
+      end
+
+      v_add_u32             v4, vcc, v4, s25
+      v_addc_u32            v5, vcc, v5, 0x0, vcc
+    end
+
+    // Repeat until branched out.
+    s_branch                L_COPY_ALIGNED_PHASE_2_LOOP
+
+  L_COPY_ALIGNED_PHASE_2_DONE:
+
+    // ===========================================
+    // Phase 3: Dword copy up to last whole dword.
+    // ===========================================
+
+    // Compute dword stride across all threads.
+    s_lshl_b32              s25, s24, 0x2
+
+    // Compute phase source address.
+    v_lshlrev_b32           v1, 0x2, v0
+    v_mov_b32               v3, s13
+    v_add_u32               v2, vcc, v1, s12
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s15
+    v_add_u32               v4, vcc, v1, s14
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+  L_COPY_ALIGNED_PHASE_3_LOOP:
+    // Mask off lanes (or branch out) after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[16:17]
+    s_cbranch_vccz          L_COPY_ALIGNED_PHASE_3_DONE
+    s_and_b64               exec, exec, vcc
+
+    // Load from/advance the source address.
+    flat_load_dword         v1, v[2:3]
+    v_add_u32               v2, vcc, v2, s25
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+    s_waitcnt               vmcnt(0)
+
+    // Write to/advance the destination address.
+    flat_store_dword        v[4:5], v1
+    v_add_u32               v4, vcc, v4, s25
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+    // Repeat until branched out.
+    s_branch                L_COPY_ALIGNED_PHASE_3_LOOP
+
+  L_COPY_ALIGNED_PHASE_3_DONE:
+    // Restore EXEC mask for all lanes.
+    s_mov_b64               exec, 0xFFFFFFFFFFFFFFFF
+
+    // =============================
+    // Phase 4: Byte copy up to end.
+    // =============================
+
+    // Compute phase source address.
+    v_mov_b32               v3, s17
+    v_add_u32               v2, vcc, v0, s16
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s19
+    v_add_u32               v4, vcc, v0, s18
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+    // Mask off lanes (or branch out) after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[20:21]
+    s_cbranch_vccz          L_COPY_ALIGNED_PHASE_4_DONE
+    s_and_b64               exec, exec, vcc
+
+    // Load from the source address.
+    flat_load_ubyte         v1, v[2:3]
+    s_waitcnt               vmcnt(0)
+
+    // Write to the destination address.
+    flat_store_byte         v[4:5], v1
+
+  L_COPY_ALIGNED_PHASE_4_DONE:
+    s_endpgm
+  end
+
+  // Memory copy for this case:
+  //  (src_addr & 0x3) != (dst_addr & 0x3)
+  //
+  // Kernel argument buffer:
+  //   [DW  0, 1]  Phase 1 src start address
+  //   [DW  2, 3]  Phase 1 dst start address
+  //   [DW  4, 5]  Phase 2 src start address
+  //   [DW  6, 7]  Phase 2 dst start address
+  //   [DW  8, 9]  Phase 2 src end address
+  //   [DW 10,11]  Phase 2 dst end address
+  //   [DW 12   ]  Total number of workitems
+
+  var kCopyMisalignedUnroll = 4
+
+  shader CopyMisaligned
+    type(CS)
+    user_sgpr_count(2)
+    sgpr_count(23)
+    vgpr_count(6 + kCopyMisalignedUnroll)
+
+    // Retrieve kernel arguments.
+    s_load_dwordx4          s[4:7], s[0:1], s_load_dword_offset(0x0)
+    s_load_dwordx4          s[8:11], s[0:1], s_load_dword_offset(0x10)
+    s_load_dwordx4          s[12:15], s[0:1], s_load_dword_offset(0x20)
+    s_load_dword            s16, s[0:1], s_load_dword_offset(0x30)
+    s_waitcnt               lgkmcnt(0)
+
+    // Compute workitem id.
+    s_lshl_b32              s2, s2, 0x6
+    v_add_u32               v0, vcc, s2, v0
+
+    // ===================================================
+    // Phase 1: Unrolled byte copy up to last whole block.
+    // ===================================================
+
+    // Compute phase source address.
+    v_mov_b32               v3, s5
+    v_add_u32               v2, vcc, v0, s4
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s7
+    v_add_u32               v4, vcc, v0, s6
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+  L_COPY_MISALIGNED_PHASE_1_LOOP:
+    // Branch out after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[8:9]
+    s_cbranch_vccz          L_COPY_MISALIGNED_PHASE_1_DONE
+
+    // Load from/advance the source address.
+    for var i = 0; i < kCopyMisalignedUnroll; i ++
+      flat_load_ubyte       v[6 + i], v[2:3]
+      v_add_u32             v2, vcc, v2, s16
+      v_addc_u32            v3, vcc, v3, 0x0, vcc
+    end
+
+    // Write to/advance the destination address.
+    s_waitcnt               vmcnt(0)
+
+    for var i = 0; i < kCopyMisalignedUnroll; i ++
+      flat_store_byte       v[4:5], v[6 + i]
+      v_add_u32             v4, vcc, v4, s16
+      v_addc_u32            v5, vcc, v5, 0x0, vcc
+    end
+
+    // Repeat until branched out.
+    s_branch                L_COPY_MISALIGNED_PHASE_1_LOOP
+
+  L_COPY_MISALIGNED_PHASE_1_DONE:
+
+    // =============================
+    // Phase 2: Byte copy up to end.
+    // =============================
+
+    // Compute phase source address.
+    v_mov_b32               v3, s9
+    v_add_u32               v2, vcc, v0, s8
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Compute phase destination address.
+    v_mov_b32               v5, s11
+    v_add_u32               v4, vcc, v0, s10
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+  L_COPY_MISALIGNED_PHASE_2_LOOP:
+    // Mask off lanes (or branch out) after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[12:13]
+    s_cbranch_vccz          L_COPY_MISALIGNED_PHASE_2_DONE
+    s_and_b64               exec, exec, vcc
+
+    // Load from/advance the source address.
+    flat_load_ubyte         v1, v[2:3]
+    v_add_u32               v2, vcc, v2, s16
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+    s_waitcnt               vmcnt(0)
+
+    // Write to/advance the destination address.
+    flat_store_byte         v[4:5], v1
+    v_add_u32               v4, vcc, v4, s16
+    v_addc_u32              v5, vcc, v5, 0x0, vcc
+
+    // Repeat until branched out.
+    s_branch                L_COPY_MISALIGNED_PHASE_2_LOOP
+
+  L_COPY_MISALIGNED_PHASE_2_DONE:
+    s_endpgm
+  end
+
+  // Memory fill for dword-aligned region.
+  //
+  // Kernel argument buffer:
+  //   [DW  0, 1]  Phase 1 dst start address
+  //   [DW  2, 3]  Phase 2 dst start address
+  //   [DW  4, 5]  Phase 2 dst end address
+  //   [DW  6   ]  Value to fill memory with
+  //   [DW  7   ]  Total number of workitems
+
+  var kFillVecWidth = 4
+  var kFillUnroll = 1
+
+  shader Fill
+    type(CS)
+    user_sgpr_count(2)
+    sgpr_count(19)
+    vgpr_count(8)
+
+    // Retrieve kernel arguments.
+    s_load_dwordx4          s[4:7], s[0:1], s_load_dword_offset(0x0)
+    s_load_dwordx4          s[8:11], s[0:1], s_load_dword_offset(0x10)
+    s_waitcnt               lgkmcnt(0)
+
+    // Compute workitem id.
+    s_lshl_b32              s2, s2, 0x6
+    v_add_u32               v0, vcc, s2, v0
+
+    // Copy fill pattern into VGPRs.
+    for var i = 0; i < kFillVecWidth; i ++
+      v_mov_b32           v[4 + i], s10
+    end
+
+    // ========================================================
+    // Phase 1: Unrolled dword[x4] fill up to last whole block.
+    // ========================================================
+
+    // Compute unrolled dword[x4] stride across all threads.
+    if kFillVecWidth == 4
+      s_lshl_b32            s12, s11, 0x4
+    else
+      s_lshl_b32            s12, s11, 0x2
+    end
+
+    // Compute phase destination address.
+    if kFillVecWidth == 4
+      v_lshlrev_b32         v1, 0x4, v0
+    else
+      v_lshlrev_b32         v1, 0x2, v0
+    end
+
+    v_mov_b32               v3, s5
+    v_add_u32               v2, vcc, v1, s4
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+  L_FILL_PHASE_1_LOOP:
+    // Branch out after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[6:7]
+    s_cbranch_vccz          L_FILL_PHASE_1_DONE
+
+    // Write to/advance the destination address.
+    for var i = 0; i < kFillUnroll; i ++
+      if kFillVecWidth == 4
+        flat_store_dwordx4  v[2:3], v[4:7]
+      else
+        flat_store_dword    v[2:3], v4
+      end
+
+      v_add_u32             v2, vcc, v2, s12
+      v_addc_u32            v3, vcc, v3, 0x0, vcc
+    end
+
+    // Repeat until branched out.
+    s_branch                L_FILL_PHASE_1_LOOP
+
+  L_FILL_PHASE_1_DONE:
+
+    // ==============================
+    // Phase 2: Dword fill up to end.
+    // ==============================
+
+    // Compute dword stride across all threads.
+    s_lshl_b32              s12, s11, 0x2
+
+    // Compute phase destination address.
+    v_lshlrev_b32           v1, 0x2, v0
+    v_mov_b32               v3, s7
+    v_add_u32               v2, vcc, v1, s6
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+  L_FILL_PHASE_2_LOOP:
+    // Mask off lanes (or branch out) after phase end.
+    v_cmp_lt_u64            vcc, v[2:3], s[8:9]
+    s_cbranch_vccz          L_FILL_PHASE_2_DONE
+    s_and_b64               exec, exec, vcc
+
+    // Write to/advance the destination address.
+    flat_store_dword        v[2:3], v4
+    v_add_u32               v2, vcc, v2, s12
+    v_addc_u32              v3, vcc, v3, 0x0, vcc
+
+    // Repeat until branched out.
+    s_branch                L_FILL_PHASE_2_LOOP
+
+  L_FILL_PHASE_2_DONE:
+    s_endpgm
+  end
+)");
+
+// Search kernel source for variable definition and return value.
+int GetKernelSourceParam(const char* paramName) {
+  std::stringstream paramDef;
+  paramDef << "var " << paramName << " = ";
+
+  std::string::size_type paramDefLoc = kBlitKernelSource.find(paramDef.str());
+  assert(paramDefLoc != std::string::npos);
+  std::string::size_type paramValLoc = paramDefLoc + paramDef.str().size();
+  std::string::size_type paramEndLoc =
+      kBlitKernelSource.find('\n', paramDefLoc);
+  assert(paramDefLoc != std::string::npos);
+
+  std::string paramVal(&kBlitKernelSource[paramValLoc],
+                       &kBlitKernelSource[paramEndLoc]);
+  return std::stoi(paramVal);
+}
+
+static int kCopyAlignedVecWidth = GetKernelSourceParam("kCopyAlignedVecWidth");
+static int kCopyAlignedUnroll = GetKernelSourceParam("kCopyAlignedUnroll");
+static int kCopyMisalignedUnroll = GetKernelSourceParam("kCopyMisalignedUnroll");
+static int kFillVecWidth = GetKernelSourceParam("kFillVecWidth");
+static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
 
 BlitKernel::BlitKernel()
     : core::Blit(),
-      copy_code_handle_(0),
-      fill_code_handle_(0),
       queue_(NULL),
       cached_index_(0),
       kernarg_async_(NULL),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
-      code_arg_buffer_(NULL) {
+      num_cus_(0) {
   completion_signal_.handle = 0;
 }
 
@@ -96,26 +542,8 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
     return HSA_STATUS_ERROR;
   }
 
-  // Need queue buffer that can cover the max size of local memory.
-  const uint64_t kGpuVmVaSize = 1ULL << 40;
-  const uint32_t kRequiredQueueSize = NextPow2(static_cast<uint32_t>(
-      std::ceil(static_cast<double>(kGpuVmVaSize) / kMaxCopyCount)));
-
-  uint32_t max_queue_size = 0;
-  status = HSA::hsa_agent_get_info(agent_handle, HSA_AGENT_INFO_QUEUE_MAX_SIZE,
-                                   &max_queue_size);
-
-  if (HSA_STATUS_SUCCESS != status) {
-    return status;
-  }
-
-  if (max_queue_size < kRequiredQueueSize) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  status =
-      HSA::hsa_queue_create(agent_handle, kRequiredQueueSize,
-                            HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue_);
+  status = HSA::hsa_queue_create(agent_handle, 1024, HSA_QUEUE_TYPE_MULTI, NULL,
+                                 NULL, 0, 0, &queue_);
 
   if (HSA_STATUS_SUCCESS != status) {
     return status;
@@ -125,86 +553,6 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   cached_index_ = 0;
 
-  void* copy_raw_obj_mem = NULL;
-  size_t copy_akc_size = 0;
-  size_t copy_akc_offset = 0;
-
-  void* copy_aligned_raw_obj_mem = NULL;
-  size_t copy_aligned_akc_size = 0;
-  size_t copy_aligned_akc_offset = 0;
-
-  void* fill_raw_obj_mem = NULL;
-  size_t fill_akc_size = 0;
-  size_t fill_akc_offset = 0;
-
-  switch (agent.isa()->GetMajorVersion()) {
-    case 7:
-      copy_raw_obj_mem = kVectorCopyKvObject;
-      copy_akc_size = HSA_VECTOR_COPY_KV_AKC_SIZE;
-      copy_akc_offset = HSA_VECTOR_COPY_KV_AKC_OFFSET;
-
-      copy_aligned_raw_obj_mem = kVectorCopyAlignedKvObject;
-      copy_aligned_akc_size = HSA_VECTOR_COPY_ALIGNED_KV_AKC_SIZE;
-      copy_aligned_akc_offset = HSA_VECTOR_COPY_ALIGNED_KV_AKC_OFFSET;
-
-      fill_raw_obj_mem = kFillMemoryKvObject;
-      fill_akc_size = HSA_FILL_MEMORY_KV_AKC_SIZE;
-      fill_akc_offset = HSA_FILL_MEMORY_KV_AKC_OFFSET;
-      break;
-    case 8:
-      copy_raw_obj_mem = kVectorCopyViObject;
-      copy_akc_size = HSA_VECTOR_COPY_VI_AKC_SIZE;
-      copy_akc_offset = HSA_VECTOR_COPY_VI_AKC_OFFSET;
-
-      copy_aligned_raw_obj_mem = kVectorCopyAlignedViObject;
-      copy_aligned_akc_size = HSA_VECTOR_COPY_ALIGNED_VI_AKC_SIZE;
-      copy_aligned_akc_offset = HSA_VECTOR_COPY_ALIGNED_VI_AKC_OFFSET;
-
-      fill_raw_obj_mem = kFillMemoryViObject;
-      fill_akc_size = HSA_FILL_MEMORY_VI_AKC_SIZE;
-      fill_akc_offset = HSA_FILL_MEMORY_VI_AKC_OFFSET;
-      break;
-    default:
-      assert(false && "Only gfx7 and gfx8 are supported");
-      break;
-  }
-
-  const size_t total_alloc_size = AlignUp(
-      AlignUp(copy_akc_size, 256) + AlignUp(copy_aligned_akc_size, 256) +
-          AlignUp(fill_akc_size, 256),
-      4096);
-
-  amd_kernel_code_t *code_ptr = nullptr;
-  code_arg_buffer_ = core::Runtime::runtime_singleton_->system_allocator()(
-      total_alloc_size, 4096);
-
-  char* akc_arg = reinterpret_cast<char*>(code_arg_buffer_);
-  memcpy(akc_arg,
-         reinterpret_cast<const char*>(copy_raw_obj_mem) + copy_akc_offset,
-         copy_akc_size);
-  copy_code_handle_ = reinterpret_cast<uint64_t>(akc_arg);
-  code_ptr = (amd_kernel_code_t*)(copy_code_handle_);
-  code_ptr->runtime_loader_kernel_symbol = 0;
-  akc_arg += copy_akc_size;
-
-  akc_arg = AlignUp(akc_arg, 256);
-  memcpy(akc_arg, reinterpret_cast<const char*>(copy_aligned_raw_obj_mem) +
-                      copy_aligned_akc_offset,
-         copy_aligned_akc_size);
-  copy_aligned_code_handle_ = reinterpret_cast<uint64_t>(akc_arg);
-  code_ptr = (amd_kernel_code_t*)(copy_aligned_code_handle_);
-  code_ptr->runtime_loader_kernel_symbol = 0;
-  akc_arg += copy_aligned_akc_size;
-
-  akc_arg = AlignUp(akc_arg, 256);
-  memcpy(akc_arg,
-         reinterpret_cast<const char*>(fill_raw_obj_mem) + fill_akc_offset,
-         fill_akc_size);
-  fill_code_handle_ = reinterpret_cast<uint64_t>(akc_arg);
-  code_ptr = (amd_kernel_code_t*)(fill_code_handle_);
-  code_ptr->runtime_loader_kernel_symbol = 0;
-  akc_arg += fill_akc_size;
-
   status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
@@ -212,33 +560,39 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   kernarg_async_ = reinterpret_cast<KernelArgs*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          kRequiredQueueSize * AlignUp(sizeof(KernelArgs), 16), 16));
+          queue_->size * AlignUp(sizeof(KernelArgs), 16), 16));
 
-  kernarg_async_mask_ = kRequiredQueueSize - 1;
+  kernarg_async_mask_ = queue_->size - 1;
 
-  // TODO: remove this code when execute permission level is not mandatory.
-  if (((amd::GpuAgent&)agent).profile() == HSA_PROFILE_FULL) {
-#if defined(_WIN32) || defined(_WIN64)
-#define NOMINMAX
-    DWORD old_protect = 0;
-    const DWORD new_protect = PAGE_EXECUTE_READWRITE;
-    if (!VirtualProtect(code_arg_buffer_, total_alloc_size, new_protect,
-                        &old_protect)) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-#else
-    if (0 != mprotect(code_arg_buffer_, total_alloc_size,
-                      PROT_READ | PROT_WRITE | PROT_EXEC)) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-#endif
+  // Obtain the number of compute units in the underlying agent.
+  const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
+  num_cus_ = gpuAgent.properties().NumFComputeCores / 4;
+
+  // Assemble shaders to AQL code objects.
+  std::map<KernelType, const char*> kernel_names = {
+      {KernelType::CopyAligned, "CopyAligned"},
+      {KernelType::CopyMisaligned, "CopyMisaligned"},
+      {KernelType::Fill, "Fill"}};
+
+  for (auto kernel_name : kernel_names) {
+    KernelCode& kernel = kernels_[kernel_name.first];
+    gpuAgent.AssembleShader(kBlitKernelSource.c_str(), kernel_name.second,
+                            GpuAgent::AssembleTarget::AQL, kernel.code_buf_,
+                            kernel.code_buf_size_);
   }
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitKernel::Destroy(void) {
+hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   std::lock_guard<std::mutex> guard(lock_);
+
+  const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
+
+  for (auto kernel_pair : kernels_) {
+    gpuAgent.ReleaseShader(kernel_pair.second.code_buf_,
+                           kernel_pair.second.code_buf_size_);
+  }
 
   if (queue_ != NULL) {
     HSA::hsa_queue_destroy(queue_);
@@ -248,20 +602,11 @@ hsa_status_t BlitKernel::Destroy(void) {
     core::Runtime::runtime_singleton_->system_deallocator()(kernarg_async_);
   }
 
-  if (code_arg_buffer_ != NULL) {
-    core::Runtime::runtime_singleton_->system_deallocator()(code_arg_buffer_);
-  }
-
   if (completion_signal_.handle != 0) {
     HSA::hsa_signal_destroy(completion_signal_);
   }
 
   return HSA_STATUS_SUCCESS;
-}
-
-static bool IsSystemMemory(void* address) {
-  static const uint64_t kLimitSystem = 1ULL << 48;
-  return (reinterpret_cast<uint64_t>(address) < kLimitSystem);
 }
 
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
@@ -294,35 +639,14 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     void* dst, const void* src, size_t size,
     std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
-  assert(copy_code_handle_ != 0);
-
-  const size_t kAlignmentChar = 1;
-  const size_t kAlignmentUin32 = 4;
-  const size_t kAlignmentVec4 = 16;
-  const size_t copy_granule =
-      (IsMultipleOf(dst, kAlignmentVec4) && IsMultipleOf(src, kAlignmentVec4) &&
-       IsMultipleOf(size, kAlignmentVec4))
-          ? kAlignmentVec4
-          : (IsMultipleOf(dst, kAlignmentUin32) &&
-             IsMultipleOf(src, kAlignmentUin32) &&
-             IsMultipleOf(size, kAlignmentUin32))
-                ? kAlignmentUin32
-                : kAlignmentChar;
-
-  size = size / copy_granule;
-
-  const uint32_t num_copy_packet = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(size) / kMaxCopyCount));
-
-  const uint32_t num_barrier_packet =
-      static_cast<uint32_t>(std::ceil(dep_signals.size() / 5.0f));
-
-  // Reserve write index for copy + fence packet.
-  const uint32_t total_num_packet = num_barrier_packet + num_copy_packet;
+  // Reserve write index for barrier(s) + dispatch packet.
+  const uint32_t num_barrier_packet = uint32_t((dep_signals.size() + 4) / 5);
+  const uint32_t total_num_packet = num_barrier_packet + 1;
 
   uint64_t write_index = AcquireWriteIndex(total_num_packet);
   uint64_t write_index_temp = write_index;
 
+  // Insert barrier packets to handle dependent signals.
   const uint16_t kBarrierPacketHeader =
       (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
@@ -352,99 +676,116 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     }
   }
 
-  const uint32_t last_copy_index = num_copy_packet - 1;
-  size_t total_copy_count = 0;
-  for (uint32_t i = 0; i < num_copy_packet; ++i) {
-    // Setup arguments.
-    const uint32_t copy_count = static_cast<uint32_t>(
-        std::min((size - total_copy_count), kMaxCopyCount));
+  // Insert dispatch packet for copy kernel.
+  KernelArgs* args = ObtainAsyncKernelCopyArg();
+  KernelCode* kernel_code = nullptr;
+  int num_workitems = 0;
 
-    void* cur_dst = static_cast<char*>(dst) + (total_copy_count * copy_granule);
-    const void* cur_src =
-        static_cast<const char*>(src) + (total_copy_count * copy_granule);
+  bool aligned = ((uintptr_t(src) & 0x3) == (uintptr_t(dst) & 0x3));
 
-    KernelArgs* args = ObtainAsyncKernelCopyArg();
-    assert(args != NULL);
-    assert(IsMultipleOf(&args->copy, 16));
+  if (aligned) {
+    // Use dword-based aligned kernel.
+    kernel_code = &kernels_[KernelType::CopyAligned];
 
-    args->copy.src = cur_src;
-    args->copy.dst = cur_dst;
-    args->copy.size = copy_count;
-    args->copy.use_vector = (copy_granule == kAlignmentVec4) ? 1 : 0;
+    // Compute the size of each copy phase.
+    num_workitems = 64 * 4 * num_cus_;
 
-    const uint32_t grid_size_x =
-        AlignUp(static_cast<uint32_t>(copy_count), kGroupSize);
+    // Phase 1 (byte copy) ends when destination is 0x100-aligned.
+    uintptr_t src_start = uintptr_t(src);
+    uintptr_t dst_start = uintptr_t(dst);
+    uint64_t phase1_size =
+        std::min(size, uint64_t(0x100 - (dst_start & 0xFF)) & 0xFF);
 
-    // This assert to make sure kMaxCopySize is not changed to a number that
-    // could cause overflow to packet.grid_size_x.
-    assert(grid_size_x >= copy_count);
+    // Phase 2 (unrolled dwordx4 copy) ends when last whole block fits.
+    uint64_t phase2_block = num_workitems * sizeof(uint32_t) *
+                            kCopyAlignedUnroll * kCopyAlignedVecWidth;
+    uint64_t phase2_size = ((size - phase1_size) / phase2_block) * phase2_block;
 
-    hsa_signal_t signal = {(i == last_copy_index)
-                               ? (core::Signal::Convert(&out_signal)).handle
-                               : 0};
-    PopulateQueue(write_index, ((copy_granule == kAlignmentChar)
-                                    ? copy_code_handle_
-                                    : copy_aligned_code_handle_),
-                  args, grid_size_x, signal);
+    // Phase 3 (dword copy) ends when last whole dword fits.
+    uint64_t phase3_size =
+        ((size - phase1_size - phase2_size) / sizeof(uint32_t)) *
+        sizeof(uint32_t);
 
-    ++write_index;
+    args->copy_aligned.phase1_src_start = src_start;
+    args->copy_aligned.phase1_dst_start = dst_start;
+    args->copy_aligned.phase2_src_start = src_start + phase1_size;
+    args->copy_aligned.phase2_dst_start = dst_start + phase1_size;
+    args->copy_aligned.phase3_src_start = src_start + phase1_size + phase2_size;
+    args->copy_aligned.phase3_dst_start = dst_start + phase1_size + phase2_size;
+    args->copy_aligned.phase4_src_start =
+        src_start + phase1_size + phase2_size + phase3_size;
+    args->copy_aligned.phase4_dst_start =
+        dst_start + phase1_size + phase2_size + phase3_size;
+    args->copy_aligned.phase4_src_end = src_start + size;
+    args->copy_aligned.phase4_dst_end = dst_start + size;
+    args->copy_aligned.num_workitems = num_workitems;
+  } else {
+    // Use byte-based misaligned kernel.
+    kernel_code = &kernels_[KernelType::CopyMisaligned];
 
-    total_copy_count += copy_count;
+    // Compute the size of each copy phase.
+    num_workitems = 64 * 4 * num_cus_;
+
+    // Phase 1 (unrolled byte copy) ends when last whole block fits.
+    uintptr_t src_start = uintptr_t(src);
+    uintptr_t dst_start = uintptr_t(dst);
+    uint64_t phase1_block =
+        num_workitems * sizeof(uint8_t) * kCopyMisalignedUnroll;
+    uint64_t phase1_size = (size / phase1_block) * phase1_block;
+
+    args->copy_misaligned.phase1_src_start = src_start;
+    args->copy_misaligned.phase1_dst_start = dst_start;
+    args->copy_misaligned.phase2_src_start = src_start + phase1_size;
+    args->copy_misaligned.phase2_dst_start = dst_start + phase1_size;
+    args->copy_misaligned.phase2_src_end = src_start + size;
+    args->copy_misaligned.phase2_dst_end = dst_start + size;
+    args->copy_misaligned.num_workitems = num_workitems;
   }
 
-  // Launch copy packet.
+  hsa_signal_t signal = {(core::Signal::Convert(&out_signal)).handle};
+  PopulateQueue(write_index, uintptr_t(kernel_code->code_buf_), args,
+                num_workitems, signal);
+
+  // Submit barrier(s) and dispatch packets.
   ReleaseWriteIndex(write_index_temp, total_num_packet);
 
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
-                                                 size_t num) {
-  assert(fill_code_handle_ != 0);
-
+                                                 size_t count) {
   std::lock_guard<std::mutex> guard(lock_);
 
-  HSA::hsa_signal_store_relaxed(completion_signal_, 1);
-
-  const uint32_t num_fill_packet = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(num) / kMaxFillCount));
-
-  // Reserve write index for copy + fence packet.
-  uint64_t write_index = AcquireWriteIndex(num_fill_packet);
-
-  const uint32_t last_fill_index = num_fill_packet - 1;
-  size_t total_fill_count = 0;
-  for (uint32_t i = 0; i < num_fill_packet; ++i) {
-    // Setup arguments.
-    const uint32_t fill_count = static_cast<uint32_t>(
-        std::min((num - total_fill_count), kMaxFillCount));
-    void* cur_ptr = static_cast<char*>(ptr) + total_fill_count;
-
-    KernelArgs* args = ObtainAsyncKernelCopyArg();
-    assert(args != NULL);
-    assert(IsMultipleOf(&args->fill, 16));
-
-    args->fill.ptr = cur_ptr;
-    args->fill.num = fill_count;
-    args->fill.value = value;
-
-    const uint32_t grid_size_x =
-        AlignUp(static_cast<uint32_t>(fill_count), kGroupSize);
-
-    // This assert to make sure kMaxFillCount is not changed to a number that
-    // could cause overflow to packet.grid_size_x.
-    assert(grid_size_x >= fill_count);
-
-    hsa_signal_t signal = {(i == last_fill_index) ? completion_signal_.handle
-                                                  : 0};
-    PopulateQueue(write_index + i, fill_code_handle_, &args[i], grid_size_x,
-                  signal);
-
-    total_fill_count += fill_count;
+  // Reject misaligned base address.
+  if ((uintptr_t(ptr) & 0x3) != 0) {
+    return HSA_STATUS_ERROR;
   }
 
-  // Launch fill packet.
-  ReleaseWriteIndex(write_index, num_fill_packet);
+  // Compute the size of each fill phase.
+  int num_workitems = 64 * num_cus_;
+
+  // Phase 1 (unrolled dwordx4 copy) ends when last whole block fits.
+  uintptr_t dst_start = uintptr_t(ptr);
+  uint64_t fill_size = count * sizeof(uint32_t);
+
+  uint64_t phase1_block =
+      num_workitems * sizeof(uint32_t) * kFillUnroll * kFillVecWidth;
+  uint64_t phase1_size = (fill_size / phase1_block) * phase1_block;
+
+  KernelArgs* args = ObtainAsyncKernelCopyArg();
+  args->fill.phase1_dst_start = dst_start;
+  args->fill.phase2_dst_start = dst_start + phase1_size;
+  args->fill.phase2_dst_end = dst_start + fill_size;
+  args->fill.fill_value = value;
+  args->fill.num_workitems = num_workitems;
+
+  // Submit dispatch packet.
+  HSA::hsa_signal_store_relaxed(completion_signal_, 1);
+
+  uint64_t write_index = AcquireWriteIndex(1);
+  PopulateQueue(write_index, uintptr_t(kernels_[KernelType::Fill].code_buf_),
+                args, num_workitems, completion_signal_);
+  ReleaseWriteIndex(write_index, 1);
 
   // Wait for the packet to finish.
   if (HSA::hsa_signal_wait_acquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
@@ -556,9 +897,9 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
   // Setup working size.
   const int kNumDimension = 1;
   packet.setup = kNumDimension << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
-  packet.grid_size_x = AlignUp(static_cast<uint32_t>(grid_size_x), kGroupSize);
+  packet.grid_size_x = AlignUp(static_cast<uint32_t>(grid_size_x), 64);
   packet.grid_size_y = packet.grid_size_z = 1;
-  packet.workgroup_size_x = kGroupSize;
+  packet.workgroup_size_x = 64;
   packet.workgroup_size_y = packet.workgroup_size_z = 1;
 
   packet.completion_signal = completion_signal;

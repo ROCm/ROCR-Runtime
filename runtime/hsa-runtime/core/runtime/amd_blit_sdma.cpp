@@ -404,7 +404,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
 
   if (err != HSAKMT_STATUS_SUCCESS) {
     assert(false && "AQL queue memory map failure.");
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -419,7 +419,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
       hsaKmtCreateQueue(gpu_agent.node_id(), kQueueType_, 100,
                         HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
                         queue_size_, NULL, &queue_resource_)) {
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -436,14 +436,14 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
           fence_pool_size_ * sizeof(uint32_t), 256));
 
   if (fence_base_addr_ == NULL) {
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::Destroy(void) {
+hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
   // Release all allocated resources and reset them to zero.
 
   if (queue_resource_.QueueId != 0) {

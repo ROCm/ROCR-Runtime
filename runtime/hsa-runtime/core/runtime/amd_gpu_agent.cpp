@@ -46,6 +46,7 @@
 #include <atomic>
 #include <cstring>
 #include <climits>
+#include <string>
 #include <vector>
 
 #include "core/inc/amd_aql_queue.h"
@@ -126,7 +127,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
 GpuAgent::~GpuAgent() {
   if (blit_h2d_ != NULL) {
-    hsa_status_t status = blit_h2d_->Destroy();
+    hsa_status_t status = blit_h2d_->Destroy(*this);
     assert(status == HSA_STATUS_SUCCESS);
 
     delete blit_h2d_;
@@ -134,7 +135,7 @@ GpuAgent::~GpuAgent() {
   }
 
   if (blit_d2h_ != NULL) {
-    hsa_status_t status = blit_d2h_->Destroy();
+    hsa_status_t status = blit_d2h_->Destroy(*this);
     assert(status == HSA_STATUS_SUCCESS);
 
     delete blit_d2h_;
@@ -158,33 +159,51 @@ GpuAgent::~GpuAgent() {
 }
 
 void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
-                              void*& code_buf, size_t& code_buf_size) {
+                              AssembleTarget assemble_target, void*& code_buf,
+                              size_t& code_buf_size) const {
 #ifdef __linux__  // No VS builds of libsp3 available right now
+  std::string src_sp3_unified(src_sp3);
+
+  if (isa_->GetMajorVersion() == 7) {
+    // On Gfx7 replace v_add_u32 with legacy equivalent v_add_i32.
+    std::string add_inst_gfx8("v_add_u32"), add_inst_gfx7("v_add_i32");
+
+    for (size_t instIdx = 0; (instIdx = src_sp3_unified.find(
+                                  add_inst_gfx8, instIdx)) != std::string::npos;
+         instIdx += add_inst_gfx8.size()) {
+      src_sp3_unified.replace(instIdx, add_inst_gfx7.size(), add_inst_gfx7);
+    }
+  }
+
   // Assemble source string with libsp3.
   sp3_context* sp3 = sp3_new();
 
   switch (isa_->GetMajorVersion()) {
     case 7:
       sp3_setasic(sp3, "CI");
+      sp3_set_param_int(sp3, "kGFXIPVersion", 7);
       break;
     case 8:
       sp3_setasic(sp3, "VI");
+      sp3_set_param_int(sp3, "kGFXIPVersion", 8);
       break;
     default:
       assert(false && "SP3 assembly not supported on this agent");
   }
 
-  sp3_parse_string(sp3, src_sp3);
+  sp3_parse_string(sp3, src_sp3_unified.c_str());
   sp3_shader* code_sp3_meta = sp3_compile(sp3, func_name);
 
-  // Allocate a GPU-visible buffer for the trap shader.
+  // Allocate a GPU-visible buffer for the shader.
   HsaMemFlags code_buf_flags = {0};
   code_buf_flags.ui32.HostAccess = 1;
   code_buf_flags.ui32.ExecuteAccess = 1;
   code_buf_flags.ui32.NoSubstitute = 1;
 
   size_t code_size = code_sp3_meta->size * sizeof(uint32_t);
-  code_buf_size = AlignUp(code_size, 0x1000);
+  size_t header_size =
+      (assemble_target == AssembleTarget::AQL ? sizeof(amd_kernel_code_t) : 0);
+  code_buf_size = AlignUp(header_size + code_size, 0x1000);
 
   HSAKMT_STATUS err =
       hsaKmtAllocMemory(node_id(), code_buf_size, code_buf_flags, &code_buf);
@@ -193,9 +212,38 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   err = hsaKmtMapMemoryToGPU(code_buf, code_buf_size, NULL);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtMapMemoryToGPU(Trap) failed");
 
-  // Copy trap handler code into the GPU-visible buffer.
   memset(code_buf, 0, code_buf_size);
-  memcpy(code_buf, code_sp3_meta->data, code_size);
+
+  // Populate optional code object header.
+  if (assemble_target == AssembleTarget::AQL) {
+    amd_kernel_code_t* header = reinterpret_cast<amd_kernel_code_t*>(code_buf);
+
+    int gran_sgprs = std::max(0, (int(code_sp3_meta->nsgprs) - 1) / 8);
+    int gran_vgprs = std::max(0, (int(code_sp3_meta->nvgprs) - 1) / 4);
+
+    header->kernel_code_entry_byte_offset = sizeof(amd_kernel_code_t);
+    AMD_HSA_BITS_SET(header->kernel_code_properties,
+                     AMD_KERNEL_CODE_PROPERTIES_ENABLE_SGPR_KERNARG_SEGMENT_PTR,
+                     1);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc1,
+                     AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WAVEFRONT_SGPR_COUNT,
+                     gran_sgprs);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc1,
+                     AMD_COMPUTE_PGM_RSRC_ONE_GRANULATED_WORKITEM_VGPR_COUNT,
+                     gran_vgprs);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc1,
+                     AMD_COMPUTE_PGM_RSRC_ONE_FLOAT_DENORM_MODE_16_64, 3);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc1,
+                     AMD_COMPUTE_PGM_RSRC_ONE_ENABLE_IEEE_MODE, 1);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc2,
+                     AMD_COMPUTE_PGM_RSRC_TWO_USER_SGPR_COUNT, 2);
+    AMD_HSA_BITS_SET(header->compute_pgm_rsrc2,
+                     AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_SGPR_WORKGROUP_ID_X, 1);
+  }
+
+  // Copy trap handler code into the GPU-visible buffer.
+  memcpy((void*)(uintptr_t(code_buf) + header_size), code_sp3_meta->data,
+         code_size);
 
   // Release SP3 resources.
   sp3_free_shader(code_sp3_meta);
@@ -203,7 +251,7 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
 #endif
 }
 
-void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) {
+void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) const {
   hsaKmtUnmapMemoryToGPU(code_buf);
   hsaKmtFreeMemory(code_buf, code_buf_size);
 }
@@ -377,7 +425,7 @@ core::Blit* GpuAgent::CreateBlitSdma() {
   BlitSdma* sdma = new BlitSdma();
 
   if (sdma->Initialize(*this) != HSA_STATUS_SUCCESS) {
-    sdma->Destroy();
+    sdma->Destroy(*this);
     delete sdma;
     sdma = NULL;
   }
@@ -389,7 +437,7 @@ core::Blit* GpuAgent::CreateBlitKernel() {
   BlitKernel* kernl = new BlitKernel();
 
   if (kernl->Initialize(*this) != HSA_STATUS_SUCCESS) {
-    kernl->Destroy();
+    kernl->Destroy(*this);
     delete kernl;
     kernl = NULL;
   }
@@ -904,7 +952,8 @@ void GpuAgent::BindTrapHandler() {
   }
 
   // Assemble the trap handler source code.
-  AssembleShader(src_sp3, "TrapHandler", trap_code_buf_, trap_code_buf_size_);
+  AssembleShader(src_sp3, "TrapHandler", AssembleTarget::ISA, trap_code_buf_,
+                 trap_code_buf_size_);
 
   // Bind the trap handler to this node.
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
