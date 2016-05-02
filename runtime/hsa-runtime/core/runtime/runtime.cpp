@@ -261,6 +261,10 @@ void Runtime::RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
   const uint32_t idx = GetIndexLinkInfo(node_id_from, node_id_to);
   link_matrix_[idx].num_hop = num_hop;
   link_matrix_[idx].info = link_info;
+
+  // Limit the number of hop to 1 since the runtime does not have enough
+  // information to share to the user about each hop.
+  link_matrix_[idx].num_hop = std::min(link_matrix_[idx].num_hop , 1U);
 }
 
 const Runtime::LinkInfo Runtime::GetLinkInfo(uint32_t node_id_from,

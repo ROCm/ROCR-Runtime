@@ -263,7 +263,7 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
 
 /**
  * @brief Computes the frequency ratio and offset between the agent clock and
- * HSA system clock and converts the agent’s tick to HSA system domain tick.
+ * HSA system clock and converts the agent's tick to HSA system domain tick.
  *
  * @param[in] agent The agent used to retrieve the agent_tick. It is user's
  * responsibility to make sure the tick number is from this agent, otherwise,
@@ -392,7 +392,7 @@ hsa_status_t HSA_API
  *
  * @details Allows waiting for any of several signal and conditions pairs to be
  * satisfied. The function returns the index into the list of signals of the
- * first satisfying signal-condition pair. The value of the satisfying signal’s
+ * first satisfying signal-condition pair. The value of the satisfying signal's
  * value is returned in satisfying_value unless satisfying_value is NULL. This
  * function provides only relaxed memory semantics.
  */
@@ -857,7 +857,10 @@ typedef enum {
 
   /**
   * Number of links to hop when accessing the memory pool from the specified
-  * agent. The type of this attribute is uint32_t.
+  * agent. The value of this attribute is zero if the memory pool is associated
+  * with the agent, or if the access type is
+  * HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED. The type of this attribute is
+  * uint32_t.
   */
   HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS = 1,
 
