@@ -374,35 +374,41 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   const core::Runtime::LinkInfo link_info =
       core::Runtime::runtime_singleton_->GetLinkInfo(node_id_from, node_id_to);
 
+  /**
+   *  ---------------------------------------------------
+   *  |              |CPU        |GPU (owner)|GPU (peer) |
+   *  ---------------------------------------------------
+   *  |system memory |allowed    |disallowed |disallowed |
+   *  ---------------------------------------------------
+   *  |fb private    |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   *  |fb public     |disallowed |allowed    |disallowed |
+   *  ---------------------------------------------------
+   *  |others        |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   */
+  const hsa_amd_memory_pool_access_t access_type =
+      ((IsSystem() && (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
+       (agent.node_id() == owner()->node_id()))
+          ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
+          : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
+                ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
+                : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+
   switch (attribute) {
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
-      /**
-      *  ---------------------------------------------------
-      *  |              |CPU        |GPU (owner)|GPU (peer) |
-      *  ---------------------------------------------------
-      *  |system memory |allowed    |disallowed |disallowed |
-      *  ---------------------------------------------------
-      *  |fb private    |never      |allowed    |never      |
-      *  ---------------------------------------------------
-      *  |fb public     |disallowed |allowed    |disallowed |
-      *  ---------------------------------------------------
-      *  |others        |never      |allowed    |never      |
-      *  ---------------------------------------------------
-      */
-      *((hsa_amd_memory_pool_access_t*)value) =
-          (((IsSystem()) &&
-            (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
-           (agent.node_id() == owner()->node_id()))
-              ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
-              : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
-                    ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
-                    : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+      *((hsa_amd_memory_pool_access_t*)value) = access_type;
       break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
-      *((uint32_t*)value) = link_info.num_hop;
+      *((uint32_t*)value) =
+          (access_type != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED)
+              ? link_info.num_hop
+              : 0;
+      break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_LINK_INFO:
       memset(value, 0, sizeof(hsa_amd_memory_pool_link_info_t));
-      if (link_info.num_hop > 0) {
+      if ((access_type != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) &&
+          (link_info.num_hop > 0)) {
         memcpy(value, &link_info.info, sizeof(hsa_amd_memory_pool_link_info_t));
       }
       break;
