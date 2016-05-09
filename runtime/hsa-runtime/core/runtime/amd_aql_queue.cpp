@@ -99,17 +99,13 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
     return;
   }
 
-  hsa_status_t stat = agent_->GetInfo(HSA_AGENT_INFO_PROFILE, &agent_profile_);
-  assert(stat == HSA_STATUS_SUCCESS);
-
-  const core::Isa* isa = agent_->isa();
-
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
   // are mapped to the same set of pages backing the lower half.
   // Values written to the HW doorbell are modulo the doubled size.
   // This allows the HW to accept (doorbell == last_doorbell + queue_size).
   // This workaround is required for GFXIP 7 and GFXIP 8 ASICs.
+  const core::Isa* isa = agent_->isa();
   queue_full_workaround_ =
       (isa->GetMajorVersion() == 7 || isa->GetMajorVersion() == 8)
           ? 1
@@ -187,62 +183,8 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
                    0);
 #endif
 
-  // Populate scratch resource descriptor in amd_queue_.
-  SQ_BUF_RSRC_WORD0 srd0;
-  SQ_BUF_RSRC_WORD1 srd1;
-  SQ_BUF_RSRC_WORD2 srd2;
-  SQ_BUF_RSRC_WORD3 srd3;
-  uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
-  uint32_t scratch_base_hi = 0;
-
-#ifdef HSA_LARGE_MODEL
-  scratch_base_hi = uint32_t(scratch_base >> 32);
-#endif
-
-  srd0.bits.BASE_ADDRESS = uint32_t(scratch_base);
-  srd1.bits.BASE_ADDRESS_HI = scratch_base_hi;
-  srd1.bits.STRIDE = 0;
-  srd1.bits.CACHE_SWIZZLE = 0;
-  srd1.bits.SWIZZLE_ENABLE = 1;
-  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size);
-  srd3.bits.DST_SEL_X = SQ_SEL_X;
-  srd3.bits.DST_SEL_Y = SQ_SEL_Y;
-  srd3.bits.DST_SEL_Z = SQ_SEL_Z;
-  srd3.bits.DST_SEL_W = SQ_SEL_W;
-  srd3.bits.NUM_FORMAT = BUF_NUM_FORMAT_UINT;
-  srd3.bits.DATA_FORMAT = BUF_DATA_FORMAT_32;
-  srd3.bits.ELEMENT_SIZE = 1;  // 4
-  srd3.bits.INDEX_STRIDE = 3;  // 64
-  srd3.bits.ADD_TID_ENABLE = 1;
-  srd3.bits.ATC__CI__VI = (agent_profile_ == HSA_PROFILE_FULL) ? 1 : 0;
-  srd3.bits.HASH_ENABLE = 0;
-  srd3.bits.HEAP = 0;
-  srd3.bits.MTYPE__CI__VI = 0;
-  srd3.bits.TYPE = SQ_RSRC_BUF;
-
-  amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
-  amd_queue_.scratch_resource_descriptor[1] = srd1.u32All;
-  amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
-  amd_queue_.scratch_resource_descriptor[3] = srd3.u32All;
-
-  // Populate flat scratch parameters in amd_queue_.
-  amd_queue_.scratch_backing_memory_location =
-      queue_scratch_.queue_process_offset;
-  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size;
-  amd_queue_.scratch_workitem_byte_size =
-      uint32_t(queue_scratch_.size_per_thread);
-
-  // Set concurrent wavefront limits when scratch is being used.
-  COMPUTE_TMPRING_SIZE tmpring_size = {0};
-
-  if (queue_scratch_.size != 0) {
-    tmpring_size.bits.WAVES =
-        (queue_scratch_.size / queue_scratch_.size_per_thread / 64);
-    tmpring_size.bits.WAVESIZE =
-        (((64 * queue_scratch_.size_per_thread) + 1023) / 1024);
-  }
-
-  amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+  // Initialize scratch memory related entities
+  InitScratchSRD();
 
   // Set group and private memory apertures in amd_queue_.
   auto& regions = agent->regions();
@@ -518,7 +460,7 @@ uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
 }
 
 void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
-  if (agent_profile_ == HSA_PROFILE_FULL) {
+  if (agent_->profile() == HSA_PROFILE_FULL) {
     // Compute the physical and virtual size of the queue.
     uint32_t ring_buf_phys_size_bytes =
         uint32_t(queue_size_pkts * sizeof(core::AqlPacket));
@@ -696,7 +638,7 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
 }
 
 void AqlQueue::FreeRegisteredRingBuffer() {
-  if (agent_profile_ == HSA_PROFILE_FULL) {
+  if (agent_->profile() == HSA_PROFILE_FULL) {
 #ifdef __linux__
     munmap(ring_buf_, ring_buf_alloc_bytes_);
 #endif
@@ -755,37 +697,8 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       return false;
     }
 
-    SQ_BUF_RSRC_WORD0 srd0;
-    SQ_BUF_RSRC_WORD2 srd2;
-    uintptr_t base = (uintptr_t)scratch.queue_base;
-
-    srd0.u32All = queue->amd_queue_.scratch_resource_descriptor[0];
-    srd2.u32All = queue->amd_queue_.scratch_resource_descriptor[2];
-
-    srd0.bits.BASE_ADDRESS = uint32_t(base);
-    srd2.bits.NUM_RECORDS = uint32_t(scratch.size);
-
-    queue->amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
-    queue->amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
-
-#ifdef HSA_LARGE_MODEL
-    SQ_BUF_RSRC_WORD1 srd1;
-    srd1.u32All = queue->amd_queue_.scratch_resource_descriptor[1];
-    srd1.bits.BASE_ADDRESS_HI = uint32_t(base >> 32);
-    queue->amd_queue_.scratch_resource_descriptor[1] = srd1.u32All;
-#endif
-
-    queue->amd_queue_.scratch_backing_memory_location =
-        scratch.queue_process_offset;
-    queue->amd_queue_.scratch_backing_memory_byte_size = scratch.size;
-    queue->amd_queue_.scratch_workitem_byte_size =
-        uint32_t(scratch.size_per_thread);
-
-    COMPUTE_TMPRING_SIZE tmpring_size = {0};
-    tmpring_size.bits.WAVES = (scratch.size / scratch.size_per_thread / 64);
-    tmpring_size.bits.WAVESIZE =
-        (((64 * scratch.size_per_thread) + 1023) / 1024);
-    queue->amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+    // Reset scratch memory related entities for the queue
+    queue->InitScratchSRD();
 
   } else if ((error_code & 2) == 2) {  // Invalid dim
     queue->Inactivate();
@@ -852,5 +765,81 @@ hsa_status_t AqlQueue::SetCUMasking(const uint32_t num_cu_mask_count,
       queue_id_, num_cu_mask_count,
       reinterpret_cast<HSAuint32*>(const_cast<uint32_t*>(cu_mask)));
   return (HSAKMT_STATUS_SUCCESS == ret) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+}
+
+// @brief Define the Scratch Buffer Descriptor and related parameters
+// that enable kernel access scratch memory
+void AqlQueue::InitScratchSRD() {
+
+  // Populate scratch resource descriptor
+  SQ_BUF_RSRC_WORD0 srd0;
+  SQ_BUF_RSRC_WORD1 srd1;
+  SQ_BUF_RSRC_WORD2 srd2;
+  SQ_BUF_RSRC_WORD3 srd3;
+  
+  uint32_t scratch_base_hi = 0;
+  uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
+  #ifdef HSA_LARGE_MODEL
+  scratch_base_hi = uint32_t(scratch_base >> 32);
+  #endif
+  srd0.bits.BASE_ADDRESS = uint32_t(scratch_base);
+  
+  srd1.bits.BASE_ADDRESS_HI = scratch_base_hi;
+  srd1.bits.STRIDE = 0;
+  srd1.bits.CACHE_SWIZZLE = 0;
+  srd1.bits.SWIZZLE_ENABLE = 1;
+  
+  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size);
+  
+  srd3.bits.DST_SEL_X = SQ_SEL_X;
+  srd3.bits.DST_SEL_Y = SQ_SEL_Y;
+  srd3.bits.DST_SEL_Z = SQ_SEL_Z;
+  srd3.bits.DST_SEL_W = SQ_SEL_W;
+  srd3.bits.NUM_FORMAT = BUF_NUM_FORMAT_UINT;
+  srd3.bits.DATA_FORMAT = BUF_DATA_FORMAT_32;
+  srd3.bits.ELEMENT_SIZE = 1;  // 4
+  srd3.bits.INDEX_STRIDE = 3;  // 64
+  srd3.bits.ADD_TID_ENABLE = 1;
+  srd3.bits.ATC__CI__VI = (agent_->profile() == HSA_PROFILE_FULL);
+  srd3.bits.HASH_ENABLE = 0;
+  srd3.bits.HEAP = 0;
+  srd3.bits.MTYPE__CI__VI = 0;
+  srd3.bits.TYPE = SQ_RSRC_BUF;
+  
+  // Update Queue's Scratch descriptor's property 
+  amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
+  amd_queue_.scratch_resource_descriptor[1] = srd1.u32All;
+  amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
+  amd_queue_.scratch_resource_descriptor[3] = srd3.u32All;
+
+  // Populate flat scratch parameters in amd_queue_.
+  amd_queue_.scratch_backing_memory_location =
+      queue_scratch_.queue_process_offset;
+  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size;
+  amd_queue_.scratch_workitem_byte_size =
+      uint32_t(queue_scratch_.size_per_thread);
+
+  // Set concurrent wavefront limits only when scratch is being used.
+  COMPUTE_TMPRING_SIZE tmpring_size = {0};
+  if (queue_scratch_.size == 0) {
+    amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+    return;
+  }
+
+  // Determine the maximum number of waves device can support
+  const auto& agent_props = agent_->properties();
+  uint32_t num_cus = agent_props.NumFComputeCores / agent_props.NumSIMDPerCU;
+  uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
+
+  // Scratch is allocated program COMPUTE_TMPRING_SIZE register
+  // Scratch Size per Wave is specified in terms of kilobytes 
+  uint32_t wave_size = agent_props.WaveFrontSize;
+  tmpring_size.bits.WAVESIZE =
+        (((wave_size * queue_scratch_.size_per_thread) + 1023) / 1024);
+  uint32_t num_waves = (queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024));
+  tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
+  amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+
+  return;
 }
 }  // namespace amd
