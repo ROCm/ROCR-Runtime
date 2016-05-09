@@ -136,7 +136,8 @@ static struct hsa_gfxip_table {
 	{ 0x6938, 8, 0, 2, 1, "Tonga" },
 	{ 0x6939, 8, 0, 2, 1, "Tonga" },
 	/* Fiji */
-	{ 0x7300, 8, 0, 3, 1, "Fiji" }
+	{ 0x7300, 8, 0, 3, 1, "Fiji" },
+	{ 0x730f, 8, 0, 3, 1, "Fiji" }
 };
 
 enum cache_type {
