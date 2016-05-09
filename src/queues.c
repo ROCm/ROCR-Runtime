@@ -150,6 +150,7 @@ struct device_id supported_devices[] = {
 	{ 0x6938, &tonga_device_info },
 	{ 0x6939, &tonga_device_info },
 	{ 0x7300, &fiji_device_info },
+	{ 0x730f, &fiji_device_info },
 	{ 0, NULL }
 };
 
