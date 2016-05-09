@@ -358,6 +358,10 @@ class AqlQueue : public core::Queue, public core::Signal {
 
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
 
+  /// @brief Define the Scratch Buffer Descriptor and related parameters
+  /// that enable kernel access scratch memory
+  void InitScratchSRD();
+
   // AQL packet ring buffer
   void* ring_buf_;
 
@@ -379,8 +383,6 @@ class AqlQueue : public core::Queue, public core::Signal {
 
   // Handle of agent, which queue is attached to
   GpuAgent* agent_;
-
-  hsa_profile_t agent_profile_;
 
   uint32_t queue_full_workaround_;
 
