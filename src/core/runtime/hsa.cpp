@@ -491,7 +491,7 @@ uint64_t hsa_queue_load_write_index_acquire(const hsa_queue_t* queue) {
 uint64_t hsa_queue_load_write_index_relaxed(const hsa_queue_t* queue) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
-  return cmd_queue->LoadWriteIndexAcquire();
+  return cmd_queue->LoadWriteIndexRelaxed();
 }
 
 /// @brief Api to store the Read Index of Queue using Relaxed semantics
@@ -972,7 +972,7 @@ void
     hsa_signal_add_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
-  return signal->AddRelaxed(value);
+  signal->AddRelaxed(value);
 }
 
 void 
