@@ -57,6 +57,8 @@
 #include "core/util/locks.h"
 
 namespace amd {
+class MemoryRegion;
+
 // @brief Contains scratch memory information.
 struct ScratchInfo {
   void* queue_base;
@@ -112,6 +114,16 @@ class GpuAgentInt : public core::Agent {
   // @param [out] time Structure to be populated with the host domain value.
   virtual void TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) = 0;
+
+  // @brief Translate the async copy start and end timestamp from agent
+  // domain to host domain.
+  //
+  // @param [in] signal Pointer to signal that provides the async copy timing.
+  // @param [out] time Structure to be populated with the host domain value.
+  virtual void TranslateTime(core::Signal* signal,
+                             hsa_amd_profiling_async_copy_time_t& time) {
+    return TranslateTime(signal, (hsa_amd_profiling_dispatch_time_t&)time);
+  }
 
   // @brief Translate timestamp agent domain to host domain.
   //
@@ -214,6 +226,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Override from core::Agent.
   hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
+
+  // @brief Get the next available end timestamp object.
+  uint64_t* ObtainEndTsObject();
 
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
@@ -320,6 +335,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Binds the second-level trap handler to this node.
   void BindTrapHandler();
 
+  // @brief Override from core::Agent.
+  hsa_status_t EnableDmaProfiling(bool enable) override;
+
   // @brief Node properties.
   const HsaNodeProperties properties_;
 
@@ -371,6 +389,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
 
+  MemoryRegion* local_region_;
+
   core::Isa* isa_;
 
   // @brief HSA profile.
@@ -399,6 +419,10 @@ class GpuAgent : public GpuAgentInt {
   // @brief Query the driver to get the cache properties.
   void InitCacheList();
 
+  // @brief Initialize memory pool for end timestamp object.
+  // @retval True if the memory pool for end timestamp object is initialized.
+  bool InitEndTsPool();
+
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
@@ -406,7 +430,17 @@ class GpuAgent : public GpuAgentInt {
   size_t ape1_size_;
 
   // @brief True if blit objects are initialized.
-  bool blit_initialized_;
+  std::atomic<bool> blit_initialized_;
+
+  // Each end ts is 32 bytes.
+  static const size_t kTsSize = 32;
+
+  // Number of element in the pool.
+  uint32_t end_ts_pool_size_;
+
+  std::atomic<uint32_t> end_ts_pool_counter_;
+
+  std::atomic<uint64_t*> end_ts_base_addr_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

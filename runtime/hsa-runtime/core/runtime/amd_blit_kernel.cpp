@@ -581,6 +581,10 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
                             kernel.code_buf_size_);
   }
 
+  if (agent.profiling_enabled()) {
+    return EnableProfiling(true);
+  }
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -796,6 +800,17 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   }
 
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t BlitKernel::EnableProfiling(bool enable) {
+  core::Queue* cmd_queue = core::Queue::Convert(queue_);
+  if (cmd_queue != NULL) {
+    AMD_HSA_BITS_SET(cmd_queue->amd_queue_.queue_properties,
+                     AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
+    return HSA_STATUS_SUCCESS;
+  }
+
+  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
 uint64_t BlitKernel::AcquireWriteIndex(uint32_t num_packet) {

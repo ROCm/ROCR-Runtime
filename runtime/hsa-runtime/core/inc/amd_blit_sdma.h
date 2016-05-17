@@ -43,10 +43,12 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_BLIT_SDMA_H_
 #define HSA_RUNTIME_CORE_INC_AMD_BLIT_SDMA_H_
 
+#include <mutex>
 #include <stdint.h>
 
 #include "hsakmt.h"
 
+#include "core/inc/amd_gpu_agent.h"
 #include "core/inc/blit.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
@@ -109,6 +111,12 @@ class BlitSdma : public core::Blit {
   virtual hsa_status_t SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                size_t count) override;
 
+  virtual hsa_status_t EnableProfiling(bool enable) override;
+
+  static const size_t kQueueSize;
+
+  static const size_t kCopyPacketSize;
+
  protected:
   /// @brief Acquires the address into queue buffer where a new command
   /// packet of specified size could be written. The address that is
@@ -161,6 +169,11 @@ class BlitSdma : public core::Blit {
 
   void BuildAtomicDecrementCommand(char* cmd_addr, void* addr);
 
+  void BuildGetGlobalTimestampCommand(char* cmd_addr, void* write_address);
+
+  // Agent object owning the SDMA engine.
+  GpuAgent* agent_;
+
   /// Indicates size of Queue buffer in bytes.
   uint32_t queue_size_;
 
@@ -200,6 +213,8 @@ class BlitSdma : public core::Blit {
   uint32_t poll_command_size_;
 
   uint32_t atomic_command_size_;
+
+  uint32_t timestamp_command_size_;
 
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;

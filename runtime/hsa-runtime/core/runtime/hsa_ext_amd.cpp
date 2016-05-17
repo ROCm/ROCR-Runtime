@@ -229,6 +229,17 @@ hsa_status_t HSA_API
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t HSA_API hsa_amd_profiling_async_copy_enable(bool enable) {
+  IS_OPEN();
+
+  return core::Runtime::runtime_singleton_->IterateAgent(
+      [](hsa_agent_t agent_handle, void* data) -> hsa_status_t {
+        const bool enable = *(reinterpret_cast<bool*>(data));
+        return core::Agent::Convert(agent_handle)->profiling_enabled(enable);
+      },
+      reinterpret_cast<void*>(&enable));
+}
+
 hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
     hsa_agent_t agent_handle, hsa_signal_t hsa_signal,
     hsa_amd_profiling_dispatch_time_t* time) {
@@ -250,8 +261,37 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
 
   amd::GpuAgentInt* gpu_agent = static_cast<amd::GpuAgentInt*>(agent);
 
+  // Translate timestamp from GPU to system domain.
   gpu_agent->TranslateTime(signal, *time);
 
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t HSA_API hsa_amd_profiling_get_async_copy_time(
+    hsa_signal_t hsa_signal, hsa_amd_profiling_async_copy_time_t* time) {
+  IS_OPEN();
+
+  IS_BAD_PTR(time);
+
+  core::Signal* signal = core::Signal::Convert(hsa_signal);
+
+  IS_VALID(signal);
+
+  core::Agent* agent = signal->async_copy_agent();
+
+  if (agent == NULL) {
+    return HSA_STATUS_ERROR;
+  }
+
+  if (agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice) {
+    // Translate timestamp from GPU to system domain.
+    static_cast<amd::GpuAgentInt*>(agent)->TranslateTime(signal, *time);
+    return HSA_STATUS_SUCCESS;
+  }
+
+  // The timestamp is already in system domain.
+  time->start = signal->signal_.start_ts;
+  time->end = signal->signal_.end_ts;
   return HSA_STATUS_SUCCESS;
 }
 

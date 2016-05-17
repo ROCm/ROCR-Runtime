@@ -105,6 +105,8 @@ class BlitKernel : public core::Blit {
   virtual hsa_status_t SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                size_t count) override;
 
+  virtual hsa_status_t EnableProfiling(bool enable) override;
+
  private:
   union KernelArgs {
     struct __ALIGNED__(16) {

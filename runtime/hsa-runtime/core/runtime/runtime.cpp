@@ -424,19 +424,37 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
   }
 
   // For cpu to cpu, fire and forget a copy thread.
-  std::thread([](void* dst, const void* src, size_t size,
-                 std::vector<core::Signal*> dep_signals,
-                 core::Signal* completion_signal) {
-                for (core::Signal* dep : dep_signals) {
-                  dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX,
-                                   HSA_WAIT_STATE_BLOCKED);
-                }
+  const bool profiling_enabled =
+      (dst_agent.profiling_enabled() || src_agent.profiling_enabled());
+  std::thread(
+      [](void* dst, const void* src, size_t size,
+         std::vector<core::Signal*> dep_signals,
+         core::Signal* completion_signal, bool profiling_enabled) {
+        for (core::Signal* dep : dep_signals) {
+          dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX,
+                           HSA_WAIT_STATE_BLOCKED);
+        }
 
-                memcpy(dst, src, size);
+        if (profiling_enabled) {
+          HsaClockCounters clocks = {0};
+          core::Runtime::runtime_singleton_->GetSystemInfo(
+              HSA_SYSTEM_INFO_TIMESTAMP, reinterpret_cast<void*>(&clocks));
+          completion_signal->signal_.start_ts = clocks.SystemClockCounter;
+        }
 
-                completion_signal->SubRelease(1);
-              },
-              dst, src, size, dep_signals, &completion_signal).detach();
+        memcpy(dst, src, size);
+
+        if (profiling_enabled) {
+          HsaClockCounters clocks = {0};
+          core::Runtime::runtime_singleton_->GetSystemInfo(
+              HSA_SYSTEM_INFO_TIMESTAMP, reinterpret_cast<void*>(&clocks));
+          completion_signal->signal_.end_ts = clocks.SystemClockCounter;
+        }
+
+        completion_signal->SubRelease(1);
+      },
+      dst, src, size, dep_signals, &completion_signal,
+      profiling_enabled).detach();
 
   return HSA_STATUS_SUCCESS;
 }
