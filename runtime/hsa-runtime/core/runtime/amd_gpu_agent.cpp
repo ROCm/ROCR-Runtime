@@ -72,6 +72,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       blit_h2d_(NULL),
       blit_d2h_(NULL),
       blit_d2d_(NULL),
+      local_region_(NULL),
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
@@ -79,7 +80,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       memory_max_frequency_(0),
       ape1_base_(0),
       ape1_size_(0),
-      blit_initialized_(false) {
+      blit_initialized_(false),
+      end_ts_pool_size_(0),
+      end_ts_pool_counter_(0),
+      end_ts_base_addr_(NULL) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -91,6 +95,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   isa_ = (core::Isa*)core::IsaRegistry::GetIsa(core::Isa::Version(
       node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
       node_props.EngineId.ui32.Stepping));
+
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
       isa_->GetStepping() == 0) {
@@ -150,6 +155,10 @@ GpuAgent::~GpuAgent() {
 
     delete blit_d2h_;
     blit_d2h_ = NULL;
+  }
+
+  if (end_ts_base_addr_ != NULL) {
+    core::Runtime::runtime_singleton_->FreeMemory(end_ts_base_addr_);
   }
 
   if (ape1_base_ != 0) {
@@ -296,6 +305,10 @@ void GpuAgent::InitRegionList() {
               new MemoryRegion(false, false, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
+
+          if (region->IsLocalMemory()) {
+            local_region_ = region;
+          }
           break;
         }
         case HSA_HEAPTYPE_SYSTEM:
@@ -370,6 +383,57 @@ void GpuAgent::InitCacheList() {
       }
     }
   }
+}
+
+bool GpuAgent::InitEndTsPool() {
+  if (HSA_PROFILE_FULL == profile_) {
+    return true;
+  }
+
+  if (end_ts_base_addr_.load(std::memory_order_acquire) != NULL) {
+    return true;
+  }
+
+  ScopedAcquire<KernelMutex> lock(&blit_lock_);
+
+  if (end_ts_base_addr_.load(std::memory_order_relaxed) != NULL) {
+    return true;
+  }
+
+  end_ts_pool_size_ = static_cast<uint32_t>(
+      (BlitSdma::kQueueSize + BlitSdma::kCopyPacketSize - 1) /
+      (BlitSdma::kCopyPacketSize));
+
+  // Allocate end timestamp object for both h2d and d2h DMA.
+  const size_t alloc_size = 2 * end_ts_pool_size_ * kTsSize;
+
+  core::Runtime* runtime = core::Runtime::runtime_singleton_;
+
+  uint64_t* buff = NULL;
+  if (HSA_STATUS_SUCCESS !=
+      runtime->AllocateMemory(true, local_region_, alloc_size,
+                              reinterpret_cast<void**>(&buff))) {
+    return false;
+  }
+
+  end_ts_base_addr_.store(buff, std::memory_order_release);
+
+  return true;
+}
+
+uint64_t* GpuAgent::ObtainEndTsObject() {
+  if (end_ts_base_addr_ == NULL) {
+    return NULL;
+  }
+
+  const uint32_t end_ts_index =
+      end_ts_pool_counter_.fetch_add(1U, std::memory_order_acq_rel) %
+      end_ts_pool_size_;
+  const static size_t kNumU64 = kTsSize / sizeof(uint64_t);
+  uint64_t* end_ts_addr = &end_ts_base_addr_[end_ts_index * kNumU64];
+  assert(IsMultipleOf(end_ts_addr, kTsSize));
+
+  return end_ts_addr;
 }
 
 hsa_status_t GpuAgent::IterateRegion(
@@ -460,18 +524,17 @@ void GpuAgent::InitDma() {
   // could give indication of DMA usage in the future. E.g.:
   // 1. Call to allow access API.
   // 2. Call to memory lock API.
-  if (!atomic::Load(&blit_initialized_, std::memory_order_acquire)) {
+  if (!blit_initialized_.load(std::memory_order_acquire)) {
     ScopedAcquire<KernelMutex> lock(&blit_lock_);
-    if (!atomic::Load(&blit_initialized_, std::memory_order_relaxed)) {
+    if (!blit_initialized_.load(std::memory_order_relaxed)) {
       // Try create SDMA blit first.
       if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
-          isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0 &&
-          isa_->GetStepping() == 3) {
+          (HSA_PROFILE_BASE == profile_)) {
         blit_h2d_ = CreateBlitSdma();
         blit_d2h_ = CreateBlitSdma();
 
         if (blit_h2d_ != NULL && blit_d2h_ != NULL) {
-          atomic::Store(&blit_initialized_, true, std::memory_order_release);
+          blit_initialized_.store(true, std::memory_order_release);
           return;
         }
       }
@@ -487,7 +550,7 @@ void GpuAgent::InitDma() {
         blit_d2h_ = CreateBlitKernel();
       }
 
-      atomic::Store(&blit_initialized_, true, std::memory_order_release);
+      blit_initialized_.store(true, std::memory_order_release);
     }
   }
 }
@@ -536,7 +599,16 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     static_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
   }
 
-  return blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
+  hsa_status_t stat =
+      blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
+
+  if (profiling_enabled() && HSA_STATUS_SUCCESS == stat) {
+    // Track the agent so we could translate the resulting timestamp to system
+    // domain correctly.
+    out_signal.async_copy_agent(this);
+  }
+
+  return stat;
 }
 
 hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
@@ -547,13 +619,29 @@ hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
   return blit_d2d_->SubmitLinearFillCommand(ptr, value, count);
 }
 
+hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
+  if (enable && !InitEndTsPool()) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  core::Blit* blit[3] = {blit_h2d_, blit_d2h_, blit_d2d_};
+  for (int i = 0; i < 3; ++i) {
+    if (blit[i] != NULL) {
+      const hsa_status_t stat = blit[i]->EnableProfiling(enable);
+      if (stat != HSA_STATUS_SUCCESS) {
+        return stat;
+      }
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t kNameSize = 64;  // agent, and vendor name size limit
 
   const core::ExtensionEntryPoints& extensions =
       core::Runtime::runtime_singleton_->extensions_;
-
-  hsa_agent_t agent = core::Agent::Convert(this);
 
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
