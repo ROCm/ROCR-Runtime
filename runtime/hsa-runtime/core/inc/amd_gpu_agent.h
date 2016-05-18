@@ -72,6 +72,11 @@ class GpuAgentInt : public core::Agent {
   GpuAgentInt(uint32_t node_id)
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
+  // @brief Initialize DMA queue.
+  //
+  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
+  virtual void InitDma() = 0;
+
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
   //
@@ -158,10 +163,13 @@ class GpuAgent : public GpuAgentInt {
   // @brief GPU agent destructor.
   ~GpuAgent();
 
-  // @brief Initialize DMA queue.
+  // @brief Override from core::Agent.
+  void InitDma() override;
+
+  // @brief Initialize blit kernel object based on AQL queue.
   //
-  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
-  hsa_status_t InitDma();
+  // @retval HSA_STATUS_SUCCESS blit kernel object initialization is successful.
+  hsa_status_t InitBlitKernel();
 
   uint16_t GetMicrocodeVersion() const;
 
@@ -333,9 +341,12 @@ class GpuAgent : public GpuAgentInt {
   // @brief Blit object to handle memory copy from system to device memory.
   core::Blit* blit_h2d_;
 
-  // @brief Blit object to handle memory copy from device to system, device to
-  // device, and memory fill.
+  // @brief Blit object to handle memory copy from device to system memory.
   core::Blit* blit_d2h_;
+
+  // @brief Blit object to handle memory copy from device to device memory, and
+  // memory fill.
+  core::Blit* blit_d2d_;
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
@@ -345,6 +356,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Mutex to protect access to ::t1_.
   KernelMutex t1_lock_;
+
+  // @brief Mutex to protect access to blit objects.
+  KernelMutex blit_lock_;
 
   // @brief GPU tick on initialization.
   HsaClockCounters t0_;
@@ -390,6 +404,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
+
+  // @brief True if blit objects are initialized.
+  bool blit_initialized_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

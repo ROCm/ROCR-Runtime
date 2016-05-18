@@ -71,13 +71,15 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       blit_h2d_(NULL),
       blit_d2h_(NULL),
+      blit_d2d_(NULL),
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
       memory_bus_width_(0),
       memory_max_frequency_(0),
       ape1_base_(0),
-      ape1_size_(0) {
+      ape1_size_(0),
+      blit_initialized_(false) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -126,6 +128,14 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 }
 
 GpuAgent::~GpuAgent() {
+  if (blit_d2d_ != NULL) {
+    hsa_status_t status = blit_d2d_->Destroy(*this);
+    assert(status == HSA_STATUS_SUCCESS);
+
+    delete blit_d2d_;
+    blit_d2d_ = NULL;
+  }
+
   if (blit_h2d_ != NULL) {
     hsa_status_t status = blit_h2d_->Destroy(*this);
     assert(status == HSA_STATUS_SUCCESS);
@@ -445,41 +455,60 @@ core::Blit* GpuAgent::CreateBlitKernel() {
   return kernl;
 }
 
-hsa_status_t GpuAgent::InitDma() {
-  // Try create SDMA blit first.
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
-      isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0 &&
-      isa_->GetStepping() == 3) {
-    blit_h2d_ = CreateBlitSdma();
-    blit_d2h_ = CreateBlitSdma();
+void GpuAgent::InitDma() {
+  // This provides the ability to lazy init the blit objects on places that
+  // could give indication of DMA usage in the future. E.g.:
+  // 1. Call to allow access API.
+  // 2. Call to memory lock API.
+  if (!atomic::Load(&blit_initialized_, std::memory_order_acquire)) {
+    ScopedAcquire<KernelMutex> lock(&blit_lock_);
+    if (!atomic::Load(&blit_initialized_, std::memory_order_relaxed)) {
+      // Try create SDMA blit first.
+      if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+          isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0 &&
+          isa_->GetStepping() == 3) {
+        blit_h2d_ = CreateBlitSdma();
+        blit_d2h_ = CreateBlitSdma();
 
-    if (blit_h2d_ != NULL && blit_d2h_ != NULL) {
-      return HSA_STATUS_SUCCESS;
+        if (blit_h2d_ != NULL && blit_d2h_ != NULL) {
+          atomic::Store(&blit_initialized_, true, std::memory_order_release);
+          return;
+        }
+      }
+
+      // Fall back to blit kernel if SDMA is unavailable.
+      assert(blit_h2d_ == NULL || blit_d2h_ == NULL);
+
+      if (blit_h2d_ == NULL) {
+        blit_h2d_ = CreateBlitKernel();
+      }
+
+      if (blit_d2h_ == NULL) {
+        blit_d2h_ = CreateBlitKernel();
+      }
+
+      atomic::Store(&blit_initialized_, true, std::memory_order_release);
     }
   }
+}
 
-  // Fall back to blit kernel if SDMA is unavailable.
-  assert(blit_h2d_ == NULL || blit_d2h_ == NULL);
-
-  if (blit_h2d_ == NULL) {
-    blit_h2d_ = CreateBlitKernel();
+hsa_status_t GpuAgent::InitBlitKernel() {
+  // Unlike InitDma, this function is not designed for lazy initialization.
+  // So checking the state without  double checked locking is fine.
+  if (blit_d2d_ == NULL) {
+    blit_d2d_ = CreateBlitKernel();
   }
 
-  if (blit_d2h_ == NULL) {
-    blit_d2h_ = CreateBlitKernel();
-  }
-
-  return (blit_h2d_ != NULL && blit_d2h_ != NULL)
-             ? HSA_STATUS_SUCCESS
-             : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  return (blit_d2d_ != NULL) ? HSA_STATUS_SUCCESS
+                             : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
 hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
-  if (blit_d2h_ == NULL) {
+  if (blit_d2d_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  return blit_d2h_->SubmitLinearCopyCommand(dst, src, size);
+  return blit_d2d_->SubmitLinearCopyCommand(dst, src, size);
 }
 
 hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
@@ -487,10 +516,14 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
-  core::Blit* blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
-                      dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-                         ? blit_h2d_
-                         : blit_d2h_;
+  core::Blit* blit =
+      (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+       dst_agent.device_type() == core::Agent::kAmdGpuDevice)
+          ? blit_h2d_
+          : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+             dst_agent.device_type() == core::Agent::kAmdCpuDevice)
+                ? blit_d2h_
+                : blit_d2d_;
 
   if (blit == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -507,11 +540,11 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
 }
 
 hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
-  if (blit_d2h_ == NULL) {
+  if (blit_d2d_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  return blit_d2h_->SubmitLinearFillCommand(ptr, value, count);
+  return blit_d2d_->SubmitLinearFillCommand(ptr, value, count);
 }
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
