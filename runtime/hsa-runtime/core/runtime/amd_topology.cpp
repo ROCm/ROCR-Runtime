@@ -78,7 +78,7 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   GpuAgent* gpu = new GpuAgent(node_id, node_prop);
   core::Runtime::runtime_singleton_->RegisterAgent(gpu);
 
-  if (HSA_STATUS_SUCCESS != gpu->InitDma()) {
+  if (HSA_STATUS_SUCCESS != gpu->InitBlitKernel()) {
     assert(false && "Fail init blit");
     delete gpu;
     gpu = NULL;

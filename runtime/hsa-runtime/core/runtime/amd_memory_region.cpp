@@ -43,6 +43,7 @@
 #include "core/inc/amd_memory_region.h"
 
 #include <algorithm>
+#include <set>
 
 #include "core/inc/runtime.h"
 #include "core/inc/amd_cpu_agent.h"
@@ -431,15 +432,17 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
   bool cpu_in_list = false;
 
+  std::set<GpuAgentInt*> whitelist_gpus;
   std::vector<uint32_t> whitelist_nodes;
   for (uint32_t i = 0; i < num_agents; ++i) {
-    const core::Agent* agent = core::Agent::Convert(agents[i]);
+    core::Agent* agent = core::Agent::Convert(agents[i]);
     if (agent == NULL || !agent->IsValid()) {
       return HSA_STATUS_ERROR_INVALID_AGENT;
     }
 
     if (agent->device_type() == core::Agent::kAmdGpuDevice) {
       whitelist_nodes.push_back(agent->node_id());
+      whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
     } else {
       cpu_in_list = true;
     }
@@ -458,17 +461,24 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
       std::find(whitelist_nodes.begin(), whitelist_nodes.end(),
                 owner()->node_id()) == whitelist_nodes.end()) {
     whitelist_nodes.push_back(owner()->node_id());
+    whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(owner()));
   }
 
   HsaMemMapFlags map_flag = map_flag_;
   map_flag.ui32.HostAccess |= (cpu_in_list) ? 1 : 0;
 
   uint64_t alternate_va = 0;
-  return (amd::MemoryRegion::MakeKfdMemoryResident(
-             whitelist_nodes.size(), &whitelist_nodes[0],
-             const_cast<void*>(ptr), size, &alternate_va, map_flag))
-             ? HSA_STATUS_SUCCESS
-             : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (!amd::MemoryRegion::MakeKfdMemoryResident(
+          whitelist_nodes.size(), &whitelist_nodes[0], const_cast<void*>(ptr),
+          size, &alternate_va, map_flag)) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  for (GpuAgentInt* gpu : whitelist_gpus) {
+    gpu->InitDma();
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
@@ -496,10 +506,15 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
     return HSA_STATUS_SUCCESS;
   }
 
+  std::set<core::Agent*> whitelist_gpus;
   std::vector<HSAuint32> whitelist_nodes;
   if (num_agents == 0 || agents == NULL) {
     // Map to all GPU agents.
     whitelist_nodes = core::Runtime::runtime_singleton_->gpu_ids();
+
+    whitelist_gpus.insert(
+        core::Runtime::runtime_singleton_->gpu_agents().begin(),
+        core::Runtime::runtime_singleton_->gpu_agents().end());
   } else {
     for (int i = 0; i < num_agents; ++i) {
       core::Agent* agent = core::Agent::Convert(agents[i]);
@@ -509,6 +524,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       if (agent->device_type() == core::Agent::kAmdGpuDevice) {
         whitelist_nodes.push_back(agent->node_id());
+        whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
       }
     }
   }
@@ -528,6 +544,11 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
                               host_ptr, size, &alternate_va, map_flag_)) {
       assert(alternate_va != 0);
       *agent_ptr = reinterpret_cast<void*>(alternate_va);
+
+      for (core::Agent* gpu : whitelist_gpus) {
+        reinterpret_cast<GpuAgentInt*>(gpu)->InitDma();
+      }
+
       return HSA_STATUS_SUCCESS;
     }
     amd::MemoryRegion::DeregisterMemory(host_ptr);
