@@ -152,10 +152,15 @@ endif ()
 set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
 
 ## Add the core runtime in the link
+set ( LIBHSAIL -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a )
+set ( LIBHSAILAMD -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail-amd.a )
+
+## Add the core runtime in the link
 link_directories(${HSA_BUILD_LIB_PATH})
 target_link_libraries (
     ${IMAGE_TARGET}
-    PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail-amd.a
+    PRIVATE ${LIBHSAIL}
+    PRIVATE ${LIBHSAILAMD}
     PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a
     PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
     c dl pthread rt
