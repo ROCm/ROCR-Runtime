@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -331,12 +331,12 @@ int main(int argc, char **argv) {
      * grained memory region.
      */
     char* in;
-    err=hsa_memory_allocate(finegrained_region, 1024*1024*4, (void*) &in);
+    err=hsa_memory_allocate(finegrained_region, 1024*1024*4, (void**) &in);
     check(Allocating argument memory for input parameter, err);
     memset(in, 1, 1024*1024*4);
 
     char* out;
-    err=hsa_memory_allocate(finegrained_region, 1024*1024*4, (void*) &out);
+    err=hsa_memory_allocate(finegrained_region, 1024*1024*4, (void**) &out);
     check(Allocating argument memory for output parameter, err);
     memset(out, 0, 1024*1024*4);
 
