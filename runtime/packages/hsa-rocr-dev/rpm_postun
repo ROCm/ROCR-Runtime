@@ -1,0 +1,1 @@
+rm -f /etc/ld.so.conf.d/hsa-rocr-dev.conf && ldconfig
