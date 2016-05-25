@@ -906,10 +906,8 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
 
-  for (size_t i = 0; i < code->RelocationSectionCount(); ++i) {
-    status = LoadRelocationSection(agent, code->GetRelocationSection(i));
-    if (status != HSA_STATUS_SUCCESS) { return status; }
-  }
+  status = ApplyRelocations(agent, code.get());
+  if (status != HSA_STATUS_SUCCESS) { return status; }
 
   code.reset();
 
@@ -1073,6 +1071,16 @@ hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent, code::Symb
   return HSA_STATUS_SUCCESS;
 }
 
+Segment* ExecutableImpl::VirtualAddressSegment(uint64_t vaddr)
+{
+  for (auto &seg : loaded_code_objects.back()->LoadedSegments()) {
+    if (seg->IsAddressInSegment(vaddr)) {
+      return seg;
+    }
+  }
+  return 0;
+}
+
 uint64_t ExecutableImpl::SymbolAddress(hsa_agent_t agent, code::Symbol* sym)
 {
   code::Section* sec = sym->GetSection();
@@ -1103,19 +1111,46 @@ Segment* ExecutableImpl::SectionSegment(hsa_agent_t agent, code::Section* sec)
   return 0;
 }
 
-hsa_status_t ExecutableImpl::LoadRelocationSection(hsa_agent_t agent, code::RelocationSection* sec)
+hsa_status_t ExecutableImpl::ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c)
 {
-  hsa_status_t status;
-  for (size_t i = 0; i < sec->relocationCount(); ++i) {
-    status = LoadRelocation(agent, sec->relocation(i));
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  for (size_t i = 0; i < c->RelocationSectionCount(); ++i) {
+    if (c->GetRelocationSection(i)->targetSection()) {
+      status = ApplyStaticRelocationSection(agent, c->GetRelocationSection(i));
+    } else {
+      // Dynamic relocations are supported starting code object v2.1.
+      uint32_t majorVersion, minorVersion;
+      if (!c->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
+        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+      }
+      if (majorVersion < 2) {
+        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+      }
+      if (majorVersion == 2 && minorVersion < 1) {
+        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+      }
+      status = ApplyDynamicRelocationSection(agent, c->GetRelocationSection(i));
+    }
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadRelocation(hsa_agent_t agent, code::Relocation* rel)
+hsa_status_t ExecutableImpl::ApplyStaticRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec)
 {
-  hsa_status_t status;
+  // Skip link-time relocations (if any).
+  if (!(sec->targetSection()->flags() & SHF_ALLOC)) { return HSA_STATUS_SUCCESS; }
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  for (size_t i = 0; i < sec->relocationCount(); ++i) {
+    status = ApplyStaticRelocation(agent, sec->relocation(i));
+    if (status != HSA_STATUS_SUCCESS) { return status; }
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::code::Relocation *rel)
+{
+  hsa_status_t status = HSA_STATUS_SUCCESS;
   amd::elf::Symbol* sym = rel->symbol();
   code::RelocationSection* rsec = rel->section();
   code::Section* sec = rsec->targetSection();
@@ -1128,43 +1163,43 @@ hsa_status_t ExecutableImpl::LoadRelocation(hsa_agent_t agent, code::Relocation*
     {
       uint64_t addr;
       switch (sym->type()) {
-      case STT_OBJECT:
-      case STT_SECTION:
-      case STT_AMDGPU_HSA_KERNEL:
-      case STT_AMDGPU_HSA_INDIRECT_FUNCTION:
-        addr = SymbolAddress(agent, sym);
-        if (!addr) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-        break;
-      case STT_COMMON: {
-        hsa_agent_t sagent = agent;
-        if (STA_AMDGPU_HSA_GLOBAL_PROGRAM == ELF64_ST_AMDGPU_ALLOCATION(sym->other())) {
-          sagent.handle = 0;
+        case STT_OBJECT:
+        case STT_SECTION:
+        case STT_AMDGPU_HSA_KERNEL:
+        case STT_AMDGPU_HSA_INDIRECT_FUNCTION:
+          addr = SymbolAddress(agent, sym);
+          if (!addr) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+          break;
+        case STT_COMMON: {
+          hsa_agent_t sagent = agent;
+          if (STA_AMDGPU_HSA_GLOBAL_PROGRAM == ELF64_ST_AMDGPU_ALLOCATION(sym->other())) {
+            sagent.handle = 0;
+          }
+          SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal("", sym->name().c_str(), sagent, 0);
+          if (!esym) { return HSA_STATUS_ERROR_VARIABLE_UNDEFINED; }
+          addr = esym->address;
+          break;
         }
-        SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal("", sym->name().c_str(), sagent, 0);
-        if (!esym) { return HSA_STATUS_ERROR_VARIABLE_UNDEFINED; }
-        addr = esym->address;
-        break;
-      }
-      default:
-        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+        default:
+          return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
       }
       addr += rel->addend();
 
       uint32_t addr32 = 0;
       switch (rel->type()) {
-      case R_AMDGPU_32_HIGH:
-        addr32 = uint32_t((addr >> 32) & 0xFFFFFFFF);
-        rseg->Copy(reladdr, &addr32, sizeof(addr32));
-        break;
-      case R_AMDGPU_32_LOW:
-        addr32 = uint32_t(addr & 0xFFFFFFFF);
-        rseg->Copy(reladdr, &addr32, sizeof(addr32));
-        break;
-      case R_AMDGPU_64:
-        rseg->Copy(reladdr, &addr, sizeof(addr));
-        break;
-      default:
-        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+        case R_AMDGPU_32_HIGH:
+          addr32 = uint32_t((addr >> 32) & 0xFFFFFFFF);
+          rseg->Copy(reladdr, &addr32, sizeof(addr32));
+          break;
+        case R_AMDGPU_32_LOW:
+          addr32 = uint32_t(addr & 0xFFFFFFFF);
+          rseg->Copy(reladdr, &addr32, sizeof(addr32));
+          break;
+        case R_AMDGPU_64:
+          rseg->Copy(reladdr, &addr, sizeof(addr));
+          break;
+        default:
+          return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
       }
       break;
     }
@@ -1200,7 +1235,7 @@ hsa_status_t ExecutableImpl::LoadRelocation(hsa_agent_t agent, code::Relocation*
       break;
     }
 
-  case R_AMDGPU_INIT_IMAGE:
+    case R_AMDGPU_INIT_IMAGE:
     {
       if (STT_AMDGPU_HSA_METADATA != sym->type() ||
           SHT_PROGBITS != sym->section()->type() ||
@@ -1263,9 +1298,86 @@ hsa_status_t ExecutableImpl::LoadRelocation(hsa_agent_t agent, code::Relocation*
       break;
     }
 
-  default:
-    // Ignore
-    break;
+    default:
+      // Ignore.
+      break;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::ApplyDynamicRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec)
+{
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  for (size_t i = 0; i < sec->relocationCount(); ++i) {
+    status = ApplyDynamicRelocation(agent, sec->relocation(i));
+    if (status != HSA_STATUS_SUCCESS) { return status; }
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa::code::Relocation *rel)
+{
+  Segment* relSeg = VirtualAddressSegment(rel->offset());
+  uint64_t symAddr = 0;
+  switch (rel->symbol()->type()) {
+    case STT_OBJECT:
+    case STT_AMDGPU_HSA_KERNEL:
+    {
+      Segment* symSeg = VirtualAddressSegment(rel->symbol()->value());
+      symAddr = reinterpret_cast<uint64_t>(symSeg->Address(rel->symbol()->value()));
+      break;
+    }
+
+    // External symbols, they must be defined prior loading.
+    case STT_NOTYPE:
+    {
+      // TODO: Only agent allocation variables are supported in v2.1. How will
+      // we distinguish between program allocation and agent allocation
+      // variables?
+      auto agent_symbol = agent_symbols_.find(std::make_pair(rel->symbol()->name(), agent));
+      if (agent_symbol == agent_symbols_.end()) {
+        // External symbols must be defined prior loading.
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
+      symAddr = agent_symbol->second->address;
+      break;
+    }
+
+    default:
+      // Only objects and kernels are supported in v2.1.
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+  symAddr += rel->addend();
+
+  switch (rel->type()) {
+    case R_AMDGPU_32_HIGH:
+    {
+      uint32_t symAddr32 = uint32_t((symAddr >> 32) & 0xFFFFFFFF);
+      relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
+      break;
+    }
+
+    case R_AMDGPU_32_LOW:
+    {
+      uint32_t symAddr32 = uint32_t(symAddr & 0xFFFFFFFF);
+      relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
+      break;
+    }
+
+    case R_AMDGPU_64:
+    {
+      relSeg->Copy(rel->offset(), &symAddr, sizeof(symAddr));
+      break;
+    }
+
+    case R_AMDGPU_INIT_IMAGE:
+    case R_AMDGPU_INIT_SAMPLER:
+      // Images and samplers are not supported in v2.1.
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+
+    default:
+      // Ignore.
+      break;
   }
   return HSA_STATUS_SUCCESS;
 }
