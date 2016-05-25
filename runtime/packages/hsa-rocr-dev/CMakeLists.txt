@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -69,7 +69,7 @@ set ( PACKAGE_DIRECTORIES
       "include"
       "hsa/include"
       "hsa/lib")
- 
+
 set ( RUNTIME_HEADER_NAMES
       "hsa.h"
       "amd_hsa_common.h"
@@ -97,8 +97,8 @@ set ( HSA_INCLUDE_LINK "${EXTERNAL_DIR}/hsa/include/hsa" )
 
 set ( TOPLEVEL_INCLUDE_LINK "${EXTERNAL_DIR}/include/hsa" )
 
-add_custom_command(OUTPUT ${PACKAGE_DIRECTORIES} WORKING_DIRECTORY ${EXTERNAL_DIR} 
-                   COMMAND mkdir -p include 
+add_custom_command(OUTPUT ${PACKAGE_DIRECTORIES} WORKING_DIRECTORY ${EXTERNAL_DIR}
+                   COMMAND mkdir -p include
                    COMMAND mkdir -p lib
                    COMMAND mkdir -p hsa/lib
                    COMMAND mkdir -p hsa/include )
@@ -113,7 +113,7 @@ add_custom_command( OUTPUT ${TOPLEVEL_INCLUDE_LINK} WORKING_DIRECTORY ${EXTERNAL
 
 add_custom_target (link_dirs DEPENDS create_dirs ${TOPLEVEL_INCLUDE_LINK} ${HSA_INCLUDE_LINK} )
 
-add_custom_command( OUTPUT ${RUNTIME_LIBRARY_TARGET} WORKING_DIRECTORY ${EXTERNAL_DIR} 
+add_custom_command( OUTPUT ${RUNTIME_LIBRARY_TARGET} WORKING_DIRECTORY ${EXTERNAL_DIR}
                     COMMAND ${CMAKE_COMMAND} -E copy ${RUNTIME_LIBRARY_SOURCE} ${RUNTIME_LIBRARY_TARGET} )
 
 add_custom_command( OUTPUT ${RUNTIME_LIBRARY_SONAME} WORKING_DIRECTORY ${EXTERNAL_DIR}/hsa/lib
