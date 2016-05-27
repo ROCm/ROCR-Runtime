@@ -51,10 +51,10 @@ OBJ_FILES := $(notdir $(C_FILES:.c=.o))
 all: vector_copy
 
 vector_copy: $(OBJ_FILES)
-	$(CC) $(LFLAGS) $(OBJ_FILES) -L/opt/hsa/lib -lhsa-runtime64 -o vector_copy
+	$(CC) $(LFLAGS) $(OBJ_FILES) -L/opt/rocm/lib -lhsa-runtime64 -o vector_copy
 
 %.o: %.c
-	$(CC) -c -I/opt/hsa/include -o $@ $< -std=c99
+	$(CC) -c -I/opt/rocm/include -o $@ $< -std=c99
 
 clean:
 	rm -rf *.o vector_copy
