@@ -91,7 +91,7 @@ set ( RUNTIME_TOOLS_HEADER_NAMES
       "amd_hsa_tools_interfaces.h"
     )
 
-set ( RUNTIME_TOOLS_INCLUDE_DIR "${AMD_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
+set ( RUNTIME_TOOLS_INCLUDE_DIR "${HSA_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
 
 set ( HSA_INCLUDE_LINK "${EXTERNAL_DIR}/hsa/include/hsa" )
 

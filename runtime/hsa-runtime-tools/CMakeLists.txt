@@ -47,7 +47,7 @@ project ( ${TOOLS_TARGET} )
 
 ## External dependencies
 if ( NOT DEFINED REG_INCLUDE )
-  set(REG_INCLUDE ${AMD_CLOSED_SOURCE_DIR}/inc/asic_reg)
+  set(REG_INCLUDE ${HSA_CLOSED_SOURCE_DIR}/drivers/inc/asic_reg)
 endif()
 
 if ( NOT EXISTS ${REG_INCLUDE}/si_id.h )
@@ -55,7 +55,7 @@ if ( NOT EXISTS ${REG_INCLUDE}/si_id.h )
 endif ()
 
 if ( NOT DEFINED HSAKMT_INCLUDE )
-  set(HSAKMT_INCLUDE ${AMD_CLOSED_SOURCE_DIR}/hsathk/include)
+  set(HSAKMT_INCLUDE ${HSA_CLOSED_SOURCE_DIR}/drivers/hsathk/include)
 endif()
 
 if ( NOT EXISTS ${HSAKMT_INCLUDE}/hsakmt.h )
