@@ -79,6 +79,11 @@ class GpuAgentInt : public core::Agent {
   // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
   virtual void InitDma() = 0;
 
+  // @brief Initialize blit kernel object based on AQL queue.
+  //
+  // @retval HSA_STATUS_SUCCESS blit kernel object initialization is successful.
+  virtual hsa_status_t InitBlitKernel() = 0;
+
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
   //
@@ -178,10 +183,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from core::Agent.
   void InitDma() override;
 
-  // @brief Initialize blit kernel object based on AQL queue.
-  //
-  // @retval HSA_STATUS_SUCCESS blit kernel object initialization is successful.
-  hsa_status_t InitBlitKernel();
+  // @brief Override from core::Agent.
+  hsa_status_t InitBlitKernel() override;
 
   uint16_t GetMicrocodeVersion() const;
 

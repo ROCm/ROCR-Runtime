@@ -430,6 +430,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
       [](void* dst, const void* src, size_t size,
          std::vector<core::Signal*> dep_signals,
          core::Signal* completion_signal, bool profiling_enabled) {
+
         for (core::Signal* dep : dep_signals) {
           dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX,
                            HSA_WAIT_STATE_BLOCKED);
@@ -820,6 +821,14 @@ void Runtime::Load() {
 
   // Load tools libraries
   LoadTools();
+
+  // Initialize blit kernel object after tools is initialized to allow tools
+  // to overload blit kernel.
+  for (core::Agent* agent : gpu_agents_) {
+    const hsa_status_t stat =
+        reinterpret_cast<amd::GpuAgentInt*>(agent)->InitBlitKernel();
+    assert(HSA_STATUS_SUCCESS == stat);
+  }
 }
 
 void Runtime::Unload() {
