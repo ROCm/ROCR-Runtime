@@ -65,7 +65,7 @@ project ( ${IMAGE_TARGET} )
 
 ## External dependencies and directories
 if ( NOT DEFINED REG_INCLUDE )
-  set(REG_INCLUDE ${AMD_CLOSED_SOURCE_DIR}/inc/asic_reg)
+  set(REG_INCLUDE ${HSA_CLOSED_SOURCE_DIR}/drivers/inc/asic_reg)
 endif()
 
 if ( NOT EXISTS ${REG_INCLUDE}/si_id.h )
@@ -117,10 +117,10 @@ include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/r800 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
-include_directories ( ${AMD_CLOSED_SOURCE_DIR}/hsa/compiler/ext_finalize/amdhsafin/Interface )
-include_directories ( ${AMD_CLOSED_SOURCE_DIR}/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
-include_directories ( ${AMD_CLOSED_SOURCE_DIR}/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
-include_directories ( ${AMD_CLOSED_SOURCE_DIR}/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/build/${LIBHSAIL_BUILD_FOLDER} )
+include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize/amdhsafin/Interface )
+include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
+include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
+include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/build/${LIBHSAIL_BUILD_FOLDER} )
 
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
