@@ -365,7 +365,8 @@ BlitSdma::BlitSdma()
       fence_pool_size_(0),
       fence_pool_counter_(0),
       cached_reserve_offset_(0),
-      cached_commit_offset_(0) {
+      cached_commit_offset_(0),
+      platform_atomic_support_(true) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
@@ -416,6 +417,10 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   if (HSA_PROFILE_FULL == amd_gpu_agent.profile()) {
     assert(false && "Only support SDMA for dgpu currently");
     return HSA_STATUS_ERROR;
+  }
+
+  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1)) {
+    platform_atomic_support_ = false;
   }
 
   // Allocate queue buffer.
@@ -568,7 +573,8 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
 
-  // In case the user disable or enable the profiling in the middle of the call.
+  // Load the profiling state early in case the user disable or enable the
+  // profiling in the middle of the call.
   const bool profiling_enabled = agent_->profiling_enabled();
 
   uint64_t* end_ts_addr = NULL;
@@ -589,8 +595,20 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
         (2 * timestamp_command_size_) + linear_copy_command_size_;
   }
 
+  // On agent that does not support platform atomic, we replace it with
+  // one or two fence packet(s) to update the signal value. The reason fence
+  // is used and not write packet is because the SDMA engine may overlap a
+  // serial copy/write packets.
+  const uint64_t completion_signal_value =
+      static_cast<uint64_t>(out_signal.LoadRelaxed() - 1);
+  const size_t sync_command_size = (platform_atomic_support_)
+                                       ? atomic_command_size_
+                                       : (completion_signal_value > UINT32_MAX)
+                                             ? 2 * fence_command_size_
+                                             : fence_command_size_;
+
   const uint32_t total_command_size =
-      total_poll_command_size + total_copy_command_size + atomic_command_size_ +
+      total_poll_command_size + total_copy_command_size + sync_command_size +
       total_timestamp_command_size;
 
   char* command_addr = AcquireWriteAddress(total_command_size);
@@ -635,7 +653,20 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
   }
 
   // After transfer is completed, decrement the signal.
-  BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
+  if (platform_atomic_support_) {
+    BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
+  } else {
+    uint32_t* signal_value_location =
+        reinterpret_cast<uint32_t*>(out_signal.ValueLocation());
+    if (completion_signal_value > UINT32_MAX) {
+      BuildFenceCommand(command_addr, signal_value_location + 1,
+                        static_cast<uint32_t>(completion_signal_value >> 32));
+      command_addr += fence_command_size_;
+    }
+
+    BuildFenceCommand(command_addr, signal_value_location,
+                      static_cast<uint32_t>(completion_signal_value));
+  }
 
   ReleaseWriteAddress(command_addr_temp, total_command_size);
 

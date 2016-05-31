@@ -227,6 +227,9 @@ class BlitSdma : public core::Blit {
 
   /// Max total fill count supported by the queue.
   size_t max_total_fill_size_;
+
+  /// True if platform atomic is supported.
+  bool platform_atomic_support_;
 };
 }  // namespace amd
 
