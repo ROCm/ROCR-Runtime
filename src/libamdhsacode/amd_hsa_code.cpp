@@ -1243,6 +1243,8 @@ namespace code {
           asic = "CI";
         } else if (major_version == 8) {
           asic = "VI";
+        } else if (major_version == 9) {
+          asic = "GREENLAND";
         } else {
           assert(!"unknown compute capability");
         }

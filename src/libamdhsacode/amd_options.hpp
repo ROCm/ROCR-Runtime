@@ -372,14 +372,24 @@ private:
 
   bool ProcessTokens(std::list<std::string> &tokens) {
     assert(0 == name_.compare(tokens.front()) && "option name is mismatched");
-    if (1 != tokens.size()) {
-      error() << "error: invalid option: \'" << name_ << '\'' << std::endl;
-      return false;
+    if (1 == tokens.size()) {
+      tokens.pop_front();
+      is_set_ = true;
+      return true;
+    } else if (2 == tokens.size()) {
+      tokens.pop_front();
+      if (tokens.front() == "1") {
+        is_set_ = true;
+        tokens.pop_front();
+        return true;
+      } else if (tokens.front() == "0") {
+        is_set_ = false;
+        tokens.pop_front();
+        return true;
+      }
     }
-
-    is_set_ = true;
-    tokens.pop_front();
-    return true;
+    error() << "error: invalid option: '" << name_ << "'" << std::endl;
+    return false;
   }
 };
 

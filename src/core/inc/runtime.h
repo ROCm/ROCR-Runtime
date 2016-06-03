@@ -87,6 +87,8 @@ class Runtime {
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
+    LinkInfo() : num_hop(0), info{0} {}
+
     uint32_t num_hop;
     hsa_amd_memory_pool_link_info_t info;
   };
@@ -133,7 +135,7 @@ class Runtime {
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
   /// @retval The link information between source and destination nodes.
-  const LinkInfo& GetLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
+  const LinkInfo GetLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
   /// @brief Invoke the user provided call back for each agent in the agent
   /// list.
