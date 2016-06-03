@@ -366,7 +366,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
                static_cast<uint64_t>(max_num_copy_command) *
                    static_cast<uint64_t>(max_single_linear_copy_size_)));
 
-  max_single_fill_size_ = 1 << 22;
+  max_single_fill_size_ = (1 << 22) - sizeof(uint32_t);
   max_total_fill_size_ = static_cast<size_t>(
       std::min(static_cast<uint64_t>(SIZE_MAX),
                static_cast<uint64_t>(max_num_fill_command) *

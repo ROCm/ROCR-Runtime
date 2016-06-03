@@ -263,9 +263,11 @@ void Runtime::RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
   link_matrix_[idx].info = link_info;
 }
 
-const Runtime::LinkInfo& Runtime::GetLinkInfo(uint32_t node_id_from,
-                                              uint32_t node_id_to) {
-  return link_matrix_[GetIndexLinkInfo(node_id_from, node_id_to)];
+const Runtime::LinkInfo Runtime::GetLinkInfo(uint32_t node_id_from,
+                                             uint32_t node_id_to) {
+  return (node_id_from != node_id_to)
+             ? link_matrix_[GetIndexLinkInfo(node_id_from, node_id_to)]
+             : LinkInfo();  // No link.
 }
 
 uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
