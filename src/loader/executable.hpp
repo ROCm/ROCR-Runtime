@@ -425,9 +425,14 @@ private:
   hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
-  hsa_status_t LoadRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec);
-  hsa_status_t LoadRelocation(hsa_agent_t agent, amd::hsa::code::Relocation* rel);
 
+  hsa_status_t ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c);
+  hsa_status_t ApplyStaticRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec);
+  hsa_status_t ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::code::Relocation *rel);
+  hsa_status_t ApplyDynamicRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec);
+  hsa_status_t ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa::code::Relocation *rel);
+
+  Segment* VirtualAddressSegment(uint64_t vaddr);
   uint64_t SymbolAddress(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   uint64_t SymbolAddress(hsa_agent_t agent, amd::elf::Symbol* sym);
   Segment* SymbolSegment(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
