@@ -44,8 +44,8 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
-#include "hsa.h"
-#include "hsa_ext_finalize.h"
+#include "hsa/hsa.h"
+#include "hsa/hsa_ext_finalize.h"
 
 #define check(msg, status) \
 if (status != HSA_STATUS_SUCCESS) { \
@@ -172,19 +172,19 @@ int main(int argc, char **argv) {
 
     check(Generating function table for finalizer, err);
 
-    /* 
-     * Iterate over the agents and pick the gpu agent using 
+    /*
+     * Iterate over the agents and pick the gpu agent using
      * the get_gpu_agent callback.
      */
     hsa_agent_t agent;
     err = hsa_iterate_agents(get_gpu_agent, &agent);
-    if(err == HSA_STATUS_INFO_BREAK) { 
-        err = HSA_STATUS_SUCCESS; 
+    if(err == HSA_STATUS_INFO_BREAK) {
+        err = HSA_STATUS_SUCCESS;
     } else {
         /*
          * No GPU agent was found.
          */
-        err = HSA_STATUS_ERROR; 
+        err = HSA_STATUS_ERROR;
     }
     check(Getting a gpu agent, err);
 
@@ -207,7 +207,7 @@ int main(int argc, char **argv) {
     /*
      * Create a queue using the maximum size.
      */
-    hsa_queue_t* queue; 
+    hsa_queue_t* queue;
     err = hsa_queue_create(agent, queue_size, HSA_QUEUE_TYPE_SINGLE, NULL, NULL, UINT32_MAX, UINT32_MAX, &queue);
     check(Creating the queue, err);
 
@@ -315,7 +315,7 @@ int main(int argc, char **argv) {
 
     /*
      * Create a signal to wait for the dispatch to finish.
-     */ 
+     */
     hsa_signal_t signal;
     err=hsa_signal_create(1, 0, NULL, &signal);
     check(Creating a HSA signal, err);
@@ -360,11 +360,11 @@ int main(int argc, char **argv) {
 
     /*
      * Allocate the kernel argument buffer from the correct region.
-     */   
+     */
     err = hsa_memory_allocate(kernarg_region, kernarg_segment_size, &kernarg_address);
     check(Allocating kernel argument memory buffer, err);
     memcpy(kernarg_address, &args, sizeof(args));
- 
+
     /*
      * Obtain the current queue write index.
      */
@@ -444,7 +444,7 @@ int main(int argc, char **argv) {
 
     err=hsa_queue_destroy(queue);
     check(Destroying the queue, err);
-    
+
     err = hsa_memory_free(in);
     check(Freeing in argument memory buffer, err);
 
