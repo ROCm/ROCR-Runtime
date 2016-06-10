@@ -107,7 +107,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   //
   // @param [in] type CPU or GPU or other.
   explicit Agent(uint32_t node_id, DeviceType type)
-      : node_id_(node_id), device_type_(uint32_t(type)) {
+      : node_id_(node_id),
+        device_type_(uint32_t(type)),
+        profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -115,7 +117,7 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   //
   // @param [in] type CPU or GPU or other.
   explicit Agent(uint32_t node_id, uint32_t type)
-      : node_id_(node_id), device_type_(type) {
+      : node_id_(node_id), device_type_(type), profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 

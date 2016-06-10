@@ -171,6 +171,8 @@ class BlitSdma : public core::Blit {
 
   void BuildGetGlobalTimestampCommand(char* cmd_addr, void* write_address);
 
+  void BuildTrapCommand(char* cmd_addr);
+
   // Agent object owning the SDMA engine.
   GpuAgent* agent_;
 
@@ -215,6 +217,8 @@ class BlitSdma : public core::Blit {
   uint32_t atomic_command_size_;
 
   uint32_t timestamp_command_size_;
+
+  uint32_t trap_command_size_;
 
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;

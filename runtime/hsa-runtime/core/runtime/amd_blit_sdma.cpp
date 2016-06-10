@@ -60,6 +60,7 @@ namespace amd {
 
 const unsigned int SDMA_OP_COPY = 1;
 const unsigned int SDMA_OP_FENCE = 5;
+const unsigned int SDMA_OP_TRAP = 6;
 const unsigned int SDMA_OP_POLL_REGMEM = 8;
 const unsigned int SDMA_OP_ATOMIC = 10;
 const unsigned int SDMA_OP_CONST_FILL = 11;
@@ -341,6 +342,25 @@ typedef struct SDMA_PKT_TIMESTAMP_TAG {
 
 } SDMA_PKT_TIMESTAMP;
 
+typedef struct SDMA_PKT_TRAP_TAG {
+  union {
+    struct {
+      unsigned int op : 8;
+      unsigned int sub_op : 8;
+      unsigned int reserved_0 : 16;
+    };
+    unsigned int DW_0_DATA;
+  } HEADER_UNION;
+
+  union {
+    struct {
+      unsigned int int_ctx : 28;
+      unsigned int reserved_1 : 4;
+    };
+    unsigned int DW_1_DATA;
+  } INT_CONTEXT_UNION;
+} SDMA_PKT_TRAP;
+
 inline uint32_t ptrlow32(const void* p) {
   return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p));
 }
@@ -390,6 +410,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   poll_command_size_ = sizeof(SDMA_PKT_POLL_REGMEM);
   atomic_command_size_ = sizeof(SDMA_PKT_ATOMIC);
   timestamp_command_size_ = sizeof(SDMA_PKT_TIMESTAMP);
+  trap_command_size_ = sizeof(SDMA_PKT_TRAP);
 
   const uint32_t sync_command_size = fence_command_size_;
   const uint32_t max_num_copy_command =
@@ -607,9 +628,16 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
                                              ? 2 * fence_command_size_
                                              : fence_command_size_;
 
+  // If the signal is an interrupt signal, we also need to make SDMA engine to
+  // send interrupt packet to IH.
+  const size_t interrupt_command_size =
+      (out_signal.signal_.event_mailbox_ptr != 0)
+          ? (fence_command_size_ + trap_command_size_)
+          : 0;
+
   const uint32_t total_command_size =
       total_poll_command_size + total_copy_command_size + sync_command_size +
-      total_timestamp_command_size;
+      total_timestamp_command_size + interrupt_command_size;
 
   char* command_addr = AcquireWriteAddress(total_command_size);
   char* const command_addr_temp = command_addr;
@@ -652,9 +680,11 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
     command_addr += linear_copy_command_size_;
   }
 
-  // After transfer is completed, decrement the signal.
+  // After transfer is completed, decrement the signal value.
   if (platform_atomic_support_) {
     BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
+    command_addr += atomic_command_size_;
+
   } else {
     uint32_t* signal_value_location =
         reinterpret_cast<uint32_t*>(out_signal.ValueLocation());
@@ -666,6 +696,18 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
 
     BuildFenceCommand(command_addr, signal_value_location,
                       static_cast<uint32_t>(completion_signal_value));
+
+    command_addr += fence_command_size_;
+  }
+
+  // Update mailbox event and send interrupt to IH.
+  if (out_signal.signal_.event_mailbox_ptr != 0) {
+    BuildFenceCommand(command_addr, reinterpret_cast<uint32_t*>(
+                                        out_signal.signal_.event_mailbox_ptr),
+                      static_cast<uint32_t>(out_signal.signal_.event_id));
+    command_addr += fence_command_size_;
+
+    BuildTrapCommand(command_addr);
   }
 
   ReleaseWriteAddress(command_addr_temp, total_command_size);
@@ -981,5 +1023,14 @@ void BlitSdma::BuildGetGlobalTimestampCommand(char* cmd_addr,
 
   packet_addr->ADDR_LO_UNION.addr_31_0 = ptrlow32(write_address);
   packet_addr->ADDR_HI_UNION.addr_63_32 = ptrhigh32(write_address);
+}
+
+void BlitSdma::BuildTrapCommand(char* cmd_addr) {
+  SDMA_PKT_TRAP* packet_addr =
+      reinterpret_cast<SDMA_PKT_TRAP*>(cmd_addr);
+
+  memset(packet_addr, 0, sizeof(SDMA_PKT_TRAP));
+
+  packet_addr->HEADER_UNION.op = SDMA_OP_TRAP;
 }
 }  // namespace amd
