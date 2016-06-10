@@ -64,6 +64,7 @@
 #include "core/util/utils.h"
 #include "core/inc/registers.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 
 namespace amd {
 // Queue::amd_queue_ is cache-aligned for performance.
@@ -249,7 +250,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
     }
     auto signal = new core::InterruptSignal(0, queue_event_);
     amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(signal);
-    if (hsa_amd_signal_async_handler(
+    if (AMD::hsa_amd_signal_async_handler(
             amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, 0,
             DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
       return;
