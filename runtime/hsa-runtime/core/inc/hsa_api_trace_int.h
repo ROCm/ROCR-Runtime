@@ -47,17 +47,28 @@
 #include "core/inc/hsa_internal.h"
 
 namespace core {
-struct ApiTable {
-  ::ApiTable table;
-  ExtTable extension_backup;
+  struct HsaApiTable {
 
-  ApiTable();
-  void Reset();
-  void LinkExts(ExtTable* ptr);
-};
+    static const uint32_t HSA_EXT_FINALIZER_API_TABLE_ID = 0;
+    static const uint32_t HSA_EXT_IMAGE_API_TABLE_ID = 1;
 
-extern ApiTable hsa_api_table_;
-extern ApiTable hsa_internal_api_table_;
+    ::HsaApiTable hsa_api;
+    ::CoreApiTable core_api;
+    ::AmdExtTable amd_ext_api;
+    ::FinalizerExtTable finalizer_api;
+    ::ImageExtTable image_api;
+
+    HsaApiTable();
+    void Init();
+    void UpdateCore();
+    void UpdateAmdExts();
+    void CloneExts(void* ptr, uint32_t table_id);
+    void LinkExts(void* ptr, uint32_t table_id);
+    void Reset();
+  };
+
+  extern HsaApiTable hsa_api_table_;
+  extern HsaApiTable hsa_internal_api_table_;
 }
 
 #endif

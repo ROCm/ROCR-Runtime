@@ -109,7 +109,9 @@ static __forceinline bool IsValid(T* ptr) {
   return (ptr == NULL) ? NULL : ptr->IsValid();
 }
 
-hsa_status_t HSA_API
+namespace AMD {
+
+hsa_status_t 
     hsa_amd_coherency_get_type(hsa_agent_t agent_handle,
                                hsa_amd_coherency_type_t* type) {
   IS_OPEN();
@@ -132,7 +134,7 @@ hsa_status_t HSA_API
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
+hsa_status_t hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
                                                 hsa_amd_coherency_type_t type) {
   IS_OPEN();
 
@@ -158,7 +160,7 @@ hsa_status_t HSA_API hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
   IS_OPEN();
 
@@ -173,7 +175,7 @@ hsa_status_t HSA_API
   return core::Runtime::runtime_singleton_->FillMemory(ptr, value, count);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle,
                               const void* src, hsa_agent_t src_agent_handle,
                               size_t size, uint32_t num_dep_signals,
@@ -215,7 +217,7 @@ hsa_status_t HSA_API
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enable) {
   IS_OPEN();
 
@@ -229,7 +231,7 @@ hsa_status_t HSA_API
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API hsa_amd_profiling_async_copy_enable(bool enable) {
+hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
   IS_OPEN();
 
   return core::Runtime::runtime_singleton_->IterateAgent(
@@ -240,7 +242,7 @@ hsa_status_t HSA_API hsa_amd_profiling_async_copy_enable(bool enable) {
       reinterpret_cast<void*>(&enable));
 }
 
-hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
+hsa_status_t hsa_amd_profiling_get_dispatch_time(
     hsa_agent_t agent_handle, hsa_signal_t hsa_signal,
     hsa_amd_profiling_dispatch_time_t* time) {
   IS_OPEN();
@@ -267,7 +269,7 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API hsa_amd_profiling_get_async_copy_time(
+hsa_status_t hsa_amd_profiling_get_async_copy_time(
     hsa_signal_t hsa_signal, hsa_amd_profiling_async_copy_time_t* time) {
   IS_OPEN();
 
@@ -295,7 +297,7 @@ hsa_status_t HSA_API hsa_amd_profiling_get_async_copy_time(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent_handle,
                                                     uint64_t agent_tick,
                                                     uint64_t* system_tick) {
@@ -318,7 +320,7 @@ hsa_status_t HSA_API
   return HSA_STATUS_SUCCESS;
 }
 
-uint32_t HSA_API
+uint32_t
     hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* hsa_signals,
                             hsa_signal_condition_t* conds,
                             hsa_signal_value_t* values, uint64_t timeout_hint,
@@ -336,7 +338,7 @@ uint32_t HSA_API
                                timeout_hint, wait_hint, satisfying_value);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_signal_async_handler(hsa_signal_t hsa_signal,
                                  hsa_signal_condition_t cond,
                                  hsa_signal_value_t value,
@@ -352,7 +354,7 @@ hsa_status_t HSA_API
       hsa_signal, cond, value, handler, arg);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
   IS_OPEN();
 
@@ -363,7 +365,7 @@ hsa_status_t HSA_API
       arg);
 }
 
-hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
+hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
                                                uint32_t num_cu_mask_count,
                                                const uint32_t* cu_mask) {
   IS_OPEN();
@@ -374,7 +376,7 @@ hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
   return cmd_queue->SetCUMasking(num_cu_mask_count, cu_mask);
 }
 
-hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
+hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
                                          hsa_agent_t* agents, int num_agent,
                                          void** agent_ptr) {
   *agent_ptr = NULL;
@@ -397,7 +399,7 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
   return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
 }
 
-hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr) {
+hsa_status_t hsa_amd_memory_unlock(void* host_ptr) {
   IS_OPEN();
 
   const amd::MemoryRegion* system_region =
@@ -407,7 +409,7 @@ hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr) {
   return system_region->Unlock(host_ptr);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
                                  hsa_amd_memory_pool_info_t attribute,
                                  void* value) {
@@ -423,7 +425,7 @@ hsa_status_t HSA_API
   return mem_region->GetPoolInfo(attribute, value);
 }
 
-hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
+hsa_status_t hsa_amd_agent_iterate_memory_pools(
     hsa_agent_t agent_handle,
     hsa_status_t (*callback)(hsa_amd_memory_pool_t memory_pool, void* data),
     void* data) {
@@ -446,7 +448,7 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
       data);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, size_t size,
                                  uint32_t flags, void** ptr) {
   IS_OPEN();
@@ -466,11 +468,11 @@ hsa_status_t HSA_API
                                                            size, ptr);
 }
 
-hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr) {
+hsa_status_t hsa_amd_memory_pool_free(void* ptr) {
   return HSA::hsa_memory_free(ptr);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_agents_allow_access(uint32_t num_agents, const hsa_agent_t* agents,
                                 const uint32_t* flags, const void* ptr) {
   IS_OPEN();
@@ -483,7 +485,7 @@ hsa_status_t HSA_API
                                                         ptr);
 }
 
-hsa_status_t HSA_API
+hsa_status_t
     hsa_amd_memory_pool_can_migrate(hsa_amd_memory_pool_t src_memory_pool,
                                     hsa_amd_memory_pool_t dst_memory_pool,
                                     bool* result) {
@@ -512,7 +514,7 @@ hsa_status_t HSA_API
   return src_mem_region->CanMigrate(*dst_mem_region, *result);
 }
 
-hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
+hsa_status_t hsa_amd_memory_migrate(const void* ptr,
                                             hsa_amd_memory_pool_t memory_pool,
                                             uint32_t flags) {
   IS_OPEN();
@@ -532,7 +534,7 @@ hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
   return dst_mem_region->Migrate(flags, ptr);
 }
 
-hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
+hsa_status_t hsa_amd_agent_memory_pool_get_info(
     hsa_agent_t agent_handle, hsa_amd_memory_pool_t memory_pool,
     hsa_amd_agent_memory_pool_info_t attribute, void* value) {
   IS_OPEN();
@@ -593,3 +595,5 @@ hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   if (ptr != NULL) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
   return HSA_STATUS_SUCCESS;
 }
+
+} // end of AMD namespace

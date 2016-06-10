@@ -64,6 +64,8 @@
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 
+extern core::HsaApiTable hsa_internal_api_table_;
+
 namespace amd {
 GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
@@ -729,11 +731,11 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AGENT_INFO_EXTENSIONS:
       memset(value, 0, sizeof(uint8_t) * 128);
 
-      if (extensions.table.hsa_ext_program_finalize_fn != NULL) {
+      if (core::hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
         *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
       }
 
-      if (extensions.table.hsa_ext_image_create_fn != NULL) {
+      if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
         *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
       }
 

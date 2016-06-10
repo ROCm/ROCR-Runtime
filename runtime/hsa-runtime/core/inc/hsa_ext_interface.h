@@ -52,27 +52,43 @@
 #include "core/util/utils.h"
 
 namespace core {
-struct ExtTableInternal : public ExtTable {
+struct ImageExtTableInternal : public ImageExtTable {
   decltype(::hsa_amd_image_get_info_max_dim)* hsa_amd_image_get_info_max_dim_fn;
-  decltype(::hsa_amd_image_create)* hsa_amd_image_create_fn;
 };
 
 class ExtensionEntryPoints {
  public:
-  ExtTableInternal table;
+
+  // Table of function pointers for Hsa Extension Image
+  ImageExtTableInternal image_api;
+
+  // Table of function pointers for Hsa Extension Finalizer
+  FinalizerExtTable finalizer_api;
 
   ExtensionEntryPoints();
 
-  bool Load(std::string library_name);
+  bool LoadFinalizer(std::string library_name);
+  bool LoadImage(std::string library_name);
   void Unload();
 
  private:
-  typedef void (*Load_t)(const ::ApiTable* table);
+  typedef void (*Load_t)(const ::HsaApiTable* table);
   typedef void (*Unload_t)();
 
   std::vector<os::LibHandle> libs_;
 
-  void InitTable();
+  // Initialize table for HSA Finalizer Extension Api's
+  void InitFinalizerExtTable();
+
+  // Initialize table for HSA Image Extension Api's
+  void InitImageExtTable();
+
+  // Initialize Amd Ext table for Api related to Images
+  void InitAmdExtTable();
+
+  // Update Amd Ext table for Api related to Images
+  void UpdateAmdExtTable(void *func_ptr);
+
   DISALLOW_COPY_AND_ASSIGN(ExtensionEntryPoints);
 };
 }

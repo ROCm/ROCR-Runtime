@@ -58,6 +58,7 @@
 #include "core/inc/amd_topology.h"
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/hsa_api_trace_int.h"
 
@@ -528,11 +529,11 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
     case HSA_SYSTEM_INFO_EXTENSIONS:
       memset(value, 0, sizeof(uint8_t) * 128);
 
-      if (extensions_.table.hsa_ext_program_finalize_fn != NULL) {
+      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
         *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
       }
 
-      if (extensions_.table.hsa_ext_image_create_fn != NULL) {
+      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
         *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
       }
 
@@ -652,7 +653,7 @@ void Runtime::AsyncEventsLoop(void*) {
   while (!async_events_control_.exit) {
     // Wait for a signal
     hsa_signal_value_t value;
-    uint32_t index = hsa_amd_signal_wait_any(
+    uint32_t index = AMD::hsa_amd_signal_wait_any(
         uint32_t(async_events_.Size()), &async_events_.signal_[0],
         &async_events_.cond_[0], &async_events_.value_[0], uint64_t(-1),
         HSA_WAIT_STATE_BLOCKED, &value);
@@ -863,8 +864,12 @@ void Runtime::LoadExtensions() {
   static const std::string kImageLib[] = {"hsa-ext-image.dll",
                                           "libhsa-ext-image.so.1"};
 #endif
-  extensions_.Load(kFinalizerLib[os_index(os::current_os)]);
-  extensions_.Load(kImageLib[os_index(os::current_os)]);
+
+  // Update Hsa Api Table with handle of Image extension Apis
+  extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
+
+  // Update Hsa Api Table with handle of Finalizer extension Apis
+  extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
@@ -920,13 +925,16 @@ static std::vector<std::string> parse_tool_names(std::string tool_names) {
 }
 
 void Runtime::LoadTools() {
-  typedef bool (*tool_init_t)(::ApiTable*, uint64_t, uint64_t,
+  typedef bool (*tool_init_t)(::HsaApiTable*, uint64_t, uint64_t,
                               const char* const*);
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
 
-  // Link extensions to API interception
-  hsa_api_table_.LinkExts(&extensions_.table);
+  // Link HSA Extensions for Finalizer and Images for Api interception
+  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
+                          core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
+  hsa_api_table_.LinkExts(&extensions_.image_api,
+                          core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   // Load tool libs
   std::string tool_names = flag_.tools_lib_names();
@@ -942,7 +950,9 @@ void Runtime::LoadTools() {
         tool_init_t ld;
         ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
         if (ld) {
-          if (!ld(&hsa_api_table_.table, 0, failed.size(), &failed[0])) {
+          if (!ld(&hsa_api_table_.hsa_api,
+                  hsa_api_table_.hsa_api.version.major_id,
+                  failed.size(), &failed[0])) {
             failed.push_back(names[i].c_str());
             os::CloseLib(tool);
             continue;

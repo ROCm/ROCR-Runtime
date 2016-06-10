@@ -42,6 +42,6 @@
 
 #include "hsa_api_trace.h"
 
-void hsa_table_interface_init(const ApiTable* table);
+void hsa_table_interface_init(const HsaApiTable* apiTable);
 
-const ApiTable* hsa_table_interface_get_table();
+const HsaApiTable* hsa_table_interface_get_table();
