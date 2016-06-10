@@ -738,9 +738,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
       }
 
-      if (profile_ == HSA_PROFILE_FULL &&
-          extensions.table.hsa_ext_image_create_fn != NULL) {
-        // TODO: only APU supports images currently.
+      if (extensions.table.hsa_ext_image_create_fn != NULL) {
         *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
       }
 
