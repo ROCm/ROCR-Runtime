@@ -592,13 +592,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  // TODO: temporarily disable wait on thunk event if the out_signal
-  // is an interrupt signal object. Remove this when SDMA handle interrupt
-  // packet properly.
-  if (out_signal.EopEvent() != NULL) {
-    static_cast<core::InterruptSignal&>(out_signal).DisableWaitEvent();
-  }
-
   hsa_status_t stat =
       blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
 

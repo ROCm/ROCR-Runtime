@@ -165,10 +165,6 @@ class InterruptSignal : public Signal {
   /// @brief See base class Signal.
   __forceinline HsaEvent* EopEvent() { return event_; }
 
-  // TODO: work around for SDMA async copy. Bypass waiting on EOP
-  // event because SDMA copy does not handle interrupt yet.
-  __forceinline void DisableWaitEvent() { wait_on_event_ = false; }
-
   /// @brief prevent throwing exceptions
   void* operator new(size_t size) { return malloc(size); }
 
@@ -185,10 +181,6 @@ class InterruptSignal : public Signal {
   /// @variable Indicates whether the signal should release the event when it
   /// closes or not.
   bool free_event_;
-
-  // TODO: work around for SDMA async copy. Bypass waiting on EOP
-  // event because SDMA copy does not handle interrupt yet.
-  bool wait_on_event_;
 
   /// Used to obtain a globally unique value (address) for rtti.
   static int rtti_id_;

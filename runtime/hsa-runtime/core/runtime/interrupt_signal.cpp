@@ -87,8 +87,6 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
     signal_.event_mailbox_ptr = 0;
   }
   signal_.kind = AMD_SIGNAL_KIND_USER;
-
-  wait_on_event_ = true;
 }
 
 InterruptSignal::~InterruptSignal() {
@@ -110,13 +108,11 @@ hsa_signal_value_t InterruptSignal::LoadAcquire() {
 }
 
 void InterruptSignal::StoreRelaxed(hsa_signal_value_t value) {
-  wait_on_event_ = true;
   atomic::Store(&signal_.value, int64_t(value), std::memory_order_relaxed);
   SetEvent();
 }
 
 void InterruptSignal::StoreRelease(hsa_signal_value_t value) {
-  wait_on_event_ = true;
   atomic::Store(&signal_.value, int64_t(value), std::memory_order_release);
   SetEvent();
 }
@@ -181,7 +177,7 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
         value = atomic::Load(&signal_.value, std::memory_order_relaxed);
         return hsa_signal_value_t(value);
       }
-      if (wait_on_event_ && wait_hint != HSA_WAIT_STATE_ACTIVE) {
+      if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
         uint32_t wait_ms;
         auto time_remaining = fast_timeout - (time - start_time);
         if ((timeout == -1) ||
