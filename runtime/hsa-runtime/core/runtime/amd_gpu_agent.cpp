@@ -133,14 +133,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 }
 
 GpuAgent::~GpuAgent() {
-  if (blit_d2d_ != NULL) {
-    hsa_status_t status = blit_d2d_->Destroy(*this);
-    assert(status == HSA_STATUS_SUCCESS);
-
-    delete blit_d2d_;
-    blit_d2d_ = NULL;
-  }
-
   if (blit_h2d_ != NULL) {
     hsa_status_t status = blit_h2d_->Destroy(*this);
     assert(status == HSA_STATUS_SUCCESS);
@@ -149,12 +141,20 @@ GpuAgent::~GpuAgent() {
     blit_h2d_ = NULL;
   }
 
-  if (blit_d2h_ != NULL) {
+  if (blit_d2h_ != NULL && blit_d2h_ != blit_d2d_) {
     hsa_status_t status = blit_d2h_->Destroy(*this);
     assert(status == HSA_STATUS_SUCCESS);
 
     delete blit_d2h_;
     blit_d2h_ = NULL;
+  }
+
+  if (blit_d2d_ != NULL) {
+    hsa_status_t status = blit_d2d_->Destroy(*this);
+    assert(status == HSA_STATUS_SUCCESS);
+
+    delete blit_d2d_;
+    blit_d2d_ = NULL;
   }
 
   if (end_ts_base_addr_ != NULL) {
@@ -547,7 +547,8 @@ void GpuAgent::InitDma() {
       }
 
       if (blit_d2h_ == NULL) {
-        blit_d2h_ = CreateBlitKernel();
+        // Share device-to-host queue with device-to-device.
+        blit_d2h_ = blit_d2d_;
       }
 
       blit_initialized_.store(true, std::memory_order_release);
