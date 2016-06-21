@@ -542,9 +542,11 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
     uint64_t alternate_va = 0;
     if (MakeKfdMemoryResident(whitelist_nodes.size(), &whitelist_nodes[0],
                               host_ptr, size, &alternate_va, map_flag_)) {
-      assert(alternate_va != 0);
-      *agent_ptr = reinterpret_cast<void*>(alternate_va);
-
+      if (alternate_va != 0) {
+        *agent_ptr = reinterpret_cast<void*>(alternate_va);
+      } else {
+        *agent_ptr = host_ptr;
+      }
       for (core::Agent* gpu : whitelist_gpus) {
         reinterpret_cast<GpuAgentInt*>(gpu)->InitDma();
       }
