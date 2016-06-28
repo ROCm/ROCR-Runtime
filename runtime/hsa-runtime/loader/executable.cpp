@@ -137,7 +137,7 @@ void Loader::Destroy(Loader *loader)
 Executable* AmdHsaCodeLoader::CreateExecutable(
   hsa_profile_t profile, const char *options)
 {
-  std::lock_guard<std::mutex> lock(executables_mutex);
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
 
   executables.push_back(new ExecutableImpl(profile, context, executables.size()));
   return executables.back();
@@ -145,7 +145,8 @@ Executable* AmdHsaCodeLoader::CreateExecutable(
 
 void AmdHsaCodeLoader::DestroyExecutable(Executable *executable)
 {
-  std::lock_guard<std::mutex> lock(executables_mutex);
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
+
   executables[((ExecutableImpl*)executable)->id()] = nullptr;
   delete executable;
 }
@@ -156,7 +157,7 @@ hsa_status_t AmdHsaCodeLoader::IterateExecutables(
     void *data),
   void *data)
 {
-  std::lock_guard<std::mutex> lock(executables_mutex);
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   assert(callback);
 
   for (auto &exec : executables) {
@@ -169,12 +170,57 @@ hsa_status_t AmdHsaCodeLoader::IterateExecutables(
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t AmdHsaCodeLoader::QuerySegmentDescriptors(
+  hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+  size_t *num_segment_descriptors)
+{
+  if (!num_segment_descriptors) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  if (*num_segment_descriptors == 0 && segment_descriptors) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  if (*num_segment_descriptors != 0 && !segment_descriptors) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  this->EnableReadOnlyMode();
+
+  size_t actual_num_segment_descriptors = 0;
+  for (auto &executable : executables) {
+    if (executable) {
+      actual_num_segment_descriptors += executable->GetNumSegmentDescriptors();
+    }
+  }
+
+  if (*num_segment_descriptors == 0) {
+    *num_segment_descriptors = actual_num_segment_descriptors;
+    this->DisableReadOnlyMode();
+    return HSA_STATUS_SUCCESS;
+  }
+  if (*num_segment_descriptors != actual_num_segment_descriptors) {
+    this->DisableReadOnlyMode();
+    return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+  }
+
+  size_t i = 0;
+  for (auto &executable : executables) {
+    if (executable) {
+      i += executable->QuerySegmentDescriptors(segment_descriptors, actual_num_segment_descriptors, i);
+    }
+  }
+
+  this->DisableReadOnlyMode();
+  return HSA_STATUS_SUCCESS;
+}
+
 uint64_t AmdHsaCodeLoader::FindHostAddress(uint64_t device_address)
 {
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
   if (device_address == 0) {
     return 0;
   }
-  std::lock_guard<std::mutex> lock(executables_mutex);
+
   for (auto &exec : executables) {
     if (exec != nullptr) {
       uint64_t host_address = exec->FindHostAddress(device_address);
@@ -184,6 +230,26 @@ uint64_t AmdHsaCodeLoader::FindHostAddress(uint64_t device_address)
     }
   }
   return 0;
+}
+
+void AmdHsaCodeLoader::EnableReadOnlyMode()
+{
+  rw_lock_.ReaderLock();
+  for (auto &executable : executables) {
+    if (executable) {
+      ((ExecutableImpl*)executable)->EnableReadOnlyMode();
+    }
+  }
+}
+
+void AmdHsaCodeLoader::DisableReadOnlyMode()
+{
+  rw_lock_.ReaderUnlock();
+  for (auto &executable : executables) {
+    if (executable) {
+      ((ExecutableImpl*)executable)->DisableReadOnlyMode();
+    }
+  }
 }
 
 //===----------------------------------------------------------------------===//
@@ -754,6 +820,44 @@ hsa_status_t ExecutableImpl::IterateLoadedCodeObjects(
   return HSA_STATUS_SUCCESS;
 }
 
+size_t ExecutableImpl::GetNumSegmentDescriptors()
+{
+  // assuming we are in readonly mode.
+  size_t actual_num_segment_descriptors = 0;
+  for (auto &obj : loaded_code_objects) {
+    actual_num_segment_descriptors += obj->LoadedSegments().size();
+  }
+  return actual_num_segment_descriptors;
+}
+
+size_t ExecutableImpl::QuerySegmentDescriptors(
+  hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+  size_t total_num_segment_descriptors,
+  size_t first_empty_segment_descriptor)
+{
+  // assuming we are in readonly mode.
+  assert(segment_descriptors);
+  assert(first_empty_segment_descriptor < total_num_segment_descriptors);
+
+  size_t i = first_empty_segment_descriptor;
+  for (auto &obj : loaded_code_objects) {
+    assert(i < total_num_segment_descriptors);
+    for (auto &seg : obj->LoadedSegments()) {
+      segment_descriptors[i].agent = seg->Agent();
+      segment_descriptors[i].executable = Executable::Handle(seg->Owner());
+      segment_descriptors[i].code_object_storage_type = HSA_VEN_AMD_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY;
+      segment_descriptors[i].code_object_storage_base = obj->ElfData();
+      segment_descriptors[i].code_object_storage_size = obj->ElfSize();
+      segment_descriptors[i].code_object_storage_offset = seg->StorageOffset();
+      segment_descriptors[i].segment_base = seg->Address(seg->VAddr());
+      segment_descriptors[i].segment_size = seg->Size();
+      ++i;
+    }
+  }
+
+  return i - first_empty_segment_descriptor;
+}
+
 uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
 {
   for (auto &obj : loaded_code_objects) {
@@ -769,6 +873,16 @@ uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
     }
   }
   return 0;
+}
+
+void ExecutableImpl::EnableReadOnlyMode()
+{
+  rw_lock_.ReaderLock();
+}
+
+void ExecutableImpl::DisableReadOnlyMode()
+{
+  rw_lock_.ReaderUnlock();
 }
 
 #define HSAERRCHECK(hsc)                                                       \
@@ -854,7 +968,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpCode()->is_set()) {
-    if (!code->SaveToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "co", dumpNum))) {
+    if (!code->SaveToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "hsaco", dumpNum))) {
       // Ignore error.
     }
   }
@@ -946,7 +1060,7 @@ hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent, code::Segment* s)
   if (need_alloc) {
     void* ptr = context_->SegmentAlloc(segment, agent, s->memSize(), s->align(), true);
     if (!ptr) { return HSA_STATUS_ERROR_OUT_OF_RESOURCES; }
-    new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr());
+    new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr(), s->offset());
     new_seg->Copy(s->vaddr(), s->data(), s->imageSize());
     objects.push_back(new_seg);
 
@@ -1422,7 +1536,7 @@ hsa_status_t ExecutableImpl::LoadSegmentV2(hsa_agent_t agent, code::Segment* s, 
   void* ptr = context_->SegmentAlloc(segment, agent, s->memSize(), s->align(), true);
   if (!ptr) { return HSA_STATUS_ERROR_OUT_OF_RESOURCES; }
 
-  Segment *new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr());
+  Segment *new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr(), s->offset());
   new_seg->Copy(s->vaddr(), s->data(), s->imageSize());
   objects.push_back(new_seg);
   assert(new_seg);

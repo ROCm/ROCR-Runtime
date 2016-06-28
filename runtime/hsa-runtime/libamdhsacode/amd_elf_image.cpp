@@ -456,6 +456,7 @@ namespace amd {
       uint64_t imageSize() const override { return phdr.p_filesz; }
       uint64_t vaddr() const override { return phdr.p_vaddr; }
       uint64_t flags() const override { return phdr.p_flags; }
+      uint64_t offset() const override { return phdr.p_offset; }
       const char* data() const override;
       uint16_t getSegmentIndex() override;
       bool updateAddSection(Section *section) override;
