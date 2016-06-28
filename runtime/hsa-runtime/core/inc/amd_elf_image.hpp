@@ -103,6 +103,7 @@ namespace amd {
       virtual uint64_t imageSize() const = 0;
       virtual uint64_t vaddr() const = 0;
       virtual uint64_t flags() const = 0;
+      virtual uint64_t offset() const = 0;
       virtual const char* data() const = 0;
       virtual uint16_t getSegmentIndex() = 0;
       virtual bool updateAddSection(Section *section) = 0;

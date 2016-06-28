@@ -56,6 +56,7 @@
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/amd_loader_context.hpp"
 #include "inc/hsa_ven_amd_loaded_code_object.h"
+#include "inc/hsa_ven_amd_loader.h"
 
 using namespace amd::hsa::code;
 
@@ -168,9 +169,7 @@ hsa_status_t
                                    uint16_t version_minor, bool* result) {
   IS_OPEN();
 
-  if ((extension > HSA_EXTENSION_AMD_PROFILER &&
-        extension != HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) ||
-      (result == NULL)) {
+  if (extension >= HSA_EXTENSION_COUNT || result == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -213,9 +212,6 @@ hsa_status_t
   }
 
   if (supported) {
-    ExtTable& runtime_ext_table =
-        core::Runtime::runtime_singleton_->extensions_.table;
-
     if (extension == HSA_EXTENSION_IMAGES) {
       // Currently there is only version 1.00.
       hsa_ext_images_1_00_pfn_t* ext_table =
@@ -253,6 +249,14 @@ hsa_status_t
         hsa_ven_amd_loaded_code_object_query_host_address;
 
       return HSA_STATUS_SUCCESS;
+    } else if (extension == HSA_EXTENSION_AMD_LOADER) {
+      // Currently there is only version 1.00.
+      hsa_ven_amd_loader_1_00_pfn_t* ext_table =
+        reinterpret_cast<hsa_ven_amd_loader_1_00_pfn_t*>(table);
+      ext_table->hsa_ven_amd_loader_query_segment_descriptors =
+        hsa_ven_amd_loader_query_segment_descriptors;
+      ext_table->hsa_ven_amd_loader_query_host_address =
+        hsa_ven_amd_loader_query_host_address;
     } else {
       return HSA_STATUS_ERROR;
     }

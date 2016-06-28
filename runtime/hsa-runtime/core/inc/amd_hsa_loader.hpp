@@ -47,6 +47,7 @@
 #include <cstdint>
 #include "hsa.h"
 #include "hsa_ext_image.h"
+#include "hsa_ven_amd_loader.h"
 #include "amd_hsa_elf.h"
 #include <string>
 #include <mutex>
@@ -317,6 +318,13 @@ public:
       void *data),
     void *data) = 0;
 
+  virtual size_t GetNumSegmentDescriptors() = 0;
+
+  virtual size_t QuerySegmentDescriptors(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t total_num_segment_descriptors,
+    size_t first_empty_segment_descriptor) = 0;
+
   virtual uint64_t FindHostAddress(uint64_t device_address) = 0;
 
   virtual void Print(std::ostream& out) = 0;
@@ -367,6 +375,11 @@ public:
       hsa_executable_t executable,
       void *data),
     void *data) = 0;
+
+  /// @brief same as hsa_ven_amd_loader_query_segment_descriptors.
+  virtual hsa_status_t QuerySegmentDescriptors(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t *num_segment_descriptors) = 0;
 
   /// @brief Returns host address given @p device_address. If @p device_address
   /// is already host address, returns null pointer. If @p device_address is

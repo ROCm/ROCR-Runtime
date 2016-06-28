@@ -462,9 +462,17 @@ typedef enum {
    */
   HSA_EXTENSION_AMD_PROFILER = 2,
   /**
-   * Loaded code object extension.
+   * @deprecated Loaded code object extension.
    */
-  HSA_EXTENSION_AMD_LOADED_CODE_OBJECT = 3
+  HSA_EXTENSION_AMD_LOADED_CODE_OBJECT = 3,
+  /**
+   * Loader extension.
+   */
+  HSA_EXTENSION_AMD_LOADER = 4,
+  /**
+   * Extension count.
+   */
+  HSA_EXTENSION_COUNT
 } hsa_extension_t;
 
 /**

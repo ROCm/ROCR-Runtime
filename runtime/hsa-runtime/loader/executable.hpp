@@ -273,16 +273,18 @@ private:
   size_t size;
   uint64_t vaddr;
   bool frozen;
+  size_t storage_offset;
 
 public:
-  Segment(ExecutableImpl *owner_, hsa_agent_t agent_, amdgpu_hsa_elf_segment_t segment_, void* ptr_, size_t size_, uint64_t vaddr_)
+  Segment(ExecutableImpl *owner_, hsa_agent_t agent_, amdgpu_hsa_elf_segment_t segment_, void* ptr_, size_t size_, uint64_t vaddr_, size_t storage_offset_)
     : ExecutableObject(owner_, agent_), segment(segment_),
-      ptr(ptr_), size(size_), vaddr(vaddr_), frozen(false) { }
+      ptr(ptr_), size(size_), vaddr(vaddr_), frozen(false), storage_offset(storage_offset_) { }
 
   amdgpu_hsa_elf_segment_t ElfSegment() const { return segment; }
   void* Ptr() const { return ptr; }
   size_t Size() const { return size; }
   uint64_t VAddr() const { return vaddr; }
+  size_t StorageOffset() const { return storage_offset;  }
 
   bool GetInfo(amd_loaded_segment_info_t attribute, void *value) override;
 
@@ -399,7 +401,17 @@ public:
       void *data),
     void *data);
 
+  size_t GetNumSegmentDescriptors() override;
+
+  size_t QuerySegmentDescriptors(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t total_num_segment_descriptors,
+    size_t first_empty_segment_descriptor) override;
+
   uint64_t FindHostAddress(uint64_t device_address) override;
+
+  void EnableReadOnlyMode();
+  void DisableReadOnlyMode();
 
   void Print(std::ostream& out) override;
   bool PrintToFile(const std::string& filename) override;
@@ -455,7 +467,7 @@ class AmdHsaCodeLoader : public Loader {
 private:
   Context* context;
   std::vector<Executable*> executables;
-  std::mutex executables_mutex;
+  amd::hsa::common::ReaderWriterLock rw_lock_;
 
 public:
   AmdHsaCodeLoader(Context* context_)
@@ -473,7 +485,14 @@ public:
       void *data),
     void *data) override;
 
+  hsa_status_t QuerySegmentDescriptors(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t *num_segment_descriptors) override;
+
   uint64_t FindHostAddress(uint64_t device_address) override;
+
+  void EnableReadOnlyMode();
+  void DisableReadOnlyMode();
 };
 
 } // namespace loader
