@@ -257,6 +257,8 @@ hsa_status_t
         hsa_ven_amd_loader_query_segment_descriptors;
       ext_table->hsa_ven_amd_loader_query_host_address =
         hsa_ven_amd_loader_query_host_address;
+
+      return HSA_STATUS_SUCCESS;
     } else {
       return HSA_STATUS_ERROR;
     }
