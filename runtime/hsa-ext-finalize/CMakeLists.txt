@@ -40,6 +40,7 @@ set ( CORE_RUNTIME_NAME "hsa-runtime" )
 set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}${ONLY64STR}" )
 set ( CORE_RUNTIME_LIB "lib${CORE_RUNTIME_NAME}${ONLY64STR}.so" )
+set ( THUNK_LIB "libhsakmt.so" )
 
 MESSAGE ( ------IS64BIT: ${IS64BIT} )
 MESSAGE ( ------Compiler: ${CMAKE_CXX_COMPILER} )
@@ -110,6 +111,7 @@ include_directories ( ${EXT_SOURCE_DIR}/inc )
 include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime )
 include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/inc )
 include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/core/inc )
+include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/core/common )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize/amdhsafin/Interface )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/include )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
@@ -119,6 +121,11 @@ include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HS
 set ( FINALIZE_SRCS ${EXT_SOURCE_DIR}/finalize/hsa_ext_finalize.cpp
                     ${EXT_SOURCE_DIR}/finalize/program_context.cpp
                     ${EXT_SOURCE_DIR}/finalize/finalizer_manager.cpp
+                    ${EXT_SOURCE_DIR}/runtime/amd_ext.cpp
+                    ${EXT_SOURCE_DIR}/runtime/device_info.cpp
+                    ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
+                    ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
+                    ${OPEN_SOURCE_DIR}/hsa-runtime/core/util/lnx/os_linux.cpp
 )
 
 add_library ( ${FINALIZE_TARGET} SHARED ${FINALIZE_SRCS} )
@@ -131,29 +138,31 @@ endif ()
 set_property ( TARGET ${FINALIZE_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
 
 ## Add the core runtime in the link
-set ( LIBHSAIL -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a )
-set ( LIBHSAILAMD -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail-amd.a )
-set ( LIBAMDHSAFIN -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/amdhsafin64.a )
-set ( LIBAMDHSACODE -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libamdhsacode.a )
-set ( LIBCACHING -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libcaching.a )
-set ( LIBDWARF -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libdwarf.a )
-set ( LIBELF -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libelf.a )
-set ( LIBSCP3 -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/scSP3_R1000.a )
+set ( LIBAMDHSAFIN -Wl,--no-whole-archive ${HSA_BUILD_LIB_PATH}/amdhsafin64.a )
+set ( LIBAMDHSACODE ${HSA_BUILD_LIB_PATH}/libamdhsacode.a )
+set ( LIBCACHING ${HSA_BUILD_LIB_PATH}/libcaching.a )
+set ( LIBSCP3 ${HSA_BUILD_LIB_PATH}/scSP3_R1000.a )
+set ( LIBHSAILAMD ${HSA_BUILD_LIB_PATH}/libhsail-amd.a )
+set ( LIBHSAIL ${HSA_BUILD_LIB_PATH}/libhsail.a )
+set ( LIBDWARF ${HSA_BUILD_LIB_PATH}/libdwarf.a )
+set ( LIBELF ${HSA_BUILD_LIB_PATH}/libelf.a )
 
 ## Add the core runtime in the link
 link_directories(${HSA_BUILD_LIB_PATH})
+
 target_link_libraries (
     ${FINALIZE_TARGET}
-    PRIVATE ${LIBHSAIL}
-    PRIVATE ${LIBHSAILAMD}
     PRIVATE ${LIBAMDHSAFIN}
     PRIVATE ${LIBAMDHSACODE}
     PRIVATE ${LIBCACHING}
+    PRIVATE ${LIBSCP3}
+    PRIVATE ${LIBHSAILAMD}
+    PRIVATE ${LIBHSAIL}
     PRIVATE ${LIBDWARF}
     PRIVATE ${LIBELF}
-    PRIVATE ${LIBSCP3}
     PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
-    c dl pthread rt
+    PRIVATE ${HSA_BUILD_LIB_PATH}/${THUNK_LIB}
+    c stdc++ dl pthread rt
 )
 
 ## If the build is Release, strip the target library
