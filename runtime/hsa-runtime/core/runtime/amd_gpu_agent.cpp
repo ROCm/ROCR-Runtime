@@ -640,22 +640,16 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
-      // TODO: hardcode for now.
+    {
+      // This code assumes that UTF-16 HsaNodeProperties.MarketingName is
+      // actually encoded in 7-bit ASCII, and the runtime output is 7-bit ASCII
+      // in bytes.
       std::memset(value, 0, kNameSize);
-      if (isa_->GetMajorVersion() == 7) {
-        std::memcpy(value, "Kaveri", sizeof("Kaveri"));
-      } else if (isa_->GetMajorVersion() == 8) {
-        if (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 2) {
-          std::memcpy(value, "Tonga", sizeof("Tonga"));
-        } else if (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 3) {
-          std::memcpy(value, "Fiji", sizeof("Fiji"));
-        } else {
-          std::memcpy(value, "Carrizo", sizeof("Carrizo"));
-        }
-      } else {
-        std::memcpy(value, "Unknown", sizeof("Unknown"));
-      }
+      char* temp = reinterpret_cast<char*>(value);
+      for (uint32_t i = 0; properties_.MarketingName[i] != 0 && i < kNameSize - 1; i++)
+        temp[i] = properties_.MarketingName[i];
       break;
+    }
     case HSA_AGENT_INFO_VENDOR_NAME:
       std::memset(value, 0, kNameSize);
       std::memcpy(value, "AMD", sizeof("AMD"));
