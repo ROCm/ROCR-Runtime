@@ -55,7 +55,6 @@
 #include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/amd_loader_context.hpp"
-#include "inc/hsa_ven_amd_loaded_code_object.h"
 #include "inc/hsa_ven_amd_loader.h"
 
 using namespace amd::hsa::code;
@@ -244,17 +243,7 @@ hsa_status_t
 
     return HSA_STATUS_SUCCESS;
   }
-  
-  if (extension == HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) {
-    // Currently there is only version 1.00.
-    hsa_ven_amd_loaded_code_object_1_00_pfn_t* ext_table =
-      reinterpret_cast<hsa_ven_amd_loaded_code_object_1_00_pfn_t*>(table);
-    ext_table->hsa_ven_amd_loaded_code_object_query_host_address =
-      hsa_ven_amd_loaded_code_object_query_host_address;
 
-    return HSA_STATUS_SUCCESS;
-  }
-  
   if (extension == HSA_EXTENSION_AMD_LOADER) {
     // Currently there is only version 1.00.
     hsa_ven_amd_loader_1_00_pfn_t* ext_table =
@@ -266,7 +255,7 @@ hsa_status_t
 
     return HSA_STATUS_SUCCESS;
   }
-  
+
   return HSA_STATUS_ERROR;
 }
 
