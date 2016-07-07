@@ -400,6 +400,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
       break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
       *((uint32_t*)value) = link_info.num_hop;
+      break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_LINK_INFO:
       memset(value, 0, sizeof(hsa_amd_memory_pool_link_info_t));
       if (link_info.num_hop > 0) {
