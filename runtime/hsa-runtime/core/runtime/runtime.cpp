@@ -188,7 +188,6 @@ void Runtime::RegisterAgent(Agent* agent) {
       HsaClockCounters clocks;
       hsaKmtGetClockCounters(0, &clocks);
       sys_clock_freq_ = clocks.SystemClockFrequencyHz;
-      host_agent_ = agent;
     }
   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
     gpu_agents_.push_back(agent);
@@ -791,8 +790,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
 }
 
 Runtime::Runtime()
-    : host_agent_(NULL),
-      blit_agent_(NULL),
+    : blit_agent_(NULL),
       queue_count_(0),
       sys_clock_freq_(0),
       vm_fault_event_(NULL),

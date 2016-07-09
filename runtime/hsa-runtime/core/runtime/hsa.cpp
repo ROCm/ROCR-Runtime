@@ -783,7 +783,7 @@ hsa_status_t
 
   core::Signal* ret;
 
-  bool useshost = true;
+  bool uses_host = false;
 
   if (num_consumers > 0) {
     IS_BAD_PTR(consumers);
@@ -796,13 +796,16 @@ hsa_status_t
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
 
-    useshost =
-        (consumer_set.find(
-            core::Runtime::runtime_singleton_->host_agent()->public_handle()) !=
-        consumer_set.end());
+    for (const core::Agent* cpu_agent :
+         core::Runtime::runtime_singleton_->cpu_agents()) {
+      uses_host |=
+          (consumer_set.find(cpu_agent->public_handle()) != consumer_set.end());
+    }
+  } else {
+    uses_host = true;
   }
 
-  if (core::g_use_interrupt_wait && useshost) {
+  if (core::g_use_interrupt_wait && uses_host) {
     ret = new core::InterruptSignal(initial_value);
   } else {
     ret = new core::DefaultSignal(initial_value);
