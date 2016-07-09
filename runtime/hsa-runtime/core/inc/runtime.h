@@ -280,8 +280,6 @@ class Runtime {
 
   Agent* blit_agent() { return blit_agent_; }
 
-  Agent* host_agent() { return host_agent_; }
-
   const std::vector<const MemoryRegion*>& system_regions_fine() const {
     return system_regions_fine_;
   }
@@ -454,9 +452,6 @@ class Runtime {
 
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;
-
-  // Pointer to a host/cpu agent object.
-  Agent* host_agent_;
 
   // Pointer to DMA agent.
   Agent* blit_agent_;
