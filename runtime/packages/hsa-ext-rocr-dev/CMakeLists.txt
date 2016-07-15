@@ -72,21 +72,25 @@ add_custom_target (create_dirs DEPENDS ${PACKAGE_DIRECTORIES} )
 
 set ( FINALIZER_NAME "libhsa-ext-finalize64" )
 set ( TOOLS_NAME     "libhsa-runtime-tools64" )
+set ( IMAGE_NAME     "libhsa-ext-image64" )
 set ( AMDHSACOD_NAME "amdhsacod" )
 set ( AMDHSAFIN_NAME "amdhsafin" )
 
-set ( FINALIZER_LIBRARY_SOURCE "${OUT_DIR}/lib/${FINALIZER_NAME}.so.1" )
+set ( FINALIZER_LIBRARY_SOURCE "${OUT_DIR}/lib/${FINALIZER_NAME}.so.${VERSION_STRING}" )
 set ( TOOLS_LIBRARY_SOURCE     "${OUT_DIR}/lib/${TOOLS_NAME}.so.${VERSION_STRING}" )
+set ( IMAGE_LIBRARY_SOURCE     "${OUT_DIR}/lib/${IMAGE_NAME}.so.${VERSION_STRING}" )
 set ( AMDHSACOD_SOURCE         "${OUT_DIR}/bin/${AMDHSACOD_NAME}" )
 set ( AMDHSAFIN_SOURCE         "${OUT_DIR}/bin/${AMDHSAFIN_NAME}" )
 
 set ( FINALIZER_LIBRARY_TARGET "${EXTERNAL_DIR}/hsa/lib/${FINALIZER_NAME}.so.${VERSION_STRING}" )
 set ( TOOLS_LIBRARY_TARGET     "${EXTERNAL_DIR}/hsa/lib/${TOOLS_NAME}.so.${VERSION_STRING}" )
+set ( IMAGE_LIBRARY_TARGET     "${EXTERNAL_DIR}/hsa/lib/${IMAGE_NAME}.so.${VERSION_STRING}" )
 set ( AMDHSACOD_TARGET         "${EXTERNAL_DIR}/hsa/bin/${AMDHSACOD_NAME}" )
 set ( AMDHSAFIN_TARGET         "${EXTERNAL_DIR}/hsa/bin/${AMDHSAFIN_NAME}" )
 
 set ( FINALIZER_LIBRARY_SONAME "${EXTERNAL_DIR}/hsa/lib/${FINALIZER_NAME}.so.1" )
 set ( TOOLS_LIBRARY_SONAME     "${EXTERNAL_DIR}/hsa/lib/${TOOLS_NAME}.so.1" )
+set ( IMAGE_LIBRARY_SONAME     "${EXTERNAL_DIR}/hsa/lib/${IMAGE_NAME}.so.1" )
 set ( AMDHSACOD_LINK           "${EXTERNAL_DIR}/bin/${AMDHSACOD_NAME}" )
 set ( AMDHSAFIN_LINK           "${EXTERNAL_DIR}/bin/${AMDHSAFIN_NAME}" )
 
@@ -95,6 +99,9 @@ add_custom_command(OUTPUT ${FINALIZER_LIBRARY_TARGET} WORKING_DIRECTORY ${EXTERN
 
 add_custom_command(OUTPUT ${TOOLS_LIBRARY_TARGET} WORKING_DIRECTORY ${EXTERNAL_DIR} 
                    COMMAND ${CMAKE_COMMAND} -E copy ${TOOLS_LIBRARY_SOURCE} ${TOOLS_LIBRARY_TARGET})
+
+add_custom_command(OUTPUT ${IMAGE_LIBRARY_TARGET} WORKING_DIRECTORY ${EXTERNAL_DIR} 
+                   COMMAND ${CMAKE_COMMAND} -E copy ${IMAGE_LIBRARY_SOURCE} ${IMAGE_LIBRARY_TARGET})
 
 add_custom_command(OUTPUT ${AMDHSACOD_TARGET} WORKING_DIRECTORY ${EXTERNAL_DIR} 
                    COMMAND ${CMAKE_COMMAND} -E copy ${AMDHSACOD_SOURCE} ${AMDHSACOD_TARGET})
@@ -108,6 +115,9 @@ add_custom_command(OUTPUT ${FINALIZER_LIBRARY_SONAME} WORKING_DIRECTORY ${EXTERN
 add_custom_command(OUTPUT ${TOOLS_LIBRARY_SONAME} WORKING_DIRECTORY ${EXTERNAL_DIR}/hsa/lib
                    COMMAND ${CMAKE_COMMAND} -E create_symlink ${TOOLS_NAME}.so.${VERSION_STRING} ${TOOLS_NAME}.so.1 )
 
+add_custom_command(OUTPUT ${IMAGE_LIBRARY_SONAME} WORKING_DIRECTORY ${EXTERNAL_DIR}/hsa/lib
+                   COMMAND ${CMAKE_COMMAND} -E create_symlink ${IMAGE_NAME}.so.${VERSION_STRING} ${IMAGE_NAME}.so.1 )
+
 add_custom_command(OUTPUT ${AMDHSACOD_LINK} WORKING_DIRECTORY ${EXTERNAL_DIR}/bin
                    COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/bin/${AMDHSACOD_NAME} ${AMDHSACOD_NAME} )
 
@@ -117,10 +127,12 @@ add_custom_command(OUTPUT ${AMDHSAFIN_LINK} WORKING_DIRECTORY ${EXTERNAL_DIR}/bi
 add_custom_target (copy_targets DEPENDS create_dirs
                                         ${FINALIZER_LIBRARY_TARGET} 
                                         ${TOOLS_LIBRARY_TARGET}
+                                        ${IMAGE_LIBRARY_TARGET}
                                         ${AMDHSACOD_TARGET}
                                         ${AMDHSAFIN_TARGET}
                                         ${FINALIZER_LIBRARY_SONAME}
                                         ${TOOLS_LIBRARY_SONAME}
+                                        ${IMAGE_LIBRARY_SONAME}
                                         ${AMDHSACOD_LINK}
                                         ${AMDHSAFIN_LINK}
                                         )
