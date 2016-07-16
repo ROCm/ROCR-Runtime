@@ -46,18 +46,18 @@
 #include <atomic>
 #include <cstring>
 #include <climits>
+#include <map>
 #include <string>
 #include <vector>
 
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
+#include "core/inc/amd_gpu_shaders.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
-
-#include "utils/sp3/sp3.h"
 
 #include "hsa_ext_image.h"
 
@@ -182,38 +182,48 @@ GpuAgent::~GpuAgent() {
 void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
                               AssembleTarget assemble_target, void*& code_buf,
                               size_t& code_buf_size) const {
-#ifdef __linux__  // No VS builds of libsp3 available right now
-  std::string src_sp3_unified(src_sp3);
+  // Select precompiled shader implementation from name/target.
+  struct ASICShader {
+    const void* code;
+    size_t size;
+    int num_sgprs;
+    int num_vgprs;
+  };
 
-  if (isa_->GetMajorVersion() == 7) {
-    // On Gfx7 replace v_add_u32 with legacy equivalent v_add_i32.
-    std::string add_inst_gfx8("v_add_u32"), add_inst_gfx7("v_add_i32");
+  struct CompiledShader {
+    ASICShader compute_7;
+    ASICShader compute_8;
+  };
 
-    for (size_t instIdx = 0; (instIdx = src_sp3_unified.find(
-                                  add_inst_gfx8, instIdx)) != std::string::npos;
-         instIdx += add_inst_gfx8.size()) {
-      src_sp3_unified.replace(instIdx, add_inst_gfx7.size(), add_inst_gfx7);
-    }
-  }
+  std::map<std::string, CompiledShader> compiled_shaders = {
+      {"TrapHandler",
+       {{NULL, 0, 0, 0}, {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4}}},
+      {"CopyAligned",
+       {{kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
+        {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12}}},
+      {"CopyMisaligned",
+       {{kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
+        {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10}}},
+      {"Fill",
+       {{kCodeFill7, sizeof(kCodeFill7), 19, 8},
+        {kCodeFill8, sizeof(kCodeFill8), 19, 8}}}};
 
-  // Assemble source string with libsp3.
-  sp3_context* sp3 = sp3_new();
+  auto compiled_shader_it = compiled_shaders.find(func_name);
+  assert(compiled_shader_it != compiled_shaders.end() &&
+         "Precompiled shader unavailable");
+
+  ASICShader* asic_shader = NULL;
 
   switch (isa_->GetMajorVersion()) {
     case 7:
-      sp3_setasic(sp3, "CI");
-      sp3_set_param_int(sp3, "kGFXIPVersion", 7);
+      asic_shader = &compiled_shader_it->second.compute_7;
       break;
     case 8:
-      sp3_setasic(sp3, "VI");
-      sp3_set_param_int(sp3, "kGFXIPVersion", 8);
+      asic_shader = &compiled_shader_it->second.compute_8;
       break;
     default:
-      assert(false && "SP3 assembly not supported on this agent");
+      assert(false && "Precompiled shader unavailable for target");
   }
-
-  sp3_parse_string(sp3, src_sp3_unified.c_str());
-  sp3_shader* code_sp3_meta = sp3_compile(sp3, func_name);
 
   // Allocate a GPU-visible buffer for the shader.
   HsaMemFlags code_buf_flags = {0};
@@ -221,10 +231,9 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   code_buf_flags.ui32.ExecuteAccess = 1;
   code_buf_flags.ui32.NoSubstitute = 1;
 
-  size_t code_size = code_sp3_meta->size * sizeof(uint32_t);
   size_t header_size =
       (assemble_target == AssembleTarget::AQL ? sizeof(amd_kernel_code_t) : 0);
-  code_buf_size = AlignUp(header_size + code_size, 0x1000);
+  code_buf_size = AlignUp(header_size + asic_shader->size, 0x1000);
 
   HSAKMT_STATUS err =
       hsaKmtAllocMemory(node_id(), code_buf_size, code_buf_flags, &code_buf);
@@ -239,8 +248,8 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   if (assemble_target == AssembleTarget::AQL) {
     amd_kernel_code_t* header = reinterpret_cast<amd_kernel_code_t*>(code_buf);
 
-    int gran_sgprs = std::max(0, (int(code_sp3_meta->nsgprs) - 1) / 8);
-    int gran_vgprs = std::max(0, (int(code_sp3_meta->nvgprs) - 1) / 4);
+    int gran_sgprs = std::max(0, (int(asic_shader->num_sgprs) - 1) / 8);
+    int gran_vgprs = std::max(0, (int(asic_shader->num_vgprs) - 1) / 4);
 
     header->kernel_code_entry_byte_offset = sizeof(amd_kernel_code_t);
     AMD_HSA_BITS_SET(header->kernel_code_properties,
@@ -262,14 +271,9 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
                      AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_SGPR_WORKGROUP_ID_X, 1);
   }
 
-  // Copy trap handler code into the GPU-visible buffer.
-  memcpy((void*)(uintptr_t(code_buf) + header_size), code_sp3_meta->data,
-         code_size);
-
-  // Release SP3 resources.
-  sp3_free_shader(code_sp3_meta);
-  sp3_close(sp3);
-#endif
+  // Copy shader code into the GPU-visible buffer.
+  memcpy((void*)(uintptr_t(code_buf) + header_size), asic_shader->code,
+         asic_shader->size);
 }
 
 void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) const {
@@ -988,7 +992,6 @@ void GpuAgent::SyncClocks() {
 }
 
 void GpuAgent::BindTrapHandler() {
-#ifdef __linux__  // No raw string literal support in VS builds right now
   const char* src_sp3 = R"(
     var s_trap_info_lo = ttmp0
     var s_trap_info_hi = ttmp1
@@ -1068,7 +1071,6 @@ void GpuAgent::BindTrapHandler() {
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
                                            trap_code_buf_size_, NULL, 0);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
-#endif
 }
 
 }  // namespace
