@@ -174,7 +174,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
 
   const auto& props = agent->properties();
   amd_queue_.max_cu_id = (props.NumFComputeCores / props.NumSIMDPerCU) - 1;
-  amd_queue_.max_wave_id = props.MaxWavesPerSIMD - 1;
+  amd_queue_.max_wave_id = (props.MaxWavesPerSIMD * props.NumSIMDPerCU) - 1;
 
 #ifdef HSA_LARGE_MODEL
   AMD_HSA_BITS_SET(amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_IS_PTR64,
