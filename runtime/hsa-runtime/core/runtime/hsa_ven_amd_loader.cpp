@@ -47,17 +47,6 @@
 
 using namespace core;
 
-hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
-  hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
-  size_t *num_segment_descriptors) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
-    return HSA_STATUS_ERROR_NOT_INITIALIZED;
-  }
-
-  // Arguments are checked by the loader.
-  return Runtime::runtime_singleton_->loader()->QuerySegmentDescriptors(segment_descriptors, num_segment_descriptors);
-}
-
 hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
   const void *device_address,
   const void **host_address) {
@@ -79,4 +68,15 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
 
   *host_address = reinterpret_cast<void*>(uhaddr);
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
+  hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+  size_t *num_segment_descriptors) {
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  }
+
+  // Arguments are checked by the loader.
+  return Runtime::runtime_singleton_->loader()->QuerySegmentDescriptors(segment_descriptors, num_segment_descriptors);
 }

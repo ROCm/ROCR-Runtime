@@ -52,6 +52,42 @@ extern "C" {
 #endif /* __cplusplus */
 
 /**
+ * @brief Queries equivalent host address for given @p device_address, and
+ * records it in @p host_address.
+ *
+ *
+ * @details Contents of memory pointed to by @p host_address would be identical
+ * to contents of memory pointed to by @p device_address. Only difference
+ * between the two is host accessibility: @p host_address is always accessible
+ * from host, @p device_address might not be accessible from host.
+ *
+ * If @p device_address already points to host accessible memory, then the value
+ * of @p device_address is simply copied into @p host_address.
+ *
+ * The lifetime of @p host_address is the same as the lifetime of @p
+ * device_address, and both lifetimes are limited by the lifetime of the
+ * executable that is managing these addresses.
+ *
+ *
+ * @param[in] device_address Device address to query equivalent host address
+ * for.
+ *
+ * @param[out] host_address Pointer to application-allocated buffer to record
+ * queried equivalent host address in.
+ *
+ *
+ * @retval HSA_STATUS_SUCCESS Function is executed successfully.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED Runtime is not initialized.
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p device_address is invalid or
+ * null, or @p host_address is null.
+ */
+hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
+  const void *device_address,
+  const void **host_address);
+
+/**
  * @brief The storage type of the code object that is backing loaded memory
  * segment.
  */
@@ -189,42 +225,6 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
   size_t *num_segment_descriptors);
 
 /**
- * @brief Queries equivalent host address for given @p device_address, and
- * records it in @p host_address.
- *
- *
- * @details Contents of memory pointed to by @p host_address would be identical
- * to contents of memory pointed to by @p device_address. Only difference
- * between the two is host accessibility: @p host_address is always accessible
- * from host, @p device_address might not be accessible from host.
- *
- * If @p device_address already points to host accessible memory, then the value
- * of @p device_address is simply copied into @p host_address.
- *
- * The lifetime of @p host_address is the same as the lifetime of @p
- * device_address, and both lifetimes are limited by the lifetime of the
- * executable that is managing these addresses.
- *
- *
- * @param[in] device_address Device address to query equivalent host address
- * for.
- *
- * @param[out] host_address Pointer to application-allocated buffer to record
- * queried equivalent host address in.
- *
- *
- * @retval HSA_STATUS_SUCCESS Function is executed successfully.
- *
- * @retval HSA_STATUS_ERROR_NOT_INITIALIZED Runtime is not initialized.
- *
- * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p device_address is invalid or
- * null, or @p host_address is null.
- */
-hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
-  const void *device_address,
-  const void **host_address);
-
-/**
  * @brief Extension version.
  */
 #define hsa_ven_amd_loader 001000
@@ -233,13 +233,13 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
  * @brief Extension function table.
  */
 typedef struct hsa_ven_amd_loader_1_00_pfn_s {
-  hsa_status_t (*hsa_ven_amd_loader_query_segment_descriptors)(
-    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
-    size_t *num_segment_descriptors);
-
   hsa_status_t (*hsa_ven_amd_loader_query_host_address)(
     const void *device_address,
     const void **host_address);
+
+  hsa_status_t (*hsa_ven_amd_loader_query_segment_descriptors)(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t *num_segment_descriptors);
 } hsa_ven_amd_loader_1_00_pfn_t;
 
 #ifdef __cplusplus

@@ -228,7 +228,7 @@ hsa_status_t
 
     return HSA_STATUS_SUCCESS;
   }
-  
+
   if (extension == HSA_EXTENSION_FINALIZER) {
     // Currently there is only version 1.00.
     hsa_ext_finalizer_1_00_pfn_s* ext_table =
@@ -248,10 +248,10 @@ hsa_status_t
     // Currently there is only version 1.00.
     hsa_ven_amd_loader_1_00_pfn_t* ext_table =
       reinterpret_cast<hsa_ven_amd_loader_1_00_pfn_t*>(table);
-    ext_table->hsa_ven_amd_loader_query_segment_descriptors =
-      hsa_ven_amd_loader_query_segment_descriptors;
     ext_table->hsa_ven_amd_loader_query_host_address =
       hsa_ven_amd_loader_query_host_address;
+    ext_table->hsa_ven_amd_loader_query_segment_descriptors =
+      hsa_ven_amd_loader_query_segment_descriptors;
 
     return HSA_STATUS_SUCCESS;
   }
