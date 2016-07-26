@@ -130,8 +130,7 @@ set ( CMD_WRITER_SRC  ${TOOLS_SOURCE_DIR}/command_writer/tools_command_writer.cp
 set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp
                       ${TOOLS_SOURCE_DIR}/common/cmd_buf_impl.cpp )
 
-set ( DEBUGGER_SRC    ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring.cpp
-                      ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring_perf.cpp
+set ( DEBUGGER_SRC    ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring_perf.cpp
                       ${TOOLS_SOURCE_DIR}/debugger/gpu_trap_event.cpp
                       ${TOOLS_SOURCE_DIR}/debugger/hsa_ext_debugger.cpp
                       ${TOOLS_SOURCE_DIR}/debugger/kfd_event.cpp
