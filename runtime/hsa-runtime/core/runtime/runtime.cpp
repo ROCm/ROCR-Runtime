@@ -821,11 +821,9 @@ void Runtime::Load() {
   // Load tools libraries
   LoadTools();
 
-  // Initialize blit kernel object after tools is initialized to allow tools
-  // to overload blit kernel.
   for (core::Agent* agent : gpu_agents_) {
     const hsa_status_t stat =
-        reinterpret_cast<amd::GpuAgentInt*>(agent)->InitBlitKernel();
+        reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
     assert(HSA_STATUS_SUCCESS == stat);
   }
 }

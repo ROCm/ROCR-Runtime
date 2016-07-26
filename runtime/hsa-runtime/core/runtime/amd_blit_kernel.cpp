@@ -515,10 +515,9 @@ static int kCopyMisalignedUnroll = GetKernelSourceParam("kCopyMisalignedUnroll")
 static int kFillVecWidth = GetKernelSourceParam("kFillVecWidth");
 static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
 
-BlitKernel::BlitKernel()
+BlitKernel::BlitKernel(core::Queue* queue)
     : core::Blit(),
-      queue_(NULL),
-      cached_index_(0),
+      queue_(queue),
       kernarg_async_(NULL),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
@@ -529,40 +528,18 @@ BlitKernel::BlitKernel()
 BlitKernel::~BlitKernel() {}
 
 hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
-  hsa_agent_t agent_handle = agent.public_handle();
+  queue_bitmask_ = queue_->public_handle()->size - 1;
 
-  uint32_t features = 0;
-  hsa_status_t status =
-      HSA::hsa_agent_get_info(agent_handle, HSA_AGENT_INFO_FEATURE, &features);
-  if (status != HSA_STATUS_SUCCESS) {
-    return status;
-  }
-
-  if ((features & HSA_AGENT_FEATURE_KERNEL_DISPATCH) == 0) {
-    return HSA_STATUS_ERROR;
-  }
-
-  status = HSA::hsa_queue_create(agent_handle, 1024, HSA_QUEUE_TYPE_MULTI, NULL,
-                                 NULL, 0, 0, &queue_);
-
-  if (HSA_STATUS_SUCCESS != status) {
-    return status;
-  }
-
-  queue_bitmask_ = queue_->size - 1;
-
-  cached_index_ = 0;
-
-  status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
+  hsa_status_t status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
 
   kernarg_async_ = reinterpret_cast<KernelArgs*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          queue_->size * AlignUp(sizeof(KernelArgs), 16), 16));
+          queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16), 16));
 
-  kernarg_async_mask_ = queue_->size - 1;
+  kernarg_async_mask_ = queue_->public_handle()->size - 1;
 
   // Obtain the number of compute units in the underlying agent.
   const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
@@ -596,10 +573,6 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   for (auto kernel_pair : kernels_) {
     gpuAgent.ReleaseShader(kernel_pair.second.code_buf_,
                            kernel_pair.second.code_buf_size_);
-  }
-
-  if (queue_ != NULL) {
-    HSA::hsa_queue_destroy(queue_);
   }
 
   if (kernarg_async_ != NULL) {
@@ -661,7 +634,8 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
   barrier_packet.header = HSA_PACKET_TYPE_INVALID;
 
   hsa_barrier_and_packet_t* queue_buffer =
-      reinterpret_cast<hsa_barrier_and_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_barrier_and_packet_t*>(
+          queue_->public_handle()->base_address);
 
   const size_t dep_signal_count = dep_signals.size();
   for (size_t i = 0; i < dep_signal_count; ++i) {
@@ -803,26 +777,20 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
 }
 
 hsa_status_t BlitKernel::EnableProfiling(bool enable) {
-  core::Queue* cmd_queue = core::Queue::Convert(queue_);
-  if (cmd_queue != NULL) {
-    AMD_HSA_BITS_SET(cmd_queue->amd_queue_.queue_properties,
-                     AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
-    return HSA_STATUS_SUCCESS;
-  }
-
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  AMD_HSA_BITS_SET(queue_->amd_queue_.queue_properties,
+                   AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
+  return HSA_STATUS_SUCCESS;
 }
 
 uint64_t BlitKernel::AcquireWriteIndex(uint32_t num_packet) {
-  assert(queue_->size >= num_packet);
+  assert(queue_->public_handle()->size >= num_packet);
 
-  uint64_t write_index =
-      HSA::hsa_queue_add_write_index_acq_rel(queue_, num_packet);
+  uint64_t write_index = queue_->AddWriteIndexAcqRel(num_packet);
 
   while (true) {
     // Wait until we have room in the queue;
-    const uint64_t read_index = HSA::hsa_queue_load_read_index_relaxed(queue_);
-    if ((write_index - read_index) < queue_->size) {
+    const uint64_t read_index = queue_->LoadReadIndexRelaxed();
+    if ((write_index - read_index) <= queue_->public_handle()->size) {
       break;
     }
   }
@@ -831,19 +799,10 @@ uint64_t BlitKernel::AcquireWriteIndex(uint32_t num_packet) {
 }
 
 void BlitKernel::ReleaseWriteIndex(uint64_t write_index, uint32_t num_packet) {
-  // Launch packet.
-  while (true) {
-    // Make sure that the address before ::current_offset is already released.
-    // Otherwise the packet processor may read invalid packets.
-    uint64_t expected_offset = write_index;
-    if (atomic::Cas(&cached_index_, write_index + num_packet, expected_offset,
-                    std::memory_order_release) == expected_offset) {
-      // Update doorbel register with last packet id.
-      HSA::hsa_signal_store_release(queue_->doorbell_signal,
-                                    write_index + num_packet - 1);
-      break;
-    }
-  }
+  // Update doorbel register with last packet id.
+  core::Signal* doorbell =
+      core::Signal::Convert(queue_->public_handle()->doorbell_signal);
+  doorbell->StoreRelease(write_index + num_packet - 1);
 }
 
 hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
@@ -871,7 +830,8 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
 
   // Populate queue buffer with AQL packet.
   hsa_barrier_and_packet_t* queue_buffer =
-      reinterpret_cast<hsa_barrier_and_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_barrier_and_packet_t*>(
+          queue_->public_handle()->base_address);
   std::atomic_thread_fence(std::memory_order_acquire);
   queue_buffer[(write_index + num_copy_packet) & queue_bitmask_] = packet;
   std::atomic_thread_fence(std::memory_order_release);
@@ -921,7 +881,8 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
 
   // Populate queue buffer with AQL packet.
   hsa_kernel_dispatch_packet_t* queue_buffer =
-      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
+          queue_->public_handle()->base_address);
   std::atomic_thread_fence(std::memory_order_acquire);
   queue_buffer[index & queue_bitmask_] = packet;
   std::atomic_thread_fence(std::memory_order_release);
