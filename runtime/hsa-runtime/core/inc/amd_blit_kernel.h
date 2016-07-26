@@ -51,7 +51,7 @@
 namespace amd {
 class BlitKernel : public core::Blit {
  public:
-  explicit BlitKernel();
+  explicit BlitKernel(core::Queue* queue);
   virtual ~BlitKernel() override;
 
   /// @brief Initialize a blit kernel object.
@@ -175,11 +175,8 @@ class BlitKernel : public core::Blit {
   std::map<KernelType, KernelCode> kernels_;
 
   /// AQL queue for submitting the vector copy kernel.
-  hsa_queue_t* queue_;
+  core::Queue* queue_;
   uint32_t queue_bitmask_;
-
-  /// Index to track concurrent kernel launch.
-  volatile uint64_t cached_index_;
 
   /// Pointer to the kernel argument buffer.
   KernelArgs* kernarg_async_;
