@@ -61,7 +61,7 @@ class Flag {
     check_flat_scratch_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_ENABLE_VM_FAULT_MESSAGE");
-    enable_vm_fault_message_ = (var == "1") ? true : false;
+    enable_vm_fault_message_ = (var == "0") ? false : true;
 
     var = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
     enable_interrupt_ = (var == "0") ? false : true;
