@@ -155,56 +155,26 @@ get_block_properties(uint16_t dev_id,
     if (block_id > PERFCOUNTER_BLOCKID__MAX || block_id < PERFCOUNTER_BLOCKID__FIRST)
         return HSAKMT_STATUS_INVALID_PARAMETER;
 
-    switch(dev_id) {
-        case 0x1304:
-        case 0x1305:
-        case 0x1306:
-        case 0x1307:
-        case 0x1309:
-        case 0x130A:
-        case 0x130B:
-        case 0x130C:
-        case 0x130D:
-        case 0x130E:
-        case 0x130F:
-        case 0x1310:
-        case 0x1311:
-        case 0x1312:
-        case 0x1313:
-        case 0x1315:
-        case 0x1316:
-        case 0x1317:
-        case 0x1318:
-        case 0x131B:
-        case 0x131C:
-        case 0x131D:
+    /* To avoid the long list, we read the 12 most significant digits of DID
+     * to identify the GPU instead of listing the complete 16 bits. If one day
+     * 12-bits is not good enough to distinguish the GPU, change the code here.
+     */
+    switch(dev_id >> 4) {
+        case 0x130:
+        case 0x131:
             *block = kaveri_blocks[block_id];
             break;
 
-        case 0x9870:
-        case 0x9874:
-        case 0x9875:
-        case 0x9876:
-        case 0x9877:
+        case 0x987:
             *block = carrizo_blocks[block_id];
             break;
 
-        case 0x7300:
+        case 0x730:
             *block = fiji_blocks[block_id];
             break;
 
-        case 0x67A0:
-        case 0x67A1:
-        case 0x67A2:
-        case 0x67A8:
-        case 0x67A9:
-        case 0x67AA:
-        case 0x67B0:
-        case 0x67B1:
-        case 0x67B8:
-        case 0x67B9:
-        case 0x67BA:
-        case 0x67BE:
+        case 0x67A:
+        case 0x67B:
             *block = hawaii_blocks[block_id];
             break;
 
