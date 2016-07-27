@@ -143,6 +143,10 @@ class HostQueue : public Queue {
     return HSA_STATUS_ERROR;
   }
 
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override {
+    assert(false && "HostQueue::ExecutePM4 is unimplemented");
+  }
+
   bool active() const { return active_; }
 
   void* operator new(size_t size) {

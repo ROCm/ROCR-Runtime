@@ -136,6 +136,9 @@ class GpuAgentInt : public core::Agent {
   // @param [out] time Timestamp in agent domain.
   virtual uint64_t TranslateTime(uint64_t tick) = 0;
 
+  // @brief Invalidate caches on the agent which may hold code object data.
+  virtual void InvalidateCodeCaches() = 0;
+
   // @brief Sets the coherency type of this agent.
   //
   // @param [in] type New coherency type.
@@ -258,9 +261,11 @@ class GpuAgent : public GpuAgentInt {
   uint64_t TranslateTime(uint64_t tick) override;
 
   // @brief Override from amd::GpuAgentInt.
-  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
+  void InvalidateCodeCaches() override;
 
   // @brief Override from amd::GpuAgentInt.
+  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
+
   hsa_amd_coherency_type_t current_coherency_type() const override {
     return current_coherency_type_;
   }
