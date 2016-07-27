@@ -465,6 +465,10 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
     default:
       assert(false);
     }
+
+    // Invalidate agent caches which may hold lines of the new allocation.
+    ((GpuAgentInt*)core::Agent::Convert(agent))->InvalidateCodeCaches();
+
     break;
   default:
     assert(false);

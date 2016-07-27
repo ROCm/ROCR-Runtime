@@ -47,6 +47,7 @@
 #include "core/inc/signal.h"
 #include "core/inc/queue.h"
 #include "core/inc/amd_gpu_agent.h"
+#include "core/util/locks.h"
 
 namespace amd {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
@@ -180,6 +181,9 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @return hsa_status_t
   hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count,
                             const uint32_t* cu_mask);
+
+  // @brief Submits a block of PM4 and waits until it has been executed.
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
 
   /// @brief This operation is illegal
   hsa_signal_value_t LoadRelaxed() {
@@ -395,6 +399,11 @@ class AqlQueue : public core::Queue, public core::Signal {
 
   // Is KV device queue
   bool is_kv_queue_;
+
+  // GPU-visible indirect buffer holding PM4 commands.
+  void* pm4_ib_buf_;
+  uint32_t pm4_ib_size_b_;
+  KernelMutex pm4_ib_mutex_;
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;

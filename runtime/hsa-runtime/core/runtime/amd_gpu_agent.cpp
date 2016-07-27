@@ -53,6 +53,7 @@
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
+#include "core/inc/amd_gpu_pm4.h"
 #include "core/inc/amd_gpu_shaders.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/interrupt_signal.h"
@@ -1075,6 +1076,44 @@ void GpuAgent::BindTrapHandler() {
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
                                            trap_code_buf_size_, NULL, 0);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
+}
+
+void GpuAgent::InvalidateCodeCaches() {
+  // Check for microcode cache invalidation support.
+  // This is deprecated in later microcode builds.
+  if (isa_->GetMajorVersion() == 7) {
+    if (properties_.EngineId.ui32.uCode < 420) {
+      // Microcode is handling code cache invalidation.
+      return;
+    }
+  } else if (isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0) {
+    if (properties_.EngineId.ui32.uCode < 685) {
+      // Microcode is handling code cache invalidation.
+      return;
+    }
+  } else {
+    assert(false && "Code cache invalidation not implemented for this agent");
+  }
+
+  // Invalidate caches which may hold lines of code object allocation.
+  constexpr uint32_t cache_inv_size_dw = 7;
+  uint32_t cache_inv[cache_inv_size_dw];
+
+  cache_inv[0] = PM4_HDR(PM4_HDR_IT_OPCODE_ACQUIRE_MEM, cache_inv_size_dw,
+                         isa_->GetMajorVersion());
+  cache_inv[1] = PM4_ACQUIRE_MEM_DW1_COHER_CNTL(
+      PM4_ACQUIRE_MEM_COHER_CNTL_SH_ICACHE_ACTION_ENA |
+      PM4_ACQUIRE_MEM_COHER_CNTL_SH_KCACHE_ACTION_ENA |
+      PM4_ACQUIRE_MEM_COHER_CNTL_TC_ACTION_ENA |
+      PM4_ACQUIRE_MEM_COHER_CNTL_TC_WB_ACTION_ENA);
+  cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
+  cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
+  cache_inv[4] = 0;
+  cache_inv[5] = 0;
+  cache_inv[6] = 0;
+
+  // Submit the command to the utility queue and wait for it to complete.
+  queues_[QueueUtility]->ExecutePM4(cache_inv, sizeof(cache_inv));
 }
 
 }  // namespace
