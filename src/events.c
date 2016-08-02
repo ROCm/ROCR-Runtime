@@ -93,6 +93,8 @@ hsaKmtCreateEvent(
 		return HSAKMT_STATUS_ERROR;
 	}
 
+	e->EventId = args.event_id;
+
 	if (events_page == NULL && args.event_page_offset > 0) {
 		events_page = mmap(NULL, KFD_SIGNAL_EVENT_LIMIT * 8, PROT_WRITE | PROT_READ,
 				MAP_SHARED, kfd_fd, args.event_page_offset);
@@ -109,7 +111,6 @@ hsaKmtCreateEvent(
 	if (args.event_page_offset > 0 && args.event_slot_index < KFD_SIGNAL_EVENT_LIMIT)
 		e->EventData.HWData2 = (HSAuint64)&events_page[args.event_slot_index];
 
-	e->EventId = args.event_id;
 	e->EventData.EventType = EventDesc->EventType;
 	e->EventData.HWData1 = args.event_id;
 
