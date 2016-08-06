@@ -47,41 +47,6 @@
 
 namespace core {
 
-const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
-  IsaRegistry::GetSupportedIsas();
-
-const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
-  auto isareg_iter = supported_isas_.find(full_name);
-  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
-}
-
-const Isa *IsaRegistry::GetIsa(const Isa::Version &version) {
-  auto isareg_iter = supported_isas_.find(Isa(version).GetFullName());
-  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
-}
-
-const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
-#define ISAREG_ENTRY_GEN(maj, min, stp)                                        \
-  Isa amd_amdgpu_##maj##min##stp;                                              \
-  amd_amdgpu_##maj##min##stp.version_ = Isa::Version(maj, min, stp);           \
-  supported_isas.insert(                                                       \
-    std::make_pair(                                                            \
-      amd_amdgpu_##maj##min##stp.GetFullName(), amd_amdgpu_##maj##min##stp));  \
-
-  IsaMap supported_isas;
-
-  ISAREG_ENTRY_GEN(7, 0, 0)
-  ISAREG_ENTRY_GEN(7, 0, 1)
-  ISAREG_ENTRY_GEN(8, 0, 0)
-  ISAREG_ENTRY_GEN(8, 0, 1)
-  ISAREG_ENTRY_GEN(8, 0, 2)
-  ISAREG_ENTRY_GEN(8, 0, 3)
-  ISAREG_ENTRY_GEN(8, 1, 0)
-  ISAREG_ENTRY_GEN(9, 0, 0)
-
-  return supported_isas;
-}
-
 std::string Isa::GetFullName() const {
   std::stringstream full_name;
   full_name << GetVendor() << ":" << GetArchitecture() << ":"
@@ -106,17 +71,17 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
       memcpy(value, full_name.c_str(), full_name.size());
       return true;
     }
-    // @todo: following case needs to be removed
+    // @todo: following case needs to be removed.
     case HSA_ISA_INFO_CALL_CONVENTION_COUNT: {
       *((uint32_t *)value) = 1;
       return true;
     }
-    // @todo: following case needs to be removed
+    // @todo: following case needs to be removed.
     case HSA_ISA_INFO_CALL_CONVENTION_INFO_WAVEFRONT_SIZE: {
       *((uint32_t *)value) = 64;
       return true;
     }
-    // @todo: following needs to be removed
+    // @todo: following needs to be removed.
     case HSA_ISA_INFO_CALL_CONVENTION_INFO_WAVEFRONTS_PER_COMPUTE_UNIT: {
       *((uint32_t *)value) = 40;
       return true;
@@ -127,4 +92,39 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
   }
 }
 
-}  // namespace core
+const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
+  auto isareg_iter = supported_isas_.find(full_name);
+  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
+}
+
+const Isa *IsaRegistry::GetIsa(const Isa::Version &version) {
+  auto isareg_iter = supported_isas_.find(Isa(version).GetFullName());
+  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
+}
+
+const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
+  IsaRegistry::GetSupportedIsas();
+
+const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
+#define ISAREG_ENTRY_GEN(maj, min, stp)                                        \
+  Isa amd_amdgpu_##maj##min##stp;                                              \
+  amd_amdgpu_##maj##min##stp.version_ = Isa::Version(maj, min, stp);           \
+  supported_isas.insert(                                                       \
+    std::make_pair(                                                            \
+      amd_amdgpu_##maj##min##stp.GetFullName(), amd_amdgpu_##maj##min##stp));  \
+
+  IsaMap supported_isas;
+
+  ISAREG_ENTRY_GEN(7, 0, 0)
+  ISAREG_ENTRY_GEN(7, 0, 1)
+  ISAREG_ENTRY_GEN(8, 0, 0)
+  ISAREG_ENTRY_GEN(8, 0, 1)
+  ISAREG_ENTRY_GEN(8, 0, 2)
+  ISAREG_ENTRY_GEN(8, 0, 3)
+  ISAREG_ENTRY_GEN(8, 1, 0)
+  ISAREG_ENTRY_GEN(9, 0, 0)
+
+  return supported_isas;
+}
+
+} // namespace core
