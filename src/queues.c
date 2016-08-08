@@ -42,11 +42,13 @@ enum asic_family_type {
 	CHIP_HAWAII,
 	CHIP_CARRIZO,
 	CHIP_TONGA,
-	CHIP_FIJI
+	CHIP_FIJI,
+	CHIP_POLARIS10,
+	CHIP_POLARIS11
 };
 
-#define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_FIJI)
-#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_FIJI) || \
+#define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_POLARIS11)
+#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_POLARIS11) || \
 		       (chip) == CHIP_HAWAII)
 
 #define WG_CONTEXT_DATA_SIZE_PER_CU_VI	344576
@@ -80,6 +82,16 @@ struct device_info tonga_device_info = {
 
 struct device_info fiji_device_info = {
 	.asic_family = CHIP_FIJI,
+	.eop_buffer_size = TONGA_PAGE_SIZE,
+};
+
+struct device_info polaris10_device_info = {
+	.asic_family = CHIP_POLARIS10,
+	.eop_buffer_size = TONGA_PAGE_SIZE,
+};
+
+struct device_info polaris11_device_info = {
+	.asic_family = CHIP_POLARIS11,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 };
 
@@ -141,6 +153,12 @@ struct device_id supported_devices[] = {
 	{ 0x6939, &tonga_device_info },
 	{ 0x7300, &fiji_device_info },
 	{ 0x730f, &fiji_device_info },
+	{ 0x67c4, &polaris10_device_info },
+	{ 0x67c7, &polaris10_device_info },
+	{ 0x67df, &polaris10_device_info },
+	{ 0x67e3, &polaris11_device_info },
+	{ 0x67ef, &polaris11_device_info },
+	{ 0x67ff, &polaris11_device_info },
 	{ 0, NULL }
 };
 
