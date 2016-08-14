@@ -1181,7 +1181,13 @@ namespace code {
 
     void AmdHsaCode::PrintRelocationData(std::ostream& out, RelocationSection* section)
     {
-      out << "    Relocation Entries for " << section->targetSection()->Name() << " Section (total " << section->relocationCount() << "):" << std::endl;
+      if (section->targetSection()) {
+        out << "    Relocation Entries for " << section->targetSection()->Name() << " Section (total " << section->relocationCount() << "):" << std::endl;
+      } else {
+        // Dynamic relocations do not have a target section, they work with
+        // virtual addresses.
+        out << "    Dynamic Relocation Entries (total " << section->relocationCount() << "):" << std::endl;
+      }
       for (size_t i = 0; i < section->relocationCount(); ++i) {
         out << "      Relocation (Index " << i << "):" << std::endl;
         out << "        Type: " << section->relocation(i)->type() << std::endl;

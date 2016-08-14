@@ -107,7 +107,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   //
   // @param [in] type CPU or GPU or other.
   explicit Agent(uint32_t node_id, DeviceType type)
-      : node_id_(node_id), device_type_(uint32_t(type)) {
+      : node_id_(node_id),
+        device_type_(uint32_t(type)),
+        profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -115,7 +117,7 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   //
   // @param [in] type CPU or GPU or other.
   explicit Agent(uint32_t node_id, uint32_t type)
-      : node_id_(node_id), device_type_(type) {
+      : node_id_(node_id), device_type_(type), profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -240,6 +242,19 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Returns node id associated with this agent.
   __forceinline uint32_t node_id() const { return node_id_; }
 
+  // @brief Getter for profiling_enabled_.
+  __forceinline bool profiling_enabled() const { return profiling_enabled_; }
+
+  // @brief Setter for profiling_enabled_.
+  virtual hsa_status_t profiling_enabled(bool enable) {
+    const hsa_status_t stat = EnableDmaProfiling(enable);
+    if (HSA_STATUS_SUCCESS == stat) {
+      profiling_enabled_ = enable;
+    }
+
+    return stat;
+  }
+
  protected:
   // Intention here is to have a polymorphic update procedure for public_handle_
   // which is callable on any Agent* but only from some class dervied from
@@ -254,6 +269,17 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
     public_handle_ = handle;
   }
 
+  // @brief Enable profiling of the asynchronous DMA copy. The timestamp
+  // of each copy request will be stored in the completion signal structure.
+  //
+  // @param enable True to enable profiling. False to disable profiling.
+  //
+  // @retval HSA_STATUS_SUCCESS The profiling is enabled and the
+  // timing of subsequent async copy will be measured.
+  virtual hsa_status_t EnableDmaProfiling(bool enable) {
+    return HSA_STATUS_SUCCESS;
+  }
+
   hsa_agent_t public_handle_;
 
  private:
@@ -261,6 +287,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   const uint32_t node_id_;
 
   const uint32_t device_type_;
+
+  bool profiling_enabled_;
 
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(Agent);

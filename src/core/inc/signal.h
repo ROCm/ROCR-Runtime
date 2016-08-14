@@ -57,6 +57,7 @@
 #include "inc/amd_hsa_signal.h"
 
 namespace core {
+class Agent;
 class Signal;
 
 /// @brief Helper structure to simplify conversion of amd_signal_t and
@@ -75,7 +76,9 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
  public:
   /// @brief Constructor initializes the signal with initial value.
   explicit Signal(hsa_signal_value_t initial_value)
-      : Shared(), signal_(shared_object()->amd_signal) {
+      : Shared(),
+        signal_(shared_object()->amd_signal),
+        async_copy_agent_(NULL) {
     if (!Shared::IsSharedObjectAllocationValid()) {
       invalid_ = true;
       return;
@@ -225,6 +228,12 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   /// @brief Checks if signal is currently in use by a wait API.
   bool InWaiting() const { return waiting_ != 0; }
 
+  __forceinline void async_copy_agent(core::Agent* agent) {
+    async_copy_agent_ = agent;
+  }
+
+  __forceinline core::Agent* async_copy_agent() { return async_copy_agent_; }
+
   /// @brief Structure which defines key signal elements like type and value.
   /// Address of this struct is used as a value for the opaque handle of type
   /// hsa_signal_t provided to the public API.
@@ -245,6 +254,9 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   volatile uint32_t waiting_;
 
   volatile uint32_t retained_;
+
+  /// @variable Pointer to agent used to perform an async copy.
+  core::Agent* async_copy_agent_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Signal);

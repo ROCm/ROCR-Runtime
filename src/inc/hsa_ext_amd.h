@@ -212,6 +212,23 @@ typedef struct hsa_amd_profiling_dispatch_time_s {
 } hsa_amd_profiling_dispatch_time_t;
 
 /**
+ * @brief Structure containing profiling async copy time information.
+ *
+ * Times are reported as ticks in the domain of the HSA system clock.
+ * The HSA system clock tick and frequency is obtained via hsa_system_get_info.
+ */
+typedef struct hsa_amd_profiling_async_copy_time_s {
+  /**
+   * Async copy processing start time.
+   */
+  uint64_t start;
+  /**
+   * Async copy completion time.
+   */
+  uint64_t end;
+} hsa_amd_profiling_async_copy_time_t;
+
+/**
  * @brief Enable or disable profiling capability of a queue.
  *
  * @param[in] queue A valid queue.
@@ -231,9 +248,33 @@ hsa_status_t HSA_API
     hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enable);
 
 /**
+ * @brief Enable or disable asynchronous memory copy profiling.
+ *
+ * @details The runtime will provide the copy processing start timestamp and
+ * completion timestamp of each call to hsa_amd_memory_async_copy if the
+ * async copy profiling is enabled prior to the call to
+ * hsa_amd_memory_async_copy. The completion signal object is used to
+ * hold the last async copy start and end timestamp. The client can retrieve
+ * these timestamps via call to hsa_amd_profiling_get_async_copy_time.
+ *
+ * @param[in] enable True to enable profiling. False to disable profiling.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Failed on allocating resources
+ * needed to profile the asynchronous copy.
+ */
+hsa_status_t HSA_API
+    hsa_amd_profiling_async_copy_enable(bool enable);
+
+/**
  * @brief Retrieve packet processing time stamps.
  *
- * @param[in] agent The agent with which the signal was last used.  For instance,
+ * @param[in] agent The agent with which the signal was last used.  For
+ *instance,
  * if the profiled dispatch packet is dispatched on to queue Q, which was
  * created on agent A, then this parameter must be A.
  *
@@ -262,8 +303,32 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
     hsa_amd_profiling_dispatch_time_t* time);
 
 /**
+ * @brief Retrieve asynchronous copy timestamps.
+ *
+ * @details Async copy profiling is enabled via call to
+ * hsa_amd_profiling_async_copy_enable.
+ *
+ * @param[in] signal A signal used as the completion signal of the call to
+ * hsa_amd_memory_async_copy.
+ *
+ * @param[out] time Async copy processing timestamps in the HSA system clock
+ * domain.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_SIGNAL The signal is invalid.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p time is NULL.
+ */
+hsa_status_t HSA_API hsa_amd_profiling_get_async_copy_time(
+    hsa_signal_t signal, hsa_amd_profiling_async_copy_time_t* time);
+
+/**
  * @brief Computes the frequency ratio and offset between the agent clock and
- * HSA system clock and converts the agent’s tick to HSA system domain tick.
+ * HSA system clock and converts the agent's tick to HSA system domain tick.
  *
  * @param[in] agent The agent used to retrieve the agent_tick. It is user's
  * responsibility to make sure the tick number is from this agent, otherwise,
@@ -392,7 +457,7 @@ hsa_status_t HSA_API
  *
  * @details Allows waiting for any of several signal and conditions pairs to be
  * satisfied. The function returns the index into the list of signals of the
- * first satisfying signal-condition pair. The value of the satisfying signal’s
+ * first satisfying signal-condition pair. The value of the satisfying signal's
  * value is returned in satisfying_value unless satisfying_value is NULL. This
  * function provides only relaxed memory semantics.
  */
@@ -857,7 +922,10 @@ typedef enum {
 
   /**
   * Number of links to hop when accessing the memory pool from the specified
-  * agent. The type of this attribute is uint32_t.
+  * agent. The value of this attribute is zero if the memory pool is associated
+  * with the agent, or if the access type is
+  * HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED. The type of this attribute is
+  * uint32_t.
   */
   HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS = 1,
 

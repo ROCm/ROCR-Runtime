@@ -66,8 +66,10 @@ class Blit {
   ///
   /// @note: The call will block until all commands have executed.
   ///
+  /// @param agent Agent passed to Initialize.
+  ///
   /// @return hsa_status_t
-  virtual hsa_status_t Destroy() = 0;
+  virtual hsa_status_t Destroy(const core::Agent& agent) = 0;
 
   /// @brief Submit a linear copy command to the the underlying compute device's
   /// control block. The call is blocking until the command execution is
@@ -102,6 +104,15 @@ class Blit {
   /// @param num Number of uint32_t element to be set to the value.
   virtual hsa_status_t SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                size_t num) = 0;
+
+  /// @brief Enable profiling of the asynchronous copy command. The timestamp
+  /// of each copy request will be stored in the completion signal structure.
+  ///
+  /// @param enable True to enable profiling. False to disable profiling.
+  ///
+  /// @return HSA_STATUS_SUCCESS if the request to enable/disable profiling is
+  /// successful.
+  virtual hsa_status_t EnableProfiling(bool enable) = 0;
 };
 }  // namespace core
 

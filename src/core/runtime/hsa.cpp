@@ -55,7 +55,7 @@
 #include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/amd_loader_context.hpp"
-#include "inc/hsa_ven_amd_loaded_code_object.h"
+#include "inc/hsa_ven_amd_loader.h"
 
 using namespace amd::hsa::code;
 
@@ -168,9 +168,7 @@ hsa_status_t
                                    uint16_t version_minor, bool* result) {
   IS_OPEN();
 
-  if ((extension > HSA_EXTENSION_AMD_PROFILER &&
-        extension != HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) ||
-      (result == NULL)) {
+  if (extension >= HSA_EXTENSION_COUNT || result == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -208,57 +206,57 @@ hsa_status_t
   hsa_status_t status = hsa_system_extension_supported(
       extension, version_major, version_minor, &supported);
 
-  if (HSA_STATUS_SUCCESS != status) {
+  if ((HSA_STATUS_SUCCESS != status) ||
+      (supported == false)) {
     return status;
   }
 
-  if (supported) {
-    ExtTable& runtime_ext_table =
-        core::Runtime::runtime_singleton_->extensions_.table;
+  if (extension == HSA_EXTENSION_IMAGES) {
+    // Currently there is only version 1.00.
+    hsa_ext_images_1_00_pfn_t* ext_table =
+        reinterpret_cast<hsa_ext_images_1_00_pfn_t*>(table);
+    ext_table->hsa_ext_image_clear = hsa_ext_image_clear;
+    ext_table->hsa_ext_image_copy = hsa_ext_image_copy;
+    ext_table->hsa_ext_image_create = hsa_ext_image_create;
+    ext_table->hsa_ext_image_data_get_info = hsa_ext_image_data_get_info;
+    ext_table->hsa_ext_image_destroy = hsa_ext_image_destroy;
+    ext_table->hsa_ext_image_export = hsa_ext_image_export;
+    ext_table->hsa_ext_image_get_capability = hsa_ext_image_get_capability;
+    ext_table->hsa_ext_image_import = hsa_ext_image_import;
+    ext_table->hsa_ext_sampler_create = hsa_ext_sampler_create;
+    ext_table->hsa_ext_sampler_destroy = hsa_ext_sampler_destroy;
 
-    if (extension == HSA_EXTENSION_IMAGES) {
-      // Currently there is only version 1.00.
-      hsa_ext_images_1_00_pfn_t* ext_table =
-          reinterpret_cast<hsa_ext_images_1_00_pfn_t*>(table);
-      ext_table->hsa_ext_image_clear = hsa_ext_image_clear;
-      ext_table->hsa_ext_image_copy = hsa_ext_image_copy;
-      ext_table->hsa_ext_image_create = hsa_ext_image_create;
-      ext_table->hsa_ext_image_data_get_info = hsa_ext_image_data_get_info;
-      ext_table->hsa_ext_image_destroy = hsa_ext_image_destroy;
-      ext_table->hsa_ext_image_export = hsa_ext_image_export;
-      ext_table->hsa_ext_image_get_capability = hsa_ext_image_get_capability;
-      ext_table->hsa_ext_image_import = hsa_ext_image_import;
-      ext_table->hsa_ext_sampler_create = hsa_ext_sampler_create;
-      ext_table->hsa_ext_sampler_destroy = hsa_ext_sampler_destroy;
-
-      return HSA_STATUS_SUCCESS;
-    } else if (extension == HSA_EXTENSION_FINALIZER) {
-      // Currently there is only version 1.00.
-      hsa_ext_finalizer_1_00_pfn_s* ext_table =
-          reinterpret_cast<hsa_ext_finalizer_1_00_pfn_s*>(table);
-      ext_table->hsa_ext_program_add_module = hsa_ext_program_add_module;
-      ext_table->hsa_ext_program_create = hsa_ext_program_create;
-      ext_table->hsa_ext_program_destroy = hsa_ext_program_destroy;
-      ext_table->hsa_ext_program_finalize = hsa_ext_program_finalize;
-      ext_table->hsa_ext_program_get_info = hsa_ext_program_get_info;
-      ext_table->hsa_ext_program_iterate_modules =
-          hsa_ext_program_iterate_modules;
-
-      return HSA_STATUS_SUCCESS;
-    } else if (extension == HSA_EXTENSION_AMD_LOADED_CODE_OBJECT) {
-      // Currently there is only version 1.00.
-      hsa_ven_amd_loaded_code_object_1_00_pfn_t* ext_table =
-        reinterpret_cast<hsa_ven_amd_loaded_code_object_1_00_pfn_t*>(table);
-      ext_table->hsa_ven_amd_loaded_code_object_query_host_address =
-        hsa_ven_amd_loaded_code_object_query_host_address;
-
-      return HSA_STATUS_SUCCESS;
-    } else {
-      return HSA_STATUS_ERROR;
-    }
+    return HSA_STATUS_SUCCESS;
   }
 
-  return HSA_STATUS_SUCCESS;
+  if (extension == HSA_EXTENSION_FINALIZER) {
+    // Currently there is only version 1.00.
+    hsa_ext_finalizer_1_00_pfn_s* ext_table =
+        reinterpret_cast<hsa_ext_finalizer_1_00_pfn_s*>(table);
+    ext_table->hsa_ext_program_add_module = hsa_ext_program_add_module;
+    ext_table->hsa_ext_program_create = hsa_ext_program_create;
+    ext_table->hsa_ext_program_destroy = hsa_ext_program_destroy;
+    ext_table->hsa_ext_program_finalize = hsa_ext_program_finalize;
+    ext_table->hsa_ext_program_get_info = hsa_ext_program_get_info;
+    ext_table->hsa_ext_program_iterate_modules =
+        hsa_ext_program_iterate_modules;
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  if (extension == HSA_EXTENSION_AMD_LOADER) {
+    // Currently there is only version 1.00.
+    hsa_ven_amd_loader_1_00_pfn_t* ext_table =
+      reinterpret_cast<hsa_ven_amd_loader_1_00_pfn_t*>(table);
+    ext_table->hsa_ven_amd_loader_query_host_address =
+      hsa_ven_amd_loader_query_host_address;
+    ext_table->hsa_ven_amd_loader_query_segment_descriptors =
+      hsa_ven_amd_loader_query_segment_descriptors;
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  return HSA_STATUS_ERROR;
 }
 
 //---------------------------------------------------------------------------//
@@ -785,7 +783,7 @@ hsa_status_t
 
   core::Signal* ret;
 
-  bool useshost = true;
+  bool uses_host = false;
 
   if (num_consumers > 0) {
     IS_BAD_PTR(consumers);
@@ -798,13 +796,16 @@ hsa_status_t
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
 
-    useshost =
-        (consumer_set.find(
-            core::Runtime::runtime_singleton_->host_agent()->public_handle()) !=
-        consumer_set.end());
+    for (const core::Agent* cpu_agent :
+         core::Runtime::runtime_singleton_->cpu_agents()) {
+      uses_host |=
+          (consumer_set.find(cpu_agent->public_handle()) != consumer_set.end());
+    }
+  } else {
+    uses_host = true;
   }
 
-  if (core::g_use_interrupt_wait && useshost) {
+  if (core::g_use_interrupt_wait && uses_host) {
     ret = new core::InterruptSignal(initial_value);
   } else {
     ret = new core::DefaultSignal(initial_value);

@@ -66,18 +66,6 @@ if ( NOT EXISTS ${HSATHK_BUILD_LIB_PATH}/libhsakmt.so.1 )
     MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_LIB_PATH is not set to point to the location where KFD Thunk library libhsakmt.so.1 could be found." )
 endif ()
 
-if ( EXISTS ${LIBSP3_BUILD_INC_PATH}/sp3.h )
-  set ( LIBSP3_BUILD_INC_PATH ${LIBSP3_BUILD_INC_PATH} )
-else ()
-  set ( LIBSP3_BUILD_INC_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
-endif ()
-
-if ( EXISTS ${LIBSP3_BUILD_LIB_PATH}/libsp3.a )
-  set ( LIBSP3_BUILD_LIB_PATH ${LIBSP3_BUILD_LIB_PATH} )
-else ()
-  set ( LIBSP3_BUILD_LIB_PATH ${CMAKE_CURRENT_SOURCE_DIR}/../utils/sp3 )
-endif ()
-
 MESSAGE ( ------IS64BIT: ${IS64BIT} )
 MESSAGE ( ------Compiler: ${CMAKE_CXX_COMPILER} )
 MESSAGE ( ------Version: ${CMAKE_CXX_COMPILER_VERSION} )
@@ -132,7 +120,7 @@ set ( CORE_SRCS ${CORE_SRCS} runtime/amd_cpu_agent.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_gpu_agent.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_aql_queue.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_loader_context.cpp )
-set ( CORE_SRCS ${CORE_SRCS} runtime/hsa_ven_amd_loaded_code_object.cpp )
+set ( CORE_SRCS ${CORE_SRCS} runtime/hsa_ven_amd_loader.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_memory_region.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/amd_topology.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/default_signal.cpp )
@@ -153,11 +141,9 @@ include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/.. )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/../inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
 include_directories ( ${HSATHK_BUILD_INC_PATH} )
-include_directories ( ${LIBSP3_BUILD_INC_PATH} )
 
 ## Library path(s).
 link_directories ( ${HSATHK_BUILD_LIB_PATH} )
-link_directories ( ${LIBSP3_BUILD_LIB_PATH} )
 
 add_library ( ${CORE_RUNTIME_TARGET} SHARED ${CORE_SRCS} )
 
@@ -172,7 +158,6 @@ target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE amdhsaloader
   PRIVATE amdhsacode
   PRIVATE hsakmt
-  PRIVATE sp3
   dl pthread rt
 )
 

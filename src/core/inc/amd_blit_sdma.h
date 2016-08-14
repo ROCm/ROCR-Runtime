@@ -43,10 +43,12 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_BLIT_SDMA_H_
 #define HSA_RUNTIME_CORE_INC_AMD_BLIT_SDMA_H_
 
+#include <mutex>
 #include <stdint.h>
 
 #include "hsakmt.h"
 
+#include "core/inc/amd_gpu_agent.h"
 #include "core/inc/blit.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
@@ -73,8 +75,10 @@ class BlitSdma : public core::Blit {
   ///
   /// @note: The call will block until all packets have executed.
   ///
+  /// @param agent Agent passed to Initialize.
+  ///
   /// @return hsa_status_t
-  virtual hsa_status_t Destroy() override;
+  virtual hsa_status_t Destroy(const core::Agent& agent) override;
 
   /// @brief Submit a linear copy command to the queue buffer.
   ///
@@ -106,6 +110,12 @@ class BlitSdma : public core::Blit {
   /// @param count Number of uint32_t element to be set to the value.
   virtual hsa_status_t SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                size_t count) override;
+
+  virtual hsa_status_t EnableProfiling(bool enable) override;
+
+  static const size_t kQueueSize;
+
+  static const size_t kCopyPacketSize;
 
  protected:
   /// @brief Acquires the address into queue buffer where a new command
@@ -159,6 +169,13 @@ class BlitSdma : public core::Blit {
 
   void BuildAtomicDecrementCommand(char* cmd_addr, void* addr);
 
+  void BuildGetGlobalTimestampCommand(char* cmd_addr, void* write_address);
+
+  void BuildTrapCommand(char* cmd_addr);
+
+  // Agent object owning the SDMA engine.
+  GpuAgent* agent_;
+
   /// Indicates size of Queue buffer in bytes.
   uint32_t queue_size_;
 
@@ -199,6 +216,10 @@ class BlitSdma : public core::Blit {
 
   uint32_t atomic_command_size_;
 
+  uint32_t timestamp_command_size_;
+
+  uint32_t trap_command_size_;
+
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;
 
@@ -210,6 +231,9 @@ class BlitSdma : public core::Blit {
 
   /// Max total fill count supported by the queue.
   size_t max_total_fill_size_;
+
+  /// True if platform atomic is supported.
+  bool platform_atomic_support_;
 };
 }  // namespace amd
 

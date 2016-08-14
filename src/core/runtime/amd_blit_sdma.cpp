@@ -48,8 +48,11 @@
 #include <cstring>
 
 #include "core/inc/amd_gpu_agent.h"
+#include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
+
+#define SDMA_QUEUE_SIZE 1024 * 1024
 
 namespace amd {
 // SDMA packet for VI device.
@@ -57,10 +60,13 @@ namespace amd {
 
 const unsigned int SDMA_OP_COPY = 1;
 const unsigned int SDMA_OP_FENCE = 5;
+const unsigned int SDMA_OP_TRAP = 6;
 const unsigned int SDMA_OP_POLL_REGMEM = 8;
 const unsigned int SDMA_OP_ATOMIC = 10;
 const unsigned int SDMA_OP_CONST_FILL = 11;
+const unsigned int SDMA_OP_TIMESTAMP = 13;
 const unsigned int SDMA_SUBOP_COPY_LINEAR = 0;
+const unsigned int SDMA_SUBOP_TIMESTAMP_GET_GLOBAL = 2;
 const unsigned int SDMA_ATOMIC_ADD64 = 47;
 
 typedef struct SDMA_PKT_COPY_LINEAR_TAG {
@@ -310,6 +316,51 @@ typedef struct SDMA_PKT_ATOMIC_TAG {
   } LOOP_UNION;
 } SDMA_PKT_ATOMIC;
 
+typedef struct SDMA_PKT_TIMESTAMP_TAG {
+  union {
+    struct {
+      unsigned int op : 8;
+      unsigned int sub_op : 8;
+      unsigned int reserved_0 : 16;
+    };
+    unsigned int DW_0_DATA;
+  } HEADER_UNION;
+
+  union {
+    struct {
+      unsigned int addr_31_0 : 32;
+    };
+    unsigned int DW_1_DATA;
+  } ADDR_LO_UNION;
+
+  union {
+    struct {
+      unsigned int addr_63_32 : 32;
+    };
+    unsigned int DW_2_DATA;
+  } ADDR_HI_UNION;
+
+} SDMA_PKT_TIMESTAMP;
+
+typedef struct SDMA_PKT_TRAP_TAG {
+  union {
+    struct {
+      unsigned int op : 8;
+      unsigned int sub_op : 8;
+      unsigned int reserved_0 : 16;
+    };
+    unsigned int DW_0_DATA;
+  } HEADER_UNION;
+
+  union {
+    struct {
+      unsigned int int_ctx : 28;
+      unsigned int reserved_1 : 4;
+    };
+    unsigned int DW_1_DATA;
+  } INT_CONTEXT_UNION;
+} SDMA_PKT_TRAP;
+
 inline uint32_t ptrlow32(const void* p) {
   return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p));
 }
@@ -322,21 +373,28 @@ inline uint32_t ptrhigh32(const void* p) {
 #endif
 }
 
+const size_t BlitSdma::kQueueSize = SDMA_QUEUE_SIZE;
+const size_t BlitSdma::kCopyPacketSize = sizeof(SDMA_PKT_COPY_LINEAR);
+
 BlitSdma::BlitSdma()
     : core::Blit(),
+      agent_(NULL),
       queue_size_(0),
       queue_start_addr_(NULL),
       fence_base_addr_(NULL),
       fence_pool_size_(0),
       fence_pool_counter_(0),
       cached_reserve_offset_(0),
-      cached_commit_offset_(0) {
+      cached_commit_offset_(0),
+      platform_atomic_support_(true) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
 BlitSdma::~BlitSdma() {}
 
 hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
+  agent_ = reinterpret_cast<amd::GpuAgent*>(&const_cast<core::Agent&>(agent));
+
   if (queue_start_addr_ != NULL && queue_size_ != 0) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
@@ -351,6 +409,8 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   fence_command_size_ = sizeof(SDMA_PKT_FENCE);
   poll_command_size_ = sizeof(SDMA_PKT_POLL_REGMEM);
   atomic_command_size_ = sizeof(SDMA_PKT_ATOMIC);
+  timestamp_command_size_ = sizeof(SDMA_PKT_TIMESTAMP);
+  trap_command_size_ = sizeof(SDMA_PKT_TRAP);
 
   const uint32_t sync_command_size = fence_command_size_;
   const uint32_t max_num_copy_command =
@@ -372,18 +432,20 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
                static_cast<uint64_t>(max_num_fill_command) *
                    static_cast<uint64_t>(max_single_fill_size_)));
 
-  const amd::GpuAgent& amd_gpu_agent = static_cast<const amd::GpuAgent&>(agent);
+  const amd::GpuAgentInt& amd_gpu_agent =
+      static_cast<const amd::GpuAgentInt&>(agent);
 
-  if (amd_gpu_agent.isa()->version() != core::Isa::Version(8, 0, 3)) {
-    assert(false && "Only for Fiji currently");
+  if (HSA_PROFILE_FULL == amd_gpu_agent.profile()) {
+    assert(false && "Only support SDMA for dgpu currently");
     return HSA_STATUS_ERROR;
   }
 
-  // Allocate queue buffer.
-  const size_t kPageSize = 4096;
-  const size_t kSdmaQueueSize = 1024 * 1024;
+  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1)) {
+    platform_atomic_support_ = false;
+  }
 
-  queue_size_ = kSdmaQueueSize;
+  // Allocate queue buffer.
+  queue_size_ = kQueueSize;
 
   HsaMemFlags flags;
   flags.Value = 0;
@@ -404,7 +466,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
 
   if (err != HSAKMT_STATUS_SUCCESS) {
     assert(false && "AQL queue memory map failure.");
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -413,21 +475,20 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   // Access kernel driver to initialize the queue control block
   // This call binds user mode queue object to underlying compute
   // device.
-  const GpuAgent& gpu_agent = reinterpret_cast<const GpuAgent&>(agent);
   const HSA_QUEUE_TYPE kQueueType_ = HSA_QUEUE_SDMA;
   if (HSAKMT_STATUS_SUCCESS !=
-      hsaKmtCreateQueue(gpu_agent.node_id(), kQueueType_, 100,
+      hsaKmtCreateQueue(amd_gpu_agent.node_id(), kQueueType_, 100,
                         HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
                         queue_size_, NULL, &queue_resource_)) {
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   cached_reserve_offset_ = *(queue_resource_.Queue_write_ptr);
   cached_commit_offset_ = cached_reserve_offset_;
 
-  fence_pool_size_ =
-      static_cast<uint32_t>(std::ceil(kSdmaQueueSize / fence_command_size_));
+  fence_pool_size_ = static_cast<uint32_t>(
+      (kQueueSize + fence_command_size_ - 1) / fence_command_size_);
 
   fence_pool_mask_ = fence_pool_size_ - 1;
 
@@ -436,14 +497,14 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
           fence_pool_size_ * sizeof(uint32_t), 256));
 
   if (fence_base_addr_ == NULL) {
-    Destroy();
+    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::Destroy(void) {
+hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
   // Release all allocated resources and reset them to zero.
 
   if (queue_resource_.QueueId != 0) {
@@ -479,8 +540,8 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(void* dst, const void* src,
 
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(size) / max_single_linear_copy_size_));
+  const uint32_t num_copy_command =
+      (size + max_single_linear_copy_size_ - 1) / max_single_linear_copy_size_;
 
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
@@ -528,18 +589,55 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
 
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(size) / max_single_linear_copy_size_));
+  const uint32_t num_copy_command =
+      (size + max_single_linear_copy_size_ - 1) / max_single_linear_copy_size_;
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
 
-  const uint32_t total_command_size =
-      total_poll_command_size + total_copy_command_size + atomic_command_size_ +
-      fence_command_size_;
+  // Load the profiling state early in case the user disable or enable the
+  // profiling in the middle of the call.
+  const bool profiling_enabled = agent_->profiling_enabled();
 
-  const uint32_t kFenceValue = 2015;
-  uint32_t* fence_addr = ObtainFenceObject();
-  *fence_addr = 0;
+  uint64_t* end_ts_addr = NULL;
+  uint32_t total_timestamp_command_size = 0;
+
+  if (profiling_enabled) {
+    // SDMA timestamp packet requires 32 byte of aligned memory, but
+    // amd_signal_t::end_ts is not 32 byte aligned. So an extra copy packet to
+    // read from a 32 byte aligned bounce buffer is required to avoid changing
+    // the amd_signal_t ABI.
+
+    end_ts_addr = agent_->ObtainEndTsObject();
+    if (end_ts_addr == NULL) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+
+    total_timestamp_command_size =
+        (2 * timestamp_command_size_) + linear_copy_command_size_;
+  }
+
+  // On agent that does not support platform atomic, we replace it with
+  // one or two fence packet(s) to update the signal value. The reason fence
+  // is used and not write packet is because the SDMA engine may overlap a
+  // serial copy/write packets.
+  const uint64_t completion_signal_value =
+      static_cast<uint64_t>(out_signal.LoadRelaxed() - 1);
+  const size_t sync_command_size = (platform_atomic_support_)
+                                       ? atomic_command_size_
+                                       : (completion_signal_value > UINT32_MAX)
+                                             ? 2 * fence_command_size_
+                                             : fence_command_size_;
+
+  // If the signal is an interrupt signal, we also need to make SDMA engine to
+  // send interrupt packet to IH.
+  const size_t interrupt_command_size =
+      (out_signal.signal_.event_mailbox_ptr != 0)
+          ? (fence_command_size_ + trap_command_size_)
+          : 0;
+
+  const uint32_t total_command_size =
+      total_poll_command_size + total_copy_command_size + sync_command_size +
+      total_timestamp_command_size + interrupt_command_size;
 
   char* command_addr = AcquireWriteAddress(total_command_size);
   char* const command_addr_temp = command_addr;
@@ -559,17 +657,58 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
     command_addr += poll_command_size_;
   }
 
+  if (profiling_enabled) {
+    BuildGetGlobalTimestampCommand(
+        command_addr, reinterpret_cast<void*>(&out_signal.signal_.start_ts));
+    command_addr += timestamp_command_size_;
+  }
+
   // Do the transfer after all polls are satisfied.
   BuildCopyCommand(command_addr, num_copy_command, dst, src, size);
 
   command_addr += total_copy_command_size;
 
-  // After transfer is completed, decrement the signal.
-  BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
+  if (profiling_enabled) {
+    assert(IsMultipleOf(end_ts_addr, 32));
+    BuildGetGlobalTimestampCommand(command_addr,
+                                   reinterpret_cast<void*>(end_ts_addr));
+    command_addr += timestamp_command_size_;
 
-  command_addr += atomic_command_size_;
+    BuildCopyCommand(command_addr, 1,
+                     reinterpret_cast<void*>(&out_signal.signal_.end_ts),
+                     reinterpret_cast<void*>(end_ts_addr), sizeof(uint64_t));
+    command_addr += linear_copy_command_size_;
+  }
 
-  BuildFenceCommand(command_addr, fence_addr, kFenceValue);
+  // After transfer is completed, decrement the signal value.
+  if (platform_atomic_support_) {
+    BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
+    command_addr += atomic_command_size_;
+
+  } else {
+    uint32_t* signal_value_location =
+        reinterpret_cast<uint32_t*>(out_signal.ValueLocation());
+    if (completion_signal_value > UINT32_MAX) {
+      BuildFenceCommand(command_addr, signal_value_location + 1,
+                        static_cast<uint32_t>(completion_signal_value >> 32));
+      command_addr += fence_command_size_;
+    }
+
+    BuildFenceCommand(command_addr, signal_value_location,
+                      static_cast<uint32_t>(completion_signal_value));
+
+    command_addr += fence_command_size_;
+  }
+
+  // Update mailbox event and send interrupt to IH.
+  if (out_signal.signal_.event_mailbox_ptr != 0) {
+    BuildFenceCommand(command_addr, reinterpret_cast<uint32_t*>(
+                                        out_signal.signal_.event_mailbox_ptr),
+                      static_cast<uint32_t>(out_signal.signal_.event_id));
+    command_addr += fence_command_size_;
+
+    BuildTrapCommand(command_addr);
+  }
 
   ReleaseWriteAddress(command_addr_temp, total_command_size);
 
@@ -586,8 +725,8 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
 
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_fill_command = static_cast<uint32_t>(
-      std::ceil(static_cast<double>(size) / max_single_fill_size_));
+  const uint32_t num_fill_command =
+      (size + max_single_fill_size_ - 1) / max_single_fill_size_;
 
   const uint32_t total_fill_command_size =
       num_fill_command * fill_command_size_;
@@ -641,6 +780,10 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
 
   WaitFence(fence_addr, kFenceValue);
 
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t BlitSdma::EnableProfiling(bool enable) {
   return HSA_STATUS_SUCCESS;
 }
 
@@ -866,5 +1009,28 @@ void BlitSdma::BuildAtomicDecrementCommand(char* cmd_addr, void* addr) {
 
   packet_addr->SRC_DATA_LO_UNION.src_data_31_0 = 0xffffffff;
   packet_addr->SRC_DATA_HI_UNION.src_data_63_32 = 0xffffffff;
+}
+
+void BlitSdma::BuildGetGlobalTimestampCommand(char* cmd_addr,
+                                              void* write_address) {
+  SDMA_PKT_TIMESTAMP* packet_addr =
+      reinterpret_cast<SDMA_PKT_TIMESTAMP*>(cmd_addr);
+
+  memset(packet_addr, 0, sizeof(SDMA_PKT_TIMESTAMP));
+
+  packet_addr->HEADER_UNION.op = SDMA_OP_TIMESTAMP;
+  packet_addr->HEADER_UNION.sub_op = SDMA_SUBOP_TIMESTAMP_GET_GLOBAL;
+
+  packet_addr->ADDR_LO_UNION.addr_31_0 = ptrlow32(write_address);
+  packet_addr->ADDR_HI_UNION.addr_63_32 = ptrhigh32(write_address);
+}
+
+void BlitSdma::BuildTrapCommand(char* cmd_addr) {
+  SDMA_PKT_TRAP* packet_addr =
+      reinterpret_cast<SDMA_PKT_TRAP*>(cmd_addr);
+
+  memset(packet_addr, 0, sizeof(SDMA_PKT_TRAP));
+
+  packet_addr->HEADER_UNION.op = SDMA_OP_TRAP;
 }
 }  // namespace amd

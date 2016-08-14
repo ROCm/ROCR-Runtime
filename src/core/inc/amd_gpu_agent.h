@@ -57,6 +57,8 @@
 #include "core/util/locks.h"
 
 namespace amd {
+class MemoryRegion;
+
 // @brief Contains scratch memory information.
 struct ScratchInfo {
   void* queue_base;
@@ -71,6 +73,16 @@ class GpuAgentInt : public core::Agent {
   // @brief Constructor
   GpuAgentInt(uint32_t node_id)
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
+
+  // @brief Initialize DMA queue.
+  //
+  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
+  virtual void InitDma() = 0;
+
+  // @brief Initialize blit kernel object based on AQL queue.
+  //
+  // @retval HSA_STATUS_SUCCESS blit kernel object initialization is successful.
+  virtual hsa_status_t InitBlitKernel() = 0;
 
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
@@ -107,6 +119,16 @@ class GpuAgentInt : public core::Agent {
   // @param [out] time Structure to be populated with the host domain value.
   virtual void TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) = 0;
+
+  // @brief Translate the async copy start and end timestamp from agent
+  // domain to host domain.
+  //
+  // @param [in] signal Pointer to signal that provides the async copy timing.
+  // @param [out] time Structure to be populated with the host domain value.
+  virtual void TranslateTime(core::Signal* signal,
+                             hsa_amd_profiling_async_copy_time_t& time) {
+    return TranslateTime(signal, (hsa_amd_profiling_dispatch_time_t&)time);
+  }
 
   // @brief Translate timestamp agent domain to host domain.
   //
@@ -158,27 +180,32 @@ class GpuAgent : public GpuAgentInt {
   // @brief GPU agent destructor.
   ~GpuAgent();
 
-  // @brief Initialize DMA queue.
-  //
-  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
-  hsa_status_t InitDma();
+  // @brief Override from core::Agent.
+  void InitDma() override;
+
+  // @brief Override from core::Agent.
+  hsa_status_t InitBlitKernel() override;
 
   uint16_t GetMicrocodeVersion() const;
 
-  // @brief Assembles SP3 shader source into executable code.
+  // @brief Assembles SP3 shader source into ISA or AQL code object.
   //
   // @param [in] src_sp3 SP3 shader source text representation.
   // @param [in] func_name Name of the SP3 function to assemble.
-  // @param [out] code_buf Executable code buffer.
-  // @param [out] code_buf_size Size of executable code buffer in bytes.
-  void AssembleShader(const char* src_sp3, const char* func_name,
-                      void*& code_buf, size_t& code_buf_size);
+  // @param [in] assemble_target ISA or AQL assembly target.
+  // @param [out] code_buf Code object buffer.
+  // @param [out] code_buf_size Size of code object buffer in bytes.
+  enum class AssembleTarget { ISA, AQL };
 
-  // @brief Frees executable code created by AssembleShader.
+  void AssembleShader(const char* src_sp3, const char* func_name,
+                      AssembleTarget assemble_target, void*& code_buf,
+                      size_t& code_buf_size) const;
+
+  // @brief Frees code object created by AssembleShader.
   //
-  // @param [in] code_buf Executable code buffer.
-  // @param [in] code_buf_size Size of executable code buffer in bytes.
-  void ReleaseShader(void* code_buf, size_t code_buf_size);
+  // @param [in] code_buf Code object buffer.
+  // @param [in] code_buf_size Size of code object buffer in bytes.
+  void ReleaseShader(void* code_buf, size_t code_buf_size) const;
 
   // @brief Override from core::Agent.
   hsa_status_t VisitRegion(bool include_peer,
@@ -202,6 +229,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Override from core::Agent.
   hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
+
+  // @brief Get the next available end timestamp object.
+  uint64_t* ObtainEndTsObject();
 
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
@@ -308,6 +338,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Binds the second-level trap handler to this node.
   void BindTrapHandler();
 
+  // @brief Override from core::Agent.
+  hsa_status_t EnableDmaProfiling(bool enable) override;
+
   // @brief Node properties.
   const HsaNodeProperties properties_;
 
@@ -329,9 +362,12 @@ class GpuAgent : public GpuAgentInt {
   // @brief Blit object to handle memory copy from system to device memory.
   core::Blit* blit_h2d_;
 
-  // @brief Blit object to handle memory copy from device to system, device to
-  // device, and memory fill.
+  // @brief Blit object to handle memory copy from device to system memory.
   core::Blit* blit_d2h_;
+
+  // @brief Blit object to handle memory copy from device to device memory, and
+  // memory fill.
+  core::Blit* blit_d2d_;
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
@@ -341,6 +377,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Mutex to protect access to ::t1_.
   KernelMutex t1_lock_;
+
+  // @brief Mutex to protect access to blit objects.
+  KernelMutex blit_lock_;
 
   // @brief GPU tick on initialization.
   HsaClockCounters t0_;
@@ -352,6 +391,8 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
+
+  MemoryRegion* local_region_;
 
   core::Isa* isa_;
 
@@ -381,11 +422,28 @@ class GpuAgent : public GpuAgentInt {
   // @brief Query the driver to get the cache properties.
   void InitCacheList();
 
+  // @brief Initialize memory pool for end timestamp object.
+  // @retval True if the memory pool for end timestamp object is initialized.
+  bool InitEndTsPool();
+
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
+
+  // @brief True if blit objects are initialized.
+  std::atomic<bool> blit_initialized_;
+
+  // Each end ts is 32 bytes.
+  static const size_t kTsSize = 32;
+
+  // Number of element in the pool.
+  uint32_t end_ts_pool_size_;
+
+  std::atomic<uint32_t> end_ts_pool_counter_;
+
+  std::atomic<uint64_t*> end_ts_base_addr_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

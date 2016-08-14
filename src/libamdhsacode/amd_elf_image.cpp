@@ -456,6 +456,7 @@ namespace amd {
       uint64_t imageSize() const override { return phdr.p_filesz; }
       uint64_t vaddr() const override { return phdr.p_vaddr; }
       uint64_t flags() const override { return phdr.p_flags; }
+      uint64_t offset() const override { return phdr.p_offset; }
       const char* data() const override;
       uint16_t getSegmentIndex() override;
       bool updateAddSection(Section *section) override;
@@ -1368,7 +1369,7 @@ namespace amd {
           section = new GElfRelocationSection(this);
         } else if (shdr.sh_type == SHT_STRTAB) {
           section = new GElfStringTable(this);
-        } else if (shdr.sh_type == SHT_SYMTAB) {
+        } else if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
           section = new GElfSymbolTable(this);
         } else if (shdr.sh_type == SHT_NULL) {
           section = 0;
@@ -1391,14 +1392,14 @@ namespace amd {
 
       for (size_t n = 1; n < sections.size(); ++n) {
         GElfSection* section = sections[n].get();
-        if (section->type() == SHT_SYMTAB) {
+        if (section->type() == SHT_SYMTAB || section->type() == SHT_DYNSYM) {
           if (!section->pullData()) { return false; }
         }
       }
 
       for (size_t n = 1; n < sections.size(); ++n) {
         GElfSection* section = sections[n].get();
-        if (section->type() != SHT_STRTAB && section->type() != SHT_SYMTAB) {
+        if (section->type() != SHT_STRTAB && section->type() != SHT_SYMTAB && section->type() != SHT_DYNSYM) {
           if (!section->pullData()) { return false; }
         }
       }

@@ -43,6 +43,7 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_BLIT_KERNEL_H_
 #define HSA_RUNTIME_CORE_INC_AMD_BLIT_KERNEL_H_
 
+#include <map>
 #include <stdint.h>
 
 #include "core/inc/blit.h"
@@ -66,8 +67,10 @@ class BlitKernel : public core::Blit {
   ///
   /// @note: The call will block until all AQL packets have been executed.
   ///
+  /// @param agent Agent passed to Initialize.
+  ///
   /// @return hsa_status_t
-  virtual hsa_status_t Destroy() override;
+  virtual hsa_status_t Destroy(const core::Agent& agent) override;
 
   /// @brief Submit an AQL packet to perform vector copy. The call is blocking
   /// until the command execution is finished.
@@ -102,19 +105,40 @@ class BlitKernel : public core::Blit {
   virtual hsa_status_t SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                size_t count) override;
 
+  virtual hsa_status_t EnableProfiling(bool enable) override;
+
  private:
   union KernelArgs {
-    struct __ALIGNED__(16) KernelCopyArgs {
-      const void* src;
-      void* dst;
-      uint64_t size;
-      uint32_t use_vector;
-    } copy;
+    struct __ALIGNED__(16) {
+      uint64_t phase1_src_start;
+      uint64_t phase1_dst_start;
+      uint64_t phase2_src_start;
+      uint64_t phase2_dst_start;
+      uint64_t phase3_src_start;
+      uint64_t phase3_dst_start;
+      uint64_t phase4_src_start;
+      uint64_t phase4_dst_start;
+      uint64_t phase4_src_end;
+      uint64_t phase4_dst_end;
+      uint32_t num_workitems;
+    } copy_aligned;
 
-    struct __ALIGNED__(16) KernelFillArgs {
-      void* ptr;
-      uint64_t num;
-      uint32_t value;
+    struct __ALIGNED__(16) {
+      uint64_t phase1_src_start;
+      uint64_t phase1_dst_start;
+      uint64_t phase2_src_start;
+      uint64_t phase2_dst_start;
+      uint64_t phase2_src_end;
+      uint64_t phase2_dst_end;
+      uint32_t num_workitems;
+    } copy_misaligned;
+
+    struct __ALIGNED__(16) {
+      uint64_t phase1_dst_start;
+      uint64_t phase2_dst_start;
+      uint64_t phase2_dst_end;
+      uint32_t fill_value;
+      uint32_t num_workitems;
     } fill;
   };
 
@@ -136,14 +160,19 @@ class BlitKernel : public core::Blit {
 
   KernelArgs* ObtainAsyncKernelCopyArg();
 
-  /// Handles to the vector copy kernel.
-  uint64_t copy_code_handle_;
+  /// AQL code object and size for each kernel.
+  enum class KernelType {
+    CopyAligned,
+    CopyMisaligned,
+    Fill,
+  };
 
-  /// Handles to the vector copy aligned kernel.
-  uint64_t copy_aligned_code_handle_;
+  struct KernelCode {
+    void* code_buf_;
+    size_t code_buf_size_;
+  };
 
-  /// Handles to the fill memory kernel.
-  uint64_t fill_code_handle_;
+  std::map<KernelType, KernelCode> kernels_;
 
   /// AQL queue for submitting the vector copy kernel.
   hsa_queue_t* queue_;
@@ -163,12 +192,8 @@ class BlitKernel : public core::Blit {
   /// Lock to synchronize access to kernarg_ and completion_signal_
   std::mutex lock_;
 
-  /// Pointer to memory containing the ISA and argument buffer.
-  void* code_arg_buffer_;
-
-  static const size_t kMaxCopyCount;
-  static const size_t kMaxFillCount;
-  static const uint32_t kGroupSize;
+  /// Number of CUs on the underlying agent.
+  int num_cus_;
 };
 }  // namespace amd
 

@@ -43,6 +43,7 @@
 #include "core/inc/amd_memory_region.h"
 
 #include <algorithm>
+#include <set>
 
 #include "core/inc/runtime.h"
 #include "core/inc/amd_cpu_agent.h"
@@ -374,35 +375,41 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   const core::Runtime::LinkInfo link_info =
       core::Runtime::runtime_singleton_->GetLinkInfo(node_id_from, node_id_to);
 
+  /**
+   *  ---------------------------------------------------
+   *  |              |CPU        |GPU (owner)|GPU (peer) |
+   *  ---------------------------------------------------
+   *  |system memory |allowed    |disallowed |disallowed |
+   *  ---------------------------------------------------
+   *  |fb private    |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   *  |fb public     |disallowed |allowed    |disallowed |
+   *  ---------------------------------------------------
+   *  |others        |never      |allowed    |never      |
+   *  ---------------------------------------------------
+   */
+  const hsa_amd_memory_pool_access_t access_type =
+      ((IsSystem() && (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
+       (agent.node_id() == owner()->node_id()))
+          ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
+          : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
+                ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
+                : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+
   switch (attribute) {
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
-      /**
-      *  ---------------------------------------------------
-      *  |              |CPU        |GPU (owner)|GPU (peer) |
-      *  ---------------------------------------------------
-      *  |system memory |allowed    |disallowed |disallowed |
-      *  ---------------------------------------------------
-      *  |fb private    |never      |allowed    |never      |
-      *  ---------------------------------------------------
-      *  |fb public     |disallowed |allowed    |disallowed |
-      *  ---------------------------------------------------
-      *  |others        |never      |allowed    |never      |
-      *  ---------------------------------------------------
-      */
-      *((hsa_amd_memory_pool_access_t*)value) =
-          (((IsSystem()) &&
-            (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
-           (agent.node_id() == owner()->node_id()))
-              ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
-              : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
-                    ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
-                    : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+      *((hsa_amd_memory_pool_access_t*)value) = access_type;
       break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
-      *((uint32_t*)value) = link_info.num_hop;
+      *((uint32_t*)value) =
+          (access_type != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED)
+              ? link_info.num_hop
+              : 0;
+      break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_LINK_INFO:
       memset(value, 0, sizeof(hsa_amd_memory_pool_link_info_t));
-      if (link_info.num_hop > 0) {
+      if ((access_type != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) &&
+          (link_info.num_hop > 0)) {
         memcpy(value, &link_info.info, sizeof(hsa_amd_memory_pool_link_info_t));
       }
       break;
@@ -425,15 +432,17 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
   bool cpu_in_list = false;
 
+  std::set<GpuAgentInt*> whitelist_gpus;
   std::vector<uint32_t> whitelist_nodes;
   for (uint32_t i = 0; i < num_agents; ++i) {
-    const core::Agent* agent = core::Agent::Convert(agents[i]);
+    core::Agent* agent = core::Agent::Convert(agents[i]);
     if (agent == NULL || !agent->IsValid()) {
       return HSA_STATUS_ERROR_INVALID_AGENT;
     }
 
     if (agent->device_type() == core::Agent::kAmdGpuDevice) {
       whitelist_nodes.push_back(agent->node_id());
+      whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
     } else {
       cpu_in_list = true;
     }
@@ -452,17 +461,24 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
       std::find(whitelist_nodes.begin(), whitelist_nodes.end(),
                 owner()->node_id()) == whitelist_nodes.end()) {
     whitelist_nodes.push_back(owner()->node_id());
+    whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(owner()));
   }
 
   HsaMemMapFlags map_flag = map_flag_;
   map_flag.ui32.HostAccess |= (cpu_in_list) ? 1 : 0;
 
   uint64_t alternate_va = 0;
-  return (amd::MemoryRegion::MakeKfdMemoryResident(
-             whitelist_nodes.size(), &whitelist_nodes[0],
-             const_cast<void*>(ptr), size, &alternate_va, map_flag))
-             ? HSA_STATUS_SUCCESS
-             : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (!amd::MemoryRegion::MakeKfdMemoryResident(
+          whitelist_nodes.size(), &whitelist_nodes[0], const_cast<void*>(ptr),
+          size, &alternate_va, map_flag)) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  for (GpuAgentInt* gpu : whitelist_gpus) {
+    gpu->InitDma();
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
@@ -490,10 +506,15 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
     return HSA_STATUS_SUCCESS;
   }
 
+  std::set<core::Agent*> whitelist_gpus;
   std::vector<HSAuint32> whitelist_nodes;
   if (num_agents == 0 || agents == NULL) {
     // Map to all GPU agents.
     whitelist_nodes = core::Runtime::runtime_singleton_->gpu_ids();
+
+    whitelist_gpus.insert(
+        core::Runtime::runtime_singleton_->gpu_agents().begin(),
+        core::Runtime::runtime_singleton_->gpu_agents().end());
   } else {
     for (int i = 0; i < num_agents; ++i) {
       core::Agent* agent = core::Agent::Convert(agents[i]);
@@ -503,6 +524,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       if (agent->device_type() == core::Agent::kAmdGpuDevice) {
         whitelist_nodes.push_back(agent->node_id());
+        whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
       }
     }
   }
@@ -520,8 +542,15 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
     uint64_t alternate_va = 0;
     if (MakeKfdMemoryResident(whitelist_nodes.size(), &whitelist_nodes[0],
                               host_ptr, size, &alternate_va, map_flag_)) {
-      assert(alternate_va != 0);
-      *agent_ptr = reinterpret_cast<void*>(alternate_va);
+      if (alternate_va != 0) {
+        *agent_ptr = reinterpret_cast<void*>(alternate_va);
+      } else {
+        *agent_ptr = host_ptr;
+      }
+      for (core::Agent* gpu : whitelist_gpus) {
+        reinterpret_cast<GpuAgentInt*>(gpu)->InitDma();
+      }
+
       return HSA_STATUS_SUCCESS;
     }
     amd::MemoryRegion::DeregisterMemory(host_ptr);

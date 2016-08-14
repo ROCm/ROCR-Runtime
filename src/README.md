@@ -60,18 +60,6 @@ For example, from the top level ROCR repository execute:
 
 The name of the core hsa runtime is libhsa-runtime64.so.1.
 
-#### External requirements
-
-The core runtime requires the sp3.a library to be able to compiler
-on x86_64 architechtures. The binaries for the sp3.a librariy can
-be found on the amd-codexl-analyzer GitHub repository:
-
-https://github.com/GPUOpen-Tools/amd-codexl-analyzer
-
-The x86_64 library and associated header files have been added to
-this code base for convenience, but are still subject to the 
-AMD copyright license.
-
 #### Specs
 
 http://www.hsafoundation.com/standards/

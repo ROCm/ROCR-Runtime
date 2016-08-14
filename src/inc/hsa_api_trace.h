@@ -54,13 +54,51 @@
 #include "inc/hsa_ext_finalize.h"
 #endif
 
-struct ExtTable {
+#include <string.h>
+#include <assert.h>
+#include <stddef.h>
+
+// Major Ids of the Api tables exported by Hsa Core Runtime
+#define HSA_API_TABLE_MAJOR_VERSION               0x01
+#define HSA_CORE_API_TABLE_MAJOR_VERSION          0x01
+#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x01
+#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x01
+#define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x01
+
+// Step Ids of the Api tables exported by Hsa Core Runtime
+#define HSA_API_TABLE_STEP_VERSION                0x00
+#define HSA_CORE_API_TABLE_STEP_VERSION           0x00
+#define HSA_AMD_EXT_API_TABLE_STEP_VERSION        0x00
+#define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
+#define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
+
+// Min function used to copy Api Tables
+static inline uint32_t Min(const uint32_t a, const uint32_t b) {
+  return (a > b) ? b : a;
+}
+
+// Structure of Version used to identify an instance of Api table
+struct ApiTableVersion {
+  uint32_t major_id;
+  uint32_t minor_id;
+  uint32_t step_id;
+  uint32_t reserved;
+};
+
+// Table to export HSA Finalizer Extension Apis 
+struct FinalizerExtTable {
+  ApiTableVersion version;
 	decltype(hsa_ext_program_create)* hsa_ext_program_create_fn;
 	decltype(hsa_ext_program_destroy)* hsa_ext_program_destroy_fn;
 	decltype(hsa_ext_program_add_module)* hsa_ext_program_add_module_fn;
 	decltype(hsa_ext_program_iterate_modules)* hsa_ext_program_iterate_modules_fn;
 	decltype(hsa_ext_program_get_info)* hsa_ext_program_get_info_fn;
 	decltype(hsa_ext_program_finalize)* hsa_ext_program_finalize_fn;
+};
+
+// Table to export HSA Image Extension Apis
+struct ImageExtTable {
+  ApiTableVersion version;
 	decltype(hsa_ext_image_get_capability)* hsa_ext_image_get_capability_fn;
 	decltype(hsa_ext_image_data_get_info)* hsa_ext_image_data_get_info_fn;
 	decltype(hsa_ext_image_create)* hsa_ext_image_create_fn;
@@ -73,7 +111,40 @@ struct ExtTable {
 	decltype(hsa_ext_sampler_destroy)* hsa_ext_sampler_destroy_fn;
 };
 
-struct ApiTable {
+// Table to export AMD Extension Apis
+struct AmdExtTable {
+  ApiTableVersion version;
+	decltype(hsa_amd_coherency_get_type)* hsa_amd_coherency_get_type_fn;
+	decltype(hsa_amd_coherency_set_type)* hsa_amd_coherency_set_type_fn;
+  decltype(hsa_amd_profiling_set_profiler_enabled)* hsa_amd_profiling_set_profiler_enabled_fn;
+  decltype(hsa_amd_profiling_async_copy_enable) *hsa_amd_profiling_async_copy_enable_fn;
+  decltype(hsa_amd_profiling_get_dispatch_time)* hsa_amd_profiling_get_dispatch_time_fn;
+  decltype(hsa_amd_profiling_get_async_copy_time) *hsa_amd_profiling_get_async_copy_time_fn;
+  decltype(hsa_amd_profiling_convert_tick_to_system_domain)* hsa_amd_profiling_convert_tick_to_system_domain_fn;
+  decltype(hsa_amd_signal_async_handler)* hsa_amd_signal_async_handler_fn;
+  decltype(hsa_amd_async_function)* hsa_amd_async_function_fn;
+  decltype(hsa_amd_signal_wait_any)* hsa_amd_signal_wait_any_fn;
+  decltype(hsa_amd_queue_cu_set_mask)* hsa_amd_queue_cu_set_mask_fn;
+  decltype(hsa_amd_memory_pool_get_info)* hsa_amd_memory_pool_get_info_fn;
+  decltype(hsa_amd_agent_iterate_memory_pools)* hsa_amd_agent_iterate_memory_pools_fn;
+  decltype(hsa_amd_memory_pool_allocate)* hsa_amd_memory_pool_allocate_fn;
+  decltype(hsa_amd_memory_pool_free)* hsa_amd_memory_pool_free_fn;
+  decltype(hsa_amd_memory_async_copy)* hsa_amd_memory_async_copy_fn;
+  decltype(hsa_amd_agent_memory_pool_get_info)* hsa_amd_agent_memory_pool_get_info_fn;
+  decltype(hsa_amd_agents_allow_access)* hsa_amd_agents_allow_access_fn;
+  decltype(hsa_amd_memory_pool_can_migrate)* hsa_amd_memory_pool_can_migrate_fn;
+  decltype(hsa_amd_memory_migrate)* hsa_amd_memory_migrate_fn;
+  decltype(hsa_amd_memory_lock)* hsa_amd_memory_lock_fn;
+  decltype(hsa_amd_memory_unlock)* hsa_amd_memory_unlock_fn;
+  decltype(hsa_amd_memory_fill)* hsa_amd_memory_fill_fn;
+  decltype(hsa_amd_interop_map_buffer)* hsa_amd_interop_map_buffer_fn;
+  decltype(hsa_amd_interop_unmap_buffer)* hsa_amd_interop_unmap_buffer_fn;
+  decltype(::hsa_amd_image_create)* hsa_amd_image_create_fn;
+};
+
+// Table to export HSA Core Runtime Apis
+struct CoreApiTable {
+  ApiTableVersion version;
 	decltype(hsa_init)* hsa_init_fn;
 	decltype(hsa_shut_down)* hsa_shut_down_fn;
 	decltype(hsa_system_get_info)* hsa_system_get_info_fn;
@@ -170,8 +241,126 @@ struct ApiTable {
 	decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info_fn;
 	decltype(hsa_executable_iterate_symbols)* hsa_executable_iterate_symbols_fn;
 	decltype(hsa_status_string)* hsa_status_string_fn;
-
-	ExtTable* std_exts_;
 };
 
+// Table to export HSA Apis from Core Runtime, Amd Extensions
+// Finalizer and Images
+struct HsaApiTable {
+
+  // Version of Hsa Api Table
+  ApiTableVersion version;
+  
+  // Table of function pointers to HSA Core Runtime
+	CoreApiTable* core_;
+
+  // Table of function pointers to AMD extensions
+	AmdExtTable* amd_ext_;
+
+  // Table of function pointers to HSA Finalizer Extension
+	FinalizerExtTable* finalizer_ext_;
+  
+  // Table of function pointers to HSA Image Extension
+	ImageExtTable* image_ext_;
+
+};
+
+// Structure containing instances of different api tables
+struct HsaApiTableContainer {
+  HsaApiTable root;
+	CoreApiTable core;
+	AmdExtTable amd_ext;
+	FinalizerExtTable finalizer_ext;
+	ImageExtTable image_ext;
+
+  // Default initialization of a container instance
+  HsaApiTableContainer() {
+    root.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
+    root.version.minor_id = sizeof(HsaApiTable);
+    root.version.step_id = HSA_API_TABLE_STEP_VERSION;
+    
+    core.version.major_id = HSA_CORE_API_TABLE_MAJOR_VERSION;
+    core.version.minor_id = sizeof(CoreApiTable);
+    core.version.step_id = HSA_CORE_API_TABLE_STEP_VERSION;
+    root.core_ = &core;
+    
+    amd_ext.version.major_id = HSA_AMD_EXT_API_TABLE_MAJOR_VERSION;
+    amd_ext.version.minor_id = sizeof(AmdExtTable);
+    amd_ext.version.step_id = HSA_AMD_EXT_API_TABLE_STEP_VERSION;
+    root.amd_ext_ = &amd_ext;
+
+    finalizer_ext.version.major_id = HSA_FINALIZER_API_TABLE_MAJOR_VERSION;
+    finalizer_ext.version.minor_id = sizeof(FinalizerExtTable);
+    finalizer_ext.version.step_id = HSA_FINALIZER_API_TABLE_STEP_VERSION;
+    root.finalizer_ext_ = & finalizer_ext;
+
+    image_ext.version.major_id = HSA_IMAGE_API_TABLE_MAJOR_VERSION;
+    image_ext.version.minor_id = sizeof(ImageExtTable);
+    image_ext.version.step_id = HSA_IMAGE_API_TABLE_STEP_VERSION;
+    root.image_ext_ = &image_ext;
+  }
+};
+
+// Api to copy function pointers of a table
+static
+void inline copyApi(void* src, void* dest, size_t size) {
+  memcpy((char*)src + sizeof(ApiTableVersion),
+         (char*)dest + sizeof(ApiTableVersion),
+         (size - sizeof(ApiTableVersion)));
+}
+
+// Copy constructor for all Api tables. The function assumes the
+// user has initialized an instance of tables container correctly
+// for the Major, Minor and Stepping Ids of Root and Child Api tables.
+// The function will overwrite the value of Minor Id by taking the
+// minimum of source and destination parameters. It will also overwrite
+// the stepping Id with value from source parameter.
+static const
+void inline copyTables(const HsaApiTable* src, HsaApiTableContainer* dest) {
+
+  // Verify Major Id of source and destination tables are valid
+  assert(dest->root.version.major_id == src->version.major_id);
+  assert(dest->core.version.major_id == src->core_->version.major_id);
+  assert(dest->amd_ext.version.major_id == src->amd_ext_->version.major_id);
+  assert(dest->finalizer_ext.version.major_id == src->finalizer_ext_->version.major_id);
+  assert(dest->image_ext.version.major_id == src->image_ext_->version.major_id);
+
+  // Initialize the stepping id and minor id of root table. For the
+  // minor id which encodes struct size, take the minimum of source
+  // and destination parameters
+  dest->root.version.step_id = src->version.step_id;
+  dest->root.version.minor_id = Min(dest->root.version.minor_id, src->version.minor_id);
+  
+  // Copy the Core Api table
+  size_t size = dest->root.version.minor_id;
+  if (size > offsetof(HsaApiTable, core_)) {
+    dest->core.version.step_id = src->core_->version.step_id;
+    dest->core.version.minor_id = Min(dest->core.version.minor_id,
+                                      src->core_->version.minor_id);
+    copyApi(&dest->core, src->core_, dest->core.version.minor_id);
+  }
+  
+  // Copy the Amd Ext Api table
+  if (size > offsetof(HsaApiTable, amd_ext_)) {
+    dest->amd_ext.version.step_id = src->amd_ext_->version.step_id;
+    dest->amd_ext.version.minor_id = Min(dest->core.version.minor_id,
+                                         src->amd_ext_->version.minor_id);
+    copyApi(&dest->amd_ext, src->amd_ext_, dest->amd_ext.version.minor_id);
+  }
+  
+  // Copy the Finalizer Ext Api table
+  if (size > offsetof(HsaApiTable, finalizer_ext_)) {
+    dest->finalizer_ext.version.step_id = src->finalizer_ext_->version.step_id;
+    dest->finalizer_ext.version.minor_id = Min(dest->core.version.minor_id,
+                                               src->finalizer_ext_->version.minor_id);
+    copyApi(&dest->finalizer_ext, src->finalizer_ext_, dest->finalizer_ext.version.minor_id);
+  }
+  
+  // Copy the Image Ext Api table
+  if (size > offsetof(HsaApiTable, image_ext_)) {
+    dest->image_ext.version.step_id = src->image_ext_->version.step_id;
+    dest->image_ext.version.minor_id = Min(dest->core.version.minor_id,
+                                           src->image_ext_->version.minor_id);
+    copyApi(&dest->image_ext, src->image_ext_, dest->image_ext.version.minor_id);
+  }
+}
 #endif
