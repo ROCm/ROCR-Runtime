@@ -66,7 +66,7 @@ If the sample runs without generating errors, the installation is complete.
 
 #### Known Issues
 
-* The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference. 
+* Image support was provided in ROCr 1.2. Previous versions did not have support.
 * Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifths simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
  
 #### Disclaimer
