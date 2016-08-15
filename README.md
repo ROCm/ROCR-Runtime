@@ -2,12 +2,13 @@
 
 This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Reference source code for the core runtime is also available.
 
-Only the AMD/ATI Fiji(c) family of discrete GPUs are currently supported.
+The AMD/ATI Fiji(c) and Hawaii(c) families of discrete GPUs are currently supported.
 
 #### Initial Target Platform Requirements
 
 * CPU: Intel(c) Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
 * GPU: Fiji ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
+* GPU: Hawaii ASIC (AMD R9 390, R9 390X) with ROCm 1.2 or greater
 
 #### Source code
 
