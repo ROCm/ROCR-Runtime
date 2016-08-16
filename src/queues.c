@@ -598,7 +598,7 @@ hsaKmtSetQueueCUMask(
 
 	CHECK_KFD_OPEN();
 
-	if (CUMaskCount == 0 || QueueCUMask == NULL)
+	if (CUMaskCount == 0 || QueueCUMask == NULL || ((CUMaskCount % 32) != 0))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	memset(&args, 0, sizeof(args));
