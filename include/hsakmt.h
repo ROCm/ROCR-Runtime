@@ -651,6 +651,16 @@ hsaKmtSetTrapHandler(
     HSAuint64           TrapBufferSizeInBytes     //IN
     );
 
+/**
+  Gets image tile configuration.
+ */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetTileConfig(
+    HSAuint32           NodeId,     // IN
+    HsaGpuTileConfig*   config      // IN & OUT
+    );
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif

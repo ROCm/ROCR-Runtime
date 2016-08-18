@@ -386,3 +386,39 @@ hsaKmtUnmapGraphicHandle(
 
 	return hsaKmtUnmapMemoryToGPU(PORT_UINT64_TO_VPTR(FlatMemoryAddress));
 }
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetTileConfig(
+	HSAuint32		NodeId,	/* IN */
+	HsaGpuTileConfig	*config	/* IN & OUT */
+)
+{
+	struct kfd_ioctl_get_tile_config_args args;
+	uint32_t gpu_id;
+	HSAKMT_STATUS result;
+
+	result = validate_nodeid(NodeId, &gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	args.gpu_id = gpu_id;
+	args.tile_config_ptr = (uint64_t)config->TileConfig;
+	args.macro_tile_config_ptr = (uint64_t)config->MacroTileConfig;
+	args.num_tile_configs = config->NumTileConfigs;
+	args.num_macro_tile_configs = config->NumMacroTileConfigs;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_TILE_CONFIG, &args) != 0) {
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	config->NumTileConfigs = args.num_tile_configs;
+	config->NumMacroTileConfigs = args.num_macro_tile_configs;
+
+	config->GbAddrConfig = args.gb_addr_config;
+
+	config->NumBanks = args.num_banks;
+	config->NumRanks = args.num_ranks;
+
+	return HSAKMT_STATUS_SUCCESS;
+}

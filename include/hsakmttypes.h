@@ -967,6 +967,21 @@ typedef struct _HsaPmcTraceRoot
     HSATraceId                  TraceId;
 } HsaPmcTraceRoot;
 
+typedef struct _HsaGpuTileConfig
+{
+    const HSAuint32 *TileConfig;
+    const HSAuint32 *MacroTileConfig;
+    HSAuint32 NumTileConfigs;
+    HSAuint32 NumMacroTileConfigs;
+
+    HSAuint32 GbAddrConfig;
+
+    HSAuint32 NumBanks;
+    HSAuint32 NumRanks;
+    /* 9 dwords on 64-bit system */
+    HSAuint32 Reserved[7]; /* Round up to 16 dwords for future extension */
+} HsaGpuTileConfig;
+
 #pragma pack(pop, hsakmttypes_h)
 
 
