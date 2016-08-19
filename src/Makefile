@@ -39,7 +39,7 @@ OBJS = debug.o globals.o memory.o perfctr.o time.o version.o \
 .PHONY: all lnx lnx64a clean
 
 # Default target
-all: lnx lnx64a
+all: lnx64a
 
 # To relocate build output, set "O=target/dir/"
 # otherwise it defaults to a local directory
