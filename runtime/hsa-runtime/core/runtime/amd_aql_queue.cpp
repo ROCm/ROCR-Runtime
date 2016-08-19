@@ -266,12 +266,21 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   SignalGuard.Dismiss();
 #endif
 
-  pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
-      pm4_ib_size_b_, 0x1000);
-  if (pm4_ib_buf_ == NULL) return;
+  HsaMemFlags pm4_ib_buf_flags = {0};
+  pm4_ib_buf_flags.ui32.HostAccess = 1;
+  pm4_ib_buf_flags.ui32.ExecuteAccess = 1;
+  pm4_ib_buf_flags.ui32.NoSubstitute = 1;
+
+  HSAKMT_STATUS err =
+      hsaKmtAllocMemory(agent_->node_id(), pm4_ib_size_b_, pm4_ib_buf_flags, &pm4_ib_buf_);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(PM4 IB) failed");
+
+  err = hsaKmtMapMemoryToGPU(pm4_ib_buf_, pm4_ib_size_b_, NULL);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtMapMemoryToGPU(PM4 IB) failed");
 
   MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() {
-    core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
+    hsaKmtUnmapMemoryToGPU(pm4_ib_buf_);
+    hsaKmtFreeMemory(pm4_ib_buf_, pm4_ib_size_b_);
   });
 
   valid_ = true;
@@ -304,7 +313,9 @@ AqlQueue::~AqlQueue() {
     }
   }
 #endif
-  core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
+
+  hsaKmtUnmapMemoryToGPU(pm4_ib_buf_);
+  hsaKmtFreeMemory(pm4_ib_buf_, pm4_ib_size_b_);
 }
 
 uint64_t AqlQueue::LoadReadIndexAcquire() {
