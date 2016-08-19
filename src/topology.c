@@ -34,6 +34,7 @@
 #include <unistd.h>
 #include <ctype.h>
 #include <sched.h>
+#include <pci/pci.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -81,7 +82,7 @@ static struct hsa_gfxip_table {
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
 	unsigned char is_dgpu;		// Predicate for dGPU devices
-	const char* marketing_name;	// Marketing Name of the device
+	const char* amd_name;		// CALName of the device
 } gfxip_lookup_table[] = {
 	/* Kaveri Family */
 	{ 0x1304, 7, 0, 0, 0, "Spectre" },
@@ -433,7 +434,7 @@ bool topology_is_dgpu(uint16_t device_id)
 static HSAKMT_STATUS
 topology_get_cpu_model_name(HsaNodeProperties *props) {
 	FILE *fd;
-	char read_buf[256], cpu_model_name[128];
+	char read_buf[256], cpu_model_name[HSA_PUBLIC_NAME_SIZE];
 	const char *p;
 	uint32_t i, apic_id;
 
@@ -478,6 +479,8 @@ topology_get_cpu_model_name(HsaNodeProperties *props) {
 
 			/* Set CPU model name only if corresponding apic id */
 			if (props->CComputeIdLo == apic_id) {
+				/* Retrieve the CAL name of CPU node */
+				strncpy( (char *) props->AMDName, cpu_model_name, sizeof(props->AMDName));
 				/* Convert from UTF8 to UTF16 */
 				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 					props->MarketingName[i] = cpu_model_name[i];
@@ -542,7 +545,9 @@ static void topology_set_processor_vendor(void)
 }
 
 HSAKMT_STATUS
-topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id) {
+topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id,
+							  struct pci_access* pacc )
+{
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
@@ -552,6 +557,8 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	uint16_t fw_version = 0;
 	int read_size;
 	const struct hsa_gfxip_table* hsa_gfxip;
+	char namebuf[HSA_PUBLIC_NAME_SIZE];
+	const char* name;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -652,15 +659,22 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		props->EngineId.ui32.Minor = hsa_gfxip->minor;
 		props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
 
-		if (!hsa_gfxip->marketing_name) {
+		if (!hsa_gfxip->amd_name) {
 			ret = HSAKMT_STATUS_ERROR;
 			goto err;
 		}
 
-		/* Retrieve the marketing name of the node, convert UTF8 to UTF16 */
-		for (i = 0; hsa_gfxip->marketing_name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
-			props->MarketingName[i] = hsa_gfxip->marketing_name[i];
-		props->MarketingName[i] = 0;
+		/* Retrieve the CAL name of the node */
+		strncpy( (char *) props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName) );
+		/* Retrieve the marketing name of the node using pcilib,
+		 * convert UTF8 to UTF16
+		 */
+		name = pci_lookup_name(pacc, namebuf, sizeof(namebuf), PCI_LOOKUP_DEVICE,
+		 					   props->VendorId, props->DeviceId);
+
+		for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
+			props->MarketingName[i] = name[i];
+		props->MarketingName[i] = '\0';
 	} else {
 		/* Is CPU node */
 		if (!props->NumFComputeCores || !props->DeviceId) {
@@ -1357,6 +1371,7 @@ topology_take_snapshot(void)
 	node_t *temp_nodes = 0;
 	void *cpu_ci_list = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	struct pci_access *pacc;
 
 	topology_set_processor_vendor();
 retry:
@@ -1371,10 +1386,12 @@ retry:
 		temp_nodes = calloc(sys_props.NumNodes * sizeof(node_t),1);
 		if (!temp_nodes)
 			return HSAKMT_STATUS_NO_MEMORY;
+		pacc = pci_alloc();
+		pci_init(pacc);
 		for (i = 0; i < sys_props.NumNodes; i++) {
 			ret = topology_sysfs_get_node_props(i,
 					&temp_nodes[i].node,
-					&temp_nodes[i].gpu_id);
+					&temp_nodes[i].gpu_id, pacc);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
 				free_nodes(temp_nodes, i);
 				goto err;
@@ -1443,6 +1460,7 @@ retry:
 			}
 
 		}
+		pci_cleanup(pacc);
 	}
 
 	/* The Kernel only creates one way direct link -

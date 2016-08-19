@@ -33,6 +33,7 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <pci/pci.h>
 
 #define NON_VALID_GPU_ID 0
 
@@ -1053,6 +1054,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	struct kfd_process_device_apertures * process_apertures;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache;
+	struct pci_access *pacc;
 
 	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
 	disableCache = getenv("HSA_DISABLE_CACHE");
@@ -1070,8 +1072,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * 0 by calloc. This is necessary because this function
 	 * gets called before hsaKmtAcquireSystemProperties() is called.*/
 	gpu_mem_count = 0;
+	pacc = pci_alloc();
+	pci_init(pacc);
 	while (i < NumNodes) {
-		ret = topology_sysfs_get_node_props(i, &props, &gpu_id);
+		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
 
@@ -1092,6 +1096,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		}
 		i++;
 	}
+	pci_cleanup(pacc);
 
 	/* The ioctl will also return Number of Nodes if args.kfd_process_device_apertures_ptr
 	* is set to NULL. This is not required since Number of nodes is already known. Kernel

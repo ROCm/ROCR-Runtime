@@ -195,7 +195,7 @@ typedef union
 // of throughput compute units (= SIMDs) associated with a H-NUMA node.
 //
 
-#define HSA_PUBLIC_NAME_SIZE        128
+#define HSA_PUBLIC_NAME_SIZE        64   // Marketing name string size
 
 typedef struct _HsaNodeProperties
 {
@@ -248,6 +248,8 @@ typedef struct _HsaNodeProperties
 
     HSAuint16       MarketingName[HSA_PUBLIC_NAME_SIZE];   // Public name of the "device" on the node (board or APU name).
                                        // Unicode string
+    HSAuint8        AMDName[HSA_PUBLIC_NAME_SIZE];   //CAL Name of the "device", ASCII
+    HSAuint8        Reserved[64];
 } HsaNodeProperties;
 
 

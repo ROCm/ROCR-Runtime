@@ -30,7 +30,7 @@ ifneq ($(REL),1)
   CFLAGS += -ggdb
 endif
 
-LDFLAGS += -lrt -pthread -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER) -Wl,-z,nodelete
+LDFLAGS += -lrt -pthread -lpci -Wl,--version-script=libhsakmt.ver -Wl,-soname=$(LIB_NAME).$(LIB_MAJOR_VER) -Wl,-z,nodelete
 
 OBJS = debug.o globals.o memory.o perfctr.o time.o version.o \
     events.o openclose.o queues.o topology.o fmm.o pmc_table.o \
@@ -55,7 +55,7 @@ BUILDDIR = $(BUILD_ROOT)/$(MAKECMDGOALS)
 TARGET = $(addprefix $(BUILDDIR)/,$(OBJS))
 
 $(BUILDDIR)/$(LIB_NAME).$(LIB_MAJOR_VER): $(TARGET)
-	gcc -shared $(LDFLAGS) -o $@ $^
+	gcc -shared -o $@ $^ $(LDFLAGS)
 
 $(BUILDDIR)/$(LIB_NAME): $(BUILDDIR)/$(LIB_NAME).$(LIB_MAJOR_VER)
 	@ln -sf $(LIB_NAME).$(LIB_MAJOR_VER) $(BUILDDIR)/$(LIB_NAME)
@@ -73,6 +73,7 @@ ROCM_LIB = $(ROCM_ROOT)/lib
 ROCM_INCLUDE = $(ROCM_ROOT)/include
 INSTALL_LIB_DIR = libhsakmt/lib
 INSTALL_INCLUDE_DIR = libhsakmt/include/libhsakmt
+
 export PACKAGE_DIR
 
 package-common: lnx64a
@@ -106,7 +107,6 @@ lnx64a: $(BUILDDIR)/$(LIB_NAME)
 
 clean:
 	rm -rf $(BUILD_ROOT)
-
 #Rule
 $(BUILDDIR)/%.o: %.c ../include/hsakmt.h ../include/hsakmttypes.h ../include/linux/kfd_ioctl.h
 	@echo Compiling $^
