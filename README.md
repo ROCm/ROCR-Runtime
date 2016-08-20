@@ -1,6 +1,6 @@
-### HSA Runtime API and runtime for Boltzmann
+### ROCm Platform Runtime: ROCr a HPC market focused API that leverages HSA Runtime Specification 
 
-This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Reference source code for the core runtime is also available.
+This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA  kernel agents. Reference source code for the core runtime is also available.
 
 The AMD/ATI Fiji(c) and Hawaii(c) families of discrete GPUs are currently supported.
 
@@ -12,7 +12,7 @@ The AMD/ATI Fiji(c) and Hawaii(c) families of discrete GPUs are currently suppor
 
 #### Source code
 
-The HSA core runtime source code for Boltzmann is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
+The HSA core runtime source code for ROCm is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
 #### Binaries for Ubuntu & Fedora and Installation Instructions
 
@@ -20,12 +20,12 @@ Pre-built binaries are available for installation from the ROCm package reposito
 
 Core runtime package:
 
-* HSA include files to support application development on the HSA runtime for Boltzmann
-* A 64-bit version of AMD's HSA core runtime for Boltzmann
+* HSA include files to support application development on the HSA runtime for ROCm
+* A 64-bit version of AMD's HSA core runtime for ROCm
 
 Runtime extension package:
 
-* A 64-bit version of AMD's finalizer extension for Boltzmann
+* A 64-bit version of AMD's finalizer extension for ROCm
 * A 64-bit version of AMD's runtime tools library
 
 The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default. 
@@ -37,7 +37,7 @@ https://github.com/RadeonOpenCompute/ROCm
  
 #### Infrastructure
 
-The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the Boltzmann HSA kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
+The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCm HSA kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
 
 The capabilities expressed by the HSA Runtime API are:
 
