@@ -139,7 +139,7 @@ struct AmdExtTable {
   decltype(hsa_amd_memory_fill)* hsa_amd_memory_fill_fn;
   decltype(hsa_amd_interop_map_buffer)* hsa_amd_interop_map_buffer_fn;
   decltype(hsa_amd_interop_unmap_buffer)* hsa_amd_interop_unmap_buffer_fn;
-  decltype(::hsa_amd_image_create)* hsa_amd_image_create_fn;
+  decltype(hsa_amd_image_create)* hsa_amd_image_create_fn;
 };
 
 // Table to export HSA Core Runtime Apis
