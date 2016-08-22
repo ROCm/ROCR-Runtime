@@ -49,13 +49,13 @@
 
 namespace core {
 
-uint32_t Signal::WaitAny(uint32_t signal_count, hsa_signal_t* hsa_signals,
-                         hsa_signal_condition_t* conds,
-                         hsa_signal_value_t* values, uint64_t timeout,
+uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
+                         const hsa_signal_condition_t* conds,
+                         const hsa_signal_value_t* values, uint64_t timeout,
                          hsa_wait_state_t wait_hint,
                          hsa_signal_value_t* satisfying_value) {
   hsa_signal_handle* signals =
-      reinterpret_cast<hsa_signal_handle*>(hsa_signals);
+      reinterpret_cast<hsa_signal_handle*>(const_cast<hsa_signal_t*>(hsa_signals));
   uint32_t prior = 0;
   for (uint32_t i = 0; i < signal_count; i++)
     prior = Max(prior, atomic::Increment(&signals[i]->waiting_));
@@ -180,6 +180,18 @@ uint32_t Signal::WaitAny(uint32_t signal_count, hsa_signal_t* hsa_signals,
       }
     }
   }
+}
+
+SignalGroup::SignalGroup(uint32_t num_signals, const hsa_signal_t* hsa_signals) : count(num_signals)
+{
+  if(count!=0)
+    signals=new hsa_signal_t[count];
+  else
+    signals=NULL;
+  if(signals==NULL)
+    return;
+  for(int i=0; i<count; i++)
+    signals[i]=hsa_signals[i];
 }
 
 }  // namespace core

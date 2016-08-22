@@ -190,6 +190,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
       hsa_status_t (*callback)(hsa_region_t region, void* data),
       void* data) const = 0;
 
+  // @brief Invoke the callback for each cache useable by this agent.
+  virtual hsa_status_t IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* data) const = 0;
+
   // @brief Create queue.
   //
   // @param [in] size Number of packets the queue is expected to hold. Must be a

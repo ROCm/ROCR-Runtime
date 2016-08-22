@@ -125,6 +125,15 @@ void CpuAgent::InitCacheList() {
       }
     }
   }
+
+  //Update cache objects
+  caches_.clear();
+  caches_.resize(cache_props_.size());
+  char name[64];
+  GetInfo(HSA_AGENT_INFO_NAME, name);
+  std::string deviceName=name;
+  for(size_t i=0; i<caches_.size(); i++)
+    caches_[i].reset(new core::Cache(deviceName+" L"+std::to_string(cache_props_[i].CacheLevel), cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
 }
 
 hsa_status_t CpuAgent::VisitRegion(bool include_peer,
@@ -165,6 +174,17 @@ hsa_status_t CpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
   return VisitRegion(true, callback, data);
+}
+
+hsa_status_t CpuAgent::IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* data) const
+{
+  for(size_t i=0; i<caches_.size(); i++)
+  {
+    hsa_status_t stat = callback(core::Cache::Convert(caches_[i].get()), data);
+    if(stat!=HSA_STATUS_SUCCESS)
+      return stat;
+  }
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
@@ -263,7 +283,7 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint16_t*)value) = 1;
       break;
     case HSA_AGENT_INFO_VERSION_MINOR:
-      *((uint16_t*)value) = 0;
+      *((uint16_t*)value) = 1;
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:

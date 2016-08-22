@@ -100,11 +100,13 @@ endif ()
 
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
-set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-deprecated-declarations -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
+set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
 
 set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.def" )
 
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF}" )
+set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.link" )
+
+set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF}" )
 
 set ( CMAKE_SKIP_BUILD_RPATH TRUE)
 
@@ -133,6 +135,7 @@ set ( CORE_SRCS ${CORE_SRCS} runtime/interrupt_signal.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/isa.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/runtime.cpp )
 set ( CORE_SRCS ${CORE_SRCS} runtime/signal.cpp )
+set ( CORE_SRCS ${CORE_SRCS} runtime/cache.cpp )
 set ( CORE_SRCS ${CORE_SRCS} common/shared.cpp )
 set ( CORE_SRCS ${CORE_SRCS} common/hsa_table_interface.cpp )
 

@@ -46,6 +46,8 @@ project(hsa-runtime)
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
 
+add_definitions (-D HSA_DEPRECATED=)
+
 include(utils)
 include(hsa_common)
 

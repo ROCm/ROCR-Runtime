@@ -370,6 +370,26 @@ bool RegionMemory::Freeze() {
   return true;
 }
 
+hsa_status_t IsIsaEquivalent(hsa_isa_t isa, void *data) {
+  assert(data);
+
+  std::pair<hsa_isa_t, bool> *data_pair = (std::pair<hsa_isa_t, bool>*)data;
+  assert(data_pair);
+  assert(data_pair->first.handle != 0);
+  assert(data_pair->second != true);
+
+  const core::Isa *isa1 = core::Isa::Object(isa);
+  assert(isa1);
+  const core::Isa *isa2 = core::Isa::Object(data_pair->first);
+  assert(isa2);
+  if (isa1->version() == isa2->version()) {
+    data_pair->second = true;
+    return HSA_STATUS_INFO_BREAK;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace anonymous
 
 namespace amd {
@@ -392,25 +412,14 @@ hsa_isa_t LoaderContext::IsaFromName(const char *name) {
 
 bool LoaderContext::IsaSupportedByAgent(hsa_agent_t agent,
                                         hsa_isa_t code_object_isa) {
-  assert(agent.handle);
+  assert(agent.handle != 0);
 
-  hsa_status_t hsa_status = HSA_STATUS_SUCCESS;
-  hsa_isa_t agent_isa;
-  agent_isa.handle = 0;
-
-  hsa_status = HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_ISA, &agent_isa);
-  if (HSA_STATUS_SUCCESS != hsa_status) {
+  std::pair<hsa_isa_t, bool> data(code_object_isa, false);
+  hsa_status_t status = HSA::hsa_agent_iterate_isas(agent, IsIsaEquivalent, &data);
+  if (status != HSA_STATUS_SUCCESS && status != HSA_STATUS_INFO_BREAK) {
     return false;
   }
-
-  bool result = false;
-
-  hsa_status = HSA::hsa_isa_compatible(code_object_isa, agent_isa, &result);
-  if (HSA_STATUS_SUCCESS != hsa_status) {
-    return false;
-  }
-
-  return result;
+  return data.second;
 }
 
 void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
@@ -421,14 +430,16 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
 {
   assert(0 < size);
   assert(0 < align && 0 == (align & (align - 1)));
-  hsa_profile_t agent_profile;
-  if (HSA_STATUS_SUCCESS != HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_PROFILE, &agent_profile)) {
-    return nullptr;
-  }
+
   SegmentMemory *mem = nullptr;
   switch (segment) {
   case AMDGPU_HSA_SEGMENT_GLOBAL_AGENT:
-  case AMDGPU_HSA_SEGMENT_READONLY_AGENT:
+  case AMDGPU_HSA_SEGMENT_READONLY_AGENT: {
+    hsa_profile_t agent_profile;
+    if (HSA_STATUS_SUCCESS != HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_PROFILE, &agent_profile)) {
+      return nullptr;
+    }
+
     switch (agent_profile) {
     case HSA_PROFILE_BASE:
       mem = new (std::nothrow) RegionMemory(RegionMemory::AgentLocal(agent));
@@ -440,19 +451,17 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
       assert(false);
     }
     break;
-  case AMDGPU_HSA_SEGMENT_GLOBAL_PROGRAM:
-    switch (agent_profile) {
-    case HSA_PROFILE_BASE:
-      mem = new (std::nothrow) RegionMemory(RegionMemory::System());
-      break;
-    case HSA_PROFILE_FULL:
-      mem = new (std::nothrow) MallocedMemory();
-      break;
-    default:
-      assert(false);
-    }
+  }
+  case AMDGPU_HSA_SEGMENT_GLOBAL_PROGRAM: {
+    mem = new (std::nothrow) RegionMemory(RegionMemory::System());
     break;
-  case AMDGPU_HSA_SEGMENT_CODE_AGENT:
+  }
+  case AMDGPU_HSA_SEGMENT_CODE_AGENT: {
+    hsa_profile_t agent_profile;
+    if (HSA_STATUS_SUCCESS != HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_PROFILE, &agent_profile)) {
+      return nullptr;
+    }
+
     switch (agent_profile) {
     case HSA_PROFILE_BASE:
       mem = new (std::nothrow) RegionMemory(IsDebuggerRegistered() ?
@@ -470,16 +479,20 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
     ((GpuAgentInt*)core::Agent::Convert(agent))->InvalidateCodeCaches();
 
     break;
+  }
   default:
     assert(false);
   }
+
   if (nullptr == mem) {
     return nullptr;
   }
+
   if (!mem->Allocate(size, align, zero)) {
     delete mem;
     return nullptr;
   }
+
   return mem;
 }
 
