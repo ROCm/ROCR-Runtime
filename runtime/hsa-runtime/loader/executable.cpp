@@ -135,11 +135,11 @@ void Loader::Destroy(Loader *loader)
 }
 
 Executable* AmdHsaCodeLoader::CreateExecutable(
-  hsa_profile_t profile, const char *options)
+  hsa_profile_t profile, const char *options, hsa_default_float_rounding_mode_t default_float_rounding_mode)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
 
-  executables.push_back(new ExecutableImpl(profile, context, executables.size()));
+  executables.push_back(new ExecutableImpl(profile, context, executables.size(), default_float_rounding_mode));
   return executables.back();
 }
 
@@ -372,6 +372,10 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       *((bool*)value) = is_definition;
       break;
     }
+    case HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_CALL_CONVENTION: {
+      *((uint32_t*)value) = 0;
+      break;
+    }
     case HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT:
     case HSA_EXECUTABLE_SYMBOL_INFO_VARIABLE_ADDRESS: {
       if (!is_loaded) {
@@ -525,15 +529,15 @@ bool VariableSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
   return true;
 }
 
-bool LoadedCodeObjectImpl::GetInfo(amd_loaded_code_object_info_t attribute, void *value)
+bool LoadedCodeObjectImpl::GetInfo(hsa_loaded_code_object_info_t attribute, void *value)
 {
   assert(value);
 
   switch (attribute) {
-    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
+    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
       ((hsa_code_object_t*)value)->handle = reinterpret_cast<uint64_t>(elf_data);
       break;
-    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
+    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
       *((size_t*)value) = elf_size;
       break;
     default: {
@@ -646,11 +650,16 @@ void Segment::Destroy()
 // ExecutableImpl.                                                                //
 //===----------------------------------------------------------------------===//
 
-ExecutableImpl::ExecutableImpl(const hsa_profile_t &_profile, Context *context, size_t id)
+ExecutableImpl::ExecutableImpl(
+    const hsa_profile_t &_profile,
+    Context *context,
+    size_t id,
+    hsa_default_float_rounding_mode_t default_float_rounding_mode)
   : Executable()
   , profile_(_profile)
   , context_(context)
   , id_(id)
+  , default_float_rounding_mode_(default_float_rounding_mode)
   , state_(HSA_EXECUTABLE_STATE_UNFROZEN)
   , program_allocation_segment(nullptr)
 {
@@ -676,7 +685,6 @@ hsa_status_t ExecutableImpl::DefineProgramExternalVariable(
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   assert(name);
-  assert(address);
 
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
     return HSA_STATUS_ERROR_FROZEN_EXECUTABLE;
@@ -711,7 +719,6 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   assert(name);
-  assert(address);
 
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
     return HSA_STATUS_ERROR_FROZEN_EXECUTABLE;
@@ -738,39 +745,41 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
   return HSA_STATUS_SUCCESS;
 }
 
+bool ExecutableImpl::IsProgramSymbol(const char *symbol_name) {
+  assert(symbol_name);
+
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
+  return program_symbols_.find(std::string(symbol_name)) != program_symbols_.end();
+}
+
 Symbol* ExecutableImpl::GetSymbol(
-  const char *module_name,
   const char *symbol_name,
-  hsa_agent_t agent,
-  int32_t call_convention)
+  const hsa_agent_t *agent)
 {
   ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
-  return this->GetSymbolInternal(module_name, symbol_name, agent, call_convention);
+  return this->GetSymbolInternal(symbol_name, agent);
 }
 
 Symbol* ExecutableImpl::GetSymbolInternal(
-  const char *module_name,
   const char *symbol_name,
-  hsa_agent_t agent,
-  int32_t call_convention)
+  const hsa_agent_t *agent)
 {
-  assert(module_name);
   assert(symbol_name);
 
   std::string mangled_name = std::string(symbol_name);
   if (mangled_name.empty()) {
     return nullptr;
   }
-  if (!std::string(module_name).empty()) {
-    mangled_name.insert(0, "::");
-    mangled_name.insert(0, std::string(module_name));
+
+  if (!agent) {
+    auto program_symbol = program_symbols_.find(mangled_name);
+    if (program_symbol != program_symbols_.end()) {
+      return program_symbol->second;
+    }
+    return nullptr;
   }
 
-  auto program_symbol = program_symbols_.find(mangled_name);
-  if (program_symbol != program_symbols_.end()) {
-    return program_symbol->second;
-  }
-  auto agent_symbol = agent_symbols_.find(std::make_pair(mangled_name, agent));
+  auto agent_symbol = agent_symbols_.find(std::make_pair(mangled_name, *agent));
   if (agent_symbol != agent_symbols_.end()) {
     return agent_symbol->second;
   }
@@ -801,9 +810,54 @@ hsa_status_t ExecutableImpl::IterateSymbols(
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t ExecutableImpl::IterateAgentSymbols(
+    hsa_agent_t agent,
+    hsa_status_t (*callback)(hsa_executable_t exec,
+                             hsa_agent_t agent,
+                             hsa_executable_symbol_t symbol,
+                             void *data),
+    void *data) {
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
+  assert(callback);
+
+  for (auto &symbol_entry : agent_symbols_) {
+    if (symbol_entry.second->GetAgent().handle != agent.handle) {
+      continue;
+    }
+
+    hsa_status_t status = callback(
+        Executable::Handle(this), agent, Symbol::Handle(symbol_entry.second),
+        data);
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::IterateProgramSymbols(
+    hsa_status_t (*callback)(hsa_executable_t exec,
+                             hsa_executable_symbol_t symbol,
+                             void *data),
+    void *data) {
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
+  assert(callback);
+
+  for (auto &symbol_entry : program_symbols_) {
+    hsa_status_t status = callback(
+        Executable::Handle(this), Symbol::Handle(symbol_entry.second), data);
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t ExecutableImpl::IterateLoadedCodeObjects(
   hsa_status_t (*callback)(
-    amd_loaded_code_object_t loaded_code_object,
+    hsa_loaded_code_object_t loaded_code_object,
     void *data),
   void *data)
 {
@@ -908,6 +962,11 @@ hsa_status_t ExecutableImpl::GetInfo(
       *((hsa_executable_state_t*)value) = state_;
       break;
     }
+    case HSA_EXECUTABLE_INFO_DEFAULT_FLOAT_ROUNDING_MODE: {
+      *((hsa_default_float_rounding_mode_t*)value) =
+          default_float_rounding_mode_;
+      break;
+    }
     default: {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
@@ -926,9 +985,10 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
   const char *options,
-  amd_loaded_code_object_t *loaded_code_object)
+  hsa_loaded_code_object_t *loaded_code_object,
+  bool load_legacy)
 {
-  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object);
+  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object, load_legacy);
 }
 
 hsa_status_t ExecutableImpl::LoadCodeObject(
@@ -936,7 +996,8 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_code_object_t code_object,
   size_t code_object_size,
   const char *options,
-  amd_loaded_code_object_t *loaded_code_object)
+  hsa_loaded_code_object_t *loaded_code_object,
+  bool load_legacy)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
@@ -954,6 +1015,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   code.reset(new code::AmdHsaCode());
+  load_legacy_ = load_legacy;
 
   if (!code->InitAsHandle(code_object)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
@@ -984,14 +1046,14 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
   if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
 
-  if (!context_->IsaSupportedByAgent(agent, objectsIsa)) { return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS; }
-
   uint32_t majorVersion, minorVersion;
   if (!code->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
   if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+  if (agent.handle == 0 && majorVersion == 1) { return HSA_STATUS_ERROR_INVALID_AGENT; }
+  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) { return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS; }
 
   uint32_t codeHsailMajor;
   uint32_t codeHsailMinor;
@@ -1084,7 +1146,11 @@ hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent, code::Symbol* sym)
 
 hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbol* sym)
 {
-  if (sym->IsAgent()) {
+  bool isAgent = sym->IsAgent();
+  if (!load_legacy_) {
+    isAgent = agent.handle == 0 ? false : true;
+  }
+  if (isAgent) {
     auto agent_symbol = agent_symbols_.find(std::make_pair(sym->Name(), agent));
     if (agent_symbol != agent_symbols_.end()) {
       // TODO(spec): this is not spec compliant.
@@ -1164,7 +1230,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
     return HSA_STATUS_ERROR;
   }
   assert(symbol);
-  if (sym->IsAgent()) {
+  if (isAgent) {
     agent_symbols_.insert(std::make_pair(std::make_pair(sym->Name(), agent), symbol));
   } else {
     program_symbols_.insert(std::make_pair(sym->Name(), symbol));
@@ -1285,11 +1351,11 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
           if (!addr) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
           break;
         case STT_COMMON: {
-          hsa_agent_t sagent = agent;
+          hsa_agent_t *sagent = &agent;
           if (STA_AMDGPU_HSA_GLOBAL_PROGRAM == ELF64_ST_AMDGPU_ALLOCATION(sym->other())) {
-            sagent.handle = 0;
+            sagent = nullptr;
           }
-          SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal("", sym->name().c_str(), sagent, 0);
+          SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal(sym->name().c_str(), sagent);
           if (!esym) { return HSA_STATUS_ERROR_VARIABLE_UNDEFINED; }
           addr = esym->address;
           break;

@@ -53,6 +53,7 @@
 #include "core/inc/agent.h"
 #include "core/inc/blit.h"
 #include "core/inc/signal.h"
+#include "core/inc/cache.h"
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
 
@@ -221,6 +222,9 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
                              void* data) const override;
+
+  // @brief Override from core::Agent.
+  hsa_status_t IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* value) const override;
 
   // @brief Override from core::Agent.
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
@@ -401,6 +405,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Array of GPU cache property.
   std::vector<HsaCacheProperties> cache_props_;
+
+  // @brief Array of HSA cache objects.
+  std::vector<std::unique_ptr<core::Cache>> caches_;
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;

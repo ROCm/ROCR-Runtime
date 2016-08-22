@@ -377,6 +377,15 @@ void GpuAgent::InitCacheList() {
       }
     }
   }
+
+  //Update cache objects
+  caches_.clear();
+  caches_.resize(cache_props_.size());
+  char name[64];
+  GetInfo(HSA_AGENT_INFO_NAME, name);
+  std::string deviceName=name;
+  for(size_t i=0; i<caches_.size(); i++)
+    caches_[i].reset(new core::Cache(deviceName+" L"+std::to_string(cache_props_[i].CacheLevel), cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
 }
 
 bool GpuAgent::InitEndTsPool() {
@@ -434,6 +443,17 @@ hsa_status_t GpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
   return VisitRegion(true, callback, data);
+}
+
+hsa_status_t GpuAgent::IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* data) const
+{
+  for(size_t i=0; i<caches_.size(); i++)
+  {
+    hsa_status_t stat = callback(core::Cache::Convert(caches_[i].get()), data);
+    if(stat!=HSA_STATUS_SUCCESS)
+      return stat;
+  }
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t GpuAgent::VisitRegion(bool include_peer,
@@ -738,24 +758,28 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((hsa_isa_t*)value) = core::Isa::Handle(isa_);
       break;
     case HSA_AGENT_INFO_EXTENSIONS:
-      memset(value, 0, sizeof(uint8_t) * 128);
+      {
+        memset(value, 0, sizeof(uint8_t) * 128);
 
-      if (core::hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
-        *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
+        auto setFlag = [&](uint32_t bit) { assert(bit<128*8 && "Extension value exceeds extension bitmask"); uint index = bit/8; uint subBit = bit%8; ((uint8_t*)value)[index] |= 1<<subBit; };
+
+        if (core::hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+          setFlag(HSA_EXTENSION_FINALIZER);
+        }
+
+        if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+          setFlag(HSA_EXTENSION_IMAGES);
+        }
+
+        setFlag(HSA_EXTENSION_AMD_PROFILER);
+
+        break;
       }
-
-      if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
-        *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
-      }
-
-      *((uint8_t*)value) |= 1 << HSA_EXTENSION_AMD_PROFILER;
-
-      break;
     case HSA_AGENT_INFO_VERSION_MAJOR:
       *((uint16_t*)value) = 1;
       break;
     case HSA_AGENT_INFO_VERSION_MINOR:
-      *((uint16_t*)value) = 0;
+      *((uint16_t*)value) = 1;
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:

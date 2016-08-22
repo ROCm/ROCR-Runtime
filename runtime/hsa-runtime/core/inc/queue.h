@@ -90,11 +90,11 @@ struct AqlPacket {
            << "\nbarrier: " << ((dispatch.header >> HSA_PACKET_HEADER_BARRIER) &
                                 ((1 << HSA_PACKET_HEADER_WIDTH_BARRIER) - 1))
            << "\nacquire: "
-           << ((dispatch.header >> HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) &
-               ((1 << HSA_PACKET_HEADER_WIDTH_ACQUIRE_FENCE_SCOPE) - 1))
+           << ((dispatch.header >> HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) &
+               ((1 << HSA_PACKET_HEADER_WIDTH_SCACQUIRE_FENCE_SCOPE) - 1))
            << "\nrelease: "
-           << ((dispatch.header >> HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE) &
-               ((1 << HSA_PACKET_HEADER_WIDTH_RELEASE_FENCE_SCOPE) - 1));
+           << ((dispatch.header >> HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE) &
+               ((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1));
 
     if (type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
       string << "\nDim: " << dispatch.setup

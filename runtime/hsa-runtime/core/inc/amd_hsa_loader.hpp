@@ -73,15 +73,10 @@ typedef uint32_t hsa_symbol_info32_t;
 typedef hsa_executable_symbol_t hsa_symbol_t;
 typedef hsa_executable_symbol_info_t hsa_symbol_info_t;
 
-/// @brief Loaded code object handle.
-typedef struct amd_loaded_code_object_s {
-  uint64_t handle;
-} amd_loaded_code_object_t;
-
 /// @brief Loaded code object attributes.
-enum amd_loaded_code_object_info_t {
-  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE = 0,
-  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE = 1
+enum hsa_loaded_code_object_info_t {
+  HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE = 0,
+  HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE = 1
 };
 
 /// @brief Loaded segment handle.
@@ -175,6 +170,8 @@ public:
 
   virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) = 0;
 
+  virtual hsa_agent_t GetAgent() = 0;
+
 protected:
   Symbol() {}
 
@@ -189,13 +186,13 @@ private:
 
 class LoadedCodeObject {
 public:
-  static amd_loaded_code_object_t Handle(LoadedCodeObject *object) {
-    amd_loaded_code_object_t handle =
+  static hsa_loaded_code_object_t Handle(LoadedCodeObject *object) {
+    hsa_loaded_code_object_t handle =
       {reinterpret_cast<uint64_t>(object)};
     return handle;
   }
 
-  static LoadedCodeObject* Object(amd_loaded_code_object_t handle) {
+  static LoadedCodeObject* Object(hsa_loaded_code_object_t handle) {
     LoadedCodeObject *object =
       reinterpret_cast<LoadedCodeObject*>(handle.handle);
     return object;
@@ -203,7 +200,7 @@ public:
 
   virtual ~LoadedCodeObject() {}
 
-  virtual bool GetInfo(amd_loaded_code_object_info_t attribute, void *value) = 0;
+  virtual bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) = 0;
 
   virtual hsa_status_t IterateLoadedSegments(
     hsa_status_t (*callback)(
@@ -285,24 +282,28 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
-    amd_loaded_code_object_t *loaded_code_object = nullptr) = 0;
+    hsa_loaded_code_object_t *loaded_code_object = nullptr,
+    bool load_legacy = true) = 0;
 
   virtual hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
-    amd_loaded_code_object_t *loaded_code_object = nullptr) = 0;
+    hsa_loaded_code_object_t *loaded_code_object = nullptr,
+    bool load_legacy = true) = 0;
 
   virtual hsa_status_t Freeze(const char *options) = 0;
 
   virtual hsa_status_t Validate(uint32_t *result) = 0;
 
+  /// @note needed for hsa v1.0.
+  /// @todo remove during loader refactoring.
+  virtual bool IsProgramSymbol(const char *symbol_name) = 0;
+
   virtual Symbol* GetSymbol(
-    const char *module_name,
     const char *symbol_name,
-    hsa_agent_t agent,
-    int32_t call_convention) = 0;
+    const hsa_agent_t *agent) = 0;
 
   typedef hsa_status_t (*iterate_symbols_f)(
     hsa_executable_t executable,
@@ -312,9 +313,25 @@ public:
   virtual hsa_status_t IterateSymbols(
     iterate_symbols_f callback, void *data) = 0;
 
+  /// @since hsa v1.1.
+  virtual hsa_status_t IterateAgentSymbols(
+      hsa_agent_t agent,
+      hsa_status_t (*callback)(hsa_executable_t exec,
+                               hsa_agent_t agent,
+                               hsa_executable_symbol_t symbol,
+                               void *data),
+      void *data) = 0;
+
+  /// @since hsa v1.1.
+  virtual hsa_status_t IterateProgramSymbols(
+      hsa_status_t (*callback)(hsa_executable_t exec,
+                               hsa_executable_symbol_t symbol,
+                               void *data),
+      void *data) = 0;
+
   virtual hsa_status_t IterateLoadedCodeObjects(
     hsa_status_t (*callback)(
-      amd_loaded_code_object_t loaded_code_object,
+      hsa_loaded_code_object_t loaded_code_object,
       void *data),
     void *data) = 0;
 
@@ -364,7 +381,10 @@ public:
 
   /// @brief Creates empty AMD HSA Executable with specified @p profile,
   /// @p options
-  virtual Executable* CreateExecutable(hsa_profile_t profile, const char *options) = 0;
+  virtual Executable* CreateExecutable(
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) = 0;
 
   /// @brief Destroys @p executable
   virtual void DestroyExecutable(Executable *executable) = 0;

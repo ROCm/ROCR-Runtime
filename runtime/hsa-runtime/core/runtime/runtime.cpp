@@ -63,7 +63,7 @@
 #include "core/inc/hsa_api_trace_int.h"
 
 #define HSA_VERSION_MAJOR 1
-#define HSA_VERSION_MINOR 0
+#define HSA_VERSION_MINOR 1
 
 const char rocrbuildid[] = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
@@ -526,19 +526,23 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
 #endif
       break;
     case HSA_SYSTEM_INFO_EXTENSIONS:
-      memset(value, 0, sizeof(uint8_t) * 128);
+      {
+        memset(value, 0, sizeof(uint8_t) * 128);
 
-      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
-        *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
+        auto setFlag = [&](uint32_t bit) { assert(bit<128*8 && "Extension value exceeds extension bitmask"); uint index = bit/8; uint subBit = bit%8; ((uint8_t*)value)[index] |= 1<<subBit; };
+
+        if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+          setFlag(HSA_EXTENSION_FINALIZER);
+        }
+
+        if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+          setFlag(HSA_EXTENSION_IMAGES);
+        }
+
+        setFlag(HSA_EXTENSION_AMD_PROFILER);
+
+        break;
       }
-
-      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
-        *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
-      }
-
-      *((uint8_t*)value) |= 1 << HSA_EXTENSION_AMD_PROFILER;
-
-      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

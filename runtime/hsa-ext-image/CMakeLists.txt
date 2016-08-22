@@ -56,6 +56,7 @@ add_definitions ( -D__AMD64__ )
 add_definitions ( -D__x86_64__ )
 add_definitions ( -DAMD_INTERNAL_BUILD )
 add_definitions ( -DLITTLEENDIAN_CPU=1 )
+add_definitions ( -D HSA_DEPRECATED= )
 
 ## Set ext runtime module name and project name.
 set ( IMAGE_NAME "hsa-ext-image" )
