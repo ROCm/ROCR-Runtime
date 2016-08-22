@@ -195,15 +195,11 @@ namespace HSA {
 //---------------------------------------------------------------------------//
 //  Init/Shutdown routines
 //---------------------------------------------------------------------------//
-hsa_status_t hsa_init() {
-  if (core::Runtime::runtime_singleton_->Acquire()) return HSA_STATUS_SUCCESS;
-  return HSA_STATUS_ERROR_REFCOUNT_OVERFLOW;
-}
+hsa_status_t hsa_init() { return core::Runtime::runtime_singleton_->Acquire(); }
 
 hsa_status_t hsa_shut_down() {
   IS_OPEN();
-  if (core::Runtime::runtime_singleton_->Release()) return HSA_STATUS_SUCCESS;
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  return core::Runtime::runtime_singleton_->Release();
 }
 
 //---------------------------------------------------------------------------//

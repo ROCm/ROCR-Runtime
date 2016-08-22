@@ -89,9 +89,9 @@ class RuntimeCleanup {
 
 static RuntimeCleanup cleanup_at_unload_;
 
-bool Runtime::Acquire() {
+hsa_status_t Runtime::Acquire() {
   // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded) return false;
+  if (!loaded) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   // Handle initialization races
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
@@ -104,22 +104,26 @@ bool Runtime::Acquire() {
   ScopedAcquire<KernelMutex> lock(&runtime_singleton_->kernel_lock_);
 
   if (runtime_singleton_->ref_count_ == INT32_MAX) {
-    return false;
+    return HSA_STATUS_ERROR_REFCOUNT_OVERFLOW;
   }
 
   runtime_singleton_->ref_count_++;
 
   if (runtime_singleton_->ref_count_ == 1) {
-    runtime_singleton_->Load();
+    hsa_status_t status = runtime_singleton_->Load();
+
+    if (status != HSA_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
   }
 
-  return true;
+  return HSA_STATUS_SUCCESS;
 }
 
-bool Runtime::Release() {
+hsa_status_t Runtime::Release() {
   ScopedAcquire<KernelMutex> lock(&kernel_lock_);
   if (ref_count_ == 0) {
-    return false;
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
 
   if (ref_count_ == 1) {
@@ -129,7 +133,7 @@ bool Runtime::Release() {
 
   ref_count_--;
 
-  return true;
+  return HSA_STATUS_SUCCESS;
 }
 
 bool Runtime::IsOpen() {
@@ -808,13 +812,13 @@ Runtime::Runtime()
 #endif
 }
 
-void Runtime::Load() {
+hsa_status_t Runtime::Load() {
   flag_.Refresh();
 
   g_use_interrupt_wait = flag_.enable_interrupt();
 
   if (!amd::Load()) {
-    return;
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
@@ -826,10 +830,15 @@ void Runtime::Load() {
   LoadTools();
 
   for (core::Agent* agent : gpu_agents_) {
-    const hsa_status_t stat =
+    hsa_status_t status =
         reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
-    assert(HSA_STATUS_SUCCESS == stat);
+
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
   }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 void Runtime::Unload() {
