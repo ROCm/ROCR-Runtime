@@ -94,8 +94,7 @@ class Runtime {
   };
 
   /// @brief Open connection to kernel driver and increment reference count.
-  /// @retval True if the connection to kernel driver is successfully opened.
-  static bool Acquire();
+  static hsa_status_t Acquire();
 
   /// @brief Checks if connection to kernel driver is opened.
   /// @retval True if the connection to kernel driver is opened.
@@ -108,8 +107,7 @@ class Runtime {
   static Runtime* runtime_singleton_;
 
   /// @brief Decrement reference count and close connection to kernel driver.
-  /// @retval True if reference count is larger than 0.
-  bool Release();
+  hsa_status_t Release();
 
   /// @brief Insert agent into agent list ::agents_.
   /// @param [in] agent Pointer to the agent object.
@@ -362,7 +360,7 @@ class Runtime {
   ~Runtime() {}
 
   /// @brief Open connection to kernel driver.
-  void Load();
+  hsa_status_t Load();
 
   /// @brief Close connection to kernel driver and cleanup resources.
   void Unload();
