@@ -67,8 +67,7 @@ hsa_status_t HSA_API
   return coreApiTable->hsa_system_get_info_fn(attribute, value);
 }
 
-hsa_status_t HSA_API hsa_extension_get_name(uint16_t extension, const char** name)
-{
+hsa_status_t HSA_API hsa_extension_get_name(uint16_t extension, const char** name) {
   return coreApiTable->hsa_extension_get_name_fn(extension, name);
 }
 
@@ -79,23 +78,24 @@ hsa_status_t HSA_API
       extension, version_major, version_minor, result);
 }
 
-hsa_status_t HSA_API
-    hsa_system_major_extension_supported(uint16_t extension, uint16_t version_major,
-                                   uint16_t *version_minor, bool* result) {
-  return coreApiTable->hsa_system_major_extension_supported_fn(
-      extension, version_major, version_minor, result);
+hsa_status_t HSA_API hsa_system_major_extension_supported(uint16_t extension,
+                                                          uint16_t version_major,
+                                                          uint16_t* version_minor, bool* result) {
+  return coreApiTable->hsa_system_major_extension_supported_fn(extension, version_major,
+                                                               version_minor, result);
 }
 
-hsa_status_t HSA_API
-    hsa_system_get_extension_table(uint16_t extension, uint16_t version_major,
-                                   uint16_t version_minor, void* table) {
+hsa_status_t HSA_API hsa_system_get_extension_table(uint16_t extension, uint16_t version_major,
+                                                    uint16_t version_minor, void* table) {
   return coreApiTable->hsa_system_get_extension_table_fn(
       extension, version_major, version_minor, table);
 }
 
-hsa_status_t HSA_API hsa_system_get_major_extension_table(uint16_t extension, uint16_t version_major, size_t table_length, void *table)
-{
-  return coreApiTable->hsa_system_get_major_extension_table_fn(extension, version_major, table_length, table);
+hsa_status_t HSA_API hsa_system_get_major_extension_table(uint16_t extension,
+                                                          uint16_t version_major,
+                                                          size_t table_length, void* table) {
+  return coreApiTable->hsa_system_get_major_extension_table_fn(extension, version_major,
+                                                               table_length, table);
 }
 
 hsa_status_t HSA_API
@@ -116,13 +116,13 @@ hsa_status_t HSA_API hsa_agent_get_exception_policies(hsa_agent_t agent,
   return coreApiTable->hsa_agent_get_exception_policies_fn(agent, profile, mask);
 }
 
-hsa_status_t HSA_API hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute, void *value)
-{
+hsa_status_t HSA_API hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute,
+                                        void* value) {
   return coreApiTable->hsa_cache_get_info_fn(cache, attribute, value);
 }
 
-hsa_status_t HSA_API hsa_agent_iterate_caches(hsa_agent_t agent, hsa_status_t (*callback )(hsa_cache_t cache, void *data), void *value)
-{
+hsa_status_t HSA_API hsa_agent_iterate_caches(
+    hsa_agent_t agent, hsa_status_t (*callback)(hsa_cache_t cache, void* data), void* value) {
   return coreApiTable->hsa_agent_iterate_caches_fn(agent, callback, value);
 }
 
@@ -134,9 +134,11 @@ hsa_status_t HSA_API
       extension, agent, version_major, version_minor, result);
 }
 
-hsa_status_t HSA_API hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent, uint16_t version_major, uint16_t *version_minor, bool *result)
-{
-  return coreApiTable->hsa_agent_major_extension_supported_fn(extension, agent, version_major, version_minor, result);
+hsa_status_t HSA_API hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent,
+                                                         uint16_t version_major,
+                                                         uint16_t* version_minor, bool* result) {
+  return coreApiTable->hsa_agent_major_extension_supported_fn(extension, agent, version_major,
+                                                              version_minor, result);
 }
 
 hsa_status_t HSA_API
@@ -187,23 +189,18 @@ void HSA_API hsa_queue_store_write_index_relaxed(const hsa_queue_t* queue,
   return coreApiTable->hsa_queue_store_write_index_relaxed_fn(queue, value);
 }
 
-void HSA_API hsa_queue_store_write_index_screlease(const hsa_queue_t* queue,
-                                                 uint64_t value) {
+void HSA_API hsa_queue_store_write_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   return coreApiTable->hsa_queue_store_write_index_screlease_fn(queue, value);
 }
 
-uint64_t HSA_API hsa_queue_cas_write_index_scacq_screl(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
-  return coreApiTable->hsa_queue_cas_write_index_scacq_screl_fn(queue, expected,
-                                                           value);
+uint64_t HSA_API hsa_queue_cas_write_index_scacq_screl(const hsa_queue_t* queue, uint64_t expected,
+                                                       uint64_t value) {
+  return coreApiTable->hsa_queue_cas_write_index_scacq_screl_fn(queue, expected, value);
 }
 
-uint64_t HSA_API hsa_queue_cas_write_index_scacquire(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
-  return coreApiTable->hsa_queue_cas_write_index_scacquire_fn(queue, expected,
-                                                           value);
+uint64_t HSA_API hsa_queue_cas_write_index_scacquire(const hsa_queue_t* queue, uint64_t expected,
+                                                     uint64_t value) {
+  return coreApiTable->hsa_queue_cas_write_index_scacquire_fn(queue, expected, value);
 }
 
 uint64_t HSA_API hsa_queue_cas_write_index_relaxed(const hsa_queue_t* queue,
@@ -213,20 +210,16 @@ uint64_t HSA_API hsa_queue_cas_write_index_relaxed(const hsa_queue_t* queue,
                                                            value);
 }
 
-uint64_t HSA_API hsa_queue_cas_write_index_screlease(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
-  return coreApiTable->hsa_queue_cas_write_index_screlease_fn(queue, expected,
-                                                           value);
+uint64_t HSA_API hsa_queue_cas_write_index_screlease(const hsa_queue_t* queue, uint64_t expected,
+                                                     uint64_t value) {
+  return coreApiTable->hsa_queue_cas_write_index_screlease_fn(queue, expected, value);
 }
 
-uint64_t HSA_API hsa_queue_add_write_index_scacq_screl(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t HSA_API hsa_queue_add_write_index_scacq_screl(const hsa_queue_t* queue, uint64_t value) {
   return coreApiTable->hsa_queue_add_write_index_scacq_screl_fn(queue, value);
 }
 
-uint64_t HSA_API hsa_queue_add_write_index_scacquire(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t HSA_API hsa_queue_add_write_index_scacquire(const hsa_queue_t* queue, uint64_t value) {
   return coreApiTable->hsa_queue_add_write_index_scacquire_fn(queue, value);
 }
 
@@ -235,8 +228,7 @@ uint64_t HSA_API hsa_queue_add_write_index_relaxed(const hsa_queue_t* queue,
   return coreApiTable->hsa_queue_add_write_index_relaxed_fn(queue, value);
 }
 
-uint64_t HSA_API hsa_queue_add_write_index_screlease(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t HSA_API hsa_queue_add_write_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   return coreApiTable->hsa_queue_add_write_index_screlease_fn(queue, value);
 }
 
@@ -245,8 +237,7 @@ void HSA_API hsa_queue_store_read_index_relaxed(const hsa_queue_t* queue,
   return coreApiTable->hsa_queue_store_read_index_relaxed_fn(queue, value);
 }
 
-void HSA_API hsa_queue_store_read_index_screlease(const hsa_queue_t* queue,
-                                                uint64_t value) {
+void HSA_API hsa_queue_store_read_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   return coreApiTable->hsa_queue_store_read_index_screlease_fn(queue, value);
 }
 
@@ -312,18 +303,15 @@ void HSA_API
   return coreApiTable->hsa_signal_store_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_store_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_store_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_store_screlease_fn(signal, value);
 }
 
-void HSA_API hsa_signal_silent_store_relaxed(hsa_signal_t signal, hsa_signal_value_t value)
-{
+void HSA_API hsa_signal_silent_store_relaxed(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_silent_store_relaxed_fn(signal, value);
 }
 
-void HSA_API hsa_signal_silent_store_screlease(hsa_signal_t signal, hsa_signal_value_t value)
-{
+void HSA_API hsa_signal_silent_store_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_silent_store_screlease_fn(signal, value);
 }
 
@@ -337,34 +325,44 @@ hsa_signal_value_t HSA_API
       signal, condition, compare_value, timeout_hint, wait_expectancy_hint);
 }
 
-hsa_signal_value_t HSA_API
-    hsa_signal_wait_scacquire(hsa_signal_t signal,
-                            hsa_signal_condition_t condition,
-                            hsa_signal_value_t compare_value,
-                            uint64_t timeout_hint,
-                            hsa_wait_state_t wait_expectancy_hint) {
-  return coreApiTable->hsa_signal_wait_scacquire_fn(
-      signal, condition, compare_value, timeout_hint, wait_expectancy_hint);
+hsa_signal_value_t HSA_API hsa_signal_wait_scacquire(hsa_signal_t signal,
+                                                     hsa_signal_condition_t condition,
+                                                     hsa_signal_value_t compare_value,
+                                                     uint64_t timeout_hint,
+                                                     hsa_wait_state_t wait_expectancy_hint) {
+  return coreApiTable->hsa_signal_wait_scacquire_fn(signal, condition, compare_value, timeout_hint,
+                                                    wait_expectancy_hint);
 }
 
-hsa_status_t HSA_API hsa_signal_group_create(uint32_t num_signals, const hsa_signal_t *signals, uint32_t num_consumers, const hsa_agent_t *consumers, hsa_signal_group_t *signal_group)
-{
-  return coreApiTable->hsa_signal_group_create_fn(num_signals, signals, num_consumers, consumers, signal_group);
+hsa_status_t HSA_API hsa_signal_group_create(uint32_t num_signals, const hsa_signal_t* signals,
+                                             uint32_t num_consumers, const hsa_agent_t* consumers,
+                                             hsa_signal_group_t* signal_group) {
+  return coreApiTable->hsa_signal_group_create_fn(num_signals, signals, num_consumers, consumers,
+                                                  signal_group);
 }
 
-hsa_status_t HSA_API hsa_signal_group_destroy(hsa_signal_group_t signal_group)
-{
+hsa_status_t HSA_API hsa_signal_group_destroy(hsa_signal_group_t signal_group) {
   return coreApiTable->hsa_signal_group_destroy_fn(signal_group);
 }
 
-hsa_status_t HSA_API hsa_signal_group_wait_any_relaxed(hsa_signal_group_t signal_group, const hsa_signal_condition_t *conditions, const hsa_signal_value_t *compare_values, hsa_wait_state_t wait_state_hint, hsa_signal_t *signal, hsa_signal_value_t *value)
-{
-  return coreApiTable->hsa_signal_group_wait_any_relaxed_fn(signal_group, conditions, compare_values, wait_state_hint, signal, value);
+hsa_status_t HSA_API hsa_signal_group_wait_any_relaxed(hsa_signal_group_t signal_group,
+                                                       const hsa_signal_condition_t* conditions,
+                                                       const hsa_signal_value_t* compare_values,
+                                                       hsa_wait_state_t wait_state_hint,
+                                                       hsa_signal_t* signal,
+                                                       hsa_signal_value_t* value) {
+  return coreApiTable->hsa_signal_group_wait_any_relaxed_fn(
+      signal_group, conditions, compare_values, wait_state_hint, signal, value);
 }
 
-hsa_status_t HSA_API hsa_signal_group_wait_any_scacquire(hsa_signal_group_t signal_group, const hsa_signal_condition_t *conditions, const hsa_signal_value_t *compare_values, hsa_wait_state_t wait_state_hint, hsa_signal_t *signal, hsa_signal_value_t *value)
-{
-  return coreApiTable->hsa_signal_group_wait_any_scacquire_fn(signal_group, conditions, compare_values, wait_state_hint, signal, value);
+hsa_status_t HSA_API hsa_signal_group_wait_any_scacquire(hsa_signal_group_t signal_group,
+                                                         const hsa_signal_condition_t* conditions,
+                                                         const hsa_signal_value_t* compare_values,
+                                                         hsa_wait_state_t wait_state_hint,
+                                                         hsa_signal_t* signal,
+                                                         hsa_signal_value_t* value) {
+  return coreApiTable->hsa_signal_group_wait_any_scacquire_fn(
+      signal_group, conditions, compare_values, wait_state_hint, signal, value);
 }
 
 void HSA_API
@@ -372,18 +370,15 @@ void HSA_API
   return coreApiTable->hsa_signal_and_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_and_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_and_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_and_scacquire_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_and_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_and_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_and_screlease_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_and_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_and_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_and_scacq_screl_fn(signal, value);
 }
 
@@ -392,18 +387,15 @@ void HSA_API
   return coreApiTable->hsa_signal_or_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_or_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_or_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_or_scacquire_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_or_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_or_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_or_screlease_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_or_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_or_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_or_scacq_screl_fn(signal, value);
 }
 
@@ -412,18 +404,15 @@ void HSA_API
   return coreApiTable->hsa_signal_xor_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_xor_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_xor_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_xor_scacquire_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_xor_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_xor_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_xor_screlease_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_xor_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_xor_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_xor_scacq_screl_fn(signal, value);
 }
 
@@ -432,18 +421,15 @@ void HSA_API
   return coreApiTable->hsa_signal_add_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_add_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_add_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_add_scacquire_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_add_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_add_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_add_screlease_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_add_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_add_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_add_scacq_screl_fn(signal, value);
 }
 
@@ -452,18 +438,15 @@ void HSA_API
   return coreApiTable->hsa_signal_subtract_relaxed_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_subtract_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_subtract_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_subtract_scacquire_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_subtract_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_subtract_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_subtract_screlease_fn(signal, value);
 }
 
-void HSA_API
-    hsa_signal_subtract_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+void HSA_API hsa_signal_subtract_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_subtract_scacq_screl_fn(signal, value);
 }
 
@@ -472,18 +455,18 @@ hsa_signal_value_t HSA_API
   return coreApiTable->hsa_signal_exchange_relaxed_fn(signal, value);
 }
 
-hsa_signal_value_t HSA_API
-    hsa_signal_exchange_scacquire(hsa_signal_t signal, hsa_signal_value_t value) {
+hsa_signal_value_t HSA_API hsa_signal_exchange_scacquire(hsa_signal_t signal,
+                                                         hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_exchange_scacquire_fn(signal, value);
 }
 
-hsa_signal_value_t HSA_API
-    hsa_signal_exchange_screlease(hsa_signal_t signal, hsa_signal_value_t value) {
+hsa_signal_value_t HSA_API hsa_signal_exchange_screlease(hsa_signal_t signal,
+                                                         hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_exchange_screlease_fn(signal, value);
 }
 
-hsa_signal_value_t HSA_API
-    hsa_signal_exchange_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value) {
+hsa_signal_value_t HSA_API hsa_signal_exchange_scacq_screl(hsa_signal_t signal,
+                                                           hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_exchange_scacq_screl_fn(signal, value);
 }
 
@@ -494,20 +477,20 @@ hsa_signal_value_t HSA_API hsa_signal_cas_relaxed(hsa_signal_t signal,
 }
 
 hsa_signal_value_t HSA_API hsa_signal_cas_scacquire(hsa_signal_t signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+                                                    hsa_signal_value_t expected,
+                                                    hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_cas_scacquire_fn(signal, expected, value);
 }
 
 hsa_signal_value_t HSA_API hsa_signal_cas_screlease(hsa_signal_t signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+                                                    hsa_signal_value_t expected,
+                                                    hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_cas_screlease_fn(signal, expected, value);
 }
 
 hsa_signal_value_t HSA_API hsa_signal_cas_scacq_screl(hsa_signal_t signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+                                                      hsa_signal_value_t expected,
+                                                      hsa_signal_value_t value) {
   return coreApiTable->hsa_signal_cas_scacq_screl_fn(signal, expected, value);
 }
 

@@ -529,24 +529,28 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_SMALL;
 #endif
       break;
-    case HSA_SYSTEM_INFO_EXTENSIONS:
-      {
-        memset(value, 0, sizeof(uint8_t) * 128);
+    case HSA_SYSTEM_INFO_EXTENSIONS: {
+      memset(value, 0, sizeof(uint8_t) * 128);
 
-        auto setFlag = [&](uint32_t bit) { assert(bit<128*8 && "Extension value exceeds extension bitmask"); uint index = bit/8; uint subBit = bit%8; ((uint8_t*)value)[index] |= 1<<subBit; };
+      auto setFlag = [&](uint32_t bit) {
+        assert(bit < 128 * 8 && "Extension value exceeds extension bitmask");
+        uint index = bit / 8;
+        uint subBit = bit % 8;
+        ((uint8_t*)value)[index] |= 1 << subBit;
+      };
 
-        if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
-          setFlag(HSA_EXTENSION_FINALIZER);
-        }
-
-        if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
-          setFlag(HSA_EXTENSION_IMAGES);
-        }
-
-        setFlag(HSA_EXTENSION_AMD_PROFILER);
-
-        break;
+      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+        setFlag(HSA_EXTENSION_FINALIZER);
       }
+
+      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+        setFlag(HSA_EXTENSION_IMAGES);
+      }
+
+      setFlag(HSA_EXTENSION_AMD_PROFILER);
+
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

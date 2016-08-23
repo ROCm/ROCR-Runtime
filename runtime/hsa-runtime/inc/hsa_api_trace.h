@@ -372,7 +372,7 @@ struct CoreApiTable {
 
   decltype(hsa_status_string)* hsa_status_string_fn;
 
-  //Start HSA v1.1 additions
+  // Start HSA v1.1 additions
   decltype(hsa_extension_get_name)* hsa_extension_get_name_fn;
   decltype(hsa_system_major_extension_supported)* hsa_system_major_extension_supported_fn;
   decltype(hsa_system_get_major_extension_table)* hsa_system_get_major_extension_table_fn;

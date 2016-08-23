@@ -224,7 +224,8 @@ class GpuAgent : public GpuAgentInt {
                              void* data) const override;
 
   // @brief Override from core::Agent.
-  hsa_status_t IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* value) const override;
+  hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                            void* value) const override;
 
   // @brief Override from core::Agent.
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
