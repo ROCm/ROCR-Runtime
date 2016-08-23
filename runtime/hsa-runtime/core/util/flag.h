@@ -63,6 +63,9 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_VM_FAULT_MESSAGE");
     enable_vm_fault_message_ = (var == "0") ? false : true;
 
+    var = os::GetEnvVar("HSA_ENABLE_QUEUE_FAULT_MESSAGE");
+    enable_queue_fault_message_ = (var == "1") ? true : false;
+
     var = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
     enable_interrupt_ = (var == "0") ? false : true;
 
@@ -90,6 +93,8 @@ class Flag {
   bool check_flat_scratch() const { return check_flat_scratch_; }
 
   bool enable_vm_fault_message() const { return enable_vm_fault_message_; }
+  
+  bool enable_queue_fault_message() const { return enable_queue_fault_message_; }
 
   bool enable_interrupt() const { return enable_interrupt_; }
 
@@ -115,6 +120,7 @@ class Flag {
   bool emulate_aql_;
   bool running_valgrind_;
   bool sdma_wait_idle_;
+  bool enable_queue_fault_message_;
 
   uint32_t max_queues_;
 
