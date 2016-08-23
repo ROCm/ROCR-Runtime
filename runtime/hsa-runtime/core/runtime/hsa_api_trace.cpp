@@ -146,38 +146,28 @@ void HsaApiTable::UpdateCore() {
   core_api.hsa_soft_queue_create_fn = HSA::hsa_soft_queue_create;
   core_api.hsa_queue_destroy_fn = HSA::hsa_queue_destroy;
   core_api.hsa_queue_inactivate_fn = HSA::hsa_queue_inactivate;
-  core_api.hsa_queue_load_read_index_scacquire_fn =
-      HSA::hsa_queue_load_read_index_scacquire;
+  core_api.hsa_queue_load_read_index_scacquire_fn = HSA::hsa_queue_load_read_index_scacquire;
   core_api.hsa_queue_load_read_index_relaxed_fn =
       HSA::hsa_queue_load_read_index_relaxed;
-  core_api.hsa_queue_load_write_index_scacquire_fn =
-      HSA::hsa_queue_load_write_index_scacquire;
+  core_api.hsa_queue_load_write_index_scacquire_fn = HSA::hsa_queue_load_write_index_scacquire;
   core_api.hsa_queue_load_write_index_relaxed_fn =
       HSA::hsa_queue_load_write_index_relaxed;
   core_api.hsa_queue_store_write_index_relaxed_fn =
       HSA::hsa_queue_store_write_index_relaxed;
-  core_api.hsa_queue_store_write_index_screlease_fn =
-      HSA::hsa_queue_store_write_index_screlease;
-  core_api.hsa_queue_cas_write_index_scacq_screl_fn =
-      HSA::hsa_queue_cas_write_index_scacq_screl;
-  core_api.hsa_queue_cas_write_index_scacquire_fn =
-      HSA::hsa_queue_cas_write_index_scacquire;
+  core_api.hsa_queue_store_write_index_screlease_fn = HSA::hsa_queue_store_write_index_screlease;
+  core_api.hsa_queue_cas_write_index_scacq_screl_fn = HSA::hsa_queue_cas_write_index_scacq_screl;
+  core_api.hsa_queue_cas_write_index_scacquire_fn = HSA::hsa_queue_cas_write_index_scacquire;
   core_api.hsa_queue_cas_write_index_relaxed_fn =
       HSA::hsa_queue_cas_write_index_relaxed;
-  core_api.hsa_queue_cas_write_index_screlease_fn =
-      HSA::hsa_queue_cas_write_index_screlease;
-  core_api.hsa_queue_add_write_index_scacq_screl_fn =
-      HSA::hsa_queue_add_write_index_scacq_screl;
-  core_api.hsa_queue_add_write_index_scacquire_fn =
-      HSA::hsa_queue_add_write_index_scacquire;
+  core_api.hsa_queue_cas_write_index_screlease_fn = HSA::hsa_queue_cas_write_index_screlease;
+  core_api.hsa_queue_add_write_index_scacq_screl_fn = HSA::hsa_queue_add_write_index_scacq_screl;
+  core_api.hsa_queue_add_write_index_scacquire_fn = HSA::hsa_queue_add_write_index_scacquire;
   core_api.hsa_queue_add_write_index_relaxed_fn =
       HSA::hsa_queue_add_write_index_relaxed;
-  core_api.hsa_queue_add_write_index_screlease_fn =
-      HSA::hsa_queue_add_write_index_screlease;
+  core_api.hsa_queue_add_write_index_screlease_fn = HSA::hsa_queue_add_write_index_screlease;
   core_api.hsa_queue_store_read_index_relaxed_fn =
       HSA::hsa_queue_store_read_index_relaxed;
-  core_api.hsa_queue_store_read_index_screlease_fn =
-      HSA::hsa_queue_store_read_index_screlease;
+  core_api.hsa_queue_store_read_index_screlease_fn = HSA::hsa_queue_store_read_index_screlease;
   core_api.hsa_agent_iterate_regions_fn = HSA::hsa_agent_iterate_regions;
   core_api.hsa_region_get_info_fn = HSA::hsa_region_get_info;
   core_api.hsa_memory_register_fn = HSA::hsa_memory_register;
@@ -278,14 +268,14 @@ void HsaApiTable::UpdateCore() {
 
   core_api.hsa_status_string_fn = HSA::hsa_status_string;
 
-  //Start HSA v1.1 additions
+  // Start HSA v1.1 additions
   core_api.hsa_extension_get_name_fn = HSA::hsa_extension_get_name;
   core_api.hsa_system_major_extension_supported_fn = HSA::hsa_system_major_extension_supported;
   core_api.hsa_system_get_major_extension_table_fn = HSA::hsa_system_get_major_extension_table;
   core_api.hsa_agent_major_extension_supported_fn = HSA::hsa_agent_major_extension_supported;
   core_api.hsa_cache_get_info_fn = HSA::hsa_cache_get_info;
   core_api.hsa_agent_iterate_caches_fn = HSA::hsa_agent_iterate_caches;
-  //Silent store optimization is present in all signal ops when no agents are sleeping.
+  // Silent store optimization is present in all signal ops when no agents are sleeping.
   core_api.hsa_signal_silent_store_relaxed_fn = HSA::hsa_signal_store_relaxed;
   core_api.hsa_signal_silent_store_screlease_fn = HSA::hsa_signal_store_screlease;
   core_api.hsa_signal_group_create_fn = HSA::hsa_signal_group_create;

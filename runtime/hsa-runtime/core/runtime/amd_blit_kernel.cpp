@@ -603,9 +603,8 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
   }
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
-                                   1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+                                     HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
@@ -624,8 +623,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
   uint64_t write_index_temp = write_index;
 
   // Insert barrier packets to handle dependent signals.
-  const uint16_t kBarrierPacketHeader =
-      (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+  const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
       (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
       (HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
@@ -766,9 +764,8 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   ReleaseWriteIndex(write_index, 1);
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
-                                   1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+                                     HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
@@ -810,8 +807,7 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
                                       hsa_fence_scope_t fence) {
   // This function is not thread safe.
 
-  const uint16_t kBarrierPacketHeader =
-      (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+  const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
       (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
       (fence << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
@@ -842,9 +838,8 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
   ReleaseWriteIndex(write_index, num_copy_packet + 1);
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(packet.completion_signal,
-                                   HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(packet.completion_signal, HSA_SIGNAL_CONDITION_LT, 1,
+                                     uint64_t(-1), HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }

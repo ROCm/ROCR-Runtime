@@ -76,36 +76,28 @@ using namespace amd::hsa;
 
 template <class T>
 struct ValidityError;
-template <>
-struct ValidityError<core::Signal*> {
+template <> struct ValidityError<core::Signal*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_SIGNAL };
 };
-template <>
-struct ValidityError<core::SignalGroup*> {
+template <> struct ValidityError<core::SignalGroup*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP };
 };
-template <>
-struct ValidityError<core::Agent*> {
+template <> struct ValidityError<core::Agent*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_AGENT };
 };
-template <>
-struct ValidityError<core::MemoryRegion*> {
+template <> struct ValidityError<core::MemoryRegion*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_REGION };
 };
-template <>
-struct ValidityError<core::Queue*> {
+template <> struct ValidityError<core::Queue*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_QUEUE };
 };
-template <>
-struct ValidityError<core::Cache*> {
+template <> struct ValidityError<core::Cache*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_CACHE };
 };
-template <>
-struct ValidityError<core::Isa*> {
+template <> struct ValidityError<core::Isa*> {
   enum { kValue = HSA_STATUS_ERROR_INVALID_ISA };
 };
-template <class T>
-struct ValidityError<const T*> {
+template <class T> struct ValidityError<const T*> {
   enum { kValue = ValidityError<T*>::kValue };
 };
 
@@ -212,12 +204,10 @@ hsa_status_t
   return core::Runtime::runtime_singleton_->GetSystemInfo(attribute, value);
 }
 
-hsa_status_t hsa_extension_get_name(uint16_t extension, const char** name)
-{
+hsa_status_t hsa_extension_get_name(uint16_t extension, const char** name) {
   IS_OPEN();
   IS_BAD_PTR(name);
-  switch(extension)
-  {
+  switch (extension) {
     case HSA_EXTENSION_FINALIZER:
       *name = "HSA_EXTENSION_FINALIZER";
       break;
@@ -248,13 +238,16 @@ hsa_status_t
                                    uint16_t version_minor, bool* result) {
   IS_OPEN();
 
-  if ((extension > HSA_EXTENSION_STD_LAST && (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) || result == NULL) {
+  if ((extension > HSA_EXTENSION_STD_LAST &&
+       (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
+      result == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   *result = false;
 
-  if(extension==HSA_EXTENSION_PERFORMANCE_COUNTERS || extension == HSA_EXTENSION_PROFILING_EVENTS)
+  if (extension == HSA_EXTENSION_PERFORMANCE_COUNTERS ||
+      extension == HSA_EXTENSION_PROFILING_EVENTS)
     return HSA_STATUS_SUCCESS;
 
   uint16_t system_version_major = 0;
@@ -272,108 +265,98 @@ hsa_status_t
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t 
-    hsa_system_major_extension_supported(uint16_t extension, uint16_t version_major,
-                                   uint16_t *version_minor, bool* result) {
+hsa_status_t hsa_system_major_extension_supported(uint16_t extension, uint16_t version_major,
+                                                  uint16_t* version_minor, bool* result) {
   IS_OPEN();
   IS_BAD_PTR(version_minor);
   IS_BAD_PTR(result);
 
-  if ((extension == HSA_EXTENSION_IMAGES) && (version_major==1)) {
-    *version_minor=0;
-    *result=true;
+  if ((extension == HSA_EXTENSION_IMAGES) && (version_major == 1)) {
+    *version_minor = 0;
+    *result = true;
     return HSA_STATUS_SUCCESS;
   }
 
-  if ((extension == HSA_EXTENSION_FINALIZER) && (version_major==1)) {
-    *version_minor=0;
-    *result=true;
+  if ((extension == HSA_EXTENSION_FINALIZER) && (version_major == 1)) {
+    *version_minor = 0;
+    *result = true;
     return HSA_STATUS_SUCCESS;
   }
 
-  if ((extension == HSA_EXTENSION_AMD_LOADER) && (version_major==1)) {
-    *version_minor=0;
-    *result=true;
+  if ((extension == HSA_EXTENSION_AMD_LOADER) && (version_major == 1)) {
+    *version_minor = 0;
+    *result = true;
     return HSA_STATUS_SUCCESS;
   }
 
-  *result=false;
+  *result = false;
   return HSA_STATUS_SUCCESS;
 }
 
-static size_t get_extension_table_length(uint16_t extension, uint16_t major, uint16_t minor)
-{
-  //Table to convert from major/minor to major/length
-  struct sizes_t
-  {
+static size_t get_extension_table_length(uint16_t extension, uint16_t major, uint16_t minor) {
+  // Table to convert from major/minor to major/length
+  struct sizes_t {
     std::string name;
     size_t size;
   };
-  static sizes_t sizes[] = {
-    "hsa_ext_images_1_00_pfn_t", sizeof(hsa_ext_images_1_00_pfn_t),
-    "hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t),
-    "hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)
-  };
-  static const size_t num_tables = sizeof(sizes)/sizeof(sizes_t);
+  static sizes_t sizes[] = {"hsa_ext_images_1_00_pfn_t",     sizeof(hsa_ext_images_1_00_pfn_t),
+                            "hsa_ext_finalizer_1_00_pfn_t",  sizeof(hsa_ext_finalizer_1_00_pfn_t),
+                            "hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)};
+  static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
-  if(minor>99)
-    return 0;
+  if (minor > 99) return 0;
 
   std::string name;
 
-  switch(extension)
-  {
-  case HSA_EXTENSION_FINALIZER:
-    name = "hsa_ext_finalizer_";
-    break;
-  case HSA_EXTENSION_IMAGES:
-    name="hsa_ext_images_";
-    break;
-  //case HSA_EXTENSION_PERFORMANCE_COUNTERS:
-  //  name = "hsa_ext_perf_counter_";
-  //  break;
-  //case HSA_EXTENSION_PROFILING_EVENTS:
-  //  name = "hsa_ext_profiling_event_";
-  //  break;
-  //case HSA_EXTENSION_AMD_PROFILER:
-  //  name = "hsa_ven_amd_profiler_";
-  //  break;
-  case HSA_EXTENSION_AMD_LOADER:
-    name = "hsa_ven_amd_loader_";
-    break;
-  default:
-    return 0;
+  switch (extension) {
+    case HSA_EXTENSION_FINALIZER:
+      name = "hsa_ext_finalizer_";
+      break;
+    case HSA_EXTENSION_IMAGES:
+      name = "hsa_ext_images_";
+      break;
+    // case HSA_EXTENSION_PERFORMANCE_COUNTERS:
+    //  name = "hsa_ext_perf_counter_";
+    //  break;
+    // case HSA_EXTENSION_PROFILING_EVENTS:
+    //  name = "hsa_ext_profiling_event_";
+    //  break;
+    // case HSA_EXTENSION_AMD_PROFILER:
+    //  name = "hsa_ven_amd_profiler_";
+    //  break;
+    case HSA_EXTENSION_AMD_LOADER:
+      name = "hsa_ven_amd_loader_";
+      break;
+    default:
+      return 0;
   }
 
   char buff[3];
   sprintf(buff, "%02u", minor);
-  name+=std::to_string(major)+"_"+buff+"_pfn_t";
+  name += std::to_string(major) + "_" + buff + "_pfn_t";
 
-  for(size_t i=0; i<num_tables; i++)
-  {
-    if(sizes[i].name==name)
-      return sizes[i].size;
+  for (size_t i = 0; i < num_tables; i++) {
+    if (sizes[i].name == name) return sizes[i].size;
   }
   return 0;
 }
 
-hsa_status_t 
-    hsa_system_get_extension_table(uint16_t extension, uint16_t version_major,
-                                   uint16_t version_minor, void* table) {
-  return HSA::hsa_system_get_major_extension_table(extension, version_major, get_extension_table_length(extension, version_major, version_minor), table);
+hsa_status_t hsa_system_get_extension_table(uint16_t extension, uint16_t version_major,
+                                            uint16_t version_minor, void* table) {
+  return HSA::hsa_system_get_major_extension_table(
+      extension, version_major, get_extension_table_length(extension, version_major, version_minor),
+      table);
 }
 
-hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t version_major, size_t table_length, void *table)
-{
+hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t version_major,
+                                                  size_t table_length, void* table) {
   IS_OPEN();
   IS_BAD_PTR(table);
-  
-  if(table_length==0)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  if (table_length == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   if (extension == HSA_EXTENSION_IMAGES) {
-    if(version_major>1)
-      return HSA_STATUS_ERROR;
+    if (version_major > 1) return HSA_STATUS_ERROR;
     hsa_ext_images_1_00_pfn_t ext_table;
     ext_table.hsa_ext_image_clear = hsa_ext_image_clear;
     ext_table.hsa_ext_image_copy = hsa_ext_image_copy;
@@ -387,13 +370,12 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ext_sampler_destroy = hsa_ext_sampler_destroy;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
-    
+
     return HSA_STATUS_SUCCESS;
   }
 
   if (extension == HSA_EXTENSION_FINALIZER) {
-    if(version_major>1)
-      return HSA_STATUS_ERROR;
+    if (version_major > 1) return HSA_STATUS_ERROR;
     hsa_ext_finalizer_1_00_pfn_t ext_table;
     ext_table.hsa_ext_program_add_module = hsa_ext_program_add_module;
     ext_table.hsa_ext_program_create = hsa_ext_program_create;
@@ -408,13 +390,11 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
   }
 
   if (extension == HSA_EXTENSION_AMD_LOADER) {
-    if(version_major>1)
-      return HSA_STATUS_ERROR;
+    if (version_major > 1) return HSA_STATUS_ERROR;
     hsa_ven_amd_loader_1_00_pfn_t ext_table;
-    ext_table.hsa_ven_amd_loader_query_host_address =
-      hsa_ven_amd_loader_query_host_address;
+    ext_table.hsa_ven_amd_loader_query_host_address = hsa_ven_amd_loader_query_host_address;
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
-      hsa_ven_amd_loader_query_segment_descriptors;
+        hsa_ven_amd_loader_query_segment_descriptors;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
@@ -458,8 +438,7 @@ hsa_status_t hsa_agent_get_exception_policies(hsa_agent_t agent_handle,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute, void *value)
-{
+hsa_status_t hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute, void* value) {
   IS_OPEN();
   core::Cache* Cache = core::Cache::Convert(cache);
   IS_VALID(Cache);
@@ -467,10 +446,11 @@ hsa_status_t hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute, v
   return Cache->GetInfo(attribute, value);
 }
 
-hsa_status_t hsa_agent_iterate_caches(hsa_agent_t agent_handle, hsa_status_t (*callback )(hsa_cache_t cache, void *data), void *data)
-{
+hsa_status_t hsa_agent_iterate_caches(hsa_agent_t agent_handle,
+                                      hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                                      void* data) {
   IS_OPEN();
-  const core::Agent* agent=core::Agent::Convert(agent_handle);
+  const core::Agent* agent = core::Agent::Convert(agent_handle);
   IS_VALID(agent);
   IS_BAD_PTR(callback);
   return agent->IterateCache(callback, data);
@@ -482,7 +462,9 @@ hsa_status_t
                                   uint16_t version_minor, bool* result) {
   IS_OPEN();
 
-  if ((extension > HSA_EXTENSION_STD_LAST && (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) || result == NULL) {
+  if ((extension > HSA_EXTENSION_STD_LAST &&
+       (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
+      result == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -508,11 +490,14 @@ hsa_status_t
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent_handle, uint16_t version_major, uint16_t *version_minor, bool *result)
-{
+hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent_handle,
+                                                 uint16_t version_major, uint16_t* version_minor,
+                                                 bool* result) {
   IS_OPEN();
 
-  if ((extension > HSA_EXTENSION_STD_LAST && (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) || result == NULL) {
+  if ((extension > HSA_EXTENSION_STD_LAST &&
+       (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
+      result == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -523,8 +508,7 @@ hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t
 
   if (agent->device_type() == core::Agent::kAmdGpuDevice) {
     uint16_t agent_version_major = 0;
-    hsa_status_t status =
-        agent->GetInfo(HSA_AGENT_INFO_VERSION_MAJOR, &agent_version_major);
+    hsa_status_t status = agent->GetInfo(HSA_AGENT_INFO_VERSION_MAJOR, &agent_version_major);
     assert(status == HSA_STATUS_SUCCESS);
 
     if (version_major <= agent_version_major) {
@@ -715,8 +699,7 @@ void hsa_queue_store_read_index_relaxed(const hsa_queue_t* queue,
 /// @param queue Pointer to the queue whose read index is being updated
 ///
 /// @param value Value of new read index
-void hsa_queue_store_read_index_screlease(const hsa_queue_t* queue,
-                                                uint64_t value) {
+void hsa_queue_store_read_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   cmd_queue->StoreReadIndexRelease(value);
@@ -739,8 +722,7 @@ void hsa_queue_store_write_index_relaxed(const hsa_queue_t* queue,
 /// @param queue Pointer to the queue whose write index is being updated
 ///
 /// @param value Value of new write index
-void hsa_queue_store_write_index_screlease(const hsa_queue_t* queue,
-                                                 uint64_t value) {
+void hsa_queue_store_write_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   cmd_queue->StoreWriteIndexRelease(value);
@@ -756,9 +738,8 @@ void hsa_queue_store_write_index_screlease(const hsa_queue_t* queue,
 /// @param value Value of new write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_cas_write_index_scacq_screl(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
+uint64_t hsa_queue_cas_write_index_scacq_screl(const hsa_queue_t* queue, uint64_t expected,
+                                               uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->CasWriteIndexAcqRel(expected, value);
@@ -774,9 +755,8 @@ uint64_t hsa_queue_cas_write_index_scacq_screl(const hsa_queue_t* queue,
 /// @param value Value of new write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_cas_write_index_scacquire(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
+uint64_t hsa_queue_cas_write_index_scacquire(const hsa_queue_t* queue, uint64_t expected,
+                                             uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->CasWriteIndexAcquire(expected, value);
@@ -810,9 +790,8 @@ uint64_t hsa_queue_cas_write_index_relaxed(const hsa_queue_t* queue,
 /// @param value Value of new write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_cas_write_index_screlease(const hsa_queue_t* queue,
-                                                   uint64_t expected,
-                                                   uint64_t value) {
+uint64_t hsa_queue_cas_write_index_screlease(const hsa_queue_t* queue, uint64_t expected,
+                                             uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->CasWriteIndexRelease(expected, value);
@@ -826,8 +805,7 @@ uint64_t hsa_queue_cas_write_index_screlease(const hsa_queue_t* queue,
 /// @param value Value to add to write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_add_write_index_scacq_screl(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t hsa_queue_add_write_index_scacq_screl(const hsa_queue_t* queue, uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->AddWriteIndexAcqRel(value);
@@ -840,8 +818,7 @@ uint64_t hsa_queue_add_write_index_scacq_screl(const hsa_queue_t* queue,
 /// @param value Value to add to write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_add_write_index_scacquire(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t hsa_queue_add_write_index_scacquire(const hsa_queue_t* queue, uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->AddWriteIndexAcquire(value);
@@ -868,8 +845,7 @@ uint64_t hsa_queue_add_write_index_relaxed(const hsa_queue_t* queue,
 /// @param value Value to add to write index
 ///
 /// @return uint64_t Value of write index before the update
-uint64_t hsa_queue_add_write_index_screlease(const hsa_queue_t* queue,
-                                                   uint64_t value) {
+uint64_t hsa_queue_add_write_index_screlease(const hsa_queue_t* queue, uint64_t value) {
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
   return cmd_queue->AddWriteIndexRelease(value);
@@ -1060,8 +1036,7 @@ void hsa_signal_store_relaxed(hsa_signal_t hsa_signal,
   signal->StoreRelaxed(value);
 }
 
-void hsa_signal_store_screlease(hsa_signal_t hsa_signal,
-                                      hsa_signal_value_t value) {
+void hsa_signal_store_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->StoreRelease(value);
@@ -1079,40 +1054,35 @@ hsa_signal_value_t
                              wait_state_hint);
 }
 
-hsa_signal_value_t 
-    hsa_signal_wait_scacquire(hsa_signal_t hsa_signal,
-                            hsa_signal_condition_t condition,
-                            hsa_signal_value_t compare_value,
-                            uint64_t timeout_hint,
-                            hsa_wait_state_t wait_state_hint) {
+hsa_signal_value_t hsa_signal_wait_scacquire(hsa_signal_t hsa_signal,
+                                             hsa_signal_condition_t condition,
+                                             hsa_signal_value_t compare_value,
+                                             uint64_t timeout_hint,
+                                             hsa_wait_state_t wait_state_hint) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->WaitAcquire(condition, compare_value, timeout_hint,
                              wait_state_hint);
 }
 
-hsa_status_t hsa_signal_group_create(uint32_t num_signals, const hsa_signal_t *signals, uint32_t num_consumers, const hsa_agent_t *consumers, hsa_signal_group_t *signal_group)
-{
+hsa_status_t hsa_signal_group_create(uint32_t num_signals, const hsa_signal_t* signals,
+                                     uint32_t num_consumers, const hsa_agent_t* consumers,
+                                     hsa_signal_group_t* signal_group) {
   IS_OPEN();
-  if(num_signals==0)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  for (uint i = 0; i < num_signals; i++)
-    IS_VALID(core::Signal::Convert(signals[i]));
-  for (uint i = 0; i < num_consumers; i++)
-    IS_VALID(core::Agent::Convert(consumers[i]));
-  core::SignalGroup* group=new core::SignalGroup(num_signals, signals);
+  if (num_signals == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  for (uint i = 0; i < num_signals; i++) IS_VALID(core::Signal::Convert(signals[i]));
+  for (uint i = 0; i < num_consumers; i++) IS_VALID(core::Agent::Convert(consumers[i]));
+  core::SignalGroup* group = new core::SignalGroup(num_signals, signals);
   CHECK_ALLOC(group);
-  if(!group->IsValid())
-  {
+  if (!group->IsValid()) {
     delete group;
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
-  *signal_group=core::SignalGroup::Convert(group);
+  *signal_group = core::SignalGroup::Convert(group);
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_signal_group_destroy(hsa_signal_group_t signal_group)
-{
+hsa_status_t hsa_signal_group_destroy(hsa_signal_group_t signal_group) {
   IS_OPEN();
   core::SignalGroup* group = core::SignalGroup::Convert(signal_group);
   IS_VALID(group);
@@ -1120,21 +1090,30 @@ hsa_status_t hsa_signal_group_destroy(hsa_signal_group_t signal_group)
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_signal_group_wait_any_relaxed(hsa_signal_group_t signal_group, const hsa_signal_condition_t *conditions, const hsa_signal_value_t *compare_values, hsa_wait_state_t wait_state_hint, hsa_signal_t *signal, hsa_signal_value_t *value)
-{
+hsa_status_t hsa_signal_group_wait_any_relaxed(hsa_signal_group_t signal_group,
+                                               const hsa_signal_condition_t* conditions,
+                                               const hsa_signal_value_t* compare_values,
+                                               hsa_wait_state_t wait_state_hint,
+                                               hsa_signal_t* signal, hsa_signal_value_t* value) {
   IS_OPEN();
   const core::SignalGroup* group = core::SignalGroup::Convert(signal_group);
   IS_VALID(group);
-  const uint32_t index = AMD::hsa_amd_signal_wait_any(group->Count(), const_cast<hsa_signal_t*>(group->List()), const_cast<hsa_signal_condition_t*>(conditions), const_cast<hsa_signal_value_t*>(compare_values), uint64_t(-1), wait_state_hint, value);
-  if(index>=group->Count())
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  *signal=group->List()[index];
+  const uint32_t index = AMD::hsa_amd_signal_wait_any(
+      group->Count(), const_cast<hsa_signal_t*>(group->List()),
+      const_cast<hsa_signal_condition_t*>(conditions),
+      const_cast<hsa_signal_value_t*>(compare_values), uint64_t(-1), wait_state_hint, value);
+  if (index >= group->Count()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  *signal = group->List()[index];
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_signal_group_wait_any_scacquire(hsa_signal_group_t signal_group, const hsa_signal_condition_t *conditions, const hsa_signal_value_t *compare_values, hsa_wait_state_t wait_state_hint, hsa_signal_t *signal, hsa_signal_value_t *value)
-{
-  hsa_status_t ret=HSA::hsa_signal_group_wait_any_relaxed(signal_group, conditions, compare_values, wait_state_hint, signal, value);
+hsa_status_t hsa_signal_group_wait_any_scacquire(hsa_signal_group_t signal_group,
+                                                 const hsa_signal_condition_t* conditions,
+                                                 const hsa_signal_value_t* compare_values,
+                                                 hsa_wait_state_t wait_state_hint,
+                                                 hsa_signal_t* signal, hsa_signal_value_t* value) {
+  hsa_status_t ret = HSA::hsa_signal_group_wait_any_relaxed(
+      signal_group, conditions, compare_values, wait_state_hint, signal, value);
   std::atomic_thread_fence(std::memory_order_acquire);
   return ret;
 }
@@ -1146,22 +1125,19 @@ void
   signal->AndRelaxed(value);
 }
 
-void 
-    hsa_signal_and_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_and_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AndAcquire(value);
 }
 
-void 
-    hsa_signal_and_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_and_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AndRelease(value);
 }
 
-void 
-    hsa_signal_and_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_and_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AndAcqRel(value);
@@ -1174,22 +1150,19 @@ void
   signal->OrRelaxed(value);
 }
 
-void 
-    hsa_signal_or_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_or_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->OrAcquire(value);
 }
 
-void 
-    hsa_signal_or_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_or_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->OrRelease(value);
 }
 
-void 
-    hsa_signal_or_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_or_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->OrAcqRel(value);
@@ -1202,22 +1175,19 @@ void
   signal->XorRelaxed(value);
 }
 
-void 
-    hsa_signal_xor_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_xor_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->XorAcquire(value);
 }
 
-void 
-    hsa_signal_xor_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_xor_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->XorRelease(value);
 }
 
-void 
-    hsa_signal_xor_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_xor_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->XorAcqRel(value);
@@ -1230,22 +1200,19 @@ void
   return signal->AddRelaxed(value);
 }
 
-void 
-    hsa_signal_add_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_add_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AddAcquire(value);
 }
 
-void 
-    hsa_signal_add_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_add_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AddRelease(value);
 }
 
-void 
-    hsa_signal_add_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
+void hsa_signal_add_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->AddAcqRel(value);
@@ -1258,22 +1225,19 @@ void hsa_signal_subtract_relaxed(hsa_signal_t hsa_signal,
   signal->SubRelaxed(value);
 }
 
-void hsa_signal_subtract_scacquire(hsa_signal_t hsa_signal,
-                                         hsa_signal_value_t value) {
+void hsa_signal_subtract_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->SubAcquire(value);
 }
 
-void hsa_signal_subtract_screlease(hsa_signal_t hsa_signal,
-                                         hsa_signal_value_t value) {
+void hsa_signal_subtract_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->SubRelease(value);
 }
 
-void hsa_signal_subtract_scacq_screl(hsa_signal_t hsa_signal,
-                                         hsa_signal_value_t value) {
+void hsa_signal_subtract_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   signal->SubAcqRel(value);
@@ -1287,25 +1251,22 @@ hsa_signal_value_t
   return signal->ExchRelaxed(value);
 }
 
-hsa_signal_value_t 
-    hsa_signal_exchange_scacquire(hsa_signal_t hsa_signal,
-                                hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_exchange_scacquire(hsa_signal_t hsa_signal,
+                                                 hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->ExchAcquire(value);
 }
 
-hsa_signal_value_t 
-    hsa_signal_exchange_screlease(hsa_signal_t hsa_signal,
-                                hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_exchange_screlease(hsa_signal_t hsa_signal,
+                                                 hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->ExchRelease(value);
 }
 
-hsa_signal_value_t 
-    hsa_signal_exchange_scacq_screl(hsa_signal_t hsa_signal,
-                                hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_exchange_scacq_screl(hsa_signal_t hsa_signal,
+                                                   hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->ExchAcqRel(value);
@@ -1319,25 +1280,22 @@ hsa_signal_value_t hsa_signal_cas_relaxed(hsa_signal_t hsa_signal,
   return signal->CasRelaxed(expected, value);
 }
 
-hsa_signal_value_t hsa_signal_cas_scacquire(hsa_signal_t hsa_signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_cas_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t expected,
+                                            hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->CasAcquire(expected, value);
 }
 
-hsa_signal_value_t hsa_signal_cas_screlease(hsa_signal_t hsa_signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_cas_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t expected,
+                                            hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->CasRelease(expected, value);
 }
 
-hsa_signal_value_t hsa_signal_cas_scacq_screl(hsa_signal_t hsa_signal,
-                                                  hsa_signal_value_t expected,
-                                                  hsa_signal_value_t value) {
+hsa_signal_value_t hsa_signal_cas_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t expected,
+                                              hsa_signal_value_t value) {
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
   return signal->CasAcqRel(expected, value);
@@ -2335,46 +2293,53 @@ hsa_status_t hsa_status_string(
       *status_string = "HSA_STATUS_ERROR_FROZEN_EXECUTABLE: The executable is frozen.";
       break;
     case HSA_STATUS_ERROR_INVALID_SYMBOL_NAME:
-      *status_string = "HSA_STATUS_ERROR_INVALID_SYMBOL_NAME: There is no symbol with the given name.";
+      *status_string =
+          "HSA_STATUS_ERROR_INVALID_SYMBOL_NAME: There is no symbol with the given name.";
       break;
     case HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED:
-      *status_string = "HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED: The variable is already defined.";
+      *status_string =
+          "HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED: The variable is already defined.";
       break;
     case HSA_STATUS_ERROR_VARIABLE_UNDEFINED:
       *status_string = "HSA_STATUS_ERROR_VARIABLE_UNDEFINED: The variable is undefined.";
       break;
-    case HSA_STATUS_ERROR_INVALID_CODE_SYMBOL :
+    case HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:
       *status_string = "HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:  The code object symbol is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL :
-      *status_string = "HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL:  The executable symbol is invalid.";
+    case HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL:
+      *status_string =
+          "HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL:  The executable symbol is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_FILE :
+    case HSA_STATUS_ERROR_INVALID_FILE:
       *status_string = "HSA_STATUS_ERROR_INVALID_FILE:  The file descriptor is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER :
-      *status_string = "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  *The code object reader is invalid.";
+    case HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:
+      *status_string =
+          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  *The code object reader is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_CACHE :
+    case HSA_STATUS_ERROR_INVALID_CACHE:
       *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  *The cache is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_WAVEFRONT :
+    case HSA_STATUS_ERROR_INVALID_WAVEFRONT:
       *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  *The wavefront is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP :
+    case HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:
       *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  *The signal group is invalid.";
       break;
-    case HSA_STATUS_ERROR_INVALID_RUNTIME_STATE :
-      *status_string = "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  *The HSA runtime is not in the configuration state.";
+    case HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:
+      *status_string =
+          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  *The HSA runtime is not in the configuration "
+          "state.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED:
-      *status_string = "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "
-      "format is not supported.";
+      *status_string =
+          "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "
+          "format is not supported.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED:
       *status_string =
-        "HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED: Image size "
-        "is not supported.";
+          "HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED: Image size "
+          "is not supported.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_PITCH_UNSUPPORTED:
       *status_string = "Image pitch is not supported or invalid.";

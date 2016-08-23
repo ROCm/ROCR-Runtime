@@ -90,7 +90,8 @@ class CpuAgent : public core::Agent {
                              void* data) const override;
 
   // @brief Override from core::Agent.
-  hsa_status_t IterateCache(hsa_status_t (*callback )(hsa_cache_t cache, void *data), void* value) const override;
+  hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                            void* value) const override;
 
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
