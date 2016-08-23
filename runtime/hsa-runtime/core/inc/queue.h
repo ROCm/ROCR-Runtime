@@ -48,7 +48,6 @@
 
 #include "core/common/shared.h"
 
-#include "core/inc/runtime.h"
 #include "core/inc/checked.h"
 
 #include "core/util/utils.h"

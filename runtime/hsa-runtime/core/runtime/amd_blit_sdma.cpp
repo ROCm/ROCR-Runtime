@@ -447,26 +447,11 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   // Allocate queue buffer.
   queue_size_ = kQueueSize;
 
-  HsaMemFlags flags;
-  flags.Value = 0;
-  flags.ui32.HostAccess = 1;
-  flags.ui32.AtomicAccessPartial = 1;
-  flags.ui32.ExecuteAccess = 1;
+  queue_start_addr_ =
+      (char*)core::Runtime::runtime_singleton_->system_allocator()(
+          queue_size_, 0x1000, core::MemoryRegion::AllocateExecutable);
 
-  auto err = hsaKmtAllocMemory(amd_gpu_agent.node_id(), queue_size_, flags,
-                               reinterpret_cast<void**>(&queue_start_addr_));
-
-  if (err != HSAKMT_STATUS_SUCCESS) {
-    assert(false && "SDMA queue memory allocation failure.");
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  HSAuint64 alternate_va;
-  err = hsaKmtMapMemoryToGPU(queue_start_addr_, queue_size_, &alternate_va);
-
-  if (err != HSAKMT_STATUS_SUCCESS) {
-    assert(false && "AQL queue memory map failure.");
-    Destroy(agent);
+  if (queue_start_addr_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -494,7 +479,8 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
 
   fence_base_addr_ = reinterpret_cast<uint32_t*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          fence_pool_size_ * sizeof(uint32_t), 256));
+          fence_pool_size_ * sizeof(uint32_t), 256,
+          core::MemoryRegion::AllocateNoFlags));
 
   if (fence_base_addr_ == NULL) {
     Destroy(agent);
@@ -516,8 +502,7 @@ hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
 
   if (queue_start_addr_ != NULL && queue_size_ != 0) {
     // Release queue buffer.
-    hsaKmtUnmapMemoryToGPU(queue_start_addr_);
-    hsaKmtFreeMemory(queue_start_addr_, queue_size_);
+    core::Runtime::runtime_singleton_->system_deallocator()(queue_start_addr_);
   }
 
   if (fence_base_addr_ != NULL) {

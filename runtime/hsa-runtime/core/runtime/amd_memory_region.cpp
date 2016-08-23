@@ -149,11 +149,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
 
 MemoryRegion::~MemoryRegion() {}
 
-hsa_status_t MemoryRegion::Allocate(size_t size, void** address) const {
-  return Allocate(false, size, address);
-}
-
-hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
+hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
                                     void** address) const {
   if (address == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -169,7 +165,13 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
 
   size = AlignUp(size, kPageSize_);
 
-  *address = AllocateKfdMemory(mem_flag_, owner()->node_id(), size);
+  HsaMemFlags kmt_alloc_flags(mem_flag_);
+  kmt_alloc_flags.ui32.ExecuteAccess =
+      (alloc_flags & AllocateExecutable ? 1 : 0);
+  kmt_alloc_flags.ui32.AQLQueueMemory =
+      (alloc_flags & AllocateDoubleMap ? 1 : 0);
+
+  *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
 
   if (*address != NULL) {
     // Commit the memory.
@@ -184,7 +186,7 @@ hsa_status_t MemoryRegion::Allocate(bool restrict_access, size_t size,
     const uint32_t* map_node_id = &owner_node_id;
 
     if (IsSystem()) {
-      if (!restrict_access) {
+      if ((alloc_flags & AllocateRestrict) == 0) {
         // Map to all GPU agents.
         map_node_count = core::Runtime::runtime_singleton_->gpu_ids().size();
 

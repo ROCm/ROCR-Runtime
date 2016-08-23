@@ -47,7 +47,6 @@
 
 #include <vector>
 
-#include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/checked.h"
 
@@ -81,7 +80,17 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     return reinterpret_cast<MemoryRegion*>(region.handle);
   }
 
-  virtual hsa_status_t Allocate(size_t size, void** address) const = 0;
+  enum AllocateEnum {
+    AllocateNoFlags = 0,
+    AllocateRestrict = (1 << 0),    // Don't map system memory to GPU agents
+    AllocateExecutable = (1 << 1),  // Set executable permission
+    AllocateDoubleMap = (1 << 2),   // Map twice VA allocation to backing store
+  };
+
+  typedef uint32_t AllocateFlags;
+
+  virtual hsa_status_t Allocate(size_t size, AllocateFlags alloc_flags,
+                                void** address) const = 0;
 
   virtual hsa_status_t Free(void* address, size_t size) const = 0;
 

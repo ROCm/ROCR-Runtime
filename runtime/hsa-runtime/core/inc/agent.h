@@ -49,7 +49,6 @@
 
 #include <vector>
 
-#include "core/inc/runtime.h"
 #include "core/inc/checked.h"
 #include "core/inc/isa.h"
 #include "core/inc/queue.h"

@@ -55,14 +55,14 @@ namespace core {
 class BaseShared {
  public:
   static void SetAllocateAndFree(
-      const std::function<void*(size_t, size_t)>& allocate,
+      const std::function<void*(size_t, size_t, uint32_t)>& allocate,
       const std::function<void(void*)>& free) {
     allocate_ = allocate;
     free_ = free;
   }
 
  protected:
-  static std::function<void*(size_t, size_t)> allocate_;
+  static std::function<void*(size_t, size_t, uint32_t)> allocate_;
   static std::function<void(void*)> free_;
 };
 
@@ -78,7 +78,7 @@ class Shared : public BaseShared {
                   "Align is less than alignof(T)");
 
     shared_object_ =
-        reinterpret_cast<T*>(allocate_(sizeof(T), Max(__alignof(T), Align)));
+        reinterpret_cast<T*>(allocate_(sizeof(T), Max(__alignof(T), Align), 0));
 
     assert(shared_object_ != NULL && "Failed on allocating shared_object_");
 

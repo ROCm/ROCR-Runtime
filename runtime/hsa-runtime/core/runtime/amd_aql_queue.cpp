@@ -266,21 +266,12 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   SignalGuard.Dismiss();
 #endif
 
-  HsaMemFlags pm4_ib_buf_flags = {0};
-  pm4_ib_buf_flags.ui32.HostAccess = 1;
-  pm4_ib_buf_flags.ui32.ExecuteAccess = 1;
-  pm4_ib_buf_flags.ui32.NoSubstitute = 1;
-
-  HSAKMT_STATUS err =
-      hsaKmtAllocMemory(agent_->node_id(), pm4_ib_size_b_, pm4_ib_buf_flags, &pm4_ib_buf_);
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(PM4 IB) failed");
-
-  err = hsaKmtMapMemoryToGPU(pm4_ib_buf_, pm4_ib_size_b_, NULL);
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtMapMemoryToGPU(PM4 IB) failed");
+  pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
+      pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
+  if (pm4_ib_buf_ == NULL) return;
 
   MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() {
-    hsaKmtUnmapMemoryToGPU(pm4_ib_buf_);
-    hsaKmtFreeMemory(pm4_ib_buf_, pm4_ib_size_b_);
+    core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
   });
 
   valid_ = true;
@@ -314,8 +305,7 @@ AqlQueue::~AqlQueue() {
   }
 #endif
 
-  hsaKmtUnmapMemoryToGPU(pm4_ib_buf_);
-  hsaKmtFreeMemory(pm4_ib_buf_, pm4_ib_size_b_);
+  core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
 }
 
 uint64_t AqlQueue::LoadReadIndexAcquire() {
@@ -631,34 +621,19 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
 #endif
   } else {
     // Allocate storage for the ring buffer.
-    HsaMemFlags flags;
-    flags.Value = 0;
-    flags.ui32.HostAccess = 1;
-    flags.ui32.AtomicAccessPartial = 1;
-    flags.ui32.ExecuteAccess = 1;
-    flags.ui32.AQLQueueMemory = 1;
-
     ring_buf_alloc_bytes_ = AlignUp(
         queue_size_pkts * static_cast<uint32_t>(sizeof(core::AqlPacket)), 4096);
-    auto err = hsaKmtAllocMemory(agent_->node_id(), ring_buf_alloc_bytes_,
-                                 flags, (void**)&ring_buf_);
 
-    if (err != HSAKMT_STATUS_SUCCESS) {
-      assert(false && "AQL queue memory allocation failure.");
-      return;
-    }
+    ring_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
+        ring_buf_alloc_bytes_, 0x1000,
+        core::MemoryRegion::AllocateExecutable |
+            core::MemoryRegion::AllocateDoubleMap);
 
-    HSAuint64 alternate_va;
-    err = hsaKmtMapMemoryToGPU(ring_buf_, ring_buf_alloc_bytes_, &alternate_va);
+    assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
 
-    if (err != HSAKMT_STATUS_SUCCESS) {
-      assert(false && "AQL queue memory map failure.");
-      hsaKmtFreeMemory(ring_buf_, ring_buf_alloc_bytes_);
-      ring_buf_ = NULL;
-      return;
-    }
-
-    ring_buf_alloc_bytes_ = 2 * ring_buf_alloc_bytes_;
+    // The virtual ring allocation is twice as large as requested.
+    // Each half maps to the same set of physical pages.
+    ring_buf_alloc_bytes_ *= 2;
   }
 }
 
@@ -673,8 +648,7 @@ void AqlQueue::FreeRegisteredRingBuffer() {
         (void*)(uintptr_t(ring_buf_) + (ring_buf_alloc_bytes_ / 2)));
 #endif
   } else {
-    hsaKmtUnmapMemoryToGPU(ring_buf_);
-    hsaKmtFreeMemory(ring_buf_, ring_buf_alloc_bytes_ / 2);
+    core::Runtime::runtime_singleton_->system_deallocator()(ring_buf_);
   }
 
   ring_buf_ = NULL;

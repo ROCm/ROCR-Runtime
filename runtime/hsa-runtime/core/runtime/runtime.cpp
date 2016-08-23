@@ -159,29 +159,22 @@ void Runtime::RegisterAgent(Agent* agent) {
     // Init default fine grain system region allocator using fine grain
     // system region of the first discovered CPU agent.
     if (cpu_agents_.size() == 1) {
-      if (system_regions_fine_[0]->full_profile()) {
-        system_allocator_ = [](size_t size, size_t alignment) -> void * {
-          return _aligned_malloc(size, alignment);
-        };
+      // Might need memory pooling to cover allocation that
+      // requires less than 4096 bytes.
+      system_allocator_ =
+          [&](size_t size, size_t alignment,
+              MemoryRegion::AllocateFlags alloc_flags) -> void* {
+            assert(alignment <= 4096);
+            void* ptr = NULL;
+            return (HSA_STATUS_SUCCESS ==
+                    core::Runtime::runtime_singleton_->AllocateMemory(
+                        system_regions_fine_[0], size, alloc_flags, &ptr))
+                       ? ptr
+                       : NULL;
+          };
 
-        system_deallocator_ = [](void* ptr) { _aligned_free(ptr); };
-      } else {
-        // Might need memory pooling to cover allocation that
-        // requires less than 4096 bytes.
-        system_allocator_ = [&](size_t size, size_t alignment) -> void * {
-          assert(alignment <= 4096);
-          void* ptr = NULL;
-          return (HSA_STATUS_SUCCESS ==
-                  core::Runtime::runtime_singleton_->AllocateMemory(
-                      system_regions_fine_[0], size, &ptr))
-                     ? ptr
-                     : NULL;
-        };
-
-        system_deallocator_ = [](void* ptr) {
-          core::Runtime::runtime_singleton_->FreeMemory(ptr);
-        };
-      }
+      system_deallocator_ =
+          [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
 
       BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
     }
@@ -307,16 +300,9 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 }
 
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
-                                     void** ptr) {
-  return AllocateMemory(false, region, size, ptr);
-}
-
-hsa_status_t Runtime::AllocateMemory(bool restrict_access,
-                                     const MemoryRegion* region, size_t size,
+                                     MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
-  const amd::MemoryRegion* amd_region =
-      reinterpret_cast<const amd::MemoryRegion*>(region);
-  hsa_status_t status = amd_region->Allocate(restrict_access, size, address);
+  hsa_status_t status = region->Allocate(size, alloc_flags, address);
 
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
