@@ -43,7 +43,8 @@
 #ifndef HSA_RUNTME_CORE_INC_CHECKED_H_
 #define HSA_RUNTME_CORE_INC_CHECKED_H_
 
-#include "stdint.h"
+#include <stdint.h>
+#include <stdlib.h>
 
 namespace core {
 

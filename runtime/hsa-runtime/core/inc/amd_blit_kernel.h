@@ -44,6 +44,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_BLIT_KERNEL_H_
 
 #include <map>
+#include <mutex>
 #include <stdint.h>
 
 #include "core/inc/blit.h"

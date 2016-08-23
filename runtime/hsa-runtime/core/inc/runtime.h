@@ -151,24 +151,13 @@ class Runtime {
   ///
   /// @param [in] region Pointer to region object.
   /// @param [in] size Allocation size in bytes.
+  /// @param [in] alloc_flags Modifiers to pass to MemoryRegion allocator.
   /// @param [out] address Pointer to store the allocation result.
   ///
   /// @retval ::HSA_STATUS_SUCCESS If allocation is successful.
   hsa_status_t AllocateMemory(const MemoryRegion* region, size_t size,
+                              MemoryRegion::AllocateFlags alloc_flags,
                               void** address);
-
-  /// @brief Allocate memory on a particular region with option to restrict
-  /// access to the owning agent.
-  ///
-  /// @param [in] restrict_access If true, the allocation result would only be
-  /// accessible to the agent(s) that own the region object.
-  /// @param [in] region Pointer to region object.
-  /// @param [in] size Allocation size in bytes.
-  /// @param [out] address Pointer to store the allocation result.
-  ///
-  /// @retval ::HSA_STATUS_SUCCESS If allocation is successful.
-  hsa_status_t AllocateMemory(bool restrict_access, const MemoryRegion* region,
-                              size_t size, void** address);
 
   /// @brief Free memory previously allocated with AllocateMemory.
   ///
@@ -292,7 +281,8 @@ class Runtime {
 
   amd::hsa::code::AmdHsaCodeManager* code_manager() { return &code_manager_; }
 
-  std::function<void*(size_t, size_t)>& system_allocator() {
+  std::function<void*(size_t, size_t, MemoryRegion::AllocateFlags)>&
+  system_allocator() {
     return system_allocator_;
   }
 
@@ -446,7 +436,8 @@ class Runtime {
   std::map<const void*, AllocationRegion> allocation_map_;
 
   // Allocator using ::system_region_
-  std::function<void*(size_t, size_t)> system_allocator_;
+  std::function<void*(size_t, size_t, MemoryRegion::AllocateFlags)>
+      system_allocator_;
 
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;

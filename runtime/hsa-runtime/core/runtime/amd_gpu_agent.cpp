@@ -124,14 +124,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   // Populate region list.
   InitRegionList();
 
-  // Reserve memory for scratch.
-  InitScratchPool();
-
   // Populate cache list.
   InitCacheList();
-
-  // Bind the second-level trap handler to this node.
-  BindTrapHandler();
 }
 
 GpuAgent::~GpuAgent() {
@@ -214,21 +208,13 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   }
 
   // Allocate a GPU-visible buffer for the shader.
-  HsaMemFlags code_buf_flags = {0};
-  code_buf_flags.ui32.HostAccess = 1;
-  code_buf_flags.ui32.ExecuteAccess = 1;
-  code_buf_flags.ui32.NoSubstitute = 1;
-
   size_t header_size =
       (assemble_target == AssembleTarget::AQL ? sizeof(amd_kernel_code_t) : 0);
   code_buf_size = AlignUp(header_size + asic_shader->size, 0x1000);
 
-  HSAKMT_STATUS err =
-      hsaKmtAllocMemory(node_id(), code_buf_size, code_buf_flags, &code_buf);
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Trap) failed");
-
-  err = hsaKmtMapMemoryToGPU(code_buf, code_buf_size, NULL);
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtMapMemoryToGPU(Trap) failed");
+  code_buf = core::Runtime::runtime_singleton_->system_allocator()(
+      code_buf_size, 0x1000, core::MemoryRegion::AllocateExecutable);
+  assert(code_buf != NULL && "Code buffer allocation failed");
 
   memset(code_buf, 0, code_buf_size);
 
@@ -265,8 +251,7 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
 }
 
 void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) const {
-  hsaKmtUnmapMemoryToGPU(code_buf);
-  hsaKmtFreeMemory(code_buf, code_buf_size);
+  core::Runtime::runtime_singleton_->system_deallocator()(code_buf);
 }
 
 void GpuAgent::InitRegionList() {
@@ -415,7 +400,8 @@ bool GpuAgent::InitEndTsPool() {
 
   uint64_t* buff = NULL;
   if (HSA_STATUS_SUCCESS !=
-      runtime->AllocateMemory(true, local_region_, alloc_size,
+      runtime->AllocateMemory(local_region_, alloc_size,
+                              MemoryRegion::AllocateRestrict,
                               reinterpret_cast<void**>(&buff))) {
     return false;
   }
@@ -589,6 +575,10 @@ void GpuAgent::InitDma() {
 }
 
 hsa_status_t GpuAgent::PostToolsInit() {
+  // Defer memory allocation until agents have been discovered.
+  InitScratchPool();
+  BindTrapHandler();
+
   // Defer utility queue creation to allow tools to intercept.
   queues_[QueueUtility] = CreateInterceptibleQueue();
 

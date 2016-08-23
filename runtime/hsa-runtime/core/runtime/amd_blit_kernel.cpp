@@ -537,7 +537,8 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   kernarg_async_ = reinterpret_cast<KernelArgs*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16), 16));
+          queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16), 16,
+          core::MemoryRegion::AllocateNoFlags));
 
   kernarg_async_mask_ = queue_->public_handle()->size - 1;
 

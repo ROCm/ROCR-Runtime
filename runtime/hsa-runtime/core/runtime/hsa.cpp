@@ -903,8 +903,8 @@ hsa_status_t
   const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
   IS_VALID(mem_region);
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size,
-                                                           ptr);
+  return core::Runtime::runtime_singleton_->AllocateMemory(
+      mem_region, size, core::MemoryRegion::AllocateNoFlags, ptr);
 }
 
 hsa_status_t hsa_memory_free(void* ptr) {
