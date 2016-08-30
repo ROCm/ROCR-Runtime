@@ -657,13 +657,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
     {
-      // This code assumes that UTF-16 HsaNodeProperties.MarketingName is
-      // actually encoded in 7-bit ASCII, and the runtime output is 7-bit ASCII
-      // in bytes.
+      // The code copies from HsaNodeProperties.AMDName is encoded in
+      // 7-bit ASCII as the runtime output is 7-bit ASCII in bytes.
       std::memset(value, 0, kNameSize);
       char* temp = reinterpret_cast<char*>(value);
-      for (uint32_t i = 0; properties_.MarketingName[i] != 0 && i < kNameSize - 1; i++)
-        temp[i] = properties_.MarketingName[i];
+      for (uint32_t i = 0; properties_.AMDName[i] != 0 && i < kNameSize - 1; i++)
+        temp[i] = properties_.AMDName[i];
       break;
     }
     case HSA_AGENT_INFO_VENDOR_NAME:

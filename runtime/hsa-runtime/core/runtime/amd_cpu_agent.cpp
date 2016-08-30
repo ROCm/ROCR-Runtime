@@ -191,10 +191,14 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
-    case HSA_AGENT_INFO_NAME:
-      // TODO: hardcode for now, wait until SWDEV-88894 implemented
+    case HSA_AGENT_INFO_NAME: {
+      // The code copies from HsaNodeProperties.AMDName is encoded in
+      // 7-bit ASCII as the runtime output is 7-bit ASCII in bytes.
       std::memset(value, 0, kNameSize);
-      std::memcpy(value, "CPU Device", sizeof("CPU Device"));
+      char* temp = reinterpret_cast<char*>(value);
+      for (uint32_t i = 0; properties_.AMDName[i] != 0 && i < kNameSize - 1; i++)
+        temp[i] = properties_.AMDName[i];
+      }
       break;
     case HSA_AGENT_INFO_VENDOR_NAME:
       // TODO: hardcode for now, wait until SWDEV-88894 implemented
