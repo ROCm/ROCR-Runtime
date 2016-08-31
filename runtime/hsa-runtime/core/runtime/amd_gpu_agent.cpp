@@ -653,10 +653,6 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   const size_t kNameSize = 64;  // agent, and vendor name size limit
-
-  const core::ExtensionEntryPoints& extensions =
-      core::Runtime::runtime_singleton_->extensions_;
-
   const size_t attribute_u = static_cast<size_t>(attribute);
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME:
