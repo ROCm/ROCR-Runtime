@@ -1546,13 +1546,9 @@ AmdHsaCodeManager *GetCodeManager() {
   }
   assert(*serialized_code_object);
 
-  status = HSA::hsa_memory_copy(
-      *serialized_code_object, code->ElfData(), code->ElfSize());
-  if (status != HSA_STATUS_SUCCESS) {
-    return status;
-  }
-
+  memcpy(*serialized_code_object, code->ElfData(), code->ElfSize());
   *serialized_code_object_size = code->ElfSize();
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -1585,14 +1581,11 @@ AmdHsaCodeManager *GetCodeManager() {
   }
   assert(code_object_alloc_data);
 
-  status = HSA::hsa_memory_copy(
+  memcpy(
       code_object_alloc_data, serialized_code_object,
       serialized_code_object_size);
-  if (status != HSA_STATUS_SUCCESS) {
-    return status;
-  }
-
   code_object->handle = reinterpret_cast<uint64_t>(code_object_alloc_data);
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -1845,7 +1838,7 @@ hsa_status_t hsa_code_object_reader_destroy(
 
   // Invoke non-deprecated API.
   hsa_status_t status = HSA::hsa_executable_create_alt(
-    profile, HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, options, executable);
+      profile, HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, options, executable);
   if (status != HSA_STATUS_SUCCESS) {
     return status;
   }
