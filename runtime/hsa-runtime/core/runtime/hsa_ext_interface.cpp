@@ -264,7 +264,6 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
   void* ptr;
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_impl");
-  bool libIsImage = (ptr != NULL);
   if (ptr != NULL) {
     assert(image_api.hsa_ext_image_get_capability_fn ==
                (decltype(::hsa_ext_image_get_capability)*)hsa_ext_null &&
