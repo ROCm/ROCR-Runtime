@@ -40,45 +40,119 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-// Helpers to use non-atomic types with C++11 atomic operations.
-
+/*
+  Helpers to use native types with C++11 atomic operations.
+  Fixes GCC builtin functionality for x86 with respect to WC and non-temporal
+  stores.
+*/
 #ifndef HSA_RUNTIME_CORE_UTIL_ATOMIC_HELPERS_H_
 #define HSA_RUNTIME_CORE_UTIL_ATOMIC_HELPERS_H_
 
 #include <atomic>
 #include "utils.h"
 
-/// @brief: Special assert used here to check each atomic variable for lock free
-/// implementation.
-/// ANY locked atomics are very likely incompatable with out-of-library
-/// concurrent access (HW access for instance)
-#define lockless_check(exp) assert(exp)
+//ALWAYS_CONSERVATIVE will very likely overfence your code.
+//For use as a debugging aid only.
+#define ALWAYS_CONSERVATIVE 0
+
+#if !ALWAYS_CONSERVATIVE
+#ifdef __x86_64
+#define X64_ORDER_WC 1
+#endif
+#if X64_ORDER_WC
+#include <xmmintrin.h>
+#endif
+#endif
 
 namespace atomic {
-/// @brief: Checks if type T is compatible with its atomic representation.
-/// @param: ptr(Input), a pointer to type T for check.
-/// @return: void.
+
+static constexpr int c11ToBuiltInFlags(std::memory_order order)
+{
+#if ALWAYS_CONSERVATIVE
+  return __ATOMIC_RELAXED;
+#elif X64_ORDER_WC
+  return __ATOMIC_RELAXED;
+#else
+  return (order == std::memory_order_relaxed) ? __ATOMIC_RELAXED :
+    (order == std::memory_order_acquire) ? __ATOMIC_ACQUIRE :
+    (order == std::memory_order_release) ? __ATOMIC_RELEASE :
+    (order == std::memory_order_seq_cst) ? __ATOMIC_SEQ_CST :
+    (order == std::memory_order_consume) ? __ATOMIC_CONSUME :
+    (order == std::memory_order_acq_rel) ? __ATOMIC_ACQ_REL :
+    __ATOMIC_SEQ_CST;
+#endif
+}
+
+static __forceinline void PreFence(std::memory_order order) {
+#if ALWAYS_CONSERVATIVE
+  switch (order) {
+    case std::memory_order_release:
+    case std::memory_order_seq_cst:
+    case std::memory_order_acq_rel:
+      __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    default:;
+  }
+#elif X64_ORDER_WC
+  switch (order) {
+    case std::memory_order_release:
+    case std::memory_order_seq_cst:
+    case std::memory_order_acq_rel:
+      _mm_sfence();
+    default:;
+  }
+#endif
+}
+
+static __forceinline void PostFence(std::memory_order order) {
+#if ALWAYS_CONSERVATIVE
+  switch (order) {
+    case std::memory_order_seq_cst:
+    case std::memory_order_acq_rel:
+    case std::memory_order_acquire:
+      __atomic_thread_fence(__ATOMIC_SEQ_CST);
+    default:;
+  }
+#elif X64_ORDER_WC
+  switch (order) {
+    case std::memory_order_seq_cst:
+      return _mm_mfence();
+    case std::memory_order_acq_rel:
+    case std::memory_order_acquire:
+      return _mm_lfence();
+    default:;
+  }
+#endif
+}
+
+static __forceinline void Fence(std::memory_order order=std::memory_order_seq_cst) {
+#if ALWAYS_CONSERVATIVE
+  __atomic_thread_fence(__ATOMIC_SEQ_CST);
+#elif X64_ORDER_WC
+  switch (order) {
+    case std::memory_order_seq_cst:
+    case std::memory_order_acq_rel:
+      return _mm_mfence();
+    case std::memory_order_acquire:
+      return _mm_lfence();
+    case std::memory_order_release:
+      return _mm_sfence();
+    default:;
+  }
+#else
+  std::atomic_thread_fence(order);
+#endif
+}
+
 template <class T>
 static __forceinline void BasicCheck(const T* ptr) {
-  static_assert(sizeof(T) == sizeof(std::atomic<T>),
-                "Type is size incompatible with its atomic representation!");
-  lockless_check(
-      reinterpret_cast<const std::atomic<T>*>(ptr)->is_lock_free() &&
-      "Atomic operation is not lock free!  Use may conflict with peripheral HW "
-      "atomics!");
+  constexpr bool value = __atomic_always_lock_free(sizeof(T), 0);
+  static_assert(value, "Atomic type may not be compatible with peripheral atomics.");
 };
 
-/// @brief: function overloading, for more info, see previous one.
-/// @param: ptr(Input), a pointer to a volatile type.
-/// @return: void.
 template <class T>
 static __forceinline void BasicCheck(const volatile T* ptr) {
-  static_assert(sizeof(T) == sizeof(std::atomic<T>),
-                "Type is size incompatible with its atomic representation!");
-  lockless_check(
-      reinterpret_cast<const volatile std::atomic<T>*>(ptr)->is_lock_free() &&
-      "Atomic operation is not lock free!  Use may conflict with peripheral HW "
-      "atomics!");
+  constexpr bool value = __atomic_always_lock_free(sizeof(T), 0);
+  static_assert(value, "Atomic type may not be compatible with peripheral atomics.");
 };
 
 /// @brief: Load value of type T atomically with specified memory order.
@@ -89,8 +163,11 @@ template <class T>
 static __forceinline T
     Load(const T* ptr, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  const std::atomic<T>* aptr = reinterpret_cast<const std::atomic<T>*>(ptr);
-  return aptr->load(order);
+  T ret;
+  PreFence(order);
+  __atomic_load(ptr, &ret, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: function overloading, for more info, see previous one.
@@ -102,9 +179,11 @@ static __forceinline T
     Load(const volatile T* ptr,
          std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile const std::atomic<T>* aptr =
-      reinterpret_cast<volatile const std::atomic<T>*>(ptr);
-  return aptr->load(order);
+  T ret;
+  PreFence(order);
+  __atomic_load(ptr, &ret, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Store value of type T with specified memory order.
@@ -116,8 +195,9 @@ template <class T>
 static __forceinline void Store(
     T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  aptr->store(val, order);
+  PreFence(order);
+  __atomic_store(ptr, &val, c11ToBuiltInFlags(order));
+  PostFence(order);
 }
 
 /// @brief: Function overloading, for more info, see previous one.
@@ -130,9 +210,9 @@ static __forceinline void Store(
     volatile T* ptr, T val,
     std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  aptr->store(val, order);
+  PreFence(order);
+  __atomic_store(ptr, &val, c11ToBuiltInFlags(order));
+  PostFence(order);
 }
 
 /// @brief: Compare and swap value atomically with specified memory order.
@@ -146,8 +226,9 @@ static __forceinline T
     Cas(T* ptr, T val, T expected,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  aptr->compare_exchange_strong(expected, val, order);
+  PreFence(order);
+  __atomic_compare_exchange(ptr, &expected, &val, false, c11ToBuiltInFlags(order), __ATOMIC_RELAXED);
+  PostFence(order);
   return expected;
 }
 
@@ -162,9 +243,9 @@ static __forceinline T
     Cas(volatile T* ptr, T val, T expected,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  aptr->compare_exchange_strong(expected, val, order);
+  PreFence(order);
+  __atomic_compare_exchange(ptr, &expected, &val, false, c11ToBuiltInFlags(order), __ATOMIC_RELAXED);
+  PostFence(order);
   return expected;
 }
 
@@ -178,8 +259,11 @@ static __forceinline T
     Exchange(T* ptr, T val,
              std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->exchange(val, order);
+  T ret;
+  PreFence(order);
+  __atomic_exchange(ptr, &val, &ret, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Function overloading, for more info, see previous one.
@@ -192,9 +276,11 @@ static __forceinline T
     Exchange(volatile T* ptr, T val,
              std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->exchange(val, order);
+  T ret;
+  PreFence(order);
+  __atomic_exchange(ptr, &val, &ret, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Add value to variable atomically with specified memory order.
@@ -206,8 +292,10 @@ template <class T>
 static __forceinline T
     Add(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_add(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_add(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Subtract value from the variable atomically with specified memory
@@ -220,8 +308,10 @@ template <class T>
 static __forceinline T
     Sub(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_sub(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_sub(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit And operation on variable atomically with specified memory
@@ -234,8 +324,10 @@ template <class T>
 static __forceinline T
     And(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_and(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_and(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit Or operation on variable atomically with specified memory order.
@@ -247,8 +339,10 @@ template <class T>
 static __forceinline T
     Or(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_or(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_or(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit Xor operation on variable atomically with specified memory
@@ -261,8 +355,10 @@ template <class T>
 static __forceinline T
     Xor(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_xor(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_xor(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Increase the value of variable atomically with specified memory
@@ -274,8 +370,10 @@ template <class T>
 static __forceinline T
     Increment(T* ptr, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_add(1, order);
+  PreFence(order);
+  T ret = __atomic_fetch_add(ptr, 1, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Decrease the value of the variable atomically with specified memory
@@ -287,8 +385,10 @@ template <class T>
 static __forceinline T
     Decrement(T* ptr, std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  std::atomic<T>* aptr = reinterpret_cast<std::atomic<T>*>(ptr);
-  return aptr->fetch_sub(1, order);
+  PreFence(order);
+  T ret = __atomic_fetch_sub(ptr, 1, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Add value to variable atomically with specified memory order.
@@ -301,9 +401,10 @@ static __forceinline T
     Add(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_add(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_add(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Subtract value from the variable atomically with specified memory
@@ -317,9 +418,10 @@ static __forceinline T
     Sub(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_sub(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_sub(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit And operation on variable atomically with specified memory
@@ -333,9 +435,10 @@ static __forceinline T
     And(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_and(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_and(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit Or operation on variable atomically with specified memory order.
@@ -347,9 +450,10 @@ template <class T>
 static __forceinline T Or(volatile T* ptr, T val,
                           std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_or(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_or(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Bit Xor operation on variable atomically with specified memory
@@ -363,9 +467,10 @@ static __forceinline T
     Xor(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_xor(val, order);
+  PreFence(order);
+  T ret = __atomic_fetch_xor(ptr, val, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Increase the value of variable atomically with specified memory
@@ -378,9 +483,10 @@ static __forceinline T
     Increment(volatile T* ptr,
               std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_add(1, order);
+  PreFence(order);
+  T ret = __atomic_fetch_add(ptr, 1, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 
 /// @brief: Decrease the value of the variable atomically with specified memory
@@ -393,13 +499,19 @@ static __forceinline T
     Decrement(volatile T* ptr,
               std::memory_order order = std::memory_order_relaxed) {
   BasicCheck<T>(ptr);
-  volatile std::atomic<T>* aptr =
-      reinterpret_cast<volatile std::atomic<T>*>(ptr);
-  return aptr->fetch_sub(1, order);
+  PreFence(order);
+  T ret = __atomic_fetch_sub(ptr, 1, c11ToBuiltInFlags(order));
+  PostFence(order);
+  return ret;
 }
 }
 
-// Remove special assert to avoid name polution
-#undef lockless_check
+#ifdef X64_ORDER_WC
+#undef X64_ORDER_WC
+#endif
+
+#ifdef ALWAYS_CONSERVATIVE
+#undef ALWAYS_CONSERVATIVE
+#endif
 
 #endif  // HSA_RUNTIME_CORE_UTIL_ATOMIC_HELPERS_H_
