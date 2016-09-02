@@ -661,6 +661,26 @@ hsaKmtGetTileConfig(
     HsaGpuTileConfig*   config      // IN & OUT
     );
 
+/**
+  Returns information about pointers
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueryPointerInfo(
+    const void *        Pointer,        //IN
+    HsaPointerInfo *    PointerInfo     //OUT
+    );
+
+/**
+  Associates user data with a memory allocation
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetMemoryUserData(
+    const void *    Pointer,    //IN
+    void *          UserData    //IN
+    );
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif

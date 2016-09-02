@@ -48,6 +48,8 @@ hsaKmtMapGraphicHandle;
 hsaKmtUnmapGraphicHandle;
 hsaKmtSetTrapHandler;
 hsaKmtGetTileConfig;
+hsaKmtQueryPointerInfo;
+hsaKmtSetMemoryUserData;
 
 local: *;
 };
