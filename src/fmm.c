@@ -1075,6 +1075,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	pacc = pci_alloc();
 	pci_init(pacc);
 	while (i < NumNodes) {
+		memset(&props, 0, sizeof(props));
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
