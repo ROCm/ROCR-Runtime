@@ -52,7 +52,8 @@ void fmm_destroy_process_apertures(void);
  */
 void* fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes);
 void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags);
-void* fmm_allocate_host(uint64_t MemorySizeInBytes, HsaMemFlags flags);
+void* fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
+			HsaMemFlags flags);
 void* fmm_open_graphic_handle(uint32_t gpu_id,
         int32_t graphic_device_handle,
         uint32_t graphic_handle,
@@ -63,6 +64,8 @@ void fmm_release(void* address);
 int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address);
 int fmm_unmap_from_gpu(void *address);
 bool fmm_get_handle(void *address, uint64_t *handle);
+HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info);
+HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data);
 
 /* Topology interface*/
 HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);

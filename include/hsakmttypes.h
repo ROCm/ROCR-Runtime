@@ -982,6 +982,28 @@ typedef struct _HsaGpuTileConfig
     HSAuint32 Reserved[7]; /* Round up to 16 dwords for future extension */
 } HsaGpuTileConfig;
 
+typedef enum _HSA_POINTER_TYPE {
+    HSA_POINTER_UNKNOWN = 0,
+    HSA_POINTER_ALLOCATED = 1,           // Allocated with hsaKmtAllocMemory (except scratch)
+    HSA_POINTER_REGISTERED_USER = 2,     // Registered user pointer
+    HSA_POINTER_REGISTERED_GRAPHICS = 3  // Registered graphics buffer
+                                         // (hsaKmtRegisterGraphicsToNodes)
+} HSA_POINTER_TYPE;
+
+typedef struct _HsaPointerInfo {
+    HSA_POINTER_TYPE   Type;             // Pointer type
+    HSAuint32          Node;             // Node where the memory is located
+    HsaMemFlags        MemFlags;         // Only valid for HSA_POINTER_ALLOCATED
+    void               *CPUAddress;      // Start address for CPU access
+    HSAuint64          GPUAddress;       // Start address for GPU access
+    HSAuint64          SizeInBytes;      // Size in bytes
+    HSAuint32          NRegisteredNodes; // Number of nodes the memory is registered to
+    HSAuint32          NMappedNodes;     // Number of nodes the memory is mapped to
+    const HSAuint32    *RegisteredNodes; // Array of registered nodes
+    const HSAuint32    *MappedNodes;     // Array of mapped nodes
+    void               *UserData;        // User data associated with the memory
+} HsaPointerInfo;
+
 #pragma pack(pop, hsakmttypes_h)
 
 

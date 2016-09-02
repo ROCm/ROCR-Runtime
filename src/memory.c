@@ -133,7 +133,8 @@ hsaKmtAllocMemory(
 	}
 
 	if (gpu_id == 0 && !MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_host(SizeInBytes, MemFlags);
+		*MemoryAddress = fmm_allocate_host(PreferredNode, SizeInBytes,
+						MemFlags);
 
 		if (*MemoryAddress == NULL)
 			return HSAKMT_STATUS_ERROR;
@@ -161,7 +162,8 @@ hsaKmtAllocMemory(
 	/* Backwards compatibility hack: Allocate system memory if app
 	 * asks for paged memory from a GPU node. */
 	if (gpu_id && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_host(SizeInBytes, MemFlags);
+		*MemoryAddress = fmm_allocate_host(PreferredNode, SizeInBytes,
+						MemFlags);
 
 		if (*MemoryAddress == NULL)
 			return HSAKMT_STATUS_ERROR;
@@ -421,4 +423,26 @@ hsaKmtGetTileConfig(
 	config->NumRanks = args.num_ranks;
 
 	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueryPointerInfo(
+	const void	*Pointer,	/* IN */
+	HsaPointerInfo	*PointerInfo	/* OUT */
+)
+{
+	if (!PointerInfo)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	return fmm_get_mem_info(Pointer, PointerInfo);
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetMemoryUserData(
+	const void	*Pointer,	/* IN */
+	void		*UserData	/* IN */
+)
+{
+	return fmm_set_mem_user_data(Pointer, UserData);
 }
