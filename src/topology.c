@@ -432,7 +432,7 @@ bool topology_is_dgpu(uint16_t device_id)
 }
 
 static HSAKMT_STATUS
-topology_get_cpu_model_name(HsaNodeProperties *props) {
+topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
 	FILE *fd;
 	char read_buf[256], cpu_model_name[HSA_PUBLIC_NAME_SIZE];
 	const char *p;
@@ -480,7 +480,8 @@ topology_get_cpu_model_name(HsaNodeProperties *props) {
 			/* Set CPU model name only if corresponding apic id */
 			if (props->CComputeIdLo == apic_id) {
 				/* Retrieve the CAL name of CPU node */
-				strncpy( (char *) props->AMDName, cpu_model_name, sizeof(props->AMDName));
+				if (!is_apu)
+					strncpy( (char *) props->AMDName, cpu_model_name, sizeof(props->AMDName));
 				/* Convert from UTF8 to UTF16 */
 				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 					props->MarketingName[i] = cpu_model_name[i];
@@ -666,19 +667,29 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 
 		/* Retrieve the CAL name of the node */
 		strncpy( (char *) props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName) );
-		/* Retrieve the marketing name of the node using pcilib,
-		 * convert UTF8 to UTF16
-		 */
-		name = pci_lookup_name(pacc, namebuf, sizeof(namebuf), PCI_LOOKUP_DEVICE,
-		 					   props->VendorId, props->DeviceId);
-
-		for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
-			props->MarketingName[i] = name[i];
-		props->MarketingName[i] = '\0';
+		if (props->NumCPUCores) {
+			/* Is APU node */
+			ret = topology_get_cpu_model_name(props, true);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+			{
+				printf("Failed to get APU Model Name from %s\n", PROC_CPUINFO_PATH);
+				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
+			}
+		} else {
+			/* Is dGPU Node
+			 * Retrieve the marketing name of the node using pcilib,
+			 * convert UTF8 to UTF16
+			 */
+			name = pci_lookup_name(pacc, namebuf, sizeof(namebuf), PCI_LOOKUP_DEVICE,
+								   props->VendorId, props->DeviceId);
+			for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
+				props->MarketingName[i] = name[i];
+			props->MarketingName[i] = '\0';
+		}
 	} else {
-		/* Is CPU node */
+		/* Is CPU Node */
 		if (!props->NumFComputeCores || !props->DeviceId) {
-			ret = topology_get_cpu_model_name(props);
+			ret = topology_get_cpu_model_name(props, false);
 			if (ret != HSAKMT_STATUS_SUCCESS)
 			{
 				printf("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
