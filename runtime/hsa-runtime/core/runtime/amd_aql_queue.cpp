@@ -405,11 +405,12 @@ void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
   if (legacy_dispatch_id > amd_queue_.max_legacy_doorbell_dispatch_id_plus_1) {
     // Record the most recent packet index used in a doorbell submission.
     // This field will be interpreted as a write index upon HW queue connect.
-    // Must be visible to the HW before sending the doorbell to avoid a race.
+    // Make ring buffer visible to HW before updating write index.
     atomic::Store(&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1,
-                  legacy_dispatch_id, std::memory_order_relaxed);
+                  legacy_dispatch_id, std::memory_order_release);
 
     // Write the dispatch id to the hardware MMIO doorbell.
+    // Make write index visible to HW before sending doorbell.
     if (doorbell_type_ == 0) {
       // The legacy GFXIP 7 hardware doorbell expects:
       //   1. Packet index wrapped to a point within the ring buffer
@@ -417,18 +418,20 @@ void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
       uint64_t queue_size_mask =
           ((1 + queue_full_workaround_) * amd_queue_.hsa_queue.size) - 1;
 
-      *(volatile uint32_t*)signal_.legacy_hardware_doorbell_ptr =
-          uint32_t((legacy_dispatch_id & queue_size_mask) *
-                   (sizeof(core::AqlPacket) / sizeof(uint32_t)));
+      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
+                    uint32_t((legacy_dispatch_id & queue_size_mask) *
+                             (sizeof(core::AqlPacket) / sizeof(uint32_t))),
+                    std::memory_order_release);
     } else if (doorbell_type_ == 1) {
-      *(volatile uint32_t*)signal_.legacy_hardware_doorbell_ptr =
-          uint32_t(legacy_dispatch_id);
+      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
+                    uint32_t(legacy_dispatch_id), std::memory_order_release);
     } else {
       assert(false && "Agent has unsupported doorbell semantics");
     }
   }
 
   // Release spinlock protecting the legacy doorbell.
+  // Also ensures timely delivery of (write-combined) doorbell to HW.
   atomic::Store(&amd_queue_.legacy_doorbell_lock, 0U,
                 std::memory_order_release);
 }
