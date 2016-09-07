@@ -69,6 +69,7 @@ global:
 	hsa_signal_group_create;
 	hsa_signal_group_destroy;
 	hsa_signal_group_wait_any_scacquire;
+	hsa_signal_group_wait_any_relaxed;
 	hsa_signal_and_relaxed;
 	hsa_signal_and_scacquire;
 	hsa_signal_and_acquire;
