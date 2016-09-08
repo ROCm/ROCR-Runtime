@@ -139,6 +139,12 @@ static svm_t svm = {
 	INIT_MANAGEBLE_APERTURE(0, 0)
 };
 
+/* On APU, for memory allocated on the system memory that GPU doesn't access
+ * via GPU driver, they are not managed by GPUVM. cpuvm_aperture keeps track
+ * of this part of memory.
+ */
+static manageble_aperture_t cpuvm_aperture = INIT_MANAGEBLE_APERTURE(0, 0);
+
 /* GPU node array for default mappings */
 static uint32_t all_gpu_id_array_size = 0;
 static uint32_t *all_gpu_id_array = NULL;
@@ -230,6 +236,35 @@ static void vm_remove_object(manageble_aperture_t *app, vm_object_t *object)
 	vm_object_t *next;
 	vm_object_t *prev;
 
+	/* Free allocations inside the object */
+	if (object->registered_device_id_array_size > 0) {
+		if (object->mapped_device_id_array ==
+			object->registered_device_id_array) {
+			object->mapped_device_id_array_size = 0;
+			object->mapped_device_id_array = NULL;
+			object->mapped_node_id_array = NULL;
+		}
+		free(object->registered_device_id_array);
+		object->registered_device_id_array_size = 0;
+	}
+	if (object->mapped_device_id_array != NULL &&
+		object->mapped_device_id_array_size > 0 &&
+		object->mapped_device_id_array != all_gpu_id_array &&
+		object->mapped_device_id_array != object->registered_device_id_array)
+	{
+		free(object->mapped_device_id_array);
+		object->mapped_device_id_array_size = 0;
+	}
+	if (object->metadata)
+		free(object->metadata);
+
+	if (object->registered_node_id_array)
+		free(object->registered_node_id_array);
+	object->registered_node_id_array = NULL;
+	if (object->mapped_node_id_array)
+		free(object->mapped_node_id_array);
+	object->mapped_node_id_array = NULL;
+
 	next = object->next;
 	prev = object->prev;
 
@@ -242,7 +277,6 @@ static void vm_remove_object(manageble_aperture_t *app, vm_object_t *object)
 		next->prev = prev;
 
 	free(object);
-
 }
 
 static void vm_add_area_after(vm_area_t *after_this, vm_area_t *new_area)
@@ -491,6 +525,35 @@ static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
 			return i;
 
 	return -1;
+}
+
+static manageble_aperture_t *fmm_find_aperture(const void *address)
+{
+	manageble_aperture_t *aperture = NULL;
+	uint32_t i;
+
+	if (is_dgpu) {
+		if (address >= svm.dgpu_aperture.base &&
+			address <= svm.dgpu_aperture.limit)
+			aperture = &svm.dgpu_aperture;
+		else if (address >= svm.dgpu_alt_aperture.base &&
+			address <= svm.dgpu_alt_aperture.limit)
+			aperture = &svm.dgpu_alt_aperture;
+		else
+		/* Not in SVM, it can be system memory registered by userptr */
+			aperture = &svm.dgpu_aperture;
+	}
+	else { /* APU */
+		for (i = 0; i < gpu_mem_count; i++) {
+			if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
+				(address <= gpu_mem[i].gpuvm_aperture.limit))
+				aperture = &gpu_mem[i].gpuvm_aperture;
+		}
+		if (!aperture) /* Not in GPUVM */
+			aperture = &cpuvm_aperture;
+	}
+
+	return aperture;
 }
 
 /* After allocating the memory, return the vm_object created for this memory.
@@ -832,6 +895,7 @@ static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 	int err;
 	HSAuint64 page_size;
 	void *mem = NULL;
+	vm_object_t *vm_obj;
 
 	page_size = PageSizeFromFlags(flags.ui32.PageSize);
 	err = posix_memalign(&mem, page_size, MemorySizeInBytes);
@@ -847,6 +911,14 @@ static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 			return NULL;
 		}
 	}
+
+	pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
+	vm_obj = aperture_allocate_object(&cpuvm_aperture, mem, 0,
+				      MemorySizeInBytes, flags.Value);
+	if (vm_obj)
+		vm_obj->node_id = 0; /* APU systems only have one CPU node */
+	pthread_mutex_unlock(&cpuvm_aperture.fmm_mutex);
+
 	return mem;
 }
 
@@ -994,34 +1066,6 @@ static void __fmm_release(void *address, manageble_aperture_t *aperture)
 		return;
 	}
 
-	if (object->registered_device_id_array_size > 0) {
-		if (object->mapped_device_id_array ==
-				object->registered_device_id_array) {
-			object->mapped_device_id_array_size = 0;
-			object->mapped_device_id_array = NULL;
-			object->mapped_node_id_array = NULL;
-		}
-		free(object->registered_device_id_array);
-		object->registered_device_id_array_size = 0;
-	}
-	if (object->mapped_device_id_array != NULL &&
-		object->mapped_device_id_array_size > 0 &&
-		object->mapped_device_id_array != all_gpu_id_array &&
-		object->mapped_device_id_array != object->registered_device_id_array)
-	{
-		free(object->mapped_device_id_array);
-		object->mapped_device_id_array_size = 0;
-	}
-	if (object->metadata)
-		free(object->metadata);
-
-	if (object->registered_node_id_array)
-		free(object->registered_node_id_array);
-	object->registered_node_id_array = NULL;
-	if (object->mapped_node_id_array)
-		free(object->mapped_node_id_array);
-	object->mapped_node_id_array = NULL;
-
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
 		/* Remove any CPU mapping, but keep the address range reserved */
@@ -1042,6 +1086,7 @@ void fmm_release(void *address)
 {
 	uint32_t i;
 	bool found = false;
+	vm_object_t *object;
 
 	for (i = 0; i < gpu_mem_count && !found; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
@@ -1076,10 +1121,17 @@ void fmm_release(void *address)
 	}
 
 	/*
-	 * If memory address isn't inside of any defined aperture - it refers
-	 * to the system memory
+	 * If memory address isn't inside of any defined GPU aperture - it
+	 * refers to the system memory
 	 */
 	if (!found) {
+		/* Release the vm object in CPUVM */
+		pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
+		object = vm_find_object_by_start_address(&cpuvm_aperture, address, 0);
+		if (object)
+			vm_remove_object(&cpuvm_aperture, object);
+		pthread_mutex_unlock(&cpuvm_aperture.fmm_mutex);
+		/* Free the memory from the system */
 		free(address);
 	}
 }
@@ -1267,6 +1319,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			svm.dgpu_alt_aperture.align = vm_alignment;
 		}
 	}
+
+	cpuvm_aperture.align = PAGE_SIZE;
+	cpuvm_aperture.limit = (void *)0x7FFFFFFFFFFF; /* 2^47 - 1 */
 
 	free(process_apertures);
 	return ret;
@@ -2448,17 +2503,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 
 	memset(info, 0, sizeof(HsaPointerInfo));
 
-	/* TODO: APU */
-
-	if (address >= svm.dgpu_aperture.base &&
-		address <= svm.dgpu_aperture.limit)
-		aperture = &svm.dgpu_aperture;
-	else if (address >= svm.dgpu_alt_aperture.base &&
-		address <= svm.dgpu_alt_aperture.limit)
-		aperture = &svm.dgpu_alt_aperture;
-	else
-		/* Not in SVM, it can be system memory registered by userptr */
-		aperture = &svm.dgpu_aperture;
+	aperture = fmm_find_aperture(address);
 
 	vm_obj = vm_find_object_by_address(aperture, address);
 	if (!vm_obj)
@@ -2530,13 +2575,7 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 	manageble_aperture_t *aperture;
 	vm_object_t *vm_obj;
 
-	/* TODO: APU */
-
-	if (mem >= svm.dgpu_alt_aperture.base &&
-		mem <= svm.dgpu_alt_aperture.limit)
-		aperture = &svm.dgpu_alt_aperture;
-	else
-		aperture = &svm.dgpu_aperture;
+	aperture = fmm_find_aperture(mem);
 
 	vm_obj = vm_find_object_by_start_address(aperture, mem, 0);
 	if (!vm_obj)
