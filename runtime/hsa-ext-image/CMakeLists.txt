@@ -122,6 +122,9 @@ include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/build/${LIBHSAIL_BUILD_FOLDER} )
+include_directories ( ${HSATHK_BUILD_INC_PATH} )
+
+link_directories (${HSATHK_BUILD_LIB_PATH})
 
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
@@ -164,6 +167,7 @@ target_link_libraries (
     PRIVATE ${LIBHSAILAMD}
     PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a
     PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
+    PRIVATE hsakmt
     c dl pthread rt
 )
 
