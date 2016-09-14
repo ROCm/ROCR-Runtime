@@ -252,6 +252,7 @@ static int num_subdirs(char *dirpath, char *prefix)
 	return count;
 }
 
+#if defined(__x86_64__) || defined(__i386__)
 /* cpuid instruction returns processor identification and feature information
  * to the EAX, EBX, ECX, and EDX registers, as determined by input entered in
  * EAX (in some cases, ECX as well).
@@ -307,6 +308,118 @@ static int get_count_order(unsigned int count)
 
 	return bit;
 }
+
+/* cpuid_find_num_cache_leaves - Use cpuid instruction to find out how many
+ *		cache leaves the CPU has.
+ *	@op - cpuid opcode to get cache information
+ *	Return - the number of cache leaves
+ */
+static int cpuid_find_num_cache_leaves(uint32_t op)
+{
+	union _cpuid_leaf_eax eax;
+	union _cpuid_leaf_ebx ebx;
+	unsigned int ecx;
+	unsigned int edx;
+	int idx = -1;
+
+	do {
+		++idx;
+		cpuid_count(op, idx, &eax.full, &ebx.full, &ecx, &edx);
+	} while (eax.split.type != CACHE_TYPE_NULL);
+	return idx;
+}
+
+/* cpuid_get_cpu_cache_info - Use cpuid instruction to get cache information
+ *	@op - cpuid opcode to get cache information
+ *	@cpu_ci - this parameter is an input and also an output.
+ *		  [IN] cpu_ci->num_caches: the number of caches of this cpu
+ *		  [OUT] cpu_ci->cache_info: to store cache info collected
+ */
+static void cpuid_get_cpu_cache_info(uint32_t op, cpu_cacheinfo_t *cpu_ci)
+{
+	union _cpuid_leaf_eax eax;
+	union _cpuid_leaf_ebx ebx;
+	uint32_t ecx;
+	uint32_t edx;
+	uint32_t index;
+	cacheinfo_t *this_leaf;
+
+	for (index = 0; index < cpu_ci->num_caches; index++) {
+		cpuid_count(op, index, &eax.full, &ebx.full, &ecx, &edx);
+		this_leaf = cpu_ci->cache_info + index;
+		this_leaf->hsa_cache_prop.ProcessorIdLow = cpu_ci->apicid;
+		this_leaf->num_threads_sharing =
+				eax.split.num_threads_sharing + 1;
+		this_leaf->hsa_cache_prop.CacheLevel = eax.split.level;
+		this_leaf->hsa_cache_prop.CacheType.ui32.CPU = 1;
+		if (eax.split.type & CACHE_TYPE_DATA )
+			this_leaf->hsa_cache_prop.CacheType.ui32.Data = 1;
+		if (eax.split.type & CACHE_TYPE_INST )
+			this_leaf->hsa_cache_prop.CacheType.ui32.Instruction = 1;
+		this_leaf->hsa_cache_prop.CacheLineSize =
+				ebx.split.coherency_line_size + 1;
+		this_leaf->hsa_cache_prop.CacheAssociativity =
+				ebx.split.ways_of_associativity + 1;
+		this_leaf->hsa_cache_prop.CacheLinesPerTag =
+				ebx.split.physical_line_partition + 1;
+		this_leaf->hsa_cache_prop.CacheSize = (ecx + 1) *
+				(ebx.split.coherency_line_size	   + 1) *
+				(ebx.split.physical_line_partition + 1) *
+				(ebx.split.ways_of_associativity   + 1);
+	}
+}
+
+/* find_cpu_cache_siblings - In the cache list, some caches may be listed more
+ *	than once if they are shared by multiple CPUs. Identify the cache's CPU
+ *	siblings, record it to SiblingMap[], then remove the duplicated cache by
+ *	changing the cache size to 0.
+ */
+static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
+{
+	cacheinfo_t *this_leaf, *leaf2;
+	uint32_t n, j, idx_msb, apicid1, apicid2;
+	cpu_cacheinfo_t *this_cpu, *cpu2;
+	uint32_t index;
+
+	for (n = 0; n < cpu_ci_list->len; n++) {
+		this_cpu = cpu_ci_list + n;
+		for (index = 0; index < this_cpu->num_caches; index++) {
+			this_leaf = this_cpu->cache_info + index;
+			/* CacheSize 0 means an invalid cache */
+			if (!this_leaf->hsa_cache_prop.CacheSize)
+				continue;
+			if (this_leaf->num_threads_sharing == 1) // no siblings
+				continue;
+			idx_msb = get_count_order(this_leaf->num_threads_sharing);
+			for (j = n + 1; j < cpu_ci_list->len; j++) {
+				cpu2 = cpu_ci_list + j;
+				leaf2 = cpu2->cache_info + index;
+				apicid1 = this_leaf->hsa_cache_prop.ProcessorIdLow;
+				apicid2 = leaf2->hsa_cache_prop.ProcessorIdLow;
+				if ((apicid2 >> idx_msb) != (apicid1 >> idx_msb))
+					continue;
+				/* A sibling leaf is found. Cache properties
+				 * use ProcIdLow as offset to represent siblings
+				 * in SiblingMap, so keep the lower apicid and
+				 * delete the other by changing CacheSize to 0.
+				 */
+				if (apicid1 < apicid2) {
+					this_leaf->hsa_cache_prop.SiblingMap[0] = 1;
+					this_leaf->hsa_cache_prop.SiblingMap[apicid2 - apicid1] = 1;
+					leaf2->hsa_cache_prop.CacheSize = 0;
+					cpu2->num_duplicated_caches++;
+				}
+				else {
+					leaf2->hsa_cache_prop.SiblingMap[0] = 1;
+					leaf2->hsa_cache_prop.SiblingMap[apicid1 - apicid2] = 1;
+					this_leaf->hsa_cache_prop.CacheSize = 0;
+					this_cpu->num_duplicated_caches++;
+				}
+			}
+		}
+	}
+}
+#endif /* X86 platform */
 
 static HSAKMT_STATUS
 topology_sysfs_get_generation(uint32_t *gen) {
@@ -765,117 +878,7 @@ err1:
 	return ret;
 }
 
-/* cpuid_find_num_cache_leaves - Use cpuid instruction to find out how many
- *		cache leaves the CPU has.
- *	@op - cpuid opcode to get cache information
- *	Return - the number of cache leaves
-*/
-static int cpuid_find_num_cache_leaves(uint32_t op)
-{
-	union _cpuid_leaf_eax eax;
-	union _cpuid_leaf_ebx ebx;
-	unsigned int ecx;
-	unsigned int edx;
-	int idx = -1;
-
-	do {
-		++idx;
-		cpuid_count(op, idx, &eax.full, &ebx.full, &ecx, &edx);
-	} while (eax.split.type != CACHE_TYPE_NULL);
-	return idx;
-}
-
-/* cpuid_get_cpu_cache_info - Use cpuid instruction to get cache information
- *	@op - cpuid opcode to get cache information
- *	@cpu_ci - this parameter is an input and also an output.
- *		  [IN] cpu_ci->num_caches: the number of caches of this cpu
- *		  [OUT] cpu_ci->cache_info: to store cache info collected
- */
-static void cpuid_get_cpu_cache_info(uint32_t op, cpu_cacheinfo_t *cpu_ci)
-{
-	union _cpuid_leaf_eax eax;
-	union _cpuid_leaf_ebx ebx;
-	uint32_t ecx;
-	uint32_t edx;
-	uint32_t index;
-	cacheinfo_t *this_leaf;
-
-	for (index = 0; index < cpu_ci->num_caches; index++) {
-		cpuid_count(op, index, &eax.full, &ebx.full, &ecx, &edx);
-		this_leaf = cpu_ci->cache_info + index;
-		this_leaf->hsa_cache_prop.ProcessorIdLow = cpu_ci->apicid;
-		this_leaf->num_threads_sharing =
-				eax.split.num_threads_sharing + 1;
-		this_leaf->hsa_cache_prop.CacheLevel = eax.split.level;
-		this_leaf->hsa_cache_prop.CacheType.ui32.CPU = 1;
-		if (eax.split.type & CACHE_TYPE_DATA )
-			this_leaf->hsa_cache_prop.CacheType.ui32.Data = 1;
-		if (eax.split.type & CACHE_TYPE_INST )
-			this_leaf->hsa_cache_prop.CacheType.ui32.Instruction = 1;
-		this_leaf->hsa_cache_prop.CacheLineSize =
-				ebx.split.coherency_line_size + 1;
-		this_leaf->hsa_cache_prop.CacheAssociativity =
-				ebx.split.ways_of_associativity + 1;
-		this_leaf->hsa_cache_prop.CacheLinesPerTag =
-				ebx.split.physical_line_partition + 1;
-		this_leaf->hsa_cache_prop.CacheSize = (ecx + 1) *
-				(ebx.split.coherency_line_size	   + 1) *
-				(ebx.split.physical_line_partition + 1) *
-				(ebx.split.ways_of_associativity   + 1);
-	}
-}
-
-/* find_cpu_cache_siblings - In the cache list, some caches may be listed more
- *	than once if they are shared by multiple CPUs. Identify the cache's CPU
- *	siblings, record it to SiblingMap[], then remove the duplicated cache by
- *	changing the cache size to 0.
- */
-static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
-{
-	cacheinfo_t *this_leaf, *leaf2;
-	uint32_t n, j, idx_msb, apicid1, apicid2;
-	cpu_cacheinfo_t *this_cpu, *cpu2;
-	uint32_t index;
-
-	for (n = 0; n < cpu_ci_list->len; n++) {
-		this_cpu = cpu_ci_list + n;
-		for (index = 0; index < this_cpu->num_caches; index++) {
-			this_leaf = this_cpu->cache_info + index;
-			/* CacheSize 0 means an invalid cache */
-			if (!this_leaf->hsa_cache_prop.CacheSize)
-				continue;
-			if (this_leaf->num_threads_sharing == 1) // no siblings
-				continue;
-			idx_msb = get_count_order(this_leaf->num_threads_sharing);
-			for (j = n + 1; j < cpu_ci_list->len; j++) {
-				cpu2 = cpu_ci_list + j;
-				leaf2 = cpu2->cache_info + index;
-				apicid1 = this_leaf->hsa_cache_prop.ProcessorIdLow;
-				apicid2 = leaf2->hsa_cache_prop.ProcessorIdLow;
-				if ((apicid2 >> idx_msb) != (apicid1 >> idx_msb))
-					continue;
-				/* A sibling leaf is found. Cache properties
-				 * use ProcIdLow as offset to represent siblings
-				 * in SiblingMap, so keep the lower apicid and
-				 * delete the other by changing CacheSize to 0.
-				 */
-				if (apicid1 < apicid2) {
-					this_leaf->hsa_cache_prop.SiblingMap[0] = 1;
-					this_leaf->hsa_cache_prop.SiblingMap[apicid2 - apicid1] = 1;
-					leaf2->hsa_cache_prop.CacheSize = 0;
-					cpu2->num_duplicated_caches++;
-				}
-				else {
-					leaf2->hsa_cache_prop.SiblingMap[0] = 1;
-					leaf2->hsa_cache_prop.SiblingMap[apicid1 - apicid2] = 1;
-					this_leaf->hsa_cache_prop.CacheSize = 0;
-					this_cpu->num_duplicated_caches++;
-				}
-			}
-		}
-	}
-}
-
+#if defined(__x86_64__) || defined(__i386__)
 /* topology_destroy_temp_cpu_cache_list - Free the memory allocated in
  *		topology_create_temp_cpu_cache_list().
  */
@@ -1043,6 +1046,23 @@ topology_get_cpu_cache_props(node_t *tbl, cpu_cacheinfo_t *cpu_ci_list)
 exit:
 	return ret;
 }
+#else /* not X86 */
+static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
+{
+}
+
+static HSAKMT_STATUS
+topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
+{
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS
+topology_get_cpu_cache_props(node_t *tbl, cpu_cacheinfo_t *cpu_ci_list)
+{
+	return HSAKMT_STATUS_SUCCESS;
+}
+#endif
 
 static HSAKMT_STATUS
 topology_sysfs_get_cache_props(uint32_t node_id, uint32_t cache_id, HsaCacheProperties *props) {
