@@ -187,22 +187,29 @@ hsa_status_t CpuAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, 
 }
 
 hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
-  const size_t kNameSize = 64;  // agent, and vendor name size limit
-
+  
+  // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
+  
   switch (attribute_u) {
-    case HSA_AGENT_INFO_NAME: {
-      // The code copies from HsaNodeProperties.AMDName is encoded in
-      // 7-bit ASCII as the runtime output is 7-bit ASCII in bytes.
-      std::memset(value, 0, kNameSize);
+    
+    // The code copies HsaNodeProperties.MarketingName a Unicode string
+    // which is encoded in UTF-16 as a 7-bit ASCII string. The value of
+    // HsaNodeProperties.MarketingName is obtained from the "model name"
+    // property of /proc/cpuinfo file
+    case HSA_AGENT_INFO_NAME:
+    case HSA_AMD_AGENT_INFO_PRODUCT_NAME: {
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       char* temp = reinterpret_cast<char*>(value);
-      for (uint32_t i = 0; properties_.AMDName[i] != 0 && i < kNameSize - 1; i++)
-        temp[i] = properties_.AMDName[i];
+      for (uint32_t idx = 0;
+           properties_.MarketingName[idx] != 0 && idx < HSA_PUBLIC_NAME_SIZE - 1; idx++) {
+        temp[idx] = (uint8_t)properties_.MarketingName[idx];
       }
       break;
+    }
     case HSA_AGENT_INFO_VENDOR_NAME:
       // TODO: hardcode for now, wait until SWDEV-88894 implemented
-      std::memset(value, 0, kNameSize);
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       std::memcpy(value, "CPU", sizeof("CPU"));
       break;
     case HSA_AGENT_INFO_FEATURE:
