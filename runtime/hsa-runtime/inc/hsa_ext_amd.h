@@ -111,7 +111,12 @@ typedef enum hsa_amd_agent_info_s {
   /**
    * Max Memory Clock, the return value type is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY = 0xA008
+  HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY = 0xA008,
+  /**
+   * Board name of Agent - populated from MarketingName of Kfd Node
+   * The value is an Ascii string of 64 chars.
+   */
+  HSA_AMD_AGENT_INFO_PRODUCT_NAME = 0xA009
 } hsa_amd_agent_info_t;
 
 /**

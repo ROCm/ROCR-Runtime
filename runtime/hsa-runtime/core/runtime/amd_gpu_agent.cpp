@@ -652,21 +652,24 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
 }
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
-  const size_t kNameSize = 64;  // agent, and vendor name size limit
+  
+  // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
+  
   switch (attribute_u) {
-    case HSA_AGENT_INFO_NAME:
-    {
-      // The code copies from HsaNodeProperties.AMDName is encoded in
-      // 7-bit ASCII as the runtime output is 7-bit ASCII in bytes.
-      std::memset(value, 0, kNameSize);
+    
+    // Build agent name by concatenating the Major, Minor and Stepping Ids
+    // of devices compute capability with a prefix of "gfx"
+    case HSA_AGENT_INFO_NAME: {
+      std::stringstream name;
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       char* temp = reinterpret_cast<char*>(value);
-      for (uint32_t i = 0; properties_.AMDName[i] != 0 && i < kNameSize - 1; i++)
-        temp[i] = properties_.AMDName[i];
+      name << "gfx" << isa_->GetMajorVersion() << isa_->GetMinorVersion() << isa_->GetStepping();
+      std::strcpy(temp, name.str().c_str());
       break;
     }
     case HSA_AGENT_INFO_VENDOR_NAME:
-      std::memset(value, 0, kNameSize);
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       std::memcpy(value, "AMD", sizeof("AMD"));
       break;
     case HSA_AGENT_INFO_FEATURE:
@@ -821,6 +824,18 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY:
       *((uint32_t*)value) = memory_max_frequency_;
       break;
+    
+    // The code copies HsaNodeProperties.MarketingName a Unicode string
+    // which is encoded in UTF-16 as a 7-bit ASCII string
+    case HSA_AMD_AGENT_INFO_PRODUCT_NAME: {
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      char* temp = reinterpret_cast<char*>(value);
+      for (uint32_t idx = 0;
+           properties_.MarketingName[idx] != 0 && idx < HSA_PUBLIC_NAME_SIZE - 1; idx++) {
+        temp[idx] = (uint8_t)properties_.MarketingName[idx];
+      }
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
