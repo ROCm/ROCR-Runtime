@@ -24,6 +24,7 @@
  */
 
 #include "libhsakmt.h"
+#include "fmm.h"
 #include "linux/kfd_ioctl.h"
 #include <stdlib.h>
 #include <string.h>
@@ -181,6 +182,7 @@ struct process_doorbells
 	pthread_mutex_t doorbells_mutex;
 };
 
+static unsigned int num_doorbells;
 static struct process_doorbells *doorbells;
 
 HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
@@ -199,15 +201,94 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 		doorbells[i].doorbells = NULL;
 		pthread_mutex_init(&doorbells[i].doorbells_mutex, NULL);
 	}
+
+	num_doorbells = NumNodes;
+
 	return ret;
 }
 
 void destroy_process_doorbells(void)
 {
-	if (doorbells) {
-		free(doorbells);
-		doorbells = NULL;
+	unsigned int i;
+
+	if (!doorbells)
+		return;
+
+	for (i = 0; i < num_doorbells; i++) {
+		if (doorbells[i].need_mmap)
+			continue;
+
+		if (topology_is_dgpu(get_device_id_by_node(i))) {
+			fmm_unmap_from_gpu(doorbells[i].doorbells);
+			fmm_release(doorbells[i].doorbells);
+		} else
+			munmap(doorbells[i].doorbells, DOORBELLS_PAGE_SIZE);
 	}
+
+	free(doorbells);
+	doorbells = NULL;
+	num_doorbells = 0;
+}
+
+static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
+				      HSAuint64 doorbell_offset)
+{
+	void *ptr;
+
+	ptr = mmap(0, DOORBELLS_PAGE_SIZE, PROT_READ|PROT_WRITE,
+		   MAP_SHARED, kfd_fd, doorbell_offset);
+
+	if (ptr == MAP_FAILED)
+		return HSAKMT_STATUS_ERROR;
+
+	doorbells[NodeId].need_mmap = false;
+	doorbells[NodeId].doorbells = ptr;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
+				       HSAuint64 doorbell_offset)
+{
+	void *ptr;
+
+	ptr = fmm_allocate_doorbell(gpu_id, DOORBELLS_PAGE_SIZE,
+				    doorbell_offset);
+
+	if (ptr == NULL)
+		return HSAKMT_STATUS_ERROR;
+
+	/* map for GPU access */
+	if (fmm_map_to_gpu(ptr, DOORBELLS_PAGE_SIZE, NULL)) {
+		fmm_release(ptr);
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	doorbells[NodeId].need_mmap = false;
+	doorbells[NodeId].doorbells = ptr;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
+				  HSAuint64 doorbell_offset)
+{
+	HSAKMT_STATUS status = HSAKMT_STATUS_SUCCESS;
+
+	pthread_mutex_lock(&doorbells[NodeId].doorbells_mutex);
+	if (!doorbells[NodeId].need_mmap) {
+		pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	if (topology_is_dgpu(get_device_id_by_node(NodeId)))
+		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_offset);
+	else
+		status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
+
+	pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
+
+	return status;
 }
 
 static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
@@ -432,7 +513,6 @@ hsaKmtCreateQueue(
 	uint16_t dev_id;
 	struct device_info *dev_info;
 	int err;
-	void* ptr;
 	CHECK_KFD_OPEN();
 
 	result = validate_nodeid(NodeId, &gpu_id);
@@ -495,24 +575,12 @@ hsaKmtCreateQueue(
 
 	q->queue_id = args.queue_id;
 
-	pthread_mutex_lock(&doorbells[NodeId].doorbells_mutex);
-
-	if (doorbells[NodeId].need_mmap) {
-		ptr = mmap(0, DOORBELLS_PAGE_SIZE, PROT_READ|PROT_WRITE,
-				MAP_SHARED, kfd_fd, args.doorbell_offset);
-
-		if (ptr == MAP_FAILED) {
-			pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
-			hsaKmtDestroyQueue(q->queue_id);
-			free_queue(q);
-			return HSAKMT_STATUS_ERROR;
-		}
-
-		doorbells[NodeId].need_mmap = false;
-		doorbells[NodeId].doorbells = ptr;
+	err = map_doorbell(NodeId, gpu_id, args.doorbell_offset);
+	if (err != HSAKMT_STATUS_SUCCESS) {
+		hsaKmtDestroyQueue(q->queue_id);
+		free_queue(q);
+		return HSAKMT_STATUS_ERROR;
 	}
-
-	pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 
 	QueueResource->QueueId = PORT_VPTR_TO_UINT64(q);
 	QueueResource->Queue_DoorBell = VOID_PTR_ADD32(doorbells[NodeId].doorbells, q->queue_id);
