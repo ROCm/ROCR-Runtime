@@ -52,6 +52,7 @@ void fmm_destroy_process_apertures(void);
  */
 void* fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes);
 void* fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags);
+void* fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes, uint64_t doorbell_offset);
 void* fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 			HsaMemFlags flags);
 void* fmm_open_graphic_handle(uint32_t gpu_id,

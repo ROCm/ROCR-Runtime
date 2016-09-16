@@ -905,6 +905,57 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 	return mem;
 }
 
+void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
+			    uint64_t doorbell_offset)
+{
+	manageble_aperture_t *aperture;
+	int32_t gpu_mem_id;
+	uint32_t ioc_flags;
+	void *mem;
+	vm_object_t *vm_obj = NULL;
+
+	/* Retrieve gpu_mem id according to gpu_id */
+	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+	if (gpu_mem_id < 0)
+		return NULL;
+
+	/* Use fine-grained aperture */
+	aperture = &svm.dgpu_alt_aperture;
+	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DOORBELL;
+
+	mem = __fmm_allocate_device(gpu_id, MemorySizeInBytes,
+			aperture, 0, NULL,
+			ioc_flags, &vm_obj);
+
+	if (mem && vm_obj) {
+		HsaMemFlags flags;
+
+		/* Cook up some flags for storing in the VM object */
+		flags.Value = 0;
+		flags.ui32.NonPaged = 1;
+		flags.ui32.HostAccess = 1;
+		flags.ui32.Reserved = 0xBe11;
+
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		vm_obj->flags = flags.Value;
+		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+	}
+
+	if (mem) {
+		void *ret = mmap(mem, MemorySizeInBytes,
+				 PROT_READ | PROT_WRITE,
+				 MAP_SHARED | MAP_FIXED, kfd_fd,
+				 doorbell_offset);
+		if (ret == MAP_FAILED) {
+			__fmm_release(mem, aperture);
+			return NULL;
+		}
+	}
+
+	return mem;
+}
+
 static void* fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 				HsaMemFlags flags)
 {
