@@ -124,7 +124,7 @@ add_custom_command(OUTPUT ${AMDHSACOD_LINK} WORKING_DIRECTORY ${EXTERNAL_DIR}/bi
 add_custom_command(OUTPUT ${AMDHSAFIN_LINK} WORKING_DIRECTORY ${EXTERNAL_DIR}/bin 
                    COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/bin/${AMDHSAFIN_NAME} ${AMDHSAFIN_NAME} )
 
-add_custom_target (copy_targets DEPENDS create_dirs
+add_custom_target (copy_targets ALL DEPENDS create_dirs
                                         ${FINALIZER_LIBRARY_TARGET} 
                                         ${TOOLS_LIBRARY_TARGET}
                                         ${IMAGE_LIBRARY_TARGET}
