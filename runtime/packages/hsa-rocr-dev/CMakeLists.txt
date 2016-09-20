@@ -146,7 +146,7 @@ endforeach()
 
 add_custom_target (copy_headers DEPENDS ${RUNTIME_HEADERS} create_dirs)
 
-add_custom_target (copy_targets DEPENDS create_dirs
+add_custom_target (copy_targets ALL DEPENDS create_dirs
                                         ${RUNTIME_LIBRARY_TARGET}
                                         ${RUNTIME_LIBRARY_SONAME}
                                         ${RUNTIME_LIBRARY_LINKNAME}
