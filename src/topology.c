@@ -160,7 +160,10 @@ static struct hsa_gfxip_table {
 	{ 0x67E9, 8, 0, 3, 1, "Polaris11" },
 	{ 0x67EB, 8, 0, 3, 1, "Polaris11" },
 	{ 0x67EF, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67FF, 8, 0, 3, 1, "Polaris11" }
+	{ 0x67FF, 8, 0, 3, 1, "Polaris11" },
+	/* Vega10 */
+	{ 0x6860, 9, 0, 0, 1, "Vega10" },
+	{ 0x687F, 9, 0, 0, 1, "Vega10" }
 };
 
 enum cache_type {
