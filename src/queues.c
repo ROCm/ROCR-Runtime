@@ -45,11 +45,12 @@ enum asic_family_type {
 	CHIP_TONGA,
 	CHIP_FIJI,
 	CHIP_POLARIS10,
-	CHIP_POLARIS11
+	CHIP_POLARIS11,
+	CHIP_VEGA10
 };
 
 #define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_POLARIS11)
-#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_POLARIS11) || \
+#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_VEGA10) || \
 		       (chip) == CHIP_HAWAII)
 
 #define WG_CONTEXT_DATA_SIZE_PER_CU_VI	344576
@@ -94,6 +95,11 @@ struct device_info polaris10_device_info = {
 struct device_info polaris11_device_info = {
 	.asic_family = CHIP_POLARIS11,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
+};
+
+struct device_info vega10_device_info = {
+	.asic_family = CHIP_VEGA10,
+	.eop_buffer_size = 4096,
 };
 
 struct device_id
@@ -174,6 +180,8 @@ struct device_id supported_devices[] = {
 	{ 0x67EB, &polaris11_device_info },
 	{ 0x67EF, &polaris11_device_info },
 	{ 0x67FF, &polaris11_device_info },
+	{ 0x6860, &vega10_device_info },
+	{ 0x687F, &vega10_device_info },
 	{ 0, NULL }
 };
 
