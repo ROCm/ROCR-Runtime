@@ -785,12 +785,8 @@ uint64_t BlitKernel::AcquireWriteIndex(uint32_t num_packet) {
 
   uint64_t write_index = queue_->AddWriteIndexAcqRel(num_packet);
 
-  while (true) {
-    // Wait until we have room in the queue;
-    const uint64_t read_index = queue_->LoadReadIndexRelaxed();
-    if ((write_index - read_index) <= queue_->public_handle()->size) {
-      break;
-    }
+  while (write_index + num_packet - queue_->LoadReadIndexRelaxed() > queue_->public_handle()->size) {
+    os::YieldThread();
   }
 
   return write_index;
@@ -887,8 +883,9 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
 
 BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
   const uint32_t index =
-      atomic::Add(&kernarg_async_counter_, 1U, std::memory_order_acquire);
-  KernelArgs* arg = &kernarg_async_[index & kernarg_async_mask_];
+      atomic::Add(&kernarg_async_counter_, 1U, std::memory_order_acquire) & kernarg_async_mask_;
+
+  KernelArgs* arg = &kernarg_async_[index];
   assert(IsMultipleOf(arg, 16));
   return arg;
 }
