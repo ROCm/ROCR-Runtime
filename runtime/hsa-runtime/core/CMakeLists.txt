@@ -47,57 +47,27 @@ if ( WIN32 )
     MESSAGE ( FATAL_ERROR "Windows build is not supported." )
 endif ()
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules")
-
-## Process environment variables.
-if ( DEFINED HSATHK_BUILD_TARGET_BITS AND "${HSATHK_BUILD_TARGET_BITS}" STREQUAL 32 )
-    set ( ONLY64STR "" )
-    set ( IS64BIT 0 )
-else ()
-    set ( ONLY64STR "64" )
-    set ( IS64BIT 1 )
-endif ()
-
-if ( NOT EXISTS ${HSATHK_BUILD_INC_PATH}/hsakmt.h )
-    MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_INC_PATH is not set to point to the location where KFD Thunk header file hsakmt.h (and rest of the thunk headers) could be found." )
-endif ()
-
-if ( NOT EXISTS ${HSATHK_BUILD_LIB_PATH}/libhsakmt.so.1 )
-    MESSAGE ( FATAL_ERROR "Environment variable HSATHK_BUILD_LIB_PATH is not set to point to the location where KFD Thunk library libhsakmt.so.1 could be found." )
-endif ()
-
-MESSAGE ( ------IS64BIT: ${IS64BIT} )
-MESSAGE ( ------Compiler: ${CMAKE_CXX_COMPILER} )
-MESSAGE ( ------Version: ${CMAKE_CXX_COMPILER_VERSION} )
-
-## Set core runtime module name and project name.
-set ( CORE_RUNTIME_NAME "hsa-runtime" )
-set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
-set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}${ONLY64STR}" )
-project ( ${CORE_RUNTIME_TARGET} )
-
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler preproc definitions.
-add_definitions ( -D__linux__ )
+add_definitions ( -D__linux__  )
 add_definitions ( -DHSA_EXPORT=1 )
 add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
 
 if ( DEFINED BUILDID )
-    add_definitions ( -DROCR_BUILD_ID=${BUILDID})
-else ( NOT DEFINED BUILDID)
+    add_definitions ( -DROCR_BUILD_ID=${BUILDID} )
+else ( NOT DEFINED BUILDID )
     ## get date information based on UTC - full date
-    execute_process(COMMAND date --utc +%F WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND date --utc +%F WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE )
     ## get commit information
-    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE)
+    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
     ## check dirty tree status
-    execute_process(COMMAND git diff --shortstat COMMAND wc -l WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_DIRTY_TREE  OUTPUT_STRIP_TRAILING_WHITESPACE)
-    set  ( BUILD_ID "${ROCR_BUILD_COMMIT}.${ROCR_BUILD_TIME}.${ROCR_DIRTY_TREE}")
-    add_definitions ( -DROCR_BUILD_ID=${BUILD_ID})
+    execute_process(COMMAND git diff --shortstat COMMAND wc -l WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_DIRTY_TREE  OUTPUT_STRIP_TRAILING_WHITESPACE )
+    set  ( BUILD_ID "${ROCR_BUILD_COMMIT}.${ROCR_BUILD_TIME}.${ROCR_DIRTY_TREE}" )
+    add_definitions ( -DROCR_BUILD_ID=${BUILD_ID} )
 endif ()
-
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
@@ -108,7 +78,7 @@ set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.link" )
 
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF}" )
 
-set ( CMAKE_SKIP_BUILD_RPATH TRUE)
+set ( CMAKE_SKIP_BUILD_RPATH TRUE )
 
 ##  -------------------------  End Compiler and Linker options ----------------------------
 
@@ -139,23 +109,14 @@ set ( CORE_SRCS ${CORE_SRCS} runtime/cache.cpp )
 set ( CORE_SRCS ${CORE_SRCS} common/shared.cpp )
 set ( CORE_SRCS ${CORE_SRCS} common/hsa_table_interface.cpp )
 
-## Include path(s).
-include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/.. )
-include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/../inc )
-include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
-include_directories ( ${HSATHK_BUILD_INC_PATH} )
-
-## Library path(s).
-link_directories ( ${HSATHK_BUILD_LIB_PATH} )
-
 add_library ( ${CORE_RUNTIME_TARGET} SHARED ${CORE_SRCS} )
 
 ## Set the VERSION and SOVERSION values
 if ( DEFINED VERSION_STRING )
-    set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${VERSION_STRING}" )
+    set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${RUNTIME_VERSION_STRING}" )
 endif ()
 
-set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
+set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${RUNTIME_VERSION_MAJOR}" )
 
 target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE amdhsaloader
@@ -169,5 +130,4 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     add_custom_command ( TARGET ${CORE_RUNTIME_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
 endif ()
 
-## Set install information
-install ( TARGETS ${CORE_RUNTIME_TARGET} LIBRARY DESTINATION lib COMPONENT ${CORE_RUNTIME_COMPONENT})
+install ( TARGETS ${CORE_RUNTIME_TARGET} LIBRARY DESTINATION lib COMPONENT ${CORE_RUNTIME_COMPONENT} )
