@@ -42,29 +42,81 @@
 
 cmake_minimum_required(VERSION 2.8)
 
-project(hsa-runtime)
+## Set core runtime module name and project name.
+set ( CORE_RUNTIME_NAME "hsa-runtime" )
+set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
+set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
+project( ${CORE_RUNTIME_TARGET} )
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
 
-add_definitions (-D HSA_DEPRECATED=)
+add_definitions ( -D HSA_DEPRECATED= )
 
-include(utils)
-include(hsa_common)
+include ( utils )
+include ( hsa_common )
 
-if(NOT DEFINED VERSION_STRING)
-    set (VERSION_STRING "1")
+## Parse the package version
+if( NOT DEFINED VERSION_STRING )
+    set ( VERSION_STRING "1.0.0" )
 endif()
 
-parse_version(${VERSION_STRING})
+## Parse the package version
+parse_version ( ${VERSION_STRING} )
 
-include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/inc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/core/inc)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode)
-include_directories(${HSATHK_BUILD_INC_PATH})
+set ( PACKAGE_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( PACKAGE_VERSION_MINOR ${VERSION_MINOR} )
+set ( PACKAGE_VERSION_PATCH ${VERSION_PATCH} )
 
-link_directories (${HSATHK_BUILD_LIB_PATH})
+## Parse the library version
+if( NOT DEFINED RUNTIME_VERSION_STRING )
+    set ( RUNTIME_VERSION_STRING "1" )
+endif()
 
-add_subdirectory(libamdhsacode)
-add_subdirectory(loader)
-add_subdirectory(core)
+parse_version ( ${RUNTIME_VERSION_STRING} )
+set ( RUNTIME_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( RUNTIME_VERSION_MINOR ${VERSION_MINOR} )
+set ( RUNTIME_VERSION_PATCH ${VERSION_PATCH} )
+
+include_directories ( ${CMAKE_CURRENT_SOURCE_DIR} )
+include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
+include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/core/inc )
+include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
+include_directories ( ${HSAKMT_BUILD_INC_PATH})
+
+link_directories ( ${HSAKMT_BUILD_LIB_PATH} )
+
+add_subdirectory ( libamdhsacode )
+add_subdirectory ( loader )
+add_subdirectory ( core )
+
+## Set install information
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION include/hsa )
+
+## Packaging directives
+set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
+set ( CPACK_PACKAGE_VENDOR "AMD" )
+set ( CPACK_PACKAGE_VERSION_MAJOR ${PACKAGE_VERSION_MAJOR} )
+set ( CPACK_PACKAGE_VERSION_MINOR ${PACKAGE_VERSION_MINOR} )
+set ( CPACK_PACKAGE_VERSION_PATCH ${PACKAGE_VERSION_PATCH} )
+set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
+set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+
+## Set dependency strings
+set ( HSAKMT_ROCT_DEV_DEPS "" )
+if ( DEFINED HSAKMT_VERSION_STRING )
+    set ( HSAKMT_ROCT_DEV_DEPS " (=${HSAKMT_VERSION_STRING})" )
+endif ()
+
+# Debian package specific variables
+set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct-dev${HSAKMT_ROCT_DEV_DEPS}" )
+set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
+set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
+
+## RPM package specific variables
+set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct-dev${HSAKMT_ROCT_DEV_DEPS}" )
+set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
+set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
+
+## Include packaging
+include ( CPack )
