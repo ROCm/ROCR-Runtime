@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -116,9 +116,9 @@ endif ()
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-but-set-variable -Wno-error=unused-function" )
 
-set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/core/hsacore.so.def" )
+set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.def" )
 
-set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/core/hsacore.so.link" )
+set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.link" )
 
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF}" )
 
