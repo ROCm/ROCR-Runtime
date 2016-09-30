@@ -984,7 +984,7 @@ err:
 	sched_setaffinity(0, sizeof(cpu_set_t), &orig_cpuset);
 exit:
 	if (ret != HSAKMT_STATUS_SUCCESS)
-		topology_destroy_temp_cpu_cache_list(&temp_cpu_ci_list);
+		topology_destroy_temp_cpu_cache_list(*temp_cpu_ci_list);
 	return ret;
 }
 

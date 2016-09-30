@@ -45,7 +45,7 @@ parse_version ( ${VERSION_STRING} )
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler flags
-set ( CMAKE_CXX_FLAGS "-fPIC -W -Wall -Wextra -Werror -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden" )
+set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Werror -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden" )
 
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
@@ -53,6 +53,7 @@ set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.$(VERSION_MAJOR) -Wl,-z,nodelete" )
 
 ## Source files
+set ( HSAKMT_SRC ${HSAKMT_SRC} src/debug.c )
 set ( HSAKMT_SRC ${HSAKMT_SRC} src/events.c )
 set ( HSAKMT_SRC ${HSAKMT_SRC} src/fmm.c )
 set ( HSAKMT_SRC ${HSAKMT_SRC} src/globals.c )
@@ -93,26 +94,22 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
 endif ()
 
-## Create temporary directories for packaged symbolic links
-set ( LINK_DIRECTORY "links" )
-
-add_custom_command ( OUTPUT ${LINK_DIRECTORY} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                     COMMAND mkdir -p links )
-
-add_custom_command ( OUTPUT ${LINK_DIRECTORY}/${HSAKMT_COMPONENT} COMMAND ${CMAKE_COMMAND} -E create_symlink ../libhsakmt/include/${HSAKMT_COMPONENT} ${LINK_DIRECTORY}/${HSAKMT_COMPONENT} DEPENDS ${LINK_DIRECTORY} )
-
-add_custom_command ( OUTPUT ${LINK_DIRECTORY}/${HSAKMT_COMPONENT}.so COMMAND ${CMAKE_COMMAND} -E create_symlink ../libhsakmt/lib/${HSAKMT_COMPONENT}.so.${VERSION_MAJOR} ${LINK_DIRECTORY}/${HSAKMT_COMPONENT}.so DEPENDS ${LINK_DIRECTORY} )
-
-add_custom_target ( copy_links ALL DEPENDS ${LINK_DIRECTORY}/${HSAKMT_COMPONENT}.so ${LINK_DIRECTORY}/${HSAKMT_COMPONENT} )
-
 ## Set the install targets
 install ( TARGETS ${HSAKMT_TARGET} LIBRARY DESTINATION libhsakmt/lib COMPONENT ${HSAKMT_COMPONENT} )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt PERMISSIONS OWNER_WRITE OWNER_READ )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmt.h DESTINATION libhsakmt/include/libhsakmt PERMISSIONS OWNER_WRITE OWNER_READ )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmttypes.h DESTINATION libhsakmt/include/libhsakmt PERMISSIONS OWNER_WRITE OWNER_READ )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/linux/kfd_ioctl.h DESTINATION libhsakmt/include/libhsakmt/linux PERMISSIONS OWNER_WRITE OWNER_READ )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${LINK_DIRECTORY}/${HSAKMT_COMPONENT} DESTINATION include PERMISSIONS OWNER_WRITE OWNER_READ )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${LINK_DIRECTORY}/${HSAKMT_COMPONENT}.so DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ )
+
+#if( CMAKE_HOST_UNIX )
+#    install( CODE "EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E create_symlink include/${HSAKMT_COMPONENT} \${CMAKE_INSTALL_PREFIX}/include/${HSAKMT_COMPONENT} WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
+#    install( CODE "EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E create_symlink lib/${HSAKMT_COMPONENT}.so \${CMAKE_INSTALL_PREFIX}/lib/${HSAKMT_COMPONENT}.so WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
+#endif( )
+
+if( CMAKE_HOST_UNIX )
+    install( CODE "EXECUTE_PROCESS( COMMAND mkdir -p \${CMAKE_INSTALL_PREFIX}/include COMMAND ln -srf include/${HSAKMT_COMPONENT} \${CMAKE_INSTALL_PREFIX}/include/${HSAKMT_COMPONENT} WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
+    install( CODE "EXECUTE_PROCESS( COMMAND mkdir -p \${CMAKE_INSTALL_PREFIX}/lib COMMAND ln -srf lib/${HSAKMT_COMPONENT}.so \${CMAKE_INSTALL_PREFIX}/lib/${HSAKMT_COMPONENT}.so WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
+endif( )
 
 ## Packaging directives
 set ( CPACK_PACKAGE_NAME "hsakmt-roct-dev" )
