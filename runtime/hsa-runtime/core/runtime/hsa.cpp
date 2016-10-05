@@ -396,6 +396,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_loader_query_host_address = hsa_ven_amd_loader_query_host_address;
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
         hsa_ven_amd_loader_query_segment_descriptors;
+    ext_table.hsa_ven_amd_loader_query_executable = hsa_ven_amd_loader_query_executable;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 

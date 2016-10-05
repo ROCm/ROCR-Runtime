@@ -80,3 +80,24 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
   // Arguments are checked by the loader.
   return Runtime::runtime_singleton_->loader()->QuerySegmentDescriptors(segment_descriptors, num_segment_descriptors);
 }
+
+hsa_status_t HSA_API hsa_ven_amd_loader_query_executable(
+  const void *device_address,
+  hsa_executable_t *executable) {
+
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  }
+  if ((nullptr == device_address) || (nullptr == executable)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  uint64_t udaddr = reinterpret_cast<uint64_t>(device_address);
+  hsa_executable_t exec = Runtime::runtime_singleton_->loader()->FindExecutable(udaddr);
+  if (0 == exec.handle) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  *executable = exec;
+  return HSA_STATUS_SUCCESS;
+}
