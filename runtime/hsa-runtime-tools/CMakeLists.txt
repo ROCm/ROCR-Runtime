@@ -146,16 +146,17 @@ set ( INTERCEPT_SRC   ${TOOLS_SOURCE_DIR}/intercept/amd_sw_aql_command_processor
                       ${TOOLS_SOURCE_DIR}/intercept/hsa_amd_tools.cpp
                       ${TOOLS_SOURCE_DIR}/intercept/profiler.cpp )
 
-set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/ci_blockinfo.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/ci_pmu.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
+set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp 
                       ${TOOLS_SOURCE_DIR}/profiler/gpu_counter.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/var_data.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/info_set.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/parameter_set.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/var_data.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/thread_trace.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/ci_blockinfo.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/ci_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/vi_blockinfo.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/vi_pmu.cpp )
+                      ${TOOLS_SOURCE_DIR}/profiler/vi_pmu.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp )
 
 set ( SP3_R1000_SRC   ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/sp3-asic.c
                       ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/sp3-dispatch.c

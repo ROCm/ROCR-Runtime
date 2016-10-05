@@ -522,6 +522,8 @@ public:
     hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
     size_t *num_segment_descriptors) override;
 
+  hsa_executable_t FindExecutable(uint64_t device_address) override;
+
   uint64_t FindHostAddress(uint64_t device_address) override;
 
   void EnableReadOnlyMode();

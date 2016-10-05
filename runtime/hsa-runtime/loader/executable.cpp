@@ -915,6 +915,25 @@ size_t ExecutableImpl::QuerySegmentDescriptors(
   return i - first_empty_segment_descriptor;
 }
 
+hsa_executable_t AmdHsaCodeLoader::FindExecutable(uint64_t device_address)
+{
+  hsa_executable_t execHandle = {0};
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
+  if (device_address == 0) {
+    return execHandle;
+  }
+
+  for (auto &exec : executables) {
+    if (exec != nullptr) {
+      uint64_t host_address = exec->FindHostAddress(device_address);
+      if (host_address != 0) {
+        return Executable::Handle(exec);
+      }
+    }
+  }
+  return execHandle;
+}
+
 uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
 {
   for (auto &obj : loaded_code_objects) {
