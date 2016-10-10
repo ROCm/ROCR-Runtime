@@ -207,6 +207,33 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 	return ret;
 }
 
+static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
+{
+	int i = 0;
+	while (supported_devices[i].dev_id != 0) {
+		if (supported_devices[i].dev_id == dev_id) {
+			return supported_devices[i].dev_info;
+		}
+		i++;
+	}
+
+	return NULL;
+}
+
+static bool use_gpuvm_doorbell(uint16_t dev_id)
+{
+	struct device_info *dev_info;
+
+	dev_info = get_device_info_by_dev_id(dev_id);
+
+	/*
+	 * GPUVM doorbell on Tonga requires a workaround for VM TLB ACTIVE bit
+	 * lookup bug. Remove ASIC check when this is implemented in amdgpu.
+	 */
+	return (topology_is_dgpu(dev_id) &&
+		dev_info->asic_family != CHIP_TONGA);
+}
+
 void destroy_process_doorbells(void)
 {
 	unsigned int i;
@@ -218,7 +245,7 @@ void destroy_process_doorbells(void)
 		if (doorbells[i].need_mmap)
 			continue;
 
-		if (topology_is_dgpu(get_device_id_by_node(i))) {
+		if (use_gpuvm_doorbell(get_device_id_by_node(i))) {
 			fmm_unmap_from_gpu(doorbells[i].doorbells);
 			fmm_release(doorbells[i].doorbells);
 		} else
@@ -281,7 +308,7 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (topology_is_dgpu(get_device_id_by_node(NodeId)))
+	if (use_gpuvm_doorbell(get_device_id_by_node(NodeId)))
 		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_offset);
 	else
 		status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
@@ -289,19 +316,6 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 
 	return status;
-}
-
-static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
-{
-	int i = 0;
-	while (supported_devices[i].dev_id != 0) {
-		if (supported_devices[i].dev_id == dev_id) {
-			return supported_devices[i].dev_info;
-		}
-		i++;
-	}
-
-	return NULL;
 }
 
 static void free_queue_cpu(struct queue *q)
