@@ -729,7 +729,7 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
     return HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED;
   }
 
-  agent_symbols_.insert(
+  auto insert_status = agent_symbols_.insert(
     std::make_pair(std::make_pair(std::string(name), agent),
                    new VariableSymbol(true,
                                       std::string(name),
@@ -742,6 +742,9 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
                                       false, // TODO: const.
                                       true,
                                       reinterpret_cast<uint64_t>(address))));
+  assert(insert_status.second);
+  insert_status.first->second->agent = agent;
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -1231,6 +1234,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
   }
   assert(symbol);
   if (isAgent) {
+    symbol->agent = agent;
     agent_symbols_.insert(std::make_pair(std::make_pair(sym->Name(), agent), symbol));
   } else {
     program_symbols_.insert(std::make_pair(sym->Name(), symbol));
