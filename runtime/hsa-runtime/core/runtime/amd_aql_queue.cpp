@@ -670,9 +670,10 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
     queue->agent_->ReleaseQueueScratch(scratch.queue_base);
 
+    uint64_t pkt_slot_idx = queue->amd_queue_.read_dispatch_id % queue->amd_queue_.hsa_queue.size;
+
     const core::AqlPacket& pkt =
-        ((core::AqlPacket*)queue->amd_queue_.hsa_queue
-             .base_address)[queue->amd_queue_.read_dispatch_id];
+        ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
     uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
