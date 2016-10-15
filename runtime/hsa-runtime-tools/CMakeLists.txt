@@ -28,7 +28,7 @@ set ( CMAKE_VERBOSE_MAKEFILE on )
 set ( CORE_RUNTIME_NAME "hsa-runtime" )
 set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}${ONLY64STR}" )
-set ( CORE_RUNTIME_LIB "lib${CORE_RUNTIME_NAME}${ONLY64STR}.so.1" )
+set ( CORE_RUNTIME_LIB "lib${CORE_RUNTIME_NAME}${ONLY64STR}.so" )
 
 ## Compiler preproc definitions.
 add_definitions ( -D__linux__ )
@@ -218,7 +218,7 @@ add_library ( ${TOOLS_TARGET} SHARED ${CORE_SRC}
 target_link_libraries ( 
     ${TOOLS_TARGET}
     PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
-    PRIVATE ${HSA_BUILD_LIB_PATH}/libhsakmt.so.1
+    PRIVATE ${HSA_BUILD_LIB_PATH}/libhsakmt.so
     c dl pthread rt
 )
 
