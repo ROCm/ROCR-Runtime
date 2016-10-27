@@ -217,12 +217,10 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
     }
   }
 
-  assert(amd_queue_.group_segment_aperture_base_hi != NULL &&
-         "No group region found.");
+  assert(amd_queue_.group_segment_aperture_base_hi != 0 && "No group region found.");
 
   if (core::Runtime::runtime_singleton_->flag().check_flat_scratch()) {
-    assert(amd_queue_.private_segment_aperture_base_hi != NULL &&
-           "No private region found.");
+    assert(amd_queue_.private_segment_aperture_base_hi != 0 && "No private region found.");
   }
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
@@ -783,8 +781,8 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
   uint32_t slot_idx = uint32_t(write_idx % public_handle()->size);
   constexpr uint32_t slot_size_b = 0x40;
-  uint32_t* queue_slot = (uint32_t*)uintptr_t(public_handle()->base_address +
-                                              (slot_idx * slot_size_b));
+  uint32_t* queue_slot =
+      (uint32_t*)(uintptr_t(public_handle()->base_address) + (slot_idx * slot_size_b));
 
   // Copy client PM4 command into IB.
   assert(cmd_size_b < pm4_ib_size_b_ && "PM4 exceeds IB size");
@@ -913,7 +911,7 @@ void AqlQueue::InitScratchSRD() {
       uint32_t(queue_scratch_.size_per_thread);
 
   // Set concurrent wavefront limits only when scratch is being used.
-  COMPUTE_TMPRING_SIZE tmpring_size = {0};
+  COMPUTE_TMPRING_SIZE tmpring_size = {};
   if (queue_scratch_.size == 0) {
     amd_queue_.compute_tmpring_size = tmpring_size.u32All;
     return;

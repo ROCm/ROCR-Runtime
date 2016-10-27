@@ -283,7 +283,7 @@ private:
   /// @brief Not copy-assignable.
   ValueOption& operator=(const ValueOption &o);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string> &tokens) override;
 
   T value_;
 };
@@ -340,7 +340,7 @@ private:
   /// @brief Not copy-assignable.
   ChoiceOption& operator =(const ChoiceOption&);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string> &tokens) override;
 
   std::unordered_set<std::string> choices_;
   std::string value_;
@@ -370,7 +370,7 @@ private:
   /// @brief Not copy-assignable.
   NoArgOption& operator=(const NoArgOption &o);
 
-  bool ProcessTokens(std::list<std::string> &tokens) {
+  bool ProcessTokens(std::list<std::string> &tokens) override {
     assert(0 == name_.compare(tokens.front()) && "option name is mismatched");
     if (1 == tokens.size()) {
       tokens.pop_front();
