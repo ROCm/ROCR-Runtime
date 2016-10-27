@@ -64,7 +64,6 @@ typedef uint64_t uint64;
 #endif
 
 #define __forceinline __inline__ __attribute__((always_inline))
-static __forceinline void __debugbreak() { __builtin_trap(); }
 #define __declspec(x) __attribute__((x))
 #undef __stdcall
 #define __stdcall  // __attribute__((__stdcall__))

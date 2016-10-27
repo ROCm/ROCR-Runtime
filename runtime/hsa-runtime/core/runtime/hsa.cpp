@@ -299,9 +299,10 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
     std::string name;
     size_t size;
   };
-  static sizes_t sizes[] = {"hsa_ext_images_1_00_pfn_t",     sizeof(hsa_ext_images_1_00_pfn_t),
-                            "hsa_ext_finalizer_1_00_pfn_t",  sizeof(hsa_ext_finalizer_1_00_pfn_t),
-                            "hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)};
+  static sizes_t sizes[] = {
+      {"hsa_ext_images_1_00_pfn_t", sizeof(hsa_ext_images_1_00_pfn_t)},
+      {"hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t)},
+      {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
   if (minor > 99) return 0;

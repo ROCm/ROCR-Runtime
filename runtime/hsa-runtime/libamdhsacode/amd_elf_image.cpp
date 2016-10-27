@@ -423,9 +423,9 @@ namespace amd {
       RelocationSection* relocationSection(SymbolTable* symtab = 0) override;
       Segment* segment() override { return seg; }
       RelocationSection* asRelocationSection() override { return 0; }
-      bool setMemSize(uint64_t s) { memsize_ = s; return true; }
+      bool setMemSize(uint64_t s) override { memsize_ = s; return true; }
       uint64_t memSize() const override { return memsize_ ? memsize_ : size(); }
-      bool setAlign(uint64_t a) { align_ = a; return true; }
+      bool setAlign(uint64_t a) override { align_ = a; return true; }
       uint64_t memAlign() const override { return align_ ? align_ : addralign(); }
 
     protected:
@@ -474,7 +474,7 @@ namespace amd {
       bool push(const char* name, uint32_t shtype, uint64_t shflags);
       bool pullData() override;
       const char* addString(const std::string& s) override;
-      size_t addString1(const std::string& s);
+      size_t addString1(const std::string& s) override;
       const char* getString(size_t ndx) override;
       size_t getStringIndex(const char* name) override;
 
@@ -510,12 +510,12 @@ namespace amd {
 
       uint32_t index() override { return eindex / sizeof(GElf_Rela); }
       uint32_t type() override { return GELF_ST_TYPE(Sym()->st_info); }
-      uint32_t binding() { return GELF_ST_BIND(Sym()->st_info); }
-      uint64_t size() { return Sym()->st_size; }
-      uint64_t value() { return Sym()->st_value; }
-      unsigned char other() { return Sym()->st_other; }
+      uint32_t binding() override { return GELF_ST_BIND(Sym()->st_info); }
+      uint64_t size() override { return Sym()->st_size; }
+      uint64_t value() override { return Sym()->st_value; }
+      unsigned char other() override { return Sym()->st_other; }
       std::string name() override;
-      Section* section();
+      Section* section() override;
 
       void setValue(uint64_t value) override { Sym()->st_value = value; }
       void setSize(uint64_t size) override { Sym()->st_size = size; }
@@ -665,8 +665,8 @@ namespace amd {
       bool initNew(uint16_t machine, uint16_t type, uint8_t os_abi = 0, uint8_t abi_version = 0, uint32_t e_flags = 0) override;
       bool loadFromFile(const std::string& filename) override;
       bool saveToFile(const std::string& filename) override;
-      bool initFromBuffer(const void* buffer, size_t size);
-      bool initAsBuffer(const void* buffer, size_t size);
+      bool initFromBuffer(const void* buffer, size_t size) override;
+      bool initAsBuffer(const void* buffer, size_t size) override;
       bool close();
       bool writeTo(const std::string& filename) override;
       bool copyToBuffer(void** buf, size_t* size = 0) override;
@@ -683,9 +683,9 @@ namespace amd {
       uint16_t Machine() override { return ehdr.e_machine; }
       uint16_t Type() override { return ehdr.e_type; }
 
-      GElfStringTable* shstrtab();
-      GElfStringTable* strtab();
-      GElfSymbolTable* getSymtab(uint16_t index)
+      GElfStringTable* shstrtab() override;
+      GElfStringTable* strtab() override;
+      GElfSymbolTable* getSymtab(uint16_t index) override
       {
         return static_cast<GElfSymbolTable*>(section(index));
       }
@@ -694,7 +694,7 @@ namespace amd {
       GElfStringTable* getStringTable(uint16_t index) override;
 
       GElfSymbolTable* addSymbolTable(const std::string& name, StringTable* stab = 0) override;
-      GElfSymbolTable* symtab();
+      GElfSymbolTable* symtab() override;
 
       GElfSegment* segment(size_t i) override { return segments[i].get(); }
       Segment* segmentByVAddr(uint64_t vaddr) override;
