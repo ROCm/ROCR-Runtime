@@ -340,6 +340,10 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_BDFID:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
       break;
+    case HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU:
+      *((uint32_t*)value) = static_cast<uint32_t>(
+          properties_.NumSIMDPerCU * properties_.MaxWavesPerSIMD);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
