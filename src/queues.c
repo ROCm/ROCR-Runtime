@@ -35,8 +35,11 @@
 #include <sys/mman.h>
 #include <fcntl.h>
 
-/* 1024 doorbells, 4 bytes each doorbell */
-#define DOORBELLS_PAGE_SIZE	1024 * 4
+/* 1024 doorbells, 4 or 8 bytes each doorbell depending on ASIC generation */
+#define DOORBELL_SIZE_GFX7 4
+#define DOORBELL_SIZE_GFX8 4
+#define DOORBELL_SIZE_GFX9 8
+#define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
 
 enum asic_family_type {
 	CHIP_KAVERI = 0,
@@ -60,46 +63,55 @@ struct device_info
 {
 	enum asic_family_type asic_family;
 	uint32_t eop_buffer_size;
+	uint32_t doorbell_size;
 };
 
 struct device_info kaveri_device_info = {
 	.asic_family = CHIP_KAVERI,
 	.eop_buffer_size = 0,
+	.doorbell_size = DOORBELL_SIZE_GFX7,
 };
 
 struct device_info hawaii_device_info = {
 	.asic_family = CHIP_HAWAII,
 	.eop_buffer_size = 0,
+	.doorbell_size = DOORBELL_SIZE_GFX7,
 };
 
 struct device_info carrizo_device_info = {
 	.asic_family = CHIP_CARRIZO,
 	.eop_buffer_size = 4096,
+	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
 struct device_info tonga_device_info = {
 	.asic_family = CHIP_TONGA,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
+	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
 struct device_info fiji_device_info = {
 	.asic_family = CHIP_FIJI,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
+	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
 struct device_info polaris10_device_info = {
 	.asic_family = CHIP_POLARIS10,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
+	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
 struct device_info polaris11_device_info = {
 	.asic_family = CHIP_POLARIS11,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
+	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
 struct device_info vega10_device_info = {
 	.asic_family = CHIP_VEGA10,
 	.eop_buffer_size = 4096,
+	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
 struct device_id
@@ -199,7 +211,8 @@ struct queue
 
 struct process_doorbells
 {
-	bool need_mmap;
+	bool use_gpuvm;
+	uint32_t size;
 	void* doorbells;
 	pthread_mutex_t doorbells_mutex;
 };
@@ -219,7 +232,8 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	for (i = 0; i < NumNodes; i++) {
-		doorbells[i].need_mmap = true;
+		doorbells[i].use_gpuvm = false;
+		doorbells[i].size = 0;
 		doorbells[i].doorbells = NULL;
 		pthread_mutex_init(&doorbells[i].doorbells_mutex, NULL);
 	}
@@ -242,7 +256,8 @@ static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 	return NULL;
 }
 
-static bool use_gpuvm_doorbell(uint16_t dev_id)
+static void get_doorbell_map_info(uint16_t dev_id,
+				  struct process_doorbells *doorbell)
 {
 	struct device_info *dev_info;
 
@@ -252,8 +267,9 @@ static bool use_gpuvm_doorbell(uint16_t dev_id)
 	 * GPUVM doorbell on Tonga requires a workaround for VM TLB ACTIVE bit
 	 * lookup bug. Remove ASIC check when this is implemented in amdgpu.
 	 */
-	return (topology_is_dgpu(dev_id) &&
-		dev_info->asic_family != CHIP_TONGA);
+	doorbell->use_gpuvm = (topology_is_dgpu(dev_id) &&
+			       dev_info->asic_family != CHIP_TONGA);
+	doorbell->size = DOORBELLS_PAGE_SIZE(dev_info->doorbell_size);
 }
 
 void destroy_process_doorbells(void)
@@ -264,14 +280,14 @@ void destroy_process_doorbells(void)
 		return;
 
 	for (i = 0; i < num_doorbells; i++) {
-		if (doorbells[i].need_mmap)
+		if (!doorbells[i].size)
 			continue;
 
-		if (use_gpuvm_doorbell(get_device_id_by_node(i))) {
+		if (doorbells[i].use_gpuvm) {
 			fmm_unmap_from_gpu(doorbells[i].doorbells);
 			fmm_release(doorbells[i].doorbells);
 		} else
-			munmap(doorbells[i].doorbells, DOORBELLS_PAGE_SIZE);
+			munmap(doorbells[i].doorbells, doorbells[i].size);
 	}
 
 	free(doorbells);
@@ -290,11 +306,11 @@ void clear_process_doorbells(void)
 		return;
 
 	for (i = 0; i < num_doorbells; i++) {
-		if (doorbells[i].need_mmap)
+		if (!doorbells[i].size)
 			continue;
 
-		if (!use_gpuvm_doorbell(get_device_id_by_node(i)))
-			munmap(doorbells[i].doorbells, DOORBELLS_PAGE_SIZE);
+		if (!doorbells[i].use_gpuvm)
+			munmap(doorbells[i].doorbells, doorbells[i].size);
 	}
 
 	free(doorbells);
@@ -307,13 +323,12 @@ static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
 {
 	void *ptr;
 
-	ptr = mmap(0, DOORBELLS_PAGE_SIZE, PROT_READ|PROT_WRITE,
+	ptr = mmap(0, doorbells[NodeId].size, PROT_READ|PROT_WRITE,
 		   MAP_SHARED, kfd_fd, doorbell_offset);
 
 	if (ptr == MAP_FAILED)
 		return HSAKMT_STATUS_ERROR;
 
-	doorbells[NodeId].need_mmap = false;
 	doorbells[NodeId].doorbells = ptr;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -324,19 +339,18 @@ static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
 {
 	void *ptr;
 
-	ptr = fmm_allocate_doorbell(gpu_id, DOORBELLS_PAGE_SIZE,
+	ptr = fmm_allocate_doorbell(gpu_id, doorbells[NodeId].size,
 				    doorbell_offset);
 
 	if (ptr == NULL)
 		return HSAKMT_STATUS_ERROR;
 
 	/* map for GPU access */
-	if (fmm_map_to_gpu(ptr, DOORBELLS_PAGE_SIZE, NULL)) {
+	if (fmm_map_to_gpu(ptr, doorbells[NodeId].size, NULL)) {
 		fmm_release(ptr);
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	doorbells[NodeId].need_mmap = false;
 	doorbells[NodeId].doorbells = ptr;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -348,15 +362,21 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	HSAKMT_STATUS status = HSAKMT_STATUS_SUCCESS;
 
 	pthread_mutex_lock(&doorbells[NodeId].doorbells_mutex);
-	if (!doorbells[NodeId].need_mmap) {
+	if (doorbells[NodeId].size) {
 		pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (use_gpuvm_doorbell(get_device_id_by_node(NodeId)))
+	get_doorbell_map_info(get_device_id_by_node(NodeId),
+			      &doorbells[NodeId]);
+
+	if (doorbells[NodeId].use_gpuvm)
 		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_offset);
 	else
 		status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
+
+	if (status != HSAKMT_STATUS_SUCCESS)
+		doorbells[NodeId].size = 0;
 
 	pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
 
@@ -619,7 +639,9 @@ hsaKmtCreateQueue(
 	}
 
 	QueueResource->QueueId = PORT_VPTR_TO_UINT64(q);
-	QueueResource->Queue_DoorBell = VOID_PTR_ADD32(doorbells[NodeId].doorbells, q->queue_id);
+	QueueResource->Queue_DoorBell = VOID_PTR_ADD(doorbells[NodeId].doorbells,
+						     (q->queue_id *
+						      dev_info->doorbell_size));
 
 	return HSAKMT_STATUS_SUCCESS;
 }
