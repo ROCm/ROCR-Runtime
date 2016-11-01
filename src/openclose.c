@@ -37,6 +37,19 @@ static const char kfd_device_name[] = "/dev/kfd";
 static const char tmp_file[] = "/var/lock/.amd_hsa_thunk_lock";
 int amd_hsa_thunk_lock_fd = 0;
 
+static bool is_forked_child(void)
+{
+	static pid_t open_pid = -1;
+	pid_t my_pid = getpid();
+
+	if (open_pid == -1 || open_pid != my_pid) {
+		open_pid = my_pid;
+		return true;
+	}
+
+	return false;
+}
+
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtOpenKFD(void)
@@ -46,6 +59,13 @@ hsaKmtOpenKFD(void)
 	HsaSystemProperties sys_props;
 
 	pthread_mutex_lock(&hsakmt_mutex);
+
+	/* If the process has forked, the child process must re-initialize
+	 * it's connection to KFD. Any references tracked by kfd_open_count
+	 * belong to the parent
+	 */
+	if (is_forked_child())
+		kfd_open_count = 0;
 
 	if (kfd_open_count == 0)
 	{
