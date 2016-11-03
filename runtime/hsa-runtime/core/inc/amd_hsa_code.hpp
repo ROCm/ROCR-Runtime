@@ -263,7 +263,7 @@ namespace code {
       amd::elf::Section* HsaText() { assert(hsatext); return hsatext; }
       const amd::elf::Section* HsaText() const { assert(hsatext); return hsatext; }
       amd::elf::SymbolTable* Symtab() { assert(img); return img->symtab(); }
-      uint16_t Machine() { return img->Machine(); }
+      uint16_t Machine() const { return img->Machine(); }
 
       AmdHsaCode(bool combineDataSegments = true);
       virtual ~AmdHsaCode();
@@ -319,8 +319,8 @@ namespace code {
 
       Symbol* AddKernelDefinition(const std::string& name, const void* isa, size_t isa_size);
 
-      size_t DataSegmentCount() { return dataSegments.size(); }
-      Segment* DataSegment(size_t i) { return dataSegments[i]; }
+      size_t DataSegmentCount() const { return dataSegments.size(); }
+      Segment* DataSegment(size_t i) const { return dataSegments[i]; }
 
       size_t DataSectionCount() { return dataSections.size(); }
       Section* DataSection(size_t i) { return dataSections[i]; }
