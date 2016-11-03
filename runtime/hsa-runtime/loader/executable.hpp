@@ -458,9 +458,14 @@ private:
     const char *symbol_name,
     const hsa_agent_t *agent);
 
-  hsa_status_t LoadSegment(hsa_agent_t agent, code::Segment* s, uint32_t majorVersion, uint16_t machine);
-  hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* seg);
-  hsa_status_t LoadSegmentV2(hsa_agent_t agent, amd::hsa::code::Segment* seg, uint16_t machine);
+  hsa_status_t LoadSegments(hsa_agent_t agent, const code::AmdHsaCode *c,
+                            uint32_t majorVersion);
+  hsa_status_t LoadSegmentsV1(hsa_agent_t agent, const code::AmdHsaCode *c);
+  hsa_status_t LoadSegmentsV2(hsa_agent_t agent, const code::AmdHsaCode *c);
+  hsa_status_t LoadSegmentV1(hsa_agent_t agent, const code::Segment *s);
+  hsa_status_t LoadSegmentV2(const code::Segment *data_segment,
+                             loader::Segment *load_segment);
+
   hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
