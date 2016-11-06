@@ -53,6 +53,7 @@
 #include "core/inc/agent.h"
 #include "core/inc/blit.h"
 #include "core/inc/signal.h"
+#include "core/inc/cache.h"
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
 
@@ -79,10 +80,11 @@ class GpuAgentInt : public core::Agent {
   // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
   virtual void InitDma() = 0;
 
-  // @brief Initialize blit kernel object based on AQL queue.
+  // @brief Initialization hook invoked after tools library has loaded,
+  // to allow tools interception of interface functions.
   //
-  // @retval HSA_STATUS_SUCCESS blit kernel object initialization is successful.
-  virtual hsa_status_t InitBlitKernel() = 0;
+  // @retval HSA_STATUS_SUCCESS if initialization is successful.
+  virtual hsa_status_t PostToolsInit() = 0;
 
   // @brief Invoke the user provided callback for each region accessible by
   // this agent.
@@ -135,6 +137,9 @@ class GpuAgentInt : public core::Agent {
   // @param [out] time Timestamp in agent domain.
   virtual uint64_t TranslateTime(uint64_t tick) = 0;
 
+  // @brief Invalidate caches on the agent which may hold code object data.
+  virtual void InvalidateCodeCaches() = 0;
+
   // @brief Sets the coherency type of this agent.
   //
   // @param [in] type New coherency type.
@@ -184,7 +189,7 @@ class GpuAgent : public GpuAgentInt {
   void InitDma() override;
 
   // @brief Override from core::Agent.
-  hsa_status_t InitBlitKernel() override;
+  hsa_status_t PostToolsInit() override;
 
   uint16_t GetMicrocodeVersion() const;
 
@@ -217,6 +222,10 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
                              void* data) const override;
+
+  // @brief Override from core::Agent.
+  hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                            void* value) const override;
 
   // @brief Override from core::Agent.
   hsa_status_t DmaCopy(void* dst, const void* src, size_t size) override;
@@ -257,9 +266,11 @@ class GpuAgent : public GpuAgentInt {
   uint64_t TranslateTime(uint64_t tick) override;
 
   // @brief Override from amd::GpuAgentInt.
-  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
+  void InvalidateCodeCaches() override;
 
   // @brief Override from amd::GpuAgentInt.
+  bool current_coherency_type(hsa_amd_coherency_type_t type) override;
+
   hsa_amd_coherency_type_t current_coherency_type() const override {
     return current_coherency_type_;
   }
@@ -309,15 +320,18 @@ class GpuAgent : public GpuAgentInt {
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
+  // @brief Create a queue through HSA API to allow tools to intercept.
+  core::Queue* CreateInterceptibleQueue();
+
   // @brief Create SDMA blit object.
   //
   // @retval NULL if SDMA blit creation and initialization failed.
   core::Blit* CreateBlitSdma();
 
-  // @brief Create Kernel blit object.
+  // @brief Create Kernel blit object using provided compute queue.
   //
   // @retval NULL if Kernel blit creation and initialization failed.
-  core::Blit* CreateBlitKernel();
+  core::Blit* CreateBlitKernel(core::Queue* queue);
 
   // @brief Invoke the user provided callback for every region in @p regions.
   //
@@ -359,15 +373,19 @@ class GpuAgent : public GpuAgentInt {
   // @brief Default scratch size per work item.
   size_t scratch_per_thread_;
 
-  // @brief Blit object to handle memory copy from system to device memory.
-  core::Blit* blit_h2d_;
+  // @brief Blit interfaces for each data path.
+  enum BlitEnum { BlitHostToDev, BlitDevToHost, BlitDevToDev, BlitCount };
 
-  // @brief Blit object to handle memory copy from device to system memory.
-  core::Blit* blit_d2h_;
+  core::Blit* blits_[BlitCount];
 
-  // @brief Blit object to handle memory copy from device to device memory, and
-  // memory fill.
-  core::Blit* blit_d2d_;
+  // @brief AQL queues for cache management and blit compute usage.
+  enum QueueEnum {
+    QueueUtility,   // Cache management and device to {host,device} blit compute
+    QueueBlitOnly,  // Host to device blit
+    QueueCount
+  };
+
+  core::Queue* queues_[QueueCount];
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
@@ -388,6 +406,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Array of GPU cache property.
   std::vector<HsaCacheProperties> cache_props_;
+
+  // @brief Array of HSA cache objects.
+  std::vector<std::unique_ptr<core::Cache>> caches_;
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;

@@ -94,6 +94,10 @@ public:
   uint64_t address;
   hsa_agent_t agent;
 
+  hsa_agent_t GetAgent() override {
+    return agent;
+  }
+
 protected:
   SymbolImpl(const bool &_is_loaded,
              const hsa_symbol_kind_t &_kind,
@@ -253,7 +257,7 @@ public:
   size_t ElfSize() const { return elf_size; }
   std::vector<Segment*>& LoadedSegments() { return loaded_segments; }
 
-  bool GetInfo(amd_loaded_code_object_info_t attribute, void *value) override;
+  bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) override;
 
   hsa_status_t IterateLoadedSegments(
     hsa_status_t (*callback)(
@@ -349,7 +353,11 @@ public:
     return state_;
   }
 
-  ExecutableImpl(const hsa_profile_t &_profile, Context *context, size_t id);
+  ExecutableImpl(
+      const hsa_profile_t &_profile,
+      Context *context,
+      size_t id,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode);
 
   ~ExecutableImpl();
 
@@ -368,14 +376,16 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
-    amd_loaded_code_object_t *loaded_code_object);
+    hsa_loaded_code_object_t *loaded_code_object,
+    bool load_legacy = true);
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
-    amd_loaded_code_object_t *loaded_code_object);
+    hsa_loaded_code_object_t *loaded_code_object,
+    bool load_legacy = true);
 
   hsa_status_t Freeze(const char *options);
 
@@ -386,18 +396,36 @@ public:
     return HSA_STATUS_SUCCESS;
   }
 
+  /// @note needed for hsa v1.0.
+  /// @todo remove during loader refactoring.
+  bool IsProgramSymbol(const char *symbol_name) override;
+
   Symbol* GetSymbol(
-    const char *module_name,
     const char *symbol_name,
-    hsa_agent_t agent,
-    int32_t call_convention);
+    const hsa_agent_t *agent) override;
 
   hsa_status_t IterateSymbols(
     iterate_symbols_f callback, void *data);
 
+  /// @since hsa v1.1.
+  hsa_status_t IterateAgentSymbols(
+      hsa_agent_t agent,
+      hsa_status_t (*callback)(hsa_executable_t exec,
+                               hsa_agent_t agent,
+                               hsa_executable_symbol_t symbol,
+                               void *data),
+      void *data) override;
+
+  /// @since hsa v1.1.
+  hsa_status_t IterateProgramSymbols(
+      hsa_status_t (*callback)(hsa_executable_t exec,
+                               hsa_executable_symbol_t symbol,
+                               void *data),
+      void *data) override;
+
   hsa_status_t IterateLoadedCodeObjects(
     hsa_status_t (*callback)(
-      amd_loaded_code_object_t loaded_code_object,
+      hsa_loaded_code_object_t loaded_code_object,
       void *data),
     void *data);
 
@@ -424,12 +452,11 @@ private:
   ExecutableImpl& operator=(const ExecutableImpl &e);
 
   std::unique_ptr<amd::hsa::code::AmdHsaCode> code;
+  bool load_legacy_;
 
   Symbol* GetSymbolInternal(
-    const char *module_name,
     const char *symbol_name,
-    hsa_agent_t agent,
-    int32_t call_convention);
+    const hsa_agent_t *agent);
 
   hsa_status_t LoadSegment(hsa_agent_t agent, code::Segment* s, uint32_t majorVersion, uint16_t machine);
   hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* seg);
@@ -454,6 +481,7 @@ private:
   hsa_profile_t profile_;
   Context *context_;
   const size_t id_;
+  hsa_default_float_rounding_mode_t default_float_rounding_mode_;
   hsa_executable_state_t state_;
 
   ProgramSymbolMap program_symbols_;
@@ -475,7 +503,10 @@ public:
 
   Context* GetContext() const { return context; }
 
-  Executable* CreateExecutable(hsa_profile_t profile, const char *options) override;
+  Executable* CreateExecutable(
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) override;
 
   void DestroyExecutable(Executable *executable) override;
 

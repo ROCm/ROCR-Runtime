@@ -125,6 +125,16 @@ void CpuAgent::InitCacheList() {
       }
     }
   }
+
+  // Update cache objects
+  caches_.clear();
+  caches_.resize(cache_props_.size());
+  char name[64];
+  GetInfo(HSA_AGENT_INFO_NAME, name);
+  std::string deviceName = name;
+  for (size_t i = 0; i < caches_.size(); i++)
+    caches_[i].reset(new core::Cache(deviceName + " L" + std::to_string(cache_props_[i].CacheLevel),
+                                     cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
 }
 
 hsa_status_t CpuAgent::VisitRegion(bool include_peer,
@@ -167,19 +177,39 @@ hsa_status_t CpuAgent::IterateRegion(
   return VisitRegion(true, callback, data);
 }
 
-hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
-  const size_t kNameSize = 64;  // agent, and vendor name size limit
+hsa_status_t CpuAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                                    void* data) const {
+  for (size_t i = 0; i < caches_.size(); i++) {
+    hsa_status_t stat = callback(core::Cache::Convert(caches_[i].get()), data);
+    if (stat != HSA_STATUS_SUCCESS) return stat;
+  }
+  return HSA_STATUS_SUCCESS;
+}
 
+hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
+  
+  // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
+  
   switch (attribute_u) {
+    
+    // The code copies HsaNodeProperties.MarketingName a Unicode string
+    // which is encoded in UTF-16 as a 7-bit ASCII string. The value of
+    // HsaNodeProperties.MarketingName is obtained from the "model name"
+    // property of /proc/cpuinfo file
     case HSA_AGENT_INFO_NAME:
-      // TODO: hardcode for now, wait until SWDEV-88894 implemented
-      std::memset(value, 0, kNameSize);
-      std::memcpy(value, "CPU Device", sizeof("CPU Device"));
+    case HSA_AMD_AGENT_INFO_PRODUCT_NAME: {
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      char* temp = reinterpret_cast<char*>(value);
+      for (uint32_t idx = 0;
+           properties_.MarketingName[idx] != 0 && idx < HSA_PUBLIC_NAME_SIZE - 1; idx++) {
+        temp[idx] = (uint8_t)properties_.MarketingName[idx];
+      }
       break;
+    }
     case HSA_AGENT_INFO_VENDOR_NAME:
       // TODO: hardcode for now, wait until SWDEV-88894 implemented
-      std::memset(value, 0, kNameSize);
+      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       std::memcpy(value, "CPU", sizeof("CPU"));
       break;
     case HSA_AGENT_INFO_FEATURE:
@@ -263,7 +293,7 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint16_t*)value) = 1;
       break;
     case HSA_AGENT_INFO_VERSION_MINOR:
-      *((uint16_t*)value) = 0;
+      *((uint16_t*)value) = 1;
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:

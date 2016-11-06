@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -63,7 +63,7 @@ if(UNIX)
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32" )
   endif ()
   if ( "${CMAKE_BUILD_TYPE}" STREQUAL Debug )
-    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb" )
+    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0 -ggdb" )
   endif ()
   add_definitions(-D __STDC_LIMIT_MACROS)
   add_definitions(-D __STDC_CONSTANT_MACROS)

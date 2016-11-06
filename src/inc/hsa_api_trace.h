@@ -139,108 +139,287 @@ struct AmdExtTable {
   decltype(hsa_amd_memory_fill)* hsa_amd_memory_fill_fn;
   decltype(hsa_amd_interop_map_buffer)* hsa_amd_interop_map_buffer_fn;
   decltype(hsa_amd_interop_unmap_buffer)* hsa_amd_interop_unmap_buffer_fn;
-  decltype(::hsa_amd_image_create)* hsa_amd_image_create_fn;
+  decltype(hsa_amd_image_create)* hsa_amd_image_create_fn;
 };
 
 // Table to export HSA Core Runtime Apis
 struct CoreApiTable {
   ApiTableVersion version;
-	decltype(hsa_init)* hsa_init_fn;
-	decltype(hsa_shut_down)* hsa_shut_down_fn;
-	decltype(hsa_system_get_info)* hsa_system_get_info_fn;
-	decltype(hsa_system_extension_supported)* hsa_system_extension_supported_fn;
-	decltype(hsa_system_get_extension_table)* hsa_system_get_extension_table_fn;
-	decltype(hsa_iterate_agents)* hsa_iterate_agents_fn;
-	decltype(hsa_agent_get_info)* hsa_agent_get_info_fn;
-	decltype(hsa_queue_create)* hsa_queue_create_fn;
-	decltype(hsa_soft_queue_create)* hsa_soft_queue_create_fn;
-	decltype(hsa_queue_destroy)* hsa_queue_destroy_fn;
-	decltype(hsa_queue_inactivate)* hsa_queue_inactivate_fn;
-	decltype(hsa_queue_load_read_index_acquire)* hsa_queue_load_read_index_acquire_fn;
-	decltype(hsa_queue_load_read_index_relaxed)* hsa_queue_load_read_index_relaxed_fn;
-	decltype(hsa_queue_load_write_index_acquire)* hsa_queue_load_write_index_acquire_fn;
-	decltype(hsa_queue_load_write_index_relaxed)* hsa_queue_load_write_index_relaxed_fn;
-	decltype(hsa_queue_store_write_index_relaxed)* hsa_queue_store_write_index_relaxed_fn;
-	decltype(hsa_queue_store_write_index_release)* hsa_queue_store_write_index_release_fn;
-	decltype(hsa_queue_cas_write_index_acq_rel)* hsa_queue_cas_write_index_acq_rel_fn;
-	decltype(hsa_queue_cas_write_index_acquire)* hsa_queue_cas_write_index_acquire_fn;
-	decltype(hsa_queue_cas_write_index_relaxed)* hsa_queue_cas_write_index_relaxed_fn;
-	decltype(hsa_queue_cas_write_index_release)* hsa_queue_cas_write_index_release_fn;
-	decltype(hsa_queue_add_write_index_acq_rel)* hsa_queue_add_write_index_acq_rel_fn;
-	decltype(hsa_queue_add_write_index_acquire)* hsa_queue_add_write_index_acquire_fn;
-	decltype(hsa_queue_add_write_index_relaxed)* hsa_queue_add_write_index_relaxed_fn;
-	decltype(hsa_queue_add_write_index_release)* hsa_queue_add_write_index_release_fn;
-	decltype(hsa_queue_store_read_index_relaxed)* hsa_queue_store_read_index_relaxed_fn;
-	decltype(hsa_queue_store_read_index_release)* hsa_queue_store_read_index_release_fn;
-	decltype(hsa_agent_iterate_regions)* hsa_agent_iterate_regions_fn;
-	decltype(hsa_region_get_info)* hsa_region_get_info_fn;
-	decltype(hsa_agent_get_exception_policies)* hsa_agent_get_exception_policies_fn;
-	decltype(hsa_agent_extension_supported)* hsa_agent_extension_supported_fn;
-	decltype(hsa_memory_register)* hsa_memory_register_fn;
-	decltype(hsa_memory_deregister)* hsa_memory_deregister_fn;
-	decltype(hsa_memory_allocate)* hsa_memory_allocate_fn;
-	decltype(hsa_memory_free)* hsa_memory_free_fn;
-	decltype(hsa_memory_copy)* hsa_memory_copy_fn;
-	decltype(hsa_memory_assign_agent)* hsa_memory_assign_agent_fn;
-	decltype(hsa_signal_create)* hsa_signal_create_fn;
-	decltype(hsa_signal_destroy)* hsa_signal_destroy_fn;
-	decltype(hsa_signal_load_relaxed)* hsa_signal_load_relaxed_fn;
-	decltype(hsa_signal_load_acquire)* hsa_signal_load_acquire_fn;
-	decltype(hsa_signal_store_relaxed)* hsa_signal_store_relaxed_fn;
-	decltype(hsa_signal_store_release)* hsa_signal_store_release_fn;
-	decltype(hsa_signal_wait_relaxed)* hsa_signal_wait_relaxed_fn;
-	decltype(hsa_signal_wait_acquire)* hsa_signal_wait_acquire_fn;
-	decltype(hsa_signal_and_relaxed)* hsa_signal_and_relaxed_fn;
-	decltype(hsa_signal_and_acquire)* hsa_signal_and_acquire_fn;
-	decltype(hsa_signal_and_release)* hsa_signal_and_release_fn;
-	decltype(hsa_signal_and_acq_rel)* hsa_signal_and_acq_rel_fn;
-	decltype(hsa_signal_or_relaxed)* hsa_signal_or_relaxed_fn;
-	decltype(hsa_signal_or_acquire)* hsa_signal_or_acquire_fn;
-	decltype(hsa_signal_or_release)* hsa_signal_or_release_fn;
-	decltype(hsa_signal_or_acq_rel)* hsa_signal_or_acq_rel_fn;
-	decltype(hsa_signal_xor_relaxed)* hsa_signal_xor_relaxed_fn;
-	decltype(hsa_signal_xor_acquire)* hsa_signal_xor_acquire_fn;
-	decltype(hsa_signal_xor_release)* hsa_signal_xor_release_fn;
-	decltype(hsa_signal_xor_acq_rel)* hsa_signal_xor_acq_rel_fn;
-	decltype(hsa_signal_exchange_relaxed)* hsa_signal_exchange_relaxed_fn;
-	decltype(hsa_signal_exchange_acquire)* hsa_signal_exchange_acquire_fn;
-	decltype(hsa_signal_exchange_release)* hsa_signal_exchange_release_fn;
-	decltype(hsa_signal_exchange_acq_rel)* hsa_signal_exchange_acq_rel_fn;
-	decltype(hsa_signal_add_relaxed)* hsa_signal_add_relaxed_fn;
-	decltype(hsa_signal_add_acquire)* hsa_signal_add_acquire_fn;
-	decltype(hsa_signal_add_release)* hsa_signal_add_release_fn;
-	decltype(hsa_signal_add_acq_rel)* hsa_signal_add_acq_rel_fn;
-	decltype(hsa_signal_subtract_relaxed)* hsa_signal_subtract_relaxed_fn;
-	decltype(hsa_signal_subtract_acquire)* hsa_signal_subtract_acquire_fn;
-	decltype(hsa_signal_subtract_release)* hsa_signal_subtract_release_fn;
-	decltype(hsa_signal_subtract_acq_rel)* hsa_signal_subtract_acq_rel_fn;
-	decltype(hsa_signal_cas_relaxed)* hsa_signal_cas_relaxed_fn;
-	decltype(hsa_signal_cas_acquire)* hsa_signal_cas_acquire_fn;
-	decltype(hsa_signal_cas_release)* hsa_signal_cas_release_fn;
-	decltype(hsa_signal_cas_acq_rel)* hsa_signal_cas_acq_rel_fn;
-	decltype(hsa_isa_from_name)* hsa_isa_from_name_fn;
-	decltype(hsa_isa_get_info)* hsa_isa_get_info_fn;
-	decltype(hsa_isa_compatible)* hsa_isa_compatible_fn;
-	decltype(hsa_code_object_serialize)* hsa_code_object_serialize_fn;
-	decltype(hsa_code_object_deserialize)* hsa_code_object_deserialize_fn;
-	decltype(hsa_code_object_destroy)* hsa_code_object_destroy_fn;
-	decltype(hsa_code_object_get_info)* hsa_code_object_get_info_fn;
-	decltype(hsa_code_object_get_symbol)* hsa_code_object_get_symbol_fn;
-	decltype(hsa_code_symbol_get_info)* hsa_code_symbol_get_info_fn;
-	decltype(hsa_code_object_iterate_symbols)* hsa_code_object_iterate_symbols_fn;
-	decltype(hsa_executable_create)* hsa_executable_create_fn;
-	decltype(hsa_executable_destroy)* hsa_executable_destroy_fn;
-	decltype(hsa_executable_load_code_object)* hsa_executable_load_code_object_fn;
-	decltype(hsa_executable_freeze)* hsa_executable_freeze_fn;
-	decltype(hsa_executable_get_info)* hsa_executable_get_info_fn;
-	decltype(hsa_executable_global_variable_define)* hsa_executable_global_variable_define_fn;
-	decltype(hsa_executable_agent_global_variable_define)* hsa_executable_agent_global_variable_define_fn;
-	decltype(hsa_executable_readonly_variable_define)* hsa_executable_readonly_variable_define_fn;
-	decltype(hsa_executable_validate)* hsa_executable_validate_fn;
-	decltype(hsa_executable_get_symbol)* hsa_executable_get_symbol_fn;
-	decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info_fn;
-	decltype(hsa_executable_iterate_symbols)* hsa_executable_iterate_symbols_fn;
-	decltype(hsa_status_string)* hsa_status_string_fn;
+  decltype(hsa_init)* hsa_init_fn;
+  decltype(hsa_shut_down)* hsa_shut_down_fn;
+  decltype(hsa_system_get_info)* hsa_system_get_info_fn;
+  decltype(hsa_system_extension_supported)* hsa_system_extension_supported_fn;
+  decltype(hsa_system_get_extension_table)* hsa_system_get_extension_table_fn;
+  decltype(hsa_iterate_agents)* hsa_iterate_agents_fn;
+  decltype(hsa_agent_get_info)* hsa_agent_get_info_fn;
+  decltype(hsa_queue_create)* hsa_queue_create_fn;
+  decltype(hsa_soft_queue_create)* hsa_soft_queue_create_fn;
+  decltype(hsa_queue_destroy)* hsa_queue_destroy_fn;
+  decltype(hsa_queue_inactivate)* hsa_queue_inactivate_fn;
+  union {
+    decltype(hsa_queue_load_read_index_scacquire)* hsa_queue_load_read_index_scacquire_fn;
+    decltype(hsa_queue_load_read_index_acquire)* hsa_queue_load_read_index_acquire_fn;
+  };
+  decltype(hsa_queue_load_read_index_relaxed)* hsa_queue_load_read_index_relaxed_fn;
+  union {
+    decltype(hsa_queue_load_write_index_scacquire)* hsa_queue_load_write_index_scacquire_fn;
+    decltype(hsa_queue_load_write_index_acquire)* hsa_queue_load_write_index_acquire_fn;
+  };
+  decltype(hsa_queue_load_write_index_relaxed)* hsa_queue_load_write_index_relaxed_fn;
+  decltype(hsa_queue_store_write_index_relaxed)* hsa_queue_store_write_index_relaxed_fn;
+  union {
+    decltype(hsa_queue_store_write_index_screlease)* hsa_queue_store_write_index_screlease_fn;
+    decltype(hsa_queue_store_write_index_release)* hsa_queue_store_write_index_release_fn;
+  };
+  union {
+    decltype(hsa_queue_cas_write_index_scacq_screl)* hsa_queue_cas_write_index_scacq_screl_fn;
+    decltype(hsa_queue_cas_write_index_acq_rel)* hsa_queue_cas_write_index_acq_rel_fn;
+  };
+  union {
+    decltype(hsa_queue_cas_write_index_scacquire)* hsa_queue_cas_write_index_scacquire_fn;
+    decltype(hsa_queue_cas_write_index_acquire)* hsa_queue_cas_write_index_acquire_fn;
+  };
+  decltype(hsa_queue_cas_write_index_relaxed)* hsa_queue_cas_write_index_relaxed_fn;
+  union {
+    decltype(hsa_queue_cas_write_index_screlease)* hsa_queue_cas_write_index_screlease_fn;
+    decltype(hsa_queue_cas_write_index_release)* hsa_queue_cas_write_index_release_fn;
+  };
+  union {
+    decltype(hsa_queue_add_write_index_scacq_screl)* hsa_queue_add_write_index_scacq_screl_fn;
+    decltype(hsa_queue_add_write_index_acq_rel)* hsa_queue_add_write_index_acq_rel_fn;
+  };
+  union {
+    decltype(hsa_queue_add_write_index_scacquire)* hsa_queue_add_write_index_scacquire_fn;
+    decltype(hsa_queue_add_write_index_acquire)* hsa_queue_add_write_index_acquire_fn;
+  };
+  decltype(hsa_queue_add_write_index_relaxed)* hsa_queue_add_write_index_relaxed_fn;
+  union {
+    decltype(hsa_queue_add_write_index_screlease)* hsa_queue_add_write_index_screlease_fn;
+    decltype(hsa_queue_add_write_index_release)* hsa_queue_add_write_index_release_fn;
+  };
+  decltype(hsa_queue_store_read_index_relaxed)* hsa_queue_store_read_index_relaxed_fn;
+  union {
+    decltype(hsa_queue_store_read_index_screlease)* hsa_queue_store_read_index_screlease_fn;
+    decltype(hsa_queue_store_read_index_release)* hsa_queue_store_read_index_release_fn;
+  };
+  decltype(hsa_agent_iterate_regions)* hsa_agent_iterate_regions_fn;
+  decltype(hsa_region_get_info)* hsa_region_get_info_fn;
+  decltype(hsa_agent_get_exception_policies)* hsa_agent_get_exception_policies_fn;
+  decltype(hsa_agent_extension_supported)* hsa_agent_extension_supported_fn;
+  decltype(hsa_memory_register)* hsa_memory_register_fn;
+  decltype(hsa_memory_deregister)* hsa_memory_deregister_fn;
+  decltype(hsa_memory_allocate)* hsa_memory_allocate_fn;
+  decltype(hsa_memory_free)* hsa_memory_free_fn;
+  decltype(hsa_memory_copy)* hsa_memory_copy_fn;
+  decltype(hsa_memory_assign_agent)* hsa_memory_assign_agent_fn;
+  decltype(hsa_signal_create)* hsa_signal_create_fn;
+  decltype(hsa_signal_destroy)* hsa_signal_destroy_fn;
+  decltype(hsa_signal_load_relaxed)* hsa_signal_load_relaxed_fn;
+  union {
+    decltype(hsa_signal_load_scacquire)* hsa_signal_load_scacquire_fn;
+    decltype(hsa_signal_load_acquire)* hsa_signal_load_acquire_fn;
+  };
+  decltype(hsa_signal_store_relaxed)* hsa_signal_store_relaxed_fn;
+  union {
+    decltype(hsa_signal_store_screlease)* hsa_signal_store_screlease_fn;
+    decltype(hsa_signal_store_release)* hsa_signal_store_release_fn;
+  };
+  decltype(hsa_signal_wait_relaxed)* hsa_signal_wait_relaxed_fn;
+  union {
+    decltype(hsa_signal_wait_scacquire)* hsa_signal_wait_scacquire_fn;
+    decltype(hsa_signal_wait_acquire)* hsa_signal_wait_acquire_fn;
+  };
+  decltype(hsa_signal_and_relaxed)* hsa_signal_and_relaxed_fn;
+  union {
+    decltype(hsa_signal_and_scacquire)* hsa_signal_and_scacquire_fn;
+    decltype(hsa_signal_and_acquire)* hsa_signal_and_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_and_screlease)* hsa_signal_and_screlease_fn;
+    decltype(hsa_signal_and_release)* hsa_signal_and_release_fn;
+  };
+  union {
+    decltype(hsa_signal_and_scacq_screl)* hsa_signal_and_scacq_screl_fn;
+    decltype(hsa_signal_and_acq_rel)* hsa_signal_and_acq_rel_fn;
+  };
+  decltype(hsa_signal_or_relaxed)* hsa_signal_or_relaxed_fn;
+  union {
+    decltype(hsa_signal_or_scacquire)* hsa_signal_or_scacquire_fn;
+    decltype(hsa_signal_or_acquire)* hsa_signal_or_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_or_screlease)* hsa_signal_or_screlease_fn;
+    decltype(hsa_signal_or_release)* hsa_signal_or_release_fn;
+  };
+  union {
+    decltype(hsa_signal_or_scacq_screl)* hsa_signal_or_scacq_screl_fn;
+    decltype(hsa_signal_or_acq_rel)* hsa_signal_or_acq_rel_fn;
+  };
+  decltype(hsa_signal_xor_relaxed)* hsa_signal_xor_relaxed_fn;
+  union {
+    decltype(hsa_signal_xor_scacquire)* hsa_signal_xor_scacquire_fn;
+    decltype(hsa_signal_xor_acquire)* hsa_signal_xor_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_xor_screlease)* hsa_signal_xor_screlease_fn;
+    decltype(hsa_signal_xor_release)* hsa_signal_xor_release_fn;
+  };
+  union {
+    decltype(hsa_signal_xor_scacq_screl)* hsa_signal_xor_scacq_screl_fn;
+    decltype(hsa_signal_xor_acq_rel)* hsa_signal_xor_acq_rel_fn;
+  };
+  decltype(hsa_signal_exchange_relaxed)* hsa_signal_exchange_relaxed_fn;
+  union {
+    decltype(hsa_signal_exchange_scacquire)* hsa_signal_exchange_scacquire_fn;
+    decltype(hsa_signal_exchange_acquire)* hsa_signal_exchange_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_exchange_screlease)* hsa_signal_exchange_screlease_fn;
+    decltype(hsa_signal_exchange_release)* hsa_signal_exchange_release_fn;
+  };
+  union {
+    decltype(hsa_signal_exchange_scacq_screl)* hsa_signal_exchange_scacq_screl_fn;
+    decltype(hsa_signal_exchange_acq_rel)* hsa_signal_exchange_acq_rel_fn;
+  };
+  decltype(hsa_signal_add_relaxed)* hsa_signal_add_relaxed_fn;
+  union {
+    decltype(hsa_signal_add_scacquire)* hsa_signal_add_scacquire_fn;
+    decltype(hsa_signal_add_acquire)* hsa_signal_add_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_add_screlease)* hsa_signal_add_screlease_fn;
+    decltype(hsa_signal_add_release)* hsa_signal_add_release_fn;
+  };
+  union {
+    decltype(hsa_signal_add_scacq_screl)* hsa_signal_add_scacq_screl_fn;
+    decltype(hsa_signal_add_acq_rel)* hsa_signal_add_acq_rel_fn;
+  };
+  decltype(hsa_signal_subtract_relaxed)* hsa_signal_subtract_relaxed_fn;
+  union {
+    decltype(hsa_signal_subtract_scacquire)* hsa_signal_subtract_scacquire_fn;
+    decltype(hsa_signal_subtract_acquire)* hsa_signal_subtract_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_subtract_screlease)* hsa_signal_subtract_screlease_fn;
+    decltype(hsa_signal_subtract_release)* hsa_signal_subtract_release_fn;
+  };
+  union {
+    decltype(hsa_signal_subtract_scacq_screl)* hsa_signal_subtract_scacq_screl_fn;
+    decltype(hsa_signal_subtract_acq_rel)* hsa_signal_subtract_acq_rel_fn;
+  };
+  decltype(hsa_signal_cas_relaxed)* hsa_signal_cas_relaxed_fn;
+  union {
+    decltype(hsa_signal_cas_scacquire)* hsa_signal_cas_scacquire_fn;
+    decltype(hsa_signal_cas_acquire)* hsa_signal_cas_acquire_fn;
+  };
+  union {
+    decltype(hsa_signal_cas_screlease)* hsa_signal_cas_screlease_fn;
+    decltype(hsa_signal_cas_release)* hsa_signal_cas_release_fn;
+  };
+  union {
+    decltype(hsa_signal_cas_scacq_screl)* hsa_signal_cas_scacq_screl_fn;
+    decltype(hsa_signal_cas_acq_rel)* hsa_signal_cas_acq_rel_fn;
+  };
+
+  //===--- Instruction Set Architecture -----------------------------------===//
+
+  decltype(hsa_isa_from_name)* hsa_isa_from_name_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_isa_get_info)* hsa_isa_get_info_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_isa_compatible)* hsa_isa_compatible_fn;
+
+  //===--- Code Objects (deprecated) --------------------------------------===//
+
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_serialize)* hsa_code_object_serialize_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_deserialize)* hsa_code_object_deserialize_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_destroy)* hsa_code_object_destroy_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_get_info)* hsa_code_object_get_info_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_get_symbol)* hsa_code_object_get_symbol_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_symbol_get_info)* hsa_code_symbol_get_info_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_iterate_symbols)* hsa_code_object_iterate_symbols_fn;
+
+  //===--- Executable -----------------------------------------------------===//
+
+  // Deprecated since v1.1.
+  decltype(hsa_executable_create)* hsa_executable_create_fn;
+  decltype(hsa_executable_destroy)* hsa_executable_destroy_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_executable_load_code_object)* hsa_executable_load_code_object_fn;
+  decltype(hsa_executable_freeze)* hsa_executable_freeze_fn;
+  decltype(hsa_executable_get_info)* hsa_executable_get_info_fn;
+  decltype(hsa_executable_global_variable_define)*
+      hsa_executable_global_variable_define_fn;
+  decltype(hsa_executable_agent_global_variable_define)*
+      hsa_executable_agent_global_variable_define_fn;
+  decltype(hsa_executable_readonly_variable_define)*
+      hsa_executable_readonly_variable_define_fn;
+  decltype(hsa_executable_validate)* hsa_executable_validate_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_executable_get_symbol)* hsa_executable_get_symbol_fn;
+  decltype(hsa_executable_symbol_get_info)* hsa_executable_symbol_get_info_fn;
+  // Deprecated since v1.1.
+  decltype(hsa_executable_iterate_symbols)* hsa_executable_iterate_symbols_fn;
+
+  //===--- Runtime Notifications ------------------------------------------===//
+
+  decltype(hsa_status_string)* hsa_status_string_fn;
+
+  // Start HSA v1.1 additions
+  decltype(hsa_extension_get_name)* hsa_extension_get_name_fn;
+  decltype(hsa_system_major_extension_supported)* hsa_system_major_extension_supported_fn;
+  decltype(hsa_system_get_major_extension_table)* hsa_system_get_major_extension_table_fn;
+  decltype(hsa_agent_major_extension_supported)* hsa_agent_major_extension_supported_fn;
+  decltype(hsa_cache_get_info)* hsa_cache_get_info_fn;
+  decltype(hsa_agent_iterate_caches)* hsa_agent_iterate_caches_fn;
+  decltype(hsa_signal_silent_store_relaxed)* hsa_signal_silent_store_relaxed_fn;
+  decltype(hsa_signal_silent_store_screlease)* hsa_signal_silent_store_screlease_fn;
+  decltype(hsa_signal_group_create)* hsa_signal_group_create_fn;
+  decltype(hsa_signal_group_destroy)* hsa_signal_group_destroy_fn;
+  decltype(hsa_signal_group_wait_any_scacquire)* hsa_signal_group_wait_any_scacquire_fn;
+  decltype(hsa_signal_group_wait_any_relaxed)* hsa_signal_group_wait_any_relaxed_fn;
+
+  //===--- Instruction Set Architecture - HSA v1.1 additions --------------===//
+
+  decltype(hsa_agent_iterate_isas)* hsa_agent_iterate_isas_fn;
+  decltype(hsa_isa_get_info_alt)* hsa_isa_get_info_alt_fn;
+  decltype(hsa_isa_get_exception_policies)* hsa_isa_get_exception_policies_fn;
+  decltype(hsa_isa_get_round_method)* hsa_isa_get_round_method_fn;
+  decltype(hsa_wavefront_get_info)* hsa_wavefront_get_info_fn;
+  decltype(hsa_isa_iterate_wavefronts)* hsa_isa_iterate_wavefronts_fn;
+
+  //===--- Code Objects (deprecated) - HSA v1.1 additions -----------------===//
+
+  // Deprecated since v1.1.
+  decltype(hsa_code_object_get_symbol_from_name)*
+      hsa_code_object_get_symbol_from_name_fn;
+
+  //===--- Executable - HSA v1.1 additions --------------------------------===//
+
+  decltype(hsa_code_object_reader_create_from_file)*
+      hsa_code_object_reader_create_from_file_fn;
+  decltype(hsa_code_object_reader_create_from_memory)*
+      hsa_code_object_reader_create_from_memory_fn;
+  decltype(hsa_code_object_reader_destroy)* hsa_code_object_reader_destroy_fn;
+  decltype(hsa_executable_create_alt)* hsa_executable_create_alt_fn;
+  decltype(hsa_executable_load_program_code_object)*
+      hsa_executable_load_program_code_object_fn;
+  decltype(hsa_executable_load_agent_code_object)*
+      hsa_executable_load_agent_code_object_fn;
+  decltype(hsa_executable_validate_alt)* hsa_executable_validate_alt_fn;
+  decltype(hsa_executable_get_symbol_by_name)*
+      hsa_executable_get_symbol_by_name_fn;
+  decltype(hsa_executable_iterate_agent_symbols)*
+      hsa_executable_iterate_agent_symbols_fn;
+  decltype(hsa_executable_iterate_program_symbols)*
+      hsa_executable_iterate_program_symbols_fn;
 };
 
 // Table to export HSA Apis from Core Runtime, Amd Extensions

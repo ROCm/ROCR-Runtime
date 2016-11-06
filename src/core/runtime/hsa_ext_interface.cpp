@@ -221,15 +221,15 @@ void ExtensionEntryPoints::InitAmdExtTable() {
 void ExtensionEntryPoints::UpdateAmdExtTable(void *func_ptr) {
   
   assert(hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
-             (decltype(::hsa_amd_image_create)*)hsa_ext_null && 
+             (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
   assert(hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
-             (decltype(::hsa_amd_image_create)*)hsa_ext_null && 
+             (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
   hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(::hsa_amd_image_create)*)func_ptr;
+             (decltype(hsa_amd_image_create)*)func_ptr;
   hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(::hsa_amd_image_create)*)func_ptr;
+             (decltype(hsa_amd_image_create)*)func_ptr;
 }
 
 void ExtensionEntryPoints::Unload() {
@@ -264,7 +264,6 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
   void* ptr;
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_impl");
-  bool libIsImage = (ptr != NULL);
   if (ptr != NULL) {
     assert(image_api.hsa_ext_image_get_capability_fn ==
                (decltype(::hsa_ext_image_get_capability)*)hsa_ext_null &&

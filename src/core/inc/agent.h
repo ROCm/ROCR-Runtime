@@ -49,7 +49,6 @@
 
 #include <vector>
 
-#include "core/inc/runtime.h"
 #include "core/inc/checked.h"
 #include "core/inc/isa.h"
 #include "core/inc/queue.h"
@@ -189,6 +188,10 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   virtual hsa_status_t IterateRegion(
       hsa_status_t (*callback)(hsa_region_t region, void* data),
       void* data) const = 0;
+
+  // @brief Invoke the callback for each cache useable by this agent.
+  virtual hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                                    void* data) const = 0;
 
   // @brief Create queue.
   //

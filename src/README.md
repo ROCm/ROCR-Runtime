@@ -1,7 +1,7 @@
 ### Package Contents
 
-This directory contains the HSA Runtime source code for the Boltzmann release. It has been modified to support
-AMD/ATI discrete GPUs.
+This directory contains the ROC Runtime source code based on the HSA Runtime
+but modified to support AMD/ATI discrete GPUs.
 
 #### Source & Include directories
 
@@ -11,7 +11,7 @@ cmake_modules - CMake support modules and files.
 
 inc - Contains the public and AMD specific header files exposing the HSA Runtimes interfaces.
 
-libamdhsacode - HSAIL/Finalizer runtime interface. 
+libamdhsacode - Code object definitions and interface.
 
 loader - Used to load code objects.
 
@@ -19,12 +19,11 @@ utils - Utilities required to build the core runtime.
 
 #### Build environment
 
-CMake build framework is used to build the HSA runtime. The minimum version is 2.8.
+CMake build framework is used to build the ROC runtime. The minimum version is 2.8.
 
 Obtain cmake infrastructure: http://www.cmake.org/download/
 
 Export cmake bin into your PATH
-HSA Runtime CMake build file CMakeLists.txt is located in runtime/core folder.
 
 #### Package Dependencies
 
@@ -36,26 +35,26 @@ The following support packages are requried to succesfully build the runtime:
 
 #### Building the runtime
 
-To build the runtime a compatible version of the libhsakmt library and the 
+To build the runtime a compatible version of the libhsakmt library and the
 hsakmt.h header file must be available. The latest version of these files
 can be obtained from the ROCT-Thunk-Interface repository, available here:
 
 https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface
  
-Specify the directory containing libhsakmt.so.1 and hsakmt.h using the following 
+Specify the directory containing libhsakmt.so.1 and hsakmt.h using the following
 cmake variables:
 
-HSATHK_BUILD_INC_PATH - Set to the dirctory containing hsakmt.h.
+HSAKMT_BUILD_INC_PATH - Set to the dirctory containing hsakmt.h.
 
-HSATHK_BUILD_LIB_PATH - Set to the directory containing libhsakmt.so.1
+HSAKMT_BUILD_LIB_PATH - Set to the directory containing libhsakmt.so.1
 
 For example, from the top level ROCR repository execute:
 
     mkdir build
     cd build
-    cmake -D HSATHK_BUILD_INC_PATH=<location of hsakmt.h> \
-          -D HSATHK_BUILD_LIB_PATH=<location of libhsakmt.so> \
-          ../src
+    cmake -D HSAKMT_BUILD_INC_PATH=<location of hsakmt.h> \
+          -D HSAKMT_BUILD_LIB_PATH=<location of libhsakmt.so> \
+          ..
     make
 
 The name of the core hsa runtime is libhsa-runtime64.so.1.
@@ -64,15 +63,15 @@ The name of the core hsa runtime is libhsa-runtime64.so.1.
 
 http://www.hsafoundation.com/standards/
 
-HSA Runtime Specification 1.0
+HSA Runtime Specification 1.1
 
-HSA Programmer Reference Manual Specification 1.0
+HSA Programmer Reference Manual Specification 1.1
 
-HSA Platform System Architecture Specification 1.0
+HSA Platform System Architecture Specification 1.1
 
 #### Runtime Design overview
 
-The AMD HSA runtime consists of three primary layers:
+The AMD ROC runtime consists of three primary layers:
 
 C interface adaptors
 C++ interfaces classes and common functions
@@ -87,7 +86,7 @@ hsa.h(cpp)
 
 hsa_ext_interface.h(cpp)
 
-The C interface layer provides C99 APIs as defined in the HSA Runtime Specification 1.0. The interfaces and default definitions for the standard extensions are also provided. The interface functions simply forward to a function pointer table defined here. The table is initialized to point to default definitions, which simply return an appropriate error code. If available the extension library is loaded as part of runtime initialization and the table is updated to point into the extension library.  In this release the standard extensions (image support and finalizer) are implemented in a separate libraries (not open sourced), and can be obtained from the HSA-Runtime-AMD git repository.
+The C interface layer provides C99 APIs as defined in the HSA Runtime Specification 1.1. The interfaces and default definitions for the standard extensions are also provided. The interface functions simply forward to a function pointer table defined here. The table is initialized to point to default definitions, which simply return an appropriate error code. If available the extension library is loaded as part of runtime initialization and the table is updated to point into the extension library.  In this release the standard extensions (image support and finalizer) are implemented in a separate libraries (not open sourced), and can be obtained from the HSA-Runtime-AMD git repository.
 
 #### C++ interfaces classes and common functions
 
@@ -133,7 +132,7 @@ interrupt_signal.h(cpp)
 
 hsa_ext_private_amd.h(cpp)
 
-The device specific layer contains implementations of the C++ interface classes which implement HSA functionality for AMD Kaveri & Carrizo APUs.
+The device specific layer contains implementations of the C++ interface classes which implement HSA functionality for ROCm supported devices.
 
 #### Implemented functionality
 
@@ -154,4 +153,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2015 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2016 Advanced Micro Devices, Inc. All rights reserved.

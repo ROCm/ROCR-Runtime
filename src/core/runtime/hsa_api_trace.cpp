@@ -146,38 +146,28 @@ void HsaApiTable::UpdateCore() {
   core_api.hsa_soft_queue_create_fn = HSA::hsa_soft_queue_create;
   core_api.hsa_queue_destroy_fn = HSA::hsa_queue_destroy;
   core_api.hsa_queue_inactivate_fn = HSA::hsa_queue_inactivate;
-  core_api.hsa_queue_load_read_index_acquire_fn =
-      HSA::hsa_queue_load_read_index_acquire;
+  core_api.hsa_queue_load_read_index_scacquire_fn = HSA::hsa_queue_load_read_index_scacquire;
   core_api.hsa_queue_load_read_index_relaxed_fn =
       HSA::hsa_queue_load_read_index_relaxed;
-  core_api.hsa_queue_load_write_index_acquire_fn =
-      HSA::hsa_queue_load_write_index_acquire;
+  core_api.hsa_queue_load_write_index_scacquire_fn = HSA::hsa_queue_load_write_index_scacquire;
   core_api.hsa_queue_load_write_index_relaxed_fn =
       HSA::hsa_queue_load_write_index_relaxed;
   core_api.hsa_queue_store_write_index_relaxed_fn =
       HSA::hsa_queue_store_write_index_relaxed;
-  core_api.hsa_queue_store_write_index_release_fn =
-      HSA::hsa_queue_store_write_index_release;
-  core_api.hsa_queue_cas_write_index_acq_rel_fn =
-      HSA::hsa_queue_cas_write_index_acq_rel;
-  core_api.hsa_queue_cas_write_index_acquire_fn =
-      HSA::hsa_queue_cas_write_index_acquire;
+  core_api.hsa_queue_store_write_index_screlease_fn = HSA::hsa_queue_store_write_index_screlease;
+  core_api.hsa_queue_cas_write_index_scacq_screl_fn = HSA::hsa_queue_cas_write_index_scacq_screl;
+  core_api.hsa_queue_cas_write_index_scacquire_fn = HSA::hsa_queue_cas_write_index_scacquire;
   core_api.hsa_queue_cas_write_index_relaxed_fn =
       HSA::hsa_queue_cas_write_index_relaxed;
-  core_api.hsa_queue_cas_write_index_release_fn =
-      HSA::hsa_queue_cas_write_index_release;
-  core_api.hsa_queue_add_write_index_acq_rel_fn =
-      HSA::hsa_queue_add_write_index_acq_rel;
-  core_api.hsa_queue_add_write_index_acquire_fn =
-      HSA::hsa_queue_add_write_index_acquire;
+  core_api.hsa_queue_cas_write_index_screlease_fn = HSA::hsa_queue_cas_write_index_screlease;
+  core_api.hsa_queue_add_write_index_scacq_screl_fn = HSA::hsa_queue_add_write_index_scacq_screl;
+  core_api.hsa_queue_add_write_index_scacquire_fn = HSA::hsa_queue_add_write_index_scacquire;
   core_api.hsa_queue_add_write_index_relaxed_fn =
       HSA::hsa_queue_add_write_index_relaxed;
-  core_api.hsa_queue_add_write_index_release_fn =
-      HSA::hsa_queue_add_write_index_release;
+  core_api.hsa_queue_add_write_index_screlease_fn = HSA::hsa_queue_add_write_index_screlease;
   core_api.hsa_queue_store_read_index_relaxed_fn =
       HSA::hsa_queue_store_read_index_relaxed;
-  core_api.hsa_queue_store_read_index_release_fn =
-      HSA::hsa_queue_store_read_index_release;
+  core_api.hsa_queue_store_read_index_screlease_fn = HSA::hsa_queue_store_read_index_screlease;
   core_api.hsa_agent_iterate_regions_fn = HSA::hsa_agent_iterate_regions;
   core_api.hsa_region_get_info_fn = HSA::hsa_region_get_info;
   core_api.hsa_memory_register_fn = HSA::hsa_memory_register;
@@ -189,52 +179,72 @@ void HsaApiTable::UpdateCore() {
   core_api.hsa_signal_create_fn = HSA::hsa_signal_create;
   core_api.hsa_signal_destroy_fn = HSA::hsa_signal_destroy;
   core_api.hsa_signal_load_relaxed_fn = HSA::hsa_signal_load_relaxed;
-  core_api.hsa_signal_load_acquire_fn = HSA::hsa_signal_load_acquire;
+  core_api.hsa_signal_load_scacquire_fn = HSA::hsa_signal_load_scacquire;
   core_api.hsa_signal_store_relaxed_fn = HSA::hsa_signal_store_relaxed;
-  core_api.hsa_signal_store_release_fn = HSA::hsa_signal_store_release;
+  core_api.hsa_signal_store_screlease_fn = HSA::hsa_signal_store_screlease;
   core_api.hsa_signal_wait_relaxed_fn = HSA::hsa_signal_wait_relaxed;
-  core_api.hsa_signal_wait_acquire_fn = HSA::hsa_signal_wait_acquire;
+  core_api.hsa_signal_wait_scacquire_fn = HSA::hsa_signal_wait_scacquire;
   core_api.hsa_signal_and_relaxed_fn = HSA::hsa_signal_and_relaxed;
-  core_api.hsa_signal_and_acquire_fn = HSA::hsa_signal_and_acquire;
-  core_api.hsa_signal_and_release_fn = HSA::hsa_signal_and_release;
-  core_api.hsa_signal_and_acq_rel_fn = HSA::hsa_signal_and_acq_rel;
+  core_api.hsa_signal_and_scacquire_fn = HSA::hsa_signal_and_scacquire;
+  core_api.hsa_signal_and_screlease_fn = HSA::hsa_signal_and_screlease;
+  core_api.hsa_signal_and_scacq_screl_fn = HSA::hsa_signal_and_scacq_screl;
   core_api.hsa_signal_or_relaxed_fn = HSA::hsa_signal_or_relaxed;
-  core_api.hsa_signal_or_acquire_fn = HSA::hsa_signal_or_acquire;
-  core_api.hsa_signal_or_release_fn = HSA::hsa_signal_or_release;
-  core_api.hsa_signal_or_acq_rel_fn = HSA::hsa_signal_or_acq_rel;
+  core_api.hsa_signal_or_scacquire_fn = HSA::hsa_signal_or_scacquire;
+  core_api.hsa_signal_or_screlease_fn = HSA::hsa_signal_or_screlease;
+  core_api.hsa_signal_or_scacq_screl_fn = HSA::hsa_signal_or_scacq_screl;
   core_api.hsa_signal_xor_relaxed_fn = HSA::hsa_signal_xor_relaxed;
-  core_api.hsa_signal_xor_acquire_fn = HSA::hsa_signal_xor_acquire;
-  core_api.hsa_signal_xor_release_fn = HSA::hsa_signal_xor_release;
-  core_api.hsa_signal_xor_acq_rel_fn = HSA::hsa_signal_xor_acq_rel;
+  core_api.hsa_signal_xor_scacquire_fn = HSA::hsa_signal_xor_scacquire;
+  core_api.hsa_signal_xor_screlease_fn = HSA::hsa_signal_xor_screlease;
+  core_api.hsa_signal_xor_scacq_screl_fn = HSA::hsa_signal_xor_scacq_screl;
   core_api.hsa_signal_exchange_relaxed_fn = HSA::hsa_signal_exchange_relaxed;
-  core_api.hsa_signal_exchange_acquire_fn = HSA::hsa_signal_exchange_acquire;
-  core_api.hsa_signal_exchange_release_fn = HSA::hsa_signal_exchange_release;
-  core_api.hsa_signal_exchange_acq_rel_fn = HSA::hsa_signal_exchange_acq_rel;
+  core_api.hsa_signal_exchange_scacquire_fn = HSA::hsa_signal_exchange_scacquire;
+  core_api.hsa_signal_exchange_screlease_fn = HSA::hsa_signal_exchange_screlease;
+  core_api.hsa_signal_exchange_scacq_screl_fn = HSA::hsa_signal_exchange_scacq_screl;
   core_api.hsa_signal_add_relaxed_fn = HSA::hsa_signal_add_relaxed;
-  core_api.hsa_signal_add_acquire_fn = HSA::hsa_signal_add_acquire;
-  core_api.hsa_signal_add_release_fn = HSA::hsa_signal_add_release;
-  core_api.hsa_signal_add_acq_rel_fn = HSA::hsa_signal_add_acq_rel;
+  core_api.hsa_signal_add_scacquire_fn = HSA::hsa_signal_add_scacquire;
+  core_api.hsa_signal_add_screlease_fn = HSA::hsa_signal_add_screlease;
+  core_api.hsa_signal_add_scacq_screl_fn = HSA::hsa_signal_add_scacq_screl;
   core_api.hsa_signal_subtract_relaxed_fn = HSA::hsa_signal_subtract_relaxed;
-  core_api.hsa_signal_subtract_acquire_fn = HSA::hsa_signal_subtract_acquire;
-  core_api.hsa_signal_subtract_release_fn = HSA::hsa_signal_subtract_release;
-  core_api.hsa_signal_subtract_acq_rel_fn = HSA::hsa_signal_subtract_acq_rel;
+  core_api.hsa_signal_subtract_scacquire_fn = HSA::hsa_signal_subtract_scacquire;
+  core_api.hsa_signal_subtract_screlease_fn = HSA::hsa_signal_subtract_screlease;
+  core_api.hsa_signal_subtract_scacq_screl_fn = HSA::hsa_signal_subtract_scacq_screl;
   core_api.hsa_signal_cas_relaxed_fn = HSA::hsa_signal_cas_relaxed;
-  core_api.hsa_signal_cas_acquire_fn = HSA::hsa_signal_cas_acquire;
-  core_api.hsa_signal_cas_release_fn = HSA::hsa_signal_cas_release;
-  core_api.hsa_signal_cas_acq_rel_fn = HSA::hsa_signal_cas_acq_rel;
+  core_api.hsa_signal_cas_scacquire_fn = HSA::hsa_signal_cas_scacquire;
+  core_api.hsa_signal_cas_screlease_fn = HSA::hsa_signal_cas_screlease;
+  core_api.hsa_signal_cas_scacq_screl_fn = HSA::hsa_signal_cas_scacq_screl;
+
+  //===--- Instruction Set Architecture -----------------------------------===//
+
   core_api.hsa_isa_from_name_fn = HSA::hsa_isa_from_name;
+  // Deprecated since v1.1.
   core_api.hsa_isa_get_info_fn = HSA::hsa_isa_get_info;
+  // Deprecated since v1.1.
   core_api.hsa_isa_compatible_fn = HSA::hsa_isa_compatible;
+
+  //===--- Code Objects (deprecated) --------------------------------------===//
+
+  // Deprecated since v1.1.
   core_api.hsa_code_object_serialize_fn = HSA::hsa_code_object_serialize;
+  // Deprecated since v1.1.
   core_api.hsa_code_object_deserialize_fn = HSA::hsa_code_object_deserialize;
+  // Deprecated since v1.1.
   core_api.hsa_code_object_destroy_fn = HSA::hsa_code_object_destroy;
+  // Deprecated since v1.1.
   core_api.hsa_code_object_get_info_fn = HSA::hsa_code_object_get_info;
+  // Deprecated since v1.1.
   core_api.hsa_code_object_get_symbol_fn = HSA::hsa_code_object_get_symbol;
+  // Deprecated since v1.1.
   core_api.hsa_code_symbol_get_info_fn = HSA::hsa_code_symbol_get_info;
+  // Deprecated since v1.1.
   core_api.hsa_code_object_iterate_symbols_fn =
       HSA::hsa_code_object_iterate_symbols;
+
+  //===--- Executable -----------------------------------------------------===//
+
+  // Deprecated since v1.1.
   core_api.hsa_executable_create_fn = HSA::hsa_executable_create;
   core_api.hsa_executable_destroy_fn = HSA::hsa_executable_destroy;
+  // Deprecated since v1.1.
   core_api.hsa_executable_load_code_object_fn =
       HSA::hsa_executable_load_code_object;
   core_api.hsa_executable_freeze_fn = HSA::hsa_executable_freeze;
@@ -246,10 +256,69 @@ void HsaApiTable::UpdateCore() {
   core_api.hsa_executable_readonly_variable_define_fn =
       HSA::hsa_executable_readonly_variable_define;
   core_api.hsa_executable_validate_fn = HSA::hsa_executable_validate;
+  // Deprecated since v1.1.
   core_api.hsa_executable_get_symbol_fn = HSA::hsa_executable_get_symbol;
-  core_api.hsa_executable_symbol_get_info_fn = HSA::hsa_executable_symbol_get_info;
-  core_api.hsa_executable_iterate_symbols_fn = HSA::hsa_executable_iterate_symbols;
+  core_api.hsa_executable_symbol_get_info_fn =
+      HSA::hsa_executable_symbol_get_info;
+  // Deprecated since v1.1.
+  core_api.hsa_executable_iterate_symbols_fn =
+      HSA::hsa_executable_iterate_symbols;
+
+  //===--- Runtime Notifications ------------------------------------------===//
+
   core_api.hsa_status_string_fn = HSA::hsa_status_string;
+
+  // Start HSA v1.1 additions
+  core_api.hsa_extension_get_name_fn = HSA::hsa_extension_get_name;
+  core_api.hsa_system_major_extension_supported_fn = HSA::hsa_system_major_extension_supported;
+  core_api.hsa_system_get_major_extension_table_fn = HSA::hsa_system_get_major_extension_table;
+  core_api.hsa_agent_major_extension_supported_fn = HSA::hsa_agent_major_extension_supported;
+  core_api.hsa_cache_get_info_fn = HSA::hsa_cache_get_info;
+  core_api.hsa_agent_iterate_caches_fn = HSA::hsa_agent_iterate_caches;
+  // Silent store optimization is present in all signal ops when no agents are sleeping.
+  core_api.hsa_signal_silent_store_relaxed_fn = HSA::hsa_signal_store_relaxed;
+  core_api.hsa_signal_silent_store_screlease_fn = HSA::hsa_signal_store_screlease;
+  core_api.hsa_signal_group_create_fn = HSA::hsa_signal_group_create;
+  core_api.hsa_signal_group_destroy_fn = HSA::hsa_signal_group_destroy;
+  core_api.hsa_signal_group_wait_any_scacquire_fn = HSA::hsa_signal_group_wait_any_scacquire;
+  core_api.hsa_signal_group_wait_any_relaxed_fn = HSA::hsa_signal_group_wait_any_relaxed;
+
+  //===--- Instruction Set Architecture - HSA v1.1 additions --------------===//
+
+  core_api.hsa_agent_iterate_isas_fn = HSA::hsa_agent_iterate_isas;
+  core_api.hsa_isa_get_info_alt_fn = HSA::hsa_isa_get_info_alt;
+  core_api.hsa_isa_get_exception_policies_fn =
+      HSA::hsa_isa_get_exception_policies;
+  core_api.hsa_isa_get_round_method_fn = HSA::hsa_isa_get_round_method;
+  core_api.hsa_wavefront_get_info_fn = HSA::hsa_wavefront_get_info;
+  core_api.hsa_isa_iterate_wavefronts_fn = HSA::hsa_isa_iterate_wavefronts;
+
+  //===--- Code Objects (deprecated) - HSA v1.1 additions -----------------===//
+
+  // Deprecated since v1.1.
+  core_api.hsa_code_object_get_symbol_from_name_fn =
+      HSA::hsa_code_object_get_symbol_from_name;
+
+  //===--- Executable - HSA v1.1 additions --------------------------------===//
+
+  core_api.hsa_code_object_reader_create_from_file_fn =
+      HSA::hsa_code_object_reader_create_from_file;
+  core_api.hsa_code_object_reader_create_from_memory_fn =
+      HSA::hsa_code_object_reader_create_from_memory;
+  core_api.hsa_code_object_reader_destroy_fn =
+      HSA::hsa_code_object_reader_destroy;
+  core_api.hsa_executable_create_alt_fn = HSA::hsa_executable_create_alt;
+  core_api.hsa_executable_load_program_code_object_fn =
+      HSA::hsa_executable_load_program_code_object;
+  core_api.hsa_executable_load_agent_code_object_fn =
+      HSA::hsa_executable_load_agent_code_object;
+  core_api.hsa_executable_validate_alt_fn = HSA::hsa_executable_validate_alt;
+  core_api.hsa_executable_get_symbol_by_name_fn =
+      HSA::hsa_executable_get_symbol_by_name;
+  core_api.hsa_executable_iterate_agent_symbols_fn =
+      HSA::hsa_executable_iterate_agent_symbols;
+  core_api.hsa_executable_iterate_program_symbols_fn =
+      HSA::hsa_executable_iterate_program_symbols;
 }
 
 // Update Api table for Amd Extensions.

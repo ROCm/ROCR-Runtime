@@ -711,6 +711,11 @@ typedef enum {
 } hsa_ext_sampler_addressing_mode_t;
 
 /**
+ *@brief Fixed size container for address mode.
+ */
+typedef uint32_t hsa_ext_sampler_addressing_mode32_t;
+
+/**
  * @brief Sampler coordinate modes. The enumeration values match the BRIG
  * BRIG_SAMPLER_COORD bit in BrigSamplerModifier.
  */
@@ -726,6 +731,11 @@ typedef enum {
   HSA_EXT_SAMPLER_COORDINATE_MODE_NORMALIZED = 1
 
 } hsa_ext_sampler_coordinate_mode_t;
+
+/**
+ *@brief Fixed size container for coordinate mode.
+ */
+typedef uint32_t hsa_ext_sampler_coordinate_mode32_t;
 
 /**
  * @brief Sampler filter modes. The enumeration values match the BRIG type
@@ -748,24 +758,29 @@ typedef enum {
 } hsa_ext_sampler_filter_mode_t;
 
 /**
+ *@brief Fixed size container for filter mode.
+ */
+typedef uint32_t hsa_ext_sampler_filter_mode32_t;
+
+/**
  * @brief Implementation-independent sampler descriptor.
  */
 typedef struct hsa_ext_sampler_descriptor_s {
   /**
    * Sampler coordinate mode describes the normalization of image coordinates.
    */
-  hsa_ext_sampler_coordinate_mode_t coordinate_mode;
+  hsa_ext_sampler_coordinate_mode32_t coordinate_mode;
 
   /**
    * Sampler filter type describes the type of sampling performed.
    */
-  hsa_ext_sampler_filter_mode_t filter_mode;
+  hsa_ext_sampler_filter_mode32_t filter_mode;
 
   /**
    * Sampler address mode describes the processing of out-of-range image
    * coordinates.
    */
-  hsa_ext_sampler_addressing_mode_t address_mode;
+  hsa_ext_sampler_addressing_mode32_t address_mode;
 
 } hsa_ext_sampler_descriptor_t;
 
@@ -828,7 +843,15 @@ enum {
   /**
    * Image size is not supported.
    */
-  HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED = 0x3001
+  HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED = 0x3001,
+  /**
+   * Image pitch is not supported or invalid.
+   */
+  HSA_EXT_STATUS_ERROR_IMAGE_PITCH_UNSUPPORTED = 0x3002,
+  /**
+   * Sampler descriptor is not supported or invalid.
+   */
+  HSA_EXT_STATUS_ERROR_SAMPLER_DESCRIPTOR_UNSUPPORTED = 0x3003
 };
 
 /**

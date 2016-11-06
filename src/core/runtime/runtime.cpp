@@ -63,7 +63,7 @@
 #include "core/inc/hsa_api_trace_int.h"
 
 #define HSA_VERSION_MAJOR 1
-#define HSA_VERSION_MINOR 0
+#define HSA_VERSION_MINOR 1
 
 const char rocrbuildid[] = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
@@ -89,9 +89,9 @@ class RuntimeCleanup {
 
 static RuntimeCleanup cleanup_at_unload_;
 
-bool Runtime::Acquire() {
+hsa_status_t Runtime::Acquire() {
   // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded) return false;
+  if (!loaded) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   // Handle initialization races
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
@@ -104,22 +104,26 @@ bool Runtime::Acquire() {
   ScopedAcquire<KernelMutex> lock(&runtime_singleton_->kernel_lock_);
 
   if (runtime_singleton_->ref_count_ == INT32_MAX) {
-    return false;
+    return HSA_STATUS_ERROR_REFCOUNT_OVERFLOW;
   }
 
   runtime_singleton_->ref_count_++;
 
   if (runtime_singleton_->ref_count_ == 1) {
-    runtime_singleton_->Load();
+    hsa_status_t status = runtime_singleton_->Load();
+
+    if (status != HSA_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
   }
 
-  return true;
+  return HSA_STATUS_SUCCESS;
 }
 
-bool Runtime::Release() {
+hsa_status_t Runtime::Release() {
   ScopedAcquire<KernelMutex> lock(&kernel_lock_);
   if (ref_count_ == 0) {
-    return false;
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
 
   if (ref_count_ == 1) {
@@ -129,7 +133,7 @@ bool Runtime::Release() {
 
   ref_count_--;
 
-  return true;
+  return HSA_STATUS_SUCCESS;
 }
 
 bool Runtime::IsOpen() {
@@ -155,29 +159,22 @@ void Runtime::RegisterAgent(Agent* agent) {
     // Init default fine grain system region allocator using fine grain
     // system region of the first discovered CPU agent.
     if (cpu_agents_.size() == 1) {
-      if (system_regions_fine_[0]->full_profile()) {
-        system_allocator_ = [](size_t size, size_t alignment) -> void * {
-          return _aligned_malloc(size, alignment);
-        };
+      // Might need memory pooling to cover allocation that
+      // requires less than 4096 bytes.
+      system_allocator_ =
+          [&](size_t size, size_t alignment,
+              MemoryRegion::AllocateFlags alloc_flags) -> void* {
+            assert(alignment <= 4096);
+            void* ptr = NULL;
+            return (HSA_STATUS_SUCCESS ==
+                    core::Runtime::runtime_singleton_->AllocateMemory(
+                        system_regions_fine_[0], size, alloc_flags, &ptr))
+                       ? ptr
+                       : NULL;
+          };
 
-        system_deallocator_ = [](void* ptr) { _aligned_free(ptr); };
-      } else {
-        // Might need memory pooling to cover allocation that
-        // requires less than 4096 bytes.
-        system_allocator_ = [&](size_t size, size_t alignment) -> void * {
-          assert(alignment <= 4096);
-          void* ptr = NULL;
-          return (HSA_STATUS_SUCCESS ==
-                  core::Runtime::runtime_singleton_->AllocateMemory(
-                      system_regions_fine_[0], size, &ptr))
-                     ? ptr
-                     : NULL;
-        };
-
-        system_deallocator_ = [](void* ptr) {
-          core::Runtime::runtime_singleton_->FreeMemory(ptr);
-        };
-      }
+      system_deallocator_ =
+          [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
 
       BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
     }
@@ -303,16 +300,9 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 }
 
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
-                                     void** ptr) {
-  return AllocateMemory(false, region, size, ptr);
-}
-
-hsa_status_t Runtime::AllocateMemory(bool restrict_access,
-                                     const MemoryRegion* region, size_t size,
+                                     MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
-  const amd::MemoryRegion* amd_region =
-      reinterpret_cast<const amd::MemoryRegion*>(region);
-  hsa_status_t status = amd_region->Allocate(restrict_access, size, address);
+  hsa_status_t status = region->Allocate(size, alloc_flags, address);
 
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
@@ -525,20 +515,28 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_SMALL;
 #endif
       break;
-    case HSA_SYSTEM_INFO_EXTENSIONS:
+    case HSA_SYSTEM_INFO_EXTENSIONS: {
       memset(value, 0, sizeof(uint8_t) * 128);
 
+      auto setFlag = [&](uint32_t bit) {
+        assert(bit < 128 * 8 && "Extension value exceeds extension bitmask");
+        uint index = bit / 8;
+        uint subBit = bit % 8;
+        ((uint8_t*)value)[index] |= 1 << subBit;
+      };
+
       if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
-        *((uint8_t*)value) = 1 << HSA_EXTENSION_FINALIZER;
+        setFlag(HSA_EXTENSION_FINALIZER);
       }
 
       if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
-        *((uint8_t*)value) |= 1 << HSA_EXTENSION_IMAGES;
+        setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      *((uint8_t*)value) |= 1 << HSA_EXTENSION_AMD_PROFILER;
+      setFlag(HSA_EXTENSION_AMD_PROFILER);
 
       break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -804,13 +802,13 @@ Runtime::Runtime()
 #endif
 }
 
-void Runtime::Load() {
+hsa_status_t Runtime::Load() {
   flag_.Refresh();
 
   g_use_interrupt_wait = flag_.enable_interrupt();
 
   if (!amd::Load()) {
-    return;
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
@@ -821,13 +819,16 @@ void Runtime::Load() {
   // Load tools libraries
   LoadTools();
 
-  // Initialize blit kernel object after tools is initialized to allow tools
-  // to overload blit kernel.
   for (core::Agent* agent : gpu_agents_) {
-    const hsa_status_t stat =
-        reinterpret_cast<amd::GpuAgentInt*>(agent)->InitBlitKernel();
-    assert(HSA_STATUS_SUCCESS == stat);
+    hsa_status_t status =
+        reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
+
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
   }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 void Runtime::Unload() {

@@ -99,9 +99,7 @@ class MemoryRegion : public core::MemoryRegion {
 
   ~MemoryRegion();
 
-  hsa_status_t Allocate(size_t size, void** address) const;
-
-  hsa_status_t Allocate(bool restrict_access, size_t size,
+  hsa_status_t Allocate(size_t size, AllocateFlags alloc_flags,
                         void** address) const;
 
   hsa_status_t Free(void* address, size_t size) const;

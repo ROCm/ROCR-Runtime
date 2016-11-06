@@ -515,10 +515,9 @@ static int kCopyMisalignedUnroll = GetKernelSourceParam("kCopyMisalignedUnroll")
 static int kFillVecWidth = GetKernelSourceParam("kFillVecWidth");
 static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
 
-BlitKernel::BlitKernel()
+BlitKernel::BlitKernel(core::Queue* queue)
     : core::Blit(),
-      queue_(NULL),
-      cached_index_(0),
+      queue_(queue),
       kernarg_async_(NULL),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
@@ -529,40 +528,19 @@ BlitKernel::BlitKernel()
 BlitKernel::~BlitKernel() {}
 
 hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
-  hsa_agent_t agent_handle = agent.public_handle();
+  queue_bitmask_ = queue_->public_handle()->size - 1;
 
-  uint32_t features = 0;
-  hsa_status_t status =
-      HSA::hsa_agent_get_info(agent_handle, HSA_AGENT_INFO_FEATURE, &features);
-  if (status != HSA_STATUS_SUCCESS) {
-    return status;
-  }
-
-  if ((features & HSA_AGENT_FEATURE_KERNEL_DISPATCH) == 0) {
-    return HSA_STATUS_ERROR;
-  }
-
-  status = HSA::hsa_queue_create(agent_handle, 1024, HSA_QUEUE_TYPE_MULTI, NULL,
-                                 NULL, 0, 0, &queue_);
-
-  if (HSA_STATUS_SUCCESS != status) {
-    return status;
-  }
-
-  queue_bitmask_ = queue_->size - 1;
-
-  cached_index_ = 0;
-
-  status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
+  hsa_status_t status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
 
   kernarg_async_ = reinterpret_cast<KernelArgs*>(
       core::Runtime::runtime_singleton_->system_allocator()(
-          queue_->size * AlignUp(sizeof(KernelArgs), 16), 16));
+          queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16), 16,
+          core::MemoryRegion::AllocateNoFlags));
 
-  kernarg_async_mask_ = queue_->size - 1;
+  kernarg_async_mask_ = queue_->public_handle()->size - 1;
 
   // Obtain the number of compute units in the underlying agent.
   const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
@@ -598,10 +576,6 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
                            kernel_pair.second.code_buf_size_);
   }
 
-  if (queue_ != NULL) {
-    HSA::hsa_queue_destroy(queue_);
-  }
-
   if (kernarg_async_ != NULL) {
     core::Runtime::runtime_singleton_->system_deallocator()(kernarg_async_);
   }
@@ -630,9 +604,8 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
   }
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_acquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
-                                   1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+                                     HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
@@ -651,17 +624,17 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
   uint64_t write_index_temp = write_index;
 
   // Insert barrier packets to handle dependent signals.
-  const uint16_t kBarrierPacketHeader =
-      (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+  const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
-      (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
-      (HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
+      (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
+      (HSA_FENCE_SCOPE_AGENT << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
 
   hsa_barrier_and_packet_t barrier_packet = {0};
   barrier_packet.header = HSA_PACKET_TYPE_INVALID;
 
   hsa_barrier_and_packet_t* queue_buffer =
-      reinterpret_cast<hsa_barrier_and_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_barrier_and_packet_t*>(
+          queue_->public_handle()->base_address);
 
   const size_t dep_signal_count = dep_signals.size();
   for (size_t i = 0; i < dep_signal_count; ++i) {
@@ -792,9 +765,8 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   ReleaseWriteIndex(write_index, 1);
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_acquire(completion_signal_, HSA_SIGNAL_CONDITION_LT,
-                                   1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+                                     HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
@@ -803,47 +775,28 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
 }
 
 hsa_status_t BlitKernel::EnableProfiling(bool enable) {
-  core::Queue* cmd_queue = core::Queue::Convert(queue_);
-  if (cmd_queue != NULL) {
-    AMD_HSA_BITS_SET(cmd_queue->amd_queue_.queue_properties,
-                     AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
-    return HSA_STATUS_SUCCESS;
-  }
-
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  AMD_HSA_BITS_SET(queue_->amd_queue_.queue_properties,
+                   AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
+  return HSA_STATUS_SUCCESS;
 }
 
 uint64_t BlitKernel::AcquireWriteIndex(uint32_t num_packet) {
-  assert(queue_->size >= num_packet);
+  assert(queue_->public_handle()->size >= num_packet);
 
-  uint64_t write_index =
-      HSA::hsa_queue_add_write_index_acq_rel(queue_, num_packet);
+  uint64_t write_index = queue_->AddWriteIndexAcqRel(num_packet);
 
-  while (true) {
-    // Wait until we have room in the queue;
-    const uint64_t read_index = HSA::hsa_queue_load_read_index_relaxed(queue_);
-    if ((write_index - read_index) < queue_->size) {
-      break;
-    }
+  while (write_index + num_packet - queue_->LoadReadIndexRelaxed() > queue_->public_handle()->size) {
+    os::YieldThread();
   }
 
   return write_index;
 }
 
 void BlitKernel::ReleaseWriteIndex(uint64_t write_index, uint32_t num_packet) {
-  // Launch packet.
-  while (true) {
-    // Make sure that the address before ::current_offset is already released.
-    // Otherwise the packet processor may read invalid packets.
-    uint64_t expected_offset = write_index;
-    if (atomic::Cas(&cached_index_, write_index + num_packet, expected_offset,
-                    std::memory_order_release) == expected_offset) {
-      // Update doorbel register with last packet id.
-      HSA::hsa_signal_store_release(queue_->doorbell_signal,
-                                    write_index + num_packet - 1);
-      break;
-    }
-  }
+  // Update doorbel register with last packet id.
+  core::Signal* doorbell =
+      core::Signal::Convert(queue_->public_handle()->doorbell_signal);
+  doorbell->StoreRelease(write_index + num_packet - 1);
 }
 
 hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
@@ -851,11 +804,10 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
                                       hsa_fence_scope_t fence) {
   // This function is not thread safe.
 
-  const uint16_t kBarrierPacketHeader =
-      (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
+  const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
-      (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
-      (fence << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
+      (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
+      (fence << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
 
   hsa_barrier_and_packet_t packet = {0};
   packet.header = kInvalidPacketHeader;
@@ -871,7 +823,8 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
 
   // Populate queue buffer with AQL packet.
   hsa_barrier_and_packet_t* queue_buffer =
-      reinterpret_cast<hsa_barrier_and_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_barrier_and_packet_t*>(
+          queue_->public_handle()->base_address);
   std::atomic_thread_fence(std::memory_order_acquire);
   queue_buffer[(write_index + num_copy_packet) & queue_bitmask_] = packet;
   std::atomic_thread_fence(std::memory_order_release);
@@ -882,9 +835,8 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
   ReleaseWriteIndex(write_index, num_copy_packet + 1);
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_acquire(packet.completion_signal,
-                                   HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
-                                   HSA_WAIT_STATE_ACTIVE) != 0) {
+  if (HSA::hsa_signal_wait_scacquire(packet.completion_signal, HSA_SIGNAL_CONDITION_LT, 1,
+                                     uint64_t(-1), HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
@@ -902,8 +854,8 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
   static const uint16_t kDispatchPacketHeader =
       (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
       (((completion_signal.handle != 0) ? 1 : 0) << HSA_PACKET_HEADER_BARRIER) |
-      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
-      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
+      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
+      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
 
   packet.header = kInvalidPacketHeader;
   packet.kernel_object = code_handle;
@@ -921,7 +873,8 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
 
   // Populate queue buffer with AQL packet.
   hsa_kernel_dispatch_packet_t* queue_buffer =
-      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue_->base_address);
+      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
+          queue_->public_handle()->base_address);
   std::atomic_thread_fence(std::memory_order_acquire);
   queue_buffer[index & queue_bitmask_] = packet;
   std::atomic_thread_fence(std::memory_order_release);
@@ -930,8 +883,9 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
 
 BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
   const uint32_t index =
-      atomic::Add(&kernarg_async_counter_, 1U, std::memory_order_acquire);
-  KernelArgs* arg = &kernarg_async_[index & kernarg_async_mask_];
+      atomic::Add(&kernarg_async_counter_, 1U, std::memory_order_acquire) & kernarg_async_mask_;
+
+  KernelArgs* arg = &kernarg_async_[index];
   assert(IsMultipleOf(arg, 16));
   return arg;
 }

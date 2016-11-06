@@ -209,10 +209,9 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   /// timeout is reached.
   /// Returns the index of a satisfied signal.  Returns -1 on timeout and
   /// errors.
-  static uint32_t WaitAny(uint32_t signal_count, hsa_signal_t* hsa_signals,
-                          hsa_signal_condition_t* conds,
-                          hsa_signal_value_t* values, uint64_t timeout_hint,
-                          hsa_wait_state_t wait_hint,
+  static uint32_t WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
+                          const hsa_signal_condition_t* conds, const hsa_signal_value_t* values,
+                          uint64_t timeout_hint, hsa_wait_state_t wait_hint,
                           hsa_signal_value_t* satisfying_value);
 
   __forceinline bool IsType(rtti_t id) { return _IsA(id); }
@@ -276,6 +275,33 @@ static_assert(
 static_assert(
     sizeof(hsa_signal_handle[2]) == sizeof(hsa_signal_t[2]),
     "hsa_signal_handle and hsa_signal_t must have identical binary layout.");
+
+class SignalGroup : public Checked<0xBD35DDDD578F091> {
+ public:
+  static __forceinline hsa_signal_group_t Convert(SignalGroup* group) {
+    const hsa_signal_group_t handle = {static_cast<uint64_t>(reinterpret_cast<uintptr_t>(group))};
+    return handle;
+  }
+  static __forceinline SignalGroup* Convert(hsa_signal_group_t group) {
+    return reinterpret_cast<SignalGroup*>(static_cast<uintptr_t>(group.handle));
+  }
+
+  SignalGroup(uint32_t num_signals, const hsa_signal_t* signals);
+  ~SignalGroup() { delete[] signals; }
+
+  bool IsValid() const {
+    if (CheckedType::IsValid() && signals != NULL) return true;
+    return false;
+  }
+
+  const hsa_signal_t* List() const { return signals; }
+  uint32_t Count() const { return count; }
+
+ private:
+  hsa_signal_t* signals;
+  const uint32_t count;
+  DISALLOW_COPY_AND_ASSIGN(SignalGroup);
+};
 
 }  // namespace core
 #endif  // header guard

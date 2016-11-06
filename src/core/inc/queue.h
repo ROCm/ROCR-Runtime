@@ -48,7 +48,6 @@
 
 #include "core/common/shared.h"
 
-#include "core/inc/runtime.h"
 #include "core/inc/checked.h"
 
 #include "core/util/utils.h"
@@ -89,12 +88,10 @@ struct AqlPacket {
     string << "type: " << type_names[type]
            << "\nbarrier: " << ((dispatch.header >> HSA_PACKET_HEADER_BARRIER) &
                                 ((1 << HSA_PACKET_HEADER_WIDTH_BARRIER) - 1))
-           << "\nacquire: "
-           << ((dispatch.header >> HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) &
-               ((1 << HSA_PACKET_HEADER_WIDTH_ACQUIRE_FENCE_SCOPE) - 1))
-           << "\nrelease: "
-           << ((dispatch.header >> HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE) &
-               ((1 << HSA_PACKET_HEADER_WIDTH_RELEASE_FENCE_SCOPE) - 1));
+           << "\nacquire: " << ((dispatch.header >> HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) &
+                                ((1 << HSA_PACKET_HEADER_WIDTH_SCACQUIRE_FENCE_SCOPE) - 1))
+           << "\nrelease: " << ((dispatch.header >> HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE) &
+                                ((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1));
 
     if (type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
       string << "\nDim: " << dispatch.setup
@@ -299,6 +296,9 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
   /// @return hsa_status_t
   virtual hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count,
                                     const uint32_t* cu_mask) = 0;
+
+  // @brief Submits a block of PM4 and waits until it has been executed.
+  virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) = 0;
 
   // Handle of AMD Queue struct
   amd_queue_t& amd_queue_;

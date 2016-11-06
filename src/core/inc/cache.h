@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -40,37 +40,43 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HSA_RUNTME_CORE_INC_CHECKED_H_
-#define HSA_RUNTME_CORE_INC_CHECKED_H_
+#ifndef HSA_RUNTIME_CORE_INC_CACHE_H
+#define HSA_RUNTIME_CORE_INC_CACHE_H
 
-#include <stdint.h>
-#include <stdlib.h>
+#include "core/inc/hsa_internal.h"
+#include "core/inc/checked.h"
+#include "core/util/utils.h"
+#include <utility>
+#include <string>
 
 namespace core {
 
-/// @brief Base class for all classes whose validity can be checked using
-/// IsValid() method.
-template <uint64_t code>
-class Checked {
+class Cache : public Checked<0x39A6C7AD3F135B06> {
  public:
-  typedef Checked<code> CheckedType;
-
-  Checked() { object_ = uintptr_t(this) ^ uintptr_t(code); }
-  Checked(const Checked&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
-  Checked(Checked&&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
-
-  virtual ~Checked() { object_ = NULL; }
-
-  const Checked& operator=(Checked&& rhs) { return *this; }
-  const Checked& operator=(const Checked& rhs) { return *this; }
-
-  bool IsValid() const {
-    return object_ == (uintptr_t(this) ^ uintptr_t(code));
+  static __forceinline hsa_cache_t Convert(const Cache* cache) {
+    const hsa_cache_t handle = {static_cast<uint64_t>(reinterpret_cast<uintptr_t>(cache))};
+    return handle;
+  }
+  static __forceinline Cache* Convert(const hsa_cache_t cache) {
+    return reinterpret_cast<Cache*>(static_cast<uintptr_t>(cache.handle));
   }
 
- private:
-  uintptr_t object_;
-};
+  Cache(const std::string& name, uint8_t level, uint32_t size)
+      : name_(name), level_(level), size_(size) {}
 
-}  // namespace core
-#endif  // header guard
+  Cache(std::string&& name, uint8_t level, uint32_t size)
+      : name_(std::move(name)), level_(level), size_(size) {}
+
+  hsa_status_t GetInfo(hsa_cache_info_t attribute, void* value);
+
+ private:
+  std::string name_;
+  uint32_t level_;
+  uint32_t size_;
+
+  // Forbid copying and moving of this object
+  DISALLOW_COPY_AND_ASSIGN(Cache);
+};
+}
+
+#endif  // HSA_RUNTIME_CORE_INC_CACHE_H

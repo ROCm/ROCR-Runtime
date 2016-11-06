@@ -1,18 +1,16 @@
-### ROCm Platform Runtime: ROCr a HPC market focused API that leverages HSA Runtime Specification 
+### HSA Runtime API and runtime for ROCm
 
-This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA  kernel agents. Reference source code for the core runtime is also available.
-
-The AMD/ATI Fiji(c) and Hawaii(c) families of discrete GPUs are currently supported.
+This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA ROCm kernel agents. Reference source code for the core runtime is also available.
 
 #### Initial Target Platform Requirements
 
 * CPU: Intel(c) Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
-* GPU: Fiji ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
-* GPU: Hawaii ASIC (AMD R9 390, R9 390X) with ROCm 1.2 or greater
+* GPU: Fiji(c) ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
+* GPU: Polaris(c) ASIC (AMD RX480)
 
 #### Source code
 
-The HSA core runtime source code for ROCm is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
+The HSA core runtime source code for the ROCR runtime is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
 #### Binaries for Ubuntu & Fedora and Installation Instructions
 
@@ -20,24 +18,24 @@ Pre-built binaries are available for installation from the ROCm package reposito
 
 Core runtime package:
 
-* HSA include files to support application development on the HSA runtime for ROCm
-* A 64-bit version of AMD's HSA core runtime for ROCm
+* HSA include files to support application development on the HSA runtime for the ROCR runtime 
+* A 64-bit version of AMD's HSA core runtime for the ROCR runtime
 
 Runtime extension package:
 
-* A 64-bit version of AMD's finalizer extension for ROCm
+* A 64-bit version of AMD's finalizer extension for ROCR runtime
 * A 64-bit version of AMD's runtime tools library
 
-The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default. 
+The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default.
 The core runtime package depends on the hsakmt-roct-dev package
 
 Installation instructions can be found in the ROCm manifest repository README.md:
 
 https://github.com/RadeonOpenCompute/ROCm
- 
+
 #### Infrastructure
 
-The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCm HSA kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
+The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCK kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
 
 The capabilities expressed by the HSA Runtime API are:
 
@@ -49,7 +47,7 @@ The capabilities expressed by the HSA Runtime API are:
 * Memory management
 * HSA runtime fits into a typical software architecture stack.
 
-The HSA runtime provides direct access to the graphics hardware to give the programmer more control of the execution. Some examples of low level hardware access  is  the support of one or more user mode queues provides programmers with a low-latency kernel dispatch interface, allowing them to develop customized dispatch algorithms specific to their application.
+The HSA runtime provides direct access to the graphics hardware to give the programmer more control of the execution. An example of low level hardware access is the support of one or more user mode queues provides programmers with a low-latency kernel dispatch interface, allowing them to develop customized dispatch algorithms specific to their application.
 
 The HSA Architected Queuing Language is an open standard, defined by the HSA Foundation, specifying the packet syntax used to control supported AMD/ATI Radeon (c) graphics devices. The AQL language supports several packet types, including packets that can command the hardware to automatically resolve inter-packet dependencies (barrier AND & barrier OR packet), kernel dispatch packets and agent dispatch packets.
 
@@ -67,9 +65,9 @@ If the sample runs without generating errors, the installation is complete.
 
 #### Known Issues
 
-* Image support was provided in ROCr 1.2. Previous versions did not have support.
-* Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifths simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
- 
+* The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference.
+* Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifth simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
+
 #### Disclaimer
 
 The information contained herein is for informational purposes only, and is subject to change without notice. While every precaution has been taken in the preparation of this document, it may contain technical inaccuracies, omissions and typographical errors, and AMD is under no obligation to update or otherwise correct this information. Advanced Micro Devices, Inc. makes no representations or warranties with respect to the accuracy or completeness of the contents of this document, and assumes no liability of any kind, including the implied warranties of noninfringement, merchantability or fitness for particular purposes, with respect to the operation or use of AMD hardware, software or other products described herein. No license, including implied or arising by estoppel, to any intellectual property rights is granted by this document. Terms and limitations applicable to the purchase or use of AMD's products are as set forth in a signed agreement between the parties or in AMD's Standard Terms and Conditions of Sale.

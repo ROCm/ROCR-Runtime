@@ -464,8 +464,8 @@ hsa_status_t
     return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(true, mem_region,
-                                                           size, ptr);
+  return core::Runtime::runtime_singleton_->AllocateMemory(
+      mem_region, size, core::MemoryRegion::AllocateRestrict, ptr);
 }
 
 hsa_status_t hsa_amd_memory_pool_free(void* ptr) {

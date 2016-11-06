@@ -52,6 +52,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/queue.h"
+#include "core/inc/cache.h"
 
 namespace amd {
 // @brief Class to represent a CPU device.
@@ -87,6 +88,10 @@ class CpuAgent : public core::Agent {
   hsa_status_t IterateRegion(hsa_status_t (*callback)(hsa_region_t region,
                                                       void* data),
                              void* data) const override;
+
+  // @brief Override from core::Agent.
+  hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
+                            void* value) const override;
 
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
@@ -142,6 +147,9 @@ class CpuAgent : public core::Agent {
   // @brief Array of data cache property. The array index represents the cache
   // level.
   std::vector<HsaCacheProperties> cache_props_;
+
+  // @brief Array of HSA cache objects.
+  std::vector<std::unique_ptr<core::Cache>> caches_;
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
