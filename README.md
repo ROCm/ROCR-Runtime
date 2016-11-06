@@ -25,6 +25,7 @@ Runtime extension package:
 
 * A 64-bit version of AMD's finalizer extension for ROCR runtime
 * A 64-bit version of AMD's runtime tools library
+* A 64-bit version of AMD's runtime image library, which supports the HSAIL image implementation only. 
 
 The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default.
 The core runtime package depends on the hsakmt-roct-dev package
@@ -65,7 +66,6 @@ If the sample runs without generating errors, the installation is complete.
 
 #### Known Issues
 
-* The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference.
 * Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifth simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
 
 #### Disclaimer
