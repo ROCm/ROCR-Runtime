@@ -65,12 +65,15 @@ struct vm_object {
 	uint32_t *registered_device_id_array;
 	uint32_t registered_device_id_array_size;
 	uint32_t *registered_node_id_array;
+	uint32_t registration_count; /* the same memory region can be
+					registered multiple times */
 	/*
 	 * Nodes that mapped already
 	 */
 	uint32_t *mapped_device_id_array;
 	uint32_t mapped_device_id_array_size;
 	uint32_t *mapped_node_id_array;
+	uint32_t mapping_count;
 	/* Metadata of imported graphics buffers */
 	void *metadata;
 	/* User data associated with the memory */
@@ -204,6 +207,8 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->mapped_device_id_array_size = 0;
 		object->registered_node_id_array = NULL;
 		object->mapped_node_id_array = NULL;
+		object->registration_count = 0;
+		object->mapping_count = 0;
 		object->flags = flags;
 		object->metadata = NULL;
 		object->user_data = NULL;
@@ -355,18 +360,36 @@ static vm_object_t *vm_find_object_by_address_range(manageble_aperture_t *app,
 }
 
 static vm_object_t *vm_find_object_by_userptr(manageble_aperture_t *app,
-						const void *address)
+					const void *address, HSAuint64 size)
 {
-	vm_object_t *cur = app->vm_objects;
+	vm_object_t *cur = app->vm_objects, *obj;
+	uint32_t found = 0;
 
-	/* Look up the appropriate address range containing the given address */
+	/* Look up the userptr that matches the address. If size is specified,
+	   the size needs to match too. */
 	while (cur) {
-		if (cur->userptr == address)
+		if ((cur->userptr == address) &&
+				((cur->userptr_size == size) || !size)) {
+			found = 1;
 			break;
+		}
 		cur = cur->next;
 	}
 
-	return cur; /* NULL if not found */
+	/* If size is not specified, we need to ensure the vm_obj found is the
+	   only obj having this address. */
+	if (found && !size) {
+		obj = cur->next;
+		while (obj) {
+			if (obj->userptr == address) {
+				cur = NULL;
+				break;
+			}
+			obj = obj->next;
+		}
+	}
+
+	return cur; /* NULL if any look-up failure */
 }
 
 static vm_object_t *vm_find_object_by_userptr_range(manageble_aperture_t *app,
@@ -1480,6 +1503,15 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 			goto err_object_not_found;
 	}
 
+	/* For a memory region that is registered by user pointer, changing
+	 * mapping nodes is not allowed, so we don't need to check the mapping
+	 * nodes or map if it's already mapped. Just increase the reference.
+	 */
+	if (object->userptr && object->mapping_count) {
+		++object->mapping_count;
+		goto exit_ok;
+	}
+
 	args.handle = object->handle;
 	if (object->registered_device_id_array_size > 0) {
 		args.device_ids_array = object->registered_device_id_array;
@@ -1507,7 +1539,9 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 	memcpy(temp_mapped_id_array, args.device_ids_array, args.device_ids_array_size);
 	object->mapped_device_id_array = temp_mapped_id_array;
 	object->mapped_device_id_array_size = args.device_ids_array_size;
+	object->mapping_count = 1;
 
+exit_ok:
 	if (!obj)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -1669,7 +1703,7 @@ static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 
 	obj = object;
 	if (!obj) {
-		obj = vm_find_object_by_userptr(aperture, addr);
+		obj = vm_find_object_by_userptr(aperture, addr, size);
 		if (obj == NULL) {
 			pthread_mutex_unlock(&aperture->fmm_mutex);
 			return HSAKMT_STATUS_ERROR;
@@ -1761,8 +1795,9 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 		vm_object_t *obj)
 {
 	vm_object_t *object;
-	int ret;
+	int ret = 0;
 	struct kfd_ioctl_unmap_memory_from_gpu_new_args args;
+	HSAuint32 page_offset = (HSAint64)address & (PAGE_SIZE - 1);
 
 	if (!obj)
 		pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1770,11 +1805,17 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 	/* Find the object to retrieve the handle */
 	object = obj;
 	if (!object) {
-		object = vm_find_object_by_address(aperture, address, 0);
+		object = vm_find_object_by_address(aperture,
+					VOID_PTR_SUB(address, page_offset), 0);
 		if (!object) {
 			ret = -1;
-			goto err;
+			goto out;
 		}
+	}
+
+	if (object->userptr && object->mapping_count > 1) {
+		--object->mapping_count;
+		goto out;
 	}
 
 	args.handle = object->handle;
@@ -1791,14 +1832,14 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 		 * need to deploy the change on there side before thunk fails on this case.
 		 */
 		ret = 0;
-		goto err;
+		goto out;
 	}
 
 	print_device_id_array(args.device_ids_array, args.device_ids_array_size);
 
 	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &args);
 	if (ret != 0)
-		goto err;
+		goto out;
 
 	/* Clearing all mapped nodes list */
 	if (object->mapped_device_id_array != NULL &&
@@ -1812,12 +1853,9 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
 	object->mapped_node_id_array = NULL;
+	object->mapping_count = 0;
 
-	if (!obj)
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	return 0;
-err:
+out:
 	if (!obj)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	return ret;
@@ -1894,7 +1932,7 @@ static int _fmm_unmap_from_gpu_userptr(void *addr)
 
 	/* Find the start address in SVM space for GPU unmapping */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr);
+	obj = vm_find_object_by_userptr(aperture, addr, 0);
 	if (obj == NULL) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_ERROR;
@@ -2160,10 +2198,14 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 
 	/* Check if this address was already registered */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr);
+	obj = vm_find_object_by_userptr(aperture, addr, size);
+	if (obj != NULL) {
+		++obj->registration_count;
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		*obj_ret = obj;
+		return HSAKMT_STATUS_SUCCESS;
+	}
 	pthread_mutex_unlock(&aperture->fmm_mutex);
-	if (obj != NULL)
-		return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
 
 	/* Allocate BO, userptr address is passed in mmap_offset */
 	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture, 0,
@@ -2176,6 +2218,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 		obj->userptr = addr;
 		gpuid_to_nodeid(gpu_id, &obj->node_id);
 		obj->userptr_size = size;
+		obj->registration_count = 1;
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
 	else
@@ -2225,8 +2268,18 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 
 	if (!object)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
-	if (object->registered_device_id_array_size > 0)
-		return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
+	if (object->registered_device_id_array_size > 0) {
+		/* Multiple registration is allowed, but not changing nodes */
+		if ((gpu_id_array_size != object->registered_device_id_array_size)
+			|| memcmp(object->registered_device_id_array,
+					gpu_id_array, gpu_id_array_size)) {
+			fprintf(stderr,
+				"Error. Changing nodes in a registered addr.\n");
+			return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
+		}
+		else
+			return HSAKMT_STATUS_SUCCESS;
+	}
 
 	if (gpu_id_array_size > 0) {
 		object->registered_device_id_array = gpu_id_array;
@@ -2345,10 +2398,10 @@ static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 
 	/* Find the size and start address in SVM space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr);
-	if (obj == NULL) {
+	obj = vm_find_object_by_userptr(aperture, addr, 0);
+	if ((obj == NULL) || (obj->registration_count > 1)) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+		return HSAKMT_STATUS_ERROR;
 	}
 	svm_addr = obj->start;
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -2364,6 +2417,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 	manageble_aperture_t *aperture = NULL;
 	vm_object_t *object = NULL;
 	unsigned i;
+	HSAuint32 page_offset = (HSAint64)address & (PAGE_SIZE - 1);
 
 	if ((address >= svm.dgpu_aperture.base) &&
 	    (address <= svm.dgpu_aperture.limit))
@@ -2399,18 +2453,24 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
-	object = vm_find_object_by_address(aperture, address, 0);
+	object = vm_find_object_by_address(aperture,
+				VOID_PTR_SUB(address, page_offset), 0);
 	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 	}
 
-	if (object->userptr) {
+	if (object->registration_count > 1) {
+		--object->registration_count;
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return fmm_deregister_user_memory(object->userptr);
-	} else if (object->metadata) {
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	if (object->metadata || object->userptr) {
 		/* An object with metadata is an imported graphics
-		 * buffer. Deregistering it means releasing the buffer. */
+		 * buffer. Deregistering imported graphics buffers or
+		 * userptrs means releasing the BO.
+		 */
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		__fmm_release(address, aperture);
 		return HSAKMT_STATUS_SUCCESS;
@@ -2427,6 +2487,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 	if (object->registered_node_id_array)
 		free(object->registered_node_id_array);
 	object->registered_node_id_array = NULL;
+	object->registration_count = 0;
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -2470,13 +2531,24 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	if (userptr && is_dgpu)
-		object = vm_find_object_by_userptr(aperture, address);
+		object = vm_find_object_by_userptr(aperture, address, size);
 	else
 		object = vm_find_object_by_address(aperture, address, 0);
 
 	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_ERROR;
+	}
+
+	/* For userptr, we ignore the nodes array and map all registered nodes.
+	 * This is to simply the implementation of allowing the same memory
+	 * region to be registered multiple times.
+	 */
+	if (userptr && is_dgpu) {
+		retcode = _fmm_map_to_gpu_userptr(address, size,
+					gpuvm_address, object);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return retcode;
 	}
 
 	/* Verify that all nodes to map are registered already */
@@ -2539,16 +2611,8 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	object->registered_device_id_array = nodes_to_map;
 	object->registered_device_id_array_size = nodes_to_map_size;
 
-	if (nodes_to_map_size > 0) {
-		if (userptr && is_dgpu)
-			retcode = _fmm_map_to_gpu_userptr(address, size,
-					gpuvm_address,
-					object);
-		else
-			retcode = _fmm_map_to_gpu_gtt(aperture, address,
-					size,
-					object);
-	}
+	if (nodes_to_map_size > 0)
+		retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object);
 
 	/* Restore old registered device id array */
 	object->registered_device_id_array = temp_node_id_array;
@@ -2647,7 +2711,7 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 
 	vm_obj = vm_find_object_by_address(aperture, mem, 0);
 	if (!vm_obj)
-		vm_obj = vm_find_object_by_userptr(aperture, mem);
+		vm_obj = vm_find_object_by_userptr(aperture, mem, 0);
 	if (!vm_obj)
 		return HSAKMT_STATUS_ERROR;
 
