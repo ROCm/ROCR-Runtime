@@ -597,4 +597,18 @@ hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+                              uint32_t* num_accessible, hsa_agent_t** accessible) {
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(info);
+  return core::Runtime::runtime_singleton_->PtrInfo(ptr, info, alloc, num_accessible, accessible);
+}
+
+hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata) {
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  return core::Runtime::runtime_singleton_->SetPtrInfoData(ptr, userdata);
+}
+
 } // end of AMD namespace
