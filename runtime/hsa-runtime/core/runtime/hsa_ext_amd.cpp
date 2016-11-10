@@ -611,4 +611,45 @@ hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata) {
   return core::Runtime::runtime_singleton_->SetPtrInfoData(ptr, userdata);
 }
 
+hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(handle);
+  return core::Runtime::runtime_singleton_->IPCCreate(ptr, len, handle);
+}
+
+hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t len,
+                                       uint32_t num_agents, const hsa_agent_t* mapping_agents,
+                                       void** mapped_ptr) {
+  static const int tinyArraySize = 8;
+  IS_OPEN();
+  IS_BAD_PTR(mapped_ptr);
+  if (num_agents != 0) IS_BAD_PTR(mapping_agents);
+
+  core::Agent** core_agents = nullptr;
+  if (num_agents > tinyArraySize)
+    core_agents = new core::Agent*[num_agents];
+  else
+    core_agents = (core::Agent**)alloca(sizeof(core::Agent*) * num_agents);
+  if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  MAKE_SCOPE_GUARD([&]() {
+    if (num_agents > tinyArraySize) delete[] core_agents;
+  });
+
+  for (int i = 0; i < num_agents; i++) {
+    core::Agent* device = core::Agent::Convert(mapping_agents[i]);
+    IS_VALID(device);
+    core_agents[i] = device;
+  }
+
+  return core::Runtime::runtime_singleton_->IPCAttach(ipc, len, num_agents, core_agents,
+                                                      mapped_ptr);
+}
+
+hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr) {
+  IS_OPEN();
+  IS_BAD_PTR(mapped_ptr);
+  return core::Runtime::runtime_singleton_->IPCDetach(mapped_ptr);
+}
+
 } // end of AMD namespace

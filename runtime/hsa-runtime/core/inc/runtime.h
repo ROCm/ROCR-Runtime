@@ -269,6 +269,13 @@ class Runtime {
 
   hsa_status_t SetPtrInfoData(void* ptr, void* userptr);
 
+  hsa_status_t IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
+
+  hsa_status_t IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, uint32_t num_agents,
+                         Agent** mapping_agents, void** mapped_ptr);
+
+  hsa_status_t IPCDetach(void* ptr);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
