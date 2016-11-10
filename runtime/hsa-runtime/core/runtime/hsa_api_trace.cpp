@@ -358,6 +358,8 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_memory_fill_fn = AMD::hsa_amd_memory_fill;
   amd_ext_api.hsa_amd_interop_map_buffer_fn = AMD::hsa_amd_interop_map_buffer;
   amd_ext_api.hsa_amd_interop_unmap_buffer_fn = AMD::hsa_amd_interop_unmap_buffer;
+  amd_ext_api.hsa_amd_pointer_info_fn = AMD::hsa_amd_pointer_info;
+  amd_ext_api.hsa_amd_pointer_info_set_userdata_fn = AMD::hsa_amd_pointer_info_set_userdata;
 }
 
 class Init {

@@ -142,6 +142,10 @@ bool Runtime::IsOpen() {
 }
 
 void Runtime::RegisterAgent(Agent* agent) {
+  // Record the agent in the node-to-agent reverse lookup table.
+  agents_by_node_[agent->node_id()].push_back(agent);
+
+  // Process agent as a cpu or gpu device.
   if (agent->device_type() == Agent::DeviceType::kAmdCpuDevice) {
     cpu_agents_.push_back(agent);
 
@@ -230,6 +234,8 @@ void Runtime::RegisterAgent(Agent* agent) {
 }
 
 void Runtime::DestroyAgents() {
+  agents_by_node_.clear();
+
   std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
   gpu_agents_.clear();
 
@@ -302,11 +308,11 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
   hsa_status_t status = region->Allocate(size, alloc_flags, address);
 
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
     allocation_map_[*address] = AllocationRegion(region, size);
   }
 
@@ -320,22 +326,18 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 
   const MemoryRegion* region = NULL;
   size_t size = 0;
-  {
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
 
-    std::map<const void*, AllocationRegion>::const_iterator it =
-        allocation_map_.find(ptr);
+  std::map<const void*, AllocationRegion>::const_iterator it = allocation_map_.find(ptr);
 
-    if (it == allocation_map_.end()) {
-      assert(false && "Can't find address in allocation map");
-      return HSA_STATUS_ERROR;
-    }
-
-    region = it->second.region;
-    size = it->second.size;
-
-    allocation_map_.erase(it);
+  if (it == allocation_map_.end()) {
+    assert(false && "Can't find address in allocation map");
+    return HSA_STATUS_ERROR;
   }
+  region = it->second.region;
+  size = it->second.size;
+
+  allocation_map_.erase(it);
 
   return region->Free(ptr, size);
 }
@@ -463,8 +465,7 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
   {
     ScopedAcquire<KernelMutex> lock(&memory_lock_);
 
-    std::map<const void*, AllocationRegion>::const_iterator it =
-        allocation_map_.find(ptr);
+    std::map<const void*, AllocationRegion>::const_iterator it = allocation_map_.find(ptr);
 
     if (it == allocation_map_.end()) {
       return HSA_STATUS_ERROR;
@@ -634,13 +635,84 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t Runtime::InteropUnmap(void* ptr)
-{
+hsa_status_t Runtime::InteropUnmap(void* ptr) {
   if(hsaKmtUnmapMemoryToGPU(ptr)!=HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   if(hsaKmtDeregisterMemory(ptr)!=HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+                              uint32_t* num_agents_accessible, hsa_agent_t** accessible) {
+  HsaPointerInfo thunkInfo;
+  uint32_t* mappedNodes;
+
+  // check output struct is at least as large as the first info revision.
+  if (info->size < sizeof(struct hsa_amd_pointer_info_v1_s)) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  bool returnListData =
+      ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
+  if (returnListData) {
+    size_t max_agents = cpu_agents_.size() + gpu_agents_.size();
+    mappedNodes = (uint32_t*)alloca(max_agents * sizeof(uint32_t));
+    // memory_lock protects access to the NMappedNodes array since this changes with calls to memory
+    // APIs.
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    hsaKmtQueryPointerInfo(ptr, &thunkInfo);
+    assert(thunkInfo.NMappedNodes <= max_agents &&
+           "PointerInfo: Thunk returned more than all agents in NMappedNodes.");
+    memcpy(mappedNodes, thunkInfo.MappedNodes, thunkInfo.NMappedNodes * sizeof(uint32_t));
+  } else {
+    hsaKmtQueryPointerInfo(ptr, &thunkInfo);
+  }
+
+  static_assert((int)HSA_POINTER_UNKNOWN == (int)HSA_EXT_POINTER_TYPE_UNKNOWN,
+                "Thunk pointer info mismatch");
+  static_assert((int)HSA_POINTER_ALLOCATED == (int)HSA_EXT_POINTER_TYPE_HSA,
+                "Thunk pointer info mismatch");
+  static_assert((int)HSA_POINTER_REGISTERED_USER == (int)HSA_EXT_POINTER_TYPE_LOCKED,
+                "Thunk pointer info mismatch");
+  static_assert((int)HSA_POINTER_REGISTERED_GRAPHICS == (int)HSA_EXT_POINTER_TYPE_GRAPHICS,
+                "Thunk pointer info mismatch");
+
+  info->size = Min(info->size, sizeof(struct hsa_amd_pointer_info_v1_s));
+  info->type = (hsa_amd_pointer_type_t)thunkInfo.Type;
+  info->agentBaseAddress = (void*)thunkInfo.GPUAddress;
+  info->hostBaseAddress = thunkInfo.CPUAddress;
+  info->sizeInBytes = thunkInfo.SizeInBytes;
+  info->userData = thunkInfo.UserData;
+
+  if (returnListData) {
+    uint32_t count = 0;
+    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+      assert(mappedNodes[i] < agents_by_node_.size() &&
+             "PointerInfo: Invalid node ID returned from thunk.");
+      count += agents_by_node_[mappedNodes[i]].size();
+    }
+
+    *accessible = (hsa_agent_t*)alloc(sizeof(hsa_agent_t) * count);
+    if ((*accessible) == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    *num_agents_accessible = count;
+
+    uint32_t index = 0;
+    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+      auto& list = agents_by_node_[mappedNodes[i]];
+      for (int j = 0; j < list.size(); j++) {
+        (*accessible)[index] = list[j]->public_handle();
+        index++;
+      }
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::SetPtrInfoData(void* ptr, void* userptr) {
+  if (hsaKmtSetMemoryUserData(ptr, userptr) == HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_SUCCESS;
+  else
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 }
 
 void Runtime::AsyncEventsLoop(void*) {

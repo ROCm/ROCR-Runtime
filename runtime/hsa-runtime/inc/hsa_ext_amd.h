@@ -1268,6 +1268,131 @@ hsa_status_t HSA_API hsa_amd_image_create(
     hsa_ext_image_t *image
 );
 
+/**
+ * @brief Denotes the type of memory in a pointer info query.
+ */
+typedef enum {
+  /*
+  Memory is not known to the HSA driver.  Unallocated or unlocked system memory.
+  */
+  HSA_EXT_POINTER_TYPE_UNKNOWN = 0,
+  /*
+  Memory was allocated with an HSA memory allocator.
+  */
+  HSA_EXT_POINTER_TYPE_HSA = 1,
+  /*
+  System memory which has been locked for use with an HSA agent.
+
+  Memory of this type is normal malloc'd memory and is always accessible to
+  the CPU.  Pointer info queries may not include CPU agents in the accessible
+  agents list as the CPU has implicit access.
+  */
+  HSA_EXT_POINTER_TYPE_LOCKED = 2,
+  /*
+  Memory originated in a graphics component and is shared with ROCr.
+  */
+  HSA_EXT_POINTER_TYPE_GRAPHICS = 3,
+  /*
+  Memory has been shared with the local process via ROCr IPC APIs.
+  */
+  HSA_EXT_POINTER_TYPE_IPC = 4
+} hsa_amd_pointer_type_t;
+
+/**
+ * @brief Describes a memory allocation known to ROCr.
+ * Within a ROCr major version this structure can only grow.
+ */
+typedef struct hsa_amd_pointer_info_v1_s {
+  /*
+  size in bytes of this structure.  Used for version control within a major ROCr
+  revision.  Set to sizeof(hsa_amd_pointer_t) prior to calling
+  hsa_amd_pointer_info.  If the runtime supports an older version of pointer
+  info then size will be smaller on return.  Members starting after the return
+  value of size will not be updated by hsa_amd_pointer_info.
+  */
+  uint32_t size;
+  /*
+  The type of allocation referenced.
+  */
+  hsa_amd_pointer_type_t type;
+  /*
+  Base address at which non-host agents may access the allocation.
+  */
+  void* agentBaseAddress;
+  /*
+  Base address at which the host agent may access the allocation.
+  */
+  void* hostBaseAddress;
+  /*
+  Size of the allocation
+  */
+  size_t sizeInBytes;
+  /*
+  Application provided value.
+  */
+  void* userData;
+} hsa_amd_pointer_info_t;
+
+/**
+ * @brief Retrieves information about the allocation referenced by the given
+ * pointer.  Optionally returns the number and list of agents which can
+ * directly access the allocation.
+ *
+ * @param[in] ptr Pointer which references the allocation to retrieve info for.
+ *
+ * @param[in, out] info Pointer to structure to be filled with allocation info.
+ * Data member size must be set to the size of the structure prior to calling
+ * hsa_amd_pointer_info.  On return size will be set to the size of the
+ * pointer info structure supported by the runtime, if smaller.  Members
+ * beyond the returned value of size will not be updated by the API.
+ * Must not be NULL.
+ *
+ * @param[in] alloc Function pointer to an allocator used to allocate the
+ * @p accessible array.  If NULL @p accessible will not be returned.
+ *
+ * @param[out] num_agents_accessible Recieves the count of agents in
+ * @p accessible.  If NULL @p accessible will not be returned.
+ *
+ * @param[out] accessible Recieves a pointer to the array, allocated by @p alloc,
+ * holding the list of agents which may directly access the allocation.
+ * May be NULL.
+ *
+ * @retval HSA_STATUS_SUCCESS Info retrieved successfully
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT NULL in @p ptr or @p info.
+ */
+hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
+                                          hsa_amd_pointer_info_t* info,
+                                          void* (*alloc)(size_t),
+                                          uint32_t* num_agents_accessible,
+                                          hsa_agent_t** accessible);
+
+/**
+ * @brief Associates an arbitrary pointer with an allocation known to ROCr.
+ * The pointer can be fetched by hsa_amd_pointer_info in the userData field.
+ *
+ * @param[in] ptr Pointer to the first byte of an allocation known to ROCr
+ * with which to associate @p userdata.
+ *
+ * @param[in] userdata Abitrary pointer to associate with the allocation.
+ *
+ * @retval HSA_STATUS_SUCCESS @p userdata successfully stored.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is not known to ROCr.
+ */
+hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr,
+                                                       void* userdata);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

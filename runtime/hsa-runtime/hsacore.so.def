@@ -203,6 +203,8 @@ global:
 	hsa_ext_image_destroy;
 	hsa_ext_sampler_create;
 	hsa_ext_sampler_destroy;
+	hsa_amd_pointer_info;
+	hsa_amd_pointer_info_set_userdata;
 
 local:
     *;
