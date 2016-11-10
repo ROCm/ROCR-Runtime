@@ -206,6 +206,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->mapped_node_id_array = NULL;
 		object->flags = flags;
 		object->metadata = NULL;
+		object->user_data = NULL;
 	}
 
 	return object;
