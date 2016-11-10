@@ -562,6 +562,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
                                         uint32_t flags, size_t* size,
                                         void** ptr, size_t* metadata_size,
                                         const void** metadata) {
+  static const int tinyArraySize=8;
   IS_OPEN();
   IS_BAD_PTR(agents);
   IS_BAD_PTR(size);
@@ -569,9 +570,9 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
   if (flags != 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   if (num_agents == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-  core::Agent* short_agents[64];
+  core::Agent* short_agents[tinyArraySize];
   core::Agent** core_agents = short_agents;
-  if (num_agents > 64) {
+  if (num_agents > tinyArraySize) {
     core_agents = new core::Agent* [num_agents];
     if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
@@ -586,7 +587,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
       num_agents, core_agents, interop_handle, flags, size, ptr, metadata_size,
       metadata);
 
-  if (num_agents > 64) delete[] core_agents;
+  if (num_agents > tinyArraySize) delete[] core_agents;
   return ret;
 }
 

@@ -590,16 +590,17 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
                                  int interop_handle, uint32_t flags,
                                  size_t* size, void** ptr,
                                  size_t* metadata_size, const void** metadata) {
+  static const int tinyArraySize=8;
   HsaGraphicsResourceInfo info;
 
-  HSAuint32 short_nodes[64];
+  HSAuint32 short_nodes[tinyArraySize];
   HSAuint32* nodes = short_nodes;
-  if (num_agents > 64) {
+  if (num_agents > tinyArraySize) {
     nodes = new HSAuint32[num_agents];
     if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
   MAKE_SCOPE_GUARD([&]() {
-    if (num_agents > 64) delete[] nodes;
+    if (num_agents > tinyArraySize) delete[] nodes;
   });
 
   for (int i = 0; i < num_agents; i++)
