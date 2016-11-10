@@ -620,10 +620,11 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
                                 &altAddress, map_flags, num_agents,
                                 nodes) != HSAKMT_STATUS_SUCCESS) {
     map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    if (hsaKmtMapMemoryToGPUNodes(info.MemoryAddress, info.SizeInBytes,
-                                  &altAddress, map_flags, num_agents,
-                                  nodes) != HSAKMT_STATUS_SUCCESS)
+    if (hsaKmtMapMemoryToGPUNodes(info.MemoryAddress, info.SizeInBytes, &altAddress, map_flags,
+                                  num_agents, nodes) != HSAKMT_STATUS_SUCCESS) {
+      hsaKmtDeregisterMemory(info.MemoryAddress);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
   }
 
   if (metadata_size != NULL) *metadata_size = info.MetadataSizeInBytes;
@@ -713,6 +714,80 @@ hsa_status_t Runtime::SetPtrInfoData(void* ptr, void* userptr) {
     return HSA_STATUS_SUCCESS;
   else
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+}
+
+hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
+  return HSA_STATUS_ERROR;
+  //static_assert(sizeof(hsa_amd_ipc_memory_t) == sizeof(HsaSharedMemoryHandle),
+  //              "Thunk IPC mismatch.");
+  //if (hsaKmtShareMemory(ptr, len, (HsaSharedMemoryHandle*)handle) == HSAKMT_STATUS_SUCCESS)
+  //  return HSA_STATUS_SUCCESS;
+  //else
+  //  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+}
+
+hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, uint32_t num_agents,
+                                Agent** agents, void** mapped_ptr) {
+  return HSA_STATUS_ERROR;
+  //static const int tinyArraySize = 8;
+  //void* importAddress;
+  //HSAuint64 importSize;
+  //HSAuint64 altAddress;
+  //if (num_agents == 0) {
+  //  if (hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(handle),
+  //                                 &importAddress, &importSize) != HSAKMT_STATUS_SUCCESS)
+  //    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  //  if (hsaKmtMapMemoryToGPU(importAddress, importSize, &altAddress) != HSAKMT_STATUS_SUCCESS) {
+  //    hsaKmtDeregisterMemory(importAddress);
+  //    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  //  }
+  //  *mapped_ptr = importAddress;
+  //  return HSA_STATUS_SUCCESS;
+  //}
+
+  //HSAuint32* nodes = nullptr;
+  //if (num_agents > tinyArraySize)
+  //  nodes = new HSAuint32[num_agents];
+  //else
+  //  nodes = (HSAuint32*)alloca(sizeof(HSAuint32) * num_agents);
+  //if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  //MAKE_SCOPE_GUARD([&]() {
+  //  if (num_agents > tinyArraySize) delete[] nodes;
+  //});
+
+  //for (int i = 0; i < num_agents; i++)
+  //  agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
+
+  //if (hsaKmtRegisterSharedHandleToNodes(reinterpret_cast<const HsaSharedMemoryHandle*>(handle),
+  //                                      &importAddress, &importSize, num_agents,
+  //                                      nodes) != HSAKMT_STATUS_SUCCESS)
+  //  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  //HsaMemMapFlags map_flags;
+  //map_flags.Value = 0;
+  //map_flags.ui32.PageSize = HSA_PAGE_SIZE_64KB;
+  //if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, num_agents,
+  //                              nodes) != HSAKMT_STATUS_SUCCESS) {
+  //  map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
+  //  if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, num_agents,
+  //                                nodes) != HSAKMT_STATUS_SUCCESS) {
+  //    hsaKmtDeregisterMemory(importAddress);
+  //    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  //  }
+  //}
+
+  //*mapped_ptr = importAddress;
+  //return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::IPCDetach(void* ptr) {
+  return HSA_STATUS_ERROR;
+  //if (hsaKmtUnmapMemoryToGPU(ptr) != HSAKMT_STATUS_SUCCESS)
+  //  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  //if (hsaKmtDeregisterMemory(ptr) != HSAKMT_STATUS_SUCCESS)
+  //  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  //return HSA_STATUS_SUCCESS;
 }
 
 void Runtime::AsyncEventsLoop(void*) {

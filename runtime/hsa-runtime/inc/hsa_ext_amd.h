@@ -1140,7 +1140,7 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
 hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr);
 
 /**
- * @brief Sets the first @p num of uint32_t of the block of memory pointed by
+ * @brief Sets the first @p count of uint32_t of the block of memory pointed by
  * @p ptr to the specified @p value.
  *
  * @param[in] ptr Pointer to the block of memory to fill.
@@ -1304,7 +1304,7 @@ typedef enum {
  */
 typedef struct hsa_amd_pointer_info_v1_s {
   /*
-  size in bytes of this structure.  Used for version control within a major ROCr
+  Size in bytes of this structure.  Used for version control within a major ROCr
   revision.  Set to sizeof(hsa_amd_pointer_t) prior to calling
   hsa_amd_pointer_info.  If the runtime supports an older version of pointer
   info then size will be smaller on return.  Members starting after the return
@@ -1392,6 +1392,100 @@ hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
  */
 hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr,
                                                        void* userdata);
+
+/**
+ * @brief 256-bit process independent identifier for a ROCr shared memory
+ * allocation.
+ */
+typedef struct hsa_amd_ipc_memory_s {
+  uint32_t handle[9];
+} hsa_amd_ipc_memory_t;
+
+/**
+ * @brief Prepares an allocation for interprocess sharing and creates a
+ * handle of type hsa_amd_ipc_memory_t uniquely identifying the allocation.  A
+ * handle is valid while the allocation it references remains accessible in
+ * any process.  In general applications should confirm that a shared memory
+ * region has been attached (via hsa_amd_ipc_memory_attach) in the remote
+ * process prior to releasing that memory in the local process.
+ * Repeated calls for the same allocaiton may, but are not required to, return
+ * unique handles.
+ *
+ * @param[in] ptr Pointer to memory allocated via ROCr APIs to prepare for
+ * sharing.
+ *
+ * @param[in] len Length in bytes of the allocation to share.
+ *
+ * @param[out] handle Process independent identifier referencing the shared
+ * allocation.
+ *
+ * @retval HSA_STATUS_SUCCESS allocation is prepared for interprocess sharing.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr does not point to the
+ * first byte of an allocation made through ROCr, or len is not the full length
+ * of the allocation or handle is NULL.
+ */
+hsa_status_t HSA_API hsa_amd_ipc_memory_create(void* ptr, size_t len,
+                                               hsa_amd_ipc_memory_t* handle);
+
+/**
+ * @brief Imports shared memory into the local process and makes it accessible
+ * by the given agents.  If a shared memory handle is attached multiple times
+ * in a process each attach may return a different address.  Each returned
+ * address is refcounted and requires a matching number of calls to
+ * hsa_amd_ipc_memory_detach to release the shared memory mapping.
+ *
+ * @param[in] handle Pointer to the identifier for the shared memory.
+ *
+ * @param[in] len Length of the shared memory to import.
+ * Reserved.  Must be the full length of the shared allocation in this version.
+ *
+ * @param[in] num_agents Count of agents in @p mapping_agents.
+ * May be zero if all agents are to be allowed access.
+ *
+ * @param[in] mapping_agents List of agents to access the shared memory.
+ * Ignored if @p num_agents is zero.
+ *
+ * @param[out] mapped_ptr Recieves a process local pointer to the shared memory.
+ *
+ * @retval HSA_STATUS_SUCCESS if memory is successfully imported.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p handle is not valid, @p len is
+ * incorrect, @p mapped_ptr is NULL, or some agent for which access was
+ * requested can not access the shared memory.
+ */
+hsa_status_t HSA_API hsa_amd_ipc_memory_attach(
+    const hsa_amd_ipc_memory_t* handle, size_t len,
+    uint32_t num_agents,
+    const hsa_agent_t* mapping_agents,
+    void** mapped_ptr);
+
+/**
+ * @brief Decrements the reference count for the shared memory mapping and
+ * releases access to shared memory imported with hsa_amd_ipc_memory_attach.
+ *
+ * @param[in] mapped_ptr Pointer to the first byte of a shared allocation
+ * imported with hsa_amd_ipc_memory_attach.
+ *
+ * @retval HSA_STATUS_SUCCESS if @p mapped_ptr was imported with
+ * hsa_amd_ipc_memory_attach.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p mapped_ptr was not imported
+ * with hsa_amd_ipc_memory_attach.
+ */
+hsa_status_t HSA_API hsa_amd_ipc_memory_detach(void* mapped_ptr);
 
 #ifdef __cplusplus
 }  // end extern "C" block
