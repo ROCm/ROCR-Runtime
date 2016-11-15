@@ -1023,7 +1023,8 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 
 	/* Use fine-grained aperture */
 	aperture = &svm.dgpu_alt_aperture;
-	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DOORBELL;
+	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DOORBELL |
+		    KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
 	mem = __fmm_allocate_device(gpu_id, MemorySizeInBytes,
 			aperture, 0, NULL,
@@ -1109,10 +1110,12 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 	size = MemorySizeInBytes;
 	ioc_flags = 0;
-	if (flags.ui32.CoarseGrain)
+	if (flags.ui32.CoarseGrain) {
 		aperture = &svm.dgpu_aperture;
-	else
+	} else {
 		aperture = &svm.dgpu_alt_aperture; /* coherent */
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
+	}
 	if (flags.ui32.AQLQueueMemory) {
 		size = MemorySizeInBytes * 2;
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
