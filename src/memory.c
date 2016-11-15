@@ -183,6 +183,11 @@ hsaKmtFreeMemory(
 {
 	CHECK_KFD_OPEN();
 
+	if (MemoryAddress == NULL) {
+		fprintf(stderr, "FIXME: freeing NULL pointer\n");
+		return HSAKMT_STATUS_ERROR;
+	}
+
 	fmm_release(MemoryAddress);
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -283,6 +288,11 @@ hsaKmtMapMemoryToGPU(
 {
 	CHECK_KFD_OPEN();
 
+	if (MemoryAddress == NULL) {
+		fprintf(stderr, "FIXME: mapping NULL pointer\n");
+		return HSAKMT_STATUS_ERROR;
+	}
+
 	if (AlternateVAGPU)
 		*AlternateVAGPU = 0;
 
@@ -305,6 +315,11 @@ hsaKmtMapMemoryToGPUNodes(
 {
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret;
+
+	if (MemoryAddress == NULL) {
+		fprintf(stderr, "FIXME: mapping NULL pointer\n");
+		return HSAKMT_STATUS_ERROR;
+	}
 
 	if (!is_dgpu && NumberOfNodes == 1)
 		return hsaKmtMapMemoryToGPU(MemoryAddress,
