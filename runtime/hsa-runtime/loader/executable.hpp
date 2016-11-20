@@ -257,7 +257,7 @@ public:
   size_t ElfSize() const { return elf_size; }
   std::vector<Segment*>& LoadedSegments() { return loaded_segments; }
 
-  bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) override;
+  bool GetInfo(amd_loaded_code_object_info_t attribute, void *value) override;
 
   hsa_status_t IterateLoadedSegments(
     hsa_status_t (*callback)(
@@ -376,16 +376,14 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true) override;
+    hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true) override;
+    hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t Freeze(const char *options) override;
 
@@ -452,7 +450,6 @@ private:
   ExecutableImpl& operator=(const ExecutableImpl &e);
 
   std::unique_ptr<amd::hsa::code::AmdHsaCode> code;
-  bool load_legacy_;
 
   Symbol* GetSymbolInternal(
     const char *symbol_name,
@@ -466,9 +463,9 @@ private:
   hsa_status_t LoadSegmentV2(const code::Segment *data_segment,
                              loader::Segment *load_segment);
 
-  hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
-  hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
-  hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
+  hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
+  hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
+  hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
 
   hsa_status_t ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c);
   hsa_status_t ApplyStaticRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec);

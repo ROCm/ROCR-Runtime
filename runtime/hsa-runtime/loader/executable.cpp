@@ -529,15 +529,15 @@ bool VariableSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
   return true;
 }
 
-bool LoadedCodeObjectImpl::GetInfo(hsa_loaded_code_object_info_t attribute, void *value)
+bool LoadedCodeObjectImpl::GetInfo(amd_loaded_code_object_info_t attribute, void *value)
 {
   assert(value);
 
   switch (attribute) {
-    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
+    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
       ((hsa_code_object_t*)value)->handle = reinterpret_cast<uint64_t>(elf_data);
       break;
-    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
+    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
       *((size_t*)value) = elf_size;
       break;
     default: {
@@ -988,10 +988,9 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
   const char *options,
-  hsa_loaded_code_object_t *loaded_code_object,
-  bool load_legacy)
+  hsa_loaded_code_object_t *loaded_code_object)
 {
-  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object, load_legacy);
+  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object);
 }
 
 hsa_status_t ExecutableImpl::LoadCodeObject(
@@ -999,8 +998,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_code_object_t code_object,
   size_t code_object_size,
   const char *options,
-  hsa_loaded_code_object_t *loaded_code_object,
-  bool load_legacy)
+  hsa_loaded_code_object_t *loaded_code_object)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
@@ -1018,7 +1016,6 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   code.reset(new code::AmdHsaCode());
-  load_legacy_ = load_legacy;
 
   if (!code->InitAsHandle(code_object)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
@@ -1079,7 +1076,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   if (status != HSA_STATUS_SUCCESS) return status;
 
   for (size_t i = 0; i < code->SymbolCount(); ++i) {
-    status = LoadSymbol(agent, code->GetSymbol(i));
+    status = LoadSymbol(agent, code->GetSymbol(i), majorVersion);
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
 
@@ -1185,20 +1182,24 @@ hsa_status_t ExecutableImpl::LoadSegmentV2(const code::Segment *data_segment,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent,
+                                        code::Symbol* sym,
+                                        uint32_t majorVersion)
 {
   if (sym->IsDeclaration()) {
-    return LoadDeclarationSymbol(agent, sym);
+    return LoadDeclarationSymbol(agent, sym, majorVersion);
   } else {
-    return LoadDefinitionSymbol(agent, sym);
+    return LoadDefinitionSymbol(agent, sym, majorVersion);
   }
 }
 
-hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
+                                                  code::Symbol* sym,
+                                                  uint32_t majorVersion)
 {
   bool isAgent = sym->IsAgent();
-  if (!load_legacy_) {
-    isAgent = agent.handle == 0 ? false : true;
+  if (majorVersion >= 2) {
+    isAgent = agent.handle != 0;
   }
   if (isAgent) {
     auto agent_symbol = agent_symbols_.find(std::make_pair(sym->Name(), agent));
@@ -1289,7 +1290,9 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent,
+                                                   code::Symbol* sym,
+                                                   uint32_t majorVersion)
 {
   auto program_symbol = program_symbols_.find(sym->Name());
   if (program_symbol == program_symbols_.end()) {

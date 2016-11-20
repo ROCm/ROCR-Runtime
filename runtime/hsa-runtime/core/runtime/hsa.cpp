@@ -1926,7 +1926,7 @@ hsa_status_t hsa_executable_load_program_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      {0}, code_object, options, loaded_code_object, false);
+      {0}, code_object, options, loaded_code_object);
 }
 
 hsa_status_t hsa_executable_load_agent_code_object(
@@ -1951,7 +1951,7 @@ hsa_status_t hsa_executable_load_agent_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      agent, code_object, options, loaded_code_object, false);
+      agent, code_object, options, loaded_code_object);
 }
 
 hsa_status_t hsa_executable_freeze(
