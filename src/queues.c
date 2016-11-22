@@ -200,8 +200,8 @@ struct device_id supported_devices[] = {
 struct queue
 {
 	uint32_t queue_id;
-	uint32_t wptr;
-	uint32_t rptr;
+	uint64_t wptr;
+	uint64_t rptr;
 	void *eop_buffer;
 	void *ctx_save_restore;
 	uint32_t ctx_save_restore_size;
