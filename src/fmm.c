@@ -78,6 +78,8 @@ struct vm_object {
 	void *metadata;
 	/* User data associated with the memory */
 	void *user_data;
+	/* Flag to indicate imported KFD buffer */
+	bool is_imported_kfd_bo;
 };
 typedef struct vm_object vm_object_t;
 
@@ -152,6 +154,45 @@ static manageble_aperture_t cpuvm_aperture = INIT_MANAGEBLE_APERTURE(0, 0);
 static uint32_t all_gpu_id_array_size = 0;
 static uint32_t *all_gpu_id_array = NULL;
 
+/* IPC structures and helper functions */
+typedef enum _HSA_APERTURE {
+	HSA_APERTURE_UNSUPPORTED = 0,
+	HSA_APERTURE_DGPU,
+	HSA_APERTURE_DGPU_ALT,
+	HSA_APERTURE_GPUVM,
+	HSA_APERTURE_CPUVM
+} HSA_APERTURE;
+
+typedef struct _HsaApertureInfo {
+	HSA_APERTURE	type;		// Aperture type
+	HSAuint32	idx;		// Aperture index
+} HsaApertureInfo;
+
+typedef struct _HsaSharedMemoryStruct {
+	HSAuint32	ShareHandle[4];
+	HsaApertureInfo	ApeInfo;
+	HSAuint32	SizeInPages;
+	HSAuint32	ExportGpuId;
+} HsaSharedMemoryStruct;
+
+static inline const HsaSharedMemoryStruct * to_const_hsa_shared_memory_struct(
+			const HsaSharedMemoryHandle *SharedMemoryHandle)
+{
+	return (const HsaSharedMemoryStruct *)SharedMemoryHandle;
+}
+
+static inline HsaSharedMemoryStruct * to_hsa_shared_memory_struct(
+			HsaSharedMemoryHandle *SharedMemoryHandle)
+{
+	return (HsaSharedMemoryStruct *)SharedMemoryHandle;
+}
+
+static inline HsaSharedMemoryHandle * to_hsa_shared_memory_handle(
+			HsaSharedMemoryStruct *SharedMemoryStruct)
+{
+	return (HsaSharedMemoryHandle *)SharedMemoryStruct;
+}
+
 extern int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
 static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
 static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit);
@@ -212,6 +253,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->flags = flags;
 		object->metadata = NULL;
 		object->user_data = NULL;
+		object->is_imported_kfd_bo = false;
 	}
 
 	return object;
@@ -567,31 +609,63 @@ static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
 	return -1;
 }
 
-static manageble_aperture_t *fmm_find_aperture(const void *address)
+static manageble_aperture_t *fmm_get_aperture(HsaApertureInfo info)
+{
+	switch (info.type) {
+		case HSA_APERTURE_DGPU:
+			return &svm.dgpu_aperture;
+		case HSA_APERTURE_DGPU_ALT:
+			return &svm.dgpu_alt_aperture;
+		case HSA_APERTURE_GPUVM:
+			return &gpu_mem[info.idx].gpuvm_aperture;
+		case HSA_APERTURE_CPUVM:
+			return &cpuvm_aperture;
+		default:
+			return NULL;
+	}
+}
+static manageble_aperture_t *fmm_find_aperture(const void *address,
+						HsaApertureInfo *info)
 {
 	manageble_aperture_t *aperture = NULL;
 	uint32_t i;
+	HsaApertureInfo _info = { .type = HSA_APERTURE_UNSUPPORTED, .idx = 0};
 
 	if (is_dgpu) {
 		if (address >= svm.dgpu_aperture.base &&
-			address <= svm.dgpu_aperture.limit)
+			address <= svm.dgpu_aperture.limit) {
 			aperture = &svm.dgpu_aperture;
+			_info.type = HSA_APERTURE_DGPU;
+		}
 		else if (address >= svm.dgpu_alt_aperture.base &&
-			address <= svm.dgpu_alt_aperture.limit)
+			address <= svm.dgpu_alt_aperture.limit) {
 			aperture = &svm.dgpu_alt_aperture;
-		else
-		/* Not in SVM, it can be system memory registered by userptr */
+			_info.type = HSA_APERTURE_DGPU_ALT;
+		}
+		else {
+			/* Not in SVM, it can be system memory registered by userptr */
 			aperture = &svm.dgpu_aperture;
+			_info.type = HSA_APERTURE_DGPU;
+		}
 	}
 	else { /* APU */
 		for (i = 0; i < gpu_mem_count; i++) {
 			if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
-				(address <= gpu_mem[i].gpuvm_aperture.limit))
+				(address <= gpu_mem[i].gpuvm_aperture.limit)) {
 				aperture = &gpu_mem[i].gpuvm_aperture;
+				_info.type = HSA_APERTURE_GPUVM;
+				_info.idx = i;
+			}
 		}
-		if (!aperture) /* Not in GPUVM */
+		if (!aperture) {
+			/* Not in GPUVM */
 			aperture = &cpuvm_aperture;
+			_info.type = HSA_APERTURE_CPUVM;
+		}
 	}
+
+	if (info)
+		*info = _info;
 
 	return aperture;
 }
@@ -2307,6 +2381,9 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	int r;
 	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
 
+	if (gpu_id_array_size > 0 && gpu_id_array == NULL)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
 	infoArgs.dmabuf_fd = GraphicsResourceHandle;
 	infoArgs.metadata_size = GRAPHICS_METADATA_DEFAULT_SIZE;
 	metadata = calloc(infoArgs.metadata_size, 1);
@@ -2388,6 +2465,139 @@ error_free_metadata:
 	return status;
 }
 
+HSAKMT_STATUS fmm_share_memory(void* MemoryAddress,
+				HSAuint64 SizeInBytes,
+				HsaSharedMemoryHandle *SharedMemoryHandle)
+{
+	int r = 0;
+	HSAuint32 gpu_id = 0;
+	vm_object_t *obj = NULL;
+	manageble_aperture_t * aperture = NULL;
+	struct kfd_ioctl_ipc_export_handle_args exportArgs;
+	HsaApertureInfo ApeInfo;
+	HsaSharedMemoryStruct *SharedMemoryStruct =
+		to_hsa_shared_memory_struct(SharedMemoryHandle);
+
+	if (SizeInBytes >= (1ULL << ((sizeof(HSAuint32) * 8) + PAGE_SHIFT)))
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	aperture = fmm_find_aperture(MemoryAddress, &ApeInfo);
+	if (!aperture)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_address(aperture, MemoryAddress, 0);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (!obj)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	r = validate_nodeid(obj->node_id, &gpu_id);
+	if (r < 0)
+		return HSAKMT_STATUS_ERROR;
+
+	exportArgs.handle = obj->handle;
+	exportArgs.gpu_id = gpu_id;
+
+
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IPC_EXPORT_HANDLE, (void *)&exportArgs);
+	if (r)
+		return HSAKMT_STATUS_ERROR;
+
+	memcpy(SharedMemoryStruct->ShareHandle, exportArgs.share_handle,
+			sizeof(SharedMemoryStruct->ShareHandle));
+	SharedMemoryStruct->ApeInfo = ApeInfo;
+	SharedMemoryStruct->SizeInPages = (HSAuint32) (SizeInBytes >> PAGE_SHIFT);
+	SharedMemoryStruct->ExportGpuId = gpu_id;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemoryHandle,
+						HSAuint64 *SizeInBytes,
+						void **MemoryAddress,
+						uint32_t *gpu_id_array,
+						uint32_t gpu_id_array_size)
+{
+	int r = 0;
+	HSAKMT_STATUS err = HSAKMT_STATUS_ERROR;
+	vm_object_t *obj = NULL;
+	void *reservedMem = NULL;
+	manageble_aperture_t *aperture;
+	struct kfd_ioctl_ipc_import_handle_args importArgs;
+	struct kfd_ioctl_free_memory_of_gpu_args freeArgs;
+	const HsaSharedMemoryStruct *SharedMemoryStruct =
+		to_const_hsa_shared_memory_struct(SharedMemoryHandle);
+
+	if (gpu_id_array_size > 0 && gpu_id_array == NULL)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	memcpy(importArgs.share_handle, SharedMemoryStruct->ShareHandle,
+			sizeof(importArgs.share_handle));
+	importArgs.gpu_id = SharedMemoryStruct->ExportGpuId;
+
+	aperture = fmm_get_aperture(SharedMemoryStruct->ApeInfo);
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	reservedMem = aperture_allocate_area(aperture,
+					     (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+					     0);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (!reservedMem) {
+		err = HSAKMT_STATUS_NO_MEMORY;
+		goto err_free_buffer;
+	}
+
+	importArgs.va_addr = (uint64_t)reservedMem;
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IPC_IMPORT_HANDLE, (void *)&importArgs);
+	if (r) {
+		err = HSAKMT_STATUS_ERROR;
+		goto err_import;
+	}
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
+				       (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+				       0);
+	if (!obj) {
+		err = HSAKMT_STATUS_NO_MEMORY;
+		goto err_free_mem;
+	}
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (importArgs.mmap_offset) {
+		void *ret = mmap(reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+				 PROT_READ | PROT_WRITE,
+				 MAP_SHARED | MAP_FIXED, kfd_fd,
+				 importArgs.mmap_offset);
+		if (ret == MAP_FAILED) {
+			err = HSAKMT_STATUS_ERROR;
+			goto err_free_obj;
+		}
+	}
+
+	*MemoryAddress = reservedMem;
+	*SizeInBytes = (SharedMemoryStruct->SizeInPages << PAGE_SHIFT);
+
+	if (gpu_id_array_size > 0) {
+		obj->registered_device_id_array = gpu_id_array;
+		obj->registered_device_id_array_size = gpu_id_array_size;
+	}
+	obj->is_imported_kfd_bo = true;
+
+	return HSAKMT_STATUS_SUCCESS;
+err_free_obj:
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	vm_remove_object(aperture, obj);
+err_free_mem:
+	aperture_release_area(aperture, reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT));
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+err_free_buffer:
+	freeArgs.handle = importArgs.handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
+err_import:
+	return err;
+}
+
 static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 {
 	manageble_aperture_t *aperture;
@@ -2466,7 +2676,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (object->metadata || object->userptr) {
+	if (object->metadata || object->userptr || object->is_imported_kfd_bo) {
 		/* An object with metadata is an imported graphics
 		 * buffer. Deregistering imported graphics buffers or
 		 * userptrs means releasing the BO.
@@ -2635,7 +2845,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 
 	memset(info, 0, sizeof(HsaPointerInfo));
 
-	aperture = fmm_find_aperture(address);
+	aperture = fmm_find_aperture(address, NULL);
 
 	vm_obj = vm_find_object_by_address_range(aperture, address);
 	if (!vm_obj)
@@ -2707,7 +2917,7 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 	manageble_aperture_t *aperture;
 	vm_object_t *vm_obj;
 
-	aperture = fmm_find_aperture(mem);
+	aperture = fmm_find_aperture(mem, NULL);
 
 	vm_obj = vm_find_object_by_address(aperture, mem, 0);
 	if (!vm_obj)

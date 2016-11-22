@@ -50,6 +50,7 @@ extern bool is_dgpu;
 	do { if (kfd_open_count == 0) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
 
 #define PAGE_SIZE 4096
+#define PAGE_SHIFT 12
 /* VI HW bug requires this virtual address alignment */
 #define TONGA_PAGE_SIZE 0x8000
 

@@ -269,6 +269,79 @@ hsaKmtRegisterGraphicsHandleToNodes(
 
 HSAKMT_STATUS
 HSAKMTAPI
+hsaKmtShareMemory(
+	void                  *MemoryAddress,     /* IN */
+	HSAuint64             SizeInBytes,        /* IN */
+	HsaSharedMemoryHandle *SharedMemoryHandle /* OUT */
+)
+{
+	CHECK_KFD_OPEN();
+
+	if (!SharedMemoryHandle)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	return fmm_share_memory(MemoryAddress, SizeInBytes, SharedMemoryHandle);
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterSharedHandle(
+	const HsaSharedMemoryHandle *SharedMemoryHandle, /* IN */
+	void                        **MemoryAddress,     /* OUT */
+	HSAuint64                   *SizeInBytes         /* OUT */
+)
+{
+	CHECK_KFD_OPEN();
+
+	return hsaKmtRegisterSharedHandleToNodes(SharedMemoryHandle,
+						 MemoryAddress,
+						 SizeInBytes,
+						 0,
+						 NULL);
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterSharedHandleToNodes(
+	const HsaSharedMemoryHandle *SharedMemoryHandle, /* IN */
+	void                        **MemoryAddress,     /* OUT */
+	HSAuint64                   *SizeInBytes,        /* OUT */
+	HSAuint64                   NumberOfNodes,       /* OUT */
+	HSAuint32*                  NodeArray            /* OUT */
+)
+{
+	CHECK_KFD_OPEN();
+
+	uint32_t *gpu_id_array = NULL;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	if (!SharedMemoryHandle)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	if (NodeArray) {
+		ret = validate_nodeid_array(&gpu_id_array, NumberOfNodes, NodeArray);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto error;
+	}
+
+	ret = fmm_register_shared_memory(SharedMemoryHandle,
+					 SizeInBytes,
+					 MemoryAddress,
+					 gpu_id_array,
+					 NumberOfNodes*sizeof(uint32_t));
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		goto error;
+
+	return ret;
+
+error:
+	if (gpu_id_array)
+		free(gpu_id_array);
+	return ret;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
 hsaKmtDeregisterMemory(
 	void		*MemoryAddress		/* IN */
 )
