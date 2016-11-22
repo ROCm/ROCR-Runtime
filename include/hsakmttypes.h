@@ -1004,6 +1004,8 @@ typedef struct _HsaPointerInfo {
     void               *UserData;        // User data associated with the memory
 } HsaPointerInfo;
 
+typedef HSAuint32 HsaSharedMemoryHandle[8];
+
 #pragma pack(pop, hsakmttypes_h)
 
 

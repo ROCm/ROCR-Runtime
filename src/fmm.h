@@ -82,6 +82,14 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   uint32_t *gpu_id_array,
 					   uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_deregister_memory(void *address);
+HSAKMT_STATUS fmm_share_memory(void* MemoryAddress,
+			       HSAuint64 SizeInBytes,
+			       HsaSharedMemoryHandle *SharedMemoryHandle);
+HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemoryHandle,
+					 HSAuint64 *SizeInBytes,
+					 void **MemoryAddress,
+					 uint32_t *gpu_id_array,
+					 uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint32_t *nodes_to_map, uint32_t nodes_to_map_size, uint64_t *gpuvm_address);
 #endif /* FMM_H_ */

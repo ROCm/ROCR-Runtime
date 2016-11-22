@@ -406,6 +406,43 @@ hsaKmtRegisterGraphicsHandleToNodes(
     HSAuint32*      NodeArray                      //IN
     );
 
+/**
+ Export a memory buffer for sharing with other processes
+
+ NOTE: for the current revision of the thunk spec, SizeInBytes
+ must match whole allocation.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtShareMemory(
+	void                  *MemoryAddress,     // IN
+	HSAuint64             SizeInBytes,        // IN
+	HsaSharedMemoryHandle *SharedMemoryHandle // OUT
+);
+
+/**
+ Register shared memory handle
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterSharedHandle(
+	const HsaSharedMemoryHandle *SharedMemoryHandle, // IN
+	void                        **MemoryAddress,     // OUT
+	HSAuint64                   *SizeInBytes         // OUT
+);
+
+/**
+ Register shared memory handle to specific nodes only
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterSharedHandleToNodes(
+	const HsaSharedMemoryHandle *SharedMemoryHandle, // IN
+	void                        **MemoryAddress,     // OUT
+	HSAuint64                   *SizeInBytes,        // OUT
+	HSAuint64                   NumberOfNodes,       // OUT
+	HSAuint32*                  NodeArray            // OUT
+);
 
 /**
   Unregisters with KFD a memory buffer
