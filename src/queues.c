@@ -55,6 +55,7 @@ enum asic_family_type {
 #define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_POLARIS11)
 #define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_VEGA10) || \
 		       (chip) == CHIP_HAWAII)
+#define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
 
 #define WG_CONTEXT_DATA_SIZE_PER_CU_VI	344576
 #define WAVES_PER_CU_VI		32
@@ -563,6 +564,8 @@ hsaKmtCreateQueue(
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	uint16_t dev_id;
+	uint64_t doorbell_mmap_offset;
+	unsigned doorbell_offset;
 	struct device_info *dev_info;
 	int err;
 	CHECK_KFD_OPEN();
@@ -631,7 +634,24 @@ hsaKmtCreateQueue(
 
 	q->queue_id = args.queue_id;
 
-	err = map_doorbell(NodeId, gpu_id, args.doorbell_offset);
+	if (IS_SOC15(dev_info->asic_family)) {
+		/* On SOC15 chips, the doorbell offset within the
+		 * doorbell page is included in the doorbell offset
+		 * returned by KFD. This allows doorbells to be
+		 * allocated per-device, independent of the
+		 * per-process queue ID. */
+		doorbell_mmap_offset = args.doorbell_offset &
+			~(HSAuint64)(doorbells[NodeId].size - 1);
+		doorbell_offset = args.doorbell_offset &
+			(doorbells[NodeId].size - 1);
+	} else {
+		/* On older chips, the doorbell offset within the
+		 * doorbell page is based on the queue ID. */
+		doorbell_mmap_offset = args.doorbell_offset;
+		doorbell_offset = q->queue_id * dev_info->doorbell_size;
+	}
+
+	err = map_doorbell(NodeId, gpu_id, doorbell_mmap_offset);
 	if (err != HSAKMT_STATUS_SUCCESS) {
 		hsaKmtDestroyQueue(q->queue_id);
 		free_queue(q);
@@ -640,8 +660,7 @@ hsaKmtCreateQueue(
 
 	QueueResource->QueueId = PORT_VPTR_TO_UINT64(q);
 	QueueResource->Queue_DoorBell = VOID_PTR_ADD(doorbells[NodeId].doorbells,
-						     (q->queue_id *
-						      dev_info->doorbell_size));
+						     doorbell_offset);
 
 	return HSAKMT_STATUS_SUCCESS;
 }
