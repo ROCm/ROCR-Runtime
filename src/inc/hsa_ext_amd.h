@@ -116,7 +116,12 @@ typedef enum hsa_amd_agent_info_s {
    * Board name of Agent - populated from MarketingName of Kfd Node
    * The value is an Ascii string of 64 chars.
    */
-  HSA_AMD_AGENT_INFO_PRODUCT_NAME = 0xA009
+  HSA_AMD_AGENT_INFO_PRODUCT_NAME = 0xA009,
+  /**
+   * Maximum number of waves possible in a Compute Unit.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU = 0xA00A
 } hsa_amd_agent_info_t;
 
 /**
