@@ -399,8 +399,8 @@ public:
     hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
     size_t *num_segment_descriptors) = 0;
 
-  /// @brief Finds the handle of @p executable to which the device
-  /// address belongs. Return NULL handle if device address is invalid
+  /// @brief Finds the handle of executable to which @p device_address
+  /// belongs. Return NULL handle if device address is invalid.
   virtual hsa_executable_t FindExecutable(uint64_t device_address) = 0;
 
   /// @brief Returns host address given @p device_address. If @p device_address

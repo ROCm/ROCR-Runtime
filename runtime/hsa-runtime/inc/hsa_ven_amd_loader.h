@@ -226,14 +226,16 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
 
 /**
  * @brief Obtains the handle of executable to which the device address belongs.
- * This method should not be used to obtain executable handle by using a host
- * address.
+ *
+ * @details This method should not be used to obtain executable handle by using
+ * a host address. The executable returned is expected to be alive until its
+ * destroyed by the user.
  *
  * @retval HSA_STATUS_SUCCESS Function is executed successfully.
  *
  * @retval HSA_STATUS_ERROR_NOT_INITIALIZED Runtime is not initialized.
  *
- * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT the input is invalid or there
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT The input is invalid or there
  * is no exectuable found for this kernel code object.
  */
 hsa_status_t hsa_ven_amd_loader_query_executable(
@@ -256,7 +258,7 @@ typedef struct hsa_ven_amd_loader_1_00_pfn_s {
   hsa_status_t (*hsa_ven_amd_loader_query_segment_descriptors)(
     hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
     size_t *num_segment_descriptors);
-  
+
   hsa_status_t (*hsa_ven_amd_loader_query_executable)(
     const void *device_address,
     hsa_executable_t *executable);
