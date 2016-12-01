@@ -1398,7 +1398,7 @@ hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr,
  * allocation.
  */
 typedef struct hsa_amd_ipc_memory_s {
-  uint32_t handle[9];
+  uint32_t handle[8];
 } hsa_amd_ipc_memory_t;
 
 /**
