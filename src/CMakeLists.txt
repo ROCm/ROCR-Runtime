@@ -99,6 +99,7 @@ enable_clang_tidy(
         -misc-misplaced-const
         -modernize-loop-convert
         -modernize-pass-by-value
+        -modernize-use-auto
         -performance-unnecessary-value-param
         -readability-braces-around-statements
         -readability-else-after-return
