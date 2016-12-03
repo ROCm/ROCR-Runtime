@@ -779,7 +779,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
   uint32_t slot_idx = uint32_t(write_idx % public_handle()->size);
   constexpr uint32_t slot_size_b = 0x40;
-  uint32_t* queue_slot = (uint32_t*)uintptr_t(public_handle()->base_address +
+  uint32_t* queue_slot = (uint32_t*)uintptr_t((char*)public_handle()->base_address +
                                               (slot_idx * slot_size_b));
 
   // Copy client PM4 command into IB.
