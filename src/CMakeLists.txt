@@ -69,6 +69,47 @@ add_definitions ( -D HSA_DEPRECATED= )
 
 include ( utils )
 include ( hsa_common )
+include ( EnableCompilerWarnings )
+include ( ClangTidy )
+
+## Setup clang tidy
+enable_clang_tidy(
+    CHECKS 
+        *
+        -cert-err60-cpp
+        -clang-analyzer-alpha.core.CastToStruct
+        # Disable this because it doesn't recognize clean up in the destructor
+        -clang-analyzer-alpha.unix.Stream
+        -clang-analyzer-optin.performance.Padding
+        -clang-diagnostic-extern-c-compat
+        -cppcoreguidelines-pro-bounds-array-to-pointer-decay
+        -cppcoreguidelines-pro-bounds-constant-array-index
+        -cppcoreguidelines-pro-bounds-pointer-arithmetic
+        -cppcoreguidelines-pro-type-reinterpret-cast
+        -cppcoreguidelines-pro-type-vararg
+        -google-explicit-constructor
+        -google-readability-braces-around-statements
+        -google-readability-todo
+        -google-runtime-int
+        -google-runtime-references
+        -llvm-include-order
+        -misc-macro-parentheses
+        -misc-misplaced-const
+        -modernize-loop-convert
+        -modernize-pass-by-value
+        -performance-unnecessary-value-param
+        -readability-braces-around-statements
+        -readability-else-after-return
+        -readability-implicit-bool-cast
+        -readability-named-parameter
+    ERRORS
+        *
+        -readability-inconsistent-declaration-parameter-name
+    HEADER_FILTER
+        "hpp$"
+    ANALYZE_TEMPORARY_DTORS ON
+
+)
 
 ## Parse the package version
 if( NOT DEFINED VERSION_STRING )
@@ -162,6 +203,7 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
 )
 
 add_library( ${CORE_RUNTIME_TARGET} SHARED ${SRCS} )
+clang_tidy_check(${CORE_RUNTIME_TARGET})
 link_directories ( ${HSAKMT_BUILD_LIB_PATH} )
 
 ## Set the VERSION and SOVERSION values

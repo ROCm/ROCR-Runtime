@@ -12,5 +12,6 @@
 
 file(GLOB sources *.cpp *.hpp)
 add_library(amdhsaloader ${sources})
+clang_tidy_check(amdhsaloader)
 target_include_directories(amdhsaloader PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(amdhsaloader amdhsacode)
