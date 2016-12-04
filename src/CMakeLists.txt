@@ -76,6 +76,7 @@ include ( ClangTidy )
 enable_clang_tidy(
     CHECKS 
         *
+        -cert-dcl03-c
         -cert-err60-cpp
         -clang-analyzer-alpha.core.CastToStruct
         # Disable this because it doesn't recognize clean up in the destructor
@@ -86,6 +87,8 @@ enable_clang_tidy(
         -cppcoreguidelines-pro-bounds-constant-array-index
         -cppcoreguidelines-pro-bounds-pointer-arithmetic
         -cppcoreguidelines-pro-type-reinterpret-cast
+        -cppcoreguidelines-pro-type-static-cast-downcast # Need rtti
+        -cppcoreguidelines-pro-type-union-access # Need C++17 or boost
         -cppcoreguidelines-pro-type-vararg
         -google-explicit-constructor
         -google-readability-braces-around-statements
@@ -98,6 +101,7 @@ enable_clang_tidy(
         -misc-macro-parentheses
         -misc-misplaced-const
         -modernize-loop-convert
+        -modernize-make-unique # Need C++14
         -modernize-pass-by-value
         -modernize-use-auto
         -performance-unnecessary-value-param
