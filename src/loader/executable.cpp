@@ -135,7 +135,7 @@ void Loader::Destroy(Loader *loader)
 }
 
 Executable* AmdHsaCodeLoader::CreateExecutable(
-  hsa_profile_t profile, const char *options, hsa_default_float_rounding_mode_t default_float_rounding_mode)
+  hsa_profile_t profile, const char * /*options*/, hsa_default_float_rounding_mode_t default_float_rounding_mode)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
 
@@ -147,7 +147,7 @@ void AmdHsaCodeLoader::DestroyExecutable(Executable *executable)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
 
-  executables[((ExecutableImpl*)executable)->id()] = nullptr;
+  executables[(static_cast<ExecutableImpl*>(executable))->id()] = nullptr;
   delete executable;
 }
 
@@ -237,7 +237,7 @@ void AmdHsaCodeLoader::EnableReadOnlyMode()
   rw_lock_.ReaderLock();
   for (auto &executable : executables) {
     if (executable) {
-      ((ExecutableImpl*)executable)->EnableReadOnlyMode();
+      (static_cast<ExecutableImpl*>(executable))->EnableReadOnlyMode();
     }
   }
 }
@@ -247,7 +247,7 @@ void AmdHsaCodeLoader::DisableReadOnlyMode()
   rw_lock_.ReaderUnlock();
   for (auto &executable : executables) {
     if (executable) {
-      ((ExecutableImpl*)executable)->DisableReadOnlyMode();
+      (static_cast<ExecutableImpl*>(executable))->DisableReadOnlyMode();
     }
   }
 }
@@ -302,7 +302,7 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
 
   switch (symbol_info) {
     case HSA_CODE_SYMBOL_INFO_TYPE: {
-      *((hsa_symbol_kind_t*)value) = kind;
+      *(reinterpret_cast<hsa_symbol_kind_t*>(value)) = kind;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_NAME_LENGTH: {
@@ -316,7 +316,7 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
         matter = name.substr(name.rfind(":") + 1);
       }
 
-      *((uint32_t*)value) = matter.size() + 1;
+      *(reinterpret_cast<uint32_t*>(value)) = matter.size() + 1;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_NAME: {
@@ -339,14 +339,14 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
 
       if (linkage == HSA_SYMBOL_LINKAGE_PROGRAM) {
         assert(name.find(":") == std::string::npos);
-        *((uint32_t*)value) = 0;
+        *(reinterpret_cast<uint32_t*>(value)) = 0;
         return true;
       }
 
       assert(name.find(":") != std::string::npos);
       matter = name.substr(0, name.find(":"));
 
-      *((uint32_t*)value) = matter.size() + 1;
+      *(reinterpret_cast<uint32_t*>(value)) = matter.size() + 1;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_MODULE_NAME: {
@@ -365,15 +365,15 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       break;
     }
     case HSA_CODE_SYMBOL_INFO_LINKAGE: {
-      *((hsa_symbol_linkage_t*)value) = linkage;
+      *(reinterpret_cast<hsa_symbol_linkage_t*>(value)) = linkage;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_IS_DEFINITION: {
-      *((bool*)value) = is_definition;
+      *(reinterpret_cast<bool*>(value)) = is_definition;
       break;
     }
     case HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_CALL_CONVENTION: {
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     }
     case HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT:
@@ -381,14 +381,14 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       if (!is_loaded) {
         return false;
       }
-      *((uint64_t*)value) = address;
+      *(reinterpret_cast<uint64_t*>(value)) = address;
       break;
     }
     case HSA_EXECUTABLE_SYMBOL_INFO_AGENT: {
       if (!is_loaded) {
         return false;
       }
-      *((hsa_agent_t*)value) = agent;
+      *(reinterpret_cast<hsa_agent_t*>(value)) = agent;
       break;
     }
     default: {
@@ -434,31 +434,31 @@ bool KernelSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
 
   switch (symbol_info) {
     case HSA_CODE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE: {
-      *((uint32_t*)value) = kernarg_segment_size;
+      *(reinterpret_cast<uint32_t*>(value)) = kernarg_segment_size;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT: {
-      *((uint32_t*)value) = kernarg_segment_alignment;
+      *(reinterpret_cast<uint32_t*>(value)) = kernarg_segment_alignment;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE: {
-      *((uint32_t*)value) = group_segment_size;
+      *(reinterpret_cast<uint32_t*>(value)) = group_segment_size;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE: {
-      *((uint32_t*)value) = private_segment_size;
+      *(reinterpret_cast<uint32_t*>(value)) = private_segment_size;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_KERNEL_DYNAMIC_CALLSTACK: {
-      *((bool*)value) = is_dynamic_callstack;
+      *(reinterpret_cast<bool*>(value)) = is_dynamic_callstack;
       break;
     }
     case HSA_EXT_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT_SIZE: {
-      *((uint32_t*)value) = size;
+      *(reinterpret_cast<uint32_t*>(value)) = size;
       break;
     }
     case HSA_EXT_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT_ALIGN: {
-      *((uint32_t*)value) = alignment;
+      *(reinterpret_cast<uint32_t*>(value)) = alignment;
       break;
     }
     default: {
@@ -502,23 +502,23 @@ bool VariableSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
 
   switch (symbol_info) {
     case HSA_CODE_SYMBOL_INFO_VARIABLE_ALLOCATION: {
-      *((hsa_variable_allocation_t*)value) = allocation;
+      *(reinterpret_cast<hsa_variable_allocation_t*>(value)) = allocation;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_VARIABLE_SEGMENT: {
-      *((hsa_variable_segment_t*)value) = segment;
+      *(reinterpret_cast<hsa_variable_segment_t*>(value)) = segment;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_VARIABLE_ALIGNMENT: {
-      *((uint32_t*)value) = alignment;
+      *(reinterpret_cast<uint32_t*>(value)) = alignment;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_VARIABLE_SIZE: {
-      *((uint32_t*)value) = size;
+      *(reinterpret_cast<uint32_t*>(value)) = size;
       break;
     }
     case HSA_CODE_SYMBOL_INFO_VARIABLE_IS_CONST: {
-      *((bool*)value) = is_constant;
+      *(reinterpret_cast<bool*>(value)) = is_constant;
       break;
     }
     default: {
@@ -535,10 +535,10 @@ bool LoadedCodeObjectImpl::GetInfo(hsa_loaded_code_object_info_t attribute, void
 
   switch (attribute) {
     case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
-      ((hsa_code_object_t*)value)->handle = reinterpret_cast<uint64_t>(elf_data);
+      (reinterpret_cast<hsa_code_object_t*>(value))->handle = reinterpret_cast<uint64_t>(elf_data);
       break;
     case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
-      *((size_t*)value) = elf_size;
+      *(reinterpret_cast<size_t*>(value)) = elf_size;
       break;
     default: {
       return false;
@@ -577,19 +577,19 @@ bool Segment::GetInfo(amd_loaded_segment_info_t attribute, void *value)
 
   switch (attribute) {
     case AMD_LOADED_SEGMENT_INFO_TYPE: {
-      *((amdgpu_hsa_elf_segment_t*)value) = segment;
+      *(reinterpret_cast<amdgpu_hsa_elf_segment_t*>(value)) = segment;
       break;
     }
     case AMD_LOADED_SEGMENT_INFO_ELF_BASE_ADDRESS: {
-      *((uint64_t*)value) = vaddr;
+      *(reinterpret_cast<uint64_t*>(value)) = vaddr;
       break;
     }
     case AMD_LOADED_SEGMENT_INFO_LOAD_BASE_ADDRESS: {
-      *((uint64_t*)value) = reinterpret_cast<uint64_t>(this->Address(this->VAddr()));
+      *(reinterpret_cast<uint64_t*>(value)) = reinterpret_cast<uint64_t>(this->Address(this->VAddr()));
       break;
     }
     case AMD_LOADED_SEGMENT_INFO_SIZE: {
-      *((size_t*)value) = size;
+      *(reinterpret_cast<size_t*>(value)) = size;
       break;
     }
     default: {
@@ -955,15 +955,15 @@ hsa_status_t ExecutableImpl::GetInfo(
 
   switch (executable_info) {
     case HSA_EXECUTABLE_INFO_PROFILE: {
-      *((hsa_profile_t*)value) = profile_;;
+      *(reinterpret_cast<hsa_profile_t*>(value)) = profile_;;
       break;
     }
     case HSA_EXECUTABLE_INFO_STATE: {
-      *((hsa_executable_state_t*)value) = state_;
+      *(reinterpret_cast<hsa_executable_state_t*>(value)) = state_;
       break;
     }
     case HSA_EXECUTABLE_INFO_DEFAULT_FLOAT_ROUNDING_MODE: {
-      *((hsa_default_float_rounding_mode_t*)value) =
+      *(reinterpret_cast<hsa_default_float_rounding_mode_t*>(value)) =
           default_float_rounding_mode_;
       break;
     }
@@ -994,7 +994,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
 hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
-  size_t code_object_size,
+  size_t  /*code_object_size*/,
   const char *options,
   hsa_loaded_code_object_t *loaded_code_object,
   bool load_legacy)
@@ -1070,7 +1070,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_status_t status;
 
   objects.push_back(new LoadedCodeObjectImpl(this, agent, code->ElfData(), code->ElfSize()));
-  loaded_code_objects.push_back((LoadedCodeObjectImpl*)objects.back());
+  loaded_code_objects.push_back(static_cast<LoadedCodeObjectImpl*>(objects.back()));
 
   for (size_t i = 0; i < code->DataSegmentCount(); ++i) {
     status = LoadSegment(agent, code->DataSegment(i), majorVersion, code->Machine());
@@ -1112,7 +1112,7 @@ hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent, code::Segment* s)
   assert(s->type() < PT_LOOS + AMDGPU_HSA_SEGMENT_LAST);
   if (s->memSize() == 0)
     return HSA_STATUS_SUCCESS;
-  amdgpu_hsa_elf_segment_t segment = (amdgpu_hsa_elf_segment_t)(s->type() - PT_LOOS);
+  amdgpu_hsa_elf_segment_t segment = static_cast<amdgpu_hsa_elf_segment_t>(s->type() - PT_LOOS);
   Segment *new_seg = nullptr;
   bool need_alloc = true;
   if (segment == AMDGPU_HSA_SEGMENT_GLOBAL_PROGRAM && nullptr != program_allocation_segment) {
@@ -1148,7 +1148,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
 {
   bool isAgent = sym->IsAgent();
   if (!load_legacy_) {
-    isAgent = agent.handle == 0 ? false : true;
+    isAgent = agent.handle != 0;
   }
   if (isAgent) {
     auto agent_symbol = agent_symbols_.find(std::make_pair(sym->Name(), agent));
@@ -1193,7 +1193,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
       uint32_t private_segment_size =
         uint32_t(akc.workitem_private_segment_byte_size);
       bool is_dynamic_callstack =
-        AMD_HSA_BITS_GET(akc.kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK) ? true : false;
+        bool(AMD_HSA_BITS_GET(akc.kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK));
 
       uint64_t size = sym->Size();
 
@@ -1217,12 +1217,12 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
       kernel_symbol->debug_info.elf_raw = code->ElfData();
       kernel_symbol->debug_info.elf_size = code->ElfSize();
       kernel_symbol->debug_info.kernel_name = kernel_symbol->name.c_str();
-      kernel_symbol->debug_info.owning_segment = (void*)SymbolSegment(agent, sym)->Address(sym->GetSection()->addr());
+      kernel_symbol->debug_info.owning_segment = SymbolSegment(agent, sym)->Address(sym->GetSection()->addr());
       symbol = kernel_symbol;
 
       // \todo kzhuravl 10/15/15 This is a debugger backdoor: needs to be
       // removed.
-      uint64_t target_address = sym->GetSection()->addr() + sym->SectionOffset() + ((size_t)(&((amd_kernel_code_t*)0)->runtime_loader_kernel_symbol));
+      uint64_t target_address = sym->GetSection()->addr() + sym->SectionOffset() + ((size_t)(&((amd_kernel_code_t*)nullptr)->runtime_loader_kernel_symbol));
       uint64_t source_value = (uint64_t) (uintptr_t) &kernel_symbol->debug_info;
       SymbolSegment(agent, sym)->Copy(target_address, &source_value, sizeof(source_value));
   } else {
@@ -1258,7 +1258,7 @@ Segment* ExecutableImpl::VirtualAddressSegment(uint64_t vaddr)
       return seg;
     }
   }
-  return 0;
+  return nullptr;
 }
 
 uint64_t ExecutableImpl::SymbolAddress(hsa_agent_t agent, code::Symbol* sym)
@@ -1281,14 +1281,14 @@ Segment* ExecutableImpl::SymbolSegment(hsa_agent_t agent, code::Symbol* sym)
   return SectionSegment(agent, sym->GetSection());
 }
 
-Segment* ExecutableImpl::SectionSegment(hsa_agent_t agent, code::Section* sec)
+Segment* ExecutableImpl::SectionSegment(hsa_agent_t  /*agent*/, code::Section* sec)
 {
   for (Segment* seg : loaded_code_objects.back()->LoadedSegments()) {
     if (seg->IsAddressInSegment(sec->addr())) {
       return seg;
     }
   }
-  return 0;
+  return nullptr;
 }
 
 hsa_status_t ExecutableImpl::ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c)
@@ -1355,7 +1355,7 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
           if (STA_AMDGPU_HSA_GLOBAL_PROGRAM == ELF64_ST_AMDGPU_ALLOCATION(sym->other())) {
             sagent = nullptr;
           }
-          SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal(sym->name().c_str(), sagent);
+          SymbolImpl* esym = static_cast<SymbolImpl*>( GetSymbolInternal(sym->name().c_str(), sagent));
           if (!esym) { return HSA_STATUS_ERROR_VARIABLE_UNDEFINED; }
           addr = esym->address;
           break;
@@ -1471,7 +1471,7 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
       hsa_ext_image_t hsa_image = {0};
       status = context_->ImageCreate(agent, hsa_image_permission,
                                   &hsa_image_descriptor,
-                                  NULL, // TODO: image_data?
+                                  nullptr, // TODO: image_data?
                                   &hsa_image);
       if (status != HSA_STATUS_SUCCESS) { return status; }
       rseg->Copy(reladdr, &hsa_image, sizeof(hsa_image));
@@ -1562,7 +1562,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::Freeze(const char *options) {
+hsa_status_t ExecutableImpl::Freeze(const char * /*options*/) {
   amd::hsa::common::WriterLockGuard<amd::hsa::common::ReaderWriterLock> writer_lock(rw_lock_);
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
     return HSA_STATUS_ERROR_FROZEN_EXECUTABLE;

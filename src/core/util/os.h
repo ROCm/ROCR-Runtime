@@ -112,7 +112,7 @@ void DestroyMutex(Mutex lock);
 /// @brief: Puts current thread to sleep.
 /// @param: delayInMs(Input), time in millisecond for sleeping.
 /// @return: void.
-void Sleep(int delayInMs);
+void Sleep(int delay_in_millisec);
 
 /// @brief: Yields current thread.
 /// @param: void.
@@ -128,8 +128,8 @@ typedef void (*ThreadEntry)(void*);
 /// function.
 /// @param: stack_size(Input), size of the thread's stack, 0 by default.
 /// @return: Thread, a handle to thread created.
-Thread CreateThread(ThreadEntry entry_function, void* entry_argument,
-                    uint stack_size = 0);
+Thread CreateThread(ThreadEntry function, void* threadArgument,
+                    uint stackSize = 0);
 
 /// @brief: Destroys the thread.
 /// @param: thread(Input), thread handle to what will be destroyed.
@@ -145,7 +145,7 @@ bool WaitForThread(Thread thread);
 /// @param; threads(Input), a pointer to a list of thread handle.
 /// @param: thread_count(Input), number of threads to be waited on.
 /// @return: bool.
-bool WaitForAllThreads(Thread* threads, uint thread_count);
+bool WaitForAllThreads(Thread* threads, uint threadCount);
 
 /// @brief: Sets the environment value.
 /// @param: env_var_name(Input), name of the environment value.

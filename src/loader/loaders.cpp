@@ -55,12 +55,12 @@ namespace loader {
   #if defined(_WIN32)
     return ::_aligned_malloc(size, alignment);
   #else
-    void * ptr = NULL;
+    void * ptr = nullptr;
     alignment = (std::max)(alignment, sizeof(void*));
     if (0 == ::posix_memalign(&ptr, alignment, size)) {
       return ptr;
     }
-    return NULL;
+    return nullptr;
   #endif
   }
 
@@ -124,12 +124,12 @@ namespace loader {
     }
   }
 
-  bool OfflineLoaderContext::IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa)
+  bool OfflineLoaderContext::IsaSupportedByAgent(hsa_agent_t  /*agent*/, hsa_isa_t  /*isa*/)
   {
     return true;
   }
 
-  void* OfflineLoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, size_t size, size_t align, bool zero)
+  void* OfflineLoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, size_t size, size_t align, bool zero)
   {
     void* ptr = alignedMalloc(size, align);
     if (zero) { memset(ptr, 0, size); }
@@ -138,7 +138,7 @@ namespace loader {
     return ptr;
   }
 
-  bool OfflineLoaderContext::SegmentCopy(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* dst, size_t offset, const void* src, size_t size)
+  bool OfflineLoaderContext::SegmentCopy(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, void* dst, size_t offset, const void* src, size_t size)
   {
     out << "SegmentCopy: " << segment << ": " << "dst=" << dst << " offset=" << offset << " src=" << src << " size=" << size << std::endl;
     if (!dst || !src || dst == src) {
@@ -147,30 +147,30 @@ namespace loader {
     if (0 == size) {
       return true;
     }
-    memcpy((char *) dst + offset, src, size);
+    memcpy(reinterpret_cast<char *>( dst) + offset, src, size);
     return true;
   }
 
-  void OfflineLoaderContext::SegmentFree(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size)
+  void OfflineLoaderContext::SegmentFree(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, void* seg, size_t size)
   {
     out << "SegmentFree: " << segment << ": " << " ptr=" << seg << " size=" << size << std::endl;
     pointers.erase(seg);
     alignedFree(seg);
   }
 
-  void* OfflineLoaderContext::SegmentAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset)
+  void* OfflineLoaderContext::SegmentAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, void* seg, size_t offset)
   {
       out << "SegmentAddress: " << segment << ": " << " ptr=" << seg << " offset=" << offset << std::endl;
-      return (char*) seg + offset;
+      return reinterpret_cast<char*>( seg) + offset;
   }
 
-  void* OfflineLoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset)
+  void* OfflineLoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, void* seg, size_t offset)
   {
       out << "SegmentHostAddress: " << segment << ": " << " ptr=" << seg << " offset=" << offset << std::endl;
-      return (char*) seg + offset;
+      return reinterpret_cast<char*>( seg) + offset;
   }
 
-  bool OfflineLoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size)
+  bool OfflineLoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t  /*agent*/, void* seg, size_t size)
   {
     out << "SegmentFreeze: " << segment << ": " << " ptr=" << seg << " size=" << size << std::endl;
     return true;
@@ -182,7 +182,7 @@ namespace loader {
   }
 
   hsa_status_t OfflineLoaderContext::ImageCreate(
-    hsa_agent_t agent,
+    hsa_agent_t  /*agent*/,
     hsa_access_permission_t image_permission,
     const hsa_ext_image_descriptor_t *image_descriptor,
     const void *image_data,
@@ -206,7 +206,7 @@ namespace loader {
   }
 
   hsa_status_t OfflineLoaderContext::ImageDestroy(
-    hsa_agent_t agent, hsa_ext_image_t image_handle)
+    hsa_agent_t  /*agent*/, hsa_ext_image_t image_handle)
   {
     void* ptr = reinterpret_cast<void*>(image_handle.handle);
     pointers.erase(ptr);
@@ -215,7 +215,7 @@ namespace loader {
   }
 
   hsa_status_t OfflineLoaderContext::SamplerCreate(
-    hsa_agent_t agent,
+    hsa_agent_t  /*agent*/,
     const hsa_ext_sampler_descriptor_t *sampler_descriptor,
     hsa_ext_sampler_t *sampler_handle)
   {
@@ -231,7 +231,7 @@ namespace loader {
   }
 
   hsa_status_t OfflineLoaderContext::SamplerDestroy(
-    hsa_agent_t agent, hsa_ext_sampler_t sampler_handle)
+    hsa_agent_t  /*agent*/, hsa_ext_sampler_t sampler_handle)
   {
     void* ptr = reinterpret_cast<void*>(sampler_handle.handle);
     pointers.erase(ptr);

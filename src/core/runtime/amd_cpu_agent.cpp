@@ -97,8 +97,8 @@ void CpuAgent::InitRegionList() {
       assert(system_physical_size != 0);
 
       system_props.HeapType = HSA_HEAPTYPE_SYSTEM;
-      system_props.SizeInBytes = (HSAuint64)system_physical_size;
-      system_props.VirtualBaseAddress = (HSAuint64)(system_base);
+      system_props.SizeInBytes = static_cast<HSAuint64>(system_physical_size);
+      system_props.VirtualBaseAddress = static_cast<HSAuint64>(system_base);
 
       MemoryRegion* system_region =
           new MemoryRegion(true, is_apu_node, this, system_props);
@@ -203,7 +203,7 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       char* temp = reinterpret_cast<char*>(value);
       for (uint32_t idx = 0;
            properties_.MarketingName[idx] != 0 && idx < HSA_PUBLIC_NAME_SIZE - 1; idx++) {
-        temp[idx] = (uint8_t)properties_.MarketingName[idx];
+        temp[idx] = static_cast<uint8_t>(properties_.MarketingName[idx]);
       }
       break;
     }
@@ -213,11 +213,11 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       std::memcpy(value, "CPU", sizeof("CPU"));
       break;
     case HSA_AGENT_INFO_FEATURE:
-      *((hsa_agent_feature_t*)value) = static_cast<hsa_agent_feature_t>(0);
+      *(reinterpret_cast<hsa_agent_feature_t*>(value)) = static_cast<hsa_agent_feature_t>(0);
       break;
     case HSA_AGENT_INFO_MACHINE_MODEL:
 #if defined(HSA_LARGE_MODEL)
-      *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_LARGE;
+      *(reinterpret_cast<hsa_machine_model_t*>(value)) = HSA_MACHINE_MODEL_LARGE;
 #else
       *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_SMALL;
 #endif
@@ -225,80 +225,80 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AGENT_INFO_BASE_PROFILE_DEFAULT_FLOAT_ROUNDING_MODES:
     case HSA_AGENT_INFO_DEFAULT_FLOAT_ROUNDING_MODE:
       // TODO: validate if this is true.
-      *((hsa_default_float_rounding_mode_t*)value) =
+      *(reinterpret_cast<hsa_default_float_rounding_mode_t*>(value)) =
           HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR;
       break;
     case HSA_AGENT_INFO_FAST_F16_OPERATION:
       // TODO: validate if this is true.
-      *((bool*)value) = false;
+      *(reinterpret_cast<bool*>(value)) = false;
       break;
     case HSA_AGENT_INFO_PROFILE:
-      *((hsa_profile_t*)value) = HSA_PROFILE_FULL;
+      *(reinterpret_cast<hsa_profile_t*>(value)) = HSA_PROFILE_FULL;
       break;
     case HSA_AGENT_INFO_WAVEFRONT_SIZE:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_WORKGROUP_MAX_DIM:
       std::memset(value, 0, sizeof(uint16_t) * 3);
       break;
     case HSA_AGENT_INFO_WORKGROUP_MAX_SIZE:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_GRID_MAX_DIM:
       std::memset(value, 0, sizeof(hsa_dim3_t));
       break;
     case HSA_AGENT_INFO_GRID_MAX_SIZE:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_FBARRIER_MAX_SIZE:
       // TODO: ?
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_QUEUES_MAX:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_QUEUE_MIN_SIZE:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_QUEUE_MAX_SIZE:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AGENT_INFO_QUEUE_TYPE:
-      *((hsa_queue_type_t*)value) = static_cast<hsa_queue_type_t>(0);
+      *(reinterpret_cast<hsa_queue_type_t*>(value)) = static_cast<hsa_queue_type_t>(0);
       break;
     case HSA_AGENT_INFO_NODE:
       // TODO: associate with OS NUMA support (numactl / GetNumaProcessorNode).
-      *((uint32_t*)value) = node_id();
+      *(reinterpret_cast<uint32_t*>(value)) = node_id();
       break;
     case HSA_AGENT_INFO_DEVICE:
-      *((hsa_device_type_t*)value) = HSA_DEVICE_TYPE_CPU;
+      *(reinterpret_cast<hsa_device_type_t*>(value)) = HSA_DEVICE_TYPE_CPU;
       break;
     case HSA_AGENT_INFO_CACHE_SIZE: {
       std::memset(value, 0, sizeof(uint32_t) * 4);
 
-      assert(cache_props_.size() > 0 && "CPU cache info missing.");
+      assert(!cache_props_.empty() && "CPU cache info missing.");
       const size_t num_cache = cache_props_.size();
       for (size_t i = 0; i < num_cache; ++i) {
         const uint32_t line_level = cache_props_[i].CacheLevel;
-        ((uint32_t*)value)[line_level - 1] = cache_props_[i].CacheSize * 1024;
+        (reinterpret_cast<uint32_t*>(value))[line_level - 1] = cache_props_[i].CacheSize * 1024;
       }
     } break;
     case HSA_AGENT_INFO_ISA:
-      ((hsa_isa_t*)value)->handle = 0;
+      (reinterpret_cast<hsa_isa_t*>(value))->handle = 0;
       break;
     case HSA_AGENT_INFO_EXTENSIONS:
       memset(value, 0, sizeof(uint8_t) * 128);
       break;
     case HSA_AGENT_INFO_VERSION_MAJOR:
-      *((uint16_t*)value) = 1;
+      *(reinterpret_cast<uint16_t*>(value)) = 1;
       break;
     case HSA_AGENT_INFO_VERSION_MINOR:
-      *((uint16_t*)value) = 1;
+      *(reinterpret_cast<uint16_t*>(value)) = 1;
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_1DB_MAX_ELEMENTS:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_2D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_2DA_MAX_ELEMENTS:
@@ -310,38 +310,38 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       memset(value, 0, sizeof(uint32_t) * 3);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_LAYERS:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_EXT_AGENT_INFO_MAX_IMAGE_RD_HANDLES:
     case HSA_EXT_AGENT_INFO_MAX_IMAGE_RORW_HANDLES:
     case HSA_EXT_AGENT_INFO_MAX_SAMPLER_HANDLERS:
-      *((uint32_t*)value) = 0;
+      *(reinterpret_cast<uint32_t*>(value)) = 0;
       break;
     case HSA_AMD_AGENT_INFO_CHIP_ID:
-      *((uint32_t*)value) = properties_.DeviceId;
+      *(reinterpret_cast<uint32_t*>(value)) = properties_.DeviceId;
       break;
     case HSA_AMD_AGENT_INFO_CACHELINE_SIZE:
       // TODO: hardcode for now.
-      *((uint32_t*)value) = 64;
+      *(reinterpret_cast<uint32_t*>(value)) = 64;
       break;
     case HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT:
-      *((uint32_t*)value) = properties_.NumCPUCores;
+      *(reinterpret_cast<uint32_t*>(value)) = properties_.NumCPUCores;
       break;
     case HSA_AMD_AGENT_INFO_MAX_CLOCK_FREQUENCY:
-      *((uint32_t*)value) = properties_.MaxEngineClockMhzCCompute;
+      *(reinterpret_cast<uint32_t*>(value)) = properties_.MaxEngineClockMhzCCompute;
       break;
     case HSA_AMD_AGENT_INFO_DRIVER_NODE_ID:
-      *((uint32_t*)value) = node_id();
+      *(reinterpret_cast<uint32_t*>(value)) = node_id();
       break;
     case HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS:
-      *((uint32_t*)value) = static_cast<uint32_t>(
+      *(reinterpret_cast<uint32_t*>(value)) = static_cast<uint32_t>(
           1 << properties_.Capability.ui32.WatchPointsTotalBits);
       break;
     case HSA_AMD_AGENT_INFO_BDFID:
-      *((uint32_t*)value) = static_cast<uint32_t>(properties_.LocationId);
+      *(reinterpret_cast<uint32_t*>(value)) = static_cast<uint32_t>(properties_.LocationId);
       break;
     case HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU:
-      *((uint32_t*)value) = static_cast<uint32_t>(
+      *(reinterpret_cast<uint32_t*>(value)) = static_cast<uint32_t>(
           properties_.NumSIMDPerCU * properties_.MaxWavesPerSIMD);
       break;
     default:
@@ -351,11 +351,11 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
-                                   core::HsaEventCallback event_callback,
-                                   void* data, uint32_t private_segment_size,
-                                   uint32_t group_segment_size,
-                                   core::Queue** queue) {
+hsa_status_t CpuAgent::QueueCreate(size_t  /*size*/, hsa_queue_type_t  /*queue_type*/,
+                                   core::HsaEventCallback  /*event_callback*/,
+                                   void*  /*data*/, uint32_t  /*private_segment_size*/,
+                                   uint32_t  /*group_segment_size*/,
+                                   core::Queue**  /*queue*/) {
   // No HW AQL packet processor on CPU device.
   return HSA_STATUS_ERROR;
 }

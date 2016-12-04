@@ -70,7 +70,7 @@ const char rocrbuildid[] = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 namespace core {
 bool g_use_interrupt_wait = true;
 
-Runtime* Runtime::runtime_singleton_ = NULL;
+Runtime* Runtime::runtime_singleton_ = nullptr;
 
 KernelMutex Runtime::bootstrap_lock_;
 
@@ -96,7 +96,7 @@ hsa_status_t Runtime::Acquire() {
   // Handle initialization races
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
 
-  if (runtime_singleton_ == NULL) {
+  if (runtime_singleton_ == nullptr) {
     runtime_singleton_ = new Runtime();
   }
 
@@ -137,7 +137,7 @@ hsa_status_t Runtime::Release() {
 }
 
 bool Runtime::IsOpen() {
-  return (Runtime::runtime_singleton_ != NULL) &&
+  return (Runtime::runtime_singleton_ != nullptr) &&
          (Runtime::runtime_singleton_->ref_count_ != 0);
 }
 
@@ -154,7 +154,7 @@ void Runtime::RegisterAgent(Agent* agent) {
       }
     }
 
-    assert(system_regions_fine_.size() > 0);
+    assert(!system_regions_fine_.empty());
 
     // Init default fine grain system region allocator using fine grain
     // system region of the first discovered CPU agent.
@@ -165,12 +165,12 @@ void Runtime::RegisterAgent(Agent* agent) {
           [&](size_t size, size_t alignment,
               MemoryRegion::AllocateFlags alloc_flags) -> void* {
             assert(alignment <= 4096);
-            void* ptr = NULL;
+            void* ptr = nullptr;
             return (HSA_STATUS_SUCCESS ==
                     core::Runtime::runtime_singleton_->AllocateMemory(
                         system_regions_fine_[0], size, alloc_flags, &ptr))
                        ? ptr
-                       : NULL;
+                       : nullptr;
           };
 
       system_deallocator_ =
@@ -193,7 +193,7 @@ void Runtime::RegisterAgent(Agent* agent) {
 
     // Assign the first discovered gpu agent as blit agent that will provide
     // DMA operation for hsa_memory_copy.
-    if (blit_agent_ == NULL) {
+    if (blit_agent_ == nullptr) {
       blit_agent_ = agent;
 
       // Query the start and end address of the SVM address space in this
@@ -238,7 +238,7 @@ void Runtime::DestroyAgents() {
   std::for_each(cpu_agents_.begin(), cpu_agents_.end(), DeleteObject());
   cpu_agents_.clear();
 
-  blit_agent_ = NULL;
+  blit_agent_ = nullptr;
 
   system_regions_fine_.clear();
   system_regions_coarse_.clear();
@@ -314,11 +314,11 @@ hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
 }
 
 hsa_status_t Runtime::FreeMemory(void* ptr) {
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
     return HSA_STATUS_SUCCESS;
   }
 
-  const MemoryRegion* region = NULL;
+  const MemoryRegion* region = nullptr;
   size_t size = 0;
   {
     ScopedAcquire<KernelMutex> lock(&memory_lock_);
@@ -327,7 +327,7 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
         allocation_map_.find(ptr);
 
     if (it == allocation_map_.end()) {
-      assert(false && "Can't find address in allocation map");
+      assert(false);
       return HSA_STATUS_ERROR;
     }
 
@@ -341,7 +341,7 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
-  assert(dst != NULL && src != NULL && size != 0);
+  assert(dst != nullptr && src != nullptr && size != 0);
 
   bool is_src_system = false;
   bool is_dst_system = false;
@@ -377,7 +377,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
                                           size_t size, bool dst_malloc) {
   void* usrptr = (dst_malloc) ? dst : const_cast<void*>(src);
-  void* agent_ptr = NULL;
+  void* agent_ptr = nullptr;
 
   hsa_agent_t blit_agent = core::Agent::Convert(blit_agent_);
 
@@ -451,13 +451,13 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
-  assert(blit_agent_ != NULL);
+  assert(blit_agent_ != nullptr);
   return blit_agent_->DmaFill(ptr, value, count);
 }
 
 hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
                                   const hsa_agent_t* agents, const void* ptr) {
-  const amd::MemoryRegion* amd_region = NULL;
+  const amd::MemoryRegion* amd_region = nullptr;
   size_t alloc_size = 0;
 
   {
@@ -480,37 +480,37 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
 hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
   switch (attribute) {
     case HSA_SYSTEM_INFO_VERSION_MAJOR:
-      *((uint16_t*)value) = HSA_VERSION_MAJOR;
+      *(reinterpret_cast<uint16_t*>(value)) = HSA_VERSION_MAJOR;
       break;
     case HSA_SYSTEM_INFO_VERSION_MINOR:
-      *((uint16_t*)value) = HSA_VERSION_MINOR;
+      *(reinterpret_cast<uint16_t*>(value)) = HSA_VERSION_MINOR;
       break;
     case HSA_SYSTEM_INFO_TIMESTAMP: {
       HsaClockCounters clocks;
       hsaKmtGetClockCounters(0, &clocks);
-      *((uint64_t*)value) = clocks.SystemClockCounter;
+      *(reinterpret_cast<uint64_t*>(value)) = clocks.SystemClockCounter;
       break;
     }
     case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
       assert(sys_clock_freq_ != 0 &&
              "Use of HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY before HSA "
              "initialization completes.");
-      *(uint64_t*)value = sys_clock_freq_;
+      *reinterpret_cast<uint64_t*>(value) = sys_clock_freq_;
       break;
     }
     case HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT:
-      *((uint64_t*)value) = 0xFFFFFFFFFFFFFFFF;
+      *(reinterpret_cast<uint64_t*>(value)) = 0xFFFFFFFFFFFFFFFF;
       break;
     case HSA_SYSTEM_INFO_ENDIANNESS:
 #if defined(HSA_LITTLE_ENDIAN)
-      *((hsa_endianness_t*)value) = HSA_ENDIANNESS_LITTLE;
+      *(reinterpret_cast<hsa_endianness_t*>(value)) = HSA_ENDIANNESS_LITTLE;
 #else
       *((hsa_endianness_t*)value) = HSA_ENDIANNESS_BIG;
 #endif
       break;
     case HSA_SYSTEM_INFO_MACHINE_MODEL:
 #if defined(HSA_LARGE_MODEL)
-      *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_LARGE;
+      *(reinterpret_cast<hsa_machine_model_t*>(value)) = HSA_MACHINE_MODEL_LARGE;
 #else
       *((hsa_machine_model_t*)value) = HSA_MACHINE_MODEL_SMALL;
 #endif
@@ -522,14 +522,14 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         assert(bit < 128 * 8 && "Extension value exceeds extension bitmask");
         uint index = bit / 8;
         uint subBit = bit % 8;
-        ((uint8_t*)value)[index] |= 1 << subBit;
+        (reinterpret_cast<uint8_t*>(value))[index] |= 1 << subBit;
       };
 
-      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != nullptr) {
         setFlag(HSA_EXTENSION_FINALIZER);
       }
 
-      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != nullptr) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
@@ -559,22 +559,22 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
   ScopedAcquire<KernelMutex> scope_lock(&async_events_control_.lock);
 
   // Lazy initializer
-  if (async_events_control_.async_events_thread_ == NULL) {
+  if (async_events_control_.async_events_thread_ == nullptr) {
     // Create monitoring thread control signal
-    auto err = HSA::hsa_signal_create(0, 0, NULL, &async_events_control_.wake);
+    auto err = HSA::hsa_signal_create(0, 0, nullptr, &async_events_control_.wake);
     if (err != HSA_STATUS_SUCCESS) {
-      assert(false && "Asyncronous events control signal creation error.");
+      assert(false);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
     async_events_.PushBack(async_events_control_.wake, HSA_SIGNAL_CONDITION_NE,
-                           0, NULL, NULL);
+                           0, nullptr, nullptr);
 
     // Start event monitoring thread
     async_events_control_.exit = false;
     async_events_control_.async_events_thread_ =
-        os::CreateThread(AsyncEventsLoop, NULL);
-    if (async_events_control_.async_events_thread_ == NULL) {
-      assert(false && "Asyncronous events thread creation error.");
+        os::CreateThread(AsyncEventsLoop, nullptr);
+    if (async_events_control_.async_events_thread_ == nullptr) {
+      assert(false);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
@@ -587,7 +587,7 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
 }
 
 hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
-                                 int interop_handle, uint32_t flags,
+                                 int interop_handle, uint32_t  /*flags*/,
                                  size_t* size, void** ptr,
                                  size_t* metadata_size, const void** metadata) {
   HsaGraphicsResourceInfo info;
@@ -596,14 +596,14 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
   HSAuint32* nodes = short_nodes;
   if (num_agents > 64) {
     nodes = new HSAuint32[num_agents];
-    if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    if (nodes == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
   MAKE_SCOPE_GUARD([&]() {
     if (num_agents > 64) delete[] nodes;
   });
 
   for (int i = 0; i < num_agents; i++)
-    agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID,
+    agents[i]->GetInfo(static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_DRIVER_NODE_ID),
                        &nodes[i]);
 
   if (hsaKmtRegisterGraphicsHandleToNodes(interop_handle, &info, num_agents,
@@ -624,8 +624,8 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  if (metadata_size != NULL) *metadata_size = info.MetadataSizeInBytes;
-  if (metadata != NULL) *metadata = info.Metadata;
+  if (metadata_size != nullptr) *metadata_size = info.MetadataSizeInBytes;
+  if (metadata != nullptr) *metadata = info.Metadata;
 
   *size = info.SizeInBytes;
   *ptr = info.MemoryAddress;
@@ -660,7 +660,7 @@ void Runtime::AsyncEventsLoop(void*) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
     } else if (index != -1) {
       // No error or timout occured, process the handler
-      assert(async_events_.handler_[index] != NULL);
+      assert(async_events_.handler_[index] != nullptr);
       bool keep =
           async_events_.handler_[index](value, async_events_.arg_[index]);
       if (!keep) {
@@ -690,7 +690,7 @@ void Runtime::AsyncEventsLoop(void*) {
       for (size_t i = 0; i < new_async_events_.Size(); i++) {
         if (new_async_events_.signal_[i].handle == 0) {
           functions.push_back(
-              func_arg_t((void (*)(void*))new_async_events_.handler_[i],
+              func_arg_t(reinterpret_cast<void (*)(void*)>(new_async_events_.handler_[i]),
                          new_async_events_.arg_[i]));
           continue;
         }
@@ -730,8 +730,8 @@ void Runtime::BindVmFaultHandler() {
     // thread.
     vm_fault_signal_ = new core::InterruptSignal(0, vm_fault_event_);
 
-    if (!vm_fault_signal_->IsValid() || vm_fault_signal_->EopEvent() == NULL) {
-      assert(false && "Failed on creating VM fault signal");
+    if (!vm_fault_signal_->IsValid() || vm_fault_signal_->EopEvent() == nullptr) {
+      assert(false);
       return;
     }
 
@@ -741,13 +741,13 @@ void Runtime::BindVmFaultHandler() {
   }
 }
 
-bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
+bool Runtime::VMFaultHandler(hsa_signal_value_t  /*val*/, void* arg) {
   core::InterruptSignal* vm_fault_signal =
       reinterpret_cast<core::InterruptSignal*>(arg);
 
-  assert(vm_fault_signal != NULL);
+  assert(vm_fault_signal != nullptr);
 
-  if (vm_fault_signal == NULL) {
+  if (vm_fault_signal == nullptr) {
     return false;
   }
 
@@ -778,7 +778,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
             (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
             reason.c_str());
   } else {
-    assert(false && "GPU memory access fault.");
+    assert(false);
   }
 
   std::abort();
@@ -788,11 +788,11 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
 }
 
 Runtime::Runtime()
-    : blit_agent_(NULL),
+    : blit_agent_(nullptr),
       queue_count_(0),
       sys_clock_freq_(0),
-      vm_fault_event_(NULL),
-      vm_fault_signal_(NULL),
+      vm_fault_event_(nullptr),
+      vm_fault_signal_(nullptr),
       ref_count_(0) {
   start_svm_address_ = 0;
 #if defined(HSA_LARGE_MODEL)
@@ -943,11 +943,11 @@ void Runtime::LoadTools() {
     for (int i = 0; i < names.size(); i++) {
       os::LibHandle tool = os::LoadLib(names[i]);
 
-      if (tool != NULL) {
+      if (tool != nullptr) {
         tool_libs_.push_back(tool);
 
         tool_init_t ld;
-        ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
+        ld = reinterpret_cast<tool_init_t>(os::GetExportAddress(tool, "OnLoad"));
         if (ld) {
           if (!ld(&hsa_api_table_.hsa_api,
                   hsa_api_table_.hsa_api.version.major_id,
@@ -959,7 +959,7 @@ void Runtime::LoadTools() {
         }
 
         tool_wrap_t wrap;
-        wrap = (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
+        wrap = reinterpret_cast<tool_wrap_t>(os::GetExportAddress(tool, "WrapAgent"));
         if (wrap) {
           std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
                                                        &gpu_agents_};
@@ -967,7 +967,7 @@ void Runtime::LoadTools() {
             for (size_t agent_idx = 0; agent_idx < agent_list->size();
                  ++agent_idx) {
               Agent* agent = wrap(agent_list->at(agent_idx));
-              if (agent != NULL) {
+              if (agent != nullptr) {
                 assert(agent->IsValid() &&
                        "Agent returned from WrapAgent is not valid");
                 agent_list->at(agent_idx) = agent;
@@ -977,7 +977,7 @@ void Runtime::LoadTools() {
         }
 
         tool_add_t add;
-        add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
+        add = reinterpret_cast<tool_add_t>(os::GetExportAddress(tool, "AddAgent"));
         if (add) add(this);
       }
     }
@@ -988,7 +988,7 @@ void Runtime::UnloadTools() {
   typedef void (*tool_unload_t)();
   for (size_t i = tool_libs_.size(); i != 0; i--) {
     tool_unload_t unld;
-    unld = (tool_unload_t)os::GetExportAddress(tool_libs_[i - 1], "OnUnload");
+    unld = reinterpret_cast<tool_unload_t>(os::GetExportAddress(tool_libs_[i - 1], "OnUnload"));
     if (unld) unld();
   }
 
@@ -1006,12 +1006,12 @@ void Runtime::CloseTools() {
 }
 
 void Runtime::AsyncEventsControl::Shutdown() {
-  if (async_events_thread_ != NULL) {
+  if (async_events_thread_ != nullptr) {
     exit = true;
     hsa_signal_handle(wake)->StoreRelaxed(1);
     os::WaitForThread(async_events_thread_);
     os::CloseThread(async_events_thread_);
-    async_events_thread_ = NULL;
+    async_events_thread_ = nullptr;
     HSA::hsa_signal_destroy(wake);
   }
 }

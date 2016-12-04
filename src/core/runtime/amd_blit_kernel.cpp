@@ -518,19 +518,19 @@ static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
 BlitKernel::BlitKernel(core::Queue* queue)
     : core::Blit(),
       queue_(queue),
-      kernarg_async_(NULL),
+      kernarg_async_(nullptr),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
       num_cus_(0) {
   completion_signal_.handle = 0;
 }
 
-BlitKernel::~BlitKernel() {}
+BlitKernel::~BlitKernel() = default;
 
 hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
   queue_bitmask_ = queue_->public_handle()->size - 1;
 
-  hsa_status_t status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
+  hsa_status_t status = HSA::hsa_signal_create(1, 0, nullptr, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -576,7 +576,7 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
                            kernel_pair.second.code_buf_size_);
   }
 
-  if (kernarg_async_ != NULL) {
+  if (kernarg_async_ != nullptr) {
     core::Runtime::runtime_singleton_->system_deallocator()(kernarg_async_);
   }
 

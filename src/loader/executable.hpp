@@ -77,7 +77,7 @@ typedef uint32_t symbol_attribute32_t;
 
 class SymbolImpl: public Symbol {
 public:
-  virtual ~SymbolImpl() {}
+  ~SymbolImpl() override = default;
 
   bool IsKernel() const {
     return HSA_SYMBOL_KIND_KERNEL == kind;
@@ -112,7 +112,7 @@ protected:
     , is_definition(_is_definition)
     , address(_address) {}
 
-  virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value);
+  bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) override;
 
 private:
   SymbolImpl(const SymbolImpl &s);
@@ -151,9 +151,9 @@ public:
     , size(_size)
     , alignment(_alignment) {}
 
-  ~KernelSymbol() {}
+  ~KernelSymbol() override = default;
 
-  bool GetInfo(hsa_symbol_info32_t symbol_info, void *value);
+  bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) override;
 
   uint32_t kernarg_segment_size;
   uint32_t kernarg_segment_alignment;
@@ -199,9 +199,9 @@ public:
     , is_constant(_is_constant)
     , is_external(_is_external) {}
 
-  ~VariableSymbol() {}
+  ~VariableSymbol() override = default;
 
-  bool GetInfo(hsa_symbol_info32_t symbol_info, void *value);
+  bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) override;
 
   hsa_variable_allocation_t allocation;
   hsa_variable_segment_t segment;
@@ -237,7 +237,7 @@ public:
   virtual void Print(std::ostream& out) = 0;
   virtual void Destroy() = 0;
 
-  virtual ~ExecutableObject() { }
+  virtual ~ExecutableObject() = default;
 };
 
 class LoadedCodeObjectImpl : public LoadedCodeObject, public ExecutableObject {
@@ -359,25 +359,25 @@ public:
       size_t id,
       hsa_default_float_rounding_mode_t default_float_rounding_mode);
 
-  ~ExecutableImpl();
+  ~ExecutableImpl() override;
 
-  hsa_status_t GetInfo(hsa_executable_info_t executable_info, void *value);
+  hsa_status_t GetInfo(hsa_executable_info_t executable_info, void *value) override;
 
   hsa_status_t DefineProgramExternalVariable(
-    const char *name, void *address);
+    const char *name, void *address) override;
 
   hsa_status_t DefineAgentExternalVariable(
     const char *name,
     hsa_agent_t agent,
     hsa_variable_segment_t segment,
-    void *address);
+    void *address) override;
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
     hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true);
+    bool load_legacy = true) override;
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
@@ -385,11 +385,11 @@ public:
     size_t code_object_size,
     const char *options,
     hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true);
+    bool load_legacy = true) override;
 
-  hsa_status_t Freeze(const char *options);
+  hsa_status_t Freeze(const char *options) override;
 
-  hsa_status_t Validate(uint32_t *result) {
+  hsa_status_t Validate(uint32_t *result) override {
     amd::hsa::common::ReaderLockGuard<amd::hsa::common::ReaderWriterLock> reader_lock(rw_lock_);
     assert(result);
     *result = 0;
@@ -405,7 +405,7 @@ public:
     const hsa_agent_t *agent) override;
 
   hsa_status_t IterateSymbols(
-    iterate_symbols_f callback, void *data);
+    iterate_symbols_f callback, void *data) override;
 
   /// @since hsa v1.1.
   hsa_status_t IterateAgentSymbols(
@@ -427,7 +427,7 @@ public:
     hsa_status_t (*callback)(
       hsa_loaded_code_object_t loaded_code_object,
       void *data),
-    void *data);
+    void *data) override;
 
   size_t GetNumSegmentDescriptors() override;
 
@@ -459,8 +459,8 @@ private:
     const hsa_agent_t *agent);
 
   hsa_status_t LoadSegment(hsa_agent_t agent, code::Segment* s, uint32_t majorVersion, uint16_t machine);
-  hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* seg);
-  hsa_status_t LoadSegmentV2(hsa_agent_t agent, amd::hsa::code::Segment* seg, uint16_t machine);
+  hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* s);
+  hsa_status_t LoadSegmentV2(hsa_agent_t agent, amd::hsa::code::Segment* s, uint16_t machine);
   hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
   hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
@@ -501,7 +501,7 @@ public:
   AmdHsaCodeLoader(Context* context_)
     : context(context_) { assert(context); }
 
-  Context* GetContext() const { return context; }
+  Context* GetContext() const override { return context; }
 
   Executable* CreateExecutable(
       hsa_profile_t profile,

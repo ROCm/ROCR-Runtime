@@ -65,7 +65,7 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
   }
 
   assert(IsMultipleOf(ring_, kRingAlignment));
-  assert(ring_ != NULL);
+  assert(ring_ != nullptr);
 
   amd_queue_.hsa_queue.base_address = ring_;
   amd_queue_.hsa_queue.size = size_;

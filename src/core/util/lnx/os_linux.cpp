@@ -73,7 +73,7 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
   // dlsym searches the given library and all the library's load dependencies.
   // Remaining code limits symbol lookup to only the library handle given.
   // This lookup pattern matches Windows.
-  if (ret == NULL) return ret;
+  if (ret == nullptr) return ret;
 
   link_map* map;
   int err = dlinfo(*(void**)&lib, RTLD_DI_LINKMAP, &map);
@@ -85,32 +85,32 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
   if (strcmp(info.dli_fname, map->l_name) == 0) return ret;
 
-  return NULL;
+  return nullptr;
 }
 
 void CloseLib(LibHandle lib) { dlclose(*(void**)&lib); }
 
 Mutex CreateMutex() {
   pthread_mutex_t* mutex = new pthread_mutex_t;
-  pthread_mutex_init(mutex, NULL);
-  return *(Mutex*)&mutex;
+  pthread_mutex_init(mutex, nullptr);
+  return *reinterpret_cast<Mutex*>(&mutex);
 }
 
 bool TryAcquireMutex(Mutex lock) {
-  return pthread_mutex_trylock(*(pthread_mutex_t**)&lock) == 0;
+  return pthread_mutex_trylock(*reinterpret_cast<pthread_mutex_t**>(&lock)) == 0;
 }
 
 bool AcquireMutex(Mutex lock) {
-  return pthread_mutex_lock(*(pthread_mutex_t**)&lock) == 0;
+  return pthread_mutex_lock(*reinterpret_cast<pthread_mutex_t**>(&lock)) == 0;
 }
 
 void ReleaseMutex(Mutex lock) {
-  pthread_mutex_unlock(*(pthread_mutex_t**)&lock);
+  pthread_mutex_unlock(*reinterpret_cast<pthread_mutex_t**>(&lock));
 }
 
 void DestroyMutex(Mutex lock) {
-  pthread_mutex_destroy(*(pthread_mutex_t**)&lock);
-  delete *(pthread_mutex_t**)&lock;
+  pthread_mutex_destroy(*reinterpret_cast<pthread_mutex_t**>(&lock));
+  delete *reinterpret_cast<pthread_mutex_t**>(&lock);
 }
 
 void Sleep(int delay_in_millisec) { usleep(delay_in_millisec * 1000); }
@@ -123,12 +123,12 @@ struct ThreadArgs {
 };
 
 void* __stdcall ThreadTrampoline(void* arg) {
-  ThreadArgs* ar = (ThreadArgs*)arg;
+  ThreadArgs* ar = reinterpret_cast<ThreadArgs*>(arg);
   ThreadEntry CallMe = ar->entry_function;
   void* Data = ar->entry_args;
   delete ar;
   CallMe(Data);
-  return NULL;
+  return nullptr;
 }
 
 Thread CreateThread(ThreadEntry function, void* threadArgument,
@@ -144,16 +144,16 @@ Thread CreateThread(ThreadEntry function, void* threadArgument,
       (pthread_create(&thread, &attrib, ThreadTrampoline, args) == 0);
   pthread_attr_destroy(&attrib);
   if (!success) {
-    pthread_join(thread, NULL);
-    return NULL;
+    pthread_join(thread, nullptr);
+    return nullptr;
   }
-  return *(Thread*)&thread;
+  return *reinterpret_cast<Thread*>(&thread);
 }
 
-void CloseThread(Thread thread) { pthread_detach(*(pthread_t*)&thread); }
+void CloseThread(Thread thread) { pthread_detach(*reinterpret_cast<pthread_t*>(&thread)); }
 
 bool WaitForThread(Thread thread) {
-  return pthread_join(*(pthread_t*)&thread, NULL);
+  return pthread_join(*reinterpret_cast<pthread_t*>(&thread), nullptr);
 }
 
 bool WaitForAllThreads(Thread* threads, uint threadCount) {
@@ -179,7 +179,7 @@ size_t GetUserModeVirtualMemorySize() {
 #ifdef _LP64
   // https://www.kernel.org/doc/Documentation/x86/x86_64/mm.txt :
   // user space is 0000000000000000 - 00007fffffffffff (=47 bits)
-  return (size_t)(0x800000000000);
+  return static_cast<size_t>(0x800000000000);
 #else
   return (size_t)(0xffffffff);  // ~4GB
 #endif
@@ -196,7 +196,7 @@ size_t GetUsablePhysicalHostMemorySize() {
   return std::min(GetUserModeVirtualMemorySize(), physical_size);
 }
 
-uintptr_t GetUserModeVirtualMemoryBase() { return (uintptr_t)0; }
+uintptr_t GetUserModeVirtualMemoryBase() { return static_cast<uintptr_t>(0); }
 
 // Os event implementation
 typedef struct EventDescriptor_ {
@@ -208,10 +208,10 @@ typedef struct EventDescriptor_ {
 
 EventHandle CreateOsEvent(bool auto_reset, bool init_state) {
   EventDescriptor* eventDescrp;
-  eventDescrp = (EventDescriptor*)malloc(sizeof(EventDescriptor));
+  eventDescrp = reinterpret_cast<EventDescriptor*>(malloc(sizeof(EventDescriptor)));
 
-  pthread_mutex_init(&eventDescrp->mutex, NULL);
-  pthread_cond_init(&eventDescrp->event, NULL);
+  pthread_mutex_init(&eventDescrp->mutex, nullptr);
+  pthread_cond_init(&eventDescrp->event, nullptr);
   eventDescrp->auto_reset = auto_reset;
   eventDescrp->state = init_state;
 
@@ -221,7 +221,7 @@ EventHandle CreateOsEvent(bool auto_reset, bool init_state) {
 }
 
 int DestroyOsEvent(EventHandle event) {
-  if (event == NULL) {
+  if (event == nullptr) {
     return -1;
   }
 
@@ -233,7 +233,7 @@ int DestroyOsEvent(EventHandle event) {
 }
 
 int WaitForOsEvent(EventHandle event, unsigned int milli_seconds) {
-  if (event == NULL) {
+  if (event == nullptr) {
     return -1;
   }
 
@@ -256,7 +256,7 @@ int WaitForOsEvent(EventHandle event, unsigned int milli_seconds) {
       struct timespec ts;
       struct timeval tp;
 
-      ret_code = gettimeofday(&tp, NULL);
+      ret_code = gettimeofday(&tp, nullptr);
       ts.tv_sec = tp.tv_sec;
       ts.tv_nsec = tp.tv_usec * 1000;
 
@@ -292,7 +292,7 @@ int WaitForOsEvent(EventHandle event, unsigned int milli_seconds) {
 }
 
 int SetOsEvent(EventHandle event) {
-  if (event == NULL) {
+  if (event == nullptr) {
     return -1;
   }
 
@@ -307,7 +307,7 @@ int SetOsEvent(EventHandle event) {
 }
 
 int ResetOsEvent(EventHandle event) {
-  if (event == NULL) {
+  if (event == nullptr) {
     return -1;
   }
 

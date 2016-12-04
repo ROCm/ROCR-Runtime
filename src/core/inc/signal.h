@@ -211,7 +211,7 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   /// errors.
   static uint32_t WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
                           const hsa_signal_condition_t* conds, const hsa_signal_value_t* values,
-                          uint64_t timeout_hint, hsa_wait_state_t wait_hint,
+                          uint64_t timeout, hsa_wait_state_t wait_hint,
                           hsa_signal_value_t* satisfying_value);
 
   __forceinline bool IsType(rtti_t id) { return _IsA(id); }
@@ -286,7 +286,7 @@ class SignalGroup : public Checked<0xBD35DDDD578F091> {
     return reinterpret_cast<SignalGroup*>(static_cast<uintptr_t>(group.handle));
   }
 
-  SignalGroup(uint32_t num_signals, const hsa_signal_t* signals);
+  SignalGroup(uint32_t num_signals, const hsa_signal_t* hsa_signals);
   ~SignalGroup() { delete[] signals; }
 
   bool IsValid() const {

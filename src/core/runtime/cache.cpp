@@ -48,16 +48,16 @@ namespace core {
 hsa_status_t Cache::GetInfo(hsa_cache_info_t attribute, void* value) {
   switch (attribute) {
     case HSA_CACHE_INFO_NAME_LENGTH:
-      *(uint32_t*)value = name_.size();
+      *reinterpret_cast<uint32_t*>(value) = name_.size();
       break;
     case HSA_CACHE_INFO_NAME:
-      *(const char**)value = name_.c_str();
+      *reinterpret_cast<const char**>(value) = name_.c_str();
       break;
     case HSA_CACHE_INFO_LEVEL:
-      *(uint8_t*)value = level_;
+      *reinterpret_cast<uint8_t*>(value) = level_;
       break;
     case HSA_CACHE_INFO_SIZE:
-      *(uint32_t*)value = size_;
+      *reinterpret_cast<uint32_t*>(value) = size_;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

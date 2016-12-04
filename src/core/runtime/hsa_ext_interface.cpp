@@ -227,16 +227,16 @@ void ExtensionEntryPoints::UpdateAmdExtTable(void *func_ptr) {
              (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
   hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(hsa_amd_image_create)*)func_ptr;
+             reinterpret_cast<decltype(hsa_amd_image_create)*>(func_ptr);
   hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(hsa_amd_image_create)*)func_ptr;
+             reinterpret_cast<decltype(hsa_amd_image_create)*>(func_ptr);
 }
 
 void ExtensionEntryPoints::Unload() {
   for (int i = 0; i < libs_.size(); i++) {
     void* ptr = os::GetExportAddress(libs_[i], "Unload");
     if (ptr) {
-      ((Unload_t)ptr)();
+      (reinterpret_cast<Unload_t>(ptr))();
     }
   }
   // Due to valgrind bug, runtime cannot dlclose extensions see:
@@ -256,7 +256,7 @@ void ExtensionEntryPoints::Unload() {
 
 bool ExtensionEntryPoints::LoadImage(std::string library_name) {
   os::LibHandle lib = os::LoadLib(library_name);
-  if (lib == NULL) {
+  if (lib == nullptr) {
     return false;
   }
   libs_.push_back(lib);
@@ -264,99 +264,99 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
   void* ptr;
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_get_capability_fn ==
                (decltype(::hsa_ext_image_get_capability)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     image_api.hsa_ext_image_get_capability_fn =
-        (decltype(::hsa_ext_image_get_capability)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_image_get_capability)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_data_get_info_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_data_get_info_fn ==
                (decltype(::hsa_ext_image_data_get_info)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     image_api.hsa_ext_image_data_get_info_fn =
-        (decltype(::hsa_ext_image_data_get_info)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_image_data_get_info)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_create_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_create_fn ==
                (decltype(::hsa_ext_image_create)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_create_fn = (decltype(::hsa_ext_image_create)*)ptr;
+    image_api.hsa_ext_image_create_fn = reinterpret_cast<decltype(::hsa_ext_image_create)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_import_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_import_fn ==
                (decltype(::hsa_ext_image_import)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_import_fn = (decltype(::hsa_ext_image_import)*)ptr;
+    image_api.hsa_ext_image_import_fn = reinterpret_cast<decltype(::hsa_ext_image_import)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_export_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_export_fn ==
                (decltype(::hsa_ext_image_export)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_export_fn = (decltype(::hsa_ext_image_export)*)ptr;
+    image_api.hsa_ext_image_export_fn = reinterpret_cast<decltype(::hsa_ext_image_export)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_copy_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_copy_fn ==
                (decltype(::hsa_ext_image_copy)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_copy_fn = (decltype(::hsa_ext_image_copy)*)ptr;
+    image_api.hsa_ext_image_copy_fn = reinterpret_cast<decltype(::hsa_ext_image_copy)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_clear_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_clear_fn ==
                (decltype(::hsa_ext_image_clear)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_clear_fn = (decltype(::hsa_ext_image_clear)*)ptr;
+    image_api.hsa_ext_image_clear_fn = reinterpret_cast<decltype(::hsa_ext_image_clear)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_image_destroy_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_image_destroy_fn ==
                (decltype(::hsa_ext_image_destroy)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_image_destroy_fn = (decltype(::hsa_ext_image_destroy)*)ptr;
+    image_api.hsa_ext_image_destroy_fn = reinterpret_cast<decltype(::hsa_ext_image_destroy)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_sampler_create_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_sampler_create_fn ==
                (decltype(::hsa_ext_sampler_create)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    image_api.hsa_ext_sampler_create_fn = (decltype(::hsa_ext_sampler_create)*)ptr;
+    image_api.hsa_ext_sampler_create_fn = reinterpret_cast<decltype(::hsa_ext_sampler_create)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_sampler_destroy_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_ext_sampler_destroy_fn ==
                (decltype(::hsa_ext_sampler_destroy)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     image_api.hsa_ext_sampler_destroy_fn =
-        (decltype(::hsa_ext_sampler_destroy)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_sampler_destroy)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_amd_image_get_info_max_dim_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(image_api.hsa_amd_image_get_info_max_dim_fn ==
                (decltype(::hsa_amd_image_get_info_max_dim)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     image_api.hsa_amd_image_get_info_max_dim_fn =
-        (decltype(::hsa_amd_image_get_info_max_dim)*)ptr;
+        reinterpret_cast<decltype(::hsa_amd_image_get_info_max_dim)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_amd_image_create_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     UpdateAmdExtTable(ptr);
   }
  
@@ -370,8 +370,8 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
                                     core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   ptr = os::GetExportAddress(lib, "Load");
-  if (ptr != NULL) {
-    ((Load_t)ptr)(&core::hsa_internal_api_table_.hsa_api);
+  if (ptr != nullptr) {
+    (reinterpret_cast<Load_t>(ptr))(&core::hsa_internal_api_table_.hsa_api);
   }
 
   return true;
@@ -379,7 +379,7 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
 
 bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
   os::LibHandle lib = os::LoadLib(library_name);
-  if (lib == NULL) {
+  if (lib == nullptr) {
     return false;
   }
   libs_.push_back(lib);
@@ -387,56 +387,56 @@ bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
   void* ptr;
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_create_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_create_fn ==
                (decltype(::hsa_ext_program_create)*)hsa_ext_null &&
            "Duplicate load of extension import.");
-    finalizer_api.hsa_ext_program_create_fn = (decltype(::hsa_ext_program_create)*)ptr;
+    finalizer_api.hsa_ext_program_create_fn = reinterpret_cast<decltype(::hsa_ext_program_create)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_destroy_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_destroy_fn ==
                (decltype(::hsa_ext_program_destroy)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     finalizer_api.hsa_ext_program_destroy_fn =
-        (decltype(::hsa_ext_program_destroy)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_program_destroy)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_add_module_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_add_module_fn ==
                (decltype(::hsa_ext_program_add_module)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     finalizer_api.hsa_ext_program_add_module_fn =
-        (decltype(::hsa_ext_program_add_module)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_program_add_module)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_iterate_modules_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_iterate_modules_fn ==
                (decltype(::hsa_ext_program_iterate_modules)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     finalizer_api.hsa_ext_program_iterate_modules_fn =
-        (decltype(::hsa_ext_program_iterate_modules)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_program_iterate_modules)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_get_info_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_get_info_fn ==
                (decltype(::hsa_ext_program_get_info)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     finalizer_api.hsa_ext_program_get_info_fn =
-        (decltype(::hsa_ext_program_get_info)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_program_get_info)*>(ptr);
   }
 
   ptr = os::GetExportAddress(lib, "hsa_ext_program_finalize_impl");
-  if (ptr != NULL) {
+  if (ptr != nullptr) {
     assert(finalizer_api.hsa_ext_program_finalize_fn ==
                (decltype(::hsa_ext_program_finalize)*)hsa_ext_null &&
            "Duplicate load of extension import.");
     finalizer_api.hsa_ext_program_finalize_fn =
-        (decltype(::hsa_ext_program_finalize)*)ptr;
+        reinterpret_cast<decltype(::hsa_ext_program_finalize)*>(ptr);
   }
   
   // Initialize Version of Api Table
@@ -449,8 +449,8 @@ bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
                                     core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
   ptr = os::GetExportAddress(lib, "Load");
-  if (ptr != NULL) {
-    ((Load_t)ptr)(&core::hsa_internal_api_table_.hsa_api);
+  if (ptr != nullptr) {
+    (reinterpret_cast<Load_t>(ptr))(&core::hsa_internal_api_table_.hsa_api);
   }
 
   return true;

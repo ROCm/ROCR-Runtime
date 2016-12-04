@@ -68,25 +68,25 @@ namespace HSA
   hsa_status_t HSA_API
     hsa_iterate_agents(hsa_status_t (*callback)(hsa_agent_t agent, void *data),
     void *data);
-  hsa_status_t HSA_API hsa_agent_get_info(hsa_agent_t agent,
+  hsa_status_t HSA_API hsa_agent_get_info(hsa_agent_t agent_handle,
     hsa_agent_info_t attribute,
     void *value);
-  hsa_status_t HSA_API hsa_agent_get_exception_policies(hsa_agent_t agent,
+  hsa_status_t HSA_API hsa_agent_get_exception_policies(hsa_agent_t agent_handle,
     hsa_profile_t profile,
     uint16_t *mask);
   hsa_status_t HSA_API hsa_cache_get_info(hsa_cache_t cache, hsa_cache_info_t attribute,
                                           void* value);
   hsa_status_t HSA_API hsa_agent_iterate_caches(
-      hsa_agent_t agent, hsa_status_t (*callback)(hsa_cache_t cache, void* data), void* value);
+      hsa_agent_t agent_handle, hsa_status_t (*callback)(hsa_cache_t cache, void* data), void* data);
   hsa_status_t HSA_API
-    hsa_agent_extension_supported(uint16_t extension, hsa_agent_t agent,
+    hsa_agent_extension_supported(uint16_t extension, hsa_agent_t agent_handle,
     uint16_t version_major,
     uint16_t version_minor, bool *result);
-  hsa_status_t HSA_API hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent,
+  hsa_status_t HSA_API hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t agent_handle,
                                                            uint16_t version_major,
                                                            uint16_t* version_minor, bool* result);
   hsa_status_t HSA_API
-    hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type_t type,
+    hsa_queue_create(hsa_agent_t agent_handle, uint32_t size, hsa_queue_type_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t *source,
     void *data),
     void *data, uint32_t private_segment_size,
@@ -94,7 +94,7 @@ namespace HSA
   hsa_status_t HSA_API
     hsa_soft_queue_create(hsa_region_t region, uint32_t size,
     hsa_queue_type_t type, uint32_t features,
-    hsa_signal_t completion_signal, hsa_queue_t **queue);
+    hsa_signal_t doorbell_signal, hsa_queue_t **queue);
   hsa_status_t HSA_API hsa_queue_destroy(hsa_queue_t *queue);
   hsa_status_t HSA_API hsa_queue_inactivate(hsa_queue_t *queue);
   uint64_t HSA_API hsa_queue_load_read_index_scacquire(const hsa_queue_t* queue);
@@ -122,7 +122,7 @@ namespace HSA
     uint64_t value);
   void HSA_API hsa_queue_store_read_index_screlease(const hsa_queue_t* queue, uint64_t value);
   hsa_status_t HSA_API hsa_agent_iterate_regions(
-    hsa_agent_t agent,
+    hsa_agent_t agent_handle,
     hsa_status_t (*callback)(hsa_region_t region, void *data), void *data);
   hsa_status_t HSA_API hsa_region_get_info(hsa_region_t region,
     hsa_region_info_t attribute,
@@ -133,30 +133,30 @@ namespace HSA
     hsa_memory_allocate(hsa_region_t region, size_t size, void **ptr);
   hsa_status_t HSA_API hsa_memory_free(void *ptr);
   hsa_status_t HSA_API hsa_memory_copy(void *dst, const void *src, size_t size);
-  hsa_status_t HSA_API hsa_memory_assign_agent(void *ptr, hsa_agent_t agent,
+  hsa_status_t HSA_API hsa_memory_assign_agent(void *ptr, hsa_agent_t agent_handle,
     hsa_access_permission_t access);
   hsa_status_t HSA_API
     hsa_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
-    const hsa_agent_t *consumers, hsa_signal_t *signal);
-  hsa_status_t HSA_API hsa_signal_destroy(hsa_signal_t signal);
-  hsa_signal_value_t HSA_API hsa_signal_load_relaxed(hsa_signal_t signal);
-  hsa_signal_value_t HSA_API hsa_signal_load_scacquire(hsa_signal_t signal);
+    const hsa_agent_t *consumers, hsa_signal_t *hsa_signal);
+  hsa_status_t HSA_API hsa_signal_destroy(hsa_signal_t hsa_signal);
+  hsa_signal_value_t HSA_API hsa_signal_load_relaxed(hsa_signal_t hsa_signal);
+  hsa_signal_value_t HSA_API hsa_signal_load_scacquire(hsa_signal_t hsa_signal);
   void HSA_API
-    hsa_signal_store_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_store_screlease(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_store_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_store_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   void HSA_API hsa_signal_silent_store_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
   void HSA_API hsa_signal_silent_store_screlease(hsa_signal_t signal, hsa_signal_value_t value);
   hsa_signal_value_t HSA_API
-    hsa_signal_wait_relaxed(hsa_signal_t signal,
+    hsa_signal_wait_relaxed(hsa_signal_t hsa_signal,
     hsa_signal_condition_t condition,
     hsa_signal_value_t compare_value,
     uint64_t timeout_hint,
-    hsa_wait_state_t wait_expectancy_hint);
-  hsa_signal_value_t HSA_API hsa_signal_wait_scacquire(hsa_signal_t signal,
+    hsa_wait_state_t wait_state_hint);
+  hsa_signal_value_t HSA_API hsa_signal_wait_scacquire(hsa_signal_t hsa_signal,
                                                        hsa_signal_condition_t condition,
                                                        hsa_signal_value_t compare_value,
                                                        uint64_t timeout_hint,
-                                                       hsa_wait_state_t wait_expectancy_hint);
+                                                       hsa_wait_state_t wait_state_hint);
   hsa_status_t HSA_API hsa_signal_group_create(uint32_t num_signals, const hsa_signal_t* signals,
                                                uint32_t num_consumers, const hsa_agent_t* consumers,
                                                hsa_signal_group_t* signal_group);
@@ -174,48 +174,48 @@ namespace HSA
                                                          hsa_signal_t* signal,
                                                          hsa_signal_value_t* value);
   void HSA_API
-    hsa_signal_and_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_and_scacquire(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_and_screlease(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_and_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_and_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_and_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_and_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_and_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   void HSA_API
-    hsa_signal_or_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_or_scacquire(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_or_screlease(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_or_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_or_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_or_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_or_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_or_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   void HSA_API
-    hsa_signal_xor_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_xor_scacquire(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_xor_screlease(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_xor_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_xor_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_xor_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_xor_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_xor_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   void HSA_API
-    hsa_signal_add_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_add_scacquire(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_add_screlease(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_add_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_add_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_add_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_add_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_add_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   void HSA_API
-    hsa_signal_subtract_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_subtract_scacquire(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_subtract_screlease(hsa_signal_t signal, hsa_signal_value_t value);
-  void HSA_API hsa_signal_subtract_scacq_screl(hsa_signal_t signal, hsa_signal_value_t value);
+    hsa_signal_subtract_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_subtract_scacquire(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_subtract_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  void HSA_API hsa_signal_subtract_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t value);
   hsa_signal_value_t HSA_API
-    hsa_signal_exchange_relaxed(hsa_signal_t signal, hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_exchange_scacquire(hsa_signal_t signal,
+    hsa_signal_exchange_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value);
+  hsa_signal_value_t HSA_API hsa_signal_exchange_scacquire(hsa_signal_t hsa_signal,
                                                            hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_exchange_screlease(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_exchange_screlease(hsa_signal_t hsa_signal,
                                                            hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_exchange_scacq_screl(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_exchange_scacq_screl(hsa_signal_t hsa_signal,
                                                              hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_cas_relaxed(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_cas_relaxed(hsa_signal_t hsa_signal,
     hsa_signal_value_t expected,
     hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_cas_scacquire(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_cas_scacquire(hsa_signal_t hsa_signal,
                                                       hsa_signal_value_t expected,
                                                       hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_cas_screlease(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_cas_screlease(hsa_signal_t hsa_signal,
                                                       hsa_signal_value_t expected,
                                                       hsa_signal_value_t value);
-  hsa_signal_value_t HSA_API hsa_signal_cas_scacq_screl(hsa_signal_t signal,
+  hsa_signal_value_t HSA_API hsa_signal_cas_scacq_screl(hsa_signal_t hsa_signal,
                                                         hsa_signal_value_t expected,
                                                         hsa_signal_value_t value);
 

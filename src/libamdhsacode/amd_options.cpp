@@ -64,13 +64,13 @@ namespace options {
 std::string StringFactory::Flatten(const char **cstrs,
                                    const uint32_t &cstrs_count,
                                    const char &spacer) {
-  if (NULL == cstrs || 0 == cstrs_count) {
+  if (nullptr == cstrs || 0 == cstrs_count) {
     return std::string();
   }
 
   std::string flattened;
   for (uint32_t i = 0; i < cstrs_count; ++i) {
-    if (NULL == cstrs[i]) {
+    if (nullptr == cstrs[i]) {
       return std::string();
     }
     flattened += cstrs[i];
@@ -83,7 +83,7 @@ std::string StringFactory::Flatten(const char **cstrs,
 
 std::list<std::string> StringFactory::Tokenize(const char *cstr,
                                                const char &delim) {
-  if (NULL == cstr) {
+  if (nullptr == cstr) {
     return std::list<std::string>();
   }
 
@@ -238,7 +238,7 @@ OptionParser::FindOption(const std::string& name) {
 }
 
 bool OptionParser::AddOption(OptionBase *option) {
-  if (NULL == option || !option->IsValid()) {
+  if (nullptr == option || !option->IsValid()) {
     return false;
   }
   if (FindOption(option->name()) != options_.end()) {

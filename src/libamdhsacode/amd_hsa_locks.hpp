@@ -98,7 +98,7 @@ public:
   ReaderWriterLock():
     readers_count_(0), writers_count_(0), writers_waiting_(0) {}
 
-  ~ReaderWriterLock() {}
+  ~ReaderWriterLock() = default;
 
   void ReaderLock();
 

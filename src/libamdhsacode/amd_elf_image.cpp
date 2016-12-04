@@ -91,7 +91,7 @@ namespace amd {
       bool readFrom(const std::string& filename);
       bool copyFrom(const void* data, size_t size);
       bool writeTo(const std::string& filename);
-      bool copyTo(void** buffer, size_t* size = 0);
+      bool copyTo(void** buffer, size_t* size = nullptr);
       bool copyTo(void* buffer, size_t size);
       size_t getSize();
 
@@ -198,7 +198,7 @@ namespace amd {
       if (_lseek(d, 0L, SEEK_SET) < 0) { return perror("lseek(3) failed"); }
       ssize_t written;
       do {
-        written = sendfile(d, in, NULL, size);
+        written = sendfile(d, in, nullptr, size);
         if (written < 0) {
           _close(in);
           return perror("sendfile failed");
@@ -218,7 +218,7 @@ namespace amd {
       if (_ftruncate(d, 0) < 0) { return perror("ftruncate failed"); }
       int written, offset = 0;
       while (size > 0) {
-        written = _write(d, (const char*) data + offset, size);
+        written = _write(d, reinterpret_cast<const char*>( data) + offset, size);
         if (written < 0) {
           return perror("write failed");
         }
@@ -265,7 +265,7 @@ namespace amd {
       if (copyTo(&buffer, &size)) {
         res = true;
         std::ofstream out(filename.c_str(), std::ios::binary);
-        out.write((char*)buffer, size);
+        out.write(reinterpret_cast<char*>(buffer), size);
       }
       free(buffer);
       return res;
@@ -349,8 +349,7 @@ namespace amd {
     }
 
     Buffer::~Buffer()
-    {
-    }
+    = default;
 
     Buffer::size_type Buffer::getRawOffset(const Buffer::byte_type *src) const
     {
@@ -382,7 +381,7 @@ namespace amd {
 
     Buffer::size_type Buffer::addStringLength(const std::string &str, size_type align)
     {
-      return this->add((uint32_t)(str.length() + 1), align == 0 ? alignof(uint32_t) : align);
+      return this->add(static_cast<uint32_t>(str.length() + 1), align == 0 ? alignof(uint32_t) : align);
     }
 
     Buffer::size_type Buffer::align(Buffer::size_type align)
@@ -400,7 +399,7 @@ namespace amd {
 
     class GElfSection : public virtual Section {
     public:
-      GElfSection(GElfImage* elf);
+      GElfSection(GElfImage* elf_);
 
       bool push(const char* name, uint32_t shtype, uint64_t shflags, uint16_t shlink, uint32_t info, uint32_t align, uint64_t entsize = 0);
       bool pull0();
@@ -419,13 +418,13 @@ namespace amd {
       uint64_t nextDataOffset(uint64_t align) const override;
       uint64_t addData(const void *src, uint64_t size, uint64_t align) override;
       bool getData(uint64_t offset, void* dest, uint64_t size) override;
-      bool hasRelocationSection() const override { return reloc_sec != 0; }
-      RelocationSection* relocationSection(SymbolTable* symtab = 0) override;
+      bool hasRelocationSection() const override { return reloc_sec != nullptr; }
+      RelocationSection* relocationSection(SymbolTable* symtab = nullptr) override;
       Segment* segment() override { return seg; }
-      RelocationSection* asRelocationSection() override { return 0; }
-      bool setMemSize(uint64_t s) { memsize_ = s; return true; }
+      RelocationSection* asRelocationSection() override { return nullptr; }
+      bool setMemSize(uint64_t s) override { memsize_ = s; return true; }
       uint64_t memSize() const override { return memsize_ ? memsize_ : size(); }
-      bool setAlign(uint64_t a) { align_ = a; return true; }
+      bool setAlign(uint64_t a) override { align_ = a; return true; }
       uint64_t memAlign() const override { return align_ ? align_ : addralign(); }
 
     protected:
@@ -446,8 +445,8 @@ namespace amd {
 
     class GElfSegment : public Segment {
     public:
-      GElfSegment(GElfImage* elf, uint16_t index);
-      GElfSegment(GElfImage* elf, uint16_t index, uint32_t type, uint32_t flags, uint64_t paddr = 0);
+      GElfSegment(GElfImage* elf_, uint16_t index_);
+      GElfSegment(GElfImage* elf_, uint16_t index_, uint32_t type, uint32_t flags, uint64_t paddr = 0);
       bool push(uint64_t vaddr);
       bool pull();
       uint64_t type() const override { return phdr.p_type; }
@@ -474,9 +473,9 @@ namespace amd {
       bool push(const char* name, uint32_t shtype, uint64_t shflags);
       bool pullData() override;
       const char* addString(const std::string& s) override;
-      size_t addString1(const std::string& s);
+      size_t addString1(const std::string& s) override;
       const char* getString(size_t ndx) override;
-      size_t getStringIndex(const char* name) override;
+      size_t getStringIndex(const char* s) override;
 
       uint16_t getSectionIndex() const override { return GElfSection::getSectionIndex(); }
       uint32_t type() const override { return GElfSection::type(); }
@@ -492,8 +491,8 @@ namespace amd {
       uint64_t addData(const void *src, uint64_t size, uint64_t align) override { return GElfSection::addData(src, size, align); }
       bool getData(uint64_t offset, void* dest, uint64_t size) override { return GElfSection::getData(offset, dest, size); }
       bool hasRelocationSection() const override { return GElfSection::hasRelocationSection(); }
-      RelocationSection* relocationSection(SymbolTable* symtab) override { return GElfSection::relocationSection(); }
-      RelocationSection* asRelocationSection() override { return 0; }
+      RelocationSection* relocationSection(SymbolTable*  /*symtab*/) override { return GElfSection::relocationSection(); }
+      RelocationSection* asRelocationSection() override { return nullptr; }
       uint64_t memSize() const override { return GElfSection::memSize(); }
       bool setMemSize(uint64_t s) override { return GElfSection::setMemSize(s); }
       uint64_t memAlign() const override { return GElfSection::memAlign(); }
@@ -504,18 +503,18 @@ namespace amd {
 
     class GElfSymbol : public Symbol {
     public:
-      GElfSymbol(GElfSymbolTable* symtab, Buffer &data, size_t index);
+      GElfSymbol(GElfSymbolTable* symtab_, Buffer &data_, size_t index_);
 
       bool push(const std::string& name, uint64_t value, uint64_t size, unsigned char type, unsigned char binding, uint16_t shndx, unsigned char other);
 
       uint32_t index() override { return eindex / sizeof(GElf_Rela); }
       uint32_t type() override { return GELF_ST_TYPE(Sym()->st_info); }
-      uint32_t binding() { return GELF_ST_BIND(Sym()->st_info); }
-      uint64_t size() { return Sym()->st_size; }
-      uint64_t value() { return Sym()->st_value; }
-      unsigned char other() { return Sym()->st_other; }
+      uint32_t binding() override { return GELF_ST_BIND(Sym()->st_info); }
+      uint64_t size() override { return Sym()->st_size; }
+      uint64_t value() override { return Sym()->st_value; }
+      unsigned char other() override { return Sym()->st_other; }
       std::string name() override;
-      Section* section();
+      Section* section() override;
 
       void setValue(uint64_t value) override { Sym()->st_value = value; }
       void setSize(uint64_t size) override { Sym()->st_size = size; }
@@ -554,11 +553,11 @@ namespace amd {
       uint64_t addData(const void *src, uint64_t size, uint64_t align) override { return GElfSection::addData(src, size, align); }
       bool getData(uint64_t offset, void* dest, uint64_t size) override { return GElfSection::getData(offset, dest, size); }
       bool hasRelocationSection() const override { return GElfSection::hasRelocationSection(); }
-      RelocationSection* relocationSection(SymbolTable* symtab) override { return GElfSection::relocationSection(); }
+      RelocationSection* relocationSection(SymbolTable*  /*symtab*/) override { return GElfSection::relocationSection(); }
       Symbol* addSymbol(Section* section, const std::string& name, uint64_t value, uint64_t size, unsigned char type, unsigned char binding, unsigned char other = 0) override;
       size_t symbolCount() override;
       Symbol* symbol(size_t i) override;
-      RelocationSection* asRelocationSection() override { return 0; }
+      RelocationSection* asRelocationSection() override { return nullptr; }
       uint64_t memSize() const override { return GElfSection::memSize(); }
       bool setMemSize(uint64_t s) override { return GElfSection::setMemSize(s); }
       uint64_t memAlign() const override { return GElfSection::memAlign(); }
@@ -583,10 +582,10 @@ namespace amd {
       uint64_t addData(const void *src, uint64_t size, uint64_t align) override { return GElfSection::addData(src, size, align); }
       bool getData(uint64_t offset, void* dest, uint64_t size) override { return GElfSection::getData(offset, dest, size); }
       bool hasRelocationSection() const override { return GElfSection::hasRelocationSection(); }
-      RelocationSection* relocationSection(SymbolTable* symtab) override { return GElfSection::relocationSection(); }
+      RelocationSection* relocationSection(SymbolTable*  /*symtab*/) override { return GElfSection::relocationSection(); }
       bool addNote(const std::string& name, uint32_t type, const void* desc, uint32_t desc_size) override;
       bool getNote(const std::string& name, uint32_t type, void** desc, uint32_t* desc_size) override;
-      RelocationSection* asRelocationSection() override { return 0; }
+      RelocationSection* asRelocationSection() override { return nullptr; }
       uint64_t memSize() const override { return GElfSection::memSize(); }
       bool setMemSize(uint64_t s) override { return GElfSection::setMemSize(s); }
       uint64_t memAlign() const override { return GElfSection::memAlign(); }
@@ -627,7 +626,7 @@ namespace amd {
       std::vector<std::unique_ptr<GElfRelocation>> relocations;
 
     public:
-      GElfRelocationSection(GElfImage* elf, Section* targetSection = 0, GElfSymbolTable* symtab_ = 0);
+      GElfRelocationSection(GElfImage* elf, Section* section_ = nullptr, GElfSymbolTable* symtab_ = nullptr);
       bool push(const std::string& name);
       bool pullData() override;
       uint16_t getSectionIndex() const override { return GElfSection::getSectionIndex(); }
@@ -644,7 +643,7 @@ namespace amd {
       uint64_t addData(const void *src, uint64_t size, uint64_t align) override { return GElfSection::addData(src, size, align); }
       bool getData(uint64_t offset, void* dest, uint64_t size) override { return GElfSection::getData(offset, dest, size); }
       bool hasRelocationSection() const override { return GElfSection::hasRelocationSection(); }
-      RelocationSection* relocationSection(SymbolTable* symtab) override { return GElfSection::relocationSection(); }
+      RelocationSection* relocationSection(SymbolTable*  /*symtab*/) override { return GElfSection::relocationSection(); }
       RelocationSection* asRelocationSection() override { return this; }
 
       size_t relocationCount() const override { return relocations.size(); }
@@ -660,16 +659,16 @@ namespace amd {
 
     class GElfImage : public Image {
     public:
-      GElfImage(int elfclass);
-      ~GElfImage();
+      GElfImage(int elfclass_);
+      ~GElfImage() override;
       bool initNew(uint16_t machine, uint16_t type, uint8_t os_abi = 0, uint8_t abi_version = 0, uint32_t e_flags = 0) override;
       bool loadFromFile(const std::string& filename) override;
       bool saveToFile(const std::string& filename) override;
-      bool initFromBuffer(const void* buffer, size_t size);
-      bool initAsBuffer(const void* buffer, size_t size);
+      bool initFromBuffer(const void* buffer, size_t size) override;
+      bool initAsBuffer(const void* buffer, size_t size) override;
       bool close();
       bool writeTo(const std::string& filename) override;
-      bool copyToBuffer(void** buf, size_t* size = 0) override;
+      bool copyToBuffer(void** buf, size_t* size = nullptr) override;
       bool copyToBuffer(void* buf, size_t size) override;
 
       const char* data() override { assert(buffer); return buffer; }
@@ -683,9 +682,9 @@ namespace amd {
       uint16_t Machine() override { return ehdr.e_machine; }
       uint16_t Type() override { return ehdr.e_type; }
 
-      GElfStringTable* shstrtab();
-      GElfStringTable* strtab();
-      GElfSymbolTable* getSymtab(uint16_t index)
+      GElfStringTable* shstrtab() override;
+      GElfStringTable* strtab() override;
+      GElfSymbolTable* getSymtab(uint16_t index) override
       {
         return static_cast<GElfSymbolTable*>(section(index));
       }
@@ -693,8 +692,8 @@ namespace amd {
       GElfStringTable* addStringTable(const std::string& name) override;
       GElfStringTable* getStringTable(uint16_t index) override;
 
-      GElfSymbolTable* addSymbolTable(const std::string& name, StringTable* stab = 0) override;
-      GElfSymbolTable* symtab();
+      GElfSymbolTable* addSymbolTable(const std::string& name, StringTable* stab = nullptr) override;
+      GElfSymbolTable* symtab() override;
 
       GElfSegment* segment(size_t i) override { return segments[i].get(); }
       Segment* segmentByVAddr(uint64_t vaddr) override;
@@ -717,10 +716,10 @@ namespace amd {
                           uint32_t type,
                           uint64_t flags = 0,
                           uint64_t entsize = 0,
-                          Segment* segment = 0) override;
+                          Segment* segment = nullptr) override;
 
       RelocationSection* addRelocationSection(Section* sec, SymbolTable* symtab);
-      RelocationSection* relocationSection(Section* sec, SymbolTable* symtab = 0) override;
+      RelocationSection* relocationSection(Section* sec, SymbolTable* symtab = nullptr) override;
 
     private:
       bool frozen;
@@ -772,7 +771,7 @@ namespace amd {
 
     const char* GElfSegment::data() const
     {
-      return (const char*) elf->data() + phdr.p_offset;
+      return elf->data() + phdr.p_offset;
     }
 
     bool GElfImage::Freeze()
@@ -809,12 +808,12 @@ namespace amd {
       for (Section* section : sections) {
         phdr.p_align = (std::max)(phdr.p_align, section->memAlign());
       }
-      phdr.p_vaddr = alignUp(vaddr, (std::max)(phdr.p_align, (uint64_t) 1));
+      phdr.p_vaddr = alignUp(vaddr, (std::max)(phdr.p_align, static_cast<uint64_t>( 1)));
       phdr.p_filesz = 0;
       phdr.p_memsz = 0;
       for (Section* section : sections) {
-        phdr.p_memsz = alignUp(phdr.p_memsz, (std::max)(section->memAlign(), (uint64_t) 1));
-        phdr.p_filesz = alignUp(phdr.p_filesz, (std::max)(section->memAlign(), (uint64_t) 1));
+        phdr.p_memsz = alignUp(phdr.p_memsz, (std::max)(section->memAlign(), static_cast<uint64_t>( 1)));
+        phdr.p_filesz = alignUp(phdr.p_filesz, (std::max)(section->memAlign(), static_cast<uint64_t>( 1)));
         if (!section->updateAddr(phdr.p_vaddr + phdr.p_memsz)) { return false; }
         phdr.p_filesz += (section->type() == SHT_NOBITS) ? 0 : section->size();
         phdr.p_memsz += section->memSize();
@@ -851,7 +850,7 @@ namespace amd {
 
     uint16_t GElfSection::getSectionIndex() const
     {
-      return (uint16_t)ndxscn;
+      return static_cast<uint16_t>(ndxscn);
     }
 
     std::string GElfSection::Name() const
@@ -875,7 +874,7 @@ namespace amd {
       if (!scn) { return false; }
       ndxscn = elf_ndxscn(scn);
       if (!gelf_getshdr(scn, &hdr)) { return elf->elfError("gelf_get_shdr failed"); }
-      align = (std::max)(align, (uint32_t) 8);
+      align = (std::max)(align, static_cast<uint32_t>( 8));
       hdr.sh_name = elf->shstrtab()->addString1(name);
       hdr.sh_type = shtype;
       hdr.sh_flags = shflags;
@@ -898,13 +897,13 @@ namespace amd {
 
     bool GElfSection::pull(uint16_t ndx)
     {
-      ndxscn = (size_t) ndx;
+      ndxscn = static_cast<size_t>( ndx);
       if (!pull0()) { return false; }
       Elf_Scn *scn = elf_getscn(elf->e, ndx);
       if (!scn) { return false; }
-      Elf_Data *edata0 = elf_getdata(scn, NULL);
+      Elf_Data *edata0 = elf_getdata(scn, nullptr);
       if (edata0) {
-        data0 = Buffer((const Buffer::byte_type*)edata0->d_buf, edata0->d_size, edata0->d_align);
+        data0 = Buffer(reinterpret_cast<const Buffer::byte_type*>(edata0->d_buf), edata0->d_size, edata0->d_align);
       }
       seg = elf->segmentByVAddr(hdr.sh_addr);
       return true;
@@ -918,7 +917,7 @@ namespace amd {
       edata = elf_newdata(scn);
       if (!edata) { return elf->elfError("elf_newdata failed"); }
       if (hdr.sh_type == SHT_NOBITS) {
-        edata->d_buf = 0;
+        edata->d_buf = nullptr;
         edata->d_size = memsize_;
         if (align_ != 0) {
           edata->d_align = align_;
@@ -930,7 +929,7 @@ namespace amd {
           edata->d_align = data.align();
         }
       }
-      edata->d_align = (std::max)(edata->d_align, (uint64_t) 8);
+      edata->d_align = (std::max)(edata->d_align, static_cast<uint64_t>( 8));
       switch (hdr.sh_type) {
       case SHT_RELA:
         edata->d_type = ELF_T_RELA;
@@ -962,17 +961,17 @@ namespace amd {
 
     bool GElfSection::getData(uint64_t offset, void* dest, uint64_t size)
     {
-      Elf_Data* edata = 0;
+      Elf_Data* edata = nullptr;
       uint64_t coffset = 0;
       uint64_t csize = 0;
       Elf_Scn *scn = elf_getscn(elf->e, ndxscn);
       assert(scn);
-      if ((edata = elf_getdata(scn, edata)) != 0) {
+      if ((edata = elf_getdata(scn, edata)) != nullptr) {
         if (coffset <= offset && offset <= coffset + edata->d_size) {
           csize = (std::min)(size, edata->d_size - offset);
-          memcpy(dest, (const char*) edata->d_buf + offset - coffset, csize);
+          memcpy(dest, reinterpret_cast<const char*>( edata->d_buf) + offset - coffset, csize);
           coffset += csize;
-          dest = (char*) dest + csize;
+          dest = reinterpret_cast<char*>( dest) + csize;
           size -= csize;
           if (!size) { return true; }
         }
@@ -995,8 +994,7 @@ namespace amd {
 
     bool GElfStringTable::push(const char* name, uint32_t shtype, uint64_t shflags)
     {
-      if (!GElfSection::push(name, shtype, shflags, SHN_UNDEF, 0, 0)) { return false; }
-      return true;
+      return GElfSection::push(name, shtype, shflags, SHN_UNDEF, 0, 0);
     }
 
     bool GElfStringTable::pullData()
@@ -1051,7 +1049,7 @@ namespace amd {
       if (Sym()->st_shndx != SHN_UNDEF) {
         return symtab->elf->section(Sym()->st_shndx);
       }
-      return 0;
+      return nullptr;
     }
 
     bool GElfSymbol::push(const std::string& name, uint64_t value, uint64_t size, unsigned char type, unsigned char binding, uint16_t shndx, unsigned char other)
@@ -1072,7 +1070,7 @@ namespace amd {
 
     GElfSymbolTable::GElfSymbolTable(GElfImage* elf)
       : GElfSection(elf),
-        strtab(0)
+        strtab(nullptr)
     {
     }
 
@@ -1080,8 +1078,7 @@ namespace amd {
     {
       if (!strtab) { strtab = elf->strtab(); }
       this->strtab = strtab;
-      if (!GElfSection::push(name, SHT_SYMTAB, 0, strtab->getSectionIndex(), 0, 0, sizeof(Elf64_Sym))) { return false;  }
-      return true;
+      return GElfSection::push(name, SHT_SYMTAB, 0, strtab->getSectionIndex(), 0, 0, sizeof(Elf64_Sym));
     }
 
     bool GElfSymbolTable::pullData()
@@ -1096,7 +1093,7 @@ namespace amd {
     Symbol* GElfSymbolTable::addSymbolInternal(Section* section, const std::string& name, uint64_t value, uint64_t size, unsigned char type, unsigned char binding, unsigned char other)
     {
       GElfSymbol *sym = new (std::nothrow) GElfSymbol(this, data, data.reserve<GElf_Sym>());
-      uint16_t shndx = section ? section->getSectionIndex() : (uint16_t) SHN_UNDEF;
+      uint16_t shndx = section ? section->getSectionIndex() : static_cast<uint16_t>( SHN_UNDEF);
       if (!sym->push(name, value, size, type, binding, shndx, other)) {
         delete sym;
         return nullptr;
@@ -1107,7 +1104,7 @@ namespace amd {
 
     Symbol* GElfSymbolTable::addSymbol(Section* section, const std::string& name, uint64_t value, uint64_t size, unsigned char type, unsigned char binding, unsigned char other)
     {
-      if (symbols.size() == 0) {
+      if (symbols.empty()) {
         this->addSymbolInternal(nullptr, "", 0, 0, 0, 0, 0);
       }
       return this->addSymbolInternal(section, name, value, size, type, binding, other);
@@ -1150,14 +1147,14 @@ namespace amd {
 
     bool GElfNoteSection::getNote(const std::string& name, uint32_t type, void** desc, uint32_t* desc_size)
     {
-      Elf_Data* data = 0;
+      Elf_Data* data = nullptr;
       Elf_Scn *scn = elf_getscn(elf->e, ndxscn);
       assert(scn);
-      while ((data = elf_getdata(scn, data)) != 0) {
+      while ((data = elf_getdata(scn, data)) != nullptr) {
         uint32_t note_offset = 0;
         while (note_offset < data->d_size) {
-          char* notec = (char *) data->d_buf + note_offset;
-          Elf64_Nhdr* note = (Elf64_Nhdr*) notec;
+          char* notec = reinterpret_cast<char *>( data->d_buf) + note_offset;
+          Elf64_Nhdr* note = reinterpret_cast<Elf64_Nhdr*>( notec);
           if (type == note->n_type) {
             std::string note_name = GetNoteString(note->n_namesz, notec + sizeof(Elf64_Nhdr));
             if (name == note_name) {
@@ -1221,7 +1218,7 @@ namespace amd {
       assert(lScn);
       Elf_Data *lData = elf_getdata(lScn, nullptr);
       assert(lData);
-      data0 = Buffer((const Buffer::byte_type*)lData->d_buf, lData->d_size, lData->d_align);
+      data0 = Buffer(reinterpret_cast<const Buffer::byte_type*>(lData->d_buf), lData->d_size, lData->d_align);
       for (size_t i = 0; i < data0.size() / sizeof(GElf_Rela); ++i) {
         relocations.push_back(std::unique_ptr<GElfRelocation>(new GElfRelocation(this, data0, i * sizeof(GElf_Rela))));
       }
@@ -1231,11 +1228,11 @@ namespace amd {
     GElfImage::GElfImage(int elfclass_)
       : frozen(true),
         elfclass(elfclass_),
-        buffer(0), bufferSize(0),
-        e(0),
-        shstrtabSection(0), strtabSection(0),
-        symtabSection(0),
-        noteSection(0)
+        buffer(nullptr), bufferSize(0),
+        e(nullptr),
+        shstrtabSection(nullptr), strtabSection(nullptr),
+        symtabSection(nullptr),
+        noteSection(nullptr)
     {
       if (EV_NONE == elf_version(EV_CURRENT)) {
         assert(false);
@@ -1260,11 +1257,11 @@ namespace amd {
 
     bool GElfImage::elfBegin(Elf_Cmd cmd)
     {
-      if ((e = elf_begin(img.fd(), cmd, NULL
+      if ((e = elf_begin(img.fd(), cmd, nullptr
 #ifdef AMD_LIBELF
                        , NULL
 #endif
-        )) == NULL) {
+        )) == nullptr) {
         out << "elf_begin failed: " << elfError() << std::endl;
         return false;
       }
@@ -1332,7 +1329,7 @@ namespace amd {
 #ifdef AMD_LIBELF
                        , NULL
 #endif
-        )) == NULL) {
+        )) == nullptr) {
         out << "elf_begin(buffer) failed: " << elfError() << std::endl;
         return false;
       }
@@ -1353,7 +1350,7 @@ namespace amd {
 
       shstrtabSection = new GElfStringTable(this);
       if (!shstrtabSection->pull(ehdr.e_shstrndx)) { return false; }
-      Elf_Scn* scn = 0;
+      Elf_Scn* scn = nullptr;
       for (unsigned n = 0; n < ehdr.e_shnum; ++n) {
         scn = elf_getscn(e, n);
         if (n == ehdr.e_shstrndx) {
@@ -1362,7 +1359,7 @@ namespace amd {
         }
         GElf_Shdr shdr;
         if (!gelf_getshdr(scn, &shdr)) { return elfError("Failed to get shdr"); }
-        GElfSection* section = 0;
+        GElfSection* section = nullptr;
         if (shdr.sh_type == SHT_NOTE) {
           section = new GElfNoteSection(this);
         } else if (shdr.sh_type == SHT_RELA) {
@@ -1372,7 +1369,7 @@ namespace amd {
         } else if (shdr.sh_type == SHT_SYMTAB || shdr.sh_type == SHT_DYNSYM) {
           section = new GElfSymbolTable(this);
         } else if (shdr.sh_type == SHT_NULL) {
-          section = 0;
+          section = nullptr;
           sections.push_back(std::unique_ptr<GElfSection>());
         } else {
           section = new GElfSection(this);
@@ -1480,7 +1477,7 @@ namespace amd {
           return seg.get();
         }
       }
-      return 0;
+      return nullptr;
     }
 
     Section* GElfImage::sectionByVAddr(uint64_t vaddr)
@@ -1527,7 +1524,7 @@ namespace amd {
       }
     }
 
-    GElfStringTable* GElfImage::addStringTable(const std::string& name) 
+    GElfStringTable* GElfImage::addStringTable(const std::string&  /*name*/) 
     {
       GElfStringTable* stab = new GElfStringTable(this);
       sections.push_back(std::unique_ptr<GElfStringTable>(stab));
@@ -1622,7 +1619,7 @@ namespace amd {
     {
       std::string section_name = ".rela" + sec->Name();
       if (!symtab) { symtab = this->symtab(); }
-      GElfRelocationSection *rsec = new GElfRelocationSection(this, sec, (GElfSymbolTable*) symtab);
+      GElfRelocationSection *rsec = new GElfRelocationSection(this, sec, static_cast<GElfSymbolTable*>( symtab));
       if (!rsec || !rsec->push(section_name)) {
         delete rsec;
         return nullptr;
@@ -1651,13 +1648,13 @@ namespace amd {
 
     uint64_t ElfSize(const void* emi)
     {
-      const Elf64_Ehdr *ehdr = (const Elf64_Ehdr*) emi;
-      if (NULL == ehdr || EV_CURRENT != ehdr->e_version) {
+      const Elf64_Ehdr *ehdr = reinterpret_cast<const Elf64_Ehdr*>( emi);
+      if (nullptr == ehdr || EV_CURRENT != ehdr->e_version) {
         return false;
       }
 
-      const Elf64_Shdr *shdr = (const Elf64_Shdr*)((char*)emi + ehdr->e_shoff);
-      if (NULL == shdr) {
+      const Elf64_Shdr *shdr = reinterpret_cast<const Elf64_Shdr*>((char*)emi + ehdr->e_shoff);
+      if (nullptr == shdr) {
         return false;
       }
 

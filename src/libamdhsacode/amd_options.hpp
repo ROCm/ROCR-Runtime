@@ -82,7 +82,7 @@ class HelpStreambuf : public std::streambuf {
 public:
   explicit HelpStreambuf(std::ostream& stream);
 
-  virtual ~HelpStreambuf() {
+  ~HelpStreambuf() override {
     basicStream_->rdbuf(basicBuf_);
   }
 
@@ -97,7 +97,7 @@ public:
   }
 
 protected:
-  virtual int_type overflow(int_type ch) override;
+  int_type overflow(int_type ch) override;
 
 private:
   std::ostream* basicStream_;
@@ -143,7 +143,7 @@ private:
 
 class OptionBase {
 public:
-  virtual ~OptionBase() {}
+  virtual ~OptionBase() = default;
 
   const std::string& name() const {
     return name_;
@@ -203,14 +203,14 @@ public:
                   std::ostream& error = std::cerr):
     OptionBase(name, help, error) {}
 
-  ~Option() {}
+  ~Option() override = default;
 
   const std::list<T>& values() const {
     return values_;
   }
 
 protected:
-  virtual void PrintHelp(HelpPrinter& printer) const override;
+  void PrintHelp(HelpPrinter& printer) const override;
 
 private:
   /// @brief Not copy-constructible.
@@ -218,7 +218,7 @@ private:
   /// @brief Not copy-assignable.
   Option& operator=(const Option &o);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string> &tokens) override;
 
   std::list<T> values_;
 };
@@ -268,7 +268,7 @@ public:
                        std::ostream& error = std::cerr):
     OptionBase(name, help, error) {}
 
-  ~ValueOption() {}
+  ~ValueOption() override = default;
 
   const T& value() const {
     return value_;
@@ -283,7 +283,7 @@ private:
   /// @brief Not copy-assignable.
   ValueOption& operator=(const ValueOption &o);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string> &tokens) override;
 
   T value_;
 };
@@ -325,7 +325,7 @@ public:
                const std::string& help = "",
                std::ostream& error = std::cerr);
 
-  ~ChoiceOption() {}
+  ~ChoiceOption() override = default;
 
   const std::string& value() const {
     return value_;
@@ -340,7 +340,7 @@ private:
   /// @brief Not copy-assignable.
   ChoiceOption& operator =(const ChoiceOption&);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string> &tokens) override;
 
   std::unordered_set<std::string> choices_;
   std::string value_;
@@ -357,7 +357,7 @@ public:
                        std::ostream& error = std::cerr):
     OptionBase(name, help, error) {}
 
-  ~NoArgOption() {}
+  ~NoArgOption() override = default;
 
 protected:
   void PrintHelp(HelpPrinter& printer) const override {
@@ -370,7 +370,7 @@ private:
   /// @brief Not copy-assignable.
   NoArgOption& operator=(const NoArgOption &o);
 
-  bool ProcessTokens(std::list<std::string> &tokens) {
+  bool ProcessTokens(std::list<std::string> &tokens) override {
     assert(0 == name_.compare(tokens.front()) && "option name is mismatched");
     if (1 == tokens.size()) {
       tokens.pop_front();
@@ -403,7 +403,7 @@ public:
     : collectUnknown_(collectUnknown),
       error_(&error) {}
 
-  ~OptionParser() {}
+  ~OptionParser() = default;
 
   bool AddOption(OptionBase *option);
 

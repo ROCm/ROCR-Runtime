@@ -62,8 +62,8 @@ namespace core {
     void Init();
     void UpdateCore();
     void UpdateAmdExts();
-    void CloneExts(void* ptr, uint32_t table_id);
-    void LinkExts(void* ptr, uint32_t table_id);
+    void CloneExts(void* ext_table, uint32_t table_id);
+    void LinkExts(void* ext_table, uint32_t table_id);
     void Reset();
   };
 

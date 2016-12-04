@@ -83,25 +83,25 @@ namespace loader {
 
     bool SegmentFreeze(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size) override;
 
-    bool ImageExtensionSupported();
+    bool ImageExtensionSupported() override;
 
     hsa_status_t ImageCreate(
       hsa_agent_t agent,
       hsa_access_permission_t image_permission,
       const hsa_ext_image_descriptor_t *image_descriptor,
       const void *image_data,
-      hsa_ext_image_t *image_handle);
+      hsa_ext_image_t *image_handle) override;
 
     hsa_status_t ImageDestroy(
-      hsa_agent_t agent, hsa_ext_image_t image_handle);
+      hsa_agent_t agent, hsa_ext_image_t image_handle) override;
 
     hsa_status_t SamplerCreate(
       hsa_agent_t agent,
       const hsa_ext_sampler_descriptor_t *sampler_descriptor,
-      hsa_ext_sampler_t *sampler_handle);
+      hsa_ext_sampler_t *sampler_handle) override;
 
     hsa_status_t SamplerDestroy(
-      hsa_agent_t agent, hsa_ext_sampler_t sampler_handle);
+      hsa_agent_t agent, hsa_ext_sampler_t sampler_handle) override;
   };
 }
 }

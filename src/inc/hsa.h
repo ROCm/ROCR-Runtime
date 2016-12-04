@@ -1200,7 +1200,7 @@ hsa_status_t HSA_API hsa_cache_get_info(
 hsa_status_t HSA_API hsa_agent_iterate_caches(
     hsa_agent_t agent,
     hsa_status_t (*callback)(hsa_cache_t cache, void* data),
-    void* data);
+    void* value);
 
 /**
  * @deprecated
@@ -1985,7 +1985,7 @@ hsa_signal_value_t HSA_API hsa_signal_wait_scacquire(
     hsa_signal_condition_t condition,
     hsa_signal_value_t compare_value,
     uint64_t timeout_hint,
-    hsa_wait_state_t wait_state_hint);
+    hsa_wait_state_t wait_expectancy_hint);
 
 /**
  * @copydoc hsa_signal_wait_scacquire
@@ -1995,7 +1995,7 @@ hsa_signal_value_t HSA_API hsa_signal_wait_relaxed(
     hsa_signal_condition_t condition,
     hsa_signal_value_t compare_value,
     uint64_t timeout_hint,
-    hsa_wait_state_t wait_state_hint);
+    hsa_wait_state_t wait_expectancy_hint);
 
 /**
  * @deprecated Renamed as ::hsa_signal_wait_scacquire.
@@ -2409,7 +2409,7 @@ hsa_status_t HSA_API hsa_soft_queue_create(
     uint32_t size,
     hsa_queue_type_t type,
     uint32_t features,
-    hsa_signal_t doorbell_signal,
+    hsa_signal_t completion_signal,
     hsa_queue_t **queue);
 
 /**
@@ -3450,7 +3450,7 @@ hsa_status_t HSA_API hsa_memory_assign_agent(
  * is not NULL.
  */
 hsa_status_t HSA_API hsa_memory_register(
-    void *ptr,
+    void *address,
     size_t size);
 
 /**
@@ -3472,7 +3472,7 @@ hsa_status_t HSA_API hsa_memory_register(
  *
  */
 hsa_status_t HSA_API hsa_memory_deregister(
-    void *ptr,
+    void *address,
     size_t size);
 
 /** @} */

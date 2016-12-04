@@ -56,7 +56,7 @@ bool Wavefront::GetInfo(
 
   switch (attribute) {
     case HSA_WAVEFRONT_INFO_SIZE: {
-      *((uint32_t*)value) = 64;
+      *(reinterpret_cast<uint32_t*>(value)) = 64;
       return true;
     }
     default: {
@@ -81,7 +81,7 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
   switch (attribute) {
     case HSA_ISA_INFO_NAME_LENGTH: {
       std::string full_name = GetFullName();
-      *((uint32_t*)value) = static_cast<uint32_t>(full_name.size() + 1);
+      *(reinterpret_cast<uint32_t*>(value)) = static_cast<uint32_t>(full_name.size() + 1);
       return true;
     }
     case HSA_ISA_INFO_NAME: {
@@ -92,17 +92,17 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
     }
     // deprecated.
     case HSA_ISA_INFO_CALL_CONVENTION_COUNT: {
-      *((uint32_t*)value) = 1;
+      *(reinterpret_cast<uint32_t*>(value)) = 1;
       return true;
     }
     // deprecated.
     case HSA_ISA_INFO_CALL_CONVENTION_INFO_WAVEFRONT_SIZE: {
-      *((uint32_t*)value) = 64;
+      *(reinterpret_cast<uint32_t*>(value)) = 64;
       return true;
     }
     // deprecated.
     case HSA_ISA_INFO_CALL_CONVENTION_INFO_WAVEFRONTS_PER_COMPUTE_UNIT: {
-      *((uint32_t*)value) = 40;
+      *(reinterpret_cast<uint32_t*>(value)) = 40;
       return true;
     }
     case HSA_ISA_INFO_MACHINE_MODELS: {
@@ -131,9 +131,9 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
     }
     case HSA_ISA_INFO_FAST_F16_OPERATION: {
       if (this->GetMajorVersion() >= 8) {
-        *((bool*)value) = true;
+        *(reinterpret_cast<bool*>(value)) = true;
       } else {
-        *((bool*)value) = false;
+        *(reinterpret_cast<bool*>(value)) = false;
       }
       return true;
     }
@@ -143,7 +143,7 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
       return true;
     }
     case HSA_ISA_INFO_WORKGROUP_MAX_SIZE: {
-      *((uint32_t*)value) = 1024;
+      *(reinterpret_cast<uint32_t*>(value)) = 1024;
       return true;
     }
     case HSA_ISA_INFO_GRID_MAX_DIM: {
@@ -152,11 +152,11 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
       return true;
     }
     case HSA_ISA_INFO_GRID_MAX_SIZE: {
-      *((uint64_t*)value) = UINT64_MAX;
+      *(reinterpret_cast<uint64_t*>(value)) = UINT64_MAX;
       return true;
     }
     case HSA_ISA_INFO_FBARRIER_MAX_SIZE: {
-      *((uint32_t*)value) = 32;
+      *(reinterpret_cast<uint32_t*>(value)) = 32;
       return true;
     }
     default: {
@@ -166,8 +166,8 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
 }
 
 hsa_round_method_t Isa::GetRoundMethod(
-    hsa_fp_type_t fp_type,
-    hsa_flush_mode_t flush_mode) const {
+    hsa_fp_type_t  /*fp_type*/,
+    hsa_flush_mode_t  /*flush_mode*/) const {
   return HSA_ROUND_METHOD_SINGLE;
 }
 

@@ -100,6 +100,7 @@ enable_clang_tidy(
         -llvm-namespace-comment
         -misc-macro-parentheses
         -misc-misplaced-const
+        -misc-static-assert
         -modernize-loop-convert
         -modernize-make-unique # Need C++14
         -modernize-pass-by-value

@@ -61,7 +61,7 @@ static const uint kKfdVersionMinor = 99;
 
 CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumCPUCores == 0) {
-    return NULL;
+    return nullptr;
   }
 
   CpuAgent* cpu = new CpuAgent(node_id, node_prop);
@@ -72,7 +72,7 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
 
 GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumFComputeCores == 0) {
-    return NULL;
+    return nullptr;
   }
 
   GpuAgent* gpu = new GpuAgent(node_id, node_prop);
@@ -175,7 +175,7 @@ void BuildTopology() {
     const CpuAgent* cpu = DiscoverCpu(node_id, node_prop);
     const GpuAgent* gpu = DiscoverGpu(node_id, node_prop);
 
-    assert(!(cpu == NULL && gpu == NULL));
+    assert(!(cpu == nullptr && gpu == nullptr));
 
     RegisterLinkInfo(node_id, node_prop.NumIOLinks);
   }

@@ -96,7 +96,7 @@ namespace amd {
 
     class Segment {
     public:
-      virtual ~Segment() { }
+      virtual ~Segment() = default;
       virtual uint64_t type() const = 0;
       virtual uint64_t memSize() const = 0;
       virtual uint64_t align() const = 0;
@@ -111,7 +111,7 @@ namespace amd {
 
     class Section {
     public:
-      virtual ~Section() { }
+      virtual ~Section() = default;
       virtual uint16_t getSectionIndex() const = 0;
       virtual uint32_t type() const = 0;
       virtual std::string Name() const = 0;
@@ -127,7 +127,7 @@ namespace amd {
       virtual Segment* segment() = 0;
       virtual RelocationSection* asRelocationSection() = 0;
       virtual bool hasRelocationSection() const = 0;
-      virtual RelocationSection* relocationSection(SymbolTable* symtab = 0) = 0;
+      virtual RelocationSection* relocationSection(SymbolTable* symtab = nullptr) = 0;
       virtual bool setMemSize(uint64_t s) = 0;
       virtual uint64_t memSize() const = 0;
       virtual bool setAlign(uint64_t a) = 0;
@@ -136,7 +136,7 @@ namespace amd {
 
     class Relocation {
     public:
-      virtual ~Relocation() { }
+      virtual ~Relocation() = default;
       virtual RelocationSection* section() = 0;
       virtual uint32_t type() = 0;
       virtual uint32_t symbolIndex() = 0;
@@ -163,7 +163,7 @@ namespace amd {
 
     class Symbol {
     public:
-      virtual ~Symbol() { }
+      virtual ~Symbol() = default;
       virtual uint32_t index() = 0;
       virtual uint32_t type() = 0;
       virtual uint32_t binding() = 0;
@@ -185,13 +185,13 @@ namespace amd {
 
     class NoteSection : public virtual Section {
     public:
-      virtual bool addNote(const std::string& name, uint32_t type, const void* desc = 0, uint32_t desc_size = 0) = 0;
+      virtual bool addNote(const std::string& name, uint32_t type, const void* desc = nullptr, uint32_t desc_size = 0) = 0;
       virtual bool getNote(const std::string& name, uint32_t type, void** desc, uint32_t* desc_size) = 0;
     };
 
     class Image {
     public:
-      virtual ~Image() { }
+      virtual ~Image() = default;
 
       virtual bool initNew(uint16_t machine, uint16_t type, uint8_t os_abi = 0, uint8_t abi_version = 0, uint32_t e_flags = 0) = 0;
       virtual bool loadFromFile(const std::string& filename) = 0;
@@ -199,7 +199,7 @@ namespace amd {
       virtual bool initFromBuffer(const void* buffer, size_t size) = 0;
       virtual bool initAsBuffer(const void* buffer, size_t size) = 0;
       virtual bool writeTo(const std::string& filename) = 0;
-      virtual bool copyToBuffer(void** buf, size_t* size = 0) = 0; // Copy to new buffer allocated with malloc
+      virtual bool copyToBuffer(void** buf, size_t* size = nullptr) = 0; // Copy to new buffer allocated with malloc
       virtual bool copyToBuffer(void* buf, size_t size) = 0; // Copy to existing buffer of given size.
 
       virtual const char* data() = 0;
@@ -221,7 +221,7 @@ namespace amd {
       virtual StringTable* addStringTable(const std::string& name) = 0;
       virtual StringTable* getStringTable(uint16_t index) = 0;
 
-      virtual SymbolTable* addSymbolTable(const std::string& name, StringTable* stab = 0) = 0;
+      virtual SymbolTable* addSymbolTable(const std::string& name, StringTable* stab = nullptr) = 0;
 
       virtual size_t segmentCount() = 0;
       virtual Segment* segment(size_t i) = 0;
@@ -241,9 +241,9 @@ namespace amd {
                                   uint32_t type,
                                   uint64_t flags = 0,
                                   uint64_t entsize = 0,
-                                  Segment* segment = 0) = 0;
+                                  Segment* segment = nullptr) = 0;
 
-      virtual RelocationSection* relocationSection(Section* sec, SymbolTable* symtab = 0) = 0;
+      virtual RelocationSection* relocationSection(Section* sec, SymbolTable* symtab = nullptr) = 0;
 
     protected:
       std::ostringstream out;
@@ -252,7 +252,7 @@ namespace amd {
     Image* NewElf32Image();
     Image* NewElf64Image();
 
-    uint64_t ElfSize(const void* buffer);
+    uint64_t ElfSize(const void* emi);
 
     std::string GetNoteString(uint32_t s_size, const char* s);
 

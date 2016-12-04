@@ -50,7 +50,7 @@ using namespace core;
 hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
   const void *device_address,
   const void **host_address) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (!core::Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if (nullptr == device_address) {
@@ -73,7 +73,7 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
 hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
   hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
   size_t *num_segment_descriptors) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (!core::Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
 

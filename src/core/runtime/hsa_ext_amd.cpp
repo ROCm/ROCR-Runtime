@@ -164,7 +164,7 @@ hsa_status_t
     hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
   IS_OPEN();
 
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -181,12 +181,12 @@ hsa_status_t
                               size_t size, uint32_t num_dep_signals,
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal) {
-  if (dst == NULL || src == NULL) {
+  if (dst == nullptr || src == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((num_dep_signals == 0 && dep_signals != NULL) ||
-      (num_dep_signals > 0 && dep_signals == NULL)) {
+  if ((num_dep_signals == 0 && dep_signals != nullptr) ||
+      (num_dep_signals > 0 && dep_signals == nullptr)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -281,7 +281,7 @@ hsa_status_t hsa_amd_profiling_get_async_copy_time(
 
   core::Agent* agent = signal->async_copy_agent();
 
-  if (agent == NULL) {
+  if (agent == nullptr) {
     return HSA_STATUS_ERROR;
   }
 
@@ -361,7 +361,7 @@ hsa_status_t
   IS_BAD_PTR(callback);
   static const hsa_signal_t null_signal = {0};
   return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
-      null_signal, HSA_SIGNAL_CONDITION_EQ, 0, (hsa_amd_signal_handler)callback,
+      null_signal, HSA_SIGNAL_CONDITION_EQ, 0, reinterpret_cast<hsa_amd_signal_handler>(callback),
       arg);
 }
 
@@ -379,16 +379,16 @@ hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
 hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
                                          hsa_agent_t* agents, int num_agent,
                                          void** agent_ptr) {
-  *agent_ptr = NULL;
+  *agent_ptr = nullptr;
 
   IS_OPEN();
 
-  if (size == 0 || host_ptr == NULL || agent_ptr == NULL) {
+  if (size == 0 || host_ptr == nullptr || agent_ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((agents != NULL && num_agent == 0) ||
-      (agents == NULL && num_agent != 0)) {
+  if ((agents != nullptr && num_agent == 0) ||
+      (agents == nullptr && num_agent != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -418,8 +418,8 @@ hsa_status_t
 
   hsa_region_t region = {memory_pool.handle};
   const amd::MemoryRegion* mem_region = amd::MemoryRegion::Convert(region);
-  if (mem_region == NULL) {
-    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
+  if (mem_region == nullptr) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
   return mem_region->GetPoolInfo(attribute, value);
@@ -450,18 +450,18 @@ hsa_status_t hsa_amd_agent_iterate_memory_pools(
 
 hsa_status_t
     hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, size_t size,
-                                 uint32_t flags, void** ptr) {
+                                 uint32_t  /*flags*/, void** ptr) {
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL) {
+  if (size == 0 || ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   hsa_region_t region = {memory_pool.handle};
   const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
 
-  if (mem_region == NULL || !mem_region->IsValid()) {
-    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
+  if (mem_region == nullptr || !mem_region->IsValid()) {
+    return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
   return core::Runtime::runtime_singleton_->AllocateMemory(
@@ -477,7 +477,7 @@ hsa_status_t
                                 const uint32_t* flags, const void* ptr) {
   IS_OPEN();
 
-  if (num_agents == 0 || agents == NULL || flags != NULL || ptr == NULL) {
+  if (num_agents == 0 || agents == nullptr || flags != nullptr || ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -491,7 +491,7 @@ hsa_status_t
                                     bool* result) {
   IS_OPEN();
 
-  if (result == NULL) {
+  if (result == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -499,7 +499,7 @@ hsa_status_t
   const amd::MemoryRegion* src_mem_region =
       amd::MemoryRegion::Convert(src_region_handle);
 
-  if (src_mem_region == NULL || !src_mem_region->IsValid()) {
+  if (src_mem_region == nullptr || !src_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
@@ -507,7 +507,7 @@ hsa_status_t
   const amd::MemoryRegion* dst_mem_region =
       amd::MemoryRegion::Convert(dst_region_handle);
 
-  if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
+  if (dst_mem_region == nullptr || !dst_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
@@ -519,7 +519,7 @@ hsa_status_t hsa_amd_memory_migrate(const void* ptr,
                                             uint32_t flags) {
   IS_OPEN();
 
-  if (ptr == NULL || flags != 0) {
+  if (ptr == nullptr || flags != 0) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -527,7 +527,7 @@ hsa_status_t hsa_amd_memory_migrate(const void* ptr,
   const amd::MemoryRegion* dst_mem_region =
       amd::MemoryRegion::Convert(dst_region_handle);
 
-  if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
+  if (dst_mem_region == nullptr || !dst_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
@@ -539,7 +539,7 @@ hsa_status_t hsa_amd_agent_memory_pool_get_info(
     hsa_amd_agent_memory_pool_info_t attribute, void* value) {
   IS_OPEN();
 
-  if (value == NULL) {
+  if (value == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -550,7 +550,7 @@ hsa_status_t hsa_amd_agent_memory_pool_get_info(
   const amd::MemoryRegion* mem_region =
       amd::MemoryRegion::Convert(region_handle);
 
-  if (mem_region == NULL || !mem_region->IsValid()) {
+  if (mem_region == nullptr || !mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
@@ -573,7 +573,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
   core::Agent** core_agents = short_agents;
   if (num_agents > 64) {
     core_agents = new core::Agent* [num_agents];
-    if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    if (core_agents == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   for (int i = 0; i < num_agents; i++) {
@@ -592,7 +592,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
 
 hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   IS_OPEN();
-  if (ptr != NULL) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
+  if (ptr != nullptr) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
   return HSA_STATUS_SUCCESS;
 }
 

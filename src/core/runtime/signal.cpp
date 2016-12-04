@@ -70,7 +70,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   // Ensure that all signals in the list can be slept on.
   if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
     for (uint32_t i = 0; i < signal_count; i++) {
-      if (signals[i]->EopEvent() == NULL) {
+      if (signals[i]->EopEvent() == nullptr) {
         wait_hint = HSA_WAIT_STATE_ACTIVE;
         break;
       }
@@ -79,7 +79,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
 
   const uint32_t small_size = 10;
   HsaEvent* short_evts[small_size];
-  HsaEvent** evts = NULL;
+  HsaEvent** evts = nullptr;
   uint32_t unique_evts = 0;
   if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
     if (signal_count > small_size)
@@ -118,7 +118,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
       if (signals[i]->invalid_) return uint32_t(-1);
 
       // Handling special event.
-      if (signals[i]->EopEvent() != NULL) {
+      if (signals[i]->EopEvent() != nullptr) {
         const HSA_EVENTTYPE event_type =
             signals[i]->EopEvent()->EventData.EventType;
         if (event_type == HSA_EVENTTYPE_MEMORY) {
@@ -156,7 +156,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
           return uint32_t(-1);
       }
       if (condition_met) {
-        if (satisfying_value != NULL) *satisfying_value = value;
+        if (satisfying_value != nullptr) *satisfying_value = value;
         return i;
       }
     }
@@ -186,9 +186,9 @@ SignalGroup::SignalGroup(uint32_t num_signals, const hsa_signal_t* hsa_signals)
   if (count != 0) {
     signals = new hsa_signal_t[count];
   } else {
-    signals = NULL;
+    signals = nullptr;
   }
-  if (signals == NULL) return;
+  if (signals == nullptr) return;
   for (int i = 0; i < count; i++) signals[i] = hsa_signals[i];
 }
 

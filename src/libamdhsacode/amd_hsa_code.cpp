@@ -79,7 +79,7 @@ namespace code {
 
     bool Symbol::IsAgent() const
     {
-      return elfsym->section()->flags() & SHF_AMDGPU_HSA_AGENT ? true : false;
+      return bool(elfsym->section()->flags() & SHF_AMDGPU_HSA_AGENT);
     }
 
     hsa_symbol_linkage_t Symbol::Linkage() const
@@ -105,7 +105,7 @@ namespace code {
     uint32_t Symbol::Size32() const
     {
       assert(elfsym->size() < UINT32_MAX);
-      return (uint32_t) Size();
+      return static_cast<uint32_t>( Size());
     }
 
     uint32_t Symbol::Alignment() const
@@ -116,7 +116,7 @@ namespace code {
 
     bool Symbol::IsConst() const
     {
-      return elfsym->section()->flags() & SHF_WRITE ? true : false;
+      return bool(elfsym->section()->flags() & SHF_WRITE);
     }
 
     hsa_status_t Symbol::GetInfo(hsa_code_symbol_info_t attribute, void *value)
@@ -125,7 +125,7 @@ namespace code {
       std::string name = Name();
       switch (attribute) {
         case HSA_CODE_SYMBOL_INFO_TYPE: {
-          *((hsa_symbol_kind_t*)value) = Kind();
+          *(reinterpret_cast<hsa_symbol_kind_t*>(value)) = Kind();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_NAME_LENGTH:
@@ -145,7 +145,7 @@ namespace code {
             return HSA_STATUS_ERROR;
           }
           if (attribute == HSA_CODE_SYMBOL_INFO_NAME_LENGTH) {
-            *((uint32_t*) value) = matter.size() + 1;
+            *(reinterpret_cast<uint32_t*>( value)) = matter.size() + 1;
           } else {
             memset(value, 0x0, matter.size() + 1);
             memcpy(value, matter.c_str(), matter.size());
@@ -157,18 +157,18 @@ namespace code {
           switch (Linkage()) {
           case HSA_SYMBOL_LINKAGE_PROGRAM:
             if (attribute == HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH) {
-              *((uint32_t*) value) = 0;
+              *(reinterpret_cast<uint32_t*>( value)) = 0;
             }
             break;
           case HSA_SYMBOL_LINKAGE_MODULE: {
             assert(name.find(":") != std::string::npos);
             std::string matter = name.substr(0, name.find(":"));
             if (attribute == HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH) {
-              *((uint32_t*) value) = matter.length() + 1;
+              *(reinterpret_cast<uint32_t*>( value)) = matter.length() + 1;
             } else {
               memset(value, 0x0, matter.size() + 1);
               memcpy(value, matter.c_str(), matter.length());
-              ((char*)value)[matter.size() + 1] = '\0';
+              (reinterpret_cast<char*>(value))[matter.size() + 1] = '\0';
             }
             break;
           }
@@ -179,11 +179,11 @@ namespace code {
           break;
         }
         case HSA_CODE_SYMBOL_INFO_LINKAGE: {
-          *((hsa_symbol_linkage_t*)value) = Linkage();
+          *(reinterpret_cast<hsa_symbol_linkage_t*>(value)) = Linkage();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_IS_DEFINITION: {
-          *((bool*)value) = IsDefinition();
+          *(reinterpret_cast<bool*>(value)) = IsDefinition();
           break;
         }
         default: {
@@ -214,12 +214,12 @@ namespace code {
         , is_dynamic_callstack(0)
     {
       if (akc) {
-        kernarg_segment_size = (uint32_t) akc->kernarg_segment_byte_size;
-        kernarg_segment_alignment = (uint32_t) (1 << akc->kernarg_segment_alignment);
+        kernarg_segment_size = static_cast<uint32_t>( akc->kernarg_segment_byte_size);
+        kernarg_segment_alignment = static_cast<uint32_t> (1 << akc->kernarg_segment_alignment);
         group_segment_size = uint32_t(akc->workgroup_group_segment_byte_size);
         private_segment_size = uint32_t(akc->workitem_private_segment_byte_size);
         is_dynamic_callstack =
-          AMD_HSA_BITS_GET(akc->kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK) ? true : false;
+          bool(AMD_HSA_BITS_GET(akc->kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK));
       }
     }
 
@@ -228,23 +228,23 @@ namespace code {
       assert(value);
       switch (attribute) {
         case HSA_CODE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE: {
-          *((uint32_t*)value) = kernarg_segment_size;
+          *(reinterpret_cast<uint32_t*>(value)) = kernarg_segment_size;
           break;
         }
         case HSA_CODE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT: {
-          *((uint32_t*)value) = kernarg_segment_alignment;
+          *(reinterpret_cast<uint32_t*>(value)) = kernarg_segment_alignment;
           break;
         }
         case HSA_CODE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE: {
-          *((uint32_t*)value) = group_segment_size;
+          *(reinterpret_cast<uint32_t*>(value)) = group_segment_size;
           break;
         }
         case HSA_CODE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE: {
-          *((uint32_t*)value) = private_segment_size;
+          *(reinterpret_cast<uint32_t*>(value)) = private_segment_size;
           break;
         }
         case HSA_CODE_SYMBOL_INFO_KERNEL_DYNAMIC_CALLSTACK: {
-          *((bool*)value) = is_dynamic_callstack;
+          *(reinterpret_cast<bool*>(value)) = is_dynamic_callstack;
           break;
         }
         default: {
@@ -259,23 +259,23 @@ namespace code {
       assert(value);
       switch (attribute) {
         case HSA_CODE_SYMBOL_INFO_VARIABLE_ALLOCATION: {
-          *((hsa_variable_allocation_t*)value) = Allocation();
+          *(reinterpret_cast<hsa_variable_allocation_t*>(value)) = Allocation();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_VARIABLE_SEGMENT: {
-          *((hsa_variable_segment_t*)value) = Segment();
+          *(reinterpret_cast<hsa_variable_segment_t*>(value)) = Segment();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_VARIABLE_ALIGNMENT: {
-          *((uint32_t*)value) = Alignment();
+          *(reinterpret_cast<uint32_t*>(value)) = Alignment();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_VARIABLE_SIZE: {
-          *((uint32_t*)value) = Size();
+          *(reinterpret_cast<uint32_t*>(value)) = Size();
           break;
         }
         case HSA_CODE_SYMBOL_INFO_VARIABLE_IS_CONST: {
-          *((bool*)value) = IsConst();
+          *(reinterpret_cast<bool*>(value)) = IsConst();
           break;
         }
         default: {
@@ -288,16 +288,16 @@ namespace code {
     AmdHsaCode::AmdHsaCode(bool combineDataSegments_)
       : img(nullptr),
         combineDataSegments(combineDataSegments_),
-        hsatext(0), imageInit(0), samplerInit(0),
-        debugInfo(0), debugLine(0), debugAbbrev(0)
+        hsatext(nullptr), imageInit(nullptr), samplerInit(nullptr),
+        debugInfo(nullptr), debugLine(nullptr), debugAbbrev(nullptr)
     {
       for (unsigned i = 0; i < AMDGPU_HSA_SEGMENT_LAST; ++i) {
         for (unsigned j = 0; j < 2; ++j) {
-          hsaSegments[i][j] = 0;
+          hsaSegments[i][j] = nullptr;
         }
       }
       for (unsigned i = 0; i < AMDGPU_HSA_SECTION_LAST; ++i) {
-        hsaSections[i] = 0;
+        hsaSections[i] = nullptr;
       }
     }
 
@@ -345,7 +345,7 @@ namespace code {
       }
       for (size_t i = 0; i < img->symtab()->symbolCount(); ++i) {
         amd::elf::Symbol* elfsym = img->symtab()->symbol(i);
-        Symbol* sym = 0;
+        Symbol* sym = nullptr;
         switch (elfsym->type()) {
         case STT_AMDGPU_HSA_KERNEL: {
           amd::elf::Section* sec = elfsym->section();
@@ -515,16 +515,16 @@ namespace code {
       if (!GetAmdNote(NT_AMDGPU_HSA_HSAIL, &desc)) { return false; }
       *hsail_major = desc->hsail_major_version;
       *hsail_minor = desc->hsail_minor_version;
-      *profile = (hsa_profile_t) desc->profile;
-      *machine_model = (hsa_machine_model_t) desc->machine_model;
-      *default_float_round = (hsa_default_float_rounding_mode_t) desc->default_float_round;
+      *profile = static_cast<hsa_profile_t>( desc->profile);
+      *machine_model = static_cast<hsa_machine_model_t>( desc->machine_model);
+      *default_float_round = static_cast<hsa_default_float_rounding_mode_t>( desc->default_float_round);
       return true;
     }
 
     void AmdHsaCode::AddNoteIsa(const std::string& vendor_name, const std::string& architecture_name, uint32_t major, uint32_t minor, uint32_t stepping)
     {
       size_t size = sizeof(amdgpu_hsa_note_producer_t) + vendor_name.length() + architecture_name.length() + 1;
-      amdgpu_hsa_note_isa_t* desc = (amdgpu_hsa_note_isa_t*) _alloca(size);
+      amdgpu_hsa_note_isa_t* desc = reinterpret_cast<amdgpu_hsa_note_isa_t*>( _alloca(size));
       memset(desc, 0, size);
       desc->vendor_name_size = vendor_name.length()+1;
       desc->architecture_name_size = architecture_name.length()+1;
@@ -569,7 +569,7 @@ namespace code {
     void AmdHsaCode::AddNoteProducer(uint32_t major, uint32_t minor, const std::string& producer)
     {
       size_t size = sizeof(amdgpu_hsa_note_producer_t) + producer.length();
-      amdgpu_hsa_note_producer_t* desc = (amdgpu_hsa_note_producer_t*) _alloca(size);
+      amdgpu_hsa_note_producer_t* desc = reinterpret_cast<amdgpu_hsa_note_producer_t*>( _alloca(size));
       memset(desc, 0, size);
       desc->producer_name_size = producer.length();
       desc->producer_major_version = major;
@@ -591,7 +591,7 @@ namespace code {
     void AmdHsaCode::AddNoteProducerOptions(const std::string& options)
     {
       size_t size = sizeof(amdgpu_hsa_note_producer_options_t) + options.length();
-      amdgpu_hsa_note_producer_options_t *desc = (amdgpu_hsa_note_producer_options_t*) _alloca(size);
+      amdgpu_hsa_note_producer_options_t *desc = reinterpret_cast<amdgpu_hsa_note_producer_options_t*>( _alloca(size));
       desc->producer_options_size = options.length();
       memcpy(desc->producer_options, options.c_str(), options.length() + 1);
       AddAmdNote(NT_AMDGPU_HSA_PRODUCER_OPTIONS, desc, size);
@@ -626,7 +626,7 @@ namespace code {
       case HSA_CODE_OBJECT_INFO_VERSION: {
         std::string version;
         if (!GetNoteCodeObjectVersion(version)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-        char *svalue = (char*)value;
+        char *svalue = reinterpret_cast<char*>(value);
         memset(svalue, 0x0, 64);
         memcpy(svalue, version.c_str(), (std::min)(size_t(63), version.length()));
         break;
@@ -636,7 +636,7 @@ namespace code {
         // which is unavailable here.
         std::string isa;
         if (!GetNoteIsa(isa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-        char *svalue = (char*)value;
+        char *svalue = reinterpret_cast<char*>(value);
         memset(svalue, 0x0, 64);
         memcpy(svalue, isa.c_str(), (std::min)(size_t(63), isa.length()));
         break;
@@ -653,11 +653,11 @@ namespace code {
         }
         switch (attribute) {
         case HSA_CODE_OBJECT_INFO_MACHINE_MODEL:
-           *((hsa_machine_model_t*)value) = machine_model; break;
+           *(reinterpret_cast<hsa_machine_model_t*>(value)) = machine_model; break;
         case HSA_CODE_OBJECT_INFO_PROFILE:
-          *((hsa_profile_t*)value) = profile; break;
+          *(reinterpret_cast<hsa_profile_t*>(value)) = profile; break;
         case HSA_CODE_OBJECT_INFO_DEFAULT_FLOAT_ROUNDING_MODE:
-          *((hsa_default_float_rounding_mode_t*)value) = default_float_round; break;
+          *(reinterpret_cast<hsa_default_float_rounding_mode_t*>(value)) = default_float_round; break;
         default: break;
         }
         break;
@@ -724,7 +724,7 @@ namespace code {
       uint64_t width, uint64_t height, uint64_t depth, uint64_t array)
     {
       amdgpu_hsa_image_descriptor_t desc;
-      desc.size = (uint16_t) sizeof(amdgpu_hsa_image_descriptor_t);
+      desc.size = static_cast<uint16_t>( sizeof(amdgpu_hsa_image_descriptor_t));
       desc.kind = kind;
       desc.geometry = geometry;
       desc.channel_order = channel_order;
@@ -763,7 +763,7 @@ namespace code {
         amdgpu_hsa_sampler_addressing8_t addressing)
     {
       amdgpu_hsa_sampler_descriptor_t desc;
-      desc.size = (uint16_t) sizeof(amdgpu_hsa_sampler_descriptor_t);
+      desc.size = static_cast<uint16_t>( sizeof(amdgpu_hsa_sampler_descriptor_t));
       desc.kind = AMDGPU_HSA_METADATA_KIND_INIT_SAMP;
       desc.coord = coord;
       desc.filter = filter;
@@ -854,7 +854,7 @@ namespace code {
         case AMDGPU_HSA_BSS_READONLY_AGENT:
           section = AddDataSection(".hsabss_readonly_agent", SHT_NOBITS, SHF_ALLOC | SHF_WRITE | SHF_AMDGPU_HSA_READONLY | SHF_AMDGPU_HSA_AGENT, segment); break;
         default:
-          assert(false); return 0;
+          assert(false); return nullptr;
         }
         hsaSections[sec] = section;
       }
@@ -939,7 +939,7 @@ namespace code {
       return nullptr;
     }
 
-    void AmdHsaCode::AddData(amdgpu_hsa_elf_section_t s, const void* data, size_t size)
+    void AmdHsaCode::AddData(amdgpu_hsa_elf_section_t  /*s*/, const void*  /*data*/, size_t  /*size*/)
     {
 //      getDataSection(s)->addData(data, size);
     }
@@ -1152,7 +1152,7 @@ namespace code {
     void AmdHsaCode::PrintRawData(std::ostream& out, Section* section)
     {
       out << "    Data:" << std::endl;
-      unsigned char *sdata = (unsigned char*)alloca(section->size());
+      unsigned char *sdata = reinterpret_cast<unsigned char*>(alloca(section->size()));
       section->getData(0, sdata, section->size());
       PrintRawData(out, sdata, section->size());
     }
@@ -1164,14 +1164,14 @@ namespace code {
         out << "      " << std::setw(7) << i << ":";
 
         for (size_t j = 0; j < 16; j += 1) {
-          uint32_t value = i + j < size ? (uint32_t)data[i + j] : 0;
+          uint32_t value = i + j < size ? static_cast<uint32_t>(data[i + j]) : 0;
           if (j % 2 == 0) { out << ' '; }
           out << std::setw(2) << value;
         }
         out << "  ";
 
         for (size_t j = 0; i + j < size && j < 16; j += 1) {
-          char value = (char)data[i + j] >= 32 && (char)data[i + j] <= 126 ? (char)data[i + j] : '.';
+          char value = static_cast<char>(data[i + j]) >= 32 && static_cast<char>(data[i + j]) <= 126 ? static_cast<char>(data[i + j]) : '.';
           out << value;
         }
         out << std::endl;
@@ -1237,7 +1237,7 @@ namespace code {
       out << std::endl << std::dec;
     }
 
-    void AmdHsaCode::PrintDisassembly(std::ostream& out, const unsigned char *isa, size_t size, uint32_t isa_offset)
+    void AmdHsaCode::PrintDisassembly(std::ostream& out, const unsigned char *isa, size_t size, uint32_t  /*isa_offset*/)
     {
     #ifdef SP3_STATIC_LIB
       // Default asic is ci.
@@ -1500,7 +1500,7 @@ namespace code {
           const void* buffer = reinterpret_cast<const void*>(c.handle);
           if (!code->InitAsBuffer(buffer, 0)) {
             delete code;
-            return 0;
+            return nullptr;
           }
           codeMap[c.handle] = code;
           return code;
@@ -1543,7 +1543,7 @@ namespace code {
       }
       for (size_t i = 0; i < img->symtab()->symbolCount(); ++i) {
         amd::elf::Symbol* elfsym = img->symtab()->symbol(i);
-        Symbol* sym = 0;
+        Symbol* sym = nullptr;
         switch (elfsym->type()) {
         case STT_AMDGPU_HSA_KERNEL: {
           amd::elf::Section* sec = elfsym->section();

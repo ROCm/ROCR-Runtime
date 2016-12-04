@@ -53,13 +53,13 @@
 namespace amd {
 void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
                                       HSAuint32 node_id, size_t size) {
-  void* ret = NULL;
+  void* ret = nullptr;
   const HSAKMT_STATUS status = hsaKmtAllocMemory(node_id, size, flag, &ret);
-  return (status == HSAKMT_STATUS_SUCCESS) ? ret : NULL;
+  return (status == HSAKMT_STATUS_SUCCESS) ? ret : nullptr;
 }
 
 void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
-  if (ptr == NULL || size == 0) {
+  if (ptr == nullptr || size == 0) {
     return;
   }
 
@@ -69,10 +69,10 @@ void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
 
 bool MemoryRegion::RegisterMemory(void* ptr, size_t size, size_t num_nodes,
                                   const uint32_t* nodes) {
-  assert(ptr != NULL);
+  assert(ptr != nullptr);
   assert(size != 0);
   assert(num_nodes != 0);
-  assert(nodes != NULL);
+  assert(nodes != nullptr);
 
   const HSAKMT_STATUS status = hsaKmtRegisterMemoryToNodes(
       ptr, size, num_nodes, const_cast<uint32_t*>(nodes));
@@ -86,7 +86,7 @@ bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
                                          uint64_t* alternate_va,
                                          HsaMemMapFlags map_flag) {
   assert(num_node > 0);
-  assert(nodes != NULL);
+  assert(nodes != nullptr);
 
   *alternate_va = 0;
   const HSAKMT_STATUS status =
@@ -147,11 +147,11 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
   assert(IsMultipleOf(max_single_alloc_size_, kPageSize_));
 }
 
-MemoryRegion::~MemoryRegion() {}
+MemoryRegion::~MemoryRegion() = default;
 
 hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
                                     void** address) const {
-  if (address == NULL) {
+  if (address == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -173,7 +173,7 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
 
   *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
 
-  if (*address != NULL) {
+  if (*address != nullptr) {
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so
@@ -211,7 +211,7 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
 
     if (require_pinning && !is_resident) {
       FreeKfdMemory(*address, size);
-      *address = NULL;
+      *address = nullptr;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
 
@@ -237,30 +237,30 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_SYSTEM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((hsa_region_segment_t*)value) = HSA_REGION_SEGMENT_GLOBAL;
+          *(reinterpret_cast<hsa_region_segment_t*>(value)) = HSA_REGION_SEGMENT_GLOBAL;
           break;
         case HSA_HEAPTYPE_GPU_LDS:
-          *((hsa_region_segment_t*)value) = HSA_REGION_SEGMENT_GROUP;
+          *(reinterpret_cast<hsa_region_segment_t*>(value)) = HSA_REGION_SEGMENT_GROUP;
           break;
         default:
-          assert(false && "Memory region should only be global, group");
+          assert(false);
           break;
       }
       break;
     case HSA_REGION_INFO_GLOBAL_FLAGS:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
-          *((uint32_t*)value) = fine_grain()
+          *(reinterpret_cast<uint32_t*>(value)) = fine_grain()
                                     ? (HSA_REGION_GLOBAL_FLAG_KERNARG |
                                        HSA_REGION_GLOBAL_FLAG_FINE_GRAINED)
                                     : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
           break;
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((uint32_t*)value) = HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+          *(reinterpret_cast<uint32_t*>(value)) = HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
           break;
         default:
-          *((uint32_t*)value) = 0;
+          *(reinterpret_cast<uint32_t*>(value)) = 0;
           break;
       }
       break;
@@ -268,10 +268,10 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((size_t*)value) = static_cast<size_t>(GetPhysicalSize());
+          *(reinterpret_cast<size_t*>(value)) = static_cast<size_t>(GetPhysicalSize());
           break;
         default:
-          *((size_t*)value) = static_cast<size_t>(
+          *(reinterpret_cast<size_t*>(value)) = static_cast<size_t>(
               (full_profile()) ? GetVirtualSize() : GetPhysicalSize());
           break;
       }
@@ -281,10 +281,10 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
         case HSA_HEAPTYPE_SYSTEM:
-          *((size_t*)value) = max_single_alloc_size_;
+          *(reinterpret_cast<size_t*>(value)) = max_single_alloc_size_;
           break;
         default:
-          *((size_t*)value) = 0;
+          *(reinterpret_cast<size_t*>(value)) = 0;
       }
       break;
     case HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED:
@@ -292,10 +292,10 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_SYSTEM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((bool*)value) = true;
+          *(reinterpret_cast<bool*>(value)) = true;
           break;
         default:
-          *((bool*)value) = false;
+          *(reinterpret_cast<bool*>(value)) = false;
           break;
       }
       break;
@@ -304,10 +304,10 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_SYSTEM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((size_t*)value) = kPageSize_;
+          *(reinterpret_cast<size_t*>(value)) = kPageSize_;
           break;
         default:
-          *((size_t*)value) = 0;
+          *(reinterpret_cast<size_t*>(value)) = 0;
           break;
       }
       break;
@@ -316,27 +316,27 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_SYSTEM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((size_t*)value) = kPageSize_;
+          *(reinterpret_cast<size_t*>(value)) = kPageSize_;
           break;
         default:
-          *((size_t*)value) = 0;
+          *(reinterpret_cast<size_t*>(value)) = 0;
           break;
       }
       break;
     default:
-      switch ((hsa_amd_region_info_t)attribute) {
+      switch (static_cast<hsa_amd_region_info_t>(attribute)) {
         case HSA_AMD_REGION_INFO_HOST_ACCESSIBLE:
-          *((bool*)value) =
-              (mem_props_.HeapType == HSA_HEAPTYPE_SYSTEM) ? true : false;
+          *(reinterpret_cast<bool*>(value)) =
+              mem_props_.HeapType == HSA_HEAPTYPE_SYSTEM;
           break;
         case HSA_AMD_REGION_INFO_BASE:
-          *((void**)value) = reinterpret_cast<void*>(GetBaseAddress());
+          *(reinterpret_cast<void**>(value)) = reinterpret_cast<void*>(GetBaseAddress());
           break;
         case HSA_AMD_REGION_INFO_BUS_WIDTH:
-          *((uint32_t*)value) = BusWidth();
+          *(reinterpret_cast<uint32_t*>(value)) = BusWidth();
           break;
         case HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY:
-          *((uint32_t*)value) = MaxMemCloc();
+          *(reinterpret_cast<uint32_t*>(value)) = MaxMemCloc();
           break;
         default:
           return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -359,7 +359,7 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
       return GetInfo(static_cast<hsa_region_info_t>(attribute), value);
       break;
     case HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL:
-      *((bool*)value) = IsSystem() ? true : false;
+      *(reinterpret_cast<bool*>(value)) = IsSystem();
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -400,10 +400,10 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
 
   switch (attribute) {
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
-      *((hsa_amd_memory_pool_access_t*)value) = access_type;
+      *(reinterpret_cast<hsa_amd_memory_pool_access_t*>(value)) = access_type;
       break;
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_NUM_LINK_HOPS:
-      *((uint32_t*)value) =
+      *(reinterpret_cast<uint32_t*>(value)) =
           (access_type != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED)
               ? link_info.num_hop
               : 0;
@@ -424,7 +424,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
 hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
                                        const hsa_agent_t* agents,
                                        const void* ptr, size_t size) const {
-  if (num_agents == 0 || agents == NULL || ptr == NULL || size == 0) {
+  if (num_agents == 0 || agents == nullptr || ptr == nullptr || size == 0) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -438,7 +438,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   std::vector<uint32_t> whitelist_nodes;
   for (uint32_t i = 0; i < num_agents; ++i) {
     core::Agent* agent = core::Agent::Convert(agents[i]);
-    if (agent == NULL || !agent->IsValid()) {
+    if (agent == nullptr || !agent->IsValid()) {
       return HSA_STATUS_ERROR_INVALID_AGENT;
     }
 
@@ -450,7 +450,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
     }
   }
 
-  if (whitelist_nodes.size() == 0 && IsSystem()) {
+  if (whitelist_nodes.empty() && IsSystem()) {
     assert(cpu_in_list);
     // This is a system region and only CPU agents in the whitelist.
     // No need to call map.
@@ -483,14 +483,14 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
+hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion&  /*dst*/,
                                       bool& result) const {
   // TODO: not implemented yet.
   result = false;
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
-hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
+hsa_status_t MemoryRegion::Migrate(uint32_t  /*flag*/, const void*  /*ptr*/) const {
   // TODO: not implemented yet.
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
@@ -510,7 +510,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
   std::set<core::Agent*> whitelist_gpus;
   std::vector<HSAuint32> whitelist_nodes;
-  if (num_agents == 0 || agents == NULL) {
+  if (num_agents == 0 || agents == nullptr) {
     // Map to all GPU agents.
     whitelist_nodes = core::Runtime::runtime_singleton_->gpu_ids();
 
@@ -520,7 +520,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
   } else {
     for (int i = 0; i < num_agents; ++i) {
       core::Agent* agent = core::Agent::Convert(agents[i]);
-      if (agent == NULL || !agent->IsValid()) {
+      if (agent == nullptr || !agent->IsValid()) {
         return HSA_STATUS_ERROR_INVALID_AGENT;
       }
 
@@ -531,7 +531,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
     }
   }
 
-  if (whitelist_nodes.size() == 0) {
+  if (whitelist_nodes.empty()) {
     // No GPU agents in the whitelist. So no need to register and map since the
     // platform only has CPUs.
     *agent_ptr = host_ptr;
@@ -577,9 +577,9 @@ hsa_status_t MemoryRegion::Unlock(void* host_ptr) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
-                                       const core::Agent& agent,
-                                       hsa_access_permission_t access) const {
+hsa_status_t MemoryRegion::AssignAgent(void*  /*ptr*/, size_t  /*size*/,
+                                       const core::Agent&  /*agent*/,
+                                       hsa_access_permission_t  /*access*/) const {
   return HSA_STATUS_SUCCESS;
 }
 

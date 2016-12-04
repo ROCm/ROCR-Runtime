@@ -271,7 +271,7 @@ std::string AmdExceptionKindToString(amd_exception_kind16_t exceptions)
 
 std::string AmdPowerTwoToString(amd_powertwo8_t p)
 {
-  return std::to_string(1 << (unsigned) p);
+  return std::to_string(1 << static_cast<unsigned>( p));
 }
 
 amdgpu_hsa_elf_segment_t AmdHsaElfSectionSegment(amdgpu_hsa_elf_section_t sec)
@@ -319,7 +319,7 @@ std::string AmdHsaElfSegmentToString(amdgpu_hsa_elf_segment_t seg)
 std::string AmdPTLoadToString(uint64_t type)
 {
   if (PT_LOOS <= type && type < PT_LOOS + AMDGPU_HSA_SEGMENT_LAST) {
-    return AmdHsaElfSegmentToString((amdgpu_hsa_elf_segment_t) (type - PT_LOOS));
+    return AmdHsaElfSegmentToString(static_cast<amdgpu_hsa_elf_segment_t> (type - PT_LOOS));
   } else {
     return "UNKNOWN (" + std::to_string(type) + ")";
   }
@@ -339,13 +339,13 @@ void PrintAmdKernelCode(std::ostream& out, const amd_kernel_code_t *akc)
       << AmdMachineKindToString(akc->amd_machine_kind)
       << std::endl;
   out << attr1 << "amd_machine_version_major" << eq
-      << (uint32_t)akc->amd_machine_version_major
+      << static_cast<uint32_t>(akc->amd_machine_version_major)
       << std::endl;
   out << attr1 << "amd_machine_version_minor" << eq
-      << (uint32_t)akc->amd_machine_version_minor
+      << static_cast<uint32_t>(akc->amd_machine_version_minor)
       << std::endl;
   out << attr1 << "amd_machine_version_stepping" << eq
-      << (uint32_t)akc->amd_machine_version_stepping
+      << static_cast<uint32_t>(akc->amd_machine_version_stepping)
       << std::endl;
   out << attr1 << "kernel_code_entry_byte_offset" << eq
       << akc->kernel_code_entry_byte_offset
@@ -392,60 +392,60 @@ void PrintAmdKernelCode(std::ostream& out, const amd_kernel_code_t *akc)
         << std::endl;
   }
   out << attr1 << "wavefront_sgpr_count" << eq
-      << (uint32_t)akc->wavefront_sgpr_count
+      << static_cast<uint32_t>(akc->wavefront_sgpr_count)
       << std::endl;
   out << attr1 << "workitem_vgpr_count" << eq
-      << (uint32_t)akc->workitem_vgpr_count
+      << static_cast<uint32_t>(akc->workitem_vgpr_count)
       << std::endl;
   if (akc->reserved_vgpr_count > 0) {
     out << attr1 << "reserved_vgpr_first" << eq
-        << (uint32_t)akc->reserved_vgpr_first
+        << static_cast<uint32_t>(akc->reserved_vgpr_first)
         << std::endl;
     out << attr1 << "reserved_vgpr_count" << eq
-        << (uint32_t)akc->reserved_vgpr_count
+        << static_cast<uint32_t>(akc->reserved_vgpr_count)
         << std::endl;
   }
   if (akc->reserved_sgpr_count > 0) {
     out << attr1 << "reserved_sgpr_first" << eq
-        << (uint32_t)akc->reserved_sgpr_first
+        << static_cast<uint32_t>(akc->reserved_sgpr_first)
         << std::endl;
     out << attr1 << "reserved_sgpr_count" << eq
-        << (uint32_t)akc->reserved_sgpr_count
+        << static_cast<uint32_t>(akc->reserved_sgpr_count)
         << std::endl;
   }
   if (is_debug_enabled && (akc->debug_wavefront_private_segment_offset_sgpr != uint16_t(-1))) {
     out << attr1 << "debug_wavefront_private_segment_offset_sgpr" << eq
-        << (uint32_t)akc->debug_wavefront_private_segment_offset_sgpr
+        << static_cast<uint32_t>(akc->debug_wavefront_private_segment_offset_sgpr)
         << std::endl;
   }
   if (is_debug_enabled && (akc->debug_private_segment_buffer_sgpr != uint16_t(-1))) {
     out << attr1 << "debug_private_segment_buffer_sgpr" << eq
-        << (uint32_t)akc->debug_private_segment_buffer_sgpr
+        << static_cast<uint32_t>(akc->debug_private_segment_buffer_sgpr)
         << ":"
-        << (uint32_t)(akc->debug_private_segment_buffer_sgpr + 3)
+        << static_cast<uint32_t>(akc->debug_private_segment_buffer_sgpr + 3)
         << std::endl;
   }
   if (akc->kernarg_segment_alignment) {
     out << attr1 << "kernarg_segment_alignment" << eq
         << AmdPowerTwoToString(akc->kernarg_segment_alignment)
-        << " (" << (uint32_t) akc->kernarg_segment_alignment << ")"
+        << " (" << static_cast<uint32_t>( akc->kernarg_segment_alignment) << ")"
         << std::endl;
   }
   if (akc->group_segment_alignment) {
     out << attr1 << "group_segment_alignment" << eq
         << AmdPowerTwoToString(akc->group_segment_alignment)
-        << " (" << (uint32_t) akc->group_segment_alignment << ")"
+        << " (" << static_cast<uint32_t>( akc->group_segment_alignment) << ")"
         << std::endl;
   }
   if (akc->private_segment_alignment) {
     out << attr1 << "private_segment_alignment" << eq
         << AmdPowerTwoToString(akc->private_segment_alignment)
-        << " (" << (uint32_t) akc->private_segment_alignment << ")"
+        << " (" << static_cast<uint32_t>( akc->private_segment_alignment) << ")"
         << std::endl;
   }
   out << attr1 << "wavefront_size" << eq
       << AmdPowerTwoToString(akc->wavefront_size)
-      << " (" << (uint32_t) akc->wavefront_size << ")"
+      << " (" << static_cast<uint32_t>( akc->wavefront_size) << ")"
       << std::endl;
   PrintAmdControlDirectives(out, akc->control_directives);
 }
@@ -469,19 +469,19 @@ void PrintAmdComputePgmRsrcOne(std::ostream& out, amd_compute_pgm_rsrc_one32_t c
       << std::endl;
   uint32_t float_round_mode_32 = AMD_HSA_BITS_GET(compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_FLOAT_ROUND_MODE_32);
   out << attr2 << "float_round_mode_32" << eq
-      << AmdFloatRoundModeToString((amd_float_round_mode_t)float_round_mode_32)
+      << AmdFloatRoundModeToString(static_cast<amd_float_round_mode_t>(float_round_mode_32))
       << std::endl;
   uint32_t float_round_mode_16_64 = AMD_HSA_BITS_GET(compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_FLOAT_ROUND_MODE_16_64);
   out << attr2 << "float_round_mode_16_64" << eq
-      << AmdFloatRoundModeToString((amd_float_round_mode_t)float_round_mode_16_64)
+      << AmdFloatRoundModeToString(static_cast<amd_float_round_mode_t>(float_round_mode_16_64))
       << std::endl;
   uint32_t float_denorm_mode_32 = AMD_HSA_BITS_GET(compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_FLOAT_DENORM_MODE_32);
   out << attr2 << "float_denorm_mode_32" << eq
-      << AmdFloatDenormModeToString((amd_float_denorm_mode_t)float_denorm_mode_32)
+      << AmdFloatDenormModeToString(static_cast<amd_float_denorm_mode_t>(float_denorm_mode_32))
       << std::endl;
   uint32_t float_denorm_mode_16_64 = AMD_HSA_BITS_GET(compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_FLOAT_DENORM_MODE_16_64);
   out << attr2 << "float_denorm_mode_16_64" << eq
-      << AmdFloatDenormModeToString((amd_float_denorm_mode_t)float_denorm_mode_16_64)
+      << AmdFloatDenormModeToString(static_cast<amd_float_denorm_mode_t>(float_denorm_mode_16_64))
       << std::endl;
   if (AMD_HSA_BITS_GET(compute_pgm_rsrc1, AMD_COMPUTE_PGM_RSRC_ONE_PRIV)) {
     out << attr2 << "priv" << eq << "TRUE"
@@ -544,7 +544,7 @@ void PrintAmdComputePgmRsrcTwo(std::ostream& out, amd_compute_pgm_rsrc_two32_t c
   }
   uint32_t enable_vgpr_workitem_id = AMD_HSA_BITS_GET(compute_pgm_rsrc2, AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_VGPR_WORKITEM_ID);
   out << attr2 << "enable_vgpr_workitem_id" << eq
-      << AmdSystemVgprWorkitemIdToString((amd_system_vgpr_workitem_id_t)enable_vgpr_workitem_id)
+      << AmdSystemVgprWorkitemIdToString(static_cast<amd_system_vgpr_workitem_id_t>(enable_vgpr_workitem_id))
       << std::endl;
   if (AMD_HSA_BITS_GET(compute_pgm_rsrc2, AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_EXCEPTION_ADDRESS_WATCH)) {
     out << attr2 << "enable_exception_address_watch" << eq << "TRUE"
@@ -639,7 +639,7 @@ void PrintAmdKernelCodeProperties(std::ostream& out, amd_kernel_code_properties3
   }
   uint32_t private_element_size = AMD_HSA_BITS_GET(kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_PRIVATE_ELEMENT_SIZE);
   out << attr2 << "private_element_size" << eq
-      << AmdElementByteSizeToString((amd_element_byte_size_t)private_element_size)
+      << AmdElementByteSizeToString(static_cast<amd_element_byte_size_t>(private_element_size))
       << std::endl;
   if (AMD_HSA_BITS_GET(kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_PTR64)) {
     out << attr2 << "is_ptr64" << eq << "TRUE"
@@ -694,7 +694,7 @@ void PrintAmdControlDirectives(std::ostream& out, const amd_control_directives_t
   }
   if (control_directives.enabled_control_directives & AMD_ENABLED_CONTROL_DIRECTIVE_REQUIRED_DIM) {
     out << attr2 << "required_dim" << eq
-        << (uint32_t)control_directives.required_dim
+        << static_cast<uint32_t>(control_directives.required_dim)
         << std::endl;
   }
   if (control_directives.enabled_control_directives & AMD_ENABLED_CONTROL_DIRECTIVE_REQUIRED_GRID_SIZE) {
@@ -819,7 +819,7 @@ namespace code_options {
 }
 
 const char* hsaerr2str(hsa_status_t status) {
-  switch ((unsigned) status) {
+  switch (static_cast<unsigned>( status)) {
     case HSA_STATUS_SUCCESS:
       return
           "HSA_STATUS_SUCCESS: The function has been executed successfully.";
@@ -933,9 +933,8 @@ bool ReadFileIntoBuffer(const std::string& filename, std::vector<char>& buffer)
   std::streamsize size = file.tellg();
   file.seekg(0, std::ios::beg);
 
-  buffer.resize((size_t) size);
-  if (!file.read(buffer.data(), size)) { return false; }
-  return true;
+  buffer.resize(static_cast<size_t>( size));
+  return bool(file.read(buffer.data(), size));
 }
 
 #ifndef _WIN32
@@ -957,7 +956,7 @@ int OpenTempFile(const char* prefix)
     char dir[MAX_PATH+1];
     if (!GetTempPath(sizeof(dir), dir)) { return -1; }
 #else // _WIN32
-    char *dir = NULL;
+    char *dir = nullptr;
 #endif // _WIN32
     char *name = _tempnam(dir, tname.c_str());
     if (!name) { return -1; }
@@ -989,7 +988,7 @@ void CloseTempFile(int fd)
   _close(fd);
 }
 
-const char * CommentTopCallBack(void *ctx, int type) {
+const char * CommentTopCallBack(void * /*ctx*/, int type) {
   static const char* amd_kernel_code_t_begin = "amd_kernel_code_t begin";
   static const char* amd_kernel_code_t_end = "amd_kernel_code_t end";
   static const char* isa_begin = "isa begin";
@@ -1005,7 +1004,7 @@ const char * CommentTopCallBack(void *ctx, int type) {
     return "";
   }
 }
-const char * CommentRightCallBack(void *ctx, int type) {
+const char * CommentRightCallBack(void * /*ctx*/, int  /*type*/) {
   return nullptr;
 }
 

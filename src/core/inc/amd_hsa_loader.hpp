@@ -102,7 +102,7 @@ namespace loader {
 
 class Context {
 public:
-  virtual ~Context() {}
+  virtual ~Context() = default;
 
   virtual hsa_isa_t IsaFromName(const char *name) = 0;
 
@@ -141,7 +141,7 @@ public:
     hsa_agent_t agent, hsa_ext_sampler_t sampler_handle) = 0;
 
 protected:
-  Context() {}
+  Context() = default;
 
 private:
   Context(const Context &c);
@@ -166,14 +166,14 @@ public:
     return symbol;
   }
 
-  virtual ~Symbol() {}
+  virtual ~Symbol() = default;
 
   virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) = 0;
 
   virtual hsa_agent_t GetAgent() = 0;
 
 protected:
-  Symbol() {}
+  Symbol() = default;
 
 private:
   Symbol(const Symbol &s);
@@ -198,7 +198,7 @@ public:
     return object;
   }
 
-  virtual ~LoadedCodeObject() {}
+  virtual ~LoadedCodeObject() = default;
 
   virtual bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) = 0;
 
@@ -209,7 +209,7 @@ public:
     void *data) = 0;
 
 protected:
-  LoadedCodeObject() {}
+  LoadedCodeObject() = default;
 
 private:
   LoadedCodeObject(const LoadedCodeObject&);
@@ -234,12 +234,12 @@ public:
     return object;
   }
 
-  virtual ~LoadedSegment() {}
+  virtual ~LoadedSegment() = default;
 
   virtual bool GetInfo(amd_loaded_segment_info_t attribute, void *value) = 0;
 
 protected:
-  LoadedSegment() {}
+  LoadedSegment() = default;
 
 private:
   LoadedSegment(const LoadedSegment&);
@@ -264,7 +264,7 @@ public:
     return executable;
   }
 
-  virtual ~Executable() {}
+  virtual ~Executable() = default;
 
   virtual hsa_status_t GetInfo(
     hsa_executable_info_t executable_info, void *value) = 0;
@@ -348,7 +348,7 @@ public:
   virtual bool PrintToFile(const std::string& filename) = 0;
 
 protected:
-  Executable() {}
+  Executable() = default;
 
 private:
   Executable(const Executable &e);
@@ -362,7 +362,7 @@ private:
 class Loader {
 public:
   /// @brief Destructor.
-  virtual ~Loader() {}
+  virtual ~Loader() = default;
 
   /// @brief Creates AMD HSA Loader with specified @p context.
   ///
@@ -408,7 +408,7 @@ public:
 
 protected:
   /// @brief Default constructor.
-  Loader() {}
+  Loader() = default;
 
 private:
   /// @brief Copy constructor - not available.

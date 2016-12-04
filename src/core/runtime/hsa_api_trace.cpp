@@ -77,8 +77,8 @@ void HsaApiTable::Init() {
   // Initialize Api tables for Finalizer and Image to NULL
   // Tables for Finalizer and Images are initialized as part
   // of Hsa Runtime initialization, including their major ids
-  hsa_api.finalizer_ext_ = NULL;
-  hsa_api.image_ext_ = NULL;
+  hsa_api.finalizer_ext_ = nullptr;
+  hsa_api.image_ext_ = nullptr;
 }
 
 void HsaApiTable::Reset() {
@@ -87,18 +87,18 @@ void HsaApiTable::Reset() {
 
 void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
   
-  assert(ext_table != NULL && "Invalid extension table linked.");
+  assert(ext_table != nullptr && "Invalid extension table linked.");
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
+    finalizer_api = (*reinterpret_cast<FinalizerExtTable *>(ext_table));
     hsa_api.finalizer_ext_ = &finalizer_api;
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
+    image_api = (*reinterpret_cast<ImageExtTable *>(ext_table));
     hsa_api.image_ext_ = &image_api;
     return;
   }
@@ -106,19 +106,19 @@ void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
 
 void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
   
-  assert(ext_table != NULL && "Invalid extension table linked.");
+  assert(ext_table != nullptr && "Invalid extension table linked.");
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
-    hsa_api.finalizer_ext_ = (FinalizerExtTable *)ext_table; 
+    finalizer_api = (*reinterpret_cast<FinalizerExtTable *>(ext_table));
+    hsa_api.finalizer_ext_ = reinterpret_cast<FinalizerExtTable *>(ext_table); 
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
-    hsa_api.image_ext_ = (ImageExtTable *)ext_table; 
+    image_api = (*reinterpret_cast<ImageExtTable *>(ext_table));
+    hsa_api.image_ext_ = reinterpret_cast<ImageExtTable *>(ext_table); 
     return;
   }
 }

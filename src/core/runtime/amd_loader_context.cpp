@@ -66,11 +66,8 @@ namespace {
 
 bool IsLocalRegion(const core::MemoryRegion *region)
 {
-  const amd::MemoryRegion *amd_region = (amd::MemoryRegion*)region;
-  if (nullptr == amd_region || !amd_region->IsLocalMemory()) {
-    return false;
-  }
-  return true;
+  const amd::MemoryRegion *amd_region = static_cast<const amd::MemoryRegion*>(region);
+  return !(nullptr == amd_region || !amd_region->IsLocalMemory());
 }
 
 bool IsDebuggerRegistered()
@@ -84,7 +81,7 @@ bool IsDebuggerRegistered()
 
 class SegmentMemory {
 public:
-  virtual ~SegmentMemory() {}
+  virtual ~SegmentMemory() = default;
   virtual void* Address(size_t offset = 0) const = 0;
   virtual void* HostAddress(size_t offset = 0) const = 0;
   virtual bool Allocated() const = 0;
@@ -94,7 +91,7 @@ public:
   virtual bool Freeze() = 0;
 
 protected:
-  SegmentMemory() {}
+  SegmentMemory() = default;
 
 private:
   SegmentMemory(const SegmentMemory&);
@@ -104,10 +101,10 @@ private:
 class MallocedMemory final: public SegmentMemory {
 public:
   MallocedMemory(): SegmentMemory(), ptr_(nullptr), size_(0) {}
-  ~MallocedMemory() {}
+  ~MallocedMemory() override = default;
 
   void* Address(size_t offset = 0) const override
-    { assert(this->Allocated()); return (char*)ptr_ + offset; }
+    { assert(this->Allocated()); return reinterpret_cast<char*>(ptr_) + offset; }
   void* HostAddress(size_t offset = 0) const override
     { return this->Address(offset); }
   bool Allocated() const override
@@ -174,10 +171,10 @@ bool MallocedMemory::Freeze()
 class MappedMemory final: public SegmentMemory {
 public:
   MappedMemory(bool is_kv = false): SegmentMemory(), is_kv_(is_kv), ptr_(nullptr), size_(0) {}
-  ~MappedMemory() {}
+  ~MappedMemory() override = default;
 
   void* Address(size_t offset = 0) const override
-    { assert(this->Allocated()); return (char*)ptr_ + offset; }
+    { assert(this->Allocated()); return reinterpret_cast<char*>(ptr_) + offset; }
   void* HostAddress(size_t offset = 0) const override
     { return this->Address(offset); }
   bool Allocated() const override
@@ -265,12 +262,12 @@ public:
   static hsa_region_t System();
 
   RegionMemory(hsa_region_t region): SegmentMemory(), region_(region), ptr_(nullptr), host_ptr_(nullptr), size_(0) {}
-  ~RegionMemory() {}
+  ~RegionMemory() override = default;
 
   void* Address(size_t offset = 0) const override
-    { assert(this->Allocated()); return (char*)ptr_ + offset; }
+    { assert(this->Allocated()); return reinterpret_cast<char*>(ptr_) + offset; }
   void* HostAddress(size_t offset = 0) const override
-    { assert(this->Allocated()); return (char*)host_ptr_ + offset; }
+    { assert(this->Allocated()); return reinterpret_cast<char*>(host_ptr_) + offset; }
   bool Allocated() const override
     { return nullptr != ptr_; }
 
@@ -292,7 +289,7 @@ private:
 hsa_region_t RegionMemory::AgentLocal(hsa_agent_t agent)
 {
   hsa_region_t invalid_region; invalid_region.handle = 0;
-  amd::GpuAgent *amd_agent = (amd::GpuAgent*)core::Agent::Convert(agent);
+  amd::GpuAgent *amd_agent = static_cast<amd::GpuAgent*>(core::Agent::Convert(agent));
   if (nullptr == amd_agent) {
     return invalid_region;
   }
@@ -305,7 +302,7 @@ hsa_region_t RegionMemory::System() {
   const core::MemoryRegion* default_system_region =
       core::Runtime::runtime_singleton_->system_regions_fine()[0];
 
-  assert(default_system_region != NULL);
+  assert(default_system_region != nullptr);
 
   return core::MemoryRegion::Convert(default_system_region);
 }
@@ -338,7 +335,7 @@ bool RegionMemory::Copy(size_t offset, const void *src, size_t size)
   assert(this->Allocated() && nullptr != host_ptr_);
   assert(nullptr != src);
   assert(0 < size);
-  memcpy((char*)host_ptr_ + offset, src, size);
+  memcpy(reinterpret_cast<char*>(host_ptr_) + offset, src, size);
   return true;
 }
 
@@ -359,7 +356,7 @@ bool RegionMemory::Freeze() {
 
   core::Agent* agent = reinterpret_cast<amd::MemoryRegion*>(
                            core::MemoryRegion::Convert(region_))->owner();
-  if (agent != NULL && agent->device_type() == core::Agent::kAmdGpuDevice) {
+  if (agent != nullptr && agent->device_type() == core::Agent::kAmdGpuDevice) {
     if (HSA_STATUS_SUCCESS != agent->DmaCopy(ptr_, host_ptr_, size_)) {
       return false;
     }
@@ -373,10 +370,10 @@ bool RegionMemory::Freeze() {
 hsa_status_t IsIsaEquivalent(hsa_isa_t isa, void *data) {
   assert(data);
 
-  std::pair<hsa_isa_t, bool> *data_pair = (std::pair<hsa_isa_t, bool>*)data;
+  std::pair<hsa_isa_t, bool> *data_pair = reinterpret_cast<std::pair<hsa_isa_t, bool>*>(data);
   assert(data_pair);
   assert(data_pair->first.handle != 0);
-  assert(data_pair->second != true);
+  assert(!data_pair->second);
 
   const core::Isa *isa1 = core::Isa::Object(isa);
   assert(isa1);
@@ -469,14 +466,14 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
                                             RegionMemory::AgentLocal(agent));
       break;
     case HSA_PROFILE_FULL:
-      mem = new (std::nothrow) MappedMemory(((GpuAgentInt*)core::Agent::Convert(agent))->is_kv_device());
+      mem = new (std::nothrow) MappedMemory((static_cast<GpuAgentInt*>(core::Agent::Convert(agent)))->is_kv_device());
       break;
     default:
       assert(false);
     }
 
     // Invalidate agent caches which may hold lines of the new allocation.
-    ((GpuAgentInt*)core::Agent::Convert(agent))->InvalidateCodeCaches();
+    (static_cast<GpuAgentInt*>(core::Agent::Convert(agent)))->InvalidateCodeCaches();
 
     break;
   }
@@ -496,54 +493,54 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
   return mem;
 }
 
-bool LoaderContext::SegmentCopy(amdgpu_hsa_elf_segment_t segment, // not used.
-                                hsa_agent_t agent,                // not used.
+bool LoaderContext::SegmentCopy(amdgpu_hsa_elf_segment_t  /*segment*/, // not used.
+                                hsa_agent_t  /*agent*/,                // not used.
                                 void* dst,
                                 size_t offset,
                                 const void* src,
                                 size_t size)
 {
   assert(nullptr != dst);
-  return ((SegmentMemory*)dst)->Copy(offset, src, size);
+  return (reinterpret_cast<SegmentMemory*>(dst))->Copy(offset, src, size);
 }
 
-void LoaderContext::SegmentFree(amdgpu_hsa_elf_segment_t segment, // not used.
-                                hsa_agent_t agent,                // not used.
+void LoaderContext::SegmentFree(amdgpu_hsa_elf_segment_t  /*segment*/, // not used.
+                                hsa_agent_t  /*agent*/,                // not used.
                                 void* seg,
-                                size_t size)                      // not used.
+                                size_t  /*size*/)                      // not used.
 {
   assert(nullptr != seg);
-  SegmentMemory *mem = (SegmentMemory*)seg;
+  SegmentMemory *mem = reinterpret_cast<SegmentMemory*>(seg);
   mem->Free();
   delete mem;
   mem = nullptr;
 }
 
-void* LoaderContext::SegmentAddress(amdgpu_hsa_elf_segment_t segment, // not used.
-                                    hsa_agent_t agent,                // not used.
+void* LoaderContext::SegmentAddress(amdgpu_hsa_elf_segment_t  /*segment*/, // not used.
+                                    hsa_agent_t  /*agent*/,                // not used.
                                     void* seg,
                                     size_t offset)
 {
   assert(nullptr != seg);
-  return ((SegmentMemory*)seg)->Address(offset);
+  return (reinterpret_cast<SegmentMemory*>(seg))->Address(offset);
 }
 
-void* LoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t segment, // not used.
-                                        hsa_agent_t agent,                // not used.
+void* LoaderContext::SegmentHostAddress(amdgpu_hsa_elf_segment_t  /*segment*/, // not used.
+                                        hsa_agent_t  /*agent*/,                // not used.
                                         void* seg,
                                         size_t offset)
 {
   assert(nullptr != seg);
-  return ((SegmentMemory*)seg)->HostAddress(offset);
+  return (reinterpret_cast<SegmentMemory*>(seg))->HostAddress(offset);
 }
 
-bool LoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t segment, // not used.
-                                  hsa_agent_t agent,                // not used.
+bool LoaderContext::SegmentFreeze(amdgpu_hsa_elf_segment_t  /*segment*/, // not used.
+                                  hsa_agent_t  /*agent*/,                // not used.
                                   void* seg,
-                                  size_t size)                      // not used.
+                                  size_t  /*size*/)                      // not used.
 {
   assert(nullptr != seg);
-  return ((SegmentMemory*)seg)->Freeze();
+  return (reinterpret_cast<SegmentMemory*>(seg))->Freeze();
 }
 
 bool LoaderContext::ImageExtensionSupported() {

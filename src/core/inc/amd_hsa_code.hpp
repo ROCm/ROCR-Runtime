@@ -104,7 +104,7 @@ public:
 
 protected:
   Signed(): RT_SIGNATURE(signature) {}
-  virtual ~Signed() {}
+  virtual ~Signed() = default;
 };
 
 template<uint64_t signature>
@@ -156,11 +156,11 @@ namespace code {
     public:
       explicit Symbol(amd::elf::Symbol* elfsym_)
         : elfsym(elfsym_) { }
-      virtual ~Symbol() { }
+      virtual ~Symbol() = default;
       virtual bool IsKernelSymbol() const { return false; }
-      virtual KernelSymbol* AsKernelSymbol() { assert(false); return 0; }
+      virtual KernelSymbol* AsKernelSymbol() { assert(false); return nullptr; }
       virtual bool IsVariableSymbol() const { return false; }
-      virtual VariableSymbol* AsVariableSymbol() { assert(false); return 0; }
+      virtual VariableSymbol* AsVariableSymbol() { assert(false); return nullptr; }
       amd::elf::Symbol* elfSym() { return elfsym; }
       std::string Name() const { return elfsym ? elfsym->name() : ""; }
       Section* GetSection() { return elfsym->section(); }
@@ -180,7 +180,7 @@ namespace code {
       bool IsConst() const;
       virtual hsa_status_t GetInfo(hsa_code_symbol_info_t attribute, void *value);
       static hsa_code_symbol_t ToHandle(Symbol* sym);
-      static Symbol* FromHandle(hsa_code_symbol_t handle);
+      static Symbol* FromHandle(hsa_code_symbol_t s);
       void setValue(uint64_t value) { elfsym->setValue(value); }
       void setSize(uint32_t size) { elfsym->setSize(size); }
     };
@@ -259,13 +259,13 @@ namespace code {
       bool ElfImageError();
 
     public:
-      bool HasHsaText() const { return hsatext != 0; }
+      bool HasHsaText() const { return hsatext != nullptr; }
       amd::elf::Section* HsaText() { assert(hsatext); return hsatext; }
       const amd::elf::Section* HsaText() const { assert(hsatext); return hsatext; }
       amd::elf::SymbolTable* Symtab() { assert(img); return img->symtab(); }
       uint16_t Machine() { return img->Machine(); }
 
-      AmdHsaCode(bool combineDataSegments = true);
+      AmdHsaCode(bool combineDataSegments_ = true);
       virtual ~AmdHsaCode();
 
       std::string output() { return out.str(); }
@@ -274,7 +274,7 @@ namespace code {
       bool WriteToBuffer(void* buffer);
       bool InitFromBuffer(const void* buffer, size_t size);
       bool InitAsBuffer(const void* buffer, size_t size);
-      bool InitAsHandle(hsa_code_object_t code_handle);
+      bool InitAsHandle(hsa_code_object_t code_object);
       bool InitNew(bool xnack = false);
       bool Freeze();
       hsa_code_object_t GetHandle();
@@ -305,7 +305,7 @@ namespace code {
       bool GetNoteProducerOptions(std::string& options);
 
       hsa_status_t GetInfo(hsa_code_object_info_t attribute, void *value);
-      hsa_status_t GetSymbol(const char *module_name, const char *symbol_name, hsa_code_symbol_t *sym);
+      hsa_status_t GetSymbol(const char *module_name, const char *symbol_name, hsa_code_symbol_t *s);
       hsa_status_t IterateSymbols(hsa_code_object_t code_object,
                                   hsa_status_t (*callback)(
                                     hsa_code_object_t code_object,
@@ -332,9 +332,9 @@ namespace code {
                               uint64_t flags,
                               Segment* segment);
 
-      bool HasImageInitSection() const { return imageInit != 0; }
+      bool HasImageInitSection() const { return imageInit != nullptr; }
       Section* ImageInitSection();
-      void AddImageInitializer(Symbol* image, uint64_t destOffset, const amdgpu_hsa_image_descriptor_t& init);
+      void AddImageInitializer(Symbol* image, uint64_t destOffset, const amdgpu_hsa_image_descriptor_t& desc);
       void AddImageInitializer(Symbol* image, uint64_t destOffset,
         amdgpu_hsa_metadata_kind16_t kind,
         amdgpu_hsa_image_geometry8_t geometry,
@@ -342,10 +342,10 @@ namespace code {
         uint64_t width, uint64_t height, uint64_t depth, uint64_t array);
 
 
-      bool HasSamplerInitSection() const { return samplerInit != 0; }
+      bool HasSamplerInitSection() const { return samplerInit != nullptr; }
       amd::elf::Section* SamplerInitSection();
       amd::elf::Section* AddSamplerInit();
-      void AddSamplerInitializer(Symbol* sampler, uint64_t destOffset, const amdgpu_hsa_sampler_descriptor_t& init);
+      void AddSamplerInitializer(Symbol* sampler, uint64_t destOffset, const amdgpu_hsa_sampler_descriptor_t& desc);
       void AddSamplerInitializer(Symbol* sampler, uint64_t destOffset,
         amdgpu_hsa_sampler_coord8_t coord,
         amdgpu_hsa_sampler_filter8_t filter,
@@ -358,13 +358,13 @@ namespace code {
       Segment* HsaSegment(amdgpu_hsa_elf_segment_t segment, bool writable);
 
       void InitHsaSectionSegment(amdgpu_hsa_elf_section_t section, bool combineSegments = true);
-      Section* HsaDataSection(amdgpu_hsa_elf_section_t section, bool combineSegments = true);
+      Section* HsaDataSection(amdgpu_hsa_elf_section_t sec, bool combineSegments = true);
 
       Symbol* AddExecutableSymbol(const std::string &name,
                                   unsigned char type,
                                   unsigned char binding,
                                   unsigned char other,
-                                  Section *section = 0);
+                                  Section *section = nullptr);
 
       Symbol* AddVariableSymbol(const std::string &name,
                                 unsigned char type,
@@ -383,7 +383,7 @@ namespace code {
       Symbol* GetSymbolByElfIndex(size_t index);
       Symbol* FindSymbol(const std::string &n);
 
-      void AddData(amdgpu_hsa_elf_section_t section, const void* data = 0, size_t size = 0);
+      void AddData(amdgpu_hsa_elf_section_t section, const void* data = nullptr, size_t size = 0);
 
       Section* DebugInfo();
       Section* DebugLine();
@@ -398,8 +398,8 @@ namespace code {
       CodeMap codeMap;
 
     public:
-      AmdHsaCode* FromHandle(hsa_code_object_t handle);
-      bool Destroy(hsa_code_object_t handle);
+      AmdHsaCode* FromHandle(hsa_code_object_t c);
+      bool Destroy(hsa_code_object_t c);
     };
 
     class KernelSymbolV2 : public KernelSymbol {

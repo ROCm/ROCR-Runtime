@@ -50,7 +50,7 @@ int DefaultSignal::rtti_id_ = 0;
 DefaultSignal::DefaultSignal(hsa_signal_value_t initial_value)
     : Signal(initial_value) {
   signal_.kind = AMD_SIGNAL_KIND_USER;
-  signal_.event_mailbox_ptr = NULL;
+  signal_.event_mailbox_ptr = 0;
   HSA::hsa_memory_register(this, sizeof(DefaultSignal));
 }
 
@@ -82,7 +82,7 @@ void DefaultSignal::StoreRelease(hsa_signal_value_t value) {
 hsa_signal_value_t DefaultSignal::WaitRelaxed(hsa_signal_condition_t condition,
                                               hsa_signal_value_t compare_value,
                                               uint64_t timeout,
-                                              hsa_wait_state_t wait_hint) {
+                                              hsa_wait_state_t  /*wait_hint*/) {
   atomic::Increment(&waiting_);
   MAKE_SCOPE_GUARD([&]() { atomic::Decrement(&waiting_); });
   bool condition_met = false;

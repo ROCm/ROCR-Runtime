@@ -60,17 +60,17 @@ SmallHeap::memory_t::iterator SmallHeap::merge(
 }
 
 void SmallHeap::free(void* ptr) {
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
 
   auto iterator = memory.find(ptr);
 
   // Check for illegal free
   if (iterator == memory.end()) {
-    assert(false && "Illegal free.");
+    assert(false);
     return;
   }
 
-  const auto start_guard = memory.find(0);
+  const auto start_guard = memory.find(nullptr);
   const auto end_guard = memory.find((void*)0xFFFFFFFFFFFFFFFFull);
 
   // Return memory to total and link node into free list
@@ -114,7 +114,7 @@ void SmallHeap::free(void* ptr) {
 
 void* SmallHeap::alloc(size_t bytes) {
   // Is enough memory available?
-  if ((bytes > total_free) || (bytes == 0)) return NULL;
+  if ((bytes > total_free) || (bytes == 0)) return nullptr;
 
   memory_t::iterator current;
   memory_t::iterator prior;
@@ -137,11 +137,11 @@ void* SmallHeap::alloc(size_t bytes) {
           if (!current->second.islastfree())
             memory[current->second.next_free].prior_free = prior->first;
         }
-        current->second.next_free = NULL;
+        current->second.next_free = nullptr;
         return current->first;
       } else {
         // Split current node
-        void* remaining = (char*)current->first + bytes;
+        void* remaining = reinterpret_cast<char*>(current->first) + bytes;
         Node& node = memory[remaining];
         node.next_free = current->second.next_free;
         node.prior_free = current->second.prior_free;
@@ -157,7 +157,7 @@ void* SmallHeap::alloc(size_t bytes) {
         }
         if (!node.islastfree()) memory[node.next_free].prior_free = remaining;
 
-        current->second.next_free = NULL;
+        current->second.next_free = nullptr;
         return current->first;
       }
     }
@@ -170,5 +170,5 @@ void* SmallHeap::alloc(size_t bytes) {
   }
 
   // Can't service the request due to fragmentation
-  return NULL;
+  return nullptr;
 }

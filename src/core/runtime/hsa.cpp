@@ -159,7 +159,7 @@ template <class T> struct ValidityError<const T*> {
 
 template <class T>
 static __forceinline bool IsValid(T* ptr) {
-  return (ptr == NULL) ? NULL : ptr->IsValid();
+  return (ptr == nullptr) ? false : ptr->IsValid();
 }
 
 //-----------------------------------------------------------------------------
@@ -240,7 +240,7 @@ hsa_status_t
 
   if ((extension > HSA_EXTENSION_STD_LAST &&
        (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
-      result == NULL) {
+      result == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -299,9 +299,9 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
     std::string name;
     size_t size;
   };
-  static sizes_t sizes[] = {"hsa_ext_images_1_00_pfn_t",     sizeof(hsa_ext_images_1_00_pfn_t),
-                            "hsa_ext_finalizer_1_00_pfn_t",  sizeof(hsa_ext_finalizer_1_00_pfn_t),
-                            "hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)};
+  static sizes_t sizes[] = {{"hsa_ext_images_1_00_pfn_t",     sizeof(hsa_ext_images_1_00_pfn_t)},
+                            {"hsa_ext_finalizer_1_00_pfn_t",  sizeof(hsa_ext_finalizer_1_00_pfn_t)},
+                            {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
   if (minor > 99) return 0;
@@ -464,7 +464,7 @@ hsa_status_t
 
   if ((extension > HSA_EXTENSION_STD_LAST &&
        (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
-      result == NULL) {
+      result == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -497,7 +497,7 @@ hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t
 
   if ((extension > HSA_EXTENSION_STD_LAST &&
        (extension < HSA_AMD_FIRST_EXTENSION || extension > HSA_AMD_LAST_EXTENSION)) ||
-      result == NULL) {
+      result == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -544,7 +544,7 @@ hsa_status_t hsa_queue_create(
     hsa_queue_t** queue) {
   IS_OPEN();
 
-  if ((queue == NULL) || (size == 0) || (!IsPowerOfTwo(size)) ||
+  if ((queue == nullptr) || (size == 0) || (!IsPowerOfTwo(size)) ||
       (type < HSA_QUEUE_TYPE_MULTI) || (type > HSA_QUEUE_TYPE_SINGLE)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -562,17 +562,17 @@ hsa_status_t hsa_queue_create(
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
-  core::Queue* cmd_queue = NULL;
+  core::Queue* cmd_queue = nullptr;
   status = agent->QueueCreate(size, type, callback, data, private_segment_size,
                               group_segment_size, &cmd_queue);
-  if (cmd_queue != NULL) {
+  if (cmd_queue != nullptr) {
     *queue = core::Queue::Convert(cmd_queue);
-    if (*queue == NULL) {
+    if (*queue == nullptr) {
       delete cmd_queue;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   } else {
-    *queue = NULL;
+    *queue = nullptr;
   }
 
   return status;
@@ -584,7 +584,7 @@ hsa_status_t hsa_soft_queue_create(hsa_region_t region, uint32_t size,
                                    hsa_queue_t** queue) {
   IS_OPEN();
 
-  if ((queue == NULL) || (region.handle == 0) ||
+  if ((queue == nullptr) || (region.handle == 0) ||
       (doorbell_signal.handle == 0) || (size == 0) || (!IsPowerOfTwo(size)) ||
       (type < HSA_QUEUE_TYPE_MULTI) || (type > HSA_QUEUE_TYPE_SINGLE) ||
       (features == 0)) {
@@ -879,14 +879,14 @@ hsa_status_t hsa_region_get_info(hsa_region_t region,
 hsa_status_t hsa_memory_register(void* address, size_t size) {
   IS_OPEN();
 
-  if (size == 0 && address != NULL) {
+  if (size == 0 && address != nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_memory_deregister(void* address, size_t size) {
+hsa_status_t hsa_memory_deregister(void*  /*address*/, size_t  /*size*/) {
   IS_OPEN();
 
   return HSA_STATUS_SUCCESS;
@@ -896,7 +896,7 @@ hsa_status_t
     hsa_memory_allocate(hsa_region_t region, size_t size, void** ptr) {
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL) {
+  if (size == 0 || ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -910,7 +910,7 @@ hsa_status_t
 hsa_status_t hsa_memory_free(void* ptr) {
   IS_OPEN();
 
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
     return HSA_STATUS_SUCCESS;
   }
 
@@ -922,7 +922,7 @@ hsa_status_t hsa_memory_assign_agent(void* ptr,
                                              hsa_access_permission_t access) {
   IS_OPEN();
 
-  if ((ptr == NULL) || (access < HSA_ACCESS_PERMISSION_RO) ||
+  if ((ptr == nullptr) || (access < HSA_ACCESS_PERMISSION_RO) ||
       (access > HSA_ACCESS_PERMISSION_RW)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -936,7 +936,7 @@ hsa_status_t hsa_memory_assign_agent(void* ptr,
 hsa_status_t hsa_memory_copy(void* dst, const void* src, size_t size) {
   IS_OPEN();
 
-  if (dst == NULL || src == NULL) {
+  if (dst == nullptr || src == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -1479,7 +1479,7 @@ hsa_status_t IsCodeObjectAllocRegion(
   }
 
   if (runtime_alloc_allowed) {
-    ((hsa_region_t*)data)->handle = region.handle;
+    (reinterpret_cast<hsa_region_t*>(data))->handle = region.handle;
     return HSA_STATUS_INFO_BREAK;
   }
 
@@ -1526,7 +1526,7 @@ AmdHsaCodeManager *GetCodeManager() {
                                    hsa_callback_data_t data,
                                    void **address),
     hsa_callback_data_t callback_data,
-    const char *options,
+    const char * /*options*/,
     void **serialized_code_object,
     size_t *serialized_code_object_size) {
   IS_OPEN();
@@ -1555,7 +1555,7 @@ AmdHsaCodeManager *GetCodeManager() {
 /* deprecated */ hsa_status_t hsa_code_object_deserialize(
     void *serialized_code_object,
     size_t serialized_code_object_size,
-    const char *options,
+    const char * /*options*/,
     hsa_code_object_t *code_object) {
   IS_OPEN();
   IS_BAD_PTR(serialized_code_object);
@@ -1632,7 +1632,7 @@ AmdHsaCodeManager *GetCodeManager() {
       return status;
     }
 
-    *((hsa_isa_t*)value) = isa_handle;
+    *(reinterpret_cast<hsa_isa_t*>(value)) = isa_handle;
     return HSA_STATUS_SUCCESS;
   }
   default: {
@@ -1741,7 +1741,7 @@ struct CodeObjectReaderWrapper final : Signed<0x266E71EDBC718D2C> {
     , comes_from_file(_comes_from_file) {}
 
   /// @brief Default destructor.
-  ~CodeObjectReaderWrapper() {}
+  ~CodeObjectReaderWrapper() override = default;
 
   const void *code_object_memory;
   const size_t code_object_size;
@@ -1761,11 +1761,11 @@ hsa_status_t hsa_code_object_reader_create_from_file(
   IS_BAD_PTR(code_object_reader);
 
   off_t file_size = __lseek__(file, 0, SEEK_END);
-  if (file_size == (off_t)-1) {
+  if (file_size == static_cast<off_t>(-1)) {
     return HSA_STATUS_ERROR_INVALID_FILE;
   }
 
-  if (__lseek__(file, 0, SEEK_SET) == (off_t)-1) {
+  if (__lseek__(file, 0, SEEK_SET) == static_cast<off_t>(-1)) {
     return HSA_STATUS_ERROR_INVALID_FILE;
   }
 
@@ -2046,7 +2046,7 @@ hsa_status_t hsa_executable_validate(
 
 hsa_status_t hsa_executable_validate_alt(
     hsa_executable_t executable,
-    const char *options,
+    const char * /*options*/,
     uint32_t *result) {
   IS_OPEN();
   IS_BAD_PTR(result);
@@ -2059,7 +2059,7 @@ hsa_status_t hsa_executable_validate_alt(
     const char *module_name,
     const char *symbol_name,
     hsa_agent_t agent,
-    int32_t call_convention,
+    int32_t  /*call_convention*/,
     hsa_executable_symbol_t *symbol) {
   IS_OPEN();
   IS_BAD_PTR(symbol_name);

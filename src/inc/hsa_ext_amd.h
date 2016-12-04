@@ -334,7 +334,7 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
  * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p time is NULL.
  */
 hsa_status_t HSA_API hsa_amd_profiling_get_async_copy_time(
-    hsa_signal_t signal, hsa_amd_profiling_async_copy_time_t* time);
+    hsa_signal_t hsa_signal, hsa_amd_profiling_async_copy_time_t* time);
 
 /**
  * @brief Computes the frequency ratio and offset between the agent clock and
@@ -499,7 +499,7 @@ uint32_t HSA_API
  * HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_LAYERS.
  *
  */
-hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
+hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t component,
                                                     hsa_agent_info_t attribute,
                                                     void* value);
 

@@ -153,12 +153,12 @@ alignedMalloc(size_t size, size_t alignment)
 #if defined(_WIN32)
   return ::_aligned_malloc(size, alignment);
 #else
-  void * ptr = NULL;
+  void * ptr = nullptr;
   alignment = (std::max)(alignment, sizeof(void*));
   if (0 == ::posix_memalign(&ptr, alignment, size)) {
     return ptr;
   }
-  return NULL;
+  return nullptr;
 #endif
 }
 

@@ -378,10 +378,10 @@ const size_t BlitSdma::kCopyPacketSize = sizeof(SDMA_PKT_COPY_LINEAR);
 
 BlitSdma::BlitSdma()
     : core::Blit(),
-      agent_(NULL),
+      agent_(nullptr),
       queue_size_(0),
-      queue_start_addr_(NULL),
-      fence_base_addr_(NULL),
+      queue_start_addr_(nullptr),
+      fence_base_addr_(nullptr),
       fence_pool_size_(0),
       fence_pool_counter_(0),
       cached_reserve_offset_(0),
@@ -390,12 +390,12 @@ BlitSdma::BlitSdma()
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
-BlitSdma::~BlitSdma() {}
+BlitSdma::~BlitSdma() = default;
 
 hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   agent_ = reinterpret_cast<amd::GpuAgent*>(&const_cast<core::Agent&>(agent));
 
-  if (queue_start_addr_ != NULL && queue_size_ != 0) {
+  if (queue_start_addr_ != nullptr && queue_size_ != 0) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
   }
@@ -436,7 +436,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
       static_cast<const amd::GpuAgentInt&>(agent);
 
   if (HSA_PROFILE_FULL == amd_gpu_agent.profile()) {
-    assert(false && "Only support SDMA for dgpu currently");
+    assert(false);
     return HSA_STATUS_ERROR;
   }
 
@@ -448,10 +448,10 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   queue_size_ = kQueueSize;
 
   queue_start_addr_ =
-      (char*)core::Runtime::runtime_singleton_->system_allocator()(
-          queue_size_, 0x1000, core::MemoryRegion::AllocateExecutable);
+      reinterpret_cast<char*>(core::Runtime::runtime_singleton_->system_allocator()(
+          queue_size_, 0x1000, core::MemoryRegion::AllocateExecutable));
 
-  if (queue_start_addr_ == NULL) {
+  if (queue_start_addr_ == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -464,7 +464,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   if (HSAKMT_STATUS_SUCCESS !=
       hsaKmtCreateQueue(amd_gpu_agent.node_id(), kQueueType_, 100,
                         HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
-                        queue_size_, NULL, &queue_resource_)) {
+                        queue_size_, nullptr, &queue_resource_)) {
     Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
@@ -482,7 +482,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
           fence_pool_size_ * sizeof(uint32_t), 256,
           core::MemoryRegion::AllocateNoFlags));
 
-  if (fence_base_addr_ == NULL) {
+  if (fence_base_addr_ == nullptr) {
     Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
@@ -490,7 +490,7 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
+hsa_status_t BlitSdma::Destroy(const core::Agent&  /*agent*/) {
   // Release all allocated resources and reset them to zero.
 
   if (queue_resource_.QueueId != 0) {
@@ -500,17 +500,17 @@ hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
     memset(&queue_resource_, 0, sizeof(queue_resource_));
   }
 
-  if (queue_start_addr_ != NULL && queue_size_ != 0) {
+  if (queue_start_addr_ != nullptr && queue_size_ != 0) {
     // Release queue buffer.
     core::Runtime::runtime_singleton_->system_deallocator()(queue_start_addr_);
   }
 
-  if (fence_base_addr_ != NULL) {
+  if (fence_base_addr_ != nullptr) {
     core::Runtime::runtime_singleton_->system_deallocator()(fence_base_addr_);
   }
 
   queue_size_ = 0;
-  queue_start_addr_ = NULL;
+  queue_start_addr_ = nullptr;
   cached_reserve_offset_ = 0;
   cached_commit_offset_ = 0;
 
@@ -541,7 +541,7 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(void* dst, const void* src,
   char* command_addr = AcquireWriteAddress(total_command_size);
   char* const command_addr_temp = command_addr;
 
-  if (command_addr == NULL) {
+  if (command_addr == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -583,7 +583,7 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
   // profiling in the middle of the call.
   const bool profiling_enabled = agent_->profiling_enabled();
 
-  uint64_t* end_ts_addr = NULL;
+  uint64_t* end_ts_addr = nullptr;
   uint32_t total_timestamp_command_size = 0;
 
   if (profiling_enabled) {
@@ -593,7 +593,7 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
     // the amd_signal_t ABI.
 
     end_ts_addr = agent_->ObtainEndTsObject();
-    if (end_ts_addr == NULL) {
+    if (end_ts_addr == nullptr) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
 
@@ -627,7 +627,7 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
   char* command_addr = AcquireWriteAddress(total_command_size);
   char* const command_addr_temp = command_addr;
 
-  if (command_addr == NULL) {
+  if (command_addr == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -722,7 +722,7 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
   char* command_addr = AcquireWriteAddress(total_command_size);
   char* const command_addr_temp = command_addr;
 
-  if (command_addr == NULL) {
+  if (command_addr == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -768,13 +768,13 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::EnableProfiling(bool enable) {
+hsa_status_t BlitSdma::EnableProfiling(bool  /*enable*/) {
   return HSA_STATUS_SUCCESS;
 }
 
 char* BlitSdma::AcquireWriteAddress(uint32_t cmd_size) {
   if (cmd_size > queue_size_) {
-    return NULL;
+    return nullptr;
   }
 
   while (true) {
@@ -801,7 +801,7 @@ char* BlitSdma::AcquireWriteAddress(uint32_t cmd_size) {
     }
   }
 
-  return NULL;
+  return nullptr;
 }
 
 void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
@@ -837,11 +837,11 @@ void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
 }
 
 void BlitSdma::ReleaseWriteAddress(char* cmd_addr, uint32_t cmd_size) {
-  assert(cmd_addr != NULL);
+  assert(cmd_addr != nullptr);
   assert(cmd_addr >= queue_start_addr_);
 
   if (cmd_size > queue_size_) {
-    assert(false && "cmd_addr is outside the queue buffer range");
+    assert(false);
     return;
   }
 
@@ -894,7 +894,7 @@ void BlitSdma::WrapQueue(uint32_t cmd_size) {
 
 void BlitSdma::BuildFenceCommand(char* fence_command_addr, uint32_t* fence,
                                  uint32_t fence_value) {
-  assert(fence_command_addr != NULL);
+  assert(fence_command_addr != nullptr);
   SDMA_PKT_FENCE* packet_addr =
       reinterpret_cast<SDMA_PKT_FENCE*>(fence_command_addr);
 

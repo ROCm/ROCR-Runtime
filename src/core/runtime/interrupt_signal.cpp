@@ -48,11 +48,11 @@ namespace core {
 HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
   HsaEventDescriptor event_descriptor;
   event_descriptor.EventType = type;
-  event_descriptor.SyncVar.SyncVar.UserData = NULL;
+  event_descriptor.SyncVar.SyncVar.UserData = nullptr;
   event_descriptor.SyncVar.SyncVarSize = sizeof(hsa_signal_value_t);
   event_descriptor.NodeId = 0;
 
-  HsaEvent* ret = NULL;
+  HsaEvent* ret = nullptr;
   if (HSAKMT_STATUS_SUCCESS ==
       hsaKmtCreateEvent(&event_descriptor, manual_reset, false, &ret)) {
     if (type == HSA_EVENTTYPE_MEMORY) {
@@ -71,7 +71,7 @@ void InterruptSignal::DestroyEvent(HsaEvent* evt) { hsaKmtDestroyEvent(evt); }
 InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
                                  HsaEvent* use_event)
     : Signal(initial_value) {
-  if (use_event != NULL) {
+  if (use_event != nullptr) {
     event_ = use_event;
     free_event_ = false;
   } else {
@@ -79,7 +79,7 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
     free_event_ = true;
   }
 
-  if (event_ != NULL) {
+  if (event_ != nullptr) {
     signal_.event_id = event_->EventId;
     signal_.event_mailbox_ptr = event_->EventData.HWData2;
   } else {
