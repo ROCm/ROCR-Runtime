@@ -186,7 +186,7 @@ set ( CPACK_PACKAGE_VERSION_MAJOR ${PROJECT_VERSION_MAJOR} )
 set ( CPACK_PACKAGE_VERSION_MINOR ${PROJECT_VERSION_MINOR} )
 set ( CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "James Edwards (JamesAdrian.Edwards@amd.com)" )
-set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for ROCm platforms" )
 set ( CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/description" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/copyright" )
 
