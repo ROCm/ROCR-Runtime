@@ -1,17 +1,16 @@
-### HSA Runtime API and runtime for Boltzmann
+### HSA Runtime API and runtime for ROCm
 
-This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA Boltzmann kernel agents. Reference source code for the core runtime is also available.
-
-Only the AMD/ATI Fiji(c) family of discrete GPUs are currently supported.
+This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA ROCm kernel agents. Reference source code for the core runtime is also available.
 
 #### Initial Target Platform Requirements
 
 * CPU: Intel(c) Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
-* GPU: Fiji ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
+* GPU: Fiji(c) ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
+* GPU: Polaris(c) ASIC (AMD RX480)
 
 #### Source code
 
-The HSA core runtime source code for Boltzmann is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
+The HSA core runtime source code for the ROCR runtime is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
 #### Binaries for Ubuntu & Fedora and Installation Instructions
 
@@ -19,13 +18,14 @@ Pre-built binaries are available for installation from the ROCm package reposito
 
 Core runtime package:
 
-* HSA include files to support application development on the HSA runtime for Boltzmann
-* A 64-bit version of AMD's HSA core runtime for Boltzmann
+* HSA include files to support application development on the HSA runtime for the ROCR runtime 
+* A 64-bit version of AMD's HSA core runtime for the ROCR runtime
 
 Runtime extension package:
 
-* A 64-bit version of AMD's finalizer extension for Boltzmann
+* A 64-bit version of AMD's finalizer extension for ROCR runtime
 * A 64-bit version of AMD's runtime tools library
+* A 64-bit version of AMD's runtime image library, which supports the HSAIL image implementation only. 
 
 The contents of these packages are installed in /opt/rocm/hsa and /opt/rocm by default.
 The core runtime package depends on the hsakmt-roct-dev package
@@ -36,7 +36,7 @@ https://github.com/RadeonOpenCompute/ROCm
 
 #### Infrastructure
 
-The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the Boltzmann HSA kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
+The HSA runtime is a thin, user-mode API that exposes the necessary interfaces to access and interact with graphics hardware driven by the AMDGPU driver set and the ROCK kernel driver. Together they enable programmers to directly harness the power of AMD discrete graphics devices by allowing host applications to launch compute kernels directly to the graphics hardware.
 
 The capabilities expressed by the HSA Runtime API are:
 
@@ -66,7 +66,6 @@ If the sample runs without generating errors, the installation is complete.
 
 #### Known Issues
 
-* The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference.
 * Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifth simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
 
 #### Disclaimer

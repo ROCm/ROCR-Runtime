@@ -72,7 +72,7 @@ include ( hsa_common )
 
 ## Parse the package version
 if( NOT DEFINED VERSION_STRING )
-    set ( VERSION_STRING "1.0.0" )
+    set ( VERSION_STRING "1.1.0" )
 endif()
 
 ## Parse the package version

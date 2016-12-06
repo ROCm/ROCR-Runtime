@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -158,7 +158,7 @@ set ( CPACK_PACKAGE_VERSION_MAJOR ${PACKAGE_VERSION_MAJOR} )
 set ( CPACK_PACKAGE_VERSION_MINOR ${PACKAGE_VERSION_MINOR} )
 set ( CPACK_PACKAGE_VERSION_PATCH ${PACKAGE_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "James Edwards (JamesAdrian.Edwards@amd.com)" )
-set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime extensions for Boltzmann (ROCm) platforms" )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime extensions for ROCm platforms" )
 set ( CPACK_PACKAGE_DESCRIPTION_FILE "${CMAKE_CURRENT_SOURCE_DIR}/description" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/copyright" )
 
