@@ -46,6 +46,8 @@
 #include <algorithm>
 #include "amd_hsa_code.hpp"
 #include "amd_hsa_code_util.hpp"
+#include "amdgpu_metadata.hpp"
+#include "AMDGPURuntimeMetadata.h"
 #include <libelf.h>
 #include "amd_hsa_elf.h"
 #include <fstream>
@@ -122,60 +124,30 @@ namespace code {
     hsa_status_t Symbol::GetInfo(hsa_code_symbol_info_t attribute, void *value)
     {
       assert(value);
-      std::string name = Name();
+
       switch (attribute) {
         case HSA_CODE_SYMBOL_INFO_TYPE: {
           *((hsa_symbol_kind_t*)value) = Kind();
           break;
         }
-        case HSA_CODE_SYMBOL_INFO_NAME_LENGTH:
-        case HSA_CODE_SYMBOL_INFO_NAME: {
-          std::string matter = "";
-          switch (Linkage()) {
-          case HSA_SYMBOL_LINKAGE_PROGRAM:
-            assert(name.rfind(":") == std::string::npos);
-            matter = name;
-            break;
-          case HSA_SYMBOL_LINKAGE_MODULE:
-            assert(name.rfind(":") != std::string::npos);
-            matter = name.substr(name.rfind(":") + 1);
-            break;
-          default:
-            assert(!"Unsupported linkage in Symbol::GetInfo");
-            return HSA_STATUS_ERROR;
-          }
-          if (attribute == HSA_CODE_SYMBOL_INFO_NAME_LENGTH) {
-            *((uint32_t*) value) = matter.size() + 1;
-          } else {
-            memset(value, 0x0, matter.size() + 1);
-            memcpy(value, matter.c_str(), matter.size());
-          }
+        case HSA_CODE_SYMBOL_INFO_NAME_LENGTH: {
+          *((uint32_t*)value) = GetSymbolName().size();
           break;
         }
-        case HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH:
+        case HSA_CODE_SYMBOL_INFO_NAME: {
+          std::string SymbolName = GetSymbolName();
+          memset(value, 0x0, SymbolName.size());
+          memcpy(value, SymbolName.c_str(), SymbolName.size());
+          break;
+        }
+        case HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH: {
+          *((uint32_t*)value) = GetModuleName().size();
+          break;
+        }
         case HSA_CODE_SYMBOL_INFO_MODULE_NAME: {
-          switch (Linkage()) {
-          case HSA_SYMBOL_LINKAGE_PROGRAM:
-            if (attribute == HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH) {
-              *((uint32_t*) value) = 0;
-            }
-            break;
-          case HSA_SYMBOL_LINKAGE_MODULE: {
-            assert(name.find(":") != std::string::npos);
-            std::string matter = name.substr(0, name.find(":"));
-            if (attribute == HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH) {
-              *((uint32_t*) value) = matter.length() + 1;
-            } else {
-              memset(value, 0x0, matter.size() + 1);
-              memcpy(value, matter.c_str(), matter.length());
-              ((char*)value)[matter.size() + 1] = '\0';
-            }
-            break;
-          }
-          default:
-            assert(!"Unsupported linkage in Symbol::GetInfo");
-            return HSA_STATUS_ERROR;
-          }
+          std::string ModuleName = GetModuleName();
+          memset(value, 0x0, ModuleName.size());
+          memcpy(value, ModuleName.c_str(), ModuleName.size());
           break;
         }
         case HSA_CODE_SYMBOL_INFO_LINKAGE: {
@@ -191,6 +163,18 @@ namespace code {
         }
       }
       return HSA_STATUS_SUCCESS;
+    }
+
+    std::string Symbol::GetModuleName() const {
+      std::string FullName = Name();
+      return FullName.rfind(":") != std::string::npos ?
+        FullName.substr(0, FullName.find(":")) : "";
+    }
+
+    std::string Symbol::GetSymbolName() const {
+      std::string FullName = Name();
+      return FullName.rfind(":") != std::string::npos ?
+        FullName.substr(FullName.rfind(":") + 1) : FullName;
     }
 
     hsa_code_symbol_t Symbol::ToHandle(Symbol* sym)
@@ -289,7 +273,8 @@ namespace code {
       : img(nullptr),
         combineDataSegments(combineDataSegments_),
         hsatext(0), imageInit(0), samplerInit(0),
-        debugInfo(0), debugLine(0), debugAbbrev(0)
+        debugInfo(0), debugLine(0), debugAbbrev(0),
+        runtimeMetadata(0)
     {
       for (unsigned i = 0; i < AMDGPU_HSA_SEGMENT_LAST; ++i) {
         for (unsigned j = 0; j < 2; ++j) {
@@ -375,6 +360,17 @@ namespace code {
         if (sym) { symbols.push_back(sym); }
       }
 
+      return true;
+    }
+
+    bool AmdHsaCode::PullOpenCLMetadata(const void* buffer, size_t size)
+    {
+      assert(!runtimeMetadata);
+      runtimeMetadata = new Program::Metadata();
+      if (!runtimeMetadata->ReadFrom(buffer, size)) {
+        out << "Failed to read OpenCL metadata" << std::endl;
+        return false;
+      }
       return true;
     }
 
@@ -994,6 +990,9 @@ namespace code {
       PrintSymbols(out);
       out << std::endl;
       PrintMachineCode(out);
+      out << std::endl;
+      PrintOpenCLMetadata(out);
+      out << std::endl;
       out << "AMD HSA Code Object End" << std::endl;
     }
 
@@ -1099,6 +1098,19 @@ namespace code {
         out << "Machine code section is not present" << std::endl << std::endl;
       }
     }
+
+    Program::Metadata* AmdHsaCode::GetRuntimeMetadata()
+    {
+      return runtimeMetadata;
+    }
+
+    void AmdHsaCode::PrintOpenCLMetadata(std::ostream& out)
+    {
+      Program::Metadata* md = GetRuntimeMetadata();
+      if (!md) { return; }
+      md->Print(out);
+    }
+
 
     void AmdHsaCode::PrintSegment(std::ostream& out, Segment* segment)
     {
@@ -1250,7 +1262,7 @@ namespace code {
         } else if (major_version == 8) {
           asic = "VI";
         } else if (major_version == 9) {
-          asic = "GREENLAND";
+          asic = "GFX9";
         } else {
           assert(!"unknown compute capability");
         }
@@ -1522,10 +1534,14 @@ namespace code {
 
     bool AmdHsaCode::PullElfV2()
     {
+      Segment* note = NULL;
       for (size_t i = 0; i < img->segmentCount(); ++i) {
         Segment* s = img->segment(i);
         if (s->type() == PT_LOAD) {
           dataSegments.push_back(s);
+        }
+        else if (s->type() == PT_NOTE && s->align() >= 4) {
+          note = s;
         }
       }
       for (size_t i = 0; i < img->sectionCount(); ++i) {
@@ -1571,6 +1587,32 @@ namespace code {
           break; // Skip unknown symbols.
         }
         if (sym) { symbols.push_back(sym); }
+      }
+
+      if (note) {
+        // Iterate over the notes in this segment
+        const char* ptr = note->data();
+        const char* end = ptr + note->imageSize();
+
+        while (ptr < end) {
+          struct Elf_Note {
+            uint32_t n_namesz; // Length of note's name
+            uint32_t n_descsz; // Length of note's value
+            uint32_t n_type;   // Type of note
+          }* note = (struct Elf_Note*) ptr;
+          const char* name = (const char*) &note[1];
+          const char* desc = name + ((note->n_namesz + 3) & -4);
+
+          if (note->n_type == 7 /*NT_AMDGPU_HSA_RUNTIME_METADATA_1_0*/
+            && note->n_namesz == sizeof "AMD"
+            && !memcmp(name, "AMD", note->n_namesz)) {
+            if (!PullOpenCLMetadata(desc,note->n_descsz)) { return false; }
+            break;
+          }
+          ptr += sizeof(*note)
+            + ((note->n_namesz + 3) & -4)
+            + ((note->n_descsz + 3) & -4);
+        }
       }
 
       return true;

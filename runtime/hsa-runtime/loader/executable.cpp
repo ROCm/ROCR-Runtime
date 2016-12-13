@@ -72,6 +72,7 @@ public:
   const amd::options::NoArgOption* DumpExec() const { return &dump_exec; }
   const amd::options::NoArgOption* DumpAll() const { return &dump_all; }
   const amd::options::ValueOption<std::string>* DumpDir() const { return &dump_dir; }
+  const amd::options::PrefixOption* Substitute() const { return &substitute; }
 
   bool ParseOptions(const std::string& options);
   void Reset();
@@ -90,6 +91,7 @@ private:
   amd::options::NoArgOption dump_exec;
   amd::options::NoArgOption dump_all;
   amd::options::ValueOption<std::string> dump_dir;
+  amd::options::PrefixOption substitute;
   amd::options::OptionParser option_parser;
 };
 
@@ -100,6 +102,7 @@ LoaderOptions::LoaderOptions(std::ostream& error) :
   dump_exec("dump-exec", "Dump executable to text file"),
   dump_all("dump-all", "Dump all finalizer input and output (as above)"),
   dump_dir("dump-dir", "Dump directory"),
+  substitute("substitute", "Substitute code object with given index or index range on loading from file"),
   option_parser(false, error)
 {
   option_parser.AddOption(&help);
@@ -108,17 +111,21 @@ LoaderOptions::LoaderOptions(std::ostream& error) :
   option_parser.AddOption(&dump_exec);
   option_parser.AddOption(&dump_all);
   option_parser.AddOption(&dump_dir);
+  option_parser.AddOption(&substitute);
 }
 
-bool LoaderOptions::ParseOptions(const std::string& options) {
+bool LoaderOptions::ParseOptions(const std::string& options)
+{
   return option_parser.ParseOptions(options.c_str());
 }
 
-void LoaderOptions::Reset() {
+void LoaderOptions::Reset()
+{
   option_parser.Reset();
 }
 
-void LoaderOptions::PrintHelp(std::ostream& out) const {
+void LoaderOptions::PrintHelp(std::ostream& out) const
+{
   option_parser.PrintHelp(out);
 }
 
@@ -232,6 +239,11 @@ uint64_t AmdHsaCodeLoader::FindHostAddress(uint64_t device_address)
   return 0;
 }
 
+void AmdHsaCodeLoader::PrintHelp(std::ostream& out)
+{
+  LoaderOptions().PrintHelp(out);
+}
+
 void AmdHsaCodeLoader::EnableReadOnlyMode()
 {
   rw_lock_.ReaderLock();
@@ -306,62 +318,21 @@ bool SymbolImpl::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       break;
     }
     case HSA_CODE_SYMBOL_INFO_NAME_LENGTH: {
-      std::string matter = "";
-
-      if (linkage == HSA_SYMBOL_LINKAGE_PROGRAM) {
-        assert(name.rfind(":") == std::string::npos);
-        matter = name;
-      } else {
-        assert(name.rfind(":") != std::string::npos);
-        matter = name.substr(name.rfind(":") + 1);
-      }
-
-      *((uint32_t*)value) = matter.size() + 1;
+      *((uint32_t*)value) = symbol_name.size();
       break;
     }
     case HSA_CODE_SYMBOL_INFO_NAME: {
-      std::string matter = "";
-
-      if (linkage == HSA_SYMBOL_LINKAGE_PROGRAM) {
-        assert(name.rfind(":") == std::string::npos);
-        matter = name;
-      } else {
-        assert(name.rfind(":") != std::string::npos);
-        matter = name.substr(name.rfind(":") + 1);
-      }
-
-      memset(value, 0x0, matter.size() + 1);
-      memcpy(value, matter.c_str(), matter.size());
+      memset(value, 0x0, symbol_name.size());
+      memcpy(value, symbol_name.c_str(), symbol_name.size());
       break;
     }
     case HSA_CODE_SYMBOL_INFO_MODULE_NAME_LENGTH: {
-      std::string matter = "";
-
-      if (linkage == HSA_SYMBOL_LINKAGE_PROGRAM) {
-        assert(name.find(":") == std::string::npos);
-        *((uint32_t*)value) = 0;
-        return true;
-      }
-
-      assert(name.find(":") != std::string::npos);
-      matter = name.substr(0, name.find(":"));
-
-      *((uint32_t*)value) = matter.size() + 1;
+      *((uint32_t*)value) = module_name.size();
       break;
     }
     case HSA_CODE_SYMBOL_INFO_MODULE_NAME: {
-      std::string matter = "";
-
-      if (linkage == HSA_SYMBOL_LINKAGE_PROGRAM) {
-        assert(name.find(":") == std::string::npos);
-        return true;
-      }
-
-      assert(name.find(":") != std::string::npos);
-      matter = name.substr(0, name.find(":"));
-
-      memset(value, 0x0, matter.size() + 1);
-      memcpy(value, matter.c_str(), matter.size());
+      memset(value, 0x0, module_name.size());
+      memcpy(value, module_name.c_str(), module_name.size());
       break;
     }
     case HSA_CODE_SYMBOL_INFO_LINKAGE: {
@@ -698,6 +669,8 @@ hsa_status_t ExecutableImpl::DefineProgramExternalVariable(
   program_symbols_.insert(
     std::make_pair(std::string(name),
                    new VariableSymbol(true,
+                                      "", // Only program linkage symbols can be
+                                          // defined.
                                       std::string(name),
                                       HSA_SYMBOL_LINKAGE_PROGRAM,
                                       true,
@@ -732,6 +705,8 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
   auto insert_status = agent_symbols_.insert(
     std::make_pair(std::make_pair(std::string(name), agent),
                    new VariableSymbol(true,
+                                      "", // Only program linkage symbols can be
+                                          // defined.
                                       std::string(name),
                                       HSA_SYMBOL_LINKAGE_PROGRAM,
                                       true,
@@ -997,7 +972,7 @@ hsa_status_t ExecutableImpl::GetInfo(
   return HSA_STATUS_SUCCESS;
 }
 
-static uint32_t NextLoaderDumpNum()
+static uint32_t NextCodeObjectNum()
 {
   static std::atomic_uint_fast32_t dumpN(1);
   return dumpN++;
@@ -1034,27 +1009,62 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR;
   }
 
-  code.reset(new code::AmdHsaCode());
+  typedef std::tuple<uint32_t, uint32_t, std::string> Substitute;
+  std::vector<Substitute> substitutes;
 
-  if (!code->InitAsHandle(code_object)) {
-    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  for (const std::string& s : loaderOptions.Substitute()->values()) {
+    std::string::size_type vi = s.find('=');
+    if (vi == std::string::npos) { return HSA_STATUS_ERROR; }
+    std::string value = s.substr(vi + 1);
+    std::string range = s.substr(0, vi);
+    std::string::size_type mi = range.find('-');
+    uint32_t n1 = UINT32_MAX, n2 = UINT32_MAX;
+    if (mi != std::string::npos) {
+      std::string s1, s2;
+      s1 = range.substr(0, mi - 1);
+      s2 = range.substr(mi + 1);
+      std::istringstream is1(s1); is1 >> n1;
+      std::istringstream is2(s2); is2 >> n2;
+    }
+    else {
+      std::istringstream is(range); is >> n1;
+      n2 = n1;
+    }
+    substitutes.push_back(std::make_tuple(n1, n2, value));
   }
 
-  uint32_t dumpNum = 0;
-  if (loaderOptions.DumpAll()->is_set() ||
-      loaderOptions.DumpExec()->is_set() ||
-      loaderOptions.DumpCode()->is_set() ||
-      loaderOptions.DumpIsa()->is_set()) {
-    dumpNum = NextLoaderDumpNum();
+  uint32_t codeNum = NextCodeObjectNum();
+
+  code.reset(new code::AmdHsaCode());
+
+  std::string substituteFileName;
+  for (const Substitute& ss : substitutes) {
+    if (codeNum >= std::get<0>(ss) && codeNum <= std::get<1>(ss)) {
+      substituteFileName = std::get<2>(ss);
+      break;
+    }
+  }
+  std::vector<char> buffer;
+  if (substituteFileName.empty()) {
+   if (!code->InitAsHandle(code_object)) {
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+    }
+  } else {
+    if (!ReadFileIntoBuffer(substituteFileName, buffer)) {
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+    }
+    if (!code->InitAsBuffer(&buffer[0], buffer.size())) {
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+    }
   }
 
   if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpCode()->is_set()) {
-    if (!code->SaveToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "hsaco", dumpNum))) {
+    if (!code->SaveToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "hsaco", codeNum))) {
       // Ignore error.
     }
   }
   if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpIsa()->is_set()) {
-    if (!code->PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "isa", dumpNum))) {
+    if (!code->PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "isa", codeNum))) {
       // Ignore error.
     }
   }
@@ -1105,7 +1115,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   code.reset();
 
   if (loaderOptions.DumpAll()->is_set() || loaderOptions.DumpExec()->is_set()) {
-    if (!PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "exec", dumpNum))) {
+    if (!PrintToFile(amd::hsa::DumpFileName(loaderOptions.DumpDir()->value(), LOADER_DUMP_PREFIX, "exec", codeNum))) {
       // Ignore error.
     }
   }
@@ -1240,7 +1250,8 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
   SymbolImpl *symbol = nullptr;
   if (sym->IsVariableSymbol()) {
     symbol = new VariableSymbol(true,
-                       sym->Name(),
+                       sym->GetModuleName(),
+                       sym->GetSymbolName(),
                        sym->Linkage(),
                        true, // sym->IsDefinition()
                        sym->Allocation(),
@@ -1273,7 +1284,8 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
         size = sym->GetSection()->size() - sym->SectionOffset();
       }
       KernelSymbol *kernel_symbol = new KernelSymbol(true,
-                                      sym->Name(),
+                                      sym->GetModuleName(),
+                                      sym->GetSymbolName(),
                                       sym->Linkage(),
                                       true, // sym->IsDefinition()
                                       kernarg_segment_size,
@@ -1286,7 +1298,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                       address);
       kernel_symbol->debug_info.elf_raw = code->ElfData();
       kernel_symbol->debug_info.elf_size = code->ElfSize();
-      kernel_symbol->debug_info.kernel_name = kernel_symbol->name.c_str();
+      kernel_symbol->debug_info.kernel_name = kernel_symbol->full_name.c_str();
       kernel_symbol->debug_info.owning_segment = (void*)SymbolSegment(agent, sym)->Address(sym->GetSection()->addr());
       symbol = kernel_symbol;
 

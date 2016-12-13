@@ -158,7 +158,8 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "libamdhsacode/amd_hsa_code_util.cpp"
             "libamdhsacode/amd_hsa_locks.cpp"
             "libamdhsacode/amd_options.cpp"
-            "libamdhsacode/amd_hsa_code.cpp" 
+            "libamdhsacode/amd_hsa_code.cpp"
+            "libamdhsacode/amdgpu_metadata.cpp"
 )
 
 add_library( ${CORE_RUNTIME_TARGET} SHARED ${SRCS} )

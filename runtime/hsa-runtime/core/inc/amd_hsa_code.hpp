@@ -183,6 +183,9 @@ namespace code {
       static Symbol* FromHandle(hsa_code_symbol_t handle);
       void setValue(uint64_t value) { elfsym->setValue(value); }
       void setSize(uint32_t size) { elfsym->setSize(size); }
+
+      std::string GetModuleName() const;
+      std::string GetSymbolName() const;
     };
 
     class KernelSymbol : public Symbol {
@@ -209,6 +212,10 @@ namespace code {
       hsa_status_t GetInfo(hsa_code_symbol_info_t attribute, void *value) override;
     };
 
+    namespace Program {
+      class Metadata;
+    }
+
     class AmdHsaCode {
     private:
       std::ostringstream out;
@@ -227,10 +234,12 @@ namespace code {
       amd::elf::Section* debugInfo;
       amd::elf::Section* debugLine;
       amd::elf::Section* debugAbbrev;
+      Program::Metadata* runtimeMetadata;
 
       bool PullElf();
       bool PullElfV1();
       bool PullElfV2();
+      bool PullOpenCLMetadata(const void* buffer, size_t size);
 
       void AddAmdNote(uint32_t type, const void* desc, uint32_t desc_size);
       template <typename S>
@@ -255,6 +264,7 @@ namespace code {
       void PrintRelocationData(std::ostream& out, RelocationSection* section);
       void PrintSymbol(std::ostream& out, Symbol* sym);
       void PrintDisassembly(std::ostream& out, const unsigned char *isa, size_t size, uint32_t isa_offset = 0);
+      void PrintOpenCLMetadata(std::ostream& out);
       std::string MangleSymbolName(const std::string& module_name, const std::string symbol_name);
       bool ElfImageError();
 
@@ -390,6 +400,8 @@ namespace code {
       Section* DebugAbbrev();
 
       Section* AddHsaHlDebug(const std::string& name, const void* data, size_t size);
+
+      Program::Metadata* GetRuntimeMetadata();
     };
 
     class AmdHsaCodeManager {
