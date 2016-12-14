@@ -223,47 +223,6 @@ void ChoiceOption::PrintHelp(HelpPrinter& printer) const {
 }
 
 //===----------------------------------------------------------------------===//
-// PrefixOption.                                                             //
-//===----------------------------------------------------------------------===//
-bool PrefixOption::IsValid() const {
-  return (0 < name_.size()) && (name_.find(':') == std::string::npos);
-}
-
-std::string::size_type PrefixOption::FindPrefix(const std::string& token) const {
-  auto prefix = name_ + ':';
-  return token.find(prefix);
-}
-
-bool PrefixOption::Accept(const std::string& token) const {
-  return
-    (token.compare(0, name_.length(), name_) == 0) &&
-    token.length() > name_.length() &&
-    token[name_.length()] == ':';
-}
-
-bool PrefixOption::ProcessTokens(std::list<std::string> &tokens) {
-  assert(1 <= tokens.size());
-  assert(Accept(tokens.front()) && "option name is mismatched");
-
-  std::string value = tokens.front(); tokens.pop_front();
-  value = value.substr(name_.length() + 1);
-
-  for (const auto& token: tokens) {
-    value += '=';
-    value += token;
-  }
-  tokens.clear();
-
-  values_.push_back(value);
-  is_set_ = true;
-  return true;
-}
-
-void PrefixOption::PrintHelp(HelpPrinter& printer) const {
-  printer.PrintUsage("-" + name_ + ":[value]").PrintDescription(help_);
-}
-
-//===----------------------------------------------------------------------===//
 // OptionParser.                                                              //
 //===----------------------------------------------------------------------===//
 std::vector<OptionBase*>::iterator
@@ -271,7 +230,7 @@ OptionParser::FindOption(const std::string& name) {
   std::vector<OptionBase*>::iterator it = options_.begin();
   std::vector<OptionBase*>::iterator end = options_.end();
   for (; it != end; ++it) {
-    if ((*it)->Accept(name)) {
+    if ((*it)->name() == name) {
       return it;
     }
   }
