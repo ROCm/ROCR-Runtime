@@ -43,11 +43,6 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_GPU_PM4_H_
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_PM4_H_
 
-// PM4 definitions:
-//   http://amd-dev.wpengine.netdna-cdn.com/wordpress/media/2013/10/si_programming_guide_v2.pdf
-//
-// ACQUIRE_MEM was introduced in Gfx7.
-
 #define PM4_HDR_IT_OPCODE_NOP                             0x10
 #define PM4_HDR_IT_OPCODE_INDIRECT_BUFFER                 0x3F
 #define PM4_HDR_IT_OPCODE_RELEASE_MEM                     0x49
