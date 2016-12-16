@@ -217,12 +217,10 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
     }
   }
 
-  assert(amd_queue_.group_segment_aperture_base_hi != NULL &&
-         "No group region found.");
+  assert(amd_queue_.group_segment_aperture_base_hi != 0 && "No group region found.");
 
   if (core::Runtime::runtime_singleton_->flag().check_flat_scratch()) {
-    assert(amd_queue_.private_segment_aperture_base_hi != NULL &&
-           "No private region found.");
+    assert(amd_queue_.private_segment_aperture_base_hi != 0 && "No private region found.");
   }
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
@@ -405,11 +403,12 @@ void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
   if (legacy_dispatch_id > amd_queue_.max_legacy_doorbell_dispatch_id_plus_1) {
     // Record the most recent packet index used in a doorbell submission.
     // This field will be interpreted as a write index upon HW queue connect.
-    // Must be visible to the HW before sending the doorbell to avoid a race.
+    // Make ring buffer visible to HW before updating write index.
     atomic::Store(&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1,
-                  legacy_dispatch_id, std::memory_order_relaxed);
+                  legacy_dispatch_id, std::memory_order_release);
 
     // Write the dispatch id to the hardware MMIO doorbell.
+    // Make write index visible to HW before sending doorbell.
     if (doorbell_type_ == 0) {
       // The legacy GFXIP 7 hardware doorbell expects:
       //   1. Packet index wrapped to a point within the ring buffer
@@ -417,18 +416,20 @@ void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
       uint64_t queue_size_mask =
           ((1 + queue_full_workaround_) * amd_queue_.hsa_queue.size) - 1;
 
-      *(volatile uint32_t*)signal_.legacy_hardware_doorbell_ptr =
-          uint32_t((legacy_dispatch_id & queue_size_mask) *
-                   (sizeof(core::AqlPacket) / sizeof(uint32_t)));
+      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
+                    uint32_t((legacy_dispatch_id & queue_size_mask) *
+                             (sizeof(core::AqlPacket) / sizeof(uint32_t))),
+                    std::memory_order_release);
     } else if (doorbell_type_ == 1) {
-      *(volatile uint32_t*)signal_.legacy_hardware_doorbell_ptr =
-          uint32_t(legacy_dispatch_id);
+      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
+                    uint32_t(legacy_dispatch_id), std::memory_order_release);
     } else {
       assert(false && "Agent has unsupported doorbell semantics");
     }
   }
 
   // Release spinlock protecting the legacy doorbell.
+  // Also ensures timely delivery of (write-combined) doorbell to HW.
   atomic::Store(&amd_queue_.legacy_doorbell_lock, 0U,
                 std::memory_order_release);
 }
@@ -670,9 +671,10 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
     queue->agent_->ReleaseQueueScratch(scratch.queue_base);
 
+    uint64_t pkt_slot_idx = queue->amd_queue_.read_dispatch_id % queue->amd_queue_.hsa_queue.size;
+
     const core::AqlPacket& pkt =
-        ((core::AqlPacket*)queue->amd_queue_.hsa_queue
-             .base_address)[queue->amd_queue_.read_dispatch_id];
+        ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
     uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
@@ -779,8 +781,8 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
   uint32_t slot_idx = uint32_t(write_idx % public_handle()->size);
   constexpr uint32_t slot_size_b = 0x40;
-  uint32_t* queue_slot = (uint32_t*)uintptr_t(public_handle()->base_address +
-                                              (slot_idx * slot_size_b));
+  uint32_t* queue_slot =
+      (uint32_t*)(uintptr_t(public_handle()->base_address) + (slot_idx * slot_size_b));
 
   // Copy client PM4 command into IB.
   assert(cmd_size_b < pm4_ib_size_b_ && "PM4 exceeds IB size");
@@ -909,7 +911,7 @@ void AqlQueue::InitScratchSRD() {
       uint32_t(queue_scratch_.size_per_thread);
 
   // Set concurrent wavefront limits only when scratch is being used.
-  COMPUTE_TMPRING_SIZE tmpring_size = {0};
+  COMPUTE_TMPRING_SIZE tmpring_size = {};
   if (queue_scratch_.size == 0) {
     amd_queue_.compute_tmpring_size = tmpring_size.u32All;
     return;

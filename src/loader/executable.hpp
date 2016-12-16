@@ -112,7 +112,7 @@ protected:
     , is_definition(_is_definition)
     , address(_address) {}
 
-  virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value);
+  virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) override;
 
 private:
   SymbolImpl(const SymbolImpl &s);
@@ -257,7 +257,7 @@ public:
   size_t ElfSize() const { return elf_size; }
   std::vector<Segment*>& LoadedSegments() { return loaded_segments; }
 
-  bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) override;
+  bool GetInfo(amd_loaded_code_object_info_t attribute, void *value) override;
 
   hsa_status_t IterateLoadedSegments(
     hsa_status_t (*callback)(
@@ -361,35 +361,33 @@ public:
 
   ~ExecutableImpl();
 
-  hsa_status_t GetInfo(hsa_executable_info_t executable_info, void *value);
+  hsa_status_t GetInfo(hsa_executable_info_t executable_info, void *value) override;
 
   hsa_status_t DefineProgramExternalVariable(
-    const char *name, void *address);
+    const char *name, void *address) override;
 
   hsa_status_t DefineAgentExternalVariable(
     const char *name,
     hsa_agent_t agent,
     hsa_variable_segment_t segment,
-    void *address);
+    void *address) override;
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true);
+    hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object,
-    bool load_legacy = true);
+    hsa_loaded_code_object_t *loaded_code_object) override;
 
-  hsa_status_t Freeze(const char *options);
+  hsa_status_t Freeze(const char *options) override;
 
-  hsa_status_t Validate(uint32_t *result) {
+  hsa_status_t Validate(uint32_t *result) override {
     amd::hsa::common::ReaderLockGuard<amd::hsa::common::ReaderWriterLock> reader_lock(rw_lock_);
     assert(result);
     *result = 0;
@@ -405,7 +403,7 @@ public:
     const hsa_agent_t *agent) override;
 
   hsa_status_t IterateSymbols(
-    iterate_symbols_f callback, void *data);
+    iterate_symbols_f callback, void *data) override;
 
   /// @since hsa v1.1.
   hsa_status_t IterateAgentSymbols(
@@ -427,7 +425,7 @@ public:
     hsa_status_t (*callback)(
       hsa_loaded_code_object_t loaded_code_object,
       void *data),
-    void *data);
+    void *data) override;
 
   size_t GetNumSegmentDescriptors() override;
 
@@ -452,18 +450,22 @@ private:
   ExecutableImpl& operator=(const ExecutableImpl &e);
 
   std::unique_ptr<amd::hsa::code::AmdHsaCode> code;
-  bool load_legacy_;
 
   Symbol* GetSymbolInternal(
     const char *symbol_name,
     const hsa_agent_t *agent);
 
-  hsa_status_t LoadSegment(hsa_agent_t agent, code::Segment* s, uint32_t majorVersion, uint16_t machine);
-  hsa_status_t LoadSegmentV1(hsa_agent_t agent, amd::hsa::code::Segment* seg);
-  hsa_status_t LoadSegmentV2(hsa_agent_t agent, amd::hsa::code::Segment* seg, uint16_t machine);
-  hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
-  hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
-  hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym);
+  hsa_status_t LoadSegments(hsa_agent_t agent, const code::AmdHsaCode *c,
+                            uint32_t majorVersion);
+  hsa_status_t LoadSegmentsV1(hsa_agent_t agent, const code::AmdHsaCode *c);
+  hsa_status_t LoadSegmentsV2(hsa_agent_t agent, const code::AmdHsaCode *c);
+  hsa_status_t LoadSegmentV1(hsa_agent_t agent, const code::Segment *s);
+  hsa_status_t LoadSegmentV2(const code::Segment *data_segment,
+                             loader::Segment *load_segment);
+
+  hsa_status_t LoadSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
+  hsa_status_t LoadDefinitionSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
+  hsa_status_t LoadDeclarationSymbol(hsa_agent_t agent, amd::hsa::code::Symbol* sym, uint32_t majorVersion);
 
   hsa_status_t ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c);
   hsa_status_t ApplyStaticRelocationSection(hsa_agent_t agent, amd::hsa::code::RelocationSection* sec);
@@ -501,7 +503,7 @@ public:
   AmdHsaCodeLoader(Context* context_)
     : context(context_) { assert(context); }
 
-  Context* GetContext() const { return context; }
+  Context* GetContext() const override { return context; }
 
   Executable* CreateExecutable(
       hsa_profile_t profile,
@@ -519,6 +521,8 @@ public:
   hsa_status_t QuerySegmentDescriptors(
     hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
     size_t *num_segment_descriptors) override;
+
+  hsa_executable_t FindExecutable(uint64_t device_address) override;
 
   uint64_t FindHostAddress(uint64_t device_address) override;
 

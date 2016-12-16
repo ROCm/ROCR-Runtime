@@ -181,6 +181,24 @@ hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_interop_unmap_buffer(void* ptr);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+                              uint32_t* num_agents_accessible, hsa_agent_t** accessible);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* handle, size_t len,
+                                       uint32_t num_agents, const hsa_agent_t* mapping_agents,
+                                       void** mapped_ptr);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr);
+
 }  // end of AMD namespace
 
 #endif  // header guard

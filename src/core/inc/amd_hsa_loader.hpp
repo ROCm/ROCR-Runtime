@@ -74,9 +74,9 @@ typedef hsa_executable_symbol_t hsa_symbol_t;
 typedef hsa_executable_symbol_info_t hsa_symbol_info_t;
 
 /// @brief Loaded code object attributes.
-enum hsa_loaded_code_object_info_t {
-  HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE = 0,
-  HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE = 1
+enum amd_loaded_code_object_info_t {
+  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE = 0,
+  AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE = 1
 };
 
 /// @brief Loaded segment handle.
@@ -200,7 +200,7 @@ public:
 
   virtual ~LoadedCodeObject() {}
 
-  virtual bool GetInfo(hsa_loaded_code_object_info_t attribute, void *value) = 0;
+  virtual bool GetInfo(amd_loaded_code_object_info_t attribute, void *value) = 0;
 
   virtual hsa_status_t IterateLoadedSegments(
     hsa_status_t (*callback)(
@@ -282,16 +282,14 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object = nullptr,
-    bool load_legacy = true) = 0;
+    hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t LoadCodeObject(
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
-    hsa_loaded_code_object_t *loaded_code_object = nullptr,
-    bool load_legacy = true) = 0;
+    hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t Freeze(const char *options) = 0;
 
@@ -400,6 +398,10 @@ public:
   virtual hsa_status_t QuerySegmentDescriptors(
     hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
     size_t *num_segment_descriptors) = 0;
+
+  /// @brief Finds the handle of executable to which @p device_address
+  /// belongs. Return NULL handle if device address is invalid.
+  virtual hsa_executable_t FindExecutable(uint64_t device_address) = 0;
 
   /// @brief Returns host address given @p device_address. If @p device_address
   /// is already host address, returns null pointer. If @p device_address is

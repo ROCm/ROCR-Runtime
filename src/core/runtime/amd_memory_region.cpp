@@ -469,11 +469,15 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   HsaMemMapFlags map_flag = map_flag_;
   map_flag.ui32.HostAccess |= (cpu_in_list) ? 1 : 0;
 
-  uint64_t alternate_va = 0;
-  if (!amd::MemoryRegion::MakeKfdMemoryResident(
-          whitelist_nodes.size(), &whitelist_nodes[0], const_cast<void*>(ptr),
-          size, &alternate_va, map_flag)) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  
+  {
+    ScopedAcquire<KernelMutex> lock(&core::Runtime::runtime_singleton_->memory_lock_);
+    uint64_t alternate_va = 0;
+    if (!amd::MemoryRegion::MakeKfdMemoryResident(
+      whitelist_nodes.size(), &whitelist_nodes[0], const_cast<void*>(ptr),
+      size, &alternate_va, map_flag)) {
+        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
   }
 
   for (GpuAgentInt* gpu : whitelist_gpus) {

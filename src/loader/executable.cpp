@@ -529,15 +529,15 @@ bool VariableSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
   return true;
 }
 
-bool LoadedCodeObjectImpl::GetInfo(hsa_loaded_code_object_info_t attribute, void *value)
+bool LoadedCodeObjectImpl::GetInfo(amd_loaded_code_object_info_t attribute, void *value)
 {
   assert(value);
 
   switch (attribute) {
-    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
+    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE:
       ((hsa_code_object_t*)value)->handle = reinterpret_cast<uint64_t>(elf_data);
       break;
-    case HSA_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
+    case AMD_LOADED_CODE_OBJECT_INFO_ELF_IMAGE_SIZE:
       *((size_t*)value) = elf_size;
       break;
     default: {
@@ -729,7 +729,7 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
     return HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED;
   }
 
-  agent_symbols_.insert(
+  auto insert_status = agent_symbols_.insert(
     std::make_pair(std::make_pair(std::string(name), agent),
                    new VariableSymbol(true,
                                       std::string(name),
@@ -742,6 +742,9 @@ hsa_status_t ExecutableImpl::DefineAgentExternalVariable(
                                       false, // TODO: const.
                                       true,
                                       reinterpret_cast<uint64_t>(address))));
+  assert(insert_status.second);
+  insert_status.first->second->agent = agent;
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -912,6 +915,25 @@ size_t ExecutableImpl::QuerySegmentDescriptors(
   return i - first_empty_segment_descriptor;
 }
 
+hsa_executable_t AmdHsaCodeLoader::FindExecutable(uint64_t device_address)
+{
+  hsa_executable_t execHandle = {0};
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
+  if (device_address == 0) {
+    return execHandle;
+  }
+
+  for (auto &exec : executables) {
+    if (exec != nullptr) {
+      uint64_t host_address = exec->FindHostAddress(device_address);
+      if (host_address != 0) {
+        return Executable::Handle(exec);
+      }
+    }
+  }
+  return execHandle;
+}
+
 uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
 {
   for (auto &obj : loaded_code_objects) {
@@ -985,10 +1007,9 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
   const char *options,
-  hsa_loaded_code_object_t *loaded_code_object,
-  bool load_legacy)
+  hsa_loaded_code_object_t *loaded_code_object)
 {
-  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object, load_legacy);
+  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object);
 }
 
 hsa_status_t ExecutableImpl::LoadCodeObject(
@@ -996,8 +1017,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_code_object_t code_object,
   size_t code_object_size,
   const char *options,
-  hsa_loaded_code_object_t *loaded_code_object,
-  bool load_legacy)
+  hsa_loaded_code_object_t *loaded_code_object)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
@@ -1015,7 +1035,6 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   code.reset(new code::AmdHsaCode());
-  load_legacy_ = load_legacy;
 
   if (!code->InitAsHandle(code_object)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
@@ -1072,13 +1091,11 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   objects.push_back(new LoadedCodeObjectImpl(this, agent, code->ElfData(), code->ElfSize()));
   loaded_code_objects.push_back((LoadedCodeObjectImpl*)objects.back());
 
-  for (size_t i = 0; i < code->DataSegmentCount(); ++i) {
-    status = LoadSegment(agent, code->DataSegment(i), majorVersion, code->Machine());
-    if (status != HSA_STATUS_SUCCESS) { return status; }
-  }
+  status = LoadSegments(agent, code.get(), majorVersion);
+  if (status != HSA_STATUS_SUCCESS) return status;
 
   for (size_t i = 0; i < code->SymbolCount(); ++i) {
-    status = LoadSymbol(agent, code->GetSymbol(i));
+    status = LoadSymbol(agent, code->GetSymbol(i), majorVersion);
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
 
@@ -1097,18 +1114,58 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadSegment(hsa_agent_t agent, code::Segment* s,
-                                         uint32_t majorVersion, uint16_t machine)
-{
-  if (majorVersion >= 2)
-    return LoadSegmentV2(agent, s, machine);
+hsa_status_t ExecutableImpl::LoadSegments(hsa_agent_t agent,
+                                          const code::AmdHsaCode *c,
+                                          uint32_t majorVersion) {
+  if (majorVersion < 2)
+    return LoadSegmentsV1(agent, c);
   else
-    return LoadSegmentV1(agent, s);
-
+    return LoadSegmentsV2(agent, c);
 }
 
-hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent, code::Segment* s)
-{
+hsa_status_t ExecutableImpl::LoadSegmentsV1(hsa_agent_t agent,
+                                            const code::AmdHsaCode *c) {
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  for (size_t i = 0; i < c->DataSegmentCount(); ++i) {
+    status = LoadSegmentV1(agent, c->DataSegment(i));
+    if (status != HSA_STATUS_SUCCESS) return status;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::LoadSegmentsV2(hsa_agent_t agent,
+                                            const code::AmdHsaCode *c) {
+  assert(c->Machine() == EM_AMDGPU && "Program code objects are not supported");
+
+  if (!c->DataSegmentCount()) return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+
+  uint64_t vaddr = c->DataSegment(0)->vaddr();
+  uint64_t size = c->DataSegment(c->DataSegmentCount() - 1)->vaddr() +
+                  c->DataSegment(c->DataSegmentCount() - 1)->memSize();
+
+  void *ptr = context_->SegmentAlloc(AMDGPU_HSA_SEGMENT_CODE_AGENT, agent, size,
+      AMD_ISA_ALIGN_BYTES, true);
+  if (!ptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  Segment *load_segment = new Segment(this, agent, AMDGPU_HSA_SEGMENT_CODE_AGENT,
+      ptr, size, vaddr, 0);
+  if (!load_segment) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  hsa_status_t status = HSA_STATUS_SUCCESS;
+  for (size_t i = 0; i < c->DataSegmentCount(); ++i) {
+    status = LoadSegmentV2(c->DataSegment(i), load_segment);
+    if (status != HSA_STATUS_SUCCESS) return status;
+  }
+
+  objects.push_back(load_segment);
+  loaded_code_objects.back()->LoadedSegments().push_back(load_segment);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent,
+                                           const code::Segment *s) {
   assert(s->type() < PT_LOOS + AMDGPU_HSA_SEGMENT_LAST);
   if (s->memSize() == 0)
     return HSA_STATUS_SUCCESS;
@@ -1135,20 +1192,33 @@ hsa_status_t ExecutableImpl::LoadSegmentV1(hsa_agent_t agent, code::Segment* s)
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadSegmentV2(const code::Segment *data_segment,
+                                           loader::Segment *load_segment) {
+  assert(data_segment && load_segment);
+  load_segment->Copy(data_segment->vaddr(), data_segment->data(),
+                     data_segment->imageSize());
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent,
+                                        code::Symbol* sym,
+                                        uint32_t majorVersion)
 {
   if (sym->IsDeclaration()) {
-    return LoadDeclarationSymbol(agent, sym);
+    return LoadDeclarationSymbol(agent, sym, majorVersion);
   } else {
-    return LoadDefinitionSymbol(agent, sym);
+    return LoadDefinitionSymbol(agent, sym, majorVersion);
   }
 }
 
-hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
+                                                  code::Symbol* sym,
+                                                  uint32_t majorVersion)
 {
   bool isAgent = sym->IsAgent();
-  if (!load_legacy_) {
-    isAgent = agent.handle == 0 ? false : true;
+  if (majorVersion >= 2) {
+    isAgent = agent.handle != 0;
   }
   if (isAgent) {
     auto agent_symbol = agent_symbols_.find(std::make_pair(sym->Name(), agent));
@@ -1231,6 +1301,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
   }
   assert(symbol);
   if (isAgent) {
+    symbol->agent = agent;
     agent_symbols_.insert(std::make_pair(std::make_pair(sym->Name(), agent), symbol));
   } else {
     program_symbols_.insert(std::make_pair(sym->Name(), symbol));
@@ -1238,7 +1309,9 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent, code::Symbo
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent, code::Symbol* sym)
+hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent,
+                                                   code::Symbol* sym,
+                                                   uint32_t majorVersion)
 {
   auto program_symbol = program_symbols_.find(sym->Name());
   if (program_symbol == program_symbols_.end()) {
@@ -1575,39 +1648,6 @@ hsa_status_t ExecutableImpl::Freeze(const char *options) {
   }
 
   state_ = HSA_EXECUTABLE_STATE_FROZEN;
-  return HSA_STATUS_SUCCESS;
-}
-
-hsa_status_t ExecutableImpl::LoadSegmentV2(hsa_agent_t agent, code::Segment* s, uint16_t machine)
-{
-  amdgpu_hsa_elf_segment_t segment;
-
-  if (s->memSize() == 0)
-    return HSA_STATUS_SUCCESS;
-
-  // FIXME: Should support EM_HSA_VENDOR
-  if (machine == EM_AMDGPU) {
-    if (s->flags() & PF_X)
-      segment = AMDGPU_HSA_SEGMENT_CODE_AGENT;
-    else if (s->flags() & PF_W)
-      segment = AMDGPU_HSA_SEGMENT_GLOBAL_AGENT;
-    else {
-      assert (s->flags() & PF_R);
-      segment = AMDGPU_HSA_SEGMENT_READONLY_AGENT;
-    }
-  } else { // EM_HSA_SHARED
-    segment = AMDGPU_HSA_SEGMENT_GLOBAL_PROGRAM;
-  }
-
-  void* ptr = context_->SegmentAlloc(segment, agent, s->memSize(), s->align(), true);
-  if (!ptr) { return HSA_STATUS_ERROR_OUT_OF_RESOURCES; }
-
-  Segment *new_seg = new Segment(this, agent, segment, ptr, s->memSize(), s->vaddr(), s->offset());
-  new_seg->Copy(s->vaddr(), s->data(), s->imageSize());
-  objects.push_back(new_seg);
-  assert(new_seg);
-
-  loaded_code_objects.back()->LoadedSegments().push_back(new_seg);
   return HSA_STATUS_SUCCESS;
 }
 

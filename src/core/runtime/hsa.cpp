@@ -299,9 +299,10 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
     std::string name;
     size_t size;
   };
-  static sizes_t sizes[] = {"hsa_ext_images_1_00_pfn_t",     sizeof(hsa_ext_images_1_00_pfn_t),
-                            "hsa_ext_finalizer_1_00_pfn_t",  sizeof(hsa_ext_finalizer_1_00_pfn_t),
-                            "hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)};
+  static sizes_t sizes[] = {
+      {"hsa_ext_images_1_00_pfn_t", sizeof(hsa_ext_images_1_00_pfn_t)},
+      {"hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t)},
+      {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
   if (minor > 99) return 0;
@@ -395,6 +396,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_loader_query_host_address = hsa_ven_amd_loader_query_host_address;
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
         hsa_ven_amd_loader_query_segment_descriptors;
+    ext_table.hsa_ven_amd_loader_query_executable = hsa_ven_amd_loader_query_executable;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
@@ -1925,7 +1927,7 @@ hsa_status_t hsa_executable_load_program_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      {0}, code_object, options, loaded_code_object, false);
+      {0}, code_object, options, loaded_code_object);
 }
 
 hsa_status_t hsa_executable_load_agent_code_object(
@@ -1950,7 +1952,7 @@ hsa_status_t hsa_executable_load_agent_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      agent, code_object, options, loaded_code_object, false);
+      agent, code_object, options, loaded_code_object);
 }
 
 hsa_status_t hsa_executable_freeze(

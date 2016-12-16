@@ -70,6 +70,11 @@
 #define HSA_QUEUE_ALIGN_BYTES 64
 #define HSA_PACKET_ALIGN_BYTES 64
 
+//Avoids include
+namespace amd {
+  class MemoryRegion;
+}
+
 namespace core {
 extern bool g_use_interrupt_wait;
 
@@ -84,6 +89,7 @@ extern bool g_use_interrupt_wait;
 /// - maintain loader state.
 /// - monitor asynchronous event from agent.
 class Runtime {
+ friend class amd::MemoryRegion;
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
@@ -258,10 +264,21 @@ class Runtime {
 
   hsa_status_t InteropUnmap(void* ptr);
 
+  hsa_status_t PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+                       uint32_t* num_agents_accessible, hsa_agent_t** accessible);
+
+  hsa_status_t SetPtrInfoData(void* ptr, void* userptr);
+
+  hsa_status_t IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
+
+  hsa_status_t IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, uint32_t num_agents,
+                         Agent** mapping_agents, void** mapped_ptr);
+
+  hsa_status_t IPCDetach(void* ptr);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
-
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
@@ -399,7 +416,9 @@ class Runtime {
   // Mutex object to protect multithreaded access to ::Acquire and ::Release.
   KernelMutex kernel_lock_;
 
-  // Mutex object to protect multithreaded access to ::allocation_map_.
+  // Mutex object to protect multithreaded access to ::allocation_map_,
+  // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
+  // registered & mapped arrays.
   KernelMutex memory_lock_;
 
   // Array containing tools library handles.
@@ -410,6 +429,9 @@ class Runtime {
 
   // Agent list containing all compatible GPU agents in the platform.
   std::vector<Agent*> gpu_agents_;
+
+  // Agent map containing all agents indexed by their KFD node IDs.
+  std::map<uint32_t, std::vector<Agent*> > agents_by_node_;
 
   // Agent list containing all compatible gpu agent ids in the platform.
   std::vector<uint32_t> gpu_ids_;

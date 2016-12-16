@@ -1035,7 +1035,7 @@ hsa_status_t HSA_API hsa_amd_interop_unmap_buffer(void* ptr) {
   return amdExtTable->hsa_amd_interop_unmap_buffer_fn(ptr);
 }
 
-// Use the function pointer from local instance Image Extension
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_image_create(
   hsa_agent_t agent,
   const hsa_ext_image_descriptor_t *image_descriptor,
@@ -1047,3 +1047,31 @@ hsa_status_t HSA_API hsa_amd_image_create(
                           image_layout, image_data, access_permission, image);
 }
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+                              uint32_t* num_agents_accessible, hsa_agent_t** accessible) {
+  return amdExtTable->hsa_amd_pointer_info_fn(ptr, info, alloc, num_agents_accessible, accessible);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userptr) {
+  return amdExtTable->hsa_amd_pointer_info_set_userdata_fn(ptr, userptr);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
+  return amdExtTable->hsa_amd_ipc_memory_create_fn(ptr, len, handle);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t len,
+                                       uint32_t num_agents, const hsa_agent_t* mapping_agents,
+                                       void** mapped_ptr) {
+  return amdExtTable->hsa_amd_ipc_memory_attach_fn(ipc, len, num_agents, mapping_agents,
+                                                   mapped_ptr);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr) {
+  return amdExtTable->hsa_amd_ipc_memory_detach_fn(mapped_ptr);
+}

@@ -70,43 +70,43 @@ class AqlQueue : public core::Queue, public core::Signal {
   bool IsValid() const { return valid_; }
 
   /// @brief Queue interfaces
-  hsa_status_t Inactivate();
+  hsa_status_t Inactivate() override;
 
   /// @brief Atomically reads the Read index of with Acquire semantics
   ///
   /// @return uint64_t Value of read index
-  uint64_t LoadReadIndexAcquire();
+  uint64_t LoadReadIndexAcquire() override;
 
   /// @brief Atomically reads the Read index of with Relaxed semantics
   ///
   /// @return uint64_t Value of read index
-  uint64_t LoadReadIndexRelaxed();
+  uint64_t LoadReadIndexRelaxed() override;
 
   /// @brief Atomically reads the Write index of with Acquire semantics
   ///
   /// @return uint64_t Value of write index
-  uint64_t LoadWriteIndexAcquire();
+  uint64_t LoadWriteIndexAcquire() override;
 
   /// @brief Atomically reads the Write index of with Relaxed semantics
   ///
   /// @return uint64_t Value of write index
-  uint64_t LoadWriteIndexRelaxed();
+  uint64_t LoadWriteIndexRelaxed() override;
 
   /// @brief This operation is illegal
-  void StoreReadIndexRelaxed(uint64_t value) { assert(false); }
+  void StoreReadIndexRelaxed(uint64_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void StoreReadIndexRelease(uint64_t value) { assert(false); }
+  void StoreReadIndexRelease(uint64_t value) override { assert(false); }
 
   /// @brief Atomically writes the Write index of with Relaxed semantics
   ///
   /// @param value New value of write index to update with
-  void StoreWriteIndexRelaxed(uint64_t value);
+  void StoreWriteIndexRelaxed(uint64_t value) override;
 
   /// @brief Atomically writes the Write index of with Release semantics
   ///
   /// @param value New value of write index to update with
-  void StoreWriteIndexRelease(uint64_t value);
+  void StoreWriteIndexRelease(uint64_t value) override;
 
   /// @brief Compares and swaps Write index using Acquire and Release semantics
   ///
@@ -115,7 +115,7 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t CasWriteIndexAcqRel(uint64_t expected, uint64_t value);
+  uint64_t CasWriteIndexAcqRel(uint64_t expected, uint64_t value) override;
 
   /// @brief Compares and swaps Write index using Acquire semantics
   ///
@@ -124,7 +124,7 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t CasWriteIndexAcquire(uint64_t expected, uint64_t value);
+  uint64_t CasWriteIndexAcquire(uint64_t expected, uint64_t value) override;
 
   /// @brief Compares and swaps Write index using Relaxed semantics
   ///
@@ -133,7 +133,7 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t CasWriteIndexRelaxed(uint64_t expected, uint64_t value);
+  uint64_t CasWriteIndexRelaxed(uint64_t expected, uint64_t value) override;
 
   /// @brief Compares and swaps Write index using Release semantics
   ///
@@ -142,35 +142,35 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t CasWriteIndexRelease(uint64_t expected, uint64_t value);
+  uint64_t CasWriteIndexRelease(uint64_t expected, uint64_t value) override;
 
   /// @brief Updates the Write index using Acquire and Release semantics
   ///
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t AddWriteIndexAcqRel(uint64_t value);
+  uint64_t AddWriteIndexAcqRel(uint64_t value) override;
 
   /// @brief Updates the Write index using Acquire semantics
   ///
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t AddWriteIndexAcquire(uint64_t value);
+  uint64_t AddWriteIndexAcquire(uint64_t value) override;
 
   /// @brief Updates the Write index using Relaxed semantics
   ///
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t AddWriteIndexRelaxed(uint64_t value);
+  uint64_t AddWriteIndexRelaxed(uint64_t value) override;
 
   /// @brief Updates the Write index using Release semantics
   ///
   /// @param value Value of new write index
   ///
   /// @return uint64_t Value of write index before the update
-  uint64_t AddWriteIndexRelease(uint64_t value);
+  uint64_t AddWriteIndexRelease(uint64_t value) override;
 
   /// @brief Set CU Masking
   ///
@@ -179,166 +179,159 @@ class AqlQueue : public core::Queue, public core::Signal {
   /// @param cu_mask pointer to cu mask
   ///
   /// @return hsa_status_t
-  hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count,
-                            const uint32_t* cu_mask);
+  hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count, const uint32_t* cu_mask) override;
 
   // @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
 
   /// @brief This operation is illegal
-  hsa_signal_value_t LoadRelaxed() {
+  hsa_signal_value_t LoadRelaxed() override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t LoadAcquire() {
+  hsa_signal_value_t LoadAcquire() override {
     assert(false);
     return 0;
   }
 
   /// @brief Update signal value using Relaxed semantics
-  void StoreRelaxed(hsa_signal_value_t value);
+  void StoreRelaxed(hsa_signal_value_t value) override;
 
   /// @brief Update signal value using Release semantics
-  void StoreRelease(hsa_signal_value_t value);
+  void StoreRelease(hsa_signal_value_t value) override;
 
   /// @brief This operation is illegal
-  hsa_signal_value_t WaitRelaxed(hsa_signal_condition_t condition,
-                                 hsa_signal_value_t compare_value,
-                                 uint64_t timeout, hsa_wait_state_t wait_hint) {
+  hsa_signal_value_t WaitRelaxed(hsa_signal_condition_t condition, hsa_signal_value_t compare_value,
+                                 uint64_t timeout, hsa_wait_state_t wait_hint) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t WaitAcquire(hsa_signal_condition_t condition,
-                                 hsa_signal_value_t compare_value,
-                                 uint64_t timeout, hsa_wait_state_t wait_hint) {
+  hsa_signal_value_t WaitAcquire(hsa_signal_condition_t condition, hsa_signal_value_t compare_value,
+                                 uint64_t timeout, hsa_wait_state_t wait_hint) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  void AndRelaxed(hsa_signal_value_t value) { assert(false); }
+  void AndRelaxed(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AndAcquire(hsa_signal_value_t value) { assert(false); }
+  void AndAcquire(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AndRelease(hsa_signal_value_t value) { assert(false); }
+  void AndRelease(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AndAcqRel(hsa_signal_value_t value) { assert(false); }
+  void AndAcqRel(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void OrRelaxed(hsa_signal_value_t value) { assert(false); }
+  void OrRelaxed(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void OrAcquire(hsa_signal_value_t value) { assert(false); }
+  void OrAcquire(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void OrRelease(hsa_signal_value_t value) { assert(false); }
+  void OrRelease(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void OrAcqRel(hsa_signal_value_t value) { assert(false); }
+  void OrAcqRel(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void XorRelaxed(hsa_signal_value_t value) { assert(false); }
+  void XorRelaxed(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void XorAcquire(hsa_signal_value_t value) { assert(false); }
+  void XorAcquire(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void XorRelease(hsa_signal_value_t value) { assert(false); }
+  void XorRelease(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void XorAcqRel(hsa_signal_value_t value) { assert(false); }
+  void XorAcqRel(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AddRelaxed(hsa_signal_value_t value) { assert(false); }
+  void AddRelaxed(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AddAcquire(hsa_signal_value_t value) { assert(false); }
+  void AddAcquire(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AddRelease(hsa_signal_value_t value) { assert(false); }
+  void AddRelease(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void AddAcqRel(hsa_signal_value_t value) { assert(false); }
+  void AddAcqRel(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void SubRelaxed(hsa_signal_value_t value) { assert(false); }
+  void SubRelaxed(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void SubAcquire(hsa_signal_value_t value) { assert(false); }
+  void SubAcquire(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void SubRelease(hsa_signal_value_t value) { assert(false); }
+  void SubRelease(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  void SubAcqRel(hsa_signal_value_t value) { assert(false); }
+  void SubAcqRel(hsa_signal_value_t value) override { assert(false); }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t ExchRelaxed(hsa_signal_value_t value) {
+  hsa_signal_value_t ExchRelaxed(hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t ExchAcquire(hsa_signal_value_t value) {
+  hsa_signal_value_t ExchAcquire(hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t ExchRelease(hsa_signal_value_t value) {
+  hsa_signal_value_t ExchRelease(hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t ExchAcqRel(hsa_signal_value_t value) {
+  hsa_signal_value_t ExchAcqRel(hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t CasRelaxed(hsa_signal_value_t expected,
-                                hsa_signal_value_t value) {
+  hsa_signal_value_t CasRelaxed(hsa_signal_value_t expected, hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t CasAcquire(hsa_signal_value_t expected,
-                                hsa_signal_value_t value) {
+  hsa_signal_value_t CasAcquire(hsa_signal_value_t expected, hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t CasRelease(hsa_signal_value_t expected,
-                                hsa_signal_value_t value) {
+  hsa_signal_value_t CasRelease(hsa_signal_value_t expected, hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t CasAcqRel(hsa_signal_value_t expected,
-                               hsa_signal_value_t value) {
+  hsa_signal_value_t CasAcqRel(hsa_signal_value_t expected, hsa_signal_value_t value) override {
     assert(false);
     return 0;
   }
 
   /// @brief This operation is illegal
-  hsa_signal_value_t* ValueLocation() const {
+  hsa_signal_value_t* ValueLocation() const override {
     assert(false);
     return NULL;
   }
 
   /// @brief This operation is illegal
-  HsaEvent* EopEvent() {
+  HsaEvent* EopEvent() override {
     assert(false);
     return NULL;
   }
@@ -350,7 +343,7 @@ class AqlQueue : public core::Queue, public core::Signal {
   void operator delete(void*, void*) {}
 
  protected:
-  bool _IsA(rtti_t id) const { return id == &rtti_id_; }
+  bool _IsA(rtti_t id) const override { return id == &rtti_id_; }
 
  private:
   uint32_t ComputeRingBufferMinPkts();
