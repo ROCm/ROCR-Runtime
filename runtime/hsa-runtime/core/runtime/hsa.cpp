@@ -564,6 +564,8 @@ hsa_status_t hsa_queue_create(
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
+  if (callback == NULL) callback = core::Queue::DefaultErrorHandler;
+
   core::Queue* cmd_queue = NULL;
   status = agent->QueueCreate(size, type, callback, data, private_segment_size,
                               group_segment_size, &cmd_queue);

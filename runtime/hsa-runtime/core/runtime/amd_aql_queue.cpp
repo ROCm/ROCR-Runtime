@@ -683,10 +683,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
     // Align whole waves to 1KB.
     scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
     scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
-                   32 * 64;  // TODO: replace constants.
-
-    // printf("Growing scratch to %u - %u\n", uint32_t(scratch.size_per_thread),
-    // uint32_t(scratch.size));
+        queue->agent_->properties().MaxSlotsScratchCU * queue->agent_->properties().WaveFrontSize;
 
     queue->agent_->AcquireQueueScratch(scratch);
     if (scratch.queue_base == NULL) {

@@ -64,7 +64,7 @@ class Flag {
     enable_vm_fault_message_ = (var == "0") ? false : true;
 
     var = os::GetEnvVar("HSA_ENABLE_QUEUE_FAULT_MESSAGE");
-    enable_queue_fault_message_ = (var == "1") ? true : false;
+    enable_queue_fault_message_ = (var == "0") ? false : true;
 
     var = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
     enable_interrupt_ = (var == "0") ? false : true;
@@ -105,6 +105,7 @@ class Flag {
   bool enable_interrupt() const { return enable_interrupt_; }
 
   bool enable_thread_trace() const { return enable_thread_trace_; }
+
   bool thread_trace_buff_size() const { return thread_trace_buff_size_; }
 
   bool enable_sdma() const { return enable_sdma_; }
