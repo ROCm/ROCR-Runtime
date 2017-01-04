@@ -318,15 +318,6 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	return status;
 }
 
-static void free_queue_cpu(struct queue *q)
-{
-	if (q->eop_buffer)
-		free(q->eop_buffer);
-	if (q->ctx_save_restore)
-		free(q->ctx_save_restore);
-	free(q);
-}
-
 static void* allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
 {
 	void *ptr;
@@ -433,24 +424,17 @@ static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
 		free(addr);
 }
 
-static void free_queue_gpu(struct queue *q)
-{
-	if (q->eop_buffer) {
-		hsaKmtUnmapMemoryToGPU(q->eop_buffer);
-		hsaKmtFreeMemory(q->eop_buffer, q->dev_info->eop_buffer_size);
-	}
-	if (q->ctx_save_restore) {
-		hsaKmtUnmapMemoryToGPU(q->ctx_save_restore);
-		hsaKmtFreeMemory(q->ctx_save_restore, q->ctx_save_restore_size);
-	}
-	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
-}
-
 static void free_queue(struct queue *q)
 {
-	if (IS_DGPU(q->dev_info->asic_family))
-		return free_queue_gpu(q);
-	return free_queue_cpu(q);
+	if (q->eop_buffer)
+		free_exec_aligned_memory(q->eop_buffer,
+					 q->dev_info->eop_buffer_size,
+					 PAGE_SIZE, q->dev_info->asic_family);
+	if (q->ctx_save_restore)
+		free_exec_aligned_memory(q->ctx_save_restore,
+					 q->ctx_save_restore_size,
+					 PAGE_SIZE, q->dev_info->asic_family);
+	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
 }
 
 static int handle_concrete_asic(struct queue *q,
@@ -475,30 +459,11 @@ static int handle_concrete_asic(struct queue *q,
 			update_ctx_save_restore_size(NodeId, q) == true) {
 			args->ctx_save_restore_size = q->ctx_save_restore_size;
 			args->ctl_stack_size = q->ctl_stack_size;
-			if (IS_DGPU(dev_info->asic_family)) {
-				void *mem;
-				HsaMemFlags flags;
-				HSAKMT_STATUS ret;
-				HSAuint64 size = q->ctx_save_restore_size;
-				flags.Value = 0;
-				flags.ui32.NonPaged = 1; /* device memory*/
-
-				ret = hsaKmtAllocMemory(NodeId, size, flags, &mem);
-				if (ret != HSAKMT_STATUS_SUCCESS)
-					return ret;
-				ret = hsaKmtMapMemoryToGPU(mem, size, NULL);
-				if (ret != HSAKMT_STATUS_SUCCESS) {
-					hsaKmtFreeMemory(mem, size);
-					return ret;
-				}
-				q->ctx_save_restore = mem;
-
-			} else
-				q->ctx_save_restore =
-					allocate_exec_aligned_memory(q->ctx_save_restore_size,
-					PAGE_SIZE,
-					dev_info->asic_family,
-					NodeId);
+			q->ctx_save_restore =
+				allocate_exec_aligned_memory(q->ctx_save_restore_size,
+							     PAGE_SIZE,
+							     dev_info->asic_family,
+							     NodeId);
 			if (q->ctx_save_restore == NULL) {;
 				return HSAKMT_STATUS_NO_MEMORY;
 			}
