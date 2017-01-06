@@ -561,7 +561,7 @@ bool LoaderContext::ImageExtensionSupported() {
 
 hsa_status_t LoaderContext::ImageCreate(
     hsa_agent_t agent, hsa_access_permission_t image_permission,
-    const hsa_ext_image_descriptor_t *image_descriptor, const void *image_data,
+    const hsa_ext_image_descriptor_t *image_descriptor, void *image_data,
     hsa_ext_image_t *image_handle) {
   assert(agent.handle);
   assert(image_descriptor);
