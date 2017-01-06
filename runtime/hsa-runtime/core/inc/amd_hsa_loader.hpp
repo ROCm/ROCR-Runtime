@@ -126,7 +126,7 @@ public:
     hsa_agent_t agent,
     hsa_access_permission_t image_permission,
     const hsa_ext_image_descriptor_t *image_descriptor,
-    const void *image_data,
+    void *image_data,
     hsa_ext_image_t *image_handle) = 0;
 
   virtual hsa_status_t ImageDestroy(
