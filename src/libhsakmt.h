@@ -95,4 +95,7 @@ extern int kmtIoctl(int fd, unsigned long request, void *arg);
 #define VOID_PTR_SUB(ptr,n) (void*)((uint8_t*)(ptr) - n)/*ptr - offset*/
 #define VOID_PTRS_SUB(ptr1,ptr2) (uint64_t)((uint8_t*)(ptr1) - (uint8_t*)(ptr2)) /*ptr1 - ptr2*/
 
+void clear_events_page(void);
+void fmm_clear_all_mem(void);
+void clear_process_doorbells(void);
 #endif

@@ -36,18 +36,37 @@
 static const char kfd_device_name[] = "/dev/kfd";
 static const char tmp_file[] = "/var/lock/.amd_hsa_thunk_lock";
 int amd_hsa_thunk_lock_fd = 0;
+static pid_t parent_pid = -1;
+
 
 static bool is_forked_child(void)
 {
-	static pid_t open_pid = -1;
-	pid_t my_pid = getpid();
+	pid_t cur_pid = getpid();
 
-	if (open_pid == -1 || open_pid != my_pid) {
-		open_pid = my_pid;
-		return true;
+	if (parent_pid == -1) {
+		parent_pid = cur_pid;
+		return false;
 	}
 
+	if (parent_pid != cur_pid)
+		return true;
+
 	return false;
+}
+
+/* Call this from the child process after fork. This will clear all
+ * data that is duplicated from the parent process, that is not valid
+ * in the child.
+ * The topology information is duplicated from the parent is valid
+ * in the child process so it is not cleared
+ */
+static void clear_after_fork(void)
+{
+	clear_process_doorbells();
+	clear_events_page();
+	fmm_clear_all_mem();
+	destroy_device_debugging_memory();
+	kfd_open_count = 0;
 }
 
 HSAKMT_STATUS
@@ -65,7 +84,7 @@ hsaKmtOpenKFD(void)
 	 * belong to the parent
 	 */
 	if (is_forked_child())
-		kfd_open_count = 0;
+		clear_after_fork();
 
 	if (kfd_open_count == 0)
 	{

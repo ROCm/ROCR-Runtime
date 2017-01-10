@@ -2928,3 +2928,67 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 	vm_obj->user_data = usr_data;
 	return HSAKMT_STATUS_SUCCESS;
 }
+
+static void fmm_clear_aperture(manageble_aperture_t *app)
+{
+	while (app->vm_objects)
+		vm_remove_object(app, app->vm_objects);
+
+	while (app->vm_ranges)
+		vm_remove_area(app, app->vm_ranges);
+
+}
+
+/* This is a special funcion that should be called only from the child process
+ * after a fork(). This will clear all vm_objects and mmaps duplicated from
+ * the parent.
+ */
+void fmm_clear_all_mem(void)
+{
+	uint32_t i;
+	void *map_addr;
+
+	/* Nothing is initialized. */
+	if (!gpu_mem)
+		return;
+
+	fmm_clear_aperture(&cpuvm_aperture);
+
+	for (i = 0; i < gpu_mem_count; i++) {
+		fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
+		fmm_clear_aperture(&gpu_mem[i].scratch_aperture);
+		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
+	}
+
+	if (is_dgpu_mem_init) {
+		fmm_clear_aperture(&svm.dgpu_aperture);
+		fmm_clear_aperture(&svm.dgpu_alt_aperture);
+
+		/* Use the same dgpu range as the parent. If failed, then set
+		 * is_dgpu_mem_init to false. Later on dgpu_mem_init will try
+		 * to get a new range
+		 */
+		map_addr = mmap(dgpu_shared_aperture_base, (HSAuint64)(dgpu_shared_aperture_limit)-
+			(HSAuint64)(dgpu_shared_aperture_base) + 1, PROT_NONE,
+			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
+
+		if (map_addr == MAP_FAILED) {
+			munmap(dgpu_shared_aperture_base,
+				   (HSAuint64)(dgpu_shared_aperture_limit) -
+				   (HSAuint64)(dgpu_shared_aperture_base) + 1);
+
+			dgpu_shared_aperture_base = NULL;
+			dgpu_shared_aperture_limit = NULL;
+			is_dgpu_mem_init = false;
+		}
+	}
+
+	if (all_gpu_id_array)
+		free(all_gpu_id_array);
+
+	all_gpu_id_array_size = 0;
+	all_gpu_id_array = NULL;
+
+	gpu_mem_count = 0;
+	free(gpu_mem);
+}

@@ -36,6 +36,11 @@
 
 static HSAuint64 *events_page = NULL;
 
+void clear_events_page(void)
+{
+	events_page = NULL;
+}
+
 static bool IsSystemEventType(HSA_EVENTTYPE type)
 {
 	// Debug events behave as signal events.
