@@ -257,6 +257,29 @@ void destroy_process_doorbells(void)
 	num_doorbells = 0;
 }
 
+/* This is a special funcion that should be called only from the child process
+ * after a fork(). This will clear doorbells duplicated from the parent.
+ */
+void clear_process_doorbells(void)
+{
+	unsigned int i;
+
+	if (!doorbells)
+		return;
+
+	for (i = 0; i < num_doorbells; i++) {
+		if (doorbells[i].need_mmap)
+			continue;
+
+		if (!use_gpuvm_doorbell(get_device_id_by_node(i)))
+			munmap(doorbells[i].doorbells, DOORBELLS_PAGE_SIZE);
+	}
+
+	free(doorbells);
+	doorbells = NULL;
+	num_doorbells = 0;
+}
+
 static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
 				      HSAuint64 doorbell_offset)
 {
