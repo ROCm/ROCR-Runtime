@@ -103,8 +103,6 @@ include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/core/inc )
 include_directories ( ${TOOLS_SOURCE_DIR}/inc )
 include_directories ( ${TOOLS_SOURCE_DIR}/commandwriter )
 include_directories ( ${TOOLS_SOURCE_DIR}/commandwriter/include/si )
-include_directories ( ${TOOLS_SOURCE_DIR}/command_writer )
-include_directories ( ${TOOLS_SOURCE_DIR}/command_writer/public )
 include_directories ( ${TOOLS_SOURCE_DIR}/common )
 include_directories ( ${TOOLS_SOURCE_DIR}/debugger )
 include_directories ( ${TOOLS_SOURCE_DIR}/intercept )
@@ -124,12 +122,7 @@ set ( CMDWRITER_SRC   ${TOOLS_SOURCE_DIR}/commandwriter/aql_hw_cmdwriter.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/ci_aql_common.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/cmdwriter.cpp )
 
-set ( CMD_WRITER_SRC  ${TOOLS_SOURCE_DIR}/command_writer/tools_command_writer.cpp
-                      ${TOOLS_SOURCE_DIR}/command_writer/tools_hw_cmd_writer.cpp
-                      ${TOOLS_SOURCE_DIR}/command_writer/tools_command_writer.cpp )
-
-set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp
-                      ${TOOLS_SOURCE_DIR}/common/cmd_buf_impl.cpp )
+set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp )
 
 set ( DEBUGGER_SRC    ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring_perf.cpp
                       ${TOOLS_SOURCE_DIR}/debugger/gpu_trap_event.cpp
