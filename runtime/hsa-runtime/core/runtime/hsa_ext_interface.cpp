@@ -528,7 +528,7 @@ hsa_status_t hsa_ext_image_data_get_info(
 
 hsa_status_t hsa_ext_image_create(
     hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
-    void* image_data, hsa_access_permission_t access_permission,
+    const void* image_data, hsa_access_permission_t access_permission,
     hsa_ext_image_t* image) {
   return core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_create_fn(agent, image_descriptor, image_data,
