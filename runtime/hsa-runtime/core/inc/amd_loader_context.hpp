@@ -73,7 +73,7 @@ public:
 
   hsa_status_t ImageCreate(hsa_agent_t agent, hsa_access_permission_t image_permission,
                            const hsa_ext_image_descriptor_t* image_descriptor,
-                           void* image_data, hsa_ext_image_t* image_handle) override;
+                           const void* image_data, hsa_ext_image_t* image_handle) override;
 
   hsa_status_t ImageDestroy(hsa_agent_t agent, hsa_ext_image_t image_handle) override;
 
