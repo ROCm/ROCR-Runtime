@@ -121,7 +121,22 @@ typedef enum hsa_amd_agent_info_s {
    * Maximum number of waves possible in a Compute Unit.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU = 0xA00A
+  HSA_AMD_AGENT_INFO_MAX_WAVES_PER_CU = 0xA00A,
+  /**
+   * Number of SIMD's per compute unit CU
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SIMDS_PER_CU = 0xA00B,
+  /**
+   * Number of Shader Engines (SE) in Gpu
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SHADER_ENGINES = 0xA00C,
+  /**
+   * Number of Shader Arrays Per Shader Engines in Gpu
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE = 0xA00D
 } hsa_amd_agent_info_t;
 
 /**
