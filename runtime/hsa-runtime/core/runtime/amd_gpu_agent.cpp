@@ -840,6 +840,15 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = static_cast<uint32_t>(
           properties_.NumSIMDPerCU * properties_.MaxWavesPerSIMD);
       break;
+    case HSA_AMD_AGENT_INFO_NUM_SIMDS_PER_CU:
+      *((uint32_t*)value) = properties_.NumSIMDPerCU;
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SHADER_ENGINES:
+      *((uint32_t*)value) = properties_.NumShaderBanks;
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE:
+      *((uint32_t*)value) = properties_.NumArrays;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
