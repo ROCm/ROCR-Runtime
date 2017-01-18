@@ -120,6 +120,9 @@ set ( CORE_SRC   ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
 
 set ( CMDWRITER_SRC   ${TOOLS_SOURCE_DIR}/commandwriter/aql_hw_cmdwriter.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/ci_aql_common.cpp
+                      ${TOOLS_SOURCE_DIR}/commandwriter/gfx9_cmdwriter.cpp
+                      ${TOOLS_SOURCE_DIR}/commandwriter/gfx9_factory.cpp
+                      ${TOOLS_SOURCE_DIR}/commandwriter/pre_gfx9_factory.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/cmdwriter.cpp )
 
 set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp )
