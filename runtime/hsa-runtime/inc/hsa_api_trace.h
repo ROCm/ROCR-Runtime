@@ -109,6 +109,9 @@ struct ImageExtTable {
 	decltype(hsa_ext_image_destroy)* hsa_ext_image_destroy_fn;
 	decltype(hsa_ext_sampler_create)* hsa_ext_sampler_create_fn;
 	decltype(hsa_ext_sampler_destroy)* hsa_ext_sampler_destroy_fn;
+        decltype(hsa_ext_image_get_capability_with_layout)* hsa_ext_image_get_capability_with_layout_fn;
+        decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
+        decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
 };
 
 // Table to export AMD Extension Apis
