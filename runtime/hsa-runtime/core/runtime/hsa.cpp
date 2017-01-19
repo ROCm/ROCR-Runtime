@@ -358,7 +358,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 
   if (extension == HSA_EXTENSION_IMAGES) {
     if (version_major > 1) return HSA_STATUS_ERROR;
-    hsa_ext_images_1_00_pfn_t ext_table;
+    hsa_ext_images_1_pfn_t ext_table;
     ext_table.hsa_ext_image_clear = hsa_ext_image_clear;
     ext_table.hsa_ext_image_copy = hsa_ext_image_copy;
     ext_table.hsa_ext_image_create = hsa_ext_image_create;
@@ -369,6 +369,9 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ext_image_import = hsa_ext_image_import;
     ext_table.hsa_ext_sampler_create = hsa_ext_sampler_create;
     ext_table.hsa_ext_sampler_destroy = hsa_ext_sampler_destroy;
+    ext_table.hsa_ext_image_get_capability_with_layout = hsa_ext_image_get_capability_with_layout;
+    ext_table.hsa_ext_image_data_get_info_with_layout = hsa_ext_image_data_get_info_with_layout;
+    ext_table.hsa_ext_image_create_with_layout = hsa_ext_image_create_with_layout;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 

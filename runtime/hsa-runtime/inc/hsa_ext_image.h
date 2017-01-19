@@ -655,6 +655,7 @@ hsa_status_t HSA_API hsa_ext_image_data_get_info(
  * or @p image_data_info is NULL.
  */
 hsa_status_t HSA_API hsa_ext_image_data_get_info_with_layout(
+    hsa_agent_t agent,
     const hsa_ext_image_descriptor_t *image_descriptor,
     hsa_access_permission_t access_permission,
     hsa_ext_image_data_layout_t image_data_layout,
@@ -1425,6 +1426,7 @@ typedef struct hsa_ext_images_1_pfn_s {
     uint32_t *capability_mask);
 
   hsa_status_t (*hsa_ext_image_data_get_info_with_layout)(
+    hsa_agent_t agent,
     const hsa_ext_image_descriptor_t *image_descriptor,
     hsa_access_permission_t access_permission,
     hsa_ext_image_data_layout_t image_data_layout,

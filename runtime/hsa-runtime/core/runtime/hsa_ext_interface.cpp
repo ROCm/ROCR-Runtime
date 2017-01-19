@@ -207,6 +207,9 @@ void ExtensionEntryPoints::InitImageExtTable() {
   image_api.hsa_ext_sampler_create_fn = hsa_ext_null;
   image_api.hsa_ext_sampler_destroy_fn = hsa_ext_null;
   image_api.hsa_amd_image_get_info_max_dim_fn = hsa_ext_null;
+  image_api.hsa_ext_image_get_capability_with_layout_fn = hsa_ext_null;
+  image_api.hsa_ext_image_data_get_info_with_layout_fn = hsa_ext_null;
+  image_api.hsa_ext_image_create_with_layout_fn = hsa_ext_null;
 }
 
 // Initialize Amd Ext table for Api related to Images
@@ -344,6 +347,32 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
            "Duplicate load of extension import.");
     image_api.hsa_ext_sampler_destroy_fn =
         (decltype(::hsa_ext_sampler_destroy)*)ptr;
+  }
+
+  ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_with_layout_impl");
+  if (ptr != NULL) {
+    assert(image_api.hsa_ext_image_get_capability_with_layout_fn ==
+               (decltype(::hsa_ext_image_get_capability_with_layout)*)hsa_ext_null &&
+           "Duplicate load of extension import.");
+    image_api.hsa_ext_image_get_capability_with_layout_fn =
+        (decltype(::hsa_ext_image_get_capability_with_layout)*)ptr;
+  }
+
+  ptr = os::GetExportAddress(lib, "hsa_ext_image_data_get_info_with_layout_impl");
+  if (ptr != NULL) {
+    assert(image_api.hsa_ext_image_data_get_info_with_layout_fn ==
+               (decltype(::hsa_ext_image_data_get_info_with_layout)*)hsa_ext_null &&
+           "Duplicate load of extension import.");
+    image_api.hsa_ext_image_data_get_info_with_layout_fn =
+        (decltype(::hsa_ext_image_data_get_info_with_layout)*)ptr;
+  }
+
+  ptr = os::GetExportAddress(lib, "hsa_ext_image_create_with_layout_impl");
+  if (ptr != NULL) {
+    assert(image_api.hsa_ext_image_create_with_layout_fn ==
+               (decltype(::hsa_ext_image_create_with_layout)*)hsa_ext_null &&
+           "Duplicate load of extension import.");
+    image_api.hsa_ext_image_create_with_layout_fn = (decltype(::hsa_ext_image_create_with_layout)*)ptr;
   }
 
   ptr = os::GetExportAddress(lib, "hsa_amd_image_get_info_max_dim_impl");
@@ -586,6 +615,44 @@ hsa_status_t hsa_ext_sampler_destroy(hsa_agent_t agent,
                                      hsa_ext_sampler_t sampler) {
   return core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_sampler_destroy_fn(agent, sampler);
+}
+
+hsa_status_t hsa_ext_image_get_capability_with_layout(
+    hsa_agent_t agent, hsa_ext_image_geometry_t geometry,
+    const hsa_ext_image_format_t* image_format,
+    hsa_ext_image_data_layout_t image_data_layout,
+    uint32_t* capability_mask) {
+  return core::Runtime::runtime_singleton_->extensions_.image_api
+      .hsa_ext_image_get_capability_with_layout_fn(agent, geometry, image_format,
+                                       image_data_layout, capability_mask);
+}
+
+hsa_status_t hsa_ext_image_data_get_info_with_layout(
+    hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
+    hsa_access_permission_t access_permission,
+    hsa_ext_image_data_layout_t image_data_layout,
+    size_t image_data_row_pitch,
+    size_t image_data_slice_pitch,
+    hsa_ext_image_data_info_t* image_data_info) {
+  return core::Runtime::runtime_singleton_->extensions_.image_api
+      .hsa_ext_image_data_get_info_with_layout_fn(agent, image_descriptor,
+                                      access_permission, image_data_layout,
+                                      image_data_row_pitch, image_data_slice_pitch,
+                                      image_data_info);
+}
+
+hsa_status_t hsa_ext_image_create_with_layout(
+    hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
+    const void* image_data, hsa_access_permission_t access_permission,
+    hsa_ext_image_data_layout_t image_data_layout,
+    size_t image_data_row_pitch,
+    size_t image_data_slice_pitch,
+    hsa_ext_image_t* image) {
+  return core::Runtime::runtime_singleton_->extensions_.image_api
+      .hsa_ext_image_create_with_layout_fn(agent, image_descriptor, image_data,
+                               access_permission, image_data_layout,
+                               image_data_row_pitch, image_data_slice_pitch,
+                               image);
 }
 
 //---------------------------------------------------------------------------//
