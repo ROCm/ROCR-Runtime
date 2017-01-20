@@ -418,8 +418,12 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		ctl_stack_size = cu_num * WAVES_PER_CU_VI * 8 + 8;
 		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU_VI;
 		q->ctl_stack_size = PAGE_ALIGN_UP(ctl_stack_size);
-		q->ctx_save_restore_size =
-			q->ctl_stack_size + PAGE_ALIGN_UP(wg_data_size);
+		q->ctx_save_restore_size = PAGE_ALIGN_UP(wg_data_size);
+
+		if (q->dev_info->asic_family < CHIP_VEGA10)
+			/* GFX8 chips store ctl-stack with WG data */
+			q->ctx_save_restore_size += q->ctl_stack_size;
+
 		return true;
 	}
 	return false;
