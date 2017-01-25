@@ -46,13 +46,12 @@
 #include <atomic>
 #include <cmath>
 #include <cstring>
+#include <limits>
 
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
-
-#define SDMA_QUEUE_SIZE 1024 * 1024
 
 namespace amd {
 // SDMA packet for VI device.
@@ -373,29 +372,33 @@ inline uint32_t ptrhigh32(const void* p) {
 #endif
 }
 
-const size_t BlitSdma::kQueueSize = SDMA_QUEUE_SIZE;
-const size_t BlitSdma::kCopyPacketSize = sizeof(SDMA_PKT_COPY_LINEAR);
+const size_t BlitSdmaBase::kQueueSize = 1024 * 1024;
+const size_t BlitSdmaBase::kCopyPacketSize = sizeof(SDMA_PKT_COPY_LINEAR);
+const size_t BlitSdmaBase::kMaxSingleCopySize = 0x3fffe0;  // From HW documentation
+const size_t BlitSdmaBase::kMaxSingleFillSize = 0x3fffe0;
 
-BlitSdma::BlitSdma()
-    : core::Blit(),
-      agent_(NULL),
-      queue_size_(0),
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma()
+    : agent_(NULL),
       queue_start_addr_(NULL),
       fence_base_addr_(NULL),
       fence_pool_size_(0),
       fence_pool_counter_(0),
-      cached_reserve_offset_(0),
-      cached_commit_offset_(0),
+      cached_reserve_index_(0),
+      cached_commit_index_(0),
       platform_atomic_support_(true) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
-BlitSdma::~BlitSdma() {}
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::~BlitSdma() {}
 
-hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initialize(
+    const core::Agent& agent) {
   agent_ = reinterpret_cast<amd::GpuAgent*>(&const_cast<core::Agent&>(agent));
 
-  if (queue_start_addr_ != NULL && queue_size_ != 0) {
+  if (queue_start_addr_ != NULL) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
   }
@@ -412,26 +415,6 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   timestamp_command_size_ = sizeof(SDMA_PKT_TIMESTAMP);
   trap_command_size_ = sizeof(SDMA_PKT_TRAP);
 
-  const uint32_t sync_command_size = fence_command_size_;
-  const uint32_t max_num_copy_command =
-      std::floor((static_cast<uint32_t>(queue_size_) - sync_command_size) /
-                 linear_copy_command_size_);
-  const uint32_t max_num_fill_command =
-      std::floor((static_cast<uint32_t>(queue_size_) - sync_command_size) /
-                 fill_command_size_);
-
-  max_single_linear_copy_size_ = 0x3fffe0;
-  max_total_linear_copy_size_ = static_cast<size_t>(
-      std::min(static_cast<uint64_t>(SIZE_MAX),
-               static_cast<uint64_t>(max_num_copy_command) *
-                   static_cast<uint64_t>(max_single_linear_copy_size_)));
-
-  max_single_fill_size_ = (1 << 22) - sizeof(uint32_t);
-  max_total_fill_size_ = static_cast<size_t>(
-      std::min(static_cast<uint64_t>(SIZE_MAX),
-               static_cast<uint64_t>(max_num_fill_command) *
-                   static_cast<uint64_t>(max_single_fill_size_)));
-
   const amd::GpuAgentInt& amd_gpu_agent =
       static_cast<const amd::GpuAgentInt&>(agent);
 
@@ -445,35 +428,31 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   }
 
   // Allocate queue buffer.
-  queue_size_ = kQueueSize;
-
-  queue_start_addr_ =
-      (char*)core::Runtime::runtime_singleton_->system_allocator()(
-          queue_size_, 0x1000, core::MemoryRegion::AllocateExecutable);
+  queue_start_addr_ = (char*)core::Runtime::runtime_singleton_->system_allocator()(
+      kQueueSize, 0x1000, core::MemoryRegion::AllocateExecutable);
 
   if (queue_start_addr_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  std::memset(queue_start_addr_, 0, queue_size_);
+  std::memset(queue_start_addr_, 0, kQueueSize);
 
   // Access kernel driver to initialize the queue control block
   // This call binds user mode queue object to underlying compute
   // device.
   const HSA_QUEUE_TYPE kQueueType_ = HSA_QUEUE_SDMA;
-  if (HSAKMT_STATUS_SUCCESS !=
-      hsaKmtCreateQueue(amd_gpu_agent.node_id(), kQueueType_, 100,
-                        HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
-                        queue_size_, NULL, &queue_resource_)) {
+  if (HSAKMT_STATUS_SUCCESS != hsaKmtCreateQueue(amd_gpu_agent.node_id(), kQueueType_, 100,
+                                                 HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
+                                                 kQueueSize, NULL, &queue_resource_)) {
     Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  cached_reserve_offset_ = *(queue_resource_.Queue_write_ptr);
-  cached_commit_offset_ = cached_reserve_offset_;
+  cached_reserve_index_ = *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_write_ptr);
+  cached_commit_index_ = cached_reserve_index_;
 
-  fence_pool_size_ = static_cast<uint32_t>(
-      (kQueueSize + fence_command_size_ - 1) / fence_command_size_);
+  fence_pool_size_ =
+      static_cast<uint32_t>((kQueueSize + fence_command_size_ - 1) / fence_command_size_);
 
   fence_pool_mask_ = fence_pool_size_ - 1;
 
@@ -490,7 +469,9 @@ hsa_status_t BlitSdma::Initialize(const core::Agent& agent) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Destroy(
+    const core::Agent& agent) {
   // Release all allocated resources and reset them to zero.
 
   if (queue_resource_.QueueId != 0) {
@@ -500,7 +481,7 @@ hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
     memset(&queue_resource_, 0, sizeof(queue_resource_));
   }
 
-  if (queue_start_addr_ != NULL && queue_size_ != 0) {
+  if (queue_start_addr_ != NULL) {
     // Release queue buffer.
     core::Runtime::runtime_singleton_->system_deallocator()(queue_start_addr_);
   }
@@ -509,24 +490,19 @@ hsa_status_t BlitSdma::Destroy(const core::Agent& agent) {
     core::Runtime::runtime_singleton_->system_deallocator()(fence_base_addr_);
   }
 
-  queue_size_ = 0;
   queue_start_addr_ = NULL;
-  cached_reserve_offset_ = 0;
-  cached_commit_offset_ = 0;
+  cached_reserve_index_ = 0;
+  cached_commit_index_ = 0;
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::SubmitLinearCopyCommand(void* dst, const void* src,
-                                               size_t size) {
-  if (size > max_total_linear_copy_size_) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitLinearCopyCommand(
+    void* dst, const void* src, size_t size) {
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command =
-      (size + max_single_linear_copy_size_ - 1) / max_single_linear_copy_size_;
+  const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
 
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
@@ -538,8 +514,8 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(void* dst, const void* src,
   uint32_t* fence_addr = ObtainFenceObject();
   *fence_addr = 0;
 
-  char* command_addr = AcquireWriteAddress(total_command_size);
-  char* const command_addr_temp = command_addr;
+  RingIndexTy curr_index;
+  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
 
   if (command_addr == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -551,20 +527,17 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(void* dst, const void* src,
 
   BuildFenceCommand(command_addr, fence_addr, kFenceValue);
 
-  ReleaseWriteAddress(command_addr_temp, total_command_size);
+  ReleaseWriteAddress(curr_index, total_command_size);
 
   WaitFence(fence_addr, kFenceValue);
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::SubmitLinearCopyCommand(
-    void* dst, const void* src, size_t size,
-    std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
-  if (size > max_total_linear_copy_size_) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitLinearCopyCommand(
+    void* dst, const void* src, size_t size, std::vector<core::Signal*>& dep_signals,
+    core::Signal& out_signal) {
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
   const uint32_t num_poll_command =
@@ -574,8 +547,7 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
 
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command =
-      (size + max_single_linear_copy_size_ - 1) / max_single_linear_copy_size_;
+  const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
 
@@ -624,8 +596,8 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
       total_poll_command_size + total_copy_command_size + sync_command_size +
       total_timestamp_command_size + interrupt_command_size;
 
-  char* command_addr = AcquireWriteAddress(total_command_size);
-  char* const command_addr_temp = command_addr;
+  RingIndexTy curr_index;
+  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
 
   if (command_addr == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -695,23 +667,19 @@ hsa_status_t BlitSdma::SubmitLinearCopyCommand(
     BuildTrapCommand(command_addr);
   }
 
-  ReleaseWriteAddress(command_addr_temp, total_command_size);
+  ReleaseWriteAddress(curr_index, total_command_size);
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
-                                               size_t count) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitLinearFillCommand(
+    void* ptr, uint32_t value, size_t count) {
   const size_t size = count * sizeof(uint32_t);
-
-  if (size > max_total_fill_size_) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
 
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_fill_command =
-      (size + max_single_fill_size_ - 1) / max_single_fill_size_;
+  const uint32_t num_fill_command = (size + kMaxSingleFillSize - 1) / kMaxSingleFillSize;
 
   const uint32_t total_fill_command_size =
       num_fill_command * fill_command_size_;
@@ -719,8 +687,8 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
   const uint32_t total_command_size =
       total_fill_command_size + fence_command_size_;
 
-  char* command_addr = AcquireWriteAddress(total_command_size);
-  char* const command_addr_temp = command_addr;
+  RingIndexTy curr_index;
+  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
 
   if (command_addr == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -729,8 +697,8 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
   const uint32_t fill_command_size = fill_command_size_;
   size_t cur_size = 0;
   for (uint32_t i = 0; i < num_fill_command; ++i) {
-    const uint32_t fill_size = static_cast<uint32_t>(
-        std::min((size - cur_size), max_single_fill_size_));
+    const uint32_t fill_size =
+        static_cast<uint32_t>(std::min((size - cur_size), kMaxSingleFillSize));
 
     void* cur_ptr = static_cast<char*>(ptr) + cur_size;
 
@@ -747,7 +715,7 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
 
     packet_addr->DATA_UNION.src_data_31_0 = value;
 
-    packet_addr->COUNT_UNION.count = fill_size;
+    packet_addr->COUNT_UNION.count = fill_size + SizeToCountOffset;
 
     command_addr += fill_command_size;
     cur_size += fill_size;
@@ -761,139 +729,160 @@ hsa_status_t BlitSdma::SubmitLinearFillCommand(void* ptr, uint32_t value,
 
   BuildFenceCommand(command_addr, fence_addr, kFenceValue);
 
-  ReleaseWriteAddress(command_addr_temp, total_command_size);
+  ReleaseWriteAddress(curr_index, total_command_size);
 
   WaitFence(fence_addr, kFenceValue);
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitSdma::EnableProfiling(bool enable) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::EnableProfiling(
+    bool enable) {
   return HSA_STATUS_SUCCESS;
 }
 
-char* BlitSdma::AcquireWriteAddress(uint32_t cmd_size) {
-  if (cmd_size > queue_size_) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+char* BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::AcquireWriteAddress(
+    uint32_t cmd_size, RingIndexTy& curr_index) {
+  // Ring is full when all but one byte is written.
+  if (cmd_size >= kQueueSize) {
     return NULL;
   }
 
   while (true) {
-    const uint32_t curr_offset =
-        atomic::Load(&cached_reserve_offset_, std::memory_order_acquire);
-    const uint32_t end_offset = curr_offset + cmd_size;
+    curr_index = atomic::Load(&cached_reserve_index_, std::memory_order_acquire);
 
-    if (end_offset >= queue_size_) {
-      // Queue buffer is not enough to contain the new command.
-      WrapQueue(cmd_size);
+    // Check whether a linear region of the requested size is available.
+    // If == cmd_size: region is at beginning of ring.
+    // If < cmd_size: region intersects end of ring, pad with no-ops and retry.
+    if (WrapIntoRing(curr_index + cmd_size) < cmd_size) {
+      PadRingToEnd(curr_index);
       continue;
     }
 
-    const uint32_t curr_read_ptr_val =
-        atomic::Load(queue_resource_.Queue_read_ptr, std::memory_order_acquire);
-    if (curr_offset < curr_read_ptr_val && end_offset > curr_read_ptr_val) {
-      // Queue is wrapping and there is not enough space to recycle.
+    // Check whether the engine has finished using this region.
+    const RingIndexTy new_index = curr_index + cmd_size;
+
+    if (CanWriteUpto(new_index) == false) {
+      // Wait for read index to move and try again.
+      os::YieldThread();
       continue;
     }
 
-    if (atomic::Cas(&cached_reserve_offset_, end_offset, curr_offset,
-                    std::memory_order_release) == curr_offset) {
-      return queue_start_addr_ + curr_offset;
+    // Try to reserve this part of the ring.
+    if (atomic::Cas(&cached_reserve_index_, new_index, curr_index, std::memory_order_release) ==
+        curr_index) {
+      return queue_start_addr_ + WrapIntoRing(curr_index);
     }
+
+    // Another thread reserved curr_index, try again.
+    os::YieldThread();
   }
 
   return NULL;
 }
 
-void BlitSdma::UpdateWriteAndDoorbellRegister(uint32_t current_offset,
-                                              uint32_t new_offset) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::UpdateWriteAndDoorbellRegister(
+    RingIndexTy curr_index, RingIndexTy new_index) {
   while (true) {
-    // Make sure that the address before ::current_offset is already released.
+    // Make sure that the address before ::curr_index is already released.
     // Otherwise the CP may read invalid packets.
-    if (atomic::Load(&cached_commit_offset_, std::memory_order_acquire) ==
-        current_offset) {
+    if (atomic::Load(&cached_commit_index_, std::memory_order_acquire) == curr_index) {
       if (core::Runtime::runtime_singleton_->flag().sdma_wait_idle()) {
         // TODO: remove when sdma wpointer issue is resolved.
         // Wait until the SDMA engine finish processing all packets before
         // updating the wptr and doorbell.
-        while (atomic::Load(queue_resource_.Queue_read_ptr,
-                            std::memory_order_acquire) != current_offset) {
+        while (WrapIntoRing(*reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_read_ptr)) !=
+               WrapIntoRing(curr_index)) {
           os::YieldThread();
         }
       }
 
       // Update write pointer and doorbel register.
-      atomic::Store(queue_resource_.Queue_write_ptr, new_offset);
+      *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_write_ptr) =
+          (HwIndexMonotonic ? new_index : WrapIntoRing(new_index));
 
+      // Ensure write pointer is visible to GPU before doorbell.
       std::atomic_thread_fence(std::memory_order_release);
 
-      atomic::Store(queue_resource_.Queue_DoorBell, new_offset);
+      *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_DoorBell) =
+          (HwIndexMonotonic ? new_index : WrapIntoRing(new_index));
 
-      std::atomic_thread_fence(std::memory_order_release);
-
-      atomic::Store(&cached_commit_offset_, new_offset);
+      atomic::Store(&cached_commit_index_, new_index, std::memory_order_release);
       break;
     }
+
+    // Waiting for another thread to submit preceding commands first.
+    os::YieldThread();
   }
 }
 
-void BlitSdma::ReleaseWriteAddress(char* cmd_addr, uint32_t cmd_size) {
-  assert(cmd_addr != NULL);
-  assert(cmd_addr >= queue_start_addr_);
-
-  if (cmd_size > queue_size_) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::ReleaseWriteAddress(
+    RingIndexTy curr_index, uint32_t cmd_size) {
+  if (cmd_size > kQueueSize) {
     assert(false && "cmd_addr is outside the queue buffer range");
     return;
   }
 
-  // Update write register.
-  const uint32_t curent_offset = cmd_addr - queue_start_addr_;
-  const uint32_t new_offset = curent_offset + cmd_size;
-  UpdateWriteAndDoorbellRegister(curent_offset, new_offset);
+  UpdateWriteAndDoorbellRegister(curr_index, curr_index + cmd_size);
 }
 
-void BlitSdma::WrapQueue(uint32_t cmd_size) {
-  // Re-determine the offset into queue buffer where NOOP instructions
-  // should be written.
-  while (true) {
-    const uint32_t full_offset = queue_size_ + 1;
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::PadRingToEnd(
+    RingIndexTy curr_index) {
+  // Reserve region from here to the end of the ring.
+  RingIndexTy new_index = curr_index + (kQueueSize - WrapIntoRing(curr_index));
 
-    uint32_t curent_offset =
-        atomic::Load(&cached_reserve_offset_, std::memory_order_acquire);
-    const uint32_t end_offset = curent_offset + cmd_size;
-    if (end_offset < queue_size_) {
-      return;
-    }
+  // Check whether the engine has finished using this region.
+  if (CanWriteUpto(new_index) == false) {
+    // Wait for read index to move and try again.
+    return;
+  }
 
-    if (curent_offset == full_offset) {
-      // Another thread is already wrapping the queue.
-      continue;
-    }
+  if (atomic::Cas(&cached_reserve_index_, new_index, curr_index, std::memory_order_release) ==
+      curr_index) {
+    // Write and submit NOP commands in reserved region.
+    char* nop_address = queue_start_addr_ + WrapIntoRing(curr_index);
+    memset(nop_address, 0, new_index - curr_index);
 
-    // Close reservation to queue temporarily by "making" it full.
-    if (atomic::Cas(&cached_reserve_offset_, full_offset, curent_offset,
-                    std::memory_order_release) == curent_offset) {
-      // Wait till all reserved packets are commited.
-      while (atomic::Load(&cached_commit_offset_, std::memory_order_acquire) !=
-             curent_offset) {
-        os::YieldThread();
-      }
-
-      // Fill the remainder of the queue with NOOP commands.
-      char* noop_address = queue_start_addr_ + curent_offset;
-      const size_t noop_commands_size = queue_size_ - curent_offset;
-      memset(noop_address, 0, noop_commands_size);
-
-      // Update write and doorbell registers to execute NOOP instructions.
-      UpdateWriteAndDoorbellRegister(curent_offset, 0);
-
-      // Open access to queue.
-      atomic::Store(&cached_reserve_offset_, 0U, std::memory_order_release);
-    }
+    UpdateWriteAndDoorbellRegister(curr_index, new_index);
   }
 }
 
-void BlitSdma::BuildFenceCommand(char* fence_command_addr, uint32_t* fence,
-                                 uint32_t fence_value) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::WrapIntoRing(
+    RingIndexTy index) {
+  return index & (kQueueSize - 1);
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+bool BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::CanWriteUpto(
+    RingIndexTy upto_index) {
+  // Get/calculate the monotonic read index.
+  RingIndexTy hw_read_index = *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_read_ptr);
+  RingIndexTy read_index;
+
+  if (HwIndexMonotonic) {
+    read_index = hw_read_index;
+  } else {
+    // Calculate distance from commit index to HW read index.
+    // Commit index is always < kQueueSize away from HW read index.
+    RingIndexTy commit_index = atomic::Load(&cached_commit_index_, std::memory_order_relaxed);
+    RingIndexTy dist_to_read_index = WrapIntoRing(commit_index - hw_read_index);
+    read_index = commit_index - dist_to_read_index;
+  }
+
+  // Check whether the read pointer has passed the given index.
+  // At most we can submit (kQueueSize - 1) bytes at a time.
+  return (upto_index - read_index) < kQueueSize;
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildFenceCommand(
+    char* fence_command_addr, uint32_t* fence, uint32_t fence_value) {
   assert(fence_command_addr != NULL);
   SDMA_PKT_FENCE* packet_addr =
       reinterpret_cast<SDMA_PKT_FENCE*>(fence_command_addr);
@@ -909,7 +898,8 @@ void BlitSdma::BuildFenceCommand(char* fence_command_addr, uint32_t* fence,
   packet_addr->DATA_UNION.data = fence_value;
 }
 
-uint32_t* BlitSdma::ObtainFenceObject() {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+uint32_t* BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::ObtainFenceObject() {
   const uint32_t fence_index =
       atomic::Add(&fence_pool_counter_, 1U, std::memory_order_acquire);
   uint32_t* fence_addr = &fence_base_addr_[fence_index & fence_pool_mask_];
@@ -917,7 +907,9 @@ uint32_t* BlitSdma::ObtainFenceObject() {
   return fence_addr;
 }
 
-void BlitSdma::WaitFence(uint32_t* fence, uint32_t fence_value) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::WaitFence(uint32_t* fence,
+                                                                           uint32_t fence_value) {
   int spin_count = 51;
   while (atomic::Load(fence, std::memory_order_acquire) != fence_value) {
     if (--spin_count > 0) {
@@ -927,12 +919,13 @@ void BlitSdma::WaitFence(uint32_t* fence, uint32_t fence_value) {
   }
 }
 
-void BlitSdma::BuildCopyCommand(char* cmd_addr, uint32_t num_copy_command,
-                                void* dst, const void* src, size_t size) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildCopyCommand(
+    char* cmd_addr, uint32_t num_copy_command, void* dst, const void* src, size_t size) {
   size_t cur_size = 0;
   for (uint32_t i = 0; i < num_copy_command; ++i) {
-    const uint32_t copy_size = static_cast<uint32_t>(
-        std::min((size - cur_size), max_single_linear_copy_size_));
+    const uint32_t copy_size =
+        static_cast<uint32_t>(std::min((size - cur_size), kMaxSingleCopySize));
 
     void* cur_dst = static_cast<char*>(dst) + cur_size;
     const void* cur_src = static_cast<const char*>(src) + cur_size;
@@ -945,7 +938,7 @@ void BlitSdma::BuildCopyCommand(char* cmd_addr, uint32_t num_copy_command,
     packet_addr->HEADER_UNION.op = SDMA_OP_COPY;
     packet_addr->HEADER_UNION.sub_op = SDMA_SUBOP_COPY_LINEAR;
 
-    packet_addr->COUNT_UNION.count = copy_size;
+    packet_addr->COUNT_UNION.count = copy_size + SizeToCountOffset;
 
     packet_addr->SRC_ADDR_LO_UNION.src_addr_31_0 = ptrlow32(cur_src);
     packet_addr->SRC_ADDR_HI_UNION.src_addr_63_32 = ptrhigh32(cur_src);
@@ -960,8 +953,9 @@ void BlitSdma::BuildCopyCommand(char* cmd_addr, uint32_t num_copy_command,
   assert(cur_size == size);
 }
 
-void BlitSdma::BuildPollCommand(char* cmd_addr, void* addr,
-                                uint32_t reference) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildPollCommand(
+    char* cmd_addr, void* addr, uint32_t reference) {
   SDMA_PKT_POLL_REGMEM* packet_addr =
       reinterpret_cast<SDMA_PKT_POLL_REGMEM*>(cmd_addr);
 
@@ -981,7 +975,9 @@ void BlitSdma::BuildPollCommand(char* cmd_addr, void* addr,
   packet_addr->DW5_UNION.retry_count = 0xfff;  // Retry forever.
 }
 
-void BlitSdma::BuildAtomicDecrementCommand(char* cmd_addr, void* addr) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildAtomicDecrementCommand(
+    char* cmd_addr, void* addr) {
   SDMA_PKT_ATOMIC* packet_addr = reinterpret_cast<SDMA_PKT_ATOMIC*>(cmd_addr);
 
   memset(packet_addr, 0, sizeof(SDMA_PKT_ATOMIC));
@@ -996,8 +992,9 @@ void BlitSdma::BuildAtomicDecrementCommand(char* cmd_addr, void* addr) {
   packet_addr->SRC_DATA_HI_UNION.src_data_63_32 = 0xffffffff;
 }
 
-void BlitSdma::BuildGetGlobalTimestampCommand(char* cmd_addr,
-                                              void* write_address) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildGetGlobalTimestampCommand(
+    char* cmd_addr, void* write_address) {
   SDMA_PKT_TIMESTAMP* packet_addr =
       reinterpret_cast<SDMA_PKT_TIMESTAMP*>(cmd_addr);
 
@@ -1010,7 +1007,8 @@ void BlitSdma::BuildGetGlobalTimestampCommand(char* cmd_addr,
   packet_addr->ADDR_HI_UNION.addr_63_32 = ptrhigh32(write_address);
 }
 
-void BlitSdma::BuildTrapCommand(char* cmd_addr) {
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildTrapCommand(char* cmd_addr) {
   SDMA_PKT_TRAP* packet_addr =
       reinterpret_cast<SDMA_PKT_TRAP*>(cmd_addr);
 
@@ -1018,4 +1016,8 @@ void BlitSdma::BuildTrapCommand(char* cmd_addr) {
 
   packet_addr->HEADER_UNION.op = SDMA_OP_TRAP;
 }
+
+template class BlitSdma<uint32_t, false, 0>;
+template class BlitSdma<uint64_t, true, -1>;
+
 }  // namespace amd
