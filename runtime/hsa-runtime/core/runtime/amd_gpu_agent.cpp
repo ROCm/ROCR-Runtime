@@ -389,9 +389,9 @@ bool GpuAgent::InitEndTsPool() {
     return true;
   }
 
-  end_ts_pool_size_ = static_cast<uint32_t>(
-      (BlitSdma::kQueueSize + BlitSdma::kCopyPacketSize - 1) /
-      (BlitSdma::kCopyPacketSize));
+  end_ts_pool_size_ =
+      static_cast<uint32_t>((BlitSdmaBase::kQueueSize + BlitSdmaBase::kCopyPacketSize - 1) /
+                            (BlitSdmaBase::kCopyPacketSize));
 
   // Allocate end timestamp object for both h2d and d2h DMA.
   const size_t alloc_size = 2 * end_ts_pool_size_ * kTsSize;
@@ -510,7 +510,13 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
 }
 
 core::Blit* GpuAgent::CreateBlitSdma() {
-  BlitSdma* sdma = new BlitSdma();
+  core::Blit* sdma;
+
+  if (isa_->GetMajorVersion() <= 8) {
+    sdma = new BlitSdmaV2V3;
+  } else {
+    sdma = new BlitSdmaV4;
+  }
 
   if (sdma->Initialize(*this) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
