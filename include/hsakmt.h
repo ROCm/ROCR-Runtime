@@ -445,6 +445,37 @@ hsaKmtRegisterSharedHandleToNodes(
 );
 
 /**
+ Copy data from the GPU address space of the process identified
+ by Pid. Size Copied will return actual amount of data copied.
+ If return is not SUCCESS, partial copies could have happened.
+ */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtProcessVMRead(
+	HSAuint32                 Pid,                     // IN
+	HsaMemoryRange            *LocalMemoryArray,       // IN
+	HSAuint64                 LocalMemoryArrayCount,   // IN
+	HsaMemoryRange            *RemoteMemoryArray,      // IN
+	HSAuint64                 RemoteMemoryArrayCount,  // IN
+	HSAuint64                 *SizeCopied              // OUT
+);
+
+/**
+ Write data to the GPU address space of the process identified
+ by Pid. See also hsaKmtProcessVMRead.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtProcessVMWrite(
+	HSAuint32                 Pid,                     // IN
+	HsaMemoryRange            *LocalMemoryArray,       // IN
+	HSAuint64                 LocalMemoryArrayCount,   // IN
+	HsaMemoryRange            *RemoteMemoryArray,      // IN
+	HSAuint64                 RemoteMemoryArrayCount,  // IN
+	HSAuint64                 *SizeCopied              // OUT
+);
+
+/**
   Unregisters with KFD a memory buffer
 */
 
