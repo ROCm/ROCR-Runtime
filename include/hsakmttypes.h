@@ -1008,6 +1008,11 @@ typedef struct _HsaPointerInfo {
 
 typedef HSAuint32 HsaSharedMemoryHandle[8];
 
+typedef struct _HsaMemoryRange {
+	void               *MemoryAddress;   // Pointer to GPU memory
+	HSAuint64          SizeInBytes;      // Size of above memory
+} HsaMemoryRange;
+
 #pragma pack(pop, hsakmttypes_h)
 
 

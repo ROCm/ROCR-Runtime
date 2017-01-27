@@ -30,6 +30,8 @@ hsaKmtRegisterGraphicsHandleToNodes;
 hsaKmtShareMemory;
 hsaKmtRegisterSharedHandle;
 hsaKmtRegisterSharedHandleToNodes;
+hsaKmtProcessVMRead;
+hsaKmtProcessVMWrite;
 hsaKmtDeregisterMemory;
 hsaKmtMapMemoryToGPU;
 hsaKmtMapMemoryToGPUNodes;
