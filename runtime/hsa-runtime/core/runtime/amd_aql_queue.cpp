@@ -370,6 +370,12 @@ uint64_t AqlQueue::AddWriteIndexRelease(uint64_t value) {
 }
 
 void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
+  if (doorbell_type_ == 2) {
+    // Hardware doorbell supports AQL semantics.
+    atomic::Store(signal_.hardware_doorbell_ptr, uint64_t(value), std::memory_order_release);
+    return;
+  }
+
   // Acquire spinlock protecting the legacy doorbell.
   while (atomic::Cas(&amd_queue_.legacy_doorbell_lock, 1U, 0U,
                      std::memory_order_acquire) != 0) {
