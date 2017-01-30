@@ -201,6 +201,7 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
       asic_shader = &compiled_shader_it->second.compute_7;
       break;
     case 8:
+    case 9: // ISA-compatible with 8
       asic_shader = &compiled_shader_it->second.compute_8;
       break;
     default:
@@ -1176,6 +1177,12 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
+  } else if (isa_->GetMajorVersion() == 9) {
+    static std::once_flag once;
+    std::call_once(once, []() {
+      fprintf(stderr, "warning: code cache invalidation not implemented\n");
+    });
+    return;
   } else {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
