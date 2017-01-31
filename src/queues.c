@@ -513,6 +513,12 @@ static int handle_concrete_asic(struct queue *q,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+/* A map to translate thunk queue priority (-3 to +3)
+ * to KFD queue priority (0 to 15)
+ * Indexed by thunk_queue_priority+3
+ */
+static uint32_t priority_map[] = {0,3,5,7,9,11,15};
+
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtCreateQueue(
@@ -532,6 +538,10 @@ hsaKmtCreateQueue(
 	struct device_info *dev_info;
 	int err;
 	CHECK_KFD_OPEN();
+
+    if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
+		Priority > HSA_QUEUE_PRIORITY_MAXIMUM)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	result = validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
@@ -581,7 +591,7 @@ hsaKmtCreateQueue(
 	args.ring_base_address = (uintptr_t)QueueAddress;
 	args.ring_size = QueueSizeInBytes;
 	args.queue_percentage = QueuePercentage;
-	args.queue_priority = Priority;
+	args.queue_priority = priority_map[Priority+3];
 
 	err = kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
 
@@ -623,13 +633,17 @@ hsaKmtUpdateQueue(
 
 	CHECK_KFD_OPEN();
 
+    if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
+		Priority > HSA_QUEUE_PRIORITY_MAXIMUM)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
 	if (q == NULL)
 		return (HSAKMT_STATUS_INVALID_PARAMETER);
 	arg.queue_id = (HSAuint32)q->queue_id;
 	arg.ring_base_address = (uintptr_t)QueueAddress;
 	arg.ring_size = QueueSize;
 	arg.queue_percentage = QueuePercentage;
-	arg.queue_priority = Priority;
+	arg.queue_priority = priority_map[Priority+3];
 
 	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_UPDATE_QUEUE, &arg);
 	if (err == -1)

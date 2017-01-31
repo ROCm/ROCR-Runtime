@@ -48,6 +48,7 @@ extern "C" {
     typedef unsigned short     HSAuint16;
     typedef signed short       HSAint16;
     typedef unsigned __int32   HSAuint32;
+    typedef signed __int32     HSAint32;
     typedef signed __int64     HSAint64;
     typedef unsigned __int64   HSAuint64;
 
@@ -63,6 +64,7 @@ extern "C" {
     typedef uint16_t	HSAuint16;
     typedef int16_t	HSAint16;
     typedef uint32_t	HSAuint32;
+    typedef int32_t 	HSAint32;
     typedef int64_t	HSAint64;
     typedef uint64_t	HSAuint64;
 

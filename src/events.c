@@ -120,6 +120,10 @@ hsaKmtCreateEvent(
 	e->EventData.HWData1 = args.event_id;
 
 	e->EventData.HWData3 = args.event_trigger_data;
+	e->EventData.EventData.SyncVar.SyncVar.UserData =
+		EventDesc->SyncVar.SyncVar.UserData;
+	e->EventData.EventData.SyncVar.SyncVarSize =
+		EventDesc->SyncVar.SyncVarSize;
 
 	if (IsSignaled && !IsSystemEventType(e->EventData.EventType)) {
 		struct kfd_ioctl_set_event_args set_args;
