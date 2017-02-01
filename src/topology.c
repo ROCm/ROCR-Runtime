@@ -138,13 +138,27 @@ static struct hsa_gfxip_table {
 	{ 0x6939, 8, 0, 2, 1, "Tonga" },
 	/* Fiji */
 	{ 0x7300, 8, 0, 3, 1, "Fiji" },
-	{ 0x730f, 8, 0, 3, 1, "Fiji" },
+	{ 0x730F, 8, 0, 3, 1, "Fiji" },
 	/* Polaris10 */
+	{ 0x67C0, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67C1, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67C2, 8, 0, 3, 1, "Polaris10" },
 	{ 0x67C4, 8, 0, 3, 1, "Polaris10" },
 	{ 0x67C7, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67C8, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67C9, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67CA, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67CC, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67CF, 8, 0, 3, 1, "Polaris10" },
 	{ 0x67DF, 8, 0, 3, 1, "Polaris10" },
 	/* Polaris11 */
+	{ 0x67E0, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67E1, 8, 0, 3, 1, "Polaris11" },
 	{ 0x67E3, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67E7, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67E8, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67E9, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67EB, 8, 0, 3, 1, "Polaris11" },
 	{ 0x67EF, 8, 0, 3, 1, "Polaris11" },
 	{ 0x67FF, 8, 0, 3, 1, "Polaris11" }
 };
