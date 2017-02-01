@@ -46,7 +46,7 @@
 #include "core/util/utils.h"
 #include "core/util/os.h"
 #include <chrono>
-
+#include <time.h>
 #include <type_traits>
 
 namespace timer {
@@ -144,8 +144,18 @@ class fast_clock {
   typedef uint64_t raw_rep;
   typedef double raw_frequency;
 
+#ifdef __x86_64__
   static __forceinline raw_rep raw_now() { return __rdtsc(); }
   static __forceinline raw_frequency raw_freq() { return freq; }
+#endif
+#ifdef __aarch64__
+  static __forceinline raw_rep raw_now() {
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC_RAW, &ts);
+    return (raw_rep(ts.tv_sec) * 1000000000 + raw_rep(ts.tv_nsec));
+  }
+  static __forceinline raw_frequency raw_freq() { return 1.e-9; }
+#endif
 
  private:
   static double period_ps;
