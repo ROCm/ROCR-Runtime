@@ -89,9 +89,9 @@ set ( CMAKE_CXX_FLAGS "-std=c++11 " )
 
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-deprecated-declarations -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -fPIC" )
 
-if ( IS64BIT )
+if ( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
     set  ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2" )
-else  ()
+elseif ( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86" )
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32" )
 endif ()
 
