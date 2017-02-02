@@ -125,7 +125,8 @@ set ( CMDWRITER_SRC   ${TOOLS_SOURCE_DIR}/commandwriter/aql_hw_cmdwriter.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/pre_gfx9_factory.cpp
                       ${TOOLS_SOURCE_DIR}/commandwriter/cmdwriter.cpp )
 
-set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp )
+set ( COMMON_SRC      ${TOOLS_SOURCE_DIR}/common/amd_asic_type.cpp
+                      ${TOOLS_SOURCE_DIR}/common/amd_tools_interface.cpp )
 
 set ( DEBUGGER_SRC    ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring_perf.cpp
                       ${TOOLS_SOURCE_DIR}/debugger/gpu_trap_event.cpp
