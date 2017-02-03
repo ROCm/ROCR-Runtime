@@ -29,22 +29,22 @@
 #include "libhsakmt.h"
 
 enum perf_block_id {
-    PERFCOUNTER_BLOCKID__FIRST = 0,
-    PERFCOUNTER_BLOCKID__SQ = PERFCOUNTER_BLOCKID__FIRST,
-    PERFCOUNTER_BLOCKID__MAX
+	PERFCOUNTER_BLOCKID__FIRST = 0,
+	PERFCOUNTER_BLOCKID__SQ = PERFCOUNTER_BLOCKID__FIRST,
+	PERFCOUNTER_BLOCKID__MAX
 };
 
 struct perf_counter_block {
-    uint32_t    num_of_slots;
-    uint32_t    num_of_counters;
-    uint32_t    *counter_ids;
-    uint32_t    counter_size_in_bits;
-    uint64_t    counter_mask;
+	uint32_t    num_of_slots;
+	uint32_t    num_of_counters;
+	uint32_t    *counter_ids;
+	uint32_t    counter_size_in_bits;
+	uint64_t    counter_mask;
 };
 
 HSAKMT_STATUS
 get_block_properties(uint16_t dev_id,
-                     enum perf_block_id block_id,
-                     struct perf_counter_block *block);
+		 enum perf_block_id block_id,
+		 struct perf_counter_block *block);
 
 #endif // PMC_TABLE_H
