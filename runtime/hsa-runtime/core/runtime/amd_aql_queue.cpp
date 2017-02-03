@@ -147,8 +147,14 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   // Initialize and map a HW AQL queue.
   HsaQueueResource queue_rsrc = {0};
   queue_rsrc.Queue_read_ptr_aql = (uint64_t*)&amd_queue_.read_dispatch_id;
-  queue_rsrc.Queue_write_ptr_aql =
-      (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
+
+  if (doorbell_type_ == 2) {
+    // Hardware write pointer supports AQL semantics.
+    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.write_dispatch_id;
+  } else {
+    // Map hardware write pointer to a software proxy.
+    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
+  }
 
   HSAKMT_STATUS kmt_status;
   kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100,
