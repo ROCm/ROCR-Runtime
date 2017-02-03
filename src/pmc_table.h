@@ -31,6 +31,7 @@
 enum perf_block_id {
 	PERFCOUNTER_BLOCKID__FIRST = 0,
 	PERFCOUNTER_BLOCKID__SQ = PERFCOUNTER_BLOCKID__FIRST,
+	PERFCOUNTER_BLOCKID__IOMMUV2,
 	PERFCOUNTER_BLOCKID__MAX
 };
 
@@ -42,9 +43,12 @@ struct perf_counter_block {
 	uint64_t    counter_mask;
 };
 
+HSAKMT_STATUS alloc_pmc_blocks(void);
+void free_pmc_blocks(void);
+
 HSAKMT_STATUS
-get_block_properties(uint16_t dev_id,
-		 enum perf_block_id block_id,
-		 struct perf_counter_block *block);
+get_block_properties(uint32_t node_id,
+                     enum perf_block_id block_id,
+                     struct perf_counter_block *block);
 
 #endif // PMC_TABLE_H
