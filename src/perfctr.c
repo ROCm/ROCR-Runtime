@@ -56,6 +56,9 @@ HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	counter_props_count = NumNodes;
+
+	alloc_pmc_blocks();
+
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -73,18 +76,24 @@ void destroy_counter_props(void)
 		}
 
 	free(counter_props);
+	free_pmc_blocks();
 }
 
 static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 {
 	int rc = 0;
+
 	switch (block_id) {
 	case PERFCOUNTER_BLOCKID__SQ:
 		*uuid = HSA_PROFILEBLOCK_AMD_SQ;
 		break;
+	case PERFCOUNTER_BLOCKID__IOMMUV2:
+		*uuid = HSA_PROFILEBLOCK_AMD_IOMMUV2;
+		break;
 	default:
 		/* If we reach this point, it's a bug */
 		rc = -1;
+		break;
 	}
 
 	return rc;
@@ -99,11 +108,12 @@ hsaKmtPmcGetCounterProperties(
 {
 	HSAKMT_STATUS rc = HSAKMT_STATUS_SUCCESS;
 	uint32_t gpu_id, i, block_id;
-	uint16_t dev_id;
 	uint32_t counter_props_size = 0;
 	uint32_t total_counters = 0;
 	uint32_t total_concurrent = 0;
 	struct perf_counter_block block = {0};
+	uint32_t total_blocks = 0;
+	uint32_t entry;
 
 	if (counter_props == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
@@ -114,50 +124,63 @@ hsaKmtPmcGetCounterProperties(
 	if (validate_nodeid(NodeId, &gpu_id) != 0)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
-	if (counter_props[NodeId] == NULL) {
-		dev_id = get_device_id_by_node(NodeId);
-		for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
-			rc = get_block_properties(dev_id, i, &block);
-			if (rc != HSAKMT_STATUS_SUCCESS)
-				return rc;
-			total_concurrent += block.num_of_slots;
-			total_counters += block.num_of_counters;
+	if (counter_props[NodeId] != NULL) {
+		*CounterProperties = counter_props[NodeId];
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
+		rc = get_block_properties(NodeId, i, &block);
+		if (rc != HSAKMT_STATUS_SUCCESS)
+			return rc;
+		total_concurrent += block.num_of_slots;
+		total_counters += block.num_of_counters;
+		/* If num_of_slots=0, this block doesn't exist */
+		if (block.num_of_slots)
+			total_blocks++;
+	}
+
+	counter_props_size = sizeof(HsaCounterProperties) +
+			sizeof(HsaCounterBlockProperties)*(total_blocks-1) +
+			sizeof(HsaCounter)*(total_counters-1);
+
+	counter_props[NodeId] = malloc(counter_props_size);
+	if (counter_props[NodeId] == NULL)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	counter_props[NodeId]->NumBlocks = total_blocks;
+	counter_props[NodeId]->NumConcurrent = total_concurrent;
+
+	entry = 0;
+	for (block_id = 0; block_id < PERFCOUNTER_BLOCKID__MAX; block_id++) {
+		rc = get_block_properties(NodeId, block_id, &block);
+		if (rc != HSAKMT_STATUS_SUCCESS) {
+			free(counter_props[NodeId]);
+			return rc;
 		}
 
-		counter_props_size = sizeof(HsaCounterProperties) +
-		sizeof(HsaCounterBlockProperties)*(PERFCOUNTER_BLOCKID__MAX-1) +
-		sizeof(HsaCounter)*(total_counters-1);
+		if (!block.num_of_slots) /* not a valid block */
+			continue;
 
-		counter_props[NodeId] = malloc(counter_props_size);
+		blockid2uuid(block_id,
+			&counter_props[NodeId]->Blocks[entry].BlockId);
+		counter_props[NodeId]->Blocks[entry].NumCounters =
+					block.num_of_counters;
+		counter_props[NodeId]->Blocks[entry].NumConcurrent =
+					block.num_of_slots;
 
-		if (counter_props[NodeId] == NULL)
-			return HSAKMT_STATUS_NO_MEMORY;
-
-		counter_props[NodeId]->NumBlocks = PERFCOUNTER_BLOCKID__MAX;
-		counter_props[NodeId]->NumConcurrent = total_concurrent;
-
-		for (block_id = 0; block_id < PERFCOUNTER_BLOCKID__MAX; block_id++)
-		{
-			rc = get_block_properties(dev_id, block_id, &block);
-			if (rc != HSAKMT_STATUS_SUCCESS) {
-				free(counter_props[NodeId]);
-				return rc;
-			}
-
-			/* Filling the SQ block */
-			blockid2uuid(block_id, &counter_props[NodeId]->Blocks[block_id].BlockId);
-			counter_props[NodeId]->Blocks[block_id].NumCounters = block.num_of_counters;
-			counter_props[NodeId]->Blocks[block_id].NumConcurrent = block.num_of_slots;
-
-			for (i = 0; i < block.num_of_counters; i++) {
-				counter_props[NodeId]->Blocks[block_id].Counters[i].BlockIndex = block_id;
-				counter_props[NodeId]->Blocks[block_id].Counters[i].CounterId = block.counter_ids[i];
-				counter_props[NodeId]->Blocks[block_id].Counters[i].CounterSizeInBits = block.counter_size_in_bits;
-				counter_props[NodeId]->Blocks[block_id].Counters[i].CounterMask = block.counter_mask;
-				counter_props[NodeId]->Blocks[block_id].Counters[i].Flags.ui32.Global = 1;
-				counter_props[NodeId]->Blocks[block_id].Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
-			}
+		for (i = 0; i < block.num_of_counters; i++) {
+			counter_props[NodeId]->Blocks[entry].Counters[i].BlockIndex = block_id;
+			counter_props[NodeId]->Blocks[entry].Counters[i].CounterId = block.counter_ids[i];
+			counter_props[NodeId]->Blocks[entry].Counters[i].CounterSizeInBits = block.counter_size_in_bits;
+			counter_props[NodeId]->Blocks[entry].Counters[i].CounterMask = block.counter_mask;
+			counter_props[NodeId]->Blocks[entry].Counters[i].Flags.ui32.Global = 1;
+			if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
+				counter_props[NodeId]->Blocks[entry].Counters[i].Type = HSA_PROFILE_TYPE_PRIVILEGED_IMMEDIATE;
+			else
+				counter_props[NodeId]->Blocks[entry].Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
 		}
+		entry++;
 	}
 
 	*CounterProperties = counter_props[NodeId];
