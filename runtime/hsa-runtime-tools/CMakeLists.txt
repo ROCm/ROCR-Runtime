@@ -107,6 +107,7 @@ include_directories ( ${TOOLS_SOURCE_DIR}/common )
 include_directories ( ${TOOLS_SOURCE_DIR}/debugger )
 include_directories ( ${TOOLS_SOURCE_DIR}/intercept )
 include_directories ( ${TOOLS_SOURCE_DIR}/profiler )
+include_directories ( ${TOOLS_SOURCE_DIR}/threadtrace )
 include_directories ( ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000 )
 include_directories ( ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/ci )
 include_directories ( ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/si )
@@ -148,12 +149,15 @@ set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/var_data.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/info_set.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/parameter_set.cpp
-                      ${TOOLS_SOURCE_DIR}/profiler/thread_trace.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/ci_blockinfo.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/ci_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/vi_blockinfo.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/vi_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp )
+
+set ( THREAD_TRACE_SRC    ${TOOLS_SOURCE_DIR}/threadtrace/thread_trace.cpp 
+                          ${TOOLS_SOURCE_DIR}/threadtrace/gfx9_thread_trace.cpp
+                          ${TOOLS_SOURCE_DIR}/threadtrace/pre_gfx9_thread_trace.cpp )
 
 set ( SP3_R1000_SRC   ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/sp3-asic.c
                       ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/sp3-dispatch.c
@@ -209,6 +213,7 @@ add_library ( ${TOOLS_TARGET} SHARED ${CORE_SRC}
                                      ${DEBUGGER_SRC}
                                      ${INTERCEPT_SRC}
                                      ${PROFILER_SRC}
+                                     ${THREAD_TRACE_SRC}
                                      ${SP3_R1000_SRC} 
                                      ${UTIL_SRC} )
 
