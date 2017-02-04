@@ -543,7 +543,7 @@ hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t
 ///
 /// @return hsa_status
 hsa_status_t hsa_queue_create(
-    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type_t type,
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
     void* data, uint32_t private_segment_size, uint32_t group_segment_size,
     hsa_queue_t** queue) {
@@ -557,7 +557,7 @@ hsa_status_t hsa_queue_create(
   core::Agent* agent = core::Agent::Convert(agent_handle);
   IS_VALID(agent);
 
-  hsa_queue_type_t agent_queue_type = HSA_QUEUE_TYPE_MULTI;
+  hsa_queue_type32_t agent_queue_type = HSA_QUEUE_TYPE_MULTI;
   hsa_status_t status =
       agent->GetInfo(HSA_AGENT_INFO_QUEUE_TYPE, &agent_queue_type);
   assert(HSA_STATUS_SUCCESS == status);
@@ -586,7 +586,7 @@ hsa_status_t hsa_queue_create(
 }
 
 hsa_status_t hsa_soft_queue_create(hsa_region_t region, uint32_t size,
-                                   hsa_queue_type_t type, uint32_t features,
+                                   hsa_queue_type32_t type, uint32_t features,
                                    hsa_signal_t doorbell_signal,
                                    hsa_queue_t** queue) {
   IS_OPEN();

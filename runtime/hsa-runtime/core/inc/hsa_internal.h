@@ -86,14 +86,14 @@ namespace HSA
                                                            uint16_t version_major,
                                                            uint16_t* version_minor, bool* result);
   hsa_status_t HSA_API
-    hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type_t type,
+    hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type32_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t *source,
     void *data),
     void *data, uint32_t private_segment_size,
     uint32_t group_segment_size, hsa_queue_t **queue);
   hsa_status_t HSA_API
     hsa_soft_queue_create(hsa_region_t region, uint32_t size,
-    hsa_queue_type_t type, uint32_t features,
+    hsa_queue_type32_t type, uint32_t features,
     hsa_signal_t completion_signal, hsa_queue_t **queue);
   hsa_status_t HSA_API hsa_queue_destroy(hsa_queue_t *queue);
   hsa_status_t HSA_API hsa_queue_inactivate(hsa_queue_t *queue);

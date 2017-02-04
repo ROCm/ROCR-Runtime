@@ -938,7 +938,7 @@ typedef enum {
   HSA_AGENT_INFO_QUEUE_MAX_SIZE = 14,
   /**
    * Type of a queue created in the agent. The type of this attribute is
-   * ::hsa_queue_type_t.
+   * ::hsa_queue_type32_t.
    */
   HSA_AGENT_INFO_QUEUE_TYPE = 15,
   /**
@@ -2343,7 +2343,7 @@ typedef struct hsa_queue_s {
 hsa_status_t HSA_API hsa_queue_create(
     hsa_agent_t agent,
     uint32_t size,
-    hsa_queue_type_t type,
+    hsa_queue_type32_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t *source, void *data),
     void *data,
     uint32_t private_segment_size,
@@ -2407,7 +2407,7 @@ hsa_status_t HSA_API hsa_queue_create(
 hsa_status_t HSA_API hsa_soft_queue_create(
     hsa_region_t region,
     uint32_t size,
-    hsa_queue_type_t type,
+    hsa_queue_type32_t type,
     uint32_t features,
     hsa_signal_t doorbell_signal,
     hsa_queue_t **queue);
