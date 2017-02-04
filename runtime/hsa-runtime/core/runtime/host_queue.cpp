@@ -47,7 +47,7 @@
 
 namespace core {
 HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
-                     hsa_queue_type_t type, uint32_t features,
+                     hsa_queue_type32_t type, uint32_t features,
                      hsa_signal_t doorbell_signal)
     : Queue(),
       size_(ring_size),

@@ -142,7 +142,7 @@ hsa_status_t HSA_API hsa_agent_major_extension_supported(uint16_t extension, hsa
 }
 
 hsa_status_t HSA_API
-    hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type_t type,
+    hsa_queue_create(hsa_agent_t agent, uint32_t size, hsa_queue_type32_t type,
                      void (*callback)(hsa_status_t status, hsa_queue_t* source,
                                       void* data),
                      void* data, uint32_t private_segment_size,
@@ -154,7 +154,7 @@ hsa_status_t HSA_API
 
 hsa_status_t HSA_API
     hsa_soft_queue_create(hsa_region_t region, uint32_t size,
-                          hsa_queue_type_t type, uint32_t features,
+                          hsa_queue_type32_t type, uint32_t features,
                           hsa_signal_t completion_signal, hsa_queue_t** queue) {
   return coreApiTable->hsa_soft_queue_create_fn(region, size, type, features,
                                                completion_signal, queue);

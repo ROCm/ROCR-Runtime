@@ -212,7 +212,7 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // to the newly created queue.
   //
   // @retval HSA_STATUS_SUCCESS The queue has been created successfully.
-  virtual hsa_status_t QueueCreate(size_t size, hsa_queue_type_t queue_type,
+  virtual hsa_status_t QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    HsaEventCallback event_callback, void* data,
                                    uint32_t private_segment_size,
                                    uint32_t group_segment_size,
