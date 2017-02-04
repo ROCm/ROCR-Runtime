@@ -1011,9 +1011,13 @@ void Runtime::LoadExtensions() {
 
   // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
+  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
+                          core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
   // Update Hsa Api Table with handle of Finalizer extension Apis
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
+  hsa_api_table_.LinkExts(&extensions_.image_api,
+                          core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
@@ -1073,12 +1077,6 @@ void Runtime::LoadTools() {
                               const char* const*);
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
-
-  // Link HSA Extensions for Finalizer and Images for Api interception
-  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
-                          core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
-  hsa_api_table_.LinkExts(&extensions_.image_api,
-                          core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   // Load tool libs
   std::string tool_names = flag_.tools_lib_names();
