@@ -92,6 +92,17 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #define PASTE2(x, y) x##y
 #define PASTE(x, y) PASTE2(x, y)
 
+#ifdef NDEBUG
+#define debug_warning(exp)
+#else
+#define debug_warning(exp)                                                                         \
+  do {                                                                                             \
+    if (!(exp))                                                                                    \
+      fprintf(stderr, "Warning: " STRING(exp) " in %s, " __FILE__ ":" STRING(__LINE__) "\n",       \
+              __PRETTY_FUNCTION__);                                                                \
+  } while (false);
+#endif
+
 // A macro to disallow the copy and move constructor and operator= functions
 // This should be used in the private: declarations for a class
 #define DISALLOW_COPY_AND_ASSIGN(TypeName) \
