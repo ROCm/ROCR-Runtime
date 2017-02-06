@@ -1277,15 +1277,19 @@ static void __fmm_release(void *address, manageble_aperture_t *aperture)
 		return;
 	}
 
+	/* If memory is user memory and it's still GPU mapped, munmap
+	 * would cause an eviction. If the restore happens quickly
+	 * enough, restore would also fail with an error message. So
+	 * free the BO before unmapping the pages. */
+	args.handle = object->handle;
+	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
+
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
 		/* Remove any CPU mapping, but keep the address range reserved */
 		mmap(address, object->size, PROT_NONE,
 		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
 	}
-
-	args.handle = object->handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
 
 	aperture_release_area(aperture, address, object->size);
 	vm_remove_object(aperture, object);
