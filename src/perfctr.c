@@ -24,6 +24,7 @@
  */
 
 #include <stdlib.h>
+#include <stdio.h>
 #include "libhsakmt.h"
 #include "pmc_table.h"
 #include "linux/kfd_ioctl.h"
@@ -38,10 +39,18 @@ enum perf_trace_state {
 	PERF_TRACE_STATE__STARTED
 };
 
+struct perf_trace_block {
+	enum perf_block_id block_id;
+	uint32_t num_counters;
+	uint64_t *counter_id;
+};
+
 struct perf_trace {
 	uint32_t magic4cc;
-	uint32_t  gpu_id;
+	uint32_t gpu_id;
 	enum perf_trace_state state;
+	uint32_t num_blocks;
+	struct perf_trace_block blocks[0];
 };
 
 extern int amd_hsa_thunk_lock_fd;
@@ -97,6 +106,19 @@ static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 	}
 
 	return rc;
+}
+
+static HSAuint32 get_block_concurrent_limit(uint32_t node_id,
+						HSAuint32 block_id)
+{
+	uint32_t i;
+
+	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++)
+		if (counter_props[node_id]->Blocks[i].Counters[0].BlockIndex ==
+								block_id)
+			return counter_props[node_id]->Blocks[i].NumConcurrent;
+
+	return 0;
 }
 
 HSAKMT_STATUS
@@ -201,10 +223,15 @@ hsaKmtPmcRegisterTrace(
 	HsaPmcTraceRoot*    TraceRoot           //OUT
 	)
 {
-	uint32_t gpu_id, i;
+	uint32_t gpu_id, i, j;
 	uint64_t min_buf_size = 0;
-	uint32_t concurrent_counters[PERFCOUNTER_BLOCKID__MAX] = {0};
 	struct perf_trace *trace = NULL;
+	uint32_t concurrent_limit;
+	const uint32_t MAX_COUNTERS = 512;
+	uint64_t counter_id[PERFCOUNTER_BLOCKID__MAX][MAX_COUNTERS];
+	uint32_t num_counters[PERFCOUNTER_BLOCKID__MAX] = {0};
+	uint32_t block, num_blocks = 0, total_counters = 0;
+	uint64_t *counter_id_ptr;
 
 	if (counter_props == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
@@ -212,28 +239,90 @@ hsaKmtPmcRegisterTrace(
 	if (Counters == NULL || TraceRoot == NULL || NumberOfCounters == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != 0)
+	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	if (NumberOfCounters > MAX_COUNTERS) {
+		fprintf(stderr, "Error: MAX_COUNTERS is too small for %d.\n",
+			NumberOfCounters);
+		return HSAKMT_STATUS_NO_MEMORY;
+	}
 
 	/* Calculating the minimum buffer size */
 	for (i = 0; i < NumberOfCounters; i++) {
 		if (Counters[i].BlockIndex >= PERFCOUNTER_BLOCKID__MAX)
 			return HSAKMT_STATUS_INVALID_PARAMETER;
+		/* Only privileged counters need to register */
+		if (Counters[i].Type > HSA_PROFILE_TYPE_PRIVILEGED_STREAMING)
+			continue;
 		min_buf_size += Counters[i].CounterSizeInBits/BITS_PER_BYTE;
-		concurrent_counters[Counters[i].BlockIndex]++;
+		/* j: the first blank entry in the block to record counter_id */
+		j = num_counters[Counters[i].BlockIndex];
+		counter_id[Counters[i].BlockIndex][j] = Counters[i].CounterId;
+		num_counters[Counters[i].BlockIndex]++;
+		total_counters++;
 	}
 
-	/* Verifying that the number of counters per block is not larger than the amount of slots */
-	if (concurrent_counters[PERFCOUNTER_BLOCKID__SQ] > counter_props[NodeId]->Blocks[PERFCOUNTER_BLOCKID__SQ].NumConcurrent)
+	/* Verify that the number of counters per block is not larger than the
+	 * number of slots.
+	 */
+	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
+		if (!num_counters[i])
+			continue;
+		concurrent_limit = get_block_concurrent_limit(NodeId, i);
+		if (!concurrent_limit) {
+			fprintf(stderr, "Invalid block ID: %d\n", i);
+			return HSAKMT_STATUS_INVALID_PARAMETER;
+		}
+		if (num_counters[i] > concurrent_limit) {
+			fprintf(stderr, "Counters exceed the limit.\n");
+			return HSAKMT_STATUS_INVALID_PARAMETER;
+		}
+		num_blocks++;
+	}
+
+	if (!num_blocks)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	trace = malloc(sizeof(trace));
+	/* Now we have sorted blocks/counters information in
+	 * num_counters[block_id] and counter_id[block_id][]. Allocate trace
+	 * and record the information.
+	 */
+	trace = (struct perf_trace *)calloc(sizeof(struct perf_trace)
+			+ sizeof(struct perf_trace_block) * num_blocks
+			+ sizeof(uint64_t) * total_counters,
+			1);
 	if (trace == NULL)
 		return HSAKMT_STATUS_NO_MEMORY;
+
+	block = 0;
+	counter_id_ptr = (uint64_t *)((char *)
+			trace + sizeof(struct perf_trace)
+			+ sizeof(struct perf_trace_block) * num_blocks);
+	/* Fill in each block's information to the TraceId */
+	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
+		if (!num_counters[i]) /* not a block to trace */
+			continue;
+		/* Following perf_trace + perf_trace_block x N are those
+		 * counter_id arrays. Assign the counter_id array belonging to
+		 * this block.
+		 */
+		trace->blocks[block].counter_id = counter_id_ptr;
+		/* Fill in counter IDs to the counter_id array. */
+		for (j = 0; j < num_counters[i]; j++)
+			trace->blocks[block].counter_id[j] = counter_id[i][j];
+		/* how many counters to trace */
+		trace->blocks[block].num_counters = num_counters[i];
+		/* block index in "enum perf_block_id" */
+		trace->blocks[block].block_id = i;
+		block++; /* move to next */
+		counter_id_ptr += num_counters[i];
+	}
 
 	trace->magic4cc = HSA_PERF_MAGIC4CC;
 	trace->gpu_id = gpu_id;
 	trace->state = PERF_TRACE_STATE__STOPPED;
+	trace->num_blocks = num_blocks;
 
 	TraceRoot->NumberOfPasses = 1;
 	TraceRoot->TraceBufferMinSizeBytes = PAGE_ALIGN_UP(min_buf_size);
