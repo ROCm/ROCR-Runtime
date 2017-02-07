@@ -156,7 +156,9 @@ set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp )
 
 set ( THREAD_TRACE_SRC    ${TOOLS_SOURCE_DIR}/threadtrace/thread_trace.cpp 
+                          ${TOOLS_SOURCE_DIR}/threadtrace/gfx9_factory.cpp
                           ${TOOLS_SOURCE_DIR}/threadtrace/gfx9_thread_trace.cpp
+                          ${TOOLS_SOURCE_DIR}/threadtrace/pre_gfx9_factory.cpp
                           ${TOOLS_SOURCE_DIR}/threadtrace/pre_gfx9_thread_trace.cpp )
 
 set ( SP3_R1000_SRC   ${TOOLS_SOURCE_DIR}/sp3/Chip/R1000/sp3-asic.c
