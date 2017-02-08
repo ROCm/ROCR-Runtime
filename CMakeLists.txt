@@ -23,7 +23,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required(VERSION 2.8.0)
+cmake_minimum_required ( VERSION 3.5.0 )
 
 set ( HSAKMT_NAME "hsakmt" )
 set ( HSAKMT_COMPONENT "lib${HSAKMT_NAME}" )
@@ -35,11 +35,18 @@ list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
 
 include ( utils )
 
-if(NOT DEFINED VERSION_STRING)
-    set ( VERSION_STRING "2.0.1" )
-endif()
+## Get the package version. The defaults to 1.0.0.
+get_version ( "1.0.0" )
 
-parse_version ( ${VERSION_STRING} )
+set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
+set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
+set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+if ( DEFINED VERSION_BUILD AND NOT ${VERSION_BUILD} STREQUAL "" )
+    message ( "VERSION BUILD DEFINED ${VERSION_BUILD}" )
+    set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
+endif ()
+set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE on )
@@ -75,15 +82,8 @@ include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/src )
 add_library ( ${HSAKMT_TARGET} SHARED ${HSAKMT_SRC} )
 
 ## Set the VERSION and SOVERSION values
-if ( DEFINED VERSION_STRING )
-  set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${VERSION_STRING}" )
-endif ()
-
-if ( DEFINED VERSION_MAJOR )
-  set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
-else ()
-  set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION 1 )
-endif()
+set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
+set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 target_link_libraries ( ${HSAKMT_TARGET}
   dl pthread rt
@@ -91,8 +91,12 @@ target_link_libraries ( ${HSAKMT_TARGET}
 
 ## If the library is a release, strip the target library
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
+    add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so* )
 endif ()
+
+## Create symlinks for packaging and install
+add_custom_target ( ${HSAKMT_COMPONENT} ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../${HSAKMT_COMPONENT}/include/${HSAKMT_COMPONENT} ${HSAKMT_COMPONENT}-link )
+add_custom_target ( ${HSAKMT_COMPONENT}.so-link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../${HSAKMT_COMPONENT}/lib/${HSAKMT_COMPONENT}.so ${HSAKMT_COMPONENT}.so-link )
 
 ## Set the install targets
 install ( TARGETS ${HSAKMT_TARGET} LIBRARY DESTINATION libhsakmt/lib COMPONENT ${HSAKMT_COMPONENT} )
@@ -100,25 +104,17 @@ install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt PER
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmt.h DESTINATION libhsakmt/include/libhsakmt PERMISSIONS OWNER_WRITE OWNER_READ )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmttypes.h DESTINATION libhsakmt/include/libhsakmt PERMISSIONS OWNER_WRITE OWNER_READ )
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/linux/kfd_ioctl.h DESTINATION libhsakmt/include/libhsakmt/linux PERMISSIONS OWNER_WRITE OWNER_READ )
-
-#if( CMAKE_HOST_UNIX )
-#    install( CODE "EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E create_symlink include/${HSAKMT_COMPONENT} \${CMAKE_INSTALL_PREFIX}/include/${HSAKMT_COMPONENT} WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
-#    install( CODE "EXECUTE_PROCESS( COMMAND ${CMAKE_COMMAND} -E create_symlink lib/${HSAKMT_COMPONENT}.so \${CMAKE_INSTALL_PREFIX}/lib/${HSAKMT_COMPONENT}.so WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
-#endif( )
-
-if( CMAKE_HOST_UNIX )
-    install( CODE "EXECUTE_PROCESS( COMMAND mkdir -p \${CMAKE_INSTALL_PREFIX}/include COMMAND ln -srf include/${HSAKMT_COMPONENT} \${CMAKE_INSTALL_PREFIX}/include/${HSAKMT_COMPONENT} WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
-    install( CODE "EXECUTE_PROCESS( COMMAND mkdir -p \${CMAKE_INSTALL_PREFIX}/lib COMMAND ln -srf lib/${HSAKMT_COMPONENT}.so \${CMAKE_INSTALL_PREFIX}/lib/${HSAKMT_COMPONENT}.so WORKING_DIRECTORY \${CMAKE_INSTALL_PREFIX}/libhsakmt )" )
-endif( )
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_COMPONENT}-link DESTINATION include PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${HSAKMT_COMPONENT} )
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_COMPONENT}.so-link DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${HSAKMT_COMPONENT}.so )
 
 ## Packaging directives
 set ( CPACK_PACKAGE_NAME "hsakmt-roct-dev" )
 set ( CPACK_PACKAGE_VENDOR "AMD" )
-set ( CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR} )
-set ( CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR} )
-set ( CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH} )
+set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
+set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
+set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
-set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Thunk library for AMD KFD" )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "HSAKMT library for AMD KFD support" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
 # Debian package specific variables
