@@ -56,7 +56,7 @@
 #define PM4_HDR(it_opcode, pkt_size_dw, gfxip_ver) (  \
   PM4_HDR_SHADER_TYPE((gfxip_ver) == 7 ? 1 : 0)    |  \
   PM4_HDR_IT_OPCODE(it_opcode)                     |  \
-  PM4_HDR_COUNT(int(pkt_size_dw) - 2)              |  \
+  PM4_HDR_COUNT(pkt_size_dw - 2)                   |  \
   PM4_HDR_TYPE(3)                                     \
 )
 

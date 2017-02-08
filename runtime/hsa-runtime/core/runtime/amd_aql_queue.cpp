@@ -797,60 +797,86 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   assert(cmd_size_b < pm4_ib_size_b_ && "PM4 exceeds IB size");
   memcpy(pm4_ib_buf_, cmd_data, cmd_size_b);
 
-  // Construct a set of PM4 to fit inside the AQL packet slot.
+  // Construct a PM4 command to execute the IB.
+  constexpr uint32_t ib_jump_size_dw = 4;
+
+  uint32_t ib_jump_cmd[ib_jump_size_dw] = {
+      PM4_HDR(PM4_HDR_IT_OPCODE_INDIRECT_BUFFER, ib_jump_size_dw, agent_->isa()->GetMajorVersion()),
+      PM4_INDIRECT_BUFFER_DW1_IB_BASE_LO(uint32_t(uintptr_t(pm4_ib_buf_) >> 2)),
+      PM4_INDIRECT_BUFFER_DW2_IB_BASE_HI(uint32_t(uintptr_t(pm4_ib_buf_) >> 32)),
+      (PM4_INDIRECT_BUFFER_DW3_IB_SIZE(uint32_t(cmd_size_b / sizeof(uint32_t))) |
+       PM4_INDIRECT_BUFFER_DW3_IB_VALID(1))};
+
+  // To respect multi-producer semantics, first buffer commands for the queue slot.
   constexpr uint32_t slot_size_dw = uint32_t(slot_size_b / sizeof(uint32_t));
   uint32_t slot_data[slot_size_dw];
-  uint32_t slot_dw_idx = 0;
 
-  // Construct a no-op command to pad the queue slot.
-  constexpr uint32_t ib_jump_size_dw = 4;
-  constexpr uint32_t rel_mem_size_dw = 7;
-  constexpr uint32_t nop_pad_size_dw =
-      slot_size_dw - (ib_jump_size_dw + rel_mem_size_dw);
+  if (agent_->isa()->GetMajorVersion() <= 8) {
+    // Construct a set of PM4 to fit inside the AQL packet slot.
+    uint32_t slot_dw_idx = 0;
 
-  uint32_t* nop_pad = &slot_data[slot_dw_idx];
-  slot_dw_idx += nop_pad_size_dw;
+    // Construct a no-op command to pad the queue slot.
+    constexpr uint32_t rel_mem_size_dw = 7;
+    constexpr uint32_t nop_pad_size_dw = slot_size_dw - (ib_jump_size_dw + rel_mem_size_dw);
 
-  nop_pad[0] = PM4_HDR(PM4_HDR_IT_OPCODE_NOP, nop_pad_size_dw,
-                       agent_->isa()->GetMajorVersion());
+    uint32_t* nop_pad = &slot_data[slot_dw_idx];
+    slot_dw_idx += nop_pad_size_dw;
 
-  for (int i = 1; i < nop_pad_size_dw; ++i) {
-    nop_pad[i] = 0;
+    nop_pad[0] = PM4_HDR(PM4_HDR_IT_OPCODE_NOP, nop_pad_size_dw, agent_->isa()->GetMajorVersion());
+
+    for (int i = 1; i < nop_pad_size_dw; ++i) {
+      nop_pad[i] = 0;
+    }
+
+    // Copy in command to execute the IB.
+    assert(slot_dw_idx + ib_jump_size_dw <= slot_size_dw && "PM4 exceeded queue slot size");
+    uint32_t* ib_jump = &slot_data[slot_dw_idx];
+    slot_dw_idx += ib_jump_size_dw;
+
+    memcpy(ib_jump, ib_jump_cmd, sizeof(ib_jump_cmd));
+
+    // Construct a command to advance the read index and invalidate the packet
+    // header. This must be the last command since this releases the queue slot
+    // for writing.
+    assert(slot_dw_idx + rel_mem_size_dw <= slot_size_dw && "PM4 exceeded queue slot size");
+    uint32_t* rel_mem = &slot_data[slot_dw_idx];
+
+    rel_mem[0] =
+        PM4_HDR(PM4_HDR_IT_OPCODE_RELEASE_MEM, rel_mem_size_dw, agent_->isa()->GetMajorVersion());
+    rel_mem[1] = PM4_RELEASE_MEM_DW1_EVENT_INDEX(PM4_RELEASE_MEM_EVENT_INDEX_AQL);
+    rel_mem[2] = 0;
+    rel_mem[3] = 0;
+    rel_mem[4] = 0;
+    rel_mem[5] = 0;
+    rel_mem[6] = 0;
+  } else if (agent_->isa()->GetMajorVersion() == 9) {
+    // Construct an AQL packet to jump to the PM4 IB.
+    struct amd_aql_pm4_ib {
+      uint16_t header;
+      uint16_t ven_hdr;
+      uint32_t ib_jump_cmd[4];
+      uint32_t dw_cnt_remain;
+      uint32_t reserved[8];
+      hsa_signal_t completion_signal;
+    };
+
+    constexpr uint32_t AMD_AQL_FORMAT_PM4_IB = 0x1;
+
+    amd_aql_pm4_ib aql_pm4_ib{};
+    aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
+    aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
+    aql_pm4_ib.ib_jump_cmd[0] = ib_jump_cmd[0];
+    aql_pm4_ib.ib_jump_cmd[1] = ib_jump_cmd[1];
+    aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];
+    aql_pm4_ib.ib_jump_cmd[3] = ib_jump_cmd[3];
+    aql_pm4_ib.dw_cnt_remain = 0xA;
+
+    memcpy(slot_data, &aql_pm4_ib, sizeof(aql_pm4_ib));
+  } else {
+    assert(false && "AqlQueue::ExecutePM4 not implemented");
   }
 
-  // Construct a command to execute the IB.
-  assert(slot_dw_idx + ib_jump_size_dw <= slot_size_dw &&
-         "PM4 exceeded queue slot size");
-  uint32_t* ib_jump = &slot_data[slot_dw_idx];
-  slot_dw_idx += ib_jump_size_dw;
-
-  ib_jump[0] = PM4_HDR(PM4_HDR_IT_OPCODE_INDIRECT_BUFFER, ib_jump_size_dw,
-                       agent_->isa()->GetMajorVersion());
-  ib_jump[1] =
-      PM4_INDIRECT_BUFFER_DW1_IB_BASE_LO(uint32_t(uintptr_t(pm4_ib_buf_) >> 2));
-  ib_jump[2] = PM4_INDIRECT_BUFFER_DW2_IB_BASE_HI(
-      uint32_t(uintptr_t(pm4_ib_buf_) >> 32));
-  ib_jump[3] =
-      PM4_INDIRECT_BUFFER_DW3_IB_SIZE(uint32_t(cmd_size_b / sizeof(uint32_t))) |
-      PM4_INDIRECT_BUFFER_DW3_IB_VALID(1);
-
-  // Construct a command to advance the read index and invalidate the packet
-  // header. This must be the last command since this releases the queue slot
-  // for writing.
-  assert(slot_dw_idx + rel_mem_size_dw <= slot_size_dw &&
-         "PM4 exceeded queue slot size");
-  uint32_t* rel_mem = &slot_data[slot_dw_idx];
-
-  rel_mem[0] = PM4_HDR(PM4_HDR_IT_OPCODE_RELEASE_MEM, rel_mem_size_dw,
-                       agent_->isa()->GetMajorVersion());
-  rel_mem[1] = PM4_RELEASE_MEM_DW1_EVENT_INDEX(PM4_RELEASE_MEM_EVENT_INDEX_AQL);
-  rel_mem[2] = 0;
-  rel_mem[3] = 0;
-  rel_mem[4] = 0;
-  rel_mem[5] = 0;
-  rel_mem[6] = 0;
-
-  // Copy all PM4 commands into the queue slot.
+  // Copy buffered commands into the queue slot.
   // Overwrite the AQL invalid header (first dword) last.
   // This prevents the slot from being read until it's fully written.
   memcpy(&queue_slot[1], &slot_data[1], slot_size_b - sizeof(uint32_t));

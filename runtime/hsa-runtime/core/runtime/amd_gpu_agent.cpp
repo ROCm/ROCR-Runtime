@@ -1178,11 +1178,12 @@ void GpuAgent::InvalidateCodeCaches() {
       return;
     }
   } else if (isa_->GetMajorVersion() == 9) {
-    static std::once_flag once;
-    std::call_once(once, []() {
-      fprintf(stderr, "warning: code cache invalidation not implemented\n");
-    });
-    return;
+    if (properties_.EngineId.ui32.uCode < 334) {
+      static std::once_flag once;
+      std::call_once(
+          once, []() { fprintf(stderr, "warning: code cache invalidation not implemented\n"); });
+      return;
+    }
   } else {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
