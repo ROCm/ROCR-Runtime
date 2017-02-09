@@ -91,7 +91,7 @@ target_link_libraries ( ${HSAKMT_TARGET}
 
 ## If the library is a release, strip the target library
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so* )
+    add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} ${HSAKMT_COMPONENT}.so )
 endif ()
 
 ## Create symlinks for packaging and install
