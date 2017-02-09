@@ -408,6 +408,9 @@ public:
   /// invalid address, returns null pointer.
   virtual uint64_t FindHostAddress(uint64_t device_address) = 0;
 
+  /// @brief Print loader help.
+  virtual void PrintHelp(std::ostream& out) = 0;
+
 protected:
   /// @brief Default constructor.
   Loader() {}
