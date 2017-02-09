@@ -183,6 +183,9 @@ namespace code {
       static Symbol* FromHandle(hsa_code_symbol_t handle);
       void setValue(uint64_t value) { elfsym->setValue(value); }
       void setSize(uint32_t size) { elfsym->setSize(size); }
+
+      std::string GetModuleName() const;
+      std::string GetSymbolName() const;
     };
 
     class KernelSymbol : public Symbol {
