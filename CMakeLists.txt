@@ -52,7 +52,7 @@ set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUIL
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler flags
-set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Werror -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden" )
+set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Werror -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden -O2" )
 
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
@@ -86,7 +86,7 @@ set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" 
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 target_link_libraries ( ${HSAKMT_TARGET}
-  dl pthread rt
+  pthread rt pci
 )
 
 ## If the library is a release, strip the target library
