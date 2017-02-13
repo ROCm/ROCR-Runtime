@@ -1,34 +1,17 @@
-cmake_minimum_required ( VERSION 2.8.0 )
-## GCC 4.8 or higher compiler required.
-
-if ( WIN32 )
-  MESSAGE ( FATAL_ERROR "Windows build is not supported." )
-endif ()
-
-## Process environment variables.
-if ( "${HSA_BUILD_TARGET_BITS}" STREQUAL 32 )
-    set ( ONLY64STR "" )
-    set ( IS64BIT 0 )
-else ()
-    set ( ONLY64STR "64" )
-    set ( IS64BIT 1 )
-endif ()
-
-## Build information
-MESSAGE ( ------IS64BIT: ${IS64BIT} )
-MESSAGE ( ------Compiler: ${CMAKE_CXX_COMPILER} )
-MESSAGE ( ------Version: ${CMAKE_CXX_COMPILER_VERSION} )
-
-set ( CMAKE_BUILD_TYPE ${BUILD_TYPE} )
+cmake_minimum_required ( VERSION 3.5.0 )
 
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
-## Used for packaging.
-set ( CORE_RUNTIME_NAME "hsa-runtime" )
-set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
-set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}${ONLY64STR}" )
-set ( CORE_RUNTIME_LIB "lib${CORE_RUNTIME_NAME}${ONLY64STR}.so" )
+## Set ext runtime module name and project name.
+set ( TOOLS_NAME "hsa-runtime-tools" )
+set ( TOOLS_COMPONENT "lib${TOOLS_NAME}" )
+set ( TOOLS_TARGET "${TOOLS_NAME}64" )
+project ( ${TOOLS_TARGET} )
+
+## Include the cmake_modules utils.cmake
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
+include ( utils )
 
 ## Compiler preproc definitions.
 add_definitions ( -D__linux__ )
@@ -40,11 +23,33 @@ add_definitions ( -DAMD_INTERNAL_BUILD )
 add_definitions ( -DLITTLEENDIAN_CPU=1 )
 add_definitions ( -D HSA_DEPRECATED= )
 
-## Set ext runtime module name and project name.
-set ( TOOLS_NAME "hsa-runtime-tools" )
-set ( TOOLS_COMPONENT "lib${TOOLS_NAME}" )
-set ( TOOLS_TARGET "${TOOLS_NAME}${ONLY64STR}" )
-project ( ${TOOLS_TARGET} )
+## Get the package version. The defaults to 1.0.0.
+get_version ( "1.0.0" )
+
+set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
+set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
+set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+if ( DEFINED VERSION_BUILD )
+    set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
+endif ()
+set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+
+## Find the hsakmt library and include files
+find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
+find_library ( HSAKMT_LIB libhsakmt.so )
+get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
+get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
+include_directories ( ${HSAKMT_BUILD_INC_PATH} )
+link_directories (${HSAKMT_BUILD_LIB_PATH})
+
+## Find the hsa-runtime and include files
+find_file ( HSA_INC "hsa/hsa.h" )
+find_library ( HSA_LIB libhsa-runtime64.so )
+get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
+get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
+include_directories ( ${HSA_BUILD_INC_PATH} )
+link_directories (${HSA_BUILD_LIB_PATH})
 
 ## External dependencies
 if ( NOT DEFINED REG_INCLUDE )
@@ -216,23 +221,20 @@ add_library ( ${TOOLS_TARGET} SHARED ${CORE_SRC}
                                      ${INTERCEPT_SRC}
                                      ${PROFILER_SRC}
                                      ${THREAD_TRACE_SRC}
-                                     ${SP3_R1000_SRC} 
+                                     ${SP3_R1000_SRC}
                                      ${UTIL_SRC} )
 
+## Set the VERSION and SOVERSION values
+set_property ( TARGET ${TOOLS_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
+set_property ( TARGET ${TOOLS_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
+
 ## Add the required link libraries
-target_link_libraries ( 
+target_link_libraries (
     ${TOOLS_TARGET}
-    PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
-    PRIVATE ${HSA_BUILD_LIB_PATH}/libhsakmt.so
+    PRIVATE hsa-runtime64
+    PRIVATE hsakmt
     c dl pthread rt
 )
-
-## Set the VERSION and SOVERSION values
-if ( DEFINED VERSION_STRING )
-    set_property ( TARGET ${TOOLS_TARGET} PROPERTY VERSION "${VERSION_STRING}" )
-endif ()
-
-set_property ( TARGET ${TOOLS_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
 
 ## If the build is Release, strip the target library
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
@@ -240,5 +242,5 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
 endif ()
 
 ## Set install information
-install ( TARGETS ${TOOLS_TARGET} LIBRARY DESTINATION lib COMPONENT ${TOOLS_COMPONENT} )
-install ( DIRECTORY ${TOOLS_SOURCE_DIR}/inc/ DESTINATION include COMPONENT tools-headers FILES_MATCHING PATTERN "*.h" )
+install ( TARGETS ${TOOLS_TARGET} LIBRARY DESTINATION hsa/lib COMPONENT ${TOOLS_COMPONENT} )
+install ( DIRECTORY ${TOOLS_SOURCE_DIR}/inc/ DESTINATION hsa/include/hsa FILES_MATCHING PATTERN "*.h" )
