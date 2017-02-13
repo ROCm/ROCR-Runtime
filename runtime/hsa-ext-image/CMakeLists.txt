@@ -1,52 +1,29 @@
-cmake_minimum_required ( VERSION 2.8.0 ) ## GCC 4.8 or higher compiler required.
+cmake_minimum_required ( VERSION 3.5.0 )
 
-if ( WIN32 )
-    MESSAGE ( FATAL_ERROR "Windows build is not supported." )
-endif ()
+## Verbose output.
+set ( CMAKE_VERBOSE_MAKEFILE on )
 
-## Process build type.
-if( NOT DEFINED CMAKE_BUILD_TYPE )
-    set( CMAKE_BUILD_TYPE "Debug" )
-endif()
-
+## Determine external build folder.
 if( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    set( BUILD_TYPE "Release" )
-    set( ISDEBUG 0 )
-    set( BUILD_FOLDER "B_rel" )
+    set( BUILD_FOLDER "lnx64a/B_rel" )
 else()
-    set( BUILD_TYPE "Debug" )
-    set( ISDEBUG 1)
-    set( BUILD_FOLDER "B_dbg" )
+    set( BUILD_FOLDER "lnx64a/B_dbg" )
 endif()
-
-## Process build target.
-if ( "${HSA_BUILD_TARGET_BITS}" STREQUAL 32 )
-    set ( ONLY64STR "" )
-    set ( IS64BIT 0 )
-    set ( BUILD_FOLDER "lnx/${BUILD_FOLDER}" )
-else ()
-    set ( ONLY64STR "64" )
-    set ( IS64BIT 1 )
-    set ( BUILD_FOLDER "lnx64a/${BUILD_FOLDER}" )
-endif ()
 
 ## Check that the libhsail include and library directories are defined.
 if ( NOT DEFINED LIBHSAIL_BUILD_FOLDER )
     set ( LIBHSAIL_BUILD_FOLDER ${BUILD_FOLDER} )
 endif()
 
-## Used for packaging.
-set ( CORE_RUNTIME_NAME "hsa-runtime" )
-set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
-set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}${ONLY64STR}" )
-set ( CORE_RUNTIME_LIB "lib${CORE_RUNTIME_NAME}${ONLY64STR}.so" )
+## Set ext runtime module name and project name.
+set ( IMAGE_NAME "hsa-ext-image" )
+set ( IMAGE_COMPONENT "lib${IMAGE_NAME}" )
+set ( IMAGE_TARGET "${IMAGE_NAME}64" )
+project ( ${IMAGE_TARGET} )
 
-MESSAGE ( ------IS64BIT: ${IS64BIT} )
-MESSAGE ( ------Compiler: ${CMAKE_CXX_COMPILER} )
-MESSAGE ( ------Version: ${CMAKE_CXX_COMPILER_VERSION} )
-
-## Verbose output.
-set ( CMAKE_VERBOSE_MAKEFILE on )
+## Include the cmake_modules utils.cmake
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
+include ( utils )
 
 ## Compiler preproc definitions.
 add_definitions ( -D__linux__ )
@@ -58,11 +35,40 @@ add_definitions ( -DAMD_INTERNAL_BUILD )
 add_definitions ( -DLITTLEENDIAN_CPU=1 )
 add_definitions ( -D HSA_DEPRECATED= )
 
-## Set ext runtime module name and project name.
-set ( IMAGE_NAME "hsa-ext-image" )
-set ( IMAGE_COMPONENT "lib${IMAGE_NAME}" )
-set ( IMAGE_TARGET "${IMAGE_NAME}${ONLY64STR}" )
-project ( ${IMAGE_TARGET} )
+## Get the package version. The defaults to 1.0.0.
+get_version ( "1.0.0" )
+
+set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
+set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
+set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+if ( DEFINED VERSION_BUILD )
+    set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
+endif ()
+set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+
+## Find the hsakmt library and include files
+find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
+find_library ( HSAKMT_LIB libhsakmt.so )
+get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
+get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
+include_directories ( ${HSAKMT_BUILD_INC_PATH} )
+link_directories (${HSAKMT_BUILD_LIB_PATH})
+
+## Find the hsa-runtime and include files
+find_file ( HSA_INC "hsa/hsa.h" )
+find_library ( HSA_LIB libhsa-runtime64.so )
+get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
+get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
+include_directories ( ${HSA_BUILD_INC_PATH} )
+link_directories (${HSA_BUILD_LIB_PATH})
+
+## Find the libhsail files in the link
+find_library ( HSAIL_LIB libhsail.a )
+set ( LIBHSAIL -Wl,--no-whole-archive PRIVATE ${HSAIL_LIB} )
+
+find_library ( HSAIL_AMD_LIB libhsail-amd.a )
+set ( LIBHSAILAMD -Wl,--no-whole-archive PRIVATE ${HSAIL_AMD_LIB} )
 
 ## External dependencies and directories
 if ( NOT DEFINED REG_INCLUDE )
@@ -122,9 +128,6 @@ include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/build/${LIBHSAIL_BUILD_FOLDER} )
-include_directories ( ${HSAKMT_BUILD_INC_PATH} )
-
-link_directories (${HSAKMT_BUILD_LIB_PATH})
 
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
@@ -149,24 +152,15 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
 add_library ( ${IMAGE_TARGET} SHARED ${IMAGE_SRCS} )
 
 ## Set the VERSION and SOVERSION values
-if ( DEFINED VERSION_STRING )
-    set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${VERSION_STRING}" )
-endif ()
-
-set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
+set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
+set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 ## Add the core runtime in the link
-set ( LIBHSAIL -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a )
-set ( LIBHSAILAMD -Wl,--no-whole-archive PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail-amd.a )
-
-## Add the core runtime in the link
-link_directories(${HSA_BUILD_LIB_PATH})
 target_link_libraries (
     ${IMAGE_TARGET}
     PRIVATE ${LIBHSAIL}
     PRIVATE ${LIBHSAILAMD}
-    PRIVATE ${HSA_BUILD_LIB_PATH}/libhsail.a
-    PRIVATE ${HSA_BUILD_LIB_PATH}/${CORE_RUNTIME_LIB}
+    PRIVATE hsa-runtime64
     PRIVATE hsakmt
     c dl pthread rt
 )
@@ -177,4 +171,4 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
 endif ()
 
 ## Set install information
-install ( TARGETS ${IMAGE_TARGET} LIBRARY DESTINATION lib COMPONENT ${IMAGE_COMPONENT})
+install ( TARGETS ${IMAGE_TARGET} LIBRARY DESTINATION hsa/lib COMPONENT ${IMAGE_COMPONENT})
