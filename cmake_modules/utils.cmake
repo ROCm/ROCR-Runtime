@@ -53,7 +53,7 @@ function( parse_version VERSION_STRING )
     endif ()
 
     string ( REGEX MATCHALL "[0123456789]+" VERSIONS ${VERSION_STRING} )
-    list (LENGTH VERSIONS VERSION_COUNT )
+    list ( LENGTH VERSIONS VERSION_COUNT )
 
     if ( ${VERSION_COUNT} GREATER 0)
         list ( GET VERSIONS 0 MAJOR )
@@ -93,7 +93,7 @@ function ( get_version DEFAULT_VERSION_STRING )
 
     if ( GIT )
 
-        execute_process ( COMMAND git describe --long --match [0-9]*
+        execute_process ( COMMAND git describe --dirty --long --match [0-9]*
                           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
                           OUTPUT_VARIABLE GIT_TAG_STRING
                           OUTPUT_STRIP_TRAILING_WHITESPACE
