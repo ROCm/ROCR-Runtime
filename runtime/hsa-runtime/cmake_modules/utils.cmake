@@ -53,7 +53,7 @@ function( parse_version VERSION_STRING )
     endif ()
 
     string ( REGEX MATCHALL "[0123456789]+" VERSIONS ${VERSION_STRING} )
-    list (LENGTH VERSIONS VERSION_COUNT )
+    list ( LENGTH VERSIONS VERSION_COUNT )
 
     if ( ${VERSION_COUNT} GREATER 0)
         list ( GET VERSIONS 0 MAJOR )
@@ -73,7 +73,7 @@ function( parse_version VERSION_STRING )
         set ( TEMP_VERSION_STRING "${TEMP_VERSION_STRING}.${PATCH}" )
     endif ()
 
-    if (DEFINED VERSION_BUILD )
+    if ( DEFINED VERSION_BUILD )
         set ( VERSION_BUILD "${VERSION_BUILD}" PARENT_SCOPE )
     endif ()
 
