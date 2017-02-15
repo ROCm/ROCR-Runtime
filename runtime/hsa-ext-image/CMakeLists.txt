@@ -17,7 +17,6 @@ endif()
 
 ## Set ext runtime module name and project name.
 set ( IMAGE_NAME "hsa-ext-image" )
-set ( IMAGE_COMPONENT "lib${IMAGE_NAME}" )
 set ( IMAGE_TARGET "${IMAGE_NAME}64" )
 project ( ${IMAGE_TARGET} )
 
@@ -52,16 +51,16 @@ find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
 find_library ( HSAKMT_LIB libhsakmt.so )
 get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
 get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
-include_directories ( ${HSAKMT_BUILD_INC_PATH} )
-link_directories (${HSAKMT_BUILD_LIB_PATH})
+include_directories ( ${HSAKMT_INC_PATH} )
+link_directories (${HSAKMT_LIB_PATH})
 
 ## Find the hsa-runtime and include files
 find_file ( HSA_INC "hsa/hsa.h" )
 find_library ( HSA_LIB libhsa-runtime64.so )
 get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
 get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
-include_directories ( ${HSA_BUILD_INC_PATH} )
-link_directories (${HSA_BUILD_LIB_PATH})
+include_directories ( ${HSA_INC_PATH} )
+link_directories (${HSA_LIB_PATH})
 
 ## Find the libhsail files in the link
 find_library ( HSAIL_LIB libhsail.a )
@@ -171,4 +170,4 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
 endif ()
 
 ## Set install information
-install ( TARGETS ${IMAGE_TARGET} LIBRARY DESTINATION hsa/lib COMPONENT ${IMAGE_COMPONENT})
+install ( TARGETS ${IMAGE_TARGET} LIBRARY DESTINATION hsa/lib )
