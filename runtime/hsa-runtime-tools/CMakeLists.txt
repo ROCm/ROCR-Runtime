@@ -5,7 +5,6 @@ set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Set ext runtime module name and project name.
 set ( TOOLS_NAME "hsa-runtime-tools" )
-set ( TOOLS_COMPONENT "lib${TOOLS_NAME}" )
 set ( TOOLS_TARGET "${TOOLS_NAME}64" )
 project ( ${TOOLS_TARGET} )
 
@@ -48,8 +47,8 @@ find_file ( HSA_INC "hsa/hsa.h" )
 find_library ( HSA_LIB libhsa-runtime64.so )
 get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
 get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
-include_directories ( ${HSA_BUILD_INC_PATH} )
-link_directories (${HSA_BUILD_LIB_PATH})
+include_directories ( ${HSA_INC_PATH} )
+link_directories (${HSA_LIB_PATH})
 
 ## External dependencies
 if ( NOT DEFINED REG_INCLUDE )
@@ -242,5 +241,5 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
 endif ()
 
 ## Set install information
-install ( TARGETS ${TOOLS_TARGET} LIBRARY DESTINATION hsa/lib COMPONENT ${TOOLS_COMPONENT} )
+install ( TARGETS ${TOOLS_TARGET} LIBRARY DESTINATION hsa/lib )
 install ( DIRECTORY ${TOOLS_SOURCE_DIR}/inc/ DESTINATION hsa/include/hsa FILES_MATCHING PATTERN "*.h" )

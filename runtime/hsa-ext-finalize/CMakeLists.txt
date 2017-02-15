@@ -17,7 +17,6 @@ endif()
 
 ## Set ext runtime module name and project name.
 set ( FINALIZE_NAME "hsa-ext-finalize" )
-set ( FINALIZE_COMPONENT "lib${FINALIZE_NAME}" )
 set ( FINALIZE_TARGET "${FINALIZE_NAME}64" )
 project ( ${FINALIZE_TARGET} )
 
@@ -60,8 +59,8 @@ find_file ( HSA_INC "hsa/hsa.h" )
 find_library ( HSA_LIB libhsa-runtime64.so )
 get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
 get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
-include_directories ( ${HSA_BUILD_INC_PATH} )
-link_directories (${HSA_BUILD_LIB_PATH})
+include_directories ( ${HSA_INC_PATH} )
+link_directories (${HSA_LIB_PATH})
 
 ## Find the external library files and set the link command
 find_library ( HSAIL_LIB libhsail.a )
@@ -154,8 +153,6 @@ set_property ( TARGET ${FINALIZE_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}
 set_property ( TARGET ${FINALIZE_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 ## Add the core runtime in the link
-link_directories(${HSA_BUILD_LIB_PATH})
-
 target_link_libraries (
     ${FINALIZE_TARGET}
     PRIVATE ${LIBAMDHSAFIN}
@@ -177,4 +174,4 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
 endif ()
 
 ## Set install information
-install ( TARGETS ${FINALIZE_TARGET} LIBRARY DESTINATION lib COMPONENT ${FINALIZE_COMPONENT})
+install ( TARGETS ${FINALIZE_TARGET} LIBRARY DESTINATION hsa/lib )
