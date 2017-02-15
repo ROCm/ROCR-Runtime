@@ -113,13 +113,16 @@ hsaKmtOpenKFD(void)
 		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
 			printf("Insufficient Memory. Debugging unavailable\n");
 
-		if (init_counter_props(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
-			printf("Insufficient Memory. Performance Counter information unavailable\n");
-
 		amd_hsa_thunk_lock_fd = open(tmp_file,
 				O_CREAT | //create the file if it's not present.
-				O_RDWR, //only need write access for the internal locking semantics.
-				S_IRUSR | S_IWUSR); //permissions on the file, 600 here.
+				O_RDWR,
+				S_IROTH | S_IWOTH); //allow others to read/write
+		if (amd_hsa_thunk_lock_fd < 0)
+			fprintf(stderr,
+			"Profiling of privileged counters is not available\n");
+		if (init_counter_props(sys_props.NumNodes) !=
+						HSAKMT_STATUS_SUCCESS)
+			fprintf(stderr, "Profiling is not available\n");
 	}
 	else
 	{
