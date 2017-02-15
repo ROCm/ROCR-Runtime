@@ -192,6 +192,16 @@ static struct perf_counter_block polaris_blocks[PERFCOUNTER_BLOCKID__MAX] = {
  */
 static struct perf_counter_block iommu_block;
 
+uint32_t pmc_table_get_max_concurrent(int block_id)
+{
+	switch (block_id) {
+	case PERFCOUNTER_BLOCKID__IOMMUV2:
+		return iommu_block.num_of_slots;
+	default:
+		return 0;
+	}
+}
+
 static HSAKMT_STATUS
 alloc_pmc_blocks_iommu(void)
 {

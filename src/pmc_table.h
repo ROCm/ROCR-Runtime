@@ -45,6 +45,7 @@ struct perf_counter_block {
 
 HSAKMT_STATUS alloc_pmc_blocks(void);
 void free_pmc_blocks(void);
+uint32_t pmc_table_get_max_concurrent(int block_id);
 
 HSAKMT_STATUS
 get_block_properties(uint32_t node_id,
