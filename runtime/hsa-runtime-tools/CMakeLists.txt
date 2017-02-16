@@ -157,6 +157,8 @@ set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/ci_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/vi_blockinfo.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/vi_pmu.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/ai_blockinfo.cpp
+                      ${TOOLS_SOURCE_DIR}/profiler/ai_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp )
 
 set ( THREAD_TRACE_SRC    ${TOOLS_SOURCE_DIR}/threadtrace/thread_trace.cpp 
