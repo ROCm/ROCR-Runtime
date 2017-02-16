@@ -118,10 +118,10 @@ add_custom_command( OUTPUT ${TOPLEVEL_INCLUDE_LINK} WORKING_DIRECTORY ${CMAKE_CU
                     COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/include/hsa hsa )
 
 add_custom_command( OUTPUT ${RUNTIME_LIBRARY_SONAME} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hsa/lib
-                    COMMAND ${CMAKE_COMMAND} -E create_symlink ${RUNTIME_NAME}.so.${RUNTIME_VERSION_STRING} ${RUNTIME_NAME}.so.${RUNTIME_VERSION_MAJOR} )
+                    COMMAND ${CMAKE_COMMAND} -E create_symlink ${RUNTIME_NAME}.so.${LIB_VERSION_STRING} ${RUNTIME_NAME}.so.${BUILD_VERSION_MAJOR} )
 
 add_custom_command( OUTPUT ${RUNTIME_LIBRARY_LINKNAME} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib
-                    COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${RUNTIME_NAME}.so.${RUNTIME_VERSION_MAJOR} ${RUNTIME_NAME}.so )
+                    COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${RUNTIME_NAME}.so.${BUILD_VERSION_MAJOR} ${RUNTIME_NAME}.so )
 
 foreach ( HEADER_FILE ${RUNTIME_HEADER_NAMES} )
 
