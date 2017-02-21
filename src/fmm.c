@@ -1139,6 +1139,11 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 			return NULL;
 		}
 
+		/* Mappings in the DGPU aperture don't need to be copied on
+		 * fork. This avoids MMU notifiers and evictions due to user
+		 * memory mappings on fork. */
+		madvise(mem, MemorySizeInBytes, MADV_DONTFORK);
+
 		/* Create userptr BO */
 		mmap_offset = (uint64_t)mem;
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_USERPTR;
