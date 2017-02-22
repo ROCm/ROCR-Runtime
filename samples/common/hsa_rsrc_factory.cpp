@@ -11,6 +11,7 @@
 #include "hsa.h"
 #include "hsa_rsrc_factory.hpp"
 #include "hsa_ext_finalize.h"
+#include "tools/inc/hsa_ext_profiler.h"
 #include "HSAILAmdExt.h"
 
 #include "common.hpp"
@@ -199,6 +200,15 @@ bool HsaRsrcFactory::CreateQueue(AgentInfo *agent_info,
                                  uint32_t num_pkts, hsa_queue_t **queue) {
 
   hsa_status_t status;
+
+  // Code to create a Profile Queue object
+  if (num_pkts == UINT32_MAX) {
+    status = hsa_ext_tools_queue_create_profiled(agent_info->dev_id,
+                                  512, HSA_QUEUE_TYPE_SINGLE, NULL,
+                                  NULL, UINT32_MAX, UINT32_MAX, queue);
+    return (status == HSA_STATUS_SUCCESS);
+  }
+
   status = hsa_queue_create(agent_info->dev_id, num_pkts,
                             HSA_QUEUE_TYPE_MULTI, NULL, NULL,
                             UINT32_MAX, UINT32_MAX, queue);
