@@ -56,6 +56,8 @@ struct perf_trace {
 	uint32_t gpu_id;
 	enum perf_trace_state state;
 	uint32_t num_blocks;
+	void *buf;
+	uint64_t buf_size;
 	struct perf_trace_block blocks[0];
 };
 
@@ -92,10 +94,14 @@ static ssize_t readn(int fd, void *buf, size_t n)
 
 	while (left) {
 		bytes = read(fd, buf, left);
-		if (bytes < 0 && errno == EINTR) /* read got interrupted */
-			continue;
-		if (bytes <= 0)
+		if (!bytes) /* reach EOF */
 			return (n - left);
+		if (bytes < 0 ) {
+			if (errno == EINTR) /* read got interrupted */
+				continue;
+			else
+				return -errno;
+		}
 		left -= bytes;
 		buf = VOID_PTR_ADD(buf, bytes);
 	}
@@ -144,11 +150,9 @@ HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	counter_props_count = NumNodes;
-
 	alloc_pmc_blocks();
-	init_lockf_perf_section();
 
-	return HSAKMT_STATUS_SUCCESS;
+	return init_lockf_perf_section();
 }
 
 void destroy_counter_props(void)
@@ -214,7 +218,13 @@ static HSAKMT_STATUS update_block_slots(enum perf_trace_action action,
 	if (lockf(amd_hsa_thunk_lock_fd, F_TLOCK, sizeof(lockf_tbl)) < 0)
 		return HSAKMT_STATUS_ERROR;
 
-	if (readn(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl)) < 0) {
+	if (lseek(amd_hsa_thunk_lock_fd, 0, SEEK_SET)) {
+		ret = HSAKMT_STATUS_ERROR;
+				goto out;
+	}
+
+	if (readn(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl))
+			!= sizeof(lockf_tbl)) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto out;
 	}
@@ -342,6 +352,34 @@ static HSAKMT_STATUS open_perf_event_fd(struct perf_trace_block *block)
 	}
 
 	return ret;
+}
+
+static HSAKMT_STATUS perf_trace_ioctl(struct perf_trace_block *block,
+				uint32_t cmd)
+{
+	uint32_t i;
+
+	for (i = 0; i < block->num_counters; i++) {
+		if (block->perf_event_fd[i] < 0)
+			return HSAKMT_STATUS_UNAVAILABLE;
+		if (ioctl(block->perf_event_fd[i], cmd, NULL))
+			return HSAKMT_STATUS_ERROR;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS query_trace(int fd, uint64_t *buf)
+{
+	struct perf_counts_values content;
+
+	if (fd < 0)
+		return HSAKMT_STATUS_ERROR;
+	if(readn(fd, &content, sizeof(content)) != sizeof(content))
+		return HSAKMT_STATUS_ERROR;
+
+	*buf = content.val;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS
@@ -706,7 +744,11 @@ hsaKmtPmcStartTrace(
 	HSAuint64   TraceBufferSizeBytes    //IN (page aligned)
 	)
 {
-	struct perf_trace *trace = (struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	struct perf_trace *trace =
+			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	uint32_t i;
+	int32_t j;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	if (TraceId == 0 || TraceBuffer == NULL || TraceBufferSizeBytes == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -714,7 +756,24 @@ hsaKmtPmcStartTrace(
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
+	for (i = 0; i < trace->num_blocks; i++) {
+		ret = perf_trace_ioctl(&trace->blocks[i],
+					PERF_EVENT_IOC_ENABLE);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			break;
+	}
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		/* Disable enabled blocks before returning the failure. */
+		j = (int32_t)i;
+		while (--j >= 0)
+			perf_trace_ioctl(&trace->blocks[j],
+					PERF_EVENT_IOC_DISABLE);
+		return ret;
+	}
+
 	trace->state = PERF_TRACE_STATE__STARTED;
+	trace->buf = TraceBuffer;
+	trace->buf_size = TraceBufferSizeBytes;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -730,13 +789,31 @@ hsaKmtPmcQueryTrace(
 	HSATraceId    TraceId   //IN
 	)
 {
-	struct perf_trace *trace = (struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	struct perf_trace *trace =
+			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	uint32_t i, j;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	uint64_t *buf;
+	uint64_t buf_filled = 0;
 
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
 		return HSAKMT_STATUS_INVALID_HANDLE;
+
+	buf = (uint64_t *)trace->buf;
+	for (i = 0; i < trace->num_blocks; i++)
+		for (j = 0; j < trace->blocks[i].num_counters; j++) {
+			buf_filled += sizeof(uint64_t);
+			if (buf_filled > trace->buf_size)
+				return HSAKMT_STATUS_NO_MEMORY;
+			ret = query_trace(trace->blocks[i].perf_event_fd[j],
+					buf);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+				return ret;
+			buf++;
+		}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -752,7 +829,10 @@ hsaKmtPmcStopTrace(
 	HSATraceId  TraceId     //IN
 	)
 {
-	struct perf_trace *trace = (struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	struct perf_trace *trace =
+			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
+	uint32_t i;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -760,7 +840,14 @@ hsaKmtPmcStopTrace(
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
+	for (i = 0; i < trace->num_blocks; i++) {
+		ret = perf_trace_ioctl(&trace->blocks[i],
+					PERF_EVENT_IOC_DISABLE);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			return ret;
+	}
+
 	trace->state = PERF_TRACE_STATE__STOPPED;
 
-	return HSAKMT_STATUS_SUCCESS;
+	return ret;
 }
