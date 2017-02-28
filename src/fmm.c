@@ -1400,10 +1400,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	if (disableCache && strcmp(disableCache, "0") == 0)
 		disableCache = NULL;
 
-	/* If HSA_USERPTR_FOR_PAGED_MEM unset or set to a non-0 value,
+	/* If HSA_USERPTR_FOR_PAGED_MEM is set to a non-0 value,
 	 * enable userptr for all paged memory allocations */
 	pagedUserptr = getenv("HSA_USERPTR_FOR_PAGED_MEM");
-	svm.userptr_for_paged_mem = (!pagedUserptr || strcmp(pagedUserptr, "0"));
+	svm.userptr_for_paged_mem = (pagedUserptr && strcmp(pagedUserptr, "0"));
 
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 *	systems with CPU node, slightly more memory is allocated than
