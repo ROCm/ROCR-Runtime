@@ -62,6 +62,20 @@ extern bool is_dgpu;
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
+enum asic_family_type {
+	CHIP_KAVERI = 0,
+	CHIP_HAWAII,
+	CHIP_CARRIZO,
+	CHIP_TONGA,
+	CHIP_FIJI,
+	CHIP_POLARIS10,
+	CHIP_POLARIS11,
+	CHIP_VEGA10
+};
+#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_VEGA10) || \
+		       (chip) == CHIP_HAWAII)
+#define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
+
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
 uint16_t get_device_id_by_node(HSAuint32 node_id);
@@ -74,6 +88,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties 
 		uint32_t *gpu_id, struct pci_access* pacc);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 bool topology_is_dgpu(uint16_t device_id);
+HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
+					enum asic_family_type *asic);
 
 HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 

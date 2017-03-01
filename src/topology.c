@@ -83,87 +83,88 @@ static struct hsa_gfxip_table {
 	unsigned char stepping;		// GFXIP Stepping info
 	unsigned char is_dgpu;		// Predicate for dGPU devices
 	const char* amd_name;		// CALName of the device
+	enum asic_family_type asic_family;
 } gfxip_lookup_table[] = {
 	/* Kaveri Family */
-	{ 0x1304, 7, 0, 0, 0, "Spectre" },
-	{ 0x1305, 7, 0, 0, 0, "Spectre" },
-	{ 0x1306, 7, 0, 0, 0, "Spectre" },
-	{ 0x1307, 7, 0, 0, 0, "Spectre" },
-	{ 0x1309, 7, 0, 0, 0, "Spectre" },
-	{ 0x130A, 7, 0, 0, 0, "Spectre" },
-	{ 0x130B, 7, 0, 0, 0, "Spectre" },
-	{ 0x130C, 7, 0, 0, 0, "Spectre" },
-	{ 0x130D, 7, 0, 0, 0, "Spectre" },
-	{ 0x130E, 7, 0, 0, 0, "Spectre" },
-	{ 0x130F, 7, 0, 0, 0, "Spectre" },
-	{ 0x1310, 7, 0, 0, 0, "Spectre" },
-	{ 0x1311, 7, 0, 0, 0, "Spectre" },
-	{ 0x1312, 7, 0, 0, 0, "Spooky" },
-	{ 0x1313, 7, 0, 0, 0, "Spectre" },
-	{ 0x1315, 7, 0, 0, 0, "Spectre" },
-	{ 0x1316, 7, 0, 0, 0, "Spooky" },
-	{ 0x1317, 7, 0, 0, 0, "Spooky" },
-	{ 0x1318, 7, 0, 0, 0, "Spectre" },
-	{ 0x131B, 7, 0, 0, 0, "Spectre" },
-	{ 0x131C, 7, 0, 0, 0, "Spectre" },
-	{ 0x131D, 7, 0, 0, 0, "Spectre" },
+	{ 0x1304, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1305, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1306, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1307, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1309, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130A, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130B, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130C, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130D, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130E, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x130F, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1310, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1311, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1312, 7, 0, 0, 0, "Spooky", CHIP_KAVERI },
+	{ 0x1313, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1315, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x1316, 7, 0, 0, 0, "Spooky", CHIP_KAVERI },
+	{ 0x1317, 7, 0, 0, 0, "Spooky", CHIP_KAVERI },
+	{ 0x1318, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x131B, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x131C, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
+	{ 0x131D, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
 	/* Hawaii Family */
-	{ 0x67A0, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67A1, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67A2, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67A8, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67A9, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67AA, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67B0, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67B1, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67B8, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67B9, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67BA, 7, 0, 1, 1, "Hawaii" },
-	{ 0x67BE, 7, 0, 1, 1, "Hawaii" },
+	{ 0x67A0, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67A1, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67A2, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67A8, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67A9, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67AA, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67B0, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67B1, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67B8, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67B9, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67BA, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
+	{ 0x67BE, 7, 0, 1, 1, "Hawaii", CHIP_HAWAII },
 	/* Carrizo Family */
-	{ 0x9870, 8, 0, 1, 0, "Carrizo" },
-	{ 0x9874, 8, 0, 1, 0, "Carrizo" },
-	{ 0x9875, 8, 0, 1, 0, "Carrizo" },
-	{ 0x9876, 8, 0, 1, 0, "Carrizo" },
-	{ 0x9877, 8, 0, 1, 0, "Carrizo" },
+	{ 0x9870, 8, 0, 1, 0, "Carrizo", CHIP_CARRIZO },
+	{ 0x9874, 8, 0, 1, 0, "Carrizo", CHIP_CARRIZO },
+	{ 0x9875, 8, 0, 1, 0, "Carrizo", CHIP_CARRIZO },
+	{ 0x9876, 8, 0, 1, 0, "Carrizo", CHIP_CARRIZO },
+	{ 0x9877, 8, 0, 1, 0, "Carrizo", CHIP_CARRIZO },
 	/* Tonga Family */
-	{ 0x6920, 8, 0, 2, 1, "Tonga" },
-	{ 0x6921, 8, 0, 2, 1, "Tonga" },
-	{ 0x6928, 8, 0, 2, 1, "Tonga" },
-	{ 0x6929, 8, 0, 2, 1, "Tonga" },
-	{ 0x692B, 8, 0, 2, 1, "Tonga" },
-	{ 0x692F, 8, 0, 2, 1, "Tonga" },
-	{ 0x6930, 8, 0, 2, 1, "Tonga" },
-	{ 0x6938, 8, 0, 2, 1, "Tonga" },
-	{ 0x6939, 8, 0, 2, 1, "Tonga" },
+	{ 0x6920, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6921, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6928, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6929, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x692B, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x692F, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6930, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6938, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
+	{ 0x6939, 8, 0, 2, 1, "Tonga", CHIP_TONGA },
 	/* Fiji */
-	{ 0x7300, 8, 0, 3, 1, "Fiji" },
-	{ 0x730F, 8, 0, 3, 1, "Fiji" },
+	{ 0x7300, 8, 0, 3, 1, "Fiji", CHIP_FIJI },
+	{ 0x730F, 8, 0, 3, 1, "Fiji", CHIP_FIJI },
 	/* Polaris10 */
-	{ 0x67C0, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C1, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C2, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C4, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C7, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C8, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67C9, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67CA, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67CC, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67CF, 8, 0, 3, 1, "Polaris10" },
-	{ 0x67DF, 8, 0, 3, 1, "Polaris10" },
+	{ 0x67C0, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C1, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C2, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C4, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C7, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C8, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67C9, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67CA, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67CC, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67CF, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x67DF, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
 	/* Polaris11 */
-	{ 0x67E0, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67E1, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67E3, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67E7, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67E8, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67E9, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67EB, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67EF, 8, 0, 3, 1, "Polaris11" },
-	{ 0x67FF, 8, 0, 3, 1, "Polaris11" },
+	{ 0x67E0, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67E1, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67E3, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67E7, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67E8, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67E9, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67EB, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67EF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	{ 0x67FF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	/* Vega10 */
-	{ 0x6860, 9, 0, 0, 1, "Vega10" },
-	{ 0x687F, 9, 0, 0, 1, "Vega10" }
+	{ 0x6860, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 }
 };
 
 enum cache_type {
@@ -547,6 +548,19 @@ static const struct hsa_gfxip_table* find_hsa_gfxip_device(uint16_t device_id)
 			return &gfxip_lookup_table[i];
 	}
 	return NULL;
+}
+
+HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
+					enum asic_family_type *asic)
+{
+	const struct hsa_gfxip_table *hsa_gfxip =
+				find_hsa_gfxip_device(device_id);
+
+	if (!hsa_gfxip)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	*asic = hsa_gfxip->asic_family;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 bool topology_is_dgpu(uint16_t device_id)

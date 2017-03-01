@@ -314,8 +314,8 @@ get_block_properties(uint32_t node_id,
                      enum perf_block_id block_id,
                      struct perf_counter_block *block)
 {
-	HSAKMT_STATUS rc = HSAKMT_STATUS_SUCCESS;
 	uint16_t dev_id = get_device_id_by_node(node_id);
+	enum asic_family_type asic;
 
 	if (block_id > PERFCOUNTER_BLOCKID__MAX ||
 			block_id < PERFCOUNTER_BLOCKID__FIRST)
@@ -326,42 +326,31 @@ get_block_properties(uint32_t node_id,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	/* To avoid the long list, we read the 12 most significant digits of DID
-	 * to identify the GPU instead of listing the complete 16 bits. If one
-	 * day 12-bits is not good enough to distinguish the GPU, change the
-	 * code here.
-	 */
-	switch(dev_id >> 4) {
-	case 0x130:
-	case 0x131:
+	if (topology_get_asic_family(dev_id, &asic) != HSAKMT_STATUS_SUCCESS)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	switch (asic) {
+	case CHIP_KAVERI:
 		*block = kaveri_blocks[block_id];
 		break;
-
-	case 0x987:
-		*block = carrizo_blocks[block_id];
-		break;
-
-	case 0x730:
-		*block = fiji_blocks[block_id];
-		break;
-
-	case 0x67A:
-	case 0x67B:
+	case CHIP_HAWAII:
 		*block = hawaii_blocks[block_id];
 		break;
-
-	case 0x67C:
-	case 0x67D:
-	case 0x67E:
-	case 0x67F:
+	case CHIP_CARRIZO:
+		*block = carrizo_blocks[block_id];
+		break;
+	case CHIP_FIJI:
+		*block = fiji_blocks[block_id];
+		break;
+	case CHIP_POLARIS10:
+	case CHIP_POLARIS11:
 		*block = polaris_blocks[block_id];
 		break;
-
 	default:
-		rc = HSAKMT_STATUS_INVALID_PARAMETER;
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
-	return rc;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 
