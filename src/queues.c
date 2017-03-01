@@ -41,22 +41,6 @@
 #define DOORBELL_SIZE_GFX9 8
 #define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
 
-enum asic_family_type {
-	CHIP_KAVERI = 0,
-	CHIP_HAWAII,
-	CHIP_CARRIZO,
-	CHIP_TONGA,
-	CHIP_FIJI,
-	CHIP_POLARIS10,
-	CHIP_POLARIS11,
-	CHIP_VEGA10
-};
-
-#define IS_VI(chip) ((chip) >= CHIP_CARRIZO && (chip) <= CHIP_POLARIS11)
-#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_VEGA10) || \
-		       (chip) == CHIP_HAWAII)
-#define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
-
 #define WG_CONTEXT_DATA_SIZE_PER_CU_VI	344576
 #define WAVES_PER_CU_VI		32
 
@@ -115,87 +99,21 @@ struct device_info vega10_device_info = {
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+static struct device_info *dev_lookup_table[] = {
+	[CHIP_KAVERI] = &kaveri_device_info,
+	[CHIP_HAWAII] = &hawaii_device_info,
+	[CHIP_CARRIZO] = &carrizo_device_info,
+	[CHIP_TONGA] = &tonga_device_info,
+	[CHIP_FIJI] = &fiji_device_info,
+	[CHIP_POLARIS10] = &polaris10_device_info,
+	[CHIP_POLARIS11] = &polaris11_device_info,
+	[CHIP_VEGA10] = &vega10_device_info
+};
+
 struct device_id
 {
 	uint16_t dev_id;
 	struct device_info *dev_info;
-};
-
-/* TODO: unify this with the device list in topology.c */
-struct device_id supported_devices[] = {
-	{ 0x1304, &kaveri_device_info },	/* Kaveri */
-	{ 0x1305, &kaveri_device_info },	/* Kaveri */
-	{ 0x1306, &kaveri_device_info },	/* Kaveri */
-	{ 0x1307, &kaveri_device_info },	/* Kaveri */
-	{ 0x1309, &kaveri_device_info },	/* Kaveri */
-	{ 0x130A, &kaveri_device_info },	/* Kaveri */
-	{ 0x130B, &kaveri_device_info },	/* Kaveri */
-	{ 0x130C, &kaveri_device_info },	/* Kaveri */
-	{ 0x130D, &kaveri_device_info },	/* Kaveri */
-	{ 0x130E, &kaveri_device_info },	/* Kaveri */
-	{ 0x130F, &kaveri_device_info },	/* Kaveri */
-	{ 0x1310, &kaveri_device_info },	/* Kaveri */
-	{ 0x1311, &kaveri_device_info },	/* Kaveri */
-	{ 0x1312, &kaveri_device_info },	/* Kaveri */
-	{ 0x1313, &kaveri_device_info },	/* Kaveri */
-	{ 0x1315, &kaveri_device_info },	/* Kaveri */
-	{ 0x1316, &kaveri_device_info },	/* Kaveri */
-	{ 0x1317, &kaveri_device_info },	/* Kaveri */
-	{ 0x1318, &kaveri_device_info },	/* Kaveri */
-	{ 0x131B, &kaveri_device_info },	/* Kaveri */
-	{ 0x131C, &kaveri_device_info },	/* Kaveri */
-	{ 0x131D, &kaveri_device_info },	/* Kaveri */
-	{ 0x67A0, &hawaii_device_info },	/* Hawaii */
-	{ 0x67A1, &hawaii_device_info },	/* Hawaii */
-	{ 0x67A2, &hawaii_device_info },	/* Hawaii */
-	{ 0x67A8, &hawaii_device_info },	/* Hawaii */
-	{ 0x67A9, &hawaii_device_info },	/* Hawaii */
-	{ 0x67AA, &hawaii_device_info },	/* Hawaii */
-	{ 0x67B0, &hawaii_device_info },	/* Hawaii */
-	{ 0x67B1, &hawaii_device_info },	/* Hawaii */
-	{ 0x67B8, &hawaii_device_info },	/* Hawaii */
-	{ 0x67B9, &hawaii_device_info },	/* Hawaii */
-	{ 0x67BA, &hawaii_device_info },	/* Hawaii */
-	{ 0x67BE, &hawaii_device_info },	/* Hawaii */
-	{ 0x9870, &carrizo_device_info },	/* Carrizo */
-	{ 0x9874, &carrizo_device_info },	/* Carrizo */
-	{ 0x9875, &carrizo_device_info },	/* Carrizo */
-	{ 0x9876, &carrizo_device_info },	/* Carrizo */
-	{ 0x9877, &carrizo_device_info },	/* Carrizo */
-	{ 0x6920, &tonga_device_info },
-	{ 0x6921, &tonga_device_info },
-	{ 0x6928, &tonga_device_info },
-	{ 0x6929, &tonga_device_info },
-	{ 0x692B, &tonga_device_info },
-	{ 0x692F, &tonga_device_info },
-	{ 0x6930, &tonga_device_info },
-	{ 0x6938, &tonga_device_info },
-	{ 0x6939, &tonga_device_info },
-	{ 0x7300, &fiji_device_info },
-	{ 0x730F, &fiji_device_info },
-	{ 0x67C0, &polaris10_device_info },
-	{ 0x67C1, &polaris10_device_info },
-	{ 0x67C2, &polaris10_device_info },
-	{ 0x67C4, &polaris10_device_info },
-	{ 0x67C7, &polaris10_device_info },
-	{ 0x67C8, &polaris10_device_info },
-	{ 0x67C9, &polaris10_device_info },
-	{ 0x67CA, &polaris10_device_info },
-	{ 0x67CC, &polaris10_device_info },
-	{ 0x67CF, &polaris10_device_info },
-	{ 0x67DF, &polaris10_device_info },
-	{ 0x67E0, &polaris11_device_info },
-	{ 0x67E1, &polaris11_device_info },
-	{ 0x67E3, &polaris11_device_info },
-	{ 0x67E7, &polaris11_device_info },
-	{ 0x67E8, &polaris11_device_info },
-	{ 0x67E9, &polaris11_device_info },
-	{ 0x67EB, &polaris11_device_info },
-	{ 0x67EF, &polaris11_device_info },
-	{ 0x67FF, &polaris11_device_info },
-	{ 0x6860, &vega10_device_info },
-	{ 0x687F, &vega10_device_info },
-	{ 0, NULL }
 };
 
 struct queue
@@ -246,15 +164,12 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 
 static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 {
-	int i = 0;
-	while (supported_devices[i].dev_id != 0) {
-		if (supported_devices[i].dev_id == dev_id) {
-			return supported_devices[i].dev_info;
-		}
-		i++;
-	}
+	enum asic_family_type asic;
 
-	return NULL;
+	if (topology_get_asic_family(dev_id, &asic) != HSAKMT_STATUS_SUCCESS)
+		return NULL;
+
+	return dev_lookup_table[asic];
 }
 
 static void get_doorbell_map_info(uint16_t dev_id,
