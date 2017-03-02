@@ -76,6 +76,7 @@ hsaKmtOpenKFD(void)
 	HSAKMT_STATUS result;
 	int fd;
 	HsaSystemProperties sys_props;
+	mode_t mask;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
@@ -113,10 +114,13 @@ hsaKmtOpenKFD(void)
 		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
 			printf("Insufficient Memory. Debugging unavailable\n");
 
+		mask = umask(0); /* save the current umask */
+		/* We don't want the existing umask to mask out S_IWOTH */
+		umask(S_IXOTH);
 		amd_hsa_thunk_lock_fd = open(tmp_file,
-				O_CREAT | //create the file if it's not present.
-				O_RDWR,
-				S_IROTH | S_IWOTH); //allow others to read/write
+				O_CREAT | O_RDWR,
+				0666);
+		umask(mask); /* restore the original umask */
 		if (amd_hsa_thunk_lock_fd < 0)
 			fprintf(stderr,
 			"Profiling of privileged counters is not available\n");
