@@ -49,6 +49,11 @@ static uint32_t gfx7_sq_counter_ids[] = {
 235, 236, 237, 238, 239, 240, 241, 242, 243, 244, 245, 246, 247, 248, 249, 250
 };
 
+static uint32_t gfx7_tca_counter_ids[] = {
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38
+};
+
 /* Unused counters - 166, 292 - 297 */
 static uint32_t gfx8_sq_counter_ids[] = {
 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
@@ -68,6 +73,11 @@ static uint32_t gfx8_sq_counter_ids[] = {
 247, 248, 249, 250, 251, 252, 253, 254, 255, 256, 257, 258, 259, 260, 261, 262,
 263, 264, 265, 266, 267, 268, 269, 270, 271, 272, 273, 274, 275, 276, 277, 278,
 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 298
+};
+
+static uint32_t gfx8_tca_counter_ids[] = {
+1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34
 };
 
 /* Polaris 10/11 have the same SQ cpunter IDs but different from other gfx8's. */
@@ -135,6 +145,17 @@ static struct perf_counter_block carrizo_blocks[PERFCOUNTER_BLOCKID__MAX] = {
 		.counter_size_in_bits = 64,
 		.counter_mask = BITMASK(64)
 	},
+	[PERFCOUNTER_BLOCKID__TCA] = {
+		/* PMC0: PERF_SEL~PERF_SEL3, PMC1: PERF_SEL~PERF_SEL3, PMC2: PERF_SEL
+		 * PMC3: PERF_SEL. So 10 PERF_SELs in total
+		 */
+		.num_of_slots = 10,
+		.num_of_counters = sizeof(gfx8_tca_counter_ids) /
+					sizeof(*gfx8_tca_counter_ids),
+		.counter_ids = gfx8_tca_counter_ids,
+		.counter_size_in_bits = 64,
+		.counter_mask = BITMASK(64)
+	},
 };
 
 static struct perf_counter_block fiji_blocks[PERFCOUNTER_BLOCKID__MAX] = {
@@ -143,6 +164,14 @@ static struct perf_counter_block fiji_blocks[PERFCOUNTER_BLOCKID__MAX] = {
 		.num_of_counters = sizeof(gfx8_sq_counter_ids) /
 					sizeof(*gfx8_sq_counter_ids),
 		.counter_ids = gfx8_sq_counter_ids,
+		.counter_size_in_bits = 64,
+		.counter_mask = BITMASK(64)
+	},
+	[PERFCOUNTER_BLOCKID__TCA] = {
+		.num_of_slots = 10, /* same as CZ */
+		.num_of_counters = sizeof(gfx8_tca_counter_ids) /
+					sizeof(*gfx8_tca_counter_ids),
+		.counter_ids = gfx8_tca_counter_ids,
 		.counter_size_in_bits = 64,
 		.counter_mask = BITMASK(64)
 	},
@@ -157,6 +186,14 @@ static struct perf_counter_block hawaii_blocks[PERFCOUNTER_BLOCKID__MAX] = {
 		.counter_size_in_bits = 64,
 		.counter_mask = BITMASK(64)
 	},
+	[PERFCOUNTER_BLOCKID__TCA] = {
+		.num_of_slots = 10, /* same as CZ */
+		.num_of_counters = sizeof(gfx7_tca_counter_ids) /
+					sizeof(*gfx7_tca_counter_ids),
+		.counter_ids = gfx7_tca_counter_ids,
+		.counter_size_in_bits = 64,
+		.counter_mask = BITMASK(64)
+	},
 };
 
 static struct perf_counter_block polaris_blocks[PERFCOUNTER_BLOCKID__MAX] = {
@@ -168,6 +205,14 @@ static struct perf_counter_block polaris_blocks[PERFCOUNTER_BLOCKID__MAX] = {
 		.counter_size_in_bits = 64,
 		.counter_mask = BITMASK(64)
 	},
+	[PERFCOUNTER_BLOCKID__TCA] = {
+		.num_of_slots = 10, /* same as CZ */
+		.num_of_counters = sizeof(gfx8_tca_counter_ids) /
+					sizeof(*gfx8_tca_counter_ids),
+		.counter_ids = gfx8_tca_counter_ids,
+		.counter_size_in_bits = 64,
+		.counter_mask = BITMASK(64)
+	},
 };
 
 static struct perf_counter_block vega_blocks[PERFCOUNTER_BLOCKID__MAX] = {
@@ -176,6 +221,15 @@ static struct perf_counter_block vega_blocks[PERFCOUNTER_BLOCKID__MAX] = {
 		.num_of_counters = sizeof(gfx9_sq_counter_ids) /
 					sizeof(*gfx9_sq_counter_ids),
 		.counter_ids = gfx9_sq_counter_ids,
+		.counter_size_in_bits = 64,
+		.counter_mask = BITMASK(64)
+	},
+	[PERFCOUNTER_BLOCKID__TCA] = {
+		.num_of_slots = 10, /* same as Fiji */
+		/* Greenland has the same TCA counter IDs with Fiji */
+		.num_of_counters = sizeof(gfx8_tca_counter_ids) /
+					sizeof(*gfx8_tca_counter_ids),
+		.counter_ids = gfx8_tca_counter_ids,
 		.counter_size_in_bits = 64,
 		.counter_mask = BITMASK(64)
 	},

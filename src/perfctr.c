@@ -180,6 +180,9 @@ static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 	case PERFCOUNTER_BLOCKID__SQ:
 		*uuid = HSA_PROFILEBLOCK_AMD_SQ;
 		break;
+	case PERFCOUNTER_BLOCKID__TCA:
+		*uuid = HSA_PROFILEBLOCK_AMD_TCA;
+		break;
 	case PERFCOUNTER_BLOCKID__IOMMUV2:
 		*uuid = HSA_PROFILEBLOCK_AMD_IOMMUV2;
 		break;
