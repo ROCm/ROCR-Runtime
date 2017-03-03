@@ -876,6 +876,11 @@ typedef struct _HSA_UUID
 HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_SQ,
 0xb5c396b6, 0xd310, 0x47e4, 0x86, 0xfc, 0x5c, 0xc3, 0x4, 0x3a, 0xf5, 0x8);
 
+// HSA_UUID that identifies the GPU TextureCache (TCA) block
+// {333e393f-e147-4f49-a6d1-60914c7086b0}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TCA,
+0x333e393f, 0xe147, 0x4f49, 0xa6, 0xd1,0x60, 0x91, 0x4c, 0x70, 0x86, 0xb0);
+
 // GUID that identifies the GPU Memory Controller (MC) block
 // {13900B57-4956-4D98-81D0-68521937F59C}
 HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_MC,
