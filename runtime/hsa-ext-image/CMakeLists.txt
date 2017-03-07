@@ -33,6 +33,7 @@ add_definitions ( -D__x86_64__ )
 add_definitions ( -DAMD_INTERNAL_BUILD )
 add_definitions ( -DLITTLEENDIAN_CPU=1 )
 add_definitions ( -D HSA_DEPRECATED= )
+add_definitions ( -D BRAHMA_BUILD=1 )
 
 ## Get the package version. The defaults to 1.0.0.
 get_version ( "1.0.0" )
@@ -121,8 +122,11 @@ include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/core )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/r800 )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/gfx9 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9 )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9/chip )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize/amdhsafin/Interface )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
 include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
@@ -135,6 +139,11 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/ciaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/egbaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/siaddrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib1.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib2.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/coord.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/gfx9addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/rbmap.cpp
                  ${EXT_SOURCE_DIR}/runtime/amd_ext.cpp
                  ${EXT_SOURCE_DIR}/runtime/device_info.cpp
                  ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp
