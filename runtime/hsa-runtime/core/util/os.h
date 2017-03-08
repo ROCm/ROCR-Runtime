@@ -114,6 +114,11 @@ void DestroyMutex(Mutex lock);
 /// @return: void.
 void Sleep(int delayInMs);
 
+/// @brief: Puts current thread to sleep.
+/// @param: delayInMs(Input), time in millisecond for sleeping.
+/// @return: void.
+void uSleep(int delayInUs);
+
 /// @brief: Yields current thread.
 /// @param: void.
 /// @return: void.

@@ -133,9 +133,8 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
   timer::fast_clock::time_point start_time = timer::fast_clock::now();
 
   // Set a polling timeout value
-  // Exact time is not hugely important, it should just be a short while which
-  // is smaller than the thread scheduling quantum (usually around 16ms)
-  const timer::fast_clock::duration kMaxElapsed = std::chrono::milliseconds(5);
+  // Should be a few times bigger than null kernel latency
+  const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
   uint64_t hsa_freq;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
@@ -188,6 +187,8 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
                         time_remaining).count();
         hsaKmtWaitOnEvent(event_, wait_ms);
       }
+    } else {
+      os::uSleep(20);
     }
   }
 }

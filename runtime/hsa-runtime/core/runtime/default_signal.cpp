@@ -131,6 +131,7 @@ hsa_signal_value_t DefaultSignal::WaitRelaxed(hsa_signal_condition_t condition,
       value = atomic::Load(&signal_.value, std::memory_order_relaxed);
       return hsa_signal_value_t(value);
     }
+    os::uSleep(20);
   }
 }
 
