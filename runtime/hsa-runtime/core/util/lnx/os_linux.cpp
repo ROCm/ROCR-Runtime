@@ -115,6 +115,8 @@ void DestroyMutex(Mutex lock) {
 
 void Sleep(int delay_in_millisec) { usleep(delay_in_millisec * 1000); }
 
+void uSleep(int delayInUs) { usleep(delayInUs); }
+
 void YieldThread() { sched_yield(); }
 
 struct ThreadArgs {

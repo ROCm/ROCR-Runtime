@@ -101,9 +101,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   timer::fast_clock::time_point start_time = timer::fast_clock::now();
 
   // Set a polling timeout value
-  // Exact time is not hugely important, it should just be a short while which
-  // is smaller than the thread scheduling quantum (usually around 16ms)
-  const timer::fast_clock::duration kMaxElapsed = std::chrono::milliseconds(5);
+  const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
   // Convert timeout value into the fast_clock domain
   uint64_t hsa_freq;
@@ -177,6 +175,8 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
                         time_remaining).count();
         hsaKmtWaitOnMultipleEvents(evts, unique_evts, false, wait_ms);
       }
+    } else {
+      os::uSleep(20);
     }
   }
 }
