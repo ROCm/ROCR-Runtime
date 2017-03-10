@@ -731,7 +731,9 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
                               queue->public_handle(), queue->errors_data_);
     return false;
 
-  } else if ((error_code & 32) == 32) {  // Invalid format
+  } else if (((error_code & 32) == 32) ||
+             ((error_code & 256) == 256)) {  // Invalid format: 32 is generic,
+                                             // 256 is vendor specific packets
     queue->Inactivate();
     if (queue->errors_callback_ != NULL)
       queue->errors_callback_(HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
