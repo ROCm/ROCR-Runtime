@@ -549,7 +549,9 @@ void GpuAgent::InitDma() {
     ScopedAcquire<KernelMutex> lock(&blit_lock_);
     if (!blit_initialized_.load(std::memory_order_relaxed)) {
       // Try create SDMA blit first.
-      if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+      // TODO: Temporarily disable SDMA on specific ISA targets until they are fully qualified.
+      if ((isa_->GetMajorVersion() != 9) &&
+          core::Runtime::runtime_singleton_->flag().enable_sdma() &&
           (HSA_PROFILE_BASE == profile_)) {
         blits_[BlitHostToDev] = CreateBlitSdma();
         blits_[BlitDevToHost] = CreateBlitSdma();
