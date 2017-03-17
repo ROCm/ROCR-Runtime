@@ -65,7 +65,7 @@
 #define HSA_VERSION_MAJOR 1
 #define HSA_VERSION_MINOR 1
 
-const char rocrbuildid[] __attribute__((unused)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
+const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
 namespace core {
 bool g_use_interrupt_wait = true;
