@@ -100,7 +100,7 @@ typedef enum hsa_amd_agent_info_s {
   HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS = 0xA005,
   /**
    * Agent BDF_ID, named LocationID in thunk. The type of this attribute is
-   * uint16_t.
+   * uint32_t.
    */
   HSA_AMD_AGENT_INFO_BDFID = 0xA006,
   /**
