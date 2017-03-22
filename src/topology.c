@@ -1244,20 +1244,6 @@ err1:
 	return ret;
 }
 
-/* topology_get_numa_node_link_type - Return NUMA node interconnect based
- *  on processor vendor
- */
-static HSA_IOLINKTYPE topology_get_numa_node_link_type(void)
-{
-	if (processor_vendor == GENUINE_INTEL)
-		return HSA_IOLINK_TYPE_QPI_1_1;
-	else if (processor_vendor == AUTHENTIC_AMD)
-		return HSA_IOLINKTYPE_HYPERTRANSPORT;
-	else
-		return HSA_IOLINKTYPE_UNDEFINED;
-
-}
-
 /* topology_get_free_io_link_slot_for_node - For the given node_id, find the
  * 	next available free slot to add an io_link
  */
@@ -1288,153 +1274,182 @@ static HsaIoLinkProperties * topology_get_free_io_link_slot_for_node(
 }
 
 /* topology_add_io_link_for_node - If a free slot is available,
- *  add io_link for the given Node.
+ *	add io_link for the given Node. If bi_directional is true, set up two
+ *	links for both directions.
  *  TODO: Add other members of HsaIoLinkProperties
  */
 static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_id,
-		const HsaSystemProperties *sys_props, node_t *temp_nodes,
+		const HsaSystemProperties *sys_props, node_t *nodes,
 		HSA_IOLINKTYPE IoLinkType, uint32_t NodeTo,
-		uint32_t Weight)
+		uint32_t Weight, bool bi_dir)
 {
 	HsaIoLinkProperties *props;
-	props = topology_get_free_io_link_slot_for_node(node_id,
-		sys_props, temp_nodes);
-	if (!props)
-		return HSAKMT_STATUS_NO_MEMORY;
+	/* If bi-directional is set true, it's two links to add. */
+	uint32_t i, num_links = (bi_dir == true) ? 2 : 1;
+	uint32_t node_from = node_id, node_to = NodeTo;
 
-	props->IoLinkType = IoLinkType;
-	props->NodeFrom = node_id;
-	props->NodeTo = NodeTo;
-	props->Weight = Weight;
-	temp_nodes[node_id].node.NumIOLinks++;
+	for (i = 0; i < num_links; i++) {
+		props = topology_get_free_io_link_slot_for_node(node_from,
+			sys_props, nodes);
+		if (!props)
+			return HSAKMT_STATUS_NO_MEMORY;
+
+		props->IoLinkType = IoLinkType;
+		props->NodeFrom = node_from;
+		props->NodeTo = node_to;
+		props->Weight = Weight;
+		nodes[node_from].node.NumIOLinks++;
+		/* switch direction on the 2nd link when num_links=2 */
+		node_from = NodeTo;
+		node_to = node_id;
+	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-/* topology_create_qpi_links - Create QPI or HT links among all NUMA nodes
- *	For now, assume all the nodes are interconnected with same Weight (=1)
- */
-static void topology_create_qpi_links(const HsaSystemProperties *sys_props,
-		node_t *nodes)
+/* Find the CPU that this GPU (gpu_node) directly connects to */
+static int32_t gpu_get_direct_link_cpu(uint32_t gpu_node, node_t *nodes)
 {
-	unsigned int i, j;
-	HSAKMT_STATUS ret;
+	HsaIoLinkProperties *props = nodes[gpu_node].link;
+	uint32_t i;
 
-	/* Find all CPU Nodes and connect each other via HT or QPI io_link */
-	for (i = 0; i < sys_props->NumNodes - 1; i++) {
-		for (j = i + 1; j < sys_props->NumNodes; j++) {
-			if (nodes[i].gpu_id || nodes[j].gpu_id)
-				continue;
-			ret = topology_add_io_link_for_node(i, sys_props, nodes,
-					topology_get_numa_node_link_type(),
-					j,  1);
-			if (ret != HSAKMT_STATUS_SUCCESS)
-				fprintf(stderr,
-				"Error %d: Fail to add QPI link [%d]->[%d]\n",
-				ret, i, j);
+	if (!nodes[gpu_node].gpu_id || !props ||
+			nodes[gpu_node].node.NumIOLinks == 0)
+		return -1;
 
-			ret = topology_add_io_link_for_node(j, sys_props, nodes,
-					topology_get_numa_node_link_type(),
-					i, 1);
-			if (ret != HSAKMT_STATUS_SUCCESS)
-				fprintf(stderr,
-				"Error %d: failed to add QPI link [%d]->[%d]\n",
-				ret, j, i);
-		}
-	}
+	for (i = 0; i < nodes[gpu_node].node.NumIOLinks; i++)
+		if (props[i].IoLinkType == HSA_IOLINKTYPE_PCIEXPRESS &&
+			props[i].Weight <= 20) /* >20 is GPU->CPU->GPU */
+			return props[i].NodeTo;
+
+	return -1;
 }
 
-/* topology_create_reverse_io_link - Create io_links from the given CPU
- *	NUMA node to all the GPUs attached to that node
+/* Get node1->node2 IO link information. This should be a direct link that has
+ * been created in the kernel.
  */
-static void topology_create_reverse_io_link(uint32_t cpu_node,
-			const HsaSystemProperties *sys_props, node_t *nodes)
+static HSAKMT_STATUS get_direct_iolink_info(uint32_t node1, uint32_t node2,
+			node_t *nodes, HSAuint32 *weight, HSA_IOLINKTYPE *type)
 {
-	unsigned int gpu_node;
+	HsaIoLinkProperties *props = nodes[node1].link;
+	uint32_t i;
+
+	if (!props)
+		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	for (i = 0; i < nodes[node1].node.NumIOLinks; i++)
+		if (props[i].NodeTo == node2) {
+			if (weight)
+				*weight = props[i].Weight;
+			if (type)
+				*type = props[i].IoLinkType;
+			return HSAKMT_STATUS_SUCCESS;
+		}
+
+	return HSAKMT_STATUS_INVALID_PARAMETER;
+}
+
+static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
+			node_t *nodes, HSAuint32 *weight, HSA_IOLINKTYPE *type)
+{
+	int32_t dir_cpu1 = -1, dir_cpu2 = -1;
+	HSAuint32 weight1 = 0, weight2 = 0, weight3 = 0;
 	HSAKMT_STATUS ret;
 
-	for (gpu_node = 0; gpu_node < sys_props->NumNodes; gpu_node++) {
-		if (!nodes[gpu_node].gpu_id)
-			continue;
-		/* Check if this GPU is connected to the give cpu_node,
-		 * if so create an io_link */
-		if (nodes[gpu_node].link->NodeTo == cpu_node) {
-			ret = topology_add_io_link_for_node(cpu_node, sys_props,
-					nodes, HSA_IOLINKTYPE_PCIEXPRESS,
-					gpu_node, nodes[gpu_node].link->Weight);
-			if (ret != HSAKMT_STATUS_SUCCESS) {
-				fprintf(stderr,
-				"Error %d: Fail to create reverse io_links from Node [%d]\n",
-					ret, cpu_node);
-				return;
+	*weight = 0;
+	*type = HSA_IOLINKTYPE_UNDEFINED;
+
+	if (node1 == node2)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	/* CPU->CPU is not an indirect link */
+	if (!nodes[node1].gpu_id && !nodes[node2].gpu_id)
+		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	if (nodes[node1].gpu_id)
+		dir_cpu1 = gpu_get_direct_link_cpu(node1, nodes);
+	if (nodes[node2].gpu_id)
+		dir_cpu2 = gpu_get_direct_link_cpu(node2, nodes);
+
+	if (dir_cpu1 < 0 && dir_cpu2 < 0)
+		return HSAKMT_STATUS_ERROR;
+
+	/* Possible topology:
+	 *   GPU --(weight1) -- CPU -- (weight2) -- GPU
+	 *   GPU --(weight1) -- CPU -- (weight2) -- CPU -- (weight3) -- GPU
+	 *   GPU --(weight1) -- CPU -- (weight2) -- CPU
+	 *   CPU -- (weight2) -- CPU -- (weight3) -- GPU
+	 */
+	if (dir_cpu1 >= 0) { /* GPU->CPU ... */
+		if (dir_cpu2 >= 0) {
+			if (dir_cpu1 == dir_cpu2) /* GPU->CPU->GPU*/ {
+				ret = get_direct_iolink_info(node1, dir_cpu1,
+						nodes, &weight1, NULL);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					return ret;
+				ret = get_direct_iolink_info(dir_cpu1, node2,
+					 	nodes, &weight2, type);
+			} else /* GPU->CPU->CPU->GPU*/ {
+				ret = get_direct_iolink_info(node1, dir_cpu1,
+						nodes, &weight1, NULL);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					return ret;
+				ret = get_direct_iolink_info(dir_cpu1, dir_cpu2,
+						nodes, &weight2, type);
+				if (ret != HSAKMT_STATUS_SUCCESS)
+					return ret;
+				/* On QPI interconnection, GPUs can't access
+				 * each other if they are attached to different
+				 * CPU sockets. CPU<->CPU weight larger than 20
+				 * means the two CPUs are in different sockets.
+				 */
+				if (*type == HSA_IOLINK_TYPE_QPI_1_1
+					&& weight2 > 20)
+					return HSAKMT_STATUS_NOT_SUPPORTED;
+				ret = get_direct_iolink_info(dir_cpu2, node2,
+						nodes, &weight3, NULL);
 			}
+		} else /* GPU->CPU->CPU */ {
+			ret = get_direct_iolink_info(node1, dir_cpu1, nodes,
+							&weight1, NULL);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+				return ret;
+			ret = get_direct_iolink_info(dir_cpu1, node2, nodes,
+							&weight2, type);
 		}
+	} else { /* CPU->CPU->GPU */
+		ret = get_direct_iolink_info(node1, dir_cpu2, nodes, &weight2,
+					type);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			return ret;
+		ret = get_direct_iolink_info(dir_cpu2, node2, nodes, &weight3,
+						NULL);
 	}
+
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	*weight = weight1 + weight2 + weight3;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
-/* topology_create_indirect_gpu_links - For the given cpu_node,
- *  find all nodes connected to it and create io_links
- *  among them */
-static void topology_create_indirect_gpu_links(uint32_t cpu_node,
+static void topology_create_indirect_gpu_links(
 		const HsaSystemProperties *sys_props, node_t *nodes)
 {
-	unsigned int i, j;
-	HSAKMT_STATUS ret;
-	HSA_IOLINKTYPE IoLinkType;
-	HsaIoLinkProperties *props = nodes[cpu_node].link;
-	HSAuint32 num_iolinks = nodes[cpu_node].node.NumIOLinks;
 
-	if (!props || !num_iolinks) {
-		fprintf(stderr, "CPU Node [%d] has no GPU connected\n",
-			cpu_node);
-		return;
-	}
+	uint32_t i, j;
+	HSAuint32 weight;
+	HSA_IOLINKTYPE type;
 
-	/* props is the list of io_links cpu_node is connected to.
-	 * Make an indirect io_links from props[i].NodeTo --> props[j].NodeTo
-	 * and props[j].NodeTo --> props[i].NodeTo */
-	for (i = 0; i < num_iolinks - 1; i++)
-	{
-		for (j = i + 1; j < num_iolinks; j++) {
-			/* Ignore CPU <--> CPU node connected as it is handled
-			 * by QPI link function */
-			if (!nodes[props[i].NodeTo].gpu_id &&
-				!nodes[props[j].NodeTo].gpu_id)
+	for (i = 0; i < sys_props->NumNodes - 1; i++) {
+		for (j = i + 1; j < sys_props->NumNodes; j++) {
+			get_indirect_iolink_info(i, j, nodes, &weight, &type);
+			if (!weight)
 				continue;
-
-			/* For the given cpu_node, connect to or from the GPUs
-			 * that are not connected directly to it via PCIEXPRESS
-			 */
-			if ((nodes[props[i].NodeTo].gpu_id &&
-				props[i].IoLinkType != HSA_IOLINKTYPE_PCIEXPRESS) ||
-				(nodes[props[j].NodeTo].gpu_id &&
-				props[j].IoLinkType != HSA_IOLINKTYPE_PCIEXPRESS))
-				continue;
-
-			/* The link is from GPU to non-parent NUMA node. So set
-			 * link type to HT or QPI */
-			if (!nodes[props[i].NodeTo].gpu_id ||
-				!nodes[props[j].NodeTo].gpu_id)
-				IoLinkType = topology_get_numa_node_link_type();
-			else
-				IoLinkType = HSA_IOLINKTYPE_PCIEXPRESS;
-
-			ret = topology_add_io_link_for_node(props[i].NodeTo,
-				sys_props, nodes, IoLinkType,
-				props[j].NodeTo,
-				props[i].Weight + props[j].Weight);
-			if (ret != HSAKMT_STATUS_SUCCESS)
+			if (topology_add_io_link_for_node(i, sys_props, nodes,
+				type, j, weight, true) != HSAKMT_STATUS_SUCCESS)
 				fprintf(stderr,
-				"Error %d: Fail to add io_link [%d]->[%d]\n",
-				ret, i, j);
-
-			ret = topology_add_io_link_for_node(props[j].NodeTo,
-				sys_props, nodes, IoLinkType, props[i].NodeTo,
-				props[i].Weight + props[j].Weight);
-			if (ret != HSAKMT_STATUS_SUCCESS)
-				fprintf(stderr,
-				"Error %d: Failed to add io_link [%d]->[%d]\n",
-				ret, j, i);
+					"Fail to add IO link %d->%d\n", i, j);
 		}
 	}
 }
@@ -1522,10 +1537,6 @@ retry:
 			}
 
 			if (temp_nodes[i].node.NumIOLinks) {
-				if (temp_nodes[i].gpu_id == 0) {
-					printf("Warning. Not expecting CPU Node [%d] to have [%d] io_links.\n",
-						i, temp_nodes[i].node.NumIOLinks);
-				}
 				for (link_id = 0; link_id < temp_nodes[i].node.NumIOLinks; link_id++) {
 					ret = topology_sysfs_get_iolink_props(i, link_id, &temp_nodes[i].link[link_id]);
 					if (ret != HSAKMT_STATUS_SUCCESS) {
@@ -1539,36 +1550,10 @@ retry:
 		pci_cleanup(pacc);
 	}
 
-	/* The Kernel only creates one way direct link -
-	 * GPU(PCI_BUS) --> Parent NUMA Node. Create the reverse direct
-	 * io_link here. [NUMA node] --> GPU */
-
-	/* Create the reverse io_link for all the CPU nodes */
-	for (i = 0; i < sys_props.NumNodes; i++) {
-		if (temp_nodes[i].gpu_id == 0) {
-			if (!temp_nodes[i].link) {
-				fprintf(stderr,
-				"Unexpected NULL pointer. Node [%d].link\n", i);
-				ret = HSAKMT_STATUS_NO_MEMORY;
-				free_nodes(temp_nodes, i + 1);
-				goto err;
-			}
-			topology_create_reverse_io_link(i, &sys_props,
-							temp_nodes);
-		}
-	}
-
-	/* Create QPI or HT links among CPU (NUMA) nodes. For now assume
-	* all nodes are interconnected with same weight */
-	topology_create_qpi_links(&sys_props, temp_nodes);
-
-	/* Create In-direct links for GPUs. Connect all the (Peer-to-Peer) GPUs
-	 * that belong to same NUMA node.
-	 * For each CPU (NUMA) node, interconnect all the GPUs. */
-	for (i = 0; i < sys_props.NumNodes; i++)
-		if (!temp_nodes[i].gpu_id)
-			topology_create_indirect_gpu_links(i, &sys_props,
-							temp_nodes);
+	/* All direct IO links are created in the kernel. Here we need to
+	 * connect GPU<->GPU or GPU<->CPU indirect IO links.
+	 */
+	topology_create_indirect_gpu_links(&sys_props, temp_nodes);
 
 	ret = topology_sysfs_get_generation(&gen_end);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
