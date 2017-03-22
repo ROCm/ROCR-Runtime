@@ -160,24 +160,25 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
     }
 
     timer::fast_clock::time_point time = timer::fast_clock::now();
-    if (time - start_time > kMaxElapsed) {
-      if (time - start_time > fast_timeout) {
-        return uint32_t(-1);
-      }
-      if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
-        uint32_t wait_ms;
-        auto time_remaining = fast_timeout - (time - start_time);
-        if ((timeout == -1) ||
-            (time_remaining > std::chrono::milliseconds(uint32_t(-1))))
-          wait_ms = uint32_t(-1);
-        else
-          wait_ms = timer::duration_cast<std::chrono::milliseconds>(
-                        time_remaining).count();
-        hsaKmtWaitOnMultipleEvents(evts, unique_evts, false, wait_ms);
-      }
-    } else {
-      os::uSleep(20);
+    if (time - start_time > fast_timeout) {
+      return uint32_t(-1);
     }
+
+    if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
+      continue;
+    }
+
+    if (time - start_time < kMaxElapsed) {
+    //  os::uSleep(20);
+      continue;
+    }
+
+    uint32_t wait_ms;
+    auto time_remaining = fast_timeout - (time - start_time);
+    uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
+      time_remaining).count();
+    wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
+    hsaKmtWaitOnMultipleEvents(evts, unique_evts, false, wait_ms);
   }
 }
 
