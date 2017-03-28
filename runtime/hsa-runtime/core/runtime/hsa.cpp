@@ -182,6 +182,10 @@ static_assert(sizeof(void*) == 8, "HSA_LARGE_MODEL is set incorrectly!");
 static_assert(sizeof(void*) == 4, "HSA_LARGE_MODEL is set incorrectly!");
 #endif
 
+#if !defined(HSA_LARGE_MODEL) || !defined(__linux__)
+static_assert(false, "Only HSA_LARGE_MODEL (64bit mode) and Linux supported.");
+#endif
+
 namespace HSA {
 
 //---------------------------------------------------------------------------//

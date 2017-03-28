@@ -64,6 +64,7 @@
 #include "core/util/utils.h"
 #include "core/inc/registers.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/default_signal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/amd_gpu_pm4.h"
 
@@ -241,34 +242,28 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   MAKE_NAMED_SCOPE_GUARD(SignalGuard, [&]() {
     HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   });
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  if (core::g_use_interrupt_wait) {
-    {
-      ScopedAcquire<KernelMutex> _lock(&queue_lock_);
-      queue_count_++;
-      if (queue_event_ == NULL) {
-        assert(queue_count_ == 1 &&
-               "Inconsistency in queue event reference counting found.\n");
 
-        queue_event_ =
-            core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
-        if (queue_event_ == NULL) return;
-      }
+  if (core::g_use_interrupt_wait) {
+    ScopedAcquire<KernelMutex> _lock(&queue_lock_);
+    queue_count_++;
+    if (queue_event_ == NULL) {
+      assert(queue_count_ == 1 && "Inconsistency in queue event reference counting found.\n");
+
+      queue_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
+      if (queue_event_ == NULL) return;
     }
-    auto signal = new core::InterruptSignal(0, queue_event_);
-    amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(signal);
-    if (AMD::hsa_amd_signal_async_handler(
-            amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, 0,
-            DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
-      return;
+    auto Signal = new core::InterruptSignal(0, queue_event_);
+    if (Signal == nullptr) return;
+    amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(Signal);
   } else {
     EventGuard.Dismiss();
-    SignalGuard.Dismiss();
+    auto Signal = new core::DefaultSignal(0);
+    if (Signal == nullptr) return;
+    amd_queue_.queue_inactive_signal = core::DefaultSignal::Convert(Signal);
   }
-#else
-  EventGuard.Dismiss();
-  SignalGuard.Dismiss();
-#endif
+  if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
+                                        0, DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
+    return;
 
   pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
       pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
@@ -298,7 +293,6 @@ AqlQueue::~AqlQueue() {
   FreeRegisteredRingBuffer();
   agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
   if (core::g_use_interrupt_wait) {
     ScopedAcquire<KernelMutex> lock(&queue_lock_);
     queue_count_--;
@@ -307,8 +301,6 @@ AqlQueue::~AqlQueue() {
       queue_event_ = NULL;
     }
   }
-#endif
-
   core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
 }
 

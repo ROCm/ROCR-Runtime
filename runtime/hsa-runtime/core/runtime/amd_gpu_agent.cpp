@@ -882,33 +882,21 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 
   // Allocate scratch memory
   ScratchInfo scratch;
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  if (core::g_use_interrupt_wait) {
-    if (private_segment_size == UINT_MAX) {
-      private_segment_size =
-          (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
-    }
-
-    if (private_segment_size > 262128) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    scratch.size_per_thread = AlignUp(private_segment_size, 16);
-    if (scratch.size_per_thread > 262128) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    const uint32_t num_cu =
-        properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-    scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
-  } else {
-    scratch.size = queue_scratch_len_;
-    scratch.size_per_thread = scratch_per_thread_;
+  if (private_segment_size == UINT_MAX) {
+    private_segment_size = (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
   }
-#else
-  scratch.size = queue_scratch_len_;
-  scratch.size_per_thread = scratch_per_thread_;
-#endif
+
+  if (private_segment_size > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  scratch.size_per_thread = AlignUp(private_segment_size, 16);
+  if (scratch.size_per_thread > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+  scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
   scratch.queue_base = NULL;
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);

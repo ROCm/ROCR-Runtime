@@ -348,7 +348,7 @@ hsa_status_t
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   IS_VALID(signal);
   IS_BAD_PTR(handler);
-  if (!core::InterruptSignal::IsType(signal))
+  if (core::g_use_interrupt_wait && (!core::InterruptSignal::IsType(signal)))
     return HSA_STATUS_ERROR_INVALID_SIGNAL;
   return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
       hsa_signal, cond, value, handler, arg);
