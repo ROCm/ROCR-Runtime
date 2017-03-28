@@ -552,7 +552,7 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             hsa_amd_signal_handler handler,
                                             void* arg) {
   // Asyncronous signal handler is only supported when KFD events are on.
-  if (!core::g_use_interrupt_wait) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  // if (!core::g_use_interrupt_wait) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   // Indicate that this signal is in use.
   if (signal.handle != 0) hsa_signal_handle(signal)->Retain();
