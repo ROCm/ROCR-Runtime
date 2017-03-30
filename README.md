@@ -2,17 +2,17 @@
 
 This repository includes the user-mode API interfaces and libraries necessary for host applications to launch compute kernels to available HSA ROCm kernel agents. Reference source code for the core runtime is also available.
 
-#### Initial Target Platform Requirements
+#### Initial target platform requirements
 
-* CPU: Intel(c) Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
-* GPU: Fiji(c) ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
-* GPU: Polaris(c) ASIC (AMD RX480)
+* CPU: Intel Haswell or newer, Core i5, Core i7, Xeon E3 v4 & v5; Xeon E5 v3
+* GPU: Fiji ASIC (AMD R9 Nano, R9 Fury and R9 Fury X)
+* GPU: Polaris ASIC (AMD RX480)
 
 #### Source code
 
 The HSA core runtime source code for the ROCR runtime is located in the src subdirectory. Please consult the associated README.md file for contents and build instructions.
 
-#### Binaries for Ubuntu & Fedora and Installation Instructions
+#### Binaries for Ubuntu & Fedora and installation instructions
 
 Pre-built binaries are available for installation from the ROCm package repository. For ROCR, they include:
 
@@ -64,7 +64,7 @@ cd ROCR-Runtime/sample && make && ./vector_copy
 
 If the sample runs without generating errors, the installation is complete.
 
-#### Known Issues
+#### Known issues
 
 * The image extension is currently not supported for discrete GPUs. An image extension library is not provided in the binary package. The standard hsa_ext_image.h extension include file is provided for reference.
 * Each HSA process creates and internal DMA queue, but there is a system-wide limit of four DMA queues. The fifth simultaneous HSA process will fail hsa_init() with HSA_STATUS_ERROR_OUT_OF_RESOURCES. To run an unlimited number of simultaneous HSA processes, set the environment variable HSA_ENABLE_SDMA=0.
