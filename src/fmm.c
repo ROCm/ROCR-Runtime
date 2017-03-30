@@ -475,6 +475,16 @@ static bool aperture_is_valid(void *app_base, void *app_limit)
 	return false;
 }
 
+/* Align size of a VM area
+ *
+ * Leave at least one guard page after every object to catch
+ * out-of-bounds accesses with VM faults.
+ */
+static uint64_t vm_align_area_size(manageble_aperture_t *app, uint64_t size)
+{
+	return ALIGN_UP(size + PAGE_SIZE, app->align);
+}
+
 /*
  * Assumes that fmm_mutex is locked on entry.
  */
@@ -484,7 +494,7 @@ static void aperture_release_area(manageble_aperture_t *app, void *address,
 	vm_area_t *area;
 	uint64_t SizeOfRegion;
 
-	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
+	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
 
 	area = vm_find(app, address);
 	if (!area)
@@ -522,7 +532,7 @@ static void *aperture_allocate_area_aligned(manageble_aperture_t *app,
 	vm_area_t *cur, *next;
 	void *start;
 
-	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
+	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
 
 	if (align < app->align)
 		align = app->align;
@@ -1697,7 +1707,6 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 				   void *address, uint64_t size)
 {
 	int32_t gpu_mem_id;
-	uint64_t offset;
 	void *mem = NULL;
 	int ret;
 	bool is_debugger = 0;
@@ -1720,20 +1729,11 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 	ret = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
 	/* allocate object within the scratch backing aperture */
 	if (!ret && !is_debugger) {
-		offset = VOID_PTRS_SUB(address, aperture->base);
-		mem = __fmm_allocate_device(gpu_id, size, aperture, offset,
-			NULL, KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE, NULL);
-		if (mem == NULL)
+		vm_object_t *obj = fmm_allocate_memory_in_device(
+			gpu_id, address, size, aperture,
+			NULL, KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
+		if (obj == NULL)
 			return -1;
-
-		if (mem != address) {
-			fprintf(stderr,
-				"Got unexpected address for scratch mapping.\n"
-				"  expected: %p\n"
-				"  got:      %p\n", address, mem);
-			__fmm_release(mem, aperture);
-			return -1;
-		}
 	} else {
 		fmm_allocate_memory_in_device(gpu_id,
 					address,
