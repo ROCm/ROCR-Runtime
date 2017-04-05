@@ -150,6 +150,7 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/image_runtime.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_kv.cpp
+                 ${EXT_SOURCE_DIR}/image/image_manager_ai.cpp
                  ${EXT_SOURCE_DIR}/image/image_lut_kv.cpp
                  ${EXT_SOURCE_DIR}/image/blit_kernel.cpp
                  ${EXT_SOURCE_DIR}/image/blit_kernel_hsail.cpp
