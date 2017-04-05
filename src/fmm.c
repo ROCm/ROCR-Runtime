@@ -132,6 +132,9 @@ typedef struct {
 
 	/* whether to use userptr for paged memory */
 	bool userptr_for_paged_mem;
+
+	/* whether to check userptrs on registration */
+	bool check_userptr;
 } svm_t;
 
 /* The other apertures are specific to each GPU. gpu_mem_t manages GPU
@@ -145,7 +148,8 @@ static void *dgpu_shared_aperture_limit = NULL;
 static svm_t svm = {
 	INIT_MANAGEBLE_APERTURE(0, 0),
 	INIT_MANAGEBLE_APERTURE(0, 0),
-	true
+	true,
+	false
 };
 
 /* On APU, for memory allocated on the system memory that GPU doesn't access
@@ -1401,8 +1405,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures * process_apertures;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	char *disableCache;
-	char *pagedUserptr;
+	char *disableCache, *pagedUserptr, *checkUserptr;
 	struct pci_access *pacc;
 
 	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
@@ -1414,6 +1417,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * enable userptr for all paged memory allocations */
 	pagedUserptr = getenv("HSA_USERPTR_FOR_PAGED_MEM");
 	svm.userptr_for_paged_mem = (pagedUserptr && strcmp(pagedUserptr, "0"));
+
+	/* If HSA_CHECK_USERPTR is set to a non-0 value, check all userptrs
+	 * when they are registered
+	 */
+	checkUserptr = getenv("HSA_CHECK_USERPTR");
+	svm.check_userptr = (checkUserptr && strcmp(checkUserptr, "0"));
 
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 *	systems with CPU node, slightly more memory is allocated than
@@ -2317,6 +2326,22 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	return found;
 }
 
+static HSAuint8 fmm_check_user_memory(const void *addr, HSAuint64 size)
+{
+	volatile const HSAuint8 *ptr = addr;
+	volatile const HSAuint8 *end = ptr + size;
+	HSAuint8 sum = 0;
+
+	/* Access every page in the buffer to make sure the mapping is
+	 * valid. If it's not, it will die with a segfault that's easy
+	 * to debug.
+	 */
+	for (; ptr < end; ptr = (void *)PAGE_ALIGN_UP(ptr + 1))
+		sum += *ptr;
+
+	return sum;
+}
+
 static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_object_t **obj_ret)
 {
 	int32_t i;
@@ -2344,6 +2369,10 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 		return HSAKMT_STATUS_SUCCESS;
 	}
 	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* Optionally check that the CPU mapping is valid */
+	if (svm.check_userptr)
+		fmm_check_user_memory(addr, size);
 
 	/* Allocate BO, userptr address is passed in mmap_offset */
 	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture, 0,
