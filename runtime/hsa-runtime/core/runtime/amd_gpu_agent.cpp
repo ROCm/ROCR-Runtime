@@ -175,20 +175,34 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   struct CompiledShader {
     ASICShader compute_7;
     ASICShader compute_8;
+    ASICShader compute_9;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
       {"TrapHandler",
-       {{NULL, 0, 0, 0}, {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4}}},
+       {
+           {NULL, 0, 0, 0},
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
+           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+       }},
       {"CopyAligned",
-       {{kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
-        {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12}}},
+       {
+           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
+       }},
       {"CopyMisaligned",
-       {{kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
-        {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10}}},
+       {
+           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+       }},
       {"Fill",
-       {{kCodeFill7, sizeof(kCodeFill7), 19, 8},
-        {kCodeFill8, sizeof(kCodeFill8), 19, 8}}}};
+       {
+           {kCodeFill7, sizeof(kCodeFill7), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+       }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
   assert(compiled_shader_it != compiled_shaders.end() &&
@@ -201,8 +215,10 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
       asic_shader = &compiled_shader_it->second.compute_7;
       break;
     case 8:
-    case 9: // ISA-compatible with 8
       asic_shader = &compiled_shader_it->second.compute_8;
+      break;
+    case 9:
+      asic_shader = &compiled_shader_it->second.compute_9;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
