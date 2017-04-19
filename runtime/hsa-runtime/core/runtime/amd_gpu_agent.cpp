@@ -936,6 +936,8 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
+  bool need_queue_scratch_base = (isa_->GetMajorVersion() > 8);
+
   if (scratch.size == 0) {
     scratch.size = queue_scratch_len_;
     scratch.size_per_thread = scratch_per_thread_;
@@ -943,7 +945,10 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   scratch.queue_base = scratch_pool_.alloc(scratch.size);
-  scratch.queue_process_offset = uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+  scratch.queue_process_offset =
+      (need_queue_scratch_base)
+          ? uintptr_t(scratch.queue_base)
+          : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
 
   if (scratch.queue_base != NULL) {
     if (profile_ == HSA_PROFILE_FULL) return;
@@ -981,7 +986,9 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       scratch.queue_base = base;
       scratch.size = size;
       scratch.queue_process_offset =
-          uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+          (need_queue_scratch_base)
+              ? uintptr_t(scratch.queue_base)
+              : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
       return;
     }
     scratch_pool_.free(base);
