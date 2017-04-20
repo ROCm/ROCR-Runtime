@@ -1597,8 +1597,7 @@ uint32_t pmc_table_get_max_concurrent(int block_id)
 	}
 }
 
-static HSAKMT_STATUS
-alloc_pmc_blocks_iommu(void)
+static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 {
 	DIR *dir;
 	struct dirent *dent;
@@ -1704,10 +1703,9 @@ void free_pmc_blocks(void)
 	iommu_block.num_of_counters = 0;
 }
 
-HSAKMT_STATUS
-get_block_properties(uint32_t node_id,
-                     enum perf_block_id block_id,
-                     struct perf_counter_block *block)
+HSAKMT_STATUS get_block_properties(uint32_t node_id,
+				   enum perf_block_id block_id,
+				   struct perf_counter_block *block)
 {
 	uint16_t dev_id = get_device_id_by_node(node_id);
 	enum asic_family_type asic;
