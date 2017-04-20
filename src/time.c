@@ -26,12 +26,8 @@
 #include "libhsakmt.h"
 #include "linux/kfd_ioctl.h"
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetClockCounters(
-    HSAuint32         NodeId,  //IN
-    HsaClockCounters* Counters //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetClockCounters(HSAuint32 NodeId,
+					       HsaClockCounters *Counters)
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;

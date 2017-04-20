@@ -44,8 +44,7 @@
 #define WG_CONTEXT_DATA_SIZE_PER_CU_VI	344576
 #define WAVES_PER_CU_VI		32
 
-struct device_info
-{
+struct device_info {
 	enum asic_family_type asic_family;
 	uint32_t eop_buffer_size;
 	uint32_t doorbell_size;
@@ -110,14 +109,12 @@ static struct device_info *dev_lookup_table[] = {
 	[CHIP_VEGA10] = &vega10_device_info
 };
 
-struct device_id
-{
+struct device_id {
 	uint16_t dev_id;
 	struct device_info *dev_info;
 };
 
-struct queue
-{
+struct queue {
 	uint32_t queue_id;
 	uint64_t wptr;
 	uint64_t rptr;
@@ -128,11 +125,10 @@ struct queue
 	const struct device_info *dev_info;
 };
 
-struct process_doorbells
-{
+struct process_doorbells {
 	bool use_gpuvm;
 	uint32_t size;
-	void* doorbells;
+	void *doorbells;
 	pthread_mutex_t doorbells_mutex;
 };
 
@@ -145,9 +141,10 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	/* doorbells[] is accessed using Topology NodeId. This means doorbells[0],
-	 * which corresponds to CPU only Node, might not be used */
+	 * which corresponds to CPU only Node, might not be used
+	 */
 	doorbells = malloc(NumNodes * sizeof(struct process_doorbells));
-	if (doorbells == NULL)
+	if (!doorbells)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	for (i = 0; i < NumNodes; i++) {
@@ -258,7 +255,7 @@ static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
 	ptr = fmm_allocate_doorbell(gpu_id, doorbells[NodeId].size,
 				    doorbell_offset);
 
-	if (ptr == NULL)
+	if (!ptr)
 		return HSAKMT_STATUS_ERROR;
 
 	/* map for GPU access */
@@ -299,7 +296,7 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	return status;
 }
 
-static void* allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
+static void *allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
 {
 	void *ptr;
 	int retval;
@@ -344,7 +341,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 	return false;
 }
 
-void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
+void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 				       uint32_t NodeId, bool nonPaged)
 {
 	void *mem;
@@ -361,14 +358,13 @@ void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	size = ALIGN_UP(size, align);
 
 	ret = hsaKmtAllocMemory(0, size, flags, &mem);
-	if (ret != HSAKMT_STATUS_SUCCESS) {
+	if (ret != HSAKMT_STATUS_SUCCESS)
 		return NULL;
-	}
 
 	if (NodeId != 0) {
 		uint32_t nodes_array[1] = {NodeId};
-		if (hsaKmtRegisterMemoryToNodes(mem, size, 1, nodes_array)
-		    != HSAKMT_STATUS_SUCCESS) {
+
+		if (hsaKmtRegisterMemoryToNodes(mem, size, 1, nodes_array) != HSAKMT_STATUS_SUCCESS) {
 			hsaKmtFreeMemory(mem, size);
 			return NULL;
 		}
@@ -386,15 +382,14 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 {
 	size = ALIGN_UP(size, align);
 
-	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS) {
+	if (hsaKmtUnmapMemoryToGPU(addr) == HSAKMT_STATUS_SUCCESS)
 		hsaKmtFreeMemory(addr, size);
-	}
 }
 
-static void* allocate_exec_aligned_memory(uint32_t size,
-					uint32_t align,
-					enum asic_family_type type,
-					uint32_t NodeId)
+static void *allocate_exec_aligned_memory(uint32_t size,
+					  uint32_t align,
+					  enum asic_family_type type,
+					  uint32_t NodeId)
 {
 	if (IS_DGPU(type))
 		return allocate_exec_aligned_memory_gpu(size, align, NodeId,
@@ -429,6 +424,7 @@ static int handle_concrete_asic(struct queue *q,
 				uint32_t NodeId)
 {
 	const struct device_info *dev_info = q->dev_info;
+
 	if (dev_info) {
 		if (dev_info->eop_buffer_size > 0) {
 			q->eop_buffer =
@@ -436,9 +432,9 @@ static int handle_concrete_asic(struct queue *q,
 					PAGE_SIZE,
 					dev_info->asic_family,
 					NodeId);
-			if (q->eop_buffer == NULL) {
+			if (!q->eop_buffer)
 				return HSAKMT_STATUS_NO_MEMORY;
-			}
+
 			args->eop_buffer_address = (uintptr_t)q->eop_buffer;
 			args->eop_buffer_size = dev_info->eop_buffer_size;
 		}
@@ -451,9 +447,9 @@ static int handle_concrete_asic(struct queue *q,
 							     PAGE_SIZE,
 							     dev_info->asic_family,
 							     NodeId);
-			if (q->ctx_save_restore == NULL) {;
+			if (!q->ctx_save_restore)
 				return HSAKMT_STATUS_NO_MEMORY;
-			}
+
 			args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
 		}
 	}
@@ -465,31 +461,28 @@ static int handle_concrete_asic(struct queue *q,
  * to KFD queue priority (0 to 15)
  * Indexed by thunk_queue_priority+3
  */
-static uint32_t priority_map[] = {0,3,5,7,9,11,15};
+static uint32_t priority_map[] = {0, 3, 5, 7, 9, 11, 15};
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtCreateQueue(
-    HSAuint32           NodeId,           //IN
-    HSA_QUEUE_TYPE      Type,             //IN
-    HSAuint32           QueuePercentage,  //IN
-    HSA_QUEUE_PRIORITY  Priority,         //IN
-    void*               QueueAddress,     //IN
-    HSAuint64           QueueSizeInBytes, //IN
-    HsaEvent*           Event,            //IN
-    HsaQueueResource*   QueueResource     //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
+					  HSA_QUEUE_TYPE Type,
+					  HSAuint32 QueuePercentage,
+					  HSA_QUEUE_PRIORITY Priority,
+					  void *QueueAddress,
+					  HSAuint64 QueueSizeInBytes,
+					  HsaEvent *Event,
+					  HsaQueueResource *QueueResource)
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	uint16_t dev_id;
 	uint64_t doorbell_mmap_offset;
-	unsigned doorbell_offset;
+	unsigned int doorbell_offset;
 	struct device_info *dev_info;
 	int err;
+
 	CHECK_KFD_OPEN();
 
-    if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
+	if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
 		Priority > HSA_QUEUE_PRIORITY_MAXIMUM)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
@@ -500,31 +493,37 @@ hsaKmtCreateQueue(
 	dev_id = get_device_id_by_node(NodeId);
 	dev_info = get_device_info_by_dev_id(dev_id);
 
-	struct queue *q = allocate_exec_aligned_memory(sizeof (*q),
+	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
 			PAGE_SIZE, dev_info->asic_family,
 			NodeId);
-	if (q == NULL)
+	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	memset(q, 0, sizeof(*q));
 
 	struct kfd_ioctl_create_queue_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.gpu_id = gpu_id;
 
 	q->dev_info = dev_info;
 
-	switch (Type)
-	{
-	case HSA_QUEUE_COMPUTE: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE; break;
-	case HSA_QUEUE_SDMA: args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA; break;
-	case HSA_QUEUE_COMPUTE_AQL: args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL; break;
-	default: return HSAKMT_STATUS_INVALID_PARAMETER;
+	switch (Type) {
+	case HSA_QUEUE_COMPUTE:
+		args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE;
+		break;
+	case HSA_QUEUE_SDMA:
+		args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA;
+		break;
+	case HSA_QUEUE_COMPUTE_AQL:
+		args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL;
+		break;
+	default:
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
-	if (Type != HSA_QUEUE_COMPUTE_AQL)
-	{
+	if (Type != HSA_QUEUE_COMPUTE_AQL) {
 		QueueResource->QueueRptrValue = (uintptr_t)&q->rptr;
 		QueueResource->QueueWptrValue = (uintptr_t)&q->wptr;
 	}
@@ -545,8 +544,7 @@ hsaKmtCreateQueue(
 
 	err = kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
 
-	if (err == -1)
-	{
+	if (err == -1) {
 		free_queue(q);
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -558,14 +556,16 @@ hsaKmtCreateQueue(
 		 * doorbell page is included in the doorbell offset
 		 * returned by KFD. This allows doorbells to be
 		 * allocated per-device, independent of the
-		 * per-process queue ID. */
+		 * per-process queue ID.
+		 */
 		doorbell_mmap_offset = args.doorbell_offset &
 			~(HSAuint64)(doorbells[NodeId].size - 1);
 		doorbell_offset = args.doorbell_offset &
 			(doorbells[NodeId].size - 1);
 	} else {
 		/* On older chips, the doorbell offset within the
-		 * doorbell page is based on the queue ID. */
+		 * doorbell page is based on the queue ID.
+		 */
 		doorbell_mmap_offset = args.doorbell_offset;
 		doorbell_offset = q->queue_id * dev_info->doorbell_size;
 	}
@@ -585,28 +585,24 @@ hsaKmtCreateQueue(
 }
 
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtUpdateQueue(
-    HSA_QUEUEID         QueueId,        //IN
-    HSAuint32           QueuePercentage,//IN
-    HSA_QUEUE_PRIORITY  Priority,       //IN
-    void*               QueueAddress,   //IN
-    HSAuint64           QueueSize,      //IN
-    HsaEvent*           Event           //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtUpdateQueue(HSA_QUEUEID QueueId,
+					  HSAuint32 QueuePercentage,
+					  HSA_QUEUE_PRIORITY Priority,
+					  void *QueueAddress,
+					  HSAuint64 QueueSize,
+					  HsaEvent *Event)
 {
 	struct kfd_ioctl_update_queue_args arg;
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
 
 	CHECK_KFD_OPEN();
 
-    if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
+	if (Priority < HSA_QUEUE_PRIORITY_MINIMUM ||
 		Priority > HSA_QUEUE_PRIORITY_MAXIMUM)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (q == NULL)
-		return (HSAKMT_STATUS_INVALID_PARAMETER);
+	if (!q)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	arg.queue_id = (HSAuint32)q->queue_id;
 	arg.ring_base_address = (uintptr_t)QueueAddress;
 	arg.ring_size = QueueSize;
@@ -614,27 +610,22 @@ hsaKmtUpdateQueue(
 	arg.queue_priority = priority_map[Priority+3];
 
 	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_UPDATE_QUEUE, &arg);
+
 	if (err == -1)
-	{
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDestroyQueue(
-    HSA_QUEUEID         QueueId         //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyQueue(HSA_QUEUEID QueueId)
 {
 	CHECK_KFD_OPEN();
 
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
 	struct kfd_ioctl_destroy_queue_args args;
 
-	if (q == NULL)
-		return (HSAKMT_STATUS_INVALID_PARAMETER);
+	if (!q)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	memset(&args, 0, sizeof(args));
 
@@ -643,30 +634,22 @@ hsaKmtDestroyQueue(
 	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_QUEUE, &args);
 
 	if (err == -1)
-	{
 		return HSAKMT_STATUS_ERROR;
-	}
-	else
-	{
-		free_queue(q);
-		return HSAKMT_STATUS_SUCCESS;
-	}
+
+	free_queue(q);
+	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSetQueueCUMask(
-    HSA_QUEUEID         QueueId,        //IN
-    HSAuint32           CUMaskCount,    //IN
-    HSAuint32*          QueueCUMask     //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetQueueCUMask(HSA_QUEUEID QueueId,
+					     HSAuint32 CUMaskCount,
+					     HSAuint32 *QueueCUMask)
 {
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
 	struct kfd_ioctl_set_cu_mask_args args;
 
 	CHECK_KFD_OPEN();
 
-	if (CUMaskCount == 0 || QueueCUMask == NULL || ((CUMaskCount % 32) != 0))
+	if (CUMaskCount == 0 || !QueueCUMask || ((CUMaskCount % 32) != 0))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	memset(&args, 0, sizeof(args));
@@ -675,23 +658,18 @@ hsaKmtSetQueueCUMask(
 	args.cu_mask_ptr = (uintptr_t)QueueCUMask;
 
 	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_CU_MASK, &args);
+
 	if (err == -1)
-	{
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSetTrapHandler(
-	HSAuint32	Node,
-	void *TrapHandlerBaseAddress,
-	HSAuint64	TrapHandlerSizeInBytes,
-	void *TrapBufferBaseAddress,
-	HSAuint64 TrapBufferSizeInBytes
-)
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
+					     void *TrapHandlerBaseAddress,
+					     HSAuint64 TrapHandlerSizeInBytes,
+					     void *TrapBufferBaseAddress,
+					     HSAuint64 TrapBufferSizeInBytes)
 {
 	struct kfd_ioctl_set_trap_handler_args args;
 	HSAKMT_STATUS result;

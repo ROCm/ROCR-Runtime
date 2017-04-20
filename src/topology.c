@@ -81,7 +81,7 @@ static struct hsa_gfxip_table {
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
 	unsigned char is_dgpu;		// Predicate for dGPU devices
-	const char* amd_name;		// CALName of the device
+	const char *amd_name;		// CALName of the device
 	enum asic_family_type asic_family;
 } gfxip_lookup_table[] = {
 	/* Kaveri Family */
@@ -226,7 +226,7 @@ free_node(node_t *n)
 {
 	assert(n);
 
-	if (n == NULL)
+	if (!n)
 		return;
 
 	if ((n)->mem)
@@ -240,6 +240,7 @@ free_node(node_t *n)
 static void free_nodes(node_t *temp_nodes, int size)
 {
 	int i;
+
 	if (temp_nodes) {
 		for (i = 0; i < size; i++)
 			free_node(&temp_nodes[i]);
@@ -261,7 +262,7 @@ static int num_subdirs(char *dirpath, char *prefix)
 	int prefix_len = strlen(prefix);
 
 	dirp = opendir(dirpath);
-	if(dirp) {
+	if (dirp) {
 		while ((dir = readdir(dirp)) != 0) {
 			if ((strcmp(dir->d_name, ".") == 0) ||
 				(strcmp(dir->d_name, "..") == 0))
@@ -282,8 +283,8 @@ static int num_subdirs(char *dirpath, char *prefix)
  * to the EAX, EBX, ECX, and EDX registers, as determined by input entered in
  * EAX (in some cases, ECX as well).
  */
-static inline void
-cpuid(uint32_t *eax, uint32_t *ebx, uint32_t *ecx, uint32_t *edx)
+static inline void cpuid(uint32_t *eax, uint32_t *ebx, uint32_t *ecx,
+			 uint32_t *edx)
 {
 	__asm__ __volatile__(
 		"cpuid;"
@@ -309,6 +310,7 @@ static void cpuid_count(uint32_t op, int count, uint32_t *eax, uint32_t *ebx,
 static int lock_to_processor(int processor)
 {
 	cpu_set_t cpuset;
+
 	memset(&cpuset, 0, sizeof(cpu_set_t));
 	CPU_SET(processor, &cpuset);
 	/* 0: this process */
@@ -377,9 +379,9 @@ static void cpuid_get_cpu_cache_info(uint32_t op, cpu_cacheinfo_t *cpu_ci)
 				eax.split.num_threads_sharing + 1;
 		this_leaf->hsa_cache_prop.CacheLevel = eax.split.level;
 		this_leaf->hsa_cache_prop.CacheType.ui32.CPU = 1;
-		if (eax.split.type & CACHE_TYPE_DATA )
+		if (eax.split.type & CACHE_TYPE_DATA)
 			this_leaf->hsa_cache_prop.CacheType.ui32.Data = 1;
-		if (eax.split.type & CACHE_TYPE_INST )
+		if (eax.split.type & CACHE_TYPE_INST)
 			this_leaf->hsa_cache_prop.CacheType.ui32.Instruction = 1;
 		this_leaf->hsa_cache_prop.CacheLineSize =
 				ebx.split.coherency_line_size + 1;
@@ -433,8 +435,7 @@ static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
 					this_leaf->hsa_cache_prop.SiblingMap[apicid2 - apicid1] = 1;
 					leaf2->hsa_cache_prop.CacheSize = 0;
 					cpu2->num_duplicated_caches++;
-				}
-				else {
+				} else {
 					leaf2->hsa_cache_prop.SiblingMap[0] = 1;
 					leaf2->hsa_cache_prop.SiblingMap[apicid1 - apicid2] = 1;
 					this_leaf->hsa_cache_prop.CacheSize = 0;
@@ -446,8 +447,8 @@ static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
 }
 #endif /* X86 platform */
 
-static HSAKMT_STATUS
-topology_sysfs_get_generation(uint32_t *gen) {
+static HSAKMT_STATUS topology_sysfs_get_generation(uint32_t *gen)
+{
 	FILE *fd;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -465,12 +466,12 @@ err:
 	return ret;
 }
 
-HSAKMT_STATUS
-topology_sysfs_get_system_props(HsaSystemProperties *props) {
+HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
+{
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
-	long long unsigned int prop_val;
+	unsigned long long prop_val;
 	uint32_t prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -487,28 +488,26 @@ topology_sysfs_get_system_props(HsaSystemProperties *props) {
 		goto err1;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
-    /* Since we're using the buffer as a string, we make sure the string terminates */
-    if(read_size >= PAGE_SIZE)
-        read_size = PAGE_SIZE-1;
-    read_buf[read_size] = 0;
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
+	read_buf[read_size] = 0;
 
-	/*
-	 * Read the system properties
-	 */
+	/* Read the system properties */
 	prog = 0;
 	p = read_buf;
-	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
-		if (strcmp(prop_name,"platform_oem") == 0)
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "platform_oem") == 0)
 			props->PlatformOem = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"platform_id") == 0)
+		else if (strcmp(prop_name, "platform_id") == 0)
 			props->PlatformId = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"platform_rev") == 0)
+		else if (strcmp(prop_name, "platform_rev") == 0)
 			props->PlatformRev = (uint32_t)prop_val;
 	}
 
@@ -526,8 +525,8 @@ err1:
 	return ret;
 }
 
-HSAKMT_STATUS
-topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id) {
+HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id)
+{
 	FILE *fd;
 	char path[256];
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -537,21 +536,20 @@ topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id) {
 	fd = fopen(path, "r");
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
-	if (fscanf(fd, "%ul", gpu_id) != 1) {
+	if (fscanf(fd, "%ul", gpu_id) != 1)
 		ret = HSAKMT_STATUS_ERROR;
-	}
 	fclose(fd);
 
 	return ret;
 }
 
-static const struct hsa_gfxip_table* find_hsa_gfxip_device(uint16_t device_id)
+static const struct hsa_gfxip_table *find_hsa_gfxip_device(uint16_t device_id)
 {
 	uint32_t i, table_size;
 
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
-	for (i=0; i<table_size; i++) {
-		if(gfxip_lookup_table[i].device_id == device_id)
+	for (i = 0; i < table_size; i++) {
+		if (gfxip_lookup_table[i].device_id == device_id)
 			return &gfxip_lookup_table[i];
 	}
 	return NULL;
@@ -572,22 +570,24 @@ HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
 
 bool topology_is_dgpu(uint16_t device_id)
 {
-	const struct hsa_gfxip_table* hsa_gfxip =
+	const struct hsa_gfxip_table *hsa_gfxip =
 				find_hsa_gfxip_device(device_id);
 
 	if (hsa_gfxip && hsa_gfxip->is_dgpu) {
 		is_dgpu = true;
 		return true;
 	}
+	is_dgpu = false;
 	return false;
 }
 
-static HSAKMT_STATUS
-topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
+static HSAKMT_STATUS topology_get_cpu_model_name(HsaNodeProperties *props,
+						 bool is_apu)
+{
 	FILE *fd;
 	char read_buf[256], cpu_model_name[HSA_PUBLIC_NAME_SIZE];
 	const char *p;
-	uint32_t i, apic_id;
+	uint32_t i = 0, apic_id = 0;
 
 	if (!props)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -599,7 +599,7 @@ topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	while (fgets(read_buf, sizeof(read_buf), fd) != NULL) {
+	while (fgets(read_buf, sizeof(read_buf), fd)) {
 		/* Get the model name first, in case matching
 		 * apic IDs are also present in the file
 		 */
@@ -609,7 +609,8 @@ topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
 				goto err;
 
 			p++; // remove separator ':'
-			for (; isspace(*p); p++); /* remove white space */
+			for (; isspace(*p); p++)
+				; /* remove white space */
 
 			/* Extract model name from string */
 			for (i = 0; i < sizeof(cpu_model_name) - 1 && p[i] != '\n'; i++)
@@ -623,7 +624,8 @@ topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
 				goto err;
 
 			p++; // remove separator ':'
-			for (; isspace(*p); p++); /* remove white space */
+			for (; isspace(*p); p++)
+				; /* remove white space */
 
 			/* Extract apic_id from remaining chars */
 			apic_id = atoi(p);
@@ -632,7 +634,7 @@ topology_get_cpu_model_name(HsaNodeProperties *props, bool is_apu) {
 			if (props->CComputeIdLo == apic_id) {
 				/* Retrieve the CAL name of CPU node */
 				if (!is_apu)
-					strncpy( (char *) props->AMDName, cpu_model_name, sizeof(props->AMDName));
+					strncpy((char *)props->AMDName, cpu_model_name, sizeof(props->AMDName));
 				/* Convert from UTF8 to UTF16 */
 				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 					props->MarketingName[i] = cpu_model_name[i];
@@ -650,6 +652,7 @@ err:
 static int topology_search_processor_vendor(const char *processor_name)
 {
 	unsigned int i;
+
 	for (i = 0; i < ARRAY_LEN(supported_processor_vendor_name); i++) {
 		if (!strcmp(processor_name, supported_processor_vendor_name[i]))
 			return i;
@@ -678,11 +681,12 @@ static void topology_set_processor_vendor(void)
 		return;
 	}
 
-	while (fgets(read_buf, sizeof(read_buf), fd) != NULL) {
+	while (fgets(read_buf, sizeof(read_buf), fd)) {
 		if (!strncmp("vendor_id", read_buf, sizeof("vendor_id") - 1)) {
 			p = strrchr(read_buf, ':');
-			p++; // remove separor ':'
-			for (; isspace(*p); p++); /* remove white space */
+			p++; // remove separator ':'
+			for (; *p && isspace(*p); p++)
+				;	/* remove white space */
 			processor_vendor = topology_search_processor_vendor(p);
 			if (processor_vendor != -1) {
 				fclose(fd);
@@ -696,21 +700,22 @@ static void topology_set_processor_vendor(void)
 	processor_vendor = GENUINE_INTEL;
 }
 
-HSAKMT_STATUS
-topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32_t *gpu_id,
-							  struct pci_access* pacc )
+HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
+					    HsaNodeProperties *props,
+					    uint32_t *gpu_id,
+					    struct pci_access *pacc)
 {
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
 	char path[256];
-	long long unsigned int  prop_val;
+	unsigned long long prop_val;
 	uint32_t i, prog;
 	uint16_t fw_version = 0;
 	int read_size;
-	const struct hsa_gfxip_table* hsa_gfxip;
+	const struct hsa_gfxip_table *hsa_gfxip;
 	char namebuf[HSA_PUBLIC_NAME_SIZE];
-	const char* name;
+	const char *name;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -728,7 +733,7 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	fd = fopen(path, "r");
 	if (!fd) {
 		free(read_buf);
-        return HSAKMT_STATUS_ERROR;
+		return HSAKMT_STATUS_ERROR;
 	}
 
 	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
@@ -738,63 +743,61 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 	}
 
 	/* Since we're using the buffer as a string, we make sure the string terminates */
-	if(read_size >= PAGE_SIZE)
-		read_size = PAGE_SIZE-1;
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
 	read_buf[read_size] = 0;
 
-	/*
-	 * Read the node properties
-	 */
+	/* Read the node properties */
 	prog = 0;
 	p = read_buf;
-	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
-		if (strcmp(prop_name,"cpu_cores_count") == 0)
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "cpu_cores_count") == 0)
 			props->NumCPUCores = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"simd_count") == 0)
+		else if (strcmp(prop_name, "simd_count") == 0)
 			props->NumFComputeCores = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"mem_banks_count") == 0)
+		else if (strcmp(prop_name, "mem_banks_count") == 0)
 			props->NumMemoryBanks = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"caches_count") == 0)
+		else if (strcmp(prop_name, "caches_count") == 0)
 			props->NumCaches = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"io_links_count") == 0)
+		else if (strcmp(prop_name, "io_links_count") == 0)
 			props->NumIOLinks = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"cpu_core_id_base") == 0)
+		else if (strcmp(prop_name, "cpu_core_id_base") == 0)
 			props->CComputeIdLo = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"simd_id_base") == 0)
+		else if (strcmp(prop_name, "simd_id_base") == 0)
 			props->FComputeIdLo = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"capability") == 0)
+		else if (strcmp(prop_name, "capability") == 0)
 			props->Capability.Value = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_waves_per_simd") == 0)
+		else if (strcmp(prop_name, "max_waves_per_simd") == 0)
 			props->MaxWavesPerSIMD = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"lds_size_in_kb") == 0)
+		else if (strcmp(prop_name, "lds_size_in_kb") == 0)
 			props->LDSSizeInKB = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"gds_size_in_kb") == 0)
+		else if (strcmp(prop_name, "gds_size_in_kb") == 0)
 			props->GDSSizeInKB = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"wave_front_size") == 0)
+		else if (strcmp(prop_name, "wave_front_size") == 0)
 			props->WaveFrontSize = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"array_count") == 0)
+		else if (strcmp(prop_name, "array_count") == 0)
 			props->NumShaderBanks = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"simd_arrays_per_engine") == 0)
+		else if (strcmp(prop_name, "simd_arrays_per_engine") == 0)
 			props->NumArrays = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"cu_per_simd_array") == 0)
+		else if (strcmp(prop_name, "cu_per_simd_array") == 0)
 			props->NumCUPerArray = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"simd_per_cu") == 0)
+		else if (strcmp(prop_name, "simd_per_cu") == 0)
 			props->NumSIMDPerCU = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_slots_scratch_cu") == 0)
+		else if (strcmp(prop_name, "max_slots_scratch_cu") == 0)
 			props->MaxSlotsScratchCU = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"fw_version") == 0)
+		else if (strcmp(prop_name, "fw_version") == 0)
 			fw_version = (uint16_t)prop_val;
-		else if (strcmp(prop_name,"vendor_id") == 0)
+		else if (strcmp(prop_name, "vendor_id") == 0)
 			props->VendorId = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"device_id") == 0)
+		else if (strcmp(prop_name, "device_id") == 0)
 			props->DeviceId = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"location_id") == 0)
+		else if (strcmp(prop_name, "location_id") == 0)
 			props->LocationId = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_engine_clk_fcompute") == 0)
+		else if (strcmp(prop_name, "max_engine_clk_fcompute") == 0)
 			props->MaxEngineClockMhzFCompute = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_engine_clk_ccompute") == 0)
+		else if (strcmp(prop_name, "max_engine_clk_ccompute") == 0)
 			props->MaxEngineClockMhzCCompute = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"local_mem_size") == 0)
+		else if (strcmp(prop_name, "local_mem_size") == 0)
 			props->LocalMemSize = prop_val;
 
 	}
@@ -817,12 +820,11 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		}
 
 		/* Retrieve the CAL name of the node */
-		strncpy( (char *) props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName) );
+		strncpy((char *)props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName));
 		if (props->NumCPUCores) {
 			/* Is APU node */
 			ret = topology_get_cpu_model_name(props, true);
-			if (ret != HSAKMT_STATUS_SUCCESS)
-			{
+			if (ret != HSAKMT_STATUS_SUCCESS) {
 				printf("Failed to get APU Model Name from %s\n", PROC_CPUINFO_PATH);
 				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
 			}
@@ -841,8 +843,7 @@ topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props, uint32
 		/* Is CPU Node */
 		if (!props->NumFComputeCores || !props->DeviceId) {
 			ret = topology_get_cpu_model_name(props, false);
-			if (ret != HSAKMT_STATUS_SUCCESS)
-			{
+			if (ret != HSAKMT_STATUS_SUCCESS) {
 				printf("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
 				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
 			}
@@ -860,52 +861,53 @@ err:
 	return ret;
 }
 
-static HSAKMT_STATUS
-topology_sysfs_get_mem_props(uint32_t node_id, uint32_t mem_id, HsaMemoryProperties *props) {
+static HSAKMT_STATUS topology_sysfs_get_mem_props(uint32_t node_id,
+						  uint32_t mem_id,
+						  HsaMemoryProperties *props)
+{
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
 	char path[256];
-	long long unsigned int  prop_val;
+	unsigned long long prop_val;
 	uint32_t prog;
-    int read_size;
+	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
 	snprintf(path, 256, "%s/%d/mem_banks/%d/properties", KFD_SYSFS_PATH_NODES, node_id, mem_id);
 	fd = fopen(path, "r");
-	if (!fd) {
+	if (!fd)
 		return HSAKMT_STATUS_ERROR;
-	}
 	read_buf = malloc(PAGE_SIZE);
 	if (!read_buf) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto err1;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
-    /* Since we're using the buffer as a string, we make sure the string terminates */
-    if(read_size >= PAGE_SIZE)
-        read_size = PAGE_SIZE-1;
-    read_buf[read_size] = 0;
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
+	read_buf[read_size] = 0;
 
 	prog = 0;
 	p = read_buf;
-	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
-		if (strcmp(prop_name,"heap_type") == 0)
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "heap_type") == 0)
 			props->HeapType = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"size_in_bytes") == 0)
+		else if (strcmp(prop_name, "size_in_bytes") == 0)
 			props->SizeInBytes = (uint64_t)prop_val;
-		else if (strcmp(prop_name,"flags") == 0)
+		else if (strcmp(prop_name, "flags") == 0)
 			props->Flags.MemoryProperty = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"width") == 0)
+		else if (strcmp(prop_name, "width") == 0)
 			props->Width = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"mem_clk_max") == 0)
+		else if (strcmp(prop_name, "mem_clk_max") == 0)
 			props->MemoryClockMax = (uint32_t)prop_val;
 	}
 
@@ -946,8 +948,7 @@ static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
  *	@temp_cpu_ci_list - [OUT] temporary cpu-cache-info list to store data
  *	Return - HSAKMT_STATUS_SUCCESS in success or error number in failure
  */
-static HSAKMT_STATUS
-topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
+static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	void *p_temp_cpu_ci_list;
@@ -1032,8 +1033,8 @@ exit:
  *	@cpu_ci_list - the cpu cache information list to look up cache info
  *	Return - HSAKMT_STATUS_SUCCESS in success or error number in failure
  */
-static HSAKMT_STATUS
-topology_get_cpu_cache_props(node_t *tbl, cpu_cacheinfo_t *cpu_ci_list)
+static HSAKMT_STATUS topology_get_cpu_cache_props(node_t *tbl,
+						  cpu_cacheinfo_t *cpu_ci_list)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	uint32_t apicid_low = tbl->node.CComputeIdLo, apicid_max = 0;
@@ -1089,71 +1090,71 @@ static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
 {
 }
 
-static HSAKMT_STATUS
-topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
+static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
 {
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-static HSAKMT_STATUS
-topology_get_cpu_cache_props(node_t *tbl, cpu_cacheinfo_t *cpu_ci_list)
+static HSAKMT_STATUS topology_get_cpu_cache_props(node_t *tbl,
+						  cpu_cacheinfo_t *cpu_ci_list)
 {
 	return HSAKMT_STATUS_SUCCESS;
 }
 #endif
 
-static HSAKMT_STATUS
-topology_sysfs_get_cache_props(uint32_t node_id, uint32_t cache_id, HsaCacheProperties *props) {
+static HSAKMT_STATUS topology_sysfs_get_cache_props(uint32_t node_id,
+						    uint32_t cache_id,
+						    HsaCacheProperties *props)
+{
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
 	char path[256];
-	long long unsigned int  prop_val;
+	unsigned long long prop_val;
 	uint32_t i, prog;
-    int read_size;
+	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
 	snprintf(path, 256, "%s/%d/caches/%d/properties", KFD_SYSFS_PATH_NODES, node_id, cache_id);
 	fd = fopen(path, "r");
-	if (!fd) {
+	if (!fd)
 		return HSAKMT_STATUS_ERROR;
-	}
 	read_buf = malloc(PAGE_SIZE);
 	if (!read_buf) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto err1;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
-    /* Since we're using the buffer as a string, we make sure the string terminates */
-    if(read_size >= PAGE_SIZE)
-        read_size = PAGE_SIZE-1;
-    read_buf[read_size] = 0;
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
+	read_buf[read_size] = 0;
 
 	prog = 0;
 	p = read_buf;
-	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
-		if (strcmp(prop_name,"processor_id_low") == 0)
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "processor_id_low") == 0)
 			props->ProcessorIdLow = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"level") == 0)
+		else if (strcmp(prop_name, "level") == 0)
 			props->CacheLevel = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"size") == 0)
+		else if (strcmp(prop_name, "size") == 0)
 			props->CacheSize = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"cache_line_size") == 0)
+		else if (strcmp(prop_name, "cache_line_size") == 0)
 			props->CacheLineSize = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"cache_lines_per_tag") == 0)
+		else if (strcmp(prop_name, "cache_lines_per_tag") == 0)
 			props->CacheLinesPerTag = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"association") == 0)
+		else if (strcmp(prop_name, "association") == 0)
 			props->CacheAssociativity = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"latency") == 0)
+		else if (strcmp(prop_name, "latency") == 0)
 			props->CacheLatency = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"type") == 0)
+		else if (strcmp(prop_name, "type") == 0)
 			props->CacheType.Value = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "sibling_map") == 0)
 			break;
@@ -1163,8 +1164,8 @@ topology_sysfs_get_cache_props(uint32_t node_id, uint32_t cache_id, HsaCacheProp
 	if ((sscanf(p, "sibling_map %n", &prog)) == 0 && prog) {
 		i = 0;
 		while ((i < HSA_CPU_SIBLINGS) &&
-			(sscanf(p+=prog, "%u%*[,\n]%n", &props->SiblingMap[i++],
-					&prog) == 1));
+			(sscanf(p += prog, "%u%*[,\n]%n", &props->SiblingMap[i++], &prog) == 1))
+			continue;
 	}
 
 err2:
@@ -1174,66 +1175,67 @@ err1:
 	return ret;
 }
 
-static HSAKMT_STATUS
-topology_sysfs_get_iolink_props(uint32_t node_id, uint32_t iolink_id, HsaIoLinkProperties *props) {
+static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
+						     uint32_t iolink_id,
+						     HsaIoLinkProperties *props)
+{
 	FILE *fd;
 	char *read_buf, *p;
 	char prop_name[256];
 	char path[256];
-	long long unsigned int  prop_val;
+	unsigned long long prop_val;
 	uint32_t prog;
-    int read_size;
+	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
 	snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, node_id, iolink_id);
 	fd = fopen(path, "r");
-	if (!fd) {
+	if (!fd)
 		return HSAKMT_STATUS_ERROR;
-	}
 	read_buf = malloc(PAGE_SIZE);
 	if (!read_buf) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto err1;
 	}
 
-    read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-    if (read_size <= 0) {
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
-    /* Since we're using the buffer as a string, we make sure the string terminates */
-    if(read_size >= PAGE_SIZE)
-        read_size = PAGE_SIZE-1;
-    read_buf[read_size] = 0;
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
+	read_buf[read_size] = 0;
 
 	prog = 0;
 	p = read_buf;
-	while(sscanf(p+=prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
-		if (strcmp(prop_name,"type") == 0)
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "type") == 0)
 			props->IoLinkType = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"version_major") == 0)
+		else if (strcmp(prop_name, "version_major") == 0)
 			props->VersionMajor = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"version_minor") == 0)
+		else if (strcmp(prop_name, "version_minor") == 0)
 			props->VersionMinor = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"node_from") == 0)
+		else if (strcmp(prop_name, "node_from") == 0)
 			props->NodeFrom = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"node_to") == 0)
+		else if (strcmp(prop_name, "node_to") == 0)
 			props->NodeTo = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"weight") == 0)
+		else if (strcmp(prop_name, "weight") == 0)
 			props->Weight = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"min_latency") == 0)
+		else if (strcmp(prop_name, "min_latency") == 0)
 			props->MinimumLatency = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_latency") == 0)
+		else if (strcmp(prop_name, "max_latency") == 0)
 			props->MaximumLatency = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"min_bandwidth") == 0)
+		else if (strcmp(prop_name, "min_bandwidth") == 0)
 			props->MinimumBandwidth = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"max_bandwidth") == 0)
+		else if (strcmp(prop_name, "max_bandwidth") == 0)
 			props->MaximumBandwidth = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"recommended_transfer_size") == 0)
+		else if (strcmp(prop_name, "recommended_transfer_size") == 0)
 			props->RecTransferSize = (uint32_t)prop_val;
-		else if (strcmp(prop_name,"flags") == 0)
+		else if (strcmp(prop_name, "flags") == 0)
 			props->Flags.LinkProperty = (uint32_t)prop_val;
 	}
 
@@ -1246,11 +1248,11 @@ err1:
 }
 
 /* topology_get_free_io_link_slot_for_node - For the given node_id, find the
- * 	next available free slot to add an io_link
+ * next available free slot to add an io_link
  */
-static HsaIoLinkProperties * topology_get_free_io_link_slot_for_node(
-			uint32_t node_id, const HsaSystemProperties *sys_props,
-			node_t *nodes)
+static HsaIoLinkProperties *topology_get_free_io_link_slot_for_node(uint32_t node_id,
+								    const HsaSystemProperties *sys_props,
+								    node_t *nodes)
 {
 	HsaIoLinkProperties *props;
 
@@ -1275,14 +1277,16 @@ static HsaIoLinkProperties * topology_get_free_io_link_slot_for_node(
 }
 
 /* topology_add_io_link_for_node - If a free slot is available,
- *	add io_link for the given Node. If bi_directional is true, set up two
- *	links for both directions.
- *  TODO: Add other members of HsaIoLinkProperties
+ * add io_link for the given Node. If bi_directional is true, set up two
+ * links for both directions.
+ * TODO: Add other members of HsaIoLinkProperties
  */
 static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_id,
-		const HsaSystemProperties *sys_props, node_t *nodes,
-		HSA_IOLINKTYPE IoLinkType, uint32_t NodeTo,
-		uint32_t Weight, bool bi_dir)
+						   const HsaSystemProperties *sys_props,
+						   node_t *nodes,
+						   HSA_IOLINKTYPE IoLinkType,
+						   uint32_t NodeTo,
+						   uint32_t Weight, bool bi_dir)
 {
 	HsaIoLinkProperties *props;
 	/* If bi-directional is set true, it's two links to add. */
@@ -1330,7 +1334,8 @@ static int32_t gpu_get_direct_link_cpu(uint32_t gpu_node, node_t *nodes)
  * been created in the kernel.
  */
 static HSAKMT_STATUS get_direct_iolink_info(uint32_t node1, uint32_t node2,
-			node_t *nodes, HSAuint32 *weight, HSA_IOLINKTYPE *type)
+					    node_t *nodes, HSAuint32 *weight,
+					    HSA_IOLINKTYPE *type)
 {
 	HsaIoLinkProperties *props = nodes[node1].link;
 	uint32_t i;
@@ -1351,7 +1356,8 @@ static HSAKMT_STATUS get_direct_iolink_info(uint32_t node1, uint32_t node2,
 }
 
 static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
-			node_t *nodes, HSAuint32 *weight, HSA_IOLINKTYPE *type)
+					      node_t *nodes, HSAuint32 *weight,
+					      HSA_IOLINKTYPE *type)
 {
 	int32_t dir_cpu1 = -1, dir_cpu2 = -1;
 	HSAuint32 weight1 = 0, weight2 = 0, weight3 = 0;
@@ -1389,7 +1395,7 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 				if (ret != HSAKMT_STATUS_SUCCESS)
 					return ret;
 				ret = get_direct_iolink_info(dir_cpu1, node2,
-					 	nodes, &weight2, type);
+						nodes, &weight2, type);
 			} else /* GPU->CPU->CPU->GPU*/ {
 				ret = get_direct_iolink_info(node1, dir_cpu1,
 						nodes, &weight1, NULL);
@@ -1434,8 +1440,8 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-static void topology_create_indirect_gpu_links(
-		const HsaSystemProperties *sys_props, node_t *nodes)
+static void topology_create_indirect_gpu_links(const HsaSystemProperties *sys_props,
+					       node_t *nodes)
 {
 
 	uint32_t i, j;
@@ -1455,8 +1461,7 @@ static void topology_create_indirect_gpu_links(
 	}
 }
 
-HSAKMT_STATUS
-topology_take_snapshot(void)
+HSAKMT_STATUS topology_take_snapshot(void)
 {
 	uint32_t gen_start, gen_end, i, mem_id, cache_id, link_id;
 	HsaSystemProperties sys_props;
@@ -1473,9 +1478,9 @@ retry:
 	ret = topology_sysfs_get_system_props(&sys_props);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
-	if(sys_props.NumNodes > 0) {
+	if (sys_props.NumNodes > 0) {
 		topology_create_temp_cpu_cache_list(&cpu_ci_list);
-		temp_nodes = calloc(sys_props.NumNodes * sizeof(node_t),1);
+		temp_nodes = calloc(sys_props.NumNodes * sizeof(node_t), 1);
 		if (!temp_nodes)
 			return HSAKMT_STATUS_NO_MEMORY;
 		pacc = pci_alloc();
@@ -1518,8 +1523,7 @@ retry:
 						goto err;
 					}
 				}
-			}
-			else if (!temp_nodes[i].gpu_id) { /* a CPU node */
+			} else if (!temp_nodes[i].gpu_id) { /* a CPU node */
 				ret = topology_get_cpu_cache_props(
 						&temp_nodes[i], cpu_ci_list);
 				if (ret != HSAKMT_STATUS_SUCCESS) {
@@ -1529,7 +1533,8 @@ retry:
 			}
 
 			/* To simplify, allocate maximum needed memory for io_links for each node. This
-			 * removes the need for realloc when indirect and QPI links are added later */
+			 * removes the need for realloc when indirect and QPI links are added later
+			 */
 			temp_nodes[i].link = calloc(sys_props.NumNodes - 1, sizeof(HsaIoLinkProperties));
 			if (!temp_nodes[i].link) {
 				ret = HSAKMT_STATUS_NO_MEMORY;
@@ -1585,12 +1590,8 @@ err:
 	return ret;
 }
 
-/*
- * Drop the Snashot of the HSA topology information.
- * Assume lock is held.
- */
-HSAKMT_STATUS
-topology_drop_snapshot(void)
+/* Drop the Snashot of the HSA topology information. Assume lock is held. */
+HSAKMT_STATUS topology_drop_snapshot(void)
 {
 	HSAKMT_STATUS err;
 
@@ -1614,10 +1615,9 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS
-validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
+HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 {
-    if (!node || !_system || _system->NumNodes <= nodeid)
+	if (!node || !_system || _system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 	if (gpu_id)
 		*gpu_id = node[nodeid].gpu_id;
@@ -1625,11 +1625,12 @@ validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id){
+HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
+{
 	uint64_t node_idx;
-	for(node_idx = 0; node_idx < _system->NumNodes; node_idx++){
-		if (node[node_idx].gpu_id == gpu_id){
+
+	for (node_idx = 0; node_idx < _system->NumNodes; node_idx++) {
+		if (node[node_idx].gpu_id == gpu_id) {
 			*node_id = node_idx;
 			return HSAKMT_STATUS_SUCCESS;
 		}
@@ -1639,17 +1640,14 @@ gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id){
 
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtAcquireSystemProperties(
-    HsaSystemProperties*  SystemProperties    //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *SystemProperties)
 {
 	HSAKMT_STATUS err;
+
 	CHECK_KFD_OPEN();
 
 	if (!SystemProperties)
-			return HSAKMT_STATUS_INVALID_PARAMETER;
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
@@ -1667,9 +1665,7 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtReleaseSystemProperties(void)
+HSAKMT_STATUS HSAKMTAPI hsaKmtReleaseSystemProperties(void)
 {
 	CHECK_KFD_OPEN();
 
@@ -1684,12 +1680,8 @@ hsaKmtReleaseSystemProperties(void)
 	return err;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetNodeProperties(
-    HSAuint32               NodeId,            //IN
-    HsaNodeProperties*      NodeProperties     //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
+						HsaNodeProperties *NodeProperties)
 {
 	HSAKMT_STATUS err;
 	uint32_t gpu_id;
@@ -1701,7 +1693,7 @@ hsaKmtGetNodeProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (_system == NULL) {
+	if (!_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
 		assert(_system);
 		goto out;
@@ -1731,13 +1723,9 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetNodeMemoryProperties(
-    HSAuint32             NodeId,             //IN
-    HSAuint32             NumBanks,           //IN
-    HsaMemoryProperties*  MemoryProperties    //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
+						      HSAuint32 NumBanks,
+						      HsaMemoryProperties *MemoryProperties)
 {
 	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 	uint32_t i, gpu_id;
@@ -1751,14 +1739,14 @@ hsaKmtGetNodeMemoryProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (_system == NULL) {
+	if (!_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
 		assert(_system);
 		goto out;
 	}
 
 	/* Check still necessary */
-	if (NodeId >= _system->NumNodes ) {
+	if (NodeId >= _system->NumNodes) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -1790,7 +1778,9 @@ hsaKmtGetNodeMemoryProperties(
 	}
 
 	/* Add Local memory - HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE.
-	 * For dGPU the topology node contains Local Memory and it is added by the for loop above */
+	 * For dGPU the topology node contains Local Memory and it is added by
+	 * the for loop above
+	 */
 	if (!nodeIsDGPU && i < NumBanks && node[NodeId].node.LocalMemSize > 0 &&
 		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
@@ -1799,7 +1789,7 @@ hsaKmtGetNodeMemoryProperties(
 		i++;
 	}
 
-	/*Add SCRATCH*/
+	/* Add SCRATCH */
 	if (i < NumBanks &&
 		fmm_get_aperture_base_and_limit(FMM_SCRATCH, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
@@ -1823,14 +1813,10 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetNodeCacheProperties(
-    HSAuint32           NodeId,         //IN
-    HSAuint32           ProcessorId,    //IN
-    HSAuint32           NumCaches,      //IN
-    HsaCacheProperties* CacheProperties //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeCacheProperties(HSAuint32 NodeId,
+						     HSAuint32 ProcessorId,
+						     HSAuint32 NumCaches,
+						     HsaCacheProperties *CacheProperties)
 {
 	HSAKMT_STATUS err;
 	uint32_t i;
@@ -1842,7 +1828,7 @@ hsaKmtGetNodeCacheProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (_system == NULL) {
+	if (!_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
 		assert(_system);
 		goto out;
@@ -1865,13 +1851,9 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetNodeIoLinkProperties(
-    HSAuint32            NodeId,            //IN
-    HSAuint32            NumIoLinks,        //IN
-    HsaIoLinkProperties* IoLinkProperties  //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
+						      HSAuint32 NumIoLinks,
+						      HsaIoLinkProperties *IoLinkProperties)
 {
 	HSAKMT_STATUS err;
 	uint32_t i;
@@ -1884,7 +1866,7 @@ hsaKmtGetNodeIoLinkProperties(
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (_system == NULL) {
+	if (!_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
 		assert(_system);
 		goto out;
@@ -1909,15 +1891,16 @@ out:
 
 uint16_t get_device_id_by_node(HSAuint32 node_id)
 {
-    if (!node || !_system || _system->NumNodes <= node_id)
-        return 0;
+	if (!node || !_system || _system->NumNodes <= node_id)
+		return 0;
 
-    return node[node_id].node.DeviceId;
+	return node[node_id].node.DeviceId;
 }
 
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 {
 	unsigned int i;
+
 	if (!node || !_system)
 		return 0;
 
@@ -1935,14 +1918,14 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 	HSAKMT_STATUS ret;
 	unsigned int i;
 
-	if (NumberOfNodes == 0 || NodeArray == NULL || gpu_id_array == NULL)
+	if (NumberOfNodes == 0 || !NodeArray || !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	/* Translate Node IDs to gpu_ids */
 	*gpu_id_array = malloc(NumberOfNodes * sizeof(uint32_t));
-	if (*gpu_id_array == NULL)
+	if (!(*gpu_id_array))
 		return HSAKMT_STATUS_NO_MEMORY;
-        for (i = 0; i < NumberOfNodes; i++) {
+	for (i = 0; i < NumberOfNodes; i++) {
 		ret = validate_nodeid(NodeArray[i], *gpu_id_array + i);
 		if (ret != HSAKMT_STATUS_SUCCESS) {
 			free(*gpu_id_array);
@@ -1950,45 +1933,5 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		}
 	}
 
-        return ret;
-}
-
-#if 0
-static int get_cpu_stepping(uint16_t* stepping)
-{
-	int ret;
-	FILE* fd = fopen("/proc/cpuinfo", "r");
-	if (!fd)
-		return -1;
-
-	char* read_buf = malloc(PAGE_SIZE);
-	if (!read_buf) {
-		ret = -1;
-		goto err1;
-	}
-
-	int read_size = fread(read_buf, 1, PAGE_SIZE, fd);
-	if (read_size <= 0) {
-		ret = -2;
-		goto err2;
-	}
-
-	/* Since we're using the buffer as a string, we make sure the string terminates */
-	if(read_size >= PAGE_SIZE)
-		read_size = PAGE_SIZE-1;
-	read_buf[read_size] = 0;
-
-	*stepping = 0;
-
-	char* p = strstr(read_buf, "stepping");
-	if (p)
-		sscanf(p , "stepping\t: %hu\n", stepping);
-
-err2:
-	free(read_buf);
-err1:
-	fclose(fd);
-
 	return ret;
 }
-#endif

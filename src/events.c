@@ -47,31 +47,24 @@ static bool IsSystemEventType(HSA_EVENTTYPE type)
 	return (type != HSA_EVENTTYPE_SIGNAL && type != HSA_EVENTTYPE_DEBUG_EVENT);
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtCreateEvent(
-    HsaEventDescriptor* EventDesc,              //IN
-    bool                ManualReset,            //IN
-    bool                IsSignaled,             //IN
-    HsaEvent**          Event                   //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
+					  bool ManualReset, bool IsSignaled,
+					  HsaEvent **Event)
 {
 	CHECK_KFD_OPEN();
 
 	if (EventDesc->EventType >= HSA_EVENTTYPE_MAXID)
-	{
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-	}
 
-	HsaEvent* e = malloc(sizeof(HsaEvent));
-	if (e == NULL)
-	{
+	HsaEvent *e = malloc(sizeof(HsaEvent));
+
+	if (!e)
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	memset(e, 0, sizeof(*e));
 
 	struct kfd_ioctl_create_event_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.event_type = EventDesc->EventType;
@@ -81,7 +74,7 @@ hsaKmtCreateEvent(
 	/* dGPU code */
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	if (is_dgpu && events_page == NULL) {
+	if (is_dgpu && !events_page) {
 		events_page = allocate_exec_aligned_memory_gpu(
 			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0, true);
 		if (!events_page) {
@@ -100,7 +93,7 @@ hsaKmtCreateEvent(
 
 	e->EventId = args.event_id;
 
-	if (events_page == NULL && args.event_page_offset > 0) {
+	if (!events_page && args.event_page_offset > 0) {
 		events_page = mmap(NULL, KFD_SIGNAL_EVENT_LIMIT * 8, PROT_WRITE | PROT_READ,
 				MAP_SHARED, kfd_fd, args.event_page_offset);
 		if (events_page == MAP_FAILED) {
@@ -127,6 +120,7 @@ hsaKmtCreateEvent(
 
 	if (IsSignaled && !IsSystemEventType(e->EventData.EventType)) {
 		struct kfd_ioctl_set_event_args set_args;
+
 		memset(&set_args, 0, sizeof(set_args));
 		set_args.event_id = args.event_id;
 
@@ -138,11 +132,7 @@ hsaKmtCreateEvent(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDestroyEvent(
-    HsaEvent*   Event    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyEvent(HsaEvent *Event)
 {
 	CHECK_KFD_OPEN();
 
@@ -150,34 +140,33 @@ hsaKmtDestroyEvent(
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	struct kfd_ioctl_destroy_event_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.event_id = Event->EventId;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) != 0) {
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) != 0)
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	free(Event);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSetEvent(
-    HsaEvent*  Event    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetEvent(HsaEvent *Event)
 {
 	CHECK_KFD_OPEN();
 
 	if (!Event)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
+	/* Although the spec is doesn't say, don't allow system-defined events
+	 * to be signaled.
+	 */
 	if (IsSystemEventType(Event->EventData.EventType))
 		return HSAKMT_STATUS_ERROR;
 
 	struct kfd_ioctl_set_event_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.event_id = Event->EventId;
@@ -188,22 +177,21 @@ hsaKmtSetEvent(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtResetEvent(
-    HsaEvent*  Event    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtResetEvent(HsaEvent *Event)
 {
 	CHECK_KFD_OPEN();
 
 	if (!Event)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	/* Although the spec is doesn't say, don't allow system-defined events to be signaled. */
+	/* Although the spec is doesn't say, don't allow system-defined events
+	 * to be signaled.
+	 */
 	if (IsSystemEventType(Event->EventData.EventType))
 		return HSAKMT_STATUS_ERROR;
 
 	struct kfd_ioctl_reset_event_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.event_id = Event->EventId;
@@ -214,11 +202,7 @@ hsaKmtResetEvent(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtQueryEventState(
-    HsaEvent*  Event    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtQueryEventState(HsaEvent *Event)
 {
 	CHECK_KFD_OPEN();
 
@@ -228,12 +212,8 @@ hsaKmtQueryEventState(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtWaitOnEvent(
-    HsaEvent*   Event,          //IN
-    HSAuint32   Milliseconds    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent(HsaEvent *Event,
+		HSAuint32 Milliseconds)
 {
 	if (!Event)
 		return HSAKMT_STATUS_INVALID_HANDLE;
@@ -241,14 +221,10 @@ hsaKmtWaitOnEvent(
 	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtWaitOnMultipleEvents(
-    HsaEvent*   Events[],       //IN
-    HSAuint32   NumEvents,      //IN
-    bool        WaitOnAll,      //IN
-    HSAuint32   Milliseconds    //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
+						   HSAuint32 NumEvents,
+						   bool WaitOnAll,
+						   HSAuint32 Milliseconds)
 {
 	CHECK_KFD_OPEN();
 
@@ -256,12 +232,14 @@ hsaKmtWaitOnMultipleEvents(
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	struct kfd_event_data *event_data = calloc(NumEvents, sizeof(struct kfd_event_data));
+
 	for (HSAuint32 i = 0; i < NumEvents; i++) {
 		event_data[i].event_id = Events[i]->EventId;
 		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
 	}
 
 	struct kfd_ioctl_wait_events_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	args.wait_for_all = WaitOnAll;
@@ -271,12 +249,10 @@ hsaKmtWaitOnMultipleEvents(
 
 	HSAKMT_STATUS result;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1) {
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1)
 		result = HSAKMT_STATUS_ERROR;
-	}
-	else if (args.wait_result == KFD_IOC_WAIT_RESULT_TIMEOUT) {
+	else if (args.wait_result == KFD_IOC_WAIT_RESULT_TIMEOUT)
 		result = HSAKMT_STATUS_WAIT_TIMEOUT;
-	}
 	else {
 		result = HSAKMT_STATUS_SUCCESS;
 		for (HSAuint32 i = 0; i < NumEvents; i++) {

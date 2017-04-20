@@ -28,15 +28,12 @@
 #include <string.h>
 #include "linux/kfd_ioctl.h"
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetVersion(
-    HsaVersionInfo*  VersionInfo    //OUT
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetVersion(HsaVersionInfo *VersionInfo)
 {
 	CHECK_KFD_OPEN();
 
 	struct kfd_ioctl_get_version_args args;
+
 	memset(&args, 0, sizeof(args));
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_VERSION, &args) == -1)

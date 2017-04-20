@@ -36,7 +36,7 @@
 
 static const char kfd_device_name[] = "/dev/kfd";
 static const char tmp_file[] = "/var/lock/.amd_hsa_thunk_lock";
-int amd_hsa_thunk_lock_fd = 0;
+int amd_hsa_thunk_lock_fd;
 static pid_t parent_pid = -1;
 
 
@@ -76,9 +76,7 @@ static inline void init_page_size(void)
 	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtOpenKFD(void)
+HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 {
 	HSAKMT_STATUS result;
 	int fd;
@@ -94,8 +92,9 @@ hsaKmtOpenKFD(void)
 	if (is_forked_child())
 		clear_after_fork();
 
-	if (kfd_open_count == 0)
-	{
+	if (kfd_open_count == 0) {
+		amd_hsa_thunk_lock_fd = 0;
+
 		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
 		if (fd != -1) {
@@ -125,7 +124,7 @@ hsaKmtOpenKFD(void)
 
 		mask = umask(0); /* save the current umask */
 		/* We don't want the existing umask to mask out S_IWOTH */
-		umask(S_IXOTH);
+		umask(0001);
 		amd_hsa_thunk_lock_fd = open(tmp_file,
 				O_CREAT | O_RDWR,
 				0666);
@@ -136,9 +135,7 @@ hsaKmtOpenKFD(void)
 		if (init_counter_props(sys_props.NumNodes) !=
 						HSAKMT_STATUS_SUCCESS)
 			fprintf(stderr, "Profiling is not available\n");
-	}
-	else
-	{
+	} else {
 		kfd_open_count++;
 		result = HSAKMT_STATUS_SUCCESS;
 	}
@@ -157,18 +154,14 @@ open_failed:
 	return result;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtCloseKFD(void)
+HSAKMT_STATUS HSAKMTAPI hsaKmtCloseKFD(void)
 {
 	HSAKMT_STATUS result;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	if (kfd_open_count > 0)
-	{
-		if (--kfd_open_count == 0)
-		{
+	if (kfd_open_count > 0)	{
+		if (--kfd_open_count == 0) {
 			destroy_counter_props();
 			destroy_device_debugging_memory();
 			destroy_process_doorbells();
@@ -183,11 +176,8 @@ hsaKmtCloseKFD(void)
 		}
 
 		result = HSAKMT_STATUS_SUCCESS;
-	}
-	else
-	{
+	} else
 		result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
-	}
 
 	pthread_mutex_unlock(&hsakmt_mutex);
 

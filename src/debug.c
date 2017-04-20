@@ -29,14 +29,14 @@
 #include <string.h>
 
 static bool *is_device_debugged;
-int debug_get_reg_status(uint32_t node_id, bool* is_debugged);
+int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
 
 HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
 {
 	unsigned int i;
 
 	is_device_debugged = malloc(NumNodes * sizeof(bool));
-	if (is_device_debugged == NULL)
+	if (!is_device_debugged)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	for (i = 0; i < NumNodes; i++)
@@ -51,17 +51,14 @@ void destroy_device_debugging_memory(void)
 		free(is_device_debugged);
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDbgRegister(
-    HSAuint32       NodeId      //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgRegister(HSAuint32 NodeId)
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
+
 	CHECK_KFD_OPEN();
 
-	if (is_device_debugged == NULL)
+	if (!is_device_debugged)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	result = validate_nodeid(NodeId, &gpu_id);
@@ -69,31 +66,28 @@ hsaKmtDbgRegister(
 		return result;
 
 	struct kfd_ioctl_dbg_register_args args;
+
 	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
-	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
+
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
 
 	if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
 	else
 		result = HSAKMT_STATUS_ERROR;
 
-	return (result);
+	return result;
 }
 
-/* =============================================================================== */
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDbgUnregister(
-    HSAuint32       NodeId      //IN
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgUnregister(HSAuint32 NodeId)
 {
-	HSAKMT_STATUS result;
 	uint32_t gpu_id;
+	HSAKMT_STATUS result;
+
 	CHECK_KFD_OPEN();
 
-	if (is_device_debugged == NULL)
+	if (!is_device_debugged)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	result = validate_nodeid(NodeId, &gpu_id);
@@ -101,28 +95,22 @@ hsaKmtDbgUnregister(
 		return result;
 
 	struct kfd_ioctl_dbg_unregister_args args;
+
 	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
-	long  err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
-	if (err == 0)
-		result = HSAKMT_STATUS_SUCCESS;
-	else
-		result = HSAKMT_STATUS_ERROR;
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
 
-	return (result);
+	if (err)
+		return HSAKMT_STATUS_ERROR;
+
+	return HSAKMT_STATUS_SUCCESS;
 }
 
-/* =============================================================================== */
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDbgWavefrontControl(
-    HSAuint32           NodeId,         //IN
-    HSA_DBG_WAVEOP      Operand,        //IN
-    HSA_DBG_WAVEMODE    Mode,           //IN
-    HSAuint32           TrapId,         //IN
-    HsaDbgWaveMessage*  DbgWaveMsgRing  //IN (? - see thunk API doc!)
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgWavefrontControl(HSAuint32 NodeId,
+						  HSA_DBG_WAVEOP Operand,
+						  HSA_DBG_WAVEMODE Mode,
+						  HSAuint32 TrapId,
+						  HsaDbgWaveMessage *DbgWaveMsgRing)
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
@@ -136,18 +124,14 @@ hsaKmtDbgWavefrontControl(
 		return result;
 
 
-/* Determine Size  of the ioctl buffer */
+/* Determine Size of the ioctl buffer */
+	uint32_t buff_size = sizeof(Operand) + sizeof(Mode) + sizeof(TrapId) +
+			     sizeof(DbgWaveMsgRing->DbgWaveMsg) +
+			     sizeof(DbgWaveMsgRing->MemoryVA) + sizeof(*args);
 
-	uint32_t buff_size = sizeof(Operand)+
-					 	 sizeof(Mode)  + sizeof(TrapId) +
-						 sizeof(DbgWaveMsgRing->DbgWaveMsg)+ sizeof(DbgWaveMsgRing->MemoryVA) + sizeof(*args);
-
-
-	args = (struct kfd_ioctl_dbg_wave_control_args*) malloc(buff_size);
-	if (args == NULL)
-	{
+	args = (struct kfd_ioctl_dbg_wave_control_args *)malloc(buff_size);
+	if (!args)
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	memset(args, 0, buff_size);
 
@@ -155,67 +139,53 @@ hsaKmtDbgWavefrontControl(
 	args->buf_size_in_bytes = buff_size;
 
 	/* increment pointer to the start of the non fixed part */
-
-	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
+	unsigned char *run_ptr = (unsigned char *)args + sizeof(*args);
 
 	/* save variable content pointer for kfd */
 	args->content_ptr = (uint64_t)run_ptr;
 
 	/* insert items, and increment pointer accordingly */
-
-	*((HSA_DBG_WAVEOP*)run_ptr)   =  Operand;
+	*((HSA_DBG_WAVEOP *)run_ptr) = Operand;
 	run_ptr += sizeof(Operand);
 
-
-	*((HSA_DBG_WAVEMODE*)run_ptr) =  Mode;
+	*((HSA_DBG_WAVEMODE *)run_ptr) = Mode;
 	run_ptr += sizeof(Mode);
 
-
-	*((HSAuint32*)run_ptr)       =  TrapId;
+	*((HSAuint32 *)run_ptr) = TrapId;
 	run_ptr += sizeof(TrapId);
 
-	*((HsaDbgWaveMessageAMD*)run_ptr)       =  DbgWaveMsgRing->DbgWaveMsg;
-		run_ptr += sizeof(DbgWaveMsgRing->DbgWaveMsg);
+	*((HsaDbgWaveMessageAMD *)run_ptr) = DbgWaveMsgRing->DbgWaveMsg;
+	run_ptr += sizeof(DbgWaveMsgRing->DbgWaveMsg);
 
-	*((void**)run_ptr)       =  DbgWaveMsgRing->MemoryVA;
+	*((void **)run_ptr) = DbgWaveMsgRing->MemoryVA;
 	run_ptr += sizeof(DbgWaveMsgRing->MemoryVA);
 
 	/* send to kernel */
-
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_WAVE_CONTROL, args);
 
-	free (args);
+	free(args);
 
-	if (err == 0)
-		return HSAKMT_STATUS_SUCCESS;
-	else
+	if (err)
 		return HSAKMT_STATUS_ERROR;
+
+	return HSAKMT_STATUS_SUCCESS;
 }
 
-
-/* =============================================================================== */
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtDbgAddressWatch(
-    HSAuint32           NodeId,         //IN
-    HSAuint32           NumWatchPoints, //IN
-    HSA_DBG_WATCH_MODE  WatchMode[],    //IN
-    void*               WatchAddress[], //IN
-    HSAuint64           WatchMask[],    //IN, optional
-    HsaEvent*           WatchEvent[]    //IN, optional
-    )
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgAddressWatch(HSAuint32 NodeId,
+					      HSAuint32 NumWatchPoints,
+					      HSA_DBG_WATCH_MODE WatchMode[],
+					      void *WatchAddress[],
+					      HSAuint64 WatchMask[],
+					      HsaEvent *WatchEvent[])
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 
 	/* determine the size of the watch mask and event buffers
-	 * the value is NULL if and only if  no vector data should be attached
-	 *
+	 * the value is NULL if and only if no vector data should be attached
 	 */
-
-	uint32_t watch_mask_items  = WatchMask[0] > 0      ? NumWatchPoints:1;
-	uint32_t watch_event_items = WatchEvent != NULL    ? NumWatchPoints:0;
+	uint32_t watch_mask_items = WatchMask[0] > 0 ? NumWatchPoints:1;
+	uint32_t watch_event_items = WatchEvent != NULL ? NumWatchPoints:0;
 
 	struct kfd_ioctl_dbg_address_watch_args *args;
 	HSAuint32		 i = 0;
@@ -229,23 +199,18 @@ hsaKmtDbgAddressWatch(
 	if (NumWatchPoints > MAX_ALLOWED_NUM_POINTS)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-/* Size and structure of the ioctl buffer is  dynamic in this case
- * Here we calculate the buff size.
- */
+	/* Size and structure of the ioctl buffer is dynamic in this case
+	 * Here we calculate the buff size.
+	 */
+	uint32_t buff_size = sizeof(NumWatchPoints) +
+		(sizeof(WatchMode[0]) + sizeof(WatchAddress[0])) *
+			NumWatchPoints +
+		watch_mask_items * sizeof(HSAuint64) +
+		watch_event_items * sizeof(HsaEvent *) + sizeof(*args);
 
-	uint32_t buff_size =sizeof(NumWatchPoints)+
-					(	sizeof(WatchMode[0]) +
-						sizeof(WatchAddress[0]))*NumWatchPoints +
-						watch_mask_items*sizeof(HSAuint64) +
-						watch_event_items*sizeof(HsaEvent*)+
-						sizeof(*args);
-
-
-	args = (struct kfd_ioctl_dbg_address_watch_args*) malloc(buff_size);
-	if (args == NULL)
-	{
+	args = (struct kfd_ioctl_dbg_address_watch_args *) malloc(buff_size);
+	if (!args)
 		return HSAKMT_STATUS_ERROR;
-	}
 
 	memset(args, 0, buff_size);
 
@@ -254,64 +219,51 @@ hsaKmtDbgAddressWatch(
 
 
 	/* increment pointer to the start of the non fixed part */
-
-	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
+	unsigned char *run_ptr = (unsigned char *)args + sizeof(*args);
 
 	/* save variable content pointer for kfd */
 	args->content_ptr = (uint64_t)run_ptr;
 	/* insert items, and increment pointer accordingly */
 
-	*((HSAuint32*)run_ptr) =  NumWatchPoints;
+	*((HSAuint32 *)run_ptr) = NumWatchPoints;
 	run_ptr += sizeof(NumWatchPoints);
 
-	for (i=0; i < NumWatchPoints; i++)
-	{
-		*((HSA_DBG_WATCH_MODE*)run_ptr) 	=  WatchMode[i];
-		run_ptr 	+= sizeof(WatchMode[i]);
+	for (i = 0; i < NumWatchPoints; i++) {
+		*((HSA_DBG_WATCH_MODE *)run_ptr) = WatchMode[i];
+		run_ptr += sizeof(WatchMode[i]);
 	}
 
-	for (i=0; i < NumWatchPoints; i++)
-	{
-		*((void**)run_ptr) 	=  WatchAddress[i];
-		run_ptr 	+= sizeof(WatchAddress[i]);
+	for (i = 0; i < NumWatchPoints; i++) {
+		*((void **)run_ptr) = WatchAddress[i];
+		run_ptr += sizeof(WatchAddress[i]);
 	}
 
-	for (i=0; i < watch_mask_items; i++)
-	{
-		*((HSAuint64*)run_ptr) 	=  WatchMask[i];
-		run_ptr 	+= sizeof(WatchMask[i]);
+	for (i = 0; i < watch_mask_items; i++) {
+		*((HSAuint64 *)run_ptr) = WatchMask[i];
+		run_ptr += sizeof(WatchMask[i]);
 	}
 
-	for (i=0; i < watch_event_items; i++)
-	{
-		*((HsaEvent**)run_ptr) 	=  WatchEvent[i];
-		run_ptr 	+= sizeof(WatchEvent[i]);
+	for (i = 0; i < watch_event_items; i++)	{
+		*((HsaEvent **)run_ptr) = WatchEvent[i];
+		run_ptr += sizeof(WatchEvent[i]);
 	}
 
 	/* send to kernel */
-
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_ADDRESS_WATCH, args);
 
-	free (args);
+	free(args);
 
-	if (err == 0)
-	{
-		return HSAKMT_STATUS_SUCCESS;
-	}
-	else
-	{
+	if (err)
 		return HSAKMT_STATUS_ERROR;
-	}
+	return HSAKMT_STATUS_SUCCESS;
 }
 
-/* =============================================================================== */
-int debug_get_reg_status(uint32_t node_id, bool* is_debugged)
+int debug_get_reg_status(uint32_t node_id, bool *is_debugged)
 {
 	*is_debugged = NULL;
-	if (is_device_debugged == NULL)
+	if (!is_device_debugged)
 		return -1;
-	else  {
-		*is_debugged = is_device_debugged[node_id];
-		return 0;
-	}
+
+	*is_debugged = is_device_debugged[node_id];
+	return 0;
 }

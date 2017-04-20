@@ -96,7 +96,7 @@ static ssize_t readn(int fd, void *buf, size_t n)
 		bytes = read(fd, buf, left);
 		if (!bytes) /* reach EOF */
 			return (n - left);
-		if (bytes < 0 ) {
+		if (bytes < 0) {
 			if (errno == EINTR) /* read got interrupted */
 				continue;
 			else
@@ -145,8 +145,8 @@ out:
 
 HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 {
-	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties*));
-	if (counter_props == NULL)
+	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties *));
+	if (!counter_props)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	counter_props_count = NumNodes;
@@ -159,11 +159,11 @@ void destroy_counter_props(void)
 {
 	unsigned int i;
 
-	if (counter_props == NULL)
+	if (!counter_props)
 		return;
 
-	for (i = 0; i<counter_props_count; i++)
-		if (counter_props[i] != NULL) {
+	for (i = 0; i < counter_props_count; i++)
+		if (counter_props[i]) {
 			free(counter_props[i]);
 			counter_props[i] = NULL;
 		}
@@ -349,9 +349,9 @@ static unsigned int get_perf_event_type(enum perf_block_id block_id)
 }
 
 /* close_perf_event_fd - Close all FDs opened for this block.
- * 		When RT acquires the trace access, RT has no ideas about each
- *		individual FD opened for this block. We should treat the whole
- *		block as one and close all of them.
+ * When RT acquires the trace access, RT has no ideas about each
+ * individual FD opened for this block. We should treat the whole
+ * block as one and close all of them.
  */
 static void close_perf_event_fd(struct perf_trace_block *block)
 {
@@ -368,9 +368,9 @@ static void close_perf_event_fd(struct perf_trace_block *block)
 }
 
 /* open_perf_event_fd - Open FDs required for this block.
- * 		If one of them fails, we should close all FDs that have been
- *		opened because RT has no ideas about those FDs successfully
- *		opened and it won't send anything to close them.
+ * If one of them fails, we should close all FDs that have been
+ * opened because RT has no ideas about those FDs successfully
+ * opened and it won't send anything to close them.
  */
 static HSAKMT_STATUS open_perf_event_fd(struct perf_trace_block *block)
 {
@@ -418,7 +418,7 @@ static HSAKMT_STATUS open_perf_event_fd(struct perf_trace_block *block)
 }
 
 static HSAKMT_STATUS perf_trace_ioctl(struct perf_trace_block *block,
-				uint32_t cmd)
+				      uint32_t cmd)
 {
 	uint32_t i;
 
@@ -438,19 +438,15 @@ static HSAKMT_STATUS query_trace(int fd, uint64_t *buf)
 
 	if (fd < 0)
 		return HSAKMT_STATUS_ERROR;
-	if(readn(fd, &content, sizeof(content)) != sizeof(content))
+	if (readn(fd, &content, sizeof(content)) != sizeof(content))
 		return HSAKMT_STATUS_ERROR;
 
 	*buf = content.val;
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcGetCounterProperties(
-	HSAuint32                   NodeId,             //IN
-	HsaCounterProperties**      CounterProperties   //OUT
-	)
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
+						      HsaCounterProperties **CounterProperties)
 {
 	HSAKMT_STATUS rc = HSAKMT_STATUS_SUCCESS;
 	uint32_t gpu_id, i, block_id;
@@ -461,16 +457,16 @@ hsaKmtPmcGetCounterProperties(
 	uint32_t total_blocks = 0;
 	uint32_t entry;
 
-	if (counter_props == NULL)
+	if (!counter_props)
 		return HSAKMT_STATUS_NO_MEMORY;
 
-	if (CounterProperties == NULL)
+	if (!CounterProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (validate_nodeid(NodeId, &gpu_id) != 0)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
-	if (counter_props[NodeId] != NULL) {
+	if (counter_props[NodeId]) {
 		*CounterProperties = counter_props[NodeId];
 		return HSAKMT_STATUS_SUCCESS;
 	}
@@ -491,7 +487,7 @@ hsaKmtPmcGetCounterProperties(
 			sizeof(HsaCounter)*(total_counters-1);
 
 	counter_props[NodeId] = malloc(counter_props_size);
-	if (counter_props[NodeId] == NULL)
+	if (!counter_props[NodeId])
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	counter_props[NodeId]->NumBlocks = total_blocks;
@@ -534,18 +530,11 @@ hsaKmtPmcGetCounterProperties(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-/**
-  Registers a set of (HW) counters to be used for tracing/profiling
-*/
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcRegisterTrace(
-	HSAuint32           NodeId,             //IN
-	HSAuint32           NumberOfCounters,   //IN
-	HsaCounter*         Counters,           //IN
-	HsaPmcTraceRoot*    TraceRoot           //OUT
-	)
+/* Registers a set of (HW) counters to be used for tracing/profiling */
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
+					       HSAuint32 NumberOfCounters,
+					       HsaCounter *Counters,
+					       HsaPmcTraceRoot *TraceRoot)
 {
 	uint32_t gpu_id, i, j;
 	uint64_t min_buf_size = 0;
@@ -558,10 +547,10 @@ hsaKmtPmcRegisterTrace(
 	uint64_t *counter_id_ptr;
 	int *fd_ptr;
 
-	if (counter_props == NULL)
+	if (!counter_props)
 		return HSAKMT_STATUS_NO_MEMORY;
 
-	if (Counters == NULL || TraceRoot == NULL || NumberOfCounters == 0)
+	if (!Counters || !TraceRoot || NumberOfCounters == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
@@ -618,7 +607,7 @@ hsaKmtPmcRegisterTrace(
 			+ sizeof(uint64_t) * total_counters
 			+ sizeof(int) * total_counters,
 			1);
-	if (trace == NULL)
+	if (!trace)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	/* Allocated area is partitioned as:
@@ -677,16 +666,10 @@ hsaKmtPmcRegisterTrace(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-/**
-  Unregisters a set of (HW) counters used for tracing/profiling
-*/
+/* Unregisters a set of (HW) counters used for tracing/profiling */
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcUnregisterTrace(
-	HSAuint32   NodeId,     //IN
-	HSATraceId  TraceId     //IN
-	)
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcUnregisterTrace(HSAuint32 NodeId,
+						 HSATraceId TraceId)
 {
 	uint32_t gpu_id;
 	struct perf_trace *trace;
@@ -708,6 +691,7 @@ hsaKmtPmcUnregisterTrace(
 	/* If the trace is in the running state, stop it */
 	if (trace->state == PERF_TRACE_STATE__STARTED) {
 		HSAKMT_STATUS status = hsaKmtPmcStopTrace(TraceId);
+
 		if (status != HSAKMT_STATUS_SUCCESS)
 			return status;
 	}
@@ -717,12 +701,8 @@ hsaKmtPmcUnregisterTrace(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcAcquireTraceAccess(
-	HSAuint32   NodeId,     //IN
-	HSATraceId  TraceId     //IN
-	)
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcAcquireTraceAccess(HSAuint32 NodeId,
+						    HSATraceId TraceId)
 {
 	struct perf_trace *trace;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -766,12 +746,8 @@ out:
 	return ret;
 }
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcReleaseTraceAccess(
-	HSAuint32   NodeId,     //IN
-	HSATraceId  TraceId     //IN
-	)
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcReleaseTraceAccess(HSAuint32 NodeId,
+						    HSATraceId TraceId)
 {
 	struct perf_trace *trace;
 	uint32_t i;
@@ -795,17 +771,10 @@ hsaKmtPmcReleaseTraceAccess(
 }
 
 
-/**
-  Starts tracing operation on a previously established set of performance counters
-*/
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcStartTrace(
-	HSATraceId  TraceId,                //IN
-	void*       TraceBuffer,            //IN (page aligned)
-	HSAuint64   TraceBufferSizeBytes    //IN (page aligned)
-	)
+/* Starts tracing operation on a previously established set of performance counters */
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcStartTrace(HSATraceId TraceId,
+					    void *TraceBuffer,
+					    HSAuint64 TraceBufferSizeBytes)
 {
 	struct perf_trace *trace =
 			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
@@ -813,7 +782,7 @@ hsaKmtPmcStartTrace(
 	int32_t j;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	if (TraceId == 0 || TraceBuffer == NULL || TraceBufferSizeBytes == 0)
+	if (TraceId == 0 || !TraceBuffer || TraceBufferSizeBytes == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
@@ -842,15 +811,9 @@ hsaKmtPmcStartTrace(
 }
 
 
-/**
-   Forces an update of all the counters that a previously started trace operation has registered
-*/
+/*Forces an update of all the counters that a previously started trace operation has registered */
 
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcQueryTrace(
-	HSATraceId    TraceId   //IN
-	)
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcQueryTrace(HSATraceId TraceId)
 {
 	struct perf_trace *trace =
 			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
@@ -882,15 +845,8 @@ hsaKmtPmcQueryTrace(
 }
 
 
-/**
-  Stops tracing operation on a previously established set of performance counters
-*/
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtPmcStopTrace(
-	HSATraceId  TraceId     //IN
-	)
+/* Stops tracing operation on a previously established set of performance counters */
+HSAKMT_STATUS HSAKMTAPI hsaKmtPmcStopTrace(HSATraceId TraceId)
 {
 	struct perf_trace *trace =
 			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
