@@ -90,8 +90,11 @@ add_library ( ${HSAKMT_TARGET} SHARED ${HSAKMT_SRC} )
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
+find_package(PkgConfig)
+pkg_check_modules(PC_LIBPCI REQUIRED libpci)
+include_directories ( ${PC_LIBPCI_INCLUDEDIR} )
 target_link_libraries ( ${HSAKMT_TARGET}
-  pthread rt pci numa
+  pthread rt numa ${PC_LIBPCI_LIBRARIES}
 )
 
 ## If the library is a release, strip the target library
