@@ -870,21 +870,120 @@ typedef struct _HSA_UUID
 #define HSA_DEFINE_UUID DEFINE_GUID
 #endif
 
+// HSA_UUID that identifies the GPU ColorBuffer (CB) block
+// {9ba429c6-af2d-4b38-b349-157271beac6a}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_CB,
+0x9ba429c6, 0xaf2d, 0x4b38, 0xb3, 0x49, 0x15, 0x72, 0x71, 0xbe, 0xac, 0x6a);
+
+// HSA_UUID that identifies the GPU (CPF) block
+// {2b0ad2b5-1c43-4f46-a7bc-e119411ea6c9}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_CPF,
+0x2b0ad2b5, 0x1c43, 0x4f46, 0xa7, 0xbc, 0xe1, 0x19, 0x41, 0x1e, 0xa6, 0xc9);
+
+// HSA_UUID that identifies the GPU (CPG) block
+// {590ec94d-20f0-448f-8dff-316c679de7ff
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_CPG,
+0x590ec94d, 0x20f0, 0x448f, 0x8d, 0xff, 0x31, 0x6c, 0x67, 0x9d, 0xe7, 0xff);
+
+// HSA_UUID that identifies the GPU (DB) block
+// {3d1a47fc-0013-4ed4-8306-822ca0b7a6c2
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_DB,
+0x3d1a47fc, 0x0013, 0x4ed4, 0x83, 0x06, 0x82, 0x2c, 0xa0, 0xb7, 0xa6, 0xc2);
+
+// HSA_UUID that identifies the GPU (GDS) block
+// {f59276ec-2526-4bf8-8ec0-118f77700dc9
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_GDS,
+0xf59276ec, 0x2526, 0x4bf8, 0x8e, 0xc0, 0x11, 0x8f, 0x77, 0x70, 0x0d, 0xc9);
+
+// HSA_UUID that identifies the GPU (GRBM) block
+// {8f00933c-c33d-4801-97b7-7007f78573ad
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_GRBM,
+0x8f00933c, 0xc33d, 0x4801, 0x97, 0xb7, 0x70, 0x07, 0xf7, 0x85, 0x73, 0xad);
+
+// HSA_UUID that identifies the GPU (GRBMSE) block
+// {34ebd8d7-7c8b-4d15-88fa-0e4e4af59ac1
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_GRBMSE,
+0x34ebd8d7, 0x7c8b, 0x4d15, 0x88, 0xfa, 0x0e, 0x4e, 0x4a, 0xf5, 0x9a, 0xc1);
+
+// HSA_UUID that identifies the GPU (IA) block
+// {34276944-4264-4fcd-9d6e-ae264582ec51
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_IA,
+0x34276944, 0x4264, 0x4fcd, 0x9d, 0x6e, 0xae, 0x26, 0x45, 0x82, 0xec, 0x51);
+
+// HSA_UUID that identifies the GPU Memory Controller (MC) block
+// {13900B57-4956-4D98-81D0-68521937F59C
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_MC,
+0x13900b57, 0x4956, 0x4d98, 0x81, 0xd0, 0x68, 0x52, 0x19, 0x37, 0xf5, 0x9c);
+
+// HSA_UUID that identifies the GPU (PASC) block
+// {b0e7fb5d-0efc-4744-b516-5d23dc1fd56c
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_PASC,
+0xb0e7fb5d, 0x0efc, 0x4744, 0xb5, 0x16, 0x5d, 0x23, 0xdc, 0x1f, 0xd5, 0x6c);
+
+// HSA_UUID that identifies the GPU (PASU) block
+// {9a152b6a-1fad-45f2-a5bf-f163826bd0cd
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_PASU,
+0x9a152b6a, 0x1fad, 0x45f2, 0xa5, 0xbf, 0xf1, 0x63, 0x82, 0x6b, 0xd0, 0xcd);
+
+// HSA_UUID that identifies the GPU (SPI) block
+// {eda81044-d62c-47eb-af89-4f6fbf3b38e0
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_SPI,
+0xeda81044, 0xd62c, 0x47eb, 0xaf, 0x89, 0x4f, 0x6f, 0xbf, 0x3b, 0x38, 0xe0);
+
+// HSA_UUID that identifies the GPU (SRBM) block
+// {9f8040e0-6830-4019-acc8-463c9e445b89
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_SRBM,
+0x9f8040e0, 0x6830, 0x4019, 0xac, 0xc8, 0x46, 0x3c, 0x9e, 0x44, 0x5b, 0x89);
 
 // GUID that identifies the GPU Shader Sequencer (SQ) block
 // {B5C396B6-D310-47E4-86FC-5CC3043AF508}
 HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_SQ,
 0xb5c396b6, 0xd310, 0x47e4, 0x86, 0xfc, 0x5c, 0xc3, 0x4, 0x3a, 0xf5, 0x8);
 
+// HSA_UUID that identifies the GPU (SX) block
+// {bdb8d737-43cc-4162-be52-51cfb847beaf}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_SX,
+0xbdb8d737, 0x43cc, 0x4162, 0xbe, 0x52, 0x51, 0xcf, 0xb8, 0x47, 0xbe, 0xaf);
+
+// HSA_UUID that identifies the GPU (TA) block
+// {c01ee43d-ad92-44b1-8ab9-be5e696ceea7}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TA,
+0xc01ee43d, 0xad92, 0x44b1, 0x8a, 0xb9, 0xbe, 0x5e, 0x69, 0x6c, 0xee, 0xa7);
+
 // HSA_UUID that identifies the GPU TextureCache (TCA) block
 // {333e393f-e147-4f49-a6d1-60914c7086b0}
 HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TCA,
 0x333e393f, 0xe147, 0x4f49, 0xa6, 0xd1,0x60, 0x91, 0x4c, 0x70, 0x86, 0xb0);
 
-// GUID that identifies the GPU Memory Controller (MC) block
-// {13900B57-4956-4D98-81D0-68521937F59C}
-HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_MC,
-0x13900b57, 0x4956, 0x4d98, 0x81, 0xd0, 0x68, 0x52, 0x19, 0x37, 0xf5, 0x9c);
+// HSA_UUID that identifies the GPU TextureCache (TCC) block
+// {848ce855-d805-4566-a8ab-73e884cc6bff}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TCC,
+0x848ce855, 0xd805, 0x4566, 0xa8, 0xab, 0x73, 0xe8, 0x84, 0xcc, 0x6b, 0xff);
+
+// HSA_UUID that identifies the GPU (TCP) block
+// {e10a013b-17d4-4bf5-b089-429591059b60}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TCP,
+0xe10a013b, 0x17d4, 0x4bf5, 0xb0, 0x89, 0x42, 0x95, 0x91, 0x05, 0x9b, 0x60);
+
+// HSA_UUID that identifies the GPU (TCS) block
+// {4126245c-4d96-4d1a-8aed-a939d4cc8ec9}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TCS,
+0x4126245c, 0x4d96, 0x4d1a, 0x8a, 0xed, 0xa9, 0x39, 0xd4, 0xcc, 0x8e, 0xc9);
+
+// HSA_UUID that identifies the GPU (TD) block
+// {7d7c0fe4-fe41-4fea-92c9-4544d7706dc6}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_TD,
+0x7d7c0fe4, 0xfe41, 0x4fea, 0x92, 0xc9, 0x45, 0x44, 0xd7, 0x70, 0x6d, 0xc6);
+
+// HSA_UUID that identifies the GPU (VGT) block
+// {0b6a8cb7-7a01-409f-a22c-3014854f1359}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_VGT,
+0x0b6a8cb7, 0x7a01, 0x409f, 0xa2, 0x2c, 0x30, 0x14, 0x85, 0x4f, 0x13, 0x59);
+
+// HSA_UUID that identifies the GPU (WD) block
+// {0e176789-46ed-4b02-972a-916d2fac244a}
+HSA_DEFINE_UUID(HSA_PROFILEBLOCK_AMD_WD,
+0x0e176789, 0x46ed, 0x4b02, 0x97, 0x2a, 0x91, 0x6d, 0x2f, 0xac, 0x24, 0x4a);
 
 // GUID that identifies the IMOMMUv2 HW device
 // {80969879-B0F6-4BE6-97F6-6A6300F5101D}
