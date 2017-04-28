@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2017, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -40,22 +40,20 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 2.8.0 )
-## GCC 4.8 or higher compiler required.
-
-if ( WIN32 )
-    MESSAGE ( FATAL_ERROR "Windows build is not supported." )
-endif ()
+cmake_minimum_required ( VERSION 3.5.0 )
 
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE on )
+
 ## Set core runtime module name and project name.
 set ( CORE_RUNTIME_NAME "hsa-runtime" )
-set ( CORE_RUNTIME_COMPONENT "lib${CORE_RUNTIME_NAME}" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
+set ( CORE_RUNTIME_LIBRARY "lib${CORE_RUNTIME_TARGET}" )
 project( ${CORE_RUNTIME_TARGET} )
 
 list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
+include ( utils )
+include ( hsa_common )
 
 ## Find LibElf
 find_package(LibElf REQUIRED)
@@ -67,50 +65,39 @@ add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
 add_definitions ( -D HSA_DEPRECATED= )
 
-include ( utils )
-include ( hsa_common )
+## Get the package version. The defaults to 1.0.0.
+get_version ( "1.0.0" )
 
-## Parse the package version
-if( NOT DEFINED VERSION_STRING )
-    set ( VERSION_STRING "1.1.0" )
-endif()
+set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
+set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
+set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
+set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+if ( DEFINED VERSION_BUILD )
+    set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
+endif ()
+set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
-## Parse the package version
-parse_version ( ${VERSION_STRING} )
+## Find the hsakmt library and include files
+find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
+find_library ( HSAKMT_LIB libhsakmt.so )
+get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
+get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
 
-set ( PACKAGE_VERSION_MAJOR ${VERSION_MAJOR} )
-set ( PACKAGE_VERSION_MINOR ${VERSION_MINOR} )
-set ( PACKAGE_VERSION_PATCH ${VERSION_PATCH} )
+## Set include and link directories for libhsakmt
+include_directories ( ${HSAKMT_INC_PATH} )
+link_directories ( ${HSAKMT_LIB_PATH} )
 
-## Parse the library version
-if( NOT DEFINED RUNTIME_VERSION_STRING )
-    set ( RUNTIME_VERSION_STRING "1" )
-endif()
-
-parse_version ( ${RUNTIME_VERSION_STRING} )
-set ( RUNTIME_VERSION_MAJOR ${VERSION_MAJOR} )
-set ( RUNTIME_VERSION_MINOR ${VERSION_MINOR} )
-set ( RUNTIME_VERSION_PATCH ${VERSION_PATCH} )
-
+## Set include directories for ROCr runtime
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR} )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/core/inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
-include_directories ( ${HSAKMT_BUILD_INC_PATH})
 
-link_directories ( ${HSAKMT_BUILD_LIB_PATH} )
-
-if ( DEFINED BUILDID )
-    add_definitions ( -DROCR_BUILD_ID=${BUILDID} )
-else ( NOT DEFINED BUILDID )
-    ## get date information based on UTC - full date
-    execute_process(COMMAND date --utc +%F WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_TIME OUTPUT_STRIP_TRAILING_WHITESPACE )
-    ## get commit information
-    execute_process(COMMAND git rev-parse --short HEAD WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_BUILD_COMMIT OUTPUT_STRIP_TRAILING_WHITESPACE )
-    ## check dirty tree status
-    execute_process(COMMAND git diff --shortstat COMMAND wc -l WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} OUTPUT_VARIABLE ROCR_DIRTY_TREE  OUTPUT_STRIP_TRAILING_WHITESPACE )
-    set  ( BUILD_ID "${ROCR_BUILD_COMMIT}.${ROCR_BUILD_TIME}.${ROCR_DIRTY_TREE}" )
-    add_definitions ( -DROCR_BUILD_ID=${BUILD_ID} )
+## ROCr build internal versioning
+if ( DEFINED VERSION_BUILD )
+    add_definitions ( -DROCR_BUILD_ID=${BUILD_VERSION_STRING} )
+else ()
+    add_definitions ( -DROCR_BUILD_ID="${BUILD_VERSION_STRING}-unknown" )
 endif ()
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
@@ -149,6 +136,7 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "core/runtime/isa.cpp"
             "core/runtime/runtime.cpp"
             "core/runtime/signal.cpp"
+            "core/runtime/queue.cpp"
             "core/runtime/cache.cpp"
             "core/common/shared.cpp"
             "core/common/hsa_table_interface.cpp"
@@ -158,18 +146,14 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "libamdhsacode/amd_hsa_code_util.cpp"
             "libamdhsacode/amd_hsa_locks.cpp"
             "libamdhsacode/amd_options.cpp"
-            "libamdhsacode/amd_hsa_code.cpp" 
+            "libamdhsacode/amd_hsa_code.cpp"
 )
 
 add_library( ${CORE_RUNTIME_TARGET} SHARED ${SRCS} )
-link_directories ( ${HSAKMT_BUILD_LIB_PATH} )
 
 ## Set the VERSION and SOVERSION values
-if ( DEFINED VERSION_STRING )
-    set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${RUNTIME_VERSION_STRING}" )
-endif ()
-
-set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${RUNTIME_VERSION_MAJOR}" )
+set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
+set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE hsakmt
@@ -181,33 +165,33 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     add_custom_command ( TARGET ${CORE_RUNTIME_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
 endif ()
 
+## Create symlinks for packaging and install
+add_custom_target ( hsa-link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/include/hsa hsa-link )
+add_custom_target ( ${CORE_RUNTIME_TARGET}.so-link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}.so-link )
+
 ## Set install information
-install ( TARGETS ${CORE_RUNTIME_TARGET} LIBRARY DESTINATION lib COMPONENT ${CORE_RUNTIME_COMPONENT} )
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION include/hsa )
+install ( TARGETS ${CORE_RUNTIME_TARGET} LIBRARY DESTINATION hsa/lib )
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION hsa/include/hsa )
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa-link DESTINATION include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}.so-link DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so )
 
 ## Packaging directives
 set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
 set ( CPACK_PACKAGE_VENDOR "AMD" )
-set ( CPACK_PACKAGE_VERSION_MAJOR ${PACKAGE_VERSION_MAJOR} )
-set ( CPACK_PACKAGE_VERSION_MINOR ${PACKAGE_VERSION_MINOR} )
-set ( CPACK_PACKAGE_VERSION_PATCH ${PACKAGE_VERSION_PATCH} )
+set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
+set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
+set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
-## Set dependency strings
-set ( HSAKMT_ROCT_DEV_DEPS "" )
-if ( DEFINED HSAKMT_VERSION_STRING )
-    set ( HSAKMT_ROCT_DEV_DEPS " (=${HSAKMT_VERSION_STRING})" )
-endif ()
-
 # Debian package specific variables
-set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct-dev${HSAKMT_ROCT_DEV_DEPS}" )
+set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct-dev" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
 
 ## RPM package specific variables
-set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct-dev${HSAKMT_ROCT_DEV_DEPS}" )
+set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct-dev" )
 set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 

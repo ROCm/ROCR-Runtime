@@ -182,6 +182,10 @@ static_assert(sizeof(void*) == 8, "HSA_LARGE_MODEL is set incorrectly!");
 static_assert(sizeof(void*) == 4, "HSA_LARGE_MODEL is set incorrectly!");
 #endif
 
+#if !defined(HSA_LARGE_MODEL) || !defined(__linux__)
+static_assert(false, "Only HSA_LARGE_MODEL (64bit mode) and Linux supported.");
+#endif
+
 namespace HSA {
 
 //---------------------------------------------------------------------------//
@@ -358,7 +362,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 
   if (extension == HSA_EXTENSION_IMAGES) {
     if (version_major > 1) return HSA_STATUS_ERROR;
-    hsa_ext_images_1_00_pfn_t ext_table;
+    hsa_ext_images_1_pfn_t ext_table;
     ext_table.hsa_ext_image_clear = hsa_ext_image_clear;
     ext_table.hsa_ext_image_copy = hsa_ext_image_copy;
     ext_table.hsa_ext_image_create = hsa_ext_image_create;
@@ -369,6 +373,9 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ext_image_import = hsa_ext_image_import;
     ext_table.hsa_ext_sampler_create = hsa_ext_sampler_create;
     ext_table.hsa_ext_sampler_destroy = hsa_ext_sampler_destroy;
+    ext_table.hsa_ext_image_get_capability_with_layout = hsa_ext_image_get_capability_with_layout;
+    ext_table.hsa_ext_image_data_get_info_with_layout = hsa_ext_image_data_get_info_with_layout;
+    ext_table.hsa_ext_image_create_with_layout = hsa_ext_image_create_with_layout;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
@@ -540,7 +547,7 @@ hsa_status_t hsa_agent_major_extension_supported(uint16_t extension, hsa_agent_t
 ///
 /// @return hsa_status
 hsa_status_t hsa_queue_create(
-    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type_t type,
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
     void* data, uint32_t private_segment_size, uint32_t group_segment_size,
     hsa_queue_t** queue) {
@@ -554,7 +561,7 @@ hsa_status_t hsa_queue_create(
   core::Agent* agent = core::Agent::Convert(agent_handle);
   IS_VALID(agent);
 
-  hsa_queue_type_t agent_queue_type = HSA_QUEUE_TYPE_MULTI;
+  hsa_queue_type32_t agent_queue_type = HSA_QUEUE_TYPE_MULTI;
   hsa_status_t status =
       agent->GetInfo(HSA_AGENT_INFO_QUEUE_TYPE, &agent_queue_type);
   assert(HSA_STATUS_SUCCESS == status);
@@ -563,6 +570,8 @@ hsa_status_t hsa_queue_create(
       type != HSA_QUEUE_TYPE_SINGLE) {
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
+
+  if (callback == NULL) callback = core::Queue::DefaultErrorHandler;
 
   core::Queue* cmd_queue = NULL;
   status = agent->QueueCreate(size, type, callback, data, private_segment_size,
@@ -581,7 +590,7 @@ hsa_status_t hsa_queue_create(
 }
 
 hsa_status_t hsa_soft_queue_create(hsa_region_t region, uint32_t size,
-                                   hsa_queue_type_t type, uint32_t features,
+                                   hsa_queue_type32_t type, uint32_t features,
                                    hsa_signal_t doorbell_signal,
                                    hsa_queue_t** queue) {
   IS_OPEN();

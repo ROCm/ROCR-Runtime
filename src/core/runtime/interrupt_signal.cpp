@@ -133,9 +133,8 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
   timer::fast_clock::time_point start_time = timer::fast_clock::now();
 
   // Set a polling timeout value
-  // Exact time is not hugely important, it should just be a short while which
-  // is smaller than the thread scheduling quantum (usually around 16ms)
-  const timer::fast_clock::duration kMaxElapsed = std::chrono::milliseconds(5);
+  // Should be a few times bigger than null kernel latency
+  const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
   uint64_t hsa_freq;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
@@ -172,23 +171,26 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
     if (condition_met) return hsa_signal_value_t(value);
 
     timer::fast_clock::time_point time = timer::fast_clock::now();
-    if (time - start_time > kMaxElapsed) {
-      if (time - start_time > fast_timeout) {
-        value = atomic::Load(&signal_.value, std::memory_order_relaxed);
-        return hsa_signal_value_t(value);
-      }
-      if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
-        uint32_t wait_ms;
-        auto time_remaining = fast_timeout - (time - start_time);
-        if ((timeout == -1) ||
-            (time_remaining > std::chrono::milliseconds(uint32_t(-1))))
-          wait_ms = uint32_t(-1);
-        else
-          wait_ms = timer::duration_cast<std::chrono::milliseconds>(
-                        time_remaining).count();
-        hsaKmtWaitOnEvent(event_, wait_ms);
-      }
+    if (time - start_time > fast_timeout) {
+      value = atomic::Load(&signal_.value, std::memory_order_relaxed);
+      return hsa_signal_value_t(value);
     }
+    
+    if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
+      continue;
+    }
+
+    if (time - start_time < kMaxElapsed) {
+    //  os::uSleep(20);
+      continue;
+    }
+
+    uint32_t wait_ms;
+    auto time_remaining = fast_timeout - (time - start_time);
+    uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
+      time_remaining).count();
+    wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
+    hsaKmtWaitOnEvent(event_, wait_ms);
   }
 }
 

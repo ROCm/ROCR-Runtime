@@ -175,20 +175,34 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
   struct CompiledShader {
     ASICShader compute_7;
     ASICShader compute_8;
+    ASICShader compute_9;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
       {"TrapHandler",
-       {{NULL, 0, 0, 0}, {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4}}},
+       {
+           {NULL, 0, 0, 0},
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
+           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+       }},
       {"CopyAligned",
-       {{kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
-        {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12}}},
+       {
+           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
+       }},
       {"CopyMisaligned",
-       {{kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
-        {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10}}},
+       {
+           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+       }},
       {"Fill",
-       {{kCodeFill7, sizeof(kCodeFill7), 19, 8},
-        {kCodeFill8, sizeof(kCodeFill8), 19, 8}}}};
+       {
+           {kCodeFill7, sizeof(kCodeFill7), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+       }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
   assert(compiled_shader_it != compiled_shaders.end() &&
@@ -202,6 +216,9 @@ void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
       break;
     case 8:
       asic_shader = &compiled_shader_it->second.compute_8;
+      break;
+    case 9:
+      asic_shader = &compiled_shader_it->second.compute_9;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
@@ -389,9 +406,9 @@ bool GpuAgent::InitEndTsPool() {
     return true;
   }
 
-  end_ts_pool_size_ = static_cast<uint32_t>(
-      (BlitSdma::kQueueSize + BlitSdma::kCopyPacketSize - 1) /
-      (BlitSdma::kCopyPacketSize));
+  end_ts_pool_size_ =
+      static_cast<uint32_t>((BlitSdmaBase::kQueueSize + BlitSdmaBase::kCopyPacketSize - 1) /
+                            (BlitSdmaBase::kCopyPacketSize));
 
   // Allocate end timestamp object for both h2d and d2h DMA.
   const size_t alloc_size = 2 * end_ts_pool_size_ * kTsSize;
@@ -510,7 +527,13 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
 }
 
 core::Blit* GpuAgent::CreateBlitSdma() {
-  BlitSdma* sdma = new BlitSdma();
+  core::Blit* sdma;
+
+  if (isa_->GetMajorVersion() <= 8) {
+    sdma = new BlitSdmaV2V3;
+  } else {
+    sdma = new BlitSdmaV4;
+  }
 
   if (sdma->Initialize(*this) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
@@ -542,7 +565,9 @@ void GpuAgent::InitDma() {
     ScopedAcquire<KernelMutex> lock(&blit_lock_);
     if (!blit_initialized_.load(std::memory_order_relaxed)) {
       // Try create SDMA blit first.
-      if (core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+      // TODO: Temporarily disable SDMA on specific ISA targets until they are fully qualified.
+      if ((isa_->GetMajorVersion() != 9) &&
+          core::Runtime::runtime_singleton_->flag().enable_sdma() &&
           (HSA_PROFILE_BASE == profile_)) {
         blits_[BlitHostToDev] = CreateBlitSdma();
         blits_[BlitDevToHost] = CreateBlitSdma();
@@ -726,7 +751,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = maxAqlSize_;
       break;
     case HSA_AGENT_INFO_QUEUE_TYPE:
-      *((hsa_queue_type_t*)value) = HSA_QUEUE_TYPE_MULTI;
+      *((hsa_queue_type32_t*)value) = HSA_QUEUE_TYPE_MULTI;
       break;
     case HSA_AGENT_INFO_NODE:
       // TODO: associate with OS NUMA support (numactl / GetNumaProcessorNode).
@@ -840,6 +865,15 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = static_cast<uint32_t>(
           properties_.NumSIMDPerCU * properties_.MaxWavesPerSIMD);
       break;
+    case HSA_AMD_AGENT_INFO_NUM_SIMDS_PER_CU:
+      *((uint32_t*)value) = properties_.NumSIMDPerCU;
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SHADER_ENGINES:
+      *((uint32_t*)value) = properties_.NumShaderBanks;
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE:
+      *((uint32_t*)value) = properties_.NumArrays;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -847,7 +881,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
+hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    core::HsaEventCallback event_callback,
                                    void* data, uint32_t private_segment_size,
                                    uint32_t group_segment_size,
@@ -864,33 +898,21 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
 
   // Allocate scratch memory
   ScratchInfo scratch;
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  if (core::g_use_interrupt_wait) {
-    if (private_segment_size == UINT_MAX) {
-      private_segment_size =
-          (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
-    }
-
-    if (private_segment_size > 262128) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    scratch.size_per_thread = AlignUp(private_segment_size, 16);
-    if (scratch.size_per_thread > 262128) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    const uint32_t num_cu =
-        properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-    scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
-  } else {
-    scratch.size = queue_scratch_len_;
-    scratch.size_per_thread = scratch_per_thread_;
+  if (private_segment_size == UINT_MAX) {
+    private_segment_size = (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
   }
-#else
-  scratch.size = queue_scratch_len_;
-  scratch.size_per_thread = scratch_per_thread_;
-#endif
+
+  if (private_segment_size > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  scratch.size_per_thread = AlignUp(private_segment_size, 16);
+  if (scratch.size_per_thread > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+  scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
   scratch.queue_base = NULL;
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);
@@ -914,6 +936,8 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type_t queue_type,
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
+  bool need_queue_scratch_base = (isa_->GetMajorVersion() > 8);
+
   if (scratch.size == 0) {
     scratch.size = queue_scratch_len_;
     scratch.size_per_thread = scratch_per_thread_;
@@ -922,17 +946,61 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   scratch.queue_base = scratch_pool_.alloc(scratch.size);
   scratch.queue_process_offset =
-      uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+      (need_queue_scratch_base)
+          ? uintptr_t(scratch.queue_base)
+          : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
 
-  if ((scratch.queue_base != NULL) && (profile_ == HSA_PROFILE_BASE)) {
-    HSAuint64 alternate_va;
-    if (HSAKMT_STATUS_SUCCESS !=
-        hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va)) {
-      assert(false && "Map scratch subrange failed!");
-      scratch_pool_.free(scratch.queue_base);
-      scratch.queue_base = NULL;
+  if (scratch.queue_base != NULL) {
+    if (profile_ == HSA_PROFILE_FULL) return;
+    if (profile_ == HSA_PROFILE_BASE) {
+      HSAuint64 alternate_va;
+      if (HSAKMT_STATUS_SUCCESS ==
+          hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va))
+        return;
     }
   }
+
+  // Scratch request failed allocation or mapping.
+  scratch_pool_.free(scratch.queue_base);
+  scratch.queue_base = NULL;
+
+// Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
+// This is somewhat dangerous as it limits the number of concurrent waves from future dispatches
+// on the queue if those waves use even small amounts of scratch.
+#ifndef NDEBUG
+  if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+    fprintf(stderr, "Failed to map requested scratch - reducing queue occupancy.\n");
+#endif
+  uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+  uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
+  uint64_t total_waves = scratch.size / size_per_wave;
+  uint64_t waves_per_cu = total_waves / num_cus;
+  while (waves_per_cu != 0) {
+    size_t size = waves_per_cu * num_cus * size_per_wave;
+    void* base = scratch_pool_.alloc(size);
+    HSAuint64 alternate_va;
+    if ((base != NULL) &&
+        ((profile_ == HSA_PROFILE_FULL) ||
+         (hsaKmtMapMemoryToGPU(base, size, &alternate_va) == HSAKMT_STATUS_SUCCESS))) {
+      // Scratch allocated and either full profile or map succeeded.
+      scratch.queue_base = base;
+      scratch.size = size;
+      scratch.queue_process_offset =
+          (need_queue_scratch_base)
+              ? uintptr_t(scratch.queue_base)
+              : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+      return;
+    }
+    scratch_pool_.free(base);
+    waves_per_cu--;
+  }
+
+  // Failed to allocate minimal scratch
+  assert(scratch.queue_base == NULL && "bad scratch data");
+#ifndef NDEBUG
+  if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+    fprintf(stderr, "Could not allocate scratch for one wave per CU.\n");
+#endif
 }
 
 void GpuAgent::ReleaseQueueScratch(void* base) {
@@ -1120,6 +1188,13 @@ void GpuAgent::InvalidateCodeCaches() {
   } else if (isa_->GetMajorVersion() == 8 && isa_->GetMinorVersion() == 0) {
     if (properties_.EngineId.ui32.uCode < 685) {
       // Microcode is handling code cache invalidation.
+      return;
+    }
+  } else if (isa_->GetMajorVersion() == 9) {
+    if (properties_.EngineId.ui32.uCode < 334) {
+      static std::once_flag once;
+      std::call_once(
+          once, []() { fprintf(stderr, "warning: code cache invalidation not implemented\n"); });
       return;
     }
   } else {

@@ -98,6 +98,8 @@ void DestroyMutex(Mutex lock) { CloseHandle(*(::HANDLE*)&lock); }
 
 void Sleep(int delay_in_millisecond) { ::Sleep(delay_in_millisecond); }
 
+void uSleep(int delayInUs) { ::Sleep(delayInUs / 1000); }
+
 void YieldThread() { ::Sleep(0); }
 
 struct ThreadArgs {

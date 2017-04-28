@@ -19,7 +19,7 @@ utils - Utilities required to build the core runtime.
 
 #### Build environment
 
-CMake build framework is used to build the ROC runtime. The minimum version is 2.8.
+CMake build framework is used to build the ROC runtime. The minimum version is 3.5.0.
 
 Obtain cmake infrastructure: http://www.cmake.org/download/
 
@@ -41,23 +41,19 @@ can be obtained from the ROCT-Thunk-Interface repository, available here:
 
 https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface
  
-Specify the directory containing libhsakmt.so.1 and hsakmt.h using the following
-cmake variables:
-
-HSAKMT_BUILD_INC_PATH - Set to the dirctory containing hsakmt.h.
-
-HSAKMT_BUILD_LIB_PATH - Set to the directory containing libhsakmt.so.1
+Specify the directory containing libhsakmt.so.1 and hsakmt.h using the
+cmake variable, CMAKE_PREFIX_PATH:
 
 For example, from the top level ROCR repository execute:
 
     mkdir build
     cd build
-    cmake -D HSAKMT_BUILD_INC_PATH=<location of hsakmt.h> \
-          -D HSAKMT_BUILD_LIB_PATH=<location of libhsakmt.so> \
+    cmake -D CMAKE_PREFIX_PATH=/opt/rocm/libhsakmt \
           ..
     make
 
-The name of the core hsa runtime is libhsa-runtime64.so.1.
+The location specified here is the default installation directory of the
+libhsakmt-roct-dev package.
 
 #### Specs
 
@@ -153,4 +149,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2016 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2017 Advanced Micro Devices, Inc. All rights reserved.

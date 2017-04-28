@@ -64,6 +64,7 @@
 #include "core/util/utils.h"
 #include "core/inc/registers.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/default_signal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/amd_gpu_pm4.h"
 
@@ -147,8 +148,14 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   // Initialize and map a HW AQL queue.
   HsaQueueResource queue_rsrc = {0};
   queue_rsrc.Queue_read_ptr_aql = (uint64_t*)&amd_queue_.read_dispatch_id;
-  queue_rsrc.Queue_write_ptr_aql =
-      (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
+
+  if (doorbell_type_ == 2) {
+    // Hardware write pointer supports AQL semantics.
+    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.write_dispatch_id;
+  } else {
+    // Map hardware write pointer to a software proxy.
+    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
+  }
 
   HSAKMT_STATUS kmt_status;
   kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100,
@@ -235,34 +242,28 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   MAKE_NAMED_SCOPE_GUARD(SignalGuard, [&]() {
     HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   });
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  if (core::g_use_interrupt_wait) {
-    {
-      ScopedAcquire<KernelMutex> _lock(&queue_lock_);
-      queue_count_++;
-      if (queue_event_ == NULL) {
-        assert(queue_count_ == 1 &&
-               "Inconsistency in queue event reference counting found.\n");
 
-        queue_event_ =
-            core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
-        if (queue_event_ == NULL) return;
-      }
+  if (core::g_use_interrupt_wait) {
+    ScopedAcquire<KernelMutex> _lock(&queue_lock_);
+    queue_count_++;
+    if (queue_event_ == NULL) {
+      assert(queue_count_ == 1 && "Inconsistency in queue event reference counting found.\n");
+
+      queue_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
+      if (queue_event_ == NULL) return;
     }
-    auto signal = new core::InterruptSignal(0, queue_event_);
-    amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(signal);
-    if (AMD::hsa_amd_signal_async_handler(
-            amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, 0,
-            DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
-      return;
+    auto Signal = new core::InterruptSignal(0, queue_event_);
+    if (Signal == nullptr) return;
+    amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(Signal);
   } else {
     EventGuard.Dismiss();
-    SignalGuard.Dismiss();
+    auto Signal = new core::DefaultSignal(0);
+    if (Signal == nullptr) return;
+    amd_queue_.queue_inactive_signal = core::DefaultSignal::Convert(Signal);
   }
-#else
-  EventGuard.Dismiss();
-  SignalGuard.Dismiss();
-#endif
+  if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
+                                        0, DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
+    return;
 
   pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
       pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
@@ -292,7 +293,6 @@ AqlQueue::~AqlQueue() {
   FreeRegisteredRingBuffer();
   agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
-#if defined(HSA_LARGE_MODEL) && defined(__linux__)
   if (core::g_use_interrupt_wait) {
     ScopedAcquire<KernelMutex> lock(&queue_lock_);
     queue_count_--;
@@ -301,8 +301,6 @@ AqlQueue::~AqlQueue() {
       queue_event_ = NULL;
     }
   }
-#endif
-
   core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
 }
 
@@ -370,6 +368,12 @@ uint64_t AqlQueue::AddWriteIndexRelease(uint64_t value) {
 }
 
 void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
+  if (doorbell_type_ == 2) {
+    // Hardware doorbell supports AQL semantics.
+    atomic::Store(signal_.hardware_doorbell_ptr, uint64_t(value), std::memory_order_release);
+    return;
+  }
+
   // Acquire spinlock protecting the legacy doorbell.
   while (atomic::Cas(&amd_queue_.legacy_doorbell_lock, 1U, 0U,
                      std::memory_order_acquire) != 0) {
@@ -683,10 +687,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
     // Align whole waves to 1KB.
     scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
     scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
-                   32 * 64;  // TODO: replace constants.
-
-    // printf("Growing scratch to %u - %u\n", uint32_t(scratch.size_per_thread),
-    // uint32_t(scratch.size));
+        queue->agent_->properties().MaxSlotsScratchCU * queue->agent_->properties().WaveFrontSize;
 
     queue->agent_->AcquireQueueScratch(scratch);
     if (scratch.queue_base == NULL) {
@@ -722,7 +723,9 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
                               queue->public_handle(), queue->errors_data_);
     return false;
 
-  } else if ((error_code & 32) == 32) {  // Invalid format
+  } else if (((error_code & 32) == 32) ||
+             ((error_code & 256) == 256)) {  // Invalid format: 32 is generic,
+                                             // 256 is vendor specific packets
     queue->Inactivate();
     if (queue->errors_callback_ != NULL)
       queue->errors_callback_(HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
@@ -788,60 +791,86 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   assert(cmd_size_b < pm4_ib_size_b_ && "PM4 exceeds IB size");
   memcpy(pm4_ib_buf_, cmd_data, cmd_size_b);
 
-  // Construct a set of PM4 to fit inside the AQL packet slot.
+  // Construct a PM4 command to execute the IB.
+  constexpr uint32_t ib_jump_size_dw = 4;
+
+  uint32_t ib_jump_cmd[ib_jump_size_dw] = {
+      PM4_HDR(PM4_HDR_IT_OPCODE_INDIRECT_BUFFER, ib_jump_size_dw, agent_->isa()->GetMajorVersion()),
+      PM4_INDIRECT_BUFFER_DW1_IB_BASE_LO(uint32_t(uintptr_t(pm4_ib_buf_) >> 2)),
+      PM4_INDIRECT_BUFFER_DW2_IB_BASE_HI(uint32_t(uintptr_t(pm4_ib_buf_) >> 32)),
+      (PM4_INDIRECT_BUFFER_DW3_IB_SIZE(uint32_t(cmd_size_b / sizeof(uint32_t))) |
+       PM4_INDIRECT_BUFFER_DW3_IB_VALID(1))};
+
+  // To respect multi-producer semantics, first buffer commands for the queue slot.
   constexpr uint32_t slot_size_dw = uint32_t(slot_size_b / sizeof(uint32_t));
   uint32_t slot_data[slot_size_dw];
-  uint32_t slot_dw_idx = 0;
 
-  // Construct a no-op command to pad the queue slot.
-  constexpr uint32_t ib_jump_size_dw = 4;
-  constexpr uint32_t rel_mem_size_dw = 7;
-  constexpr uint32_t nop_pad_size_dw =
-      slot_size_dw - (ib_jump_size_dw + rel_mem_size_dw);
+  if (agent_->isa()->GetMajorVersion() <= 8) {
+    // Construct a set of PM4 to fit inside the AQL packet slot.
+    uint32_t slot_dw_idx = 0;
 
-  uint32_t* nop_pad = &slot_data[slot_dw_idx];
-  slot_dw_idx += nop_pad_size_dw;
+    // Construct a no-op command to pad the queue slot.
+    constexpr uint32_t rel_mem_size_dw = 7;
+    constexpr uint32_t nop_pad_size_dw = slot_size_dw - (ib_jump_size_dw + rel_mem_size_dw);
 
-  nop_pad[0] = PM4_HDR(PM4_HDR_IT_OPCODE_NOP, nop_pad_size_dw,
-                       agent_->isa()->GetMajorVersion());
+    uint32_t* nop_pad = &slot_data[slot_dw_idx];
+    slot_dw_idx += nop_pad_size_dw;
 
-  for (int i = 1; i < nop_pad_size_dw; ++i) {
-    nop_pad[i] = 0;
+    nop_pad[0] = PM4_HDR(PM4_HDR_IT_OPCODE_NOP, nop_pad_size_dw, agent_->isa()->GetMajorVersion());
+
+    for (int i = 1; i < nop_pad_size_dw; ++i) {
+      nop_pad[i] = 0;
+    }
+
+    // Copy in command to execute the IB.
+    assert(slot_dw_idx + ib_jump_size_dw <= slot_size_dw && "PM4 exceeded queue slot size");
+    uint32_t* ib_jump = &slot_data[slot_dw_idx];
+    slot_dw_idx += ib_jump_size_dw;
+
+    memcpy(ib_jump, ib_jump_cmd, sizeof(ib_jump_cmd));
+
+    // Construct a command to advance the read index and invalidate the packet
+    // header. This must be the last command since this releases the queue slot
+    // for writing.
+    assert(slot_dw_idx + rel_mem_size_dw <= slot_size_dw && "PM4 exceeded queue slot size");
+    uint32_t* rel_mem = &slot_data[slot_dw_idx];
+
+    rel_mem[0] =
+        PM4_HDR(PM4_HDR_IT_OPCODE_RELEASE_MEM, rel_mem_size_dw, agent_->isa()->GetMajorVersion());
+    rel_mem[1] = PM4_RELEASE_MEM_DW1_EVENT_INDEX(PM4_RELEASE_MEM_EVENT_INDEX_AQL);
+    rel_mem[2] = 0;
+    rel_mem[3] = 0;
+    rel_mem[4] = 0;
+    rel_mem[5] = 0;
+    rel_mem[6] = 0;
+  } else if (agent_->isa()->GetMajorVersion() == 9) {
+    // Construct an AQL packet to jump to the PM4 IB.
+    struct amd_aql_pm4_ib {
+      uint16_t header;
+      uint16_t ven_hdr;
+      uint32_t ib_jump_cmd[4];
+      uint32_t dw_cnt_remain;
+      uint32_t reserved[8];
+      hsa_signal_t completion_signal;
+    };
+
+    constexpr uint32_t AMD_AQL_FORMAT_PM4_IB = 0x1;
+
+    amd_aql_pm4_ib aql_pm4_ib{};
+    aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
+    aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
+    aql_pm4_ib.ib_jump_cmd[0] = ib_jump_cmd[0];
+    aql_pm4_ib.ib_jump_cmd[1] = ib_jump_cmd[1];
+    aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];
+    aql_pm4_ib.ib_jump_cmd[3] = ib_jump_cmd[3];
+    aql_pm4_ib.dw_cnt_remain = 0xA;
+
+    memcpy(slot_data, &aql_pm4_ib, sizeof(aql_pm4_ib));
+  } else {
+    assert(false && "AqlQueue::ExecutePM4 not implemented");
   }
 
-  // Construct a command to execute the IB.
-  assert(slot_dw_idx + ib_jump_size_dw <= slot_size_dw &&
-         "PM4 exceeded queue slot size");
-  uint32_t* ib_jump = &slot_data[slot_dw_idx];
-  slot_dw_idx += ib_jump_size_dw;
-
-  ib_jump[0] = PM4_HDR(PM4_HDR_IT_OPCODE_INDIRECT_BUFFER, ib_jump_size_dw,
-                       agent_->isa()->GetMajorVersion());
-  ib_jump[1] =
-      PM4_INDIRECT_BUFFER_DW1_IB_BASE_LO(uint32_t(uintptr_t(pm4_ib_buf_) >> 2));
-  ib_jump[2] = PM4_INDIRECT_BUFFER_DW2_IB_BASE_HI(
-      uint32_t(uintptr_t(pm4_ib_buf_) >> 32));
-  ib_jump[3] =
-      PM4_INDIRECT_BUFFER_DW3_IB_SIZE(uint32_t(cmd_size_b / sizeof(uint32_t))) |
-      PM4_INDIRECT_BUFFER_DW3_IB_VALID(1);
-
-  // Construct a command to advance the read index and invalidate the packet
-  // header. This must be the last command since this releases the queue slot
-  // for writing.
-  assert(slot_dw_idx + rel_mem_size_dw <= slot_size_dw &&
-         "PM4 exceeded queue slot size");
-  uint32_t* rel_mem = &slot_data[slot_dw_idx];
-
-  rel_mem[0] = PM4_HDR(PM4_HDR_IT_OPCODE_RELEASE_MEM, rel_mem_size_dw,
-                       agent_->isa()->GetMajorVersion());
-  rel_mem[1] = PM4_RELEASE_MEM_DW1_EVENT_INDEX(PM4_RELEASE_MEM_EVENT_INDEX_AQL);
-  rel_mem[2] = 0;
-  rel_mem[3] = 0;
-  rel_mem[4] = 0;
-  rel_mem[5] = 0;
-  rel_mem[6] = 0;
-
-  // Copy all PM4 commands into the queue slot.
+  // Copy buffered commands into the queue slot.
   // Overwrite the AQL invalid header (first dword) last.
   // This prevents the slot from being read until it's fully written.
   memcpy(&queue_slot[1], &slot_data[1], slot_size_b - sizeof(uint32_t));

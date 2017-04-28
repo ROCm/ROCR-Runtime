@@ -152,7 +152,7 @@ public:
     return is_set_;
   }
 
-  bool IsValid() const {
+  virtual bool IsValid() const {
     return 0 < name_.size();
   }
 
@@ -166,6 +166,7 @@ protected:
       error_(&error) {}
 
   virtual void PrintHelp(HelpPrinter& printer) const = 0;
+  virtual bool Accept(const std::string& name) const { return name_ == name; }
 
   const std::string name_;
   const std::string help_;
@@ -391,6 +392,41 @@ private:
     error() << "error: invalid option: '" << name_ << "'" << std::endl;
     return false;
   }
+};
+
+//===----------------------------------------------------------------------===//
+// PrefixOption.                                                              //
+//===----------------------------------------------------------------------===//
+class PrefixOption final: public OptionBase {
+public:
+  PrefixOption(const std::string& prefix,
+               const std::string& help = "",
+               std::ostream& error = std::cerr)
+    : OptionBase(prefix, help, error) {}
+
+  ~PrefixOption() {}
+
+  const std::vector<std::string>& values() const {
+    return values_;
+  }
+
+  bool IsValid() const override;
+
+protected:
+  void PrintHelp(HelpPrinter& printer) const override;
+  bool Accept(const std::string& token) const override;
+
+private:
+  /// @brief Not copy-constructible.
+  PrefixOption(const PrefixOption&);
+  /// @brief Not copy-assignable.
+  PrefixOption& operator =(const PrefixOption&);
+
+  bool ProcessTokens(std::list<std::string> &tokens);
+
+  std::string::size_type FindPrefix(const std::string& token) const;
+
+  std::vector<std::string> values_;
 };
 
 //===----------------------------------------------------------------------===//

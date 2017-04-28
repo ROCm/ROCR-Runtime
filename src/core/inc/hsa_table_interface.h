@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "hsa_api_trace.h"
+#include "inc/hsa_api_trace.h"
 
 void hsa_table_interface_init(const HsaApiTable* apiTable);
 

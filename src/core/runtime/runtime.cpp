@@ -65,7 +65,7 @@
 #define HSA_VERSION_MAJOR 1
 #define HSA_VERSION_MINOR 1
 
-const char rocrbuildid[] __attribute__((unused)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
+const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
 namespace core {
 bool g_use_interrupt_wait = true;
@@ -551,9 +551,6 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             hsa_signal_value_t value,
                                             hsa_amd_signal_handler handler,
                                             void* arg) {
-  // Asyncronous signal handler is only supported when KFD events are on.
-  if (!core::g_use_interrupt_wait) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-
   // Indicate that this signal is in use.
   if (signal.handle != 0) hsa_signal_handle(signal)->Retain();
 
@@ -1011,9 +1008,13 @@ void Runtime::LoadExtensions() {
 
   // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
+  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
+                          core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
   // Update Hsa Api Table with handle of Finalizer extension Apis
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
+  hsa_api_table_.LinkExts(&extensions_.image_api,
+                          core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
@@ -1073,12 +1074,6 @@ void Runtime::LoadTools() {
                               const char* const*);
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
-
-  // Link HSA Extensions for Finalizer and Images for Api interception
-  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
-                          core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
-  hsa_api_table_.LinkExts(&extensions_.image_api,
-                          core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   // Load tool libs
   std::string tool_names = flag_.tools_lib_names();

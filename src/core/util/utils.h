@@ -54,9 +54,9 @@ typedef unsigned int uint;
 typedef uint64_t uint64;
 
 #if defined(__GNUC__)
-#include "mm_malloc.h"
 #if defined(__i386__) || defined(__x86_64__)
 #include <x86intrin.h>
+#elif defined(__aarch64__)
 #else
 #error \
     "Processor or compiler not identified.  " \
@@ -70,9 +70,9 @@ typedef uint64_t uint64;
 #define __ALIGNED__(x) __attribute__((aligned(x)))
 
 static __forceinline void* _aligned_malloc(size_t size, size_t alignment) {
-  return _mm_malloc(size, alignment);
+  return aligned_alloc(alignment, size);
 }
-static __forceinline void _aligned_free(void* ptr) { return _mm_free(ptr); }
+static __forceinline void _aligned_free(void* ptr) { return free(ptr); }
 #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #include "intrin.h"
 #define __ALIGNED__(x) __declspec(align(x))
@@ -91,6 +91,17 @@ static __forceinline unsigned long long int strtoull(const char* str,
 
 #define PASTE2(x, y) x##y
 #define PASTE(x, y) PASTE2(x, y)
+
+#ifdef NDEBUG
+#define debug_warning(exp)
+#else
+#define debug_warning(exp)                                                                         \
+  do {                                                                                             \
+    if (!(exp))                                                                                    \
+      fprintf(stderr, "Warning: " STRING(exp) " in %s, " __FILE__ ":" STRING(__LINE__) "\n",       \
+              __PRETTY_FUNCTION__);                                                                \
+  } while (false);
+#endif
 
 // A macro to disallow the copy and move constructor and operator= functions
 // This should be used in the private: declarations for a class
