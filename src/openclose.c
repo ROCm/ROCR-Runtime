@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <strings.h>
 #include "fmm.h"
 
 static const char kfd_device_name[] = "/dev/kfd";
@@ -69,6 +70,12 @@ static void clear_after_fork(void)
 	kfd_open_count = 0;
 }
 
+static inline void init_page_size(void)
+{
+	PAGE_SIZE = sysconf(_SC_PAGESIZE);
+	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
+}
+
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtOpenKFD(void)
@@ -98,6 +105,8 @@ hsaKmtOpenKFD(void)
 			result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
 			goto open_failed;
 		}
+
+		init_page_size();
 
 		result = topology_sysfs_get_system_props(&sys_props);
 		if (result != HSAKMT_STATUS_SUCCESS)
