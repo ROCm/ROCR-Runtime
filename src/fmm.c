@@ -40,7 +40,7 @@
 #define INIT_MANAGEBLE_APERTURE(base_value, limit_value) {	\
 	.base = (void *) base_value,				\
 	.limit = (void *) limit_value,				\
-	.align = PAGE_SIZE,					\
+	.align = 0,						\
 	.guard_pages = 1,					\
 	.vm_ranges = NULL,					\
 	.vm_objects = NULL,					\
@@ -1392,11 +1392,14 @@ static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_po
 
 static uint32_t get_vm_alignment(uint32_t device_id)
 {
+	int page_size = 0;
+
 	if (device_id >= 0x6920 && device_id <= 0x6939) /* Tonga */
-		return TONGA_PAGE_SIZE;
-	if (device_id >= 0x9870 && device_id <= 0x9877) /* Carrizo */
-		return TONGA_PAGE_SIZE;
-	return PAGE_SIZE;
+		page_size = TONGA_PAGE_SIZE;
+	else if (device_id >= 0x9870 && device_id <= 0x9877) /* Carrizo */
+		page_size = TONGA_PAGE_SIZE;
+
+	return MAX(PAGE_SIZE, page_size);
 }
 
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)

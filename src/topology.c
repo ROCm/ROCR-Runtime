@@ -38,8 +38,7 @@
 
 #include "libhsakmt.h"
 #include "fmm.h"
-#define PAGE_SIZE 4096
-#define MIN(X,Y) ((X) < (Y) ? (X) : (Y))
+
 /* Number of memory banks added by thunk on top of topology */
 #define NUM_OF_IGPU_HEAPS 3
 #define NUM_OF_DGPU_HEAPS 3

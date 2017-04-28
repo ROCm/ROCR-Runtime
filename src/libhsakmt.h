@@ -49,8 +49,9 @@ extern bool is_dgpu;
 #define CHECK_KFD_OPEN() \
 	do { if (kfd_open_count == 0) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
 
-#define PAGE_SIZE 4096
-#define PAGE_SHIFT 12
+extern int PAGE_SIZE;
+extern int PAGE_SHIFT;
+
 /* VI HW bug requires this virtual address alignment */
 #define TONGA_PAGE_SIZE 0x8000
 
@@ -110,6 +111,14 @@ extern int kmtIoctl(int fd, unsigned long request, void *arg);
 #define VOID_PTR_ADD(ptr,n) (void*)((uint8_t*)(ptr) + n)/*ptr + offset*/
 #define VOID_PTR_SUB(ptr,n) (void*)((uint8_t*)(ptr) - n)/*ptr - offset*/
 #define VOID_PTRS_SUB(ptr1,ptr2) (uint64_t)((uint8_t*)(ptr1) - (uint8_t*)(ptr2)) /*ptr1 - ptr2*/
+
+#define MIN(a, b) ({				\
+	typeof(a) tmp1 = (a), tmp2 = (b);	\
+	tmp1 < tmp2 ? tmp1 : tmp2; })
+
+#define MAX(a, b) ({				\
+	typeof(a) tmp1 = (a), tmp2 = (b);	\
+	tmp1 > tmp2 ? tmp1 : tmp2; })
 
 void clear_events_page(void);
 void fmm_clear_all_mem(void);
