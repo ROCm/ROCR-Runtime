@@ -700,7 +700,7 @@ static vm_object_t *fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 						uint64_t *mmap_offset,
 						uint32_t flags)
 {
-	struct kfd_ioctl_alloc_memory_of_gpu_new_args args;
+	struct kfd_ioctl_alloc_memory_of_gpu_args args;
 	struct kfd_ioctl_free_memory_of_gpu_args free_args;
 	vm_object_t *vm_obj = NULL;
 
@@ -711,14 +711,18 @@ static vm_object_t *fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 	args.gpu_id = gpu_id;
 	args.size = ALIGN_UP(MemorySizeInBytes, aperture->align);
 
-	args.flags = flags;
+	args.flags = flags |
+		KFD_IOC_ALLOC_MEM_FLAGS_NONPAGED |
+		KFD_IOC_ALLOC_MEM_FLAGS_EXECUTE_ACCESS |
+		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
 	args.va_addr = (uint64_t)mem;
-	if (flags == KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE)
+	if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)) &&
+	    (flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM))
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 	if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
 		args.mmap_offset = *mmap_offset;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU_NEW, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
 		return NULL;
 
 	/* Allocate object */
@@ -863,7 +867,7 @@ static void fmm_release_scratch(uint32_t gpu_id)
 void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
 	manageble_aperture_t *aperture_phy;
-	struct kfd_ioctl_alloc_memory_of_gpu_args args;
+	struct kfd_ioctl_alloc_memory_of_scratch_args args;
 	int32_t gpu_mem_id;
 	void *mem = NULL;
 	uint64_t aligned_size = ALIGN_UP(MemorySizeInBytes, SCRATCH_ALIGN);
@@ -973,7 +977,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 {
 	manageble_aperture_t *aperture;
 	int32_t gpu_mem_id;
-	uint32_t ioc_flags, offset;
+	uint32_t ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_VRAM, offset;
 	uint64_t size, mmap_offset;
 	void *mem;
 	vm_object_t *vm_obj = NULL;
@@ -985,16 +989,17 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 
 	size = MemorySizeInBytes;
 
+	if (flags.ui32.HostAccess)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC;
+
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
-		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE;
 		aperture = &svm.dgpu_aperture;
 		offset = 0;
 		if (flags.ui32.AQLQueueMemory) {
 			size = MemorySizeInBytes * 2;
-			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
+			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
 		}
 	} else {
-		ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_APU_DEVICE;
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 		offset = GPUVM_APP_OFFSET;
 	}
@@ -1135,7 +1140,7 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 	}
 	if (flags.ui32.AQLQueueMemory) {
 		size = MemorySizeInBytes * 2;
-		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_AQL_QUEUE_MEM;
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
 	}
 
 	/* Paged memory is allocated as a userptr mapping, non-paged
@@ -1183,7 +1188,7 @@ static void* fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 			return NULL;
 		}
 	} else {
-		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST;
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
 		mem =  __fmm_allocate_device(gpu_id, size,
 					     aperture, 0, &mmap_offset,
 					     ioc_flags, &vm_obj);
@@ -1235,7 +1240,7 @@ void *fmm_open_graphic_handle(uint32_t gpu_id,
 	void *mem = NULL;
 	int32_t i = gpu_mem_find_by_gpu_id(gpu_id);
 	struct kfd_ioctl_open_graphic_handle_args open_graphic_handle_args;
-	struct kfd_ioctl_unmap_memory_from_gpu_new_args unmap_args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
 
 	/* If not found or aperture isn't properly initialized/supported */
 	if (i < 0 || !aperture_is_valid(gpu_mem[i].gpuvm_aperture.base,
@@ -1273,9 +1278,9 @@ void *fmm_open_graphic_handle(uint32_t gpu_id,
 
 release_mem:
 	unmap_args.handle = open_graphic_handle_args.handle;
-	unmap_args.device_ids_array = NULL;
+	unmap_args.device_ids_array_ptr = 0;
 	unmap_args.device_ids_array_size = 0;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &unmap_args);
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
 release_area:
 	aperture_release_area(&gpu_mem[i].gpuvm_aperture, mem,
 				MemorySizeInBytes);
@@ -1660,7 +1665,7 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 				void *address, uint64_t size, vm_object_t *obj)
 {
-	struct kfd_ioctl_map_memory_to_gpu_new_args args;
+	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
 	void *temp_mapped_id_array = NULL;
 
@@ -1686,10 +1691,11 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 
 	args.handle = object->handle;
 	if (object->registered_device_id_array_size > 0) {
-		args.device_ids_array = object->registered_device_id_array;
+		args.device_ids_array_ptr =
+			(uint64_t)object->registered_device_id_array;
 		args.device_ids_array_size = object->registered_device_id_array_size;
 	} else {
-		args.device_ids_array = all_gpu_id_array;
+		args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
 		args.device_ids_array_size = all_gpu_id_array_size;
 	}
 
@@ -1697,10 +1703,11 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 	if (!temp_mapped_id_array)
 		goto err_object_not_found;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU_NEW, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
 		goto err_map_ioctl_failed;
 
-	print_device_id_array(args.device_ids_array, args.device_ids_array_size);
+	print_device_id_array((void *)args.device_ids_array_ptr,
+			      args.device_ids_array_size);
 
 	if (object->mapped_device_id_array != NULL &&
 			object->mapped_device_id_array_size > 0 &&
@@ -1708,7 +1715,8 @@ static int _fmm_map_to_gpu_gtt(manageble_aperture_t *aperture,
 			object->mapped_device_id_array != object->registered_device_id_array)
 		free(object->mapped_device_id_array);
 
-	memcpy(temp_mapped_id_array, args.device_ids_array, args.device_ids_array_size);
+	memcpy(temp_mapped_id_array, (void *)args.device_ids_array_ptr,
+	       args.device_ids_array_size);
 	object->mapped_device_id_array = temp_mapped_id_array;
 	object->mapped_device_id_array_size = args.device_ids_array_size;
 	object->mapping_count = 1;
@@ -1755,7 +1763,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 	if (!ret && !is_debugger) {
 		vm_object_t *obj = fmm_allocate_memory_in_device(
 			gpu_id, address, size, aperture,
-			NULL, KFD_IOC_ALLOC_MEM_FLAGS_DGPU_DEVICE);
+			NULL, KFD_IOC_ALLOC_MEM_FLAGS_VRAM);
 		if (obj == NULL)
 			return -1;
 	} else {
@@ -1764,7 +1772,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageble_aperture_t *apertu
 					size,
 					aperture,
 					&mmap_offset,
-					KFD_IOC_ALLOC_MEM_FLAGS_DGPU_HOST);
+					KFD_IOC_ALLOC_MEM_FLAGS_GTT);
 		mmap_ret = mmap(address, size,
 				PROT_READ | PROT_WRITE,
 				MAP_SHARED | MAP_FIXED,
@@ -1788,7 +1796,7 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 				void *address, uint64_t size,
 				uint64_t *gpuvm_address)
 {
-	struct kfd_ioctl_map_memory_to_gpu_new_args args;
+	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
 	void *temp_mapped_id_array = NULL;
 
@@ -1806,10 +1814,11 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 	args.handle = object->handle;
 	if (object->registered_device_id_array_size > 0 &&
 			object->registered_device_id_array) {
-		args.device_ids_array = object->registered_device_id_array;
+		args.device_ids_array_ptr =
+			(uint64_t)object->registered_device_id_array;
 		args.device_ids_array_size = object->registered_device_id_array_size;
 	} else {
-		args.device_ids_array = all_gpu_id_array;
+		args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
 		args.device_ids_array_size = all_gpu_id_array_size;
 	}
 
@@ -1817,7 +1826,7 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 	if (!temp_mapped_id_array)
 		goto err_object_not_found;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU_NEW, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
 		goto err_map_ioctl_failed;
 
 	if (object->mapped_device_id_array != NULL &&
@@ -1826,7 +1835,8 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageble_aperture_t *aperture,
 			object->mapped_device_id_array != object->registered_device_id_array)
 		free(object->mapped_device_id_array);
 
-	memcpy(temp_mapped_id_array, args.device_ids_array, args.device_ids_array_size);
+	memcpy(temp_mapped_id_array, (void *)args.device_ids_array_ptr,
+	       args.device_ids_array_size);
 	object->mapped_device_id_array = temp_mapped_id_array;
 	object->mapped_device_id_array_size = args.device_ids_array_size;
 
@@ -1958,7 +1968,7 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 {
 	vm_object_t *object;
 	int ret = 0;
-	struct kfd_ioctl_unmap_memory_from_gpu_new_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args;
 	HSAuint32 page_offset = (HSAint64)address & (PAGE_SIZE - 1);
 
 	if (!obj)
@@ -1982,10 +1992,10 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 
 	args.handle = object->handle;
 	if (device_ids_array && device_ids_array_size > 0) {
-		args.device_ids_array = device_ids_array;
+		args.device_ids_array_ptr = (uint64_t)device_ids_array;
 		args.device_ids_array_size = device_ids_array_size;
 	} else if (object->mapped_device_id_array_size > 0) {
-		args.device_ids_array = object->mapped_device_id_array;
+		args.device_ids_array_ptr = (uint64_t)object->mapped_device_id_array;
 		args.device_ids_array_size = object->mapped_device_id_array_size;
 	} else {
 		/*
@@ -1997,9 +2007,10 @@ static int _fmm_unmap_from_gpu(manageble_aperture_t *aperture, void *address,
 		goto out;
 	}
 
-	print_device_id_array(args.device_ids_array, args.device_ids_array_size);
+	print_device_id_array((void *)args.device_ids_array_ptr,
+			      args.device_ids_array_size);
 
-	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &args);
+	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 	if (ret != 0)
 		goto out;
 
@@ -2029,7 +2040,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 {
 	int32_t gpu_mem_id;
 	vm_object_t *object;
-	struct kfd_ioctl_unmap_memory_from_gpu_new_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -2055,9 +2066,9 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 
 	/* unmap from GPU */
 	args.handle = object->handle;
-	args.device_ids_array = object->mapped_device_id_array;
+	args.device_ids_array_ptr = (uint64_t)object->mapped_device_id_array;
 	args.device_ids_array_size = object->mapped_device_id_array_size;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU_NEW, &args);
+	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 
 	/* Clearing all mapped nodes list */
 	if (object->mapped_device_id_array != NULL &&
