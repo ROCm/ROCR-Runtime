@@ -1,0 +1,12 @@
+
+*.o
+*.bin
+*.tar
+*.hsaco
+*.orig
+*.obsol
+*.bk
+*.old
+*.cmake
+build/*
+

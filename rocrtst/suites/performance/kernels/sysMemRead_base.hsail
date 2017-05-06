@@ -1,0 +1,237 @@
+module &m:1:0:$base:$large:$default;
+
+/* Copyright 2014 HSA Foundation Inc.  All Rights Reserved.
+ *
+ * HSAF is granting you permission to use this software and documentation (if
+ * any) (collectively, the "Materials") pursuant to the terms and conditions
+ * of the Software License Agreement included with the Materials.  If you do
+ * not have a copy of the Software License Agreement, contact the  HSA Foundation for a copy.
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.  IN NO EVENT SHALL THE
+ * CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+ * FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS WITH THE SOFTWARE.
+ */
+
+extension "amd:gcn";
+extension "IMAGE";
+
+decl prog function &abort()();
+
+
+/**
+ * @brief Hsail kernel to benchmark READ accesses to system memory.
+ * The kernel is given a input buffer from which each each thread will
+ * read. The thread will read from multiple locations of the input buffer.
+ * The locations to read from is determined by the work-item Id, the function
+ * being work-item Id modulo total number of work-items in the global work grid.
+ * So given a global work grid of 16 work-items the reads by a thread with absolute
+ * id 4 would be 4, 20, 36, 52, etc.
+ *
+ * @NOTE: A constraint imposed by the kernel is that the buffer size be large
+ * enough to support 16 reads by each thread. So a dispatch of 8 work-items
+ * should allocate enough buffer for 8 * 16 * sizeof(uint32_t).
+ *
+ * @param bufStart beginning byte address of user buffer in system memory
+ * from which kernel threads could read
+ *
+ * @param bufEnd byte address that follows the end of user buffer. Accessing
+ * memory at bufEnd is illegal
+ *
+ * @param addrStep size by which to increment byte address following each read
+ * operation. The value represents total number of work-items * sizeof(uint32_t)
+ *
+ * @param outAddr argument that is passed by the user to be updated with values
+ * read by the kernel threads. This is ensure compiler and finalizer do not eliminate
+ * code because the values being read are not used in any meaningfule way.
+ *
+ */
+prog kernel &__SysMemLoad(kernarg_u64 %bufStart,
+                          kernarg_u64 %bufEnd,
+                          kernarg_u64 %addrStep,
+                          kernarg_u64 %outAddr) {
+
+  pragma  "AMD RTI", "ARGSTART:__SysMemLoad";
+  pragma  "AMD RTI", "version:3:1:104";
+  pragma  "AMD RTI", "device:generic";
+  pragma  "AMD RTI", "uniqueid:1024";
+  pragma  "AMD RTI", "function:1:0";
+  pragma  "AMD RTI", "memory:64bitABI";
+  pragma  "AMD RTI", "uavid:8";
+  pragma  "AMD RTI", "privateid:8";
+  pragma  "AMD RTI", "ARGEND:__SysMemLoad";
+
+  // Retrieve the values of input arguments
+  // bufStart refers to the starting byte address
+  // bufEnd refers to the end of byte address
+  // addrStep refers to the product of total number
+  // of work-items in the grid * sizeof(uint32_t)
+  ld_kernarg_u64    $d0, [%bufStart];
+  ld_kernarg_u64    $d1, [%bufEnd];
+  ld_kernarg_u64    $d2, [%addrStep];
+  ld_kernarg_u64    $d3, [%outAddr];
+
+  // Compute the absolute id of current thread
+  // and shift it by two to get index into user
+  // buffer to access for Read operation
+  workitemflatabsid_u32  $s0;
+  shl_u32         $s0, $s0, 2;
+  cvt_u64_u32     $d4, $s0;
+
+  // Add index to base address of user buffer to obtain
+  // effective address for access
+  add_u64         $d0, $d0, $d4;
+  add_u64         $d3, $d3, $d4;
+
+  // Initialize thread's read accumulator to zero
+  mov_u32         $s2, 0;
+
+@loop:
+
+  // Read sixteeen values with a stride that is
+  // determined by the total number of work-items
+  // in the global grid
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  ld_global_u32   $s1, [$d0];
+  add_u32         $s2, $s1, $s2;
+  add_u64         $d0, $d0, $d2;
+
+  // Update output buffer with values read
+  // from input buffer
+  st_global_u32   $s2, [$d3];
+
+};
+

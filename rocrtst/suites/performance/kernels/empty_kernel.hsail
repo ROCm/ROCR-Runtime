@@ -1,0 +1,12 @@
+module &m:1:0:$full:$large:$default;
+extension "amd:gcn";
+extension "IMAGE";
+
+decl prog function &abort()();
+
+prog kernel &__Empty_kernel()
+{
+
+	ret;
+};
+

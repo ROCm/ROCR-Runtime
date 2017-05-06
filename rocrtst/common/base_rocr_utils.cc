@@ -1,0 +1,476 @@
+/*
+ * =============================================================================
+ *   ROC Runtime Conformance Release License
+ * =============================================================================
+ * The University of Illinois/NCSA
+ * Open Source License (NCSA)
+ *
+ * Copyright (c) 2017, Advanced Micro Devices, Inc.
+ * All rights reserved.
+ *
+ * Developed by:
+ *
+ *                 AMD Research and AMD ROC Software Development
+ *
+ *                 Advanced Micro Devices, Inc.
+ *
+ *                 www.amd.com
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to
+ * deal with the Software without restriction, including without limitation
+ * the rights to use, copy, modify, merge, publish, distribute, sublicense,
+ * and/or sell copies of the Software, and to permit persons to whom the
+ * Software is furnished to do so, subject to the following conditions:
+ *
+ *  - Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimers.
+ *  - Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimers in
+ *    the documentation and/or other materials provided with the distribution.
+ *  - Neither the names of <Name of Development Group, Name of Institution>,
+ *    nor the names of its contributors may be used to endorse or promote
+ *    products derived from this Software without specific prior written
+ *    permission.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ * THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+ * OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+ * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+ * DEALINGS WITH THE SOFTWARE.
+ *
+ */
+
+/// \file
+/// Utility functions that act on BaseRocR objects.
+
+#include "common/base_rocr_utils.h"
+#include <assert.h>
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string>
+#include "common/base_rocr.h"
+#include "common/helper_funcs.h"
+#include "common/os.h"
+#include "hsa/hsa.h"
+#include "hsa/hsa_ext_profiler.h"
+
+namespace rocrtst {
+
+
+#define RET_IF_HSA_UTILS_ERR(err) { \
+  if ((err) != HSA_STATUS_SUCCESS) { \
+    std::cout << "hsa api call failure at line " << __LINE__ << ", file: " << \
+              __FILE__ << std::endl; \
+    return (err); \
+  } \
+}
+
+hsa_status_t CommonCleanUp(BaseRocR* test) {
+  hsa_status_t err;
+
+  assert(test != nullptr);
+
+  if (nullptr != test->kernarg_buffer()) {
+    err = hsa_amd_memory_pool_free(test->kernarg_buffer());
+    RET_IF_HSA_UTILS_ERR(err);
+    test->set_kernarg_buffer(nullptr);
+  }
+
+  if (nullptr != test->main_queue()) {
+    err = hsa_queue_destroy(test->main_queue());
+    RET_IF_HSA_UTILS_ERR(err);
+    test->set_main_queue(nullptr);
+  }
+
+  if (0 != test->signal().handle) {
+    hsa_signal_t sig;
+    sig.handle = 0;
+
+    err = hsa_signal_destroy(test->signal());
+    RET_IF_HSA_UTILS_ERR(err);
+    test->set_signal(sig);
+  }
+
+  err = hsa_shut_down();
+
+  RET_IF_HSA_UTILS_ERR(err);
+
+  std::string intr_val;
+
+  if (test->orig_hsa_enable_interrupt() == nullptr) {
+    intr_val = "";
+  } else {
+    intr_val = test->orig_hsa_enable_interrupt();
+  }
+
+  SetEnv("HSA_ENABLE_INTERRUPT", intr_val.c_str());
+
+  return err;
+}
+
+static const char* PROFILE_STR[] = {"HSA_PROFILE_BASE", "HSA_PROFILE_FULL", };
+
+/// Verify that the machine running the test has the required profile.
+/// This function will verify that the execution machine meets any specific
+/// test requirement for a profile (HSA_PROFILE_BASE or HSA_PROFILE_FULL).
+/// \param[in] test Test that provides profile requirements.
+/// \returns bool
+///          - true Machine meets test requirements
+///          - false Machine does not meet test requirements
+static bool CheckProfileAndInform(BaseRocR* test) {
+  if (test->verbosity() > 0) {
+    std::cout << "Target HW Profile is "
+              << PROFILE_STR[test->profile()] << std::endl;
+  }
+
+  if (test->requires_profile() == -1) {
+    if (test->verbosity() > 0) {
+      std::cout << "Test can run on any profile. OK." << std::endl;
+    }
+    return true;
+  } else {
+    std::cout << "Test requires " << PROFILE_STR[test->requires_profile()]
+              << ". ";
+
+    if (test->requires_profile() != test->profile()) {
+      std::cout << "Not Running." << std::endl;
+      return false;
+    } else {
+      std::cout << "OK." << std::endl;
+      return true;
+    }
+  }
+}
+
+/// Helper function to process error returned from
+///  iterate function like hsa_amd_agent_iterate_memory_pools
+/// \param[in] Error returned from iterate call
+/// \returns HSA_STATUS_SUCCESS iff iterate call succeeds in finding
+///  what was being searched for
+static hsa_status_t ProcessIterateError(hsa_status_t err) {
+  if (err == HSA_STATUS_INFO_BREAK) {
+    err = HSA_STATUS_SUCCESS;
+  } else if (err == HSA_STATUS_SUCCESS) {
+    // This actually means no pool was found.
+    err = HSA_STATUS_ERROR;
+  }
+  return err;
+}
+
+hsa_status_t SetPoolsTypical(BaseRocR* test) {
+  hsa_status_t err;
+
+  err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+        rocrtst::FindStandardPool, &test->cpu_pool());
+  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+
+  err = hsa_amd_agent_iterate_memory_pools(*test->gpu_device1(),
+        rocrtst::FindStandardPool, &test->device_pool());
+  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+
+  err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+        rocrtst::FindKernArgPool, &test->kern_arg_pool());
+  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t InitAndSetupHSA(BaseRocR* test) {
+  hsa_agent_t gpu_device1;
+  hsa_agent_t cpu_device;
+  hsa_status_t err;
+  hsa_signal_t sig;
+
+  if (test->enable_interrupt()) {
+    SetEnv("HSA_ENABLE_INTERRUPT", "1");
+  }
+
+  err = hsa_init();
+  RET_IF_HSA_UTILS_ERR(err);
+
+  gpu_device1.handle = 0;
+  err = hsa_iterate_agents(FindGPUDevice, &gpu_device1);
+  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+  test->set_gpu_device1(gpu_device1);
+
+  cpu_device.handle = 0;
+  err = hsa_iterate_agents(FindCPUDevice, &cpu_device);
+  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+  test->set_cpu_device(cpu_device);
+
+  if (0 == gpu_device1.handle) {
+    std::cout << "GPU Device is not Created properly!" << std::endl;
+    RET_IF_HSA_UTILS_ERR(HSA_STATUS_ERROR);
+  }
+
+  if (0 == cpu_device.handle) {
+    std::cout << "CPU Device is not Created properly!" << std::endl;
+    RET_IF_HSA_UTILS_ERR(HSA_STATUS_ERROR);
+  }
+
+  if (test->verbosity() > 0) {
+    char name[64] = {0};
+    err = hsa_agent_get_info(gpu_device1, HSA_AGENT_INFO_NAME, name);
+    RET_IF_HSA_UTILS_ERR(err);
+    std::cout << "The device name is " << name << std::endl;
+  }
+
+  hsa_profile_t profile;
+  err = hsa_agent_get_info(gpu_device1, HSA_AGENT_INFO_PROFILE, &profile);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_profile(profile);
+
+  if (!CheckProfileAndInform(test)) {
+    return HSA_STATUS_ERROR;
+  }
+
+  err = hsa_signal_create(1, 0, NULL, &sig);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_signal(sig);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+bool CheckProfile(BaseRocR const* test) {
+  if (test->requires_profile() == -1) {
+    return true;
+  } else {
+    return (test->requires_profile() == test->profile());
+  }
+}
+hsa_status_t LoadKernelFromObjFile(BaseRocR* test) {
+  hsa_status_t err;
+  hsa_code_object_reader_t code_obj_rdr = {0};
+  hsa_executable_t executable = {0};
+
+  assert(test != nullptr);
+  hsa_agent_t* agent = test->gpu_device1();  // Assume GPU agent for now
+  std::string obj_file = "./" + test->kernel_file_name();
+  std::string kern_name = test->kernel_name();
+
+  hsa_file_t file_handle = open(obj_file.c_str(), O_RDONLY);
+
+  if (file_handle == -1) {
+    std::cout << "failed to open " << obj_file.c_str() << " at line "
+              << __LINE__ << ", file: " << __FILE__ << std::endl;
+
+    return (hsa_status_t) errno;
+  }
+
+  err = hsa_code_object_reader_create_from_file(file_handle, &code_obj_rdr);
+  RET_IF_HSA_UTILS_ERR(err);
+  close(file_handle);
+
+  err = hsa_executable_create_alt(HSA_PROFILE_FULL,
+                                  HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
+                                                          NULL, &executable);
+  RET_IF_HSA_UTILS_ERR(err);
+  err = hsa_executable_load_agent_code_object(executable, *agent, code_obj_rdr,
+        NULL, NULL);
+  RET_IF_HSA_UTILS_ERR(err);
+  err = hsa_executable_freeze(executable, NULL);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  hsa_executable_symbol_t kern_sym;
+  err = hsa_executable_get_symbol(executable, NULL, kern_name.c_str(), *agent,
+                                  0, &kern_sym);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  uint64_t codeHandle;
+  err = hsa_executable_symbol_get_info(kern_sym,
+                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &codeHandle);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_kernel_object(codeHandle);
+
+  uint32_t val;
+  err = hsa_executable_symbol_get_info(kern_sym,
+                HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE, &val);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_private_segment_size(val);
+
+  err = hsa_executable_symbol_get_info(kern_sym,
+                  HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE, &val);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_group_segment_size(val);
+
+  err = hsa_executable_symbol_get_info(kern_sym,
+                HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &val);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_kernarg_size(val);
+
+  err = hsa_executable_symbol_get_info(kern_sym,
+           HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT, &val);
+  RET_IF_HSA_UTILS_ERR(err);
+  test->set_kernarg_align(val);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t CreateQueue(hsa_agent_t device, hsa_queue_t** queue,
+                         uint32_t num_pkts, bool do_profile) {
+  hsa_status_t err;
+
+  if (num_pkts == 0) {
+    err = hsa_agent_get_info(device, HSA_AGENT_INFO_QUEUE_MAX_SIZE,
+                             &num_pkts);
+    RET_IF_HSA_UTILS_ERR(err);
+  }
+
+  if (do_profile) {
+    err = hsa_ext_tools_queue_create_profiled(device,
+          num_pkts, HSA_QUEUE_TYPE_SINGLE, NULL,
+          NULL, UINT32_MAX, UINT32_MAX, queue);
+    RET_IF_HSA_UTILS_ERR(err);
+  } else {
+    err = hsa_queue_create(device, num_pkts, HSA_QUEUE_TYPE_MULTI, NULL,
+                           NULL, UINT32_MAX, UINT32_MAX, queue);
+    RET_IF_HSA_UTILS_ERR(err);
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+void InitializeAQLPacket(const BaseRocR* test,
+                         hsa_kernel_dispatch_packet_t* aql) {
+  assert(aql != nullptr);
+
+  if (aql == nullptr) {
+    return;
+  }
+
+  aql->header = 0;   // Set this right before doorbell ring
+
+  aql->setup = 1;
+  aql->workgroup_size_x = 256;
+  aql->workgroup_size_y = 1;
+  aql->workgroup_size_z = 1;
+
+  aql->grid_size_x = (uint64_t) 256;  // manual_input*group_input; workg max sz
+  aql->grid_size_y = 1;
+  aql->grid_size_z = 1;
+
+  aql->private_segment_size = test->private_segment_size();
+
+  aql->group_segment_size = test->group_segment_size();
+
+  // Pin kernel code and the kernel argument buffer to the aql packet->
+  aql->kernel_object = test->kernel_object();
+
+  aql->kernarg_address = NULL;
+  aql->completion_signal.handle = test->signal().handle;
+
+  return;
+}
+
+void WriteAQLToQueue(BaseRocR* test) {
+  assert(test);
+  assert(test->main_queue());
+
+  void *queue_base = test->main_queue()->base_address;
+  const uint32_t queue_mask = test->main_queue()->size - 1;
+  uint64_t que_idx = hsa_queue_add_write_index_relaxed(test->main_queue(), 1);
+
+  hsa_kernel_dispatch_packet_t* staging_aql_packet = &test->aql();
+  hsa_kernel_dispatch_packet_t* queue_aql_packet;
+
+  queue_aql_packet =
+       &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue_base))
+                                                        [que_idx & queue_mask];
+
+  queue_aql_packet->workgroup_size_x = staging_aql_packet->workgroup_size_x;
+  queue_aql_packet->workgroup_size_y = staging_aql_packet->workgroup_size_y;
+  queue_aql_packet->workgroup_size_z = staging_aql_packet->workgroup_size_z;
+  queue_aql_packet->grid_size_x = staging_aql_packet->grid_size_x;
+  queue_aql_packet->grid_size_y = staging_aql_packet->grid_size_y;
+  queue_aql_packet->grid_size_z = staging_aql_packet->grid_size_z;
+  queue_aql_packet->private_segment_size =
+                                     staging_aql_packet->private_segment_size;
+  queue_aql_packet->group_segment_size =
+                                       staging_aql_packet->group_segment_size;
+  queue_aql_packet->kernel_object = staging_aql_packet->kernel_object;
+  queue_aql_packet->kernarg_address = staging_aql_packet->kernarg_address;
+  queue_aql_packet->completion_signal = staging_aql_packet->completion_signal;
+}
+
+hsa_status_t AllocAndSetKernArgs(BaseRocR* test, void* args, size_t arg_size) {
+  void* kern_arg_buf = nullptr;
+  hsa_status_t err;
+  size_t buf_size;
+  size_t req_align;
+  assert(args != nullptr);
+  assert(test != nullptr);
+
+  req_align = test->kernarg_align();
+  // Allocate enough extra space for alignment adjustments if ncessary
+  buf_size = arg_size + (req_align << 1);
+
+  err = hsa_amd_memory_pool_allocate(test->kern_arg_pool(), buf_size, 0,
+                                     reinterpret_cast<void**>(&kern_arg_buf));
+  RET_IF_HSA_UTILS_ERR(err);
+
+  test->set_kernarg_buffer(kern_arg_buf);
+
+  void *adj_kern_arg_buf = rocrtst::AlignUp(kern_arg_buf, req_align);
+
+  assert(arg_size >= test->kernarg_size());
+  assert(((uintptr_t)adj_kern_arg_buf + arg_size) <
+                                        ((uintptr_t)kern_arg_buf + buf_size));
+
+  err = hsa_memory_copy_workaround_cpu(adj_kern_arg_buf, args, arg_size);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  hsa_agent_t ag_list[2] = {*test->gpu_device1(), *test->cpu_device()};
+  err = hsa_amd_agents_allow_access(2, ag_list, NULL, kern_arg_buf);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  test->aql().kernarg_address = adj_kern_arg_buf;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t AllocAndAllowAccess(BaseRocR* test, size_t len,
+                                  hsa_amd_memory_pool_t pool, void**buffer) {
+  hsa_status_t err;
+
+  err = hsa_amd_memory_pool_allocate(pool, len, 0, buffer);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  hsa_agent_t ag_list[2] = {*test->gpu_device1(), *test->cpu_device()};
+  err = hsa_amd_agents_allow_access(2, ag_list, NULL, *buffer);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  return err;
+}
+
+hsa_status_t hsa_memory_fill_workaround_gen(void* ptr, uint32_t value,
+    size_t count, hsa_agent_t dst_ag, hsa_agent_t src_ag, BaseRocR* test) {
+
+  hsa_status_t err;
+
+  void *tmp_mem;
+
+  err = hsa_amd_memory_pool_allocate(test->cpu_pool(), count, 0, &tmp_mem);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  hsa_agent_t ag_list[2] = {*test->gpu_device1(), *test->cpu_device()};
+  err = hsa_amd_agents_allow_access(2, ag_list, NULL, tmp_mem);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  (void)memset(tmp_mem, value, count);
+
+  err = hsa_memory_copy_workaround_gen(ptr, tmp_mem, count, dst_ag, src_ag);
+  RET_IF_HSA_UTILS_ERR(err);
+
+  hsa_amd_memory_pool_free(tmp_mem);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+#undef RET_IF_HSA_UTILS_ERR
+
+}  // namespace rocrtst
