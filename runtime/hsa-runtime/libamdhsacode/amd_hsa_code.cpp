@@ -1505,14 +1505,10 @@ namespace code {
 
     bool AmdHsaCode::PullElfV2()
     {
-      Segment* note = NULL;
       for (size_t i = 0; i < img->segmentCount(); ++i) {
         Segment* s = img->segment(i);
         if (s->type() == PT_LOAD) {
           dataSegments.push_back(s);
-        }
-        else if (s->type() == PT_NOTE && s->align() >= 4) {
-          note = s;
         }
       }
       for (size_t i = 0; i < img->sectionCount(); ++i) {
