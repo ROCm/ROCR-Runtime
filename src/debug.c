@@ -159,7 +159,7 @@ hsaKmtDbgWavefrontControl(
 	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
 
 	/* save variable content pointer for kfd */
-	args->content_ptr = (void *)run_ptr;
+	args->content_ptr = (uint64_t)run_ptr;
 
 	/* insert items, and increment pointer accordingly */
 
@@ -258,7 +258,7 @@ hsaKmtDbgAddressWatch(
 	unsigned char* run_ptr = (unsigned char*)args + sizeof(*args);
 
 	/* save variable content pointer for kfd */
-	args->content_ptr = (void *)run_ptr;
+	args->content_ptr = (uint64_t)run_ptr;
 	/* insert items, and increment pointer accordingly */
 
 	*((HSAuint32*)run_ptr) =  NumWatchPoints;
