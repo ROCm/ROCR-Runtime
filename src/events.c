@@ -255,7 +255,7 @@ hsaKmtWaitOnMultipleEvents(
 	if (!Events)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	struct kfd_event_data *event_data = malloc(NumEvents * sizeof(struct kfd_event_data));
+	struct kfd_event_data *event_data = calloc(NumEvents, sizeof(struct kfd_event_data));
 	for (HSAuint32 i = 0; i < NumEvents; i++) {
 		event_data[i].event_id = Events[i]->EventId;
 		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
