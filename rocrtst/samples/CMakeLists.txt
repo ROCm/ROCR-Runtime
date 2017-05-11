@@ -248,6 +248,11 @@ set(BITCODE_LIBS "${BITCODE_LIBS} ${BITCODE_PREF}/ocml.amdgcn.bc")
 set(CL_FILE_LIST "${PROJECT_SOURCE_DIR}/binary_search/binary_search_kernels.cl")
 process_sample("binary_search")
 
+# RocR Info
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/rocrinfo ROCR_INFO_SOURCES)
+add_executable(rocrinfo ${ROCR_INFO_SOURCES})
+target_link_libraries(rocrinfo ${ROCR_LIBS} c stdc++ dl pthread rt)
+
 install(TARGETS ${SAMPLE_EXE}
         ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
         LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib

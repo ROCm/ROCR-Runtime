@@ -105,8 +105,6 @@ typedef struct BinarySearch {
   uint64_t kernel_object;
   uint32_t group_segment_size;   ///< Kernel group seg size
   uint32_t private_segment_size;   ///< Kernel private seg size
-
-
 } BinarySearch;
 
 void InitializeBinarySearch(BinarySearch* bs) {
@@ -129,8 +127,6 @@ void InitializeBinarySearch(BinarySearch* bs) {
 //  Other -- Some error occurred
 static hsa_status_t FindAgent(hsa_agent_t agent, void* data,
                               hsa_device_type_t dev_type) {
-  assert(data != nullptr);
-
   if (data == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -229,7 +225,7 @@ FindGlobalPool(hsa_amd_memory_pool_t pool, void* data, bool kern_arg) {
   }
 
   err = hsa_amd_memory_pool_get_info(pool,
-                                     HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flag);
+                                HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flag);
   RET_IF_HSA_ERR(err);
 
   uint32_t karg_st = flag & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT;
@@ -327,7 +323,7 @@ hsa_status_t AllocateAndInitBuffers(BinarySearch* bs) {
   (void)memset(bs->input, 0, in_length);
 
   err = hsa_amd_memory_pool_allocate(bs->cpu_pool, in_length, 0,
-                                     reinterpret_cast<void**>(&bs->input_arr_local));
+                               reinterpret_cast<void**>(&bs->input_arr_local));
   RET_IF_HSA_ERR(err);
   err = hsa_amd_agents_allow_access(2, ag_list, NULL, bs->input_arr_local);
   RET_IF_HSA_ERR(err);
@@ -342,7 +338,7 @@ hsa_status_t AllocateAndInitBuffers(BinarySearch* bs) {
 
   for (uint32_t i = 1; i < bs->length; ++i) {
     bs->input[i] = bs->input[i - 1] +
-                   static_cast<uint32_t>(max * rand_r(&seed) / static_cast<float>(RAND_MAX));
+     static_cast<uint32_t>(max * rand_r(&seed) / static_cast<float>(RAND_MAX));
   }
 
 // #define VERBOSE 1
@@ -387,7 +383,7 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
   close(file_handle);
 
   err = hsa_executable_create_alt(HSA_PROFILE_FULL,
-                                  HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, NULL, &executable);
+                HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, NULL, &executable);
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_load_agent_code_object(executable, bs->gpu_dev,
@@ -403,34 +399,35 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_symbol_get_info(kern_sym,
-                                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
-                                       &bs->kernel_object);
+                                    HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
+                                                          &bs->kernel_object);
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_symbol_get_info(kern_sym,
-                                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
-                                       &bs->private_segment_size);
+                      HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
+                                                   &bs->private_segment_size);
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_symbol_get_info(kern_sym,
-                                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE,
-                                       &bs->group_segment_size);
+                        HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE,
+                                                     &bs->group_segment_size);
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_symbol_get_info(kern_sym,
-                                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &bs->kernarg_size);
+                      HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
+                                                           &bs->kernarg_size);
   RET_IF_HSA_ERR(err);
 
   err = hsa_executable_symbol_get_info(kern_sym,
-                                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT,
-                                       &bs->kernarg_align);
+                 HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT,
+                                                          &bs->kernarg_align);
   RET_IF_HSA_ERR(err);
 
   return err;
 }
 
-// This function shows how to do an asynchronous copy. We have to create a signal
-// and use the signal to notify us when the copy has completed.
+// This function shows how to do an asynchronous copy. We have to create a
+// signal and use the signal to notify us when the copy has completed.
 hsa_status_t AgentMemcpy(void* dst, const void* src,
                          size_t size, hsa_agent_t dst_ag, hsa_agent_t src_ag) {
   hsa_signal_t s;
@@ -466,16 +463,15 @@ AlignDown(intptr_t value, size_t alignment) {
 }
 static void*
 AlignUp(void* value, size_t alignment) {
-  return reinterpret_cast<void*>(
-           AlignDown((uintptr_t)(reinterpret_cast<uintptr_t>(value) + alignment - 1),
-                     alignment));
+  return reinterpret_cast<void*>(AlignDown((uintptr_t)
+           (reinterpret_cast<uintptr_t>(value) + alignment - 1), alignment));
 }
 
 // This function populates the AQL patch with the information
 // we have collected and stored in the BinarySearch structure thus far.
 void PopulateAQLPacket(BinarySearch const* bs,
                        hsa_kernel_dispatch_packet_t* aql) {
-  aql->header = 0; // Dummy val. for now. Set this right before doorbell ring
+  aql->header = 0;  // Dummy val. for now. Set this right before doorbell ring
   aql->setup = 1;
   aql->workgroup_size_x = bs->work_group_size;
   aql->workgroup_size_y = 1;
@@ -498,7 +494,6 @@ void PopulateAQLPacket(BinarySearch const* bs,
  */
 void WriteAQLToQueue(hsa_kernel_dispatch_packet_t const* in_aql,
                      hsa_queue_t* q) {
-
   void* queue_base = q->base_address;
   const uint32_t queue_mask = q->size - 1;
   uint64_t que_idx = hsa_queue_add_write_index_relaxed(q, 1);
@@ -689,8 +684,8 @@ hsa_status_t Run(BinarySearch* bs) {
 
     // Copy kernel parameter from system memory to local memory
     err = AgentMemcpy(reinterpret_cast<uint8_t*>(bs->input_arr_local),
-                      reinterpret_cast<uint8_t*>(bs->input_arr),  in_length, bs->gpu_dev,
-                      bs->cpu_dev);
+                      reinterpret_cast<uint8_t*>(bs->input_arr),
+                                        in_length, bs->gpu_dev, bs->cpu_dev);
 
     RET_IF_HSA_ERR(err);
 
@@ -722,7 +717,8 @@ hsa_status_t Run(BinarySearch* bs) {
     void* q_base = bs->queue->base_address;
 
     AtomicSetPacketHeader(aql_header, aql.setup,
-                          &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>(q_base))[que_idx & mask]);
+                      &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
+                                                   (q_base))[que_idx & mask]);
 
     // Increment the write index and ring the doorbell to dispatch kernel.
     hsa_queue_store_write_index_relaxed(bs->queue, (que_idx + 1));
@@ -782,8 +778,7 @@ hsa_status_t Run(BinarySearch* bs) {
 
   if (is_elem_found == 1) {
     std::cout << "Element found at index " << element_index << std::endl;
-  }
-  else {
+  } else {
     std::cout << "Element value " << bs->find_me << " not found" << std::endl;
   }
 
@@ -834,8 +829,8 @@ int main(int argc, char* argv[]) {
   // Set some working values specific to this application
   InitializeBinarySearch(&bs);
 
-  // hsa_init() initializes internal data structures and causes devices (agents),
-  // memory pools and other resources to be discovered.
+  // hsa_init() initializes internal data structures and causes devices
+  // (agents), memory pools and other resources to be discovered.
   err = hsa_init();
   RET_IF_HSA_ERR(err);
 
