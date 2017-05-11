@@ -167,7 +167,9 @@ static struct hsa_gfxip_table {
 	{ 0x6861, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6862, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6863, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6864, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6867, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6868, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 }
 };
