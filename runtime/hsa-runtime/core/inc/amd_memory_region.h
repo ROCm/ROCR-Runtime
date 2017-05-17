@@ -86,13 +86,11 @@ class MemoryRegion : public core::MemoryRegion {
   static void DeregisterMemory(void* ptr);
 
   /// @brief Pin memory.
-  static bool MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
-                                    void* ptr, size_t size,
-                                    uint64_t* alternate_va,
-                                    HsaMemMapFlags map_flag);
+  static bool MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes, const void* ptr,
+                                    size_t size, uint64_t* alternate_va, HsaMemMapFlags map_flag);
 
   /// @brief Unpin memory.
-  static void MakeKfdMemoryUnresident(void* ptr);
+  static void MakeKfdMemoryUnresident(const void* ptr);
 
   MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
                const HsaMemoryProperties& mem_props);
