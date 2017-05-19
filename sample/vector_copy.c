@@ -49,7 +49,7 @@
 
 #define check(msg, status) \
 if (status != HSA_STATUS_SUCCESS) { \
-    printf("%s failed.\n", #msg); \
+    printf("%s failed: %x.\n", #msg, status); \
     exit(1); \
 } else { \
    printf("%s succeeded.\n", #msg); \
@@ -230,10 +230,11 @@ int main(int argc, char **argv) {
      */
     hsa_ext_module_t module;
     if(HSA_PROFILE_FULL == profile) {
-        load_module_from_file("vector_copy_full.brig",&module);
+        err = load_module_from_file("vector_copy_full.brig",&module);
     } else {
-        load_module_from_file("vector_copy_base.brig",&module);
+        err = load_module_from_file("vector_copy_base.brig",&module);
     }
+    check(Load module from file, err);
 
     /*
      * Create hsa program.
