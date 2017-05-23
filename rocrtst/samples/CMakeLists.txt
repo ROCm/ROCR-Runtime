@@ -196,7 +196,7 @@ endif()
 # Add compiler flags to include symbol information for debug builds
 #
 if(ISDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
 endif()
 message("ISDEBUG STEP:Done")
 
@@ -252,6 +252,11 @@ process_sample("binary_search")
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/rocrinfo ROCR_INFO_SOURCES)
 add_executable(rocrinfo ${ROCR_INFO_SOURCES})
 target_link_libraries(rocrinfo ${ROCR_LIBS} c stdc++ dl pthread rt)
+
+# IPC
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ipc IPC_SOURCES)
+add_executable(ipc ${IPC_SOURCES})
+target_link_libraries(ipc ${ROCR_LIBS} c stdc++ dl pthread rt)
 
 install(TARGETS ${SAMPLE_EXE}
         ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
