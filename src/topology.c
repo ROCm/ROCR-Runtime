@@ -171,7 +171,9 @@ static struct hsa_gfxip_table {
 	{ 0x6867, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6868, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 }
+	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	/* Raven */
+	{ 0x15DD, 9, 0, 0, 0, "Raven", CHIP_RAVEN },
 };
 
 enum cache_type {
