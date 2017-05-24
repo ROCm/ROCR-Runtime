@@ -1739,6 +1739,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 		*block = polaris_blocks[block_id];
 		break;
 	case CHIP_VEGA10:
+	case CHIP_RAVEN:
 		*block = vega_blocks[block_id];
 		break;
 	default:

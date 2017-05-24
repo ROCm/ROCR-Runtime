@@ -96,10 +96,11 @@ enum asic_family_type {
 	CHIP_FIJI,
 	CHIP_POLARIS10,
 	CHIP_POLARIS11,
-	CHIP_VEGA10
+	CHIP_VEGA10,
+	CHIP_RAVEN
 };
-#define IS_DGPU(chip) (((chip) >= CHIP_TONGA && (chip) <= CHIP_VEGA10) || \
-		       (chip) == CHIP_HAWAII)
+#define IS_DGPU(chip) ((chip) != CHIP_KAVERI && (chip) != CHIP_CARRIZO && \
+		       (chip) != CHIP_RAVEN)
 #define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
