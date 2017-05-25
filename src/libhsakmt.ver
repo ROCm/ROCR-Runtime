@@ -55,6 +55,7 @@ hsaKmtSetTrapHandler;
 hsaKmtGetTileConfig;
 hsaKmtQueryPointerInfo;
 hsaKmtSetMemoryUserData;
+hsaKmtGetQueueInfo;
 
 local: *;
 };
