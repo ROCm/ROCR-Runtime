@@ -582,6 +582,25 @@ typedef enum _HSA_QUEUE_TYPE
     HSA_QUEUE_TYPE_SIZE            = 0xFFFFFFFF     //aligns to 32bit enum
 } HSA_QUEUE_TYPE;
 
+typedef struct
+{
+	HSAuint32 QueueDetailError;	// HW specific queue error state
+	HSAuint32 QueueTypeExtended;	// HW specific queue type info.
+					// 0 = no information
+	HSAuint32 NumCUAssigned;	// size of *CUMaskInfo bit array, Multiple
+					// of 32, 0 = no information
+	HSAuint32* CUMaskInfo;		// runtime/system CU assignment for realtime
+					// queue & reserved CU priority. Ptr to
+					// bit-array, each bit represents one CU.
+					// NULL = no information
+	HSAuint32* UserContextSaveArea;	// reference to user space context save area
+	HSAuint64 SaveAreaSizeInBytes;	// Must be 4-Byte aligned
+	HSAuint32* ControlStackTop;	// ptr to the TOS
+	HSAuint64 ControlStackUsedInBytes; // Must be 4-Byte aligned
+	HSAuint64 Reserved1;		// runtime/system CU assignment
+	HSAuint64 Reserved2;		// runtime/system CU assignment
+} HsaQueueInfo;
+
 typedef struct _HsaQueueResource
 {
     HSA_QUEUEID     QueueId;    /** queue ID */
