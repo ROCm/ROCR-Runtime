@@ -10,11 +10,6 @@ else()
     set( BUILD_FOLDER "lnx64a/B_dbg" )
 endif()
 
-## Check that the libhsail include and library directories are defined.
-if ( NOT DEFINED LIBHSAIL_BUILD_FOLDER )
-    set ( LIBHSAIL_BUILD_FOLDER ${BUILD_FOLDER} )
-endif()
-
 ## Set ext runtime module name and project name.
 set ( IMAGE_NAME "hsa-ext-image" )
 set ( IMAGE_TARGET "${IMAGE_NAME}64" )
@@ -62,13 +57,6 @@ get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
 get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
 include_directories ( ${HSA_INC_PATH} )
 link_directories (${HSA_LIB_PATH})
-
-## Find the libhsail files in the link
-find_library ( HSAIL_LIB libhsail.a )
-set ( LIBHSAIL -Wl,--no-whole-archive PRIVATE ${HSAIL_LIB} )
-
-find_library ( HSAIL_AMD_LIB libhsail-amd.a )
-set ( LIBHSAILAMD -Wl,--no-whole-archive PRIVATE ${HSAIL_AMD_LIB} )
 
 ## External dependencies and directories
 if ( NOT DEFINED REG_INCLUDE )
@@ -127,10 +115,6 @@ include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9 )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9/chip )
-include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/ext_finalize/amdhsafin/Interface )
-include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL-AMD )
-include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL )
-include_directories ( ${HSA_CLOSED_SOURCE_DIR}/drivers/hsa/compiler/finalizer/HSAIL/hsail-tools/libHSAIL/build/${LIBHSAIL_BUILD_FOLDER} )
 
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
@@ -152,8 +136,17 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_kv.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_ai.cpp
                  ${EXT_SOURCE_DIR}/image/image_lut_kv.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx700.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx701.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx800.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx801.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx802.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx803.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx804.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx810.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx900.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx901.cpp
                  ${EXT_SOURCE_DIR}/image/blit_kernel.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_kernel_hsail.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
 )
@@ -167,8 +160,6 @@ set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}
 ## Add the core runtime in the link
 target_link_libraries (
     ${IMAGE_TARGET}
-    PRIVATE ${LIBHSAIL}
-    PRIVATE ${LIBHSAILAMD}
     PRIVATE hsa-runtime64
     PRIVATE hsakmt
     c dl pthread rt
