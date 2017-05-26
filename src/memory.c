@@ -460,30 +460,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapGraphicHandle(HSAuint32 NodeId,
 					       HSAuint64 GraphicResourceSize,
 					       HSAuint64 *FlatMemoryAddress)
 {
-
-	CHECK_KFD_OPEN();
-	HSAKMT_STATUS result;
-	uint32_t gpu_id;
-	void *graphic_handle;
-
-	if (GraphicResourceOffset != 0)
-		return HSAKMT_STATUS_NOT_IMPLEMENTED;
-
-	result = validate_nodeid(NodeId, &gpu_id);
-	if (result != HSAKMT_STATUS_SUCCESS)
-		return result;
-
-	graphic_handle = fmm_open_graphic_handle(gpu_id,
-						GraphicDeviceHandle,
-						GraphicResourceHandle,
-						GraphicResourceSize);
-
-	*FlatMemoryAddress = PORT_VPTR_TO_UINT64(graphic_handle);
-
-	if (*FlatMemoryAddress)
-		return HSAKMT_STATUS_SUCCESS;
-	else
-		return HSAKMT_STATUS_NO_MEMORY;
+	/* This API was only ever implemented in KFD for Kaveri and
+	 * was never upstreamed. There are no open-source users of
+	 * this interface. It has been superseded by
+	 * RegisterGraphicsHandleToNodes.
+	 */
+	return HSAKMT_STATUS_NOT_IMPLEMENTED;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapGraphicHandle(HSAuint32 NodeId,

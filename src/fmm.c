@@ -1235,65 +1235,6 @@ void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 	return fmm_allocate_host_cpu(MemorySizeInBytes, flags);
 }
 
-void *fmm_open_graphic_handle(uint32_t gpu_id,
-		int32_t graphic_device_handle,
-		uint32_t graphic_handle,
-		uint64_t MemorySizeInBytes)
-{
-
-	void *mem = NULL;
-	int32_t i = gpu_mem_find_by_gpu_id(gpu_id);
-	struct kfd_ioctl_open_graphic_handle_args open_graphic_handle_args;
-	struct kfd_ioctl_unmap_memory_from_gpu_args unmap_args;
-
-	/* If not found or aperture isn't properly initialized/supported */
-	if (i < 0 || !aperture_is_valid(gpu_mem[i].gpuvm_aperture.base,
-					gpu_mem[i].gpuvm_aperture.limit))
-		return NULL;
-
-	pthread_mutex_lock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
-	/* Allocate address space */
-	mem = aperture_allocate_area(&gpu_mem[i].gpuvm_aperture,
-					MemorySizeInBytes, GPUVM_APP_OFFSET);
-	if (!mem)
-		goto out;
-
-	/* Allocate local memory */
-	open_graphic_handle_args.gpu_id = gpu_id;
-	open_graphic_handle_args.graphic_device_fd = graphic_device_handle;
-	open_graphic_handle_args.graphic_handle = graphic_handle;
-	open_graphic_handle_args.va_addr =
-			VOID_PTRS_SUB(mem, gpu_mem[i].gpuvm_aperture.base);
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_OPEN_GRAPHIC_HANDLE,
-			&open_graphic_handle_args))
-		goto release_area;
-
-	/* Allocate object */
-	if (!aperture_allocate_object(&gpu_mem[i].gpuvm_aperture, mem,
-					open_graphic_handle_args.handle,
-					MemorySizeInBytes, 0))
-		goto release_mem;
-
-	pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
-
-	/* That's all. Just return the new address */
-	return mem;
-
-release_mem:
-	unmap_args.handle = open_graphic_handle_args.handle;
-	unmap_args.device_ids_array_ptr = 0;
-	unmap_args.device_ids_array_size = 0;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &unmap_args);
-release_area:
-	aperture_release_area(&gpu_mem[i].gpuvm_aperture, mem,
-				MemorySizeInBytes);
-out:
-	pthread_mutex_unlock(&gpu_mem[i].gpuvm_aperture.fmm_mutex);
-
-	return NULL;
-}
-
 static void __fmm_release(void *address, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args;
