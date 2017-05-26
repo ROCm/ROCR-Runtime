@@ -710,7 +710,6 @@ static vm_object_t *fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
 
 	args.flags = flags |
 		KFD_IOC_ALLOC_MEM_FLAGS_NONPAGED |
-		KFD_IOC_ALLOC_MEM_FLAGS_EXECUTE_ACCESS |
 		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
 	args.va_addr = (uint64_t)mem;
 	if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)) &&
@@ -862,6 +861,22 @@ static void fmm_release_scratch(uint32_t gpu_id)
 	gpu_mem[gpu_mem_id].scratch_physical.limit = NULL;
 }
 
+static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
+{
+	uint32_t ioc_flags = 0;
+
+	if (flags.ui32.AQLQueueMemory)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
+	if (flags.ui32.ReadOnly)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_READONLY;
+	/* TODO: Since, ROCr interfaces doesn't allow caller to set page
+	 * permissions, mark all user allocations with exec permission.
+	 * Check for flags.ui32.ExecuteAccess once ROCr is ready.
+	 */
+	ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXECUTE_ACCESS;
+	return ioc_flags;
+}
+
 #define SCRATCH_ALIGN 0x10000
 void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
@@ -992,13 +1007,13 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 	if (flags.ui32.HostAccess)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC;
 
+	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
+
 	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
 		aperture = &svm.dgpu_aperture;
 		offset = 0;
-		if (flags.ui32.AQLQueueMemory) {
+		if (flags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
-			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
-		}
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 		offset = GPUVM_APP_OFFSET;
@@ -1138,10 +1153,9 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		aperture = &svm.dgpu_alt_aperture; /* coherent */
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 	}
-	if (flags.ui32.AQLQueueMemory) {
+	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
+	if (flags.ui32.AQLQueueMemory)
 		size = MemorySizeInBytes * 2;
-		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
-	}
 
 	/* Paged memory is allocated as a userptr mapping, non-paged
 	 * memory is allocated from KFD
@@ -2354,7 +2368,8 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 
 	/* Allocate BO, userptr address is passed in mmap_offset */
 	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture, 0,
-			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR, &obj);
+			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR |
+			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTE_ACCESS, &obj);
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
 
