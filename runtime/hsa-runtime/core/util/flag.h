@@ -69,17 +69,8 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
     enable_interrupt_ = (var == "0") ? false : true;
 
-    var = os::GetEnvVar("HSA_ENABLE_THREAD_TRACE");
-    enable_thread_trace_ = (var == "1") ? true : false;
-
-    var = os::GetEnvVar("HSA_THREAD_TRACE_MEM_SIZE");
-    thread_trace_buff_size_ = atoi(var.c_str());
-
     var = os::GetEnvVar("HSA_ENABLE_SDMA");
     enable_sdma_ = (var == "0") ? false : true;
-
-    var = os::GetEnvVar("HSA_EMULATE_AQL");
-    emulate_aql_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_RUNNING_UNDER_VALGRIND");
     running_valgrind_ = (var == "1") ? true : false;
@@ -104,13 +95,7 @@ class Flag {
 
   bool enable_interrupt() const { return enable_interrupt_; }
 
-  bool enable_thread_trace() const { return enable_thread_trace_; }
-
-  bool thread_trace_buff_size() const { return thread_trace_buff_size_; }
-
   bool enable_sdma() const { return enable_sdma_; }
-
-  bool emulate_aql() const { return emulate_aql_; }
 
   bool running_valgrind() const { return running_valgrind_; }
 
@@ -127,13 +112,9 @@ class Flag {
   bool enable_vm_fault_message_;
   bool enable_interrupt_;
   bool enable_sdma_;
-  bool emulate_aql_;
   bool running_valgrind_;
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
-
-  bool enable_thread_trace_;
-  size_t thread_trace_buff_size_;
 
   uint32_t max_queues_;
 
