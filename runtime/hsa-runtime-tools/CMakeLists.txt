@@ -146,6 +146,8 @@ set ( DEBUGGER_SRC    ${TOOLS_SOURCE_DIR}/debugger/cwsr_trapstring_perf.cpp
 
 set ( INTERCEPT_SRC   ${TOOLS_SOURCE_DIR}/intercept/amd_sw_aql_command_processor.cpp
                       ${TOOLS_SOURCE_DIR}/intercept/hsa_amd_tools.cpp
+                      ${TOOLS_SOURCE_DIR}/intercept/aql_pm4_factory.cpp
+                      ${TOOLS_SOURCE_DIR}/intercept/aql_proxy_queue.cpp
                       ${TOOLS_SOURCE_DIR}/intercept/profiler.cpp )
 
 set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp 
