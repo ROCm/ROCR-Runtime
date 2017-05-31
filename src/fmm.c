@@ -2184,7 +2184,7 @@ static void *reserve_address(void *addr, long long unsigned int len)
 
 	ret_addr = mmap(addr, len, PROT_NONE,
 				 MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED)
+	if (ret_addr == MAP_FAILED)
 		return NULL;
 
 	return ret_addr;
