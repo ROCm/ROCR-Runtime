@@ -136,16 +136,9 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_kv.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_ai.cpp
                  ${EXT_SOURCE_DIR}/image/image_lut_kv.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx700.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx701.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx800.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx801.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx802.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx803.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx804.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx810.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx900.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx901.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx7xx.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx8xx.cpp
+                 ${EXT_SOURCE_DIR}/image/blit_object_gfx9xx.cpp
                  ${EXT_SOURCE_DIR}/image/blit_kernel.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
