@@ -222,18 +222,22 @@ message(${ROCR_LIBS})
 include_directories(${ROCR_INC_DIR})
 include_directories($ENV{OPENCL_DIR}/include/opencl$ENV{OPENCL_VER})
 
+# Use this function to build any samples that have kernels to be built
 function(process_sample S_NAME)
   set(SNAME_EXE "${S_NAME}_${PROJECT_NAME}")
   set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
-  set(sample_kernels sampleKernels)
+  set(TARG_NAME "${S_NAME}_hsaco")
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME} PARENT_SCOPE)
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEVICE} -include ${OPENCL_DIR}/include/opencl-c.h ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${PROJECT_BINARY_DIR}/${SNAME_KERNEL}")
-  add_custom_target(sample_kernels ${CLANG} ${CLANG_ARG_LIST}
+  add_custom_target(${TARG_NAME} ${CLANG} ${CLANG_ARG_LIST}
      COMMENT "BUILDING KERNEL..."
      VERBATIM)
   aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/${S_NAME} S_NAME_SOURCES)
   add_executable(${SNAME_EXE} ${S_NAME_SOURCES})
   target_link_libraries(${SNAME_EXE} ${ROCR_LIBS} c stdc++ dl pthread rt)
 endfunction(process_sample)
+
+
 ###########################
 # SAMPLE SPECIFIC SECTION 
 ###########################
@@ -241,9 +245,11 @@ set(KERN_SUFFIX "kernels.hsaco")
 set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
 set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_DIR}/lib/x86_64/bitcode")
 
+set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
+set(COMMON_BITCODE_LIBS "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
+
 # Binary Search
-set(BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
-set(BITCODE_LIBS "${BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(BITCODE_LIBS "${BITCODE_LIBS} ${BITCODE_PREF}/ocml.amdgcn.bc")
 set(CL_FILE_LIST "${PROJECT_SOURCE_DIR}/binary_search/binary_search_kernels.cl")
 process_sample("binary_search")
@@ -258,6 +264,12 @@ aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/ipc IPC_SOURCES)
 add_executable(ipc ${IPC_SOURCES})
 target_link_libraries(ipc ${ROCR_LIBS} c stdc++ dl pthread rt)
 
+# Async Mem. Copy
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/async_mem_copy AMC_SOURCES)
+add_executable(async_mem_copy ${AMC_SOURCES})
+target_link_libraries(async_mem_copy ${ROCR_LIBS} c stdc++ dl pthread rt)
+
+add_custom_target(sample_kernels DEPENDS ${HSACO_TARG_LIST})
 install(TARGETS ${SAMPLE_EXE}
         ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
         LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib
