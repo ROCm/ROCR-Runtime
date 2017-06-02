@@ -566,7 +566,7 @@ void GpuAgent::InitDma() {
     if (!blit_initialized_.load(std::memory_order_relaxed)) {
       // Try create SDMA blit first.
       // TODO: Temporarily disable SDMA on specific ISA targets until they are fully qualified.
-      if ((isa_->GetMajorVersion() != 9) &&
+      if ((isa_->GetMajorVersion() != 8) &&
           core::Runtime::runtime_singleton_->flag().enable_sdma() &&
           (HSA_PROFILE_BASE == profile_)) {
         blits_[BlitHostToDev] = CreateBlitSdma();
