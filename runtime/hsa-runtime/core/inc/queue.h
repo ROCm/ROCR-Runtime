@@ -45,6 +45,7 @@
 #ifndef HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
 #define HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
 #include <sstream>
+#include <vector>
 
 #include "core/common/shared.h"
 
@@ -55,6 +56,8 @@
 #include "inc/amd_hsa_queue.h"
 
 namespace core {
+class Agent;
+
 struct AqlPacket {
 
   union {
@@ -137,7 +140,7 @@ All funtions other than Convert and public_handle must be virtual.
 class Queue : public Checked<0xFA3906A679F9DB49>,
               public Shared<SharedQueue, AMD_QUEUE_ALIGN_BYTES> {
  public:
-  Queue() : Shared(), amd_queue_(shared_object()->amd_queue) {
+  explicit Queue(Agent& agent) : Shared(), amd_queue_(shared_object()->amd_queue), agent_(agent) {
     if (!Shared::IsSharedObjectAllocationValid()) {
       return;
     }
@@ -308,6 +311,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
 
   hsa_queue_t* public_handle() const { return public_handle_; }
 
+  Agent& agent() { return agent_; }
+
  protected:
   static void set_public_handle(Queue* ptr, hsa_queue_t* handle) {
     ptr->do_set_public_handle(handle);
@@ -316,6 +321,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
     public_handle_ = handle;
   }
   hsa_queue_t* public_handle_;
+
+  Agent& agent_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);

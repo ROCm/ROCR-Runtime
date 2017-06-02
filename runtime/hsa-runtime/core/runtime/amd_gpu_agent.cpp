@@ -73,7 +73,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       blits_(),
-      queues_(),
+      queue_util_(nullptr),
+      queue_blit_(nullptr),
       local_region_(NULL),
       is_kv_device_(false),
       trap_code_buf_(NULL),
@@ -137,9 +138,7 @@ GpuAgent::~GpuAgent() {
     }
   }
 
-  for (int i = 0; i < QueueCount; ++i) {
-    delete queues_[i];
-  }
+  queues_.clear();
 
   if (end_ts_base_addr_ != NULL) {
     core::Runtime::runtime_singleton_->FreeMemory(end_ts_base_addr_);
@@ -581,16 +580,16 @@ void GpuAgent::InitDma() {
       // Fall back to blit kernel if SDMA is unavailable.
       if (blits_[BlitHostToDev] == NULL) {
         // Create a dedicated compute queue for host-to-device blits.
-        queues_[QueueBlitOnly] = CreateInterceptibleQueue();
-        assert(queues_[QueueBlitOnly] != NULL && "Queue creation failed");
+        queue_blit_ = CreateInterceptibleQueue();
+        assert(queue_blit_ != NULL && "Queue creation failed");
 
-        blits_[BlitHostToDev] = CreateBlitKernel(queues_[QueueBlitOnly]);
+        blits_[BlitHostToDev] = CreateBlitKernel(queue_blit_);
         assert(blits_[BlitHostToDev] != NULL && "Blit creation failed");
       }
 
       if (blits_[BlitDevToHost] == NULL) {
         // Share utility queue with device-to-host blits.
-        blits_[BlitDevToHost] = CreateBlitKernel(queues_[QueueUtility]);
+        blits_[BlitDevToHost] = CreateBlitKernel(queue_util_);
         assert(blits_[BlitDevToHost] != NULL && "Blit creation failed");
       }
 
@@ -605,14 +604,14 @@ hsa_status_t GpuAgent::PostToolsInit() {
   BindTrapHandler();
 
   // Defer utility queue creation to allow tools to intercept.
-  queues_[QueueUtility] = CreateInterceptibleQueue();
+  queue_util_ = CreateInterceptibleQueue();
 
-  if (queues_[QueueUtility] == NULL) {
+  if (queue_util_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   // Share utility queue with device-to-device blits.
-  blits_[BlitDevToDev] = CreateBlitKernel(queues_[QueueUtility]);
+  blits_[BlitDevToDev] = CreateBlitKernel(queue_util_);
 
   if (blits_[BlitDevToDev] == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -926,6 +925,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                     event_callback, data, is_kv_device_);
   if (hw_queue && hw_queue->IsValid()) {
     // return queue
+    queues_.emplace_back(hw_queue);
     *queue = hw_queue;
     return HSA_STATUS_SUCCESS;
   }
@@ -933,6 +933,28 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   delete hw_queue;
   ReleaseQueueScratch(scratch.queue_base);
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+}
+
+WaveStates GpuAgent::GetWaveStates() {
+  WaveStates wave_states;
+
+  for (auto& queue : queues_) {
+    WaveStates queue_wave_states = queue->GetWaveStates();
+    wave_states.insert(wave_states.end(), queue_wave_states.begin(), queue_wave_states.end());
+  }
+
+  return wave_states;
+}
+
+hsa_status_t GpuAgent::QueueDestroy(core::Queue* queue) {
+  auto it = std::find_if(queues_.begin(), queues_.end(), [&](std::unique_ptr<AqlQueue>& queue_ptr) {
+    return static_cast<core::Queue*>(queue_ptr.get()) == queue;
+  });
+
+  assert(it != queues_.end() && "attempt to destroy an untracked queue");
+  queues_.erase(it);
+
+  return HSA_STATUS_SUCCESS;
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
@@ -1219,7 +1241,7 @@ void GpuAgent::InvalidateCodeCaches() {
   cache_inv[6] = 0;
 
   // Submit the command to the utility queue and wait for it to complete.
-  queues_[QueueUtility]->ExecutePM4(cache_inv, sizeof(cache_inv));
+  queue_util_->ExecutePM4(cache_inv, sizeof(cache_inv));
 }
 
 }  // namespace
