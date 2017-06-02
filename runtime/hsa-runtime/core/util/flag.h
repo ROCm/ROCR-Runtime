@@ -43,6 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_FLAG_H_
 #define HSA_RUNTIME_CORE_INC_FLAG_H_
 
+#include <algorithm>
+#include <cctype>
 #include <stdint.h>
 
 #include <string>
@@ -60,8 +62,15 @@ class Flag {
     std::string var = os::GetEnvVar("HSA_CHECK_FLAT_SCRATCH");
     check_flat_scratch_ = (var == "1") ? true : false;
 
-    var = os::GetEnvVar("HSA_ENABLE_VM_FAULT_MESSAGE");
-    enable_vm_fault_message_ = (var == "0") ? false : true;
+    var = os::GetEnvVar("HSA_DEBUG_FAULT");
+    std::transform(var.begin(), var.end(), var.begin(),
+                   [](unsigned char c) { return std::tolower(c); });
+
+    if (var == "analyze") {
+      debug_fault_ = DEBUG_FAULT_ANALYZE;
+    } else {
+      debug_fault_ = DEBUG_FAULT_OFF;
+    }
 
     var = os::GetEnvVar("HSA_ENABLE_QUEUE_FAULT_MESSAGE");
     enable_queue_fault_message_ = (var == "0") ? false : true;
@@ -96,10 +105,15 @@ class Flag {
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
   }
 
+  enum DebugFaultEnum {
+    DEBUG_FAULT_OFF,
+    DEBUG_FAULT_ANALYZE,
+  };
+
   bool check_flat_scratch() const { return check_flat_scratch_; }
 
-  bool enable_vm_fault_message() const { return enable_vm_fault_message_; }
-  
+  DebugFaultEnum debug_fault() const { return debug_fault_; }
+
   bool enable_queue_fault_message() const { return enable_queue_fault_message_; }
 
   bool enable_interrupt() const { return enable_interrupt_; }
@@ -124,7 +138,7 @@ class Flag {
 
  private:
   bool check_flat_scratch_;
-  bool enable_vm_fault_message_;
+  DebugFaultEnum debug_fault_;
   bool enable_interrupt_;
   bool enable_sdma_;
   bool emulate_aql_;

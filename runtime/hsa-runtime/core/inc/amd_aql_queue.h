@@ -44,12 +44,13 @@
 #define HSA_RUNTIME_CORE_INC_AMD_HW_AQL_COMMAND_PROCESSOR_H_
 
 #include "core/inc/runtime.h"
+#include "core/inc/amd_gpu_agent.h"
 #include "core/inc/signal.h"
 #include "core/inc/queue.h"
-#include "core/inc/amd_gpu_agent.h"
 #include "core/util/locks.h"
 
 namespace amd {
+
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
@@ -183,6 +184,8 @@ class AqlQueue : public core::Queue, public core::Signal {
 
   // @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
+
+  WaveStates GetWaveStates();
 
   /// @brief This operation is illegal
   hsa_signal_value_t LoadRelaxed() override {
