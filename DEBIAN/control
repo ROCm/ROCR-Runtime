@@ -1,5 +1,5 @@
 Package: hsakmt-rocm-dev
-Architecture: amd64
+Architecture: $arch
 Maintainer: Advanced Micro Devices Inc.
 Depends:libpci3
 Priority: optional
