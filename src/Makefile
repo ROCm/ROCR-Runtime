@@ -14,6 +14,7 @@ PACKAGE_MINOR_VER = 0
 PACKAGE_PATCH_VER ?= 0
 PACKAGE_VER = $(PACKAGE_MAJOR_VER).$(PACKAGE_MINOR_VER).$(PACKAGE_PATCH_VER)
 export PACKAGE_VER
+DEB_BUILD_ARCH = $(shell dpkg --print-architecture | sed 's/ \*$i//g')
 
 # Compiler options
 CFLAGS += -fPIC # Position-independent code required to build shared library
@@ -96,9 +97,10 @@ package-common: lnx64a
 
 deb: package-common
 	@mkdir -p $(PACKAGE_DIR)/DEBIAN
-	@sed 's/\$$version/$(PACKAGE_VER)/g' $(DEBIAN_DIR)/control > $(PACKAGE_DIR)/DEBIAN/control
+	@sed 's/\$$version/$(PACKAGE_VER)/g;s/\$$arch/$(DEB_BUILD_ARCH)/g' $(DEBIAN_DIR)/control > $(PACKAGE_DIR)/DEBIAN/control
+
 	@fakeroot dpkg-deb --build $(PACKAGE_DIR) \
-		$(BUILDDIR)/hsakmt-dev-$(PACKAGE_VER)-amd64.deb
+		$(BUILDDIR)/hsakmt-dev-$(PACKAGE_VER)-${DEB_BUILD_ARCH}.deb
 
 rpm: package-common
 	@rpmbuild --define '_topdir $(BUILD_ROOT)/rpm' -ba $(THUNK_ROOT)/RPM/libhsakmt.spec
