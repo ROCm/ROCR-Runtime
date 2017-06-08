@@ -163,15 +163,15 @@ static struct hsa_gfxip_table {
 	{ 0x67EF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	{ 0x67FF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	/* Vega10 */
-	{ 0x6860, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6861, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6862, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6863, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6864, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6867, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x6868, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
-	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 }
+	{ 0x6860, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6861, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6862, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6863, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6864, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6867, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6868, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x686C, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x687F, 9, 0, 1, 1, "Vega10", CHIP_VEGA10 }
 };
 
 enum cache_type {
