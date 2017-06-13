@@ -28,6 +28,8 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _TEST_SMGR_H_
 #define _TEST_SMGR_H_
 
+#include <atomic>
+
 #include "test_aql.h"
 #include "amd_aql_pm4_ib_packet.h"
 
@@ -35,9 +37,8 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 class TestPMgr : public TestAql {
  public:
   typedef amd_aql_pm4_ib_packet_t packet_t;
-
- private:
-  bool addPacket(const packet_t* packet);
+  TestPMgr(TestAql* t);
+  bool run();
 
  protected:
   packet_t prePacket;
@@ -49,9 +50,19 @@ class TestPMgr : public TestAql {
   virtual bool dumpData() { return false; }
   virtual bool initialize(int argc, char** argv);
 
- public:
-  TestPMgr(TestAql* t);
-  bool run();
+ private:
+  enum {
+    SLOT_PM4_SIZE_DW = HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE / sizeof(uint32_t),
+    SLOT_PM4_SIZE_AQLP = HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE / 64
+  };
+  struct slot_pm4_s {
+    uint32_t words[SLOT_PM4_SIZE_DW];
+  };
+  typedef std::atomic<slot_pm4_s> slot_pm4_t;
+
+  bool addPacket(const packet_t* packet);
+  bool addPacketGfx8(const packet_t* packet);
+  bool addPacketGfx9(const packet_t* packet);
 };
 
 #endif  // _TEST_SMGR_H_

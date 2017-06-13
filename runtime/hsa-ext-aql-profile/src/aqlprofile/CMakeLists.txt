@@ -10,6 +10,7 @@ include_directories ( $ENV{ROCR_INC_DIR} )
 include_directories ( ${PROJ_DIR}/perfcounter )
 include_directories ( ${PROJ_DIR}/threadtrace )
 include_directories ( ${PROJ_DIR}/commandwriter )
+include_directories ( ${HSA_RUNTIME_OSC_DIR} )
 include_directories ( ${API_DIR} )
 
 #

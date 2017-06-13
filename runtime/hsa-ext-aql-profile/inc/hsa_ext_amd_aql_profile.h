@@ -203,11 +203,11 @@ hsa_status_t hsa_ext_amd_aql_profile_stop(
     hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);    // [out] profile stop AQL packet
 
 // Legacy PM4 profiling packet size
-const unsigned HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE = 64;
-// Converting of the profiling AQL packet to PM4 packet, GFX8 support
+const unsigned HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE = 192;
+// GFX8 support, converting the profiling AQL packet to PM4 packet blob
 hsa_status_t hsa_ext_amd_aql_profile_legacy_get_pm4(
-    const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // AQL packet
-    void* pm4);                                      // PM4 packet blob
+    const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // [in] AQL packet
+    void* data);                                     // [out] PM4 packet blob
 
 //
 // Get profile info:
