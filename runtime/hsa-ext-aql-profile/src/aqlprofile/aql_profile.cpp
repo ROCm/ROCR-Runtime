@@ -258,10 +258,17 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_stop(
   return HSA_STATUS_SUCCESS;
 }
 
-// Converting of the profiling AQL packet to PM4 packet, GFX8 support
+// GFX8 support, converting of the profiling AQL packet to PM4 packet blob
 PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_legacy_get_pm4(
-    const aql_profile::packet_t* aql_packet, void* pm4) {
-  return HSA_STATUS_ERROR;
+    const aql_profile::packet_t* aql_packet, void* data) {
+  // Populate GFX8 pm4 packet blob
+  // Adding HSA barrier acquire packet
+  data = aql_profile::legacyAqlAcquire(aql_packet, data);
+  // Adding PM4 command packet
+  data = aql_profile::legacyPm4(aql_packet, data);
+  // Adding HSA barrier release packet
+  data = aql_profile::legacyAqlRelease(aql_packet, data);
+  return HSA_STATUS_SUCCESS;
 }
 
 // Method for getting the profile info

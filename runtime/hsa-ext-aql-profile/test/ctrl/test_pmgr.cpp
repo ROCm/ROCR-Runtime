@@ -30,7 +30,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "test_pmgr.h"
 
-bool TestPMgr::addPacket(const packet_t* packet) {
+bool TestPMgr::addPacketGfx9(const packet_t* packet) {
   packet_t aql_packet = *packet;
 
   // Compute the write index of queue and copy Aql packet into it
@@ -55,6 +55,36 @@ bool TestPMgr::addPacket(const packet_t* packet) {
   hsa_signal_store_relaxed(getQueue()->doorbell_signal, que_idx);
 
   return true;
+}
+
+bool TestPMgr::addPacketGfx8(const packet_t* packet) {
+  // Create Legacy PM4 data
+  const hsa_ext_amd_aql_pm4_packet_t * aql_packet =
+    (const hsa_ext_amd_aql_pm4_packet_t *) packet;
+  slot_pm4_s data;
+  hsa_ext_amd_aql_profile_legacy_get_pm4(aql_packet, (void*)data.words);
+
+  // Compute the write index of queue and copy Aql packet into it
+  uint64_t que_idx = hsa_queue_load_write_index_relaxed(getQueue());
+  const uint32_t mask = getQueue()->size - 1;
+
+  // Copy Aql packet into queue buffer
+  packet_t* ptr = ((packet_t*)(getQueue()->base_address)) + (que_idx & mask);
+  slot_pm4_t * slot_pm4 = (slot_pm4_t*)ptr;
+  slot_pm4->store(data, std::memory_order_relaxed);
+
+  // Increment the write index and ring the doorbell to dispatch the kernel.
+  hsa_queue_store_write_index_relaxed(getQueue(), (que_idx + SLOT_PM4_SIZE_AQLP));
+  hsa_signal_store_relaxed(getQueue()->doorbell_signal, que_idx + SLOT_PM4_SIZE_AQLP - 1);
+
+  return true;
+}
+
+bool TestPMgr::addPacket(const packet_t* packet) {
+  const char * agent_name = getAgentInfo()->name;
+  return (strncmp(agent_name, "gfx8", 4) == 0) ?
+    addPacketGfx8(packet) :
+    addPacketGfx9(packet);
 }
 
 bool TestPMgr::run() {

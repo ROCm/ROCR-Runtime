@@ -144,10 +144,11 @@ bool TestHSA::run() {
   // Initialize the dispatch packet.
   hsa_kernel_dispatch_packet_t aql;
   memset(&aql, 0, sizeof(aql));
-  // Set the packet's type, acquire and release fences
+  // Set the packet's type, barrier bit, acquire and release fences
   aql.header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
-  aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
-  aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+  aql.header |= 1ul << HSA_PACKET_HEADER_BARRIER;
+  aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE;
+  aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE;
   // Populate Aql packet with default values
   aql.setup = 1;
   aql.grid_size_x = work_grid_size;
