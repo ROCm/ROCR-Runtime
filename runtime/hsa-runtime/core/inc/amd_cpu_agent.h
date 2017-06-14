@@ -45,8 +45,6 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_CPU_AGENT_H_
 #define HSA_RUNTIME_CORE_INC_AMD_CPU_AGENT_H_
 
-#include <list>
-#include <memory>
 #include <vector>
 
 #include "hsakmt.h"
@@ -105,12 +103,6 @@ class CpuAgent : public core::Agent {
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
 
-  hsa_status_t HostQueueCreate(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
-                               uint32_t features, hsa_signal_t doorbell_signal,
-                               core::Queue** queue) override;
-
-  hsa_status_t QueueDestroy(core::Queue* queue) override;
-
   // @brief Returns number of data caches.
   __forceinline size_t num_cache() const { return cache_props_.size(); }
 
@@ -161,8 +153,6 @@ class CpuAgent : public core::Agent {
 
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
-
-  std::list<std::unique_ptr<core::Queue>> queues_;
 
   DISALLOW_COPY_AND_ASSIGN(CpuAgent);
 };

@@ -53,7 +53,6 @@
 
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/amd_cpu_agent.h"
-#include "core/inc/amd_debugger.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/amd_topology.h"
@@ -917,24 +916,55 @@ void Runtime::BindVmFaultHandler() {
       return;
     }
 
-    SetAsyncSignalHandler(core::Signal::Convert(vm_fault_signal_), HSA_SIGNAL_CONDITION_NE, 0,
-                          VMFaultHandler, this);
+    SetAsyncSignalHandler(core::Signal::Convert(vm_fault_signal_),
+                          HSA_SIGNAL_CONDITION_NE, 0, VMFaultHandler,
+                          reinterpret_cast<void*>(vm_fault_signal_));
   }
 }
 
 bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
-  Runtime* runtime = reinterpret_cast<Runtime*>(arg);
-  assert(runtime->vm_fault_signal_ != NULL);
+  core::InterruptSignal* vm_fault_signal =
+      reinterpret_cast<core::InterruptSignal*>(arg);
 
-  HsaEvent* vm_fault_event = runtime->vm_fault_signal_->EopEvent();
-  const HsaMemoryAccessFault& fault = vm_fault_event->EventData.EventData.MemoryAccessFault;
+  assert(vm_fault_signal != NULL);
 
-  auto agent_it = std::find_if(runtime->gpu_agents_.begin(), runtime->gpu_agents_.end(),
-                               [&](Agent* agent) { return agent->node_id() == fault.NodeId; });
-  assert(agent_it != runtime->gpu_agents_.end());
+  if (vm_fault_signal == NULL) {
+    return false;
+  }
 
-  amd::Debugger::HandleFault(fault, static_cast<amd::GpuAgentInt*>(*agent_it));
+  if (runtime_singleton_->flag().enable_vm_fault_message()) {
+    HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
 
+    const HsaMemoryAccessFault& fault =
+        vm_fault_event->EventData.EventData.MemoryAccessFault;
+
+    std::string reason = "";
+    if (fault.Failure.NotPresent == 1) {
+      reason += "Page not present or supervisor privilege";
+    } else if (fault.Failure.ReadOnly == 1) {
+      reason += "Write access to a read-only page";
+    } else if (fault.Failure.NoExecute == 1) {
+      reason += "Execute access to a page marked NX";
+    } else if (fault.Failure.GpuAccess == 1) {
+      reason += "Host access only";
+    } else if (fault.Failure.ECC == 1) {
+      reason += "ECC failure (if supported by HW)";
+    } else {
+      reason += "Unknown";
+    }
+
+    fprintf(stderr,
+            "Memory access fault by GPU node-%u on address %p%s. Reason: %s.\n",
+            fault.NodeId, reinterpret_cast<const void*>(fault.VirtualAddress),
+            (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
+            reason.c_str());
+  } else {
+    assert(false && "GPU memory access fault.");
+  }
+
+  std::abort();
+
+  // No need to keep the signal because we are done.
   return false;
 }
 

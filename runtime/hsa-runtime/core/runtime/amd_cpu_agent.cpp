@@ -369,32 +369,4 @@ hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   return HSA_STATUS_ERROR;
 }
 
-hsa_status_t CpuAgent::HostQueueCreate(hsa_region_t region, uint32_t ring_size,
-                                       hsa_queue_type32_t type, uint32_t features,
-                                       hsa_signal_t doorbell_signal, core::Queue** queue) {
-  core::HostQueue* host_queue =
-      new core::HostQueue(*this, region, ring_size, type, features, doorbell_signal);
-
-  if (!host_queue->IsValid()) {
-    delete host_queue;
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  queues_.emplace_back(host_queue);
-  *queue = host_queue;
-
-  return HSA_STATUS_SUCCESS;
-}
-
-hsa_status_t CpuAgent::QueueDestroy(core::Queue* queue) {
-  auto it = std::find_if(
-      queues_.begin(), queues_.end(),
-      [&](std::unique_ptr<core::Queue>& queue_ptr) { return queue_ptr.get() == queue; });
-
-  assert(it != queues_.end() && "attempt to destroy an untracked queue");
-  queues_.erase(it);
-
-  return HSA_STATUS_SUCCESS;
-}
-
 }  // namespace amd
