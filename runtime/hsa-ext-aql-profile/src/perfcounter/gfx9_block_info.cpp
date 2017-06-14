@@ -1,4 +1,4 @@
-#include "ai_blockinfo.h"
+#include "gfx9_block_info.h"
 #include "gfxip/gfx9/gfx9_offset.h"
 #include "gfxip/gfx9/gfx9_typedef.h"
 
@@ -7,7 +7,7 @@ namespace pm4_profile {
  * Table containing CounterGroups which represent AI hardware blocks
  * as defined by \ref GpuBlockInfo structure
  */
-GpuBlockInfo AiPmuHwBlocks[] = {
+GpuBlockInfo Gfx9HwBlocks[] = {
     // Counter block CB
     {"AI_CB0", kHsaAiCounterBlockIdCb0, AI_MAX_NUM_SHADER_ENGINES, 2, AI_NUM_CB,
      CntlMethodBySeAndInstance, 395, AI_COUNTER_NUM_PER_CB, 0, 0, true, 0, 0, false, 0, 0},
@@ -269,6 +269,8 @@ GpuBlockInfo AiPmuHwBlocks[] = {
     // Name of the last line should be empty to indicate end of all counter groups
     {"", kHsaAiCounterBlockIdBlocksLast, 0, 0, 0, CntlMethodNone, 0, 0, 0, 0, false, 0, 0, false, 0,
      0}};
+
+extern const uint32_t Gfx9HwBlockCount = sizeof(Gfx9HwBlocks) / sizeof(GpuBlockInfo);
 
 /*
  * The following tables contain register addresses of the SQ counter registers

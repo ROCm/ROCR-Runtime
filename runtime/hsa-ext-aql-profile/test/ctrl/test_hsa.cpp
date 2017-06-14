@@ -25,9 +25,12 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
-#include "os.h"
-#include "helper_funcs.hpp"
-#include "hsa_rsrc_factory.hpp"
+#include <assert.h>
+#include <atomic>
+
+//#include "os.h"
+#include "helper_funcs.h"
+#include "hsa_rsrc_factory.h"
 #include "test_hsa.h"
 
 bool TestHSA::initialize(int arg_cnt, char** arg_list) {
@@ -146,7 +149,6 @@ bool TestHSA::run() {
   memset(&aql, 0, sizeof(aql));
   // Set the packet's type, barrier bit, acquire and release fences
   aql.header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
-  aql.header |= 1ul << HSA_PACKET_HEADER_BARRIER;
   aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE;
   aql.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE;
   // Populate Aql packet with default values

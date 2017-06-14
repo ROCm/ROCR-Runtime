@@ -3,10 +3,8 @@
 #
 include_directories ( $ENV{ROCR_INC_DIR} )
 include_directories ( ${API_DIR} )
-include_directories ( ${PROJ_DIR}/aqlprofile )
-include_directories ( ${TEST_DIR}/common )
+include_directories ( ${TEST_DIR}/util )
 include_directories ( ${TEST_DIR}/ctrl )
-include_directories ( ${CORE_UTIL_DIR} )
 
 #
 # Specify the directory containing the libraries of HsaRt
@@ -19,8 +17,8 @@ find_library ( ROCR_LIB NAMES hsa-runtime64 PATHS $ENV{ROCR_LIB_DIR} )
 # Set Name for Common library and build it as a
 # static library to be linked with others
 #
-set ( COMMON_LIB "common${ONLY64STR}" )
-add_subdirectory ( ${TEST_DIR}/common "${PROJECT_BINARY_DIR}/common" )
+set ( UTIL_LIB "util${ONLY64STR}" )
+add_subdirectory ( ${TEST_DIR}/util "${PROJECT_BINARY_DIR}/util" )
 
 #
 # Build the test library
@@ -39,7 +37,7 @@ set ( TEST_LIBS ${LIB_NAME} )
 set ( SRC_LIST ${TEST_DIR}/ctrl/test.cpp )
 set ( SRC_LIST ${SRC_LIST} ${TEST_DIR}/ctrl/test_pmgr.cpp )
 set ( SRC_LIST ${SRC_LIST} ${TEST_DIR}/ctrl/test_hsa.cpp )
-set ( LIB_LIST ${TEST_LIBS} ${COMMON_LIB} ${CORE_UTILS_LIB} ${ROCR_LIB} ${TARGET_LIB} )
+set ( LIB_LIST ${TEST_LIBS} ${UTIL_LIB} ${CORE_UTILS_LIB} ${ROCR_LIB} ${TARGET_LIB} )
 set ( EXE_NAME "ctrl" )
 add_executable ( ${EXE_NAME} ${SRC_LIST} )
 target_link_libraries( ${EXE_NAME} ${LIB_LIST} c stdc++ dl pthread rt atomic )

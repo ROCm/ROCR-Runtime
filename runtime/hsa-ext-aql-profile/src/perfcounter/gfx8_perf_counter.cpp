@@ -1,21 +1,20 @@
-#include <string.h>
-#include <iomanip>
-
-#include "os.h"
+#include <assert.h>
 
 #include "gfxip/gfx8/si_ci_vi_merged_typedef.h"
 #include "gfxip/gfx8/si_ci_vi_merged_offset.h"
 #include "gfxip/gfx8/si_ci_vi_merged_enum.h"
 #include "gfxip/gfx8/si_pm4defs.h"
-#include "cmdwriter.h"
 
-#include "vi_pmu.h"
-#include "gpu_countergroup.h"
-#include "vi_blockinfo.h"
-#include "gpu_enum.h"
+#include "gfx8_perf_counter.h"
+#include "gfx8_block_info.h"
+#include "cmdwriter.h"
 
 using namespace std;
 using namespace pm4_profile;
+
+// A flag to indicate the current packet is for copy register value
+#define MAX_REG_NUM 100
+#define COPY_DATA_FLAG 0xFFFFFFFF
 
 namespace pm4_profile {
 
@@ -27,20 +26,14 @@ static char errorString[][64] = {{"No error"},
                                  {"countegroup error state"},
                                  {"countegroup is not completed"}};
 
-ViPmu::ViPmu() {
+Gfx8PerfCounter::Gfx8PerfCounter() {
   // Initialize the number of shader engines
   num_se_ = 4;
   Init();
 }
 
-void ViPmu::Init() {
+void Gfx8PerfCounter::Init() {
   error_code_ = 0;
-  info_set_ = new InfoSet();
-  parameter_set_ = new ParameterSet();
-
-  // Initialize pointer to stored counter block list to NULL
-  blk_list_ = NULL;
-  initCounterBlock();
 
   // Initialize the value to use in resetting GRBM
   regGRBM_GFX_INDEX grbm_gfx_index;
@@ -49,106 +42,38 @@ void ViPmu::Init() {
   grbm_gfx_index.bitfields.SE_BROADCAST_WRITES = 1;
   grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
   reset_grbm_ = grbm_gfx_index.u32All;
-
-  // Update state of Perf Mgmt Unit
-  profiler_state_ = ROCR_PMU_STATE_IDLE;
 }
 
-ViPmu::~ViPmu() {
-  // Remove all counter blocks
-  RemoveCounterBlocks();
-  blk_map_.clear();
-  delete parameter_set_;
-  delete info_set_;
-
-  if (blk_list_) {
-    free(blk_list_);
-    blk_list_ = NULL;
-  }
-}
-
-// Initializes the handle of buffer used to collect PMC data
-// @param cmdBufSz Size in terms of bytes
-bool ViPmu::setPmcDataBuff(uint8_t* pmcBuffer, uint32_t pmcBuffSz) {
-  // Update counter data buffer addr and size params
-  pmcDataSz_ = pmcBuffSz;
-  pmcData_ = (uint32_t*)pmcBuffer;
-  return true;
-}
-
-//
-// The logic is quite simple and is as follows
-//
-//    Issue CsPartialFlush
-//    Issue Cmd to stop Perf Counters
-//    Issue Cmd to Disable & Reset Perf Counters
-//
-void ViPmu::ResetCounterBlocks(pm4_profile::DefaultCmdBuf* cmdBuff,
-                               pm4_profile::CommandWriter* cmdWriter) {
-  // Waits until all outstanding commands have completed
-  // by issing CS Partial Flush command
-  cmdWriter->BuildWriteWaitIdlePacket(cmdBuff);
-
-  // Program CP Perfmon Cntrl Rgstr to disable and reset counters
-  regCP_PERFMON_CNTL cp_perfmon_cntl;
-  cp_perfmon_cntl.u32All = 0;
-  cp_perfmon_cntl.bits.PERFMON_STATE = 0;
-  cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmCP_PERFMON_CNTL__CI__VI, cp_perfmon_cntl.u32All);
-}
-
-bool ViPmu::begin(pm4_profile::DefaultCmdBuf* cmdBuff, pm4_profile::CommandWriter* cmdWriter,
-                  bool reset_counter) {
-  if (profiler_state_ != ROCR_PMU_STATE_IDLE) {
-    error_code_ = kHsaPmuErrorCodeErrorState;
-    return false;
-  }
-
+void Gfx8PerfCounter::begin(DefaultCmdBuf* cmdBuff, CommandWriter* cmdWriter,
+                            const CountersMap& countersMap) {
   // Reset Grbm to its default state - broadcast
   cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmGRBM_GFX_INDEX__CI__VI, reset_grbm_);
 
-  // Program CP Perfmon Cntrl Rgstr to disable and reset counters
-  regCP_PERFMON_CNTL cp_perfmon_cntl;
-  cp_perfmon_cntl.u32All = 0;
-  cp_perfmon_cntl.bits.PERFMON_STATE = 0;
-  cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmCP_PERFMON_CNTL__CI__VI, cp_perfmon_cntl.u32All);
-
-  // Collect all the program counter blocks
-  uint32_t reg_val[MAX_REG_NUM], reg_addr[MAX_REG_NUM], reg_num;
-
-  // Retrieve the list of blocks whose perf counters have been enabled
-  uint32_t blk_cnt = 0;
-  CounterBlock** blk_list = getAllCounterBlocks(blk_cnt);
-
   // Iterate through the list of blocks to generate Pm4 commands to
   // program corresponding perf counters of each block
-  for (uint32_t blkIdx = 0; blkIdx < blk_cnt; blkIdx++) {
-    // Retrieve the list of perf counters and their count
-    uint32_t counter_num;
-    Counter** cntr_list;
-    cntr_list = blk_list[blkIdx]->getEnabledCounters(counter_num);
-    if (counter_num == 0) {
-      continue;
-    }
-
-    // Retrieve the  block Id of perf counters
-    void* p_data;
-    uint32_t block_id;
-    uint32_t data_size;
-    blk_list[blkIdx]->getInfo(GPU_BLK_INFO_ID, data_size, (void**)&p_data);
-    block_id = *(static_cast<uint32_t*>(p_data));
+  for (CountersMap::const_iterator block_it = countersMap.begin(); block_it != countersMap.end();
+       ++block_it) {
+    const uint32_t block_id = block_it->first;
+    const CountersVec& counters = block_it->second;
+    const uint32_t counter_count = counters.size();
 
     // Iterate through each enabled perf counter and building
     // corresponding Pm4 commands to program the various control
     // registers involved
-    for (uint32_t cntrIdx = 0; cntrIdx < counter_num; cntrIdx++) {
+
+    for (uint32_t ind = 0; ind < counter_count; ++ind) {
+      const uint32_t counter_id = counters[ind];
+
       // Build the list of control registers to program which
       // varies per perf counter block
-      reg_num = BuildCounterSelRegister(cntrIdx, reg_addr, reg_val, block_id, cntr_list[cntrIdx]);
+      uint32_t reg_addr[MAX_REG_NUM], reg_val[MAX_REG_NUM];
+      const uint32_t reg_num =
+          BuildCounterSelRegister(ind, reg_addr, reg_val, block_id, counter_id);
 
       // Build the list of Pm4 commands that support control
       // register programming
-      for (uint32_t regIdx = 0; regIdx < reg_num; regIdx++) {
-        cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, reg_addr[regIdx], reg_val[regIdx]);
+      for (uint32_t n = 0; n < reg_num; ++n) {
+        cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, reg_addr[n], reg_val[n]);
       }
     }
   }
@@ -163,96 +88,55 @@ bool ViPmu::begin(pm4_profile::DefaultCmdBuf* cmdBuff, pm4_profile::CommandWrite
   cmdWriter->BuildWriteShRegPacket(cmdBuff, mmCOMPUTE_PERFCOUNT_ENABLE__CI__VI,
                                    cp_perfcount_enable.u32All);
 
-  // Start the counter list
+  // Reset the counter list
+  regCP_PERFMON_CNTL cp_perfmon_cntl;
   cp_perfmon_cntl.u32All = 0;
+  cp_perfmon_cntl.bits.PERFMON_STATE = 0;
+  cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmCP_PERFMON_CNTL__CI__VI, cp_perfmon_cntl.u32All);
+
+  // Start the counter list
   cp_perfmon_cntl.bits.PERFMON_STATE = 1;
   cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmCP_PERFMON_CNTL__CI__VI, cp_perfmon_cntl.u32All);
 
+  // Issue barrier command to apply the commands to configure perfcounters
   cmdWriter->BuildWriteWaitIdlePacket(cmdBuff);
-
-  profiler_state_ = ROCR_PMU_STATE_START;
-  return true;
 }
 
-bool ViPmu::end(pm4_profile::DefaultCmdBuf* cmdBuff, pm4_profile::CommandWriter* cmdWriter) {
-  if (profiler_state_ != ROCR_PMU_STATE_START) {
-    error_code_ = kHsaPmuErrorCodeErrorState;
-    return false;
-  }
-
-  void* p_data;
-  regGRBM_GFX_INDEX grbm_gfx_index;
-
-  // Issue CsPartialFlush command to wait for dispatch to complete
+uint32_t Gfx8PerfCounter::end(DefaultCmdBuf* cmdBuff, CommandWriter* cmdWriter,
+                              const CountersMap& countersMap, void* dataBuff) {
+  // Issue barrier command to wait for dispatch to complete
   cmdWriter->BuildWriteWaitIdlePacket(cmdBuff);
 
-  // Build PM4 packet for starting counters
+  // Build PM4 packet to stop and freeze counters
   regCP_PERFMON_CNTL cp_perfmon_cntl;
   cp_perfmon_cntl.u32All = 0;
   cp_perfmon_cntl.bits.PERFMON_STATE = 2;
   cp_perfmon_cntl.bits.PERFMON_SAMPLE_ENABLE = 1;
   cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmCP_PERFMON_CNTL__CI__VI, cp_perfmon_cntl.u32All);
 
-  // Collect all the program counter blocks
-  uint32_t i, j, k, reg_addr[MAX_REG_NUM], reg_val[MAX_REG_NUM], reg_num, data_size;
-
-  uint32_t blk_cnt = 0;
-  CounterBlock** blk_list = getAllCounterBlocks(blk_cnt);
-
-  uint32_t counter_num;
-  Counter** cntr_list;
-  uint32_t total_counter_num = 0;
-  for (i = 0; i < blk_cnt; i++) {
-    // Retrieve all enabled cntr_list in each counter block
-    cntr_list = blk_list[i]->getEnabledCounters(counter_num);
-    if (!blk_list[i]->getInfo(GPU_BLK_INFO_CONTROL_METHOD, data_size, &p_data)) {
-      return false;
-    }
-
-    CntlMethod method;
-    method = static_cast<CntlMethod>(*(static_cast<uint32_t*>(p_data)));
-
-    // Need to read counter values from each shader engine
-    if (method == CntlMethodBySe || method == CntlMethodBySeAndInstance) {
-      counter_num = counter_num * num_se_;
-    }
-
-    total_counter_num += counter_num;
-  }
-
-  size_t cntrSize = sizeof(int32_t) * 2 * total_counter_num;
-  if (cntrSize > pmcDataSz_) {
-    return false;
-  }
-
   // Reset Grbm to its default state - broadcast
   cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmGRBM_GFX_INDEX__CI__VI, reset_grbm_);
 
-  // Create PM4 packet to read counter values
-  total_counter_num = 0;
-  for (i = 0; i < blk_cnt; i++) {
-    // Retrieve all enabled cntr_list in each counter block
-    cntr_list = blk_list[i]->getEnabledCounters(counter_num);
-    if (counter_num > 0) {
-      uint32_t block_id;
-      uint32_t data_size;
-      if (!blk_list[i]->getInfo(GPU_BLK_INFO_ID, data_size, (void**)&p_data)) {
-        return false;
-      }
-      block_id = *(static_cast<uint32_t*>(p_data));
+  // Iterate through the list of blocks to create PM4 packets to read counter values
+  uint32_t total_counter_num = 0;
+  for (CountersMap::const_iterator block_it = countersMap.begin(); block_it != countersMap.end();
+       ++block_it) {
+    const uint32_t block_id = block_it->first;
+    const uint32_t counter_count = block_it->second.size();
 
-      for (j = 0; j < counter_num; j++) {
-        // retrieve the registers to be set
-        reg_num = BuildCounterReadRegisters(j, block_id, reg_addr, reg_val);
-        for (k = 0; k < reg_num; k++) {
-          if (reg_val[k] == COPY_DATA_FLAG) {
-            cmdWriter->BuildCopyDataPacket(cmdBuff, COPY_DATA_SEL_REG, reg_addr[k], 0,
-                                           pmcData_ + total_counter_num, COPY_DATA_SEL_COUNT_1DW,
-                                           false);
-            total_counter_num++;
-          } else {
-            cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, reg_addr[k], reg_val[k]);
-          }
+    for (uint32_t ind = 0; ind < counter_count; ++ind) {
+      // retrieve the registers to be set
+      uint32_t reg_addr[MAX_REG_NUM], reg_val[MAX_REG_NUM];
+      const uint32_t reg_num = BuildCounterReadRegisters(ind, block_id, reg_addr, reg_val);
+
+      for (uint32_t n = 0; n < reg_num; n++) {
+        if (reg_val[n] == COPY_DATA_FLAG) {
+          cmdWriter->BuildCopyDataPacket(cmdBuff, COPY_DATA_SEL_REG, reg_addr[n], 0,
+                                         ((uint32_t*)dataBuff) + total_counter_num,
+                                         COPY_DATA_SEL_COUNT_1DW, false);
+          total_counter_num++;
+        } else {
+          cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, reg_addr[n], reg_val[n]);
         }
       }
     }
@@ -261,138 +145,21 @@ bool ViPmu::end(pm4_profile::DefaultCmdBuf* cmdBuff, pm4_profile::CommandWriter*
   // Reset Grbm to its default state - broadcast
   cmdWriter->BuildWriteUConfigRegPacket(cmdBuff, mmGRBM_GFX_INDEX__CI__VI, reset_grbm_);
 
-  profiler_state_ = ROCR_PMU_STATE_STOP;
-  return true;
+  return total_counter_num * sizeof(uint32_t);
 }
 
-bool ViPmu::initCounterBlock() {
-  for (int i = 0; !(std::string(ViPmuHwBlocks[i].blockName).empty()); i++) {
-    // Override the value of max number of shader engines
-    ViPmuHwBlocks[i].maxShaderEngineCount = num_se_;
+int Gfx8PerfCounter::getLastError() { return error_code_; }
 
-    // Instantiate a perf counter block and its properties
-    GpuCounterBlock* cntr_blk = new GpuCounterBlock();
-    if (!cntr_blk) {
-      blk_map_.clear();
-      return false;
-    }
-
-    cntr_blk->setInfo(GPU_BLK_INFO_BLOCK_NAME, GPU_BLOCK_NAME_SIZE,
-                      (void*)ViPmuHwBlocks[i].blockName);
-
-    cntr_blk->setInfo(GPU_BLK_INFO_ID, sizeof(uint32_t), (void*)&ViPmuHwBlocks[i].counterGroupId);
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_SHADER_ENGINE_COUNT, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxShaderEngineCount));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_SHADER_ARRAY_COUNT, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxShaderArrayCount));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_INSTANCE_COUNT, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxInstanceCount));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_CONTROL_METHOD, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].method));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_EVENT_ID, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxEventId));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_SIMULTANEOUS_COUNTERS, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxSimultaneousCounters));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_MAX_STREAMING_COUNTERS, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].maxStreamingCounters));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_SHARED_HW_COUNTERS, sizeof(uint32_t),
-                      (void*)&(ViPmuHwBlocks[i].sharedHWCounters));
-
-    cntr_blk->setInfo(GPU_BLK_INFO_HAS_FILTERS, sizeof(bool),
-                      (void*)&(ViPmuHwBlocks[i].hasFilters));
-
-    // TODO: Need to fill in the Threadtrace stuff here
-    HsaViCounterBlockId blk_id;
-    blk_id = static_cast<HsaViCounterBlockId>(ViPmuHwBlocks[i].counterGroupId);
-    blk_map_.insert(ViCounterBlockMap::value_type(blk_id, cntr_blk));
-  }
-
-  // Initiate the PMU state and error code
-  error_code_ = 0;
-  profiler_state_ = ROCR_PMU_STATE_IDLE;
-  return true;
-}
-
-int ViPmu::getLastError() { return error_code_; }
-
-std::string ViPmu::getErrorString(int error) {
-  if ((error >= 0) && (error < kHsaPmuErrorCodeMax)) {
+std::string Gfx8PerfCounter::getErrorString(int error) {
+  if ((error >= 0) && (error < kErrorCodeMax)) {
     std::string err_string(errorString[error]);
     return err_string;
   }
   return string("Error input code!");
 }
 
-bool ViPmu::getParameter(uint32_t param, uint32_t& retSize, void** ppData) {
-  return parameter_set_->getParameter(param, retSize, ppData);
-}
-
-bool ViPmu::setParameter(uint32_t param, uint32_t paramSize, const void* p_data) {
-  return parameter_set_->setParameter(param, paramSize, p_data);
-}
-
-bool ViPmu::getInfo(uint32_t info, uint32_t& retSize, void** ppData) {
-  return info_set_->getInfo(info, retSize, ppData);
-}
-
-pm4_profile::CounterBlock* ViPmu::getCounterBlockById(uint32_t id) {
-  HsaViCounterBlockId block_id = static_cast<HsaViCounterBlockId>(id);
-
-  // Carrizo has only 8 instances of TA, TD, TCP Perf Blocks
-  /*
-  if (asic_ == HsaAmdDeviceAsicTypeCZ) {
-    if ( ((id >= kHsaViCounterBlockIdTa8) && (id <= kHsaViCounterBlockIdTa15)) ||
-         ((id >= kHsaViCounterBlockIdTd8) && (id <= kHsaViCounterBlockIdTd15)) ||
-         ((id >= kHsaViCounterBlockIdTcp8) && (id <= kHsaViCounterBlockIdTcp15))) {
-      return NULL;
-    }
-  }
-  */
-
-  return blk_map_[block_id];
-}
-
-pm4_profile::CounterBlock** ViPmu::getAllCounterBlocks(uint32_t& num_blocks) {
-  size_t block_size = blk_map_.size();
-
-  if (block_size <= 0) {
-    error_code_ = kHsaPmuErrorCodeNoCounterBlock;
-    return NULL;
-  }
-
-  if (blk_list_) {
-    free(blk_list_);
-    blk_list_ = NULL;
-  }
-
-  blk_list_size_ = (uint32_t)(sizeof(GpuCounterBlock*) * block_size);
-  blk_list_size_ = ((blk_list_size_ % 4096) != 0) ? 4096 : blk_list_size_;
-  blk_list_ = (CounterBlock**)malloc(blk_list_size_);
-  if (blk_list_ == NULL) {
-    return NULL;
-  }
-
-  ViCounterBlockMap::iterator it;
-  uint32_t blk_cnt = 0;
-  for (it = blk_map_.begin(); it != blk_map_.end(); it++) {
-    blk_list_[blk_cnt] = it->second;
-    blk_cnt++;
-  }
-
-  num_blocks = blk_cnt;
-  return blk_list_;
-}
-
-uint32_t ViPmu::ProgramTcpCntrs(uint32_t tcpRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                                uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramTcpCntrs(uint32_t tcpRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                          uint32_t blkId, uint32_t blkCntrIdx) {
   regGRBM_GFX_INDEX grbm_gfx_index;
 
   grbm_gfx_index.u32All = 0;
@@ -416,8 +183,8 @@ uint32_t ViPmu::ProgramTcpCntrs(uint32_t tcpRegIdx, uint32_t* regAddr, uint32_t*
   return regIdx;
 }
 
-uint32_t ViPmu::ProgramTdCntrs(uint32_t tdRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                               uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramTdCntrs(uint32_t tdRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                         uint32_t blkId, uint32_t blkCntrIdx) {
   regGRBM_GFX_INDEX grbm_gfx_index;
 
   grbm_gfx_index.u32All = 0;
@@ -440,8 +207,8 @@ uint32_t ViPmu::ProgramTdCntrs(uint32_t tdRegIdx, uint32_t* regAddr, uint32_t* r
   return regIdx;
 }
 
-uint32_t ViPmu::ProgramTccCntrs(uint32_t tccRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                                uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramTccCntrs(uint32_t tccRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                          uint32_t blkId, uint32_t blkCntrIdx) {
   regGRBM_GFX_INDEX grbm_gfx_index;
 
   grbm_gfx_index.u32All = 0;
@@ -465,8 +232,8 @@ uint32_t ViPmu::ProgramTccCntrs(uint32_t tccRegIdx, uint32_t* regAddr, uint32_t*
   return regIdx;
 }
 
-uint32_t ViPmu::ProgramTcaCntrs(uint32_t tcaRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                                uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramTcaCntrs(uint32_t tcaRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                          uint32_t blkId, uint32_t blkCntrIdx) {
   regGRBM_GFX_INDEX grbm_gfx_index;
 
   grbm_gfx_index.u32All = 0;
@@ -489,8 +256,8 @@ uint32_t ViPmu::ProgramTcaCntrs(uint32_t tcaRegIdx, uint32_t* regAddr, uint32_t*
   return regIdx;
 }
 
-uint32_t ViPmu::ProgramTaCntrs(uint32_t taRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                               uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramTaCntrs(uint32_t taRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                         uint32_t blkId, uint32_t blkCntrIdx) {
   regGRBM_GFX_INDEX grbm_gfx_index;
 
   grbm_gfx_index.u32All = 0;
@@ -514,8 +281,8 @@ uint32_t ViPmu::ProgramTaCntrs(uint32_t taRegIdx, uint32_t* regAddr, uint32_t* r
   return regIdx;
 }
 
-uint32_t ViPmu::ProgramSQCntrs(uint32_t sqRegIdx, uint32_t* regAddr, uint32_t* regVal,
-                               uint32_t blkId, uint32_t blkCntrIdx) {
+uint32_t Gfx8PerfCounter::ProgramSQCntrs(uint32_t sqRegIdx, uint32_t* regAddr, uint32_t* regVal,
+                                         uint32_t blkId, uint32_t blkCntrIdx) {
   uint32_t regIdx = 0;
 
   // Program the SQ Counter Select Register
@@ -573,22 +340,13 @@ uint32_t ViPmu::ProgramSQCntrs(uint32_t sqRegIdx, uint32_t* regAddr, uint32_t* r
   return regIdx;
 }
 
-uint32_t ViPmu::BuildCounterSelRegister(uint32_t cntrIdx, uint32_t* regAddr, uint32_t* regVal,
-                                        uint32_t blkId, pm4_profile::Counter* blkCntr) {
-  void* p_data;
-  uint32_t data_size;
-  uint32_t blkCntrIdx;
-  uint32_t instance_index;
-  regGRBM_GFX_INDEX grbm_gfx_index;
-
-  // Get the blkCntr selection value
-  if (!blkCntr->getParameter(HSA_EXT_TOOLS_COUNTER_PARAMETER_EVENT_INDEX, data_size,
-                             (void**)&p_data)) {
-    return 0;
-  }
-  blkCntrIdx = *(static_cast<uint32_t*>(p_data));
-
+uint32_t Gfx8PerfCounter::BuildCounterSelRegister(uint32_t cntrIdx, uint32_t* regAddr,
+                                                  uint32_t* regVal, uint32_t blkId,
+                                                  uint32_t blkCntrIdx) {
+  uint32_t instance_index = 0;
+  regGRBM_GFX_INDEX grbm_gfx_index = {0};
   uint32_t regIdx = 0;
+
   switch (blkId) {
     // Program counters belonging to SQ block
     case kHsaViCounterBlockIdSq:
@@ -1011,8 +769,8 @@ uint32_t ViPmu::BuildCounterSelRegister(uint32_t cntrIdx, uint32_t* regAddr, uin
   return regIdx;
 }
 
-uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id, uint32_t* reg_addr,
-                                          uint32_t* reg_val) {
+uint32_t Gfx8PerfCounter::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
+                                                    uint32_t* reg_addr, uint32_t* reg_val) {
   uint32_t ii;
   uint32_t reg_num = 0;
   uint32_t instance_index;
@@ -1031,6 +789,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1056,6 +815,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_INDEX = instance_index;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1096,6 +856,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_INDEX = instance_index;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1147,6 +908,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1168,6 +930,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1189,6 +952,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1210,6 +974,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1247,6 +1012,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_INDEX = instance_index;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1269,6 +1035,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
       grbm_gfx_index.bitfields.INSTANCE_INDEX = instance_index;
       grbm_gfx_index.bitfields.SE_BROADCAST_WRITES = 1;
       grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
       reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
       reg_val[reg_num] = grbm_gfx_index.u32All;
       reg_num++;
@@ -1377,6 +1144,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_INDEX = instance_index;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1413,6 +1181,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1434,6 +1203,7 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
         grbm_gfx_index.bitfields.INSTANCE_BROADCAST_WRITES = 1;
         grbm_gfx_index.bitfields.SE_INDEX = ii;
         grbm_gfx_index.bitfields.SH_BROADCAST_WRITES = 1;
+
         reg_addr[reg_num] = mmGRBM_GFX_INDEX__CI__VI;
         reg_val[reg_num] = grbm_gfx_index.u32All;
         reg_num++;
@@ -1553,17 +1323,5 @@ uint32_t ViPmu::BuildCounterReadRegisters(uint32_t reg_index, uint32_t block_id,
 
   return reg_num;
 }
-
-hsa_status_t ViPmu::RemoveCounterBlocks() {
-  ViCounterBlockMap::iterator it = blk_map_.begin();
-  ViCounterBlockMap::iterator block_end = blk_map_.end();
-
-  for (; it != block_end; it++) {
-    delete it->second;
-  }
-
-  return HSA_STATUS_SUCCESS;
-}
-
 
 } /* namespace */

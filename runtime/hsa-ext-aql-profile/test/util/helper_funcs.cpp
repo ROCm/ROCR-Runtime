@@ -22,12 +22,19 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
 
-#include "helper_funcs.hpp"
+#include <iostream>
+#include <sstream>
+#include <string>
+#include <cmath>
+#include <time.h>
+
+#include "helper_funcs.h"
 
 #ifndef _WIN32
 #include <unistd.h>
 #endif
 
+void error(std::string errorMsg) { std::cout << "Error: " << errorMsg << std::endl; }
 
 /*
  * Prints no more than 256 elements of the given array.
@@ -47,11 +54,11 @@ void printArray(const std::string header, const T* data, const int width, const 
 }
 
 template <typename T>
-int fillRandom(T* arrayPtr, const int width, const int height, const T rangeMin, const T rangeMax,
-               unsigned int seed) {
+bool fillRandom(T* arrayPtr, const int width, const int height, const T rangeMin, const T rangeMax,
+                unsigned int seed) {
   if (!arrayPtr) {
     error("Cannot fill array. NULL pointer.");
-    return HSA_SDK_FAILURE;
+    return false;
   }
 
   if (!seed) seed = (unsigned int)time(NULL);
@@ -66,13 +73,13 @@ int fillRandom(T* arrayPtr, const int width, const int height, const T rangeMin,
       arrayPtr[index] = rangeMin + T(range * rand() / (RAND_MAX + 1.0));
     }
 
-  return HSA_SDK_SUCCESS;
+  return true;
 }
 
-template <typename T> int fillPos(T* arrayPtr, const int width, const int height) {
+template <typename T> bool fillPos(T* arrayPtr, const int width, const int height) {
   if (!arrayPtr) {
     error("Cannot fill array. NULL pointer.");
-    return HSA_SDK_FAILURE;
+    return false;
   }
 
   /* initialisation of input with positions*/
@@ -82,14 +89,14 @@ template <typename T> int fillPos(T* arrayPtr, const int width, const int height
       arrayPtr[index] = index;
     }
 
-  return HSA_SDK_SUCCESS;
+  return true;
 }
 
 template <typename T>
-int fillConstant(T* arrayPtr, const int width, const int height, const T val) {
+bool fillConstant(T* arrayPtr, const int width, const int height, const T val) {
   if (!arrayPtr) {
     error("Cannot fill array. NULL pointer.");
-    return HSA_SDK_FAILURE;
+    return false;
   }
 
   /* initialisation of input with constant value*/
@@ -99,7 +106,7 @@ int fillConstant(T* arrayPtr, const int width, const int height, const T val) {
       arrayPtr[index] = val;
     }
 
-  return HSA_SDK_SUCCESS;
+  return true;
 }
 
 template <typename T> T roundToPowerOf2(T val) {
@@ -112,31 +119,16 @@ template <typename T> T roundToPowerOf2(T val) {
   return val;
 }
 
-template <typename T> int isPowerOf2(T val) {
+template <typename T> bool isPowerOf2(T val) {
   long long _val = val;
-  if ((_val & (-_val)) - _val == 0 && _val != 0)
-    return HSA_SDK_SUCCESS;
-  else
-    return HSA_SDK_FAILURE;
+  return (((_val & (-_val)) - _val == 0) && (_val != 0));
 }
-
-
-template <typename T> bool checkVal(T input, T reference, std::string message, bool isAPIerror) {
-  if (input == reference) {
-    return true;
-  } else {
-    error(message);
-    return false;
-  }
-}
-
 
 template <typename T> std::string toString(T t, std::ios_base& (*r)(std::ios_base&)) {
   std::ostringstream output;
   output << r << t;
   return output.str();
 }
-
 
 bool compare(const float* refData, const float* data, const int length, const float epsilon) {
   float error = 0.0f;
@@ -178,19 +170,6 @@ bool compare(const double* refData, const double* data, const int length, const 
   return error < epsilon;
 }
 
-void error(const char* errorMsg) { std::cout << "Error: " << errorMsg << std::endl; }
-
-void error(std::string errorMsg) { std::cout << "Error: " << errorMsg << std::endl; }
-
-void expectedError(const char* errorMsg) {
-  std::cout << "Expected Error: " << errorMsg << std::endl;
-}
-
-void expectedError(std::string errorMsg) {
-  std::cout << "Expected Error: " << errorMsg << std::endl;
-}
-
-
 /////////////////////////////////////////////////////////////////
 // Template Instantiations
 /////////////////////////////////////////////////////////////////
@@ -202,56 +181,45 @@ template void printArray<long>(const std::string, const long*, int, int);
 template void printArray<float>(const std::string, const float*, int, int);
 template void printArray<double>(const std::string, const double*, int, int);
 
-template int fillRandom<unsigned char>(unsigned char* arrayPtr, const int width, const int height,
-                                       unsigned char rangeMin, unsigned char rangeMax,
+template bool fillRandom<unsigned char>(unsigned char* arrayPtr, const int width, const int height,
+                                        unsigned char rangeMin, unsigned char rangeMax,
+                                        unsigned int seed);
+template bool fillRandom<unsigned int>(unsigned int* arrayPtr, const int width, const int height,
+                                       unsigned int rangeMin, unsigned int rangeMax,
                                        unsigned int seed);
-template int fillRandom<unsigned int>(unsigned int* arrayPtr, const int width, const int height,
-                                      unsigned int rangeMin, unsigned int rangeMax,
-                                      unsigned int seed);
-template int fillRandom<int>(int* arrayPtr, const int width, const int height, int rangeMin,
-                             int rangeMax, unsigned int seed);
-template int fillRandom<long>(long* arrayPtr, const int width, const int height, long rangeMin,
-                              long rangeMax, unsigned int seed);
-template int fillRandom<float>(float* arrayPtr, const int width, const int height, float rangeMin,
-                               float rangeMax, unsigned int seed);
-template int fillRandom<double>(double* arrayPtr, const int width, const int height,
-                                double rangeMin, double rangeMax, unsigned int seed);
+template bool fillRandom<int>(int* arrayPtr, const int width, const int height, int rangeMin,
+                              int rangeMax, unsigned int seed);
+template bool fillRandom<long>(long* arrayPtr, const int width, const int height, long rangeMin,
+                               long rangeMax, unsigned int seed);
+template bool fillRandom<float>(float* arrayPtr, const int width, const int height, float rangeMin,
+                                float rangeMax, unsigned int seed);
+template bool fillRandom<double>(double* arrayPtr, const int width, const int height,
+                                 double rangeMin, double rangeMax, unsigned int seed);
 
 template short roundToPowerOf2<short>(short val);
 template unsigned int roundToPowerOf2<unsigned int>(unsigned int val);
 template int roundToPowerOf2<int>(int val);
 template long roundToPowerOf2<long>(long val);
 
-template int isPowerOf2<short>(short val);
-template int isPowerOf2<unsigned int>(unsigned int val);
-template int isPowerOf2<int>(int val);
-template int isPowerOf2<long>(long val);
+template bool isPowerOf2<short>(short val);
+template bool isPowerOf2<unsigned int>(unsigned int val);
+template bool isPowerOf2<int>(int val);
+template bool isPowerOf2<long>(long val);
 
-template <> int fillPos<short>(short* arrayPtr, const int width, const int height);
-template <> int fillPos<unsigned int>(unsigned int* arrayPtr, const int width, const int height);
-template <> int fillPos<int>(int* arrayPtr, const int width, const int height);
-template <> int fillPos<long>(long* arrayPtr, const int width, const int height);
+template <> bool fillPos<short>(short* arrayPtr, const int width, const int height);
+template <> bool fillPos<unsigned int>(unsigned int* arrayPtr, const int width, const int height);
+template <> bool fillPos<int>(int* arrayPtr, const int width, const int height);
+template <> bool fillPos<long>(long* arrayPtr, const int width, const int height);
 
 template <>
-int fillConstant<short>(short* arrayPtr, const int width, const int height, const short val);
+bool fillConstant<short>(short* arrayPtr, const int width, const int height, const short val);
 template <>
-int fillConstant(unsigned int* arrayPtr, const int width, const int height, const unsigned int val);
-template <> int fillConstant(int* arrayPtr, const int width, const int height, const int val);
-template <> int fillConstant(long* arrayPtr, const int width, const int height, const long val);
-template <> int fillConstant(long* arrayPtr, const int width, const int height, const long val);
-template <> int fillConstant(long* arrayPtr, const int width, const int height, const long val);
-
-
-template bool checkVal<char>(char input, char reference, std::string message, bool isAPIerror);
-template bool checkVal<bool>(bool input, bool reference, std::string message, bool isAPIerror);
-template bool checkVal<std::string>(std::string input, std::string reference, std::string message,
-                                    bool isAPIerror);
-template bool checkVal<short>(short input, short reference, std::string message, bool isAPIerror);
-template bool checkVal<unsigned int>(unsigned int input, unsigned int reference,
-                                     std::string message, bool isAPIerror);
-template bool checkVal<int>(int input, int reference, std::string message, bool isAPIerror);
-template bool checkVal<long>(long input, long reference, std::string message, bool isAPIerror);
-
+bool fillConstant(unsigned int* arrayPtr, const int width, const int height,
+                  const unsigned int val);
+template <> bool fillConstant(int* arrayPtr, const int width, const int height, const int val);
+template <> bool fillConstant(long* arrayPtr, const int width, const int height, const long val);
+template <> bool fillConstant(long* arrayPtr, const int width, const int height, const long val);
+template <> bool fillConstant(long* arrayPtr, const int width, const int height, const long val);
 
 template std::string toString<char>(char t, std::ios_base& (*r)(std::ios_base&));
 template std::string toString<short>(short t, std::ios_base& (*r)(std::ios_base&));

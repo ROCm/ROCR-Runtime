@@ -22,7 +22,9 @@
 *
 ******************************************************************************/
 
-#define COPY_DATA_SEL_COUNT_1DW 0             ///< Copy 1 word (32 bits)
+#define COPY_DATA_SEL_REG 0                   ///< Mem-mapped register
 #define COPY_DATA_SEL_SRC_SYS_PERF_COUNTER 4  ///< Privileged memory performance counter
+#define COPY_DATA_SEL_COUNT_1DW 0             ///< Copy 1 word (32 bits)
+#define COPY_DATA_SEL_COUNT_2DW 1             ///< Copy 2 words (64 bits)
 
 #endif  // _GFX9_PM4DEFS_H_

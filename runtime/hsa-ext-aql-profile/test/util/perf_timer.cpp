@@ -1,4 +1,4 @@
-#include "hsatimer.h"
+#include "perf_timer.h"
 
 PerfTimer::PerfTimer() { freq_in_100mhz = MeasureTSCFreqHz(); }
 
@@ -30,7 +30,7 @@ int PerfTimer::CreateTimer() {
 int PerfTimer::StartTimer(int index) {
   if (index >= (int)_timers.size()) {
     Error("Cannot reset timer. Invalid handle.");
-    return HSA_FAILURE;
+    return FAILURE;
   }
 
 #ifdef _WIN32
@@ -41,9 +41,7 @@ int PerfTimer::StartTimer(int index) {
   _timers[index]->_start = (double)tmpStart;
 #else
 // AMD Windows timing method
-
 #endif
-
 #else
 // General Linux timing method
 #ifndef _AMD
@@ -51,17 +49,13 @@ int PerfTimer::StartTimer(int index) {
   gettimeofday(&s, 0);
   _timers[index]->_start = s.tv_sec * 1.0E3 + ((double)(s.tv_usec / 1.0E3));
 #else
-
   // AMD timing method
-
   unsigned int unused;
   _timers[index]->_start = __rdtscp(&unused);
-
+#endif
 #endif
 
-#endif
-
-  return HSA_SUCCESS;
+  return SUCCESS;
 }
 
 
@@ -69,7 +63,7 @@ int PerfTimer::StopTimer(int index) {
   double n = 0;
   if (index >= (int)_timers.size()) {
     Error("Cannot reset timer. Invalid handle.");
-    return HSA_FAILURE;
+    return FAILURE;
   }
 #ifdef _WIN32
 #ifndef _AMD
@@ -77,9 +71,7 @@ int PerfTimer::StopTimer(int index) {
   QueryPerformanceCounter((LARGE_INTEGER*)&(n1));
   n = (double)n1;
 #else
-
 // AMD Window Timing
-
 #endif
 
 #else
@@ -90,11 +82,9 @@ int PerfTimer::StopTimer(int index) {
   n = s.tv_sec * 1.0E3 + (double)(s.tv_usec / 1.0E3);
 #else
   // AMD Linux timing
-
   unsigned int unused;
   n = __rdtscp(&unused);
 #endif
-
 #endif
 
   n -= _timers[index]->_start;
@@ -105,10 +95,9 @@ int PerfTimer::StopTimer(int index) {
 #else
   //_timers[index]->_clocks += 10 * n /freq_in_100mhz;      // unit is ns
   _timers[index]->_clocks += 1.0E-6 * 10 * n / freq_in_100mhz;  // convert to ms
-  cout << "_AMD is enabled!!!" << endl;
 #endif
 
-  return HSA_SUCCESS;
+  return SUCCESS;
 }
 
 void PerfTimer::Error(string str) { cout << str << endl; }
@@ -117,7 +106,7 @@ void PerfTimer::Error(string str) { cout << str << endl; }
 double PerfTimer::ReadTimer(int index) {
   if (index >= (int)_timers.size()) {
     Error("Cannot read timer. Invalid handle.");
-    return HSA_FAILURE;
+    return FAILURE;
   }
 
   double reading = double(_timers[index]->_clocks);

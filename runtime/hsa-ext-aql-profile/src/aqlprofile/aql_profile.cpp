@@ -2,11 +2,10 @@
 
 #include "aql_profile.h"
 #include "pm4_factory.h"
-#include "cmdwriter.h" // commandwriter
-#include "hsa_perf.h" // perfcounter
-#include "thread_trace.h" // threadtrace
-#include "gpu_enum.h"
-#include "gpu_blockinfo.h"
+#include "cmdwriter.h"     // commandwriter
+#include "perf_counter.h"  // perfcounter
+#include "thread_trace.h"  // threadtrace
+#include "gpu_block_info.h"
 
 #define PUBLIC_API __attribute__((visibility("default")))
 
@@ -129,6 +128,8 @@ hsa_status_t default_sqttdata_callback(hsa_ext_amd_aql_profile_info_type_t info_
   return status;
 }
 
+Pm4Factory::tables_t Pm4Factory::tables;
+
 }  // aql_profile
 
 extern "C" {
@@ -142,8 +143,7 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_validate_event(
 // Method to populate the provided AQL packet with profiling start commands
 PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_start(
     const hsa_ext_amd_aql_profile_profile_t* profile, aql_profile::packet_t* aql_start_packet) {
-
-  aql_profile::Pm4Factory * pm4_factory = aql_profile::Pm4Factory::Create(profile);
+  aql_profile::Pm4Factory* pm4_factory = aql_profile::Pm4Factory::Create(profile);
   if (pm4_factory == NULL) return HSA_STATUS_ERROR;
 
   pm4_profile::CommandWriter* cmdWriter = pm4_factory->getCommandWriter();
@@ -157,27 +157,22 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_start(
     pm4_profile::Pmu* pmcMgr = pm4_factory->getPmcMgr();
     if (pmcMgr == NULL) return HSA_STATUS_ERROR;
 
-    pmcMgr->setPmcDataBuff((uint8_t*)profile->output_buffer.ptr, profile->output_buffer.size);
-
+    pm4_profile::CountersMap countersMap;
     for (const hsa_ext_amd_aql_profile_event_t* p = profile->events;
          p < profile->events + profile->event_count; ++p) {
-      pm4_profile::CounterBlock* block =
-          pmcMgr->getCounterBlockById(pm4_factory->getBlockId(p));
-      if (block == NULL) return HSA_STATUS_ERROR;
-
-      pm4_profile::Counter* counter = block->createCounter();
-      if (counter == NULL) return HSA_STATUS_ERROR;
-
-      counter->setParameter(HSA_EXT_TOOLS_COUNTER_PARAMETER_EVENT_INDEX, sizeof(uint32_t),
-                            &(p->counter_id));
-      counter->setEnable(true);
+      countersMap[pm4_factory->getBlockId(p)].push_back(p->counter_id);
     }
 
     // Generate start commands
-    pmcMgr->begin(&commands, cmdWriter);
+    pmcMgr->begin(&commands, cmdWriter, countersMap);
     cmdBufMgr.setPreSize(commands.Size());
+
     // Generate stop commands
-    pmcMgr->end(&commands, cmdWriter);
+    const uint32_t data_size =
+        pmcMgr->end(&commands, cmdWriter, countersMap, profile->output_buffer.ptr);
+    if (data_size == 0) return HSA_STATUS_ERROR;
+    assert(data_size <= profile->output_buffer.size);
+    if (data_size > profile->output_buffer.size) return HSA_STATUS_ERROR;
   } else if (profile->type == HSA_EXT_AQL_PROFILE_EVENT_SQTT) {
     pm4_profile::ThreadTrace* sqttMgr = pm4_factory->getSqttMgr();
     if (sqttMgr == NULL) return HSA_STATUS_ERROR;
@@ -241,8 +236,7 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_start(
 // Method to populate the provided AQL packet with profiling stop commands
 PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_stop(
     const hsa_ext_amd_aql_profile_profile_t* profile, aql_profile::packet_t* aql_stop_packet) {
-
-  aql_profile::Pm4Factory * pm4_factory = aql_profile::Pm4Factory::Create(profile);
+  aql_profile::Pm4Factory* pm4_factory = aql_profile::Pm4Factory::Create(profile);
   if (pm4_factory == NULL) return HSA_STATUS_ERROR;
 
   pm4_profile::CommandWriter* cmdWriter = pm4_factory->getCommandWriter();
@@ -258,9 +252,9 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_stop(
   return HSA_STATUS_SUCCESS;
 }
 
-// GFX8 support, converting of the profiling AQL packet to PM4 packet blob
-PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_legacy_get_pm4(
-    const aql_profile::packet_t* aql_packet, void* data) {
+// Legacy devices, converting of the profiling AQL packet to PM4 packet blob
+PUBLIC_API hsa_status_t
+hsa_ext_amd_aql_profile_legacy_get_pm4(const aql_profile::packet_t* aql_packet, void* data) {
   // Populate GFX8 pm4 packet blob
   // Adding HSA barrier acquire packet
   data = aql_profile::legacyAqlAcquire(aql_packet, data);
@@ -272,9 +266,9 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_legacy_get_pm4(
 }
 
 // Method for getting the profile info
-PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_get_info(
-    const hsa_ext_amd_aql_profile_profile_t* profile, hsa_ext_amd_aql_profile_info_type_t attribute,
-    void* value) {
+PUBLIC_API hsa_status_t
+hsa_ext_amd_aql_profile_get_info(const hsa_ext_amd_aql_profile_profile_t* profile,
+                                 hsa_ext_amd_aql_profile_info_type_t attribute, void* value) {
   hsa_status_t status = HSA_STATUS_SUCCESS;
 
   switch (attribute) {
@@ -301,12 +295,11 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_get_info(
 }
 
 // Method for iterating the events output data
-PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_iterate_data(
-    const hsa_ext_amd_aql_profile_profile_t* profile,
-    hsa_ext_amd_aql_profile_data_callback_t callback, void* data) {
-
+PUBLIC_API hsa_status_t
+hsa_ext_amd_aql_profile_iterate_data(const hsa_ext_amd_aql_profile_profile_t* profile,
+                                     hsa_ext_amd_aql_profile_data_callback_t callback, void* data) {
   hsa_status_t status = HSA_STATUS_SUCCESS;
-  aql_profile::Pm4Factory * pm4_factory = aql_profile::Pm4Factory::Create(profile);
+  aql_profile::Pm4Factory* pm4_factory = aql_profile::Pm4Factory::Create(profile);
   if (pm4_factory == NULL) return HSA_STATUS_ERROR;
 
   if (profile->type == HSA_EXT_AQL_PROFILE_EVENT_PMC) {
@@ -321,14 +314,9 @@ PUBLIC_API hsa_status_t hsa_ext_amd_aql_profile_iterate_data(
 
     for (const hsa_ext_amd_aql_profile_event_t* p = profile->events;
          p < (profile->events + profile->event_count); ++p) {
-      pm4_profile::CounterBlock* block =
-          pmcMgr->getCounterBlockById(pm4_factory->getBlockId(p));
-      if (block == NULL) return HSA_STATUS_ERROR;
-      if (!block->getInfo(pm4_profile::GPU_BLK_INFO_CONTROL_METHOD, info_size, &info_data)) {
-        return HSA_STATUS_ERROR;
-      }
-      const pm4_profile::CntlMethod method =
-          static_cast<pm4_profile::CntlMethod>(*(static_cast<uint32_t*>(info_data)));
+      const pm4_profile::GpuBlockInfo* block_info = pm4_factory->getBlockInfo(p);
+      if (block_info == NULL) return HSA_STATUS_ERROR;
+      const pm4_profile::CntlMethod method = pm4_factory->getBlockInfo(p)->method;
       // A perfcounter data sample per ShaderEngine
       const uint32_t block_samples_count = (method == pm4_profile::CntlMethodBySe ||
                                             method == pm4_profile::CntlMethodBySeAndInstance)

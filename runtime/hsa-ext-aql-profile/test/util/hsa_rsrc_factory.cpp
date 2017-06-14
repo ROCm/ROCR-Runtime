@@ -10,11 +10,9 @@
 #include <string>
 
 #include "hsa.h"
-#include "hsa_rsrc_factory.hpp"
+#include "hsa_rsrc_factory.h"
 #include "hsa_ext_finalize.h"
 #include "hsa_ext_profiler.h"
-
-#include "common.hpp"
 
 using namespace std;
 

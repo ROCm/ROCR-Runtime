@@ -25,4 +25,6 @@ add_subdirectory ( ${TEST_DIR} ${PROJECT_BINARY_DIR}/test )
 #
 # Style format
 #
-execute_process ( COMMAND sh -xc "/usr/bin/find ${PROJ_DIR} ${TEST_DIR} ${API_DIR} -name '*.cpp' -o -name '*.hpp' -o -name '*.h' -exec /usr/bin/clang-format -i -style=file \{\} \;" )
+execute_process ( COMMAND sh -xc "/usr/bin/find ${PROJ_DIR} ${TEST_DIR} ${API_DIR} -name '*.cpp' -exec /usr/bin/clang-format -i -style=file \{\} \;" )
+execute_process ( COMMAND sh -xc "/usr/bin/find ${PROJ_DIR} ${TEST_DIR} ${API_DIR} -name '*.hpp' -exec /usr/bin/clang-format -i -style=file \{\} \;" )
+execute_process ( COMMAND sh -xc "/usr/bin/find ${PROJ_DIR} ${TEST_DIR} ${API_DIR} -name '*.h' -exec /usr/bin/clang-format -i -style=file \{\} \;" )

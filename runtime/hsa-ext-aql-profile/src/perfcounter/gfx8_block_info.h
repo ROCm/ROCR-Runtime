@@ -1,10 +1,7 @@
 #ifndef _VI_BLOCKINFO_H_
 #define _VI_BLOCKINFO_H_
 
-#include <stdint.h>
-#include "rocr_profiler.h"
-#include "gpu_enum.h"
-#include "gpu_blockinfo.h"
+#include "gpu_block_info.h"
 
 namespace pm4_profile {
 
@@ -187,7 +184,7 @@ typedef enum HsaViCounterBlockId {
   kHsaViCounterBlockIdBlocksLast = kHsaViCounterBlockIdHwInfo
 } HsaViCounterBlockId;
 
-extern GpuBlockInfo ViPmuHwBlocks[];
+extern GpuBlockInfo Gfx8HwBlocks[];
 extern GpuCounterRegInfo ViSqCounterRegAddr[];
 extern GpuCounterRegInfo ViCbCounterRegAddr[];
 extern GpuCounterRegInfo ViDrmdmaCounterRegAddr[];

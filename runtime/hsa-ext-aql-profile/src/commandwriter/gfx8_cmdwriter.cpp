@@ -1,7 +1,8 @@
-#include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <string.h>
+#include <assert.h>
 
 #include "gfx8_cmdwriter.h"
 #include "gfxip/gfx8/gfx8_utils.h"
@@ -15,10 +16,9 @@
 #define RELEASE_MEM_CACHE_POLICY_STREAM 1
 #define RELEASE_MEM_CACHE_POLICY_BYPASS 2
 
-template <class T>
-static void PrintPm4Packet(const T& command, const char* name) {
-#if ! defined(NDEBUG)
-  uint32_t * cmd = (uint32_t*)&command;
+template <class T> static void PrintPm4Packet(const T& command, const char* name) {
+#if !defined(NDEBUG)
+  uint32_t* cmd = (uint32_t*)&command;
   uint32_t size = sizeof(command) / sizeof(uint32_t);
   std::ostringstream oss;
   oss << "'" << name << "' size(" << std::dec << size << ")";
@@ -30,8 +30,8 @@ static void PrintPm4Packet(const T& command, const char* name) {
 #endif
 }
 
-#define APPEND_COMMAND_WRAPPER(cmdbuf, command) \
-  PrintPm4Packet(command, __FUNCTION__); \
+#define APPEND_COMMAND_WRAPPER(cmdbuf, command)                                                    \
+  PrintPm4Packet(command, __FUNCTION__);                                                           \
   AppendCommand(cmdbuf, command);
 
 namespace pm4_profile {
@@ -164,7 +164,7 @@ Gfx8CmdWriter::Gfx8CmdWriter(bool atc_support, bool pcie_atomic_support) {
 }
 
 void Gfx8CmdWriter::BuildWaitRegMemCommand(CmdBuf* cmdbuf, bool mem_space, uint64_t wait_addr,
-                                              bool func_eq, uint32_t mask_val, uint32_t wait_val) {
+                                           bool func_eq, uint32_t mask_val, uint32_t wait_val) {
   gfx8::WaitRegMemTemplate wait_cmd = wait_reg_mem_template_;
 
   // Apply the space to which addr belongs
@@ -212,7 +212,7 @@ void Gfx8CmdWriter::BuildUpdateHostAddress(CmdBuf* cmdbuf, uint64_t* addr, int64
 }
 
 void Gfx8CmdWriter::BuildIndirectBufferCmd(CmdBuf* cmdbuf, const void* cmd_addr,
-                                              std::size_t cmd_size) {
+                                           std::size_t cmd_size) {
   gfx8::LaunchTemplate launch = launch_template_;
 
   launch.indirect_buffer.ibBaseLo = PtrLow32(cmd_addr);
@@ -223,7 +223,7 @@ void Gfx8CmdWriter::BuildIndirectBufferCmd(CmdBuf* cmdbuf, const void* cmd_addr,
 }
 
 void Gfx8CmdWriter::BuildBOPNotifyCmd(CmdBuf* cmdbuf, const void* write_addr, uint32_t write_val,
-                                         bool interrupt) {
+                                      bool interrupt) {
   // Initialize the command including its header
   gfx8::EndofKernelNotifyTemplate eopCmd;
   memset(&eopCmd, 0, sizeof(eopCmd));
@@ -273,7 +273,7 @@ void Gfx8CmdWriter::BuildBarrierFenceCommands(CmdBuf* cmdbuf) {
 #define PM4_PACKET3_CMD_SHIFT 8
 #define PM4_PACKET3_COUNT_SHIFT 16
 
-#define PACKET3(cmd, count) \
+#define PACKET3(cmd, count)                                                                        \
   (PM4_PACKET3 | (((count)-1) << PM4_PACKET3_COUNT_SHIFT) | ((cmd) << PM4_PACKET3_CMD_SHIFT))
 
 // Structure to store the event PM4 packet
@@ -282,7 +282,6 @@ typedef struct WriteRegPacket_ { uint32_t item[3]; } WriteRegPacket;
 typedef struct WriteEventPacket_ { uint32_t item[7]; } WriteEventPacket;
 
 void Gfx8CmdWriter::BuildWriteEventPacket(CmdBuf* cmdbuf, uint32_t event) {
-
   PM4CMDEVENTWRITE cp_event_initiator;
   cp_event_initiator.ordinal1 = PACKET3(IT_EVENT_WRITE, 1);
   cp_event_initiator.ordinal2 = 0;
@@ -346,8 +345,8 @@ void Gfx8CmdWriter::BuildWriteShRegPacket(CmdBuf* cmdbuf, uint32_t addr, uint32_
 }
 
 void Gfx8CmdWriter::BuildCopyDataPacket(CmdBuf* cmdbuf, uint32_t src_sel, uint32_t src_addr_lo,
-                                           uint32_t src_addr_hi, uint32_t* dst_addr, uint32_t size,
-                                           bool wait) {
+                                        uint32_t src_addr_hi, uint32_t* dst_addr, uint32_t size,
+                                        bool wait) {
   PM4CMDCOPYDATA cmd_data;
   memset(&cmd_data, 0, sizeof(PM4CMDCOPYDATA));
 
@@ -495,9 +494,8 @@ void Gfx8CmdWriter::WriteUserData(uint32_t* dst_addr, uint32_t count, const void
 }
 
 
-void Gfx8CmdWriter::BuildAtomicPacket(CmdBuf* cmdbuf, AtomicType atomic_op,
-                                         volatile uint32_t* addr, uint32_t value,
-                                         uint32_t compare) {
+void Gfx8CmdWriter::BuildAtomicPacket(CmdBuf* cmdbuf, AtomicType atomic_op, volatile uint32_t* addr,
+                                      uint32_t value, uint32_t compare) {
   gfx8::AtomicTemplate atomic = atomic_template_;
 
   // make sure the destination adddress is aligned
@@ -554,8 +552,7 @@ void Gfx8CmdWriter::BuildAtomicPacket(CmdBuf* cmdbuf, AtomicType atomic_op,
 }
 
 void Gfx8CmdWriter::BuildAtomicPacket64(CmdBuf* cmdbuf, AtomicType atomic_op,
-                                           volatile uint64_t* addr, uint64_t value,
-                                           uint64_t compare) {
+                                        volatile uint64_t* addr, uint64_t value, uint64_t compare) {
   AtomicTemplate atomic = atomic_template_;
 
   // make sure the destination adddress is aligned
@@ -640,7 +637,7 @@ void Gfx8CmdWriter::BuildConditionalExecute(CmdBuf* cmdbuf, uint32_t* signal, ui
 }
 
 void Gfx8CmdWriter::BuildWriteDataCommand(CmdBuf* cmdbuf, uint32_t* write_addr,
-                                             uint32_t write_value) {
+                                          uint32_t write_value) {
   // Copy the initialize command packet
   gfx8::WriteDataTemplate command = write_data_template_;
 
@@ -656,7 +653,7 @@ void Gfx8CmdWriter::BuildWriteDataCommand(CmdBuf* cmdbuf, uint32_t* write_addr,
 }
 
 void Gfx8CmdWriter::BuildWriteData64Command(CmdBuf* cmdbuf, uint64_t* write_addr,
-                                               uint64_t write_value) {
+                                            uint64_t write_value) {
   // Copy the initialize command packet
   gfx8::WriteData64Template command = write_data64_template_;
 
@@ -672,7 +669,7 @@ void Gfx8CmdWriter::BuildWriteData64Command(CmdBuf* cmdbuf, uint64_t* write_addr
 }
 
 void Gfx8CmdWriter::BuildFlushCacheCmd(CmdBuf* cmdbuf, FlushCacheOptions* options,
-                                          uint32_t* writeAddr, uint32_t writeVal) {
+                                       uint32_t* writeAddr, uint32_t writeVal) {
   PM4CMDACQUIREMEM flushCmd;
   memset(&flushCmd, 0, sizeof(flushCmd));
 
@@ -720,7 +717,7 @@ void Gfx8CmdWriter::BuildFlushCacheCmd(CmdBuf* cmdbuf, FlushCacheOptions* option
 }
 
 void Gfx8CmdWriter::BuildDmaDataPacket(CmdBuf* cmdbuf, uint32_t* srcAddr, uint32_t* dstAddr,
-                                          uint32_t copySize, bool waitForConfirm) {
+                                       uint32_t copySize, bool waitForConfirm) {
   PM4CMDDMADATA cmdDmaData;
   memset(&cmdDmaData, 0, sizeof(PM4CMDDMADATA));
   cmdDmaData.header.u32All =
