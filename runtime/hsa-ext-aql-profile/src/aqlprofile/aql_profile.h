@@ -16,7 +16,7 @@ typedef hsa_ext_amd_aql_profile_data_callback_t data_callback_t;
 typedef hsa_ext_amd_aql_pm4_packet_t packet_t;
 typedef hsa_ext_amd_aql_profile_event_t event_t;
 
-void populateAql(void* cmdBuffer, uint32_t cmdSz, pm4_profile::CommandWriter* cmdWriter,
+void populateAql(const void* cmd_buffer, uint32_t cmd_size, pm4_profile::CommandWriter* cmd_writer,
                  packet_t* aql_packet);
 void* legacyAqlAcquire(const packet_t* aql_packet, void* data);
 void* legacyAqlRelease(const packet_t* aql_packet, void* data);

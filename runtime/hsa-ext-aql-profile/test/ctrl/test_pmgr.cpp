@@ -58,9 +58,8 @@ bool TestPMgr::addPacketGfx9(const packet_t* packet) {
 }
 
 bool TestPMgr::addPacketGfx8(const packet_t* packet) {
-  // Create Legacy PM4 data
-  const hsa_ext_amd_aql_pm4_packet_t * aql_packet =
-    (const hsa_ext_amd_aql_pm4_packet_t *) packet;
+  // Create legacy devices PM4 data
+  const hsa_ext_amd_aql_pm4_packet_t* aql_packet = (const hsa_ext_amd_aql_pm4_packet_t*)packet;
   slot_pm4_s data;
   hsa_ext_amd_aql_profile_legacy_get_pm4(aql_packet, (void*)data.words);
 
@@ -70,7 +69,7 @@ bool TestPMgr::addPacketGfx8(const packet_t* packet) {
 
   // Copy Aql packet into queue buffer
   packet_t* ptr = ((packet_t*)(getQueue()->base_address)) + (que_idx & mask);
-  slot_pm4_t * slot_pm4 = (slot_pm4_t*)ptr;
+  slot_pm4_t* slot_pm4 = (slot_pm4_t*)ptr;
   slot_pm4->store(data, std::memory_order_relaxed);
 
   // Increment the write index and ring the doorbell to dispatch the kernel.
@@ -81,10 +80,8 @@ bool TestPMgr::addPacketGfx8(const packet_t* packet) {
 }
 
 bool TestPMgr::addPacket(const packet_t* packet) {
-  const char * agent_name = getAgentInfo()->name;
-  return (strncmp(agent_name, "gfx8", 4) == 0) ?
-    addPacketGfx8(packet) :
-    addPacketGfx9(packet);
+  const char* agent_name = getAgentInfo()->name;
+  return (strncmp(agent_name, "gfx8", 4) == 0) ? addPacketGfx8(packet) : addPacketGfx9(packet);
 }
 
 bool TestPMgr::run() {

@@ -10,7 +10,7 @@
 #include <vector>
 #include <string>
 
-#include "hsatimer.h"
+#include "perf_timer.h"
 #include "hsa.h"
 #include "hsa_ext_finalize.h"
 

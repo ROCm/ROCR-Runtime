@@ -29,7 +29,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #define _TESTAQL_H_
 
 #include "hsa.h"
-#include "hsa_rsrc_factory.hpp"
+#include "hsa_rsrc_factory.h"
 #include "hsa_ext_amd_aql_profile.h"
 
 #define test_assert(cond)                                                                          \

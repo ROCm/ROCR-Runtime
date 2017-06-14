@@ -7,8 +7,6 @@
 #include "gfxip/gfx8/si_pm4defs.h"
 #include "thread_trace.h"
 
-#include <string>
-
 namespace pm4_profile {
 
 typedef struct Gfx8ThreadTraceCfgRegs {

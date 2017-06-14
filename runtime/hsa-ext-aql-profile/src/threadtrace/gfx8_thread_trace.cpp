@@ -1,11 +1,3 @@
-
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <random>
-#include <memory>
-
-#include "core/util/os.h"
 #include "gfx8_thread_trace.h"
 
 /// @brief Returns the lower 32-bits of a value
@@ -68,14 +60,14 @@ void Gfx8ThreadTrace::InitThreadTraceCfgRegs() {
   ttCfgRegs_.ttRegMask.u32All = 0;
   ttCfgRegs_.ttRegMask.bits.SH_SEL = 0x0;
   ttCfgRegs_.ttRegMask.bits.SIMD_EN = 0xF;
-  ttCfgRegs_.ttRegMask.bits.CU_SEL = SetCuId();
+  ttCfgRegs_.ttRegMask.bits.CU_SEL = GetCuId();
   ttCfgRegs_.ttRegMask.bits.SQ_STALL_EN__CI__VI = 0x1;
   ttCfgRegs_.ttRegMask.bits.SPI_STALL_EN__CI__VI = 0x1;
   ttCfgRegs_.ttRegMask.bits.REG_STALL_EN__CI__VI = 0x1;
-  ttCfgRegs_.ttRegMask.bits.VM_ID_MASK = SetVmId();
+  ttCfgRegs_.ttRegMask.bits.VM_ID_MASK = GetVmId();
 
   // Override Mask value if a user value is available
-  uint32_t ttMask = SetMask();
+  uint32_t ttMask = GetMask();
   if (ttMask) {
     ttCfgRegs_.ttRegMask.u32All = ttMask;
   }
@@ -93,7 +85,7 @@ void Gfx8ThreadTrace::InitThreadTraceCfgRegs() {
   ttCfgRegs_.ttRegTokenMask.bits.REG_DROP_ON_STALL__CI__VI = 0x1;
 
   // Override TokenMask1 value if a user value is available
-  uint32_t tokenMask1 = SetTokenMask();
+  uint32_t tokenMask1 = GetTokenMask();
   if (tokenMask1) {
     ttCfgRegs_.ttRegTokenMask.u32All = tokenMask1;
   }
@@ -105,7 +97,7 @@ void Gfx8ThreadTrace::InitThreadTraceCfgRegs() {
   ttCfgRegs_.ttRegTokenMask2.bits.INST_MASK = 0xFFFFFF7F;
 
   // Override TokenMask2 value if a user value is available
-  uint32_t tokenMask2 = SetTokenMask2();
+  uint32_t tokenMask2 = GetTokenMask2();
   if (tokenMask2) {
     ttCfgRegs_.ttRegTokenMask2.u32All = tokenMask2;
   }

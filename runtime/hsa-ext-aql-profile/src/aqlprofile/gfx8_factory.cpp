@@ -2,9 +2,11 @@
 // Commandwriter includes
 #include "gfx8_cmdwriter.h"
 // PMC includes
-#include "vi_pmu.h"
+#include "gfx8_perf_counter.h"
 // SQTT includes
 #include "gfx8_thread_trace.h"
+// Block info
+#include "gfx8_block_info.h"
 
 namespace aql_profile {
 
@@ -24,20 +26,12 @@ uint32_t Gfx8Factory::block_id_table[HSA_EXT_AQL_PROFILE_BLOCKS_NUMBER] = {
     pm4_profile::kHsaViCounterBlockIdIa,     pm4_profile::kHsaViCounterBlockIdMc,
     pm4_profile::kHsaViCounterBlockIdTcs,    pm4_profile::kHsaViCounterBlockIdWd};
 
-pm4_profile::CommandWriter * Gfx8Factory::getCommandWriter() {
+pm4_profile::CommandWriter* Gfx8Factory::getCommandWriter() {
   return new pm4_profile::gfx8::Gfx8CmdWriter(false, true);
 }
 
-pm4_profile::Pmu * Gfx8Factory::getPmcMgr() {
-  return new pm4_profile::ViPmu();
-}
+pm4_profile::Pmu* Gfx8Factory::getPmcMgr() { return new pm4_profile::Gfx8PerfCounter(); }
 
-pm4_profile::ThreadTrace * Gfx8Factory::getSqttMgr() {
-  return new pm4_profile::Gfx8ThreadTrace();
-}
+pm4_profile::ThreadTrace* Gfx8Factory::getSqttMgr() { return new pm4_profile::Gfx8ThreadTrace(); }
 
-uint32_t Gfx8Factory::getBlockId(const event_t* event) {
-  return block_id_table[event->block_name] + event->block_index;
-}
-
-} // aql_profile
+}  // aql_profile

@@ -1,10 +1,7 @@
 #ifndef _AI_BLOCKINFO_H_
 #define _AI_BLOCKINFO_H_
 
-#include <stdint.h>
-#include "rocr_profiler.h"
-#include "gpu_enum.h"
-#include "gpu_blockinfo.h"
+#include "gpu_block_info.h"
 
 namespace pm4_profile {
 
@@ -208,7 +205,7 @@ typedef enum HsaAiCounterBlockId {
   kHsaAiCounterBlockIdBlocksLast = kHsaAiCounterBlockIdHwInfo
 } HsaAiCounterBlockId;
 
-extern GpuBlockInfo AiPmuHwBlocks[];
+extern GpuBlockInfo Gfx9HwBlocks[];
 extern GpuCounterRegInfo AiSqCounterRegAddr[];
 extern GpuCounterRegInfo AiCbCounterRegAddr[];
 extern GpuCounterRegInfo AiDrmdmaCounterRegAddr[];

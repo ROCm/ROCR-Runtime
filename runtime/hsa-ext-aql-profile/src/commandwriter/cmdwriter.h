@@ -5,9 +5,8 @@
 #define _CMDWRITER_H_
 
 #include <vector>
-#include <string.h>
 #include <stdint.h>
-#include <assert.h>
+#include <string.h>
 
 namespace pm4_profile {
 
@@ -471,27 +470,11 @@ class CommandWriter {
   uint32_t& IndexBuffer(CmdBuf* cmdbuf, uint32_t index) { return (*cmdbuf)[index]; }
 };
 
-/// @brief Returns the Rounded value per input rounding factor
-inline uint32_t RoundUp(uint32_t u, uint32_t r) { return ((u + (r - 1)) & ~(r - 1)); }
-
 /// @brief Returns the lower 32-bits of a value
 inline uint32_t Low32(uint64_t u) { return (u & 0xFFFFFFFFUL); }
 
 /// @brief Returns the upper 32-bits of a value
 inline uint32_t High32(uint64_t u) { return (u >> 32); }
-
-/// @brief Returns the lower 32-bits of an address
-inline uint32_t Ptr48Low32(const void* p) {
-  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
-  assert((ptr & 0xFFFFFFFFFF00ULL) == ptr);
-  return (uint32_t)((ptr & 0xFFFFFFFFFFULL) >> 8);
-}
-
-/// @brief Returns the upper 8-bits of an address
-inline uint8_t Ptr48High8(const void* p) {
-  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
-  return (uint8_t)((ptr & 0xFF0000000000ULL) >> 40);
-}
 
 /// @brief Returns the lower 32-bits of an address
 inline uint32_t PtrLow32(const void* p) {

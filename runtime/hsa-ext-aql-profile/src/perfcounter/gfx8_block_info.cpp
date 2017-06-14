@@ -1,4 +1,4 @@
-#include "vi_blockinfo.h"
+#include "gfx8_block_info.h"
 #include "gfxip/gfx8/si_ci_vi_merged_offset.h"
 
 namespace pm4_profile {
@@ -6,7 +6,7 @@ namespace pm4_profile {
  * Table containing CounterGroups which represent VI hardware blocks
  * as defined by \ref GpuBlockInfo structure
  */
-GpuBlockInfo ViPmuHwBlocks[] = {
+GpuBlockInfo Gfx8HwBlocks[] = {
     // Counter block CB
     {"VI_CB0", kHsaViCounterBlockIdCb0, VI_MAX_NUM_SHADER_ENGINES, 2, VI_NUM_CB,
      CntlMethodBySeAndInstance, 395, VI_COUNTER_NUM_PER_CB, 0, 0, true, 0, 0, false, 0, 0},
@@ -258,6 +258,8 @@ GpuBlockInfo ViPmuHwBlocks[] = {
     // Name of the last line should be empty to indicate end of all counter groups
     {"", kHsaViCounterBlockIdBlocksLast, 0, 0, 0, CntlMethodNone, 0, 0, 0, 0, false, 0, 0, false, 0,
      0}};
+
+extern const uint32_t Gfx8HwBlockCount = sizeof(Gfx8HwBlocks) / sizeof(GpuBlockInfo);
 
 /*
  * The following tables contain register addresses of the SQ counter registers

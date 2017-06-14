@@ -25,7 +25,10 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
-#include "helper_funcs.hpp"
+#include <iostream>
+#include <string.h>
+
+#include "helper_funcs.h"
 #include "simple_convolution.h"
 
 SimpleConvolution::SimpleConvolution() {

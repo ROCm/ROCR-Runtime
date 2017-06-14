@@ -31,12 +31,11 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <atomic>
 
 #include "test_aql.h"
-#include "amd_aql_pm4_ib_packet.h"
 
 // SimpleConvolution: Class implements OpenCL SimpleConvolution sample
 class TestPMgr : public TestAql {
  public:
-  typedef amd_aql_pm4_ib_packet_t packet_t;
+  typedef hsa_ext_amd_aql_pm4_packet_t packet_t;
   TestPMgr(TestAql* t);
   bool run();
 
@@ -53,7 +52,7 @@ class TestPMgr : public TestAql {
  private:
   enum {
     SLOT_PM4_SIZE_DW = HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE / sizeof(uint32_t),
-    SLOT_PM4_SIZE_AQLP = HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE / 64
+    SLOT_PM4_SIZE_AQLP = HSA_EXT_AQL_PROFILE_LEGACY_PM4_PACKET_SIZE / sizeof(packet_t)
   };
   struct slot_pm4_s {
     uint32_t words[SLOT_PM4_SIZE_DW];

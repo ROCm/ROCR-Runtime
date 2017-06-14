@@ -1,14 +1,14 @@
-#include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <sstream>
+#include <string.h>
+#include <assert.h>
 
 #include "gfx9_cmdwriter.h"
 
-template <class T>
-static void PrintPm4Packet(const T& command, const char* name) {
-#if ! defined(NDEBUG)
-  uint32_t * cmd = (uint32_t*)&command;
+template <class T> static void PrintPm4Packet(const T& command, const char* name) {
+#if !defined(NDEBUG)
+  uint32_t* cmd = (uint32_t*)&command;
   uint32_t size = sizeof(command) / sizeof(uint32_t);
   std::ostringstream oss;
   oss << "'" << name << "' size(" << std::dec << size << ")";
@@ -20,8 +20,8 @@ static void PrintPm4Packet(const T& command, const char* name) {
 #endif
 }
 
-#define APPEND_COMMAND_WRAPPER(cmdbuf, command) \
-  PrintPm4Packet(command, __FUNCTION__); \
+#define APPEND_COMMAND_WRAPPER(cmdbuf, command)                                                    \
+  PrintPm4Packet(command, __FUNCTION__);                                                           \
   AppendCommand(cmdbuf, command);
 
 namespace pm4_profile {

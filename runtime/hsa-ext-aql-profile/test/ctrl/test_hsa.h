@@ -30,7 +30,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include "test_aql.h"
 #include "test_kernel.h"
-#include "hsa_rsrc_factory.hpp"
+#include "hsa_rsrc_factory.h"
 
 // Class implements HSA test
 class TestHSA : public TestAql {

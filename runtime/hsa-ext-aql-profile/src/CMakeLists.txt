@@ -24,6 +24,7 @@ set ( API_DIR ${ROOT_DIR}/inc )
 set ( HSA_RUNTIME_DIR ${PROJ_DIR}/../../.. )
 set ( HSA_RUNTIME_OSC_DIR ${HSA_RUNTIME_DIR}/opensrc/hsa-runtime )
 set ( CORE_UTIL_DIR ${HSA_RUNTIME_OSC_DIR}/core/util )
+
 include_directories ( ${ROOT_DIR} )
 
 #
@@ -35,13 +36,6 @@ include ( ${ROOT_DIR}/cmake_modules/validateBldEnv.cmake )
 # Setup tool chain flags - preprocessor, compiler and linker
 #
 include ( ${ROOT_DIR}/cmake_modules/exportToolFlags.cmake )
-
-#
-# Set Name for Utils library and build it as a
-# static library to be linked with others
-#
-set ( UTIL_LIB "util${ONLY64STR}" )
-add_subdirectory ( ${PROJ_DIR}/util "${PROJECT_BINARY_DIR}/util" )
 
 #
 # Set Name for Cmdwriter library and build it as a

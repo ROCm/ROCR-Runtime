@@ -14,6 +14,8 @@
 #ifndef _SI_PM4DEFS_H_
 #define _SI_PM4DEFS_H_
 
+#include "si_ci_vi_merged_typedef.h"
+
 /******************************************************************************
 *
 *  si_pm4defs.h

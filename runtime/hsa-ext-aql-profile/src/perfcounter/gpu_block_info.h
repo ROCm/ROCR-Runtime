@@ -1,9 +1,6 @@
 #ifndef _GPU_BLOCKINFO_H_
 #define _GPU_BLOCKINFO_H_
 
-#include "rocr_profiler.h"
-#include "gpu_enum.h"
-
 #include <stdint.h>
 
 namespace pm4_profile {

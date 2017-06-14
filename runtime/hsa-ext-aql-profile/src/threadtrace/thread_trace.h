@@ -7,17 +7,10 @@
 
 // Move them as static variables later on
 #define TT_WRITE_PTR_MASK (0x3FFFFFFF)
-#define TT_DEFAULT_BUFF_SIZE_SCALE (16)
-#define TT_DEFAULT_BUFF_SIZE (1024 * 1024 * 8)
-
 // Size of block in bytesper increment in WPTR
 #define TT_WRITE_PTR_BLK (32)
-
 // Factor by which to shift buffer address
 #define TT_BUFF_ALIGN_SHIFT (12)
-
-// Align address to 64 Kilobytes
-#define TT_BUFF_ADDR_ALIGN (0x10000)
 
 namespace pm4_profile {
 
@@ -43,19 +36,19 @@ class ThreadTrace {
   virtual ~ThreadTrace(){};
 
   // Obtain the CU id to use for thread tracing
-  uint8_t SetCuId();
+  uint8_t GetCuId();
 
   // Obtain the VM id to use for thread tracing
-  uint8_t SetVmId();
+  uint8_t GetVmId();
 
   // Obtain the Mask to use for thread tracing
-  uint32_t SetMask();
+  uint32_t GetMask();
 
   // Obtain the Token Mask 1 to use for thread tracing
-  uint32_t SetTokenMask();
+  uint32_t GetTokenMask();
 
   // Obtain the Token Mask 2 to use for thread tracing
-  uint32_t SetTokenMask2();
+  uint32_t GetTokenMask2();
 
   // Initializes various data structures and handles that
   // are needed to support a thread trace session

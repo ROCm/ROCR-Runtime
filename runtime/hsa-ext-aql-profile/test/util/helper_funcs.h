@@ -21,53 +21,10 @@ WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
  NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 POSSIBILITY OF SUCH DAMAGE.
 ********************************************************************/
-#ifndef HELPER_FUNCS_HPP_
-#define HELPER_FUNCS_HPP_
+#ifndef _HELPER_FUNCS_H_
+#define _HELPER_FUNCS_H_
 
-#define HSA_SDK_SUCCESS 0
-#define HSA_SDK_FAILURE 1
-#define HSA_SDK_EXPECTED_FAILURE 2
-
-#include <iostream>
-#include <fstream>
-#include <iomanip>
-#include <sstream>
 #include <string>
-#include <ctime>
-#include <cmath>
-#include <time.h>
-#include <stdlib.h>
-#include <string.h>
-#include <vector>
-#include <malloc.h>
-
-/**
- * error
- * constant function, Prints error messages
- * @param errorMsg char* message
- */
-void error(const char* errorMsg);
-
-/**
- * error
- * constant function, Prints error messages
- * @param errorMsg std::string message
- */
-void error(std::string errorMsg);
-
-/**
- * expectedError
- * constant function, Prints error messages
- * @param errorMsg char* message
- */
-void expectedError(const char* errorMsg);
-
-/**
- * expectedError
- * constant function, Prints error messages
- * @param errorMsg string message
- */
-void expectedError(std::string errorMsg);
 
 /**
  * compare template version
@@ -95,20 +52,21 @@ void printArray(const std::string header, const T* data, const int width, const 
  * fill array with random values
  */
 template <typename T>
-int fillRandom(T* arrayPtr, const int width, const int height, const T rangeMin, const T rangeMax,
-               unsigned int seed = 123);
+bool fillRandom(T* arrayPtr, const int width, const int height, const T rangeMin, const T rangeMax,
+                unsigned int seed = 123);
 
 /**
  * fillPos
  * fill the specified positions
  */
-template <typename T> int fillPos(T* arrayPtr, const int width, const int height);
+template <typename T> bool fillPos(T* arrayPtr, const int width, const int height);
 
 /**
  * fillConstant
  * fill the array with constant value
  */
-template <typename T> int fillConstant(T* arrayPtr, const int width, const int height, const T val);
+template <typename T>
+bool fillConstant(T* arrayPtr, const int width, const int height, const T val);
 
 
 /**
@@ -121,15 +79,7 @@ template <typename T> T roundToPowerOf2(T val);
  * isPowerOf2
  * checks if input is a power of 2
  */
-template <typename T> int isPowerOf2(T val);
-
-/**
- * checkVal
- * Set default(isAPIerror) parameter to false
- * if checkVaul is used to check otherthan OpenCL API error code
- */
-template <typename T>
-bool checkVal(T input, T reference, std::string message, bool isAPIerror = true);
+template <typename T> bool isPowerOf2(T val);
 
 /**
  * toString
@@ -137,5 +87,4 @@ bool checkVal(T input, T reference, std::string message, bool isAPIerror = true)
  */
 template <typename T> std::string toString(T t, std::ios_base& (*r)(std::ios_base&));
 
-
-#endif
+#endif  // _HELPER_FUNCS_H_
