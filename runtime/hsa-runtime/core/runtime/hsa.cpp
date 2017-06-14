@@ -608,14 +608,17 @@ hsa_status_t hsa_soft_queue_create(hsa_region_t region, uint32_t size,
   const core::Signal* signal = core::Signal::Convert(doorbell_signal);
   IS_VALID(signal);
 
-  core::Agent* agent = core::Runtime::runtime_singleton_->cpu_agents().front();
-  core::Queue* host_queue = nullptr;
-  hsa_status_t status =
-      agent->HostQueueCreate(region, size, type, features, doorbell_signal, &host_queue);
+  core::HostQueue* host_queue =
+      new core::HostQueue(region, size, type, features, doorbell_signal);
 
-  *queue = (host_queue ? core::Queue::Convert(host_queue) : nullptr);
+  if (!host_queue->active()) {
+    delete host_queue;
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
 
-  return status;
+  *queue = core::Queue::Convert(host_queue);
+
+  return HSA_STATUS_SUCCESS;
 }
 
 /// @brief Api to destroy a user mode queue
@@ -628,7 +631,8 @@ hsa_status_t hsa_queue_destroy(hsa_queue_t* queue) {
   IS_BAD_PTR(queue);
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
-  return cmd_queue->agent().QueueDestroy(cmd_queue);
+  delete cmd_queue;
+  return HSA_STATUS_SUCCESS;
 }
 
 /// @brief Api to inactivate a user mode queue

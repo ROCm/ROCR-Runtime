@@ -46,9 +46,12 @@
 #include "core/util/utils.h"
 
 namespace core {
-HostQueue::HostQueue(Agent& agent, hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
-                     uint32_t features, hsa_signal_t doorbell_signal)
-    : Queue(agent), size_(ring_size), active_(false) {
+HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
+                     hsa_queue_type32_t type, uint32_t features,
+                     hsa_signal_t doorbell_signal)
+    : Queue(),
+      size_(ring_size),
+      active_(false) {
   if (!Shared::IsSharedObjectAllocationValid()) {
     return;
   }

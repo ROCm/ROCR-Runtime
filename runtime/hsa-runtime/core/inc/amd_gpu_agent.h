@@ -45,8 +45,6 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_
 
-#include <list>
-#include <memory>
 #include <vector>
 
 #include "hsakmt.h"
@@ -61,42 +59,6 @@
 
 namespace amd {
 class MemoryRegion;
-class AqlQueue;
-
-struct WaveState {
-  // Number of SGPRs allocated per wavefront.
-  uint32_t num_sgprs;
-
-  // Array of packed SGPR data.
-  uint32_t* sgprs;
-
-  // Number of VGPRs allocated per wavefront.
-  uint32_t num_vgprs;
-
-  // Number of lanes in each VGPR.
-  uint32_t num_vgpr_lanes;
-
-  // Array of packed VGPR data.
-  // VGPR value = vgprs[(vgpr_idx * num_vgpr_lanes) + lane_idx]
-  uint32_t* vgprs;
-
-  // Data for miscellaneous registers.
-  struct {
-    uint64_t pc;
-    uint64_t exec;
-    uint32_t status;
-    uint32_t trapsts;
-    uint32_t m0;
-  } regs;
-
-  // LDS allocation size for the work group, in 32-bit words.
-  uint32_t lds_size_dw;
-
-  // Packed LDS data for the work group.
-  uint32_t* lds;
-};
-
-typedef std::vector<WaveState> WaveStates;
 
 // @brief Contains scratch memory information.
 struct ScratchInfo {
@@ -112,14 +74,6 @@ class GpuAgentInt : public core::Agent {
   // @brief Constructor
   GpuAgentInt(uint32_t node_id)
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
-
-  // @brief GpuAgent does not support HostQueueCreation.
-  hsa_status_t HostQueueCreate(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
-                               uint32_t features, hsa_signal_t doorbell_signal,
-                               core::Queue** queue) override {
-    assert(false && "GpuAgent::HostQueueCreate not implemented");
-    return HSA_STATUS_ERROR_INVALID_AGENT;
-  }
 
   // @brief Initialize DMA queue.
   //
@@ -185,8 +139,6 @@ class GpuAgentInt : public core::Agent {
 
   // @brief Invalidate caches on the agent which may hold code object data.
   virtual void InvalidateCodeCaches() = 0;
-
-  virtual WaveStates GetWaveStates() = 0;
 
   // @brief Sets the coherency type of this agent.
   //
@@ -300,8 +252,6 @@ class GpuAgent : public GpuAgentInt {
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
 
-  hsa_status_t QueueDestroy(core::Queue* queue) override;
-
   // @brief Override from amd::GpuAgentInt.
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
@@ -317,8 +267,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Override from amd::GpuAgentInt.
   void InvalidateCodeCaches() override;
-
-  WaveStates GetWaveStates() override;
 
   // @brief Override from amd::GpuAgentInt.
   bool current_coherency_type(hsa_amd_coherency_type_t type) override;
@@ -430,10 +378,14 @@ class GpuAgent : public GpuAgentInt {
 
   core::Blit* blits_[BlitCount];
 
-  std::list<std::unique_ptr<AqlQueue>> queues_;
+  // @brief AQL queues for cache management and blit compute usage.
+  enum QueueEnum {
+    QueueUtility,   // Cache management and device to {host,device} blit compute
+    QueueBlitOnly,  // Host to device blit
+    QueueCount
+  };
 
-  core::Queue* queue_util_;
-  core::Queue* queue_blit_;
+  core::Queue* queues_[QueueCount];
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;

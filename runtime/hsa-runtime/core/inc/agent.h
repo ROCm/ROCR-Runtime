@@ -218,12 +218,6 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
                                    uint32_t group_segment_size,
                                    Queue** queue) = 0;
 
-  virtual hsa_status_t HostQueueCreate(hsa_region_t region, uint32_t ring_size,
-                                       hsa_queue_type32_t type, uint32_t features,
-                                       hsa_signal_t doorbell_signal, Queue** queue) = 0;
-
-  virtual hsa_status_t QueueDestroy(Queue* queue) = 0;
-
   // @brief Query the value of an attribute.
   //
   // @param [in] attribute Attribute to query.
