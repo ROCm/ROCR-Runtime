@@ -424,9 +424,7 @@ static void free_queue(struct queue *q)
 					 q->ctx_save_restore_size,
 					 PAGE_SIZE, q->dev_info->asic_family);
 	if (q->ctl_stack_copy)
-		free_exec_aligned_memory(q->ctl_stack_copy,
-					 q->ctl_stack_size,
-					 PAGE_SIZE, q->dev_info->asic_family);
+		free(q->ctl_stack_copy);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
 }
