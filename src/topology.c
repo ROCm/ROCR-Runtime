@@ -73,7 +73,6 @@ static const char *supported_processor_vendor_name[] = {
 
 static HSAKMT_STATUS topology_take_snapshot(void);
 static HSAKMT_STATUS topology_drop_snapshot(void);
-//static int get_cpu_stepping(uint16_t* stepping);
 
 static struct hsa_gfxip_table {
 	uint16_t device_id;		// Device ID
@@ -706,11 +705,11 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 					    struct pci_access *pacc)
 {
 	FILE *fd;
-	char *read_buf, *p;
+	char *read_buf, *p, *envvar, dummy;
 	char prop_name[256];
 	char path[256];
 	unsigned long long prop_val;
-	uint32_t i, prog;
+	uint32_t i, prog, major, minor, step;
 	uint16_t fw_version = 0;
 	int read_size;
 	const struct hsa_gfxip_table *hsa_gfxip;
@@ -802,7 +801,6 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 	}
 
-//	get_cpu_stepping(&stepping);
 	props->EngineId.ui32.uCode = fw_version & 0x3ff;
 	props->EngineId.ui32.Major = 0;
 	props->EngineId.ui32.Minor = 0;
@@ -810,9 +808,26 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
 	if (hsa_gfxip) {
-		props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
-		props->EngineId.ui32.Minor = hsa_gfxip->minor;
-		props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
+		envvar = getenv("HSA_OVERRIDE_GFX_VERSION");
+		if (envvar) {
+			/* HSA_OVERRIDE_GFX_VERSION=major.minor.stepping */
+			if ((sscanf(envvar, "%u.%u.%u%c",
+					&major, &minor, &step, &dummy) != 3) ||
+				(major > 63 || minor > 255 || step > 255)) {
+				fprintf(stderr,
+					"HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
+					envvar);
+				ret = HSAKMT_STATUS_ERROR;
+				goto err;
+			}
+			props->EngineId.ui32.Major = major & 0x3f;
+			props->EngineId.ui32.Minor = minor & 0xff;
+			props->EngineId.ui32.Stepping = step & 0xff;
+		} else {
+			props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
+			props->EngineId.ui32.Minor = hsa_gfxip->minor;
+			props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
+		}
 
 		if (!hsa_gfxip->amd_name) {
 			ret = HSAKMT_STATUS_ERROR;
