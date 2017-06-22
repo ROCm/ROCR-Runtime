@@ -24,8 +24,6 @@ GpuBlockInfo Gfx9HwBlocks[] = {
     {"AI_CPF", kHsaAiCounterBlockIdCpf, AI_MAX_NUM_SHADER_ENGINES, 2, 1, CntlMethodNone, 19,
     AI_COUNTER_NUM_PER_CPF, 0, 0, true, 0, 0, false, 0, 0},
     */
-    {"AI_CB3", kHsaAiCounterBlockIdCpf, AI_MAX_NUM_SHADER_ENGINES, 2, AI_NUM_CB,
-     CntlMethodBySeAndInstance, 395, AI_COUNTER_NUM_PER_CB, 0, 0, true, 0, 0, false, 0, 0},
 
     // Counter block DB
     {"AI_DB0", kHsaAiCounterBlockIdDb0, AI_MAX_NUM_SHADER_ENGINES, 2, AI_NUM_DB,

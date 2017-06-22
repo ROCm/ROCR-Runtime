@@ -8,6 +8,7 @@
 
 #include "aql_profile.h"
 #include "gpu_block_info.h"
+#include "aql_profile_exception.h"
 
 namespace pm4_profile {
 class CommandWriter;
@@ -23,23 +24,31 @@ namespace aql_profile {
 
 class Pm4Factory {
  public:
+  enum { kBadBlockId = UINT_MAX };
+
   static Pm4Factory* Create(const hsa_ext_amd_aql_profile_profile_t* profile);
   virtual pm4_profile::CommandWriter* getCommandWriter() = 0;
   virtual pm4_profile::Pmu* getPmcMgr() = 0;
   virtual pm4_profile::ThreadTrace* getSqttMgr() = 0;
 
   uint32_t getBlockId(const event_t* event) {
-    const hsa_ext_amd_aql_profile_block_name_t block_name = event->block_name;
+    const hsa_ext_amd_aql_profile_block_name_t& block_name = event->block_name;
+    if (block_name >= tables.get_block_id_count())
+      throw aql_profile_exception<uint32_t>(std::string("Invalid block name, block_name"),
+                                            block_name);
     return (block_name < tables.get_block_id_count())
         ? tables.get_block_id_ptr()[block_name] + event->block_index
-        : UINT_MAX;
+        : kBadBlockId;
   }
   const pm4_profile::GpuBlockInfo* getBlockInfo(const uint32_t& block_id) {
     const pm4_profile::GpuBlockInfo* info = NULL;
     if (block_id < tables.get_block_info_count()) {
       info = tables.get_block_info_ptr() + block_id;
-      if (info->counterGroupId != block_id) info = NULL;
-    }
+      if (info->counterGroupId != block_id)
+        throw aql_profile_exception<uint32_t>(std::string("Bad block id table, block_id"),
+                                              block_id);
+    } else
+      throw aql_profile_exception<uint32_t>(std::string("Invalid block id, block_id"), block_id);
     return info;
   }
   const pm4_profile::GpuBlockInfo* getBlockInfo(const event_t* event) {
@@ -107,7 +116,10 @@ inline Pm4Factory* Pm4Factory::Create(const hsa_ext_amd_aql_profile_profile_t* p
   char agent_name[64];
   hsa_agent_get_info(profile->agent, HSA_AGENT_INFO_NAME, agent_name);
 
-  if (strncmp(agent_name, "gfx8", 4) == 0) {
+  if (strncmp(agent_name, "gfx801", 6) == 0) {
+    throw aql_profile_exception<std::string>(std::string("GFX8 Carrizo is not supported "),
+                                             agent_name);
+  } else if (strncmp(agent_name, "gfx8", 4) == 0) {
     instance = new Gfx8Factory();
   } else if (strncmp(agent_name, "gfx9", 4) == 0) {
     instance = new Gfx9Factory();

@@ -84,8 +84,8 @@ typedef enum HsaAiCounterBlockId {
   kHsaAiCounterBlockIdCb2,
   kHsaAiCounterBlockIdCb3,
 
-  // Temp commented for Vega10
-  kHsaAiCounterBlockIdCpf,
+  // Temp commented out for Vega10
+  // kHsaAiCounterBlockIdCpf,
 
   kHsaAiCounterBlockIdDb0,
   kHsaAiCounterBlockIdDb1,
@@ -192,8 +192,8 @@ typedef enum HsaAiCounterBlockId {
   // Temp commented out for Vega10
   // kHsaAiCounterBlockIdCpg,
 
-  // Temp commented for Vega10
-  kHsaAiCounterBlockIdCpc,
+  // Temp commented out for Vega10
+  // kHsaAiCounterBlockIdCpc,
 
   // Counters retrieved by KFD
   kHsaAiCounterBlockIdIommuV2,

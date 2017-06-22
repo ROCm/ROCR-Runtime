@@ -28,6 +28,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #ifndef _TEST_PGEN_PMC_H_
 #define _TEST_PGEN_PMC_H_
 
+#include "test_assert.h"
 #include "test_pgen.h"
 
 hsa_status_t TestPGenPMC_Callback(hsa_ext_amd_aql_profile_info_type_t info_type,
@@ -104,12 +105,12 @@ class TestPGenPMC : public TestPGen {
     command_buffer_alignment = buffer_alignment;
     status = hsa_ext_amd_aql_profile_get_info(
         &profile, HSA_EXT_AQL_PROFILE_INFO_COMMAND_BUFFER_SIZE, &command_buffer_size);
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
 
     output_buffer_alignment = buffer_alignment;
     status = hsa_ext_amd_aql_profile_get_info(&profile, HSA_EXT_AQL_PROFILE_INFO_PMC_DATA_SIZE,
                                               &output_buffer_size);
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
 
     // Application is allocating the command buffer
     // Allocate(command_buffer_alignment, command_buffer_size,
@@ -128,12 +129,12 @@ class TestPGenPMC : public TestPGen {
 
     // Populating the AQL start packet
     status = hsa_ext_amd_aql_profile_start(&profile, PrePacket());
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
     if (status != HSA_STATUS_SUCCESS) return false;
 
     // Populating the AQL stop packet
     status = hsa_ext_amd_aql_profile_stop(&profile, PostPacket());
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
 
     return (status == HSA_STATUS_SUCCESS);
   }

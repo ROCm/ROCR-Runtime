@@ -25,7 +25,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
-#include <assert.h>
+#include "test_assert.h"
 #include <atomic>
 
 //#include "os.h"
@@ -72,7 +72,7 @@ bool TestHSA::initialize(int arg_cnt, char** arg_list) {
   } else if (agentName.compare(0, 4, "gfx9") == 0) {
     brig_path_obj_.append("gfx9");
   } else {
-    assert(false);
+    test_assert(false);
     return false;
   }
   brig_path_obj_.append("_" + name_ + ".hsaco");
@@ -92,7 +92,7 @@ bool TestHSA::setup() {
     void* ptr = (des.local) ? hsa_rsrc_->AllocateLocalMemory(agent_info_, des.size)
                             : hsa_rsrc_->AllocateSysMemory(agent_info_, des.size);
     des.ptr = ptr;
-    assert(ptr != NULL);
+    test_assert(ptr != NULL);
     if (ptr == NULL) return false;
   }
   test_->init();
@@ -137,7 +137,7 @@ bool TestHSA::run() {
   size_t size_info = 0;
   hsa_executable_symbol_get_info(
       kernel_code_desc_, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &size_info);
-  assert(kernarg_segment_size == size_info);
+  test_assert(kernarg_segment_size == size_info);
   if (kernarg_segment_size != size_info) return false;
 
   // Retrieve handle of the code block

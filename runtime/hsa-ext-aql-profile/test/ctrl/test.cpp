@@ -25,7 +25,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
-#include <assert.h>
+#include "test_assert.h"
 #include "simple_convolution.h"
 #include "test_hsa.h"
 #include "test_pgen_pmc.h"
@@ -48,14 +48,14 @@ int main(int argc, char* argv[]) {
     test_aql = new TestPGenPMC(test_aql);
   else if (sqtt_enable)
     test_aql = new TestPGenSQTT(test_aql);
-  assert(test_aql != NULL);
+  test_assert(test_aql != NULL);
   if (test_aql == NULL) return 1;
 
   // Initialization of Hsa Runtime
   ret_val = test_aql->initialize(argc, argv);
   if (ret_val == false) {
     std::cout << "Error in the test initialization" << std::endl;
-    assert(ret_val);
+    test_assert(ret_val);
     return 1;
   }
 
@@ -63,7 +63,7 @@ int main(int argc, char* argv[]) {
   ret_val = test_aql->setup();
   if (ret_val == false) {
     std::cout << "Error in creating hsa resources" << std::endl;
-    assert(ret_val);
+    test_assert(ret_val);
     return 1;
   }
 
@@ -71,7 +71,7 @@ int main(int argc, char* argv[]) {
   ret_val = test_aql->run();
   if (ret_val == false) {
     std::cout << "Error in running the test kernel" << std::endl;
-    assert(ret_val);
+    test_assert(ret_val);
     return 1;
   }
 

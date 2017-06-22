@@ -25,21 +25,12 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 
 *******************************************************************************/
 
-#ifndef _TESTAQL_H_
-#define _TESTAQL_H_
+#ifndef _TEST_AQL_H_
+#define _TEST_AQL_H_
 
 #include "hsa.h"
 #include "hsa_rsrc_factory.h"
 #include "hsa_ext_amd_aql_profile.h"
-
-#define test_assert(cond)                                                                          \
-  {                                                                                                \
-    if (cond) {                                                                                    \
-      std::cout << "ASSERT FAILED: " << #cond << " : " << __FILE__ << "(" << __LINE__ << ")"       \
-                << std::endl;                                                                      \
-      abort();                                                                                     \
-    }                                                                                              \
-  }
 
 // Test AQL interface
 class TestAql {
@@ -84,4 +75,4 @@ class TestAql {
   virtual bool cleanup() { return (test_aql) ? test_aql->cleanup() : true; }
 };
 
-#endif  // _TESTAQL_H_
+#endif  // _TEST_AQL_H_
