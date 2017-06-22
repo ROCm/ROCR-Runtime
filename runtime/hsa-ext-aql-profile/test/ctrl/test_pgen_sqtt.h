@@ -32,6 +32,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <iomanip>
 #include <fstream>
 
+#include "test_assert.h"
 #include "test_pgen.h"
 
 hsa_status_t TestPGenSQTT_Callback(hsa_ext_amd_aql_profile_info_type_t info_type,
@@ -65,11 +66,11 @@ class TestPGenSQTT : public TestPGen {
                 << ") size(" << dec << it->sqtt_data.size << ")" << std::endl;
 
       void* sys_buf = getRsrcFactory()->AllocateSysMemory(getAgentInfo(), it->sqtt_data.size);
-      assert(sys_buf != NULL);
+      test_assert(sys_buf != NULL);
       if (sys_buf == NULL) return HSA_STATUS_ERROR;
 
       hsa_status_t status = hsa_memory_copy(sys_buf, it->sqtt_data.ptr, it->sqtt_data.size);
-      assert(status == HSA_STATUS_SUCCESS);
+      test_assert(status == HSA_STATUS_SUCCESS);
       if (status != HSA_STATUS_SUCCESS) return status;
 
       std::string file_name;
@@ -125,7 +126,7 @@ class TestPGenSQTT : public TestPGen {
     command_buffer_alignment = buffer_alignment;
     status = hsa_ext_amd_aql_profile_get_info(
         &profile, HSA_EXT_AQL_PROFILE_INFO_COMMAND_BUFFER_SIZE, &command_buffer_size);
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
 
     output_buffer_alignment = buffer_alignment;
     output_buffer_size = buffer_size;
@@ -146,12 +147,12 @@ class TestPGenSQTT : public TestPGen {
 
     // Populating the AQL start packet
     status = hsa_ext_amd_aql_profile_start(&profile, PrePacket());
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
     if (status != HSA_STATUS_SUCCESS) return false;
 
     // Populating the AQL stop packet
     status = hsa_ext_amd_aql_profile_stop(&profile, PostPacket());
-    assert(status == HSA_STATUS_SUCCESS);
+    test_assert(status == HSA_STATUS_SUCCESS);
 
     return (status == HSA_STATUS_SUCCESS);
   }

@@ -26,7 +26,7 @@ OF THE POSSIBILITY OF SUCH DAMAGE.
 *******************************************************************************/
 
 #include <atomic>
-#include <assert.h>
+#include "test_assert.h"
 
 #include "test_pmgr.h"
 
@@ -115,7 +115,7 @@ bool TestPMgr::run() {
 bool TestPMgr::initialize(int argc, char** argv) {
   TestAql::initialize(argc, argv);
   hsa_status_t status = hsa_signal_create(1, 0, NULL, &postSignal);
-  assert(status == HSA_STATUS_SUCCESS);
+  test_assert(status == HSA_STATUS_SUCCESS);
   return (status == HSA_STATUS_SUCCESS);
 }
 

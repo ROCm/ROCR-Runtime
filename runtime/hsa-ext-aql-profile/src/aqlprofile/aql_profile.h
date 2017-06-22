@@ -8,7 +8,6 @@ class CommandWriter;
 }
 
 namespace aql_profile {
-
 typedef hsa_ext_amd_aql_profile_descriptor_t descriptor_t;
 typedef hsa_ext_amd_aql_profile_profile_t profile_t;
 typedef hsa_ext_amd_aql_profile_info_type_t info_type_t;
