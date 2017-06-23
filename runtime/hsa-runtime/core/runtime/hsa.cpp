@@ -70,6 +70,7 @@
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/amd_loader_context.hpp"
 #include "inc/hsa_ven_amd_loader.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 
 using namespace amd::hsa;
@@ -230,6 +231,9 @@ hsa_status_t hsa_extension_get_name(uint16_t extension, const char** name) {
     case HSA_EXTENSION_AMD_LOADER:
       *name = "HSA_EXTENSION_AMD_LOADER";
       break;
+    case HSA_EXTENSION_AMD_AQLPROFILE:
+      *name = "HSA_EXTENSION_AMD_AQLPROFILE";
+      break;
     default:
       *name = "HSA_EXTENSION_INVALID";
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -293,6 +297,12 @@ hsa_status_t hsa_system_major_extension_supported(uint16_t extension, uint16_t v
     return HSA_STATUS_SUCCESS;
   }
 
+  if ((extension == HSA_EXTENSION_AMD_AQLPROFILE) && (version_major == 1)) {
+    *version_minor = 0;
+    *result = true;
+    return HSA_STATUS_SUCCESS;
+  }
+
   *result = false;
   return HSA_STATUS_SUCCESS;
 }
@@ -306,7 +316,8 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
   static sizes_t sizes[] = {
       {"hsa_ext_images_1_00_pfn_t", sizeof(hsa_ext_images_1_00_pfn_t)},
       {"hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t)},
-      {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)}};
+      {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)},
+      {"hsa_ven_amd_aqlprofile_1_00_pfn_t", sizeof(hsa_ven_amd_aqlprofile_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
   if (minor > 99) return 0;
@@ -331,6 +342,9 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
     //  break;
     case HSA_EXTENSION_AMD_LOADER:
       name = "hsa_ven_amd_loader_";
+      break;
+    case HSA_EXTENSION_AMD_AQLPROFILE:
+      name = "hsa_ven_amd_aqlprofile_";
       break;
     default:
       return 0;
@@ -361,7 +375,11 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
   if (table_length == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   if (extension == HSA_EXTENSION_IMAGES) {
-    if (version_major > 1) return HSA_STATUS_ERROR;
+    if (version_major !=
+        core::Runtime::runtime_singleton_->extensions_.image_api.version.major_id) {
+      return HSA_STATUS_ERROR;
+    }
+
     hsa_ext_images_1_pfn_t ext_table;
     ext_table.hsa_ext_image_clear = hsa_ext_image_clear;
     ext_table.hsa_ext_image_copy = hsa_ext_image_copy;
@@ -383,7 +401,11 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
   }
 
   if (extension == HSA_EXTENSION_FINALIZER) {
-    if (version_major > 1) return HSA_STATUS_ERROR;
+    if (version_major !=
+        core::Runtime::runtime_singleton_->extensions_.finalizer_api.version.major_id) {
+      return HSA_STATUS_ERROR;
+    }
+
     hsa_ext_finalizer_1_00_pfn_t ext_table;
     ext_table.hsa_ext_program_add_module = hsa_ext_program_add_module;
     ext_table.hsa_ext_program_create = hsa_ext_program_create;
@@ -404,6 +426,26 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
         hsa_ven_amd_loader_query_segment_descriptors;
     ext_table.hsa_ven_amd_loader_query_executable = hsa_ven_amd_loader_query_executable;
+
+    memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  if (extension == HSA_EXTENSION_AMD_AQLPROFILE) {
+    if (version_major !=
+        core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.version.major_id) {
+      return HSA_STATUS_ERROR;
+    }
+
+    hsa_ven_amd_aqlprofile_1_00_pfn_t ext_table;
+    ext_table.hsa_ven_amd_aqlprofile_error_string = hsa_ven_amd_aqlprofile_error_string;
+    ext_table.hsa_ven_amd_aqlprofile_validate_event = hsa_ven_amd_aqlprofile_validate_event;
+    ext_table.hsa_ven_amd_aqlprofile_start = hsa_ven_amd_aqlprofile_start;
+    ext_table.hsa_ven_amd_aqlprofile_stop = hsa_ven_amd_aqlprofile_stop;
+    ext_table.hsa_ven_amd_aqlprofile_legacy_get_pm4 = hsa_ven_amd_aqlprofile_legacy_get_pm4;
+    ext_table.hsa_ven_amd_aqlprofile_get_info = hsa_ven_amd_aqlprofile_get_info;
+    ext_table.hsa_ven_amd_aqlprofile_iterate_data = hsa_ven_amd_aqlprofile_iterate_data;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 

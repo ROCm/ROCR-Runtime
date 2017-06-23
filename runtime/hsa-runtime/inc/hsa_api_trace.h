@@ -48,10 +48,12 @@
 #include "hsa_ext_image.h"
 #include "hsa_ext_amd.h"
 #include "hsa_ext_finalize.h"
+#include "hsa_ven_amd_aqlprofile.h"
 #else
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_finalize.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 #endif
 
 #include <string.h>
@@ -64,6 +66,7 @@
 #define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x01
 #define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x01
 #define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x01
+#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION    0x01
 
 // Step Ids of the Api tables exported by Hsa Core Runtime
 #define HSA_API_TABLE_STEP_VERSION                0x00
@@ -71,6 +74,7 @@
 #define HSA_AMD_EXT_API_TABLE_STEP_VERSION        0x00
 #define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
 #define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
+#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION     0x00
 
 // Min function used to copy Api Tables
 static inline uint32_t Min(const uint32_t a, const uint32_t b) {
@@ -114,6 +118,18 @@ struct ImageExtTable {
   decltype(hsa_ext_image_get_capability_with_layout)* hsa_ext_image_get_capability_with_layout_fn;
   decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
   decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
+};
+
+// Table to export HSA AqlProfile AMD specific Extension Apis
+struct AqlProfileExtTable {
+  ApiTableVersion version;
+  decltype(hsa_ven_amd_aqlprofile_error_string)* hsa_ven_amd_aqlprofile_error_string_fn;
+  decltype(hsa_ven_amd_aqlprofile_validate_event)* hsa_ven_amd_aqlprofile_validate_event_fn;
+  decltype(hsa_ven_amd_aqlprofile_start)* hsa_ven_amd_aqlprofile_start_fn;
+  decltype(hsa_ven_amd_aqlprofile_stop)* hsa_ven_amd_aqlprofile_stop_fn;
+  decltype(hsa_ven_amd_aqlprofile_legacy_get_pm4)* hsa_ven_amd_aqlprofile_legacy_get_pm4_fn;
+  decltype(hsa_ven_amd_aqlprofile_get_info)* hsa_ven_amd_aqlprofile_get_info_fn;
+  decltype(hsa_ven_amd_aqlprofile_iterate_data)* hsa_ven_amd_aqlprofile_iterate_data_fn;
 };
 
 // Table to export AMD Extension Apis
