@@ -64,6 +64,24 @@ extern int PAGE_SHIFT;
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
+/* HSA Thunk logging usage */
+extern int hsakmt_debug_level;
+#define hsakmt_print(level, fmt, ...) \
+	do { if (level <= hsakmt_debug_level) fprintf(stderr, fmt, ##__VA_ARGS__); } while (0)
+#define HSAKMT_DEBUG_LEVEL_DEFAULT	-1
+#define HSAKMT_DEBUG_LEVEL_ERR		3
+#define HSAKMT_DEBUG_LEVEL_WARNING	4
+#define HSAKMT_DEBUG_LEVEL_INFO		6
+#define HSAKMT_DEBUG_LEVEL_DEBUG	7
+#define pr_err(fmt, ...) \
+	hsakmt_print(HSAKMT_DEBUG_LEVEL_ERR, fmt, ##__VA_ARGS__)
+#define pr_warn(fmt, ...) \
+	hsakmt_print(HSAKMT_DEBUG_LEVEL_WARNING, fmt, ##__VA_ARGS__)
+#define pr_info(fmt, ...) \
+	hsakmt_print(HSAKMT_DEBUG_LEVEL_INFO, fmt, ##__VA_ARGS__)
+#define pr_debug(fmt, ...) \
+	hsakmt_print(HSAKMT_DEBUG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+
 enum asic_family_type {
 	CHIP_KAVERI = 0,
 	CHIP_HAWAII,
