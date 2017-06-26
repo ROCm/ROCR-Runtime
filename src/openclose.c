@@ -25,6 +25,7 @@
 
 #include "libhsakmt.h"
 
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/ioctl.h>
@@ -38,7 +39,7 @@ static const char kfd_device_name[] = "/dev/kfd";
 static const char tmp_file[] = "/var/lock/.amd_hsa_thunk_lock";
 int amd_hsa_thunk_lock_fd;
 static pid_t parent_pid = -1;
-
+int hsakmt_debug_level;
 
 static bool is_forked_child(void)
 {
@@ -76,6 +77,25 @@ static inline void init_page_size(void)
 	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
 }
 
+/* Normally libraries don't print messages. For debugging purpose, we'll
+ * print messages if an environment variable, HSAKMT_DEBUG_LEVEL, is set.
+ */
+static void init_debug_level(void)
+{
+	char *envvar;
+	int debug_level;
+
+	hsakmt_debug_level = HSAKMT_DEBUG_LEVEL_DEFAULT;
+
+	envvar = getenv("HSAKMT_DEBUG_LEVEL");
+	if (envvar) {
+		debug_level = atoi(envvar);
+		if (debug_level >= HSAKMT_DEBUG_LEVEL_ERR &&
+				debug_level <= HSAKMT_DEBUG_LEVEL_DEBUG)
+			hsakmt_debug_level = debug_level;
+	}
+}
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 {
 	HSAKMT_STATUS result;
@@ -93,6 +113,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		clear_after_fork();
 
 	if (kfd_open_count == 0) {
+		init_debug_level();
 		amd_hsa_thunk_lock_fd = 0;
 
 		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
