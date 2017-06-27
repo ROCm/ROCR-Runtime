@@ -593,7 +593,7 @@ static HSAKMT_STATUS topology_get_cpu_model_name(HsaNodeProperties *props,
 
 	fd = fopen(PROC_CPUINFO_PATH, "r");
 	if (!fd) {
-		printf("Failed to open [%s]. Unable to get CPU Model Name",
+		pr_err("Failed to open [%s]. Unable to get CPU Model Name",
 			PROC_CPUINFO_PATH);
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -674,7 +674,7 @@ static void topology_set_processor_vendor(void)
 
 	fd = fopen(PROC_CPUINFO_PATH, "r");
 	if (!fd) {
-		printf("Failed to open [%s]. Setting Processor Vendor to %s",
+		pr_err("Failed to open [%s]. Setting Processor Vendor to %s",
 			PROC_CPUINFO_PATH, supported_processor_vendor_name[GENUINE_INTEL]);
 		processor_vendor = GENUINE_INTEL;
 		return;
@@ -694,7 +694,7 @@ static void topology_set_processor_vendor(void)
 		}
 	}
 	fclose(fd);
-	printf("Failed to get Processor Vendor. Setting to %s",
+	pr_err("Failed to get Processor Vendor. Setting to %s",
 		supported_processor_vendor_name[GENUINE_INTEL]);
 	processor_vendor = GENUINE_INTEL;
 }
@@ -814,8 +814,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			if ((sscanf(envvar, "%u.%u.%u%c",
 					&major, &minor, &step, &dummy) != 3) ||
 				(major > 63 || minor > 255 || step > 255)) {
-				fprintf(stderr,
-					"HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
+				pr_err("HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
 					envvar);
 				ret = HSAKMT_STATUS_ERROR;
 				goto err;
@@ -840,7 +839,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			/* Is APU node */
 			ret = topology_get_cpu_model_name(props, true);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
-				printf("Failed to get APU Model Name from %s\n", PROC_CPUINFO_PATH);
+				pr_err("Failed to get APU Model Name from %s\n", PROC_CPUINFO_PATH);
 				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
 			}
 		} else {
@@ -859,7 +858,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 		if (!props->NumFComputeCores || !props->DeviceId) {
 			ret = topology_get_cpu_model_name(props, false);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
-				printf("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
+				pr_err("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
 				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
 			}
 		} else {
@@ -1005,7 +1004,7 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 	 */
 	CPU_ZERO(&orig_cpuset);
 	if (sched_getaffinity(0, sizeof(cpu_set_t), &orig_cpuset) != 0) {
-		printf("Failed to get CPU affinity\n");
+		pr_err("Failed to get CPU affinity\n");
 		free(p_temp_cpu_ci_list);
 		ret = HSAKMT_STATUS_ERROR;
 		goto exit;
@@ -1272,19 +1271,18 @@ static HsaIoLinkProperties *topology_get_free_io_link_slot_for_node(uint32_t nod
 	HsaIoLinkProperties *props;
 
 	if (node_id >= sys_props->NumNodes) {
-		fprintf(stderr, "Invalid node [%d]\n", node_id);
+		pr_err("Invalid node [%d]\n", node_id);
 		return NULL;
 	}
 
 	props = nodes[node_id].link;
 	if (!props) {
-		fprintf(stderr, "No io_link reported for Node [%d]\n", node_id);
+		pr_err("No io_link reported for Node [%d]\n", node_id);
 		return NULL;
 	}
 
 	if (nodes[node_id].node.NumIOLinks >= sys_props->NumNodes - 1) {
-		fprintf(stderr, "No more space for io_link for Node [%d]\n",
-				node_id);
+		pr_err("No more space for io_link for Node [%d]\n", node_id);
 		return NULL;
 	}
 
@@ -1470,8 +1468,7 @@ static void topology_create_indirect_gpu_links(const HsaSystemProperties *sys_pr
 				continue;
 			if (topology_add_io_link_for_node(i, sys_props, nodes,
 				type, j, weight, true) != HSAKMT_STATUS_SUCCESS)
-				fprintf(stderr,
-					"Fail to add IO link %d->%d\n", i, j);
+				pr_err("Fail to add IO link %d->%d\n", i, j);
 		}
 	}
 }
@@ -1611,7 +1608,7 @@ HSAKMT_STATUS topology_drop_snapshot(void)
 	HSAKMT_STATUS err;
 
 	if (!!_system != !!node) {
-		printf("Probable inconsistency?\n");
+		pr_warn("Probably inconsistency?\n");
 		err = HSAKMT_STATUS_SUCCESS;
 		goto out;
 	}

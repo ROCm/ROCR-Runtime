@@ -767,8 +767,8 @@ bool fmm_is_inside_some_aperture(void *address)
 #ifdef DEBUG_PRINT_APERTURE
 static void aperture_print(aperture_t *app)
 {
-	printf("\t Base: %p\n", app->base);
-	printf("\t Limit: %p\n", app->limit);
+	pr_info("\t Base: %p\n", app->base);
+	pr_info("\t Limit: %p\n", app->limit);
 }
 
 static void manageable_aperture_print(manageable_aperture_t *app)
@@ -776,16 +776,16 @@ static void manageable_aperture_print(manageable_aperture_t *app)
 	vm_area_t *cur = app->vm_ranges;
 	vm_object_t *object = app->vm_objects;
 
-	printf("\t Base: %p\n", app->base);
-	printf("\t Limit: %p\n", app->limit);
-	printf("\t Ranges:\n");
+	pr_info("\t Base: %p\n", app->base);
+	pr_info("\t Limit: %p\n", app->limit);
+	pr_info("\t Ranges:\n");
 	while (cur) {
-		printf("\t\t Range [%p - %p]\n", cur->start, cur->end);
+		pr_info("\t\t Range [%p - %p]\n", cur->start, cur->end);
 		cur = cur->next;
 	};
-	printf("\t Objects:\n");
+	pr_info("\t Objects:\n");
 	while (object) {
-		printf("\t\t Object [%p - %" PRIu64 "]\n",
+		pr_info("\t\t Object [%p - %" PRIu64 "]\n",
 				object->start, object->size);
 		object = object->next;
 	};
@@ -796,19 +796,19 @@ void fmm_print(uint32_t gpu_id)
 	int32_t gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 
 	if (gpu_mem_id >= 0) { /* Found */
-		printf("LDS aperture:\n");
+		pr_info("LDS aperture:\n");
 		aperture_print(&gpu_mem[gpu_mem_id].lds_aperture);
-		printf("GPUVM aperture:\n");
+		pr_info("GPUVM aperture:\n");
 		manageable_aperture_print(&gpu_mem[gpu_mem_id].gpuvm_aperture);
-		printf("Scratch aperture:\n");
+		pr_info("Scratch aperture:\n");
 		manageable_aperture_print(&gpu_mem[gpu_mem_id].scratch_aperture);
-		printf("Scratch backing memory:\n");
+		pr_info("Scratch backing memory:\n");
 		manageable_aperture_print(&gpu_mem[gpu_mem_id].scratch_physical);
 	}
 
-	printf("dGPU aperture:\n");
+	pr_info("dGPU aperture:\n");
 	manageable_aperture_print(&svm.dgpu_aperture);
-	printf("dGPU alt aperture:\n");
+	pr_info("dGPU alt aperture:\n");
 	manageable_aperture_print(&svm.dgpu_alt_aperture);
 
 }
@@ -1533,7 +1533,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 						    KFD_IOC_CACHE_POLICY_COHERENT,
 						    alt_base, alt_size);
 			if (err != 0) {
-				fprintf(stderr, "Error! Failed to set alt aperture for GPU [0x%x]\n",
+				pr_err("Failed to set alt aperture for GPU [0x%x]\n",
 						gpu_mem[gpu_mem_id].gpu_id);
 				ret = HSAKMT_STATUS_ERROR;
 			}
@@ -1911,10 +1911,10 @@ static void print_device_id_array(uint32_t *device_id_array, uint32_t device_id_
 #ifdef DEBUG_PRINT_APERTURE
 	device_id_array_size /= sizeof(uint32_t);
 
-	printf("device id array size %d\n", device_id_array_size);
+	pr_info("device id array size %d\n", device_id_array_size);
 
 	for (uint32_t i = 0 ; i < device_id_array_size; i++)
-		printf("%d . 0x%x\n", (i+1), device_id_array[i]);
+		pr_info("%d . 0x%x\n", (i+1), device_id_array[i]);
 #endif
 }
 
@@ -2191,8 +2191,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 
 	ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
-		fprintf(stderr,
-			"Unable to find vm_size for dGPU, assuming 64GB.\n");
+		pr_err("Unable to find vm_size for dGPU, assuming 64GB.\n");
 		max_vm_limit_in_gb = 64;
 	}
 	max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
@@ -2216,15 +2215,13 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 			munmap(ret_addr, len);
 		}
 		if (!ret_addr) {
-			fprintf(stderr,
-				"Failed to reserve %uGB for SVM ...\n",
+			pr_err("Failed to reserve %uGB for SVM ...\n",
 				(unsigned int)(len >> 30));
 			continue;
 		}
 		if ((HSAuint64)ret_addr + min_vm_size - 1 > max_vm_limit) {
 			/* addressable size is less than the minimum */
-			fprintf(stderr,
-				"Got %uGB for SVM at %p with only %dGB usable ...\n",
+			pr_warn("Got %uGB for SVM at %p with only %dGB usable ...\n",
 				(unsigned int)(len >> 30), ret_addr,
 				(int)(((HSAint64)max_vm_limit -
 				       (HSAint64)ret_addr) >> 30));
@@ -2237,8 +2234,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 	}
 
 	if (!found) {
-		fprintf(stderr,
-			"Failed to reserve SVM address range. Giving up.\n");
+		pr_err("Failed to reserve SVM address range. Giving up.\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -2421,8 +2417,7 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 		if ((gpu_id_array_size != object->registered_device_id_array_size)
 			|| memcmp(object->registered_device_id_array,
 					gpu_id_array, gpu_id_array_size)) {
-			fprintf(stderr,
-				"Error. Changing nodes in a registered addr.\n");
+			pr_err("Cannot change nodes in a registered addr.\n");
 			return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
 		} else
 			return HSAKMT_STATUS_SUCCESS;

@@ -172,7 +172,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
 	CHECK_KFD_OPEN();
 
 	if (!MemoryAddress) {
-		fprintf(stderr, "FIXME: freeing NULL pointer\n");
+		pr_err("FIXME: freeing NULL pointer\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -308,7 +308,7 @@ static uint64_t convertHsaToKfdRange(HsaMemoryRange *HsaRange)
 {
 	if (sizeof(struct kfd_memory_range) !=
 		sizeof(HsaMemoryRange)) {
-		fprintf(stderr, "Struct size mismatch in thunk. Cannot cast Hsa Range to KFD IOCTL range\n");
+		pr_err("Struct size mismatch in thunk. Cannot cast Hsa Range to KFD IOCTL range\n");
 		return 0;
 	}
 	return (uint64_t) HsaRange;
@@ -395,7 +395,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPU(void *MemoryAddress,
 	CHECK_KFD_OPEN();
 
 	if (!MemoryAddress) {
-		fprintf(stderr, "FIXME: mapping NULL pointer\n");
+		pr_err("FIXME: mapping NULL pointer\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -419,7 +419,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
 	HSAKMT_STATUS ret;
 
 	if (!MemoryAddress) {
-		fprintf(stderr, "FIXME: mapping NULL pointer\n");
+		pr_err("FIXME: mapping NULL pointer\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -443,7 +443,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapMemoryToGPU(void *MemoryAddress)
 
 	if (!MemoryAddress) {
 		/* Workaround for runtime bug */
-		fprintf(stderr, "FIXME: Unmapping NULL pointer\n");
+		pr_err("FIXME: Unmapping NULL pointer\n");
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
