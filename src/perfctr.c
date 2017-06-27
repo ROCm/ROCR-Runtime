@@ -385,8 +385,7 @@ static HSAKMT_STATUS open_perf_event_fd(struct perf_trace_block *block)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	if (getuid()) {
-		fprintf(stderr,
-			"Error. Must be root to open perf_event.\n");
+		pr_err("Must be root to open perf_event.\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -560,7 +559,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	if (NumberOfCounters > MAX_COUNTERS) {
-		fprintf(stderr, "Error: MAX_COUNTERS is too small for %d.\n",
+		pr_err("MAX_COUNTERS is too small for %d.\n",
 			NumberOfCounters);
 		return HSAKMT_STATUS_NO_MEMORY;
 	}
@@ -588,11 +587,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 			continue;
 		concurrent_limit = get_block_concurrent_limit(NodeId, i);
 		if (!concurrent_limit) {
-			fprintf(stderr, "Invalid block ID: %d\n", i);
+			pr_err("Invalid block ID: %d\n", i);
 			return HSAKMT_STATUS_INVALID_PARAMETER;
 		}
 		if (num_counters[i] > concurrent_limit) {
-			fprintf(stderr, "Counters exceed the limit.\n");
+			pr_err("Counters exceed the limit.\n");
 			return HSAKMT_STATUS_INVALID_PARAMETER;
 		}
 		num_blocks++;

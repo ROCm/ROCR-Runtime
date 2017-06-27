@@ -1628,7 +1628,7 @@ static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 			continue;
 		if (snprintf(path, len, "%s/%s", sysfs_amdiommu_event_path,
 						dent->d_name) >= len) {
-			fprintf(stderr, "Increase path length.\n");
+			pr_err("Increase path length.\n");
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto out;
 		}
@@ -1644,8 +1644,7 @@ static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 		}
 		if (num > max_counter_id)
 		/* This should never happen. If it does, check IOMMU driver. */
-			fprintf(stderr,
-				"Error: max_counter_id %d is set too small.\n",
+			pr_err("max_counter_id %d is set too small.\n",
 				max_counter_id);
 		else {
 			counter_id[num] = 1;
@@ -1671,7 +1670,7 @@ static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 		"/sys/devices/virtual/kfd/kfd/topology/nodes",
 		0, /* IOMMU is in node 0. Change this if NUMA is introduced to APU. */
 		"perf/iommu/max_concurrent") >= len) {
-		fprintf(stderr, "Increase path length\n");
+		pr_err("Increase path length\n");
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto out;
 	};

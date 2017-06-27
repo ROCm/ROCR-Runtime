@@ -141,7 +141,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 			goto init_doorbell_failed;
 
 		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
-			printf("Insufficient Memory. Debugging unavailable\n");
+			pr_warn("Insufficient Memory. Debugging unavailable\n");
 
 		mask = umask(0); /* save the current umask */
 		/* We don't want the existing umask to mask out S_IWOTH */
@@ -151,11 +151,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 				0666);
 		umask(mask); /* restore the original umask */
 		if (amd_hsa_thunk_lock_fd < 0)
-			fprintf(stderr,
-			"Profiling of privileged counters is not available\n");
+			pr_warn("Profiling of privileged counters is not available\n");
 		if (init_counter_props(sys_props.NumNodes) !=
 						HSAKMT_STATUS_SUCCESS)
-			fprintf(stderr, "Profiling is not available\n");
+			pr_warn("Profiling is not available\n");
 	} else {
 		kfd_open_count++;
 		result = HSAKMT_STATUS_SUCCESS;
