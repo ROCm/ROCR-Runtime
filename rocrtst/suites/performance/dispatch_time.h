@@ -43,83 +43,68 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_DISPATCH_TIME_H__
-#define __ROCRTST_SRC_DISPATCH_TIME_H__
-#include "perf_common/perf_base.h"
+#ifndef ROCRTST_SUITES_PERFORMANCE_DISPATCH_TIME_H_
+#define ROCRTST_SUITES_PERFORMANCE_DISPATCH_TIME_H_
+#include <vector>
+
+#include "suites/test_common/test_base.h"
 #include "common/base_rocr.h"
 #include "common/common.h"
 #include "hsa/hsa.h"
-#include <vector>
 
-//@Brief: This class is defined to measure the mean latency of launching
-//an empty kernel
+// @Brief: This class is defined to measure the mean latency of launching
+// an empty kernel
 
-class DispatchTime: public rocrtst::BaseRocR, public PerfBase {
+class DispatchTime : public TestBase {
  public:
-  //@Brief: Constructor
-  DispatchTime();
+  // @Brief: Constructor
+  DispatchTime(bool defaultInterrupt, bool launchSingleKernel);
 
-  //@Brief: Destructor
-  virtual ~DispatchTime();
+  // @Brief: Destructor
+  virtual ~DispatchTime(void);
 
-  //@Brief: Set up the environment for the test
-  virtual void SetUp();
+  // @Brief: Set up the environment for the test
+  virtual void SetUp(void);
 
-  //@Brief: Run the test case
-  virtual void Run();
+  // @Brief: Run the test case
+  virtual void Run(void);
 
-  //@Brief: Display  results we got
-  virtual void DisplayResults() const;
+  // @Brief: Display  results we got
+  virtual void DisplayResults(void) const;
 
-  //@Brief: Clean up and close the runtime
-  virtual void Close();
+  // @Brief: Display information about what this test does
+  virtual void DisplayTestInfo(void);
 
-  //@Brief: Choose if use default signal or not
-  void UseDefaultSignal(bool use_default = true) {
-    use_default_ = use_default;
-  }
-
-  //@Brief; Choose to launch a single kernels or not
-  void LaunchSingleKernel(bool launch_single = true) {
-    launch_single_ = launch_single;
-  }
+  // @Brief: Clean up and close the runtime
+  virtual void Close(void);
 
  private:
-  //@Brief: Get actual iteration number
-  virtual size_t RealIterationNum();
+  // @Brief: Get actual iteration number
+  virtual size_t RealIterationNum(void);
 
-  //@Brief: Launch single packet each time
-  virtual void RunSingle();
+  // @Brief: Launch single packet each time
+  virtual void RunSingle(void);
 
-  //@Brief: Launch multiple packets each time
-  virtual void RunMulti();
+  // @Brief: Launch multiple packets each time
+  virtual void RunMulti(void);
 
-  //@Brief: Indicate if use default signal or not
-  bool use_default_;
+  // @Brief: Indicate if use default signal or not
+  bool use_default_interupt_;
 
-  //@Brief: Indicate if launch single kernel or not
+  // @Brief: Indicate if launch single kernel or not
   bool launch_single_;
 
-  //@Brief: Store the size of queue
+  // @Brief: Store the size of queue
   uint32_t queue_size_;
 
-  //@Brief: Number of packets in a batch
+  // @Brief: Number of packets in a batch
   uint32_t num_batch_;
 
-  //@Brief: Time of single default signal dispatch time
-  double single_default_mean_;
-
-  //@Brief: Time of single interrupt signal dispatch time
-  double single_interrupt_mean_;
-
-  //@Brief: Time of multi default signal dispatch time
-  double multi_default_mean_;
-
-  //@Brief: Time of multi interrupt signal dispatch time
-  double multi_interrupt_mean_;
+  // @Brief: Ave. dispatch time
+  double dispatch_time_mean_;
 
   char* orig_iterrupt_env_;
 };
 
-#endif
+#endif  // ROCRTST_SUITES_PERFORMANCE_DISPATCH_TIME_H_
 

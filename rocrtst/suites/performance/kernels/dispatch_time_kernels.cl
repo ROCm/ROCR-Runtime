@@ -43,64 +43,8 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_VECTOR_COPY_P2P_H__
-#define __ROCRTST_SRC_VECTOR_COPY_P2P_H__
-
-#include "perf_common/perf_base.h"
-#include "common/base_rocr.h"
-#include "common/common.h"
-#include "common/hsatimer.h"
-#include "hsa/hsa.h"
-#include "hsa/hsa_ext_amd.h"
-#include "hsa/hsa_ext_finalize.h"
-#include <algorithm>
-#include <vector>
-
-//@Brief: This class is defined to measure the mean latency of launching
-//an empty kernel
-
-class VectorCopyP2P: public rocrtst::BaseRocR, public PerfBase {
- public:
-  //@Brief: Constructor
-  VectorCopyP2P();
-
-  //@Brief: Destructor
-  virtual ~VectorCopyP2P();
-
-  //@Brief: Set up the environment for the test
-  virtual void SetUp();
-
-  //@Brief: Run the test case
-  virtual void Run();
-
-  //@Brief: Display  results we got
-  virtual void DisplayResults() const;
-
-  //@Brief: Clean up and close the runtime
-  virtual void Close();
-
- private:
-  //@Brief: Get actual iteration number
-  virtual size_t RealIterationNum();
-
-  //@Brief: Create Queue
-  virtual void CreateQueue();
-
-  //@Brief: Store the size of queue
-  uint32_t queue_size_;
-
-  //@Brief: The mean time of CP Processing
-  double mean_;
-
-  //@Brief: The group memory region
-  hsa_region_t group_region_;
-
-  //@Brief: Pointer to cu_id array
-  uint32_t* cu_;
-
-  uint32_t manual_input;
-  uint32_t group_input;
-};
-
-#endif
-
+__kernel void
+empty_kernel(void) {
+  return;
+}
+ 

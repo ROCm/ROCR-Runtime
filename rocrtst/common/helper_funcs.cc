@@ -52,9 +52,9 @@
 #include <iostream>
 #include <string>
 #include <vector>
+#include <numeric>
 
 namespace rocrtst {
-
 
 template<typename T>
 void PrintArray(const std::string header, const T* data, const int width,
@@ -191,7 +191,7 @@ AlignUp(void* value, size_t alignment) {
                                                                    alignment));
 }
 
-double CalcMedian(std::vector<double> scores) {
+double CalcMedian(const std::vector<double> &scores) {
   double median;
   size_t size = scores.size();
 
@@ -204,15 +204,11 @@ double CalcMedian(std::vector<double> scores) {
   return median;
 }
 
-double CalcMean(std::vector<double> scores) {
-  double mean = 0;
-  size_t size = scores.size();
+double CalcMean(const std::vector<double> &scores) {
+  double mean;
 
-  for (size_t i = 0; i < size; ++i) {
-    mean += scores[i];
-  }
-
-  return mean / size;
+  mean = std::accumulate(scores.begin(), scores.end(), 0.0);
+  return mean/scores.size();
 }
 
 double CalcMean(const std::vector<double>& v1, const std::vector<double>& v2) {

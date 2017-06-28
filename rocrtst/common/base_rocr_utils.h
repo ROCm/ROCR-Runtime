@@ -60,13 +60,15 @@ namespace rocrtst {
 /// \param[in] test Test for which the kernel will be loaded.
 /// \returns HSA_STATUS_SUCCESS if no errors
 hsa_status_t LoadKernelFromObjFile(BaseRocR* test);
-/// Do initialization tasks for HSA test program. This includes calling
-/// hsa_init(), finding and setting the cpu and gpu agent member variables,
-/// creating the signal needed for queueing AQL packets and checking
-/// HW requirements.
+
+/// Do initialization tasks for HSA test program.
 /// \param[in] test Test to initialize
 /// \returns HSA_STATUS_SUCCESS if no errors
 hsa_status_t InitAndSetupHSA(BaseRocR* test);
+
+/// Find and set the cpu and gpu agent member variables. Also checks that
+/// gpu agent meets test requirements (e.g., FULL profile vs. BASE profile).
+hsa_status_t SetDefaultAgents(BaseRocR* test);
 
 /// For the provided device agent, create an AQL queue
 /// \param[in] device Device for which a queue is to be created
@@ -84,16 +86,16 @@ hsa_status_t CreateQueue(hsa_agent_t device, hsa_queue_t** queue,
 /// be drawn.
 /// \param[inout] aql Caller provided pointer to aql packet that will be
 /// populated
-/// \returns void
-void InitializeAQLPacket(const BaseRocR* test,
+/// \returns Appropriate hsa_status_t
+hsa_status_t InitializeAQLPacket(const BaseRocR* test,
                          hsa_kernel_dispatch_packet_t* aql);
 
 /// This function writes all of the aql packet fields to the queue besides
 /// "setup" and "header". This assumes all the aql fields have be set
 /// appropriately.
 /// \param[in] test Test containing the queue and aql packet to be written.
-/// \returns void
-void WriteAQLToQueue(BaseRocR* test);
+/// \returns Pointer to dispatch packet in queue that was written to
+hsa_kernel_dispatch_packet_t* WriteAQLToQueue(BaseRocR* test, uint64_t *ind);
 
 /// This function writes the first 32 bits of an aql packet to the provided
 /// aql packet. This function is meant to be called immediately before
@@ -139,23 +141,21 @@ bool CheckProfile(BaseRocR const* test);
 hsa_status_t AllocAndSetKernArgs(BaseRocR* test, void* args,
                                  size_t arg_size);
 
+/// Verify that the machine running the test has the required profile.
+/// This function will verify that the execution machine meets any specific
+/// test requirement for a profile (HSA_PROFILE_BASE or HSA_PROFILE_FULL).
+/// \param[in] test Test that provides profile requirements.
+/// \returns bool
+///          - true Machine meets test requirements
+///          - false Machine does not meet test requirements
+bool CheckProfileAndInform(BaseRocR* test);
+
 /// This function will set the cpu and gpu memory pools to the type used in
 /// many applications.
 /// \param[in] test Test that provides profile requirements.
 /// \returns HSA_STATUS_SUCCESS if everything cleaned up ok, or appropriate HSA
 ///   error code otherwise.
 hsa_status_t SetPoolsTypical(BaseRocR* test);
-
-/// Allocate memory from a specified pool and grant both standard BaseRocR
-/// agents access
-/// \param[in] test Test having the agents to which access is granted
-/// \param[in] len Size of the memory buffer to allocate
-/// \pool[in] Pool from which to allocate memory
-/// \buffer[out] Address of pointer which will point to newly allocated memory
-///  upon return
-///  \returns HSA_STATUS_OK if no errors
-hsa_status_t AllocAndAllowAccess(BaseRocR* test, size_t len,
-                                  hsa_amd_memory_pool_t pool, void**buffer);
 
 /// Work-around for hsa_amd_memory_fill, which is currently broken.
 /// \param[in] ptr Pointer to start of memory location to be filled

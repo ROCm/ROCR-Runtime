@@ -50,11 +50,9 @@
 namespace rocrtst {
 
 BaseRocR::BaseRocR(void) {
-  num_iteration_ = 100;
-  signal_.handle = 0;
+  num_iteration_ = 1;
   cpu_device_.handle = -1;
   gpu_device1_.handle = -1;
-  region_.handle = 0;
   device_pool_.handle = 0;
   kern_arg_pool_.handle = 0;
   main_queue_ = nullptr;
@@ -66,6 +64,7 @@ BaseRocR::BaseRocR(void) {
   orig_hsa_enable_interrupt_ = GetEnv("HSA_ENABLE_INTERRUPT");
   set_kernel_file_name("");
   set_verbosity(0);
+  set_title("unset_title");
 }
 
 BaseRocR::~BaseRocR() {

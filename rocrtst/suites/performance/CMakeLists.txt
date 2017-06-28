@@ -25,10 +25,6 @@ cmake_minimum_required(VERSION 2.8.0)
 #   4) Set env. variable TARGET_DEVICE to indicate gpu type (e.g., gfx803,
 #      gfx900, ...)
 #
-#   5) Set env. variables AMDHSAFIN_DIR and and AMDHSAFIN_TARGET to the 
-#      directory containing the amd finalizer executable and version
-#      (e.g, 8:0:3) respectively.      
-#
 #   Building rocrtst Suite
 # 
 #   1) Create build folder e.g. "rocrtst/build" - any name will do
@@ -91,6 +87,32 @@ else()
   endif()
 endif()
 
+if (DEFINED ENV{OPENCL_DIR})
+  set(CLANG $ENV{OPENCL_DIR}/bin/x86_64/clang)
+  set(OPENCL_DIR $ENV{OPENCL_DIR})
+  if (NOT EXISTS ${CLANG})
+    message("ERROR: path to clang (${CLANG}) is not valid. Is env. variable OPENCL_DIR correct?")
+    return()
+  endif()
+
+  if (DEFINED ENV{OPENCL_VER})
+    set(OPENCL_VER $ENV{OPENCL_VER})
+  else()
+    message("OPENCL_VER environment variable is not set. Using default")
+    set(OPENCL_VER "2.0")
+  endif()
+else()
+    message("WARNING: OPENCL_DIR environment variable is not set. Kernels will not be built.")
+endif()
+
+if (DEFINED ENV{TARGET_DEVICE})
+  set(TARGET_DEVICE $ENV{TARGET_DEVICE})
+else()
+  message("ERROR: TARGET_DEVICE environment variable is not defined.")
+  message("Please define a valid clang target (e.g., gfx803, gfx900,...).")
+  return()
+endif() 
+
 #
 # Set Name for rocrtst Suite Project
 #
@@ -105,17 +127,22 @@ project (${ROCRTST_SUITE_NAME})
 #   Build Type: Debug Vs Release, 32 Vs 64
 #   Compiler Version, etc
 #
-MESSAGE("")
-MESSAGE("-------------IS64BIT: " ${IS64BIT})
-MESSAGE("-----------BuildType: " ${BUILD_TYPE})
-MESSAGE("------------Compiler: " ${CMAKE_CXX_COMPILER})
-MESSAGE("-------------Version: " ${CMAKE_CXX_COMPILER_VERSION})
-MESSAGE("--------Proj Src Dir: " ${PROJECT_SOURCE_DIR})
-MESSAGE("--------Proj Bld Dir: " ${PROJECT_BINARY_DIR})
-MESSAGE("--------Proj Lib Dir: " ${PROJECT_BINARY_DIR}/lib)
-MESSAGE("--------Proj Exe Dir: " ${PROJECT_BINARY_DIR}/bin)
-MESSAGE("")
+message("")
+message("Build Configuration:")
+message("-------------IS64BIT: " ${IS64BIT})
+message("-----------BuildType: " ${BUILD_TYPE})
+message("------------Compiler: " ${CMAKE_CXX_COMPILER})
+message("-------------Version: " ${CMAKE_CXX_COMPILER_VERSION})
+message("--------Proj Src Dir: " ${PROJECT_SOURCE_DIR})
+message("--------Proj Bld Dir: " ${PROJECT_BINARY_DIR})
+message("--------Proj Lib Dir: " ${PROJECT_BINARY_DIR}/lib)
+message("--------Proj Exe Dir: " ${PROJECT_BINARY_DIR}/bin)
+message("-------Target Device: " ${TARGET_DEVICE})
+message("----------Clang path: " ${CLANG})
+message("-------OpenCL version " ${OPENCL_VER})
+message("")
 
+set(KERNELS_DIR ${PROJECT_SOURCE_DIR}/kernels)
 #
 # Set the build type based on user input
 #
@@ -148,7 +175,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-threadsafe-statics")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmerge-all-constants")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
 
 
 #
@@ -164,7 +191,7 @@ endif()
 # Add compiler flags to include symbol information for debug builds
 #
 if(ISDEBUG)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
 endif()
 MESSAGE("ISDEBUG STEP:Done")
 
@@ -201,10 +228,11 @@ MESSAGE(${ROCRTST_LIBS})
 set(ROCRTST "rocrtst${ONLY64STR}")
 
 #
-# Sorce files for building rocrtst
+# Source files for building rocrtst
 #
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR} performanceSources)
-
+aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/test_common testCommonSources)
+aux_source_directory(${ROCRTST_ROOT}/suites/test_common testCommonSources)
 
 # Header file include path
 
@@ -212,11 +240,51 @@ include_directories(${ROCR_INC_DIR})
 include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
 
-# Build rules
+# Use this function to build any samples that have kernels to be built
+function(build_kernel S_NAME)
+  set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
+  set(TARG_NAME "${S_NAME}_hsaco")
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME} PARENT_SCOPE)
+  separate_arguments(CLANG_ARG_LIST UNIX_COMMAND "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEVICE} -include ${OPENCL_DIR}/include/opencl-c.h ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${PROJECT_BINARY_DIR}/${SNAME_KERNEL}")
+  add_custom_target(${TARG_NAME} ${CLANG} ${CLANG_ARG_LIST}
+     COMMENT "BUILDING KERNEL..."
+     VERBATIM)
+endfunction(build_kernel)
 
-add_executable(${ROCRTST} ${performanceSources} ${common_srcs})
+######################
+# Kernel Build Section
+######################
+set(KERN_SUFFIX "kernels.hsaco")
+set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
+set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_DIR}/lib/x86_64/bitcode")
+
+set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
+set(COMMON_BITCODE_LIBS "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
+
+# To build kernels, repeat the pattern used below for the P2P kernel; this
+# pattern sets the bitcode libraries required by the kernel which will be 
+# used in the build_kernel() call, which builds the kernel.
+
+# Test Case Template example
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/test_case_template_kernels.cl")
+build_kernel("test_case_template")
+
+# P2P Memory Access
+#set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+#set(CL_FILE_LIST "${KERNELS_DIR}/p2p_mem_access_kernels.cl")
+#build_kernel("p2p_mem_access")
+
+# Dispatch Time 
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/dispatch_time_kernels.cl")
+build_kernel("dispatch_time")
+
+# Build rules
+add_executable(${ROCRTST} ${performanceSources} ${common_srcs} ${testCommonSources})
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt)
 
+add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
 INSTALL(TARGETS ${ROCRTST}
         ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
         LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib

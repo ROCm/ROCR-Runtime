@@ -42,25 +42,43 @@
  * DEALINGS WITH THE SOFTWARE.
  *
  */
+#ifndef ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
+#define ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
 
+#include <string>
+#include "common/base_rocr.h"
 
-#ifndef ROCRTST_SUITES_PERFORMANCE_PERF_COMMON_PERF_BASE_H_
-#define ROCRTST_SUITES_PERFORMANCE_PERF_COMMON_PERF_BASE_H_
-
-class PerfBase {
+class TestBase : public rocrtst::BaseRocR {
  public:
+
+  TestBase(void);
+
+  virtual ~TestBase(void);
+
+  enum VerboseLevel {VERBOSE_MIN = 0, VERBOSE_STANDARD, VERBOSE_PROGRESS};
+
   // @Brief: Before run the core measure codes, do something to set up
   // i.e. init runtime, prepare packet...
-  virtual void SetUp(void) = 0;
+  virtual void SetUp(void);
 
   // @Brief: Core measurement codes executing here
-  virtual void Run(void) = 0;
+  virtual void Run(void);
 
   // @Brief: Do something clean up
-  virtual void Close(void) = 0;
+  virtual void Close(void);
 
   // @Brief: Display the results
-  virtual void DisplayResults(void) const = 0;
+  virtual void DisplayResults(void) const;
+
+  // @Brief: Display information about the test
+  virtual void DisplayTestInfo(void);
+
+  const std::string & description(void) const {return description_;}
+
+  void set_description(std::string d);
+
+ private:
+  std::string description_;
 };
 
-#endif  // ROCRTST_SUITES_PERFORMANCE_PERF_COMMON_PERF_BASE_H_
+#endif  // ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_

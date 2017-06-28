@@ -176,8 +176,7 @@ uint64_t PerfTimer::MeasureTSCFreqHz() {
 
   do {
     tscTicksEnd = __rdtscp(&unused);
-  }
-  while (tscTicksEnd - tscTicksBegin < 1000000000);
+  } while (tscTicksEnd - tscTicksBegin < 1000000000);
 
   uint64_t coarseEndUs = CoarseTimestampUs();
 

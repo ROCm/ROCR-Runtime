@@ -105,13 +105,6 @@ class BaseRocR {
     return kernel_object_;
   }
 
-  void set_signal(hsa_signal_t sig) {
-    signal_.handle = sig.handle;
-  }
-  const hsa_signal_t& signal(void) const {
-    return signal_;
-  }
-
   void set_profile(hsa_profile_t in_prof) {
     profile_ = in_prof;
   }
@@ -149,10 +142,6 @@ class BaseRocR {
 
   hsa_kernel_dispatch_packet_t& aql(void) {
     return aql_;
-  }
-
-  hsa_region_t& region(void) {
-    return region_;
   }
 
   void set_num_iteration(int num) {
@@ -237,15 +226,11 @@ class BaseRocR {
  private:
   uint64_t num_iteration_;   ///< Number of times to execute test
 
-  hsa_signal_t signal_;   ///< Completion signal used for kernel execution
-
   hsa_queue_t* main_queue_;   ///< AQL queue used for packets
 
   hsa_agent_t gpu_device1_;   ///< Handle to first GPU found
 
   hsa_agent_t cpu_device_;   ///< Handle to CPU
-
-  hsa_region_t region_;   ///< TODO(cfreehil): delete this
 
   hsa_amd_memory_pool_t device_pool_;   ///< Memory pool on gpu pool list
 
@@ -254,8 +239,6 @@ class BaseRocR {
   hsa_amd_memory_pool_t kern_arg_pool_;   ///< Memory pool suitable for args
 
   uint64_t kernel_object_;   ///< Handle to kernel code
-
-  std::string brig_file_;   // TODO(cfreehil): delete this
 
   std::string kernel_file_name_;   ///< Code object file name
 

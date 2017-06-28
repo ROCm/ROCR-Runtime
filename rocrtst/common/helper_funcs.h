@@ -60,7 +60,7 @@ bool Compare(const double* refData, const double* data,
              const int length, const double epsilon = 1e-6);
 
 /// Calculate the mean number of the vector
-double CalcMean(std::vector<double> scores);
+double CalcMean(const std::vector<double> &scores);
 
 /// Calculate the mean time of difference of the two vectors
 double CalcMean(const std::vector<double>& v1, const std::vector<double>& v2);
@@ -68,7 +68,7 @@ double CalcMean(const std::vector<double>& v1, const std::vector<double>& v2);
 /// Return the median value of a vector of doubles
 /// \param[in] scores Vector of doubles
 /// \returns double Median value of provided vector
-double CalcMedian(std::vector<double> scores);
+double CalcMedian(const std::vector<double> &scores);
 
 /// Calculate the standard deviation of the vector
 double CalcStdDeviation(std::vector<double> scores, int score_mean);

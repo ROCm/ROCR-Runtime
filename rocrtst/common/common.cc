@@ -341,45 +341,6 @@ hsa_status_t DumpPointerInfo(void* ptr) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t hsa_memory_fill_workaround_cpu(void* ptr, uint32_t value,
-                                                            size_t count) {
-  (void)memset(ptr, value, count);
-
-  return HSA_STATUS_SUCCESS;
-}
-
-hsa_status_t hsa_memory_copy_workaround_cpu(void* dst, const void *src,
-                                                            size_t size) {
-  (void)memcpy(dst, src, size);
-
-  return HSA_STATUS_SUCCESS;
-}
-
-hsa_status_t hsa_memory_copy_workaround_gen(void* dst, const void *src,
-                       size_t size, hsa_agent_t dst_ag, hsa_agent_t src_ag) {
-  hsa_signal_t s;
-  hsa_status_t err;
-
-  err = hsa_signal_create(1, 0, NULL, &s);
-  RET_IF_HSA_COMMON_ERR(err);
-
-  err = hsa_amd_memory_async_copy(dst, dst_ag, src, src_ag, size, 0, NULL, s);
-  RET_IF_HSA_COMMON_ERR(err);
-
-  if (hsa_signal_wait_scacquire(s, HSA_SIGNAL_CONDITION_LT, 1,
-                                   UINT64_MAX, HSA_WAIT_STATE_BLOCKED) != 0) {
-    err = HSA_STATUS_ERROR;
-    std::cout << "Async copy signal error" << std::endl;
-
-    RET_IF_HSA_COMMON_ERR(err);
-  }
-
-  err = hsa_signal_destroy(s);
-
-  RET_IF_HSA_COMMON_ERR(err);
-
-  return err;
-}
 
 /*! \brief Writes to the buffer and increments the write pointer to the
  *         buffer. Also, ensures that the argument is written to an
