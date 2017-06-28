@@ -43,56 +43,79 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_MEMORY_MEM_ALLOCATION_H__
-#define __ROCRTST_SRC_MEMORY_MEM_ALLOCATION_H__
+#include <assert.h>
+#include <stdint.h>
+#include <iostream>
+#include <getopt.h>
 
-#include "perf_common/perf_base.h"
-#include "common/base_rocr.h"
-#include "common/hsatimer.h"
-#include "hsa/hsa.h"
-#include <vector>
+#include "suites/test_common/test_common.h"
 
-class MemoryAllocation: public rocrtst::BaseRocR, public PerfBase {
+RocrtstOptions::RocrtstOptions(uint32_t *verb, uint32_t *iter) {
+  assert(verb != nullptr);
+  assert(iter != nullptr);
 
- public:
-  //@Brief: Constructor for test case of MemoryAllocation
-  MemoryAllocation(uint32_t num_iters = 100);
+  verbosity_ = verb;
+  iterations_ = iter;
+}
 
-  //@Brief: Destructor for test case of MemoryAllocation
-  virtual ~MemoryAllocation();
+RocrtstOptions::~RocrtstOptions() {
+}
 
-  //@Brief: Set up the environment for the test
-  virtual void SetUp();
+static const struct option long_options[] = {
+  {"iterations", required_argument, nullptr, 'i'},
+  {"verbose", no_argument, nullptr, 'v'},
 
-  //@Brief: Execute the test
-  virtual void Run();
-
-  //@Brief: Display  results
-  virtual void DisplayResults() const;
-
-  //@Brief: Clean up and close the environment
-  virtual void Close();
-
- protected:
-  //@Brief: Pointer to the memory space which is allocated by HSA Memory
-  // allocation API
-  void* ptr;
-
-  //@Brief: Array to store the timers results for each data size
-  double allocation_time_[16];
-
- private:
-  //@Brief: Define allocated data size and corresponding string
-  static const size_t Size[16];
-  static const char* Str[16];
-
-  uint32_t mem_pool_flag_;
-
-  //@Brief: Get the actual iteration number
-  size_t RealIterationNum();
-
-  //@Brief: Get mean execution time
-  double GetMeanTime(std::vector<double>& vec);
-
+  {nullptr, 0, nullptr, 0}
 };
-#endif
+static const char* short_options = "i:v:r";
+
+static void PrintHelp(void) {
+  std::cout <<
+//            "Required Arguments:\n"
+//           "--kernel, -k <path to kernel obj. file>\n"
+     "Optional RocRTst Arguments:\n"
+     "--iterations, -i <number of iterations to execute>; override default, "
+         "which varies for each test\n"
+     "--rocrtst_help, -r print this help message\n"
+     "--verbosity, -v <verbosity level>\n"
+     "  Verbosity levels:\n"
+     "   0    -- minimal; just summary information\n"
+     "   1    -- intermediate; show intermediate values such as intermediate "
+                  "perf. data\n"
+     "   2    -- progress; show progress displays\n"
+     "   >= 3 -- more debug output\n";
+}
+
+uint32_t ProcessCmdline(RocrtstOptions* test, int arg_cnt, char** arg_list) {
+  int a;
+  int ind = -1;
+
+  assert(test != nullptr);
+
+  while (true) {
+    a = getopt_long(arg_cnt, arg_list, short_options, long_options, &ind);
+
+    if (a == -1) {
+      break;
+    }
+
+    switch (a) {
+      case 'i':
+        *test->iterations_ = std::stoi(optarg);
+        break;
+
+      case 'v':
+        *test->verbosity_ = std::stoi(optarg);
+        break;
+
+      case 'r':
+        PrintHelp();
+        return 1;
+
+      default:
+        PrintHelp();
+        return 1;
+    }
+  }
+  return 0;
+}

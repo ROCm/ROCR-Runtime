@@ -70,6 +70,7 @@ PreDispatchCallback(const hsa_dispatch_callback_t* dispParam, void* usrArg) {
                         dispParam->aql_translation_handle, true);
   assert((status == HSA_STATUS_SUCCESS) &&
          "Error in beginning Perf Cntr Session");
+  (void)status;  // Avoid warning
 }
 
 static void
@@ -82,6 +83,7 @@ PostDispatchCallback(const hsa_dispatch_callback_t* dispParam, void* usrArg) {
                         dispParam->aql_translation_handle);
   assert((status == HSA_STATUS_SUCCESS) &&
          "Error in endning Perf Cntr Session");
+  (void)status;  // Avoid warning
 }
 
 /// Constructor of the class
@@ -192,6 +194,8 @@ void RocrPerfCntrApp::RegisterCallbacks(hsa_queue_t* queue) {
   status = hsa_ext_tools_set_callback_arguments(queue, &perfMgr_, &perfMgr_);
   assert((status == HSA_STATUS_SUCCESS) &&
          "Error in registering Pre & Post Dispatch Callback Params");
+
+  (void)status;  // Avoid warning
   return;
 }
 

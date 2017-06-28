@@ -43,57 +43,12 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_IMAGE_BANDWIDTH_H__
-#define __ROCRTST_SRC_IMAGE_BANDWIDTH_H__
-
-#include "perf_common/perf_base.h"
-#include "common/base_rocr.h"
-#include "hsa/hsa.h"
-#include "hsa/hsa_ext_image.h"
-#include <vector>
-
-class ImageBandwidth: public rocrtst::BaseRocR, public PerfBase {
- public:
-  //@Brief: Constructor for test case of ImageBandwidth
-  ImageBandwidth(size_t num = 100);
-
-  //@Brief: Destructor
-  virtual ~ImageBandwidth();
-
-  //@Brief: Setup the environment for measurement
-  virtual void SetUp();
-
-  //@Brief: Core measurement execution
-  virtual void Run();
-
-  //@Brief: Clean up and retrive the resource
-  virtual void Close();
-
-  //@Brief: Display  results
-  virtual void DisplayResults() const;
-
- private:
-  //@Brief: Define image size and corresponding string
-  static const size_t Size[10];
-  static const char* const Str[10];
-
-  //@Brief: Get actual iteration number
-  size_t RealIterationNum();
-
-  //@Brief: Calculate Bandwidth
-  double CalculateBandwidth(std::vector<double>& vec, size_t size);
-
- protected:
-  //@Brief: bandwidth data
-  double import_bandwidth_[10];
-  double export_bandwidth_[10];
-  double copy_bandwidth_[10];
-
-  //@Brief: Image format
-  hsa_ext_image_format_t format_;
-
-  //@Brief: Image geometry
-  hsa_ext_image_geometry_t geometry_;
-};
-
-#endif
+ __kernel void
+square(__global int *dstArray,  __global const int *srcArray, const int sz) {
+  unsigned int id = get_global_id(0);
+  if (id < sz) {
+     dstArray[id] = srcArray[id] * srcArray[id];
+  } 
+  return;
+}
+ 

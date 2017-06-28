@@ -43,51 +43,19 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_INC_QUEUE_CONCURRENCY_H__
-#define __ROCRTST_SRC_INC_QUEUE_CONCURRENCY_H__
+#ifndef ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_
+#define ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_
 
-#include "perf_common/perf_base.h"
-#include "common/base_rocr.h"
-#include "hsa/hsa.h"
-#include <vector>
-
-class QueueConcurrency: public rocrtst::BaseRocR, public PerfBase {
+class RocrtstOptions {
  public:
-  //@Brief: Constructor
-  QueueConcurrency();
+  RocrtstOptions(uint32_t *verb, uint32_t *iter);
 
-  //@Brief: Destructor
-  ~QueueConcurrency();
+  ~RocrtstOptions(void);
 
-  //@Brief: Set up the test environmnet
-  void SetUp();
-
-  //@Brief: Run the test
-  void Run();
-
-  //@Brief: Clean up and close
-  void Close();
-
-  void DisplayResults() const;
-
- private:
-
-  //@Brief: Thread function
-  void ThreadFunc(int i);
-
-  //@Brief: Calculate the concurrent queue number
-  void CalculateQueueNum();
-
-  //@Brief: Vector to store execution time
-  std::vector<double> execution_time_;
-
-  //@Brief: Number of concurrent queues
-  size_t queue_num_;
-
-  //@Brief: Store the standard execution time
-  double std_time_;
-
+  uint32_t *verbosity_;
+  uint32_t *iterations_;
 };
 
-#endif //__ROCRTST_SRC_INC_QUEUE_CONCURRENCY_H__
+uint32_t ProcessCmdline(RocrtstOptions* test, int arg_cnt, char** arg_list);
 
+#endif  // ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_

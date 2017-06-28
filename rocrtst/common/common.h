@@ -140,35 +140,5 @@ hsa_status_t DumpMemoryPoolInfo(const hsa_amd_memory_pool_t pool,
 /// \returns HSA_STATUS_SUCCESS if there are no errors
 hsa_status_t DumpPointerInfo(void* ptr);
 
-/// This is a work-around for filling cpu-memory to be used until
-/// hsa_amd_memory_fill is fixed. Should only be used for cpu memory.
-/// \param[in] ptr Start address of memory to be filled.
-/// \param[in] value Value to fill buffer with
-/// \param[in] count Size of buffer to fill
-/// \returns HSA_STATUS_SUCCESS if there are no errors
-hsa_status_t hsa_memory_fill_workaround_cpu(void* ptr, uint32_t value,
-                                                            size_t count);
-
-/// This is a work-around for copying cpu-memory to be used until
-/// hsa_amd_memory_copy is fixed. Should only be used for cpu memory.
-/// \param[in] dst Destination address of memory to be copied
-/// \param[in] src Source address of memory to be copied
-/// \param[in] size Size of buffer to fill
-/// \returns HSA_STATUS_SUCCESS if there are no errors
-hsa_status_t hsa_memory_copy_workaround_cpu(void* dst, const void *src,
-                                                            size_t size);
-
-/// This is a work-around for copying memory to be used until
-/// hsa_amd_memory_copy is fixed. Should be used when gpu local memory is
-/// involved.
-/// \param[in] dst Destination address of memory to be copied
-/// \param[in] src Source address of memory to be copied
-/// \param[in] size Size of buffer to fill
-/// \param[in] dst_ag Destination agent handle
-/// \param[in] src_ag Source agent handle
-/// \returns HSA_STATUS_SUCCESS if there are no errors
-hsa_status_t hsa_memory_copy_workaround_gen(void* dst, const void *src,
-                       size_t size, hsa_agent_t dst_ag, hsa_agent_t src_ag);
-
 }  // namespace rocrtst
 #endif  // ROCRTST_COMMON_COMMON_H_

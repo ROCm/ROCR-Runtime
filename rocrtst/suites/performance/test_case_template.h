@@ -43,43 +43,41 @@
  *
  */
 
-#ifndef __ROCRTST_SRC_HSA_INFO_H__
-#define __ROCRTST_SRC_HSA_INFO_H__
+#ifndef ROCRTST_SUITES_PERFORMANCE_TEST_CASE_TEMPLATE_H_
+#define ROCRTST_SUITES_PERFORMANCE_TEST_CASE_TEMPLATE_H_
 
-#include "perf_common/perf_base.h"
 #include "common/base_rocr.h"
-#include "common/common.h"
-#include "common/os.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_amd.h"
-#include <iostream>
-#include <map>
-#include <string>
-#include <vector>
+#include "suites/test_common/test_base.h"
 
-//@Brief: This is trying to replicate clinfo
-
-class HsaInfo: public rocrtst::BaseRocR, public PerfBase {
+class TestExample : public TestBase {
  public:
-  //@Brief: Constructor
-  HsaInfo();
+  TestExample();
 
-  //@Brief: Destructor
-  virtual ~HsaInfo();
+  // @Brief: Destructor for test case of TestExample
+  virtual ~TestExample();
 
-  //@Brief: Set up the environment for the test
+  // @Brief: Setup the environment for measurement
   virtual void SetUp();
 
-  //@Brief: Run the test case
+  // @Brief: Core measurement execution
   virtual void Run();
 
-  //@Brief: Display  results we got
-  virtual void DisplayResults() const;
-
-  //@Brief: Clean up and close the runtime
+  // @Brief: Clean up and retrive the resource
   virtual void Close();
 
+  // @Brief: Display  results
+  virtual void DisplayResults() const;
+
+  // @Brief: Display information about what this test does
+  virtual void DisplayTestInfo(void);
+
+ private:
+  uint32_t RealIterationNum(void);
+
+  double time_mean_;
+  void *src_buffer_;
+  void *dst_buffer_;
 };
 
-#endif
-
+#endif  // ROCRTST_SUITES_PERFORMANCE_TEST_CASE_TEMPLATE_H_

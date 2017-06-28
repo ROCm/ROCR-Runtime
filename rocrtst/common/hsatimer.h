@@ -91,6 +91,7 @@ class PerfTimer {
   void ResetTimer(int index);
 
   /// Read the time value of the timer associated with the provided index.
+  /// Units are seconds
   /// \param[in] index Index of the timer to read
   /// \returns double Value of the timer
   double ReadTimer(int index);
