@@ -539,10 +539,19 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 	vm_area_t *cur, *next;
 	void *start;
 
-	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
-
 	if (align < app->align)
 		align = app->align;
+
+	/* Huge-page and Big-K TLB optimizations require proper alignment */
+	if (MemorySizeInBytes >= GPU_HUGE_PAGE_SIZE) {
+		if (align < GPU_HUGE_PAGE_SIZE)
+			align = GPU_HUGE_PAGE_SIZE;
+	} else if (MemorySizeInBytes >= GPU_BIGK_PAGE_SIZE) {
+		if (align < GPU_BIGK_PAGE_SIZE)
+			align = GPU_BIGK_PAGE_SIZE;
+	}
+
+	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
 
 	/* Find a big enough "hole" in the address space */
 	cur = NULL;

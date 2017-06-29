@@ -55,6 +55,12 @@ extern int PAGE_SHIFT;
 /* VI HW bug requires this virtual address alignment */
 #define TONGA_PAGE_SIZE 0x8000
 
+/* 64KB BigK fragment size for TLB efficiency */
+#define GPU_BIGK_PAGE_SIZE (1 << 16)
+
+/* 2MB huge page size for 4-level page tables on Vega10 and later GPUs */
+#define GPU_HUGE_PAGE_SIZE (2 << 20)
+
 #define CHECK_PAGE_MULTIPLE(x) \
 	do { if ((uint64_t)PORT_VPTR_TO_UINT64(x) % PAGE_SIZE) return HSAKMT_STATUS_INVALID_PARAMETER; } while(0)
 
