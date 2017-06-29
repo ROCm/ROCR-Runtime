@@ -44,7 +44,8 @@
 	.guard_pages = 1,					\
 	.vm_ranges = NULL,					\
 	.vm_objects = NULL,					\
-	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER			\
+	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER,			\
+	.is_coherent = false					\
 	}
 
 struct vm_object {
@@ -96,6 +97,7 @@ typedef struct {
 	vm_area_t *vm_ranges;
 	vm_object_t *vm_objects;
 	pthread_mutex_t fmm_mutex;
+	bool is_coherent;
 } manageable_aperture_t;
 
 typedef struct {
@@ -1028,6 +1030,9 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 		offset = GPUVM_APP_OFFSET;
 	}
 
+	if (aperture->is_coherent)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
+
 	mem = __fmm_allocate_device(gpu_id, size,
 			aperture, offset, &mmap_offset,
 			ioc_flags, &vm_obj);
@@ -1156,13 +1161,15 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 	size = MemorySizeInBytes;
 	ioc_flags = 0;
-	if (flags.ui32.CoarseGrain) {
+	if (flags.ui32.CoarseGrain)
 		aperture = &svm.dgpu_aperture;
-	} else {
-		aperture = &svm.dgpu_alt_aperture; /* coherent */
+	else
+		aperture = &svm.dgpu_alt_aperture; /* always coherent */
+
+	if (aperture->is_coherent)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
-	}
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
+
 	if (flags.ui32.AQLQueueMemory)
 		size = MemorySizeInBytes * 2;
 
@@ -1548,7 +1555,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			alt_size = (alt_size + 0xffff) & ~0xffffULL;
 			svm.dgpu_alt_aperture.base = (void *)alt_base;
 			svm.dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
+			svm.dgpu_alt_aperture.is_coherent = true;
 			svm.dgpu_aperture.base = VOID_PTR_ADD(svm.dgpu_alt_aperture.limit, 1);
+			svm.dgpu_aperture.is_coherent = !!disableCache;
 			err = fmm_set_memory_policy(gpu_mem[gpu_mem_id].gpu_id,
 						    disableCache ?
 						    KFD_IOC_CACHE_POLICY_COHERENT :
