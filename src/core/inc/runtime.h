@@ -315,12 +315,11 @@ class Runtime {
   static void AsyncEventsLoop(void*);
 
   struct AllocationRegion {
-    AllocationRegion() : region(NULL), assigned_agent_(NULL), size(0) {}
+    AllocationRegion() : region(NULL), size(0) {}
     AllocationRegion(const MemoryRegion* region_arg, size_t size_arg)
-        : region(region_arg), assigned_agent_(NULL), size(size_arg) {}
+        : region(region_arg), size(size_arg) {}
 
     const MemoryRegion* region;
-    const Agent* assigned_agent_;
     size_t size;
   };
 
