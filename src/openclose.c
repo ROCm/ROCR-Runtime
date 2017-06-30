@@ -68,6 +68,7 @@ static void clear_after_fork(void)
 	clear_events_page();
 	fmm_clear_all_mem();
 	destroy_device_debugging_memory();
+	close(kfd_fd);
 	kfd_open_count = 0;
 }
 
