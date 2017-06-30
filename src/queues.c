@@ -122,7 +122,6 @@ struct queue {
 	void *ctx_save_restore;
 	uint32_t ctx_save_restore_size;
 	uint32_t ctl_stack_size;
-	void *ctl_stack_copy;
 	const struct device_info *dev_info;
 	/* This queue structure is allocated from GPU with page aligned size
 	 * but only small bytes are used. We use the extra space in the end for
@@ -337,11 +336,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		ctl_stack_size = cu_num * WAVES_PER_CU_VI * 8 + 8;
 		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU_VI;
 		q->ctl_stack_size = PAGE_ALIGN_UP(ctl_stack_size);
-		q->ctx_save_restore_size = PAGE_ALIGN_UP(wg_data_size);
-
-		if (q->dev_info->asic_family < CHIP_VEGA10)
-			/* GFX8 chips store ctl-stack with WG data */
-			q->ctx_save_restore_size += q->ctl_stack_size;
+		q->ctx_save_restore_size = q->ctl_stack_size + PAGE_ALIGN_UP(wg_data_size);
 
 		return true;
 	}
@@ -423,8 +418,6 @@ static void free_queue(struct queue *q)
 		free_exec_aligned_memory(q->ctx_save_restore,
 					 q->ctx_save_restore_size,
 					 PAGE_SIZE, q->dev_info->asic_family);
-	if (q->ctl_stack_copy)
-		free(q->ctl_stack_copy);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
 }
@@ -461,11 +454,6 @@ static int handle_concrete_asic(struct queue *q,
 				return HSAKMT_STATUS_NO_MEMORY;
 
 			args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
-			if (IS_SOC15(q->dev_info->asic_family)) {
-				q->ctl_stack_copy = malloc(q->ctl_stack_size);
-				if (q->ctl_stack_copy == NULL)
-					return HSAKMT_STATUS_NO_MEMORY;
-			}
 		}
 	}
 
@@ -706,7 +694,6 @@ hsaKmtGetQueueInfo(
 {
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
 	struct kfd_ioctl_get_queue_wave_state_args args;
-	uintptr_t ctl_stack_base_addr = 0;
 
 	CHECK_KFD_OPEN();
 
@@ -718,30 +705,15 @@ hsaKmtGetQueueInfo(
 
 	memset(&args, 0, sizeof(args));
 	args.queue_id = q->queue_id;
-
-	if (IS_SOC15(q->dev_info->asic_family)) {
-		/* From SOC15 onwards the control stack is kept in the MQD.
-		 * The save area is at the beginning of the allocated space.
-		 * Request a copy of the control stack from the KFD.
-		 */
-		ctl_stack_base_addr = (uintptr_t)q->ctl_stack_copy;
-		QueueInfo->UserContextSaveArea = q->ctx_save_restore;
-		args.ctl_stack_address = ctl_stack_base_addr;
-	} else {
-		/* Before SOC15 the control stack is already in userspace.
-		 * The save area immediately follows the control stack.
-		 */
-		ctl_stack_base_addr = (uintptr_t)q->ctx_save_restore;
-		QueueInfo->UserContextSaveArea = (void *)
-			((uintptr_t)q->ctx_save_restore + q->ctl_stack_size);
-		args.ctl_stack_address = 0;
-	}
+	args.ctl_stack_address = (uintptr_t)q->ctx_save_restore;
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_QUEUE_WAVE_STATE, &args) < 0)
 		return HSAKMT_STATUS_ERROR;
 
-	QueueInfo->ControlStackTop = (void *)(ctl_stack_base_addr +
+	QueueInfo->ControlStackTop = (void *)(args.ctl_stack_address +
 				q->ctl_stack_size - args.ctl_stack_used_size);
+	QueueInfo->UserContextSaveArea = (void *)
+				 (args.ctl_stack_address + q->ctl_stack_size);
 	QueueInfo->SaveAreaSizeInBytes = args.save_area_used_size;
 	QueueInfo->ControlStackUsedInBytes = args.ctl_stack_used_size;
 	QueueInfo->NumCUAssigned = q->cu_mask_count;
