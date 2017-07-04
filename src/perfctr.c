@@ -34,6 +34,9 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <errno.h>
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <semaphore.h>
 
 #define BITS_PER_BYTE		CHAR_BIT
 
@@ -66,7 +69,7 @@ enum perf_trace_action {
 	PERF_TRACE_ACTION__RELEASE
 };
 
-struct perf_lockf_tbl {
+struct perf_shared_table {
 	uint32_t magic4cc;
 	uint32_t iommu_slots_left;
 };
@@ -82,10 +85,13 @@ struct perf_counts_values {
 	};
 };
 
-extern int amd_hsa_thunk_lock_fd;
-
 static HsaCounterProperties **counter_props;
 static unsigned int counter_props_count;
+static const char shmem_name[] = "/hsakmt_shared_mem";
+static int shmem_fd;
+static const char sem_name[] = "hsakmt_semaphore";
+static sem_t *sem;
+struct perf_shared_table *shared_table;
 
 static ssize_t readn(int fd, void *buf, size_t n)
 {
@@ -108,56 +114,94 @@ static ssize_t readn(int fd, void *buf, size_t n)
 	return n;
 }
 
-static HSAKMT_STATUS init_lockf_perf_section(void)
+static HSAKMT_STATUS init_shared_region(void)
 {
-	struct perf_lockf_tbl lockf_tbl;
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	if (amd_hsa_thunk_lock_fd <= 0)
-		return HSAKMT_STATUS_UNAVAILABLE;
-
-	if (lockf(amd_hsa_thunk_lock_fd, F_TLOCK, sizeof(lockf_tbl)))
+	sem = sem_open(sem_name, O_CREAT, 0666, 1);
+	if (sem == SEM_FAILED)
 		return HSAKMT_STATUS_ERROR;
 
-	memset(&lockf_tbl, 0, sizeof(lockf_tbl));
-	if (readn(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl)) < 0) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto out;
+	shmem_fd = shm_open(shmem_name, O_CREAT | O_RDWR, 0666);
+	if (shmem_fd < 0)
+		goto exit_1;
+
+	if (ftruncate(shmem_fd, sizeof(struct perf_shared_table)) < 0)
+		goto exit_2;
+
+	shared_table = mmap(NULL, sizeof(*shared_table),
+			PROT_READ | PROT_WRITE, MAP_SHARED, shmem_fd, 0);
+	if (shared_table == MAP_FAILED)
+		goto exit_2;
+
+	return HSAKMT_STATUS_SUCCESS;
+
+exit_2:
+	shm_unlink(shmem_name);
+	shmem_fd = 0;
+exit_1:
+	sem_close(sem);
+	sem_unlink(sem_name);
+	sem = NULL;
+	return HSAKMT_STATUS_ERROR;
+}
+
+static void destroy_shared_region(void)
+{
+	if (shared_table && shared_table != MAP_FAILED)
+		munmap(shared_table, sizeof(*shared_table));
+
+	if (shmem_fd > 0)
+		shm_unlink(shmem_name);
+	if (sem && sem != SEM_FAILED) {
+		sem_close(sem);
+		sem_unlink(sem_name);
 	}
-	/* If the magic number exists, the lock file table has been
+}
+
+static void init_perf_shared_table(void)
+{
+	sem_wait(sem);
+
+	/* If the magic number exists, the perf shared table has been
 	 * initialized by another process and is in use. Don't overwrite it.
 	 */
-	if (lockf_tbl.magic4cc == HSA_PERF_MAGIC4CC)
-		goto out;
-	/* write the perf content */
-	lockf_tbl.magic4cc = HSA_PERF_MAGIC4CC;
-	lockf_tbl.iommu_slots_left =
-		pmc_table_get_max_concurrent(PERFCOUNTER_BLOCKID__IOMMUV2);
-	if (write(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl)) < 0)
-		ret = HSAKMT_STATUS_ERROR;
-out:
-	/* unlock the perf section */
-	if (lockf(amd_hsa_thunk_lock_fd, F_ULOCK, sizeof(lockf_tbl)))
-		ret = HSAKMT_STATUS_ERROR;
+	if (shared_table->magic4cc == HSA_PERF_MAGIC4CC) {
+		sem_post(sem);
+		return;
+	}
 
-	return ret;
+	/* write the perf content */
+	shared_table->magic4cc = HSA_PERF_MAGIC4CC;
+	shared_table->iommu_slots_left =
+		pmc_table_get_max_concurrent(PERFCOUNTER_BLOCKID__IOMMUV2);
+
+	sem_post(sem);
 }
 
 HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 {
 	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties *));
-	if (!counter_props)
+	if (!counter_props) {
+		pr_warn("Profiling is not available.\n");
 		return HSAKMT_STATUS_NO_MEMORY;
+	}
 
 	counter_props_count = NumNodes;
 	alloc_pmc_blocks();
 
-	return init_lockf_perf_section();
+	if (init_shared_region() != HSAKMT_STATUS_SUCCESS) {
+		pr_warn("Profiling of privileged blocks is not available.\n");
+		return HSAKMT_STATUS_ERROR;
+	}
+	init_perf_shared_table();
+
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 void destroy_counter_props(void)
 {
 	unsigned int i;
+
+	destroy_shared_region();
 
 	if (!counter_props)
 		return;
@@ -274,29 +318,18 @@ static HSAuint32 get_block_concurrent_limit(uint32_t node_id,
 static HSAKMT_STATUS update_block_slots(enum perf_trace_action action,
 					uint32_t block_id, uint32_t num_slots)
 {
-	struct perf_lockf_tbl lockf_tbl;
 	uint32_t *slots_left;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	if (amd_hsa_thunk_lock_fd <= 0)
+	if (shmem_fd <= 0)
+		return HSAKMT_STATUS_UNAVAILABLE;
+	if (!sem || sem == SEM_FAILED)
 		return HSAKMT_STATUS_UNAVAILABLE;
 
-	if (lockf(amd_hsa_thunk_lock_fd, F_TLOCK, sizeof(lockf_tbl)) < 0)
-		return HSAKMT_STATUS_ERROR;
-
-	if (lseek(amd_hsa_thunk_lock_fd, 0, SEEK_SET)) {
-		ret = HSAKMT_STATUS_ERROR;
-				goto out;
-	}
-
-	if (readn(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl))
-			!= sizeof(lockf_tbl)) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto out;
-	}
+	sem_wait(sem);
 
 	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
-		slots_left = &lockf_tbl.iommu_slots_left;
+		slots_left = &shared_table->iommu_slots_left;
 	else {
 		ret = HSAKMT_STATUS_UNAVAILABLE;
 		goto out;
@@ -321,14 +354,8 @@ static HSAKMT_STATUS update_block_slots(enum perf_trace_action action,
 		break;
 	}
 
-	if (ret == HSAKMT_STATUS_SUCCESS) {
-		if (write(amd_hsa_thunk_lock_fd, &lockf_tbl, sizeof(lockf_tbl)) < 0)
-			ret = HSAKMT_STATUS_ERROR;
-	}
 out:
-	/* unlock the perf section */
-	if (lockf(amd_hsa_thunk_lock_fd, F_ULOCK, sizeof(lockf_tbl)))
-		ret = HSAKMT_STATUS_ERROR;
+	sem_post(sem);
 
 	return ret;
 }
