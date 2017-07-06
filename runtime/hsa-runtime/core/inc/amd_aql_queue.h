@@ -53,7 +53,7 @@ namespace amd {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
-class AqlQueue : public core::Queue, public core::Signal {
+class AqlQueue : public core::Queue, private core::LocalSignal, public core::Signal {
  public:
   static __forceinline bool IsType(core::Signal* signal) {
     return signal->IsType(&rtti_id_);
@@ -335,12 +335,6 @@ class AqlQueue : public core::Queue, public core::Signal {
     assert(false);
     return NULL;
   }
-
-  // 64 byte-aligned allocation and release, for Queue::amd_queue_.
-  void* operator new(size_t size);
-  void* operator new(size_t size, void* ptr) { return ptr; }
-  void operator delete(void* ptr);
-  void operator delete(void*, void*) {}
 
  protected:
   bool _IsA(rtti_t id) const override { return id == &rtti_id_; }

@@ -53,6 +53,7 @@
 #include "core/inc/checked.h"
 
 #include "core/util/utils.h"
+#include "core/util/locks.h"
 
 #include "inc/amd_hsa_signal.h"
 
@@ -60,54 +61,72 @@ namespace core {
 class Agent;
 class Signal;
 
-/// @brief Helper structure to simplify conversion of amd_signal_t and
-/// core::Signal object.
+/// @brief ABI and object conversion struct for signals.  May be shared between processes.
 struct SharedSignal {
   amd_signal_t amd_signal;
   Signal* core_signal;
+  Check<0x71FCCA6A3D5D5276, true> id;
+
+  bool IsValid() const { return id.IsValid(); }
+
+  SharedSignal() {
+    amd_signal.kind = AMD_SIGNAL_KIND_INVALID;
+    core_signal = nullptr;
+  }
+
+  static __forceinline SharedSignal* Convert(hsa_signal_t signal) {
+    if (signal.handle == 0) throw std::bad_cast();
+    SharedSignal* ret = reinterpret_cast<SharedSignal*>(static_cast<uintptr_t>(signal.handle) -
+                                                        offsetof(SharedSignal, amd_signal));
+    if (!ret->IsValid()) throw std::bad_cast();
+    return ret;
+  }
+};
+static_assert(std::is_standard_layout<SharedSignal>::value,
+              "SharedSignal must remain standard layout for IPC use.");
+static_assert(std::is_trivially_destructible<SharedSignal>::value,
+              "SharedSignal must not be modified on delete for IPC use.");
+
+class LocalSignal {
+ public:
+  explicit LocalSignal(hsa_signal_value_t initial_value) {
+    if (!local_signal_.IsSharedObjectAllocationValid()) throw std::bad_alloc();
+    local_signal_.shared_object()->amd_signal.value = initial_value;
+  }
+
+  SharedSignal* signal() const { return local_signal_.shared_object(); }
+
+ private:
+  Shared<SharedSignal, AMD_SIGNAL_ALIGN_BYTES> local_signal_;
 };
 
 /// @brief An abstract base class which helps implement the public hsa_signal_t
 /// type (an opaque handle) and its associated APIs. At its core, signal uses
 /// a 32 or 64 bit value. This value can be waitied on or signaled atomically
 /// using specified memory ordering semantics.
-class Signal : public Checked<0x71FCCA6A3D5D5276>,
-               public Shared<SharedSignal, AMD_SIGNAL_ALIGN_BYTES> {
+class Signal {
  public:
-  /// @brief Constructor initializes the signal with initial value.
-  explicit Signal(hsa_signal_value_t initial_value)
-      : Shared(),
-        signal_(shared_object()->amd_signal),
-        async_copy_agent_(NULL) {
-    if (!Shared::IsSharedObjectAllocationValid()) {
-      invalid_ = true;
-      return;
-    }
+  /// @brief Constructor Links and publishes the signal interface object.
+  explicit Signal(SharedSignal* abi_block)
+      : signal_(abi_block->amd_signal), async_copy_agent_(NULL) {
+    if (abi_block == nullptr) throw std::bad_alloc();
 
-    shared_object()->core_signal = this;
-
-    signal_.kind = AMD_SIGNAL_KIND_INVALID;
-    signal_.value = initial_value;
     invalid_ = false;
     waiting_ = 0;
     retained_ = 0;
+
+    abi_block->core_signal = this;
   }
 
-  virtual ~Signal() { signal_.kind = AMD_SIGNAL_KIND_INVALID; }
+  virtual ~Signal() { invalid_ = true; }
 
-  bool IsValid() const {
-    if (CheckedType::IsValid() && !invalid_) return true;
-    return false;
-  }
+  bool IsValid() const { return !invalid_; }
 
   /// @brief Converts from this implementation class to the public
   /// hsa_signal_t type - an opaque handle.
   static __forceinline hsa_signal_t Convert(Signal* signal) {
-    const uint64_t handle =
-        (signal != NULL && signal->IsValid())
-            ? static_cast<uint64_t>(
-                  reinterpret_cast<uintptr_t>(&signal->signal_))
-            : 0;
+    assert(signal != nullptr && signal->IsValid() && "Conversion on invalid Signal object.");
+    const uint64_t handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&signal->signal_));
     const hsa_signal_t signal_handle = {handle};
     return signal_handle;
   }
@@ -115,11 +134,8 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   /// @brief Converts from this implementation class to the public
   /// hsa_signal_t type - an opaque handle.
   static __forceinline const hsa_signal_t Convert(const Signal* signal) {
-    const uint64_t handle =
-        (signal != NULL && signal->IsValid())
-            ? static_cast<uint64_t>(
-                  reinterpret_cast<uintptr_t>(&signal->signal_))
-            : 0;
+    assert(signal != nullptr && signal->IsValid() && "Conversion on invalid Signal object.");
+    const uint64_t handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&signal->signal_));
     const hsa_signal_t signal_handle = {handle};
     return signal_handle;
   }
@@ -127,13 +143,11 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   /// @brief Converts from public hsa_signal_t type (an opaque handle) to
   /// this implementation class object.
   static __forceinline Signal* Convert(hsa_signal_t signal) {
-    return (signal.handle != 0)
-               ? reinterpret_cast<const SharedSignal*>(
-                     static_cast<uintptr_t>(signal.handle) -
-                     (reinterpret_cast<uintptr_t>(
-                          &reinterpret_cast<SharedSignal*>(1234)->amd_signal) -
-                      uintptr_t(1234)))->core_signal
-               : NULL;
+    SharedSignal* shared = SharedSignal::Convert(signal);
+    if (shared->core_signal != nullptr)
+      return shared->core_signal;
+    else
+      throw std::bad_cast();
   }
 
   // Below are various methods corresponding to the APIs, which load/store the

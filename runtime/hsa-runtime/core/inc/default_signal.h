@@ -53,7 +53,7 @@ namespace core {
 
 /// @brief Simple pure memory based signal.
 /// @brief See base class Signal.
-class DefaultSignal : public Signal {
+class DefaultSignal : private LocalSignal, public Signal {
  public:
   /// @brief Determines if a Signal* can be safely converted to DefaultSignal*
   /// via static_cast.
@@ -154,12 +154,6 @@ class DefaultSignal : public Signal {
 
   /// @brief see the base class Signal
   __forceinline HsaEvent* EopEvent() { return NULL; }
-
-  /// @brief prevent throwing exceptions
-  void* operator new(size_t size) { return malloc(size); }
-
-  /// @brief prevent throwing exceptions
-  void operator delete(void* ptr) { free(ptr); }
 
  protected:
   bool _IsA(rtti_t id) const { return id == &rtti_id_; }

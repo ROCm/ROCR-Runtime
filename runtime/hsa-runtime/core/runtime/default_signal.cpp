@@ -48,7 +48,7 @@ namespace core {
 int DefaultSignal::rtti_id_ = 0;
 
 DefaultSignal::DefaultSignal(hsa_signal_value_t initial_value)
-    : Signal(initial_value) {
+    : LocalSignal(initial_value), Signal(signal()) {
   signal_.kind = AMD_SIGNAL_KIND_USER;
   signal_.event_mailbox_ptr = NULL;
   HSA::hsa_memory_register(this, sizeof(DefaultSignal));
