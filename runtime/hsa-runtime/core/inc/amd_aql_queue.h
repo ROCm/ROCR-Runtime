@@ -339,6 +339,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
  protected:
   bool _IsA(rtti_t id) const override { return id == &rtti_id_; }
 
+  /// @brief Disallow destroying doorbell apart from its queue.
+  void doDestroySignal() override { assert(false); }
+
  private:
   uint32_t ComputeRingBufferMinPkts();
   uint32_t ComputeRingBufferMaxPkts();

@@ -89,10 +89,6 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value, HsaEvent* use
 }
 
 InterruptSignal::~InterruptSignal() {
-  invalid_ = true;
-  SetEvent();
-  while (InUse())
-    ;
   if (free_event_) hsaKmtDestroyEvent(event_);
 }
 
@@ -119,13 +115,13 @@ void InterruptSignal::StoreRelease(hsa_signal_value_t value) {
 hsa_signal_value_t InterruptSignal::WaitRelaxed(
     hsa_signal_condition_t condition, hsa_signal_value_t compare_value,
     uint64_t timeout, hsa_wait_state_t wait_hint) {
-  uint32_t prior = atomic::Increment(&waiting_);
+  Retain();
+  MAKE_SCOPE_GUARD([&]() { Release(); });
 
-  // assert(prior == 0 && "Multiple waiters on interrupt signal!");
+  uint32_t prior = waiting_++;
+  MAKE_SCOPE_GUARD([&]() { waiting_--; });
   // Allow only the first waiter to sleep (temporary, known to be bad).
   if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
-
-  MAKE_SCOPE_GUARD([&]() { atomic::Decrement(&waiting_); });
 
   int64_t value;
 
@@ -143,7 +139,7 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
 
   bool condition_met = false;
   while (true) {
-    if (invalid_) return 0;
+    if (!IsValid()) return 0;
 
     value = atomic::Load(&signal_.value, std::memory_order_relaxed);
 

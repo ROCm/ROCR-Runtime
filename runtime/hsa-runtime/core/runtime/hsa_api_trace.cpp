@@ -378,6 +378,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_ipc_memory_create_fn = AMD::hsa_amd_ipc_memory_create;
   amd_ext_api.hsa_amd_ipc_memory_attach_fn = AMD::hsa_amd_ipc_memory_attach;
   amd_ext_api.hsa_amd_ipc_memory_detach_fn = AMD::hsa_amd_ipc_memory_detach;
+  amd_ext_api.hsa_amd_signal_create_fn = AMD::hsa_amd_signal_create;
+  amd_ext_api.hsa_amd_ipc_signal_create_fn = AMD::hsa_amd_ipc_signal_create;
+  amd_ext_api.hsa_amd_ipc_signal_attach_fn = AMD::hsa_amd_ipc_signal_attach;
 }
 
 class Init {

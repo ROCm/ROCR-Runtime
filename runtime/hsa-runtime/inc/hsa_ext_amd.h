@@ -378,6 +378,62 @@ hsa_status_t HSA_API
                                                     uint64_t* system_tick);
 
 /**
+ * @brief Signal attribute flags.
+ */
+typedef enum {
+  /**
+   * Signal will only be consumed by AMD GPUs.  Limits signal consumption to
+   * AMD GPU agents only.  Ignored if @p num_consumers is not zero (all agents).
+   */
+  HSA_AMD_SIGNAL_AMD_GPU_ONLY = 1,
+  /**
+   * Signal may be used for interprocess communication.
+   * This signal may not be used with profiling APIs.  Errors or inaccurate
+   * timing data may result from such use.
+   */
+  HSA_AMD_SIGNAL_IPC = 2,
+} hsa_amd_signal_attribute_t;
+
+/**
+ * @brief Create a signal with specific attributes.
+ *
+ * @param[in] initial_value Initial value of the signal.
+ *
+ * @param[in] num_consumers Size of @p consumers. A value of 0 indicates that
+ * any agent might wait on the signal.
+ *
+ * @param[in] consumers List of agents that might consume (wait on) the
+ * signal. If @p num_consumers is 0, this argument is ignored; otherwise, the
+ * HSA runtime might use the list to optimize the handling of the signal
+ * object. If an agent not listed in @p consumers waits on the returned
+ * signal, the behavior is undefined. The memory associated with @p consumers
+ * can be reused or freed after the function returns.
+ *
+ * @param[in] attributes Requested signal attributes.  Multiple signal attributes
+ * may be requested by combining them with bitwise OR.  Requesting no attributes
+ * (@p attributes == 0) results in the same signal as would have been obtained
+ * via hsa_signal_create.
+ *
+ * @param[out] signal Pointer to a memory location where the HSA runtime will
+ * store the newly created signal handle. Must not be NULL.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES The HSA runtime failed to allocate
+ * the required resources.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p signal is NULL, @p
+ * num_consumers is greater than 0 but @p consumers is NULL, or @p consumers
+ * contains duplicates.
+ */
+hsa_status_t HSA_API hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
+                                           const hsa_agent_t* consumers, uint64_t attributes,
+                                           hsa_signal_t* signal);
+
+/**
  * @brief Asyncronous signal handler function type.
  *
  * @details Type definition of callback function to be used with
@@ -1510,6 +1566,60 @@ hsa_status_t HSA_API hsa_amd_ipc_memory_attach(
  * with hsa_amd_ipc_memory_attach.
  */
 hsa_status_t HSA_API hsa_amd_ipc_memory_detach(void* mapped_ptr);
+
+/**
+ * @brief 256-bit process independent identifier for a ROCr IPC signal.
+ */
+typedef hsa_amd_ipc_memory_t hsa_amd_ipc_signal_t;
+
+/**
+ * @brief Obtains an interprocess sharing handle for a signal.  The handle is
+ * valid while the signal it references remains valid in any process.  In
+ * general applications should confirm that the signal has been attached (via
+ * hsa_amd_ipc_signal_attach) in the remote process prior to destroying that
+ * signal in the local process.
+ * Repeated calls for the same signal may, but are not required to, return
+ * unique handles.
+ *
+ * @param[in] signal Signal created with attribute HSA_AMD_SIGNAL_IPC.
+ *
+ * @param[out] handle Process independent identifier referencing the shared
+ * signal.
+ *
+ * @retval HSA_STATUS_SUCCESS @p handle is ready to use for interprocess sharing.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p signal is not a valid signal
+ * created with attribute HSA_AMD_SIGNAL_IPC or handle is NULL.
+ */
+hsa_status_t HSA_API hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_signal_t* handle);
+
+/**
+ * @brief Imports an IPC capable signal into the local process.  If an IPC
+ * signal handle is attached multiple times in a process each attach may return
+ * a different signal handle.  Each returned signal handle is refcounted and
+ * requires a matching number of calls to hsa_signal_destroy to release the
+ * shared signal.
+ *
+ * @param[in] handle Pointer to the identifier for the shared signal.
+ *
+ * @param[out] signal Recieves a process local signal handle to the shared signal.
+ *
+ * @retval HSA_STATUS_SUCCESS if the signal is successfully imported.
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p handle is not valid.
+ */
+hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
+                                               hsa_signal_t* signal);
 
 #ifdef __cplusplus
 }  // end extern "C" block
