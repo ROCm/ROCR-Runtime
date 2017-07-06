@@ -48,28 +48,60 @@
 
 namespace core {
 
-/// @brief Base class for all classes whose validity can be checked using
-/// IsValid() method.
-template <uint64_t code>
-class Checked {
+/// @brief Compares type codes and pointers to check object validity.  Used for cast validation.
+template <uint64_t code, bool multiProcess = false> class Check final {
  public:
-  typedef Checked<code> CheckedType;
+  typedef Check<code> CheckType;
 
-  Checked() { object_ = uintptr_t(this) ^ uintptr_t(code); }
-  Checked(const Checked&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
-  Checked(Checked&&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
+  Check() { object_ = uintptr_t(this) ^ uintptr_t(code); }
+  Check(const Check&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
+  Check(Check&&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
 
-  virtual ~Checked() { object_ = NULL; }
+  ~Check() { object_ = NULL; }
 
-  const Checked& operator=(Checked&& rhs) { return *this; }
-  const Checked& operator=(const Checked& rhs) { return *this; }
+  const Check& operator=(Check&& rhs) { return *this; }
+  const Check& operator=(const Check& rhs) { return *this; }
 
   bool IsValid() const {
     return object_ == (uintptr_t(this) ^ uintptr_t(code));
   }
 
+  uint64_t check_code() const { return code; }
+
  private:
   uintptr_t object_;
+};
+
+template <uint64_t code> class Check<code, true> final {
+ public:
+  typedef Check<code> CheckType;
+
+  Check() { object_ = uintptr_t(code); }
+  Check(const Check&) { object_ = uintptr_t(code); }
+  Check(Check&&) { object_ = uintptr_t(code); }
+
+  const Check& operator=(Check&& rhs) { return *this; }
+  const Check& operator=(const Check& rhs) { return *this; }
+
+  bool IsValid() const { return object_ == uintptr_t(code); }
+
+  uint64_t check_code() const { return code; }
+
+ private:
+  uintptr_t object_;
+};
+
+/// @brief Base class for validating objects.
+template <uint64_t code> class Checked {
+ public:
+  typedef Checked<code> CheckedType;
+
+  bool IsValid() const { return id.IsValid(); }
+
+  virtual ~Checked() {}
+
+ private:
+  Check<code, false> id;
 };
 
 }  // namespace core

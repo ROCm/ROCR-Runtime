@@ -77,18 +77,11 @@ volatile uint32_t AqlQueue::queue_count_ = 0;
 KernelMutex AqlQueue::queue_lock_;
 int AqlQueue::rtti_id_;
 
-void* AqlQueue::operator new(size_t size) {
-  // Align base to 64B to enforce amd_queue_ member alignment.
-  return _aligned_malloc(size, kAmdQueueAlignBytes);
-}
-
-void AqlQueue::operator delete(void* ptr) { _aligned_free(ptr); }
-
-AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
-                   ScratchInfo& scratch, core::HsaEventCallback callback,
-                   void* err_data, bool is_kv)
+AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
+                   core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(),
-      Signal(0),
+      LocalSignal(0),
+      Signal(signal()),
       ring_buf_(NULL),
       ring_buf_alloc_bytes_(0),
       queue_id_(HSA_QUEUEID(-1)),

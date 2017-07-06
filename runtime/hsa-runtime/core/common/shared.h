@@ -80,10 +80,6 @@ class Shared : public BaseShared {
     shared_object_ =
         reinterpret_cast<T*>(allocate_(sizeof(T), Max(__alignof(T), Align), 0));
 
-    assert(shared_object_ != NULL && "Failed on allocating shared_object_");
-
-    memset(shared_object_, 0, sizeof(T));
-
     if (shared_object_ != NULL) new (shared_object_) T;
   }
 

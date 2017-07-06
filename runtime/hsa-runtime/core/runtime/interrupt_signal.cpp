@@ -68,9 +68,8 @@ int InterruptSignal::rtti_id_ = 0;
 
 void InterruptSignal::DestroyEvent(HsaEvent* evt) { hsaKmtDestroyEvent(evt); }
 
-InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value,
-                                 HsaEvent* use_event)
-    : Signal(initial_value) {
+InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value, HsaEvent* use_event)
+    : LocalSignal(initial_value), Signal(signal()) {
   if (use_event != NULL) {
     event_ = use_event;
     free_event_ = false;
