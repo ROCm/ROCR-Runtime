@@ -582,6 +582,7 @@ void GpuAgent::InitDma() {
 
       if (blits_[BlitDevToHost] == NULL) {
         // Share utility queue with device-to-host blits.
+        if (queues_[QueueUtility] == nullptr) queues_[QueueUtility] = CreateInterceptibleQueue();
         blits_[BlitDevToHost] = CreateBlitKernel(queues_[QueueUtility]);
         assert(blits_[BlitDevToHost] != NULL && "Blit creation failed");
       }
@@ -597,14 +598,15 @@ hsa_status_t GpuAgent::PostToolsInit() {
   BindTrapHandler();
 
   // Defer utility queue creation to allow tools to intercept.
-  queues_[QueueUtility] = CreateInterceptibleQueue();
+  if (queues_[QueueUtility] == nullptr) queues_[QueueUtility] = CreateInterceptibleQueue();
 
   if (queues_[QueueUtility] == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   // Share utility queue with device-to-device blits.
-  blits_[BlitDevToDev] = CreateBlitKernel(queues_[QueueUtility]);
+  if (blits_[BlitDevToDev] == nullptr)
+    blits_[BlitDevToDev] = CreateBlitKernel(queues_[QueueUtility]);
 
   if (blits_[BlitDevToDev] == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;

@@ -1026,7 +1026,7 @@ void Runtime::Unload() {
 
   async_events_control_.Shutdown();
 
-  delete vm_fault_signal_;
+  vm_fault_signal_->DestroySignal();
   core::InterruptSignal::DestroyEvent(vm_fault_event_);
 
   DestroyAgents();

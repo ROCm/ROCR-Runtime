@@ -43,6 +43,7 @@
 #include <new>
 #include <typeinfo>
 #include <exception>
+#include <set>
 
 #include "hsakmt.h"
 
@@ -52,7 +53,10 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/signal.h"
+#include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/ipc_signal.h"
+#include "core/inc/exceptions.h"
 
 template <class T>
 struct ValidityError;
@@ -124,11 +128,13 @@ hsa_status_t handleException() {
     throw;
   } catch (const std::bad_alloc& e) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  } catch (const std::bad_cast& e) {
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks after unwinding HSA.
-    e.rethrow_nested();
-    return HSA_STATUS_ERROR;
+  } catch (const hsa_exception& e) {
+    return e.error_code();
+    // Enable when callback exception support is added.
+    // } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks after unwinding
+    // HSA.
+    //  e.rethrow_nested();
+    //  return HSA_STATUS_ERROR;
   } catch (...) {
     assert(false && "Unhandled exception.");
     abort();
@@ -143,7 +149,7 @@ template <class T> static __forceinline T handleExceptionT() {
 }
 
 hsa_status_t hsa_amd_coherency_get_type(hsa_agent_t agent_handle, hsa_amd_coherency_type_t* type) {
-  TRY
+  TRY;
   IS_OPEN();
 
   const core::Agent* agent = core::Agent::Convert(agent_handle);
@@ -162,12 +168,12 @@ hsa_status_t hsa_amd_coherency_get_type(hsa_agent_t agent_handle, hsa_amd_cohere
   *type = gpu_agent->current_coherency_type();
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
                                         hsa_amd_coherency_type_t type) {
-  TRY
+  TRY;
   IS_OPEN();
 
   core::Agent* agent = core::Agent::Convert(agent_handle);
@@ -190,11 +196,11 @@ hsa_status_t hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
   }
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (ptr == NULL) {
@@ -206,14 +212,14 @@ hsa_status_t hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
   }
 
   return core::Runtime::runtime_singleton_->FillMemory(ptr, value, count);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, const void* src,
                                        hsa_agent_t src_agent_handle, size_t size,
                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                        hsa_signal_t completion_signal) {
-  TRY
+  TRY;
   if (dst == NULL || src == NULL) { return HSA_STATUS_ERROR_INVALID_ARGUMENT; }
 
   if ((num_dep_signals == 0 && dep_signals != NULL) ||
@@ -246,11 +252,11 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   }
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enable) {
-  TRY
+  TRY;
   IS_OPEN();
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
@@ -261,11 +267,11 @@ hsa_status_t hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enab
                    AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, (enable != 0));
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
-  TRY
+  TRY;
   IS_OPEN();
 
   return core::Runtime::runtime_singleton_->IterateAgent(
@@ -274,13 +280,13 @@ hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
         return core::Agent::Convert(agent_handle)->profiling_enabled(enable);
       },
       reinterpret_cast<void*>(&enable));
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_profiling_get_dispatch_time(
     hsa_agent_t agent_handle, hsa_signal_t hsa_signal,
     hsa_amd_profiling_dispatch_time_t* time) {
-  TRY
+  TRY;
   IS_OPEN();
 
   IS_BAD_PTR(time);
@@ -303,12 +309,12 @@ hsa_status_t hsa_amd_profiling_get_dispatch_time(
   gpu_agent->TranslateTime(signal, *time);
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_profiling_get_async_copy_time(
     hsa_signal_t hsa_signal, hsa_amd_profiling_async_copy_time_t* time) {
-  TRY
+  TRY;
   IS_OPEN();
 
   IS_BAD_PTR(time);
@@ -333,13 +339,13 @@ hsa_status_t hsa_amd_profiling_get_async_copy_time(
   time->start = signal->signal_.start_ts;
   time->end = signal->signal_.end_ts;
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent_handle,
                                                              uint64_t agent_tick,
                                                              uint64_t* system_tick) {
-  TRY
+  TRY;
   IS_OPEN();
 
   IS_BAD_PTR(system_tick);
@@ -357,42 +363,89 @@ hsa_status_t hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent_h
   *system_tick = gpu_agent->TranslateTime(agent_tick);
 
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
+}
+
+hsa_status_t hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
+                                   const hsa_agent_t* consumers, uint64_t attributes,
+                                   hsa_signal_t* hsa_signal) {
+  struct AgentHandleCompare {
+    bool operator()(const hsa_agent_t& lhs, const hsa_agent_t& rhs) const {
+      return lhs.handle < rhs.handle;
+    }
+  };
+
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(hsa_signal);
+
+  core::Signal* ret;
+
+  bool enable_ipc = attributes & HSA_AMD_SIGNAL_IPC;
+  bool use_default =
+      enable_ipc || (attributes & HSA_AMD_SIGNAL_AMD_GPU_ONLY) || (!core::g_use_interrupt_wait);
+
+  if ((!use_default) && (num_consumers != 0)) {
+    IS_BAD_PTR(consumers);
+
+    // Check for duplicates in consumers.
+    std::set<hsa_agent_t, AgentHandleCompare> consumer_set(consumers, consumers + num_consumers);
+    if (consumer_set.size() != num_consumers) {
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    use_default = true;
+    for (const core::Agent* cpu_agent : core::Runtime::runtime_singleton_->cpu_agents()) {
+      use_default &= (consumer_set.find(cpu_agent->public_handle()) == consumer_set.end());
+    }
+  }
+
+  if (use_default) {
+    ret = new core::DefaultSignal(initial_value, enable_ipc);
+  } else {
+    ret = new core::InterruptSignal(initial_value);
+  }
+
+  *hsa_signal = core::Signal::Convert(ret);
+  return HSA_STATUS_SUCCESS;
+  CATCH;
 }
 
 uint32_t hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* hsa_signals,
                                  hsa_signal_condition_t* conds, hsa_signal_value_t* values,
                                  uint64_t timeout_hint, hsa_wait_state_t wait_hint,
                                  hsa_signal_value_t* satisfying_value) {
-  TRY
+  TRY;
+  IS_OPEN();
   // Do not check for signal invalidation.  Invalidation may occur during async
   // signal handler loop and is not an error.
   for (uint i = 0; i < signal_count; i++)
-    assert(core::SharedSignal::Convert(hsa_signals[i])->IsValid() && "Invalid signal.");
+    assert(hsa_signals[i].handle != 0 && core::SharedSignal::Convert(hsa_signals[i])->IsValid() &&
+           "Invalid signal.");
 
   return core::Signal::WaitAny(signal_count, hsa_signals, conds, values,
                                timeout_hint, wait_hint, satisfying_value);
-  CATCHRET(uint32_t)
+  CATCHRET(uint32_t);
 }
 
 hsa_status_t hsa_amd_signal_async_handler(hsa_signal_t hsa_signal, hsa_signal_condition_t cond,
                                           hsa_signal_value_t value, hsa_amd_signal_handler handler,
                                           void* arg) {
-  TRY
+  TRY;
   IS_OPEN();
+  IS_BAD_PTR(handler);
 
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   IS_VALID(signal);
-  IS_BAD_PTR(handler);
   if (core::g_use_interrupt_wait && (!core::InterruptSignal::IsType(signal)))
     return HSA_STATUS_ERROR_INVALID_SIGNAL;
   return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
       hsa_signal, cond, value, handler, arg);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
-  TRY
+  TRY;
   IS_OPEN();
 
   IS_BAD_PTR(callback);
@@ -400,26 +453,26 @@ hsa_status_t hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
   return core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
       null_signal, HSA_SIGNAL_CONDITION_EQ, 0, (hsa_amd_signal_handler)callback,
       arg);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
                                                uint32_t num_cu_mask_count,
                                                const uint32_t* cu_mask) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(cu_mask);
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
   return cmd_queue->SetCUMasking(num_cu_mask_count, cu_mask);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
                                  hsa_agent_t* agents, int num_agent,
                                  void** agent_ptr) {
-  TRY
+  TRY;
   IS_OPEN();
   *agent_ptr = NULL;
 
@@ -437,11 +490,11 @@ hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
           core::Runtime::runtime_singleton_->system_regions_fine()[0]);
 
   return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_unlock(void* host_ptr) {
-  TRY
+  TRY;
   IS_OPEN();
 
   const amd::MemoryRegion* system_region =
@@ -449,12 +502,12 @@ hsa_status_t hsa_amd_memory_unlock(void* host_ptr) {
           core::Runtime::runtime_singleton_->system_regions_fine()[0]);
 
   return system_region->Unlock(host_ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
                                           hsa_amd_memory_pool_info_t attribute, void* value) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(value);
 
@@ -465,14 +518,14 @@ hsa_status_t hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
   }
 
   return mem_region->GetPoolInfo(attribute, value);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_agent_iterate_memory_pools(
     hsa_agent_t agent_handle,
     hsa_status_t (*callback)(hsa_amd_memory_pool_t memory_pool, void* data),
     void* data) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(callback);
   const core::Agent* agent = core::Agent::Convert(agent_handle);
@@ -490,12 +543,12 @@ hsa_status_t hsa_amd_agent_iterate_memory_pools(
       reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool, void* data)>(
           callback),
       data);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, size_t size,
                                           uint32_t flags, void** ptr) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (size == 0 || ptr == NULL) {
@@ -511,7 +564,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
 
   return core::Runtime::runtime_singleton_->AllocateMemory(
       mem_region, size, core::MemoryRegion::AllocateRestrict, ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_pool_free(void* ptr) {
@@ -520,7 +573,7 @@ hsa_status_t hsa_amd_memory_pool_free(void* ptr) {
 
 hsa_status_t hsa_amd_agents_allow_access(uint32_t num_agents, const hsa_agent_t* agents,
                                          const uint32_t* flags, const void* ptr) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (num_agents == 0 || agents == NULL || flags != NULL || ptr == NULL) {
@@ -529,12 +582,12 @@ hsa_status_t hsa_amd_agents_allow_access(uint32_t num_agents, const hsa_agent_t*
 
   return core::Runtime::runtime_singleton_->AllowAccess(num_agents, agents,
                                                         ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_pool_can_migrate(hsa_amd_memory_pool_t src_memory_pool,
                                              hsa_amd_memory_pool_t dst_memory_pool, bool* result) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (result == NULL) {
@@ -558,13 +611,13 @@ hsa_status_t hsa_amd_memory_pool_can_migrate(hsa_amd_memory_pool_t src_memory_po
   }
 
   return src_mem_region->CanMigrate(*dst_mem_region, *result);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_memory_migrate(const void* ptr,
                                     hsa_amd_memory_pool_t memory_pool,
                                     uint32_t flags) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (ptr == NULL || flags != 0) {
@@ -580,13 +633,13 @@ hsa_status_t hsa_amd_memory_migrate(const void* ptr,
   }
 
   return dst_mem_region->Migrate(flags, ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_agent_memory_pool_get_info(
     hsa_agent_t agent_handle, hsa_amd_memory_pool_t memory_pool,
     hsa_amd_agent_memory_pool_info_t attribute, void* value) {
-  TRY
+  TRY;
   IS_OPEN();
 
   if (value == NULL) {
@@ -605,7 +658,7 @@ hsa_status_t hsa_amd_agent_memory_pool_get_info(
   }
 
   return mem_region->GetAgentPoolInfo(*agent, attribute, value);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
@@ -614,7 +667,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
                                         void** ptr, size_t* metadata_size,
                                         const void** metadata) {
   static const int tinyArraySize=8;
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(agents);
   IS_BAD_PTR(size);
@@ -641,49 +694,49 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
 
   if (num_agents > tinyArraySize) delete[] core_agents;
   return ret;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
-  TRY
+  TRY;
   IS_OPEN();
   if (ptr != NULL) core::Runtime::runtime_singleton_->InteropUnmap(ptr);
   return HSA_STATUS_SUCCESS;
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                                   uint32_t* num_accessible, hsa_agent_t** accessible) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(ptr);
   IS_BAD_PTR(info);
   return core::Runtime::runtime_singleton_->PtrInfo(ptr, info, alloc, num_accessible, accessible);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(ptr);
   return core::Runtime::runtime_singleton_->SetPtrInfoData(ptr, userdata);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(ptr);
   IS_BAD_PTR(handle);
   return core::Runtime::runtime_singleton_->IPCCreate(ptr, len, handle);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t len,
                                        uint32_t num_agents, const hsa_agent_t* mapping_agents,
                                        void** mapped_ptr) {
   static const int tinyArraySize = 8;
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(mapped_ptr);
   if (num_agents != 0) IS_BAD_PTR(mapping_agents);
@@ -706,15 +759,38 @@ hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t l
 
   return core::Runtime::runtime_singleton_->IPCAttach(ipc, len, num_agents, core_agents,
                                                       mapped_ptr);
-  CATCH
+  CATCH;
 }
 
 hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr) {
-  TRY
+  TRY;
   IS_OPEN();
   IS_BAD_PTR(mapped_ptr);
   return core::Runtime::runtime_singleton_->IPCDetach(mapped_ptr);
-  CATCH
+  CATCH;
+}
+
+hsa_status_t hsa_amd_ipc_signal_create(hsa_signal_t hsa_signal, hsa_amd_ipc_signal_t* handle) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(handle);
+  core::Signal* signal = core::Signal::Convert(hsa_signal);
+  IS_VALID(signal);
+  core::IPCSignal::CreateHandle(signal, handle);
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
+                                       hsa_signal_t* hsa_signal) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(handle);
+  IS_BAD_PTR(hsa_signal);
+  core::Signal* signal = core::IPCSignal::Attach(handle);
+  *hsa_signal = core::Signal::Convert(signal);
+  return HSA_STATUS_SUCCESS;
+  CATCH;
 }
 
 } // end of AMD namespace
