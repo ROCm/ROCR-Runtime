@@ -113,6 +113,7 @@ hsa_status_t Runtime::Acquire() {
     hsa_status_t status = runtime_singleton_->Load();
 
     if (status != HSA_STATUS_SUCCESS) {
+      runtime_singleton_->ref_count_--;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
