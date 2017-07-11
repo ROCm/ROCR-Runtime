@@ -684,7 +684,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
   hsa_amd_pointer_info_t retInfo;
 
   // check output struct is at least as large as the first info revision.
-  if (info->size < sizeof(struct hsa_amd_pointer_info_v1_s)) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (info->size < 40) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
