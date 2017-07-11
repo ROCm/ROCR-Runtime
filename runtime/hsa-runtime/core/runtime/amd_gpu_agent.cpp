@@ -512,18 +512,10 @@ hsa_status_t GpuAgent::VisitRegion(
 }
 
 core::Queue* GpuAgent::CreateInterceptibleQueue() {
-  // Until tools runtime is merged in we need to use HSA API
-  // rather than GpuAgent::QueueCreate to allow interception.
-  hsa_queue_t* queue_handle;
-  hsa_status_t status =
-      HSA::hsa_queue_create(public_handle(), minAqlSize_, HSA_QUEUE_TYPE_MULTI,
-                            NULL, NULL, 0, 0, &queue_handle);
-
-  if (status != HSA_STATUS_SUCCESS) {
-    return NULL;
-  }
-
-  return core::Queue::Convert(queue_handle);
+  // Disabled intercept of internal queues pending tools updates.
+  core::Queue* queue = nullptr;
+  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue);
+  return queue;
 }
 
 core::Blit* GpuAgent::CreateBlitSdma() {
