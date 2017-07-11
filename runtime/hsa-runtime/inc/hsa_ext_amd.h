@@ -1320,7 +1320,7 @@ typedef enum {
  * @brief Describes a memory allocation known to ROCr.
  * Within a ROCr major version this structure can only grow.
  */
-typedef struct hsa_amd_pointer_info_v1_s {
+typedef struct hsa_amd_pointer_info_s {
   /*
   Size in bytes of this structure.  Used for version control within a major ROCr
   revision.  Set to sizeof(hsa_amd_pointer_t) prior to calling
@@ -1349,17 +1349,6 @@ typedef struct hsa_amd_pointer_info_v1_s {
   Application provided value.
   */
   void* userData;
-} hsa_amd_pointer_info_v1_t;
-
-/**
- * @brief Minor version updates to pointer info.
- */
-#ifdef __cplusplus
-typedef struct hsa_amd_pointer_info_v2_s : hsa_amd_pointer_info_v1_t {
-#else
-typedef struct hsa_amd_pointer_info_v2_t {
-  struct hsa_amd_pointer_info_v1_t;
-#endif
   /*
   Reports an agent which "owns" (ie has preferred access to) the pool in which the allocation was
   made.  When multiple agents share equal access to a pool (ex: multiple CPU agents, or multi-die
