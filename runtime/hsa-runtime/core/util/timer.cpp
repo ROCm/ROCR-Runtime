@@ -93,6 +93,8 @@ fast_clock::init::init() {
 
   fast_clock::freq = double(min) / duration_in_seconds(elapsed);
   fast_clock::period_ps = 1e12 / fast_clock::freq;
+  // printf("Timer setup took %f ms\n", duration_in_seconds(elapsed)*1000.0f);
+  // printf("Fast clock frequency: %f MHz\n", double(fast_clock::freq)/1e6);
 }
 
 double accurate_clock::period_ns;
