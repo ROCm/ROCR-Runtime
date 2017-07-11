@@ -643,14 +643,13 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  hsa_status_t stat =
-      blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
-
-  if (profiling_enabled() && HSA_STATUS_SUCCESS == stat) {
+  if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
     out_signal.async_copy_agent(this);
   }
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
 
   return stat;
 }
