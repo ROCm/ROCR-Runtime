@@ -775,17 +775,20 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // pm4_ib_buf_ is a shared resource, so mutually exclude here.
   ScopedAcquire<KernelMutex> lock(&pm4_ib_mutex_);
 
-  // Obtain a queue slot for a single AQL packet.
-  uint64_t write_idx = AddWriteIndexAcqRel(1);
+  // Obtain reference to any container queue.
+  core::Queue* queue = core::Queue::Convert(public_handle());
 
-  while ((write_idx - LoadReadIndexRelaxed()) > public_handle()->size) {
+  // Obtain a queue slot for a single AQL packet.
+  uint64_t write_idx = queue->AddWriteIndexAcqRel(1);
+
+  while ((write_idx - queue->LoadReadIndexRelaxed()) > queue->amd_queue_.hsa_queue.size) {
     os::YieldThread();
   }
 
-  uint32_t slot_idx = uint32_t(write_idx % public_handle()->size);
+  uint32_t slot_idx = uint32_t(write_idx % queue->amd_queue_.hsa_queue.size);
   constexpr uint32_t slot_size_b = 0x40;
   uint32_t* queue_slot =
-      (uint32_t*)(uintptr_t(public_handle()->base_address) + (slot_idx * slot_size_b));
+      (uint32_t*)(uintptr_t(queue->amd_queue_.hsa_queue.base_address) + (slot_idx * slot_size_b));
 
   // Copy client PM4 command into IB.
   assert(cmd_size_b < pm4_ib_size_b_ && "PM4 exceeds IB size");
@@ -877,12 +880,13 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   atomic::Store(&queue_slot[0], slot_data[0], std::memory_order_release);
 
   // Submit the packet slot.
-  core::Signal* doorbell =
-      core::Signal::Convert(public_handle()->doorbell_signal);
+  core::Signal* doorbell = core::Signal::Convert(queue->amd_queue_.hsa_queue.doorbell_signal);
   doorbell->StoreRelease(write_idx);
 
   // Wait for the packet to be consumed.
-  while (LoadReadIndexRelaxed() <= write_idx) {
+  // Should be switched to a signal wait when aql_pm4_ib can be used on all
+  // supported platforms.
+  while (queue->LoadReadIndexRelaxed() <= write_idx) {
     os::YieldThread();
   }
 }

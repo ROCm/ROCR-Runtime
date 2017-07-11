@@ -64,15 +64,13 @@ struct AqlPacket {
     hsa_agent_dispatch_packet_t agent;
   };
 
-  uint8_t type() {
+  uint8_t type() const {
     return ((dispatch.header >> HSA_PACKET_HEADER_TYPE) &
                       ((1 << HSA_PACKET_HEADER_WIDTH_TYPE) - 1));
   }
 
-  bool IsValid() {
-    const uint8_t packet_type = dispatch.header >> HSA_PACKET_HEADER_TYPE;
-    return (packet_type > HSA_PACKET_TYPE_INVALID &&
-            packet_type <= HSA_PACKET_TYPE_BARRIER_OR);
+  bool IsValid() const {
+    return (type() <= HSA_PACKET_TYPE_BARRIER_OR) & (type() != HSA_PACKET_TYPE_INVALID);
   }
 
   std::string string() const {
