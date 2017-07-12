@@ -48,7 +48,7 @@
 #define OPENSRC_HSA_RUNTIME_INC_HSA_VEN_AMD_AQLPROFILE_H_
 
 #include <stdint.h>
-#include <hsa.h>
+#include "hsa.h"
 
 #ifdef __cplusplus
 extern "C" {
