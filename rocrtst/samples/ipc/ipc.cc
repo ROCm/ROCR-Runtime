@@ -45,8 +45,9 @@
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/shm.h>
-#include <sched.h>
+#include <sys/mman.h>
+#include <unistd.h>
+#include <sys/wait.h>
 
 #include <cassert>
 #include <iostream>
@@ -329,21 +330,6 @@ static void CheckAndSetToken(volatile int *token, int newVal) {
   }
 }
 
-static int SetUpSharedMemory(size_t sz, void **ptr) {
-  int id = shmget(kShmemID, sz, IPC_CREAT | 0700);
-  if (id == -1) {
-    fprintf(stdout, "shmget failed\n");
-    return id;
-  }
-  *ptr = shmat(id, NULL, 0);
-  if ((uintptr_t)*ptr == (uintptr_t)-1) {
-    fprintf(stdout, "shmat failed\n");
-    return -1;
-  }
-
-  return id;
-}
-
 // Summary of this IPC Sample:
 // This program demonstrates the IPC apis. Run it by executing 2 instances
 // of the program.
@@ -361,13 +347,71 @@ static int SetUpSharedMemory(size_t sz, void **ptr) {
 // of sharing info and  synchronizing the 2 processes. This is independent
 // of RocR IPC and should not be confused with it.
 int main(int argc, char** argv) {
+  // IPC test
+  struct Shared {
+    volatile int token;
+    volatile int count;
+    volatile size_t size;
+    volatile hsa_amd_ipc_memory_t handle;
+    volatile hsa_amd_ipc_signal_t signal_handle;
+  };
+
+  // Allocate linux shared memory.
+  Shared* shared = (Shared*)mmap(nullptr, sizeof(Shared), PROT_READ | PROT_WRITE,
+                                 MAP_SHARED | MAP_ANONYMOUS, -1, 0);
+  if (shared == MAP_FAILED) {
+    fprintf(stdout, "Unable to allocate shared memory. Exiting.\n");
+    return -1;
+  }
+
+  // "token" is used to signal state changes between the 2 processes.
+  volatile int* token = &shared->token;
+  *token = 0;
+  bool processOne;
+
+  // Spawn second process and verify communication
+  int child = fork();
+  if (child == -1) {
+    printf("fork failed.  Exiting.\n");
+    return -1;
+  }
+  if (child != 0) {
+    processOne = true;
+
+    // Signal to other process we are waiting, and then wait...
+    *token = 1;
+    while (*token == 1) {
+      sched_yield();
+    }
+
+    fprintf(stdout, "Second process observed, handshake...\n");
+    *token = 1;
+    while (*token == 1) {
+      sched_yield();
+    }
+  } else {
+    processOne = false;
+    fprintf(stdout, "Second process running.\n");
+
+    while (*token == 0) {
+      sched_yield();
+    }
+
+    CheckAndSetToken(token, 0);
+    // Wait for handshake
+    while (*token == 0) {
+      sched_yield();
+    }
+    CheckAndSetToken(token, 0);
+    fprintf(stdout, "Handshake complete.\n");
+  }
+
   hsa_status_t err;
 
   err = hsa_init();
   RET_IF_HSA_ERR(err);
 
   struct callback_args args = {0, 0, 0};
-  const char *prog_name = argv[0];
 
   err = hsa_iterate_agents(FindCPUDevice, &args);
   assert(err == HSA_STATUS_INFO_BREAK);
@@ -382,7 +426,6 @@ int main(int argc, char** argv) {
      "No GPU with accessible VRAM required for this program found. Exiting\n");
     return -1;
   }
-
 
   // Print out name of the device.
   char name1[64] = {0};
@@ -404,63 +447,6 @@ int main(int argc, char** argv) {
   hsa_signal_t copy_signal;
   err = hsa_signal_create(1, 0, NULL, &copy_signal);
   RET_IF_HSA_ERR(err);
-
-  // IPC test
-  struct Shared {
-    volatile int token;
-    volatile int count;
-    volatile size_t size;
-    volatile hsa_amd_ipc_memory_t handle;
-  };
-
-  Shared *shared = nullptr;
-
-  int shm_id = SetUpSharedMemory(sizeof(Shared),
-                                           reinterpret_cast<void**>(&shared));
-
-  if (shared == nullptr) {
-    fprintf(stdout, "Unable to allocate shared memory. Exiting.\n");
-    return -1;
-  }
-
-  // "token" is used to signal state changes between the 2 processes; it is
-  // initially 0
-  volatile int* token = &shared->token;
-  bool processOne = true;
-
-  if (*token == 0) {
-    fprintf(stdout, "You must now start second instance of %s\n", prog_name);
-    fprintf(stdout, "Waiting for second process...\n");
-
-    // Signal to other process we are waiting, and then wait...
-    *token = 1;
-    while (*token == 1) {
-      sched_yield();
-    }
-
-    fprintf(stdout, "Second process observed, handshake...\n");
-    *token = 1;
-    while (*token == 1) {
-      sched_yield();
-    }
-  } else {
-    fprintf(stdout, "Second process running.\n");
-
-    int shmerr = shmctl(shm_id, IPC_RMID, NULL);
-    if (shmerr == -1) {
-      fprintf(stdout, "shmctl failed\n");
-    }
-    processOne = false;
-
-    CheckAndSetToken(token, 0);
-    // Wait for handshake
-    while (*token == 0) {
-      sched_yield();
-    }
-    CheckAndSetToken(token, 0);
-    fprintf(stdout, "Handshake complete.\n");
-  }
-
 
 // Wrap printf to add first or second process indicator
 #define PROCESS_LOG(format, ...) \
@@ -496,16 +482,25 @@ int main(int argc, char** argv) {
     err = hsa_amd_memory_fill(gpuBuf, 1, count);
     RET_IF_HSA_ERR(err);
 
+    // Get IPC capable signal
+    hsa_signal_t ipc_signal;
+    err = hsa_amd_signal_create(1, 0, NULL, HSA_AMD_SIGNAL_IPC, &ipc_signal);
+    RET_IF_HSA_ERR(err);
+
+    err = hsa_amd_ipc_signal_create(ipc_signal,
+                                    const_cast<hsa_amd_ipc_signal_t*>(&shared->signal_handle));
+    PROCESS_LOG("Created IPC handle associated with ipc_signal\n");
+    RET_IF_HSA_ERR(err);
+
     // Signal Process 2 that the gpu buffer is ready to read.
     CheckAndSetToken(token, 1);
 
     PROCESS_LOG("Allocated buffer and filled it with 1's. Wait for P1...\n");
-    while (*token == 1) {
-      sched_yield();
-    }
+    hsa_signal_value_t ret =
+        hsa_signal_wait_acquire(ipc_signal, HSA_SIGNAL_CONDITION_NE, 1, -1, HSA_WAIT_STATE_BLOCKED);
 
-    if (*token != 2) {
-      *token = -1;
+    if (ret != 2) {
+      hsa_signal_store_release(ipc_signal, -1);
       return -1;
     }
 
@@ -513,6 +508,16 @@ int main(int argc, char** argv) {
     RET_IF_HSA_ERR(err);
     PROCESS_LOG("Confirmed P1 filled buffer with 2\n")
     PROCESS_LOG("PASSED on P0\n");
+
+    hsa_signal_store_relaxed(ipc_signal, 0);
+    
+    err = hsa_signal_destroy(ipc_signal);
+    RET_IF_HSA_ERR(err);
+
+    err = hsa_amd_memory_pool_free(gpuBuf);
+    RET_IF_HSA_ERR(err);
+
+    waitpid(child, nullptr, 0);
 
   } else {  // "ProcessTwo"
     PROCESS_LOG("Waiting for process 0 to write 1 to token...\n");
@@ -524,6 +529,7 @@ int main(int argc, char** argv) {
       return -1;
     }
 
+    // Attach shared VRAM
     void* ptr;
     err = hsa_amd_ipc_memory_attach(
       const_cast<hsa_amd_ipc_memory_t*>(&shared->handle), shared->size, 1,
@@ -534,6 +540,14 @@ int main(int argc, char** argv) {
      "Attached to IPC handle; P1 buffer address gpu-local memory is %p\n",
                                                                          ptr);
 
+    // Attach shared signal
+    hsa_signal_t ipc_signal;
+    err = hsa_amd_ipc_signal_attach(const_cast<hsa_amd_ipc_signal_t*>(&shared->signal_handle),
+                                    &ipc_signal);
+    RET_IF_HSA_ERR(err);
+
+    PROCESS_LOG("Attached to signal IPC handle\n");
+
     err = CheckAndFillBuffer(&args, reinterpret_cast<uint32_t *>(ptr), 1, 2);
     RET_IF_HSA_ERR(err);
 
@@ -541,11 +555,24 @@ int main(int argc, char** argv) {
       "Confirmed P0 filled buffer with 1; P1 re-filled buffer with 2\n");
     PROCESS_LOG("PASSED on P1\n");
 
-    CheckAndSetToken(token, 2);
+    hsa_signal_store_release(ipc_signal, 2);
 
     err = hsa_amd_ipc_memory_detach(ptr);
     RET_IF_HSA_ERR(err);
+
+    hsa_signal_wait_relaxed(ipc_signal, HSA_SIGNAL_CONDITION_NE, 2, -1, HSA_WAIT_STATE_BLOCKED);
+
+    err = hsa_signal_destroy(ipc_signal);
+    RET_IF_HSA_ERR(err);
   }
+
+  err = hsa_signal_destroy(copy_signal);
+  RET_IF_HSA_ERR(err);
+
+  munmap(shared, sizeof(Shared));
+
+  err = hsa_shut_down();
+  RET_IF_HSA_ERR(err);
 
 #undef PROCESS_LOG
   return 0;
