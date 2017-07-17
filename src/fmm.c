@@ -2463,6 +2463,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	uint64_t offset;
 	int r;
 	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
+	static const uint64_t IMAGE_ALIGN = 64*1024;
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -2503,7 +2504,8 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	if (!aperture_is_valid(aperture->base, aperture->limit))
 		goto error_free_metadata;
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture, infoArgs.size, offset);
+	mem = aperture_allocate_area_aligned(aperture, infoArgs.size, offset,
+					     MAX(aperture->align, IMAGE_ALIGN));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!mem)
 		goto error_free_metadata;
