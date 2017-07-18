@@ -74,11 +74,12 @@ void HsaApiTable::Init() {
   UpdateAmdExts();
   hsa_api.amd_ext_ = &amd_ext_api;
  
-  // Initialize Api tables for Finalizer and Image to NULL
-  // Tables for Finalizer and Images are initialized as part
+  // Initialize Api tables for Finalizer, Image, AqlProfile to NULL
+  // The tables are initialized as part
   // of Hsa Runtime initialization, including their major ids
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
+  hsa_api.aqlprofile_ext_ = NULL;
 }
 
 void HsaApiTable::Reset() {
@@ -102,6 +103,13 @@ void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
     hsa_api.image_ext_ = &image_api;
     return;
   }
+
+  // Update HSA Extension AqlProfile Api table
+  if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
+    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
+    hsa_api.aqlprofile_ext_ = &aqlprofile_api;
+    return;
+  }
 }
 
 void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
@@ -119,6 +127,13 @@ void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
     image_api = (*(ImageExtTable *)ext_table);
     hsa_api.image_ext_ = (ImageExtTable *)ext_table; 
+    return;
+  }
+
+  // Update HSA Extension AqlProfile Api table
+  if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
+    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
+    hsa_api.aqlprofile_ext_ = (AqlProfileExtTable *)ext_table;
     return;
   }
 }

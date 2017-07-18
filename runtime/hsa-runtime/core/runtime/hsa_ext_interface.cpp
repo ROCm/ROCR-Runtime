@@ -271,6 +271,7 @@ void ExtensionEntryPoints::Unload() {
 
   InitFinalizerExtTable();
   InitImageExtTable();
+  InitAqlProfileExtTable();
   InitAmdExtTable();
   core::hsa_internal_api_table_.Reset();
 }
