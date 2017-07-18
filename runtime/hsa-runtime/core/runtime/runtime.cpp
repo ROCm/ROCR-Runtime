@@ -569,6 +569,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
+      if (hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+        setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
+      }
+
       setFlag(HSA_EXTENSION_AMD_PROFILER);
 
       break;
@@ -1062,6 +1066,8 @@ void Runtime::LoadExtensions() {
 
   // Update Hsa Api Table with handle of AqlProfile extension Apis
   extensions_.LoadAqlProfileApi(kAqlProfileLib[os_index(os::current_os)]);
+  hsa_api_table_.LinkExts(&extensions_.aqlprofile_api,
+                          core::HsaApiTable::HSA_EXT_AQLPROFILE_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }

@@ -778,6 +778,10 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
+      if (core::hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+        setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
+      }
+
       setFlag(HSA_EXTENSION_AMD_PROFILER);
 
       break;
