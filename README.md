@@ -1,26 +1,32 @@
-### Boltzmann Thunk Library
+### ROCt Library
 
-This repository includes the user-mode API interfaces used to interact with the Boltzmann KFD driver. Currently supported agents include only the AMD/ATI Fiji family of discrete GPUs.
+This repository includes the user-mode API interfaces used to interact with the ROCk driver. Currently supported agents include only the AMD/ATI Fiji family of discrete GPUs.
 
-#### Boltzmann Kernel Driver
+#### ROCk Driver
 
-The thunk is not a standalone product and requires that you have the correct KFD installed. We recommend reading the full compatibility and installation details which are available in the ROCK github:
-https://github.com/RadeonOpenCompute/ROCK-Radeon-Open-Compute-Kernel-Driver
+The ROCt library is not a standalone product and requires that you have the correct ROCk driver set installed. We recommend reading the full compatibility and installation details which are available in the ROCk github:
 
-#### Binaries for Ubuntu and Fedora
-
-For deb and rpm binaries, please check the packages/ folder in the ROCK repository:
 https://github.com/RadeonOpenCompute/ROCK-Radeon-Open-Compute-Kernel-Driver
 
 #### Building the Thunk
 
-A simple make-based system is available for building thunk. The following are the supported targets:
+A simple cmake-based system is available for building thunk. To build the runtime from the the ROCT-Thunk-Interface directory, execute:
 
 ```bash
+    mkdir -p build
+    cd build
+    cmake ..
     make
-    make deb
-    make rpm
-    make clean
+```
+
+If the hsakmt-roct and hsakmt-roct-dev packages are desired:
+
+```bash
+    mkdir -p build
+    cd build
+    cmake ..
+    make package
+    make package-dev
 ```
 
 #### Disclaimer
@@ -29,4 +35,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2016 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2017 Advanced Micro Devices, Inc. All rights reserved.

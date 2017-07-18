@@ -25,23 +25,24 @@
 
 cmake_minimum_required ( VERSION 3.5.0 )
 
-set ( HSAKMT_NAME "hsakmt" )
-set ( HSAKMT_COMPONENT "lib${HSAKMT_NAME}" )
-set ( HSAKMT_TARGET "${HSAKMT_NAME}" )
+set ( HSAKMT "hsakmt" )
+set ( HSAKMT_PACKAGE "hsakmt-roct" )
+set ( HSAKMT_COMPONENT "lib${HSAKMT}" )
+set ( HSAKMT_TARGET "${HSAKMT}" )
 
 project ( ${HSAKMT_TARGET} )
 
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
-
+## Include common cmake modules
 include ( utils )
 
-## Get the package version. The defaults to 1.0.0.
+## Setup the package version.
 get_version ( "1.0.0" )
 
 set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
 set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
 set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
 set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+
 if ( DEFINED VERSION_BUILD AND NOT ${VERSION_BUILD} STREQUAL "" )
     message ( "VERSION BUILD DEFINED ${VERSION_BUILD}" )
     set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
@@ -57,22 +58,22 @@ set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Werror -Wno-unused-parameter -Wform
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
 ## Linker Flags
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.$(VERSION_MAJOR) -Wl,-z,nodelete" )
+set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.$(PROJECT_VERSION_MAJOR) -Wl,-z,nodelete" )
 
 ## Source files
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/debug.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/events.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/fmm.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/globals.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/libhsakmt.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/memory.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/openclose.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/perfctr.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/pmc_table.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/queues.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/time.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/topology.c )
-set ( HSAKMT_SRC ${HSAKMT_SRC} src/version.c )
+set ( HSAKMT_SRC "src/debug.c"
+                 "src/events.c"
+                 "src/fmm.c"
+                 "src/globals.c"
+                 "src/libhsakmt.c"
+                 "src/memory.c"
+                 "src/openclose.c"
+                 "src/perfctr.c"
+                 "src/pmc_table.c"
+                 "src/queues.c"
+                 "src/time.c"
+                 "src/topology.c"
+                 "src/version.c")
 
 ## Include paths
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/include )
@@ -94,28 +95,39 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} ${HSAKMT_COMPONENT}.so )
 endif ()
 
-## Create symlinks for packaging and install
-add_custom_target ( ${HSAKMT_COMPONENT} ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../${HSAKMT_COMPONENT}/include/${HSAKMT_COMPONENT} ${HSAKMT_COMPONENT}-link )
-add_custom_target ( ${HSAKMT_COMPONENT}.so-link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../${HSAKMT_COMPONENT}/lib/${HSAKMT_COMPONENT}.so ${HSAKMT_COMPONENT}.so-link )
+## Define default variable and variables for the optional build target hsakmt-dev
+set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
+set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 
-## Set the install targets
+## Specify build, install and package targets hsakmt-dev
+set ( DEV_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/hsakmt-roct-dev )
+configure_file ( hsakmt-dev.txt ${DEV_BUILD_DIR}/CMakeLists.txt @ONLY )
+add_custom_target ( build-dev
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR="${SOURCE_DIR}"
+        -DCMAKE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
+        -DCPACK_PACKAGING_INSTALL_PREFIX="${CPACK_PACKAGING_INSTALL_PREFIX}"
+    COMMAND rm -rf *.deb *.rpm *.tar.gz
+    COMMAND make package
+    WORKING_DIRECTORY ${DEV_BUILD_DIR} )
+## Remember to remove the 'ALL' dependency and the package-copy target in final version
+add_custom_target ( install-dev ALL DEPENDS build-dev COMMAND make install WORKING_DIRECTORY ${DEV_BUILD_DIR} )
+add_custom_target ( package-dev ALL DEPENDS install-dev  COMMAND make package WORKING_DIRECTORY ${DEV_BUILD_DIR} )
+add_custom_target ( package-copy ALL DEPENDS package-dev  COMMAND ${CMAKE_COMMAND} -E copy hsakmt-roct-dev-* .. WORKING_DIRECTORY ${DEV_BUILD_DIR} )
+
+## Add the install directives for the runtime library.
 install ( TARGETS ${HSAKMT_TARGET} LIBRARY DESTINATION libhsakmt/lib COMPONENT ${HSAKMT_COMPONENT} )
-install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt )
-install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmt.h DESTINATION libhsakmt/include/libhsakmt )
-install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/hsakmttypes.h DESTINATION libhsakmt/include/libhsakmt )
-install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/include/linux/kfd_ioctl.h DESTINATION libhsakmt/include/libhsakmt/linux )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_COMPONENT}-link DESTINATION include RENAME ${HSAKMT_COMPONENT} )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_COMPONENT}.so-link DESTINATION lib RENAME ${HSAKMT_COMPONENT}.so )
 
-## Packaging directives
-set ( CPACK_PACKAGE_NAME "hsakmt-roct-dev" )
+## Add the packaging directives for the runtime library.
+set ( CPACK_PACKAGE_NAME ${HSAKMT_PACKAGE} )
 set ( CPACK_PACKAGE_VENDOR "AMD" )
 set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
 set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
 set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "HSAKMT library for AMD KFD support" )
-set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
