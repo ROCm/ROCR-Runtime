@@ -58,6 +58,7 @@ typedef struct {
 
 static HsaSystemProperties *_system = NULL;
 static node_t *node = NULL;
+static int is_valgrind;
 
 static int processor_vendor;
 /* Supported System Vendors */
@@ -406,6 +407,12 @@ static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
 	uint32_t n, j, idx_msb, apicid1, apicid2;
 	cpu_cacheinfo_t *this_cpu, *cpu2;
 	uint32_t index;
+
+	/* FixMe: cpuid under Valgrind doesn't return data from the processor we set
+	 * affinity to. We can't use that data to calculate siblings.
+	 */
+	if (is_valgrind)
+		return;
 
 	for (n = 0; n < cpu_ci_list->len; n++) {
 		this_cpu = cpu_ci_list + n;
@@ -1036,8 +1043,10 @@ err:
 	/* restore affinity to original */
 	sched_setaffinity(0, sizeof(cpu_set_t), &orig_cpuset);
 exit:
-	if (ret != HSAKMT_STATUS_SUCCESS)
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		pr_warn("Topology fails to create cpu cache list\n");
 		topology_destroy_temp_cpu_cache_list(*temp_cpu_ci_list);
+	}
 	return ret;
 }
 
@@ -1072,6 +1081,16 @@ static HSAKMT_STATUS topology_get_cpu_cache_props(node_t *tbl,
 			continue; /* this cpu doesn't belong to the node */
 		tbl->node.NumCaches +=
 			this_cpu->num_caches - this_cpu->num_duplicated_caches;
+	}
+
+	/* FixMe: cpuid under Valgrind doesn't return data from the processor we set
+	 * affinity to. All the data come from one specific processor. We'll report
+	 * this one processor's cache and ignore others.
+	 */
+	if (is_valgrind) {
+		this_cpu = cpu_ci_list;
+		tbl->node.NumCaches = this_cpu->num_caches;
+		apicid_low = apicid_max = this_cpu->apicid;
 	}
 
 	tbl->cache = calloc(
@@ -1481,8 +1500,15 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	void *cpu_ci_list = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	struct pci_access *pacc;
+	char *envvar;
 
 	topology_set_processor_vendor();
+	envvar = getenv("HSA_RUNNING_UNDER_VALGRIND");
+	if (envvar && !strcmp(envvar, "1"))
+		is_valgrind = 1;
+	else
+		is_valgrind = 0;
+
 retry:
 	ret = topology_sysfs_get_generation(&gen_start);
 	if (ret != HSAKMT_STATUS_SUCCESS)
