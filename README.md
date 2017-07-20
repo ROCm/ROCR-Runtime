@@ -15,7 +15,7 @@ A simple cmake-based system is available for building thunk. To build the runtim
 ```bash
     mkdir -p build
     cd build
-    cmake ..
+    cmake -DCMAKE_MODULE_PATH=../cmake_modules ..
     make
 ```
 
