@@ -2481,7 +2481,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	uint64_t offset;
 	int r;
 	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
-	static const uint64_t IMAGE_ALIGN = 64*1024;
+	static const uint64_t IMAGE_ALIGN = 256*1024;
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
