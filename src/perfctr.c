@@ -492,7 +492,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	if (!CounterProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != 0)
+	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	if (counter_props[NodeId]) {
@@ -706,7 +706,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcUnregisterTrace(HSAuint32 NodeId,
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != 0)
+	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	trace = (struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
