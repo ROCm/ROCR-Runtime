@@ -2595,8 +2595,8 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	r = validate_nodeid(obj->node_id, &gpu_id);
-	if (r < 0)
-		return HSAKMT_STATUS_ERROR;
+	if (r != HSAKMT_STATUS_SUCCESS)
+		return r;
 
 	exportArgs.handle = obj->handle;
 	exportArgs.gpu_id = gpu_id;
