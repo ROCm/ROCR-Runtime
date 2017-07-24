@@ -2597,7 +2597,14 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	r = validate_nodeid(obj->node_id, &gpu_id);
 	if (r != HSAKMT_STATUS_SUCCESS)
 		return r;
-
+	if (!gpu_id && is_dgpu) {
+		/* Sharing non paged system memory. Use first dgpu which was
+		 * used during allocation. See fmm_allocate_host_gpu()
+		 */
+		r = find_first_dgpu(&gpu_id);
+		if (r != HSAKMT_STATUS_SUCCESS)
+			return r;
+	}
 	exportArgs.handle = obj->handle;
 	exportArgs.gpu_id = gpu_id;
 
