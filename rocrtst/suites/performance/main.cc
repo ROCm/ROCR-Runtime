@@ -43,6 +43,10 @@
  *
  */
 
+#include <string>
+#include <vector>
+#include <memory>
+
 #include "gtest/gtest.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
@@ -50,15 +54,35 @@
 #include "suites/performance/main.h"
 #include "suites/test_common/test_common.h"
 
-static uint32_t sRocrTstOptVerbosity = 1;
-static uint32_t sRocrTestOptIterations = 0;
+#include "common/rocm_smi/rocm_smi.h"
+
+
+static RocrTstGlobals *sRocrtstGlvalues = nullptr;
+
+static bool GetMonitorDevices(const std::shared_ptr<rocrtst::smi::Device> &d,
+                                                                    void *p) {
+  std::string val_str;
+
+  assert(p != nullptr);
+
+  std::vector<std::shared_ptr<rocrtst::smi::Device>> *device_list =
+    reinterpret_cast<std::vector<std::shared_ptr<rocrtst::smi::Device>> *>(p);
+
+  if (d->monitor() != nullptr) {
+    device_list->push_back(d);
+  }
+  return false;
+}
+
 
 static void RunTest(TestBase *test) {
-  test->set_verbosity(sRocrTstOptVerbosity);
+  assert(sRocrtstGlvalues != nullptr);
 
-  if (sRocrTestOptIterations) {
-    test->set_num_iteration(sRocrTestOptIterations);
-  }
+  test->set_verbosity(sRocrtstGlvalues->verbosity);
+  test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
+  test->set_num_iteration(sRocrtstGlvalues->num_iterations);
+  test->set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
+
   test->DisplayTestInfo();
   test->SetUp();
   test->Run();
@@ -79,6 +103,10 @@ static void RunTest(TestBase *test) {
 
 TEST(rocrtst, Test_Example) {
   TestExample tst;
+
+  rocrtst::smi::RocmSMI hw;
+  hw.DiscoverDevices();
+
   RunTest(&tst);
 }
 
@@ -117,11 +145,22 @@ TEST(rocrtst, Perf_Dispatch_Time_Multi_Interrupt) {
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
 
-  RocrtstOptions opts(&sRocrTstOptVerbosity, &sRocrTestOptIterations);
+  RocrTstGlobals settings;
 
-  if (ProcessCmdline(&opts, argc, argv)) {
+  settings.verbosity = 1;
+  settings.monitor_verbosity = 1;
+  settings.num_iterations = 0;
+
+  if (ProcessCmdline(&settings, argc, argv)) {
     return 1;
   }
+
+  rocrtst::smi::RocmSMI hw;
+  hw.DiscoverDevices();
+  hw.IterateSMIDevices(
+       GetMonitorDevices, reinterpret_cast<void *>(&settings.monitor_devices));
+
+  sRocrtstGlvalues = &settings;
 
   return RUN_ALL_TESTS();
 }
