@@ -210,6 +210,7 @@ MESSAGE("ROCRTST_LIBS SET STEP:Done")
 #
 # Other source directories
 aux_source_directory(${ROCRTST_ROOT}/common common_srcs)
+aux_source_directory(${ROCRTST_ROOT}/common/rocm_smi common_smi_srcs)
 
 #
 # Specify the directory containing various libraries of ROCR
@@ -281,7 +282,9 @@ set(CL_FILE_LIST "${KERNELS_DIR}/dispatch_time_kernels.cl")
 build_kernel("dispatch_time")
 
 # Build rules
-add_executable(${ROCRTST} ${performanceSources} ${common_srcs} ${testCommonSources})
+add_executable(${ROCRTST} ${performanceSources} ${common_srcs}
+                                ${common_smi_srcs} ${testCommonSources})
+
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt)
 
 add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
