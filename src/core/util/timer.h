@@ -147,8 +147,7 @@ class fast_clock {
 #ifdef __x86_64__
   static __forceinline raw_rep raw_now() { return __rdtsc(); }
   static __forceinline raw_frequency raw_freq() { return freq; }
-#endif
-#ifdef __aarch64__
+#else
   static __forceinline raw_rep raw_now() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC_RAW, &ts);

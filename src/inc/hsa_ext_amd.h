@@ -1164,13 +1164,16 @@ hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr);
  *
  * @param[in] count Number of uint32_t element to be set to the value.
  *
- * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ * @retval HSA_STATUS_SUCCESS The function has been executed successfully.
  *
- * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
  * initialized.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is NULL or
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is NULL or
  * not 4 bytes aligned
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ALLOCATION if the given memory
+ * region was not allocated with HSA runtime APIs.
  *
  */
 hsa_status_t HSA_API
@@ -1317,7 +1320,7 @@ typedef enum {
  * @brief Describes a memory allocation known to ROCr.
  * Within a ROCr major version this structure can only grow.
  */
-typedef struct hsa_amd_pointer_info_v1_s {
+typedef struct hsa_amd_pointer_info_s {
   /*
   Size in bytes of this structure.  Used for version control within a major ROCr
   revision.  Set to sizeof(hsa_amd_pointer_t) prior to calling
@@ -1346,6 +1349,12 @@ typedef struct hsa_amd_pointer_info_v1_s {
   Application provided value.
   */
   void* userData;
+  /*
+  Reports an agent which "owns" (ie has preferred access to) the pool in which the allocation was
+  made.  When multiple agents share equal access to a pool (ex: multiple CPU agents, or multi-die
+  GPU boards) any such agent may be returned.
+  */
+  hsa_agent_t agentOwner;
 } hsa_amd_pointer_info_t;
 
 /**

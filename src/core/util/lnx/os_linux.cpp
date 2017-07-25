@@ -322,11 +322,14 @@ int ResetOsEvent(EventHandle event) {
   return ret_code;
 }
 
+static double invPeriod = 0.0;
+
 uint64_t ReadAccurateClock() {
+  if (invPeriod == 0.0) AccurateClockFrequency();
   timespec time;
   int err = clock_gettime(CLOCK_MONOTONIC_RAW, &time);
   assert(err == 0 && "clock_gettime(CLOCK_MONOTONIC_RAW,...) failed");
-  return uint64_t(time.tv_sec) * 1000000000ull + uint64_t(time.tv_nsec);
+  return (uint64_t(time.tv_sec) * 1000000000ull + uint64_t(time.tv_nsec)) * invPeriod;
 }
 
 uint64_t AccurateClockFrequency() {
@@ -339,7 +342,8 @@ uint64_t AccurateClockFrequency() {
   assert(time.tv_nsec < 0xFFFFFFFF &&
          "clock_getres(CLOCK_MONOTONIC_RAW,...) returned very low frequency "
          "(<1Hz).");
-  return uint64_t(time.tv_nsec) * 1000000000ull;
+  if (invPeriod == 0.0) invPeriod = 1.0 / double(time.tv_nsec);
+  return 1000000000ull / uint64_t(time.tv_nsec);
 }
 }
 

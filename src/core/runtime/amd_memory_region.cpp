@@ -81,23 +81,21 @@ bool MemoryRegion::RegisterMemory(void* ptr, size_t size, size_t num_nodes,
 
 void MemoryRegion::DeregisterMemory(void* ptr) { hsaKmtDeregisterMemory(ptr); }
 
-bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
-                                         void* ptr, size_t size,
-                                         uint64_t* alternate_va,
+bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes, const void* ptr,
+                                         size_t size, uint64_t* alternate_va,
                                          HsaMemMapFlags map_flag) {
   assert(num_node > 0);
   assert(nodes != NULL);
 
   *alternate_va = 0;
-  const HSAKMT_STATUS status =
-      hsaKmtMapMemoryToGPUNodes(ptr, size, alternate_va, map_flag, num_node,
-                                const_cast<uint32_t*>(nodes));
+  const HSAKMT_STATUS status = hsaKmtMapMemoryToGPUNodes(
+      const_cast<void*>(ptr), size, alternate_va, map_flag, num_node, const_cast<uint32_t*>(nodes));
 
   return (status == HSAKMT_STATUS_SUCCESS);
 }
 
-void MemoryRegion::MakeKfdMemoryUnresident(void* ptr) {
-  hsaKmtUnmapMemoryToGPU(ptr);
+void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
+  hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
 MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
@@ -454,15 +452,16 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   if (whitelist_nodes.size() == 0 && IsSystem()) {
     assert(cpu_in_list);
     // This is a system region and only CPU agents in the whitelist.
-    // No need to call map.
+    // Remove old mappings.
+    amd::MemoryRegion::MakeKfdMemoryUnresident(ptr);
     return HSA_STATUS_SUCCESS;
   }
 
   // If this is a local memory region, the owning gpu always needs to be in
   // the whitelist.
   if (IsPublic() &&
-      std::find(whitelist_nodes.begin(), whitelist_nodes.end(),
-                owner()->node_id()) == whitelist_nodes.end()) {
+      std::find(whitelist_nodes.begin(), whitelist_nodes.end(), owner()->node_id()) ==
+          whitelist_nodes.end()) {
     whitelist_nodes.push_back(owner()->node_id());
     whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(owner()));
   }
@@ -470,12 +469,11 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   HsaMemMapFlags map_flag = map_flag_;
   map_flag.ui32.HostAccess |= (cpu_in_list) ? 1 : 0;
 
-  
   {
     ScopedAcquire<KernelMutex> lock(&core::Runtime::runtime_singleton_->memory_lock_);
     uint64_t alternate_va = 0;
     if (!amd::MemoryRegion::MakeKfdMemoryResident(
-      whitelist_nodes.size(), &whitelist_nodes[0], const_cast<void*>(ptr),
+      whitelist_nodes.size(), &whitelist_nodes[0], ptr,
       size, &alternate_va, map_flag)) {
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }

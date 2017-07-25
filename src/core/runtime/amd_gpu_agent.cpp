@@ -512,18 +512,10 @@ hsa_status_t GpuAgent::VisitRegion(
 }
 
 core::Queue* GpuAgent::CreateInterceptibleQueue() {
-  // Until tools runtime is merged in we need to use HSA API
-  // rather than GpuAgent::QueueCreate to allow interception.
-  hsa_queue_t* queue_handle;
-  hsa_status_t status =
-      HSA::hsa_queue_create(public_handle(), minAqlSize_, HSA_QUEUE_TYPE_MULTI,
-                            NULL, NULL, 0, 0, &queue_handle);
-
-  if (status != HSA_STATUS_SUCCESS) {
-    return NULL;
-  }
-
-  return core::Queue::Convert(queue_handle);
+  // Disabled intercept of internal queues pending tools updates.
+  core::Queue* queue = nullptr;
+  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue);
+  return queue;
 }
 
 core::Blit* GpuAgent::CreateBlitSdma() {
@@ -566,7 +558,7 @@ void GpuAgent::InitDma() {
     if (!blit_initialized_.load(std::memory_order_relaxed)) {
       // Try create SDMA blit first.
       // TODO: Temporarily disable SDMA on specific ISA targets until they are fully qualified.
-      if ((isa_->GetMajorVersion() != 9) &&
+      if ((isa_->GetMajorVersion() != 8) &&
           core::Runtime::runtime_singleton_->flag().enable_sdma() &&
           (HSA_PROFILE_BASE == profile_)) {
         blits_[BlitHostToDev] = CreateBlitSdma();
@@ -643,14 +635,13 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  hsa_status_t stat =
-      blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
-
-  if (profiling_enabled() && HSA_STATUS_SUCCESS == stat) {
+  if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
     out_signal.async_copy_agent(this);
   }
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
 
   return stat;
 }

@@ -113,6 +113,7 @@ hsa_status_t Runtime::Acquire() {
     hsa_status_t status = runtime_singleton_->Load();
 
     if (status != HSA_STATUS_SUCCESS) {
+      runtime_singleton_->ref_count_--;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
@@ -453,8 +454,42 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
-  assert(blit_agent_ != NULL);
-  return blit_agent_->DmaFill(ptr, value, count);
+  // Choose blit agent from pointer info
+  hsa_amd_pointer_info_t info;
+  uint32_t agent_count;
+  hsa_agent_t* accessible = nullptr;
+  info.size = sizeof(info);
+  MAKE_SCOPE_GUARD([&]() { free(accessible); });
+  hsa_status_t err = PtrInfo(ptr, &info, malloc, &agent_count, &accessible);
+  if (err != HSA_STATUS_SUCCESS) return err;
+
+  ptrdiff_t endPtr = (ptrdiff_t)ptr + count * sizeof(uint32_t);
+
+  // Check for GPU fill
+  // Selects GPU fill for SVM and Locked allocations if a GPU address is given and is mapped.
+  if (info.agentBaseAddress <= ptr &&
+      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+    core::Agent* blit_agent = core::Agent::Convert(info.agentOwner);
+    if (blit_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice) {
+      blit_agent = nullptr;
+      for (int i = 0; i < agent_count; i++) {
+        if (core::Agent::Convert(accessible[i])->device_type() ==
+            core::Agent::DeviceType::kAmdGpuDevice) {
+          blit_agent = core::Agent::Convert(accessible[i]);
+          break;
+        }
+      }
+    }
+    if (blit_agent) return blit_agent->DmaFill(ptr, value, count);
+  }
+
+  // Host and unmapped SVM addresses copy via host.
+  if (info.hostBaseAddress <= ptr && endPtr <= (ptrdiff_t)info.hostBaseAddress + info.sizeInBytes) {
+    memset(ptr, value, count * sizeof(uint32_t));
+    return HSA_STATUS_SUCCESS;
+  }
+
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 }
 
 hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
@@ -646,8 +681,10 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
   HsaPointerInfo thunkInfo;
   uint32_t* mappedNodes;
 
+  hsa_amd_pointer_info_t retInfo;
+
   // check output struct is at least as large as the first info revision.
-  if (info->size < sizeof(struct hsa_amd_pointer_info_v1_s)) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (info->size < 40) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
@@ -674,12 +711,15 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
   static_assert((int)HSA_POINTER_REGISTERED_GRAPHICS == (int)HSA_EXT_POINTER_TYPE_GRAPHICS,
                 "Thunk pointer info mismatch");
 
-  info->size = Min(info->size, sizeof(struct hsa_amd_pointer_info_v1_s));
-  info->type = (hsa_amd_pointer_type_t)thunkInfo.Type;
-  info->agentBaseAddress = (void*)thunkInfo.GPUAddress;
-  info->hostBaseAddress = thunkInfo.CPUAddress;
-  info->sizeInBytes = thunkInfo.SizeInBytes;
-  info->userData = thunkInfo.UserData;
+  retInfo.size = Min(info->size, sizeof(hsa_amd_pointer_info_t));
+  retInfo.type = (hsa_amd_pointer_type_t)thunkInfo.Type;
+  retInfo.agentBaseAddress = reinterpret_cast<void*>(thunkInfo.GPUAddress);
+  retInfo.hostBaseAddress = thunkInfo.CPUAddress;
+  retInfo.sizeInBytes = thunkInfo.SizeInBytes;
+  retInfo.userData = thunkInfo.UserData;
+  retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+
+  memcpy(info, &retInfo, retInfo.size);
 
   if (returnListData) {
     uint32_t count = 0;
