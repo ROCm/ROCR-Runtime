@@ -64,6 +64,7 @@ BaseRocR::BaseRocR(void) {
   orig_hsa_enable_interrupt_ = GetEnv("HSA_ENABLE_INTERRUPT");
   set_kernel_file_name("");
   set_verbosity(0);
+  set_monitor_verbosity(0);
   set_title("unset_title");
 }
 

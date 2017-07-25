@@ -42,56 +42,8 @@
  * DEALINGS WITH THE SOFTWARE.
  *
  */
-#ifndef ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
-#define ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
+#ifndef ROCRTST_SUITES_PERFORMANCE_MAIN_H_
+#define ROCRTST_SUITES_PERFORMANCE_MAIN_H_
 
-#include <string>
-#include <memory>
-#include <vector>
+#endif  // ROCRTST_SUITES_PERFORMANCE_MAIN_H_
 
-#include "common/base_rocr.h"
-#include "common/rocm_smi/rocm_smi.h"
-
-class TestBase : public rocrtst::BaseRocR {
- public:
-  TestBase(void);
-
-  virtual ~TestBase(void);
-
-  enum VerboseLevel {VERBOSE_MIN = 0, VERBOSE_STANDARD, VERBOSE_PROGRESS};
-
-  // @Brief: Before run the core measure codes, do something to set up
-  // i.e. init runtime, prepare packet...
-  virtual void SetUp(void);
-
-  // @Brief: Core measurement codes executing here
-  virtual void Run(void);
-
-  // @Brief: Do something clean up
-  virtual void Close(void);
-
-  // @Brief: Display the results
-  virtual void DisplayResults(void) const;
-
-  // @Brief: Display information about the test
-  virtual void DisplayTestInfo(void);
-
-  const std::string & description(void) const {return description_;}
-
-  void set_description(std::string d);
-
-  void set_monitor_devices(
-            std::vector<std::shared_ptr<rocrtst::smi::Device>> *m) {
-    monitor_devices_ = m;
-  }
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> *
-                                                 monitor_devices(void) const {
-    return monitor_devices_;
-  }
-
- private:
-  std::string description_;
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> *monitor_devices_;
-};
-
-#endif  // ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_

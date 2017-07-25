@@ -46,16 +46,20 @@
 #ifndef ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_
 #define ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_
 
-class RocrtstOptions {
- public:
-  RocrtstOptions(uint32_t *verb, uint32_t *iter);
+#include <memory>
+#include <vector>
 
-  ~RocrtstOptions(void);
+#include "common/rocm_smi/rocm_smi.h"
 
-  uint32_t *verbosity_;
-  uint32_t *iterations_;
+struct RocrTstGlobals {
+  uint32_t verbosity;
+  uint32_t monitor_verbosity;
+  uint32_t num_iterations;
+  std::vector<std::shared_ptr<rocrtst::smi::Device>> monitor_devices;
 };
 
-uint32_t ProcessCmdline(RocrtstOptions* test, int arg_cnt, char** arg_list);
+uint32_t ProcessCmdline(RocrTstGlobals* test, int arg_cnt, char** arg_list);
+
+void DumpMonitorInfo(const TestBase *test);
 
 #endif  // ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_

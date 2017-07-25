@@ -214,6 +214,13 @@ class BaseRocR {
     return verbosity_;
   }
 
+  void set_monitor_verbosity(uint32_t m) {
+    monitor_verbosity_ = m;
+  }
+  uint32_t monitor_verbosity(void) const {
+    return monitor_verbosity_;
+  }
+
  protected:
   void set_requires_profile(int32_t reqd_prof) {
     requires_profile_ = reqd_prof;
@@ -269,6 +276,8 @@ class BaseRocR {
   std::string title_;   ///< Displayed title of test
 
   uint32_t verbosity_;   ///< How much additional output to produce
+
+  uint32_t monitor_verbosity_;   ///< How much additional output to produce
 
   PerfTimer hsa_timer_;   ///< Timer to be used for timing parts of test
 };

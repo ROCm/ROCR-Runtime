@@ -46,6 +46,7 @@
 #include <assert.h>
 
 #include "suites/test_common/test_base.h"
+#include "suites/test_common/test_common.h"
 #include "common/base_rocr_utils.h"
 #include "gtest/gtest.h"
 
@@ -100,6 +101,11 @@ void TestBase::Close(void) {
   std::string label;
   MakeHeaderStr(kCloseLabel, &label);
   printf("\n\t%s\n", label.c_str());
+
+
+  if (monitor_verbosity() > 0) {
+    DumpMonitorInfo(this);
+  }
 
   err = rocrtst::CommonCleanUp(this);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
