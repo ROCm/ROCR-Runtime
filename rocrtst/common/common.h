@@ -55,6 +55,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <memory>
+
 #include "hsa/hsa.h"
 #include "hsa/hsa_ext_amd.h"
 #include "hsa/hsa_ext_finalize.h"
@@ -74,6 +76,31 @@ namespace rocrtst {
 // define below should be deleted. Leaving in commented out until code that
 // refers to it has been corrected
 // #define HSA_ARGUMENT_ALIGN_BYTES 16
+
+// This structure holds memory pool information acquired through hsa info
+// related calls, and is later used for reference when displaying the
+// information.
+typedef struct {
+    uint32_t segment;
+    size_t pool_size;
+    bool alloc_allowed;
+    size_t alloc_granule;
+    size_t pool_alloc_alignment;
+    bool pl_access;
+    uint32_t global_flag;
+} pool_info_t;
+
+
+struct agent_pools_t{
+    hsa_agent_t agent;
+    std::vector<hsa_amd_memory_pool_t> pools;
+};
+
+/// Fill in the pool_info_t structure for the provided pool.
+/// \param[in] pool Pool for which information will be retrieved
+/// \param[out] pool_i Pointer to structure where pool info will be stored
+/// \returns HSA_STATUS_SUCCESS if no errors are encountered.
+hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool, pool_info_t *pool_i);
 
 /// If the provided agent is associated with a GPU, return that agent through
 /// output parameter. This function is meant to be the call-back function used
@@ -132,13 +159,16 @@ hsa_status_t FindKernArgPool(hsa_amd_memory_pool_t pool, void* data);
 /// \param[in] pool Pool to gather and dump information for
 /// \param[in] indent Number of spaces to indent output.
 /// \returns hsa_status_t HSA_STATUS_SUCCESS if no errors
-hsa_status_t DumpMemoryPoolInfo(const hsa_amd_memory_pool_t pool,
+hsa_status_t DumpMemoryPoolInfo(const pool_info_t *pool_i,
                                                          uint32_t indent = 0);
 
 /// Dump information about a provided pointer to STDOUT.
 /// \param[in] ptr Pointer about which information is dumped.
 /// \returns HSA_STATUS_SUCCESS if there are no errors
 hsa_status_t DumpPointerInfo(void* ptr);
+
+hsa_status_t GetAgentPools(
+                    std::vector<std::shared_ptr<agent_pools_t>> *agent_pools);
 
 }  // namespace rocrtst
 #endif  // ROCRTST_COMMON_COMMON_H_

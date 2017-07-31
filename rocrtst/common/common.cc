@@ -49,6 +49,8 @@
 #include <assert.h>
 #include <sstream>
 #include <string>
+#include <memory>
+
 namespace rocrtst {
 
 
@@ -169,19 +171,51 @@ hsa_status_t FindGlobalPool(hsa_amd_memory_pool_t pool, void* data) {
                                           POOL_PROP_OFF, POOL_PROP_DONT_CARE);
 }
 
-static hsa_status_t MakeGlobalFlagsString(const hsa_amd_memory_pool_t pool,
-                                        std::string* out_str) {
+// Populate the vector with handles to all agents and pools
+hsa_status_t
+GetAgentPools(std::vector<std::shared_ptr<agent_pools_t>> *agent_pools) {
   hsa_status_t err;
 
-  uint32_t global_flag = 0;
+  assert(agent_pools != nullptr);
+
+  auto save_agent = [](hsa_agent_t a, void *data)->hsa_status_t {
+    std::vector<std::shared_ptr<agent_pools_t>> *ag_vec;
+    hsa_status_t err;
+    assert(data != nullptr);
+    ag_vec =
+        reinterpret_cast<std::vector<std::shared_ptr<agent_pools_t>> *>(data);
+    std::shared_ptr<agent_pools_t> ag(new agent_pools_t);
+    ag->agent = a;
+
+
+    auto save_pool = [](hsa_amd_memory_pool_t p, void *data)->hsa_status_t {
+      assert(data != nullptr);
+      std::vector<hsa_amd_memory_pool_t> *p_list =
+                 reinterpret_cast<std::vector<hsa_amd_memory_pool_t> *>(data);
+      p_list->push_back(p);
+
+      return HSA_STATUS_SUCCESS;
+    };
+
+    err = hsa_amd_agent_iterate_memory_pools(a, save_pool,
+                                        reinterpret_cast<void *>(&ag->pools));
+    assert(err == HSA_STATUS_SUCCESS);
+
+    ag_vec->push_back(ag);
+    return HSA_STATUS_SUCCESS;
+  };
+
+  err = hsa_iterate_agents(save_agent, reinterpret_cast<void *>(agent_pools));
+  return err;
+}
+
+static hsa_status_t MakeGlobalFlagsString(const pool_info_t *pool_i,
+                                        std::string* out_str) {
+  uint32_t global_flag = pool_i->global_flag;
 
   assert(out_str != nullptr);
 
   *out_str = "";
-
-  err = hsa_amd_memory_pool_get_info(pool,
-                       HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &global_flag);
-  RET_IF_HSA_COMMON_ERR(err);
 
   std::vector < std::string > flags;
 
@@ -207,22 +241,17 @@ static hsa_status_t MakeGlobalFlagsString(const hsa_amd_memory_pool_t pool,
 
   return HSA_STATUS_SUCCESS;
 }
-static hsa_status_t DumpSegment(const hsa_amd_memory_pool_t pool,
+static hsa_status_t DumpSegment(const pool_info_t *pool_i,
                                  std::string const *ind_lvl) {
-  uint32_t segment;
   hsa_status_t err;
-
-  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
-                                     &segment);
-  RET_IF_HSA_COMMON_ERR(err);
 
   fprintf(stdout, "%s%-25s", ind_lvl->c_str(), "Pool Segment:");
   std::string seg_str = "";
   std::string tmp_str;
 
-  switch (segment) {
+  switch (pool_i->segment) {
     case HSA_AMD_SEGMENT_GLOBAL:
-      err = MakeGlobalFlagsString(pool, &tmp_str);
+      err = MakeGlobalFlagsString(pool_i, &tmp_str);
       RET_IF_HSA_COMMON_ERR(err);
 
       seg_str += "GLOBAL; FLAGS: " + tmp_str;
@@ -250,57 +279,71 @@ static hsa_status_t DumpSegment(const hsa_amd_memory_pool_t pool,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t DumpMemoryPoolInfo(const hsa_amd_memory_pool_t pool,
-                                uint32_t indent) {
+hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
+                                                        pool_info_t *pool_i) {
   hsa_status_t err;
-  std::string ind_lvl(indent, ' ');
 
-  DumpSegment(pool, &ind_lvl);
-
-  // Get the size of the POOL
-  size_t pool_size = 0;
-  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
-                                     &pool_size);
+  err = hsa_amd_memory_pool_get_info(pool,
+                  HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &pool_i->global_flag);
   RET_IF_HSA_COMMON_ERR(err);
 
-  std::string sz_str = std::to_string(pool_size / 1024) + "KB";
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
+                                                             &pool_i->segment);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  // Get the size of the POOL
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+                                                          &pool_i->pool_size);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  err = hsa_amd_memory_pool_get_info(pool,
+             HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED,
+                                                      &pool_i->alloc_allowed);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  err = hsa_amd_memory_pool_get_info(pool,
+             HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE,
+                                                      &pool_i->alloc_granule);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  err = hsa_amd_memory_pool_get_info(pool,
+                           HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
+                                               &pool_i->pool_alloc_alignment);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  err = hsa_amd_memory_pool_get_info(pool,
+                      HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL,
+                                                          &pool_i->pl_access);
+  RET_IF_HSA_COMMON_ERR(err);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t DumpMemoryPoolInfo(const pool_info_t *pool_i,
+                                uint32_t indent) {
+  std::string ind_lvl(indent, ' ');
+
+  DumpSegment(pool_i, &ind_lvl);
+
+  std::string sz_str = std::to_string(pool_i->pool_size / 1024) + "KB";
   fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Size:",
           sz_str.c_str());
 
-  bool alloc_allowed = false;
-  err = hsa_amd_memory_pool_get_info(pool,
-             HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED, &alloc_allowed);
-  RET_IF_HSA_COMMON_ERR(err);
-
   fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Allocatable:",
-          (alloc_allowed ? "TRUE" : "FALSE"));
+          (pool_i->alloc_allowed ? "TRUE" : "FALSE"));
 
-  size_t alloc_granule = 0;
-  err = hsa_amd_memory_pool_get_info(pool,
-             HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &alloc_granule);
-  RET_IF_HSA_COMMON_ERR(err);
-
-  std::string gr_str = std::to_string(alloc_granule / 1024) + "KB";
+  std::string gr_str = std::to_string(pool_i->alloc_granule / 1024) + "KB";
   fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Alloc Granule:",
           gr_str.c_str());
 
-  size_t pool_alloc_alignment = 0;
-  err = hsa_amd_memory_pool_get_info(pool,
-                           HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
-                                                       &pool_alloc_alignment);
-  RET_IF_HSA_COMMON_ERR(err);
 
-  std::string al_str = std::to_string(pool_alloc_alignment / 1024) + "KB";
+  std::string al_str =
+                   std::to_string(pool_i->pool_alloc_alignment / 1024) + "KB";
   fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Alloc Alignment:",
           al_str.c_str());
 
-  bool pl_access = 0;
-  err = hsa_amd_memory_pool_get_info(pool,
-                      HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL, &pl_access);
-  RET_IF_HSA_COMMON_ERR(err);
-
   fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Acessible by all:",
-          (pl_access ? "TRUE" : "FALSE"));
+          (pool_i->pl_access ? "TRUE" : "FALSE"));
 
   return HSA_STATUS_SUCCESS;
 }

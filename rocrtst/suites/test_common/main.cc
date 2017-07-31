@@ -48,6 +48,7 @@
 #include <memory>
 
 #include "gtest/gtest.h"
+#include "suites/functional/memory_basic.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/test_common/test_case_template.h"
@@ -74,21 +75,39 @@ static bool GetMonitorDevices(const std::shared_ptr<rocrtst::smi::Device> &d,
   return false;
 }
 
-
-static void RunTest(TestBase *test) {
+static void SetFlags(TestBase *test) {
   assert(sRocrtstGlvalues != nullptr);
 
   test->set_verbosity(sRocrtstGlvalues->verbosity);
   test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
   test->set_num_iteration(sRocrtstGlvalues->num_iterations);
   test->set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
+}
+
+
+static void RunCustomTestProlog(TestBase *test) {
+  SetFlags(test);
 
   test->DisplayTestInfo();
   test->SetUp();
   test->Run();
+  return;
+}
+static void RunCustomTestEpilog(TestBase *test) {
   test->DisplayResults();
   test->Close();
+  return;
+}
 
+// If the test case one big test, you should use RunGenericTest()
+// to run the test case. OTOH, if the test case consists of multiple
+// functions to be run as separate tests, follow this pattern:
+//   * RunCustomTestProlog(test)  // Run() should contain minimal code
+//   * <insert call to actual test function within test case>
+//   * RunCustomTestEpilog(test)
+static void RunGenericTest(TestBase *test) {
+  RunCustomTestProlog(test);
+  RunCustomTestEpilog(test);
   return;
 }
 
@@ -96,9 +115,9 @@ static void RunTest(TestBase *test) {
 // TEST(rocrtst, Perf_<test name>) {
 //  <Test Implementation class> <test_obj>;
 //
-//  // Copy and modify implementation of RunTest() if you need to deviate
+//  // Copy and modify implementation of RunGenericTest() if you need to deviate
 //  // from the standard pattern implemented there.
-//  RunTest(&<test_obj>);
+//  RunGenericTest(&<test_obj>);
 // }
 
 TEST(rocrtst, Test_Example) {
@@ -107,7 +126,15 @@ TEST(rocrtst, Test_Example) {
   rocrtst::smi::RocmSMI hw;
   hw.DiscoverDevices();
 
-  RunTest(&tst);
+  RunGenericTest(&tst);
+}
+
+TEST(rocrtstFunc, Memory_Max_Mem) {
+  MemoryTest mt;
+
+  RunCustomTestProlog(&mt);
+  mt.MaxSingleAllocationTest();
+  RunCustomTestEpilog(&mt);
 }
 
 TEST(rocrtstPerf, Memory_Async_Copy) {
@@ -119,27 +146,27 @@ TEST(rocrtstPerf, Memory_Async_Copy) {
   //  mac.set_dst_pool(<dst pool id>);
   // The default is to and from the cpu to 1 gpu, and to/from a gpu to
   // another gpu
-  RunTest(&mac);
+  RunGenericTest(&mac);
 }
 
 TEST(rocrtstPerf, AQL_Dispatch_Time_Single_SpinWait) {
   DispatchTime dt(true, true);
-  RunTest(&dt);
+  RunGenericTest(&dt);
 }
 
 TEST(rocrtstPerf, AQL_Dispatch_Time_Single_Interrupt) {
   DispatchTime dt(false, true);
-  RunTest(&dt);
+  RunGenericTest(&dt);
 }
 
 TEST(rocrtstPerf, AQL_Dispatch_Time_Multi_SpinWait) {
   DispatchTime dt(true, false);
-  RunTest(&dt);
+  RunGenericTest(&dt);
 }
 
 TEST(rocrtstPerf, AQL_Dispatch_Time_Multi_Interrupt) {
   DispatchTime dt(false, false);
-  RunTest(&dt);
+  RunGenericTest(&dt);
 }
 
 int main(int argc, char** argv) {
