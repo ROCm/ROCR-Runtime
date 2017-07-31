@@ -8,5 +8,4 @@
 *.bk
 *.old
 *.cmake
-build/*
-
+build
