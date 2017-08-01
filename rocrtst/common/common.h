@@ -82,11 +82,11 @@ namespace rocrtst {
 // information.
 typedef struct {
     uint32_t segment;
-    size_t pool_size;
+    size_t size;
     bool alloc_allowed;
     size_t alloc_granule;
-    size_t pool_alloc_alignment;
-    bool pl_access;
+    size_t alloc_alignment;
+    bool accessible_by_all;
     uint32_t global_flag;
 } pool_info_t;
 
