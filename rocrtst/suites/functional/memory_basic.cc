@@ -188,7 +188,7 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   }
 
   if (!pool_i.alloc_allowed || pool_i.alloc_granule == 0 ||
-                                           pool_i.pool_alloc_alignment == 0) {
+                                           pool_i.alloc_alignment == 0) {
     if (verbosity() > 0) {
       std::cout << "  Test not applicable. Skipping." << std::endl;
       std::cout << kSubTestSeparator << std::endl;
@@ -197,7 +197,7 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   }
   // Do everything in "granule" units
   auto gran_sz = pool_i.alloc_granule;
-  auto pool_sz = pool_i.pool_size / gran_sz;
+  auto pool_sz = pool_i.size / gran_sz;
 
   // Neg. test: Try to allocate more than the pool size
   err = TestAllocate(pool, pool_sz*gran_sz + gran_sz);
