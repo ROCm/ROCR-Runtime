@@ -254,11 +254,6 @@ set(BITCODE_LIBS "${BITCODE_LIBS} ${BITCODE_PREF}/ocml.amdgcn.bc")
 set(CL_FILE_LIST "${PROJECT_SOURCE_DIR}/binary_search/binary_search_kernels.cl")
 process_sample("binary_search")
 
-# P2P Memory Access
-set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
-set(CL_FILE_LIST "${PROJECT_SOURCE_DIR}/p2p_mem_access/p2p_mem_access_kernels.cl")
-process_sample("p2p_mem_access")
-
 # RocR Info
 aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/rocrinfo ROCR_INFO_SOURCES)
 add_executable(rocrinfo ${ROCR_INFO_SOURCES})
