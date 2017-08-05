@@ -1382,14 +1382,45 @@ static uint32_t get_vm_alignment(uint32_t device_id)
 	return MAX(PAGE_SIZE, page_size);
 }
 
+static HSAKMT_STATUS get_process_apertures(
+	struct kfd_process_device_apertures *process_apertures,
+	uint32_t *num_of_nodes)
+{
+	struct kfd_ioctl_get_process_apertures_new_args args_new = {
+		.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures,
+		.num_of_nodes = *num_of_nodes
+	};
+	struct kfd_ioctl_get_process_apertures_args args_old;
+
+	if (!kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW,
+		      (void *)&args_new)) {
+		*num_of_nodes = args_new.num_of_nodes;
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	/* New IOCTL failed, try the old one in case we're running on
+	 * a really old kernel */
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES,
+		     (void *)&args_old))
+		return HSAKMT_STATUS_ERROR;
+
+	if (args_old.num_of_nodes < *num_of_nodes)
+		*num_of_nodes = args_old.num_of_nodes;
+
+	memcpy(process_apertures, args_old.process_apertures,
+	       sizeof(*process_apertures) * *num_of_nodes);
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
-	struct kfd_ioctl_get_process_apertures_new_args args;
 	uint32_t i = 0;
 	int32_t gpu_mem_id = 0;
 	uint32_t gpu_id;
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures *process_apertures;
+	uint32_t num_of_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr;
 	unsigned int guardPages = 1;
@@ -1463,31 +1494,28 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * required since Number of nodes is already known. Kernel will fill in
 	 * the apertures in kfd_process_device_apertures_ptr
 	 */
-	process_apertures = malloc(gpu_mem_count * sizeof(struct kfd_process_device_apertures));
+	num_of_nodes = gpu_mem_count;
+	process_apertures = malloc(num_of_nodes * sizeof(struct kfd_process_device_apertures));
 	if (!process_apertures) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto sysfs_parse_failed;
 	}
 
-	args.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures;
-	args.num_of_nodes = gpu_mem_count;
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW, (void *)&args)) {
-		ret = HSAKMT_STATUS_ERROR;
+	ret = get_process_apertures(process_apertures, &num_of_nodes);
+	if (ret != HSAKMT_STATUS_SUCCESS)
 		goto get_aperture_ioctl_failed;
-	}
 
 	all_gpu_id_array_size = 0;
 	all_gpu_id_array = NULL;
-	if (args.num_of_nodes > 0) {
-		all_gpu_id_array = malloc(sizeof(uint32_t) * args.num_of_nodes);
+	if (num_of_nodes > 0) {
+		all_gpu_id_array = malloc(sizeof(uint32_t) * num_of_nodes);
 		if (!all_gpu_id_array) {
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto get_aperture_ioctl_failed;
 		}
 	}
 
-	for (i = 0 ; i < args.num_of_nodes ; i++) {
+	for (i = 0 ; i < num_of_nodes ; i++) {
 		/* Map Kernel process device data node i <--> gpu_mem_id which
 		 * indexes into gpu_mem[] based on gpu_id
 		 */
