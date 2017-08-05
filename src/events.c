@@ -51,6 +51,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 					  bool ManualReset, bool IsSignaled,
 					  HsaEvent **Event)
 {
+	unsigned int event_limit = KFD_SIGNAL_EVENT_LIMIT;
+
 	CHECK_KFD_OPEN();
 
 	if (EventDesc->EventType >= HSA_EVENTTYPE_MAXID)
@@ -94,8 +96,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 	e->EventId = args.event_id;
 
 	if (!events_page && args.event_page_offset > 0) {
-		events_page = mmap(NULL, KFD_SIGNAL_EVENT_LIMIT * 8, PROT_WRITE | PROT_READ,
+		events_page = mmap(NULL, event_limit * 8, PROT_WRITE | PROT_READ,
 				MAP_SHARED, kfd_fd, args.event_page_offset);
+		if (events_page == MAP_FAILED) {
+			/* old kernels only support 256 events */
+			event_limit = 256;
+			events_page = mmap(NULL, PAGE_SIZE, PROT_WRITE | PROT_READ,
+					   MAP_SHARED, kfd_fd, args.event_page_offset);
+		}
 		if (events_page == MAP_FAILED) {
 			events_page = NULL;
 			pthread_mutex_unlock(&hsakmt_mutex);
@@ -106,7 +114,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 
 	pthread_mutex_unlock(&hsakmt_mutex);
 
-	if (args.event_page_offset > 0 && args.event_slot_index < KFD_SIGNAL_EVENT_LIMIT)
+	if (args.event_page_offset > 0 && args.event_slot_index < event_limit)
 		e->EventData.HWData2 = (HSAuint64)&events_page[args.event_slot_index];
 
 	e->EventData.EventType = EventDesc->EventType;
