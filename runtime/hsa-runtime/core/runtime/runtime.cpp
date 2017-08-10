@@ -1177,6 +1177,12 @@ void Runtime::LoadTools() {
         add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
         if (add) add(this);
       }
+#ifndef NDEBUG
+      else {
+        if (flag().report_tool_load_failures())
+          fprintf(stderr, "Tool lib \"%s\" failed to load.\n", names[i].c_str());
+      }
+#endif
     }
   }
 }

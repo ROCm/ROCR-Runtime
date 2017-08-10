@@ -85,6 +85,9 @@ class Flag {
     scratch_mem_size_ = atoi(var.c_str());
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
+
+    var = os::GetEnvVar("HSA_TOOLS_REPORT_LOAD_FAILURE");
+    report_tool_load_failures_ = (var == "0") ? false : true;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -107,6 +110,8 @@ class Flag {
 
   std::string tools_lib_names() const { return tools_lib_names_; }
 
+  bool report_tool_load_failures() const { return report_tool_load_failures_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -115,6 +120,7 @@ class Flag {
   bool running_valgrind_;
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
+  bool report_tool_load_failures_;
 
   uint32_t max_queues_;
 
