@@ -1677,8 +1677,10 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 	return err;
 }
 
+/* If nodes_to_map is not NULL, map the nodes specified; otherwise map all. */
 static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
-				void *address, uint64_t size, vm_object_t *obj)
+			void *address, uint64_t size, vm_object_t *obj,
+			uint32_t *nodes_to_map, uint32_t nodes_array_size)
 {
 	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
@@ -1705,11 +1707,17 @@ static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
 	}
 
 	args.handle = object->handle;
-	if (object->registered_device_id_array_size > 0) {
+	if (nodes_to_map) {
+	/* If specified, map the requested */
+		args.device_ids_array_ptr = (uint64_t)nodes_to_map;
+		args.device_ids_array_size = nodes_array_size;
+	} else if (object->registered_device_id_array_size > 0) {
+	/* otherwise map all registered */
 		args.device_ids_array_ptr =
 			(uint64_t)object->registered_device_id_array;
 		args.device_ids_array_size = object->registered_device_id_array_size;
 	} else {
+	/* not specified, not registered: map all GPUs */
 		args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
 		args.device_ids_array_size = all_gpu_id_array_size;
 	}
@@ -1800,7 +1808,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 
 
 	/* map to GPU */
-	ret = _fmm_map_to_gpu_gtt(aperture, address, size, NULL);
+	ret = _fmm_map_to_gpu_gtt(aperture, address, size, NULL, NULL, 0);
 	if (ret != 0)
 		__fmm_release(mem, aperture);
 
@@ -1902,7 +1910,7 @@ static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	ret = _fmm_map_to_gpu_gtt(aperture, svm_addr, svm_size, obj);
+	ret = _fmm_map_to_gpu_gtt(aperture, svm_addr, svm_size, obj, NULL, 0);
 	if (ret == 0 && gpuvm_addr)
 		*gpuvm_addr = (uint64_t)svm_addr + page_offset;
 
@@ -1940,12 +1948,12 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 		(address <= svm.dgpu_aperture.limit))
 		/* map it */
 		return _fmm_map_to_gpu_gtt(&svm.dgpu_aperture,
-						address, size, NULL);
+						address, size, NULL, NULL, 0);
 	else if ((address >= svm.dgpu_alt_aperture.base) &&
 		(address <= svm.dgpu_alt_aperture.limit))
 		/* map it */
 		return _fmm_map_to_gpu_gtt(&svm.dgpu_alt_aperture,
-						address, size, NULL);
+						address, size, NULL, NULL, 0);
 
 	/*
 	 * If address isn't an SVM memory address, we assume that this
@@ -2848,7 +2856,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
  */
 
 HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
-		uint32_t *nodes_to_map, uint32_t nodes_to_map_size,
+		uint32_t *nodes_to_map, uint64_t num_of_nodes,
 		uint64_t *gpuvm_address)
 {
 	manageable_aperture_t *aperture;
@@ -2860,7 +2868,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	HSAKMT_STATUS ret = HSAKMT_STATUS_ERROR;
 	int retcode = 0;
 
-	if ((nodes_to_map_size > 0 && !nodes_to_map) || !address)
+	if (!num_of_nodes || !nodes_to_map || !address)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 
@@ -2907,7 +2915,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		registered_node_id_array = object->registered_device_id_array;
 		registered_node_id_array_size = object->registered_device_id_array_size;
 	}
-	for (i = 0 ; i < nodes_to_map_size / sizeof(uint32_t); i++) {
+	for (i = 0 ; i < num_of_nodes; i++) {
 		temp_node = nodes_to_map[i];
 		found = false;
 		for (j = 0 ; j < registered_node_id_array_size / sizeof(uint32_t); j++) {
@@ -2933,7 +2941,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		for (i = 0 ; i < object->mapped_device_id_array_size / sizeof(uint32_t); i++) {
 			temp_node = object->mapped_device_id_array[i];
 			found = false;
-			for (j = 0 ; j < nodes_to_map_size / sizeof(uint32_t); j++) {
+			for (j = 0 ; j < num_of_nodes; j++) {
 				if (temp_node == nodes_to_map[j]) {
 					found = true;
 					break;
@@ -2952,19 +2960,8 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 			return ret;
 	}
 
-	/* Keep registered device id array and size */
-	temp_node_id_array = object->registered_device_id_array;
-	temp_node_id_array_size = object->registered_device_id_array_size;
-	/* Change registered device id array and size to nodes array/size that we want to map */
-	object->registered_device_id_array = nodes_to_map;
-	object->registered_device_id_array_size = nodes_to_map_size;
-
-	if (nodes_to_map_size > 0)
-		retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object);
-
-	/* Restore old registered device id array */
-	object->registered_device_id_array = temp_node_id_array;
-	object->registered_device_id_array_size = temp_node_id_array_size;
+	retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object,
+				nodes_to_map, num_of_nodes * sizeof(uint32_t));
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 

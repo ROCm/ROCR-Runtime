@@ -433,8 +433,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	return fmm_map_to_gpu_nodes(MemoryAddress, MemorySizeInBytes,
-			gpu_id_array, NumberOfNodes * sizeof(uint32_t), AlternateVAGPU);
+	ret = fmm_map_to_gpu_nodes(MemoryAddress, MemorySizeInBytes,
+		gpu_id_array, NumberOfNodes, AlternateVAGPU);
+
+	if (gpu_id_array)
+		free(gpu_id_array);
+
+	return ret;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapMemoryToGPU(void *MemoryAddress)
