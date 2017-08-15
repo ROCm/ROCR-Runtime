@@ -85,5 +85,5 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 					 uint32_t *gpu_id_array,
 					 uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
-		uint32_t *nodes_to_map, uint32_t nodes_to_map_size, uint64_t *gpuvm_address);
+		uint32_t *nodes_to_map, uint64_t num_of_nodes, uint64_t *gpuvm_address);
 #endif /* FMM_H_ */
