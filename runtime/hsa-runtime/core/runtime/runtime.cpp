@@ -977,8 +977,8 @@ Runtime::Runtime()
     : blit_agent_(NULL),
       queue_count_(0),
       sys_clock_freq_(0),
-      vm_fault_event_(NULL),
-      vm_fault_signal_(NULL),
+      vm_fault_event_(nullptr),
+      vm_fault_signal_(nullptr),
       ref_count_(0) {
   start_svm_address_ = 0;
 #if defined(HSA_LARGE_MODEL)
@@ -1026,8 +1026,12 @@ void Runtime::Unload() {
 
   async_events_control_.Shutdown();
 
-  vm_fault_signal_->DestroySignal();
+  if (vm_fault_signal_ != nullptr) {
+    vm_fault_signal_->DestroySignal();
+    vm_fault_signal_ = nullptr;
+  }
   core::InterruptSignal::DestroyEvent(vm_fault_event_);
+  vm_fault_event_ = nullptr;
 
   DestroyAgents();
 
