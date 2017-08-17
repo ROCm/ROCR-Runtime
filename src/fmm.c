@@ -2283,7 +2283,7 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 			munmap(ret_addr, len);
 		}
 		if (!ret_addr) {
-			pr_err("Failed to reserve %uGB for SVM ...\n",
+			pr_warn("Failed to reserve %uGB for SVM ...\n",
 				(unsigned int)(len >> 30));
 			continue;
 		}
@@ -2871,7 +2871,6 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	if (!num_of_nodes || !nodes_to_map || !address)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-
 	/* Find object by address */
 	if ((address >= svm.dgpu_aperture.base) &&
 	    (address <= svm.dgpu_aperture.limit))
@@ -2882,7 +2881,6 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	else {
 		aperture = &svm.dgpu_aperture;
 		userptr = true;
-
 	}
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
