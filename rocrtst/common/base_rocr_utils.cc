@@ -57,7 +57,6 @@
 #include "common/helper_funcs.h"
 #include "common/os.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_profiler.h"
 
 namespace rocrtst {
 
@@ -331,7 +330,7 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test) {
 }
 
 hsa_status_t CreateQueue(hsa_agent_t device, hsa_queue_t** queue,
-                         uint32_t num_pkts, bool do_profile) {
+                         uint32_t num_pkts) {
   hsa_status_t err;
 
   if (num_pkts == 0) {
@@ -340,16 +339,9 @@ hsa_status_t CreateQueue(hsa_agent_t device, hsa_queue_t** queue,
     RET_IF_HSA_UTILS_ERR(err);
   }
 
-  if (do_profile) {
-    err = hsa_ext_tools_queue_create_profiled(device,
-          num_pkts, HSA_QUEUE_TYPE_SINGLE, NULL,
-          NULL, UINT32_MAX, UINT32_MAX, queue);
-    RET_IF_HSA_UTILS_ERR(err);
-  } else {
-    err = hsa_queue_create(device, num_pkts, HSA_QUEUE_TYPE_MULTI, NULL,
-                           NULL, UINT32_MAX, UINT32_MAX, queue);
-    RET_IF_HSA_UTILS_ERR(err);
-  }
+  err = hsa_queue_create(device, num_pkts, HSA_QUEUE_TYPE_MULTI, NULL,
+                         NULL, UINT32_MAX, UINT32_MAX, queue);
+  RET_IF_HSA_UTILS_ERR(err);
 
   return HSA_STATUS_SUCCESS;
 }

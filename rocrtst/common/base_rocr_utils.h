@@ -78,7 +78,7 @@ hsa_status_t SetDefaultAgents(BaseRocR* test);
 ///  be created
 /// \returns  HSA_STATUS_SUCCESS if no errors encountered
 hsa_status_t CreateQueue(hsa_agent_t device, hsa_queue_t** queue,
-                         uint32_t num_pkts = 0, bool do_profile = false);
+                         uint32_t num_pkts = 0);
 
 /// This function sets some reasonable default values for an AQL packet.
 /// Override any field as necessary after calling this function.
