@@ -656,6 +656,23 @@ static manageable_aperture_t *fmm_get_aperture(HsaApertureInfo info)
 		return NULL;
 	}
 }
+
+static manageable_aperture_t *fmm_is_scratch_aperture(const void *address)
+{
+	uint32_t i;
+
+	for (i = 0; i < gpu_mem_count; i++) {
+		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
+			continue;
+
+		if ((address >= gpu_mem[i].scratch_physical.base) &&
+			(address <= gpu_mem[i].scratch_physical.limit))
+			return &gpu_mem[i].scratch_physical;
+
+	}
+	return NULL;
+}
+
 static manageable_aperture_t *fmm_find_aperture(const void *address,
 						HsaApertureInfo *info)
 {
@@ -666,8 +683,12 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 	if (is_dgpu) {
 		if (address >= svm.dgpu_aperture.base &&
 			address <= svm.dgpu_aperture.limit) {
-			aperture = &svm.dgpu_aperture;
-			_info.type = HSA_APERTURE_DGPU;
+
+			aperture = fmm_is_scratch_aperture(address);
+			if (!aperture) {
+				aperture = &svm.dgpu_aperture;
+				_info.type = HSA_APERTURE_DGPU;
+			}
 		} else if (address >= svm.dgpu_alt_aperture.base &&
 			address <= svm.dgpu_alt_aperture.limit) {
 			aperture = &svm.dgpu_alt_aperture;
@@ -751,27 +772,6 @@ err_object_allocation_failed:
 	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &free_args);
 
 	return NULL;
-}
-
-bool fmm_is_inside_some_aperture(void *address)
-{
-	uint32_t i;
-
-	for (i = 0; i < gpu_mem_count; i++) {
-		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
-			continue;
-		if ((address >= gpu_mem[i].lds_aperture.base) &&
-				(address <= gpu_mem[i].lds_aperture.limit))
-			return true;
-		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
-				(address <= gpu_mem[i].gpuvm_aperture.limit))
-			return true;
-		if ((address >= gpu_mem[i].scratch_aperture.base) &&
-				(address <= gpu_mem[i].scratch_aperture.limit))
-			return true;
-	}
-
-	return false;
 }
 
 #ifdef DEBUG_PRINT_APERTURE
