@@ -1601,8 +1601,8 @@ static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 {
 	DIR *dir;
 	struct dirent *dent;
-	const char sysfs_amdiommu_event_path[] =
-			"/sys/bus/event_source/devices/amd_iommu/events";
+	const char *sysfs_amdiommu_event_path =
+			"/sys/bus/event_source/devices/amd_iommu_0/events";
 	/* Counter source in IOMMU's Counter Bank Addressing register is 8 bits,
 	 * so the biggest counter number/id possible is 0xff.
 	 */
@@ -1619,8 +1619,14 @@ static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 	memset(block, 0, sizeof(struct perf_counter_block));
 
 	dir = opendir(sysfs_amdiommu_event_path);
-	if (!dir)
-		goto out;
+	if (!dir) {
+		/* Before kernel 4.12, amd_iommu is the path */
+		sysfs_amdiommu_event_path =
+			"/sys/bus/event_source/devices/amd_iommu/events";
+		dir = opendir(sysfs_amdiommu_event_path);
+		if (!dir)
+			goto out;
+	}
 
 	memset(counter_id, 0, max_counter_id + 1);
 	while ((dent = readdir(dir))) {
