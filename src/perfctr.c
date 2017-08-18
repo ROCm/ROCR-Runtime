@@ -365,9 +365,16 @@ static unsigned int get_perf_event_type(enum perf_block_id block_id)
 	FILE *file = NULL;
 	unsigned int type = 0;
 
-	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
-		file = fopen("/sys/bus/event_source/devices/amd_iommu/type",
+	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2) {
+		/* Starting from kernel 4.12, amd_iommu_0 is used */
+		file = fopen("/sys/bus/event_source/devices/amd_iommu_0/type",
 			 "r");
+		if (!file)
+			file = fopen(/* kernel 4.11 and older */
+				"/sys/bus/event_source/devices/amd_iommu/type",
+				"r");
+	}
+
 	if (!file)
 		return 0;
 
