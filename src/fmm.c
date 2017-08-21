@@ -2488,8 +2488,13 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 					gpu_id_array, gpu_id_array_size)) {
 			pr_err("Cannot change nodes in a registered addr.\n");
 			return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
-		} else
+		} else {
+			/* Delete the new array, keep the existing one. */
+			if (gpu_id_array)
+				free(gpu_id_array);
+
 			return HSAKMT_STATUS_SUCCESS;
+		}
 	}
 
 	if (gpu_id_array_size > 0) {
@@ -2863,7 +2868,6 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	vm_object_t *object = NULL;
 	uint32_t i, j, temp_node;
 	bool found, userptr = false;
-	uint32_t *temp_node_id_array, temp_node_id_array_size;
 	uint32_t *registered_node_id_array, registered_node_id_array_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_ERROR;
 	int retcode = 0;
@@ -2930,12 +2934,9 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 
 	/* Unmap buffer from all nodes that have this buffer mapped that are not included on nodes_to_map array */
 	if (object->mapped_device_id_array_size > 0) {
-		temp_node_id_array = (uint32_t *)malloc(object->registered_device_id_array_size);
-		if (!temp_node_id_array) {
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-			return HSAKMT_STATUS_NO_MEMORY;
-		}
-		temp_node_id_array_size = 0;
+		uint32_t temp_node_id_array[object->mapped_device_id_array_size];
+		uint32_t temp_node_id_array_size = 0;
+
 		for (i = 0 ; i < object->mapped_device_id_array_size / sizeof(uint32_t); i++) {
 			temp_node = object->mapped_device_id_array[i];
 			found = false;
@@ -2953,7 +2954,6 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		ret = _fmm_unmap_from_gpu(aperture, address,
 				temp_node_id_array, temp_node_id_array_size,
 				object);
-		free(temp_node_id_array);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			return ret;
 	}
