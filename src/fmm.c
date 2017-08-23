@@ -1423,7 +1423,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr;
-	unsigned int guardPages = 1;
+	unsigned int guardPages = 0;
 	struct pci_access *pacc;
 
 	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
@@ -1443,10 +1443,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	checkUserptr = getenv("HSA_CHECK_USERPTR");
 	svm.check_userptr = (checkUserptr && strcmp(checkUserptr, "0"));
 
-	/* Specify number of guard pages for SVM apertures, default is 1 */
+	/* Specify number of guard pages for SVM apertures, default is 0 */
 	guardPagesStr = getenv("HSA_SVM_GUARD_PAGES");
 	if (!guardPagesStr || sscanf(guardPagesStr, "%u", &guardPages) != 1)
-		guardPages = 1;
+		guardPages = 0;
 
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 * systems with CPU node, slightly more memory is allocated than
