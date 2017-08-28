@@ -1266,6 +1266,7 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args;
 	vm_object_t *object;
+	void *mmap_ret;
 
 	if (!address)
 		return;
@@ -1290,8 +1291,19 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
 		/* Remove any CPU mapping, but keep the address range reserved */
-		mmap(address, object->size, PROT_NONE,
-		     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED, -1, 0);
+		mmap_ret = mmap(address, object->size, PROT_NONE,
+			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+			-1, 0);
+		if (mmap_ret == MAP_FAILED && errno == ENOMEM) {
+			/* When mmap count reaches max_map_count, any mmap will
+			 * fail. Reduce the count with munmap then map it as
+			 * NORESERVE immediately.
+			 */
+			munmap(address, object->size);
+			mmap(address, object->size, PROT_NONE,
+				MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+				-1, 0);
+		}
 	}
 
 	aperture_release_area(aperture, address, object->size);
