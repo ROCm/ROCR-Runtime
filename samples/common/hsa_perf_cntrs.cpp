@@ -8,6 +8,8 @@
 #include <vector>
 #include <string>
 
+#include <stdlib.h>
+
 #include "hsa.h"
 #include "tools/inc/hsa_ext_profiler.h"
 #include "tools/inc/amd_hsa_tools_interfaces.h"
@@ -82,15 +84,30 @@ hsa_status_t RocrPerfCntrApp::Init(hsa_agent_t agent) {
   CntrInfo* info = NULL;
   cntrList_.reserve(23);
   
-  // Event for number of Waves
-  info = new CntrInfo(0x4, "SQ_SQ_PERF_SEL_WAVES", NULL,
-                                0x0E, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_Exact);
-  cntrList_.push_back(info);
+  char *cntrChoice = getenv("IOMMU");
+  if (cntrChoice == NULL) {
+    // Event for number of Waves
+    info = new CntrInfo(0x4, "SQ_SQ_PERF_SEL_WAVES", NULL,
+                                  0x0E, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_Exact);
+    cntrList_.push_back(info);
+    
+    // Event for number of Threads
+    info = new CntrInfo(0xE, "SQ_SQ_PERF_SEL_ITEMS", NULL,
+                                  0x0E, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_Exact);
+    cntrList_.push_back(info);
   
-  // Event for number of Threads
-  info = new CntrInfo(0xE, "SQ_SQ_PERF_SEL_ITEMS", NULL,
-                                0x0E, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_Exact);
-  cntrList_.push_back(info);
+  } else {
+
+    // Program to collect event number 4
+    info = new CntrInfo(0x4, "Iommu_Cntr_4", NULL,
+                        0x63, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_None);
+    cntrList_.push_back(info);
+  
+    // Program to collect event number 6
+    info = new CntrInfo(0x6, "Iommu_Cntr_6", NULL,
+                        0x63, NULL, 0x00, 0xFFFFFFFF, CntrValCnf_None);
+    cntrList_.push_back(info);
+  }
   
 
   // Create an instance of Perf Mgr
