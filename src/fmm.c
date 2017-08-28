@@ -544,14 +544,11 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 	if (align < app->align)
 		align = app->align;
 
-	/* Huge-page and Big-K TLB optimizations require proper alignment */
-	if (MemorySizeInBytes >= GPU_HUGE_PAGE_SIZE) {
-		if (align < GPU_HUGE_PAGE_SIZE)
-			align = GPU_HUGE_PAGE_SIZE;
-	} else if (MemorySizeInBytes >= GPU_BIGK_PAGE_SIZE) {
-		if (align < GPU_BIGK_PAGE_SIZE)
-			align = GPU_BIGK_PAGE_SIZE;
-	}
+	/* Align big buffers to the next power-of-2 up to huge page
+	 * size for flexible fragment size TLB optimizations
+	 */
+	while (align < GPU_HUGE_PAGE_SIZE && MemorySizeInBytes >= (align << 1))
+		align <<= 1;
 
 	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
 
