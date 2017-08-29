@@ -51,6 +51,7 @@
 #include "suites/functional/memory_basic.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
+#include "suites/performance/memory_async_copy_numa.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
@@ -78,9 +79,9 @@ static bool GetMonitorDevices(const std::shared_ptr<rocrtst::smi::Device> &d,
 static void SetFlags(TestBase *test) {
   assert(sRocrtstGlvalues != nullptr);
 
+  test->set_num_iteration(sRocrtstGlvalues->num_iterations);
   test->set_verbosity(sRocrtstGlvalues->verbosity);
   test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
-  test->set_num_iteration(sRocrtstGlvalues->num_iterations);
   test->set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
 }
 
@@ -149,6 +150,11 @@ TEST(rocrtstPerf, Memory_Async_Copy) {
   RunGenericTest(&mac);
 }
 
+TEST(rocrtstPerf, Memory_Async_Copy_NUMA) {
+  MemoryAsyncCopyNUMA numa;
+  RunGenericTest(&numa);
+}
+
 TEST(rocrtstPerf, AQL_Dispatch_Time_Single_SpinWait) {
   DispatchTime dt(true, true);
   RunGenericTest(&dt);
@@ -176,7 +182,6 @@ int main(int argc, char** argv) {
 
   settings.verbosity = 1;
   settings.monitor_verbosity = 1;
-  settings.num_iterations = 0;
 
   if (ProcessCmdline(&settings, argc, argv)) {
     return 1;

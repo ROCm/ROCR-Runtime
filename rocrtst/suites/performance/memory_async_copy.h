@@ -46,6 +46,8 @@
 #ifndef ROCRTST_SUITES_PERFORMANCE_MEMORY_ASYNC_COPY_H_
 #define ROCRTST_SUITES_PERFORMANCE_MEMORY_ASYNC_COPY_H_
 
+#include <hwloc.h>
+
 #include <vector>
 #include <algorithm>
 
@@ -54,7 +56,15 @@
 #include "hsa/hsa_ext_amd.h"
 #include "suites/test_common/test_base.h"
 
-typedef enum TransType {H2D = 0, D2H, P2P} TransType;
+hsa_agent_t *
+AcquireAsyncCopyAccess(
+         void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
+         void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag);
+
+hsa_status_t AcquireAccess(hsa_agent_t agent,
+                                    hsa_amd_memory_pool_t pool, void* ptr);
+typedef enum TransType
+              {H2D = 0, D2H, P2P, H2DRemote, D2HRemote, P2PRemote} TransType;
 
 typedef struct Transaction {
   int src;
@@ -70,22 +80,26 @@ typedef struct Transaction {
 
 class AgentInfo {
  public:
-    AgentInfo(hsa_agent_t agent, int index, hsa_device_type_t device_type) {
+    AgentInfo(hsa_agent_t agent, int index, hsa_device_type_t device_type,
+                                                        bool remote = false) {
       agent_ = agent;
       index_ = index;
       device_type_ = device_type;
+      remote_ = remote;
     }
     AgentInfo() {}
 
     ~AgentInfo() {}
     hsa_agent_t agent(void) const {return agent_;}
     hsa_device_type_t device_type(void) const {return device_type_;}
-
+    bool is_remote(void) const {return remote_;}
+    void set_remote(bool r) {remote_ = r;}
     hsa_agent_t agent_;
     int index_;
 
  private:
     hsa_device_type_t device_type_;
+    bool remote_;
 };
 
 class PoolInfo {
@@ -139,6 +153,9 @@ class MemoryAsyncCopy : public TestBase {
   // @Brief: Display  results
   virtual void DisplayResults() const;
 
+  // @Brief: Display information about what this test does
+  virtual void DisplayTestInfo(void);
+
   // There are 3 levels of testing, from quickest/very specific to
   // longest/most complete:
   // 1. to and from a specified source to a specified target
@@ -150,7 +167,6 @@ class MemoryAsyncCopy : public TestBase {
   // above, then that overides both #2 and #3
   void set_src_pool(int pool_id) {src_pool_id_ = pool_id;}
   void set_dst_pool(int pool_id) {dst_pool_id_ = pool_id;}
-  void set_full_test(bool full_test) {do_full_test_ = full_test;}
   int pool_index(void) const {return pool_index_;}
   void set_pool_index(int i) {pool_index_ = i;}
   int agent_index(void) const {return agent_index_;}
@@ -159,10 +175,40 @@ class MemoryAsyncCopy : public TestBase {
   std::vector<AgentInfo *> *agent_info(void) {return &agent_info_;}
   std::vector<NodeInfo> *node_info(void) {return &node_info_;}
 
-  // @Brief: Display information about what this test does
-  virtual void DisplayTestInfo(void);
+  hwloc_topology_t topology(void) const {return topology_;}
+  void set_topology(hwloc_topology_t t) {topology_ = t;}
 
- private:
+  hwloc_nodeset_t cpu_hwl_numa_nodeset(void) const {
+                                                return cpu_hwl_numa_nodeset_;}
+  void set_cpu_hwl_numa_nodeset(hwloc_nodeset_t ns) {
+                                                  cpu_hwl_numa_nodeset_ = ns;}
+  hsa_agent_t gpu_local_agent1() const {return gpu_local_agent1_;}
+  void set_gpu_local_agent1(hsa_agent_t a) {gpu_local_agent1_ = a;}
+  hsa_agent_t gpu_local_agent2() const {return gpu_local_agent2_;}
+  void set_gpu_local_agent2(hsa_agent_t a) {gpu_local_agent2_ = a;}
+
+  hsa_agent_t gpu_remote_agent() const {return gpu_remote_agent_;}
+  void set_gpu_remote_agent(hsa_agent_t a) {gpu_remote_agent_ = a;}
+
+  hsa_agent_t cpu_agent() const {return cpu_agent_;}
+  void set_cpu_agent(hsa_agent_t a) {cpu_agent_ = a;}
+
+ protected:
+  void PrintTransactionType(Transaction *t);
+
+  static const int kNumGranularity = 20;
+  static constexpr const char* Str[kNumGranularity] = {
+      "1k", "2K", "4K", "8K", "16K", "32K", "64K", "128K", "256K", "512K",
+      "1M", "2M", "4M", "8M", "16M", "32M", "64M", "128M", "256M", "512M"};
+
+  static constexpr const size_t Size[kNumGranularity] = {
+      1024, 2*1024, 4*1024, 8*1024, 16*1024, 32*1024, 64*1024, 128*1024,
+      256*1024, 512*1024, 1024*1024, 2048*1024, 4096*1024, 8*1024*1024,
+      16*1024*1024, 32*1024*1024, 64*1024*1024, 128*1024*1024, 256*1024*1024,
+      512*1024*1024};
+
+  static constexpr const int kMaxCopySize = Size[kNumGranularity - 1];
+
   // @Brief: Get real iteration number
   virtual size_t RealIterationNum(void);
 
@@ -170,10 +216,10 @@ class MemoryAsyncCopy : public TestBase {
   double GetMeanTime(std::vector<double>* vec);
 
   // @Brief: Find and print out the needed topology info
-  void FindTopology(void);
+  virtual void FindTopology(void);
 
   // @Brief: Run for Benchmark mode with verification
-  void RunBenchmarkWithVerification(Transaction *t);
+  virtual void RunBenchmarkWithVerification(Transaction *t);
 
   // @Brief: Dispaly Benchmark result
   void DisplayBenchmark(Transaction *t) const;
@@ -181,7 +227,7 @@ class MemoryAsyncCopy : public TestBase {
   // @Brief: Print topology info
   void PrintTopology(void);
 
-  void ConstructTransactionList(void);
+  virtual void ConstructTransactionList(void);
 
   // @Brief: Find system region
   void FindSystemPool(void);
@@ -210,8 +256,6 @@ class MemoryAsyncCopy : public TestBase {
   // Store the testing level
   int src_pool_id_;
   int dst_pool_id_;
-  bool do_full_test_;
-
   // System region
   hsa_amd_memory_pool_t sys_pool_;
 
@@ -219,6 +263,15 @@ class MemoryAsyncCopy : public TestBase {
   hsa_agent_t cpu_agent_;
 
   rocrtst::PerfTimer copy_timer_;
+
+  hwloc_topology_t topology_;
+  hwloc_nodeset_t cpu_hwl_numa_nodeset_;
+
+  // hsa_agent_t cpu_agent_; use one in base class
+  hsa_agent_t gpu_local_agent1_;
+  hsa_agent_t gpu_local_agent2_;
+  hsa_agent_t gpu_remote_agent_;  // Not associated with cpu_agent_
 };
+
 
 #endif  // ROCRTST_SUITES_PERFORMANCE_MEMORY_ASYNC_COPY_H_

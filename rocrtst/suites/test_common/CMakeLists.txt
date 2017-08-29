@@ -285,7 +285,7 @@ build_kernel("dispatch_time")
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${common_srcs}
                                 ${common_smi_srcs} ${testCommonSources})
 
-target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt)
+target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwloc)
 
 add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
 INSTALL(TARGETS ${ROCRTST}
