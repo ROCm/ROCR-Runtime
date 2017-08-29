@@ -43,6 +43,10 @@
  *
  */
 
+#include <hwloc.h>
+#include <hwloc/linux-libnuma.h>
+#include <numa.h>
+
 #include <vector>
 #include <algorithm>
 
@@ -52,6 +56,7 @@
 #include "hsa/hsa_ext_amd.h"
 #include "suites/performance/memory_async_copy.h"
 #include "common/base_rocr_utils.h"
+#include "common/helper_funcs.h"
 #include "gtest/gtest.h"
 
 #define RET_IF_HSA_ERR(err) { \
@@ -65,24 +70,21 @@
   } \
 }
 
-static const int kNumGranularity = 20;
-const char* Str[kNumGranularity] = {"1k", "2K", "4K", "8K", "16K", "32K",
-    "64K", "128K", "256K", "512K", "1M", "2M", "4M", "8M", "16M", "32M",
-                                               "64M", "128M", "256M", "512M"};
-
-const size_t Size[kNumGranularity] = {
-    1024, 2*1024, 4*1024, 8*1024, 16*1024, 32*1024, 64*1024, 128*1024,
-    256*1024, 512*1024, 1024*1024, 2048*1024, 4096*1024, 8*1024*1024,
-    16*1024*1024, 32*1024*1024, 64*1024*1024, 128*1024*1024, 256*1024*1024,
-    512*1024*1024};
-
-static const int kMaxCopySize = Size[kNumGranularity - 1];
+constexpr const size_t MemoryAsyncCopy::Size[kNumGranularity];
+constexpr const char* MemoryAsyncCopy::Str[kNumGranularity];
+constexpr const int MemoryAsyncCopy::kMaxCopySize;
 
 MemoryAsyncCopy::MemoryAsyncCopy(void) :
     TestBase() {
   static_assert(sizeof(Size)/sizeof(size_t) == kNumGranularity,
       "kNumGranularity does not match size of arrays");
 
+  cpu_agent_.handle = 0;  // Ignore any previous initialization
+  gpu_local_agent1_.handle = 0;
+  gpu_local_agent2_.handle = 0;
+  gpu_remote_agent_.handle = 0;
+  topology_ = nullptr;
+  cpu_hwl_numa_nodeset_ = nullptr;
   agent_index_ = 0;
   pool_index_ = 0;
   tran_.clear();
@@ -92,7 +94,6 @@ MemoryAsyncCopy::MemoryAsyncCopy(void) :
   verified_ = true;
   src_pool_id_ = -1;
   dst_pool_id_ = -1;
-  do_full_test_ = false;
   set_num_iteration(10);  // Default value
   set_title("Asynchronous Memory Copy Bandwidth");
   set_description("This test measures bandwidth to/from Host from/to GPU "
@@ -113,6 +114,8 @@ MemoryAsyncCopy::~MemoryAsyncCopy(void) {
 void MemoryAsyncCopy::SetUp(void) {
   TestBase::SetUp();
 
+  hwloc_topology_init(&topology_);
+
   FindTopology();
 
   if (verbosity() >= VERBOSE_STANDARD) {
@@ -126,22 +129,22 @@ void MemoryAsyncCopy::Run(void) {
   TestBase::Run();
 
   for (Transaction t : tran_) {
-    RunBenchmarkWithVerification(&t);
+    this->RunBenchmarkWithVerification(&t);
   }
 }
 
 void MemoryAsyncCopy::FindSystemPool(void) {
   hsa_status_t err;
 
-  err = hsa_iterate_agents(rocrtst::FindCPUDevice, &cpu_agent_);
-  ASSERT_EQ(HSA_STATUS_INFO_BREAK, err);
+//  err = hsa_iterate_agents(rocrtst::FindCPUDevice, &cpu_agent_);
+//  ASSERT_EQ(HSA_STATUS_INFO_BREAK, err);
 
   err = hsa_amd_agent_iterate_memory_pools(cpu_agent_, rocrtst::FindGlobalPool,
         &sys_pool_);
   ASSERT_EQ(HSA_STATUS_INFO_BREAK, err);
 }
 
-static hsa_status_t AcquireAccess(hsa_agent_t agent,
+hsa_status_t AcquireAccess(hsa_agent_t agent,
                                     hsa_amd_memory_pool_t pool, void* ptr) {
   hsa_status_t err;
 
@@ -163,34 +166,30 @@ static hsa_status_t AcquireAccess(hsa_agent_t agent,
   return err;
 }
 
-static hsa_agent_t *
+// Provided a destination pointer, pool and agent, and a source ptr, pool,
+// and agent, get access for one of the 2 agents to the other agent's pool.
+// Return the selected agent. This function will first attempt attempt to
+// gain access for the first agent to the second pool. If that succeeds, it
+// will return a pointer to the first agent. Otherwise, the function will
+// attempt to again access to the first pool by the second agent. If that
+// succeeds a pointer to the second agent will be returned. If it fails, a
+// nullptr will be returned.
+hsa_agent_t *
 AcquireAsyncCopyAccess(
          void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
          void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag) {
-  if (AcquireAccess(*src_ag, dst_pool, dst_ptr) != HSA_STATUS_SUCCESS) {
-    if (AcquireAccess(*dst_ag, src_pool, src_ptr) == HSA_STATUS_SUCCESS) {
-      return dst_ag;
+  if (AcquireAccess(*dst_ag, src_pool, src_ptr) != HSA_STATUS_SUCCESS) {
+    if (AcquireAccess(*src_ag, dst_pool, dst_ptr) == HSA_STATUS_SUCCESS) {
+      return src_ag;
     } else {
       return nullptr;
     }
   } else {
-    return src_ag;
+    return dst_ag;
   }
 }
 
-void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
-  hsa_status_t err;
-  void* ptr_src;
-  void* ptr_dst;
-
-  size_t size = t->max_size * 1024;
-
-  hsa_amd_memory_pool_t src_pool =  pool_info_[t->src]->pool_;
-  hsa_agent_t dst_agent = pool_info_[t->dst]->owner_agent_info()->agent();
-  hsa_amd_memory_pool_t dst_pool = pool_info_[t->dst]->pool_;
-
-  hsa_agent_t src_agent = pool_info_[t->src]->owner_agent_info()->agent();
-
+void MemoryAsyncCopy::PrintTransactionType(Transaction *t) {
   if (verbosity() >= VERBOSE_STANDARD) {
     printf("Executing Copy Path: From Pool %d To Pool %d ", t->src, t->dst);
     switch (t->type) {
@@ -206,11 +205,34 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
         printf("(Peer-To-Peer)\n");
         break;
 
+      case H2DRemote:
+        printf("(Host To Remote Device)\n");
+        break;
+
+      case D2HRemote:
+        printf("(Remote Device To Host)\n");
+        break;
+
       default:
         printf("**Unexpected path**\n");
         return;
     }
   }
+}
+void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
+  hsa_status_t err;
+  void* ptr_src;
+  void* ptr_dst;
+
+  size_t size = t->max_size * 1024;
+
+  hsa_amd_memory_pool_t src_pool =  pool_info_[t->src]->pool_;
+  hsa_agent_t dst_agent = pool_info_[t->dst]->owner_agent_info()->agent();
+  hsa_amd_memory_pool_t dst_pool = pool_info_[t->dst]->pool_;
+
+  hsa_agent_t src_agent = pool_info_[t->src]->owner_agent_info()->agent();
+
+  PrintTransactionType(t);
 
   err = hsa_amd_memory_pool_allocate(src_pool, size, 0, &ptr_src);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
@@ -238,6 +260,23 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
   hsa_signal_t s;
   err = hsa_signal_create(1, 0, NULL, &s);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+
+  // Deallocate resources...
+  MAKE_SCOPE_GUARD([&]() {
+    err = hsa_amd_memory_pool_free(ptr_src);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+    err = hsa_amd_memory_pool_free(ptr_dst);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+    err = hsa_amd_memory_pool_free(host_ptr_src);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+    err = hsa_amd_memory_pool_free(host_ptr_dst);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+    err = hsa_signal_destroy(s);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+  });
 
   // **** First copy from the system buffer source to the test source pool
   // Acquire the appropriate access; prefer GPU agent over CPU where there
@@ -336,9 +375,6 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
     // Get mean copy time and store to the array
     t->benchmark_copy_time->push_back(GetMeanTime(&time));
   }
-
-  err = hsa_signal_destroy(s);
-  ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 }
 
 size_t MemoryAsyncCopy::RealIterationNum(void) {
@@ -432,6 +468,12 @@ void MemoryAsyncCopy::DisplayBenchmark(Transaction *t) const {
 }
 
 void MemoryAsyncCopy::Close() {
+  if (cpu_hwl_numa_nodeset_ != nullptr) {
+    hwloc_bitmap_free(cpu_hwl_numa_nodeset_);
+    cpu_hwl_numa_nodeset_ = nullptr;
+  }
+  hwloc_topology_destroy(topology_);
+
   TestBase::Close();
 }
 
@@ -486,39 +528,229 @@ static hsa_status_t GetPoolInfo(hsa_amd_memory_pool_t pool, void* data) {
   return HSA_STATUS_SUCCESS;
 }
 
+static hsa_status_t GetGPUAgents(hsa_agent_t agent, void* data) {
+  hsa_status_t err;
+  MemoryAsyncCopy* ptr = reinterpret_cast<MemoryAsyncCopy*>(data);
+
+  hsa_device_type_t device_type;
+  err = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &device_type);
+  RET_IF_HSA_ERR(err);
+
+  if (device_type != HSA_DEVICE_TYPE_GPU) {
+    return HSA_STATUS_SUCCESS;
+  }
+
+  uint32_t agent_bdf_id;
+  err = hsa_agent_get_info(agent,
+                (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &agent_bdf_id);
+  RET_IF_HSA_ERR(err);
+
+  uint8_t bus = (agent_bdf_id & (0xFF << 8)) >> 8;
+  uint8_t device = (agent_bdf_id & (0x1F << 3)) >> 3;
+  uint8_t function = (agent_bdf_id & 0x07);
+
+  if (ptr->verbosity() >  MemoryAsyncCopy::VERBOSE_STANDARD) {
+    char name[64];
+    err = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, name);
+    RET_IF_HSA_ERR(err);
+
+    const char* name2 = (HSA_DEVICE_TYPE_GPU == device_type) ? "GPU" : "CPU";
+
+    printf("The %s agent name located at PCIe Bus %x, Device %x, "
+                                                     "Function %x, is %s.\n",
+                                          name2, bus, device, function, name);
+  }
+
+  hwloc_obj_t gpu_hwl_dev;
+  // Assume domain of 0 for now
+  gpu_hwl_dev = hwloc_get_pcidev_by_busid(ptr->topology(), 0, bus, device,
+                                                                    function);
+
+  if (gpu_hwl_dev == nullptr) {
+    return HSA_STATUS_ERROR;
+  }
+
+  hwloc_obj_t gpu_numa_node = hwloc_get_ancestor_obj_by_type(ptr->topology(),
+                                             HWLOC_OBJ_NUMANODE, gpu_hwl_dev);
+
+  if (gpu_numa_node != nullptr) {
+    char s1[256], s2[256];
+    hwloc_bitmap_snprintf(s1, sizeof(s1), gpu_numa_node->nodeset);
+    hwloc_bitmap_snprintf(s2, sizeof(s2), ptr->cpu_hwl_numa_nodeset());
+    printf("gpu nodeset: %s\n", s1);
+    printf("cpu nodeset: %s\n", s2);
+    if (!hwloc_bitmap_isequal(gpu_numa_node->nodeset,
+                                              ptr->cpu_hwl_numa_nodeset())) {
+      if (ptr->gpu_remote_agent().handle == 0) {
+        ptr->set_gpu_remote_agent(agent);
+      }
+
+      if (ptr->gpu_local_agent1().handle != 0 &&
+                                          ptr->gpu_local_agent2().handle != 0) {
+        return HSA_STATUS_INFO_BREAK;
+      } else {
+        return HSA_STATUS_SUCCESS;
+      }
+    } else {
+      if (ptr->gpu_local_agent1().handle == 0) {
+        ptr->set_gpu_local_agent1(agent);
+      } else if (ptr->gpu_local_agent2().handle == 0) {
+        ptr->set_gpu_local_agent2(agent);
+      }
+      if (ptr->gpu_local_agent1().handle != 0 &&
+                                     ptr->gpu_local_agent2().handle != 0 &&
+                                        ptr->gpu_remote_agent().handle != 0) {
+        return HSA_STATUS_INFO_BREAK;
+      } else {
+        return HSA_STATUS_SUCCESS;
+      }
+    }
+
+    if (!hwloc_bitmap_isequal(gpu_numa_node->nodeset,
+                                               ptr->cpu_hwl_numa_nodeset())) {
+      std::cout << "ASSERT: Unexpected unequal nodesets" << std::endl;
+      return HSA_STATUS_ERROR;
+    }
+  } else if (ptr->verbosity() >= MemoryAsyncCopy::VERBOSE_STANDARD) {
+    std::cout << "Only 1 NUMA node found.\n" << std::endl;
+  }
+
+  if (ptr->gpu_local_agent1().handle != 0) {
+    if (ptr->gpu_local_agent2().handle != 0) {
+      if (gpu_numa_node == nullptr) {
+        return HSA_STATUS_INFO_BREAK;
+      } else if (ptr->gpu_remote_agent().handle == 0) {
+        return HSA_STATUS_SUCCESS;
+      } else {
+        return HSA_STATUS_INFO_BREAK;
+      }
+    } else {
+      ptr->set_gpu_local_agent2(agent);
+      if (ptr->gpu_remote_agent().handle == 0) {
+        return (gpu_numa_node == nullptr ?
+                  HSA_STATUS_INFO_BREAK : HSA_STATUS_SUCCESS);
+      } else {
+        return HSA_STATUS_INFO_BREAK;
+      }
+    }
+  } else {
+    ptr->set_gpu_local_agent1(agent);
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
 static hsa_status_t GetAgentInfo(hsa_agent_t agent, void* data) {
   MemoryAsyncCopy* ptr = reinterpret_cast<MemoryAsyncCopy*>(data);
 
   hsa_status_t err;
-  char name[64];
-  err = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, name);
-  RET_IF_HSA_ERR(err);
+  int ret;
+
+  if (ptr->cpu_agent().handle != 0) {
+    return HSA_STATUS_ERROR;
+  }
+
 
   // Get device type
   hsa_device_type_t device_type;
   err = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &device_type);
   RET_IF_HSA_ERR(err);
 
-  ptr->agent_info()->push_back(
-                       new AgentInfo(agent, ptr->agent_index(), device_type));
+  // First thing is to find CPU agent
+  if (device_type != HSA_DEVICE_TYPE_CPU) {
+    return HSA_STATUS_SUCCESS;
+  }
 
-  // Contruct a new NodeInfo structure and push back to agent_info_
-  NodeInfo node;
-  node.agent = *ptr->agent_info()->back();
-  ptr->node_info()->push_back(node);
+  ptr->set_cpu_agent(agent);
+  uint32_t cpu_numa_node_id;
+//  hwloc_obj_t cpu_numa;
+  hwloc_nodeset_t cpu_nodeset;
 
-  err = hsa_amd_agent_iterate_memory_pools(agent, GetPoolInfo, ptr);
-  ptr->set_agent_index(ptr->agent_index() + 1);
-  return HSA_STATUS_SUCCESS;
+  err = hsa_agent_get_info(ptr->cpu_agent(), HSA_AGENT_INFO_NODE,
+                                                           &cpu_numa_node_id);
+  RET_IF_HSA_ERR(err);
+
+  struct bitmask *numa_node_mask = numa_allocate_nodemask();
+  cpu_nodeset = hwloc_bitmap_alloc();
+
+  numa_bitmask_setbit(numa_node_mask, cpu_numa_node_id);
+
+  ret = hwloc_nodeset_from_linux_libnuma_bitmask(ptr->topology(),
+      cpu_nodeset, numa_node_mask);
+  numa_free_nodemask(numa_node_mask);
+
+  if (ret == -1) {
+    hwloc_bitmap_free(cpu_nodeset);
+    return HSA_STATUS_ERROR;
+  }
+
+  ptr->set_cpu_hwl_numa_nodeset(cpu_nodeset);
+
+  err = hsa_iterate_agents(GetGPUAgents, data);
+
+  if (err != HSA_STATUS_INFO_BREAK && err != HSA_STATUS_SUCCESS) {
+    return err;
+  }
+
+  if (ptr->gpu_local_agent1().handle == 0) {
+    hwloc_bitmap_free(ptr->cpu_hwl_numa_nodeset());
+    ptr->set_cpu_hwl_numa_nodeset(nullptr);
+
+    if (ptr->gpu_local_agent2().handle != 0) {
+      std::cout << "Unexpected value set for gpu_local_agent2" << std::endl;
+      return HSA_STATUS_ERROR;
+    }
+    // In this case, the CPU and at least 1 GPU are not on the same NUMA node;
+    // try another CPU
+    hsa_agent_t t;
+    t.handle = 0;
+    ptr->set_gpu_local_agent1(t);
+    ptr->set_cpu_agent(t);
+    ptr->set_gpu_remote_agent(t);
+    return HSA_STATUS_SUCCESS;
+  }
+  auto add_agent = [&](hsa_agent_t ag, hsa_device_type_t dev_type,
+                                                                bool remote) {
+    if (ag.handle == 0) {
+      return;
+    }
+    ptr->agent_info()->push_back(
+            new AgentInfo(ag, ptr->agent_index(), dev_type, remote));
+
+    // Contruct a new NodeInfo structure and push back to agent_info_
+    NodeInfo node;
+    node.agent = *ptr->agent_info()->back();
+    ptr->node_info()->push_back(node);
+
+    err = hsa_amd_agent_iterate_memory_pools(ag, GetPoolInfo, data);
+    ptr->set_agent_index(ptr->agent_index() + 1);
+  };
+
+  add_agent(ptr->cpu_agent(), HSA_DEVICE_TYPE_CPU, false);
+  add_agent(ptr->gpu_local_agent1(), HSA_DEVICE_TYPE_GPU, false);
+  add_agent(ptr->gpu_local_agent2(), HSA_DEVICE_TYPE_GPU, false);
+  add_agent(ptr->gpu_remote_agent(), HSA_DEVICE_TYPE_GPU, true);
+
+  return HSA_STATUS_INFO_BREAK;
 }
 
 void MemoryAsyncCopy::FindTopology() {
   hsa_status_t err;
 
-  err = hsa_iterate_agents(GetAgentInfo, this);
-  FindSystemPool();
+  hwloc_topology_set_flags(topology_, HWLOC_TOPOLOGY_FLAG_WHOLE_SYSTEM |
+                                         HWLOC_TOPOLOGY_FLAG_IO_DEVICES);
 
-  ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+  hwloc_topology_load(topology_);
+
+  err = hsa_iterate_agents(GetAgentInfo, this);
+
+  if (gpu_local_agent1_.handle == 0) {
+    std::cout << "**** No GPU found in same NUMA node as a CPU ****"
+                                                                 << std::endl;
+  }
+  ASSERT_EQ(HSA_STATUS_INFO_BREAK, err);
+
+  FindSystemPool();
 }
 
 void MemoryAsyncCopy::DisplayTestInfo(void) {
@@ -531,8 +763,9 @@ void MemoryAsyncCopy::ConstructTransactionList(void) {
   tran_.clear();
 
   int cpu_pool_indx = -1;
-  int gpu1_pool_indx = -1;
-  int gpu2_pool_indx = -1;
+  int gpu_local1_pool_indx = -1;
+  int gpu_local2_pool_indx = -1;
+  int gpu_remote_pool_indx = -1;
 
   auto push_trans = [&](int from_indx, int to_indx, TransType type) {
     Transaction t;
@@ -554,41 +787,38 @@ void MemoryAsyncCopy::ConstructTransactionList(void) {
       cpu_pool_indx = n.pool[0].index_;
       continue;
     }
-    if (gpu1_pool_indx == -1 && n.agent.device_type() == HSA_DEVICE_TYPE_GPU) {
-      gpu1_pool_indx = n.pool[0].index_;
-      continue;
-    }
-    if (gpu2_pool_indx == -1 &&  n.agent.device_type() == HSA_DEVICE_TYPE_GPU) {
-      gpu2_pool_indx = n.pool[0].index_;
-      break;
+
+    if (n.agent.device_type() == HSA_DEVICE_TYPE_GPU) {
+      if (!n.agent.is_remote()) {
+        if (gpu_local1_pool_indx == -1) {
+          gpu_local1_pool_indx = n.pool[0].index_;
+          continue;
+        }
+        if (gpu_local2_pool_indx == -1) {
+          gpu_local2_pool_indx = n.pool[0].index_;
+        }
+      } else if (gpu_remote_pool_indx == -1) {
+        gpu_remote_pool_indx = n.pool[0].index_;
+      }
     }
   }
 
   ASSERT_NE(cpu_pool_indx, -1);
-  ASSERT_NE(gpu1_pool_indx, -1);
+  ASSERT_NE(gpu_local1_pool_indx, -1);
 
-  push_trans(cpu_pool_indx, gpu1_pool_indx, H2D);
-  push_trans(gpu1_pool_indx, cpu_pool_indx, D2H);
+  push_trans(cpu_pool_indx, gpu_local1_pool_indx, H2D);
+  push_trans(gpu_local1_pool_indx, cpu_pool_indx, D2H);
 
-  if (do_full_test_) {
-    for (NodeInfo n : *node_info()) {
-      if (n.agent.device_type() == HSA_DEVICE_TYPE_CPU) {
-        continue;
-      }
+  if (gpu_local2_pool_indx != -1) {
+    push_trans(gpu_local1_pool_indx, gpu_local2_pool_indx, P2P);
+    push_trans(gpu_local2_pool_indx, gpu_local1_pool_indx, P2P);
+  }
 
-      for (PoolInfo p : n.pool) {
-        if (p.index_ == gpu1_pool_indx) {
-          continue;
-        }
-        push_trans(gpu1_pool_indx, p.index_, P2P);
-        push_trans(p.index_, gpu1_pool_indx, P2P);
-      }
-    }
-  } else {
-    if (gpu2_pool_indx != -1) {
-      push_trans(gpu1_pool_indx, gpu2_pool_indx, P2P);
-      push_trans(gpu2_pool_indx, gpu1_pool_indx, P2P);
-    }
+  if (gpu_remote_pool_indx != -1) {
+    push_trans(cpu_pool_indx, gpu_remote_pool_indx, H2DRemote);
+    push_trans(gpu_remote_pool_indx, cpu_pool_indx, D2HRemote);
+    push_trans(gpu_local1_pool_indx, gpu_remote_pool_indx, P2PRemote);
+    push_trans(gpu_remote_pool_indx, gpu_local1_pool_indx, P2PRemote);
   }
 }
 

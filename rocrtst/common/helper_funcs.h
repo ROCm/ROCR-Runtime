@@ -53,7 +53,6 @@
 #include <vector>
 namespace rocrtst {
 
-
 bool Compare(const float* refData, const float* data,
              const int length, const float epsilon = 1e-6f);
 bool Compare(const double* refData, const double* data,
@@ -100,6 +99,49 @@ uint64_t RoundToPowerOf2(uint64_t val);
 
 ///  Checks if a value is a power of 2
 bool IsPowerOf2(uint64_t val);
+
+#define PASTE2(x, y) x##y
+#define PASTE(x, y) PASTE2(x, y)
+
+#define __forceinline __inline__ __attribute__((always_inline))
+
+template <typename lambda>
+class ScopeGuard {
+ public:
+  explicit __forceinline ScopeGuard(const lambda& release)
+      : release_(release), dismiss_(false) {}
+
+  ScopeGuard(const ScopeGuard& rhs) {*this = rhs; }
+
+  __forceinline ~ScopeGuard() {
+    if (!dismiss_) release_();
+  }
+  __forceinline ScopeGuard& operator=(const ScopeGuard& rhs) {
+    dismiss_ = rhs.dismiss_;
+    release_ = rhs.release_;
+    rhs.dismiss_ = true;
+  }
+  __forceinline void Dismiss() { dismiss_ = true; }
+
+ private:
+  lambda release_;
+  bool dismiss_;
+};
+
+template <typename lambda>
+static __forceinline ScopeGuard<lambda> MakeScopeGuard(lambda rel) {
+  return ScopeGuard<lambda>(rel);
+}
+
+#define MAKE_SCOPE_GUARD_HELPER(lname, sname, ...) \
+  auto lname = __VA_ARGS__;                        \
+  rocrtst::ScopeGuard<decltype(lname)> sname(lname);
+#define MAKE_SCOPE_GUARD(...)                                   \
+  MAKE_SCOPE_GUARD_HELPER(PASTE(scopeGuardLambda, __COUNTER__), \
+                          PASTE(scopeGuard, __COUNTER__), __VA_ARGS__)
+#define MAKE_NAMED_SCOPE_GUARD(name, ...)                             \
+  MAKE_SCOPE_GUARD_HELPER(PASTE(scopeGuardLambda, __COUNTER__), name, \
+                          __VA_ARGS__)
 
 }  // namespace rocrtst
 #endif  //  ROCRTST_COMMON_HELPER_FUNCS_H_
