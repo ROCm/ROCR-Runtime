@@ -306,11 +306,13 @@ static HSAuint32 get_block_concurrent_limit(uint32_t node_id,
 						HSAuint32 block_id)
 {
 	uint32_t i;
+	HsaCounterBlockProperties *block = &counter_props[node_id]->Blocks[0];
 
-	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++)
-		if (counter_props[node_id]->Blocks[i].Counters[0].BlockIndex ==
-								block_id)
-			return counter_props[node_id]->Blocks[i].NumConcurrent;
+	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
+		if (block->Counters[0].BlockIndex == block_id)
+			return block->NumConcurrent;
+		block = (HsaCounterBlockProperties *)&block->Counters[block->NumCounters];
+	}
 
 	return 0;
 }
@@ -491,7 +493,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	uint32_t total_concurrent = 0;
 	struct perf_counter_block block = {0};
 	uint32_t total_blocks = 0;
-	uint32_t entry;
+	HsaCounterBlockProperties *block_prop;
 
 	if (!counter_props)
 		return HSAKMT_STATUS_NO_MEMORY;
@@ -519,8 +521,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	}
 
 	counter_props_size = sizeof(HsaCounterProperties) +
-			sizeof(HsaCounterBlockProperties)*(total_blocks-1) +
-			sizeof(HsaCounter)*(total_counters-1);
+			sizeof(HsaCounterBlockProperties) * (total_blocks - 1) +
+			sizeof(HsaCounter) * (total_counters - total_blocks);
 
 	counter_props[NodeId] = malloc(counter_props_size);
 	if (!counter_props[NodeId])
@@ -529,36 +531,34 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	counter_props[NodeId]->NumBlocks = total_blocks;
 	counter_props[NodeId]->NumConcurrent = total_concurrent;
 
-	entry = 0;
+	block_prop = &counter_props[NodeId]->Blocks[0];
 	for (block_id = 0; block_id < PERFCOUNTER_BLOCKID__MAX; block_id++) {
 		rc = get_block_properties(NodeId, block_id, &block);
 		if (rc != HSAKMT_STATUS_SUCCESS) {
 			free(counter_props[NodeId]);
+			counter_props[NodeId] = NULL;
 			return rc;
 		}
 
 		if (!block.num_of_slots) /* not a valid block */
 			continue;
 
-		blockid2uuid(block_id,
-			&counter_props[NodeId]->Blocks[entry].BlockId);
-		counter_props[NodeId]->Blocks[entry].NumCounters =
-					block.num_of_counters;
-		counter_props[NodeId]->Blocks[entry].NumConcurrent =
-					block.num_of_slots;
-
+		blockid2uuid(block_id, &block_prop->BlockId);
+		block_prop->NumCounters = block.num_of_counters;
+		block_prop->NumConcurrent = block.num_of_slots;
 		for (i = 0; i < block.num_of_counters; i++) {
-			counter_props[NodeId]->Blocks[entry].Counters[i].BlockIndex = block_id;
-			counter_props[NodeId]->Blocks[entry].Counters[i].CounterId = block.counter_ids[i];
-			counter_props[NodeId]->Blocks[entry].Counters[i].CounterSizeInBits = block.counter_size_in_bits;
-			counter_props[NodeId]->Blocks[entry].Counters[i].CounterMask = block.counter_mask;
-			counter_props[NodeId]->Blocks[entry].Counters[i].Flags.ui32.Global = 1;
+			block_prop->Counters[i].BlockIndex = block_id;
+			block_prop->Counters[i].CounterId = block.counter_ids[i];
+			block_prop->Counters[i].CounterSizeInBits = block.counter_size_in_bits;
+			block_prop->Counters[i].CounterMask = block.counter_mask;
+			block_prop->Counters[i].Flags.ui32.Global = 1;
 			if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
-				counter_props[NodeId]->Blocks[entry].Counters[i].Type = HSA_PROFILE_TYPE_PRIVILEGED_IMMEDIATE;
+				block_prop->Counters[i].Type = HSA_PROFILE_TYPE_PRIVILEGED_IMMEDIATE;
 			else
-				counter_props[NodeId]->Blocks[entry].Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
+				block_prop->Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
 		}
-		entry++;
+
+		block_prop = (HsaCounterBlockProperties *)&block_prop->Counters[block_prop->NumCounters];
 	}
 
 	*CounterProperties = counter_props[NodeId];
