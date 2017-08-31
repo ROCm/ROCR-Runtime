@@ -52,6 +52,7 @@
 #include <sys/sysinfo.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <errno.h>
 
 namespace os {
 
