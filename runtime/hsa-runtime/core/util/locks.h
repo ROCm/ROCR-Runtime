@@ -59,7 +59,14 @@ class ScopedAcquire {
   explicit ScopedAcquire(LockType* lock) : lock_(lock) { lock_->Acquire(); }
 
   /// @brief: when destructing, release the lock.
-  ~ScopedAcquire() { lock_->Release(); }
+  ~ScopedAcquire() {
+    if (lock_ != nullptr) lock_->Release();
+  }
+
+  void Release() {
+    lock_->Release();
+    lock_ = nullptr;
+  }
 
  private:
   LockType* lock_;

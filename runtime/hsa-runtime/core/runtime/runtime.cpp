@@ -321,11 +321,11 @@ hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
 }
 
 hsa_status_t Runtime::FreeMemory(void* ptr) {
-  if (ptr == NULL) {
+  if (ptr == nullptr) {
     return HSA_STATUS_SUCCESS;
   }
 
-  const MemoryRegion* region = NULL;
+  const MemoryRegion* region = nullptr;
   size_t size = 0;
   ScopedAcquire<KernelMutex> lock(&memory_lock_);
 
@@ -333,10 +333,13 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 
   if (it == allocation_map_.end()) {
     assert(false && "Can't find address in allocation map");
-    return HSA_STATUS_ERROR;
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
   region = it->second.region;
   size = it->second.size;
+
+  // Imported fragments can't be released with FreeMemory.
+  if (region == nullptr) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   allocation_map_.erase(it);
 
@@ -681,7 +684,17 @@ hsa_status_t Runtime::InteropUnmap(void* ptr) {
 }
 
 hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
-                              uint32_t* num_agents_accessible, hsa_agent_t** accessible) {
+                              uint32_t* num_agents_accessible, hsa_agent_t** accessible,
+                              PtrInfoBlockData* block_info) {
+  static_assert(static_cast<int>(HSA_POINTER_UNKNOWN) == static_cast<int>(HSA_EXT_POINTER_TYPE_UNKNOWN),
+                "Thunk pointer info mismatch");
+  static_assert(static_cast<int>(HSA_POINTER_ALLOCATED) == static_cast<int>(HSA_EXT_POINTER_TYPE_HSA),
+                "Thunk pointer info mismatch");
+  static_assert(static_cast<int>(HSA_POINTER_REGISTERED_USER) == static_cast<int>(HSA_EXT_POINTER_TYPE_LOCKED),
+                "Thunk pointer info mismatch");
+  static_assert(static_cast<int>(HSA_POINTER_REGISTERED_GRAPHICS) == static_cast<int>(HSA_EXT_POINTER_TYPE_GRAPHICS),
+                "Thunk pointer info mismatch");
+
   HsaPointerInfo thunkInfo;
   uint32_t* mappedNodes;
 
@@ -692,36 +705,50 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
-  if (returnListData) {
-    size_t max_agents = cpu_agents_.size() + gpu_agents_.size();
-    mappedNodes = (uint32_t*)alloca(max_agents * sizeof(uint32_t));
-    // memory_lock protects access to the NMappedNodes array since this changes with calls to memory
-    // APIs.
+
+  {  // memory_lock protects access to the NMappedNodes array and fragment user data since these may
+     // change with calls to memory APIs.
     ScopedAcquire<KernelMutex> lock(&memory_lock_);
     hsaKmtQueryPointerInfo(ptr, &thunkInfo);
-    assert(thunkInfo.NMappedNodes <= max_agents &&
-           "PointerInfo: Thunk returned more than all agents in NMappedNodes.");
-    memcpy(mappedNodes, thunkInfo.MappedNodes, thunkInfo.NMappedNodes * sizeof(uint32_t));
-  } else {
-    hsaKmtQueryPointerInfo(ptr, &thunkInfo);
-  }
-
-  static_assert((int)HSA_POINTER_UNKNOWN == (int)HSA_EXT_POINTER_TYPE_UNKNOWN,
-                "Thunk pointer info mismatch");
-  static_assert((int)HSA_POINTER_ALLOCATED == (int)HSA_EXT_POINTER_TYPE_HSA,
-                "Thunk pointer info mismatch");
-  static_assert((int)HSA_POINTER_REGISTERED_USER == (int)HSA_EXT_POINTER_TYPE_LOCKED,
-                "Thunk pointer info mismatch");
-  static_assert((int)HSA_POINTER_REGISTERED_GRAPHICS == (int)HSA_EXT_POINTER_TYPE_GRAPHICS,
-                "Thunk pointer info mismatch");
+    if (returnListData) {
+      assert(thunkInfo.NMappedNodes <= agents_by_node_.size() &&
+             "PointerInfo: Thunk returned more than all agents in NMappedNodes.");
+      mappedNodes = (uint32_t*)alloca(thunkInfo.NMappedNodes * sizeof(uint32_t));
+      memcpy(mappedNodes, thunkInfo.MappedNodes, thunkInfo.NMappedNodes * sizeof(uint32_t));
+    }
+    retInfo.type = (hsa_amd_pointer_type_t)thunkInfo.Type;
+    retInfo.agentBaseAddress = reinterpret_cast<void*>(thunkInfo.GPUAddress);
+    retInfo.hostBaseAddress = thunkInfo.CPUAddress;
+    retInfo.sizeInBytes = thunkInfo.SizeInBytes;
+    retInfo.userData = thunkInfo.UserData;
+    if (block_info != nullptr) {
+      block_info->base = retInfo.hostBaseAddress;
+      block_info->length = retInfo.sizeInBytes;
+    }
+    if (retInfo.type == HSA_EXT_POINTER_TYPE_HSA) {
+      auto fragment = allocation_map_.upper_bound(ptr);
+      if (fragment != allocation_map_.begin()) {
+        fragment--;
+        if ((fragment->first <= ptr) &&
+            (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
+          retInfo.hostBaseAddress = const_cast<void*>(fragment->first);
+          retInfo.agentBaseAddress = retInfo.hostBaseAddress;
+          retInfo.sizeInBytes = fragment->second.size;
+          retInfo.userData = fragment->second.user_ptr;
+        }
+      }
+    }
+  }  // end lock scope
 
   retInfo.size = Min(info->size, sizeof(hsa_amd_pointer_info_t));
-  retInfo.type = (hsa_amd_pointer_type_t)thunkInfo.Type;
-  retInfo.agentBaseAddress = reinterpret_cast<void*>(thunkInfo.GPUAddress);
-  retInfo.hostBaseAddress = thunkInfo.CPUAddress;
-  retInfo.sizeInBytes = thunkInfo.SizeInBytes;
-  retInfo.userData = thunkInfo.UserData;
-  retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+
+  // Temp: workaround thunk bug, IPC memory has garbage in Node.
+  // retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+  auto it = agents_by_node_.find(thunkInfo.Node);
+  if (it != agents_by_node_.end())
+    retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+  else
+    retInfo.agentOwner.handle = 0;
 
   memcpy(info, &retInfo, retInfo.size);
 
@@ -751,19 +778,50 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 }
 
 hsa_status_t Runtime::SetPtrInfoData(void* ptr, void* userptr) {
+  {  // Use allocation map if possible to handle fragments.
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    const auto& it = allocation_map_.find(ptr);
+    if (it != allocation_map_.end()) {
+      it->second.user_ptr = userptr;
+      return HSA_STATUS_SUCCESS;
+    }
+  }
+  // Cover entries not in the allocation map (graphics, lock,...)
   if (hsaKmtSetMemoryUserData(ptr, userptr) == HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_SUCCESS;
-  else
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 }
 
 hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
   static_assert(sizeof(hsa_amd_ipc_memory_t) == sizeof(HsaSharedMemoryHandle),
                 "Thunk IPC mismatch.");
-  if (hsaKmtShareMemory(ptr, len, (HsaSharedMemoryHandle*)handle) == HSAKMT_STATUS_SUCCESS)
-    return HSA_STATUS_SUCCESS;
-  else
+  // Reject sharing allocations larger than ~8TB due to thunk limitations.
+  if (len > 0x7FFFFFFF000ull) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  // Check for fragment sharing.
+  PtrInfoBlockData block;
+  hsa_amd_pointer_info_t info;
+  info.size = sizeof(info);
+  if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if ((block.base != ptr) || (block.length != len)) {
+    if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
+      assert(false && "Fragment's block not aligned to 2MB!");
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+    if (hsaKmtShareMemory(block.base, block.length, reinterpret_cast<HsaSharedMemoryHandle*>(
+                                                        handle)) != HSAKMT_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    uint32_t offset =
+        (reinterpret_cast<uint8_t*>(ptr) - reinterpret_cast<uint8_t*>(block.base)) / 4096;
+    // Holds size in (4K?) pages in thunk handle: Mark as a fragment and denote offset.
+    handle->handle[6] |= 0x80000000 | offset;
+  } else {
+    if (hsaKmtShareMemory(ptr, len, reinterpret_cast<HsaSharedMemoryHandle*>(handle)) !=
+        HSAKMT_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, uint32_t num_agents,
@@ -772,14 +830,36 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   void* importAddress;
   HSAuint64 importSize;
   HSAuint64 altAddress;
+
+  hsa_amd_ipc_memory_t importHandle;
+  importHandle = *handle;
+
+  // Extract fragment info
+  bool isFragment = false;
+  uint32_t fragOffset = 0;
+  auto fixFragment = [&]() {
+    if (!isFragment) return;
+    importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
+    len = Min(len, importSize - fragOffset);
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    allocation_map_[importAddress] = AllocationRegion(nullptr, len);
+  };
+
+  if ((importHandle.handle[6] & 0x80000000) != 0) {
+    isFragment = true;
+    fragOffset = (importHandle.handle[6] & 0x1FF) * 4096;
+    importHandle.handle[6] &= ~(0x80000000 | 0x1FF);
+  }
+
   if (num_agents == 0) {
-    if (hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(handle),
+    if (hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle),
                                    &importAddress, &importSize) != HSAKMT_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     if (hsaKmtMapMemoryToGPU(importAddress, importSize, &altAddress) != HSAKMT_STATUS_SUCCESS) {
       hsaKmtDeregisterMemory(importAddress);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
+    fixFragment();
     *mapped_ptr = importAddress;
     return HSA_STATUS_SUCCESS;
   }
@@ -798,9 +878,9 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   for (int i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
-  if (hsaKmtRegisterSharedHandleToNodes(reinterpret_cast<const HsaSharedMemoryHandle*>(handle),
-                                        &importAddress, &importSize, num_agents,
-                                        nodes) != HSAKMT_STATUS_SUCCESS)
+  if (hsaKmtRegisterSharedHandleToNodes(
+          reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle), &importAddress,
+          &importSize, num_agents, nodes) != HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   HsaMemMapFlags map_flags;
@@ -816,11 +896,28 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     }
   }
 
+  fixFragment();
   *mapped_ptr = importAddress;
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::IPCDetach(void* ptr) {
+  {  // Handle imported fragments.
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    const auto& it = allocation_map_.find(ptr);
+    if (it != allocation_map_.end()) {
+      if (it->second.region != nullptr) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      allocation_map_.erase(it);
+      lock.Release();  // Can't hold memory lock when using pointer info.
+
+      PtrInfoBlockData block;
+      hsa_amd_pointer_info_t info;
+      info.size = sizeof(info);
+      if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
+        return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      ptr = block.base;
+    }
+  }
   if (hsaKmtUnmapMemoryToGPU(ptr) != HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   if (hsaKmtDeregisterMemory(ptr) != HSAKMT_STATUS_SUCCESS)

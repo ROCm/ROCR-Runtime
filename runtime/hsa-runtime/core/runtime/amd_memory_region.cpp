@@ -49,6 +49,7 @@
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/utils.h"
+#include "core/inc/exceptions.h"
 
 namespace amd {
 void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
@@ -98,13 +99,13 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
   hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
-                           core::Agent* owner,
+MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
     : core::MemoryRegion(fine_grain, full_profile, owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
-      virtual_size_(0) {
+      virtual_size_(0),
+      fragment_allocator_(BlockAllocator(*this)) {
   virtual_size_ = GetPhysicalSize();
 
   mem_flag_.Value = 0;
@@ -169,6 +170,15 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
   kmt_alloc_flags.ui32.AQLQueueMemory =
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
 
+  // Only allow using the suballocator for ordinary VRAM.
+  bool useSubAlloc = IsLocalMemory();
+  useSubAlloc &= (alloc_flags == AllocateRestrict);
+  useSubAlloc &= (size <= fragment_allocator_.max_alloc());
+  if (useSubAlloc) {
+    *address = fragment_allocator_.alloc(size);
+    return HSA_STATUS_SUCCESS;
+  }
+
   *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
 
   if (*address != NULL) {
@@ -220,6 +230,8 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
 }
 
 hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
+  if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
+
   MakeKfdMemoryUnresident(address);
 
   FreeKfdMemory(address, size);
@@ -584,6 +596,21 @@ hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
                                        const core::Agent& agent,
                                        hsa_access_permission_t access) const {
   return HSA_STATUS_SUCCESS;
+}
+
+void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
+  assert(request_size < block_size() && "BlockAllocator alloc request exceeds block size.");
+
+  void* ret;
+  hsa_status_t err = region_.Allocate(
+      block_size(), core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect,
+      &ret);
+  if (err != HSA_STATUS_SUCCESS)
+    throw new ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
+  assert(ret != nullptr && "Region returned nullptr on success.");
+
+  allocated_size = block_size();
+  return ret;
 }
 
 }  // namespace

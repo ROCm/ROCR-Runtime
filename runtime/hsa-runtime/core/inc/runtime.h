@@ -264,8 +264,14 @@ class Runtime {
 
   hsa_status_t InteropUnmap(void* ptr);
 
+  struct PtrInfoBlockData {
+    void* base;
+    size_t length;
+  };
+
   hsa_status_t PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
-                       uint32_t* num_agents_accessible, hsa_agent_t** accessible);
+                       uint32_t* num_agents_accessible, hsa_agent_t** accessible,
+                       PtrInfoBlockData* block_info = nullptr);
 
   hsa_status_t SetPtrInfoData(void* ptr, void* userptr);
 
@@ -315,12 +321,13 @@ class Runtime {
   static void AsyncEventsLoop(void*);
 
   struct AllocationRegion {
-    AllocationRegion() : region(NULL), size(0) {}
+    AllocationRegion() : region(NULL), size(0), user_ptr(nullptr) {}
     AllocationRegion(const MemoryRegion* region_arg, size_t size_arg)
-        : region(region_arg), size(size_arg) {}
+        : region(region_arg), size(size_arg), user_ptr(nullptr) {}
 
     const MemoryRegion* region;
     size_t size;
+    void* user_ptr;
   };
 
   struct AsyncEventsControl {
