@@ -1488,7 +1488,7 @@ typedef struct hsa_amd_ipc_memory_s {
  * any process.  In general applications should confirm that a shared memory
  * region has been attached (via hsa_amd_ipc_memory_attach) in the remote
  * process prior to releasing that memory in the local process.
- * Repeated calls for the same allocaiton may, but are not required to, return
+ * Repeated calls for the same allocation may, but are not required to, return
  * unique handles.
  *
  * @param[in] ptr Pointer to memory allocated via ROCr APIs to prepare for
