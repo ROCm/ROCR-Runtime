@@ -8,23 +8,23 @@ cmake_minimum_required(VERSION 2.8.0)
 #
 
 #
-#   Setup build environment
+#   Required Defines on cmake command line
 # 
-#   1) Set env. variable specifying the location of ROCR header files
+#   1) Set location of ROCR header files
 #
-#      export ROCM_DIR="Root for RocM install"
+#      ROCM_DIR="Root for RocM install"
 #
-#   2) Set env. variable ROCRTST_BLD_TYPE to either "Debug" or "Release".
+#   2) Set ROCRTST_BLD_TYPE to either "Debug" or "Release".
 #      If not set, the default value is "Debug" is bound.
 # 
-#      export ROCRTST_BLD_TYPE=Debug or ROCRTST_BLD_TYPE=Release
+#      ROCRTST_BLD_TYPE=Debug or ROCRTST_BLD_TYPE=Release
 #
-#   3) Set env. variable ROCRTST_BLD_BITS to either "32" or "64"
+#   3) Set ROCRTST_BLD_BITS to either "32" or "64"
 #      If not set, the default value of "64" is bound.
 # 
-#       export ROCRTST_BLD_BITS=32 or ROCRTST_BLD_BITS=64
+#       ROCRTST_BLD_BITS=32 or ROCRTST_BLD_BITS=64
 #
-#   4) Set env. variable TARGET_DEVICES to indicate gpu types for kernel
+#   4) Set TARGET_DEVICES to indicate gpu types for kernel
 #      builds (e.g., "gfx803;gfx900; ...")
 #
 #   Building rocrtst Suite
@@ -49,24 +49,24 @@ if(WIN32)
 endif()
 
 #
-# Process environment variables
+# Process input variables
 #
 
-# Required Env. Variables first:
+# Required Defines first:
 
-set(ROCR_INC_DIR $ENV{ROCM_DIR}/include)
-set(ROCR_LIB_DIR $ENV{ROCM_DIR}/lib)
+set(ROCR_INC_DIR ${ROCM_DIR}/include)
+set(ROCR_LIB_DIR ${ROCM_DIR}/lib)
 #
 # Determine ROCR Header files are present
 #
 if(NOT EXISTS ${ROCR_INC_DIR}/hsa/hsa.h)
-  message("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check value of env. var. ROCM_DIR")
+  message("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check value of ROCM_DIR define")
   return()
 endif()
 
 # Determine ROCR Library files are present
 #
-if("$ENV{ROCRTST_BLD_BITS}" STREQUAL 32)
+if("${ROCRTST_BLD_BITS}" STREQUAL 32)
   set (ONLY64STR "")
   set (IS64BIT 0)
 else()
@@ -76,37 +76,37 @@ endif()
 #
 if (${IS64BIT} EQUAL 0)
   if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime.so)
-    message("ERROR: ${ROCR_LIB_DIR}/libhsa-runtime.so doesn't exist. Check value of env. var. ROCM_DIR")
+    message("ERROR: ${ROCR_LIB_DIR}/libhsa-runtime.so doesn't exist. Check value of ROCM_DIR define")
     return()
   endif()
 else()
   if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime64.so)
-    message("ERROR: Environment variable ROCR_LIB_DIR pointing to ROCR libraries is not set")
+    message("ERROR: Define ROCR_LIB_DIR pointing to ROCR libraries is not set")
     return()
   endif()
 endif()
 
-if (DEFINED ENV{LLVM_DIR})
-  set(CLANG $ENV{LLVM_DIR}/clang)
+if (DEFINED LLVM_DIR)
+  set(CLANG ${LLVM_DIR}/clang)
   if (NOT EXISTS ${CLANG})
-    message("ERROR: path to clang (${CLANG}) is not valid. Is env. variable LLVM_DIR correct?")
+    message("ERROR: path to clang (${CLANG}) is not valid. Is define LLVM_DIR correct?")
     return()
   endif()
 else()
-    message("WARNING: LLVM_DIR env. variable is not set. Kernels will not be built.")
+    message("WARNING: LLVM_DIR define is not set. Kernels will not be built.")
 endif()
 
-if (DEFINED ENV{OPENCL_DIR})
-  set(OPENCL_INC_DIR $ENV{OPENCL_DIR}/include)
-  set(OPENCL_LIB_DIR $ENV{OPENCL_DIR}/lib)
+if (DEFINED OPENCL_DIR)
+  set(OPENCL_INC_DIR ${OPENCL_DIR}/include)
+  set(OPENCL_LIB_DIR ${OPENCL_DIR}/lib)
 else()
-    message("WARNING: OPENCL_DIR environment variable is not set. Kernels will not be built.")
+    message("WARNING: OPENCL_DIR define is not set. Kernels will not be built.")
 endif()
 
-if (DEFINED ENV{OPENCL_VER})
-  set(OPENCL_VER $ENV{OPENCL_VER})
+if (DEFINED OPENCL_VER)
+  set(OPENCL_VER ${OPENCL_VER})
 else()
-  message("OPENCL_VER environment variable is not set. Using default")
+  message("OPENCL_VER define is not set. Using default")
   set(OPENCL_VER "2.0")
 endif()
 
@@ -117,7 +117,7 @@ if (NOT DEFINED TARGET_DEVICES)
   list(APPEND TARGET_DEVICES "gfx803")
 endif() 
 
-string(TOLOWER "$ENV{ROCRTST_BLD_TYPE}" tmp)
+string(TOLOWER "${ROCRTST_BLD_TYPE}" tmp)
 if("${tmp}" STREQUAL release)
   set(BUILD_TYPE "Release")
   set(ISDEBUG 0)
@@ -152,6 +152,7 @@ message("--------Proj Lib Dir: " ${PROJECT_BINARY_DIR}/lib)
 message("--------Proj Exe Dir: " ${PROJECT_BINARY_DIR}/bin)
 message("------Target Devices: ${TARGET_DEVICES}")
 message("----------Clang path: " ${CLANG})
+message("----------OpenCL Dir: " ${OPENCL_DIR})
 message("-------OpenCL version " ${OPENCL_VER})
 message("")
 
@@ -223,7 +224,6 @@ include_directories(${ROCR_INC_DIR} ${OPENCL_INC_DIR})
 
 # Use this function to build any samples that have kernels to be built
 function(process_sample S_NAME TARG_DEV HAS_KERNEL)
- 
   set(KERNEL_DIR ${PROJECT_BINARY_DIR}/${TARG_DEV})
   set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
   
