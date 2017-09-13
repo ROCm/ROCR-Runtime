@@ -171,7 +171,8 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
 
   // Only allow using the suballocator for ordinary VRAM.
-  bool useSubAlloc = IsLocalMemory();
+  bool useSubAlloc = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
+  useSubAlloc &= IsLocalMemory();
   useSubAlloc &= (alloc_flags == AllocateRestrict);
   useSubAlloc &= (size <= fragment_allocator_.max_alloc());
   if (useSubAlloc) {
