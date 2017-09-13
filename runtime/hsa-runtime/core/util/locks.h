@@ -56,20 +56,22 @@ class ScopedAcquire {
  public:
   /// @brief: When constructing, acquire the lock.
   /// @param: lock(Input), pointer to an existing lock.
-  explicit ScopedAcquire(LockType* lock) : lock_(lock) { lock_->Acquire(); }
+  explicit ScopedAcquire(LockType* lock) : lock_(lock), doRelease(true) { lock_->Acquire(); }
 
   /// @brief: when destructing, release the lock.
   ~ScopedAcquire() {
-    if (lock_ != nullptr) lock_->Release();
+    if (doRelease) lock_->Release();
   }
 
+  /// @brief: Release the lock early.  Avoid using when possible.
   void Release() {
     lock_->Release();
-    lock_ = nullptr;
+    doRelease = false;
   }
 
  private:
   LockType* lock_;
+  bool doRelease;
   /// @brief: Disable copiable and assignable ability.
   DISALLOW_COPY_AND_ASSIGN(ScopedAcquire);
 };
