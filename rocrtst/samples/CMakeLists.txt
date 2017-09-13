@@ -218,7 +218,6 @@ link_directories(${ROCR_LIB_DIR})
 # Extend the list of libraries to be used for linking ROC Perf Apps
 #
 set(ROCR_LIBS ${ROCR_LIBS} hsa-runtime${ONLY64STR})
-set(ROCR_LIBS ${ROCR_LIBS} hsa-runtime-tools${ONLY64STR})
 
 include_directories(${ROCR_INC_DIR} ${OPENCL_INC_DIR})
 
