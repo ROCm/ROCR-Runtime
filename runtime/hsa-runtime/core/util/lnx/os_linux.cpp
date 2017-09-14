@@ -335,13 +335,14 @@ uint64_t ReadAccurateClock() {
 
 uint64_t AccurateClockFrequency() {
   timespec time;
-  int err = clock_getres(CLOCK_MONOTONIC_RAW, &time);
-  assert(err == 0 && "clock_getres(CLOCK_MONOTONIC_RAW,...) failed");
+  //use non-RAW for getres due to bug in older 2.6.x kernels
+  int err = clock_getres(CLOCK_MONOTONIC, &time);
+  assert(err == 0 && "clock_getres(CLOCK_MONOTONIC,...) failed");
   assert(time.tv_sec == 0 &&
-         "clock_getres(CLOCK_MONOTONIC_RAW,...) returned very low frequency "
+         "clock_getres(CLOCK_MONOTONIC,...) returned very low frequency "
          "(<1Hz).");
   assert(time.tv_nsec < 0xFFFFFFFF &&
-         "clock_getres(CLOCK_MONOTONIC_RAW,...) returned very low frequency "
+         "clock_getres(CLOCK_MONOTONIC,...) returned very low frequency "
          "(<1Hz).");
   if (invPeriod == 0.0) invPeriod = 1.0 / double(time.tv_nsec);
   return 1000000000ull / uint64_t(time.tv_nsec);
