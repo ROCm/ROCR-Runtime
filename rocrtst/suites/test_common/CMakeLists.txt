@@ -4,120 +4,125 @@
 cmake_minimum_required(VERSION 2.8.0)
 
 #
-# GCC 4.8 or higher compiler required.
+#   Required Defines on cmake command line
 #
-#   Setup build environment
+#   1) Set location of ROCR header files
 #
-#   1) Set env. variable specifying the location of ROCR header files
+#      ROCM_DIR="Root for RocM install"
 #
-#      export ROCR_DIR="Root for RocR install"
-#
-#   2) Set env. variable ROCRTST_BLD_TYPE to either "Debug" or "Release".
+#   2) Set ROCRTST_BLD_TYPE to either "Debug" or "Release".
 #      If not set, the default value is "Debug" is bound.
-# 
-#      export ROCRTST_BLD_TYPE=Debug or ROCRTST_BLD_TYPE=Release
 #
-#   3) Set env. variable ROCRTST_BLD_BITS to either "32" or "64"
+#      ROCRTST_BLD_TYPE=Debug or ROCRTST_BLD_TYPE=Release
+#
+#   3) Set ROCRTST_BLD_BITS to either "32" or "64"
 #      If not set, the default value of "64" is bound.
-# 
-#       export ROCRTST_BLD_BITS=32 or ROCRTST_BLD_BITS=64
 #
-#   4) Set env. variable TARGET_DEVICE to indicate gpu type (e.g., gfx803,
-#      gfx900, ...)
+#       ROCRTST_BLD_BITS=32 or ROCRTST_BLD_BITS=64
+#
+#   4) Set TARGET_DEVICES to indicate gpu types for kernel
+#      builds (e.g., "gfx803;gfx900; ...")
 #
 #   Building rocrtst Suite
-# 
+#
+#
 #   1) Create build folder e.g. "rocrtst/build" - any name will do
 #   2) Cd into build folder
 #   3) Run "cmake .."
 #   4) Run "make"
 #
 
+set(DEFAULT_TARGET "gfx803")
+
 #
 # Currently support for Windows platform is not present
 #
+
+#############################
+# COMMON AREA
+#############################
 if(WIN32)
-  MESSAGE("rocrtst Suite is not supported on Windows platform")
-  RETURN()
+  message("rocrtst Suite is not supported on Windows platform")
+  return()
 endif()
 
 #
-# Process environment variables relating to Build type, size and RT version
+# Process input variables
 #
-string(TOLOWER "$ENV{ROCRTST_BLD_TYPE}" tmp)
-if("${tmp}" STREQUAL debug)
-  set(BUILD_TYPE "Debug")
-  set(ISDEBUG 1)
-else()
-  set(BUILD_TYPE "Release")
-  set(ISDEBUG 0)
+
+# Required Defines first:
+
+set(ROCR_INC_DIR ${ROCM_DIR}/include)
+set(ROCR_LIB_DIR ${ROCM_DIR}/lib)
+#
+# Determine ROCR Header files are present
+#
+if(NOT EXISTS ${ROCR_INC_DIR}/hsa/hsa.h)
+  message("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check value of ROCM_DIR define")
+  return()
 endif()
 
-if("$ENV{ROCRTST_BLD_BITS}" STREQUAL 32)
+# Determine ROCR Library files are present
+#
+if("${ROCRTST_BLD_BITS}" STREQUAL 32)
   set (ONLY64STR "")
   set (IS64BIT 0)
 else()
   set (ONLY64STR "64")
   set (IS64BIT 1)
 endif()
-
-set(ROCR_INC_DIR $ENV{ROCR_DIR}/hsa/include) 
-set(ROCR_LIB_DIR $ENV{ROCR_DIR}/lib)
- 
-#
-# Determine ROCR Header files are present
-#
-if(NOT EXISTS ${ROCR_INC_DIR}/hsa/hsa.h)
-  MESSAGE("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check ROCR_DIR env. variable.")
-  RETURN()
-endif()
-
-
-# Determine ROCR Library files are present
 #
 if (${IS64BIT} EQUAL 0)
   if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime.so)
-    MESSAGE("ERROR: Environment variable ROCR_LIB_DIR pointing to ROCR libraries is not set")
-    RETURN()
+    message("ERROR: ${ROCR_LIB_DIR}/libhsa-runtime.so doesn't exist. Check value of ROCM_DIR define")
+    return()
   endif()
 else()
   if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime64.so)
-    MESSAGE("ERROR: Environment variable ROCR_LIB_DIR pointing to ROCR libraries is not set")
-    RETURN()
-  endif()
-endif()
-
-if (DEFINED ENV{OPENCL_DIR})
-  set(CLANG $ENV{OPENCL_DIR}/bin/x86_64/clang)
-  set(OPENCL_DIR $ENV{OPENCL_DIR})
-  if (NOT EXISTS ${CLANG})
-    message("ERROR: path to clang (${CLANG}) is not valid. Is env. variable OPENCL_DIR correct?")
+    message("ERROR: Define ROCR_LIB_DIR pointing to ROCR libraries is not set")
     return()
   endif()
-
-  if (DEFINED ENV{OPENCL_VER})
-    set(OPENCL_VER $ENV{OPENCL_VER})
-  else()
-    message("OPENCL_VER environment variable is not set. Using default")
-    set(OPENCL_VER "2.0")
-  endif()
-else()
-    message("WARNING: OPENCL_DIR environment variable is not set. Kernels will not be built.")
 endif()
 
-if (DEFINED ENV{TARGET_DEVICE})
-  set(TARGET_DEVICE $ENV{TARGET_DEVICE})
+if (DEFINED LLVM_DIR)
+  set(CLANG ${LLVM_DIR}/clang)
+  if (NOT EXISTS ${CLANG})
+    message("ERROR: path to clang (${CLANG}) is not valid. Is define LLVM_DIR correct?")
+    return()
+  endif()
 else()
-  message("ERROR: TARGET_DEVICE environment variable is not defined.")
-  message("Please define a valid clang target (e.g., gfx803, gfx900,...).")
-  return()
-endif() 
+    message("WARNING: LLVM_DIR define is not set. Kernels will not be built.")
+endif()
 
-#
-# Set Name for rocrtst Suite Project
-#
-set(ROCRTST_SUITE_NAME "rocrtst${ONLY64STR}")
-project (${ROCRTST_SUITE_NAME})
+if (DEFINED OPENCL_DIR)
+  set(OPENCL_INC_DIR ${OPENCL_DIR}/include)
+  set(OPENCL_LIB_DIR ${OPENCL_DIR}/lib)
+else()
+    message("WARNING: OPENCL_DIR define is not set. Kernels will not be built.")
+endif()
+
+if (DEFINED OPENCL_VER)
+  set(OPENCL_VER ${OPENCL_VER})
+else()
+  message("OPENCL_VER define is not set. Using default")
+  set(OPENCL_VER "2.0")
+endif()
+
+if (NOT DEFINED TARGET_DEVICES)
+  message("WARNING: No targets devices provided on command line")
+  message("  e.g., cmake -DTARGET_DEVICES=\"gfx803;gfx900;gfx...\" ..")
+  message("  Using default target of $DEFAULT_TARGET")
+  list(APPEND TARGET_DEVICES "gfx803")
+endif()
+
+string(TOLOWER "${ROCRTST_BLD_TYPE}" tmp)
+if("${tmp}" STREQUAL release)
+  set(BUILD_TYPE "Release")
+  set(ISDEBUG 0)
+else()
+  set(BUILD_TYPE "Debug")
+  set(ISDEBUG 1)
+endif()
 
 #
 # Print out the build configuration being used:
@@ -137,8 +142,9 @@ message("--------Proj Src Dir: " ${PROJECT_SOURCE_DIR})
 message("--------Proj Bld Dir: " ${PROJECT_BINARY_DIR})
 message("--------Proj Lib Dir: " ${PROJECT_BINARY_DIR}/lib)
 message("--------Proj Exe Dir: " ${PROJECT_BINARY_DIR}/bin)
-message("-------Target Device: " ${TARGET_DEVICE})
+message("------Target Devices: ${TARGET_DEVICES}")
 message("----------Clang path: " ${CLANG})
+message("----------OpenCL Dir: " ${OPENCL_DIR})
 message("-------OpenCL version " ${OPENCL_VER})
 message("")
 
@@ -150,7 +156,7 @@ set(CMAKE_BUILD_TYPE ${BUILD_TYPE})
 #
 # Flag to enable / disable verbose output.
 #
-SET( CMAKE_VERBOSE_MAKEFILE on )
+set(CMAKE_VERBOSE_MAKEFILE on)
 #
 # Compiler pre-processor definitions.
 #
@@ -242,44 +248,64 @@ include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
 
 # Use this function to build any samples that have kernels to be built
-function(build_kernel S_NAME)
+function(build_kernel S_NAME TARG_DEV)
+  set(KERNEL_DIR ${PROJECT_BINARY_DIR}/${TARG_DEV})
   set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
-  set(TARG_NAME "${S_NAME}_hsaco")
-  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME} PARENT_SCOPE)
-  separate_arguments(CLANG_ARG_LIST UNIX_COMMAND "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEVICE} -include ${OPENCL_DIR}/include/opencl-c.h ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${PROJECT_BINARY_DIR}/${SNAME_KERNEL}")
-  add_custom_target(${TARG_NAME} ${CLANG} ${CLANG_ARG_LIST}
+
+  set(TARG_NAME "${S_NAME}_hsaco.${TARG_DEV}")
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME}
+                                                 CACHE INTERNAL HSA_TARG_LIST)
+  separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
+   "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+  add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
+      ${CMAKE_COMMAND} -E create_symlink
+        "${PROJECT_BINARY_DIR}/${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"
      COMMENT "BUILDING KERNEL..."
      VERBATIM)
 endfunction(build_kernel)
 
+function(build_sample_for_devices S_NAME)
+  set(HSACO_TARG_LIST PARENT_SCOPE)
+
+  foreach(t ${TARGET_DEVICES})
+    build_kernel(${S_NAME} ${t})
+  endforeach(t)
+endfunction(build_sample_for_devices)
+
+
+# Make directories for each possible target device
+foreach(td ${TARGET_DEVICES})
+  file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/${td})
+endforeach(td)
+
 ######################
 # Kernel Build Section
 ######################
+set (HSACO_TARG_LIST "" CACHE INTERNAL HSACO_TARG_LIST)
+
 set(KERN_SUFFIX "kernels.hsaco")
 set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
-set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_DIR}/lib/x86_64/bitcode")
+set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_LIB_DIR}")
 
 set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
-set(COMMON_BITCODE_LIBS "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
+set(COMMON_BITCODE_LIBS
+                      "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
 
-# To build kernels, repeat the pattern used below for the P2P kernel; this
-# pattern sets the bitcode libraries required by the kernel which will be 
-# used in the build_kernel() call, which builds the kernel.
 
 # Test Case Template example
 set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/test_case_template_kernels.cl")
-build_kernel("test_case_template")
+build_sample_for_devices("test_case_template")
 
 # P2P Memory Access
 #set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 #set(CL_FILE_LIST "${KERNELS_DIR}/p2p_mem_access_kernels.cl")
-#build_kernel("p2p_mem_access")
+#build_sample_for_devices("p2p_mem_access")
 
 # Dispatch Time 
 set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/dispatch_time_kernels.cl")
-build_kernel("dispatch_time")
+build_sample_for_devices("dispatch_time")
 
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${common_srcs}
@@ -288,7 +314,7 @@ add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${common_sr
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwloc)
 
 add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
-INSTALL(TARGETS ${ROCRTST}
+install(TARGETS ${ROCRTST}
         ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
         LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib
         RUNTIME DESTINATION ${PROJECT_BINARY_DIR}/bin)
