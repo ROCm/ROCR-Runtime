@@ -129,7 +129,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 }
 
 GpuAgent::~GpuAgent() {
-  for (int i = 0; i < BlitCount; ++i) {
+  for (unsigned i = 0; i < BlitCount; ++i) {
     if (blits_[i] != NULL) {
       hsa_status_t status = blits_[i]->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
@@ -137,7 +137,7 @@ GpuAgent::~GpuAgent() {
     }
   }
 
-  for (int i = 0; i < QueueCount; ++i) {
+  for (unsigned i = 0; i < QueueCount; ++i) {
     delete queues_[i];
   }
 
@@ -655,7 +655,7 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  for (int i = 0; i < BlitCount; ++i) {
+  for (unsigned i = 0; i < BlitCount; ++i) {
     if (blits_[i] != NULL) {
       const hsa_status_t stat = blits_[i]->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {

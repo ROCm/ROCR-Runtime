@@ -200,7 +200,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
   // Set group and private memory apertures in amd_queue_.
   auto& regions = agent->regions();
 
-  for (int i = 0; i < regions.size(); i++) {
+  for (unsigned i = 0; i < regions.size(); i++) {
     const MemoryRegion* amdregion;
     amdregion = static_cast<const MemoryRegion*>(regions[i]);
     uint64_t base = amdregion->GetBaseAddress();
@@ -821,7 +821,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
     nop_pad[0] = PM4_HDR(PM4_HDR_IT_OPCODE_NOP, nop_pad_size_dw, agent_->isa()->GetMajorVersion());
 
-    for (int i = 1; i < nop_pad_size_dw; ++i) {
+    for (unsigned i = 1; i < nop_pad_size_dw; ++i) {
       nop_pad[i] = 0;
     }
 

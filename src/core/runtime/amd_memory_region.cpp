@@ -521,7 +521,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
         core::Runtime::runtime_singleton_->gpu_agents().begin(),
         core::Runtime::runtime_singleton_->gpu_agents().end());
   } else {
-    for (int i = 0; i < num_agents; ++i) {
+    for (unsigned i = 0; i < num_agents; ++i) {
       core::Agent* agent = core::Agent::Convert(agents[i]);
       if (agent == NULL || !agent->IsValid()) {
         return HSA_STATUS_ERROR_INVALID_AGENT;

@@ -106,7 +106,7 @@ struct AqlPacket {
 
     if ((type == HSA_PACKET_TYPE_BARRIER_AND) ||
         (type == HSA_PACKET_TYPE_BARRIER_OR)) {
-      for (int i = 0; i < 5; i++)
+      for (unsigned i = 0; i < 5; i++)
         string << "\ndep[" << i << "]: " << barrier_and.dep_signal[i].handle;
       string << "\nsignal: " << barrier_and.completion_signal.handle;
     }

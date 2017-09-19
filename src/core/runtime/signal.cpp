@@ -190,7 +190,7 @@ SignalGroup::SignalGroup(uint32_t num_signals, const hsa_signal_t* hsa_signals)
     signals = NULL;
   }
   if (signals == NULL) return;
-  for (int i = 0; i < count; i++) signals[i] = hsa_signals[i];
+  for (unsigned i = 0; i < count; i++) signals[i] = hsa_signals[i];
 }
 
 }  // namespace core

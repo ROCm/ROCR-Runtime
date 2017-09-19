@@ -577,7 +577,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
     if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  for (int i = 0; i < num_agents; i++) {
+  for (unsigned i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(agents[i]);
     IS_VALID(device);
     core_agents[i] = device;
@@ -636,7 +636,7 @@ hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t l
     if (num_agents > tinyArraySize) delete[] core_agents;
   });
 
-  for (int i = 0; i < num_agents; i++) {
+  for (unsigned i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(mapping_agents[i]);
     IS_VALID(device);
     core_agents[i] = device;

@@ -472,7 +472,7 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
     core::Agent* blit_agent = core::Agent::Convert(info.agentOwner);
     if (blit_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice) {
       blit_agent = nullptr;
-      for (int i = 0; i < agent_count; i++) {
+      for (unsigned i = 0; i < agent_count; i++) {
         if (core::Agent::Convert(accessible[i])->device_type() ==
             core::Agent::DeviceType::kAmdGpuDevice) {
           blit_agent = core::Agent::Convert(accessible[i]);
@@ -636,7 +636,7 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (unsigned i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID,
                        &nodes[i]);
 
@@ -723,7 +723,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   if (returnListData) {
     uint32_t count = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (unsigned i = 0; i < thunkInfo.NMappedNodes; i++) {
       assert(mappedNodes[i] < agents_by_node_.size() &&
              "PointerInfo: Invalid node ID returned from thunk.");
       count += agents_by_node_[mappedNodes[i]].size();
@@ -734,9 +734,9 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     *num_agents_accessible = count;
 
     uint32_t index = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (unsigned i = 0; i < thunkInfo.NMappedNodes; i++) {
       auto& list = agents_by_node_[mappedNodes[i]];
-      for (int j = 0; j < list.size(); j++) {
+      for (unsigned j = 0; j < list.size(); j++) {
         (*accessible)[index] = list[j]->public_handle();
         index++;
       }
@@ -791,7 +791,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (unsigned i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
   if (hsaKmtRegisterSharedHandleToNodes(reinterpret_cast<const HsaSharedMemoryHandle*>(handle),
@@ -1120,7 +1120,7 @@ void Runtime::LoadTools() {
   if (tool_names != "") {
     std::vector<std::string> names = parse_tool_names(tool_names);
     std::vector<const char*> failed;
-    for (int i = 0; i < names.size(); i++) {
+    for (unsigned i = 0; i < names.size(); i++) {
       os::LibHandle tool = os::LoadLib(names[i]);
 
       if (tool != NULL) {
@@ -1180,7 +1180,7 @@ void Runtime::CloseTools() {
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
   if (!flag_.running_valgrind()) {
-    for (int i = 0; i < tool_libs_.size(); i++) os::CloseLib(tool_libs_[i]);
+    for (unsigned i = 0; i < tool_libs_.size(); i++) os::CloseLib(tool_libs_[i]);
   }
   tool_libs_.clear();
 }
