@@ -9,26 +9,26 @@ cmake_minimum_required(VERSION 2.8.0)
 
 #
 #   Required Defines on cmake command line
-# 
+#
 #   1) Set location of ROCR header files
 #
 #      ROCM_DIR="Root for RocM install"
 #
 #   2) Set ROCRTST_BLD_TYPE to either "Debug" or "Release".
 #      If not set, the default value is "Debug" is bound.
-# 
+#
 #      ROCRTST_BLD_TYPE=Debug or ROCRTST_BLD_TYPE=Release
 #
 #   3) Set ROCRTST_BLD_BITS to either "32" or "64"
 #      If not set, the default value of "64" is bound.
-# 
+#
 #       ROCRTST_BLD_BITS=32 or ROCRTST_BLD_BITS=64
 #
 #   4) Set TARGET_DEVICES to indicate gpu types for kernel
 #      builds (e.g., "gfx803;gfx900; ...")
 #
 #   Building rocrtst Suite
-# 
+#
 #   1) Create build folder e.g. "rocrtst/build" - any name will do
 #   2) Cd into build folder
 #   3) Run "cmake .."
@@ -192,7 +192,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 #
 # Extend the compiler flags for 64-bit builds
 #
-if (IS64BIT) 
+if (IS64BIT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
@@ -244,7 +244,7 @@ function(process_sample S_NAME TARG_DEV HAS_KERNEL)
     # targ name, even though we aren't building an hsaco
     add_custom_target("${TARG_NAME}"
        ${CMAKE_COMMAND} -E create_symlink
-             "${PROJECT_BINARY_DIR}/${SNAME_EXE}" "${KERNEL_DIR}/${SNAME_EXE}"
+             "../${SNAME_EXE}" "${KERNEL_DIR}/${SNAME_EXE}"
        COMMENT "NO KERNEL TO BUILD; SYMLINK ONLY..."
       VERBATIM)
    endif()
