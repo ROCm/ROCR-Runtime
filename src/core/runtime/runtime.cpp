@@ -840,7 +840,7 @@ void Runtime::AsyncEventsLoop(void*) {
     // Reset the control signal
     if (index == 0) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
-    } else if (index != -1) {
+    } else {
       // No error or timout occured, process the handler
       assert(async_events_.handler_[index] != NULL);
       bool keep =
