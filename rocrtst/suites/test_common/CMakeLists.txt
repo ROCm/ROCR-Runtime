@@ -259,7 +259,7 @@ function(build_kernel S_NAME TARG_DEV)
    "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
   add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
-        "${PROJECT_BINARY_DIR}/${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"
+        "../${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"
      COMMENT "BUILDING KERNEL..."
      VERBATIM)
 endfunction(build_kernel)

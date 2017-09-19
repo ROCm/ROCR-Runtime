@@ -124,9 +124,6 @@ static void RunGenericTest(TestBase *test) {
 TEST(rocrtst, Test_Example) {
   TestExample tst;
 
-  rocrtst::smi::RocmSMI hw;
-  hw.DiscoverDevices();
-
   RunGenericTest(&tst);
 }
 
@@ -180,8 +177,11 @@ int main(int argc, char** argv) {
 
   RocrTstGlobals settings;
 
+  // Set some default values
   settings.verbosity = 1;
   settings.monitor_verbosity = 1;
+  settings.num_iterations = 5;
+
 
   if (ProcessCmdline(&settings, argc, argv)) {
     return 1;
@@ -193,6 +193,15 @@ int main(int argc, char** argv) {
        GetMonitorDevices, reinterpret_cast<void *>(&settings.monitor_devices));
 
   sRocrtstGlvalues = &settings;
+
+  // Use this dummy test to get one output of monitors at the beginning
+  {
+    TestExample dummy;
+    dummy.set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
+
+    std::cout << "*** Initial Hardware Monitor Values:" << std::endl;
+    DumpMonitorInfo(&dummy);
+  }
 
   return RUN_ALL_TESTS();
 }
