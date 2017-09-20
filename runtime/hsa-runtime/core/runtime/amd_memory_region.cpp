@@ -600,7 +600,7 @@ hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
 }
 
 void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
-  assert(request_size < block_size() && "BlockAllocator alloc request exceeds block size.");
+  assert(request_size <= block_size() && "BlockAllocator alloc request exceeds block size.");
 
   void* ret;
   hsa_status_t err = region_.Allocate(

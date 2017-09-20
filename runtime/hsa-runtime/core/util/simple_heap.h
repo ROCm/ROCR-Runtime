@@ -239,6 +239,7 @@ template <typename Allocator> class SimpleHeap {
     for (const auto& block : block_cache_)
       block_allocator_.free(reinterpret_cast<void*>(block.base_ptr_), block.length_);
     block_cache_.clear();
+    cache_size_ = 0;
   }
 
   size_t max_alloc() const { return block_allocator_.block_size(); }

@@ -722,6 +722,10 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     retInfo.sizeInBytes = thunkInfo.SizeInBytes;
     retInfo.userData = thunkInfo.UserData;
     if (block_info != nullptr) {
+      // The only time host and agent ptr may be different is when the memory is lock memory (malloc
+      // memory pinned for GPU access).  In this case there can not be any suballocation so
+      // block_info is redundant and unused.  Host address is returned since host address is used to
+      // manipulate lock memory.  This protects future use of block_info with lock memory.
       block_info->base = retInfo.hostBaseAddress;
       block_info->length = retInfo.sizeInBytes;
     }
@@ -731,8 +735,11 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
         fragment--;
         if ((fragment->first <= ptr) &&
             (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
-          retInfo.hostBaseAddress = const_cast<void*>(fragment->first);
-          retInfo.agentBaseAddress = retInfo.hostBaseAddress;
+          // agent and host address must match here.  Only lock memory is allowed to have differing
+          // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
+          // suballocated.
+          retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
+          retInfo.hostBaseAddress = retInfo.agentBaseAddress;
           retInfo.sizeInBytes = fragment->second.size;
           retInfo.userData = fragment->second.user_ptr;
         }
