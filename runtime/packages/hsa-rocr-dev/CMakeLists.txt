@@ -89,6 +89,7 @@ set ( RUNTIME_HEADER_NAMES
       "hsa_ext_finalize.h"
       "hsa_ext_image.h"
       "hsa_ven_amd_loader.h"
+      "hsa_ven_amd_aqlprofile.h"
      )
 
 set ( RUNTIME_TOOLS_HEADER_NAMES
