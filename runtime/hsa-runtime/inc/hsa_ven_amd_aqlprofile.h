@@ -73,14 +73,15 @@ extern "C" {
 //
 // Supported profiling events
 typedef enum {
-  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC,
-  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT
+  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC = 0,
+  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT = 1
 } hsa_ven_amd_aqlprofile_event_type_t;
 
 // Supported performance counters (PMC) blocks
 // The block ID is the same for a block instances set, for example
 // each block instance from the TCC block set, TCC0, TCC1, …, TCCN
 // will have the same block ID HSA_VEN_AMD_AQLPROFILE_BLOCKS_TCC.
+#ifndef AQLPROFILE_NGEN_API
 typedef enum {
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_CPC    = 0,
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_CPF    = 1,
@@ -111,6 +112,37 @@ typedef enum {
   /* HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_RPB    = 25, */
   HSA_VEN_AMD_AQLPROFILE_BLOCKS_NUMBER     = 26
 } hsa_ven_amd_aqlprofile_block_name_t;
+#else  // AQLPROFILE_NGEN_API
+typedef enum {
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_CPC = 0,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_CPF = 1,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GDS = 2,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GRBM = 3,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GRBMSE = 4,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SPI = 5,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SQ = 6,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SQCS = 7,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SRBM = 8,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SX = 9,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_TA = 10,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_TCA = 11,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_TCC = 12,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_TCP = 13,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_TD = 14,
+  // Memory related blocks
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCARB = 15,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCHUB = 16,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCMCBVM = 17,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCSEQ = 18,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCVML2 = 19,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_MCXBAR = 20,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_ATC = 21,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_ATCL2 = 22,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GCEA = 23,
+  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_RPB = 24,
+  HSA_VEN_AMD_AQLPROFILE_BLOCKS_NUMBER = 25
+} hsa_ven_amd_aqlprofile_block_name_t;
+#endif  // AQLPROFILE_NGEN_API
 
 // PMC event object structure
 // ‘counter_id’ value is specified in GFXIPs perfcounter user guides
@@ -123,7 +155,7 @@ typedef struct {
 } hsa_ven_amd_aqlprofile_event_t;
 
 // Check if event is valid for the specific GPU
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_validate_event(
+hsa_status_t hsa_ven_amd_aqlprofile_validate_event(
     hsa_agent_t agent,                            // HSA handle for the profiling GPU
     const hsa_ven_amd_aqlprofile_event_t* event,  // [in] Pointer on validated event
     bool* result);                                // [out] True if the event valid, False otherwise
@@ -133,11 +165,11 @@ hsa_status_t HSA_API hsa_ven_amd_aqlprofile_validate_event(
 // profile configuration then error status will be returned.
 typedef enum {
   // SQTT applicable parameters
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET = 0,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK = 1,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK = 2,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK = 3,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -192,21 +224,21 @@ typedef struct {
 // Method to populate the provided AQL packet with profiling start commands
 // Only 'pm4_command' fields of the packet are set and the application
 // is responsible to set Vendor Specific header type a completion signal
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_start(
+hsa_status_t hsa_ven_amd_aqlprofile_start(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);  // [out] profile start AQL packet
 
 // Method to populate the provided AQL packet with profiling stop commands
 // Only 'pm4_command' fields of the packet are set and the application
 // is responsible to set Vendor Specific header type and a completion signal
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_stop(
+hsa_status_t hsa_ven_amd_aqlprofile_stop(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);   // [out] profile stop AQL packet
 
 // Legacy devices, PM4 profiling packet size
 const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
 // Legacy devices, converting the profiling AQL packet to PM4 packet blob
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_legacy_get_pm4(
+hsa_status_t hsa_ven_amd_aqlprofile_legacy_get_pm4(
     const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // [in] AQL packet
     void* data);                                     // [out] PM4 packet blob
 
@@ -230,12 +262,12 @@ typedef struct {
 
 // Profile attributes
 typedef enum {
-  HSA_VEN_AMD_AQLPROFILE_INFO_COMMAND_BUFFER_SIZE,  // get_info returns uint32_t value
-  HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE,        // get_info returns uint32_t value
-  HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA,             // get_info returns PMC uint64_t value
-                                                    // in info_data object
-  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA             // get_info returns SQTT buffer ptr/size
-                                                    // in info_data object
+  HSA_VEN_AMD_AQLPROFILE_INFO_COMMAND_BUFFER_SIZE = 0,  // get_info returns uint32_t value
+  HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE = 1,        // get_info returns uint32_t value
+  HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA = 2,             // get_info returns PMC uint64_t value
+                                                        // in info_data object
+  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3             // get_info returns SQTT buffer ptr/size
+                                                        // in info_data object
 } hsa_ven_amd_aqlprofile_info_type_t;
 
 // Definition of output data iterator callback
@@ -245,19 +277,19 @@ typedef hsa_status_t (*hsa_ven_amd_aqlprofile_data_callback_t)(
     void* callback_data);                           // [in/out] data passed to the callback
 
 // Method for getting the profile info
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_get_info(
+hsa_status_t hsa_ven_amd_aqlprofile_get_info(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile context object
     hsa_ven_amd_aqlprofile_info_type_t attribute,     // [in] requested profile attribute
     void* value);                                     // [in/out] returned value
 
 // Method for iterating the events output data
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_iterate_data(
+hsa_status_t hsa_ven_amd_aqlprofile_iterate_data(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile context object
     hsa_ven_amd_aqlprofile_data_callback_t callback,  // [in] callback to iterate the output data
     void* data);                                      // [in/out] data passed to the callback
 
 // Return error string
-hsa_status_t HSA_API hsa_ven_amd_aqlprofile_error_string(
+hsa_status_t hsa_ven_amd_aqlprofile_error_string(
     const char** str);  // [out] pointer on the error string
 
 /**
@@ -269,28 +301,35 @@ hsa_status_t HSA_API hsa_ven_amd_aqlprofile_error_string(
  * @brief Extension function table.
  */
 typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
-  hsa_status_t (*hsa_ven_amd_aqlprofile_error_string)(const char** str);
+  hsa_status_t (*hsa_ven_amd_aqlprofile_error_string)(
+      const char** str);
 
-  hsa_status_t (*hsa_ven_amd_aqlprofile_validate_event)(hsa_agent_t agent,
-                                                        const hsa_ven_amd_aqlprofile_event_t* event,
-                                                        bool* result);
+  hsa_status_t (*hsa_ven_amd_aqlprofile_validate_event)(
+      hsa_agent_t agent,
+      const hsa_ven_amd_aqlprofile_event_t* event,
+      bool* result);
 
-  hsa_status_t (*hsa_ven_amd_aqlprofile_start)(const hsa_ven_amd_aqlprofile_profile_t* profile,
-                                               hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+  hsa_status_t (*hsa_ven_amd_aqlprofile_start)(
+      const hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
 
-  hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(const hsa_ven_amd_aqlprofile_profile_t* profile,
-                                              hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+  hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(
+      const hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_legacy_get_pm4)(
-      const hsa_ext_amd_aql_pm4_packet_t* aql_packet, void* data);
+      const hsa_ext_amd_aql_pm4_packet_t* aql_packet,
+      void* data);
 
-  hsa_status_t (*hsa_ven_amd_aqlprofile_get_info)(const hsa_ven_amd_aqlprofile_profile_t* profile,
-                                                  hsa_ven_amd_aqlprofile_info_type_t attribute,
-                                                  void* value);
+  hsa_status_t (*hsa_ven_amd_aqlprofile_get_info)(
+      const hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ven_amd_aqlprofile_info_type_t attribute,
+      void* value);
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_iterate_data)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
-      hsa_ven_amd_aqlprofile_data_callback_t callback, void* data);
+      hsa_ven_amd_aqlprofile_data_callback_t callback,
+      void* data);
 } hsa_ven_amd_aqlprofile_1_00_pfn_t;
 
 #ifdef __cplusplus
