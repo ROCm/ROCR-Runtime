@@ -703,12 +703,18 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 			_info.type = HSA_APERTURE_DGPU;
 		}
 	} else { /* APU */
-		for (i = 0; i < gpu_mem_count; i++) {
-			if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
-				(address <= gpu_mem[i].gpuvm_aperture.limit)) {
-				aperture = &gpu_mem[i].gpuvm_aperture;
-				_info.type = HSA_APERTURE_GPUVM;
-				_info.idx = i;
+		if (address >= svm.dgpu_aperture.base && address <= svm.dgpu_aperture.limit) {
+			aperture = &svm.dgpu_aperture;
+			_info.type = HSA_APERTURE_DGPU;
+		} else {
+			/* gpuvm_aperture */
+			for (i = 0; i < gpu_mem_count; i++) {
+				if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
+					(address <= gpu_mem[i].gpuvm_aperture.limit)) {
+					aperture = &gpu_mem[i].gpuvm_aperture;
+					_info.type = HSA_APERTURE_GPUVM;
+					_info.idx = i;
+				}
 			}
 		}
 		if (!aperture) {
@@ -1577,7 +1583,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		gpu_mem[gpu_mem_id].scratch_aperture.limit =
 			PORT_UINT64_TO_VPTR(process_apertures[i].scratch_limit);
 
-		if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+		if (topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id)) {
 			uintptr_t alt_base;
 			uint64_t alt_size;
 			int err;
@@ -2582,7 +2588,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	gpu_mem_id = gpu_mem_find_by_gpu_id(infoArgs.gpu_id);
 	if (gpu_mem_id < 0)
 		goto error_free_metadata;
-	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id)) {
 		aperture = &svm.dgpu_aperture;
 		aperture_base = NULL;
 		offset = 0;

@@ -590,6 +590,21 @@ bool topology_is_dgpu(uint16_t device_id)
 	return false;
 }
 
+bool topology_is_svm_needed(uint16_t device_id)
+{
+	const struct hsa_gfxip_table *hsa_gfxip;
+
+	if (topology_is_dgpu(device_id))
+		return true;
+
+	hsa_gfxip = find_hsa_gfxip_device(device_id);
+
+	if (hsa_gfxip && hsa_gfxip->asic_family >= CHIP_VEGA10)
+		return true;
+
+	return false;
+}
+
 static HSAKMT_STATUS topology_get_cpu_model_name(HsaNodeProperties *props,
 						 bool is_apu)
 {

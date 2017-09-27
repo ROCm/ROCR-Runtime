@@ -115,6 +115,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties 
 		uint32_t *gpu_id, struct pci_access* pacc);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 bool topology_is_dgpu(uint16_t device_id);
+bool topology_is_svm_needed(uint16_t device_id);
 HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
 					enum asic_family_type *asic);
 
