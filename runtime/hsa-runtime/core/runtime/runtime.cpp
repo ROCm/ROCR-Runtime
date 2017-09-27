@@ -339,7 +339,10 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   size = it->second.size;
 
   // Imported fragments can't be released with FreeMemory.
-  if (region == nullptr) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (region == nullptr) {
+    assert(false && "Can't release imported memory with free.");
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
 
   allocation_map_.erase(it);
 

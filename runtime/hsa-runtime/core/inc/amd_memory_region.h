@@ -50,6 +50,7 @@
 #include "core/inc/agent.h"
 #include "core/inc/memory_region.h"
 #include "core/util/simple_heap.h"
+#include "core/util/locks.h"
 
 #include "inc/hsa_ext_amd.h"
 
@@ -98,8 +99,7 @@ class MemoryRegion : public core::MemoryRegion {
 
   ~MemoryRegion();
 
-  hsa_status_t Allocate(size_t size, AllocateFlags alloc_flags,
-                        void** address) const;
+  hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const;
 
   hsa_status_t Free(void* address, size_t size) const;
 
@@ -180,6 +180,8 @@ class MemoryRegion : public core::MemoryRegion {
   size_t max_single_alloc_size_;
 
   HSAuint64 virtual_size_;
+
+  mutable KernelMutex access_lock_;
 
   static const size_t kPageSize_ = 4096;
 
