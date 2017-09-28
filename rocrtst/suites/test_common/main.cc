@@ -49,6 +49,7 @@
 
 #include "gtest/gtest.h"
 #include "suites/functional/memory_basic.h"
+#include "suites/functional/ipc.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
@@ -125,6 +126,15 @@ TEST(rocrtst, Test_Example) {
   TestExample tst;
 
   RunGenericTest(&tst);
+}
+
+// Temporarily disable this test until hsa_init()/hsa_shut_down() works
+// simultaneously in 2 different processes (SWDEV-134085); The test can be run
+// by itself to test IPC and avoid the negative consequnces of the defect
+// mentioned. To do this, use the --gtest_also_run_disabled_tests flag.
+TEST(rocrtstFunc, DISABLED_IPC) {
+  IPCTest ipc;
+  RunGenericTest(&ipc);
 }
 
 TEST(rocrtstFunc, Memory_Max_Mem) {
