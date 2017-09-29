@@ -199,10 +199,8 @@ GetAgentPools(std::vector<std::shared_ptr<agent_pools_t>> *agent_pools) {
 
     err = hsa_amd_agent_iterate_memory_pools(a, save_pool,
                                         reinterpret_cast<void *>(&ag->pools));
-    assert(err == HSA_STATUS_SUCCESS);
-
     ag_vec->push_back(ag);
-    return HSA_STATUS_SUCCESS;
+    return err;
   };
 
   err = hsa_iterate_agents(save_agent, reinterpret_cast<void *>(agent_pools));
