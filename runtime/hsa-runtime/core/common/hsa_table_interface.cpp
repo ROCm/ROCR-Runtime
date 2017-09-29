@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -865,7 +865,7 @@ hsa_status_t HSA_API hsa_amd_profiling_get_dispatch_time(
     hsa_agent_t agent, hsa_signal_t signal,
     hsa_amd_profiling_dispatch_time_t* time) {
   return amdExtTable->hsa_amd_profiling_get_dispatch_time_fn(
-                                     agent, signal, time); 
+                                     agent, signal, time);
 }
 
 hsa_status_t HSA_API
@@ -1017,16 +1017,16 @@ hsa_status_t HSA_API
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,   
-                                        hsa_agent_t* agents,       
-                                        int interop_handle,    
-                                        uint32_t flags,        
-                                        size_t* size,          
-                                        void** ptr,            
-                                        size_t* metadata_size, 
+hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,
+                                        hsa_agent_t* agents,
+                                        int interop_handle,
+                                        uint32_t flags,
+                                        size_t* size,
+                                        void** ptr,
+                                        size_t* metadata_size,
                                         const void** metadata) {
   return amdExtTable->hsa_amd_interop_map_buffer_fn(
-                                     num_agents, agents, interop_handle,    
+                                     num_agents, agents, interop_handle,
                                      flags, size, ptr, metadata_size, metadata);
 }
 
@@ -1093,4 +1093,12 @@ hsa_status_t HSA_API hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_
 hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
                                                hsa_signal_t* signal) {
   return amdExtTable->hsa_amd_ipc_signal_attach_fn(handle, signal);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_register_system_event_handler(
+    hsa_amd_event_t type,
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data) {
+  return amdExtTable->hsa_amd_register_system_event_handler_fn(type, callback, data);
 }

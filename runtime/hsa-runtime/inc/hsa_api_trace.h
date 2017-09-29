@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -91,7 +91,7 @@ struct ApiTableVersion {
   uint32_t reserved;
 };
 
-// Table to export HSA Finalizer Extension Apis 
+// Table to export HSA Finalizer Extension Apis
 struct FinalizerExtTable {
   ApiTableVersion version;
 	decltype(hsa_ext_program_create)* hsa_ext_program_create_fn;
@@ -169,6 +169,7 @@ struct AmdExtTable {
   decltype(hsa_amd_signal_create)* hsa_amd_signal_create_fn;
   decltype(hsa_amd_ipc_signal_create)* hsa_amd_ipc_signal_create_fn;
   decltype(hsa_amd_ipc_signal_attach)* hsa_amd_ipc_signal_attach_fn;
+  decltype(hsa_amd_register_system_event_handler)* hsa_amd_register_system_event_handler_fn;
 };
 
 // Table to export HSA Core Runtime Apis
@@ -355,7 +356,7 @@ struct HsaApiTable {
 
   // Version of Hsa Api Table
   ApiTableVersion version;
-  
+
   // Table of function pointers to HSA Core Runtime
 	CoreApiTable* core_;
 
@@ -364,7 +365,7 @@ struct HsaApiTable {
 
   // Table of function pointers to HSA Finalizer Extension
 	FinalizerExtTable* finalizer_ext_;
-  
+
   // Table of function pointers to HSA Image Extension
 	ImageExtTable* image_ext_;
 
@@ -386,12 +387,12 @@ struct HsaApiTableContainer {
     root.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
     root.version.minor_id = sizeof(HsaApiTable);
     root.version.step_id = HSA_API_TABLE_STEP_VERSION;
-    
+
     core.version.major_id = HSA_CORE_API_TABLE_MAJOR_VERSION;
     core.version.minor_id = sizeof(CoreApiTable);
     core.version.step_id = HSA_CORE_API_TABLE_STEP_VERSION;
     root.core_ = &core;
-    
+
     amd_ext.version.major_id = HSA_AMD_EXT_API_TABLE_MAJOR_VERSION;
     amd_ext.version.minor_id = sizeof(AmdExtTable);
     amd_ext.version.step_id = HSA_AMD_EXT_API_TABLE_STEP_VERSION;

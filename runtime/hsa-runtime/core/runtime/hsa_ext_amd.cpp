@@ -798,4 +798,19 @@ hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
   CATCH;
 }
 
+hsa_status_t hsa_amd_register_system_event_handler(
+    hsa_amd_event_t type,
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data) {
+  TRY;
+  IS_OPEN();
+  switch (type) {
+    case GPU_MEMORY_FAULT_EVENT:
+      return core::Runtime::runtime_singleton_->SetCustomVMFaultHandler(callback, data);
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  CATCH;
+}
+
 } // end of AMD namespace

@@ -45,9 +45,13 @@
 #include "core/inc/amd_hsa_loader.hpp"
 #include "core/inc/runtime.h"
 
+using namespace amd::hsa;
 using namespace core;
 
-hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
+using loader::Executable;
+using loader::LoadedCodeObject;
+
+hsa_status_t hsa_ven_amd_loader_query_host_address(
   const void *device_address,
   const void **host_address) {
   if (false == core::Runtime::runtime_singleton_->IsOpen()) {
@@ -70,7 +74,7 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_host_address(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
+hsa_status_t hsa_ven_amd_loader_query_segment_descriptors(
   hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
   size_t *num_segment_descriptors) {
   if (false == core::Runtime::runtime_singleton_->IsOpen()) {
@@ -81,7 +85,7 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_segment_descriptors(
   return Runtime::runtime_singleton_->loader()->QuerySegmentDescriptors(segment_descriptors, num_segment_descriptors);
 }
 
-hsa_status_t HSA_API hsa_ven_amd_loader_query_executable(
+hsa_status_t hsa_ven_amd_loader_query_executable(
   const void *device_address,
   hsa_executable_t *executable) {
 
@@ -99,5 +103,112 @@ hsa_status_t HSA_API hsa_ven_amd_loader_query_executable(
   }
 
   *executable = exec;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t hsa_ven_amd_loader_executable_iterate_loaded_code_objects(
+  hsa_executable_t executable,
+  hsa_status_t (*callback)(
+    hsa_executable_t executable,
+    hsa_loaded_code_object_t loaded_code_object,
+    void *data),
+  void *data) {
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  }
+  if (nullptr == callback) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  Executable *exec = Executable::Object(executable);
+  if (!exec) {
+    return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
+  }
+
+  return exec->IterateLoadedCodeObjects(callback, data);
+}
+
+hsa_status_t hsa_ven_amd_loader_loaded_code_object_get_info(
+  hsa_loaded_code_object_t loaded_code_object,
+  hsa_ven_amd_loader_loaded_code_object_info_t attribute,
+  void *value) {
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  }
+  if (nullptr == value) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  const LoadedCodeObject *lcobj = LoadedCodeObject::Object(loaded_code_object);
+  if (!lcobj) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
+  switch (attribute) {
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_EXECUTABLE: {
+      *((hsa_executable_t*)value) = lcobj->getExecutable();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_KIND: {
+      *((uint32_t*)value) = lcobj->getAgent().handle == 0
+           ? HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_KIND_PROGRAM
+           : HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_KIND_AGENT;
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_AGENT: {
+      hsa_agent_t agent = lcobj->getAgent();
+      if (agent.handle == 0) {
+          return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      }
+      *((hsa_agent_t*)value) = agent;
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_CODE_OBJECT_STORAGE_TYPE: {
+      // TODO Update loader so it keeps track if code object was loaded from a
+      // file or memory.
+      *((uint32_t*)value) = HSA_VEN_AMD_LOADER_CODE_OBJECT_STORAGE_TYPE_MEMORY;
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_CODE_OBJECT_STORAGE_MEMORY_BASE: {
+      *((uint64_t*)value) = lcobj->getElfData();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_CODE_OBJECT_STORAGE_MEMORY_SIZE: {
+      *((uint64_t*)value) = lcobj->getElfSize();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_CODE_OBJECT_STORAGE_FILE: {
+      // TODO Update loader so it keeps track if code object was loaded from a
+      // file or memory.
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_DELTA: {
+      // TODO Check if executable is frozen.
+      // This suggests this code should be moved into LoadedCodeObjectImpl::getinfo
+      // as is done for other *_get_info methods. Currently LoadedCodeObject has a
+      // GetInfo method which is likely not used.
+      // Also should this have a *NOT_FROZEN ststus code added?
+      // if (state_ != HSA_EXECUTABLE_STATE_FROZEN) {
+      //   return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      // }
+      *((int64_t*)value) = lcobj->getDelta();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_BASE: {
+      // TODO Check if executable is frozen.
+      *((uint64_t*)value) = lcobj->getLoadBase();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_SIZE: {
+      // TODO Check if executable is frozen.
+      *((uint64_t*)value) = lcobj->getLoadSize();
+      break;
+    }
+    default: {
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+  }
+
   return HSA_STATUS_SUCCESS;
 }

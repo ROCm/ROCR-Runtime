@@ -171,7 +171,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   amd_queue_.hsa_queue.base_address = ring_buf_;
   amd_queue_.hsa_queue.doorbell_signal = Signal::Convert(this);
   amd_queue_.hsa_queue.size = queue_size_pkts;
-  amd_queue_.hsa_queue.id = core::Runtime::runtime_singleton_->GetQueueId();
+  amd_queue_.hsa_queue.id = queue_id_;
   amd_queue_.read_dispatch_id_field_base_byte_offset = uint32_t(
       uintptr_t(&amd_queue_.read_dispatch_id) - uintptr_t(&amd_queue_));
 
@@ -893,21 +893,21 @@ void AqlQueue::InitScratchSRD() {
   SQ_BUF_RSRC_WORD1 srd1;
   SQ_BUF_RSRC_WORD2 srd2;
   SQ_BUF_RSRC_WORD3 srd3;
-  
+
   uint32_t scratch_base_hi = 0;
   uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
   #ifdef HSA_LARGE_MODEL
   scratch_base_hi = uint32_t(scratch_base >> 32);
   #endif
   srd0.bits.BASE_ADDRESS = uint32_t(scratch_base);
-  
+
   srd1.bits.BASE_ADDRESS_HI = scratch_base_hi;
   srd1.bits.STRIDE = 0;
   srd1.bits.CACHE_SWIZZLE = 0;
   srd1.bits.SWIZZLE_ENABLE = 1;
-  
+
   srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size);
-  
+
   srd3.bits.DST_SEL_X = SQ_SEL_X;
   srd3.bits.DST_SEL_Y = SQ_SEL_Y;
   srd3.bits.DST_SEL_Z = SQ_SEL_Z;
@@ -922,8 +922,8 @@ void AqlQueue::InitScratchSRD() {
   srd3.bits.HEAP = 0;
   srd3.bits.MTYPE__CI__VI = 0;
   srd3.bits.TYPE = SQ_RSRC_BUF;
-  
-  // Update Queue's Scratch descriptor's property 
+
+  // Update Queue's Scratch descriptor's property
   amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
   amd_queue_.scratch_resource_descriptor[1] = srd1.u32All;
   amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
@@ -949,7 +949,7 @@ void AqlQueue::InitScratchSRD() {
   uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
 
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
-  // Scratch Size per Wave is specified in terms of kilobytes 
+  // Scratch Size per Wave is specified in terms of kilobytes
   uint32_t wave_size = agent_props.WaveFrontSize;
   tmpring_size.bits.WAVESIZE =
         (((wave_size * queue_scratch_.size_per_thread) + 1023) / 1024);

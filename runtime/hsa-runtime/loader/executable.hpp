@@ -277,6 +277,15 @@ public:
   void Print(std::ostream& out) override;
 
   void Destroy() override {}
+
+  hsa_agent_t getAgent() const override;
+  hsa_executable_t getExecutable() const override;
+  uint64_t getElfData() const override;
+  uint64_t getElfSize() const override;
+  uint64_t getStorageOffset() const override;
+  uint64_t getLoadBase() const override;
+  uint64_t getLoadSize() const override;
+  int64_t getDelta() const override;
 };
 
 class Segment : public LoadedSegment, public ExecutableObject {
@@ -432,6 +441,7 @@ public:
 
   hsa_status_t IterateLoadedCodeObjects(
     hsa_status_t (*callback)(
+      hsa_executable_t executable,
       hsa_loaded_code_object_t loaded_code_object,
       void *data),
     void *data) override;
