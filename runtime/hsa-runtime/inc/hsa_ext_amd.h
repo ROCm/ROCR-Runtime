@@ -711,17 +711,17 @@ typedef enum {
 
 /**
  * @brief Get the current value of an attribute of a memory pool.
- * 
+ *
  * @param[in] memory_pool A valid memory pool.
- * 
+ *
  * @param[in] attribute Attribute to query.
- * 
+ *
  * @param[out] value Pointer to a application-allocated buffer where to store
  * the value of the attribute. If the buffer passed by the application is not
  * large enough to hold the value of @p attribute, the behavior is undefined.
- * 
+ *
  * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
- * 
+ *
  */
 hsa_status_t HSA_API
     hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
@@ -741,7 +741,7 @@ hsa_status_t HSA_API
  *
  * @param[in] agent A valid agent.
  *
- * @param[in] callback Callback to be invoked on the same thread that called 
+ * @param[in] callback Callback to be invoked on the same thread that called
  * ::hsa_amd_agent_iterate_memory_pools, serially, once per memory pool that is
  * associated with the agent.  The HSA runtime passes two arguments to the
  * callback: the memory pool, and the application data.  If @p callback
@@ -1265,7 +1265,7 @@ hsa_status_t HSA_API
  * @param[out] metadata_size Size of metadata in bytes, may be NULL
  *
  * @param[out] metadata Pointer to metadata, may be NULL
- * 
+ *
  * @retval HSA_STATUS_SUCCESS if successfully mapped
  *
  * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
@@ -1275,13 +1275,13 @@ hsa_status_t HSA_API
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT all other errors
  */
-hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,   
-                                        hsa_agent_t* agents,       
-                                        int interop_handle,    
-                                        uint32_t flags,        
-                                        size_t* size,          
-                                        void** ptr,            
-                                        size_t* metadata_size, 
+hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,
+                                        hsa_agent_t* agents,
+                                        int interop_handle,
+                                        uint32_t flags,
+                                        size_t* size,
+                                        void** ptr,
+                                        size_t* metadata_size,
                                         const void** metadata);
 
 /**
@@ -1300,7 +1300,7 @@ typedef struct hsa_amd_image_descriptor_s {
   Version number of the descriptor
   */
   uint32_t version;
-  
+
   /*
   Vendor and device PCI IDs for the format as VENDOR_ID<<16|DEVICE_ID.
   */
@@ -1624,6 +1624,66 @@ hsa_status_t HSA_API hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_
  */
 hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
                                                hsa_signal_t* signal);
+
+/**
+ * @brief GPU system event type.
+ */
+typedef enum hsa_amd_event_s {
+  /**
+   * AMD GPU memory fault.
+   */
+  GPU_MEMORY_FAULT_EVENT = 0
+} hsa_amd_event_t;
+
+/**
+ * @brief AMD GPU memory fault event data (event_specific_data) type passed to event handler.
+ */
+typedef struct hsa_amd_gpu_memory_fault_info_s {
+    /**
+    * The agent where the memory fault occurred.
+    */
+    hsa_agent_t agent;
+    /**
+    * Virtual address accessed.
+    */
+    uint64_t virtual_address;
+    /**
+    * Bit field encoding the memory access failure reasons. There could be multiple bits set
+    * for one fault.
+    * 0x00000001 Page not present or supervisor privilege.
+    * 0x00000010 Write access to a read-only page.
+    * 0x00000100 Execute access to a page marked NX.
+    * 0x00001000 Host access only.
+    * 0x00010000 ECC failure (if supported by HW).
+    * 0x00100000 Can't determine the exact fault address.
+    */
+    uint32_t fault_reason_mask;
+} hsa_amd_gpu_memory_fault_info_t;
+
+/**
+ * @brief Register AMD GPU event handler.
+ *
+ * @param[in] type The GPU event type.
+ *
+ * @param[in] callback Callback to be invoked when the event is triggered.
+ * The HSA runtime passes two arguments to the callback: the event data and user data.
+ * Event data is defined per event by the HSA runtime. For GPU_MEMORY_FAULT_EVENT,
+ * the event data type is hsa_amd_gpu_memory_fault_info_t.
+ *
+ * @param[in] data User data that is passed to @p callback. May be NULL.
+ *
+ * @param[out] callback Function pointer to the handler.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The handler has been registered successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR A handler for the event has already been registered.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p type is invalid.
+ */
+hsa_status_t hsa_amd_register_system_event_handler(
+    hsa_amd_event_t type,
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data);
 
 #ifdef __cplusplus
 }  // end extern "C" block

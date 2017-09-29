@@ -317,6 +317,8 @@ class Runtime {
 
   ExtensionEntryPoints extensions_;
 
+  hsa_status_t SetCustomVMFaultHandler(hsa_status_t (*callback)(const void* event_specific_data, void* data), void* data);
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -479,9 +481,6 @@ class Runtime {
 
   AsyncEvents new_async_events_;
 
-  // Queue id counter.
-  uint32_t queue_count_;
-
   // Starting address of SVM address space.
   // On APU the cpu and gpu could access the area inside starting and end of
   // the SVM address space.
@@ -501,6 +500,11 @@ class Runtime {
 
   // @brief HSA signal to contain the VM fault event.
   Signal* vm_fault_signal_;
+
+  // custom VM fault handler.
+  hsa_status_t (*vm_fault_handler_custom_)(const void* event_specific_data,
+                                           void* data);
+  void* vm_fault_handler_user_data_;
 
   // Holds reference count to runtime object.
   volatile uint32_t ref_count_;

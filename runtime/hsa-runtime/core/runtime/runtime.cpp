@@ -589,8 +589,6 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
   return HSA_STATUS_SUCCESS;
 }
 
-uint32_t Runtime::GetQueueId() { return atomic::Increment(&queue_count_); }
-
 hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             hsa_signal_condition_t cond,
                                             hsa_signal_value_t value,
@@ -1044,48 +1042,86 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
     return false;
   }
 
-  if (runtime_singleton_->flag().enable_vm_fault_message()) {
-    HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
+  HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
 
-    const HsaMemoryAccessFault& fault =
-        vm_fault_event->EventData.EventData.MemoryAccessFault;
+  HsaMemoryAccessFault& fault =
+      vm_fault_event->EventData.EventData.MemoryAccessFault;
 
-    std::string reason = "";
+  hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
+  // If custom handler is registered, pack the fault info and call the handler
+  if (runtime_singleton_->vm_fault_handler_custom_ != nullptr) {
+    hsa_amd_gpu_memory_fault_info_t* fault_info = new hsa_amd_gpu_memory_fault_info_t;
+
+    // Find the faulty agent
+    auto it = runtime_singleton_->agents_by_node_.find(fault.NodeId);
+    assert(it != runtime_singleton_->agents_by_node_.end() && "Can't find faulty agent.");
+    Agent* faulty_agent = it->second.front();
+    fault_info->agent = Agent::Convert(faulty_agent);
+
+    fault_info->virtual_address = fault.VirtualAddress;
+    fault_info->fault_reason_mask = 0x00000000;
     if (fault.Failure.NotPresent == 1) {
-      reason += "Page not present or supervisor privilege";
-    } else if (fault.Failure.ReadOnly == 1) {
-      reason += "Write access to a read-only page";
-    } else if (fault.Failure.NoExecute == 1) {
-      reason += "Execute access to a page marked NX";
-    } else if (fault.Failure.GpuAccess == 1) {
-      reason += "Host access only";
-    } else if (fault.Failure.ECC == 1) {
-      reason += "ECC failure (if supported by HW)";
-    } else {
-      reason += "Unknown";
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000001;
+    }
+    if (fault.Failure.ReadOnly == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000010;
+    }
+    if (fault.Failure.NoExecute == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000100;
+    }
+    if (fault.Failure.GpuAccess == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00001000;
+    }
+    if (fault.Failure.ECC == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00010000;
+    }
+    if (fault.Failure.Imprecise == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00100000;
     }
 
-    fprintf(stderr,
-            "Memory access fault by GPU node-%u on address %p%s. Reason: %s.\n",
-            fault.NodeId, reinterpret_cast<const void*>(fault.VirtualAddress),
-            (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
-            reason.c_str());
-  } else {
-    assert(false && "GPU memory access fault.");
+    custom_handler_status = runtime_singleton_->vm_fault_handler_custom_(fault_info,
+        runtime_singleton_->vm_fault_handler_user_data_);
   }
 
-  std::abort();
+  // No custom VM fault handler registered or it failed.
+  if (custom_handler_status != HSA_STATUS_SUCCESS) {
+    if (runtime_singleton_->flag().enable_vm_fault_message()) {
+      std::string reason = "";
+      if (fault.Failure.NotPresent == 1) {
+        reason += "Page not present or supervisor privilege";
+      } else if (fault.Failure.ReadOnly == 1) {
+        reason += "Write access to a read-only page";
+      } else if (fault.Failure.NoExecute == 1) {
+        reason += "Execute access to a page marked NX";
+      } else if (fault.Failure.GpuAccess == 1) {
+        reason += "Host access only";
+      } else if (fault.Failure.ECC == 1) {
+        reason += "ECC failure (if supported by HW)";
+      } else {
+        reason += "Unknown";
+      }
 
+      fprintf(stderr,
+              "Memory access fault by GPU node-%u on address %p%s. Reason: %s.\n",
+              fault.NodeId, reinterpret_cast<const void*>(fault.VirtualAddress),
+              (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
+              reason.c_str());
+    } else {
+      assert(false && "GPU memory access fault.");
+    }
+
+    std::abort();
+  }
   // No need to keep the signal because we are done.
   return false;
 }
 
 Runtime::Runtime()
     : blit_agent_(NULL),
-      queue_count_(0),
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
+      vm_fault_handler_custom_(nullptr),
       ref_count_(0) {
   start_svm_address_ = 0;
 #if defined(HSA_LARGE_MODEL)
@@ -1363,4 +1399,15 @@ void Runtime::AsyncEvents::Clear() {
   arg_.clear();
 }
 
+hsa_status_t Runtime::SetCustomVMFaultHandler(
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data) {
+  if (vm_fault_handler_custom_ != nullptr) {
+    return HSA_STATUS_ERROR;
+  } else {
+    vm_fault_handler_custom_ = callback;
+    vm_fault_handler_user_data_ = data;
+    return HSA_STATUS_SUCCESS;
+  }
+}
 }  // namespace core

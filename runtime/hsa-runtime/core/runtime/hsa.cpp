@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -219,7 +219,7 @@ hsa_status_t hsa_shut_down() {
 //---------------------------------------------------------------------------//
 //  System
 //---------------------------------------------------------------------------//
-hsa_status_t 
+hsa_status_t
     hsa_system_get_info(hsa_system_info_t attribute, void* value) {
   TRY;
   IS_OPEN();
@@ -262,7 +262,7 @@ hsa_status_t hsa_extension_get_name(uint16_t extension, const char** name) {
   CATCH;
 }
 
-hsa_status_t 
+hsa_status_t
     hsa_system_extension_supported(uint16_t extension, uint16_t version_major,
                                    uint16_t version_minor, bool* result) {
   TRY;
@@ -342,6 +342,7 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       {"hsa_ext_images_1_00_pfn_t", sizeof(hsa_ext_images_1_00_pfn_t)},
       {"hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t)},
       {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)},
+      {"hsa_ven_amd_loader_1_01_pfn_t", sizeof(hsa_ven_amd_loader_1_01_pfn_t)},
       {"hsa_ven_amd_aqlprofile_1_00_pfn_t", sizeof(hsa_ven_amd_aqlprofile_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
@@ -448,12 +449,16 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
   }
 
   if (extension == HSA_EXTENSION_AMD_LOADER) {
-    if (version_major > 1) return HSA_STATUS_ERROR;
-    hsa_ven_amd_loader_1_00_pfn_t ext_table;
+    if (version_major != 1) return HSA_STATUS_ERROR;
+    hsa_ven_amd_loader_1_01_pfn_t ext_table;
     ext_table.hsa_ven_amd_loader_query_host_address = hsa_ven_amd_loader_query_host_address;
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
         hsa_ven_amd_loader_query_segment_descriptors;
     ext_table.hsa_ven_amd_loader_query_executable = hsa_ven_amd_loader_query_executable;
+    ext_table.hsa_ven_amd_loader_executable_iterate_loaded_code_objects =
+        hsa_ven_amd_loader_executable_iterate_loaded_code_objects;
+    ext_table.hsa_ven_amd_loader_loaded_code_object_get_info =
+        hsa_ven_amd_loader_loaded_code_object_get_info;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
@@ -487,7 +492,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 //---------------------------------------------------------------------------//
 //  Agent
 //---------------------------------------------------------------------------//
-hsa_status_t 
+hsa_status_t
     hsa_iterate_agents(hsa_status_t (*callback)(hsa_agent_t agent, void* data),
                        void* data) {
   TRY;
@@ -546,7 +551,7 @@ hsa_status_t hsa_agent_iterate_caches(hsa_agent_t agent_handle,
   CATCH;
 }
 
-hsa_status_t 
+hsa_status_t
     hsa_agent_extension_supported(uint16_t extension, hsa_agent_t agent_handle,
                                   uint16_t version_major,
                                   uint16_t version_minor, bool* result) {
@@ -1036,7 +1041,7 @@ hsa_status_t hsa_memory_deregister(void* address, size_t size) {
   CATCH;
 }
 
-hsa_status_t 
+hsa_status_t
     hsa_memory_allocate(hsa_region_t region, size_t size, void** ptr) {
   TRY;
   IS_OPEN();
@@ -1103,7 +1108,7 @@ hsa_status_t hsa_memory_copy(void* dst, const void* src, size_t size) {
 // Signals
 //-----------------------------------------------------------------------------
 
-hsa_status_t 
+hsa_status_t
     hsa_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
                       const hsa_agent_t* consumers, hsa_signal_t* hsa_signal) {
   return AMD::hsa_amd_signal_create(initial_value, num_consumers, consumers, 0, hsa_signal);
@@ -1151,7 +1156,7 @@ void hsa_signal_store_screlease(hsa_signal_t hsa_signal, hsa_signal_value_t valu
   CATCHRET(void);
 }
 
-hsa_signal_value_t 
+hsa_signal_value_t
     hsa_signal_wait_relaxed(hsa_signal_t hsa_signal,
                             hsa_signal_condition_t condition,
                             hsa_signal_value_t compare_value,
@@ -1400,7 +1405,7 @@ void hsa_signal_subtract_scacq_screl(hsa_signal_t hsa_signal, hsa_signal_value_t
   CATCHRET(void);
 }
 
-hsa_signal_value_t 
+hsa_signal_value_t
     hsa_signal_exchange_relaxed(hsa_signal_t hsa_signal,
                                 hsa_signal_value_t value) {
   TRY;
@@ -1829,13 +1834,13 @@ hsa_status_t hsa_code_object_get_info(
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
-  
+
       hsa_isa_t isa_handle = {0};
       status = HSA::hsa_isa_from_name(isa_name, &isa_handle);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
-  
+
       *((hsa_isa_t*)value) = isa_handle;
       return HSA_STATUS_SUCCESS;
     }
@@ -2540,6 +2545,9 @@ hsa_status_t hsa_status_string(
       break;
     case HSA_STATUS_ERROR_INVALID_ISA:
       *status_string = "HSA_STATUS_ERROR_INVALID_ISA: The instruction set architecture is invalid.";
+      break;
+    case HSA_STATUS_ERROR_INVALID_ISA_NAME:
+      *status_string = "HSA_STATUS_ERROR_INVALID_ISA_NAME: The instruction set architecture name is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_CODE_OBJECT:
       *status_string = "HSA_STATUS_ERROR_INVALID_CODE_OBJECT: The code object is invalid.";
