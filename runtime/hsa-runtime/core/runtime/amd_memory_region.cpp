@@ -182,9 +182,15 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
     size = AlignUp(size, fragment_allocator_.max_alloc());
   }
 
+  // Allocate memory.
+  // If it fails attempt to release memory from the block allocator and retry.
   *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  if (*address == nullptr) {
+    fragment_allocator_.trim();
+    *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  }
 
-  if (*address != NULL) {
+  if (*address != nullptr) {
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so
