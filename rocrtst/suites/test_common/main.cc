@@ -137,7 +137,10 @@ TEST(rocrtstFunc, DISABLED_IPC) {
   RunGenericTest(&ipc);
 }
 
-TEST(rocrtstFunc, Memory_Max_Mem) {
+// Temporarily disable this test until hsa_shut_down() is (probably not the
+// same as with the IPC test above) is addressed. To override the disable,
+// run with --gtest-also_run_disabled_tests flag.
+TEST(rocrtstFunc, DISABLED_Memory_Max_Mem) {
   MemoryTest mt;
 
   RunCustomTestProlog(&mt);
