@@ -152,6 +152,8 @@ function(buildCodeObjects kname)
 
 endfunction(buildCodeObjects)
 
+buildCodeObjects("read")
+buildCodeObjects("write")
 buildCodeObjects("binary_search")
 
 #
