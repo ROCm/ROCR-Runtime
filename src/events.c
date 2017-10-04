@@ -229,6 +229,66 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent(HsaEvent *Event,
 	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
 }
 
+//Analysis memory exception data, print debug messages
+static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
+						memory_exception_data)
+{
+	HSAKMT_STATUS ret;
+	HsaPointerInfo info;
+	const uint64_t addr = memory_exception_data->va;
+	uint32_t node_id = 0;
+	unsigned int i;
+
+	gpuid_to_nodeid(memory_exception_data->gpu_id, &node_id);
+	pr_err("Memory exception on virtual address 0x%lx, ", addr);
+	pr_err("node id %d : ", node_id);
+	if (memory_exception_data->failure.NotPresent)
+		pr_err("Page not present\n");
+	else if (memory_exception_data->failure.ReadOnly)
+		pr_err("Writing to readonly page\n");
+	else if (memory_exception_data->failure.NoExecute)
+		pr_err("Execute to none-executable page\n");
+
+	ret = fmm_get_mem_info((const void *)addr, &info);
+
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		pr_err("Address does not belong to a known buffer\n");
+		return;
+	}
+
+	pr_err("GPU address 0x%lx, node id %d, size in byte 0x%lx\n",
+			info.GPUAddress, info.Node, info.SizeInBytes);
+	switch (info.Type) {
+	case HSA_POINTER_REGISTERED_GRAPHICS:
+		pr_err("Memory is registered graphics buffer\n");
+		break;
+	case HSA_POINTER_REGISTERED_USER:
+		pr_err("Memory is registered user pointer\n");
+		pr_err("CPU address of the memory is %p\n", info.CPUAddress);
+		break;
+	case HSA_POINTER_ALLOCATED:
+		pr_err("Memory is allocated using hsaKmtAllocMemory\n");
+		pr_err("CPU address of the memory is %p\n", info.CPUAddress);
+		break;
+	default:
+		pr_err("Invalid memory type %d\n", info.Type);
+		break;
+	}
+
+	if (info.RegisteredNodes) {
+		pr_err("Memory is registered to node id: ");
+		for (i = 0; i < info.NRegisteredNodes; i++)
+			pr_err("%d ", info.RegisteredNodes[i]);
+	}
+	pr_err("\n");
+	if (info.MappedNodes) {
+		pr_err("Memory is mapped to node id: ");
+		for (i = 0; i < info.NMappedNodes; i++)
+			pr_err("%d ", info.MappedNodes[i]);
+	}
+	pr_err("\n");
+}
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 						   HSAuint32 NumEvents,
 						   bool WaitOnAll,
@@ -274,6 +334,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.NoExecute = event_data[i].memory_exception_data.failure.NoExecute;
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.Imprecise = event_data[i].memory_exception_data.failure.imprecise;
 				Events[i]->EventData.EventData.MemoryAccessFault.Flags = HSA_EVENTID_MEMORY_FATAL_PROCESS;
+				analysis_memory_exception(&event_data[i].memory_exception_data);
 			}
 		}
 	}
