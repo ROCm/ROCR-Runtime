@@ -126,13 +126,13 @@ void RocmAsync::ParseArguments() {
       // Enable Unidirectional copy among all valid pools
       case 'a':
         copy_all_uni = true;
-        req_copy_unidir_ = REQ_COPY_UNIDIR;
+        req_copy_all_unidir_ = REQ_COPY_ALL_UNIDIR;
         break;
 
       // Enable Bidirectional copy among all valid pools
       case 'A':
         copy_all_bi = true;
-        req_copy_bidir_ = REQ_COPY_BIDIR;
+        req_copy_all_bidir_ = REQ_COPY_ALL_BIDIR;
         break;
 
       // getopt implementation returns the value of the unknown
@@ -195,10 +195,17 @@ void RocmAsync::ParseArguments() {
   }
 
   // Initialize the list of buffer sizes to use in copy/read/write operations
+  // For All Copy operations use only one buffer size
   if (size_list_.size() == 0) {
     uint32_t size_len = sizeof(SIZE_LIST)/sizeof(uint32_t);
     for (uint32_t idx = 0; idx < size_len; idx++) {
-      size_list_.push_back(SIZE_LIST[idx]);
+      if ((copy_all_bi) || (copy_all_uni)) {
+        if (idx == 0) {
+          size_list_.push_back(SIZE_LIST[idx]);
+        }
+      } else {
+        size_list_.push_back(SIZE_LIST[idx]);
+      }
     }
   }
   std::sort(size_list_.begin(), size_list_.end());

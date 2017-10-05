@@ -67,6 +67,16 @@ bool RocmAsync::BuildCopyTrans(uint32_t req_type,
     uint32_t src_dev_idx = pool_list_[src_idx].agent_index_;
     hsa_device_type_t src_dev_type = agent_list_[src_dev_idx].device_type_;
 
+    // Determine if dst pool is fine grained, if so filter out
+    // the transaction
+    if ((req_type == REQ_COPY_ALL_BIDIR) ||
+        (req_type == REQ_COPY_ALL_UNIDIR)) {
+      bool src_fine_grained =  pool_list_[src_idx].is_fine_grained_;
+      if (src_fine_grained) {
+        continue;
+      }
+    }
+
     for (uint32_t jdx = 0; jdx < dst_size; jdx++) {
     
       // Retrieve Roc runtime handles for Dst memory pool and agents
@@ -76,16 +86,30 @@ bool RocmAsync::BuildCopyTrans(uint32_t req_type,
       uint32_t dst_dev_idx = pool_list_[dst_idx].agent_index_;
       hsa_device_type_t dst_dev_type = agent_list_[dst_dev_idx].device_type_;
 
+      // Determine if dst pool is fine grained, if so filter out
+      // the transaction
+      if ((req_type == REQ_COPY_ALL_BIDIR) ||
+          (req_type == REQ_COPY_ALL_UNIDIR)) {
+        bool dst_fine_grained =  pool_list_[dst_idx].is_fine_grained_;
+        if (dst_fine_grained) {
+          continue;
+        }
+      }
+
       // Filter out transaction when Src & Dst pools belong to Cpu
+      /*
       if ((src_dev_type == HSA_DEVICE_TYPE_CPU) &&
           (dst_dev_type == HSA_DEVICE_TYPE_CPU)) {
         continue;
       }
+      */
 
       // Filter out transaction with same Src & Dst pools
+      /*
       if (src_idx == dst_idx) {
         continue;
       }
+      */
       
       // Determine if accessibility to src pool for dst agent is not denied
       status = hsa_amd_agent_memory_pool_get_info(dst_agent, src_pool,
@@ -111,7 +135,8 @@ bool RocmAsync::BuildCopyTrans(uint32_t req_type,
       trans.copy.dst_idx_ = dst_idx;
       trans.copy.src_pool_ = src_pool;
       trans.copy.dst_pool_ = dst_pool;
-      trans.copy.bidir_ = (req_type == REQ_COPY_BIDIR);
+      trans.copy.bidir_ = ((req_type == REQ_COPY_BIDIR) ||
+                           (req_type == REQ_COPY_ALL_BIDIR));
       trans.copy.uses_gpu_ = ((src_dev_type == HSA_DEVICE_TYPE_GPU) ||
                               (dst_dev_type == HSA_DEVICE_TYPE_GPU));
       trans_list_.push_back(trans);
@@ -126,6 +151,14 @@ bool RocmAsync::BuildBidirCopyTrans() {
 
 bool RocmAsync::BuildUnidirCopyTrans() {
   return BuildCopyTrans(REQ_COPY_UNIDIR, src_list_, dst_list_);
+}
+
+bool RocmAsync::BuildAllPoolsBidirCopyTrans() {
+  return BuildCopyTrans(REQ_COPY_ALL_BIDIR, bidir_list_, bidir_list_);
+}
+
+bool RocmAsync::BuildAllPoolsUnidirCopyTrans() {
+  return BuildCopyTrans(REQ_COPY_ALL_UNIDIR, src_list_, dst_list_);
 }
 
 // @brief: Builds a list of transaction per user request
@@ -167,7 +200,66 @@ bool RocmAsync::BuildTransList() {
     }
   }
 
+  // Build list of All Bidir Copy transactions per user request
+  status = false;
+  if (req_copy_all_bidir_ == REQ_COPY_ALL_BIDIR) {
+    status = BuildAllPoolsBidirCopyTrans();
+    if (status == false) {
+      return status;
+    }
+  }
+
+  // Build list of All Unidir Copy transactions per user request
+  status = false;
+  if (req_copy_all_unidir_ == REQ_COPY_ALL_UNIDIR) {
+    status = BuildAllPoolsUnidirCopyTrans();
+    if (status == false) {
+      return status;
+    }
+  }
+
   // All of the transaction are built up
   return true;
+}
+
+void RocmAsync::ComputeCopyTime(async_trans_t& trans) {
+
+  // Get the frequency of Gpu Timestamping
+  uint64_t sys_freq = 0;
+  hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &sys_freq);
+  
+  double avg_time = 0;
+  double min_time = 0;
+  double bandwidth = 0;
+  uint32_t data_size = 0;
+  double peak_bandwidth = 0;
+  uint32_t size_len = size_list_.size();
+  for (uint32_t idx = 0; idx < size_len; idx++) {
+    
+    // Adjust size of data involved in copy
+    data_size = size_list_[idx];
+    if (trans.copy.bidir_ == true) {
+      data_size += size_list_[idx];
+    }
+    data_size = data_size * 1024 * 1024;
+
+    // Copy operation does not involve a Gpu device
+    if (trans.copy.uses_gpu_ != true) {
+      avg_time = trans.cpu_avg_time_[idx];
+      min_time = trans.cpu_min_time_[idx];
+      bandwidth = (double)data_size / avg_time / 1000 / 1000 / 1000;
+      peak_bandwidth = (double)data_size / min_time / 1000 / 1000 / 1000;
+    } else {
+      avg_time = trans.gpu_avg_time_[idx] / sys_freq;
+      min_time = trans.gpu_min_time_[idx] / sys_freq;
+      bandwidth = (double)data_size / avg_time / 1000 / 1000 / 1000;
+      peak_bandwidth = (double)data_size / min_time / 1000 / 1000 / 1000;
+    }
+
+    trans.min_time_.push_back(min_time);
+    trans.avg_time_.push_back(avg_time);
+    trans.avg_bandwidth_.push_back(bandwidth);
+    trans.peak_bandwidth_.push_back(peak_bandwidth);
+  }
 }
 

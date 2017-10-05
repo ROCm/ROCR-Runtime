@@ -10,6 +10,8 @@ cmake_minimum_required(VERSION 2.8.0)
 #
 #     export ROCR_LIB_DIR="Path to ROC Runtime libraries"
 #
+#     export ROCT_LIB_DIR="Path to ROC Thunk libraries"
+#
 #  2) Make an new folder called build under root folder
 #
 #     mkdir build
@@ -38,12 +40,19 @@ SET( CMAKE_VERBOSE_MAKEFILE on )
 #
 # Set core runtime module name
 #
+set ( ROC_THUNK_NAME "hsakmt" )
+set ( ROC_THUNK_LIBRARY "lib${ROC_THUNK_NAME}" )
 set ( CORE_RUNTIME_NAME "hsa-runtime" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
 set ( CORE_RUNTIME_LIBRARY "lib${CORE_RUNTIME_TARGET}" )
 
 if(NOT EXISTS $ENV{ROCR_LIB_DIR}/${CORE_RUNTIME_LIBRARY}.so)
   MESSAGE("ERROR: ROC Runtime libraries can't be found under sprcified path")
+  RETURN()
+endif()
+
+if(NOT EXISTS $ENV{ROCT_LIB_DIR}/${ROC_THUNK_LIBRARY}.so)
+  MESSAGE("ERROR: ROC Thunk libraries can't be found under sprcified path")
   RETURN()
 endif()
 

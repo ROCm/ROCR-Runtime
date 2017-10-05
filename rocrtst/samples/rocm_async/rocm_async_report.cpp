@@ -100,6 +100,14 @@ void RocmAsync::Display() const {
     std::cout << std::endl;
     return;
   }
+
+  if ((req_copy_all_bidir_ == REQ_COPY_ALL_BIDIR) ||
+      (req_copy_all_unidir_ == REQ_COPY_ALL_UNIDIR)) {
+    DisplayCopyTimeMatrix();
+    std::cout << std::endl;
+    return;
+  }
+
   for (uint32_t idx = 0; idx < trans_size; idx++) {
     async_trans_t trans = trans_list_[idx];
     if ((trans.req_type_ == REQ_COPY_BIDIR) ||
@@ -120,10 +128,6 @@ void RocmAsync::DisplayIOTime(async_trans_t& trans) const {
 
 void RocmAsync::DisplayCopyTime(async_trans_t& trans) const {
   
-  // Get the frequency of Gpu Timestamping
-  uint64_t sys_freq = 0;
-  hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &sys_freq);
-  
   // Print Benchmark Header
   uint32_t src_idx = trans.copy.src_idx_;
   uint32_t dst_idx = trans.copy.dst_idx_;
@@ -133,35 +137,121 @@ void RocmAsync::DisplayCopyTime(async_trans_t& trans) const {
   hsa_device_type_t dst_dev_type = agent_list_[dst_dev_idx].device_type_;
   printCopyBanner(src_idx, src_dev_type, dst_idx, dst_dev_type);
   
-  double avg_time = 0;
-  double min_time = 0;
-  double bandwidth = 0;
-  uint32_t data_size = 0;
-  double peak_bandwidth = 0;
   uint32_t size_len = size_list_.size();
   for (uint32_t idx = 0; idx < size_len; idx++) {
-    
-    // Adjust size of data involved in copy
-    data_size = size_list_[idx];
-    if (trans.copy.bidir_ == true) {
-      data_size += size_list_[idx];
-    }
-    data_size = data_size * 1024 * 1024;
-
-    // Copy operation does not involve a Gpu device
-    if (trans.copy.uses_gpu_ != true) {
-      avg_time = trans.cpu_avg_time_[idx];
-      min_time = trans.cpu_min_time_[idx];
-      bandwidth = (double)data_size / avg_time / 1000 / 1000 / 1000;
-      peak_bandwidth = (double)data_size / min_time / 1000 / 1000 / 1000;
-    } else {
-      avg_time = trans.gpu_avg_time_[idx] / sys_freq;
-      min_time = trans.gpu_min_time_[idx] / sys_freq;
-      bandwidth = (double)data_size / avg_time / 1000 / 1000 / 1000;
-      peak_bandwidth = (double)data_size / min_time / 1000 / 1000 / 1000;
-    }
-
-    printRecord(size_list_[idx], avg_time, bandwidth, min_time, peak_bandwidth);
+    printRecord(size_list_[idx], trans.avg_time_[idx],
+                trans.avg_bandwidth_[idx], trans.min_time_[idx],
+                trans.peak_bandwidth_[idx]);
   }
+}
+
+void RocmAsync::DisplayCopyTimeMatrix() const {
+  
+  double* avg_matrix = new double[agent_index_ * agent_index_]();
+  double* peak_matrix = new double[agent_index_ * agent_index_]();
+  uint32_t trans_size = trans_list_.size();
+  for (uint32_t idx = 0; idx < trans_size; idx++) {
+    async_trans_t trans = trans_list_[idx];
+    uint32_t src_idx = trans.copy.src_idx_;
+    uint32_t dst_idx = trans.copy.dst_idx_;
+    uint32_t src_dev_idx = pool_list_[src_idx].agent_index_;
+    uint32_t dst_dev_idx = pool_list_[dst_idx].agent_index_;
+    avg_matrix[(src_dev_idx * agent_index_) + dst_dev_idx] = trans.avg_bandwidth_[0];
+    peak_matrix[(src_dev_idx * agent_index_) + dst_dev_idx] = trans.peak_bandwidth_[0];
+  }
+
+  uint32_t format = 12;
+  std::cout.setf(ios::left);
+
+  std::cout << std::endl;
+  std::cout.width(format);
+  std::cout << "";
+  std::cout.width(format);
+  if (req_copy_all_unidir_ == REQ_COPY_ALL_UNIDIR) {
+    std::cout << "Peak Bandwidth For Unidirectional Copies GB/sec";
+  } else {
+    std::cout << "Peak Bandwidth For Bidirectional Copies GB/sec";
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+
+  std::cout.width(format);
+  std::cout << "";
+  std::cout.width(format);
+  std::cout << "";
+  for (uint32_t idx0 = 0; idx0 < agent_index_; idx0++) {
+    std::cout.width(format);
+    std::stringstream agent_id;
+    agent_id << "Dev-" << idx0;
+    std::cout << agent_id.str();
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+  for (uint32_t idx0 = 0; idx0 < agent_index_; idx0++) {
+    std::cout.width(format);
+    std::cout << "";
+    std::stringstream agent_id;
+    agent_id << "Dev-" << idx0;
+    std::cout.width(format);
+    std::cout << agent_id.str();
+    for (uint32_t idx1 = 0; idx1 < agent_index_; idx1++) {
+      std::cout.width(format);
+      std::cout << peak_matrix[(idx0 * agent_index_) + idx1];
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+
+  std::cout.width(format);
+  std::cout << "";
+  std::cout.width(format);
+  if (req_copy_all_unidir_ == REQ_COPY_ALL_UNIDIR) {
+    std::cout << "Average Bandwidth For Unidirectional Copies GB/sec";
+  } else {
+    std::cout << "Average Bandwidth For Bidirectional Copies GB/sec";
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+
+  std::cout.width(format);
+  std::cout << "";
+  std::cout.width(format);
+  std::cout << "";
+  for (uint32_t idx0 = 0; idx0 < agent_index_; idx0++) {
+    std::cout.width(format);
+    std::stringstream agent_id;
+    agent_id << "Dev-" << idx0;
+    std::cout << agent_id.str();
+  }
+  std::cout << std::endl;
+  std::cout << std::endl;
+  for (uint32_t idx0 = 0; idx0 < agent_index_; idx0++) {
+    std::cout.width(format);
+    std::cout << "";
+    std::stringstream agent_id;
+    agent_id << "Dev-" << idx0;
+    std::cout.width(format);
+    std::cout << agent_id.str();
+    for (uint32_t idx1 = 0; idx1 < agent_index_; idx1++) {
+      std::cout.width(format);
+      std::cout << avg_matrix[(idx0 * agent_index_) + idx1];
+    }
+    std::cout << std::endl;
+    std::cout << std::endl;
+  }
+  std::cout << std::endl;
+
+  /*
+  std::cout.width(format);
+  std::cout << "";
+  std::cout << "@note-1: ZERO in Dev-i != Dev-j means DIRECT PATH doesn't exist";
+  std::cout << std::endl;
+  std::cout.width(format);
+  std::cout << "";
+  std::cout << "@note-2: ZERO in Dev-i == Dev-j means COPY operation is filtered out";
+  std::cout << std::endl;
+  std::cout << std::endl;
+  */
 }
 
