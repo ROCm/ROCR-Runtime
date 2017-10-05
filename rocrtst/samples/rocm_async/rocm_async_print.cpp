@@ -19,14 +19,25 @@ void RocmAsync::PrintHelpScreen() {
   std::cout << "\t -a Perform Unidirectional Copy involving all pool combinations" << std::endl;
   std::cout << "\t -A Perform Bidirectional Copy involving all pool combinations" << std::endl;
   std::cout << std::endl;
-
-  std::cout << "\t @note 1: Removes copyReq(srcI, dstI) - where Src & Dst Pools are same" << std::endl;
+  
   std::cout << std::endl;
-  std::cout << "\t @note 2: Removes copyReq(srcI, dstJ) - where Src & Dst Pools are Cpu bound " << std::endl;
+  std::cout << "\t @note 1: Removes copyReq(srcI, dstJ) - where either Src or Dst Pool is fine-grained" << std::endl;
   std::cout << std::endl;
-  std::cout << "\t @note 3: Treats copyReq(dstI, srcJ) as NOT EQUAL to copyReq(dstJ, srcI) " << std::endl;
+  std::cout << "\t @note 2: Treats copyReq(dstI, srcJ) as NOT EQUAL to copyReq(dstJ, srcI) " << std::endl;
   std::cout << "\t            Underlying copy engine could be different " << std::endl;
   std::cout << std::endl;
+
+  /*
+  std::cout << "\t @note 1: Removes copyReq(srcI, dstI) - where Src & Dst Pools are same" << std::endl;
+  std::cout << std::endl;
+  std::cout << "\t @note 2: Removes copyReq(srcI, dstJ) - where Src & Dst Pools are Cpu bound" << std::endl;
+  std::cout << std::endl;
+  std::cout << "\t @note 3: Removes copyReq(srcI, dstJ) - where either Src or Dst Pool is fine-grained" << std::endl;
+  std::cout << std::endl;
+  std::cout << "\t @note 4: Treats copyReq(dstI, srcJ) as NOT EQUAL to copyReq(dstJ, srcI) " << std::endl;
+  std::cout << "\t            Underlying copy engine could be different " << std::endl;
+  std::cout << std::endl;
+  */
 }
 
 // @brief: Print the topology of Memory Pools and Agents present in system

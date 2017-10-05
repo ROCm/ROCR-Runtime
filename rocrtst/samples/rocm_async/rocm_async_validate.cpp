@@ -130,9 +130,11 @@ bool RocmAsync::ValidateArguments() {
 
   // Determine if user has requested a Copy
   // operation that is bidirectional and gave
-  // valid inputs
+  // valid inputs. Same validation is applied
+  // for all-to-all unidirectional copy operation
   status = false;
-  if (req_copy_bidir_ == REQ_COPY_BIDIR) {
+  if ((req_copy_bidir_ == REQ_COPY_BIDIR) ||
+      (req_copy_all_bidir_ == REQ_COPY_ALL_BIDIR)) {
     status = ValidateBidirCopyReq();
     if (status == false) {
       return status;
@@ -141,9 +143,11 @@ bool RocmAsync::ValidateArguments() {
 
   // Determine if user has requested a Copy
   // operation that is unidirectional and gave
-  // valid inputs
+  // valid inputs. Same validation is applied
+  // for all-to-all bidirectional copy operation
   status = false;
-  if (req_copy_unidir_ == REQ_COPY_UNIDIR) {
+  if ((req_copy_unidir_ == REQ_COPY_UNIDIR) ||
+      (req_copy_all_unidir_ == REQ_COPY_ALL_UNIDIR)) {
     status = ValidateUnidirCopyReq();
     if (status == false) {
       return status;

@@ -385,12 +385,6 @@ void RocmAsync::RunCopyBenchmark(async_trans_t& trans) {
   }
 }
 
-void RocmAsync::RunIOBenchmark(async_trans_t& trans) {
-
-  std::cout << "Unsupported Request - Read / Write" << std::endl;
-  exit(1);
-}
-
 void RocmAsync::Run() {
 
   // Enable profiling of Async Copy Activity
@@ -402,8 +396,11 @@ void RocmAsync::Run() {
   for (uint32_t idx = 0; idx < trans_size; idx++) {
     async_trans_t& trans = trans_list_[idx];
     if ((trans.req_type_ == REQ_COPY_BIDIR) ||
-        (trans.req_type_ == REQ_COPY_UNIDIR)) {
+        (trans.req_type_ == REQ_COPY_UNIDIR) ||
+        (trans.req_type_ == REQ_COPY_ALL_BIDIR) ||
+        (trans.req_type_ == REQ_COPY_ALL_UNIDIR)) {
       RunCopyBenchmark(trans);
+      ComputeCopyTime(trans);
     }
     if ((trans.req_type_ == REQ_READ) ||
         (trans.req_type_ == REQ_WRITE)) {
@@ -451,15 +448,6 @@ void RocmAsync::SetUp() {
     PrintHelpScreen();
     exit(1);
   }
-
-  // Print Debug Info - List of Agents, Pool, Transactions
-  char* print_debug = getenv("PRINT_DEBUG");
-  if (print_debug) {
-    //PrintAgentsList();
-    //PrintPoolsList();
-    PrintTransList();
-    //PrintTopology();
-  }
 }
 
 RocmAsync::RocmAsync(int argc, char** argv) : BaseTest() {
@@ -472,6 +460,8 @@ RocmAsync::RocmAsync(int argc, char** argv) : BaseTest() {
   req_write_ = REQ_INVALID;
   req_copy_bidir_ = REQ_INVALID;
   req_copy_unidir_ = REQ_INVALID;
+  req_copy_all_bidir_ = REQ_INVALID;
+  req_copy_all_unidir_ = REQ_INVALID;
 }
 
 RocmAsync::~RocmAsync() { }

@@ -106,6 +106,14 @@ typedef struct async_trans {
   // Gpu Min time
   vector<double> gpu_min_time_;
 
+  // BenchMark's Average copy time and average bandwidth
+  vector<double> avg_time_;
+  vector<double> avg_bandwidth_;
+
+  // BenchMark's Min copy time and peak bandwidth
+  vector<double> min_time_;
+  vector<double> peak_bandwidth_;
+
   async_trans(uint32_t req_type) { req_type_ = req_type; }
 } async_trans_t;
 
@@ -115,7 +123,9 @@ typedef enum Request_Type {
   REQ_WRITE = 2,
   REQ_COPY_BIDIR = 3,
   REQ_COPY_UNIDIR = 4,
-  REQ_INVALID = 5,
+  REQ_COPY_ALL_BIDIR = 5,
+  REQ_COPY_ALL_UNIDIR = 6,
+  REQ_INVALID = 7,
 
 } Request_Type;
 
@@ -183,6 +193,7 @@ class RocmAsync : public BaseTest {
   // @brief: Dispaly Benchmark result
   void DisplayIOTime(async_trans_t& trans) const;
   void DisplayCopyTime(async_trans_t& trans) const;
+  void DisplayCopyTimeMatrix() const;
 
   private:
 
@@ -202,11 +213,14 @@ class RocmAsync : public BaseTest {
   bool PoolIsDuplicated(vector<uint32_t>& in_list);
 
   // @brief: Builds a list of transaction per user request
+  void ComputeCopyTime(async_trans_t& trans);
   bool BuildTransList();
   bool BuildReadTrans();
   bool BuildWriteTrans();
   bool BuildBidirCopyTrans();
   bool BuildUnidirCopyTrans();
+  bool BuildAllPoolsBidirCopyTrans();
+  bool BuildAllPoolsUnidirCopyTrans();
   bool BuildReadOrWriteTrans(uint32_t req_type,
                              vector<uint32_t>& in_list);
   bool BuildCopyTrans(uint32_t req_type,
@@ -301,9 +315,14 @@ class RocmAsync : public BaseTest {
   uint32_t req_write_;
   uint32_t req_copy_bidir_;
   uint32_t req_copy_unidir_;
+  uint32_t req_copy_all_bidir_;
+  uint32_t req_copy_all_unidir_;
 
   // List used to store transactions per user request
   vector<async_trans_t> trans_list_;
+
+  // List used to store transactions involving Cpu-Gpu pools
+  vector<async_trans_t> matrix_trans_list_;
 
   // Variable to store argument number
 
