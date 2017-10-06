@@ -50,7 +50,7 @@
 #include <vector>
 
 #include "common/base_rocr.h"
-#include "common/rocm_smi/rocm_smi.h"
+#include "rocm_smi/rocm_smi.h"
 
 class TestBase : public rocrtst::BaseRocR {
  public:
