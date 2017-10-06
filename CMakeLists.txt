@@ -91,7 +91,7 @@ set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" 
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
 
 target_link_libraries ( ${HSAKMT_TARGET}
-  pthread rt pci
+  pthread rt pci numa
 )
 
 ## If the library is a release, strip the target library
