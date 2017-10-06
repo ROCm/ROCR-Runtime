@@ -34,6 +34,13 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <pci/pci.h>
+#include <numaif.h>
+#ifndef MPOL_F_STATIC_NODES
+/* Bug in numaif.h, this should be defined in there. Definition copied
+ * from linux/mempolicy.h.
+ */
+#define MPOL_F_STATIC_NODES     (1 << 15)
+#endif
 
 #define NON_VALID_GPU_ID 0
 
@@ -1170,12 +1177,24 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 	 * memory is allocated from KFD
 	 */
 	if (!flags.ui32.NonPaged && svm.userptr_for_paged_mem) {
+		const unsigned int bits_per_long = sizeof(unsigned long) * 8;
+		unsigned long node_mask[node_id / bits_per_long + 1];
+		int mode = MPOL_F_STATIC_NODES;
+
 		/* Allocate address space */
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		mem = aperture_allocate_area(aperture, size, 0);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		if (!mem)
 			return NULL;
+
+		/* Bind to NUMA node */
+		memset(node_mask, 0, sizeof(node_mask));
+		node_mask[node_id / bits_per_long] = 1UL << (node_id % bits_per_long);
+		mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
+		if (mbind(mem, MemorySizeInBytes, mode, node_mask, node_id+1, 0))
+			pr_warn("Failed to set NUMA policy for %lu pages at %p\n",
+				MemorySizeInBytes >> 12, mem);
 
 		/* Map anonymous pages */
 		if (mmap(mem, MemorySizeInBytes, PROT_READ | PROT_WRITE,
@@ -1286,6 +1305,9 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
+		/* Reset NUMA policy */
+		mbind(address, object->size, MPOL_DEFAULT, NULL, 0, 0);
+
 		/* Remove any CPU mapping, but keep the address range reserved */
 		mmap_ret = mmap(address, object->size, PROT_NONE,
 			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
