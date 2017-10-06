@@ -54,6 +54,7 @@ endif()
 
 set(ROCR_INC_DIR ${ROCM_DIR}/include)
 set(ROCR_LIB_DIR ${ROCM_DIR}/lib)
+set(ROCM_SMI_INC_DIR ${ROCM_DIR}/include)
 #
 # Determine ROCR Header files are present
 #
@@ -216,7 +217,6 @@ MESSAGE("ROCRTST_LIBS SET STEP:Done")
 #
 # Other source directories
 aux_source_directory(${ROCRTST_ROOT}/common common_srcs)
-aux_source_directory(${ROCRTST_ROOT}/common/rocm_smi common_smi_srcs)
 
 #
 # Specify the directory containing various libraries of ROCR
@@ -228,6 +228,7 @@ LINK_DIRECTORIES(${ROCR_LIB_DIR})
 # Extend the list of libraries to be used for linking ROC Perf Apps
 #
 set(ROCRTST_LIBS ${ROCRTST_LIBS} hsa-runtime${ONLY64STR})
+set(ROCRTST_LIBS ${ROCRTST_LIBS} rocm_smi${ONLY64STR})
 
 
 # Set Name for rocrtst 
@@ -246,6 +247,7 @@ aux_source_directory(${ROCRTST_ROOT}/suites/test_common testCommonSources)
 include_directories(${ROCR_INC_DIR})
 include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
+include_directories(${ROCM_SMI_INC_DIR})
 
 # Use this function to build any samples that have kernels to be built
 function(build_kernel S_NAME TARG_DEV)
@@ -308,8 +310,8 @@ set(CL_FILE_LIST "${KERNELS_DIR}/dispatch_time_kernels.cl")
 build_sample_for_devices("dispatch_time")
 
 # Build rules
-add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${common_srcs}
-                                ${common_smi_srcs} ${testCommonSources})
+add_executable(${ROCRTST} ${performanceSources} ${functionalSources}
+                                           ${common_srcs} ${testCommonSources})
 
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwloc)
 

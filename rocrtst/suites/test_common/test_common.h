@@ -49,7 +49,7 @@
 #include <memory>
 #include <vector>
 
-#include "common/rocm_smi/rocm_smi.h"
+#include "rocm_smi/rocm_smi.h"
 
 struct RocrTstGlobals {
   uint32_t verbosity;

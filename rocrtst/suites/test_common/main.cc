@@ -57,7 +57,7 @@
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
 
-#include "common/rocm_smi/rocm_smi.h"
+#include "rocm_smi/rocm_smi.h"
 
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
