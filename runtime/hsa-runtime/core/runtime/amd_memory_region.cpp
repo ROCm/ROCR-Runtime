@@ -171,15 +171,19 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory()) {
-    bool useSubAlloc = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
-    useSubAlloc &= (alloc_flags == AllocateRestrict);
+    bool subAllocEnabled = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
+    // Avoid modifying executable or queue allocations.
+    bool useSubAlloc = subAllocEnabled;
+    useSubAlloc &= ((alloc_flags & (~AllocateRestrict)) == 0);
     useSubAlloc &= (size <= fragment_allocator_.max_alloc());
     if (useSubAlloc) {
       *address = fragment_allocator_.alloc(size);
       return HSA_STATUS_SUCCESS;
     }
-    // Pad up larger VRAM allocations.
-    size = AlignUp(size, fragment_allocator_.max_alloc());
+    if (subAllocEnabled) {
+      // Pad up larger VRAM allocations.
+      size = AlignUp(size, fragment_allocator_.max_alloc());
+    }
   }
 
   // Allocate memory.
