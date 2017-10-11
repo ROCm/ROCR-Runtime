@@ -309,21 +309,20 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	return status;
 }
 
-static void *allocate_exec_aligned_memory_cpu(uint32_t size, uint32_t align)
+static void *allocate_exec_aligned_memory_cpu(uint32_t size)
 {
 	void *ptr;
-	int retval;
 
-	retval = posix_memalign(&ptr, align, size);
-	if (retval != 0)
-		return NULL;
+	/* mmap will return a pointer with alignment equal to
+	 * sysconf(_SC_PAGESIZE).
+	 *
+	 * MAP_ANONYMOUS initializes the memory to zero.
+	 */
+	ptr = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+				MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
 
-	retval = mprotect(ptr, size, PROT_READ | PROT_WRITE | PROT_EXEC);
-	if (retval != 0) {
-		free(ptr);
+	if (ptr == MAP_FAILED)
 		return NULL;
-	}
-	memset(ptr, 0, size);
 	return ptr;
 }
 
@@ -395,15 +394,17 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 		hsaKmtFreeMemory(addr, size);
 }
 
+/*
+ * Allocates memory aligned to sysconf(_SC_PAGESIZE)
+ */
 static void *allocate_exec_aligned_memory(uint32_t size,
-					  uint32_t align,
 					  enum asic_family_type type,
 					  uint32_t NodeId)
 {
 	if (IS_DGPU(type))
-		return allocate_exec_aligned_memory_gpu(size, align, NodeId,
+		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
 							false);
-	return allocate_exec_aligned_memory_cpu(size, align);
+	return allocate_exec_aligned_memory_cpu(size);
 }
 
 static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
@@ -412,7 +413,7 @@ static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
 	if (IS_DGPU(type))
 		free_exec_aligned_memory_gpu(addr, size, align);
 	else
-		free(addr);
+		munmap(addr, size);
 }
 
 static void free_queue(struct queue *q)
@@ -439,7 +440,6 @@ static int handle_concrete_asic(struct queue *q,
 		if (dev_info->eop_buffer_size > 0) {
 			q->eop_buffer =
 					allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
-					PAGE_SIZE,
 					dev_info->asic_family,
 					NodeId);
 			if (!q->eop_buffer)
@@ -454,7 +454,6 @@ static int handle_concrete_asic(struct queue *q,
 			args->ctl_stack_size = q->ctl_stack_size;
 			q->ctx_save_restore =
 				allocate_exec_aligned_memory(q->ctx_save_restore_size,
-							     PAGE_SIZE,
 							     dev_info->asic_family,
 							     NodeId);
 			if (!q->ctx_save_restore)
@@ -506,7 +505,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	dev_info = get_device_info_by_dev_id(dev_id);
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
-			PAGE_SIZE, dev_info->asic_family,
+			dev_info->asic_family,
 			NodeId);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;

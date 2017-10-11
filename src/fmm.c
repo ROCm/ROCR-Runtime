@@ -1110,25 +1110,21 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 				HsaMemFlags flags)
 {
-	int err;
-	HSAuint64 page_size;
 	void *mem = NULL;
 	vm_object_t *vm_obj;
+	int mmap_prot = PROT_READ | PROT_WRITE;
 
-	page_size = PageSizeFromFlags(flags.ui32.PageSize);
-	err = posix_memalign(&mem, page_size, MemorySizeInBytes);
-	if (err != 0)
+	if (flags.ui32.ExecuteAccess)
+		mmap_prot |= PROT_EXEC;
+
+	/* mmap will return a pointer with alignment equal to
+	 * sysconf(_SC_PAGESIZE).
+	 */
+	mem = mmap(NULL, MemorySizeInBytes, mmap_prot,
+			MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+
+	if (mem == MAP_FAILED)
 		return NULL;
-
-	if (flags.ui32.ExecuteAccess) {
-		err = mprotect(mem, MemorySizeInBytes,
-				PROT_READ | PROT_WRITE | PROT_EXEC);
-
-		if (err != 0) {
-			free(mem);
-			return NULL;
-		}
-	}
 
 	pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
 	vm_obj = aperture_allocate_object(&cpuvm_aperture, mem, 0,
@@ -1354,14 +1350,18 @@ void fmm_release(void *address)
 	 * refers to the system memory
 	 */
 	if (!found) {
+		uint64_t size = 0;
 		/* Release the vm object in CPUVM */
 		pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
 		object = vm_find_object_by_address(&cpuvm_aperture, address, 0);
-		if (object)
+		if (object) {
+			size = object->size;
 			vm_remove_object(&cpuvm_aperture, object);
+		}
 		pthread_mutex_unlock(&cpuvm_aperture.fmm_mutex);
 		/* Free the memory from the system */
-		free(address);
+		if (size)
+			munmap(address, size);
 	}
 }
 
