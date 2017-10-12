@@ -90,6 +90,12 @@ namespace loader {
 #if defined(GFX9_BUILD)
     gfx900.handle = 900;
     gfx901.handle = 901;
+    gfx901.handle = 902;
+    gfx903.handle = 903;
+    gfx903.handle = 904;
+    gfx903.handle = 905;
+    gfx903.handle = 906;
+    gfx907.handle = 907;
 #endif // GFX9_BUILD
   }
 
@@ -117,6 +123,18 @@ namespace loader {
       return gfx900;
     } else if (sname == "AMD:AMDGPU:9:0:1") {
       return gfx901;
+    } else if (sname == "AMD:AMDGPU:9:0:2") {
+      return gfx902;
+    } else if (sname == "AMD:AMDGPU:9:0:3") {
+      return gfx903;
+    } else if (sname == "AMD:AMDGPU:9:0:4") {
+      return gfx904;
+    } else if (sname == "AMD:AMDGPU:9:0:5") {
+      return gfx905;
+    } else if (sname == "AMD:AMDGPU:9:0:6") {
+      return gfx906;
+    } else if (sname == "AMD:AMDGPU:9:0:7") {
+      return gfx907;
 #endif // GFX_BUILD
     } else {
       assert(0);
