@@ -90,7 +90,7 @@ static unsigned int counter_props_count;
 static const char shmem_name[] = "/hsakmt_shared_mem";
 static int shmem_fd;
 static const char sem_name[] = "hsakmt_semaphore";
-static sem_t *sem;
+static sem_t *sem = SEM_FAILED;
 struct perf_shared_table *shared_table;
 
 static ssize_t readn(int fd, void *buf, size_t n)
@@ -140,7 +140,7 @@ exit_2:
 exit_1:
 	sem_close(sem);
 	sem_unlink(sem_name);
-	sem = NULL;
+	sem = SEM_FAILED;
 	return HSAKMT_STATUS_ERROR;
 }
 
@@ -151,9 +151,10 @@ static void destroy_shared_region(void)
 
 	if (shmem_fd > 0)
 		shm_unlink(shmem_name);
-	if (sem && sem != SEM_FAILED) {
+	if (sem != SEM_FAILED) {
 		sem_close(sem);
 		sem_unlink(sem_name);
+		sem = SEM_FAILED;
 	}
 }
 
@@ -325,7 +326,7 @@ static HSAKMT_STATUS update_block_slots(enum perf_trace_action action,
 
 	if (shmem_fd <= 0)
 		return HSAKMT_STATUS_UNAVAILABLE;
-	if (!sem || sem == SEM_FAILED)
+	if (sem == SEM_FAILED)
 		return HSAKMT_STATUS_UNAVAILABLE;
 
 	sem_wait(sem);
