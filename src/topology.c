@@ -354,7 +354,8 @@ static int cpuid_find_num_cache_leaves(uint32_t op)
 	do {
 		++idx;
 		cpuid_count(op, idx, &eax.full, &ebx.full, &ecx, &edx);
-	} while (eax.split.type != CACHE_TYPE_NULL);
+		/* Modern systems have cache levels up to 3. */
+	} while (eax.split.type != CACHE_TYPE_NULL && idx < 4);
 	return idx;
 }
 
