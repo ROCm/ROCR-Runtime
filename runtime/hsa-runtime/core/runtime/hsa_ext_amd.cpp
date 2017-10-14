@@ -130,11 +130,16 @@ hsa_status_t handleException() {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   } catch (const hsa_exception& e) {
     return e.error_code();
-    // Enable when callback exception support is added.
-    // } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks after unwinding
-    // HSA.
+    // } catch (std::nested_exception& e) {
+    // Rethrow exceptions caught from callbacks.
     //  e.rethrow_nested();
     //  return HSA_STATUS_ERROR;
+#ifndef NDEBUG
+  } catch (const std::exception& e) {
+    fprintf(stderr, "Unhandled exception: %s\n", e.what());
+    assert(false && "Unhandled exception.");
+    return HSA_STATUS_ERROR;
+#endif
   } catch (...) {
     assert(false && "Unhandled exception.");
     abort();
