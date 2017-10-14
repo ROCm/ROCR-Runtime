@@ -649,7 +649,7 @@ void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated
   hsa_status_t err = region_.Allocate(
       bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
   if (err != HSA_STATUS_SUCCESS)
-    throw new ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
+    throw ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
   assert(ret != nullptr && "Region returned nullptr on success.");
 
   allocated_size = block_size();
