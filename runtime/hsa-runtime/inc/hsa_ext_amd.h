@@ -973,6 +973,10 @@ typedef struct hsa_amd_memory_pool_link_info_s {
   */
   hsa_amd_link_info_type_t link_type;
 
+  /**
+   * NUMA distance of memory pool relative to querying agent
+   */
+  uint32_t numa_distance;
 } hsa_amd_memory_pool_link_info_t;
 
 /**
