@@ -44,8 +44,8 @@
 #include <typeinfo>
 #include <exception>
 #include <set>
-
-#include "hsakmt.h"
+#include <utility>
+#include <memory>
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
@@ -56,6 +56,7 @@
 #include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/ipc_signal.h"
+#include "core/inc/intercept_queue.h"
 #include "core/inc/exceptions.h"
 
 template <class T>
@@ -134,12 +135,10 @@ hsa_status_t handleException() {
     // Rethrow exceptions caught from callbacks.
     //  e.rethrow_nested();
     //  return HSA_STATUS_ERROR;
-#ifndef NDEBUG
   } catch (const std::exception& e) {
-    fprintf(stderr, "Unhandled exception: %s\n", e.what());
+    debug_print("Unhandled exception: %s\n", e.what());
     assert(false && "Unhandled exception.");
     return HSA_STATUS_ERROR;
-#endif
   } catch (...) {
     assert(false && "Unhandled exception.");
     abort();
@@ -794,6 +793,45 @@ hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
   IS_BAD_PTR(hsa_signal);
   core::Signal* signal = core::IPCSignal::Attach(handle);
   *hsa_signal = core::Signal::Convert(signal);
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+// For use by tools only - not in library export table.
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue) {
+  TRY;
+  hsa_queue_t* lower_queue;
+  hsa_status_t err = HSA::hsa_queue_create(agent_handle, size, type, callback, data,
+                                           private_segment_size, group_segment_size, &lower_queue);
+  if (err != HSA_STATUS_SUCCESS) return err;
+  std::unique_ptr<core::Queue> lowerQueue(core::Queue::Convert(lower_queue));
+
+  std::unique_ptr<core::InterceptQueue> upperQueue(new core::InterceptQueue(std::move(lowerQueue)));
+
+  if (!upperQueue->IsSharedObjectAllocationValid()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  *queue = core::Queue::Convert(upperQueue.get());
+  upperQueue.release();
+
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+// For use by tools only - not in library export table.
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(callback);
+  core::Queue* cmd_queue = core::Queue::Convert(queue);
+  IS_VALID(cmd_queue);
+  if (!core::InterceptQueue::IsType(cmd_queue)) return HSA_STATUS_ERROR_INVALID_QUEUE;
+  core::InterceptQueue* iQueue = static_cast<core::InterceptQueue*>(cmd_queue);
+  iQueue->AddInterceptor(callback, user_data);
   return HSA_STATUS_SUCCESS;
   CATCH;
 }

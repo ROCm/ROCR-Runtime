@@ -50,6 +50,7 @@
 
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/hsa_internal.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
 #include "core/inc/memory_region.h"

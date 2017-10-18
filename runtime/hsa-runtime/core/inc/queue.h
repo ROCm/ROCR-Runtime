@@ -306,6 +306,10 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
 
   hsa_queue_t* public_handle() const { return public_handle_; }
 
+  typedef void* rtti_t;
+
+  bool IsType(rtti_t id) { return _IsA(id); }
+
  protected:
   static void set_public_handle(Queue* ptr, hsa_queue_t* handle) {
     ptr->do_set_public_handle(handle);
@@ -314,6 +318,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
     public_handle_ = handle;
   }
   hsa_queue_t* public_handle_;
+
+  virtual bool _IsA(rtti_t id) const = 0;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);

@@ -47,6 +47,7 @@
 
 namespace core {
 
+int HostQueue::rtti_id_ = 0;
 std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
 
 HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,

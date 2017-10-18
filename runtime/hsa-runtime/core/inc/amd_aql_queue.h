@@ -59,6 +59,8 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
     return signal->IsType(&rtti_id_);
   }
 
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+
   // Acquires/releases queue resources and requests HW schedule/deschedule.
   AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
            ScratchInfo& scratch, core::HsaEventCallback callback,
@@ -337,7 +339,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   }
 
  protected:
-  bool _IsA(rtti_t id) const override { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
   /// @brief Disallow destroying doorbell apart from its queue.
   void doDestroySignal() override { assert(false); }
