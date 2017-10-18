@@ -45,14 +45,18 @@
 #ifndef HSA_RUNTME_CORE_INC_SIGNAL_H_
 #define HSA_RUNTME_CORE_INC_SIGNAL_H_
 
+#include <map>
+
 #include "hsakmt.h"
 
 #include "core/common/shared.h"
 
 #include "core/inc/runtime.h"
 #include "core/inc/checked.h"
+#include "core/inc/exceptions.h"
 
 #include "core/util/utils.h"
+#include "core/util/locks.h"
 
 #include "inc/amd_hsa_signal.h"
 
@@ -60,81 +64,139 @@ namespace core {
 class Agent;
 class Signal;
 
-/// @brief Helper structure to simplify conversion of amd_signal_t and
-/// core::Signal object.
+/// @brief ABI and object conversion struct for signals.  May be shared between processes.
 struct SharedSignal {
   amd_signal_t amd_signal;
   Signal* core_signal;
+  Check<0x71FCCA6A3D5D5276, true> id;
+
+  SharedSignal() {
+    memset(&amd_signal, 0, sizeof(amd_signal));
+    amd_signal.kind = AMD_SIGNAL_KIND_INVALID;
+    core_signal = nullptr;
+  }
+
+  bool IsValid() const { return (Convert(this).handle != 0) && id.IsValid(); }
+
+  bool IsIPC() const { return core_signal == nullptr; }
+
+  static __forceinline SharedSignal* Convert(hsa_signal_t signal) {
+    SharedSignal* ret = reinterpret_cast<SharedSignal*>(static_cast<uintptr_t>(signal.handle) -
+                                                        offsetof(SharedSignal, amd_signal));
+    return ret;
+  }
+
+  static __forceinline hsa_signal_t Convert(const SharedSignal* signal) {
+    assert(signal != nullptr && "Conversion on null Signal object.");
+    const uint64_t handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&signal->amd_signal));
+    const hsa_signal_t signal_handle = {handle};
+    return signal_handle;
+  }
+};
+static_assert(std::is_standard_layout<SharedSignal>::value,
+              "SharedSignal must remain standard layout for IPC use.");
+static_assert(std::is_trivially_destructible<SharedSignal>::value,
+              "SharedSignal must not be modified on delete for IPC use.");
+
+class LocalSignal {
+ public:
+  explicit LocalSignal(hsa_signal_value_t initial_value) {
+    if (!local_signal_.IsSharedObjectAllocationValid()) throw std::bad_alloc();
+    local_signal_.shared_object()->amd_signal.value = initial_value;
+  }
+
+  SharedSignal* signal() const { return local_signal_.shared_object(); }
+
+ private:
+  Shared<SharedSignal, AMD_SIGNAL_ALIGN_BYTES> local_signal_;
 };
 
 /// @brief An abstract base class which helps implement the public hsa_signal_t
 /// type (an opaque handle) and its associated APIs. At its core, signal uses
 /// a 32 or 64 bit value. This value can be waitied on or signaled atomically
 /// using specified memory ordering semantics.
-class Signal : public Checked<0x71FCCA6A3D5D5276>,
-               public Shared<SharedSignal, AMD_SIGNAL_ALIGN_BYTES> {
+class Signal {
  public:
-  /// @brief Constructor initializes the signal with initial value.
-  explicit Signal(hsa_signal_value_t initial_value)
-      : Shared(),
-        signal_(shared_object()->amd_signal),
-        async_copy_agent_(NULL) {
-    if (!Shared::IsSharedObjectAllocationValid()) {
-      invalid_ = true;
-      return;
-    }
+  /// @brief Constructor Links and publishes the signal interface object.
+  explicit Signal(SharedSignal* abi_block, bool enableIPC = false)
+      : signal_(abi_block->amd_signal), async_copy_agent_(NULL), refcount_(1) {
+    assert(abi_block != nullptr && "Signal abi_block must not be NULL");
 
-    shared_object()->core_signal = this;
-
-    signal_.kind = AMD_SIGNAL_KIND_INVALID;
-    signal_.value = initial_value;
-    invalid_ = false;
     waiting_ = 0;
-    retained_ = 0;
+    retained_ = 1;
+
+    if (enableIPC) {
+      abi_block->core_signal = nullptr;
+      registerIpc();
+    } else {
+      abi_block->core_signal = this;
+    }
   }
 
-  virtual ~Signal() { signal_.kind = AMD_SIGNAL_KIND_INVALID; }
-
-  bool IsValid() const {
-    if (CheckedType::IsValid() && !invalid_) return true;
-    return false;
+  /// @brief Interface to discard a signal handle (hsa_signal_t)
+  /// Decrements signal ref count and invokes doDestroySignal() when
+  /// Signal is no longer in use.
+  void DestroySignal() {
+    // If handle is now invalid wake any retained sleepers.
+    if (--refcount_ == 0) CasRelaxed(0, 0);
+    // Release signal, last release will destroy the object.
+    Release();
   }
 
-  /// @brief Converts from this implementation class to the public
+  /// @brief Converts from this interface class to the public
   /// hsa_signal_t type - an opaque handle.
   static __forceinline hsa_signal_t Convert(Signal* signal) {
-    const uint64_t handle =
-        (signal != NULL && signal->IsValid())
-            ? static_cast<uint64_t>(
-                  reinterpret_cast<uintptr_t>(&signal->signal_))
-            : 0;
+    assert(signal != nullptr && "Conversion on null Signal object.");
+    const uint64_t handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&signal->signal_));
     const hsa_signal_t signal_handle = {handle};
     return signal_handle;
   }
 
-  /// @brief Converts from this implementation class to the public
+  /// @brief Converts from this interface class to the public
   /// hsa_signal_t type - an opaque handle.
   static __forceinline const hsa_signal_t Convert(const Signal* signal) {
-    const uint64_t handle =
-        (signal != NULL && signal->IsValid())
-            ? static_cast<uint64_t>(
-                  reinterpret_cast<uintptr_t>(&signal->signal_))
-            : 0;
+    assert(signal != nullptr && "Conversion on null Signal object.");
+    const uint64_t handle = static_cast<uint64_t>(reinterpret_cast<uintptr_t>(&signal->signal_));
     const hsa_signal_t signal_handle = {handle};
     return signal_handle;
   }
 
   /// @brief Converts from public hsa_signal_t type (an opaque handle) to
-  /// this implementation class object.
+  /// this interface class object.
   static __forceinline Signal* Convert(hsa_signal_t signal) {
-    return (signal.handle != 0)
-               ? reinterpret_cast<const SharedSignal*>(
-                     static_cast<uintptr_t>(signal.handle) -
-                     (reinterpret_cast<uintptr_t>(
-                          &reinterpret_cast<SharedSignal*>(1234)->amd_signal) -
-                      uintptr_t(1234)))->core_signal
-               : NULL;
+    if (signal.handle == 0)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "Signal handle is invalid.");
+    SharedSignal* shared = SharedSignal::Convert(signal);
+    if (!shared->IsValid())
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_SIGNAL, "Signal handle is invalid.");
+    if (shared->IsIPC()) {
+      Signal* ret = lookupIpc(signal);
+      if (ret == nullptr)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_SIGNAL, "Signal handle is invalid.");
+      return ret;
+    } else {
+      return shared->core_signal;
+    }
   }
+
+  static Signal* DuplicateHandle(hsa_signal_t signal) {
+    if (signal.handle == 0) return nullptr;
+    SharedSignal* shared = SharedSignal::Convert(signal);
+
+    if (!shared->IsIPC()) {
+      if (!shared->IsValid()) return nullptr;
+      shared->core_signal->refcount_++;
+      shared->core_signal->Retain();
+      return shared->core_signal;
+    }
+
+    // IPC signals may only be duplicated while holding the ipcMap lock.
+    return duplicateIpc(signal);
+  }
+
+  bool IsValid() const { return refcount_ != 0; }
+
+  bool __forceinline isIPC() const { return SharedSignal::Convert(Convert(this))->IsIPC(); }
 
   // Below are various methods corresponding to the APIs, which load/store the
   // signal value or modify the existing signal value automically and with
@@ -216,13 +278,9 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
 
   __forceinline bool IsType(rtti_t id) { return _IsA(id); }
 
-  /// @brief Allows special case interaction with signal destruction cleanup.
-  void Retain() { atomic::Increment(&retained_); }
-  void Release() { atomic::Decrement(&retained_); }
-
-  /// @brief Checks if signal is currently in use such that it should not be
-  /// deleted.
-  bool InUse() const { return (retained_ != 0) || (waiting_ != 0); }
+  /// @brief Prevents the signal from being destroyed until the matching Release().
+  void Retain() { retained_++; }
+  void Release();
 
   /// @brief Checks if signal is currently in use by a wait API.
   bool InWaiting() const { return waiting_ != 0; }
@@ -239,25 +297,40 @@ class Signal : public Checked<0x71FCCA6A3D5D5276>,
   amd_signal_t& signal_;
 
  protected:
+  virtual ~Signal();
+
+  /// @brief Overrideable deletion function
+  virtual void doDestroySignal() { delete this; }
+
   /// @brief Simple RTTI type checking helper
   /// Returns true if the object can be converted to the query type via
   /// static_cast.
   /// Do not use directly.  Use IsType in the desired derived type instead.
   virtual bool _IsA(rtti_t id) const = 0;
 
-  /// @variable  Indicates if signal is valid or not.
-  volatile bool invalid_;
-
   /// @variable Indicates number of runtime threads waiting on this signal.
   /// Value of zero means no waits.
-  volatile uint32_t waiting_;
-
-  volatile uint32_t retained_;
+  std::atomic<uint32_t> waiting_;
 
   /// @variable Pointer to agent used to perform an async copy.
   core::Agent* async_copy_agent_;
 
  private:
+  static KernelMutex ipcLock_;
+  static std::map<decltype(hsa_signal_t::handle), Signal*> ipcMap_;
+
+  static Signal* lookupIpc(hsa_signal_t signal);
+  static Signal* duplicateIpc(hsa_signal_t signal);
+
+  /// @variable Ref count of this signal's handle (see IPC APIs)
+  std::atomic<uint32_t> refcount_;
+
+  /// @variable Count of handle references and Retain() calls for this handle (see IPC APIs)
+  std::atomic<uint32_t> retained_;
+
+  void registerIpc();
+  bool deregisterIpc();
+
   DISALLOW_COPY_AND_ASSIGN(Signal);
 };
 

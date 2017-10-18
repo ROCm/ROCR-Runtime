@@ -85,12 +85,12 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     AllocateRestrict = (1 << 0),    // Don't map system memory to GPU agents
     AllocateExecutable = (1 << 1),  // Set executable permission
     AllocateDoubleMap = (1 << 2),   // Map twice VA allocation to backing store
+    AllocateDirect = (1 << 3),      // Bypass fragment cache.
   };
 
   typedef uint32_t AllocateFlags;
 
-  virtual hsa_status_t Allocate(size_t size, AllocateFlags alloc_flags,
-                                void** address) const = 0;
+  virtual hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const = 0;
 
   virtual hsa_status_t Free(void* address, size_t size) const = 0;
 

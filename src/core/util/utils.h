@@ -65,7 +65,14 @@ typedef uint64_t uint64;
 #define __ALIGNED__(x) __attribute__((aligned(x)))
 
 static __forceinline void* _aligned_malloc(size_t size, size_t alignment) {
+#ifdef _ISOC11_SOURCE
   return aligned_alloc(alignment, size);
+#else
+  void *mem = NULL;
+  if (NULL != posix_memalign(&mem, alignment, size))
+    return NULL;
+  return mem;
+#endif
 }
 static __forceinline void _aligned_free(void* ptr) { return free(ptr); }
 #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))

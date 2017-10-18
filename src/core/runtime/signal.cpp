@@ -44,10 +44,64 @@
 #define HSA_RUNTME_CORE_SIGNAL_CPP_
 
 #include "core/inc/signal.h"
-#include "core/util/timer.h"
+
 #include <algorithm>
+#include "core/util/timer.h"
 
 namespace core {
+
+KernelMutex Signal::ipcLock_;
+std::map<decltype(hsa_signal_t::handle), Signal*> Signal::ipcMap_;
+
+void Signal::registerIpc() {
+  ScopedAcquire<KernelMutex> lock(&ipcLock_);
+  auto handle = Convert(this);
+  assert(ipcMap_.find(handle.handle) == ipcMap_.end() &&
+         "Can't register the same IPC signal twice.");
+  ipcMap_[handle.handle] = this;
+}
+
+bool Signal::deregisterIpc() {
+  ScopedAcquire<KernelMutex> lock(&ipcLock_);
+  if (refcount_ != 0) return false;
+  auto handle = Convert(this);
+  const auto& it = ipcMap_.find(handle.handle);
+  assert(it != ipcMap_.end() && "Deregister on non-IPC signal.");
+  ipcMap_.erase(it);
+  return true;
+}
+
+Signal* Signal::lookupIpc(hsa_signal_t signal) {
+  ScopedAcquire<KernelMutex> lock(&ipcLock_);
+  const auto& it = ipcMap_.find(signal.handle);
+  if (it == ipcMap_.end()) return nullptr;
+  return it->second;
+}
+
+Signal* Signal::duplicateIpc(hsa_signal_t signal) {
+  ScopedAcquire<KernelMutex> lock(&ipcLock_);
+  const auto& it = ipcMap_.find(signal.handle);
+  if (it == ipcMap_.end()) return nullptr;
+  it->second->refcount_++;
+  it->second->Retain();
+  return it->second;
+}
+
+void Signal::Release() {
+  if (--retained_ != 0) return;
+  if (!isIPC())
+    doDestroySignal();
+  else if (deregisterIpc())
+    doDestroySignal();
+}
+
+Signal::~Signal() {
+  signal_.kind = AMD_SIGNAL_KIND_INVALID;
+  if (refcount_ == 1 && isIPC()) {
+    refcount_ = 0;
+    deregisterIpc();
+  }
+}
 
 uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
                          const hsa_signal_condition_t* conds, const hsa_signal_value_t* values,
@@ -55,13 +109,18 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
                          hsa_signal_value_t* satisfying_value) {
   hsa_signal_handle* signals =
       reinterpret_cast<hsa_signal_handle*>(const_cast<hsa_signal_t*>(hsa_signals));
-  uint32_t prior = 0;
-  for (uint32_t i = 0; i < signal_count; i++)
-    prior = Max(prior, atomic::Increment(&signals[i]->waiting_));
+
+  for (uint32_t i = 0; i < signal_count; i++) signals[i]->Retain();
 
   MAKE_SCOPE_GUARD([&]() {
-    for (uint32_t i = 0; i < signal_count; i++)
-      atomic::Decrement(&signals[i]->waiting_);
+    for (uint32_t i = 0; i < signal_count; i++) signals[i]->Release();
+  });
+
+  uint32_t prior = 0;
+  for (uint32_t i = 0; i < signal_count; i++) prior = Max(prior, signals[i]->waiting_++);
+
+  MAKE_SCOPE_GUARD([&]() {
+    for (uint32_t i = 0; i < signal_count; i++) signals[i]->waiting_--;
   });
 
   // Allow only the first waiter to sleep (temporary, known to be bad).
@@ -113,7 +172,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   bool condition_met = false;
   while (true) {
     for (uint32_t i = 0; i < signal_count; i++) {
-      if (signals[i]->invalid_) return uint32_t(-1);
+      if (!signals[i]->IsValid()) return uint32_t(-1);
 
       // Handling special event.
       if (signals[i]->EopEvent() != NULL) {

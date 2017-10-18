@@ -85,6 +85,12 @@ class Flag {
     scratch_mem_size_ = atoi(var.c_str());
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
+
+    var = os::GetEnvVar("HSA_TOOLS_REPORT_LOAD_FAILURE");
+    report_tool_load_failures_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
+    disable_fragment_alloc_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -101,6 +107,10 @@ class Flag {
 
   bool sdma_wait_idle() const { return sdma_wait_idle_; }
 
+  bool report_tool_load_failures() const { return report_tool_load_failures_; }
+
+  bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
+
   uint32_t max_queues() const { return max_queues_; }
 
   size_t scratch_mem_size() const { return scratch_mem_size_; }
@@ -115,6 +125,8 @@ class Flag {
   bool running_valgrind_;
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
+  bool report_tool_load_failures_;
+  bool disable_fragment_alloc_;
 
   uint32_t max_queues_;
 
