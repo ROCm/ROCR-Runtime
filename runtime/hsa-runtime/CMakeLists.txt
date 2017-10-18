@@ -77,11 +77,13 @@ if ( DEFINED VERSION_BUILD )
 endif ()
 set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
-## Find the hsakmt library and include files
-find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
-find_library ( HSAKMT_LIB libhsakmt.so )
-get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
-get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
+## Find the hsakmt library and include files, use directory hint from cache
+find_file ( HSAKMT_INC NAMES "hsakmt.h" "libhsakmt/hsakmt.h" PATHS ${HSAKMT_INC_PATH} )
+find_library ( HSAKMT_LIB "libhsakmt.so" ${HSAKMT_LIB_PATH} )
+get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY CACHE )
+get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY CACHE )
+unset( HSAKMT_INC CACHE )
+unset( HSAKMT_LIB CACHE )
 
 ## Set include and link directories for libhsakmt
 include_directories ( ${HSAKMT_INC_PATH} )
