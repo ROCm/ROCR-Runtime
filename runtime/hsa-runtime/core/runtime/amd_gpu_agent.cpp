@@ -964,10 +964,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
 // This is somewhat dangerous as it limits the number of concurrent waves from future dispatches
 // on the queue if those waves use even small amounts of scratch.
-#ifndef NDEBUG
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    fprintf(stderr, "Failed to map requested scratch - reducing queue occupancy.\n");
-#endif
+    debug_print("Failed to map requested scratch - reducing queue occupancy.\n");
   uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
   uint64_t total_waves = scratch.size / size_per_wave;
@@ -994,10 +992,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 
   // Failed to allocate minimal scratch
   assert(scratch.queue_base == NULL && "bad scratch data");
-#ifndef NDEBUG
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    fprintf(stderr, "Could not allocate scratch for one wave per CU.\n");
-#endif
+    debug_print("Could not allocate scratch for one wave per CU.\n");
 }
 
 void GpuAgent::ReleaseQueueScratch(void* base) {

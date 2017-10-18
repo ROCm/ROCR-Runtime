@@ -51,6 +51,8 @@
 namespace core {
 class HostQueue : public Queue {
  public:
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+
   HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
             uint32_t features, hsa_signal_t doorbell_signal);
 
@@ -158,7 +160,11 @@ class HostQueue : public Queue {
 
   void operator delete(void*, void*) {}
 
+ protected:
+  bool _IsA(Queue::rtti_t id) const { return id == &rtti_id_; }
+
  private:
+  static int rtti_id_;
   static const size_t kRingAlignment = 256;
   const uint32_t size_;
   bool active_;

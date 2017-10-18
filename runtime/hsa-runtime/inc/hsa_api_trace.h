@@ -81,6 +81,19 @@ static inline uint32_t Min(const uint32_t a, const uint32_t b) {
   return (a > b) ? b : a;
 }
 
+// Declarations of APIs intended for use only by tools.
+typedef void (*hsa_amd_queue_intercept_packet_writer)(const void* pkts, uint64_t pkt_count);
+typedef void (*hsa_amd_queue_intercept_handler)(const void* pkts, uint64_t pkt_count,
+                                                uint64_t user_pkt_index, void* data,
+                                                hsa_amd_queue_intercept_packet_writer writer);
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data);
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue);
+
 // Structure of Version used to identify an instance of Api table
 // Must be the first member (offsetof == 0) of all API tables.
 // This is the root of the table passing ABI.
@@ -170,6 +183,8 @@ struct AmdExtTable {
   decltype(hsa_amd_ipc_signal_create)* hsa_amd_ipc_signal_create_fn;
   decltype(hsa_amd_ipc_signal_attach)* hsa_amd_ipc_signal_attach_fn;
   decltype(hsa_amd_register_system_event_handler)* hsa_amd_register_system_event_handler_fn;
+  decltype(hsa_amd_queue_intercept_create)* hsa_amd_queue_intercept_create_fn;
+  decltype(hsa_amd_queue_intercept_register)* hsa_amd_queue_intercept_register_fn;
 };
 
 // Table to export HSA Core Runtime Apis

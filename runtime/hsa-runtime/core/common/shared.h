@@ -43,11 +43,12 @@
 #ifndef HSA_RUNTME_CORE_INC_SHARED_H_
 #define HSA_RUNTME_CORE_INC_SHARED_H_
 
-#include "core/util/utils.h"
 #include <assert.h>
-
 #include <cstring>
 #include <functional>
+#include <memory>
+
+#include "core/util/utils.h"
 
 namespace core {
 /// @brief Base class encapsulating the allocator and deallocator for
