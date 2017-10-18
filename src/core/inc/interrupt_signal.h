@@ -61,7 +61,7 @@ namespace core {
 /// Supports only one waiter for now.
 /// KFD changes are needed to support multiple waiters and have device
 /// signaling.
-class InterruptSignal : public Signal {
+class InterruptSignal : private LocalSignal, public Signal {
  public:
   static HsaEvent* CreateEvent(HSA_EVENTTYPE type, bool manual_reset);
   static void DestroyEvent(HsaEvent* evt);
@@ -164,12 +164,6 @@ class InterruptSignal : public Signal {
 
   /// @brief See base class Signal.
   __forceinline HsaEvent* EopEvent() { return event_; }
-
-  /// @brief prevent throwing exceptions
-  void* operator new(size_t size) { return malloc(size); }
-
-  /// @brief prevent throwing exceptions
-  void operator delete(void* ptr) { free(ptr); }
 
  protected:
   bool _IsA(rtti_t id) const { return id == &rtti_id_; }

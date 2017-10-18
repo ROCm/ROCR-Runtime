@@ -49,6 +49,8 @@
 
 #include "core/inc/agent.h"
 #include "core/inc/memory_region.h"
+#include "core/util/simple_heap.h"
+#include "core/util/locks.h"
 
 #include "inc/hsa_ext_amd.h"
 
@@ -97,8 +99,7 @@ class MemoryRegion : public core::MemoryRegion {
 
   ~MemoryRegion();
 
-  hsa_status_t Allocate(size_t size, AllocateFlags alloc_flags,
-                        void** address) const;
+  hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const;
 
   hsa_status_t Free(void* address, size_t size) const;
 
@@ -180,8 +181,24 @@ class MemoryRegion : public core::MemoryRegion {
 
   HSAuint64 virtual_size_;
 
+  mutable KernelMutex access_lock_;
+
   static const size_t kPageSize_ = 4096;
+
+  class BlockAllocator {
+   private:
+    MemoryRegion& region_;
+    static const size_t block_size_ = 2 * 1024 * 1024;  // 2MB blocks.
+   public:
+    explicit BlockAllocator(MemoryRegion& region) : region_(region) {}
+    void* alloc(size_t request_size, size_t& allocated_size) const;
+    void free(void* ptr, size_t length) const { region_.Free(ptr, length); }
+    size_t block_size() const { return block_size_; }
+  };
+
+  mutable SimpleHeap<BlockAllocator> fragment_allocator_;
 };
+
 }  // namespace
 
 #endif  // header guard

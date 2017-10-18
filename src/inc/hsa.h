@@ -536,9 +536,13 @@ typedef enum {
    */
   HSA_EXTENSION_AMD_LOADER = 0x201,
   /**
+   * AqlProfile extension.
+   */
+  HSA_EXTENSION_AMD_AQLPROFILE = 0x202,
+  /**
    * Last AMD extension.
    */
-  HSA_AMD_LAST_EXTENSION = 0x201
+  HSA_AMD_LAST_EXTENSION = 0x202
 } hsa_extension_t;
 
 /**

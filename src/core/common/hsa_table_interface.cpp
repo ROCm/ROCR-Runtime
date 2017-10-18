@@ -1075,3 +1075,22 @@ hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t l
 hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr) {
   return amdExtTable->hsa_amd_ipc_memory_detach_fn(mapped_ptr);
 }
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
+                                   const hsa_agent_t* consumers, uint64_t attributes,
+                                   hsa_signal_t* signal) {
+  return amdExtTable->hsa_amd_signal_create_fn(initial_value, num_consumers, consumers, attributes,
+                                               signal);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_signal_t* handle) {
+  return amdExtTable->hsa_amd_ipc_signal_create_fn(signal, handle);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
+                                               hsa_signal_t* signal) {
+  return amdExtTable->hsa_amd_ipc_signal_attach_fn(handle, signal);
+}

@@ -51,21 +51,18 @@
 
 namespace core {
 
-/// @brief Simple pure memory based signal.
+/// @brief Operations for a simple pure memory based signal.
 /// @brief See base class Signal.
-class DefaultSignal : public Signal {
+class BusyWaitSignal : public Signal {
  public:
-  /// @brief Determines if a Signal* can be safely converted to DefaultSignal*
+  /// @brief Determines if a Signal* can be safely converted to BusyWaitSignal*
   /// via static_cast.
   static __forceinline bool IsType(Signal* ptr) {
     return ptr->IsType(&rtti_id_);
   }
 
   /// @brief See base class Signal.
-  explicit DefaultSignal(hsa_signal_value_t initial_value);
-
-  /// @brief See base class Signal.
-  ~DefaultSignal();
+  explicit BusyWaitSignal(SharedSignal* abi_block, bool enableIPC);
 
   // Below are various methods corresponding to the APIs, which load/store the
   // signal value or modify the existing signal value automically and with
@@ -155,14 +152,31 @@ class DefaultSignal : public Signal {
   /// @brief see the base class Signal
   __forceinline HsaEvent* EopEvent() { return NULL; }
 
-  /// @brief prevent throwing exceptions
-  void* operator new(size_t size) { return malloc(size); }
-
-  /// @brief prevent throwing exceptions
-  void operator delete(void* ptr) { free(ptr); }
-
  protected:
   bool _IsA(rtti_t id) const { return id == &rtti_id_; }
+
+ private:
+  static int rtti_id_;
+
+  DISALLOW_COPY_AND_ASSIGN(BusyWaitSignal);
+};
+
+/// @brief Simple memory only signal using a new ABI block.
+class DefaultSignal : private LocalSignal, public BusyWaitSignal {
+ public:
+  /// @brief Determines if a Signal* can be safely converted to BusyWaitSignal*
+  /// via static_cast.
+  static __forceinline bool IsType(Signal* ptr) { return ptr->IsType(&rtti_id_); }
+
+  /// @brief See base class Signal.
+  explicit DefaultSignal(hsa_signal_value_t initial_value, bool enableIPC = false)
+      : LocalSignal(initial_value), BusyWaitSignal(signal(), enableIPC) {}
+
+ protected:
+  bool _IsA(rtti_t id) const {
+    if (id == &rtti_id_) return true;
+    return BusyWaitSignal::_IsA(id);
+  }
 
  private:
   static int rtti_id_;

@@ -49,6 +49,7 @@
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/utils.h"
+#include "core/inc/exceptions.h"
 
 namespace amd {
 void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
@@ -98,13 +99,13 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
   hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
-                           core::Agent* owner,
+MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
     : core::MemoryRegion(fine_grain, full_profile, owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
-      virtual_size_(0) {
+      virtual_size_(0),
+      fragment_allocator_(BlockAllocator(*this)) {
   virtual_size_ = GetPhysicalSize();
 
   mem_flag_.Value = 0;
@@ -147,8 +148,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile,
 
 MemoryRegion::~MemoryRegion() {}
 
-hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
-                                    void** address) const {
+hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const {
   if (address == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -169,9 +169,32 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
   kmt_alloc_flags.ui32.AQLQueueMemory =
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
 
-  *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  // Only allow using the suballocator for ordinary VRAM.
+  if (IsLocalMemory()) {
+    bool subAllocEnabled = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
+    // Avoid modifying executable or queue allocations.
+    bool useSubAlloc = subAllocEnabled;
+    useSubAlloc &= ((alloc_flags & (~AllocateRestrict)) == 0);
+    useSubAlloc &= (size <= fragment_allocator_.max_alloc());
+    if (useSubAlloc) {
+      *address = fragment_allocator_.alloc(size);
+      return HSA_STATUS_SUCCESS;
+    }
+    if (subAllocEnabled) {
+      // Pad up larger VRAM allocations.
+      size = AlignUp(size, fragment_allocator_.max_alloc());
+    }
+  }
 
-  if (*address != NULL) {
+  // Allocate memory.
+  // If it fails attempt to release memory from the block allocator and retry.
+  *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  if (*address == nullptr) {
+    fragment_allocator_.trim();
+    *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  }
+
+  if (*address != nullptr) {
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so
@@ -220,6 +243,8 @@ hsa_status_t MemoryRegion::Allocate(size_t size, AllocateFlags alloc_flags,
 }
 
 hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
+  if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
+
   MakeKfdMemoryUnresident(address);
 
   FreeKfdMemory(address, size);
@@ -431,6 +456,34 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
     return HSA_STATUS_ERROR;
   }
 
+  // Adjust for fragments.  Make accessibility sticky for fragments since this will satisfy the
+  // union of accessible agents between the fragments in the block.
+  hsa_amd_pointer_info_t info;
+  uint32_t agent_count = 0;
+  hsa_agent_t* accessible = nullptr;
+  MAKE_SCOPE_GUARD([&]() { free(accessible); });
+  core::Runtime::PtrInfoBlockData blockInfo;
+  std::vector<uint64_t> union_agents;
+  info.size = sizeof(info);
+
+  ScopedAcquire<KernelMutex> lock(&access_lock_);
+  if (core::Runtime::runtime_singleton_->PtrInfo(const_cast<void*>(ptr), &info, malloc,
+                                                 &agent_count, &accessible,
+                                                 &blockInfo) == HSA_STATUS_SUCCESS) {
+    if (blockInfo.length != size || info.sizeInBytes != size) {
+      for (int i = 0; i < num_agents; i++) union_agents.push_back(agents[i].handle);
+      for (int i = 0; i < agent_count; i++) union_agents.push_back(accessible[i].handle);
+      std::sort(union_agents.begin(), union_agents.end());
+      const auto& last = std::unique(union_agents.begin(), union_agents.end());
+      union_agents.erase(last, union_agents.end());
+
+      agents = reinterpret_cast<hsa_agent_t*>(&union_agents[0]);
+      num_agents = union_agents.size();
+      size = blockInfo.length;
+      ptr = blockInfo.base;
+    }
+  }
+
   bool cpu_in_list = false;
 
   std::set<GpuAgentInt*> whitelist_gpus;
@@ -478,6 +531,8 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
+
+  lock.Release();
 
   for (GpuAgentInt* gpu : whitelist_gpus) {
     gpu->InitDma();
@@ -584,6 +639,21 @@ hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
                                        const core::Agent& agent,
                                        hsa_access_permission_t access) const {
   return HSA_STATUS_SUCCESS;
+}
+
+void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
+  assert(request_size <= block_size() && "BlockAllocator alloc request exceeds block size.");
+
+  void* ret;
+  size_t bsize = block_size();
+  hsa_status_t err = region_.Allocate(
+      bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
+  if (err != HSA_STATUS_SUCCESS)
+    throw new ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
+  assert(ret != nullptr && "Region returned nullptr on success.");
+
+  allocated_size = block_size();
+  return ret;
 }
 
 }  // namespace

@@ -173,6 +173,7 @@ global:
 	hsa_amd_profiling_async_copy_enable;
 	hsa_amd_profiling_get_async_copy_time;
 	hsa_amd_profiling_convert_tick_to_system_domain;
+	hsa_amd_signal_create;
 	hsa_amd_signal_wait_any;
 	hsa_amd_signal_async_handler;
 	hsa_amd_async_function;
@@ -203,14 +204,16 @@ global:
 	hsa_ext_image_destroy;
 	hsa_ext_sampler_create;
 	hsa_ext_sampler_destroy;
-        hsa_ext_image_get_capability_with_layout;
-        hsa_ext_image_data_get_info_with_layout;
-        hsa_ext_image_create_with_layout;
+    hsa_ext_image_get_capability_with_layout;
+    hsa_ext_image_data_get_info_with_layout;
+    hsa_ext_image_create_with_layout;
 	hsa_amd_pointer_info;
 	hsa_amd_pointer_info_set_userdata;
 	hsa_amd_ipc_memory_create;
 	hsa_amd_ipc_memory_attach;
 	hsa_amd_ipc_memory_detach;
+	hsa_amd_ipc_signal_create;
+	hsa_amd_ipc_signal_attach;
 
 local:
     *;
