@@ -160,7 +160,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
 
   // Populate doorbell signal structure.
   memset(&signal_, 0, sizeof(signal_));
-  signal_.kind = AMD_SIGNAL_KIND_LEGACY_DOORBELL;
+  signal_.kind = (doorbell_type_ == 2) ? AMD_SIGNAL_KIND_DOORBELL : AMD_SIGNAL_KIND_LEGACY_DOORBELL;
   signal_.legacy_hardware_doorbell_ptr =
       (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
   signal_.queue_ptr = &amd_queue_;
