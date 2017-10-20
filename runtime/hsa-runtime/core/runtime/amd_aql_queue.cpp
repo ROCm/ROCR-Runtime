@@ -73,30 +73,26 @@ namespace amd {
 const uint32_t kAmdQueueAlignBytes = 0x40;
 
 HsaEvent* AqlQueue::queue_event_ = NULL;
-volatile uint32_t AqlQueue::queue_count_ = 0;
+std::atomic<uint32_t> AqlQueue::queue_count_(0);
 KernelMutex AqlQueue::queue_lock_;
-int AqlQueue::rtti_id_;
+int AqlQueue::rtti_id_ = 0;
 
 AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(),
       LocalSignal(0),
       Signal(signal()),
-      ring_buf_(NULL),
+      ring_buf_(nullptr),
       ring_buf_alloc_bytes_(0),
       queue_id_(HSA_QUEUEID(-1)),
-      valid_(false),
+      active_(false),
       agent_(agent),
       queue_scratch_(scratch),
       errors_callback_(callback),
       errors_data_(err_data),
       is_kv_queue_(is_kv),
-      pm4_ib_buf_(NULL),
+      pm4_ib_buf_(nullptr),
       pm4_ib_size_b_(0x1000) {
-  if (!Queue::Shared::IsSharedObjectAllocationValid()) {
-    return;
-  }
-
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
   // are mapped to the same set of pages backing the lower half.
@@ -122,14 +118,16 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   queue_size_pkts = Max(queue_size_pkts, min_pkts);
 
   uint32_t queue_size_bytes = queue_size_pkts * sizeof(core::AqlPacket);
-  if ((queue_size_bytes & (queue_size_bytes - 1)) != 0) return;
+  if ((queue_size_bytes & (queue_size_bytes - 1)) != 0)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
+                             "Requested queue with non-power of two packet capacity.\n");
 
   // Allocate the AQL packet ring buffer.
   AllocRegisteredRingBuffer(queue_size_pkts);
-  if (ring_buf_ == NULL) return;
+  if (ring_buf_ == nullptr) throw std::bad_alloc();
   MAKE_NAMED_SCOPE_GUARD(RingGuard, [&]() { FreeRegisteredRingBuffer(); });
 
-  // Fill the ring buffer with ALWAYS_RESERVED packet headers.
+  // Fill the ring buffer with invalid packet headers.
   // Leave packet content uninitialized to help track errors.
   for (uint32_t pkt_id = 0; pkt_id < queue_size_pkts; ++pkt_id) {
     ((uint32_t*)ring_buf_)[16 * pkt_id] = HSA_PACKET_TYPE_INVALID;
@@ -154,7 +152,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100,
                                  HSA_QUEUE_PRIORITY_NORMAL, ring_buf_,
                                  ring_buf_alloc_bytes_, NULL, &queue_rsrc);
-  if (kmt_status != HSAKMT_STATUS_SUCCESS) return;
+  if (kmt_status != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                             "Queue create failed at hsaKmtCreateQueue\n");
   queue_id_ = queue_rsrc.QueueId;
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
@@ -228,7 +228,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     queue_count_--;
     if (queue_count_ == 0) {
       core::InterruptSignal::DestroyEvent(queue_event_);
-      queue_event_ = NULL;
+      queue_event_ = nullptr;
     }
   });
 
@@ -239,35 +239,38 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   if (core::g_use_interrupt_wait) {
     ScopedAcquire<KernelMutex> _lock(&queue_lock_);
     queue_count_++;
-    if (queue_event_ == NULL) {
+    if (queue_event_ == nullptr) {
       assert(queue_count_ == 1 && "Inconsistency in queue event reference counting found.\n");
 
       queue_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
-      if (queue_event_ == NULL) return;
+      if (queue_event_ == nullptr)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                                 "Queue event creation failed.\n");
     }
     auto Signal = new core::InterruptSignal(0, queue_event_);
-    if (Signal == nullptr) return;
+    assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(Signal);
   } else {
     EventGuard.Dismiss();
     auto Signal = new core::DefaultSignal(0);
-    if (Signal == nullptr) return;
+    assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::DefaultSignal::Convert(Signal);
   }
   if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
                                         0, DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
-    return;
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                             "Queue event handler failed registration.\n");
 
   pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
       pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
-  if (pm4_ib_buf_ == NULL) return;
+  if (pm4_ib_buf_ == nullptr)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "PM4 IB allocation failed.\n");
 
   MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() {
     core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
   });
 
-  valid_ = true;
-  active_ = 1;
+  active_ = true;
 
   PM4IBGuard.Dismiss();
   RingGuard.Dismiss();
@@ -277,11 +280,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
 }
 
 AqlQueue::~AqlQueue() {
-  if (!IsValid()) {
-    return;
-  }
-
-  if (active_ == 1) hsaKmtDestroyQueue(queue_id_);
+  Inactivate();
 
   FreeRegisteredRingBuffer();
   agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
@@ -654,8 +653,11 @@ void AqlQueue::FreeRegisteredRingBuffer() {
 }
 
 hsa_status_t AqlQueue::Inactivate() {
-  int32_t active = atomic::Exchange((volatile int32_t*)&active_, 0);
-  if (active == 1) hsaKmtDestroyQueue(this->queue_id_);
+  bool active = active_.exchange(false, std::memory_order_relaxed);
+  if (active) {
+    auto err = hsaKmtDestroyQueue(this->queue_id_);
+    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
+  }
   return HSA_STATUS_SUCCESS;
 }
 

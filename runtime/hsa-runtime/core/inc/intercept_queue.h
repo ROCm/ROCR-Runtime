@@ -63,10 +63,6 @@ class QueueWrapper : public Queue {
   std::unique_ptr<Queue> wrapped;
 
   explicit QueueWrapper(std::unique_ptr<Queue> queue) : Queue(), wrapped(std::move(queue)) {
-    if (Queue::Shared::shared_object() == NULL) {
-      return;
-    }
-
     memcpy(&amd_queue_, &wrapped->amd_queue_, sizeof(amd_queue_t));
     wrapped->set_public_handle(wrapped.get(), public_handle_);
   }
@@ -225,6 +221,9 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public Signal {
 
   // Indicates queue active/inactive state.
   std::atomic<bool> active_;
+
+  // Proxy packet buffer
+  SharedArray<AqlPacket, 4096> buffer_;
 
   static const hsa_signal_value_t DOORBELL_MAX = 0xFFFFFFFFFFFFFFFFull;
 

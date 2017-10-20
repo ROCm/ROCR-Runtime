@@ -75,20 +75,8 @@ InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
       retry_index_(0),
       quit_(false),
       active_(true) {
-  if (Queue::Shared::shared_object() == NULL) {
-    return;
-    // TODO skeely: cleanup queue constructor failure.
-    // throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Failed to allocate Queue ABI
-    // block.\n");
-  }
-
-  void* buffer = Runtime::runtime_singleton_->system_allocator()(
-      wrapped->amd_queue_.hsa_queue.size * sizeof(hsa_agent_dispatch_packet_t), 4096,
-      MemoryRegion::AllocateNoFlags);
-  if (buffer == nullptr) throw std::bad_alloc();
-  MAKE_NAMED_SCOPE_GUARD(buffGuard,
-                         [&]() { Runtime::runtime_singleton_->system_deallocator()(buffer); });
-  amd_queue_.hsa_queue.base_address = buffer;
+  buffer_ = SharedArray<AqlPacket, 4096>(wrapped->amd_queue_.hsa_queue.size);
+  amd_queue_.hsa_queue.base_address = reinterpret_cast<void*>(&buffer_[0]);
 
   // Match the queue's signal ABI block to async_doorbell_'s
   // This allows us to use the queue's signal ABI block from devices to trigger async_doorbell while
@@ -109,14 +97,9 @@ InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
   AddInterceptor(Submit, this);
 
   sigGuard.Dismiss();
-  buffGuard.Dismiss();
 }
 
 InterceptQueue::~InterceptQueue() {
-  if (Queue::Shared::shared_object() == NULL) {
-    return;
-  }
-
   active_ = false;
 
   // Kill the async doorbell handler
@@ -128,9 +111,6 @@ InterceptQueue::~InterceptQueue() {
   if (val != 0)
     async_doorbell_->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, -1, HSA_WAIT_STATE_BLOCKED);
   async_doorbell_->DestroySignal();
-
-  // Release buffer resources
-  Runtime::runtime_singleton_->system_deallocator()(amd_queue_.hsa_queue.base_address);
 }
 
 bool InterceptQueue::HandleAsyncDoorbell(hsa_signal_value_t value, void* arg) {

@@ -130,9 +130,9 @@ hsa_status_t handleException() {
   } catch (const std::bad_alloc& e) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   } catch (const hsa_exception& e) {
+    debug_print("HSA exception: %s\n", e.what());
     return e.error_code();
-    // } catch (std::nested_exception& e) {
-    // Rethrow exceptions caught from callbacks.
+    // } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks
     //  e.rethrow_nested();
     //  return HSA_STATUS_ERROR;
   } catch (const std::exception& e) {
@@ -803,6 +803,8 @@ hsa_status_t hsa_amd_queue_intercept_create(
     void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
     uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue) {
   TRY;
+  IS_OPEN();
+  IS_BAD_PTR(queue);
   hsa_queue_t* lower_queue;
   hsa_status_t err = HSA::hsa_queue_create(agent_handle, size, type, callback, data,
                                            private_segment_size, group_segment_size, &lower_queue);
@@ -811,11 +813,7 @@ hsa_status_t hsa_amd_queue_intercept_create(
 
   std::unique_ptr<core::InterceptQueue> upperQueue(new core::InterceptQueue(std::move(lowerQueue)));
 
-  if (!upperQueue->IsSharedObjectAllocationValid()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-
-  *queue = core::Queue::Convert(upperQueue.get());
-  upperQueue.release();
-
+  *queue = core::Queue::Convert(upperQueue.release());
   return HSA_STATUS_SUCCESS;
   CATCH;
 }

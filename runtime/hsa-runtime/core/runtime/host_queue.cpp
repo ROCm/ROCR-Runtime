@@ -50,23 +50,19 @@ namespace core {
 int HostQueue::rtti_id_ = 0;
 std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
 
-HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
-                     hsa_queue_type32_t type, uint32_t features,
-                     hsa_signal_t doorbell_signal)
-    : Queue(),
-      size_(ring_size),
-      active_(false) {
-  if (!Shared::IsSharedObjectAllocationValid()) {
-    return;
-  }
-
+HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
+                     uint32_t features, hsa_signal_t doorbell_signal)
+    : Queue(), size_(ring_size) {
   HSA::hsa_memory_register(this, sizeof(HostQueue));
+  MAKE_NAMED_SCOPE_GUARD(registerGuard,
+                         [&]() { HSA::hsa_memory_deregister(this, sizeof(HostQueue)); });
 
   const size_t queue_buffer_size = size_ * sizeof(AqlPacket);
   if (HSA_STATUS_SUCCESS !=
       HSA::hsa_memory_allocate(region, queue_buffer_size, &ring_)) {
-    return;
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Host queue buffer alloc failed\n");
   }
+  MAKE_NAMED_SCOPE_GUARD(bufferGuard, [&]() { HSA::hsa_memory_free(&ring_); });
 
   assert(IsMultipleOf(ring_, kRingAlignment));
   assert(ring_ != NULL);
@@ -88,14 +84,11 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
   AMD_HSA_BITS_SET(
       amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, 0);
 
-  active_ = true;
+  bufferGuard.Dismiss();
+  registerGuard.Dismiss();
 }
 
 HostQueue::~HostQueue() {
-  if (!Shared::IsSharedObjectAllocationValid()) {
-    return;
-  }
-
   HSA::hsa_memory_free(ring_);
   HSA::hsa_memory_deregister(this, sizeof(HostQueue));
 }
