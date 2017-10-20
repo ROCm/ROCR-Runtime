@@ -322,7 +322,7 @@ void TestExample::Run(void) {
     int id = p_timer.CreateTimer();
     p_timer.StartTimer(id);
 
-    AtomicSetPacketHeader(aql_header, aql().setup, queue_aql_packet);
+    ::AtomicSetPacketHeader(aql_header, aql().setup, queue_aql_packet);
 
     hsa_signal_store_screlease(main_queue()->doorbell_signal, index);
 

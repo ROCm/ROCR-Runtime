@@ -52,6 +52,11 @@
 #include "common/base_rocr.h"
 #include "rocm_smi/rocm_smi.h"
 
+// Temporary "using namespace" to transition from rocrtst::smi to amd::smi
+// namespace amd { }
+using namespace rocrtst;
+using namespace amd;
+
 class TestBase : public rocrtst::BaseRocR {
  public:
   TestBase(void);
@@ -81,17 +86,17 @@ class TestBase : public rocrtst::BaseRocR {
   void set_description(std::string d);
 
   void set_monitor_devices(
-            std::vector<std::shared_ptr<rocrtst::smi::Device>> *m) {
+            std::vector<std::shared_ptr<smi::Device>> *m) {
     monitor_devices_ = m;
   }
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> *
+  std::vector<std::shared_ptr<smi::Device>> *
                                                  monitor_devices(void) const {
     return monitor_devices_;
   }
 
  private:
   std::string description_;
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> *monitor_devices_;
+  std::vector<std::shared_ptr<smi::Device>> *monitor_devices_;
 };
 
 #endif  // ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_

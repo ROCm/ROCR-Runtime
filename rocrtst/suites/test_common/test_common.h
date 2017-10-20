@@ -51,11 +51,16 @@
 
 #include "rocm_smi/rocm_smi.h"
 
+// Temporary "using namespace" to transition from rocrtst::smi to amd::smi
+// namespace amd { }
+using namespace rocrtst;
+using namespace amd;
+
 struct RocrTstGlobals {
   uint32_t verbosity;
   uint32_t monitor_verbosity;
   uint32_t num_iterations;
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> monitor_devices;
+  std::vector<std::shared_ptr<smi::Device>> monitor_devices;
 };
 
 uint32_t ProcessCmdline(RocrTstGlobals* test, int arg_cnt, char** arg_list);

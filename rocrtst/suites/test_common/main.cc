@@ -59,17 +59,22 @@
 
 #include "rocm_smi/rocm_smi.h"
 
+// Temporary "using namespace" to transition from rocrtst::smi to amd::smi
+// namespace amd { }
+
+using namespace rocrtst;
+using namespace amd;
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
 
-static bool GetMonitorDevices(const std::shared_ptr<rocrtst::smi::Device> &d,
+static bool GetMonitorDevices(const std::shared_ptr<smi::Device> &d,
                                                                     void *p) {
   std::string val_str;
 
   assert(p != nullptr);
 
-  std::vector<std::shared_ptr<rocrtst::smi::Device>> *device_list =
-    reinterpret_cast<std::vector<std::shared_ptr<rocrtst::smi::Device>> *>(p);
+  std::vector<std::shared_ptr<smi::Device>> *device_list =
+    reinterpret_cast<std::vector<std::shared_ptr<smi::Device>> *>(p);
 
   if (d->monitor() != nullptr) {
     device_list->push_back(d);
@@ -200,7 +205,7 @@ int main(int argc, char** argv) {
     return 1;
   }
 
-  rocrtst::smi::RocmSMI hw;
+  smi::RocmSMI hw;
   hw.DiscoverDevices();
   hw.IterateSMIDevices(
        GetMonitorDevices, reinterpret_cast<void *>(&settings.monitor_devices));
