@@ -120,12 +120,11 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #endif
 
 // A macro to disallow the copy and move constructor and operator= functions
-// This should be used in the private: declarations for a class
-#define DISALLOW_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName&);               \
-  TypeName(TypeName&&);                    \
-  void operator=(const TypeName&);         \
-  void operator=(TypeName&&);
+#define DISALLOW_COPY_AND_ASSIGN(TypeName)                                                         \
+  TypeName(const TypeName&) = delete;                                                              \
+  TypeName(TypeName&&) = delete;                                                                   \
+  void operator=(const TypeName&) = delete;                                                        \
+  void operator=(TypeName&&) = delete;
 
 template <typename lambda>
 class ScopeGuard {

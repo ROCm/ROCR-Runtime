@@ -644,8 +644,8 @@ hsa_status_t hsa_queue_create(
   TRY;
   IS_OPEN();
 
-  if ((queue == NULL) || (size == 0) || (!IsPowerOfTwo(size)) ||
-      (type < HSA_QUEUE_TYPE_MULTI) || (type > HSA_QUEUE_TYPE_SINGLE)) {
+  if ((queue == nullptr) || (size == 0) || (!IsPowerOfTwo(size)) || (type < HSA_QUEUE_TYPE_MULTI) ||
+      (type > HSA_QUEUE_TYPE_SINGLE)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -662,22 +662,17 @@ hsa_status_t hsa_queue_create(
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
-  if (callback == NULL) callback = core::Queue::DefaultErrorHandler;
+  if (callback == nullptr) callback = core::Queue::DefaultErrorHandler;
 
-  core::Queue* cmd_queue = NULL;
+  core::Queue* cmd_queue = nullptr;
   status = agent->QueueCreate(size, type, callback, data, private_segment_size,
                               group_segment_size, &cmd_queue);
-  if (cmd_queue != NULL) {
-    *queue = core::Queue::Convert(cmd_queue);
-    if (*queue == NULL) {
-      delete cmd_queue;
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-  } else {
-    *queue = NULL;
-  }
+  if (status != HSA_STATUS_SUCCESS) return status;
 
+  assert(cmd_queue != nullptr && "Queue not returned but status was success.\n");
+  *queue = core::Queue::Convert(cmd_queue);
   return status;
+
   CATCH;
 }
 
@@ -701,13 +696,7 @@ hsa_status_t hsa_soft_queue_create(hsa_region_t region, uint32_t size,
   const core::Signal* signal = core::Signal::Convert(doorbell_signal);
   IS_VALID(signal);
 
-  core::HostQueue* host_queue =
-      new core::HostQueue(region, size, type, features, doorbell_signal);
-
-  if (!host_queue->active()) {
-    delete host_queue;
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
+  core::HostQueue* host_queue = new core::HostQueue(region, size, type, features, doorbell_signal);
 
   *queue = core::Queue::Convert(host_queue);
 

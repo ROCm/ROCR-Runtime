@@ -148,8 +148,6 @@ class HostQueue : public Queue {
     assert(false && "HostQueue::ExecutePM4 is unimplemented");
   }
 
-  bool active() const { return active_; }
-
   void* operator new(size_t size) {
     return _aligned_malloc(size, HSA_QUEUE_ALIGN_BYTES);
   }
@@ -167,7 +165,6 @@ class HostQueue : public Queue {
   static int rtti_id_;
   static const size_t kRingAlignment = 256;
   const uint32_t size_;
-  bool active_;
   void* ring_;
 
   // Host queue id counter, starting from 0x80000000 to avoid overlaping

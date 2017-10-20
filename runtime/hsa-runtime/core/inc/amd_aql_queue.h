@@ -68,9 +68,6 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
 
   ~AqlQueue();
 
-  /// @brief Indicates if queue is valid or not
-  bool IsValid() const { return valid_; }
-
   /// @brief Queue interfaces
   hsa_status_t Inactivate() override;
 
@@ -368,11 +365,8 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Id of the Queue used in communication with thunk
   HSA_QUEUEID queue_id_;
 
-  // Indicates is queue is valid
-  bool valid_;
-
-  // Indicates if queue is inactive
-  int32_t active_;
+  // Indicates if queue is active
+  std::atomic<bool> active_;
 
   // Cached value of HsaNodeProperties.HSA_CAPABILITY.DoorbellType
   int doorbell_type_;
@@ -401,7 +395,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   static HsaEvent* queue_event_;
 
   // Queue count - used to ref count queue_event_
-  static volatile uint32_t queue_count_;
+  static std::atomic<uint32_t> queue_count_;
 
   // Mutex for queue_event_ manipulation
   static KernelMutex queue_lock_;
@@ -411,5 +405,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(AqlQueue);
 };
+
 }  // namespace amd
+
 #endif  // header guard

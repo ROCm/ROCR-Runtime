@@ -910,26 +910,21 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
-  scratch.queue_base = NULL;
+  scratch.queue_base = nullptr;
+
+  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() { ReleaseQueueScratch(scratch.queue_base); });
+
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);
-    if (scratch.queue_base == NULL) {
+    if (scratch.queue_base == nullptr) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
 
   // Create an HW AQL queue
-  AqlQueue* hw_queue = new AqlQueue(this, size, node_id(), scratch,
-                                    event_callback, data, is_kv_device_);
-  if (hw_queue && hw_queue->IsValid()) {
-    // return queue
-    *queue = hw_queue;
-    return HSA_STATUS_SUCCESS;
-  }
-  // If reached here its always an ERROR.
-  delete hw_queue;
-  ReleaseQueueScratch(scratch.queue_base);
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  *queue = new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
+  scratchGuard.Dismiss();
+  return HSA_STATUS_SUCCESS;
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {

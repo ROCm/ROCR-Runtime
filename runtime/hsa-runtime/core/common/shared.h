@@ -52,7 +52,8 @@
 
 namespace core {
 /// @brief Base class encapsulating the allocator and deallocator for
-/// shared shared object.
+/// shared shared object.  As used this will allocate GPU visible host
+/// memory mapped to all GPUs.
 class BaseShared {
  public:
   static void SetAllocateAndFree(
@@ -67,10 +68,9 @@ class BaseShared {
   static std::function<void(void*)> free_;
 };
 
-/// @brief Base class for classes that encapsulates object shared between
-/// host and agents.  Alignment defaults to __alignof(T) but may be increased.
-template <typename T, size_t Align=0>
-class Shared : public BaseShared {
+/// @brief Container for object located in GPU visible host memory.
+/// Alignment defaults to __alignof(T) but may be increased.
+template <typename T, size_t Align = 0> class Shared final : private BaseShared {
  public:
   Shared() {
     assert(allocate_ != nullptr && free_ != nullptr &&
@@ -80,28 +80,104 @@ class Shared : public BaseShared {
 
     shared_object_ =
         reinterpret_cast<T*>(allocate_(sizeof(T), Max(__alignof(T), Align), 0));
+    if (shared_object_ == nullptr) throw std::bad_alloc();
 
-    if (shared_object_ != NULL) new (shared_object_) T;
+    MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(shared_object_); });
+
+    new (shared_object_) T;
+
+    throwGuard.Dismiss();
   }
 
-  virtual ~Shared() {
+  ~Shared() {
     assert(allocate_ != nullptr && free_ != nullptr &&
            "Shared object allocator is not set");
 
-    if (IsSharedObjectAllocationValid()) {
+    if (shared_object_ != nullptr) {
       shared_object_->~T();
       free_(shared_object_);
     }
   }
 
+  Shared(Shared&& rhs) {
+    this->~Shared();
+    shared_object_ = rhs.shared_object_;
+    rhs.shared_object_ = nullptr;
+  }
+  Shared& operator=(Shared&& rhs) {
+    this->~Shared();
+    shared_object_ = rhs.shared_object_;
+    rhs.shared_object_ = nullptr;
+    return *this;
+  }
+
   T* shared_object() const { return shared_object_; }
 
-  bool IsSharedObjectAllocationValid() const {
-    return (shared_object_ != NULL);
+ private:
+  T* shared_object_;
+};
+
+/// @brief Container for array located in GPU visible host memory.
+/// Alignment defaults to __alignof(T) but may be increased.
+template <typename T, size_t Align> class SharedArray final : private BaseShared {
+ public:
+  SharedArray() : shared_object_(nullptr) {}
+
+  explicit SharedArray(size_t length) : shared_object_(nullptr), len(length) {
+    assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
+    static_assert((__alignof(T) <= Align) || (Align == 0), "Align is less than alignof(T)");
+
+    shared_object_ =
+        reinterpret_cast<T*>(allocate_(sizeof(T) * length, Max(__alignof(T), Align), 0));
+    if (shared_object_ == nullptr) throw std::bad_alloc();
+
+    size_t i = 0;
+
+    MAKE_NAMED_SCOPE_GUARD(loopGuard, [&]() {
+      for (size_t t = 0; t < i - 1; t++) shared_object_[t].~T();
+      free_(shared_object_);
+    });
+
+    for (; i < length; i++) new (&shared_object_[i]) T;
+
+    loopGuard.Dismiss();
+  }
+
+  ~SharedArray() {
+    assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
+
+    if (shared_object_ != nullptr) {
+      for (size_t i = 0; i < len; i++) shared_object_[i].~T();
+      free_(shared_object_);
+    }
+  }
+
+  SharedArray(SharedArray&& rhs) {
+    this->~SharedArray();
+    shared_object_ = rhs.shared_object_;
+    rhs.shared_object_ = nullptr;
+    len = rhs.len;
+  }
+  SharedArray& operator=(SharedArray&& rhs) {
+    this->~SharedArray();
+    shared_object_ = rhs.shared_object_;
+    rhs.shared_object_ = nullptr;
+    len = rhs.len;
+    return *this;
+  }
+
+  T& operator[](size_t index) {
+    assert(index < len && "Index out of bounds.");
+    return shared_object_[index];
+  }
+  const T& operator[](size_t index) const {
+    assert(index < len && "Index out of bounds.");
+    return shared_object_[index];
   }
 
  private:
   T* shared_object_;
+  size_t len;
 };
 
 }  // namespace core
