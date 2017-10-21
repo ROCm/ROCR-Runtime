@@ -128,16 +128,18 @@ hsa_status_t handleException() {
   try {
     throw;
   } catch (const std::bad_alloc& e) {
+    debug_print("HSA exception: BadAlloc\n");
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   } catch (const hsa_exception& e) {
     debug_print("HSA exception: %s\n", e.what());
     return e.error_code();
-    // } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks
-    //  e.rethrow_nested();
-    //  return HSA_STATUS_ERROR;
   } catch (const std::exception& e) {
     debug_print("Unhandled exception: %s\n", e.what());
     assert(false && "Unhandled exception.");
+    return HSA_STATUS_ERROR;
+  } catch (const std::nested_exception& e) {
+    debug_print("Callback threw, forwarding.\n");
+    e.rethrow_nested();
     return HSA_STATUS_ERROR;
   } catch (...) {
     assert(false && "Unhandled exception.");

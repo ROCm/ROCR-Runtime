@@ -379,7 +379,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Handle of scratch memory descriptor
   ScratchInfo queue_scratch_;
 
-  core::HsaEventCallback errors_callback_;
+  AMD::callback_t<core::HsaEventCallback> errors_callback_;
 
   void* errors_data_;
 

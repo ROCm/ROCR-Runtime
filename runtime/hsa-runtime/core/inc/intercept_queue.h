@@ -184,16 +184,11 @@ class QueueProxy : public QueueWrapper {
 // Device-side dispatches are processed as an asynchronous signal event.
 class InterceptQueue : public QueueProxy, private LocalSignal, public Signal {
  public:
-  // typedef void(*intercept_packet_writer)(const AqlPacket* pkts, uint64_t pkt_count);
-  // typedef void(*intercept_handler)(const AqlPacket* pkts, uint64_t pkt_count, uint64_t
-  // user_pkt_index, void* data, intercept_packet_writer writer);
-
-  std::vector<std::pair<hsa_amd_queue_intercept_handler, void*>> interceptors;
-
   explicit InterceptQueue(std::unique_ptr<Queue> queue);
   ~InterceptQueue();
 
   void AddInterceptor(hsa_amd_queue_intercept_handler interceptor, void* data) {
+    assert(interceptor != nullptr && "Packet intercept callback was nullptr.");
     interceptors.push_back(std::make_pair(interceptor, data));
   }
 
@@ -224,6 +219,9 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public Signal {
 
   // Proxy packet buffer
   SharedArray<AqlPacket, 4096> buffer_;
+
+  // Packet transform callbacks
+  std::vector<std::pair<AMD::callback_t<hsa_amd_queue_intercept_handler>, void*>> interceptors;
 
   static const hsa_signal_value_t DOORBELL_MAX = 0xFFFFFFFFFFFFFFFFull;
 

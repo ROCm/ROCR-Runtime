@@ -451,8 +451,9 @@ hsa_status_t GpuAgent::IterateRegion(
 
 hsa_status_t GpuAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
                                     void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
   for (size_t i = 0; i < caches_.size(); i++) {
-    hsa_status_t stat = callback(core::Cache::Convert(caches_[i].get()), data);
+    hsa_status_t stat = call(core::Cache::Convert(caches_[i].get()), data);
     if (stat != HSA_STATUS_SUCCESS) return stat;
   }
   return HSA_STATUS_SUCCESS;
@@ -493,6 +494,7 @@ hsa_status_t GpuAgent::VisitRegion(
     const std::vector<const core::MemoryRegion*>& regions,
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
     const amd::MemoryRegion* amd_region =
         reinterpret_cast<const amd::MemoryRegion*>(region);
@@ -501,7 +503,7 @@ hsa_status_t GpuAgent::VisitRegion(
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
         amd_region->IsLDS()) {
       hsa_region_t region_handle = core::MemoryRegion::Convert(region);
-      hsa_status_t status = callback(region_handle, data);
+      hsa_status_t status = call(region_handle, data);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
