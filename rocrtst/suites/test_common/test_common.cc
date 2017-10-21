@@ -53,12 +53,6 @@
 #include "suites/test_common/test_base.h"
 #include "suites/test_common/test_common.h"
 
-// Temporary "using namespace" to transition from rocrtst::smi to amd::smi
-// namespace amd { }
-
-using namespace rocrtst;
-using namespace amd;
-
 static const struct option long_options[] = {
   {"iterations", required_argument, nullptr, 'i'},
   {"verbose", required_argument, nullptr, 'v'},
@@ -154,7 +148,7 @@ void DumpMonitorInfo(const TestBase *test) {
   std::cout.setf(std::ios::dec, std::ios::basefield);
   for (auto dev : *test->monitor_devices()) {
     auto print_vector =
-                     [&](smi::DevInfoTypes type, std::string label) {
+                     [&](amd::smi::DevInfoTypes type, std::string label) {
       ret = dev->readDevInfo(type, &val_vec);
       if (print_attr_label(label)) {
         for (auto vs : val_vec) {
@@ -164,7 +158,7 @@ void DumpMonitorInfo(const TestBase *test) {
       }
     };
     auto print_val_str =
-                     [&](smi::DevInfoTypes type, std::string label) {
+                     [&](amd::smi::DevInfoTypes type, std::string label) {
       ret = dev->readDevInfo(type, &val_str);
 
       std::cout << "\t** " << label;
@@ -176,30 +170,30 @@ void DumpMonitorInfo(const TestBase *test) {
       std::cout << std:: endl;
     };
 
-    print_val_str(smi::kDevDevID, "Device ID: ");
-    print_val_str(smi::kDevPerfLevel, "Performance Level: ");
-    print_val_str(smi::kDevOverDriveLevel, "OverDrive Level: ");
-    print_vector(smi::kDevGPUMClk,
+    print_val_str(amd::smi::kDevDevID, "Device ID: ");
+    print_val_str(amd::smi::kDevPerfLevel, "Performance Level: ");
+    print_val_str(amd::smi::kDevOverDriveLevel, "OverDrive Level: ");
+    print_vector(amd::smi::kDevGPUMClk,
                                  "Supported GPU Memory clock frequencies:\n");
-    print_vector(smi::kDevGPUSClk,
+    print_vector(amd::smi::kDevGPUSClk,
                                     "Supported GPU clock frequencies:\n");
 
     if (dev->monitor() != nullptr) {
-      ret = dev->monitor()->readMonitor(smi::kMonName, &val_str);
+      ret = dev->monitor()->readMonitor(amd::smi::kMonName, &val_str);
       if (print_attr_label("Monitor name: ")) {
         std::cout << val_str << std::endl;
       }
 
-      ret = dev->monitor()->readMonitor(smi::kMonTemp, &value);
+      ret = dev->monitor()->readMonitor(amd::smi::kMonTemp, &value);
       if (print_attr_label("Temperature: ")) {
         std::cout << static_cast<float>(value)/1000.0 << "C" << std::endl;
       }
 
       std::cout.setf(std::ios::dec, std::ios::basefield);
 
-      ret = dev->monitor()->readMonitor(smi::kMonMaxFanSpeed, &value);
+      ret = dev->monitor()->readMonitor(amd::smi::kMonMaxFanSpeed, &value);
       if (ret == 0) {
-        ret = dev->monitor()->readMonitor(smi::kMonFanSpeed, &value2);
+        ret = dev->monitor()->readMonitor(amd::smi::kMonFanSpeed, &value2);
       }
       if (print_attr_label("Current Fan Speed: ")) {
         std::cout << value2/static_cast<float>(value) * 100 << "% (" <<
