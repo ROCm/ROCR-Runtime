@@ -287,15 +287,13 @@ uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
 hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
                                                             void* data),
                                    void* data) {
-  if (!IsOpen()) {
-    return HSA_STATUS_ERROR_NOT_INITIALIZED;
-  }
+  AMD::callback_t<decltype(callback)> call(callback);
 
   std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_, &gpu_agents_};
   for (std::vector<core::Agent*>* agent_list : agent_lists) {
     for (size_t i = 0; i < agent_list->size(); ++i) {
       hsa_agent_t agent = Agent::Convert(agent_list->at(i));
-      hsa_status_t status = callback(agent, data);
+      hsa_status_t status = call(agent, data);
 
       if (status != HSA_STATUS_SUCCESS) {
         return status;
@@ -768,7 +766,8 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
       count += agents_by_node_[mappedNodes[i]].size();
     }
 
-    *accessible = (hsa_agent_t*)alloc(sizeof(hsa_agent_t) * count);
+    AMD::callback_t<decltype(alloc)> Alloc(alloc);
+    *accessible = (hsa_agent_t*)Alloc(sizeof(hsa_agent_t) * count);
     if ((*accessible) == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     *num_agents_accessible = count;
 
