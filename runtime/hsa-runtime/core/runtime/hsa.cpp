@@ -2561,6 +2561,10 @@ hsa_status_t hsa_status_string(
     case HSA_STATUS_ERROR_VARIABLE_UNDEFINED:
       *status_string = "HSA_STATUS_ERROR_VARIABLE_UNDEFINED: The variable is undefined.";
       break;
+    case HSA_STATUS_ERROR_EXCEPTION:
+      *status_string =
+          "HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception.";
+      break;
     case HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:
       *status_string = "HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:  The code object symbol is invalid.";
       break;
