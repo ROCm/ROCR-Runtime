@@ -47,8 +47,10 @@ HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
 
 void destroy_device_debugging_memory(void)
 {
-	if (is_device_debugged)
+	if (is_device_debugged) {
 		free(is_device_debugged);
+		is_device_debugged = NULL;
+	}
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDbgRegister(HSAuint32 NodeId)

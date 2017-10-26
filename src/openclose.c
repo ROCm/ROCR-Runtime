@@ -66,7 +66,10 @@ static void clear_after_fork(void)
 	clear_events_page();
 	fmm_clear_all_mem();
 	destroy_device_debugging_memory();
-	close(kfd_fd);
+	if (kfd_fd) {
+		close(kfd_fd);
+		kfd_fd = 0;
+	}
 	kfd_open_count = 0;
 }
 
@@ -172,7 +175,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCloseKFD(void)
 			destroy_device_debugging_memory();
 			destroy_process_doorbells();
 			fmm_destroy_process_apertures();
-			close(kfd_fd);
+			if (kfd_fd) {
+				close(kfd_fd);
+				kfd_fd = 0;
+			}
 		}
 
 		result = HSAKMT_STATUS_SUCCESS;
