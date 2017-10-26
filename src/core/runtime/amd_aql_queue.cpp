@@ -540,46 +540,46 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
       return;
     }
 
-      // Reserve a VA range twice the size of the physical backing store.
-      reserve_va = mmap(NULL, ring_buf_alloc_bytes_, PROT_NONE,
-                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-      assert(reserve_va != MAP_FAILED && "mmap failed");
+    // Reserve a VA range twice the size of the physical backing store.
+    reserve_va = mmap(NULL, ring_buf_alloc_bytes_, PROT_NONE,
+                      MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    assert(reserve_va != MAP_FAILED && "mmap failed");
 
-      // Remap the lower and upper halves of the VA range.
-      // Map both halves to the shared memory backing store.
-      // If the GPU device is KV, do not set PROT_EXEC flag.
-      void* ring_buf_lower_half = NULL;
-      void* ring_buf_upper_half = NULL;
-      if (is_kv_queue_) {
-        ring_buf_lower_half =
-            mmap(reserve_va, ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE,
-                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
+    // Remap the lower and upper halves of the VA range.
+    // Map both halves to the shared memory backing store.
+    // If the GPU device is KV, do not set PROT_EXEC flag.
+    void* ring_buf_lower_half = NULL;
+    void* ring_buf_upper_half = NULL;
+    if (is_kv_queue_) {
+      ring_buf_lower_half =
+          mmap(reserve_va, ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE,
+               MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
+      assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
 
-        ring_buf_upper_half =
-            mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes),
-                 ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE,
-                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
-      } else {
-        ring_buf_lower_half = mmap(reserve_va, ring_buf_phys_size_bytes,
-                                   PROT_READ | PROT_WRITE | PROT_EXEC,
-                                   MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
+      ring_buf_upper_half =
+          mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes),
+               ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE,
+               MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
+      assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
+    } else {
+      ring_buf_lower_half = mmap(reserve_va, ring_buf_phys_size_bytes,
+                                 PROT_READ | PROT_WRITE | PROT_EXEC,
+                                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
+      assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
 
-        ring_buf_upper_half =
-            mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes),
-                 ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE | PROT_EXEC,
-                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
-      }
+      ring_buf_upper_half =
+          mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes),
+               ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE | PROT_EXEC,
+               MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
+      assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
+    }
 
-      // Successfully created mapping.
-      ring_buf_ = ring_buf_lower_half;
+    // Successfully created mapping.
+    ring_buf_ = ring_buf_lower_half;
 
-      // Release explicit reference to shared memory object.
-      CloseRingBufferFD(ring_buf_shm_path, ring_buf_shm_fd);
-      return;
+    // Release explicit reference to shared memory object.
+    CloseRingBufferFD(ring_buf_shm_path, ring_buf_shm_fd);
+    return;
 #endif
 #ifdef _WIN32
     HANDLE ring_buf_mapping = INVALID_HANDLE_VALUE;
