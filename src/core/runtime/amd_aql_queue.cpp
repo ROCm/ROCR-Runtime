@@ -479,6 +479,43 @@ uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
   return uint32_t(max_bytes / sizeof(core::AqlPacket));
 }
 
+void AqlQueue::CloseRingBufferFD(const char *ring_buf_shm_path, int fd) const {
+#if !defined(HAVE_MEMFD_CREATE)
+  shm_unlink(ring_buf_shm_path);
+#endif
+  close(fd);
+}
+
+int AqlQueue::CreateRingBufferFD(const char *ring_buf_shm_path,
+                                 uint32_t ring_buf_phys_size_bytes) const {
+
+  int fd;
+#ifdef HAVE_MEMFD_CREATE
+  fd = syscall(__NR_memfd_create, ring_buf_shm_path, 0);
+
+  if (fd == -1)
+    return -1;
+
+  if (ftruncate(fd, ring_buf_phys_size_bytes) == -1) {
+    CloseRingBufferFD(ring_buf_shm_path, fd);
+    return -1;
+  }
+#else
+  fd = shm_open(ring_buf_shm_path, O_CREAT | O_RDWR | O_EXCL,
+                S_IRUSR | S_IWUSR);
+
+  if (fd == -1)
+    return -1;
+
+  if (posix_fallocate(fd, 0, ring_buf_phys_size_bytes) != 0)
+    CloseRingBufferFD(ring_buf_shm_path, fd);
+    return -1;
+  }
+#endif
+
+  return fd;
+}
+
 void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
   if (agent_->profile() == HSA_PROFILE_FULL) {
     // Compute the physical and virtual size of the queue.
@@ -495,15 +532,13 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
     int ring_buf_shm_fd = -1;
     void* reserve_va = NULL;
 
-    do {
-      // Create a shared memory object to back the ring buffer.
-      ring_buf_shm_fd = shm_open(ring_buf_shm_path, O_CREAT | O_RDWR | O_EXCL,
-                                 S_IRUSR | S_IWUSR);
-      if (ring_buf_shm_fd == -1) {
-        break;
-      }
-      if (posix_fallocate(ring_buf_shm_fd, 0, ring_buf_phys_size_bytes) != 0)
-        break;
+    ring_buf_shm_fd = CreateRingBufferFD(ring_buf_shm_path,
+                                         ring_buf_phys_size_bytes);
+
+    // TODO: Better error handling.
+    if (ring_buf_shm_fd == -1) {
+      return;
+    }
 
       // Reserve a VA range twice the size of the physical backing store.
       reserve_va = mmap(NULL, ring_buf_alloc_bytes_, PROT_NONE,
@@ -539,21 +574,12 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
         assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
       }
 
-      // Release explicit reference to shared memory object.
-      shm_unlink(ring_buf_shm_path);
-      close(ring_buf_shm_fd);
-
       // Successfully created mapping.
       ring_buf_ = ring_buf_lower_half;
-      return;
-    } while (false);
 
-    // Resource cleanup on failure.
-    if (reserve_va) munmap(reserve_va, ring_buf_alloc_bytes_);
-    if (ring_buf_shm_fd != -1) {
-      shm_unlink(ring_buf_shm_path);
-      close(ring_buf_shm_fd);
-    }
+      // Release explicit reference to shared memory object.
+      CloseRingBufferFD(ring_buf_shm_path, ring_buf_shm_fd);
+      return;
 #endif
 #ifdef _WIN32
     HANDLE ring_buf_mapping = INVALID_HANDLE_VALUE;

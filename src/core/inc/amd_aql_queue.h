@@ -349,6 +349,9 @@ class AqlQueue : public core::Queue, public core::Signal {
   uint32_t ComputeRingBufferMinPkts();
   uint32_t ComputeRingBufferMaxPkts();
 
+  void CloseRingBufferFD(const char *ring_buf_shm_path, int fd) const;
+  int CreateRingBufferFD(const char *ring_buf_shm_path,
+                         uint32_t ring_buf_phys_size_bytes) const;
   // (De)allocates and (de)registers ring_buf_.
   void AllocRegisteredRingBuffer(uint32_t queue_size_pkts);
   void FreeRegisteredRingBuffer();
