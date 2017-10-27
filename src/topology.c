@@ -54,6 +54,7 @@ typedef struct {
 	HsaMemoryProperties *mem;     /* node->NumBanks elements */
 	HsaCacheProperties *cache;
 	HsaIoLinkProperties *link;
+	int drm_render_fd;
 } node_t;
 
 static HsaSystemProperties *_system = NULL;
@@ -239,6 +240,8 @@ free_node(node_t *n)
 		free((n)->cache);
 	if ((n)->link)
 		free((n)->link);
+	if ((n)->drm_render_fd > 0)
+		close((n)->drm_render_fd);
 }
 
 static void free_nodes(node_t *temp_nodes, int size)
@@ -825,6 +828,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->MaxEngineClockMhzCCompute = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "local_mem_size") == 0)
 			props->LocalMemSize = prop_val;
+		else if (strcmp(prop_name, "drm_render_minor") == 0)
+			props->DrmRenderMinor = (int32_t)prop_val;
 
 	}
 
@@ -1512,6 +1517,16 @@ static void topology_create_indirect_gpu_links(const HsaSystemProperties *sys_pr
 	}
 }
 
+
+static void open_drm_render_device(node_t *n)
+{
+	int minor = n->node.DrmRenderMinor;
+	char path[128];
+
+	sprintf(path, "/dev/dri/renderD%d", minor);
+	n->drm_render_fd = open(path, O_RDWR | O_CLOEXEC);
+}
+
 HSAKMT_STATUS topology_take_snapshot(void)
 {
 	uint32_t gen_start, gen_end, i, mem_id, cache_id, link_id;
@@ -1609,7 +1624,7 @@ retry:
 					}
 				}
 			}
-
+			open_drm_render_device(&temp_nodes[i]);
 		}
 		pci_cleanup(pacc);
 	}
@@ -1968,6 +1983,21 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 	}
 
 	return 0;
+}
+
+int get_drm_render_fd_by_gpu_id(HSAuint32 gpu_id)
+{
+	unsigned int i;
+
+	if (!node || !_system)
+		return 0;
+
+	for (i = 0; i < _system->NumNodes; i++) {
+		if (node[i].gpu_id == gpu_id)
+			return node[i].drm_render_fd;
+	}
+
+	return -1;
 }
 
 HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,

@@ -1056,9 +1056,12 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 	}
 
 	if (mem && flags.ui32.HostAccess) {
+		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
+					get_drm_render_fd_by_gpu_id(gpu_id);
 		void *ret = mmap(mem, MemorySizeInBytes,
 				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED, kfd_fd, mmap_offset);
+				 MAP_SHARED | MAP_FIXED,
+				 map_fd, mmap_offset);
 		if (ret == MAP_FAILED) {
 			__fmm_release(mem, aperture);
 			return NULL;
@@ -1245,9 +1248,11 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 					     ioc_flags, &vm_obj);
 
 		if (mem && flags.ui32.HostAccess) {
+			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
+						get_drm_render_fd_by_gpu_id(gpu_id);
 			void *ret = mmap(mem, MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
-					 MAP_SHARED | MAP_FIXED, kfd_fd, mmap_offset);
+					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
 			if (ret == MAP_FAILED) {
 				__fmm_release(mem, aperture);
 				return NULL;
@@ -1259,7 +1264,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 				memset(ret, 0, MemorySizeInBytes);
 				mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
 				     PROT_READ | PROT_WRITE,
-				     MAP_SHARED | MAP_FIXED, kfd_fd, mmap_offset);
+				     MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
 			}
 		}
 	}
@@ -1827,6 +1832,8 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 		if (!obj)
 			return -1;
 	} else {
+		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
+					get_drm_render_fd_by_gpu_id(gpu_id);
 		fmm_allocate_memory_in_device(gpu_id,
 					address,
 					size,
@@ -1835,8 +1842,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 					KFD_IOC_ALLOC_MEM_FLAGS_GTT);
 		mmap_ret = mmap(address, size,
 				PROT_READ | PROT_WRITE,
-				MAP_SHARED | MAP_FIXED,
-				kfd_fd, mmap_offset);
+				MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
 		if (mmap_ret == MAP_FAILED) {
 			__fmm_release(mem, aperture);
 			return -1;
@@ -2753,10 +2759,11 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	if (importArgs.mmap_offset) {
+		int map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
+					get_drm_render_fd_by_gpu_id(importArgs.gpu_id);
 		void *ret = mmap(reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
 				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED, kfd_fd,
-				 importArgs.mmap_offset);
+				 MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
 		if (ret == MAP_FAILED) {
 			err = HSAKMT_STATUS_ERROR;
 			goto err_free_obj;
