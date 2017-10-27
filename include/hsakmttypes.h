@@ -247,7 +247,7 @@ typedef struct _HsaNodeProperties
     HSAuint64       LocalMemSize;       // Local memory size
     HSAuint32       MaxEngineClockMhzFCompute;  // maximum engine clocks for CPU and
     HSAuint32       MaxEngineClockMhzCCompute;  // GPU function, including any boost caopabilities,
-
+    HSAint32        DrmRenderMinor;             // DRM render device minor device number
     HSAuint16       MarketingName[HSA_PUBLIC_NAME_SIZE];   // Public name of the "device" on the node (board or APU name).
                                        // Unicode string
     HSAuint8        AMDName[HSA_PUBLIC_NAME_SIZE];   //CAL Name of the "device", ASCII
