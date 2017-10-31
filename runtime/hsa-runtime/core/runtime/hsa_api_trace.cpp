@@ -92,21 +92,21 @@ void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
+    finalizer_api = *reinterpret_cast<FinalizerExtTable*>(ext_table);
     hsa_api.finalizer_ext_ = &finalizer_api;
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
+    image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
     hsa_api.image_ext_ = &image_api;
     return;
   }
 
   // Update HSA Extension AqlProfile Api table
   if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
-    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
+    aqlprofile_api = *reinterpret_cast<AqlProfileExtTable*>(ext_table);
     hsa_api.aqlprofile_ext_ = &aqlprofile_api;
     return;
   }
@@ -118,22 +118,22 @@ void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
-    hsa_api.finalizer_ext_ = (FinalizerExtTable *)ext_table;
+    finalizer_api = *reinterpret_cast<FinalizerExtTable*>(ext_table);
+    hsa_api.finalizer_ext_ = reinterpret_cast<FinalizerExtTable*>(ext_table);
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
-    hsa_api.image_ext_ = (ImageExtTable *)ext_table;
+    image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
+    hsa_api.image_ext_ = reinterpret_cast<ImageExtTable*>(ext_table);
     return;
   }
 
   // Update HSA Extension AqlProfile Api table
   if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
-    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
-    hsa_api.aqlprofile_ext_ = (AqlProfileExtTable *)ext_table;
+    aqlprofile_api = *reinterpret_cast<AqlProfileExtTable*>(ext_table);
+    hsa_api.aqlprofile_ext_ = reinterpret_cast<AqlProfileExtTable*>(ext_table);
     return;
   }
 }

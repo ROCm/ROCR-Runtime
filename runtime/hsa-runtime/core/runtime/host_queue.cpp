@@ -47,7 +47,7 @@
 
 namespace core {
 
-volatile uint32_t HostQueue::queue_count_ = 0x80000000;
+std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
 
 HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
                      hsa_queue_type32_t type, uint32_t features,
@@ -73,7 +73,7 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
   amd_queue_.hsa_queue.base_address = ring_;
   amd_queue_.hsa_queue.size = size_;
   amd_queue_.hsa_queue.doorbell_signal = doorbell_signal;
-  amd_queue_.hsa_queue.id = atomic::Increment(&queue_count_);
+  amd_queue_.hsa_queue.id = queue_count_++;
   amd_queue_.hsa_queue.type = type;
   amd_queue_.hsa_queue.features = features;
 #ifdef HSA_LARGE_MODEL

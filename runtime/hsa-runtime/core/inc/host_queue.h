@@ -166,7 +166,7 @@ class HostQueue : public Queue {
 
   // Host queue id counter, starting from 0x80000000 to avoid overlaping
   // with aql queue id.
-  static volatile uint32_t queue_count_;
+  static std::atomic<uint32_t> queue_count_;
 
   DISALLOW_COPY_AND_ASSIGN(HostQueue);
 };
