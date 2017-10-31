@@ -317,7 +317,9 @@ class Runtime {
 
   ExtensionEntryPoints extensions_;
 
-  hsa_status_t SetCustomVMFaultHandler(hsa_status_t (*callback)(const void* event_specific_data, void* data), void* data);
+  hsa_status_t SetCustomVMFaultHandler(hsa_status_t (*callback)(const void* event_specific_data,
+                                                                void* data),
+                                       void* data);
 
  protected:
   static void AsyncEventsLoop(void*);
