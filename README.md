@@ -10,12 +10,12 @@ https://github.com/RadeonOpenCompute/ROCK-Radeon-Open-Compute-Kernel-Driver
 
 #### Building the Thunk
 
-A simple cmake-based system is available for building thunk. To build the runtime from the the ROCT-Thunk-Interface directory, execute:
+A simple cmake-based system is available for building thunk. To build the thunk from the the ROCT-Thunk-Interface directory, execute:
 
 ```bash
     mkdir -p build
     cd build
-    cmake -DCMAKE_MODULE_PATH=../cmake_modules ..
+    cmake -DCMAKE_MODULE_PATH=${PWD}/../cmake_modules ..
     make
 ```
 
