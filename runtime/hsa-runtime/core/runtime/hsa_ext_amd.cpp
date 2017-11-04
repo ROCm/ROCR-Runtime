@@ -266,11 +266,9 @@ hsa_status_t hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enab
   IS_OPEN();
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
-
   IS_VALID(cmd_queue);
 
-  AMD_HSA_BITS_SET(cmd_queue->amd_queue_.queue_properties,
-                   AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, (enable != 0));
+  cmd_queue->SetProfiling(enable);
 
   return HSA_STATUS_SUCCESS;
   CATCH;
