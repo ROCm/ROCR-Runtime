@@ -294,6 +294,11 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   // @brief Submits a block of PM4 and waits until it has been executed.
   virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) = 0;
 
+  virtual void SetProfiling(bool enabled) {
+    AMD_HSA_BITS_SET(amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING,
+                     (enabled != 0));
+  }
+
   /// @ brief Reports async queue errors to stderr if no other error handler was registered.
   static void DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data);
 

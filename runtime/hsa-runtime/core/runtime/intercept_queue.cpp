@@ -235,6 +235,7 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   next_packet_ = i;
   Cursor.queue = nullptr;
+  atomic::Store(&amd_queue_.read_dispatch_id, next_packet_, std::memory_order_release);
 }
 
 }  // namespace core
