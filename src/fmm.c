@@ -1152,6 +1152,26 @@ static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 	return mem;
 }
 
+/* Remove any CPU mapping, but keep the address range reserved */
+static void munmap_and_reserve_address(void *address, uint64_t size)
+{
+	void *mmap_ret;
+
+	mmap_ret = mmap(address, size, PROT_NONE,
+			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+			-1, 0);
+	if (mmap_ret == MAP_FAILED && errno == ENOMEM) {
+		/* When mmap count reaches max_map_count, any mmap will
+		 * fail. Reduce the count with munmap then map it as
+		 * NORESERVE immediately.
+		 */
+		munmap(address, size);
+		mmap(address, size, PROT_NONE,
+			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+			-1, 0);
+	}
+}
+
 static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 				   HsaMemFlags flags)
 {
@@ -1233,12 +1253,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 			pthread_mutex_lock(&aperture->fmm_mutex);
 			aperture_release_area(aperture, mem, size);
 			pthread_mutex_unlock(&aperture->fmm_mutex);
-			/* Remove any CPU mapping, but keep the
-			 * address range reserved
-			 */
-			mmap(mem, MemorySizeInBytes, PROT_NONE,
-			     MAP_ANONYMOUS | MAP_NORESERVE |
-			     MAP_PRIVATE | MAP_FIXED, -1, 0);
+			munmap_and_reserve_address(mem, MemorySizeInBytes);
 			return NULL;
 		}
 	} else {
@@ -1292,7 +1307,6 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args;
 	vm_object_t *object;
-	void *mmap_ret;
 
 	if (!address)
 		return;
@@ -1318,21 +1332,7 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 	    address <= dgpu_shared_aperture_limit) {
 		/* Reset NUMA policy */
 		mbind(address, object->size, MPOL_DEFAULT, NULL, 0, 0);
-
-		/* Remove any CPU mapping, but keep the address range reserved */
-		mmap_ret = mmap(address, object->size, PROT_NONE,
-			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
-			-1, 0);
-		if (mmap_ret == MAP_FAILED && errno == ENOMEM) {
-			/* When mmap count reaches max_map_count, any mmap will
-			 * fail. Reduce the count with munmap then map it as
-			 * NORESERVE immediately.
-			 */
-			munmap(address, object->size);
-			mmap(address, object->size, PROT_NONE,
-				MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
-				-1, 0);
-		}
+		munmap_and_reserve_address(address, object->size);
 	}
 
 	aperture_release_area(aperture, address, object->size);
