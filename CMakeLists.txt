@@ -115,6 +115,7 @@ add_custom_target ( build-dev
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_DIR="${SOURCE_DIR}"
         -DCMAKE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
+        -DCPACK_RPM_PACKAGE_REQUIRES="hsakmt-roct"
         -DCPACK_PACKAGING_INSTALL_PREFIX="${CPACK_PACKAGING_INSTALL_PREFIX}"
     COMMAND rm -rf *.deb *.rpm *.tar.gz
     COMMAND make package
