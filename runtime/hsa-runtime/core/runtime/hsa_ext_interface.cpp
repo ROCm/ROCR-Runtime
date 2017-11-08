@@ -764,7 +764,7 @@ hsa_status_t hsa_ven_amd_aqlprofile_validate_event(
 }
 
 hsa_status_t hsa_ven_amd_aqlprofile_start(
-    hsa_ven_amd_aqlprofile_profile_t* profile,        // [in/out] profile contex object
+    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_start_packet)   // [out] profile start AQL packet
 {
   return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_start_fn(profile, aql_start_packet);
