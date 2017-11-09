@@ -191,9 +191,16 @@ typedef struct {
 // Method to populate the provided AQL packet with profiling start commands
 // Only 'pm4_command' fields of the packet are set and the application
 // is responsible to set Vendor Specific header type a completion signal
+#ifndef HSA_AQLPROFILE_START_NEW_API
 hsa_status_t hsa_ven_amd_aqlprofile_start(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);  // [out] profile start AQL packet
+#else
+// Will return required profile buffers sizes if the size is less then required
+hsa_status_t hsa_ven_amd_aqlprofile_start(
+    hsa_ven_amd_aqlprofile_profile_t* profile,        // [in/out] profile contex object
+    hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);  // [out] profile start AQL packet
+#endif
 
 // Method to populate the provided AQL packet with profiling stop commands
 // Only 'pm4_command' fields of the packet are set and the application
@@ -227,14 +234,24 @@ typedef struct {
   };
 } hsa_ven_amd_aqlprofile_info_data_t;
 
+// ID query type
+typedef struct {
+  const char* name;
+  uint32_t id;
+  uint32_t instance_count;
+} hsa_ven_amd_aqlprofile_id_query_t;
+
 // Profile attributes
 typedef enum {
   HSA_VEN_AMD_AQLPROFILE_INFO_COMMAND_BUFFER_SIZE = 0,  // get_info returns uint32_t value
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE = 1,        // get_info returns uint32_t value
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA = 2,             // get_info returns PMC uint64_t value
                                                         // in info_data object
-  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3             // get_info returns SQTT buffer ptr/size
+  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3,            // get_info returns SQTT buffer ptr/size
                                                         // in info_data object
+  HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS = 4,       // get_info returns number of block counter
+  HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_ID = 5              // get_info returns block id, instances
+                                                        // by name string using hsa_ven_amd_aqlprofile_id_query_t
 } hsa_ven_amd_aqlprofile_info_type_t;
 
 // Definition of output data iterator callback
@@ -276,9 +293,15 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       const hsa_ven_amd_aqlprofile_event_t* event,
       bool* result);
 
+#ifndef HSA_AQLPROFILE_START_NEW_API
   hsa_status_t (*hsa_ven_amd_aqlprofile_start)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
       hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+#else
+  hsa_status_t (*hsa_ven_amd_aqlprofile_start)(
+      hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+#endif
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
