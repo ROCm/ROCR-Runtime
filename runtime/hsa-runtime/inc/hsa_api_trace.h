@@ -48,12 +48,10 @@
 #include "hsa_ext_image.h"
 #include "hsa_ext_amd.h"
 #include "hsa_ext_finalize.h"
-#include "hsa_ven_amd_aqlprofile.h"
 #else
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_finalize.h"
-#include "inc/hsa_ven_amd_aqlprofile.h"
 #endif
 
 #include <string.h>
@@ -131,18 +129,6 @@ struct ImageExtTable {
   decltype(hsa_ext_image_get_capability_with_layout)* hsa_ext_image_get_capability_with_layout_fn;
   decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
   decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
-};
-
-// Table to export HSA AqlProfile AMD specific Extension Apis
-struct AqlProfileExtTable {
-  ApiTableVersion version;
-  decltype(hsa_ven_amd_aqlprofile_error_string)* hsa_ven_amd_aqlprofile_error_string_fn;
-  decltype(hsa_ven_amd_aqlprofile_validate_event)* hsa_ven_amd_aqlprofile_validate_event_fn;
-  decltype(hsa_ven_amd_aqlprofile_start)* hsa_ven_amd_aqlprofile_start_fn;
-  decltype(hsa_ven_amd_aqlprofile_stop)* hsa_ven_amd_aqlprofile_stop_fn;
-  decltype(hsa_ven_amd_aqlprofile_legacy_get_pm4)* hsa_ven_amd_aqlprofile_legacy_get_pm4_fn;
-  decltype(hsa_ven_amd_aqlprofile_get_info)* hsa_ven_amd_aqlprofile_get_info_fn;
-  decltype(hsa_ven_amd_aqlprofile_iterate_data)* hsa_ven_amd_aqlprofile_iterate_data_fn;
 };
 
 // Table to export AMD Extension Apis
@@ -383,9 +369,6 @@ struct HsaApiTable {
 
   // Table of function pointers to HSA Image Extension
 	ImageExtTable* image_ext_;
-
-  // Table of function pointers to AqlProfile AMD Extension
-  AqlProfileExtTable* aqlprofile_ext_;
 };
 
 // Structure containing instances of different api tables
@@ -395,7 +378,6 @@ struct HsaApiTableContainer {
 	AmdExtTable amd_ext;
 	FinalizerExtTable finalizer_ext;
 	ImageExtTable image_ext;
-  AqlProfileExtTable aqlprofile_ext;
 
   // Default initialization of a container instance
   HsaApiTableContainer() {
@@ -422,11 +404,6 @@ struct HsaApiTableContainer {
     image_ext.version.minor_id = sizeof(ImageExtTable);
     image_ext.version.step_id = HSA_IMAGE_API_TABLE_STEP_VERSION;
     root.image_ext_ = &image_ext;
-
-    aqlprofile_ext.version.major_id = HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION;
-    aqlprofile_ext.version.minor_id = sizeof(AqlProfileExtTable);
-    aqlprofile_ext.version.step_id = HSA_AQLPROFILE_API_TABLE_STEP_VERSION;
-    root.aqlprofile_ext_ = &aqlprofile_ext;
   }
 };
 
@@ -482,7 +459,5 @@ static void inline copyTables(const HsaApiTable* src, HsaApiTable* dest) {
     copyElement(&dest->finalizer_ext_->version, &src->finalizer_ext_->version);
   if ((offsetof(HsaApiTable, image_ext_) < dest->version.minor_id))
     copyElement(&dest->image_ext_->version, &src->image_ext_->version);
-  if ((offsetof(HsaApiTable, aqlprofile_ext_) < dest->version.minor_id))
-    copyElement(&dest->aqlprofile_ext_->version, &src->aqlprofile_ext_->version);
 }
 #endif

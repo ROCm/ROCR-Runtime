@@ -280,6 +280,12 @@ hsa_status_t hsa_ven_amd_aqlprofile_error_string(
  * @brief Extension version.
  */
 #define hsa_ven_amd_aqlprofile 001000
+#define hsa_ven_amd_aqlprofile_VERSION_MAJOR 1
+#ifdef HSA_LARGE_MODEL
+static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile64.so.1";
+#else
+static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile.so.1";
+#endif
 
 /**
  * @brief Extension function table.

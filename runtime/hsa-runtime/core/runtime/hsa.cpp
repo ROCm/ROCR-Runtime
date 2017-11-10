@@ -53,6 +53,7 @@
 #define __lseek__ _lseek
 #else
 #include <unistd.h>
+#include <dlfcn.h>
 #define __read__  read
 #define __lseek__ lseek
 #endif // _WIN32 || _WIN64
@@ -466,19 +467,39 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
   }
 
   if (extension == HSA_EXTENSION_AMD_AQLPROFILE) {
-    if (version_major !=
-        core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.version.major_id) {
+    if (version_major != hsa_ven_amd_aqlprofile_VERSION_MAJOR) {
       return HSA_STATUS_ERROR;
     }
 
+    os::LibHandle lib = os::LoadLib(kAqlProfileLib);
+    if (lib == NULL) {
+      fprintf(stderr, "Loading '%s' error: %s\n", kAqlProfileLib, dlerror());
+      return HSA_STATUS_ERROR;
+    }
+    dlerror();  // Clear any existing error
+
     hsa_ven_amd_aqlprofile_1_00_pfn_t ext_table;
-    ext_table.hsa_ven_amd_aqlprofile_error_string = hsa_ven_amd_aqlprofile_error_string;
-    ext_table.hsa_ven_amd_aqlprofile_validate_event = hsa_ven_amd_aqlprofile_validate_event;
-    ext_table.hsa_ven_amd_aqlprofile_start = hsa_ven_amd_aqlprofile_start;
-    ext_table.hsa_ven_amd_aqlprofile_stop = hsa_ven_amd_aqlprofile_stop;
-    ext_table.hsa_ven_amd_aqlprofile_legacy_get_pm4 = hsa_ven_amd_aqlprofile_legacy_get_pm4;
-    ext_table.hsa_ven_amd_aqlprofile_get_info = hsa_ven_amd_aqlprofile_get_info;
-    ext_table.hsa_ven_amd_aqlprofile_iterate_data = hsa_ven_amd_aqlprofile_iterate_data;
+    ext_table.hsa_ven_amd_aqlprofile_error_string =
+      (decltype(::hsa_ven_amd_aqlprofile_error_string)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_error_string");
+    ext_table.hsa_ven_amd_aqlprofile_validate_event =
+      (decltype(::hsa_ven_amd_aqlprofile_validate_event)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_validate_event");
+    ext_table.hsa_ven_amd_aqlprofile_start =
+      (decltype(::hsa_ven_amd_aqlprofile_start)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_start");
+    ext_table.hsa_ven_amd_aqlprofile_stop =
+      (decltype(::hsa_ven_amd_aqlprofile_stop)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_stop");
+    ext_table.hsa_ven_amd_aqlprofile_legacy_get_pm4 =
+      (decltype(::hsa_ven_amd_aqlprofile_legacy_get_pm4)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_legacy_get_pm4");
+    ext_table.hsa_ven_amd_aqlprofile_get_info =
+      (decltype(::hsa_ven_amd_aqlprofile_get_info)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_get_info");
+    ext_table.hsa_ven_amd_aqlprofile_iterate_data =
+      (decltype(::hsa_ven_amd_aqlprofile_iterate_data)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_data");
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 

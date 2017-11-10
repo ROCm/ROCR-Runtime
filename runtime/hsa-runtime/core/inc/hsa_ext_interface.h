@@ -65,14 +65,10 @@ class ExtensionEntryPoints {
   // Table of function pointers for Hsa Extension Finalizer
   FinalizerExtTable finalizer_api;
 
-  // Table of function pointers for Hsa Extension AqlProfiler
-  AqlProfileExtTable aqlprofile_api;
-
   ExtensionEntryPoints();
 
   bool LoadFinalizer(std::string library_name);
   bool LoadImage(std::string library_name);
-  bool LoadAqlProfileApi(std::string library_name);
   void Unload();
 
  private:
@@ -86,9 +82,6 @@ class ExtensionEntryPoints {
 
   // Initialize table for HSA Image Extension Api's
   void InitImageExtTable();
-
-  // Initialize table for HSA AqlProfile Extension Api's
-  void InitAqlProfileExtTable();
 
   // Initialize Amd Ext table for Api related to Images
   void InitAmdExtTable();
