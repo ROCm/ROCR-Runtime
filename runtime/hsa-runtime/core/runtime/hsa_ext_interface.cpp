@@ -171,7 +171,6 @@ static T0 hsa_amd_null(T1, T2, T3, T4, T5, T6) {
 ExtensionEntryPoints::ExtensionEntryPoints() {
   InitFinalizerExtTable();
   InitImageExtTable();
-  InitAqlProfileExtTable();
   InitAmdExtTable();
 }
 
@@ -215,21 +214,6 @@ void ExtensionEntryPoints::InitImageExtTable() {
   image_api.hsa_ext_image_create_with_layout_fn = hsa_ext_null;
 }
 
-void ExtensionEntryPoints::InitAqlProfileExtTable() {
-  // Initialize Version of Api Table
-  aqlprofile_api.version.major_id = 0x00;
-  aqlprofile_api.version.minor_id = 0x00;
-  aqlprofile_api.version.step_id = 0x00;
-
-  aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_validate_event_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_start_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_stop_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_legacy_get_pm4_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_get_info_fn = hsa_ext_null;
-  aqlprofile_api.hsa_ven_amd_aqlprofile_iterate_data_fn = hsa_ext_null;
-}
-
 // Initialize Amd Ext table for Api related to Images
 void ExtensionEntryPoints::InitAmdExtTable() {
   hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = hsa_ext_null;
@@ -271,7 +255,6 @@ void ExtensionEntryPoints::Unload() {
 
   InitFinalizerExtTable();
   InitImageExtTable();
-  InitAqlProfileExtTable();
   InitAmdExtTable();
   core::hsa_internal_api_table_.Reset();
 }
@@ -504,82 +487,6 @@ bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
   return true;
 }
 
-bool ExtensionEntryPoints::LoadAqlProfileApi(std::string library_name) {
-  os::LibHandle lib = os::LoadLib(library_name);
-  if (lib == NULL) {
-    return false;
-  }
-  libs_.push_back(lib);
-
-  void* ptr;
-
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_error_string");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_error_string)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn = (decltype(::hsa_ven_amd_aqlprofile_error_string)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_validate_event");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_validate_event_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_validate_event)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_validate_event_fn = (decltype(::hsa_ven_amd_aqlprofile_validate_event)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_start");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_start_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_start)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_start_fn = (decltype(::hsa_ven_amd_aqlprofile_start)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_stop");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_stop_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_stop)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_stop_fn = (decltype(::hsa_ven_amd_aqlprofile_stop)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_legacy_get_pm4");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_legacy_get_pm4_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_legacy_get_pm4)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_legacy_get_pm4_fn = (decltype(::hsa_ven_amd_aqlprofile_legacy_get_pm4)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_get_info");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_get_info_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_get_info)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_get_info_fn = (decltype(::hsa_ven_amd_aqlprofile_get_info)*)ptr;
-  }
-  ptr = os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_data");
-  if (ptr != NULL) {
-    assert(aqlprofile_api.hsa_ven_amd_aqlprofile_iterate_data_fn ==
-               (decltype(::hsa_ven_amd_aqlprofile_iterate_data)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    aqlprofile_api.hsa_ven_amd_aqlprofile_iterate_data_fn = (decltype(::hsa_ven_amd_aqlprofile_iterate_data)*)ptr;
-  }
-
-  // Initialize Version of Api Table
-  aqlprofile_api.version.major_id = HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION;
-  aqlprofile_api.version.minor_id = sizeof(::AqlProfileExtTable);
-  aqlprofile_api.version.step_id = HSA_AQLPROFILE_API_TABLE_STEP_VERSION;
-
-  // Update handle of table of HSA extensions
-  hsa_internal_api_table_.CloneExts(&aqlprofile_api,
-                                    core::HsaApiTable::HSA_EXT_AQLPROFILE_API_TABLE_ID);
-
-  ptr = os::GetExportAddress(lib, "Load");
-  if (ptr != NULL) {
-    ((Load_t)ptr)(&core::hsa_internal_api_table_.hsa_api);
-  }
-
-  return true;
-}
-
 }  // namespace core
 
 //---------------------------------------------------------------------------//
@@ -749,63 +656,6 @@ hsa_status_t hsa_ext_image_create_with_layout(
                                image);
 }
 
-hsa_status_t hsa_ven_amd_aqlprofile_error_string(
-    const char** str)                             // [out] pointer on the error string
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn(str);
-}
-
-hsa_status_t hsa_ven_amd_aqlprofile_validate_event(
-    hsa_agent_t agent,                            // HSA handle for the profiling GPU
-    const hsa_ven_amd_aqlprofile_event_t* event,  // [in] Pointer on validated event
-    bool* result)                                 // [out] True if the event valid, False otherwise
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_validate_event_fn(agent, event, result);
-}
-
-#ifndef HSA_AQLPROFILE_START_NEW_API
-hsa_status_t hsa_ven_amd_aqlprofile_start(
-    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
-    hsa_ext_amd_aql_pm4_packet_t* aql_start_packet)   // [out] profile start AQL packet
-#else
-hsa_status_t hsa_ven_amd_aqlprofile_start(
-    hsa_ven_amd_aqlprofile_profile_t* profile,        // [in/out] profile contex object
-    hsa_ext_amd_aql_pm4_packet_t* aql_start_packet)   // [out] profile start AQL packet
-#endif
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_start_fn(profile, aql_start_packet);
-}
-
-hsa_status_t hsa_ven_amd_aqlprofile_stop(
-    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
-    hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet)    // [out] profile stop AQL packet
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_stop_fn(profile, aql_stop_packet);
-}
-
-hsa_status_t hsa_ven_amd_aqlprofile_legacy_get_pm4(
-    const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // [in] AQL packet
-    void* data)                                      // [out] PM4 packet blob
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_legacy_get_pm4_fn(aql_packet, data);
-}
-
-hsa_status_t hsa_ven_amd_aqlprofile_get_info(
-    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile context object
-    hsa_ven_amd_aqlprofile_info_type_t attribute,     // [in] requested profile attribute
-    void* value)                                      // [in/out] returned value
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_get_info_fn(profile, attribute, value);
-}
-
-hsa_status_t hsa_ven_amd_aqlprofile_iterate_data(
-    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile context object
-    hsa_ven_amd_aqlprofile_data_callback_t callback,  // [in] callback to iterate the output data
-    void* data)                                       // [in/out] data passed to the callback
-{
-  return core::Runtime::runtime_singleton_->extensions_.aqlprofile_api.hsa_ven_amd_aqlprofile_iterate_data_fn(profile, callback, data);
-}
-
 //---------------------------------------------------------------------------//
 //  Stubs for internal extension functions
 //---------------------------------------------------------------------------//
@@ -817,5 +667,3 @@ hsa_status_t hsa_amd_image_get_info_max_dim(hsa_agent_t component,
   return core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_amd_image_get_info_max_dim_fn(component, attribute, value);
 }
-
-

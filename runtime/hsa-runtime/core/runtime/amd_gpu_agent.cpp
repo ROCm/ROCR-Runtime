@@ -59,8 +59,9 @@
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
-
+#include "core/util/os.h"
 #include "hsa_ext_image.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -782,7 +783,8 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (core::hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+      if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
+        os::CloseLib(lib);
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
       }
 

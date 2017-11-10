@@ -50,7 +50,6 @@
 #include <vector>
 
 #include "core/common/shared.h"
-
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
@@ -59,8 +58,9 @@
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
-
 #include "core/inc/hsa_api_trace_int.h"
+#include "core/util/os.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 #define HSA_VERSION_MAJOR 1
 #define HSA_VERSION_MINOR 1
@@ -573,7 +573,8 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+      if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
+        os::CloseLib(lib);
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
       }
 
@@ -1189,15 +1190,11 @@ void Runtime::LoadExtensions() {
                                               "libhsa-ext-finalize64.so.1"};
   static const std::string kImageLib[] = {"hsa-ext-image64.dll",
                                           "libhsa-ext-image64.so.1"};
-  static const std::string kAqlProfileLib[] = {"hsa-amd-aqlprofile64.dll",
-                                               "libhsa-amd-aqlprofile64.so.1"};
 #else
   static const std::string kFinalizerLib[] = {"hsa-ext-finalize.dll",
                                               "libhsa-ext-finalize.so.1"};
   static const std::string kImageLib[] = {"hsa-ext-image.dll",
                                           "libhsa-ext-image.so.1"};
-  static const std::string kAqlProfileLib[] = {"hsa-amd-aqlprofile.dll",
-                                               "libhsa-amd-aqlprofile.so.1"};
 #endif
 
   // Update Hsa Api Table with handle of Image extension Apis
@@ -1209,11 +1206,6 @@ void Runtime::LoadExtensions() {
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
-
-  // Update Hsa Api Table with handle of AqlProfile extension Apis
-  extensions_.LoadAqlProfileApi(kAqlProfileLib[os_index(os::current_os)]);
-  hsa_api_table_.LinkExts(&extensions_.aqlprofile_api,
-                          core::HsaApiTable::HSA_EXT_AQLPROFILE_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
