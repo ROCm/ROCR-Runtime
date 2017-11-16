@@ -24,7 +24,7 @@ If the hsakmt-roct and hsakmt-roct-dev packages are desired:
 ```bash
     mkdir -p build
     cd build
-    cmake ..
+    cmake -DCMAKE_MODULE_PATH=${PWD}/../cmake_modules ..
     make package
     make package-dev
 ```
