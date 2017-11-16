@@ -191,16 +191,9 @@ typedef struct {
 // Method to populate the provided AQL packet with profiling start commands
 // Only 'pm4_command' fields of the packet are set and the application
 // is responsible to set Vendor Specific header type a completion signal
-#ifndef HSA_AQLPROFILE_START_NEW_API
-hsa_status_t hsa_ven_amd_aqlprofile_start(
-    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
-    hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);  // [out] profile start AQL packet
-#else
-// Will return required profile buffers sizes if the size is less then required
 hsa_status_t hsa_ven_amd_aqlprofile_start(
     hsa_ven_amd_aqlprofile_profile_t* profile,        // [in/out] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);  // [out] profile start AQL packet
-#endif
 
 // Method to populate the provided AQL packet with profiling stop commands
 // Only 'pm4_command' fields of the packet are set and the application
@@ -299,15 +292,9 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       const hsa_ven_amd_aqlprofile_event_t* event,
       bool* result);
 
-#ifndef HSA_AQLPROFILE_START_NEW_API
-  hsa_status_t (*hsa_ven_amd_aqlprofile_start)(
-      const hsa_ven_amd_aqlprofile_profile_t* profile,
-      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
-#else
   hsa_status_t (*hsa_ven_amd_aqlprofile_start)(
       hsa_ven_amd_aqlprofile_profile_t* profile,
       hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
-#endif
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
