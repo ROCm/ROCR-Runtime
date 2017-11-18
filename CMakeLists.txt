@@ -32,6 +32,11 @@ set ( HSAKMT_TARGET "${HSAKMT}" )
 
 project ( ${HSAKMT_TARGET} )
 
+## Set default module path if not already set
+if ( NOT DEFINED CMAKE_MODULE_PATH )
+    set ( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/" )
+endif ()
+
 ## Include common cmake modules
 include ( utils )
 
