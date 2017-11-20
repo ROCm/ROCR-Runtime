@@ -3022,11 +3022,16 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		}
 		temp_node_id_array_size *= sizeof(uint32_t);
 
-		ret = _fmm_unmap_from_gpu(aperture, address,
-				temp_node_id_array, temp_node_id_array_size,
-				object);
-		if (ret != HSAKMT_STATUS_SUCCESS)
-			return ret;
+		if (temp_node_id_array_size) {
+			ret = _fmm_unmap_from_gpu(aperture, address,
+					temp_node_id_array,
+					temp_node_id_array_size,
+					object);
+			if (ret != HSAKMT_STATUS_SUCCESS) {
+				pthread_mutex_unlock(&aperture->fmm_mutex);
+				return ret;
+			}
+		}
 	}
 
 	retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object,
