@@ -1785,6 +1785,13 @@ static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
 	object->mapped_device_id_array = temp_mapped_id_array;
 	object->mapped_device_id_array_size = args.device_ids_array_size;
 	object->mapping_count = 1;
+	/* Mapping changed and lifecycle of object->mapped_node_id_array
+	 * terminates here. Free it and allocate on next query
+	 */
+	if (object->mapped_node_id_array) {
+		free(object->mapped_node_id_array);
+		object->mapped_node_id_array = NULL;
+	}
 
 exit_ok:
 	if (!obj)
@@ -1905,6 +1912,14 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
 	       args.device_ids_array_size);
 	object->mapped_device_id_array = temp_mapped_id_array;
 	object->mapped_device_id_array_size = args.device_ids_array_size;
+
+	/* Mapping changed and lifecycle of object->mapped_node_id_array
+	 * terminates here. Free it and allocate on next query
+	 */
+	if (object->mapped_node_id_array) {
+		free(object->mapped_node_id_array);
+		object->mapped_node_id_array = NULL;
+	}
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -2516,26 +2531,29 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 		/* fall through */
 	}
 
-	if (!object) {
-		pthread_mutex_lock(&aperture->fmm_mutex);
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	if (!object)
 		object = vm_find_object_by_address(aperture, address, 0);
+
+	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_NOT_SUPPORTED;
 	}
 
-	if (!object)
-		return HSAKMT_STATUS_NOT_SUPPORTED;
 	if (object->registered_device_id_array_size > 0) {
 		/* Multiple registration is allowed, but not changing nodes */
 		if ((gpu_id_array_size != object->registered_device_id_array_size)
 			|| memcmp(object->registered_device_id_array,
 					gpu_id_array, gpu_id_array_size)) {
 			pr_err("Cannot change nodes in a registered addr.\n");
+			pthread_mutex_unlock(&aperture->fmm_mutex);
 			return HSAKMT_STATUS_MEMORY_ALREADY_REGISTERED;
 		} else {
 			/* Delete the new array, keep the existing one. */
 			if (gpu_id_array)
 				free(gpu_id_array);
 
+			pthread_mutex_unlock(&aperture->fmm_mutex);
 			return HSAKMT_STATUS_SUCCESS;
 		}
 	}
@@ -2543,8 +2561,17 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 	if (gpu_id_array_size > 0) {
 		object->registered_device_id_array = gpu_id_array;
 		object->registered_device_id_array_size = gpu_id_array_size;
+		/* Registration of object changed. Lifecycle of object->
+		 * registered_node_id_array terminates here. Free old one
+		 * and re-allocate on next query
+		 */
+		if (object->registered_node_id_array) {
+			free(object->registered_node_id_array);
+			object->registered_node_id_array = NULL;
+		}
 	}
 
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -3024,6 +3051,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 
 	aperture = fmm_find_aperture(address, NULL);
 
+	pthread_mutex_lock(&aperture->fmm_mutex);
 	vm_obj = vm_find_object_by_address_range(aperture, address);
 	if (!vm_obj)
 		vm_obj = vm_find_object_by_userptr_range(aperture, address);
@@ -3051,8 +3079,8 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		vm_obj->registered_node_id_array = (uint32_t *)
 			(uint32_t *)malloc(vm_obj->registered_device_id_array_size);
 		/* vm_obj->registered_node_id_array allocated here will be
-		 * freed whenever the registration is deregistered or the
-		 * memory being freed
+		 * freed whenever the registration is changed (deregistration or
+		 * register to new nodes) or the memory being freed
 		 */
 		for (i = 0; i < info->NRegisteredNodes; i++)
 			gpuid_to_nodeid(vm_obj->registered_device_id_array[i],
@@ -3066,7 +3094,8 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		vm_obj->mapped_node_id_array =
 			(uint32_t *)malloc(vm_obj->mapped_device_id_array_size);
 		/* vm_obj->mapped_node_id_array allocated here will be
-		 * freed whenever the mapping is unmapped or memory being freed
+		 * freed whenever the mapping is changed (unmapped or map
+		 * to new nodes) or memory being freed
 		 */
 		for (i = 0; i < info->NMappedNodes; i++)
 			gpuid_to_nodeid(vm_obj->mapped_device_id_array[i],
@@ -3085,6 +3114,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 	}
 
 exit:
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return ret;
 }
 
