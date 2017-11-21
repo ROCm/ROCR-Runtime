@@ -584,6 +584,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	uint64_t *counter_id_ptr;
 	int *fd_ptr;
 
+	pr_debug("[%s] Number of counters %d\n", __func__, NumberOfCounters);
+
 	if (!counter_props)
 		return HSAKMT_STATUS_NO_MEMORY;
 
@@ -711,6 +713,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcUnregisterTrace(HSAuint32 NodeId,
 	uint32_t gpu_id;
 	struct perf_trace *trace;
 
+	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
+
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
@@ -745,6 +749,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcAcquireTraceAccess(HSAuint32 NodeId,
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	uint32_t gpu_id, i;
 	int j;
+
+	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
 
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -789,6 +795,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcReleaseTraceAccess(HSAuint32 NodeId,
 	struct perf_trace *trace;
 	uint32_t i;
 
+	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
+
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
@@ -818,6 +826,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcStartTrace(HSATraceId TraceId,
 	uint32_t i;
 	int32_t j;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
 
 	if (TraceId == 0 || !TraceBuffer || TraceBufferSizeBytes == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -866,6 +876,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcQueryTrace(HSATraceId TraceId)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
 	buf = (uint64_t *)trace->buf;
+	pr_debug("[%s] Trace buffer(%p): ", __func__, buf);
 	for (i = 0; i < trace->num_blocks; i++)
 		for (j = 0; j < trace->blocks[i].num_counters; j++) {
 			buf_filled += sizeof(uint64_t);
@@ -875,8 +886,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcQueryTrace(HSATraceId TraceId)
 					buf);
 			if (ret != HSAKMT_STATUS_SUCCESS)
 				return ret;
+			pr_debug("%lu_", *buf);
 			buf++;
 		}
+	pr_debug("\n");
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -889,6 +902,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcStopTrace(HSATraceId TraceId)
 			(struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
 	uint32_t i;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
 
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
