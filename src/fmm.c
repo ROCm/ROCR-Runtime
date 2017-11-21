@@ -264,6 +264,8 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->next = object->prev = NULL;
 		object->registered_device_id_array_size = 0;
 		object->mapped_device_id_array_size = 0;
+		object->registered_device_id_array = NULL;
+		object->mapped_device_id_array = NULL;
 		object->registered_node_id_array = NULL;
 		object->mapped_node_id_array = NULL;
 		object->registration_count = 0;
@@ -303,32 +305,19 @@ static void vm_remove_object(manageable_aperture_t *app, vm_object_t *object)
 	vm_object_t *prev;
 
 	/* Free allocations inside the object */
-	if (object->registered_device_id_array_size > 0) {
-		if (object->mapped_device_id_array ==
-			object->registered_device_id_array) {
-			object->mapped_device_id_array_size = 0;
-			object->mapped_device_id_array = NULL;
-			object->mapped_node_id_array = NULL;
-		}
+	if (object->registered_device_id_array)
 		free(object->registered_device_id_array);
-		object->registered_device_id_array_size = 0;
-	}
-	if (object->mapped_device_id_array &&
-		object->mapped_device_id_array_size > 0 &&
-		object->mapped_device_id_array != all_gpu_id_array &&
-		object->mapped_device_id_array != object->registered_device_id_array) {
+
+	if (object->mapped_device_id_array)
 		free(object->mapped_device_id_array);
-		object->mapped_device_id_array_size = 0;
-	}
+
 	if (object->metadata)
 		free(object->metadata);
 
 	if (object->registered_node_id_array)
 		free(object->registered_node_id_array);
-	object->registered_node_id_array = NULL;
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
-	object->mapped_node_id_array = NULL;
 
 	next = object->next;
 	prev = object->prev;
@@ -1719,6 +1708,67 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 	return err;
 }
 
+static bool id_in_array(uint32_t id, uint32_t *ids_array,
+		uint32_t ids_array_size)
+{
+	uint32_t i;
+
+	for (i = 0; i < ids_array_size/sizeof(uint32_t); i++) {
+		if (id == ids_array[i])
+			return true;
+	}
+	return false;
+}
+
+/* Helper function to remove ids_array from
+ * obj->mapped_device_id_array
+ */
+static void remove_device_ids_from_mapped_array(vm_object_t *obj,
+		uint32_t *ids_array, uint32_t ids_array_size)
+{
+	uint32_t i = 0, j = 0;
+
+	for (i = 0; i < obj->mapped_device_id_array_size/
+			sizeof(uint32_t); i++) {
+		if (!id_in_array(obj->mapped_device_id_array[i],
+					ids_array, ids_array_size))
+			obj->mapped_device_id_array[j++] =
+				obj->mapped_device_id_array[i];
+	}
+
+	obj->mapped_device_id_array_size = j*sizeof(uint32_t);
+	if (!j) {
+		if (obj->mapped_device_id_array)
+			free(obj->mapped_device_id_array);
+
+		obj->mapped_device_id_array = NULL;
+	}
+}
+
+/* Helper function to add ids_array to
+ * obj->mapped_device_id_array
+ */
+static void add_device_ids_to_mapped_array(vm_object_t *obj,
+		uint32_t *ids_array, uint32_t ids_array_size)
+{
+	uint32_t new_array_size;
+
+	/* Remove any potential duplicated ids */
+	remove_device_ids_from_mapped_array(obj, ids_array, ids_array_size);
+	new_array_size = obj->mapped_device_id_array_size
+		+ ids_array_size;
+
+	obj->mapped_device_id_array = (uint32_t *)realloc(
+			obj->mapped_device_id_array, new_array_size);
+
+	memcpy(&obj->mapped_device_id_array
+			[obj->mapped_device_id_array_size/sizeof(uint32_t)],
+			ids_array, ids_array_size);
+
+	obj->mapped_device_id_array_size = new_array_size;
+}
+
+
 /* If nodes_to_map is not NULL, map the nodes specified; otherwise map all. */
 static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
 			void *address, uint64_t size, vm_object_t *obj,
@@ -1726,7 +1776,6 @@ static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
 {
 	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
-	void *temp_mapped_id_array = NULL;
 
 	if (!obj)
 		pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1764,26 +1813,15 @@ static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
 		args.device_ids_array_size = all_gpu_id_array_size;
 	}
 
-	temp_mapped_id_array = (uint32_t *)malloc(args.device_ids_array_size);
-	if (!temp_mapped_id_array)
-		goto err_object_not_found;
-
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
 		goto err_map_ioctl_failed;
 
-	print_device_id_array((void *)args.device_ids_array_ptr,
-			      args.device_ids_array_size);
+	add_device_ids_to_mapped_array(object,
+				(uint32_t *)args.device_ids_array_ptr,
+				args.device_ids_array_size);
+	print_device_id_array((uint32_t *)object->mapped_device_id_array,
+			      object->mapped_device_id_array_size);
 
-	if (object->mapped_device_id_array &&
-			object->mapped_device_id_array_size > 0 &&
-			object->mapped_device_id_array != all_gpu_id_array &&
-			object->mapped_device_id_array != object->registered_device_id_array)
-		free(object->mapped_device_id_array);
-
-	memcpy(temp_mapped_id_array, (void *)args.device_ids_array_ptr,
-	       args.device_ids_array_size);
-	object->mapped_device_id_array = temp_mapped_id_array;
-	object->mapped_device_id_array_size = args.device_ids_array_size;
 	object->mapping_count = 1;
 	/* Mapping changed and lifecycle of object->mapped_node_id_array
 	 * terminates here. Free it and allocate on next query
@@ -1800,7 +1838,6 @@ exit_ok:
 	return 0;
 
 err_map_ioctl_failed:
-	free(temp_mapped_id_array);
 err_object_not_found:
 	if (!obj)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1871,7 +1908,6 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
 {
 	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
-	void *temp_mapped_id_array = NULL;
 
 	/* Check that address space was previously reserved */
 	if (!vm_find(aperture, address))
@@ -1895,24 +1931,13 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
 		args.device_ids_array_size = all_gpu_id_array_size;
 	}
 
-	temp_mapped_id_array = (uint32_t *)malloc(args.device_ids_array_size);
-	if (!temp_mapped_id_array)
-		goto err_object_not_found;
-
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
 		goto err_map_ioctl_failed;
 
-	if (object->mapped_device_id_array &&
-			object->mapped_device_id_array_size > 0 &&
-			object->mapped_device_id_array != all_gpu_id_array &&
-			object->mapped_device_id_array != object->registered_device_id_array)
-		free(object->mapped_device_id_array);
 
-	memcpy(temp_mapped_id_array, (void *)args.device_ids_array_ptr,
-	       args.device_ids_array_size);
-	object->mapped_device_id_array = temp_mapped_id_array;
-	object->mapped_device_id_array_size = args.device_ids_array_size;
-
+	add_device_ids_to_mapped_array(object,
+				(uint32_t *)args.device_ids_array_ptr,
+				args.device_ids_array_size);
 	/* Mapping changed and lifecycle of object->mapped_node_id_array
 	 * terminates here. Free it and allocate on next query
 	 */
@@ -2096,15 +2121,10 @@ static int _fmm_unmap_from_gpu(manageable_aperture_t *aperture, void *address,
 	if (ret != 0)
 		goto out;
 
-	/* Clearing all mapped nodes list */
-	if (object->mapped_device_id_array &&
-			object->mapped_device_id_array_size > 0 &&
-			object->mapped_device_id_array != all_gpu_id_array &&
-			object->mapped_device_id_array != object->registered_device_id_array)
-		free(object->mapped_device_id_array);
+	remove_device_ids_from_mapped_array(object,
+			(uint32_t *)args.device_ids_array_ptr,
+			args.device_ids_array_size);
 
-	object->mapped_device_id_array = NULL;
-	object->mapped_device_id_array_size = 0;
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
 	object->mapped_node_id_array = NULL;
@@ -2152,15 +2172,10 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	args.device_ids_array_size = object->mapped_device_id_array_size;
 	kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 
-	/* Clearing all mapped nodes list */
-	if (object->mapped_device_id_array &&
-			object->mapped_device_id_array_size > 0 &&
-			object->mapped_device_id_array != all_gpu_id_array &&
-			object->mapped_device_id_array != object->registered_device_id_array)
-		free(object->mapped_device_id_array);
+	remove_device_ids_from_mapped_array(object,
+			(uint32_t *)args.device_ids_array_ptr,
+			args.device_ids_array_size);
 
-	object->mapped_device_id_array = NULL;
-	object->mapped_device_id_array_size = 0;
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
 	object->mapped_node_id_array = NULL;
@@ -2908,14 +2923,17 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (object->registered_device_id_array_size <= 0) {
+	if (!object->registered_device_id_array ||
+		object->registered_device_id_array_size <= 0) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 	}
 
-	free(object->registered_device_id_array);
-	object->registered_device_id_array = NULL;
-	object->registered_device_id_array_size = 0;
+	if (object->registered_device_id_array) {
+		free(object->registered_device_id_array);
+		object->registered_device_id_array = NULL;
+		object->registered_device_id_array_size = 0;
+	}
 	if (object->registered_node_id_array)
 		free(object->registered_node_id_array);
 	object->registered_node_id_array = NULL;
@@ -2937,8 +2955,8 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object = NULL;
-	uint32_t i, j, temp_node;
-	bool found, userptr = false;
+	uint32_t i;
+	bool userptr = false;
 	uint32_t *registered_node_id_array, registered_node_id_array_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_ERROR;
 	int retcode = 0;
@@ -2989,15 +3007,8 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		registered_node_id_array_size = object->registered_device_id_array_size;
 	}
 	for (i = 0 ; i < num_of_nodes; i++) {
-		temp_node = nodes_to_map[i];
-		found = false;
-		for (j = 0 ; j < registered_node_id_array_size / sizeof(uint32_t); j++) {
-			if (temp_node == registered_node_id_array[j]) {
-				found = true;
-				break;
-			}
-		}
-		if (!found) {
+		if (!id_in_array(nodes_to_map[i], registered_node_id_array,
+					registered_node_id_array_size)) {
 			pthread_mutex_unlock(&aperture->fmm_mutex);
 			return HSAKMT_STATUS_ERROR;
 		}
@@ -3009,16 +3020,10 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint32_t temp_node_id_array_size = 0;
 
 		for (i = 0 ; i < object->mapped_device_id_array_size / sizeof(uint32_t); i++) {
-			temp_node = object->mapped_device_id_array[i];
-			found = false;
-			for (j = 0 ; j < num_of_nodes; j++) {
-				if (temp_node == nodes_to_map[j]) {
-					found = true;
-					break;
-				}
-			}
-			if (!found)
-				temp_node_id_array[temp_node_id_array_size++] = temp_node;
+			if (!id_in_array(object->mapped_device_id_array[i],
+					nodes_to_map, num_of_nodes))
+				temp_node_id_array[temp_node_id_array_size++] =
+					object->mapped_device_id_array[i];
 		}
 		temp_node_id_array_size *= sizeof(uint32_t);
 
@@ -3034,8 +3039,24 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		}
 	}
 
-	retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object,
-				nodes_to_map, num_of_nodes * sizeof(uint32_t));
+	/* Remove already mapped nodes from nodes_to_map
+	 * to generate the final map list
+	 */
+	uint32_t map_node_id_array[num_of_nodes];
+	uint32_t map_node_id_array_size = 0;
+
+	for (i = 0; i < num_of_nodes; i++) {
+		if (!id_in_array(nodes_to_map[i],
+				object->mapped_device_id_array,
+				object->mapped_device_id_array_size))
+			map_node_id_array[map_node_id_array_size++] =
+				nodes_to_map[i];
+	}
+
+	if (map_node_id_array_size)
+		retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object,
+				map_node_id_array,
+				map_node_id_array_size * sizeof(uint32_t));
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
