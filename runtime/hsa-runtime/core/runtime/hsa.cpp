@@ -805,7 +805,7 @@ uint64_t hsa_queue_load_write_index_relaxed(const hsa_queue_t* queue) {
   TRY;
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   assert(IsValid(cmd_queue));
-  return cmd_queue->LoadWriteIndexAcquire();
+  return cmd_queue->LoadWriteIndexRelaxed();
   CATCHRET(uint64_t);
 }
 
@@ -1354,7 +1354,7 @@ void hsa_signal_add_relaxed(hsa_signal_t hsa_signal, hsa_signal_value_t value) {
   TRY;
   core::Signal* signal = core::Signal::Convert(hsa_signal);
   assert(IsValid(signal));
-  return signal->AddRelaxed(value);
+  signal->AddRelaxed(value);
   CATCHRET(void);
 }
 
