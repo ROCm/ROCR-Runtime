@@ -349,6 +349,10 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   void AllocRegisteredRingBuffer(uint32_t queue_size_pkts);
   void FreeRegisteredRingBuffer();
 
+  /// @brief Abstracts the file handle use for double mapping queues.
+  void CloseRingBufferFD(const char* ring_buf_shm_path, int fd) const;
+  int CreateRingBufferFD(const char* ring_buf_shm_path, uint32_t ring_buf_phys_size_bytes) const;
+
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
 
   /// @brief Define the Scratch Buffer Descriptor and related parameters

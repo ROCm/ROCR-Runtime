@@ -58,12 +58,19 @@ include ( hsa_common )
 ## Find LibElf
 find_package(LibElf REQUIRED)
 
+## Check for memfd_create syscall
+include(CheckSymbolExists)
+CHECK_SYMBOL_EXISTS ( "__NR_memfd_create" "sys/syscall.h" HAVE_MEMFD_CREATE )
+
 ## Compiler preproc definitions.
 add_definitions ( -D__linux__  )
 add_definitions ( -DHSA_EXPORT=1 )
 add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
 add_definitions ( -D HSA_DEPRECATED= )
+if ( HAVE_MEMFD_CREATE )
+    add_definitions ( -DHAVE_MEMFD_CREATE )
+endif()
 
 ## Get the package version. The defaults to 1.0.0.
 get_version ( "1.0.0" )
