@@ -238,8 +238,8 @@ void ExtensionEntryPoints::UpdateAmdExtTable(void *func_ptr) {
 }
 
 void ExtensionEntryPoints::Unload() {
-  for (int i = 0; i < libs_.size(); i++) {
-    void* ptr = os::GetExportAddress(libs_[i], "Unload");
+  for (auto lib : libs_) {
+    void* ptr = os::GetExportAddress(lib, "Unload");
     if (ptr) {
       ((Unload_t)ptr)();
     }
@@ -247,8 +247,8 @@ void ExtensionEntryPoints::Unload() {
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
   if (!core::Runtime::runtime_singleton_->flag().running_valgrind()) {
-    for (int i = 0; i < libs_.size(); i++) {
-      os::CloseLib(libs_[i]);
+    for (auto lib : libs_) {
+      os::CloseLib(lib);
     }
   }
   libs_.clear();
