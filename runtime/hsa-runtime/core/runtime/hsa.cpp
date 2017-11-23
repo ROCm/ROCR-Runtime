@@ -53,7 +53,6 @@
 #define __lseek__ _lseek
 #else
 #include <unistd.h>
-#include <dlfcn.h>
 #define __read__  read
 #define __lseek__ lseek
 #endif // _WIN32 || _WIN64
@@ -473,10 +472,9 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 
     os::LibHandle lib = os::LoadLib(kAqlProfileLib);
     if (lib == NULL) {
-      fprintf(stderr, "Loading '%s' error: %s\n", kAqlProfileLib, dlerror());
+      debug_print("Loading '%s' failed\n", kAqlProfileLib);
       return HSA_STATUS_ERROR;
     }
-    dlerror();  // Clear any existing error
 
     hsa_ven_amd_aqlprofile_1_00_pfn_t ext_table;
     ext_table.hsa_ven_amd_aqlprofile_error_string =
