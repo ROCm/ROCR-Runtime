@@ -476,7 +476,7 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
     core::Agent* blit_agent = core::Agent::Convert(info.agentOwner);
     if (blit_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice) {
       blit_agent = nullptr;
-      for (int i = 0; i < agent_count; i++) {
+      for (uint32_t i = 0; i < agent_count; i++) {
         if (core::Agent::Convert(accessible[i])->device_type() ==
             core::Agent::DeviceType::kAmdGpuDevice) {
           blit_agent = core::Agent::Convert(accessible[i]);
@@ -643,7 +643,7 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID,
                        &nodes[i]);
 
@@ -761,7 +761,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   if (returnListData) {
     uint32_t count = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (HSAuint32 i = 0; i < thunkInfo.NMappedNodes; i++) {
       assert(mappedNodes[i] < agents_by_node_.size() &&
              "PointerInfo: Invalid node ID returned from thunk.");
       count += agents_by_node_[mappedNodes[i]].size();
@@ -773,10 +773,10 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     *num_agents_accessible = count;
 
     uint32_t index = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (HSAuint32 i = 0; i < thunkInfo.NMappedNodes; i++) {
       auto& list = agents_by_node_[mappedNodes[i]];
-      for (int j = 0; j < list.size(); j++) {
-        (*accessible)[index] = list[j]->public_handle();
+      for (auto agent : list) {
+        (*accessible)[index] = agent->public_handle();
         index++;
       }
     }
@@ -883,7 +883,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
   if (hsaKmtRegisterSharedHandleToNodes(
@@ -1271,8 +1271,8 @@ void Runtime::LoadTools() {
   if (tool_names != "") {
     std::vector<std::string> names = parse_tool_names(tool_names);
     std::vector<const char*> failed;
-    for (int i = 0; i < names.size(); i++) {
-      os::LibHandle tool = os::LoadLib(names[i]);
+    for (auto& name : names) {
+      os::LibHandle tool = os::LoadLib(name);
 
       if (tool != NULL) {
         tool_libs_.push_back(tool);
@@ -1283,7 +1283,7 @@ void Runtime::LoadTools() {
           if (!ld(&hsa_api_table_.hsa_api,
                   hsa_api_table_.hsa_api.version.major_id,
                   failed.size(), &failed[0])) {
-            failed.push_back(names[i].c_str());
+            failed.push_back(name.c_str());
             os::CloseLib(tool);
             continue;
           }
@@ -1313,7 +1313,7 @@ void Runtime::LoadTools() {
       }
       else {
         if (flag().report_tool_load_failures())
-          debug_print("Tool lib \"%s\" failed to load.\n", names[i].c_str());
+          debug_print("Tool lib \"%s\" failed to load.\n", name.c_str());
       }
     }
   }
@@ -1335,7 +1335,7 @@ void Runtime::CloseTools() {
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
   if (!flag_.running_valgrind()) {
-    for (int i = 0; i < tool_libs_.size(); i++) os::CloseLib(tool_libs_[i]);
+    for (auto& lib : tool_libs_) os::CloseLib(lib);
   }
   tool_libs_.clear();
 }
