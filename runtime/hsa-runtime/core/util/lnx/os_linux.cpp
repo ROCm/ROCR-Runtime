@@ -67,6 +67,7 @@ static_assert(sizeof(Thread) == sizeof(pthread_t),
 
 LibHandle LoadLib(std::string filename) {
   void* ret = dlopen(filename.c_str(), RTLD_LAZY);
+  if (ret == nullptr) debug_print("LoadLib(%s) failed: %s\n", filename.c_str(), dlerror());
   return *(LibHandle*)&ret;
 }
 

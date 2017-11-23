@@ -98,7 +98,9 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #define PASTE(x, y) PASTE2(x, y)
 
 #ifdef NDEBUG
-#define debug_warning(exp)
+#define debug_warning(exp)                                                                         \
+  do {                                                                                             \
+  } while (false)
 #else
 #define debug_warning(exp)                                                                         \
   do {                                                                                             \
