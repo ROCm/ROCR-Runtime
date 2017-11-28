@@ -279,14 +279,14 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 		pr_err("Memory is registered to node id: ");
 		for (i = 0; i < info.NRegisteredNodes; i++)
 			pr_err("%d ", info.RegisteredNodes[i]);
+		pr_err("\n");
 	}
-	pr_err("\n");
 	if (info.MappedNodes) {
 		pr_err("Memory is mapped to node id: ");
 		for (i = 0; i < info.NMappedNodes; i++)
 			pr_err("%d ", info.MappedNodes[i]);
+		pr_err("\n");
 	}
-	pr_err("\n");
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
