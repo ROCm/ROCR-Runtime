@@ -53,7 +53,7 @@ namespace amd {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
-class AqlQueue : public core::Queue, private core::LocalSignal, public core::Signal {
+class AqlQueue : public core::Queue, private core::LocalSignal, public core::DoorbellSignal {
  public:
   static __forceinline bool IsType(core::Signal* signal) {
     return signal->IsType(&rtti_id_);
@@ -183,163 +183,14 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
 
-  /// @brief This operation is illegal
-  hsa_signal_value_t LoadRelaxed() override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t LoadAcquire() override {
-    assert(false);
-    return 0;
-  }
-
   /// @brief Update signal value using Relaxed semantics
   void StoreRelaxed(hsa_signal_value_t value) override;
 
   /// @brief Update signal value using Release semantics
   void StoreRelease(hsa_signal_value_t value) override;
 
-  /// @brief This operation is illegal
-  hsa_signal_value_t WaitRelaxed(hsa_signal_condition_t condition, hsa_signal_value_t compare_value,
-                                 uint64_t timeout, hsa_wait_state_t wait_hint) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t WaitAcquire(hsa_signal_condition_t condition, hsa_signal_value_t compare_value,
-                                 uint64_t timeout, hsa_wait_state_t wait_hint) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  void AndRelaxed(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AndAcquire(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AndRelease(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AndAcqRel(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void OrRelaxed(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void OrAcquire(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void OrRelease(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void OrAcqRel(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void XorRelaxed(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void XorAcquire(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void XorRelease(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void XorAcqRel(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AddRelaxed(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AddAcquire(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AddRelease(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void AddAcqRel(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void SubRelaxed(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void SubAcquire(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void SubRelease(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  void SubAcqRel(hsa_signal_value_t value) override { assert(false); }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t ExchRelaxed(hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t ExchAcquire(hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t ExchRelease(hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t ExchAcqRel(hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t CasRelaxed(hsa_signal_value_t expected, hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t CasAcquire(hsa_signal_value_t expected, hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t CasRelease(hsa_signal_value_t expected, hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t CasAcqRel(hsa_signal_value_t expected, hsa_signal_value_t value) override {
-    assert(false);
-    return 0;
-  }
-
-  /// @brief This operation is illegal
-  hsa_signal_value_t* ValueLocation() const override {
-    assert(false);
-    return NULL;
-  }
-
-  /// @brief This operation is illegal
-  HsaEvent* EopEvent() override {
-    assert(false);
-    return NULL;
-  }
-
  protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
-
-  /// @brief Disallow destroying doorbell apart from its queue.
-  void doDestroySignal() override { assert(false); }
 
  private:
   uint32_t ComputeRingBufferMinPkts();
