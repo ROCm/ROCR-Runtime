@@ -81,7 +81,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(),
       LocalSignal(0),
-      Signal(signal()),
+      DoorbellSignal(signal()),
       ring_buf_(nullptr),
       ring_buf_alloc_bytes_(0),
       queue_id_(HSA_QUEUEID(-1)),

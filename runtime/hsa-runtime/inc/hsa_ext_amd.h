@@ -299,9 +299,8 @@ hsa_status_t HSA_API
  * @brief Retrieve packet processing time stamps.
  *
  * @param[in] agent The agent with which the signal was last used.  For
- *instance,
- * if the profiled dispatch packet is dispatched on to queue Q, which was
- * created on agent A, then this parameter must be A.
+ * instance, if the profiled dispatch packet is dispatched onto queue Q,
+ * which was created on agent A, then this parameter must be A.
  *
  * @param[in] signal A signal used as the completion signal of the dispatch
  * packet to retrieve time stamps from.  This dispatch packet must have been
