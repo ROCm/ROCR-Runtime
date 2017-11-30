@@ -1774,7 +1774,7 @@ static void add_device_ids_to_mapped_array(vm_object_t *obj,
 
 
 /* If nodes_to_map is not NULL, map the nodes specified; otherwise map all. */
-static int _fmm_map_to_gpu_gtt(manageable_aperture_t *aperture,
+static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 			void *address, uint64_t size, vm_object_t *obj,
 			uint32_t *nodes_to_map, uint32_t nodes_array_size)
 {
@@ -1899,20 +1899,22 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 
 
 	/* map to GPU */
-	ret = _fmm_map_to_gpu_gtt(aperture, address, size, NULL, NULL, 0);
+	ret = _fmm_map_to_gpu(aperture, address, size, NULL, NULL, 0);
 	if (ret != 0)
 		__fmm_release(mem, aperture);
 
 	return ret;
 }
 
-static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
+static int _fmm_map_to_apu_local(uint32_t gpu_id,
+				manageable_aperture_t *aperture,
 				void *address, uint64_t size,
 				uint64_t *gpuvm_address)
 {
-	struct kfd_ioctl_map_memory_to_gpu_args args;
 	vm_object_t *object;
 
+	if (gpuvm_address)
+		*gpuvm_address = 0;
 	/* Check that address space was previously reserved */
 	if (!vm_find(aperture, address))
 		return -1;
@@ -1921,36 +1923,14 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
 
 	/* Find the object to retrieve the handle */
 	object = vm_find_object_by_address(aperture, address, 0);
-	if (!object)
-		goto err_object_not_found;
-
-	args.handle = object->handle;
-	if (object->registered_device_id_array_size > 0 &&
-			object->registered_device_id_array) {
-		args.device_ids_array_ptr =
-			(uint64_t)object->registered_device_id_array;
-		args.device_ids_array_size = object->registered_device_id_array_size;
-	} else {
-		args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
-		args.device_ids_array_size = all_gpu_id_array_size;
+	if (!object) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return -1;
 	}
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args))
-		goto err_map_ioctl_failed;
-
-
-	add_device_ids_to_mapped_array(object,
-				(uint32_t *)args.device_ids_array_ptr,
-				args.device_ids_array_size);
-	/* Mapping changed and lifecycle of object->mapped_node_id_array
-	 * terminates here. Free it and allocate on next query
-	 */
-	if (object->mapped_node_id_array) {
-		free(object->mapped_node_id_array);
-		object->mapped_node_id_array = NULL;
-	}
-
 	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (_fmm_map_to_gpu(aperture, address, size, object, NULL, 0))
+		return -1;
 
 	if (gpuvm_address) {
 		*gpuvm_address = (uint64_t)object->start;
@@ -1959,12 +1939,6 @@ static int _fmm_map_to_gpu(uint32_t gpu_id, manageable_aperture_t *aperture,
 	}
 
 	return 0;
-
-err_map_ioctl_failed:
-err_object_not_found:
-	pthread_mutex_unlock(&aperture->fmm_mutex);
-	*gpuvm_address = 0;
-	return -1;
 }
 
 static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
@@ -1997,7 +1971,7 @@ static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	ret = _fmm_map_to_gpu_gtt(aperture, svm_addr, svm_size, obj, NULL, 0);
+	ret = _fmm_map_to_gpu(aperture, svm_addr, svm_size, obj, NULL, 0);
 	if (ret == 0 && gpuvm_addr)
 		*gpuvm_addr = (uint64_t)svm_addr + page_offset;
 
@@ -2026,7 +2000,7 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
 			(address <= gpu_mem[i].gpuvm_aperture.limit))
 			/* map it */
-			return _fmm_map_to_gpu(gpu_mem[i].gpu_id,
+			return _fmm_map_to_apu_local(gpu_mem[i].gpu_id,
 						&gpu_mem[i].gpuvm_aperture,
 						address, size, gpuvm_address);
 	}
@@ -2034,12 +2008,12 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 	if ((address >= svm.dgpu_aperture.base) &&
 		(address <= svm.dgpu_aperture.limit))
 		/* map it */
-		return _fmm_map_to_gpu_gtt(&svm.dgpu_aperture,
+		return _fmm_map_to_gpu(&svm.dgpu_aperture,
 						address, size, NULL, NULL, 0);
 	else if ((address >= svm.dgpu_alt_aperture.base) &&
 		(address <= svm.dgpu_alt_aperture.limit))
 		/* map it */
-		return _fmm_map_to_gpu_gtt(&svm.dgpu_alt_aperture,
+		return _fmm_map_to_gpu(&svm.dgpu_alt_aperture,
 						address, size, NULL, NULL, 0);
 
 	/*
@@ -3059,7 +3033,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	}
 
 	if (map_node_id_array_size)
-		retcode = _fmm_map_to_gpu_gtt(aperture, address, size, object,
+		retcode = _fmm_map_to_gpu(aperture, address, size, object,
 				map_node_id_array,
 				map_node_id_array_size * sizeof(uint32_t));
 
