@@ -733,7 +733,7 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 /* After allocating the memory, return the vm_object created for this memory.
  * Return NULL if any failure.
  */
-static vm_object_t *fmm_allocate_memory_in_device(uint32_t gpu_id, void *mem,
+static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 						uint64_t MemorySizeInBytes,
 						manageable_aperture_t *aperture,
 						uint64_t *mmap_offset,
@@ -984,7 +984,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 	 * Now that we have the area reserved, allocate memory in the device
 	 * itself
 	 */
-	obj = fmm_allocate_memory_in_device(gpu_id, mem,
+	obj = fmm_allocate_memory_object(gpu_id, mem,
 			MemorySizeInBytes, aperture, mmap_offset, flags);
 	if (!obj) {
 		/*
@@ -1245,7 +1245,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		/* Create userptr BO */
 		mmap_offset = (uint64_t)mem;
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_USERPTR;
-		vm_obj = fmm_allocate_memory_in_device(gpu_id, mem, size,
+		vm_obj = fmm_allocate_memory_object(gpu_id, mem, size,
 						       aperture, &mmap_offset,
 						       ioc_flags);
 		if (!vm_obj) {
@@ -1833,7 +1833,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	ret = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
 	/* allocate object within the scratch backing aperture */
 	if (!ret && !is_debugger) {
-		vm_object_t *obj = fmm_allocate_memory_in_device(
+		vm_object_t *obj = fmm_allocate_memory_object(
 			gpu_id, address, size, aperture,
 			NULL, KFD_IOC_ALLOC_MEM_FLAGS_VRAM);
 		if (!obj)
@@ -1841,7 +1841,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	} else {
 		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
 					get_drm_render_fd_by_gpu_id(gpu_id);
-		fmm_allocate_memory_in_device(gpu_id,
+		fmm_allocate_memory_object(gpu_id,
 					address,
 					size,
 					aperture,
