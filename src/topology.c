@@ -171,6 +171,11 @@ static struct hsa_gfxip_table {
 	{ 0x6868, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	/* Vega12 */
+	{ 0x69A0, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
+	{ 0x69A1, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
+	{ 0x69A3, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
+	{ 0x69Af, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
 	/* Raven */
 	{ 0x15DD, 9, 0, 2, 0, "Raven", CHIP_RAVEN },
 	/* Vega20 on emulator, treat it as vega10 */
