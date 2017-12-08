@@ -150,7 +150,7 @@ typedef struct {
  */
 static gpu_mem_t *gpu_mem;
 static unsigned int gpu_mem_count;
-
+static bool hsa_debug;
 static void *dgpu_shared_aperture_base;
 static void *dgpu_shared_aperture_limit;
 
@@ -1044,13 +1044,16 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
 
-	if (mem && flags.ui32.HostAccess) {
+	if (mem && (flags.ui32.HostAccess || hsa_debug)) {
 		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
 					get_drm_render_fd_by_gpu_id(gpu_id);
-		void *ret = mmap(mem, MemorySizeInBytes,
-				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED,
-				 map_fd, mmap_offset);
+		int prot = flags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
+					PROT_NONE;
+		int flag = flags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
+					MAP_PRIVATE|MAP_FIXED;
+		void *ret = mmap(mem, MemorySizeInBytes, prot, flag,
+					map_fd, mmap_offset);
+
 		if (ret == MAP_FAILED) {
 			__fmm_release(mem, aperture);
 			return NULL;
@@ -1455,8 +1458,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr;
+	char *hsaDebug;
 	unsigned int guardPages = 1;
 	struct pci_access *pacc;
+
+	hsaDebug = getenv("HSA_DEBUG");
+	hsa_debug = hsaDebug && strcmp(hsaDebug, "0");
 
 	/* If HSA_DISABLE_CACHE is set to a non-0 value, disable caching */
 	disableCache = getenv("HSA_DISABLE_CACHE");
