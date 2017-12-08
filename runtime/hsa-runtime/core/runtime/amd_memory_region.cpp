@@ -287,16 +287,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
       }
       break;
     case HSA_REGION_INFO_SIZE:
-      switch (mem_props_.HeapType) {
-        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
-        case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((size_t*)value) = static_cast<size_t>(GetPhysicalSize());
-          break;
-        default:
-          *((size_t*)value) = static_cast<size_t>(
-              (full_profile()) ? GetVirtualSize() : GetPhysicalSize());
-          break;
-      }
+      *((size_t*)value) = static_cast<size_t>(GetPhysicalSize());
       break;
     case HSA_REGION_INFO_ALLOC_MAX_SIZE:
       switch (mem_props_.HeapType) {
