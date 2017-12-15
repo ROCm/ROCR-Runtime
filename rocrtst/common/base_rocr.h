@@ -98,6 +98,13 @@ class BaseRocR {
     return kernel_name_;
   }
 
+  void set_agent_name(std::string in_agent_name) {
+    agent_name_ = in_agent_name;
+  }
+  std::string const get_agent_name(void) const {
+    return agent_name_;
+  }
+
   void set_kernel_object(uint64_t in_kernel_object) {
     kernel_object_ = in_kernel_object;
   }
@@ -250,6 +257,8 @@ class BaseRocR {
   std::string kernel_file_name_;   ///< Code object file name
 
   std::string kernel_name_;   ///< Kernel name
+
+  std::string agent_name_;   ///< Agent name
 
   hsa_kernel_dispatch_packet_t aql_;   ///< Kernel dispatch packet
 
