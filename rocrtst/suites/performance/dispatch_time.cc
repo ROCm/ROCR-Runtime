@@ -136,7 +136,7 @@ void DispatchTime::SetUp() {
     num_batch_ = num_batch_ > size ? size : num_batch_;
   }
 
-  err = rocrtst::LoadKernelFromObjFile(this, gpu_dev);
+  err = rocrtst::LoadKernelFromObjFile(this);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   // Fill up the kernel packet except header

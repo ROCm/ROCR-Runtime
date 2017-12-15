@@ -55,12 +55,11 @@
 namespace rocrtst {
 
 /// Open binary kernel object file and set all member data related to the
-/// kernel. Assumes that input test already has the kernel file name,
-/// agent name and kernel function specifed
+/// kernel. Assumes that input test already has the kernel file name and
+/// kernel function specifed
 /// \param[in] test Test for which the kernel will be loaded.
-/// \param[in] agent for which the kernel will be loaded .
 /// \returns HSA_STATUS_SUCCESS if no errors
-hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent);
+hsa_status_t LoadKernelFromObjFile(BaseRocR* test);
 
 /// Do initialization tasks for HSA test program.
 /// \param[in] test Test to initialize
