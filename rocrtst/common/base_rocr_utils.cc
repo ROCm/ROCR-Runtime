@@ -261,27 +261,15 @@ bool CheckProfile(BaseRocR const* test) {
 //  -group_segment_size()
 //  -kernarg_size()
 //  -kernarg_align()
-hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
+hsa_status_t LoadKernelFromObjFile(BaseRocR* test) {
   hsa_status_t err;
   hsa_code_object_reader_t code_obj_rdr = {0};
   hsa_executable_t executable = {0};
 
   assert(test != nullptr);
-  if (agent == nullptr) {
-    agent = test->gpu_device1();  // Assume GPU agent for now
-  }
-
-  // if agent name is not set, then set the agent name
-  if (!test->get_agent_name().size()) {
-    char agent_name[64];
-    err = hsa_agent_get_info(*agent, HSA_AGENT_INFO_NAME, agent_name);
-    RET_IF_HSA_UTILS_ERR(err);
-    test->set_agent_name(agent_name);
-  }
-  std::string obj_file = "./"+ test->get_agent_name()
-                          +"/" + test->kernel_file_name();
+  hsa_agent_t* agent = test->gpu_device1();  // Assume GPU agent for now
+  std::string obj_file = "./" + test->kernel_file_name();
   std::string kern_name = test->kernel_name();
-
 
   hsa_file_t file_handle = open(obj_file.c_str(), O_RDONLY);
 

@@ -123,49 +123,6 @@ hsa_status_t FindCPUDevice(hsa_agent_t agent, void* data);
 // TODO(cfreehil): get rid of FindGlobalPool and replace with FindStandardPool
 hsa_status_t FindGlobalPool(hsa_amd_memory_pool_t pool, void* data);
 
-/// If the provided agent is associated with a CPU, return that agent through
-/// output parameter. This function is meant to be the call-back function used
-/// with hsa_iterate_agents to find all the CPU agents.
-/// \param[in] agent Agent to evaluate if CPU
-/// \param[out] data If agent is associated with a CPU, this pointer will point
-///  to the agent upon return
-/// \returns HSA_STATUS_SUCCESS if no errors are encountered.
-hsa_status_t IterateCPUAgents(hsa_agent_t agent, void *data);
-
-/// If the provided agent is associated with a GPU, return that agent through
-/// output parameter. This function is meant to be the call-back function used
-/// with hsa_iterate_agents to find  all the GPU agents.
-/// \param[in] agent Agent to evaluate if GPU
-/// \param[out] data If agent is associated with a GPU, this pointer will point
-///  to the agent upon return
-/// \returns HSA_STATUS_SUCCESS if no errors are encountered.
-hsa_status_t IterateGPUAgents(hsa_agent_t agent, void *data);
-
-/// Find a GLOBAL memory pool. By this, we mean not a kernel args pool.
-/// This function is meant to be the call-back function used
-/// with hsa_amd_agent_iterate_memory_pools.
-/// \param[in] pool Pool to evaluate for required properties
-/// \param[in] data If pool meets criteria, this pointer will point
-///  to the pool upon return
-/// \returns hsa_status_t
-///      -HSA_STATUS_INFO_BREAK - we found a pool that meets criteria
-///      -HSA_STATUS_SUCCESS - we did not find a pool that meets the criteria
-///      -else return an appropriate error code for any error encountered
-hsa_status_t GetGlobalMemoryPool(hsa_amd_memory_pool_t pool, void* data);
-
-/// Find a "kernel arg" pool.
-/// This function is meant to be the call-back function used
-/// with hsa_amd_agent_iterate_memory_pools.
-/// \param[in] pool Pool to evaluate for required properties
-/// \param[in] data If pool meets criteria, this pointer will point
-///  to the pool upon return
-/// \returns hsa_status_t
-///      -HSA_STATUS_INFO_BREAK - we found a pool that meets criteria
-///      -HSA_STATUS_SUCCESS - we did not find a pool that meets the criteria
-///      -else return an appropriate error code for any error encountered
-hsa_status_t GetKernArgMemoryPool(hsa_amd_memory_pool_t pool, void* data);
-
-
 /// Find a "standard" pool. By this, we mean not a kernel args pool.
 /// The pool found will have the following properties:
 ///     HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL: Don't care

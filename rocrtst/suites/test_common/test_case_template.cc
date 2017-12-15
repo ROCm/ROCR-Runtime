@@ -197,7 +197,7 @@ void TestExample::SetUp(void) {
   ASSERT_NE(q, nullptr);
   set_main_queue(q);
 
-  err = rocrtst::LoadKernelFromObjFile(this, gpu_dev);
+  err = rocrtst::LoadKernelFromObjFile(this);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   // Fill up the kernel packet (except header) with some values we've
