@@ -131,6 +131,7 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
     link_info.max_latency = io_link.MaximumLatency;
     link_info.min_bandwidth = io_link.MinimumBandwidth;
     link_info.min_latency = io_link.MinimumLatency;
+    link_info.numa_distance = io_link.Weight;
 
     core::Runtime::runtime_singleton_->RegisterLinkInfo(
         io_link.NodeFrom, io_link.NodeTo, io_link.Weight, link_info);

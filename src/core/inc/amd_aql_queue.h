@@ -59,15 +59,14 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
     return signal->IsType(&rtti_id_);
   }
 
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+
   // Acquires/releases queue resources and requests HW schedule/deschedule.
   AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
            ScratchInfo& scratch, core::HsaEventCallback callback,
            void* err_data, bool is_kv = false);
 
   ~AqlQueue();
-
-  /// @brief Indicates if queue is valid or not
-  bool IsValid() const { return valid_; }
 
   /// @brief Queue interfaces
   hsa_status_t Inactivate() override;
@@ -337,7 +336,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   }
 
  protected:
-  bool _IsA(rtti_t id) const override { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
   /// @brief Disallow destroying doorbell apart from its queue.
   void doDestroySignal() override { assert(false); }
@@ -349,6 +348,10 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // (De)allocates and (de)registers ring_buf_.
   void AllocRegisteredRingBuffer(uint32_t queue_size_pkts);
   void FreeRegisteredRingBuffer();
+
+  /// @brief Abstracts the file handle use for double mapping queues.
+  void CloseRingBufferFD(const char* ring_buf_shm_path, int fd) const;
+  int CreateRingBufferFD(const char* ring_buf_shm_path, uint32_t ring_buf_phys_size_bytes) const;
 
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
 
@@ -366,11 +369,8 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Id of the Queue used in communication with thunk
   HSA_QUEUEID queue_id_;
 
-  // Indicates is queue is valid
-  bool valid_;
-
-  // Indicates if queue is inactive
-  int32_t active_;
+  // Indicates if queue is active
+  std::atomic<bool> active_;
 
   // Cached value of HsaNodeProperties.HSA_CAPABILITY.DoorbellType
   int doorbell_type_;
@@ -383,7 +383,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Handle of scratch memory descriptor
   ScratchInfo queue_scratch_;
 
-  core::HsaEventCallback errors_callback_;
+  AMD::callback_t<core::HsaEventCallback> errors_callback_;
 
   void* errors_data_;
 
@@ -399,7 +399,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   static HsaEvent* queue_event_;
 
   // Queue count - used to ref count queue_event_
-  static volatile uint32_t queue_count_;
+  static std::atomic<uint32_t> queue_count_;
 
   // Mutex for queue_event_ manipulation
   static KernelMutex queue_lock_;
@@ -409,5 +409,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Sig
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(AqlQueue);
 };
+
 }  // namespace amd
+
 #endif  // header guard

@@ -208,6 +208,15 @@ public:
       void *data),
     void *data) = 0;
 
+  virtual hsa_agent_t getAgent() const = 0;
+  virtual hsa_executable_t getExecutable() const = 0;
+  virtual uint64_t getElfData() const = 0;
+  virtual uint64_t getElfSize() const = 0;
+  virtual uint64_t getStorageOffset() const = 0;
+  virtual uint64_t getLoadBase() const = 0;
+  virtual uint64_t getLoadSize() const = 0;
+  virtual int64_t getDelta() const = 0;
+
 protected:
   LoadedCodeObject() {}
 
@@ -329,6 +338,7 @@ public:
 
   virtual hsa_status_t IterateLoadedCodeObjects(
     hsa_status_t (*callback)(
+      hsa_executable_t executable,
       hsa_loaded_code_object_t loaded_code_object,
       void *data),
     void *data) = 0;

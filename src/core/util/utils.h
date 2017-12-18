@@ -78,11 +78,14 @@ static __forceinline void _aligned_free(void* ptr) { return free(ptr); }
 #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #include "intrin.h"
 #define __ALIGNED__(x) __declspec(align(x))
-#if (_MSC_VER < 1800)
+#if (_MSC_VER < 1800)  // < VS 2013
 static __forceinline unsigned long long int strtoull(const char* str,
                                                      char** endptr, int base) {
   return static_cast<unsigned long long>(_strtoui64(str, endptr, base));
 }
+#endif
+#if (_MSC_VER < 1900)  // < VS 2015
+#define thread_local __declspec(thread)
 #endif
 #else
 #error "Compiler and/or processor not identified."
@@ -95,23 +98,35 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #define PASTE(x, y) PASTE2(x, y)
 
 #ifdef NDEBUG
-#define debug_warning(exp)
+#define debug_warning(exp)                                                                         \
+  do {                                                                                             \
+  } while (false)
 #else
 #define debug_warning(exp)                                                                         \
   do {                                                                                             \
     if (!(exp))                                                                                    \
       fprintf(stderr, "Warning: " STRING(exp) " in %s, " __FILE__ ":" STRING(__LINE__) "\n",       \
               __PRETTY_FUNCTION__);                                                                \
-  } while (false);
+  } while (false)
+#endif
+
+#ifdef NDEBUG
+#define debug_print(fmt, ...)                                                                      \
+  do {                                                                                             \
+  } while (false)
+#else
+#define debug_print(fmt, ...)                                                                      \
+  do {                                                                                             \
+    fprintf(stderr, fmt, ##__VA_ARGS__);                                                           \
+  } while (false)
 #endif
 
 // A macro to disallow the copy and move constructor and operator= functions
-// This should be used in the private: declarations for a class
-#define DISALLOW_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName&);               \
-  TypeName(TypeName&&);                    \
-  void operator=(const TypeName&);         \
-  void operator=(TypeName&&);
+#define DISALLOW_COPY_AND_ASSIGN(TypeName)                                                         \
+  TypeName(const TypeName&) = delete;                                                              \
+  TypeName(TypeName&&) = delete;                                                                   \
+  void operator=(const TypeName&) = delete;                                                        \
+  void operator=(TypeName&&) = delete;
 
 template <typename lambda>
 class ScopeGuard {

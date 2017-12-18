@@ -58,12 +58,19 @@ include ( hsa_common )
 ## Find LibElf
 find_package(LibElf REQUIRED)
 
+## Check for memfd_create syscall
+include(CheckSymbolExists)
+CHECK_SYMBOL_EXISTS ( "__NR_memfd_create" "sys/syscall.h" HAVE_MEMFD_CREATE )
+
 ## Compiler preproc definitions.
 add_definitions ( -D__linux__  )
 add_definitions ( -DHSA_EXPORT=1 )
 add_definitions ( -DHSA_EXPORT_FINALIZER=1 )
 add_definitions ( -DHSA_EXPORT_IMAGES=1 )
 add_definitions ( -D HSA_DEPRECATED= )
+if ( HAVE_MEMFD_CREATE )
+    add_definitions ( -DHAVE_MEMFD_CREATE )
+endif()
 
 ## Get the package version. The defaults to 1.0.0.
 get_version ( "1.0.0" )
@@ -77,11 +84,13 @@ if ( DEFINED VERSION_BUILD )
 endif ()
 set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
-## Find the hsakmt library and include files
-find_file ( HSAKMT_INC "libhsakmt/hsakmt.h" )
-find_library ( HSAKMT_LIB libhsakmt.so )
-get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
-get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
+## Find the hsakmt library and include files, use directory hint from cache
+find_file ( HSAKMT_INC NAMES "hsakmt.h" "libhsakmt/hsakmt.h" PATHS ${HSAKMT_INC_PATH} )
+find_library ( HSAKMT_LIB "libhsakmt.so" ${HSAKMT_LIB_PATH} )
+get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY CACHE )
+get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY CACHE )
+unset( HSAKMT_INC CACHE )
+unset( HSAKMT_LIB CACHE )
 
 ## Set include and link directories for libhsakmt
 include_directories ( ${HSAKMT_INC_PATH} )
@@ -133,6 +142,7 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "core/runtime/hsa_ext_amd.cpp"
             "core/runtime/hsa_ext_interface.cpp"
             "core/runtime/interrupt_signal.cpp"
+            "core/runtime/intercept_queue.cpp"
             "core/runtime/ipc_signal.cpp"
             "core/runtime/isa.cpp"
             "core/runtime/runtime.cpp"

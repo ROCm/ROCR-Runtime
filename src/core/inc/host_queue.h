@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -51,6 +51,8 @@
 namespace core {
 class HostQueue : public Queue {
  public:
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+
   HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
             uint32_t features, hsa_signal_t doorbell_signal);
 
@@ -146,8 +148,6 @@ class HostQueue : public Queue {
     assert(false && "HostQueue::ExecutePM4 is unimplemented");
   }
 
-  bool active() const { return active_; }
-
   void* operator new(size_t size) {
     return _aligned_malloc(size, HSA_QUEUE_ALIGN_BYTES);
   }
@@ -158,11 +158,18 @@ class HostQueue : public Queue {
 
   void operator delete(void*, void*) {}
 
+ protected:
+  bool _IsA(Queue::rtti_t id) const { return id == &rtti_id_; }
+
  private:
+  static int rtti_id_;
   static const size_t kRingAlignment = 256;
   const uint32_t size_;
-  bool active_;
   void* ring_;
+
+  // Host queue id counter, starting from 0x80000000 to avoid overlaping
+  // with aql queue id.
+  static std::atomic<uint32_t> queue_count_;
 
   DISALLOW_COPY_AND_ASSIGN(HostQueue);
 };

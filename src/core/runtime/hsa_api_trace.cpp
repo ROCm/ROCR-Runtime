@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -46,6 +46,17 @@
 #include "core/inc/hsa_table_interface.h"
 
 #include <iostream>
+
+// Tools only APIs.
+namespace AMD {
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data);
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue);
+}
 
 namespace core {
 
@@ -73,13 +84,12 @@ void HsaApiTable::Init() {
   // Update Api table for Amd Extensions and its major id
   UpdateAmdExts();
   hsa_api.amd_ext_ = &amd_ext_api;
- 
-  // Initialize Api tables for Finalizer, Image, AqlProfile to NULL
+
+  // Initialize Api tables for Finalizer, Image to NULL
   // The tables are initialized as part
   // of Hsa Runtime initialization, including their major ids
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
-  hsa_api.aqlprofile_ext_ = NULL;
 }
 
 void HsaApiTable::Reset() {
@@ -87,60 +97,46 @@ void HsaApiTable::Reset() {
 }
 
 void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
-  
+
   assert(ext_table != NULL && "Invalid extension table linked.");
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
+    finalizer_api = *reinterpret_cast<FinalizerExtTable*>(ext_table);
     hsa_api.finalizer_ext_ = &finalizer_api;
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
+    image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
     hsa_api.image_ext_ = &image_api;
-    return;
-  }
-
-  // Update HSA Extension AqlProfile Api table
-  if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
-    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
-    hsa_api.aqlprofile_ext_ = &aqlprofile_api;
     return;
   }
 }
 
 void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
-  
+
   assert(ext_table != NULL && "Invalid extension table linked.");
 
   // Update HSA Extension Finalizer Api table
   if (table_id == HSA_EXT_FINALIZER_API_TABLE_ID) {
-    finalizer_api = (*(FinalizerExtTable *)ext_table);
-    hsa_api.finalizer_ext_ = (FinalizerExtTable *)ext_table; 
+    finalizer_api = *reinterpret_cast<FinalizerExtTable*>(ext_table);
+    hsa_api.finalizer_ext_ = reinterpret_cast<FinalizerExtTable*>(ext_table);
     return;
   }
 
   // Update HSA Extension Image Api table
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
-    image_api = (*(ImageExtTable *)ext_table);
-    hsa_api.image_ext_ = (ImageExtTable *)ext_table; 
-    return;
-  }
-
-  // Update HSA Extension AqlProfile Api table
-  if (table_id == HSA_EXT_AQLPROFILE_API_TABLE_ID) {
-    aqlprofile_api = (*(AqlProfileExtTable *)ext_table);
-    hsa_api.aqlprofile_ext_ = (AqlProfileExtTable *)ext_table;
+    image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
+    hsa_api.image_ext_ = reinterpret_cast<ImageExtTable*>(ext_table);
     return;
   }
 }
 
 // Update Api table for Hsa Core Runtime
 void HsaApiTable::UpdateCore() {
-  
+
   // Initialize Version of Api Table
   core_api.version.major_id = HSA_CORE_API_TABLE_MAJOR_VERSION;
   core_api.version.minor_id = sizeof(::CoreApiTable);
@@ -341,12 +337,12 @@ void HsaApiTable::UpdateCore() {
 // member variable hsa_amd_image_create_fn while loading
 // Image extension library
 void HsaApiTable::UpdateAmdExts() {
-  
+
   // Initialize Version of Api Table
   amd_ext_api.version.major_id = HSA_AMD_EXT_API_TABLE_MAJOR_VERSION;
   amd_ext_api.version.minor_id = sizeof(::AmdExtTable);
   amd_ext_api.version.step_id = HSA_AMD_EXT_API_TABLE_STEP_VERSION;
-  
+
   // Initialize function pointers for Amd Extension Api's
   amd_ext_api.hsa_amd_coherency_get_type_fn = AMD::hsa_amd_coherency_get_type;
   amd_ext_api.hsa_amd_coherency_set_type_fn = AMD::hsa_amd_coherency_set_type;
@@ -381,6 +377,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_signal_create_fn = AMD::hsa_amd_signal_create;
   amd_ext_api.hsa_amd_ipc_signal_create_fn = AMD::hsa_amd_ipc_signal_create;
   amd_ext_api.hsa_amd_ipc_signal_attach_fn = AMD::hsa_amd_ipc_signal_attach;
+  amd_ext_api.hsa_amd_register_system_event_handler_fn = AMD::hsa_amd_register_system_event_handler;
+  amd_ext_api.hsa_amd_queue_intercept_create_fn = AMD::hsa_amd_queue_intercept_create;
+  amd_ext_api.hsa_amd_queue_intercept_register_fn = AMD::hsa_amd_queue_intercept_register;
 }
 
 class Init {
