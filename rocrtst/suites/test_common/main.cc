@@ -49,10 +49,12 @@
 
 #include "gtest/gtest.h"
 #include "suites/functional/memory_basic.h"
+#include "suites/functional/memory_access.h"
 #include "suites/functional/ipc.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
+#include "suites/performance/enqueueLatency.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
@@ -136,6 +138,13 @@ TEST(rocrtstFunc, IPC) {
   RunGenericTest(&ipc);
 }
 
+TEST(rocrtstFunc, MemoryAccessTests) {
+  MemoryAccessTest mt;
+  RunCustomTestProlog(&mt);
+  mt.CPUAccessToGPUMemoryTest();
+  mt.GPUAccessToCPUMemoryTest();
+  RunCustomTestEpilog(&mt);
+}
 // Temporarily disable this test until hsa_shut_down() is (probably not the
 // same as with the IPC test above) is addressed. To override the disable,
 // run with --gtest-also_run_disabled_tests flag.
@@ -145,6 +154,13 @@ TEST(rocrtstFunc, DISABLED_Memory_Max_Mem) {
   RunCustomTestProlog(&mt);
   mt.MaxSingleAllocationTest();
   RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstPerf, ENQUEUE_LATENCY) {
+  EnqueueLatency singlePacketequeue(true);
+  EnqueueLatency multiPacketequeue(false);
+  RunGenericTest(&singlePacketequeue);
+  RunGenericTest(&multiPacketequeue);
 }
 
 TEST(rocrtstPerf, Memory_Async_Copy) {

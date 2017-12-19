@@ -304,10 +304,15 @@ build_sample_for_devices("test_case_template")
 #set(CL_FILE_LIST "${KERNELS_DIR}/p2p_mem_access_kernels.cl")
 #build_sample_for_devices("p2p_mem_access")
 
-# Dispatch Time 
+# Dispatch Time
 set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/dispatch_time_kernels.cl")
 build_sample_for_devices("dispatch_time")
+
+# gpuReadWrite
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/gpuReadWrite_kernels.cl")
+build_sample_for_devices("gpuReadWrite")
 
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources}
