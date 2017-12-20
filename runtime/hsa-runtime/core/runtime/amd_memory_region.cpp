@@ -136,9 +136,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owne
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
   }
 
-  // Temporary workaround for CRAT issue.
-  max_single_alloc_size_ = AlignDown(size_t(-1), kPageSize_);
-  // max_single_alloc_size_ = AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize_);
+  max_single_alloc_size_ = AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize_);
 
   mem_flag_.ui32.CoarseGrain = (fine_grain) ? 0 : 1;
 
