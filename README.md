@@ -17,7 +17,7 @@ A simple cmake-based system is available for building thunk. To build the thunk 
 ```bash
     mkdir -p build
     cd build
-    cmake -DCMAKE_MODULE_PATH=${PWD}/../cmake_modules ..
+    cmake ..
     make
 ```
 
@@ -26,7 +26,7 @@ If the hsakmt-roct and hsakmt-roct-dev packages are desired:
 ```bash
     mkdir -p build
     cd build
-    cmake -DCMAKE_MODULE_PATH=${PWD}/../cmake_modules ..
+    cmake ..
     make package
     make package-dev
 ```
