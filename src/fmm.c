@@ -1446,20 +1446,6 @@ static HSAKMT_STATUS get_process_apertures(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-/* Tonga dGPU specific functions */
-static bool is_dgpu_mem_init;
-
-static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit)
-{
-	struct kfd_ioctl_set_process_dgpu_aperture_args args = {0};
-
-	args.gpu_id = gpu_id;
-	args.dgpu_base = base;
-	args.dgpu_limit = limit;
-
-	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_PROCESS_DGPU_APERTURE, &args);
-}
-
 static void *reserve_address(void *addr, unsigned long long int len)
 {
 	void *ret_addr;
@@ -1475,85 +1461,77 @@ static void *reserve_address(void *addr, unsigned long long int len)
 	return ret_addr;
 }
 
-#define ADDRESS_RANGE_LIMIT_MASK 0xFFFFFFFFFF
-#define AMDGPU_SYSFS_VM_SIZE "/sys/module/amdgpu/parameters/vm_size"
-
-/*
- * TODO: Provide a cleaner interface via topology
+/* Managed SVM aperture limits: only reserve up to 40 bits (1TB, what
+ * GFX8 supports). Need to find at least 4GB of usable address space.
  */
-static HSAKMT_STATUS get_dgpu_vm_limit(uint32_t *vm_size_in_gb)
+#define SVM_RESERVATION_LIMIT ((1ULL << 40) - 1)
+#define SVM_MIN_VM_SIZE (4ULL << 30)
+#define IS_CANONICAL_ADDR(a) ((a) < (1ULL << 47))
+
+static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
+					HSAuint32 align, HSAuint32 guard_pages,
+					bool disable_cache)
 {
-	FILE *fd;
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	fd = fopen(AMDGPU_SYSFS_VM_SIZE, "r");
-	if (!fd)
-		return HSAKMT_STATUS_ERROR;
-	if (fscanf(fd, "%ul", vm_size_in_gb) != 1) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto err;
-	}
-
-err:
-	fclose(fd);
-	return ret;
-}
-
-#define DGPU_APERTURE_ADDR_MIN 0x1000000 /* Leave at least 16MB for kernel */
-#define DGPU_APERTURE_ADDR_INC 0x200000	 /* Search in huge-page increments */
-
-static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limit)
-{
-	bool found;
-	HSAKMT_STATUS ret;
+	const HSAuint64 ADDR_INC = GPU_HUGE_PAGE_SIZE;
+	HSAuint64 len, alt_base, alt_size;
+	bool found = false;
 	void *addr, *ret_addr;
-	HSAuint64 len, vm_limit, max_vm_limit, min_vm_size;
-	uint32_t max_vm_limit_in_gb;
 
-	if (is_dgpu_mem_init) {
-		if (base)
-			*base = dgpu_shared_aperture_base;
-		if (limit)
-			*limit = dgpu_shared_aperture_limit;
+	/* If we already have an SVM aperture initialized (from a
+	 * parent process), keep using it
+	 */
+	if (dgpu_shared_aperture_limit)
 		return HSAKMT_STATUS_SUCCESS;
+
+	base = ALIGN_UP(base, GPU_HUGE_PAGE_SIZE);
+	limit = ((limit + 1) & ~(HSAuint64)(GPU_HUGE_PAGE_SIZE - 1)) - 1;
+	if (limit > SVM_RESERVATION_LIMIT)
+		limit = SVM_RESERVATION_LIMIT;
+	if (base >= limit) {
+		pr_err("No SVM range compatible with all GPU and software constraints\n");
+		return HSAKMT_STATUS_ERROR;
 	}
 
-	ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
-	if (ret != HSAKMT_STATUS_SUCCESS) {
-		pr_err("Unable to find vm_size for dGPU, assuming 64GB.\n");
-		max_vm_limit_in_gb = 64;
-	}
-	max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
-	min_vm_size = (HSAuint64)4 << 30;
+	/* Try to reserve address space for SVM.
+	 *
+	 * Inner loop: try start addresses in huge-page increments up
+	 * to half the VM size we're trying to reserve
+	 *
+	 * Outer loop: reduce size of the allocation by factor 2 at a
+	 * time and print a warning for every reduction
+	 */
+	for (len = limit - base + 1; !found && len >= SVM_MIN_VM_SIZE;
+	     len = (len + 1) >> 1) {
+		for (addr = (void *)base, ret_addr = NULL;
+		     (HSAuint64)addr + ((len + 1) >> 1) - 1 <= limit;
+		     addr = (void *)((HSAuint64)addr + ADDR_INC)) {
+			HSAuint64 top = MIN((HSAuint64)addr + len, limit+1);
+			HSAuint64 size = (top - (HSAuint64)addr) &
+				~(HSAuint64)(PAGE_SIZE - 1);
 
-	found = false;
-
-	for (len = max_vm_limit+1; !found && len >= min_vm_size; len >>= 1) {
-		for (addr = (void *)DGPU_APERTURE_ADDR_MIN, ret_addr = NULL;
-		     (HSAuint64)addr + (len >> 1) < max_vm_limit;
-		     addr = (void *)((HSAuint64)addr + DGPU_APERTURE_ADDR_INC)) {
-			ret_addr = reserve_address(addr, len);
+			if (size < SVM_MIN_VM_SIZE)
+				break;
+			ret_addr = reserve_address(addr, size);
 			if (!ret_addr)
 				break;
-			if ((HSAuint64)ret_addr + (len >> 1) < max_vm_limit)
+			if ((HSAuint64)ret_addr + ((len + 1) >> 1) - 1 <= limit)
 				/* At least half the returned address
 				 * space is GPU addressable, we'll
 				 * take it
 				 */
 				break;
-			munmap(ret_addr, len);
+			munmap(ret_addr, size);
 		}
 		if (!ret_addr) {
 			pr_warn("Failed to reserve %uGB for SVM ...\n",
 				(unsigned int)(len >> 30));
 			continue;
 		}
-		if ((HSAuint64)ret_addr + min_vm_size - 1 > max_vm_limit) {
+		if ((HSAuint64)ret_addr + SVM_MIN_VM_SIZE - 1 > limit) {
 			/* addressable size is less than the minimum */
 			pr_warn("Got %uGB for SVM at %p with only %dGB usable ...\n",
 				(unsigned int)(len >> 30), ret_addr,
-				(int)(((HSAint64)max_vm_limit -
-				       (HSAint64)ret_addr) >> 30));
+				(int)((limit - (HSAint64)ret_addr) >> 30));
 			munmap(ret_addr, len);
 			continue;
 		} else {
@@ -1567,20 +1545,41 @@ static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limi
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	vm_limit = (HSAuint64)ret_addr + len - 1;
-	if (vm_limit > max_vm_limit) {
+	base = (HSAuint64)ret_addr;
+	if (base + len - 1 > limit)
 		/* trim the tail that's not GPU-addressable */
-		munmap((void *)(max_vm_limit + 1), vm_limit - max_vm_limit);
-		vm_limit = max_vm_limit;
-	}
+		munmap((void *)(limit + 1), base + len - 1 - limit);
+	else
+		limit = base + len - 1;
 
-	if (base)
-		*base = ret_addr;
-	dgpu_shared_aperture_base = ret_addr;
-	if (limit)
-		*limit = (void *)vm_limit;
-	dgpu_shared_aperture_limit = (void *)vm_limit;
-	is_dgpu_mem_init = true;
+	/* init aperture */
+	svm.dgpu_aperture.base  = dgpu_shared_aperture_base  = ret_addr;
+	svm.dgpu_aperture.limit = dgpu_shared_aperture_limit = (void *)limit;
+	svm.dgpu_aperture.align = align;
+	svm.dgpu_aperture.guard_pages = guard_pages;
+	svm.dgpu_aperture.is_coherent = disable_cache;
+
+	/* Use the first 1/4 of the dGPU aperture as
+	 * alternate aperture for coherent access.
+	 * Base and size must be 64KB aligned.
+	 */
+	alt_base = (HSAuint64)svm.dgpu_aperture.base;
+	alt_size = (VOID_PTRS_SUB(svm.dgpu_aperture.limit,
+				  svm.dgpu_aperture.base) + 1) >> 2;
+	alt_base = (alt_base + 0xffff) & ~0xffffULL;
+	alt_size = (alt_size + 0xffff) & ~0xffffULL;
+	svm.dgpu_alt_aperture.base = (void *)alt_base;
+	svm.dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
+	svm.dgpu_alt_aperture.align = align;
+	svm.dgpu_alt_aperture.guard_pages = guard_pages;
+	svm.dgpu_alt_aperture.is_coherent = true;
+
+	svm.dgpu_aperture.base = VOID_PTR_ADD(svm.dgpu_alt_aperture.limit, 1);
+
+	pr_info("SVM alt (coherent): %12p - %12p\n",
+		svm.dgpu_alt_aperture.base, svm.dgpu_alt_aperture.limit);
+	pr_info("SVM (non-coherent): %12p - %12p\n",
+		svm.dgpu_aperture.base, svm.dgpu_aperture.limit);
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -1598,6 +1597,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	char *hsaDebug;
 	unsigned int guardPages = 1;
 	struct pci_access *pacc;
+	uint64_t svm_base = 0, svm_limit = 0;
+	uint32_t svm_alignment = 0;
 
 	hsaDebug = getenv("HSA_DEBUG");
 	hsa_debug = hsaDebug && strcmp(hsaDebug, "0");
@@ -1706,41 +1707,20 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 		gpu_mem[gpu_mem_id].lds_aperture.base =
 			PORT_UINT64_TO_VPTR(process_apertures[i].lds_base);
-
 		gpu_mem[gpu_mem_id].lds_aperture.limit =
 			PORT_UINT64_TO_VPTR(process_apertures[i].lds_limit);
 
-		gpu_mem[gpu_mem_id].gpuvm_aperture.base =
-			PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_base);
-
-		gpu_mem[gpu_mem_id].gpuvm_aperture.limit =
-			PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_limit);
-
 		gpu_mem[gpu_mem_id].scratch_aperture.base =
 			PORT_UINT64_TO_VPTR(process_apertures[i].scratch_base);
-
 		gpu_mem[gpu_mem_id].scratch_aperture.limit =
 			PORT_UINT64_TO_VPTR(process_apertures[i].scratch_limit);
 
-		if (topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id)) {
-			uintptr_t alt_base;
-			uint64_t alt_size;
-			int err;
+		if (IS_CANONICAL_ADDR(process_apertures[i].gpuvm_limit)) {
 			uint64_t vm_alignment = get_vm_alignment(
 				gpu_mem[gpu_mem_id].device_id);
 
-			dgpu_mem_init(gpu_mem_id, &svm.dgpu_aperture.base,
-					&svm.dgpu_aperture.limit);
-
 			/* Set proper alignment for scratch backing aperture */
 			gpu_mem[gpu_mem_id].scratch_physical.align = vm_alignment;
-
-			/* Set kernel process dgpu aperture. */
-			set_dgpu_aperture(process_apertures[i].gpu_id,
-				(uint64_t)svm.dgpu_aperture.base,
-				(uint64_t)svm.dgpu_aperture.limit);
-			svm.dgpu_aperture.align = vm_alignment;
-			svm.dgpu_aperture.guard_pages = guardPages;
 
 			/* Non-canonical per-ASIC GPUVM aperture does
 			 * not exist on dGPUs in GPUVM64 address mode
@@ -1748,33 +1728,54 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_id].gpuvm_aperture.base = NULL;
 			gpu_mem[gpu_mem_id].gpuvm_aperture.limit = NULL;
 
-			/* Use the first 1/4 of the dGPU aperture as
-			 * alternate aperture for coherent access.
-			 * Base and size must be 64KB aligned.
-			 */
-			alt_base = (uintptr_t)svm.dgpu_aperture.base;
-			alt_size = (VOID_PTRS_SUB(svm.dgpu_aperture.limit,
-				svm.dgpu_aperture.base) + 1) >> 2;
-			alt_base = (alt_base + 0xffff) & ~0xffffULL;
-			alt_size = (alt_size + 0xffff) & ~0xffffULL;
-			svm.dgpu_alt_aperture.base = (void *)alt_base;
-			svm.dgpu_alt_aperture.limit = (void *)(alt_base + alt_size - 1);
-			svm.dgpu_alt_aperture.is_coherent = true;
-			svm.dgpu_aperture.base = VOID_PTR_ADD(svm.dgpu_alt_aperture.limit, 1);
-			svm.dgpu_aperture.is_coherent = !!disableCache;
-			err = fmm_set_memory_policy(gpu_mem[gpu_mem_id].gpu_id,
-						    disableCache ?
+			/* Update SVM aperture limits and alignment */
+			if (process_apertures[i].gpuvm_base > svm_base)
+				svm_base = process_apertures[i].gpuvm_base;
+			if (process_apertures[i].gpuvm_limit < svm_limit ||
+			    svm_limit == 0)
+				svm_limit = process_apertures[i].gpuvm_limit;
+			if (vm_alignment > svm_alignment)
+				svm_alignment = vm_alignment;
+		} else {
+			gpu_mem[gpu_mem_id].gpuvm_aperture.base =
+				PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_base);
+			gpu_mem[gpu_mem_id].gpuvm_aperture.limit =
+				PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_limit);
+		}
+	}
+
+	if (svm_limit) {
+		/* At least one GPU uses GPUVM in canonical address
+		 * space. Set up SVM apertures shared by all such GPUs
+		 */
+		ret = init_svm_apertures(svm_base, svm_limit, svm_alignment,
+					 guardPages, disableCache);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto init_svm_failed;
+
+		for (i = 0 ; i < num_of_nodes ; i++) {
+			uintptr_t alt_base;
+			uint64_t alt_size;
+			int err;
+
+			if (!IS_CANONICAL_ADDR(process_apertures[i].gpuvm_limit))
+				continue;
+
+			/* Set memory policy to match the SVM apertures */
+			alt_base = (uintptr_t)svm.dgpu_alt_aperture.base;
+			alt_size = VOID_PTRS_SUB(svm.dgpu_alt_aperture.limit,
+				svm.dgpu_alt_aperture.base) + 1;
+			err = fmm_set_memory_policy(process_apertures[i].gpu_id,
+						    svm.dgpu_aperture.is_coherent ?
 						    KFD_IOC_CACHE_POLICY_COHERENT :
 						    KFD_IOC_CACHE_POLICY_NONCOHERENT,
 						    KFD_IOC_CACHE_POLICY_COHERENT,
 						    alt_base, alt_size);
-			if (err != 0) {
-				pr_err("Failed to set alt aperture for GPU [0x%x]\n",
-						gpu_mem[gpu_mem_id].gpu_id);
+			if (err) {
+				pr_err("Failed to set mem policy for GPU [0x%x]\n",
+				       process_apertures[i].gpu_id);
 				ret = HSAKMT_STATUS_ERROR;
 			}
-			svm.dgpu_alt_aperture.align = vm_alignment;
-			svm.dgpu_alt_aperture.guard_pages = guardPages;
 		}
 	}
 
@@ -1784,6 +1785,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	free(process_apertures);
 	return ret;
 
+init_svm_failed:
 get_aperture_ioctl_failed:
 invalid_gpu_id:
 	free(process_apertures);
@@ -3177,7 +3179,7 @@ void fmm_clear_all_mem(void)
 		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
 	}
 
-	if (is_dgpu_mem_init) {
+	if (dgpu_shared_aperture_limit) {
 		fmm_clear_aperture(&svm.dgpu_aperture);
 		fmm_clear_aperture(&svm.dgpu_alt_aperture);
 
@@ -3196,7 +3198,6 @@ void fmm_clear_all_mem(void)
 
 			dgpu_shared_aperture_base = NULL;
 			dgpu_shared_aperture_limit = NULL;
-			is_dgpu_mem_init = false;
 		}
 	}
 
