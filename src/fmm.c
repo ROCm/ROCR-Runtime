@@ -728,8 +728,8 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 						uint64_t *mmap_offset,
 						uint32_t flags)
 {
-	struct kfd_ioctl_alloc_memory_of_gpu_args args;
-	struct kfd_ioctl_free_memory_of_gpu_args free_args;
+	struct kfd_ioctl_alloc_memory_of_gpu_args args = {0};
+	struct kfd_ioctl_free_memory_of_gpu_args free_args = {0};
 	vm_object_t *vm_obj = NULL;
 
 	if (!mem)
@@ -891,7 +891,7 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 {
 	manageable_aperture_t *aperture_phy;
-	struct kfd_ioctl_alloc_memory_of_scratch_args args;
+	struct kfd_ioctl_alloc_memory_of_scratch_args args = {0};
 	int32_t gpu_mem_id;
 	void *mem = NULL;
 	uint64_t aligned_size = ALIGN_UP(MemorySizeInBytes, SCRATCH_ALIGN);
@@ -1298,7 +1298,7 @@ void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 static void __fmm_release(void *address, manageable_aperture_t *aperture)
 {
-	struct kfd_ioctl_free_memory_of_gpu_args args;
+	struct kfd_ioctl_free_memory_of_gpu_args args = {0};
 	vm_object_t *object;
 
 	if (!address)
@@ -1394,7 +1394,7 @@ void fmm_release(void *address)
 static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_policy,
 				 uintptr_t alt_base, uint64_t alt_size)
 {
-	struct kfd_ioctl_set_memory_policy_args args;
+	struct kfd_ioctl_set_memory_policy_args args = {0};
 
 	args.gpu_id = gpu_id;
 	args.default_policy = default_policy;
@@ -1421,12 +1421,11 @@ static HSAKMT_STATUS get_process_apertures(
 	struct kfd_process_device_apertures *process_apertures,
 	uint32_t *num_of_nodes)
 {
-	struct kfd_ioctl_get_process_apertures_new_args args_new = {
-		.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures,
-		.num_of_nodes = *num_of_nodes
-	};
+	struct kfd_ioctl_get_process_apertures_new_args args_new = {0};
 	struct kfd_ioctl_get_process_apertures_args args_old;
 
+	args_new.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures;
+	args_new.num_of_nodes = *num_of_nodes;
 	if (!kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW,
 		      (void *)&args_new)) {
 		*num_of_nodes = args_new.num_of_nodes;
@@ -1435,6 +1434,8 @@ static HSAKMT_STATUS get_process_apertures(
 
 	/* New IOCTL failed, try the old one in case we're running on
 	 * a really old kernel */
+	memset(&args_old, 0, sizeof(args_old));
+
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES,
 		     (void *)&args_old))
 		return HSAKMT_STATUS_ERROR;
@@ -1530,7 +1531,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * the apertures in kfd_process_device_apertures_ptr
 	 */
 	num_of_nodes = gpu_mem_count;
-	process_apertures = malloc(num_of_nodes * sizeof(struct kfd_process_device_apertures));
+	process_apertures = calloc(num_of_nodes, sizeof(struct kfd_process_device_apertures));
 	if (!process_apertures) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto sysfs_parse_failed;
@@ -1782,7 +1783,7 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 			void *address, uint64_t size, vm_object_t *obj,
 			uint32_t *nodes_to_map, uint32_t nodes_array_size)
 {
-	struct kfd_ioctl_map_memory_to_gpu_args args;
+	struct kfd_ioctl_map_memory_to_gpu_args args = {0};
 	vm_object_t *object;
 
 	if (!obj)
@@ -2057,7 +2058,7 @@ static int _fmm_unmap_from_gpu(manageable_aperture_t *aperture, void *address,
 {
 	vm_object_t *object;
 	int ret = 0;
-	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args = {0};
 	HSAuint32 page_offset = (HSAint64)address & (PAGE_SIZE - 1);
 
 	if (!obj)
@@ -2124,7 +2125,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 {
 	int32_t gpu_mem_id;
 	vm_object_t *object;
-	struct kfd_ioctl_unmap_memory_from_gpu_args args;
+	struct kfd_ioctl_unmap_memory_from_gpu_args args = {0};
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -2245,7 +2246,7 @@ static bool is_dgpu_mem_init = false;
 
 static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit)
 {
-	struct kfd_ioctl_set_process_dgpu_aperture_args args;
+	struct kfd_ioctl_set_process_dgpu_aperture_args args = {0};
 
 	args.gpu_id = gpu_id;
 	args.dgpu_base = base;
@@ -2578,9 +2579,9 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   uint32_t *gpu_id_array,
 					   uint32_t gpu_id_array_size)
 {
-	struct kfd_ioctl_get_dmabuf_info_args infoArgs;
-	struct kfd_ioctl_import_dmabuf_args importArgs;
-	struct kfd_ioctl_free_memory_of_gpu_args freeArgs;
+	struct kfd_ioctl_get_dmabuf_info_args infoArgs = {0};
+	struct kfd_ioctl_import_dmabuf_args importArgs = {0};
+	struct kfd_ioctl_free_memory_of_gpu_args freeArgs = {0};
 	manageable_aperture_t *aperture;
 	vm_object_t *obj;
 	void *metadata;
@@ -2684,7 +2685,7 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	HSAuint32 gpu_id = 0;
 	vm_object_t *obj = NULL;
 	manageable_aperture_t *aperture = NULL;
-	struct kfd_ioctl_ipc_export_handle_args exportArgs;
+	struct kfd_ioctl_ipc_export_handle_args exportArgs = {0};
 	HsaApertureInfo ApeInfo;
 	HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_hsa_shared_memory_struct(SharedMemoryHandle);
@@ -2741,8 +2742,8 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	vm_object_t *obj = NULL;
 	void *reservedMem = NULL;
 	manageable_aperture_t *aperture;
-	struct kfd_ioctl_ipc_import_handle_args importArgs;
-	struct kfd_ioctl_free_memory_of_gpu_args freeArgs;
+	struct kfd_ioctl_ipc_import_handle_args importArgs = {0};
+	struct kfd_ioctl_free_memory_of_gpu_args freeArgs = {0};
 	const HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_const_hsa_shared_memory_struct(SharedMemoryHandle);
 

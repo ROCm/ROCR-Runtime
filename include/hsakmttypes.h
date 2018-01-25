@@ -1094,8 +1094,8 @@ typedef struct _HsaPmcTraceRoot
 
 typedef struct _HsaGpuTileConfig
 {
-    const HSAuint32 *TileConfig;
-    const HSAuint32 *MacroTileConfig;
+    HSAuint32 *TileConfig;
+    HSAuint32 *MacroTileConfig;
     HSAuint32 NumTileConfigs;
     HSAuint32 NumMacroTileConfigs;
 

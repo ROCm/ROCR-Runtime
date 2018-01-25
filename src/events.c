@@ -65,9 +65,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 
 	memset(e, 0, sizeof(*e));
 
-	struct kfd_ioctl_create_event_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_create_event_args args = {0};
 
 	args.event_type = EventDesc->EventType;
 	args.node_id = EventDesc->NodeId;
@@ -127,9 +125,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 		EventDesc->SyncVar.SyncVarSize;
 
 	if (IsSignaled && !IsSystemEventType(e->EventData.EventType)) {
-		struct kfd_ioctl_set_event_args set_args;
+		struct kfd_ioctl_set_event_args set_args = {0};
 
-		memset(&set_args, 0, sizeof(set_args));
 		set_args.event_id = args.event_id;
 
 		kmtIoctl(kfd_fd, AMDKFD_IOC_SET_EVENT, &set_args);
@@ -147,9 +144,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyEvent(HsaEvent *Event)
 	if (!Event)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	struct kfd_ioctl_destroy_event_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_destroy_event_args args = {0};
 
 	args.event_id = Event->EventId;
 
@@ -173,9 +168,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetEvent(HsaEvent *Event)
 	if (IsSystemEventType(Event->EventData.EventType))
 		return HSAKMT_STATUS_ERROR;
 
-	struct kfd_ioctl_set_event_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_set_event_args args = {0};
 
 	args.event_id = Event->EventId;
 
@@ -198,9 +191,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtResetEvent(HsaEvent *Event)
 	if (IsSystemEventType(Event->EventData.EventType))
 		return HSAKMT_STATUS_ERROR;
 
-	struct kfd_ioctl_reset_event_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_reset_event_args args = {0};
 
 	args.event_id = Event->EventId;
 
@@ -306,9 +297,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
 	}
 
-	struct kfd_ioctl_wait_events_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_wait_events_args args = {0};
 
 	args.wait_for_all = WaitOnAll;
 	args.timeout = Milliseconds;

@@ -528,9 +528,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 			q->cu_mask[i/32] |= (1 << (i % 32));
 	}
 
-	struct kfd_ioctl_create_queue_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_create_queue_args args = {0};
 
 	args.gpu_id = gpu_id;
 
@@ -618,7 +616,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUpdateQueue(HSA_QUEUEID QueueId,
 					  HSAuint64 QueueSize,
 					  HsaEvent *Event)
 {
-	struct kfd_ioctl_update_queue_args arg;
+	struct kfd_ioctl_update_queue_args arg = {0};
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
 
 	CHECK_KFD_OPEN();
@@ -648,12 +646,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyQueue(HSA_QUEUEID QueueId)
 	CHECK_KFD_OPEN();
 
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
-	struct kfd_ioctl_destroy_queue_args args;
+	struct kfd_ioctl_destroy_queue_args args = {0};
 
 	if (!q)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	memset(&args, 0, sizeof(args));
 
 	args.queue_id = q->queue_id;
 
@@ -671,14 +667,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetQueueCUMask(HSA_QUEUEID QueueId,
 					     HSAuint32 *QueueCUMask)
 {
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
-	struct kfd_ioctl_set_cu_mask_args args;
+	struct kfd_ioctl_set_cu_mask_args args = {0};
 
 	CHECK_KFD_OPEN();
 
 	if (CUMaskCount == 0 || !QueueCUMask || ((CUMaskCount % 32) != 0))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	memset(&args, 0, sizeof(args));
 	args.queue_id = q->queue_id;
 	args.num_cu_mask = CUMaskCount;
 	args.cu_mask_ptr = (uintptr_t)QueueCUMask;
@@ -702,7 +697,7 @@ hsaKmtGetQueueInfo(
 )
 {
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
-	struct kfd_ioctl_get_queue_wave_state_args args;
+	struct kfd_ioctl_get_queue_wave_state_args args = {0};
 
 	CHECK_KFD_OPEN();
 
@@ -712,7 +707,6 @@ hsaKmtGetQueueInfo(
 	if (q->ctx_save_restore == NULL)
 		return HSAKMT_STATUS_ERROR;
 
-	memset(&args, 0, sizeof(args));
 	args.queue_id = q->queue_id;
 	args.ctl_stack_address = (uintptr_t)q->ctx_save_restore;
 
@@ -739,7 +733,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
 					     void *TrapBufferBaseAddress,
 					     HSAuint64 TrapBufferSizeInBytes)
 {
-	struct kfd_ioctl_set_trap_handler_args args;
+	struct kfd_ioctl_set_trap_handler_args args = {0};
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 
@@ -748,8 +742,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
 	result = validate_nodeid(Node, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
-
-	memset(&args, 0, sizeof(args));
 
 	args.gpu_id = gpu_id;
 	args.tba_addr = (uintptr_t)TrapHandlerBaseAddress;

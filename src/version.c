@@ -32,9 +32,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetVersion(HsaVersionInfo *VersionInfo)
 {
 	CHECK_KFD_OPEN();
 
-	struct kfd_ioctl_get_version_args args;
-
-	memset(&args, 0, sizeof(args));
+	struct kfd_ioctl_get_version_args args = {0};
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_VERSION, &args) == -1)
 		return HSAKMT_STATUS_ERROR;

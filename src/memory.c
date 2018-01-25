@@ -40,7 +40,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 					      void *MemoryAddressAlternate,
 					      HSAuint64 MemorySizeInBytes)
 {
-	struct kfd_ioctl_set_memory_policy_args args;
+	struct kfd_ioctl_set_memory_policy_args args = {0};
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 
@@ -73,8 +73,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 
 	CHECK_PAGE_MULTIPLE(MemoryAddressAlternate);
 	CHECK_PAGE_MULTIPLE(MemorySizeInBytes);
-
-	memset(&args, 0, sizeof(args));
 
 	args.gpu_id = gpu_id;
 	args.default_policy = (DefaultPolicy == HSA_CACHING_CACHED) ?
@@ -356,7 +354,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMRead(HSAuint32 Pid,
 					    HSAuint64 RemoteMemoryArrayCount,
 					    HSAuint64 *SizeCopied)
 {
-	struct kfd_ioctl_cross_memory_copy_args args;
+	struct kfd_ioctl_cross_memory_copy_args args = {0};
 
 	pr_debug("[%s]\n", __func__);
 
@@ -391,7 +389,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
 					     HSAuint64 RemoteMemoryArrayCount,
 					     HSAuint64 *SizeCopied)
 {
-	struct kfd_ioctl_cross_memory_copy_args args;
+	struct kfd_ioctl_cross_memory_copy_args args = {0};
 
 	pr_debug("[%s]\n", __func__);
 
@@ -530,7 +528,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapGraphicHandle(HSAuint32 NodeId,
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *config)
 {
-	struct kfd_ioctl_get_tile_config_args args;
+	struct kfd_ioctl_get_tile_config_args args = {0};
 	uint32_t gpu_id;
 	HSAKMT_STATUS result;
 
@@ -539,6 +537,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *
 	result = validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
+
+	/* Avoid Valgrind warnings about uninitialized data. Valgrind doesn't
+	 * know that KFD writes this.
+	 */
+	memset(config->TileConfig, 0, sizeof(*config->TileConfig) * config->NumTileConfigs);
+	memset(config->MacroTileConfig, 0, sizeof(*config->MacroTileConfig) * config->NumMacroTileConfigs);
 
 	args.gpu_id = gpu_id;
 	args.tile_config_ptr = (uint64_t)config->TileConfig;
