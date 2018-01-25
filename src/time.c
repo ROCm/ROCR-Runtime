@@ -31,7 +31,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetClockCounters(HSAuint32 NodeId,
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
-	struct kfd_ioctl_get_clock_counters_args args;
+	struct kfd_ioctl_get_clock_counters_args args = {0};
 	int err;
 
 	CHECK_KFD_OPEN();

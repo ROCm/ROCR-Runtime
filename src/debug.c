@@ -67,9 +67,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgRegister(HSAuint32 NodeId)
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	struct kfd_ioctl_dbg_register_args args;
+	struct kfd_ioctl_dbg_register_args args = {0};
 
-	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
 
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
@@ -96,9 +95,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgUnregister(HSAuint32 NodeId)
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	struct kfd_ioctl_dbg_unregister_args args;
+	struct kfd_ioctl_dbg_unregister_args args = {0};
 
-	memset(&args, 0, sizeof(args));
 	args.gpu_id = gpu_id;
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
 
