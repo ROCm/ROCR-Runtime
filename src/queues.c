@@ -304,9 +304,16 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	get_doorbell_map_info(get_device_id_by_node(NodeId),
 			      &doorbells[NodeId]);
 
-	if (doorbells[NodeId].use_gpuvm)
+	if (doorbells[NodeId].use_gpuvm) {
 		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_offset);
-	else
+		if (status != HSAKMT_STATUS_SUCCESS) {
+			/* Fall back to the old method if KFD doesn't
+			 * support doorbells in GPUVM
+			 */
+			doorbells[NodeId].use_gpuvm = false;
+			status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
+		}
+	} else
 		status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
 
 	if (status != HSAKMT_STATUS_SUCCESS)
