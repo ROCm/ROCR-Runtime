@@ -62,7 +62,7 @@
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
-
+#if 0
 static bool GetMonitorDevices(const std::shared_ptr<amd::smi::Device> &d,
                                                                     void *p) {
   std::string val_str;
@@ -77,6 +77,7 @@ static bool GetMonitorDevices(const std::shared_ptr<amd::smi::Device> &d,
   }
   return false;
 }
+#endif
 
 static void SetFlags(TestBase *test) {
   assert(sRocrtstGlvalues != nullptr);
@@ -214,7 +215,8 @@ int main(int argc, char** argv) {
   if (ProcessCmdline(&settings, argc, argv)) {
     return 1;
   }
-
+  sRocrtstGlvalues = &settings;
+#if 0
   amd::smi::RocmSMI hw;
   hw.DiscoverDevices();
   hw.IterateSMIDevices(
@@ -230,6 +232,6 @@ int main(int argc, char** argv) {
     std::cout << "*** Initial Hardware Monitor Values:" << std::endl;
     DumpMonitorInfo(&dummy);
   }
-
+#endif
   return RUN_ALL_TESTS();
 }
