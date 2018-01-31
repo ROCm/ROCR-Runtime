@@ -387,8 +387,10 @@ typedef enum {
   HSA_AMD_SIGNAL_AMD_GPU_ONLY = 1,
   /**
    * Signal may be used for interprocess communication.
-   * This signal may not be used with profiling APIs.  Errors or inaccurate
-   * timing data may result from such use.
+   * IPC signals can be read, written, and waited on from any process.
+   * Profiling using an IPC enabled signal is only supported in a single process
+   * at a time.  Producing profiling data in one process and consuming it in
+   * another process is undefined.
    */
   HSA_AMD_SIGNAL_IPC = 2,
 } hsa_amd_signal_attribute_t;
