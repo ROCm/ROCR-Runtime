@@ -77,11 +77,6 @@ void CpuAgent::InitRegionList() {
         });
 
     if (system_prop != mem_props.end()) {
-      // CRAT/KFD workaround
-      for (auto idx = system_prop + 1; idx != mem_props.end(); idx++) {
-        if (idx->HeapType == HSA_HEAPTYPE_SYSTEM) system_prop->SizeInBytes += idx->SizeInBytes;
-      }
-
       MemoryRegion* system_region_fine =
           new MemoryRegion(true, is_apu_node, this, *system_prop);
 
