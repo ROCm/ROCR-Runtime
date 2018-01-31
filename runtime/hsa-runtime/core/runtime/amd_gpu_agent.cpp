@@ -643,7 +643,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
-    out_signal.async_copy_agent(this);
+    out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
   hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
