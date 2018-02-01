@@ -525,7 +525,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   lock.Release();
 
   for (GpuAgentInt* gpu : whitelist_gpus) {
-    gpu->InitDma();
+    gpu->PreloadBlits();
   }
 
   return HSA_STATUS_SUCCESS;
@@ -574,7 +574,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       if (agent->device_type() == core::Agent::kAmdGpuDevice) {
         whitelist_nodes.push_back(agent->node_id());
-        whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
+        whitelist_gpus.insert(agent);
       }
     }
   }
@@ -597,8 +597,9 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
       } else {
         *agent_ptr = host_ptr;
       }
-      for (core::Agent* gpu : whitelist_gpus) {
-        reinterpret_cast<GpuAgentInt*>(gpu)->InitDma();
+
+      for (auto gpu : whitelist_gpus) {
+        static_cast<GpuAgentInt*>(gpu)->PreloadBlits();
       }
 
       return HSA_STATUS_SUCCESS;
