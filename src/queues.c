@@ -323,9 +323,6 @@ static void *allocate_exec_aligned_memory_cpu(uint32_t size)
 
 	if (ptr == MAP_FAILED)
 		return NULL;
-
-	memset(ptr, 0, size);
-
 	return ptr;
 }
 

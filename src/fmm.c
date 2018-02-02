@@ -933,8 +933,6 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 			munmap(aligned_end,
 			       VOID_PTRS_SUB(padded_end, aligned_end));
 		mem = aligned_start;
-
-		memset(mem, 0, aligned_size);
 	}
 
 	/* Remember scratch backing aperture for later */
@@ -1132,8 +1130,6 @@ static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 
 	if (mem == MAP_FAILED)
 		return NULL;
-
-	memset(mem, 0, MemorySizeInBytes);
 
 	pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
 	vm_obj = aperture_allocate_object(&cpuvm_aperture, mem, 0,
