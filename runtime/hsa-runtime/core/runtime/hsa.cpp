@@ -376,7 +376,7 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       return 0;
   }
 
-  char buff[3];
+  char buff[6];
   sprintf(buff, "%02u", minor);
   name += std::to_string(major) + "_" + buff + "_pfn_t";
 
