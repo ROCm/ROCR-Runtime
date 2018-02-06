@@ -799,7 +799,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // Obtain a queue slot for a single AQL packet.
   uint64_t write_idx = queue->AddWriteIndexAcqRel(1);
 
-  while ((write_idx - queue->LoadReadIndexRelaxed()) > queue->amd_queue_.hsa_queue.size) {
+  while ((write_idx - queue->LoadReadIndexRelaxed()) >= queue->amd_queue_.hsa_queue.size) {
     os::YieldThread();
   }
 
