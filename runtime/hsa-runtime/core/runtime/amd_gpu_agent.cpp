@@ -554,27 +554,25 @@ void GpuAgent::InitDma() {
                                "Internal queue creation failed.");
     return ret;
   };
-  // Dedicated compute queue for host-to-device blits.
-  queues_[QueueBlitOnly].reset(queue_lambda);
   // Share utility queue with device-to-host blits.
   queues_[QueueUtility].reset(queue_lambda);
 
   // Blits, try create SDMA blit first.
   // Disable SDMA on specific ISA targets until they are fully qualified.
-  auto blit_lambda = [this](lazy_ptr<core::Queue>& queue) {
+  auto blit_lambda = [this]() {
     if ((isa_->GetMajorVersion() != 8) && core::Runtime::runtime_singleton_->flag().enable_sdma() &&
         (HSA_PROFILE_BASE == profile_)) {
       auto ret = CreateBlitSdma();
       if (ret != nullptr) return ret;
     }
-    auto ret = CreateBlitKernel((*queue).get());
+    auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
     if (ret == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
     return ret;
   };
 
-  blits_[BlitHostToDev].reset([blit_lambda, this]() { return blit_lambda(queues_[QueueBlitOnly]); });
-  blits_[BlitDevToHost].reset([blit_lambda, this]() { return blit_lambda(queues_[QueueUtility]); });
+  blits_[BlitHostToDev].reset(blit_lambda);
+  blits_[BlitDevToHost].reset(blit_lambda);
   blits_[BlitDevToDev].reset([this]() {
     auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
     if (ret == nullptr)
