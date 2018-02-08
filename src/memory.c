@@ -354,6 +354,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMRead(HSAuint32 Pid,
 					    HSAuint64 RemoteMemoryArrayCount,
 					    HSAuint64 *SizeCopied)
 {
+	int ret = HSAKMT_STATUS_SUCCESS;
 	struct kfd_ioctl_cross_memory_copy_args args = {0};
 
 	pr_debug("[%s]\n", __func__);
@@ -371,15 +372,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMRead(HSAuint32 Pid,
 	args.dst_mem_array_size = LocalMemoryArrayCount;
 	args.bytes_copied = 0;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args);
-
-	if (err)
-		return HSAKMT_STATUS_ERROR;
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args))
+		ret = HSAKMT_STATUS_ERROR;
 
 	if (SizeCopied)
 		*SizeCopied = args.bytes_copied;
 
-	return HSAKMT_STATUS_SUCCESS;
+	return ret;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
@@ -389,9 +388,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
 					     HSAuint64 RemoteMemoryArrayCount,
 					     HSAuint64 *SizeCopied)
 {
+	int ret = HSAKMT_STATUS_SUCCESS;
 	struct kfd_ioctl_cross_memory_copy_args args = {0};
 
 	pr_debug("[%s]\n", __func__);
+
+	if (SizeCopied)
+		*SizeCopied = 0;
 
 	if (!LocalMemoryArray || !RemoteMemoryArray ||
 		LocalMemoryArrayCount == 0 || RemoteMemoryArrayCount == 0)
@@ -406,15 +409,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
 	args.dst_mem_array_size = RemoteMemoryArrayCount;
 	args.bytes_copied = 0;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args);
-
-	if (err)
-		return HSAKMT_STATUS_ERROR;
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args))
+		ret = HSAKMT_STATUS_ERROR;
 
 	if (SizeCopied)
 		*SizeCopied = args.bytes_copied;
 
-	return HSAKMT_STATUS_SUCCESS;
+	return ret;
 }
 
 
