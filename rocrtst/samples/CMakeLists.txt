@@ -283,7 +283,7 @@ set (HSACO_TARG_LIST "" CACHE INTERNAL HSACO_TARG_LIST)
 
 set(KERN_SUFFIX "kernels.hsaco")
 set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
-set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_LIB_DIR}")
+set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_LIB_DIR}/bitcode")
 
 set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
 set(COMMON_BITCODE_LIBS

@@ -59,10 +59,12 @@
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
 
+#if ENABLE_SMI
 #include "rocm_smi/rocm_smi.h"
+#endif
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
-#if 0
+#if ENABLE_SMI
 static bool GetMonitorDevices(const std::shared_ptr<amd::smi::Device> &d,
                                                                     void *p) {
   std::string val_str;
@@ -216,7 +218,7 @@ int main(int argc, char** argv) {
     return 1;
   }
   sRocrtstGlvalues = &settings;
-#if 0
+#if ENABLE_SMI
   amd::smi::RocmSMI hw;
   hw.DiscoverDevices();
   hw.IterateSMIDevices(

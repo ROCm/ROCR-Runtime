@@ -120,7 +120,7 @@ uint32_t ProcessCmdline(RocrTstGlobals* test, int arg_cnt, char** arg_list) {
   }
   return 0;
 }
-
+#if ENABLE_SMI
 void DumpMonitorInfo(const TestBase *test) {
   int ret = 0;
   uint32_t value;
@@ -204,3 +204,4 @@ void DumpMonitorInfo(const TestBase *test) {
   }
   std::cout << delim << std::endl;
 }
+#endif 
