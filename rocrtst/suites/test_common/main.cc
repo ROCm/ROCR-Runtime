@@ -87,7 +87,9 @@ static void SetFlags(TestBase *test) {
   test->set_num_iteration(sRocrtstGlvalues->num_iterations);
   test->set_verbosity(sRocrtstGlvalues->verbosity);
   test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
+#if ENABLE_SMI
   test->set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
+#endif
 }
 
 
