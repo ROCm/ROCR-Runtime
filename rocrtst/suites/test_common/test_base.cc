@@ -103,7 +103,9 @@ void TestBase::Close(void) {
 
 
   if (monitor_verbosity() > 0) {
+#if ENABLE_SMI
     DumpMonitorInfo(this);
+#endif
   }
 
   err = rocrtst::CommonCleanUp(this);
