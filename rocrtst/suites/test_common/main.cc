@@ -134,10 +134,6 @@ TEST(rocrtst, Test_Example) {
   RunGenericTest(&tst);
 }
 
-// Temporarily disable this test until hsa_init()/hsa_shut_down() works
-// simultaneously in 2 different processes (SWDEV-134085); The test can be run
-// by itself to test IPC and avoid the negative consequnces of the defect
-// mentioned. To do this, use the --gtest_also_run_disabled_tests flag.
 TEST(rocrtstFunc, IPC) {
   IPCTest ipc;
   RunGenericTest(&ipc);
@@ -150,10 +146,8 @@ TEST(rocrtstFunc, MemoryAccessTests) {
   mt.GPUAccessToCPUMemoryTest();
   RunCustomTestEpilog(&mt);
 }
-// Temporarily disable this test until hsa_shut_down() is (probably not the
-// same as with the IPC test above) is addressed. To override the disable,
-// run with --gtest-also_run_disabled_tests flag.
-TEST(rocrtstFunc, DISABLED_Memory_Max_Mem) {
+
+TEST(rocrtstFunc, Memory_Max_Mem) {
   MemoryTest mt;
 
   RunCustomTestProlog(&mt);
