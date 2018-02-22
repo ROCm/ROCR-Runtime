@@ -149,8 +149,11 @@ static void destroy_shared_region(void)
 	if (shared_table && shared_table != MAP_FAILED)
 		munmap(shared_table, sizeof(*shared_table));
 
-	if (shmem_fd > 0)
+	if (shmem_fd > 0) {
+		close(shmem_fd);
 		shm_unlink(shmem_name);
+	}
+
 	if (sem != SEM_FAILED) {
 		sem_close(sem);
 		sem_unlink(sem_name);
