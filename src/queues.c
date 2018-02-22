@@ -350,7 +350,8 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 }
 
 void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
-				       uint32_t NodeId, bool nonPaged)
+				       uint32_t NodeId, bool nonPaged,
+				       bool DeviceLocal)
 {
 	void *mem;
 	HSAuint64 gpu_va;
@@ -358,14 +359,14 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	HSAKMT_STATUS ret;
 
 	flags.Value = 0;
-	flags.ui32.HostAccess = 1;
+	flags.ui32.HostAccess = !DeviceLocal;
 	flags.ui32.ExecuteAccess = 1;
 	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 
 	size = ALIGN_UP(size, align);
 
-	ret = hsaKmtAllocMemory(0, size, flags, &mem);
+	ret = hsaKmtAllocMemory(DeviceLocal ? NodeId : 0, size, flags, &mem);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return NULL;
 
@@ -399,11 +400,12 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
  */
 static void *allocate_exec_aligned_memory(uint32_t size,
 					  enum asic_family_type type,
-					  uint32_t NodeId)
+					  uint32_t NodeId,
+					  bool DeviceLocal)
 {
 	if (IS_DGPU(type))
 		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
-							false);
+							DeviceLocal, DeviceLocal);
 	return allocate_exec_aligned_memory_cpu(size);
 }
 
@@ -441,7 +443,7 @@ static int handle_concrete_asic(struct queue *q,
 			q->eop_buffer =
 					allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
 					dev_info->asic_family,
-					NodeId);
+					NodeId, true);
 			if (!q->eop_buffer)
 				return HSAKMT_STATUS_NO_MEMORY;
 
@@ -455,7 +457,7 @@ static int handle_concrete_asic(struct queue *q,
 			q->ctx_save_restore =
 				allocate_exec_aligned_memory(q->ctx_save_restore_size,
 							     dev_info->asic_family,
-							     NodeId);
+							     NodeId, false);
 			if (!q->ctx_save_restore)
 				return HSAKMT_STATUS_NO_MEMORY;
 
@@ -506,7 +508,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
 			dev_info->asic_family,
-			NodeId);
+			NodeId, false);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
