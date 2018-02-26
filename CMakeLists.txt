@@ -55,7 +55,7 @@ endif ()
 set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
 ## Verbose output.
-set ( CMAKE_VERBOSE_MAKEFILE on )
+#set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler flags
 set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden" )
