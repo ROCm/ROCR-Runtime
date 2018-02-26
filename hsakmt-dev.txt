@@ -51,6 +51,8 @@ install ( FILES ${SOURCE_DIR}/include/hsakmttypes.h DESTINATION libhsakmt/includ
 install ( FILES ${SOURCE_DIR}/include/linux/kfd_ioctl.h DESTINATION libhsakmt/include/libhsakmt/linux )
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt-link DESTINATION include RENAME libhsakmt )
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.so-link DESTINATION lib RENAME libhsakmt.so )
+install ( FILES libhsakmt.pc DESTINATION libhsakmt )
+
 
 ## Set the default generator types for the devel package.
 set ( CPACK_GENERATOR "DEB;RPM;TGZ"  CACHE STRING "Default packaging generators." )
