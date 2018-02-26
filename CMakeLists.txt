@@ -156,4 +156,7 @@ set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libpci3" )
 set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 
+# CPACK_PACKAGING_INSTALL_PREFIX is needed in libhsakmt.pc.in
+configure_file ( libhsakmt.pc.in ${DEV_BUILD_DIR}/libhsakmt.pc @ONLY )
+
 include ( CPack )
