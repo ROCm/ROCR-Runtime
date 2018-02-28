@@ -152,10 +152,6 @@ class BlitKernel : public core::Blit {
   /// packet processor doesn't get invalid packet.
   void ReleaseWriteIndex(uint64_t write_index, uint32_t num_packet);
 
-  /// Wait until all packets are finished.
-  hsa_status_t FenceRelease(uint64_t write_index, uint32_t num_copy_packet,
-                            hsa_fence_scope_t fence);
-
   void PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
                      uint32_t grid_size_x, hsa_signal_t completion_signal);
 
