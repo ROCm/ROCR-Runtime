@@ -204,11 +204,12 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void CloseRingBufferFD(const char* ring_buf_shm_path, int fd) const;
   int CreateRingBufferFD(const char* ring_buf_shm_path, uint32_t ring_buf_phys_size_bytes) const;
 
-  static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
-
   /// @brief Define the Scratch Buffer Descriptor and related parameters
   /// that enable kernel access scratch memory
   void InitScratchSRD();
+
+  /// @brief Handler for hardware queue events.
+  static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
 
   // AQL packet ring buffer
   void* ring_buf_;
@@ -245,6 +246,10 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void* pm4_ib_buf_;
   uint32_t pm4_ib_size_b_;
   KernelMutex pm4_ib_mutex_;
+
+  // Error handler control variable.
+  std::atomic<uint32_t> dynamicScratchState;
+  enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2 };
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;

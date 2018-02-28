@@ -1222,6 +1222,9 @@ void Runtime::Unload() {
   amd::hsa::loader::Loader::Destroy(loader_);
   loader_ = nullptr;
 
+  std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
+  gpu_agents_.clear();
+
   async_events_control_.Shutdown();
 
   if (vm_fault_signal_ != nullptr) {

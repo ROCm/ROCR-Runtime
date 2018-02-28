@@ -77,7 +77,7 @@ class GpuAgentInt : public core::Agent {
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
   // @brief Ensure blits are ready (performance hint).
-  virtual void PreloadBlits(){};
+  virtual void PreloadBlits() {}
 
   // @brief Initialization hook invoked after tools library has loaded,
   // to allow tools interception of interface functions.

@@ -72,7 +72,7 @@ namespace amd {
 // Queue::amd_queue_ is cache-aligned for performance.
 const uint32_t kAmdQueueAlignBytes = 0x40;
 
-HsaEvent* AqlQueue::queue_event_ = NULL;
+HsaEvent* AqlQueue::queue_event_ = nullptr;
 std::atomic<uint32_t> AqlQueue::queue_count_(0);
 KernelMutex AqlQueue::queue_lock_;
 int AqlQueue::rtti_id_ = 0;
@@ -92,7 +92,8 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
       errors_data_(err_data),
       is_kv_queue_(is_kv),
       pm4_ib_buf_(nullptr),
-      pm4_ib_size_b_(0x1000) {
+      pm4_ib_size_b_(0x1000),
+      dynamicScratchState(0) {
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
   // are mapped to the same set of pages backing the lower half.
@@ -279,8 +280,18 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
 }
 
 AqlQueue::~AqlQueue() {
-  Inactivate();
+  // Remove error handler synchronously.
+  // Sequences error handler callbacks with queue destroy.
+  dynamicScratchState |= ERROR_HANDLER_TERMINATE;
+  HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
+  while ((dynamicScratchState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
+    HSA::hsa_signal_wait_relaxed(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
+                                 0x8000000000000000ull, -1ull, HSA_WAIT_STATE_BLOCKED);
+    HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
+  }
 
+  auto err = hsaKmtDestroyQueue(queue_id_);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
   FreeRegisteredRingBuffer();
   agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
@@ -289,7 +300,7 @@ AqlQueue::~AqlQueue() {
     queue_count_--;
     if (queue_count_ == 0) {
       core::InterruptSignal::DestroyEvent(queue_event_);
-      queue_event_ = NULL;
+      queue_event_ = nullptr;
     }
   }
   core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
@@ -678,107 +689,88 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 hsa_status_t AqlQueue::Inactivate() {
   bool active = active_.exchange(false, std::memory_order_relaxed);
   if (active) {
-    auto err = hsaKmtDestroyQueue(this->queue_id_);
-    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
+    auto err = hsaKmtUpdateQueue(queue_id_, 0, HSA_QUEUE_PRIORITY_NORMAL, NULL, 0, NULL);
+    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
   }
   return HSA_STATUS_SUCCESS;
 }
 
 bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   AqlQueue* queue = (AqlQueue*)arg;
+  hsa_status_t errorCode = HSA_STATUS_SUCCESS;
 
-  if ((error_code & 1) == 1) {
-    // Insufficient scratch - recoverable
-    auto& scratch = queue->queue_scratch_;
+  // Process errors only if queue is not terminating.
+  if ((queue->dynamicScratchState & ERROR_HANDLER_TERMINATE) != ERROR_HANDLER_TERMINATE) {
+    // Process only one queue error, don't fall through.
+    if (error_code == 1) {
+      // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
+      auto& scratch = queue->queue_scratch_;
 
-    queue->agent_->ReleaseQueueScratch(scratch.queue_base);
+      queue->agent_->ReleaseQueueScratch(scratch.queue_base);
 
-    uint64_t pkt_slot_idx = queue->amd_queue_.read_dispatch_id % queue->amd_queue_.hsa_queue.size;
+      uint64_t pkt_slot_idx = queue->amd_queue_.read_dispatch_id % queue->amd_queue_.hsa_queue.size;
 
-    const core::AqlPacket& pkt =
-        ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
+      const core::AqlPacket& pkt =
+          ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
-    uint32_t scratch_request = pkt.dispatch.private_segment_size;
+      uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
-    scratch.size_per_thread =
-        Max(uint32_t(scratch.size_per_thread * 2), scratch_request);
-    // Align whole waves to 1KB.
-    scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
-    scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
-        queue->agent_->properties().MaxSlotsScratchCU * queue->agent_->properties().WaveFrontSize;
+      scratch.size_per_thread = Max(uint32_t(scratch.size_per_thread * 2), scratch_request);
+      // Align whole waves to 1KB.
+      scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
+      scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
+          queue->agent_->properties().MaxSlotsScratchCU * queue->agent_->properties().WaveFrontSize;
 
-    queue->agent_->AcquireQueueScratch(scratch);
-    if (scratch.queue_base == NULL) {
-      // Out of scratch - promote error and invalidate queue
-      queue->Inactivate();
-      if (queue->errors_callback_ != NULL)
-        queue->errors_callback_(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
-                                queue->public_handle(), queue->errors_data_);
-      return false;
+      queue->agent_->AcquireQueueScratch(scratch);
+
+      // Out of scratch - promote error
+      if (scratch.queue_base == NULL) errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+      // Reset scratch memory related entities for the queue
+      queue->InitScratchSRD();
+
+    } else if ((error_code & 2) == 2) {  // Invalid dim
+      errorCode = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+
+    } else if ((error_code & 4) == 4) {  // Invalid group memory
+      errorCode = HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+    } else if ((error_code & 8) == 8) {  // Invalid (or NULL) code
+      errorCode = HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+
+    } else if (((error_code & 32) == 32) ||    // Invalid format: 32 is generic,
+               ((error_code & 256) == 256)) {  // 256 is vendor specific packets
+      errorCode = HSA_STATUS_ERROR_INVALID_PACKET_FORMAT;
+
+    } else if ((error_code & 64) == 64) {  // Group is too large
+      errorCode = HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+    } else if ((error_code & 128) == 128) {  // Out of VGPRs
+      errorCode = HSA_STATUS_ERROR_INVALID_ISA;
+
+    } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
+      errorCode = HSA_STATUS_ERROR_EXCEPTION;
+
+    } else {  // Undefined code
+      assert(false && "Undefined queue error code");
+      errorCode = HSA_STATUS_ERROR;
     }
 
-    // Reset scratch memory related entities for the queue
-    queue->InitScratchSRD();
+    if (errorCode == HSA_STATUS_SUCCESS) {
+      HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
+      return true;
+    }
 
-  } else if ((error_code & 2) == 2) {  // Invalid dim
     queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-
-  } else if ((error_code & 4) == 4) {  // Invalid group memory
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INVALID_ALLOCATION,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-
-  } else if ((error_code & 8) == 8) {  // Invalid (or NULL) code
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INVALID_CODE_OBJECT,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-
-  } else if (((error_code & 32) == 32) ||
-             ((error_code & 256) == 256)) {  // Invalid format: 32 is generic,
-                                             // 256 is vendor specific packets
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-  } else if ((error_code & 64) == 64) {  // Group is too large
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INVALID_ARGUMENT,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-  } else if ((error_code & 128) == 128) {  // Out of VGPRs
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_INVALID_ISA,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-  } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
-    queue->Inactivate();
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR_EXCEPTION,
-                              queue->public_handle(), queue->errors_data_);
-    return false;
-  } else {
-    // Undefined code
-    queue->Inactivate();
-    assert(false && "Undefined queue error code");
-    if (queue->errors_callback_ != NULL)
-      queue->errors_callback_(HSA_STATUS_ERROR, queue->public_handle(),
-                              queue->errors_data_);
-    return false;
+    if (queue->errors_callback_ != nullptr)
+      queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
   }
-
-  HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
-  return true;
+  // Copy here is to protect against queue being released between setting the scratch state and
+  // updating the signal value.
+  hsa_signal_t signal = queue->amd_queue_.queue_inactive_signal;
+  queue->dynamicScratchState = ERROR_HANDLER_DONE;
+  HSA::hsa_signal_store_screlease(signal, -1ull);
+  return false;
 }
 
 hsa_status_t AqlQueue::SetCUMasking(const uint32_t num_cu_mask_count,
