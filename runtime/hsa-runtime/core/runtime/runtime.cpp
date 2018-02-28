@@ -108,16 +108,17 @@ hsa_status_t Runtime::Acquire() {
   }
 
   runtime_singleton_->ref_count_++;
+  MAKE_NAMED_SCOPE_GUARD(refGuard, [&]() { runtime_singleton_->ref_count_--; });
 
   if (runtime_singleton_->ref_count_ == 1) {
     hsa_status_t status = runtime_singleton_->Load();
 
     if (status != HSA_STATUS_SUCCESS) {
-      runtime_singleton_->ref_count_--;
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
 
+  refGuard.Dismiss();
   return HSA_STATUS_SUCCESS;
 }
 
