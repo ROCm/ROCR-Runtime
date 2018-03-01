@@ -29,6 +29,9 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <inttypes.h>
 #include <sys/mman.h>
 #include <sys/time.h>
@@ -124,6 +127,7 @@ typedef struct {
 						 * GPU will get a differnt range
 						 */
 	manageable_aperture_t gpuvm_aperture;   /* used for GPUVM on APU, outsidethe canonical address range */
+	int drm_render_fd;
 } gpu_mem_t;
 
 /* The main structure for dGPU Shared Virtual Memory Management */
@@ -1044,7 +1048,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 
 	if (mem && (flags.ui32.HostAccess || hsa_debug)) {
 		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-					get_drm_render_fd_by_gpu_id(gpu_id);
+					gpu_mem[gpu_mem_id].drm_render_fd;
 		int prot = flags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
 					PROT_NONE;
 		int flag = flags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
@@ -1170,12 +1174,12 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 	uint64_t mmap_offset;
 	uint32_t ioc_flags;
 	uint64_t size;
-	int32_t i;
+	int32_t gpu_mem_id;
 	uint32_t gpu_id;
 	vm_object_t *vm_obj = NULL;
 
-	i = find_first_dgpu(&gpu_id);
-	if (i < 0)
+	gpu_mem_id = find_first_dgpu(&gpu_id);
+	if (gpu_mem_id < 0)
 		return NULL;
 
 	size = MemorySizeInBytes;
@@ -1254,7 +1258,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 		if (mem && flags.ui32.HostAccess) {
 			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-						get_drm_render_fd_by_gpu_id(gpu_id);
+						gpu_mem[gpu_mem_id].drm_render_fd;
 			void *ret = mmap(mem, MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
 					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
@@ -1442,6 +1446,57 @@ static HSAKMT_STATUS get_process_apertures(
 
 	memcpy(process_apertures, args_old.process_apertures,
 	       sizeof(*process_apertures) * *num_of_nodes);
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+/* The VMs from DRM render nodes are used by KFD for the lifetime of
+ * the process. Therefore we have to keep using the same FDs for the
+ * lifetime of the process, even when we close and reopen KFD. There
+ * are up to 128 render nodes that we cache in this array.
+ */
+#define DRM_FIRST_RENDER_NODE 128
+#define DRM_LAST_RENDER_NODE 255
+static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
+
+static int open_drm_render_device(int minor)
+{
+	char path[128];
+	int index, fd;
+
+	if (minor < DRM_FIRST_RENDER_NODE || minor > DRM_LAST_RENDER_NODE) {
+		pr_err("DRM render minor %d out of range [%d, %d]\n", minor,
+		       DRM_FIRST_RENDER_NODE, DRM_LAST_RENDER_NODE);
+		return -EINVAL;
+	}
+	index = minor - DRM_FIRST_RENDER_NODE;
+
+	/* If the render node was already opened, keep using the same FD */
+	if (drm_render_fds[index])
+		return drm_render_fds[index];
+
+	sprintf(path, "/dev/dri/renderD%d", minor);
+	fd = open(path, O_RDWR | O_CLOEXEC);
+	if (fd < 0) {
+		pr_err("Failed to open %s: %s\n", path, strerror(errno));
+		return -errno;
+	}
+	drm_render_fds[index] = fd;
+
+	return fd;
+}
+
+static HSAKMT_STATUS acquire_vm(uint32_t gpu_id, int fd)
+{
+	struct kfd_ioctl_acquire_vm_args args;
+
+	args.gpu_id = gpu_id;
+	args.drm_fd = fd;
+	pr_info("acquiring VM for %x using %d\n", gpu_id, fd);
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ACQUIRE_VM, (void *)&args)) {
+		pr_err("AMDKFD_IOC_ACQUIRE_VM failed\n");
+		return HSAKMT_STATUS_ERROR;
+	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -1648,6 +1703,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 		/* Skip non-GPU nodes */
 		if (gpu_id != 0) {
+			gpu_mem[gpu_mem_count].drm_render_fd =
+				open_drm_render_device(props.DrmRenderMinor);
+			if (gpu_mem[gpu_mem_count].drm_render_fd <= 0)
+				goto sysfs_parse_failed;
+
 			gpu_mem[gpu_mem_count].gpu_id = gpu_id;
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
@@ -1742,6 +1802,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_id].gpuvm_aperture.limit =
 				PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_limit);
 		}
+
+		/* Acquire the VM from the DRM render node for KFD use */
+		ret = acquire_vm(gpu_mem[gpu_mem_id].gpu_id,
+				 gpu_mem[gpu_mem_id].drm_render_fd);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto acquire_vm_failed;
 	}
 
 	if (svm_limit) {
@@ -1786,6 +1852,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	return ret;
 
 init_svm_failed:
+acquire_vm_failed:
 get_aperture_ioctl_failed:
 invalid_gpu_id:
 	free(process_apertures);
@@ -2028,7 +2095,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 			return -1;
 	} else {
 		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-					get_drm_render_fd_by_gpu_id(gpu_id);
+					gpu_mem[gpu_mem_id].drm_render_fd;
 		fmm_allocate_memory_object(gpu_id,
 					address,
 					size,
@@ -2787,11 +2854,19 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	if (importArgs.mmap_offset) {
-		int map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
-					get_drm_render_fd_by_gpu_id(importArgs.gpu_id);
-		void *ret = mmap(reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
-				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
+		int32_t gpu_mem_id = gpu_mem_find_by_gpu_id(importArgs.gpu_id);
+		int map_fd;
+		void *ret;
+
+		if (gpu_mem_id < 0) {
+			err = HSAKMT_STATUS_ERROR;
+			goto err_free_obj;
+		}
+		map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
+					gpu_mem[gpu_mem_id].drm_render_fd;
+		ret = mmap(reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+			   PROT_READ | PROT_WRITE,
+			   MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
 		if (ret == MAP_FAILED) {
 			err = HSAKMT_STATUS_ERROR;
 			goto err_free_obj;
@@ -3166,6 +3241,13 @@ void fmm_clear_all_mem(void)
 {
 	uint32_t i;
 	void *map_addr;
+
+	/* Close render node FDs. The child process needs to open new ones */
+	for (i = 0; i <= DRM_LAST_RENDER_NODE - DRM_FIRST_RENDER_NODE; i++)
+		if (drm_render_fds[i]) {
+			close(drm_render_fds[i]);
+			drm_render_fds[i] = 0;
+		}
 
 	/* Nothing is initialized. */
 	if (!gpu_mem)
