@@ -83,7 +83,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       memory_max_frequency_(0),
       ape1_base_(0),
       ape1_size_(0),
-      blit_initialized_(false),
       end_ts_pool_size_(0),
       end_ts_pool_counter_(0),
       end_ts_base_addr_(NULL) {
@@ -131,15 +130,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
 GpuAgent::~GpuAgent() {
   for (int i = 0; i < BlitCount; ++i) {
-    if (blits_[i] != NULL) {
+    if (blits_[i] != nullptr) {
       hsa_status_t status = blits_[i]->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
-      delete blits_[i];
     }
-  }
-
-  for (int i = 0; i < QueueCount; ++i) {
-    delete queues_[i];
   }
 
   if (end_ts_base_addr_ != NULL) {
@@ -552,68 +546,52 @@ core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
 }
 
 void GpuAgent::InitDma() {
-  // This provides the ability to lazy init the blit objects on places that
-  // could give indication of DMA usage in the future. E.g.:
-  // 1. Call to allow access API.
-  // 2. Call to memory lock API.
-  if (!blit_initialized_.load(std::memory_order_acquire)) {
-    ScopedAcquire<KernelMutex> lock(&blit_lock_);
-    if (!blit_initialized_.load(std::memory_order_relaxed)) {
-      // Try create SDMA blit first.
-      // TODO: Temporarily disable SDMA on specific ISA targets until they are fully qualified.
-      if ((isa_->GetMajorVersion() != 8) &&
-          core::Runtime::runtime_singleton_->flag().enable_sdma() &&
-          (HSA_PROFILE_BASE == profile_)) {
-        blits_[BlitHostToDev] = CreateBlitSdma();
-        blits_[BlitDevToHost] = CreateBlitSdma();
+  // Setup lazy init pointers on queues and blits.
+  auto queue_lambda = [this]() {
+    auto ret = CreateInterceptibleQueue();
+    if (ret == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Internal queue creation failed.");
+    return ret;
+  };
+  // Share utility queue with device-to-host blits.
+  queues_[QueueUtility].reset(queue_lambda);
 
-        if (blits_[BlitHostToDev] != NULL && blits_[BlitDevToHost] != NULL) {
-          blit_initialized_.store(true, std::memory_order_release);
-          return;
-        }
-      }
-
-      // Fall back to blit kernel if SDMA is unavailable.
-      if (blits_[BlitHostToDev] == NULL) {
-        // Create a dedicated compute queue for host-to-device blits.
-        queues_[QueueBlitOnly] = CreateInterceptibleQueue();
-        assert(queues_[QueueBlitOnly] != NULL && "Queue creation failed");
-
-        blits_[BlitHostToDev] = CreateBlitKernel(queues_[QueueBlitOnly]);
-        assert(blits_[BlitHostToDev] != NULL && "Blit creation failed");
-      }
-
-      if (blits_[BlitDevToHost] == NULL) {
-        // Share utility queue with device-to-host blits.
-        if (queues_[QueueUtility] == nullptr) queues_[QueueUtility] = CreateInterceptibleQueue();
-        blits_[BlitDevToHost] = CreateBlitKernel(queues_[QueueUtility]);
-        assert(blits_[BlitDevToHost] != NULL && "Blit creation failed");
-      }
-
-      blit_initialized_.store(true, std::memory_order_release);
+  // Blits, try create SDMA blit first.
+  // Disable SDMA on specific ISA targets until they are fully qualified.
+  auto blit_lambda = [this]() {
+    if ((isa_->GetMajorVersion() != 8) && core::Runtime::runtime_singleton_->flag().enable_sdma() &&
+        (HSA_PROFILE_BASE == profile_)) {
+      auto ret = CreateBlitSdma();
+      if (ret != nullptr) return ret;
     }
-  }
+    auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
+    if (ret == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
+    return ret;
+  };
+
+  blits_[BlitHostToDev].reset(blit_lambda);
+  blits_[BlitDevToHost].reset(blit_lambda);
+  blits_[BlitDevToDev].reset([this]() {
+    auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
+    if (ret == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
+    return ret;
+  });
+}
+
+void GpuAgent::PreloadBlits() {
+  blits_[BlitHostToDev].touch();
+  blits_[BlitDevToHost].touch();
+  blits_[BlitDevToDev].touch();
 }
 
 hsa_status_t GpuAgent::PostToolsInit() {
   // Defer memory allocation until agents have been discovered.
   InitScratchPool();
   BindTrapHandler();
-
-  // Defer utility queue creation to allow tools to intercept.
-  if (queues_[QueueUtility] == nullptr) queues_[QueueUtility] = CreateInterceptibleQueue();
-
-  if (queues_[QueueUtility] == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  // Share utility queue with device-to-device blits.
-  if (blits_[BlitDevToDev] == nullptr)
-    blits_[BlitDevToDev] = CreateBlitKernel(queues_[QueueUtility]);
-
-  if (blits_[BlitDevToDev] == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
+  InitDma();
 
   return HSA_STATUS_SUCCESS;
 }
@@ -627,23 +605,19 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
-  core::Blit* blit =
-      (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
-       dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-          ? blits_[BlitHostToDev]
-          : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
-             dst_agent.device_type() == core::Agent::kAmdCpuDevice)
-                ? blits_[BlitDevToHost]
-                : blits_[BlitDevToDev];
-
-  if (blit == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
+  lazy_ptr<core::Blit>& blit =
+    (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+     dst_agent.device_type() == core::Agent::kAmdGpuDevice)
+       ? blits_[BlitHostToDev]
+       : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+          dst_agent.device_type() == core::Agent::kAmdCpuDevice)
+            ? blits_[BlitDevToHost]
+            : blits_[BlitDevToDev];
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
-    out_signal.async_copy_agent(this);
+    out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
   hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
@@ -924,6 +898,11 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
+
+  // Ensure utility queue has been created.
+  // Deferring longer risks exhausting queue count before ISA upload and invalidation capability is
+  // ensured.
+  queues_[QueueUtility].touch();
 
   // Create an HW AQL queue
   *queue = new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);

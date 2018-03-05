@@ -81,7 +81,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(),
       LocalSignal(0),
-      Signal(signal()),
+      DoorbellSignal(signal()),
       ring_buf_(nullptr),
       ring_buf_alloc_bytes_(0),
       queue_id_(HSA_QUEUEID(-1)),
@@ -471,7 +471,7 @@ uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
 }
 
 void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
-  if (agent_->profile() == HSA_PROFILE_FULL) {
+  if ((agent_->profile() == HSA_PROFILE_FULL) && queue_full_workaround_) {
     // Compute the physical and virtual size of the queue.
     uint32_t ring_buf_phys_size_bytes =
         uint32_t(queue_size_pkts * sizeof(core::AqlPacket));
@@ -602,23 +602,22 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
   } else {
     // Allocate storage for the ring buffer.
     ring_buf_alloc_bytes_ = AlignUp(
-        queue_size_pkts * static_cast<uint32_t>(sizeof(core::AqlPacket)), 4096);
+        queue_size_pkts * sizeof(core::AqlPacket), 4096);
 
     ring_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
-        ring_buf_alloc_bytes_, 0x1000,
-        core::MemoryRegion::AllocateExecutable |
-            core::MemoryRegion::AllocateDoubleMap);
+        ring_buf_alloc_bytes_, 0x1000, core::MemoryRegion::AllocateExecutable |
+            (queue_full_workaround_ ? core::MemoryRegion::AllocateDoubleMap : 0));
 
     assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
 
     // The virtual ring allocation is twice as large as requested.
     // Each half maps to the same set of physical pages.
-    ring_buf_alloc_bytes_ *= 2;
+    if (queue_full_workaround_) ring_buf_alloc_bytes_ *= 2;
   }
 }
 
 void AqlQueue::FreeRegisteredRingBuffer() {
-  if (agent_->profile() == HSA_PROFILE_FULL) {
+  if ((agent_->profile() == HSA_PROFILE_FULL) && queue_full_workaround_) {
 #ifdef __linux__
     munmap(ring_buf_, ring_buf_alloc_bytes_);
 #endif
@@ -800,7 +799,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // Obtain a queue slot for a single AQL packet.
   uint64_t write_idx = queue->AddWriteIndexAcqRel(1);
 
-  while ((write_idx - queue->LoadReadIndexRelaxed()) > queue->amd_queue_.hsa_queue.size) {
+  while ((write_idx - queue->LoadReadIndexRelaxed()) >= queue->amd_queue_.hsa_queue.size) {
     os::YieldThread();
   }
 
