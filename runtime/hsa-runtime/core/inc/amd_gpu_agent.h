@@ -379,7 +379,8 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
-    QueueUtility,  // Cache management and blit compute
+    QueueUtility,   // Cache management and device to {host,device} blit compute
+    QueueBlitOnly,  // Host to device blit
     QueueCount
   };
 
