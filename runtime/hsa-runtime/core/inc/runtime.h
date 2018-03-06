@@ -510,7 +510,7 @@ class Runtime {
   void* vm_fault_handler_user_data_;
 
   // Holds reference count to runtime object.
-  volatile uint32_t ref_count_;
+  std::atomic<uint32_t> ref_count_;
 
   // Track environment variables.
   Flag flag_;
