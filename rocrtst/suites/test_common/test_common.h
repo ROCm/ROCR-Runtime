@@ -48,22 +48,15 @@
 
 #include <memory>
 #include <vector>
-#if ENABLE_SMI
-#include "rocm_smi/rocm_smi.h"
-#endif
+
 struct RocrTstGlobals {
   uint32_t verbosity;
   uint32_t monitor_verbosity;
   uint32_t num_iterations;
-#if ENABLE_SMI
-  std::vector<std::shared_ptr<amd::smi::Device>> monitor_devices;
-#endif
 };
 
 uint32_t ProcessCmdline(RocrTstGlobals* test, int arg_cnt, char** arg_list);
 
-#if ENABLE_SMI
-void DumpMonitorInfo(const TestBase *test);
-#endif
+int DumpMonitorInfo(void);
 
 #endif  // ROCRTST_SUITES_TEST_COMMON_TEST_COMMON_H_
