@@ -49,9 +49,11 @@
 
 #include <iostream>
 #include <string>
+#include <sstream>
 
 #include "suites/test_common/test_base.h"
 #include "suites/test_common/test_common.h"
+#include "rocm_smi/rocm_smi.h"
 
 static const struct option long_options[] = {
   {"iterations", required_argument, nullptr, 'i'},
@@ -120,17 +122,28 @@ uint32_t ProcessCmdline(RocrTstGlobals* test, int arg_cnt, char** arg_list) {
   }
   return 0;
 }
-#if ENABLE_SMI
-void DumpMonitorInfo(const TestBase *test) {
+
+template<typename T>
+static std::string IntegerToString(T intVal, bool hex = true) {
+  std::stringstream stream;
+
+  if (hex) {
+    stream << "0x" << std::hex << intVal;
+  } else {
+    stream << std::dec << intVal;
+  }
+  return stream.str();
+}
+
+int DumpMonitorInfo() {
   int ret = 0;
-  uint32_t value;
-  uint32_t value2;
+  uint64_t value_u64;
+  int64_t value_i64;
   std::string val_str;
   std::vector<std::string> val_vec;
+  rsmi_status_t rsmi_ret;
+  int dump_ret = 0;
 
-  assert(test != nullptr);
-  assert(test->monitor_devices() != nullptr &&
-                            "Make sure to call test->set_monitor_devices()");
   auto print_attr_label =
       [&](std::string attrib) -> bool {
           std::cout << "\t** " << attrib;
@@ -146,62 +159,91 @@ void DumpMonitorInfo(const TestBase *test) {
   std::cout << "\t***** Hardware monitor values *****" << std::endl;
   std::cout << delim << std::endl;
   std::cout.setf(std::ios::dec, std::ios::basefield);
-  for (auto dev : *test->monitor_devices()) {
-    auto print_vector =
-                     [&](amd::smi::DevInfoTypes type, std::string label) {
-      ret = dev->readDevInfo(type, &val_vec);
+
+  uint32_t num_mon_devices;
+  rsmi_ret = rsmi_num_monitor_devices(&num_mon_devices);
+  if (rsmi_ret != RSMI_STATUS_SUCCESS) {
+    std::cout << "rsmi_num_monitor_device() returned" << rsmi_ret << std::endl;
+    return 1;
+  }
+
+  for (uint32_t dindx = 0; dindx < num_mon_devices; ++dindx) {
+    auto print_frequencies = [&](rsmi_frequencies *freqs, std::string label) {
       if (print_attr_label(label)) {
-        for (auto vs : val_vec) {
-          std::cout << "\t**  " << vs << std::endl;
+        for (uint32_t i = 0; i < freqs->num_supported; ++i) {
+          std::cout << "\t**  " << i << ": " <<
+                                         freqs->frequency[i]/1000000 << "Mhz";
+          if (i == freqs->current) {
+            std::cout << " *";
+          }
+
+          std::cout << std::endl;
         }
-        val_vec.clear();
       }
     };
-    auto print_val_str =
-                     [&](amd::smi::DevInfoTypes type, std::string label) {
-      ret = dev->readDevInfo(type, &val_str);
-
+    auto print_val_str = [&](std::string val, std::string label) {
       std::cout << "\t** " << label;
-      if (ret == -1) {
-        std::cout << "not available";
+      if (ret != RSMI_STATUS_SUCCESS) {
+        std::cout << "not available; rsmi call returned" << rsmi_ret;
+        dump_ret = 1;
       } else {
-        std::cout << val_str;
+        std::cout << val;
       }
       std::cout << std:: endl;
     };
 
-    print_val_str(amd::smi::kDevDevID, "Device ID: ");
-    print_val_str(amd::smi::kDevPerfLevel, "Performance Level: ");
-    print_val_str(amd::smi::kDevOverDriveLevel, "OverDrive Level: ");
-    print_vector(amd::smi::kDevGPUMClk,
-                                 "Supported GPU Memory clock frequencies:\n");
-    print_vector(amd::smi::kDevGPUSClk,
-                                    "Supported GPU clock frequencies:\n");
+    rsmi_ret = rsmi_dev_get_id(dindx, &value_u64);
+    print_val_str(IntegerToString(value_u64), "Device ID: ");
 
-    if (dev->monitor() != nullptr) {
-      ret = dev->monitor()->readMonitor(amd::smi::kMonName, &val_str);
-      if (print_attr_label("Monitor name: ")) {
-        std::cout << val_str << std::endl;
-      }
-
-      ret = dev->monitor()->readMonitor(amd::smi::kMonTemp, &value);
-      if (print_attr_label("Temperature: ")) {
-        std::cout << static_cast<float>(value)/1000.0 << "C" << std::endl;
-      }
-
-      std::cout.setf(std::ios::dec, std::ios::basefield);
-
-      ret = dev->monitor()->readMonitor(amd::smi::kMonMaxFanSpeed, &value);
-      if (ret == 0) {
-        ret = dev->monitor()->readMonitor(amd::smi::kMonFanSpeed, &value2);
-      }
-      if (print_attr_label("Current Fan Speed: ")) {
-        std::cout << value2/static_cast<float>(value) * 100 << "% (" <<
-                                   value2 << "/" << value << ")" << std::endl;
-      }
+    rsmi_dev_perf_level perf;
+    std::string perf_str;
+    rsmi_ret = rsmi_dev_get_perf_level(dindx, &perf);
+    switch (perf) {
+      case RSMI_DEV_PERF_LEVEL_AUTO:
+        perf_str = "auto";
+        break;
+      default:
+        perf_str = "unknown";
     }
+    print_val_str(perf_str, "Performance Level: ");
+
+    rsmi_ret = rsmi_dev_get_overdrive_level(dindx, &value_u64);
+
+    print_val_str(IntegerToString(value_u64, false) + "%", "OverDrive Level: ");
+
+    rsmi_frequencies freqs;
+    rsmi_ret = rsmi_dev_get_gpu_sys_freq(dindx, &freqs);
+    print_frequencies(&freqs, "Supported GPU clock frequencies:\n");
+
+    rsmi_ret = rsmi_dev_get_gpu_mem_freq(dindx, &freqs);
+    print_frequencies(&freqs, "Supported GPU Memory clock frequencies:\n");
+
+
+    char mon_name[32];
+    rsmi_ret = rsmi_dev_mon_get_name(dindx, mon_name, 32);
+    print_val_str(mon_name, "Monitor name: ");
+
+    rsmi_ret = rsmi_dev_mon_get_temp(dindx, &value_i64);
+    print_val_str(IntegerToString(value_i64/1000, false) + "C",
+                                                            "Temperature: ");
+
+    rsmi_ret = rsmi_dev_mon_get_fan_speed(dindx, &value_i64);
+    if (ret != RSMI_STATUS_SUCCESS) {
+      std::cout << "not available; rsmi call returned" << rsmi_ret;
+      dump_ret = 1;
+    }
+    rsmi_ret = rsmi_dev_mon_get_max_fan_speed(dindx, &value_u64);
+    if (ret != RSMI_STATUS_SUCCESS) {
+      std::cout << "not available; rsmi call returned" << rsmi_ret;
+      dump_ret = 1;
+    }
+    if (print_attr_label("Current Fan Speed: ")) {
+      std::cout << static_cast<float>(value_i64)/value_u64 * 100 << "% (" <<
+          value_i64 << "/" << value_u64 << ")" << std::endl;
+    }
+
     std::cout << "\t=======" << std::endl;
   }
   std::cout << delim << std::endl;
+  return dump_ret;
 }
-#endif 
