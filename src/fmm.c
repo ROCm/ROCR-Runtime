@@ -211,8 +211,6 @@ static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 }
 
 extern int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
-static HSAKMT_STATUS dgpu_mem_init(uint32_t node_id, void **base, void **limit);
-static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit);
 static void __fmm_release(void *address, manageable_aperture_t *aperture);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
@@ -1448,6 +1446,145 @@ static HSAKMT_STATUS get_process_apertures(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+/* Tonga dGPU specific functions */
+static bool is_dgpu_mem_init;
+
+static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit)
+{
+	struct kfd_ioctl_set_process_dgpu_aperture_args args = {0};
+
+	args.gpu_id = gpu_id;
+	args.dgpu_base = base;
+	args.dgpu_limit = limit;
+
+	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_PROCESS_DGPU_APERTURE, &args);
+}
+
+static void *reserve_address(void *addr, unsigned long long int len)
+{
+	void *ret_addr;
+
+	if (len <= 0)
+		return NULL;
+
+	ret_addr = mmap(addr, len, PROT_NONE,
+				 MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
+	if (ret_addr == MAP_FAILED)
+		return NULL;
+
+	return ret_addr;
+}
+
+#define ADDRESS_RANGE_LIMIT_MASK 0xFFFFFFFFFF
+#define AMDGPU_SYSFS_VM_SIZE "/sys/module/amdgpu/parameters/vm_size"
+
+/*
+ * TODO: Provide a cleaner interface via topology
+ */
+static HSAKMT_STATUS get_dgpu_vm_limit(uint32_t *vm_size_in_gb)
+{
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	fd = fopen(AMDGPU_SYSFS_VM_SIZE, "r");
+	if (!fd)
+		return HSAKMT_STATUS_ERROR;
+	if (fscanf(fd, "%ul", vm_size_in_gb) != 1) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto err;
+	}
+
+err:
+	fclose(fd);
+	return ret;
+}
+
+#define DGPU_APERTURE_ADDR_MIN 0x1000000 /* Leave at least 16MB for kernel */
+#define DGPU_APERTURE_ADDR_INC 0x200000	 /* Search in huge-page increments */
+
+static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limit)
+{
+	bool found;
+	HSAKMT_STATUS ret;
+	void *addr, *ret_addr;
+	HSAuint64 len, vm_limit, max_vm_limit, min_vm_size;
+	uint32_t max_vm_limit_in_gb;
+
+	if (is_dgpu_mem_init) {
+		if (base)
+			*base = dgpu_shared_aperture_base;
+		if (limit)
+			*limit = dgpu_shared_aperture_limit;
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		pr_err("Unable to find vm_size for dGPU, assuming 64GB.\n");
+		max_vm_limit_in_gb = 64;
+	}
+	max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
+	min_vm_size = (HSAuint64)4 << 30;
+
+	found = false;
+
+	for (len = max_vm_limit+1; !found && len >= min_vm_size; len >>= 1) {
+		for (addr = (void *)DGPU_APERTURE_ADDR_MIN, ret_addr = NULL;
+		     (HSAuint64)addr + (len >> 1) < max_vm_limit;
+		     addr = (void *)((HSAuint64)addr + DGPU_APERTURE_ADDR_INC)) {
+			ret_addr = reserve_address(addr, len);
+			if (!ret_addr)
+				break;
+			if ((HSAuint64)ret_addr + (len >> 1) < max_vm_limit)
+				/* At least half the returned address
+				 * space is GPU addressable, we'll
+				 * take it
+				 */
+				break;
+			munmap(ret_addr, len);
+		}
+		if (!ret_addr) {
+			pr_warn("Failed to reserve %uGB for SVM ...\n",
+				(unsigned int)(len >> 30));
+			continue;
+		}
+		if ((HSAuint64)ret_addr + min_vm_size - 1 > max_vm_limit) {
+			/* addressable size is less than the minimum */
+			pr_warn("Got %uGB for SVM at %p with only %dGB usable ...\n",
+				(unsigned int)(len >> 30), ret_addr,
+				(int)(((HSAint64)max_vm_limit -
+				       (HSAint64)ret_addr) >> 30));
+			munmap(ret_addr, len);
+			continue;
+		} else {
+			found = true;
+			break;
+		}
+	}
+
+	if (!found) {
+		pr_err("Failed to reserve SVM address range. Giving up.\n");
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	vm_limit = (HSAuint64)ret_addr + len - 1;
+	if (vm_limit > max_vm_limit) {
+		/* trim the tail that's not GPU-addressable */
+		munmap((void *)(max_vm_limit + 1), vm_limit - max_vm_limit);
+		vm_limit = max_vm_limit;
+	}
+
+	if (base)
+		*base = ret_addr;
+	dgpu_shared_aperture_base = ret_addr;
+	if (limit)
+		*limit = (void *)vm_limit;
+	dgpu_shared_aperture_limit = (void *)vm_limit;
+	is_dgpu_mem_init = true;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i = 0;
@@ -2242,145 +2379,6 @@ int fmm_unmap_from_gpu(void *address)
 		return _fmm_unmap_from_gpu_userptr(address);
 
 	return 0;
-}
-
-/* Tonga dGPU specific functions */
-static bool is_dgpu_mem_init = false;
-
-static int set_dgpu_aperture(uint32_t gpu_id, uint64_t base, uint64_t limit)
-{
-	struct kfd_ioctl_set_process_dgpu_aperture_args args = {0};
-
-	args.gpu_id = gpu_id;
-	args.dgpu_base = base;
-	args.dgpu_limit = limit;
-
-	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_PROCESS_DGPU_APERTURE, &args);
-}
-
-static void *reserve_address(void *addr, unsigned long long int len)
-{
-	void *ret_addr;
-
-	if (len <= 0)
-		return NULL;
-
-	ret_addr = mmap(addr, len, PROT_NONE,
-				 MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
-	if (ret_addr == MAP_FAILED)
-		return NULL;
-
-	return ret_addr;
-}
-
-#define ADDRESS_RANGE_LIMIT_MASK 0xFFFFFFFFFF
-#define AMDGPU_SYSFS_VM_SIZE "/sys/module/amdgpu/parameters/vm_size"
-
-/*
- * TODO: Provide a cleaner interface via topology
- */
-static HSAKMT_STATUS get_dgpu_vm_limit(uint32_t *vm_size_in_gb)
-{
-	FILE *fd;
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	fd = fopen(AMDGPU_SYSFS_VM_SIZE, "r");
-	if (!fd)
-		return HSAKMT_STATUS_ERROR;
-	if (fscanf(fd, "%ul", vm_size_in_gb) != 1) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto err;
-	}
-
-err:
-	fclose(fd);
-	return ret;
-}
-
-#define DGPU_APERTURE_ADDR_MIN 0x1000000 /* Leave at least 16MB for kernel */
-#define DGPU_APERTURE_ADDR_INC 0x200000	 /* Search in huge-page increments */
-
-static HSAKMT_STATUS dgpu_mem_init(uint32_t gpu_mem_id, void **base, void **limit)
-{
-	bool found;
-	HSAKMT_STATUS ret;
-	void *addr, *ret_addr;
-	HSAuint64 len, vm_limit, max_vm_limit, min_vm_size;
-	uint32_t max_vm_limit_in_gb;
-
-	if (is_dgpu_mem_init) {
-		if (base)
-			*base = dgpu_shared_aperture_base;
-		if (limit)
-			*limit = dgpu_shared_aperture_limit;
-		return HSAKMT_STATUS_SUCCESS;
-	}
-
-	ret = get_dgpu_vm_limit(&max_vm_limit_in_gb);
-	if (ret != HSAKMT_STATUS_SUCCESS) {
-		pr_err("Unable to find vm_size for dGPU, assuming 64GB.\n");
-		max_vm_limit_in_gb = 64;
-	}
-	max_vm_limit = ((HSAuint64)max_vm_limit_in_gb << 30) - 1;
-	min_vm_size = (HSAuint64)4 << 30;
-
-	found = false;
-
-	for (len = max_vm_limit+1; !found && len >= min_vm_size; len >>= 1) {
-		for (addr = (void *)DGPU_APERTURE_ADDR_MIN, ret_addr = NULL;
-		     (HSAuint64)addr + (len >> 1) < max_vm_limit;
-		     addr = (void *)((HSAuint64)addr + DGPU_APERTURE_ADDR_INC)) {
-			ret_addr = reserve_address(addr, len);
-			if (!ret_addr)
-				break;
-			if ((HSAuint64)ret_addr + (len >> 1) < max_vm_limit)
-				/* At least half the returned address
-				 * space is GPU addressable, we'll
-				 * take it
-				 */
-				break;
-			munmap(ret_addr, len);
-		}
-		if (!ret_addr) {
-			pr_warn("Failed to reserve %uGB for SVM ...\n",
-				(unsigned int)(len >> 30));
-			continue;
-		}
-		if ((HSAuint64)ret_addr + min_vm_size - 1 > max_vm_limit) {
-			/* addressable size is less than the minimum */
-			pr_warn("Got %uGB for SVM at %p with only %dGB usable ...\n",
-				(unsigned int)(len >> 30), ret_addr,
-				(int)(((HSAint64)max_vm_limit -
-				       (HSAint64)ret_addr) >> 30));
-			munmap(ret_addr, len);
-			continue;
-		} else {
-			found = true;
-			break;
-		}
-	}
-
-	if (!found) {
-		pr_err("Failed to reserve SVM address range. Giving up.\n");
-		return HSAKMT_STATUS_ERROR;
-	}
-
-	vm_limit = (HSAuint64)ret_addr + len - 1;
-	if (vm_limit > max_vm_limit) {
-		/* trim the tail that's not GPU-addressable */
-		munmap((void *)(max_vm_limit + 1), vm_limit - max_vm_limit);
-		vm_limit = max_vm_limit;
-	}
-
-	if (base)
-		*base = ret_addr;
-	dgpu_shared_aperture_base = ret_addr;
-	if (limit)
-		*limit = (void *)vm_limit;
-	dgpu_shared_aperture_limit = (void *)vm_limit;
-	is_dgpu_mem_init = true;
-
-	return HSAKMT_STATUS_SUCCESS;
 }
 
 bool fmm_get_handle(void *address, uint64_t *handle)
