@@ -150,10 +150,10 @@ typedef struct _HsaSystemProperties
     HSAuint32    PlatformRev;      // HSA platform revision, reflects Platform Table Revision ID
 } HsaSystemProperties;
 
-typedef union 
+typedef union
 {
     HSAuint32 Value;
-    struct 
+    struct
     {
         unsigned int uCode    : 10;  // ucode packet processor version
         unsigned int Major    :  6;  // GFXIP Major engine version
@@ -161,6 +161,17 @@ typedef union
         unsigned int Stepping :  8;  // GFXIP Stepping info
     }ui32;
 } HSA_ENGINE_ID;
+
+typedef union
+{
+    HSAuint32 Value;
+    struct
+    {
+        unsigned int uCodeSDMA: 10; // ucode version SDMA engine
+        unsigned int uCodeRes : 10; // ucode version (reserved)
+        unsigned int Reserved : 12; // Reserved, must be 0
+    };
+} HSA_ENGINE_VERSION;
 
 typedef union
 {
@@ -251,7 +262,8 @@ typedef struct _HsaNodeProperties
     HSAuint16       MarketingName[HSA_PUBLIC_NAME_SIZE];   // Public name of the "device" on the node (board or APU name).
                                        // Unicode string
     HSAuint8        AMDName[HSA_PUBLIC_NAME_SIZE];   //CAL Name of the "device", ASCII
-    HSAuint8        Reserved[64];
+    HSA_ENGINE_VERSION uCodeEngineVersions;
+    HSAuint8        Reserved[60];
 } HsaNodeProperties;
 
 

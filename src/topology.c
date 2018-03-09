@@ -740,7 +740,6 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	char path[256];
 	unsigned long long prop_val;
 	uint32_t i, prog, major, minor, step;
-	uint16_t fw_version = 0;
 	int read_size;
 	const struct hsa_gfxip_table *hsa_gfxip;
 	char namebuf[HSA_PUBLIC_NAME_SIZE];
@@ -815,7 +814,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 		else if (strcmp(prop_name, "max_slots_scratch_cu") == 0)
 			props->MaxSlotsScratchCU = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "fw_version") == 0)
-			fw_version = (uint16_t)prop_val;
+			props->EngineId.Value = (uint32_t)prop_val & 0x3ff;
 		else if (strcmp(prop_name, "vendor_id") == 0)
 			props->VendorId = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "device_id") == 0)
@@ -830,13 +829,9 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->LocalMemSize = prop_val;
 		else if (strcmp(prop_name, "drm_render_minor") == 0)
 			props->DrmRenderMinor = (int32_t)prop_val;
-
+		else if (strcmp(prop_name, "sdma_fw_version") == 0)
+			props->uCodeEngineVersions.Value = (uint32_t)prop_val & 0x3ff;
 	}
-
-	props->EngineId.ui32.uCode = fw_version & 0x3ff;
-	props->EngineId.ui32.Major = 0;
-	props->EngineId.ui32.Minor = 0;
-	props->EngineId.ui32.Stepping = 0;
 
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
 	if (hsa_gfxip) {
