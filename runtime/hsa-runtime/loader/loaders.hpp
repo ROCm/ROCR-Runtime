@@ -55,11 +55,7 @@ namespace loader {
   private:
     hsa_isa_t invalid;
     hsa_isa_t gfx700, gfx701, gfx800, gfx801, gfx802, gfx803, gfx804, gfx810;
-#if defined(GFX9_BUILD)
-    hsa_isa_t gfx900, gfx901;
-#else
-    hsa_isa_t reserved;
-#endif // GFX9_BUILD
+    hsa_isa_t gfx900, gfx901, gfx902, gfx903;
     std::ostream& out;
     typedef std::set<void*> PointerSet;
     PointerSet pointers;
