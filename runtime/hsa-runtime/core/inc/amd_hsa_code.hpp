@@ -267,6 +267,7 @@ namespace code {
       const amd::elf::Section* HsaText() const { assert(hsatext); return hsatext; }
       amd::elf::SymbolTable* Symtab() { assert(img); return img->symtab(); }
       uint16_t Machine() const { return img->Machine(); }
+      uint32_t EFlags() const { return img->EFlags(); }
 
       AmdHsaCode(bool combineDataSegments = true);
       virtual ~AmdHsaCode();
