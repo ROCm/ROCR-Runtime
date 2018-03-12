@@ -192,6 +192,8 @@ class GpuAgent : public GpuAgentInt {
 
   uint16_t GetMicrocodeVersion() const;
 
+  uint16_t GetSdmaMicrocodeVersion() const;
+
   // @brief Assembles SP3 shader source into ISA or AQL code object.
   //
   // @param [in] src_sp3 SP3 shader source text representation.
@@ -325,7 +327,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create SDMA blit object.
   //
   // @retval NULL if SDMA blit creation and initialization failed.
-  core::Blit* CreateBlitSdma();
+  core::Blit* CreateBlitSdma(bool h2d);
 
   // @brief Create Kernel blit object using provided compute queue.
   //

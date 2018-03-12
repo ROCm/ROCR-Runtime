@@ -515,13 +515,13 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
   return queue;
 }
 
-core::Blit* GpuAgent::CreateBlitSdma() {
+core::Blit* GpuAgent::CreateBlitSdma(bool h2d) {
   core::Blit* sdma;
 
   if (isa_->GetMajorVersion() <= 8) {
-    sdma = new BlitSdmaV2V3;
+    sdma = new BlitSdmaV2V3(h2d);
   } else {
-    sdma = new BlitSdmaV4;
+    sdma = new BlitSdmaV4(h2d);
   }
 
   if (sdma->Initialize(*this) != HSA_STATUS_SUCCESS) {
@@ -561,10 +561,10 @@ void GpuAgent::InitDma() {
 
   // Blits, try create SDMA blit first.
   // Disable SDMA on specific ISA targets until they are fully qualified.
-  auto blit_lambda = [this](lazy_ptr<core::Queue>& queue) {
+  auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
     if ((isa_->GetMajorVersion() != 8) && core::Runtime::runtime_singleton_->flag().enable_sdma() &&
         (HSA_PROFILE_BASE == profile_)) {
-      auto ret = CreateBlitSdma();
+      auto ret = CreateBlitSdma(h2d);
       if (ret != nullptr) return ret;
     }
     auto ret = CreateBlitKernel((*queue).get());
@@ -573,8 +573,8 @@ void GpuAgent::InitDma() {
     return ret;
   };
 
-  blits_[BlitHostToDev].reset([blit_lambda, this]() { return blit_lambda(queues_[QueueBlitOnly]); });
-  blits_[BlitDevToHost].reset([blit_lambda, this]() { return blit_lambda(queues_[QueueUtility]); });
+  blits_[BlitHostToDev].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueBlitOnly]); });
+  blits_[BlitDevToHost].reset([blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility]); });
   blits_[BlitDevToDev].reset([this]() {
     auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
     if (ret == nullptr)
@@ -614,7 +614,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
        : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
           dst_agent.device_type() == core::Agent::kAmdCpuDevice)
             ? blits_[BlitDevToHost]
-            : blits_[BlitDevToDev];
+            : (src_agent.node_id() == dst_agent.node_id())
+              ? blits_[BlitDevToDev] : blits_[BlitDevToHost];
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
@@ -1061,6 +1062,10 @@ bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
 
 uint16_t GpuAgent::GetMicrocodeVersion() const {
   return (properties_.EngineId.ui32.uCode);
+}
+
+uint16_t GpuAgent::GetSdmaMicrocodeVersion() const {
+  return (properties_.uCodeEngineVersions.uCodeSDMA);
 }
 
 void GpuAgent::SyncClocks() {
