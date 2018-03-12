@@ -91,17 +91,22 @@ class Flag {
 
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_ENABLE_SDMA_HDP_FLUSH");
+    enable_sdma_hdp_flush_ = (var == "0") ? false : true;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
 
   bool enable_vm_fault_message() const { return enable_vm_fault_message_; }
-  
+
   bool enable_queue_fault_message() const { return enable_queue_fault_message_; }
 
   bool enable_interrupt() const { return enable_interrupt_; }
 
   bool enable_sdma() const { return enable_sdma_; }
+
+  bool enable_sdma_hdp_flush() const { return enable_sdma_hdp_flush_; }
 
   bool running_valgrind() const { return running_valgrind_; }
 
@@ -122,6 +127,7 @@ class Flag {
   bool enable_vm_fault_message_;
   bool enable_interrupt_;
   bool enable_sdma_;
+  bool enable_sdma_hdp_flush_;
   bool running_valgrind_;
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
