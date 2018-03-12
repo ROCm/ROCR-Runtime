@@ -52,6 +52,10 @@
 #define EF_AMDGPU_XNACK          0x00000001
 #define EF_AMDGPU_TRAP_HANDLER   0x00000002
 
+// FIXME: We really need to start thinking about separating legacy code out,
+// it is getting messy.
+#define EF_AMDGPU_XNACK_LC 0x100
+
 // ELF Section Header Flag Enumeration Values.
 #define SHF_AMDGPU_HSA_GLOBAL   (0x00100000 & SHF_MASKOS)
 #define SHF_AMDGPU_HSA_READONLY (0x00200000 & SHF_MASKOS)

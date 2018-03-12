@@ -1110,9 +1110,6 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   std::string codeIsa;
   if (!code->GetNoteIsa(codeIsa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
 
-  hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
-  if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
-
   uint32_t majorVersion, minorVersion;
   if (!code->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
@@ -1120,6 +1117,13 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
 
   if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
   if (agent.handle == 0 && majorVersion == 1) { return HSA_STATUS_ERROR_INVALID_AGENT; }
+
+  if (majorVersion == 2 && (code->EFlags() & EF_AMDGPU_XNACK_LC))
+    codeIsa = codeIsa + "-xnack";
+
+  hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
+  if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
+
   if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) { return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS; }
 
   uint32_t codeHsailMajor;
