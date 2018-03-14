@@ -208,6 +208,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// that enable kernel access scratch memory
   void InitScratchSRD();
 
+  /// @brief Halt the queue without destroying it or fencing memory.
+  void Suspend();
+
   /// @brief Handler for hardware queue events.
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
 

@@ -290,8 +290,7 @@ AqlQueue::~AqlQueue() {
     HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
   }
 
-  auto err = hsaKmtDestroyQueue(queue_id_);
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
+  Inactivate();
   FreeRegisteredRingBuffer();
   agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
@@ -686,11 +685,17 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 #endif
 }
 
+void AqlQueue::Suspend() {
+  auto err = hsaKmtUpdateQueue(queue_id_, 0, HSA_QUEUE_PRIORITY_NORMAL, NULL, 0, NULL);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
+}
+
 hsa_status_t AqlQueue::Inactivate() {
   bool active = active_.exchange(false, std::memory_order_relaxed);
   if (active) {
-    auto err = hsaKmtUpdateQueue(queue_id_, 0, HSA_QUEUE_PRIORITY_NORMAL, NULL, 0, NULL);
-    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
+    auto err = hsaKmtDestroyQueue(queue_id_);
+    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
+    atomic::Fence(std::memory_order_acquire);
   }
   return HSA_STATUS_SUCCESS;
 }
@@ -698,6 +703,7 @@ hsa_status_t AqlQueue::Inactivate() {
 bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_SUCCESS;
+  bool fatal = false;
 
   // Process errors only if queue is not terminating.
   if ((queue->dynamicScratchState & ERROR_HANDLER_TERMINATE) != ERROR_HANDLER_TERMINATE) {
@@ -750,10 +756,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
     } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
       errorCode = HSA_STATUS_ERROR_EXCEPTION;
+      fatal = true;
 
     } else {  // Undefined code
       assert(false && "Undefined queue error code");
       errorCode = HSA_STATUS_ERROR;
+      fatal = true;
     }
 
     if (errorCode == HSA_STATUS_SUCCESS) {
@@ -761,12 +769,19 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       return true;
     }
 
-    queue->Inactivate();
-    if (queue->errors_callback_ != nullptr)
+    queue->Suspend();
+    if (queue->errors_callback_ != nullptr) {
       queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
+    }
+    if (fatal) {
+      //Temporarilly removed until there is clarity on exactly what debugtrap's semantics are.
+      //assert(false && "Fatal queue error");
+      //std::abort();
+    }
   }
   // Copy here is to protect against queue being released between setting the scratch state and
-  // updating the signal value.
+  // updating the signal value.  The signal itself is safe to use because it is ref counted rather
+  // than being released with the queue.
   hsa_signal_t signal = queue->amd_queue_.queue_inactive_signal;
   queue->dynamicScratchState = ERROR_HANDLER_DONE;
   HSA::hsa_signal_store_screlease(signal, -1ull);

@@ -318,9 +318,10 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   virtual void do_set_public_handle(hsa_queue_t* handle) {
     public_handle_ = handle;
   }
-  hsa_queue_t* public_handle_;
 
   virtual bool _IsA(rtti_t id) const = 0;
+
+  hsa_queue_t* public_handle_;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);

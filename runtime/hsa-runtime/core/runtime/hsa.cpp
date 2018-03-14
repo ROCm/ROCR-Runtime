@@ -2626,22 +2626,26 @@ hsa_status_t hsa_status_string(
       break;
     case HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  *The code object reader is invalid.";
+          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  The code object reader is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_CACHE:
-      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  *The cache is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  The cache is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_WAVEFRONT:
-      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  *The wavefront is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  The wavefront is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:
-      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  *The signal group is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  The signal group is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  *The HSA runtime is not in the configuration "
+          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  The HSA runtime is not in the configuration "
           "state.";
       break;
+    case HSA_STATUS_ERROR_FATAL:
+      *status_string =
+          "HSA_STATUS_ERROR_FATAL:  The queue received an error that may require process "
+          "termination.";
     case HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED:
       *status_string =
           "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "

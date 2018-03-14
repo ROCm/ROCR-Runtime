@@ -116,148 +116,151 @@ extern "C" {
  * @brief Status codes.
  */
 typedef enum {
-    /**
-     * The function has been executed successfully.
-     */
-    HSA_STATUS_SUCCESS = 0x0,
-    /**
-     * A traversal over a list of elements has been interrupted by the
-     * application before completing.
-     */
-    HSA_STATUS_INFO_BREAK = 0x1,
-    /**
-     * A generic error has occurred.
-     */
-    HSA_STATUS_ERROR = 0x1000,
-    /**
-     * One of the actual arguments does not meet a precondition stated in the
-     * documentation of the corresponding formal argument.
-     */
-    HSA_STATUS_ERROR_INVALID_ARGUMENT = 0x1001,
-    /**
-     * The requested queue creation is not valid.
-     */
-    HSA_STATUS_ERROR_INVALID_QUEUE_CREATION = 0x1002,
-    /**
-     * The requested allocation is not valid.
-     */
-    HSA_STATUS_ERROR_INVALID_ALLOCATION = 0x1003,
-    /**
-     * The agent is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_AGENT = 0x1004,
-    /**
-     * The memory region is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_REGION = 0x1005,
-    /**
-     * The signal is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_SIGNAL = 0x1006,
-    /**
-     * The queue is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_QUEUE = 0x1007,
-    /**
-     * The HSA runtime failed to allocate the necessary resources. This error
-     * may also occur when the HSA runtime needs to spawn threads or create
-     * internal OS-specific events.
-     */
-    HSA_STATUS_ERROR_OUT_OF_RESOURCES = 0x1008,
-    /**
-     * The AQL packet is malformed.
-     */
-    HSA_STATUS_ERROR_INVALID_PACKET_FORMAT = 0x1009,
-    /**
-     * An error has been detected while releasing a resource.
-     */
-    HSA_STATUS_ERROR_RESOURCE_FREE = 0x100A,
-    /**
-     * An API other than ::hsa_init has been invoked while the reference count
-     * of the HSA runtime is 0.
-     */
-    HSA_STATUS_ERROR_NOT_INITIALIZED = 0x100B,
-    /**
-     * The maximum reference count for the object has been reached.
-     */
-    HSA_STATUS_ERROR_REFCOUNT_OVERFLOW = 0x100C,
-    /**
-     * The arguments passed to a functions are not compatible.
-     */
-    HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS = 0x100D,
-    /**
-     * The index is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_INDEX = 0x100E,
-    /**
-     * The instruction set architecture is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_ISA = 0x100F,
-    /**
-     * The instruction set architecture name is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_ISA_NAME = 0x1017,
-    /**
-     * The code object is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_CODE_OBJECT = 0x1010,
-    /**
-     * The executable is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_EXECUTABLE = 0x1011,
-    /**
-     * The executable is frozen.
-     */
-    HSA_STATUS_ERROR_FROZEN_EXECUTABLE = 0x1012,
-    /**
-     * There is no symbol with the given name.
-     */
-    HSA_STATUS_ERROR_INVALID_SYMBOL_NAME = 0x1013,
-    /**
-     * The variable is already defined.
-     */
-    HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED = 0x1014,
-    /**
-     * The variable is undefined.
-     */
-    HSA_STATUS_ERROR_VARIABLE_UNDEFINED = 0x1015,
-    /**
-     * An HSAIL operation resulted in a hardware exception.
-     */
-    HSA_STATUS_ERROR_EXCEPTION = 0x1016,
-    /**
-     * The code object symbol is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_CODE_SYMBOL = 0x1018,
-    /**
-     * The executable symbol is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL = 0x1019,
-    /**
-     * The file descriptor is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_FILE = 0x1020,
-    /**
-     * The code object reader is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER = 0x1021,
-    /**
-     * The cache is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_CACHE = 0x1022,
-    /**
-     * The wavefront is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_WAVEFRONT = 0x1023,
-    /**
-     * The signal group is invalid.
-     */
-    HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP = 0x1024,
-    /**
-     * The HSA runtime is not in the configuration state.
-     */
-    HSA_STATUS_ERROR_INVALID_RUNTIME_STATE = 0x1025
-
+  /**
+   * The function has been executed successfully.
+   */
+  HSA_STATUS_SUCCESS = 0x0,
+  /**
+   * A traversal over a list of elements has been interrupted by the
+   * application before completing.
+   */
+  HSA_STATUS_INFO_BREAK = 0x1,
+  /**
+   * A generic error has occurred.
+   */
+  HSA_STATUS_ERROR = 0x1000,
+  /**
+   * One of the actual arguments does not meet a precondition stated in the
+   * documentation of the corresponding formal argument.
+   */
+  HSA_STATUS_ERROR_INVALID_ARGUMENT = 0x1001,
+  /**
+   * The requested queue creation is not valid.
+   */
+  HSA_STATUS_ERROR_INVALID_QUEUE_CREATION = 0x1002,
+  /**
+   * The requested allocation is not valid.
+   */
+  HSA_STATUS_ERROR_INVALID_ALLOCATION = 0x1003,
+  /**
+   * The agent is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_AGENT = 0x1004,
+  /**
+   * The memory region is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_REGION = 0x1005,
+  /**
+   * The signal is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_SIGNAL = 0x1006,
+  /**
+   * The queue is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_QUEUE = 0x1007,
+  /**
+   * The HSA runtime failed to allocate the necessary resources. This error
+   * may also occur when the HSA runtime needs to spawn threads or create
+   * internal OS-specific events.
+   */
+  HSA_STATUS_ERROR_OUT_OF_RESOURCES = 0x1008,
+  /**
+   * The AQL packet is malformed.
+   */
+  HSA_STATUS_ERROR_INVALID_PACKET_FORMAT = 0x1009,
+  /**
+   * An error has been detected while releasing a resource.
+   */
+  HSA_STATUS_ERROR_RESOURCE_FREE = 0x100A,
+  /**
+   * An API other than ::hsa_init has been invoked while the reference count
+   * of the HSA runtime is 0.
+   */
+  HSA_STATUS_ERROR_NOT_INITIALIZED = 0x100B,
+  /**
+   * The maximum reference count for the object has been reached.
+   */
+  HSA_STATUS_ERROR_REFCOUNT_OVERFLOW = 0x100C,
+  /**
+   * The arguments passed to a functions are not compatible.
+   */
+  HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS = 0x100D,
+  /**
+   * The index is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_INDEX = 0x100E,
+  /**
+   * The instruction set architecture is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_ISA = 0x100F,
+  /**
+   * The instruction set architecture name is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_ISA_NAME = 0x1017,
+  /**
+   * The code object is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_CODE_OBJECT = 0x1010,
+  /**
+   * The executable is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_EXECUTABLE = 0x1011,
+  /**
+   * The executable is frozen.
+   */
+  HSA_STATUS_ERROR_FROZEN_EXECUTABLE = 0x1012,
+  /**
+   * There is no symbol with the given name.
+   */
+  HSA_STATUS_ERROR_INVALID_SYMBOL_NAME = 0x1013,
+  /**
+   * The variable is already defined.
+   */
+  HSA_STATUS_ERROR_VARIABLE_ALREADY_DEFINED = 0x1014,
+  /**
+   * The variable is undefined.
+   */
+  HSA_STATUS_ERROR_VARIABLE_UNDEFINED = 0x1015,
+  /**
+   * An HSAIL operation resulted in a hardware exception.
+   */
+  HSA_STATUS_ERROR_EXCEPTION = 0x1016,
+  /**
+   * The code object symbol is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_CODE_SYMBOL = 0x1018,
+  /**
+   * The executable symbol is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL = 0x1019,
+  /**
+   * The file descriptor is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_FILE = 0x1020,
+  /**
+   * The code object reader is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER = 0x1021,
+  /**
+   * The cache is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_CACHE = 0x1022,
+  /**
+   * The wavefront is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_WAVEFRONT = 0x1023,
+  /**
+   * The signal group is invalid.
+   */
+  HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP = 0x1024,
+  /**
+   * The HSA runtime is not in the configuration state.
+   */
+  HSA_STATUS_ERROR_INVALID_RUNTIME_STATE = 0x1025,
+  /**
+  * The queue received an error that may require process termination.
+  */
+  HSA_STATUS_ERROR_FATAL = 0x1026
 } hsa_status_t;
 
 /**
