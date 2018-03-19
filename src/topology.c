@@ -178,8 +178,13 @@ static struct hsa_gfxip_table {
 	{ 0x69Af, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
 	/* Raven */
 	{ 0x15DD, 9, 0, 2, 0, "Raven", CHIP_RAVEN },
-	/* Vega20 on emulator, treat it as vega10 */
-	{ 0x66A0, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	/* Vega20 */
+	{ 0x66A0, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66A1, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66A2, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66A3, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66A7, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66AF, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 };
 
 enum cache_type {

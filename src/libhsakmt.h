@@ -97,7 +97,8 @@ enum asic_family_type {
 	CHIP_POLARIS10,
 	CHIP_POLARIS11,
 	CHIP_VEGA10,
-	CHIP_RAVEN
+	CHIP_RAVEN,
+	CHIP_VEGA20
 };
 #define IS_DGPU(chip) ((chip) != CHIP_KAVERI && (chip) != CHIP_CARRIZO && \
 		       (chip) != CHIP_RAVEN)
