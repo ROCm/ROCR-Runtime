@@ -191,12 +191,12 @@ const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
 
 const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
 #define ISAREG_ENTRY_GEN(maj, min, stp, xnack)                                 \
-  Isa amd_amdgpu_##maj##min##stp;                                              \
-  amd_amdgpu_##maj##min##stp.version_ = Isa::Version(maj, min, stp);           \
-  amd_amdgpu_##maj##min##stp.xnackEnabled_ = xnack;                            \
-  supported_isas.insert(                                                       \
-    std::make_pair(                                                            \
-      amd_amdgpu_##maj##min##stp.GetFullName(), amd_amdgpu_##maj##min##stp));  \
+  Isa amd_amdgpu_##maj##min##stp##xnack;                                       \
+  amd_amdgpu_##maj##min##stp##xnack.version_ = Isa::Version(maj, min, stp);    \
+  amd_amdgpu_##maj##min##stp##xnack.xnackEnabled_ = xnack;                     \
+  supported_isas.insert(std::make_pair(                                        \
+      amd_amdgpu_##maj##min##stp##xnack.GetFullName(),                         \
+      amd_amdgpu_##maj##min##stp##xnack));                                     \
 
   IsaMap supported_isas;
 
