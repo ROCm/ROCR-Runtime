@@ -1843,8 +1843,41 @@ hsa_status_t hsa_code_object_get_info(
         return status;
       }
 
+      std::string isa_name_str(isa_name);
+
+      bool IsFinalizer = true;
+      uint32_t codeHsailMajor;
+      uint32_t codeHsailMinor;
+      hsa_profile_t codeProfile;
+      hsa_machine_model_t codeMachineModel;
+      hsa_default_float_rounding_mode_t codeRoundingMode;
+      if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor,
+                              &codeProfile, &codeMachineModel,
+                              &codeRoundingMode)) {
+        // Only finalizer generated the "HSAIL" note.
+        IsFinalizer = false;
+      }
+      if (IsFinalizer && (code->EFlags() & EF_AMDGPU_XNACK)) {
+        isa_name_str = isa_name_str + "-xnack";
+      } else {
+        if (code->EFlags() != 0 && (code->EFlags() & EF_AMDGPU_XNACK_LC)) {
+          isa_name_str = isa_name_str + "-xnack";
+        } else {
+          if (isa_name_str == "AMD:AMDGPU:8:0:1")
+            isa_name_str = isa_name_str + "-xnack";
+          else if (isa_name_str == "AMD:AMDGPU:8:1:0")
+            isa_name_str = isa_name_str + "-xnack";
+          else if (isa_name_str == "AMD:AMDGPU:9:0:1")
+            isa_name_str = isa_name_str + "-xnack";
+          else if (isa_name_str == "AMD:AMDGPU:9:0:2")
+            isa_name_str = isa_name_str + "-xnack";
+          else if (isa_name_str == "AMD:AMDGPU:9:0:3")
+            isa_name_str = isa_name_str + "-xnack";
+        }
+      }
+
       hsa_isa_t isa_handle = {0};
-      status = HSA::hsa_isa_from_name(isa_name, &isa_handle);
+      status = HSA::hsa_isa_from_name(isa_name_str.c_str(), &isa_handle);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
