@@ -252,7 +252,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   // Error handler control variable.
   std::atomic<uint32_t> dynamicScratchState;
-  enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2 };
+  enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2, ERROR_HANDLER_SCRATCH_RETRY = 4 };
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;

@@ -42,25 +42,47 @@
 
 #include "small_heap.h"
 
-SmallHeap::memory_t::iterator SmallHeap::merge(
-    SmallHeap::memory_t::iterator& keep,
-    SmallHeap::memory_t::iterator& destroy) {
-  assert((char*)keep->first + keep->second.len == (char*)destroy->first &&
-         "Invalid merge");
-  assert(keep->second.isfree() && "Merge with allocated block");
-  assert(destroy->second.isfree() && "Merge with allocated block");
+// Inserts node into freelist after place.
+// Assumes node will not be an end of the list (list has guard nodes).
+void SmallHeap::insertafter(SmallHeap::iterator_t place, SmallHeap::iterator_t node) {
+  assert(place->first < node->first && "Order violation");
+  assert(isfree(place->second) && "Freelist operation error.");
+  iterator_t next = place->second.next;
+  node->second.next = next;
+  node->second.prior = place;
+  place->second.next = node;
+  next->second.prior = node;
+}
 
-  keep->second.len += destroy->second.len;
-  keep->second.next_free = destroy->second.next_free;
-  if (!destroy->second.islastfree())
-    memory[destroy->second.next_free].prior_free = keep->first;
+// Removes node from freelist.
+// Assumes node will not be an end of the list (list has guard nodes).
+void SmallHeap::remove(SmallHeap::iterator_t node) {
+  assert(isfree(node->second) && "Freelist operation error.");
+  node->second.prior->second.next = node->second.next;
+  node->second.next->second.prior = node->second.prior;
+  setused(node->second);
+}
 
-  memory.erase(destroy);
-  return keep;
+// Returns high if merge failed or the merged node.
+SmallHeap::memory_t::iterator SmallHeap::merge(SmallHeap::memory_t::iterator low,
+                                               SmallHeap::memory_t::iterator high) {
+  assert(isfree(low->second) && "Merge with allocated block");
+  assert(isfree(high->second) && "Merge with allocated block");
+
+  if ((char*)low->first + low->second.len != (char*)high->first) return high;
+
+  assert(!islastfree(high->second) && "Illegal merge.");
+
+  low->second.len += high->second.len;
+  low->second.next = high->second.next;
+  high->second.next->second.prior = low;
+
+  memory.erase(high);
+  return low;
 }
 
 void SmallHeap::free(void* ptr) {
-  if (ptr == NULL) return;
+  if (ptr == nullptr) return;
 
   auto iterator = memory.find(ptr);
 
@@ -70,105 +92,90 @@ void SmallHeap::free(void* ptr) {
     return;
   }
 
-  const auto start_guard = memory.find(0);
-  const auto end_guard = memory.find((void*)0xFFFFFFFFFFFFFFFFull);
-
   // Return memory to total and link node into free list
   total_free += iterator->second.len;
-  if (first_free < iterator->first) {
-    auto before = iterator;
-    before--;
-    while (before != start_guard && !before->second.isfree()) before--;
-    assert(before->second.next_free > iterator->first &&
-           "Inconsistency in small heap.");
-    iterator->second.prior_free = before->first;
-    iterator->second.next_free = before->second.next_free;
-    before->second.next_free = iterator->first;
-    if (!iterator->second.islastfree())
-      memory[iterator->second.next_free].prior_free = iterator->first;
-  } else {
-    iterator->second.setfirstfree();
-    iterator->second.next_free = first_free;
-    first_free = iterator->first;
-    if (!iterator->second.islastfree())
-      memory[iterator->second.next_free].prior_free = iterator->first;
-  }
 
-  // Attempt compaction
+  // Could also traverse the free list which might be faster in some cases.
   auto before = iterator;
   before--;
-  if (before != start_guard) {
-    if (before->second.isfree()) {
-      iterator = merge(before, iterator);
-    }
-  }
+  while (!isfree(before->second)) before--;
+  assert(before->second.next->first > iterator->first && "Inconsistency in small heap.");
+  insertafter(before, iterator);
 
-  auto after = iterator;
-  after++;
-  if (after != end_guard) {
-    if (after->second.isfree()) {
-      iterator = merge(iterator, after);
-    }
-  }
+  // Attempt compaction
+  iterator = merge(before, iterator);
+  merge(iterator, iterator->second.next);
+
+  // Update lowHighBondary
+  high.erase(ptr);
 }
 
 void* SmallHeap::alloc(size_t bytes) {
   // Is enough memory available?
-  if ((bytes > total_free) || (bytes == 0)) return NULL;
+  if ((bytes > total_free) || (bytes == 0)) return nullptr;
 
-  memory_t::iterator current;
-  memory_t::iterator prior;
+  iterator_t current;
 
   // Walk the free list and allocate at first fitting location
-  prior = current = memory.find(first_free);
-  while (true) {
+  current = firstfree();
+  while (!islastfree(current->second)) {
     if (bytes <= current->second.len) {
       // Decrement from total
       total_free -= bytes;
 
-      // Is allocation an exact fit?
-      if (bytes == current->second.len) {
-        if (prior == current) {
-          first_free = current->second.next_free;
-          if (!current->second.islastfree())
-            memory[current->second.next_free].setfirstfree();
-        } else {
-          prior->second.next_free = current->second.next_free;
-          if (!current->second.islastfree())
-            memory[current->second.next_free].prior_free = prior->first;
-        }
-        current->second.next_free = NULL;
-        return current->first;
-      } else {
-        // Split current node
+      // Split node
+      if (bytes != current->second.len) {
         void* remaining = (char*)current->first + bytes;
         Node& node = memory[remaining];
-        node.next_free = current->second.next_free;
-        node.prior_free = current->second.prior_free;
         node.len = current->second.len - bytes;
         current->second.len = bytes;
-
-        if (prior == current) {
-          first_free = remaining;
-          node.setfirstfree();
-        } else {
-          prior->second.next_free = remaining;
-          node.prior_free = prior->first;
-        }
-        if (!node.islastfree()) memory[node.next_free].prior_free = remaining;
-
-        current->second.next_free = NULL;
-        return current->first;
+        insertafter(current, memory.find(remaining));
       }
+
+      remove(current);
+      return current->first;
     }
-
-    // End of free list?
-    if (current->second.islastfree()) break;
-
-    prior = current;
-    current = memory.find(current->second.next_free);
+    current = current->second.next;
   }
+  assert(current->second.len == 0 && "Freelist corruption.");
 
   // Can't service the request due to fragmentation
-  return NULL;
+  return nullptr;
+}
+
+void* SmallHeap::alloc_high(size_t bytes) {
+  // Is enough memory available?
+  if ((bytes > total_free) || (bytes == 0)) return nullptr;
+
+  iterator_t current;
+
+  // Walk the free list and allocate at first fitting location
+  current = lastfree();
+  while (!isfirstfree(current->second)) {
+    if (bytes <= current->second.len) {
+      // Decrement from total
+      total_free -= bytes;
+
+      void* alloc;
+      // Split node
+      if (bytes != current->second.len) {
+        alloc = (char*)current->first + current->second.len - bytes;
+        current->second.len -= bytes;
+        Node& node = memory[alloc];
+        node.len = bytes;
+        setused(node);
+      } else {
+        alloc = current->first;
+        remove(current);
+      }
+
+      high.insert(alloc);
+      return alloc;
+    }
+    current = current->second.prior;
+  }
+  assert(current->second.len == 0 && "Freelist corruption.");
+
+  // Can't service the request due to fragmentation
+  return nullptr;
 }
