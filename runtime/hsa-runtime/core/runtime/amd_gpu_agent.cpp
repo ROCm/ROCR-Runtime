@@ -330,7 +330,6 @@ void GpuAgent::InitScratchPool() {
   // scratch/thread
   const uint32_t num_cu =
       properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  queue_scratch_len_ = 0;
   queue_scratch_len_ = AlignUp(32 * 64 * num_cu * scratch_per_thread_, 65536);
   size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
@@ -352,7 +351,7 @@ void GpuAgent::InitScratchPool() {
   if (HSAKMT_STATUS_SUCCESS == err) {
     new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
   } else {
-    new (&scratch_pool_) SmallHeap(NULL, 0);
+    new (&scratch_pool_) SmallHeap();
   }
 }
 
@@ -892,8 +891,9 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
   scratch.queue_base = nullptr;
+  scratch.queue_process_offset = 0;
 
-  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() { ReleaseQueueScratch(scratch.queue_base); });
+  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() { ReleaseQueueScratch(scratch); });
 
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);
@@ -921,30 +921,46 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     scratch.size_per_thread = scratch_per_thread_;
   }
 
+  scratch.retry = false;
+
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-  scratch.queue_base = scratch_pool_.alloc(scratch.size);
+  bool large = (scratch.size > 6 * 1024 * 1024) ||
+      (scratch_pool_.size() - scratch_pool_.remaining() > 24 * 6 * 1024 * 1024);
+  if (large)
+    scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
+  else
+    scratch.queue_base = scratch_pool_.alloc(scratch.size);
+  large |= scratch.queue_base > scratch_pool_.high_split();
+  scratch.large = large;
+
   scratch.queue_process_offset =
       (need_queue_scratch_base)
           ? uintptr_t(scratch.queue_base)
           : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
 
-  if (scratch.queue_base != NULL) {
+  if (scratch.queue_base != nullptr) {
     if (profile_ == HSA_PROFILE_FULL) return;
     if (profile_ == HSA_PROFILE_BASE) {
       HSAuint64 alternate_va;
-      if (HSAKMT_STATUS_SUCCESS ==
-          hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va))
+      if (hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va) ==
+          HSAKMT_STATUS_SUCCESS) {
+        if (large) scratch_used_large_ += scratch.size;
         return;
+      }
     }
   }
 
   // Scratch request failed allocation or mapping.
   scratch_pool_.free(scratch.queue_base);
-  scratch.queue_base = NULL;
+  scratch.queue_base = nullptr;
 
-// Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
-// This is somewhat dangerous as it limits the number of concurrent waves from future dispatches
-// on the queue if those waves use even small amounts of scratch.
+  // Retry if large may yield needed space.
+  if (scratch_used_large_ != 0) {
+    scratch.retry = true;
+    return;
+  }
+
+  // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
     debug_print("Failed to map requested scratch - reducing queue occupancy.\n");
   uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
@@ -955,7 +971,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     size_t size = waves_per_cu * num_cus * size_per_wave;
     void* base = scratch_pool_.alloc(size);
     HSAuint64 alternate_va;
-    if ((base != NULL) &&
+    if ((base != nullptr) &&
         ((profile_ == HSA_PROFILE_FULL) ||
          (hsaKmtMapMemoryToGPU(base, size, &alternate_va) == HSAKMT_STATUS_SUCCESS))) {
       // Scratch allocated and either full profile or map succeeded.
@@ -965,6 +981,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
           (need_queue_scratch_base)
               ? uintptr_t(scratch.queue_base)
               : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+      scratch.large = true;
+      scratch_used_large_ += scratch.size;
       return;
     }
     scratch_pool_.free(base);
@@ -972,23 +990,29 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   }
 
   // Failed to allocate minimal scratch
-  assert(scratch.queue_base == NULL && "bad scratch data");
+  assert(scratch.queue_base == nullptr && "bad scratch data");
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
     debug_print("Could not allocate scratch for one wave per CU.\n");
 }
 
-void GpuAgent::ReleaseQueueScratch(void* base) {
-  if (base == NULL) {
+void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
+  if (scratch.queue_base == nullptr) {
     return;
   }
 
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   if (profile_ == HSA_PROFILE_BASE) {
-    if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
+    if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(scratch.queue_base)) {
       assert(false && "Unmap scratch subrange failed!");
     }
   }
-  scratch_pool_.free(base);
+  scratch_pool_.free(scratch.queue_base);
+
+  if (scratch.large) scratch_used_large_ -= scratch.size;
+
+  // Notify waiters that additional scratch may be available.
+  for (auto notifier : scratch_notifiers_)
+    HSA::hsa_signal_or_relaxed(notifier.first, notifier.second);
 }
 
 void GpuAgent::TranslateTime(core::Signal* signal,

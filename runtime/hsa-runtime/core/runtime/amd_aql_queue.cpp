@@ -291,8 +291,8 @@ AqlQueue::~AqlQueue() {
   }
 
   Inactivate();
+  agent_->ReleaseQueueScratch(queue_scratch_);
   FreeRegisteredRingBuffer();
-  agent_->ReleaseQueueScratch(queue_scratch_.queue_base);
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   if (core::g_use_interrupt_wait) {
     ScopedAcquire<KernelMutex> lock(&queue_lock_);
@@ -704,24 +704,54 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_SUCCESS;
   bool fatal = false;
+  bool changeWait = false;
+  hsa_signal_value_t waitVal;
+
+  if ((queue->dynamicScratchState & ERROR_HANDLER_SCRATCH_RETRY) == ERROR_HANDLER_SCRATCH_RETRY) {
+    queue->dynamicScratchState &= ~ERROR_HANDLER_SCRATCH_RETRY;
+    queue->agent_->RemoveScratchNotifier(queue->amd_queue_.queue_inactive_signal);
+    changeWait = true;
+    waitVal = 0;
+    HSA::hsa_signal_and_relaxed(queue->amd_queue_.queue_inactive_signal, ~0x8000000000000000ull);
+    error_code &= ~0x8000000000000000ull;
+  }
 
   // Process errors only if queue is not terminating.
   if ((queue->dynamicScratchState & ERROR_HANDLER_TERMINATE) != ERROR_HANDLER_TERMINATE) {
-    // Process only one queue error, don't fall through.
+    if (error_code == 512) {  // Large scratch reclaim
+      auto& scratch = queue->queue_scratch_;
+      queue->agent_->ReleaseQueueScratch(scratch);
+      scratch.queue_base = nullptr;
+      scratch.size = 0;
+      scratch.size_per_thread = 0;
+      scratch.queue_process_offset = 0;
+      queue->InitScratchSRD();
+
+      HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
+      // Resumes queue processing.
+      atomic::Store(&queue->amd_queue_.queue_properties,
+                    queue->amd_queue_.queue_properties & (~AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE),
+                    std::memory_order_release);
+      atomic::Fence(std::memory_order_release);
+      return true;
+    }
+
+    // Process only one queue error.
     if (error_code == 1) {
       // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
       auto& scratch = queue->queue_scratch_;
 
-      queue->agent_->ReleaseQueueScratch(scratch.queue_base);
+      queue->agent_->ReleaseQueueScratch(scratch);
 
-      uint64_t pkt_slot_idx = queue->amd_queue_.read_dispatch_id % queue->amd_queue_.hsa_queue.size;
+      uint64_t pkt_slot_idx =
+          queue->amd_queue_.read_dispatch_id & (queue->amd_queue_.hsa_queue.size - 1);
 
       const core::AqlPacket& pkt =
           ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
-      scratch.size_per_thread = Max(uint32_t(scratch.size_per_thread * 2), scratch_request);
+      scratch.size_per_thread = scratch_request;
       // Align whole waves to 1KB.
       scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
       scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
@@ -729,11 +759,26 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
       queue->agent_->AcquireQueueScratch(scratch);
 
-      // Out of scratch - promote error
-      if (scratch.queue_base == NULL) errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-
-      // Reset scratch memory related entities for the queue
-      queue->InitScratchSRD();
+      if (scratch.retry) {
+        queue->agent_->AddScratchNotifier(queue->amd_queue_.queue_inactive_signal,
+                                          0x8000000000000000ull);
+        queue->dynamicScratchState |= ERROR_HANDLER_SCRATCH_RETRY;
+        changeWait = true;
+        waitVal = error_code;
+      } else {
+        // Out of scratch - promote error
+        if (scratch.queue_base == nullptr) {
+          errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+        } else {
+          // Mark large scratch allocation for single use.
+          if (scratch.large)
+            queue->amd_queue_.queue_properties |= AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE;
+          // Reset scratch memory related entities for the queue
+          queue->InitScratchSRD();
+          // Restart the queue.
+          HSA::hsa_signal_store_screlease(queue->amd_queue_.queue_inactive_signal, 0);
+        }
+      }
 
     } else if ((error_code & 2) == 2) {  // Invalid dim
       errorCode = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
@@ -765,7 +810,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
     }
 
     if (errorCode == HSA_STATUS_SUCCESS) {
-      HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
+      if (changeWait) {
+        core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+            queue->amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, waitVal,
+            DynamicScratchHandler, queue);
+        return false;
+      }
       return true;
     }
 
@@ -774,9 +824,9 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
     }
     if (fatal) {
-      //Temporarilly removed until there is clarity on exactly what debugtrap's semantics are.
-      //assert(false && "Fatal queue error");
-      //std::abort();
+      // Temporarilly removed until there is clarity on exactly what debugtrap's semantics are.
+      // assert(false && "Fatal queue error");
+      // std::abort();
     }
   }
   // Copy here is to protect against queue being released between setting the scratch state and

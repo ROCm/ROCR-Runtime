@@ -46,6 +46,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_
 
 #include <vector>
+#include <map>
 
 #include "hsakmt.h"
 
@@ -67,6 +68,8 @@ struct ScratchInfo {
   size_t size;
   size_t size_per_thread;
   ptrdiff_t queue_process_offset;
+  bool large;
+  bool retry;
 };
 
 // @brief Interface to represent a GPU agent.
@@ -103,15 +106,15 @@ class GpuAgentInt : public core::Agent {
 
   // @brief Carve scratch memory from scratch pool.
   //
-  // @param [out] scratch Structure to be populated with the carved memory
+  // @param [in/out] scratch Structure to be populated with the carved memory
   // information.
   virtual void AcquireQueueScratch(ScratchInfo& scratch) = 0;
 
   // @brief Release scratch memory back to scratch pool.
   //
-  // @param [in] base Address of scratch memory previously acquired with
-  // call to ::AcquireQueueScratch.
-  virtual void ReleaseQueueScratch(void* base) = 0;
+  // @param [in/out] scratch Scratch memory previously acquired with call to
+  // ::AcquireQueueScratch.
+  virtual void ReleaseQueueScratch(ScratchInfo& base) = 0;
 
   // @brief Translate the kernel start and end dispatch timestamp from agent
   // domain to host domain.
@@ -257,7 +260,20 @@ class GpuAgent : public GpuAgentInt {
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
   // @brief Override from amd::GpuAgentInt.
-  void ReleaseQueueScratch(void* base) override;
+  void ReleaseQueueScratch(ScratchInfo& scratch) override;
+
+  // @brief Register signal for notification when scratch may become available.
+  // @p signal is notified by OR'ing with @p value.
+  void AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
+    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+    scratch_notifiers_[signal] = value;
+  }
+
+  // @brief Deregister scratch notification signal.
+  void RemoveScratchNotifier(hsa_signal_t signal) {
+    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+    scratch_notifiers_.erase(signal);
+  }
 
   // @brief Override from amd::GpuAgentInt.
   void TranslateTime(core::Signal* signal,
@@ -367,6 +383,12 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Object to manage scratch memory.
   SmallHeap scratch_pool_;
+
+  // @brief Current short duration scratch memory size.
+  size_t scratch_used_large_;
+
+  // @brief Notifications for scratch release.
+  std::map<hsa_signal_t, hsa_signal_value_t> scratch_notifiers_;
 
   // @brief Default scratch size per queue.
   size_t queue_scratch_len_;

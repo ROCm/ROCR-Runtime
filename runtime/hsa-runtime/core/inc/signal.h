@@ -46,6 +46,7 @@
 #define HSA_RUNTME_CORE_INC_SIGNAL_H_
 
 #include <map>
+#include <functional>
 
 #include "hsakmt.h"
 
@@ -59,6 +60,18 @@
 #include "core/util/locks.h"
 
 #include "inc/amd_hsa_signal.h"
+
+// Allow hsa_signal_t to be keys in STL structures.
+namespace std {
+template <> struct less<hsa_signal_t> {
+  __forceinline bool operator()(const hsa_signal_t& x, const hsa_signal_t& y) const {
+    return x.handle < y.handle;
+  }
+  typedef hsa_signal_t first_argument_type;
+  typedef hsa_signal_t second_argument_type;
+  typedef bool result_type;
+};
+}
 
 namespace core {
 class Agent;
