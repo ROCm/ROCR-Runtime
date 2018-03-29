@@ -139,12 +139,18 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/blit_object_gfx7xx.cpp
                  ${EXT_SOURCE_DIR}/image/blit_object_gfx8xx.cpp
                  ${EXT_SOURCE_DIR}/image/blit_object_gfx9xx.cpp
+                 ${EXT_SOURCE_DIR}/image/opencl_blit_objects.cpp
                  ${EXT_SOURCE_DIR}/image/blit_kernel.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
 )
 
+
+add_subdirectory(${EXT_SOURCE_DIR}/image/blit_src ${CMAKE_BINARY_DIR}/image_blit)
+set_source_files_properties(${EXT_SOURCE_DIR}/image/opencl_blit_objects.cpp PROPERTIES GENERATED 1)
+
 add_library ( ${IMAGE_TARGET} SHARED ${IMAGE_SRCS} )
+add_dependencies( ${IMAGE_TARGET} opencl_blit_objects.cpp )
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
