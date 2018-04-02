@@ -654,6 +654,9 @@ hsa_status_t Run(BinarySearch* bs) {
     uint64_t global_offset_x;
     uint64_t global_offset_y;
     uint64_t global_offset_z;
+    uint64_t printf_buffer;
+    uint64_t default_queue;
+    uint64_t completion_action;
   } local_args;
 
   local_args.outputArray = reinterpret_cast<uint4*>(bs->output);
@@ -662,6 +665,9 @@ hsa_status_t Run(BinarySearch* bs) {
   local_args.global_offset_x = 0;
   local_args.global_offset_y = 0;
   local_args.global_offset_z = 0;
+  local_args.printf_buffer = 0;
+  local_args.default_queue = 0;
+  local_args.completion_action = 0;
 
   // Copy the kernel args structure into kernel arg memory
   err = AllocAndSetKernArgs(bs, &local_args, sizeof(local_args),
