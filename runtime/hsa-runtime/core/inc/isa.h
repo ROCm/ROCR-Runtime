@@ -106,18 +106,30 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
   const Version &version() const {
     return version_;
   }
+  /// @returns True if this Isa has xnack enabled, false otherwise.
+  const bool &xnackEnabled() const {
+    return xnackEnabled_;
+  }
   /// @returns This Isa's supported wavefront.
   const Wavefront &wavefront() const {
     return wavefront_;
   }
 
-  /// @returns This Isa's vendor.
-  std::string GetVendor() const {
-    return "AMD";
-  }
   /// @returns This Isa's architecture.
   std::string GetArchitecture() const {
-    return "AMDGPU";
+    return "amdgcn";
+  }
+  /// @returns This Isa's vendor.
+  std::string GetVendor() const {
+    return "amd";
+  }
+  /// @returns This Isa's OS.
+  std::string GetOS() const {
+    return "amdhsa";
+  }
+  /// @returns This Isa's environment.
+  std::string GetEnvironment() const {
+    return "";
   }
   /// @returns This Isa's major version.
   int32_t GetMajorVersion() const {
@@ -140,7 +152,8 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
   /// otherwise.
   bool IsCompatible(const Isa *isa_object) const {
     assert(isa_object);
-    return version_ == isa_object->version_;
+    return version_ == isa_object->version_ &&
+           xnackEnabled_ == isa_object->xnackEnabled_;
   }
   /// @returns True if this Isa is compatible with @p isa_handle, false
   /// otherwise.
