@@ -844,18 +844,11 @@ hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
   CATCH;
 }
 
-hsa_status_t hsa_amd_register_system_event_handler(
-    hsa_amd_event_t type,
-    hsa_status_t (*callback)(const void* event_specific_data, void* data),
-    void* data) {
+hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
+                                                   void* data) {
   TRY;
   IS_OPEN();
-  switch (type) {
-    case GPU_MEMORY_FAULT_EVENT:
-      return core::Runtime::runtime_singleton_->SetCustomVMFaultHandler(callback, data);
-    default:
-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
+  return core::Runtime::runtime_singleton_->SetCustomSystemEventHandler(callback, data);
   CATCH;
 }
 

@@ -1097,10 +1097,8 @@ hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handl
 
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_register_system_event_handler(
-    hsa_amd_event_t type,
-    hsa_status_t (*callback)(const void* event_specific_data, void* data),
-    void* data) {
-  return amdExtTable->hsa_amd_register_system_event_handler_fn(type, callback, data);
+    hsa_amd_system_event_callback_t callback, void* data) {
+  return amdExtTable->hsa_amd_register_system_event_handler_fn(callback, data);
 }
 
 // Mirrors Amd Extension Apis

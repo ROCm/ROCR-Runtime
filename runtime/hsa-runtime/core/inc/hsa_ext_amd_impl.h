@@ -212,9 +212,7 @@ hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle, hsa_s
 
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_register_system_event_handler(
-    hsa_amd_event_t type,
-    hsa_status_t (*callback)(const void* event_specific_data, void* data),
-    void* data);
+    hsa_amd_system_event_callback_t callback, void* data);
 
 }  // end of AMD namespace
 
