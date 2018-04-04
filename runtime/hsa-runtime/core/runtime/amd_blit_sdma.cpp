@@ -549,7 +549,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   // Add space for acquire or release Hdp flush command
   uint32_t flush_cmd_size = 0;
   if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if (HwIndexMonotonic) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
       flush_cmd_size = flush_command_size_;
     }
   }
@@ -657,7 +657,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   // Add space for acquire or release Hdp flush command
   uint32_t flush_cmd_size = 0;
   if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if (HwIndexMonotonic) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
       flush_cmd_size = flush_command_size_;
     }
   }
@@ -772,7 +772,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   // Add space for acquire or release Hdp flush command
   uint32_t flush_cmd_size = 0;
   if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if (HwIndexMonotonic) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
       flush_cmd_size = flush_command_size_;
     }
   }
