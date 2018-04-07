@@ -558,14 +558,16 @@ void GpuAgent::InitDma() {
   // Share utility queue with device-to-host blits.
   queues_[QueueUtility].reset(queue_lambda);
 
-  // Blits, try create SDMA blit first.
-  // Disable SDMA on specific ISA targets until they are fully qualified.
+  // Decide which engine to use for blits.
   auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
-    if ((isa_->GetMajorVersion() != 8) && core::Runtime::runtime_singleton_->flag().enable_sdma() &&
-        (HSA_PROFILE_BASE == profile_)) {
-      auto ret = CreateBlitSdma(h2d);
-      if (ret != nullptr) return ret;
+    std::string sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
+    bool use_sdma = (sdma_override.size() == 0) ? (isa_->GetMajorVersion() != 8) : (sdma_override == "1");
+
+    if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
+        auto ret = CreateBlitSdma(h2d);
+        if (ret != nullptr) return ret;
     }
+
     auto ret = CreateBlitKernel((*queue).get());
     if (ret == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
