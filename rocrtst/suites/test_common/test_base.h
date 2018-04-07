@@ -50,7 +50,9 @@
 #include <vector>
 
 #include "common/base_rocr.h"
-
+#if ENABLE_SMI
+#include "rocm_smi/rocm_smi.h"
+#endif
 class TestBase : public rocrtst::BaseRocR {
  public:
   TestBase(void);
@@ -78,9 +80,21 @@ class TestBase : public rocrtst::BaseRocR {
   const std::string & description(void) const {return description_;}
 
   void set_description(std::string d);
-
+#if ENABLE_SMI
+  void set_monitor_devices(
+            std::vector<std::shared_ptr<amd::smi::Device>> *m) {
+    monitor_devices_ = m;
+  }
+  std::vector<std::shared_ptr<amd::smi::Device>> *
+                                                 monitor_devices(void) const {
+    return monitor_devices_;
+  }
+#endif
  private:
   std::string description_;
+#if ENABLE_SMI
+  std::vector<std::shared_ptr<amd::smi::Device>> *monitor_devices_;
+#endif
 };
 
 #endif  // ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
