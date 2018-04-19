@@ -55,6 +55,7 @@
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
 #include "suites/performance/enqueueLatency.h"
+#include "suites/negative/memory_allocate_negative_tests.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
@@ -152,6 +153,14 @@ TEST(rocrtstFunc, Memory_Max_Mem) {
 
   RunCustomTestProlog(&mt);
   mt.MaxSingleAllocationTest();
+  RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstNeg, Memory_Negative_Tests) {
+  MemoryAllocateNegativeTest mt;
+  RunCustomTestProlog(&mt);
+  mt.ZeroMemoryAllocateTest();
+  mt.MaxMemoryAllocateTest();
   RunCustomTestEpilog(&mt);
 }
 

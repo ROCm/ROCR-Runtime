@@ -240,6 +240,7 @@ set(ROCRTST "rocrtst${ONLY64STR}")
 #
 aux_source_directory(${ROCRTST_ROOT}/suites/performance performanceSources)
 aux_source_directory(${ROCRTST_ROOT}/suites/functional functionalSources)
+aux_source_directory(${ROCRTST_ROOT}/suites/negative negativeSources)
 aux_source_directory(${ROCRTST_ROOT}/suites/test_common testCommonSources)
 
 # Header file include path
@@ -315,7 +316,7 @@ set(CL_FILE_LIST "${KERNELS_DIR}/gpuReadWrite_kernels.cl")
 build_sample_for_devices("gpuReadWrite")
 
 # Build rules
-add_executable(${ROCRTST} ${performanceSources} ${functionalSources}
+add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources}
                                            ${common_srcs} ${testCommonSources})
 
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwloc)
