@@ -746,7 +746,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       uint64_t pkt_slot_idx =
           queue->amd_queue_.read_dispatch_id & (queue->amd_queue_.hsa_queue.size - 1);
 
-      const core::AqlPacket& pkt =
+      core::AqlPacket& pkt =
           ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
@@ -771,8 +771,17 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
           errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
         } else {
           // Mark large scratch allocation for single use.
-          if (scratch.large)
+          if (scratch.large) {
             queue->amd_queue_.queue_properties |= AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE;
+            // Set system release fence to flush scratch stores with older firmware versions.
+            if ((queue->agent_->isa()->GetMajorVersion() == 8) &&
+                (queue->agent_->GetMicrocodeVersion() < 729)) {
+              pkt.dispatch.header &= ~(((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1)
+                                       << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+              pkt.dispatch.header |=
+                  (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+            }
+          }
           // Reset scratch memory related entities for the queue
           queue->InitScratchSRD();
           // Restart the queue.

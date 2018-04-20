@@ -75,8 +75,7 @@ struct AqlPacket {
 
   std::string string() const {
     std::stringstream string;
-    uint8_t type = ((dispatch.header >> HSA_PACKET_HEADER_TYPE) &
-                    ((1 << HSA_PACKET_HEADER_WIDTH_TYPE) - 1));
+    uint8_t type = this->type();
 
     const char* type_names[] = {
         "HSA_PACKET_TYPE_VENDOR_SPECIFIC", "HSA_PACKET_TYPE_INVALID",
