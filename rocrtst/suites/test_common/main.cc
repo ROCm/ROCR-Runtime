@@ -59,6 +59,8 @@
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
+#include "suites/functional/concurrent_init.h"
+#include "suites/functional/concurrent_init_shutdown.h"
 
 #if ENABLE_SMI
 #include "rocm_smi/rocm_smi.h"
@@ -146,6 +148,20 @@ TEST(rocrtstFunc, MemoryAccessTests) {
   mt.CPUAccessToGPUMemoryTest();
   mt.GPUAccessToCPUMemoryTest();
   RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstFunc, Concurrent_Init_Test) {
+  ConcurrentInitTest ci;
+  RunCustomTestProlog(&ci);
+  ci.TestConcurrentInit();
+  RunCustomTestEpilog(&ci);
+}
+
+TEST(rocrtstFunc, Concurrent_Init_Shutdown_Test) {
+  ConcurrentInitShutdownTest ci;
+  RunCustomTestProlog(&ci);
+  ci.TestConcurrentInitShutdown();
+  RunCustomTestEpilog(&ci);
 }
 
 TEST(rocrtstFunc, Memory_Max_Mem) {
