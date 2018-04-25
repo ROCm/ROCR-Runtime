@@ -48,6 +48,7 @@
 #include <memory>
 
 #include "gtest/gtest.h"
+#include "suites/functional/debug_basic.h"
 #include "suites/functional/memory_basic.h"
 #include "suites/functional/memory_access.h"
 #include "suites/functional/ipc.h"
@@ -73,7 +74,6 @@ static void SetFlags(TestBase *test) {
   test->set_verbosity(sRocrtstGlvalues->verbosity);
   test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
 }
-
 
 static void RunCustomTestProlog(TestBase *test) {
   SetFlags(test);
@@ -148,6 +148,13 @@ TEST(rocrtstFunc, Memory_Max_Mem) {
 
   RunCustomTestProlog(&mt);
   mt.MaxSingleAllocationTest();
+  RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstFunc, DebugBasicTests) {
+  DebugBasicTest mt;
+  RunCustomTestProlog(&mt);
+  mt.VectorAddDebugTrapTest();
   RunCustomTestEpilog(&mt);
 }
 
@@ -232,7 +239,6 @@ int main(int argc, char** argv) {
   settings.verbosity = 1;
   settings.monitor_verbosity = 1;
   settings.num_iterations = 5;
-
 
   if (ProcessCmdline(&settings, argc, argv)) {
     return 1;
