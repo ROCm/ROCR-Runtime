@@ -489,6 +489,9 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_aqlprofile_stop =
       (decltype(::hsa_ven_amd_aqlprofile_stop)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_stop");
+    ext_table.hsa_ven_amd_aqlprofile_read =
+      (decltype(::hsa_ven_amd_aqlprofile_read)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_read");
     ext_table.hsa_ven_amd_aqlprofile_legacy_get_pm4 =
       (decltype(::hsa_ven_amd_aqlprofile_legacy_get_pm4)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_legacy_get_pm4");

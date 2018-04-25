@@ -203,6 +203,13 @@ hsa_status_t hsa_ven_amd_aqlprofile_stop(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);   // [out] profile stop AQL packet
 
+// Method to populate the provided AQL packet with profiling read commands
+// Only 'pm4_command' fields of the packet are set and the application
+// is responsible to set Vendor Specific header type and a completion signal
+hsa_status_t hsa_ven_amd_aqlprofile_read(
+    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
+    hsa_ext_amd_aql_pm4_packet_t* aql_read_packet);   // [out] profile stop AQL packet
+
 // Legacy devices, PM4 profiling packet size
 const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
 // Legacy devices, converting the profiling AQL packet to PM4 packet blob
@@ -299,7 +306,11 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
-      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+      hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);
+
+  hsa_status_t (*hsa_ven_amd_aqlprofile_read)(
+      const hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_read_packet);
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_legacy_get_pm4)(
       const hsa_ext_amd_aql_pm4_packet_t* aql_packet,
