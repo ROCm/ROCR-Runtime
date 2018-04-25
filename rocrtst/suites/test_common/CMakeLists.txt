@@ -316,6 +316,16 @@ set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/gpuReadWrite_kernels.cl")
 build_sample_for_devices("gpuReadWrite")
 
+# Vector Add Debug Trap
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/vector_add_debug_trap_kernel.cl")
+build_sample_for_devices("vector_add_debug_trap")
+
+# Vector Add Memory Fault
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/vector_add_memory_fault_kernel.cl")
+build_sample_for_devices("vector_add_memory_fault")
+
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources} ${stressSources}
                                            ${common_srcs} ${testCommonSources})
