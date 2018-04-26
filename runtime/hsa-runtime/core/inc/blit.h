@@ -113,6 +113,9 @@ class Blit {
   /// @return HSA_STATUS_SUCCESS if the request to enable/disable profiling is
   /// successful.
   virtual hsa_status_t EnableProfiling(bool enable) = 0;
+
+  /// @brief Blit operations use SDMA.
+  virtual bool isSDMA() const { return false; }
 };
 }  // namespace core
 

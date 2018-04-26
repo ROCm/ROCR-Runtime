@@ -49,6 +49,8 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <memory>
+#include <utility>
 
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
@@ -599,6 +601,39 @@ hsa_status_t GpuAgent::PostToolsInit() {
   return HSA_STATUS_SUCCESS;
 }
 
+struct DmaDeps_t {
+  void* dst;
+  const void* src;
+  size_t size;
+  core::Signal* out_signal;
+  core::Blit* blit;
+  std::unique_ptr<std::vector<core::Signal*>> deps;
+};
+
+static bool DmaDeps(hsa_signal_value_t val, void* arg) {
+  DmaDeps_t* Args = (DmaDeps_t*)arg;
+  std::vector<core::Signal*>& deps = *(Args->deps.get());
+  if (val != 0) return true;
+  for (int i = deps.size() - 1; i != 0; i--) {
+    if (deps[i - 1]->LoadRelaxed() != 0) {
+      deps.resize(i);
+      hsa_status_t err = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+          core::Signal::Convert(deps.back()), HSA_SIGNAL_CONDITION_EQ, 0, DmaDeps, arg);
+      assert(err == HSA_STATUS_SUCCESS && "Failed to update dependency handler.");
+      return false;
+    }
+  }
+  deps.clear();
+  hsa_status_t stat;
+  do {  // Only ready to run copies are on the SDMA queue so if resources are busy they will soon be
+        // free.
+    stat = Args->blit->SubmitLinearCopyCommand(Args->dst, Args->src, Args->size, deps,
+                                               *(Args->out_signal));
+  } while (stat != HSA_STATUS_SUCCESS);
+  delete Args;
+  return false;
+}
+
 hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
   return blits_[BlitDevToDev]->SubmitLinearCopyCommand(dst, src, size);
 }
@@ -622,6 +657,19 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
+  }
+
+  if ((dep_signals.size() != 0) && blit->isSDMA()) {
+    DmaDeps_t* Arg = new DmaDeps_t;
+    Arg->dst = dst;
+    Arg->src = src;
+    Arg->size = size;
+    Arg->out_signal = &out_signal;
+    Arg->blit = (*blit).get();
+    Arg->deps.reset(new std::vector<core::Signal*>(std::move(dep_signals)));
+    hsa_status_t stat = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+        core::Signal::Convert(Arg->deps->back()), HSA_SIGNAL_CONDITION_EQ, 0, DmaDeps, Arg);
+    return stat;
   }
 
   hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
