@@ -333,16 +333,6 @@ hsa_status_t hsa_amd_profiling_get_async_copy_time(
     return HSA_STATUS_ERROR;
   }
 
-  // Validate the embedded agent pointer if the signal is IPC.
-  if (signal->isIPC()) {
-    for (auto it : core::Runtime::runtime_singleton_->gpu_agents()) {
-      if (it == agent) break;
-    }
-    // If the agent isn't a GPU then it is from a different process or it's a CPU.
-    // Assume it's a CPU and illegal uses will generate garbage data same as kernel completion.
-    agent = core::Runtime::runtime_singleton_->cpu_agents()[0];
-  }
-
   if (agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice) {
     // Translate timestamp from GPU to system domain.
     static_cast<amd::GpuAgentInt*>(agent)->TranslateTime(signal, *time);

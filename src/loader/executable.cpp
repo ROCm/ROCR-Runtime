@@ -1673,16 +1673,14 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_RELATIVE64:
-    {
-      int64_t baseDelta = reinterpret_cast<uint64_t>(relSeg->Address(0)) - relSeg->VAddr();
-      uint64_t relocatedAddr = baseDelta + rel->addend();
-      relSeg->Copy(rel->offset(), &relocatedAddr, sizeof(relocatedAddr));
-      break;
-    }
+    case R_AMDGPU_INIT_IMAGE:
+    case R_AMDGPU_INIT_SAMPLER:
+      // Images and samplers are not supported in v2.1.
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
 
     default:
-      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+      // Ignore.
+      break;
   }
   return HSA_STATUS_SUCCESS;
 }

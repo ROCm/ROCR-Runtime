@@ -90,11 +90,11 @@ namespace loader {
 #if defined(GFX9_BUILD)
     gfx900.handle = 900;
     gfx901.handle = 901;
-    gfx902.handle = 902;
+    gfx901.handle = 902;
     gfx903.handle = 903;
-    gfx904.handle = 904;
-    gfx905.handle = 905;
-    gfx906.handle = 906;
+    gfx903.handle = 904;
+    gfx903.handle = 905;
+    gfx903.handle = 906;
     gfx907.handle = 907;
 #endif // GFX9_BUILD
   }

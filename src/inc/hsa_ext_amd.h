@@ -299,8 +299,9 @@ hsa_status_t HSA_API
  * @brief Retrieve packet processing time stamps.
  *
  * @param[in] agent The agent with which the signal was last used.  For
- * instance, if the profiled dispatch packet is dispatched onto queue Q,
- * which was created on agent A, then this parameter must be A.
+ *instance,
+ * if the profiled dispatch packet is dispatched on to queue Q, which was
+ * created on agent A, then this parameter must be A.
  *
  * @param[in] signal A signal used as the completion signal of the dispatch
  * packet to retrieve time stamps from.  This dispatch packet must have been
@@ -387,10 +388,8 @@ typedef enum {
   HSA_AMD_SIGNAL_AMD_GPU_ONLY = 1,
   /**
    * Signal may be used for interprocess communication.
-   * IPC signals can be read, written, and waited on from any process.
-   * Profiling using an IPC enabled signal is only supported in a single process
-   * at a time.  Producing profiling data in one process and consuming it in
-   * another process is undefined.
+   * This signal may not be used with profiling APIs.  Errors or inaccurate
+   * timing data may result from such use.
    */
   HSA_AMD_SIGNAL_IPC = 2,
 } hsa_amd_signal_attribute_t;

@@ -423,8 +423,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
     return HSA_STATUS_ERROR;
   }
 
-  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1) ||
-      amd_gpu_agent.isa()->GetMajorVersion() == 9) {
+  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1)) {
     platform_atomic_support_ = false;
   }
 

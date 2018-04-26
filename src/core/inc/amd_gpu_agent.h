@@ -56,7 +56,6 @@
 #include "core/inc/cache.h"
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
-#include "core/util/lazy_ptr.h"
 
 namespace amd {
 class MemoryRegion;
@@ -76,8 +75,10 @@ class GpuAgentInt : public core::Agent {
   GpuAgentInt(uint32_t node_id)
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
-  // @brief Ensure blits are ready (performance hint).
-  virtual void PreloadBlits(){};
+  // @brief Initialize DMA queue.
+  //
+  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
+  virtual void InitDma() = 0;
 
   // @brief Initialization hook invoked after tools library has loaded,
   // to allow tools interception of interface functions.
@@ -184,8 +185,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief GPU agent destructor.
   ~GpuAgent();
 
-  // @brief Ensure blits are ready (performance hint).
-  void PreloadBlits() override;
+  // @brief Override from core::Agent.
+  void InitDma() override;
 
   // @brief Override from core::Agent.
   hsa_status_t PostToolsInit() override;
@@ -375,15 +376,16 @@ class GpuAgent : public GpuAgentInt {
   // @brief Blit interfaces for each data path.
   enum BlitEnum { BlitHostToDev, BlitDevToHost, BlitDevToDev, BlitCount };
 
-  lazy_ptr<core::Blit> blits_[BlitCount];
+  core::Blit* blits_[BlitCount];
 
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
-    QueueUtility,  // Cache management and blit compute
+    QueueUtility,   // Cache management and device to {host,device} blit compute
+    QueueBlitOnly,  // Host to device blit
     QueueCount
   };
 
-  lazy_ptr<core::Queue> queues_[QueueCount];
+  core::Queue* queues_[QueueCount];
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
@@ -441,9 +443,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Query the driver to get the cache properties.
   void InitCacheList();
 
-  // @brief Create internal queues and blits.
-  void InitDma();
-
   // @brief Initialize memory pool for end timestamp object.
   // @retval True if the memory pool for end timestamp object is initialized.
   bool InitEndTsPool();
@@ -453,6 +452,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
+
+  // @brief True if blit objects are initialized.
+  std::atomic<bool> blit_initialized_;
 
   // Each end ts is 32 bytes.
   static const size_t kTsSize = 32;

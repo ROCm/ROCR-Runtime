@@ -116,7 +116,6 @@ typedef enum {
 #define R_AMDGPU_64           3
 #define R_AMDGPU_INIT_SAMPLER 4
 #define R_AMDGPU_INIT_IMAGE   5
-#define R_AMDGPU_RELATIVE64   13
 
 // AMD GPU Note Type Enumeration Values.
 #define NT_AMDGPU_HSA_CODE_OBJECT_VERSION 1

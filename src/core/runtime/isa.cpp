@@ -204,10 +204,6 @@ const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN(9, 0, 1)
   ISAREG_ENTRY_GEN(9, 0, 2)
   ISAREG_ENTRY_GEN(9, 0, 3)
-  ISAREG_ENTRY_GEN(9, 0, 4)
-  ISAREG_ENTRY_GEN(9, 0, 5)
-  ISAREG_ENTRY_GEN(9, 0, 6)
-  ISAREG_ENTRY_GEN(9, 0, 7)
 
   return supported_isas;
 }
