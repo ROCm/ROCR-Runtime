@@ -576,7 +576,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
         core::Runtime::runtime_singleton_->gpu_agents().begin(),
         core::Runtime::runtime_singleton_->gpu_agents().end());
   } else {
-    for (int i = 0; i < num_agents; ++i) {
+    for (uint32_t i = 0; i < num_agents; ++i) {
       core::Agent* agent = core::Agent::Convert(agents[i]);
       if (agent == NULL || !agent->IsValid()) {
         return HSA_STATUS_ERROR_INVALID_AGENT;
@@ -649,7 +649,7 @@ void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated
   hsa_status_t err = region_.Allocate(
       bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
   if (err != HSA_STATUS_SUCCESS)
-    throw new ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
+    throw ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
   assert(ret != nullptr && "Region returned nullptr on success.");
 
   allocated_size = block_size();

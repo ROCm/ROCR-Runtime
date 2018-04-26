@@ -58,7 +58,6 @@ namespace core {
     ::AmdExtTable amd_ext_api;
     ::FinalizerExtTable finalizer_api;
     ::ImageExtTable image_api;
-    ::AqlProfileExtTable aqlprofile_api;
 
     HsaApiTable();
     void Init();

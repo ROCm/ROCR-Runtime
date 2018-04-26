@@ -50,7 +50,6 @@
 #include <vector>
 
 #include "core/common/shared.h"
-
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
@@ -59,8 +58,9 @@
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
-
 #include "core/inc/hsa_api_trace_int.h"
+#include "core/util/os.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 #define HSA_VERSION_MAJOR 1
 #define HSA_VERSION_MINOR 1
@@ -287,15 +287,13 @@ uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
 hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
                                                             void* data),
                                    void* data) {
-  if (!IsOpen()) {
-    return HSA_STATUS_ERROR_NOT_INITIALIZED;
-  }
+  AMD::callback_t<decltype(callback)> call(callback);
 
   std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_, &gpu_agents_};
   for (std::vector<core::Agent*>* agent_list : agent_lists) {
     for (size_t i = 0; i < agent_list->size(); ++i) {
       hsa_agent_t agent = Agent::Convert(agent_list->at(i));
-      hsa_status_t status = callback(agent, data);
+      hsa_status_t status = call(agent, data);
 
       if (status != HSA_STATUS_SUCCESS) {
         return status;
@@ -478,7 +476,7 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
     core::Agent* blit_agent = core::Agent::Convert(info.agentOwner);
     if (blit_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice) {
       blit_agent = nullptr;
-      for (int i = 0; i < agent_count; i++) {
+      for (uint32_t i = 0; i < agent_count; i++) {
         if (core::Agent::Convert(accessible[i])->device_type() ==
             core::Agent::DeviceType::kAmdGpuDevice) {
           blit_agent = core::Agent::Convert(accessible[i]);
@@ -575,7 +573,8 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+      if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
+        os::CloseLib(lib);
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
       }
 
@@ -588,8 +587,6 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
   }
   return HSA_STATUS_SUCCESS;
 }
-
-uint32_t Runtime::GetQueueId() { return atomic::Increment(&queue_count_); }
 
 hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             hsa_signal_condition_t cond,
@@ -646,7 +643,7 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID,
                        &nodes[i]);
 
@@ -764,21 +761,22 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   if (returnListData) {
     uint32_t count = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (HSAuint32 i = 0; i < thunkInfo.NMappedNodes; i++) {
       assert(mappedNodes[i] < agents_by_node_.size() &&
              "PointerInfo: Invalid node ID returned from thunk.");
       count += agents_by_node_[mappedNodes[i]].size();
     }
 
-    *accessible = (hsa_agent_t*)alloc(sizeof(hsa_agent_t) * count);
+    AMD::callback_t<decltype(alloc)> Alloc(alloc);
+    *accessible = (hsa_agent_t*)Alloc(sizeof(hsa_agent_t) * count);
     if ((*accessible) == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     *num_agents_accessible = count;
 
     uint32_t index = 0;
-    for (int i = 0; i < thunkInfo.NMappedNodes; i++) {
+    for (HSAuint32 i = 0; i < thunkInfo.NMappedNodes; i++) {
       auto& list = agents_by_node_[mappedNodes[i]];
-      for (int j = 0; j < list.size(); j++) {
-        (*accessible)[index] = list[j]->public_handle();
+      for (auto agent : list) {
+        (*accessible)[index] = agent->public_handle();
         index++;
       }
     }
@@ -885,7 +883,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
-  for (int i = 0; i < num_agents; i++)
+  for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
   if (hsaKmtRegisterSharedHandleToNodes(
@@ -1044,48 +1042,86 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
     return false;
   }
 
-  if (runtime_singleton_->flag().enable_vm_fault_message()) {
-    HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
+  HsaEvent* vm_fault_event = vm_fault_signal->EopEvent();
 
-    const HsaMemoryAccessFault& fault =
-        vm_fault_event->EventData.EventData.MemoryAccessFault;
+  HsaMemoryAccessFault& fault =
+      vm_fault_event->EventData.EventData.MemoryAccessFault;
 
-    std::string reason = "";
+  hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
+  // If custom handler is registered, pack the fault info and call the handler
+  if (runtime_singleton_->vm_fault_handler_custom_ != nullptr) {
+    hsa_amd_gpu_memory_fault_info_t* fault_info = new hsa_amd_gpu_memory_fault_info_t;
+
+    // Find the faulty agent
+    auto it = runtime_singleton_->agents_by_node_.find(fault.NodeId);
+    assert(it != runtime_singleton_->agents_by_node_.end() && "Can't find faulty agent.");
+    Agent* faulty_agent = it->second.front();
+    fault_info->agent = Agent::Convert(faulty_agent);
+
+    fault_info->virtual_address = fault.VirtualAddress;
+    fault_info->fault_reason_mask = 0x00000000;
     if (fault.Failure.NotPresent == 1) {
-      reason += "Page not present or supervisor privilege";
-    } else if (fault.Failure.ReadOnly == 1) {
-      reason += "Write access to a read-only page";
-    } else if (fault.Failure.NoExecute == 1) {
-      reason += "Execute access to a page marked NX";
-    } else if (fault.Failure.GpuAccess == 1) {
-      reason += "Host access only";
-    } else if (fault.Failure.ECC == 1) {
-      reason += "ECC failure (if supported by HW)";
-    } else {
-      reason += "Unknown";
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000001;
+    }
+    if (fault.Failure.ReadOnly == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000010;
+    }
+    if (fault.Failure.NoExecute == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00000100;
+    }
+    if (fault.Failure.GpuAccess == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00001000;
+    }
+    if (fault.Failure.ECC == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00010000;
+    }
+    if (fault.Failure.Imprecise == 1) {
+      fault_info->fault_reason_mask = fault_info->fault_reason_mask | 0x00100000;
     }
 
-    fprintf(stderr,
-            "Memory access fault by GPU node-%u on address %p%s. Reason: %s.\n",
-            fault.NodeId, reinterpret_cast<const void*>(fault.VirtualAddress),
-            (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
-            reason.c_str());
-  } else {
-    assert(false && "GPU memory access fault.");
+    custom_handler_status = runtime_singleton_->vm_fault_handler_custom_(fault_info,
+        runtime_singleton_->vm_fault_handler_user_data_);
   }
 
-  std::abort();
+  // No custom VM fault handler registered or it failed.
+  if (custom_handler_status != HSA_STATUS_SUCCESS) {
+    if (runtime_singleton_->flag().enable_vm_fault_message()) {
+      std::string reason = "";
+      if (fault.Failure.NotPresent == 1) {
+        reason += "Page not present or supervisor privilege";
+      } else if (fault.Failure.ReadOnly == 1) {
+        reason += "Write access to a read-only page";
+      } else if (fault.Failure.NoExecute == 1) {
+        reason += "Execute access to a page marked NX";
+      } else if (fault.Failure.GpuAccess == 1) {
+        reason += "Host access only";
+      } else if (fault.Failure.ECC == 1) {
+        reason += "ECC failure (if supported by HW)";
+      } else {
+        reason += "Unknown";
+      }
 
+      fprintf(stderr,
+              "Memory access fault by GPU node-%u on address %p%s. Reason: %s.\n",
+              fault.NodeId, reinterpret_cast<const void*>(fault.VirtualAddress),
+              (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "",
+              reason.c_str());
+    } else {
+      assert(false && "GPU memory access fault.");
+    }
+
+    std::abort();
+  }
   // No need to keep the signal because we are done.
   return false;
 }
 
 Runtime::Runtime()
     : blit_agent_(NULL),
-      queue_count_(0),
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
+      vm_fault_handler_custom_(nullptr),
       ref_count_(0) {
   start_svm_address_ = 0;
 #if defined(HSA_LARGE_MODEL)
@@ -1154,15 +1190,11 @@ void Runtime::LoadExtensions() {
                                               "libhsa-ext-finalize64.so.1"};
   static const std::string kImageLib[] = {"hsa-ext-image64.dll",
                                           "libhsa-ext-image64.so.1"};
-  static const std::string kAqlProfileLib[] = {"hsa-amd-aqlprofile64.dll",
-                                               "libhsa-amd-aqlprofile64.so.1"};
 #else
   static const std::string kFinalizerLib[] = {"hsa-ext-finalize.dll",
                                               "libhsa-ext-finalize.so.1"};
   static const std::string kImageLib[] = {"hsa-ext-image.dll",
                                           "libhsa-ext-image.so.1"};
-  static const std::string kAqlProfileLib[] = {"hsa-amd-aqlprofile.dll",
-                                               "libhsa-amd-aqlprofile.so.1"};
 #endif
 
   // Update Hsa Api Table with handle of Image extension Apis
@@ -1174,11 +1206,6 @@ void Runtime::LoadExtensions() {
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
-
-  // Update Hsa Api Table with handle of AqlProfile extension Apis
-  extensions_.LoadAqlProfileApi(kAqlProfileLib[os_index(os::current_os)]);
-  hsa_api_table_.LinkExts(&extensions_.aqlprofile_api,
-                          core::HsaApiTable::HSA_EXT_AQLPROFILE_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
@@ -1244,8 +1271,8 @@ void Runtime::LoadTools() {
   if (tool_names != "") {
     std::vector<std::string> names = parse_tool_names(tool_names);
     std::vector<const char*> failed;
-    for (int i = 0; i < names.size(); i++) {
-      os::LibHandle tool = os::LoadLib(names[i]);
+    for (auto& name : names) {
+      os::LibHandle tool = os::LoadLib(name);
 
       if (tool != NULL) {
         tool_libs_.push_back(tool);
@@ -1256,7 +1283,7 @@ void Runtime::LoadTools() {
           if (!ld(&hsa_api_table_.hsa_api,
                   hsa_api_table_.hsa_api.version.major_id,
                   failed.size(), &failed[0])) {
-            failed.push_back(names[i].c_str());
+            failed.push_back(name.c_str());
             os::CloseLib(tool);
             continue;
           }
@@ -1284,12 +1311,10 @@ void Runtime::LoadTools() {
         add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
         if (add) add(this);
       }
-#ifndef NDEBUG
       else {
         if (flag().report_tool_load_failures())
-          fprintf(stderr, "Tool lib \"%s\" failed to load.\n", names[i].c_str());
+          debug_print("Tool lib \"%s\" failed to load.\n", name.c_str());
       }
-#endif
     }
   }
 }
@@ -1310,7 +1335,7 @@ void Runtime::CloseTools() {
   // Due to valgrind bug, runtime cannot dlclose extensions see:
   // http://valgrind.org/docs/manual/faq.html#faq.unhelpful
   if (!flag_.running_valgrind()) {
-    for (int i = 0; i < tool_libs_.size(); i++) os::CloseLib(tool_libs_[i]);
+    for (auto& lib : tool_libs_) os::CloseLib(lib);
   }
   tool_libs_.clear();
 }
@@ -1363,4 +1388,15 @@ void Runtime::AsyncEvents::Clear() {
   arg_.clear();
 }
 
+hsa_status_t Runtime::SetCustomVMFaultHandler(
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data) {
+  if (vm_fault_handler_custom_ != nullptr) {
+    return HSA_STATUS_ERROR;
+  } else {
+    vm_fault_handler_custom_ = callback;
+    vm_fault_handler_user_data_ = data;
+    return HSA_STATUS_SUCCESS;
+  }
+}
 }  // namespace core

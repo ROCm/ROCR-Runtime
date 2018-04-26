@@ -835,6 +835,7 @@ hsa_status_t ExecutableImpl::IterateProgramSymbols(
 
 hsa_status_t ExecutableImpl::IterateLoadedCodeObjects(
   hsa_status_t (*callback)(
+    hsa_executable_t executable,
     hsa_loaded_code_object_t loaded_code_object,
     void *data),
   void *data)
@@ -843,7 +844,10 @@ hsa_status_t ExecutableImpl::IterateLoadedCodeObjects(
   assert(callback);
 
   for (auto &loaded_code_object : loaded_code_objects) {
-    hsa_status_t status = callback(LoadedCodeObject::Handle(loaded_code_object), data);
+    hsa_status_t status = callback(
+        Executable::Handle(this),
+        LoadedCodeObject::Handle(loaded_code_object),
+        data);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }
@@ -888,6 +892,40 @@ size_t ExecutableImpl::QuerySegmentDescriptors(
   }
 
   return i - first_empty_segment_descriptor;
+}
+
+hsa_agent_t LoadedCodeObjectImpl::getAgent() const {
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return loaded_segments.front()->Agent();
+}
+hsa_executable_t LoadedCodeObjectImpl::getExecutable() const {
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return Executable::Handle(loaded_segments.front()->Owner());
+}
+uint64_t LoadedCodeObjectImpl::getElfData() const {
+  return reinterpret_cast<uint64_t>(elf_data);
+}
+uint64_t LoadedCodeObjectImpl::getElfSize() const {
+  return (uint64_t)elf_size;
+}
+uint64_t LoadedCodeObjectImpl::getStorageOffset() const {
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return (uint64_t)loaded_segments.front()->StorageOffset();
+}
+uint64_t LoadedCodeObjectImpl::getLoadBase() const {
+  // TODO Add support for code objects with 0 segments.
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return reinterpret_cast<uint64_t>(loaded_segments.front()->Address(0));
+}
+uint64_t LoadedCodeObjectImpl::getLoadSize() const {
+  // TODO Add support for code objects with 0 or >1 segments.
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return (uint64_t)loaded_segments.front()->Size();
+}
+int64_t LoadedCodeObjectImpl::getDelta() const {
+  // TODO Add support for code objects with 0 segments.
+  assert(loaded_segments.size() == 1 && "Only supports code objects v2+");
+  return getLoadBase() - loaded_segments.front()->VAddr();
 }
 
 hsa_executable_t AmdHsaCodeLoader::FindExecutable(uint64_t device_address)
@@ -1159,7 +1197,7 @@ hsa_status_t ExecutableImpl::LoadSegmentsV2(hsa_agent_t agent,
   if (!ptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   Segment *load_segment = new Segment(this, agent, AMDGPU_HSA_SEGMENT_CODE_AGENT,
-      ptr, size, vaddr, 0);
+      ptr, size, vaddr, c->DataSegment(0)->offset());
   if (!load_segment) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   hsa_status_t status = HSA_STATUS_SUCCESS;

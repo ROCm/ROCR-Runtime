@@ -59,8 +59,9 @@
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
-
+#include "core/util/os.h"
 #include "hsa_ext_image.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -451,8 +452,9 @@ hsa_status_t GpuAgent::IterateRegion(
 
 hsa_status_t GpuAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
                                     void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
   for (size_t i = 0; i < caches_.size(); i++) {
-    hsa_status_t stat = callback(core::Cache::Convert(caches_[i].get()), data);
+    hsa_status_t stat = call(core::Cache::Convert(caches_[i].get()), data);
     if (stat != HSA_STATUS_SUCCESS) return stat;
   }
   return HSA_STATUS_SUCCESS;
@@ -493,6 +495,7 @@ hsa_status_t GpuAgent::VisitRegion(
     const std::vector<const core::MemoryRegion*>& regions,
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
     const amd::MemoryRegion* amd_region =
         reinterpret_cast<const amd::MemoryRegion*>(region);
@@ -501,7 +504,7 @@ hsa_status_t GpuAgent::VisitRegion(
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
         amd_region->IsLDS()) {
       hsa_region_t region_handle = core::MemoryRegion::Convert(region);
-      hsa_status_t status = callback(region_handle, data);
+      hsa_status_t status = call(region_handle, data);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
@@ -780,7 +783,8 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (core::hsa_internal_api_table_.aqlprofile_api.hsa_ven_amd_aqlprofile_error_string_fn != NULL) {
+      if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
+        os::CloseLib(lib);
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);
       }
 
@@ -910,26 +914,21 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
-  scratch.queue_base = NULL;
+  scratch.queue_base = nullptr;
+
+  MAKE_NAMED_SCOPE_GUARD(scratchGuard, [&]() { ReleaseQueueScratch(scratch.queue_base); });
+
   if (scratch.size != 0) {
     AcquireQueueScratch(scratch);
-    if (scratch.queue_base == NULL) {
+    if (scratch.queue_base == nullptr) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
 
   // Create an HW AQL queue
-  AqlQueue* hw_queue = new AqlQueue(this, size, node_id(), scratch,
-                                    event_callback, data, is_kv_device_);
-  if (hw_queue && hw_queue->IsValid()) {
-    // return queue
-    *queue = hw_queue;
-    return HSA_STATUS_SUCCESS;
-  }
-  // If reached here its always an ERROR.
-  delete hw_queue;
-  ReleaseQueueScratch(scratch.queue_base);
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  *queue = new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
+  scratchGuard.Dismiss();
+  return HSA_STATUS_SUCCESS;
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
@@ -964,10 +963,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
 // This is somewhat dangerous as it limits the number of concurrent waves from future dispatches
 // on the queue if those waves use even small amounts of scratch.
-#ifndef NDEBUG
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    fprintf(stderr, "Failed to map requested scratch - reducing queue occupancy.\n");
-#endif
+    debug_print("Failed to map requested scratch - reducing queue occupancy.\n");
   uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
   uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
   uint64_t total_waves = scratch.size / size_per_wave;
@@ -994,10 +991,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 
   // Failed to allocate minimal scratch
   assert(scratch.queue_base == NULL && "bad scratch data");
-#ifndef NDEBUG
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    fprintf(stderr, "Could not allocate scratch for one wave per CU.\n");
-#endif
+    debug_print("Could not allocate scratch for one wave per CU.\n");
 }
 
 void GpuAgent::ReleaseQueueScratch(void* base) {

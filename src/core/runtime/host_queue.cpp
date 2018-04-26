@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -46,23 +46,23 @@
 #include "core/util/utils.h"
 
 namespace core {
-HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
-                     hsa_queue_type32_t type, uint32_t features,
-                     hsa_signal_t doorbell_signal)
-    : Queue(),
-      size_(ring_size),
-      active_(false) {
-  if (!Shared::IsSharedObjectAllocationValid()) {
-    return;
-  }
 
+int HostQueue::rtti_id_ = 0;
+std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
+
+HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
+                     uint32_t features, hsa_signal_t doorbell_signal)
+    : Queue(), size_(ring_size) {
   HSA::hsa_memory_register(this, sizeof(HostQueue));
+  MAKE_NAMED_SCOPE_GUARD(registerGuard,
+                         [&]() { HSA::hsa_memory_deregister(this, sizeof(HostQueue)); });
 
   const size_t queue_buffer_size = size_ * sizeof(AqlPacket);
   if (HSA_STATUS_SUCCESS !=
       HSA::hsa_memory_allocate(region, queue_buffer_size, &ring_)) {
-    return;
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Host queue buffer alloc failed\n");
   }
+  MAKE_NAMED_SCOPE_GUARD(bufferGuard, [&]() { HSA::hsa_memory_free(&ring_); });
 
   assert(IsMultipleOf(ring_, kRingAlignment));
   assert(ring_ != NULL);
@@ -70,7 +70,7 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
   amd_queue_.hsa_queue.base_address = ring_;
   amd_queue_.hsa_queue.size = size_;
   amd_queue_.hsa_queue.doorbell_signal = doorbell_signal;
-  amd_queue_.hsa_queue.id = Runtime::runtime_singleton_->GetQueueId();
+  amd_queue_.hsa_queue.id = queue_count_++;
   amd_queue_.hsa_queue.type = type;
   amd_queue_.hsa_queue.features = features;
 #ifdef HSA_LARGE_MODEL
@@ -84,14 +84,11 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size,
   AMD_HSA_BITS_SET(
       amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, 0);
 
-  active_ = true;
+  bufferGuard.Dismiss();
+  registerGuard.Dismiss();
 }
 
 HostQueue::~HostQueue() {
-  if (!Shared::IsSharedObjectAllocationValid()) {
-    return;
-  }
-
   HSA::hsa_memory_free(ring_);
   HSA::hsa_memory_deregister(this, sizeof(HostQueue));
 }

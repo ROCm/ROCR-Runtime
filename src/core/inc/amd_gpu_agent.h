@@ -297,7 +297,7 @@ class GpuAgent : public GpuAgentInt {
     return regions_;
   }
 
-  // @brief OVerride from core::Agent.
+  // @brief Override from core::Agent.
   const core::Isa* isa() const override { return isa_; }
 
   // @brief Override from amd::GpuAgentInt.

@@ -44,8 +44,8 @@
 #include <typeinfo>
 #include <exception>
 #include <set>
-
-#include "hsakmt.h"
+#include <utility>
+#include <memory>
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
@@ -56,6 +56,7 @@
 #include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/ipc_signal.h"
+#include "core/inc/intercept_queue.h"
 #include "core/inc/exceptions.h"
 
 template <class T>
@@ -127,14 +128,19 @@ hsa_status_t handleException() {
   try {
     throw;
   } catch (const std::bad_alloc& e) {
+    debug_print("HSA exception: BadAlloc\n");
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   } catch (const hsa_exception& e) {
+    debug_print("HSA exception: %s\n", e.what());
     return e.error_code();
-    // Enable when callback exception support is added.
-    // } catch (std::nested_exception& e) {  // Rethrow exceptions from callbacks after unwinding
-    // HSA.
-    //  e.rethrow_nested();
-    //  return HSA_STATUS_ERROR;
+  } catch (const std::exception& e) {
+    debug_print("Unhandled exception: %s\n", e.what());
+    assert(false && "Unhandled exception.");
+    return HSA_STATUS_ERROR;
+  } catch (const std::nested_exception& e) {
+    debug_print("Callback threw, forwarding.\n");
+    e.rethrow_nested();
+    return HSA_STATUS_ERROR;
   } catch (...) {
     assert(false && "Unhandled exception.");
     abort();
@@ -260,11 +266,9 @@ hsa_status_t hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enab
   IS_OPEN();
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
-
   IS_VALID(cmd_queue);
 
-  AMD_HSA_BITS_SET(cmd_queue->amd_queue_.queue_properties,
-                   AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, (enable != 0));
+  cmd_queue->SetProfiling(enable);
 
   return HSA_STATUS_SUCCESS;
   CATCH;
@@ -682,7 +686,7 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
     if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  for (int i = 0; i < num_agents; i++) {
+  for (uint32_t i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(agents[i]);
     IS_VALID(device);
     core_agents[i] = device;
@@ -751,7 +755,7 @@ hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* ipc, size_t l
     if (num_agents > tinyArraySize) delete[] core_agents;
   });
 
-  for (int i = 0; i < num_agents; i++) {
+  for (uint32_t i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(mapping_agents[i]);
     IS_VALID(device);
     core_agents[i] = device;
@@ -790,6 +794,58 @@ hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
   core::Signal* signal = core::IPCSignal::Attach(handle);
   *hsa_signal = core::Signal::Convert(signal);
   return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+// For use by tools only - not in library export table.
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(queue);
+  hsa_queue_t* lower_queue;
+  hsa_status_t err = HSA::hsa_queue_create(agent_handle, size, type, callback, data,
+                                           private_segment_size, group_segment_size, &lower_queue);
+  if (err != HSA_STATUS_SUCCESS) return err;
+  std::unique_ptr<core::Queue> lowerQueue(core::Queue::Convert(lower_queue));
+
+  std::unique_ptr<core::InterceptQueue> upperQueue(new core::InterceptQueue(std::move(lowerQueue)));
+
+  *queue = core::Queue::Convert(upperQueue.release());
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+// For use by tools only - not in library export table.
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(callback);
+  core::Queue* cmd_queue = core::Queue::Convert(queue);
+  IS_VALID(cmd_queue);
+  if (!core::InterceptQueue::IsType(cmd_queue)) return HSA_STATUS_ERROR_INVALID_QUEUE;
+  core::InterceptQueue* iQueue = static_cast<core::InterceptQueue*>(cmd_queue);
+  iQueue->AddInterceptor(callback, user_data);
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+hsa_status_t hsa_amd_register_system_event_handler(
+    hsa_amd_event_t type,
+    hsa_status_t (*callback)(const void* event_specific_data, void* data),
+    void* data) {
+  TRY;
+  IS_OPEN();
+  switch (type) {
+    case GPU_MEMORY_FAULT_EVENT:
+      return core::Runtime::runtime_singleton_->SetCustomVMFaultHandler(callback, data);
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
   CATCH;
 }
 

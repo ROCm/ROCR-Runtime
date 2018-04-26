@@ -124,6 +124,14 @@ struct SharedQueue {
   Queue* core_queue;
 };
 
+class LocalQueue {
+ public:
+  SharedQueue* queue() const { return local_queue_.shared_object(); }
+
+ private:
+  Shared<SharedQueue, AMD_QUEUE_ALIGN_BYTES> local_queue_;
+};
+
 /// @brief Class Queue which encapsulate user mode queues and
 /// provides Api to access its Read, Write indices using Acquire,
 /// Release and Relaxed semantics.
@@ -132,16 +140,10 @@ Queue is intended to be an pure interface class and may be wrapped or replaced
 by tools.
 All funtions other than Convert and public_handle must be virtual.
 */
-class Queue : public Checked<0xFA3906A679F9DB49>,
-              public Shared<SharedQueue, AMD_QUEUE_ALIGN_BYTES> {
+class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
  public:
-  Queue() : Shared(), amd_queue_(shared_object()->amd_queue) {
-    if (!Shared::IsSharedObjectAllocationValid()) {
-      return;
-    }
-
-    shared_object()->core_queue = this;
-
+  Queue() : LocalQueue(), amd_queue_(queue()->amd_queue) {
+    queue()->core_queue = this;
     public_handle_ = Convert(this);
   }
 
@@ -153,9 +155,7 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
   ///
   /// @return hsa_queue_t * Pointer to the public data type of a queue
   static __forceinline hsa_queue_t* Convert(Queue* queue) {
-    return ((queue != NULL) && (queue->IsSharedObjectAllocationValid()))
-               ? &queue->amd_queue_.hsa_queue
-               : NULL;
+    return (queue != nullptr) ? &queue->amd_queue_.hsa_queue : nullptr;
   }
 
   /// @brief Transform the public data type of a Queue's data type into an
@@ -165,14 +165,10 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
   ///
   /// @return Queue * Pointer to the Queue's implementation object
   static __forceinline Queue* Convert(const hsa_queue_t* queue) {
-    return (queue != NULL)
-               ? reinterpret_cast<const SharedQueue*>(
-                     reinterpret_cast<uintptr_t>(queue) -
-                     (reinterpret_cast<uintptr_t>(
-                          &reinterpret_cast<SharedQueue*>(1234)
-                               ->amd_queue.hsa_queue) -
-                      uintptr_t(1234)))->core_queue
-               : NULL;
+    return (queue != nullptr)
+        ? reinterpret_cast<SharedQueue*>(reinterpret_cast<uintptr_t>(queue) -
+                                         offsetof(SharedQueue, amd_queue.hsa_queue))->core_queue
+        : nullptr;
   }
 
   /// @brief Inactivate the queue object. Once inactivate a
@@ -298,6 +294,11 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
   // @brief Submits a block of PM4 and waits until it has been executed.
   virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) = 0;
 
+  virtual void SetProfiling(bool enabled) {
+    AMD_HSA_BITS_SET(amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING,
+                     (enabled != 0));
+  }
+
   /// @ brief Reports async queue errors to stderr if no other error handler was registered.
   static void DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data);
 
@@ -305,6 +306,10 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
   amd_queue_t& amd_queue_;
 
   hsa_queue_t* public_handle() const { return public_handle_; }
+
+  typedef void* rtti_t;
+
+  bool IsType(rtti_t id) { return _IsA(id); }
 
  protected:
   static void set_public_handle(Queue* ptr, hsa_queue_t* handle) {
@@ -314,6 +319,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>,
     public_handle_ = handle;
   }
   hsa_queue_t* public_handle_;
+
+  virtual bool _IsA(rtti_t id) const = 0;
 
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);

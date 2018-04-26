@@ -101,7 +101,6 @@ static_assert(std::is_trivially_destructible<SharedSignal>::value,
 class LocalSignal {
  public:
   explicit LocalSignal(hsa_signal_value_t initial_value) {
-    if (!local_signal_.IsSharedObjectAllocationValid()) throw std::bad_alloc();
     local_signal_.shared_object()->amd_signal.value = initial_value;
   }
 
