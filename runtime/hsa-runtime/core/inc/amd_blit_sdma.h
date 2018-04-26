@@ -61,6 +61,7 @@ class BlitSdmaBase : public core::Blit {
   static const size_t kCopyPacketSize;
   static const size_t kMaxSingleCopySize;
   static const size_t kMaxSingleFillSize;
+  virtual bool isSDMA() const override { return true; }
 };
 
 // RingIndexTy: 32/64-bit monotonic ring index, counting in bytes.
