@@ -974,8 +974,11 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   scratch.retry = false;
 
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-  bool large = (scratch.size > 6 * 1024 * 1024) ||
-      (scratch_pool_.size() - scratch_pool_.remaining() > 24 * 6 * 1024 * 1024);
+  // Limit to 1/8th of scratch pool for small scratch and 1/4 of that for a single queue.
+  size_t small_limit = scratch_pool_.size() >> 3;
+  size_t single_limit = small_limit >> 2;
+  bool large = (scratch.size > single_limit) ||
+      (scratch_pool_.size() - scratch_pool_.remaining() + scratch.size > small_limit);
   large = (isa_->GetMajorVersion() < 8) ? false : large;
   if (large)
     scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
