@@ -377,7 +377,7 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
   }
 
   char buff[3];
-  sprintf(buff, "%02u", minor);
+  sprintf(buff, "%02u", minor%100);
   name += std::to_string(major) + "_" + buff + "_pfn_t";
 
   for (size_t i = 0; i < num_tables; i++) {
