@@ -61,28 +61,9 @@
 #include "suites/test_common/test_common.h"
 #include "suites/functional/concurrent_init.h"
 #include "suites/functional/concurrent_init_shutdown.h"
-
-#if ENABLE_SMI
 #include "rocm_smi/rocm_smi.h"
-#endif
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
-#if ENABLE_SMI
-static bool GetMonitorDevices(const std::shared_ptr<amd::smi::Device> &d,
-                                                                    void *p) {
-  std::string val_str;
-
-  assert(p != nullptr);
-
-  std::vector<std::shared_ptr<amd::smi::Device>> *device_list =
-    reinterpret_cast<std::vector<std::shared_ptr<amd::smi::Device>> *>(p);
-
-  if (d->monitor() != nullptr) {
-    device_list->push_back(d);
-  }
-  return false;
-}
-#endif
 
 static void SetFlags(TestBase *test) {
   assert(sRocrtstGlvalues != nullptr);
@@ -90,9 +71,6 @@ static void SetFlags(TestBase *test) {
   test->set_num_iteration(sRocrtstGlvalues->num_iterations);
   test->set_verbosity(sRocrtstGlvalues->verbosity);
   test->set_monitor_verbosity(sRocrtstGlvalues->monitor_verbosity);
-#if ENABLE_SMI
-  test->set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
-#endif
 }
 
 
@@ -239,22 +217,12 @@ int main(int argc, char** argv) {
     return 1;
   }
   sRocrtstGlvalues = &settings;
-#if ENABLE_SMI
-  amd::smi::RocmSMI hw;
-  hw.DiscoverDevices();
-  hw.IterateSMIDevices(
-       GetMonitorDevices, reinterpret_cast<void *>(&settings.monitor_devices));
-
-  sRocrtstGlvalues = &settings;
-
-  // Use this dummy test to get one output of monitors at the beginning
-  {
-    TestExample dummy;
-    dummy.set_monitor_devices(&sRocrtstGlvalues->monitor_devices);
-
-    std::cout << "*** Initial Hardware Monitor Values:" << std::endl;
-    DumpMonitorInfo(&dummy);
+  rsmi_status_t rsmi_ret = rsmi_init(0);
+  if (rsmi_ret != RSMI_STATUS_SUCCESS) {
+    std::cout << "Failed to initialize ROCm smi" << std::endl;
+    return 1;
   }
-#endif
+  DumpMonitorInfo();
+
   return RUN_ALL_TESTS();
 }
