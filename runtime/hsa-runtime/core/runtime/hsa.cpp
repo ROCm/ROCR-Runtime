@@ -477,6 +477,12 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     }
 
     hsa_ven_amd_aqlprofile_1_00_pfn_t ext_table;
+    ext_table.hsa_ven_amd_aqlprofile_version_major =
+      (decltype(::hsa_ven_amd_aqlprofile_version_major)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_version_major");
+    ext_table.hsa_ven_amd_aqlprofile_version_minor =
+      (decltype(::hsa_ven_amd_aqlprofile_version_minor)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_version_minor");
     ext_table.hsa_ven_amd_aqlprofile_error_string =
       (decltype(::hsa_ven_amd_aqlprofile_error_string)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_error_string");
