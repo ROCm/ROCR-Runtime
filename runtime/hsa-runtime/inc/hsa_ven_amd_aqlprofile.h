@@ -50,9 +50,17 @@
 #include <stdint.h>
 #include "hsa.h"
 
+#define HSA_AQLPROFILE_VERSION_MAJOR 2
+#define HSA_AQLPROFILE_VERSION_MINUR 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
+
+////////////////////////////////////////////////////////////////////////////////
+// Library version
+uint32_t hsa_ven_amd_aqlprofile_version_major();
+uint32_t hsa_ven_amd_aqlprofile_version_minor();
 
 ///////////////////////////////////////////////////////////////////////
 // Library API:
@@ -292,6 +300,9 @@ static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile.so.1";
  * @brief Extension function table.
  */
 typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
+  uint32_t (*hsa_ven_amd_aqlprofile_version_major)();
+  uint32_t (*hsa_ven_amd_aqlprofile_version_minor)();
+
   hsa_status_t (*hsa_ven_amd_aqlprofile_error_string)(
       const char** str);
 
