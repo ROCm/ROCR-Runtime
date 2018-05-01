@@ -127,13 +127,14 @@ add_custom_target ( build-dev
         -DCMAKE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
         -DCPACK_RPM_PACKAGE_REQUIRES="hsakmt-roct"
         -DCPACK_PACKAGING_INSTALL_PREFIX="${CPACK_PACKAGING_INSTALL_PREFIX}"
-    COMMAND rm -rf *.deb *.rpm *.tar.gz
-    COMMAND make package
     WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 
 ## Custom targets for the devel package 
 add_custom_target ( install-dev DEPENDS build-dev COMMAND make install WORKING_DIRECTORY ${DEV_BUILD_DIR} )
-add_custom_target ( package-dev DEPENDS build-dev  COMMAND make package WORKING_DIRECTORY ${DEV_BUILD_DIR} )
+add_custom_target ( package-dev DEPENDS build-dev
+    COMMAND rm -rf *.deb *.rpm *.tar.gz
+    COMMAND make package
+    WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 
 ## Add the install directives for the runtime library.
 install ( TARGETS ${HSAKMT_TARGET} LIBRARY DESTINATION libhsakmt/lib COMPONENT ${HSAKMT_COMPONENT} )
