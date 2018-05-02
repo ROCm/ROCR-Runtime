@@ -56,6 +56,7 @@
 #include "suites/performance/memory_async_copy_numa.h"
 #include "suites/performance/enqueueLatency.h"
 #include "suites/negative/memory_allocate_negative_tests.h"
+#include "suites/stress/memory_concurrent_tests.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
@@ -158,6 +159,26 @@ TEST(rocrtstNeg, Memory_Negative_Tests) {
   RunCustomTestEpilog(&mt);
 }
 
+TEST(rocrtstStress, Memory_Concurrent_Allocate_Test) {
+  MemoryConcurrentTest mt(true, false, false);
+  RunCustomTestProlog(&mt);
+  mt.MemoryConcurrentAllocate();
+  RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstStress, Memory_Concurrent_Free_Test) {
+  MemoryConcurrentTest mt(false, true, false);
+  RunCustomTestProlog(&mt);
+  mt.MemoryConcurrentFree();
+  RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstStress, Memory_Concurrent_Pool_Info_Test) {
+  MemoryConcurrentTest mt(false, false, true);
+  RunCustomTestProlog(&mt);
+  mt.MemoryConcurrentPoolGetInfo();
+  RunCustomTestEpilog(&mt);
+}
 TEST(rocrtstPerf, ENQUEUE_LATENCY) {
   EnqueueLatency singlePacketequeue(true);
   EnqueueLatency multiPacketequeue(false);
