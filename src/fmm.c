@@ -1021,7 +1021,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
 
-	if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id))) {
+	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id))) {
 		aperture = &svm.dgpu_aperture;
 		offset = 0;
 		if (flags.ui32.AQLQueueMemory)
