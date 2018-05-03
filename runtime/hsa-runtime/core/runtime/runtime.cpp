@@ -1373,7 +1373,7 @@ void Runtime::LoadTools() {
       }
       else {
         if (flag().report_tool_load_failures())
-          debug_print("Tool lib \"%s\" failed to load.\n", name.c_str());
+          fprintf(stderr, "Tool lib \"%s\" failed to load.\n", name.c_str());
       }
     }
   }
