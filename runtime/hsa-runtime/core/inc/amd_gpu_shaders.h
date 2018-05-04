@@ -110,7 +110,9 @@ static const unsigned int kCodeTrapHandler8[] = {
 
 static const unsigned int kCodeTrapHandler9[] = {
 /*
-  var SQ_WAVE_PC_HI_TRAP_ID_MASK            = 0xFF0000
+  var SQ_WAVE_PC_HI_TRAP_ID_SHIFT           = 16
+  var SQ_WAVE_PC_HI_TRAP_ID_SIZE            = 8
+  var SQ_WAVE_PC_HI_TRAP_ID_BFE             = (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
   var SQ_WAVE_STATUS_HALT_MASK              = 0x2000
   var SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK = 0x8000
   var SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     = 15
@@ -132,9 +134,19 @@ static const unsigned int kCodeTrapHandler9[] = {
     type(CS)
 
     // If this is not a trap then return to the shader.
-    s_and_b32            s_tmp0, s_trap_info_hi, SQ_WAVE_PC_HI_TRAP_ID_MASK
+    s_bfe_u32            s_tmp0, s_trap_info_hi, SQ_WAVE_PC_HI_TRAP_ID_BFE
     s_cbranch_scc0       L_EXIT_TRAP
 
+    // If llvm.trap then signal queue error.
+    s_cmp_eq_u32         s_tmp0, 0x2
+    s_cbranch_scc1       L_SIGNAL_QUEUE
+
+    // For other traps advance PC and return to shader.
+    s_add_u32            s_trap_info_lo, s_trap_info_lo, 0x4
+    s_addc_u32           s_trap_info_hi, s_trap_info_hi, 0x0
+    s_branch             L_EXIT_TRAP
+
+  L_SIGNAL_QUEUE:
     // Retrieve queue_inactive_signal from amd_queue_t* passed in s[0:1].
     s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0 glc:1
     s_waitcnt            lgkmcnt(0)
@@ -185,12 +197,13 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
   end
 */
-    0x866eff6d, 0x00ff0000, 0xbf840019, 0xc0071b80, 0x000000c0, 0xbf8cc07f,
-    0xbef000ff, 0x80000000, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f,
-    0x87707170, 0xbf85000c, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070,
-    0xbf840007, 0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000,
-    0xbf8cc07f, 0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e,
-    0x00008000, 0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c,
+    0x92eeff6d, 0x00080010, 0xbf84001e, 0xbf06826e, 0xbf850003, 0x806c846c,
+    0x826d806d, 0xbf820019, 0xc0071b80, 0x000000c0, 0xbf8cc07f, 0xbef000ff,
+    0x80000000, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
+    0xbf85000c, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070, 0xbf840007,
+    0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000, 0xbf8cc07f,
+    0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e, 0x00008000,
+    0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c, 0x00000000,
 };
 
 static const unsigned int kCodeCopyAligned8[] = {
