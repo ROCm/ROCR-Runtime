@@ -63,6 +63,8 @@
 #include "suites/test_common/test_common.h"
 #include "suites/functional/concurrent_init.h"
 #include "suites/functional/concurrent_init_shutdown.h"
+#include "suites/functional/concurrent_shutdown.h"
+#include "suites/functional/reference_count.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -141,6 +143,27 @@ TEST(rocrtstFunc, Concurrent_Init_Shutdown_Test) {
   RunCustomTestProlog(&ci);
   ci.TestConcurrentInitShutdown();
   RunCustomTestEpilog(&ci);
+}
+TEST(rocrtstFunc, Concurrent_Shutdown) {
+  ConcurrentShutdownTest cs;
+  RunCustomTestProlog(&cs);
+  cs.TestConcurrentShutdown();
+  RunCustomTestEpilog(&cs);
+}
+
+
+TEST(rocrtstFunc, Reference_Count) {
+  ReferenceCountTest rc(true, false);
+  RunCustomTestProlog(&rc);
+  rc.TestReferenceCount();
+  RunCustomTestEpilog(&rc);
+}
+
+TEST(rocrtstFunc, Max_Reference_Count) {
+  ReferenceCountTest rc(false, true);
+  RunCustomTestProlog(&rc);
+  rc.TestMaxReferenceCount();
+  RunCustomTestEpilog(&rc);
 }
 
 TEST(rocrtstFunc, Memory_Max_Mem) {
