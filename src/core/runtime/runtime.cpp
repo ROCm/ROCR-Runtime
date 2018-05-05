@@ -539,7 +539,7 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       break;
     }
     case HSA_SYSTEM_INFO_SIGNAL_MAX_WAIT:
-      *((uint64_t*)value) = 0xFFFFFFFFFFFFFFFF;
+      *((uint64_t*)value) = UINT64_MAX;
       break;
     case HSA_SYSTEM_INFO_ENDIANNESS:
 #if defined(HSA_LITTLE_ENDIAN)

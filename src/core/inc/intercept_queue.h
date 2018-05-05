@@ -224,7 +224,7 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public Signal {
   // Packet transform callbacks
   std::vector<std::pair<AMD::callback_t<hsa_amd_queue_intercept_handler>, void*>> interceptors;
 
-  static const hsa_signal_value_t DOORBELL_MAX = 0xFFFFFFFFFFFFFFFFull;
+  static const hsa_signal_value_t DOORBELL_MAX = UINT64_MAX;
 
   static bool HandleAsyncDoorbell(hsa_signal_value_t value, void* arg);
   static void PacketWriter(const void* pkts, uint64_t pkt_count);
