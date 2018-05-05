@@ -943,13 +943,13 @@ void Runtime::AsyncEventsLoop(void*) {
     hsa_signal_value_t value;
     uint32_t index = AMD::hsa_amd_signal_wait_any(
         uint32_t(async_events_.Size()), &async_events_.signal_[0],
-        &async_events_.cond_[0], &async_events_.value_[0], uint64_t(-1),
+        &async_events_.cond_[0], &async_events_.value_[0], UINT64_MAX,
         HSA_WAIT_STATE_BLOCKED, &value);
 
     // Reset the control signal
     if (index == 0) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
-    } else if (index != -1) {
+    } else if (index != UINT32_MAX) {
       // No error or timout occured, process the handler
       assert(async_events_.handler_[index] != NULL);
       bool keep =

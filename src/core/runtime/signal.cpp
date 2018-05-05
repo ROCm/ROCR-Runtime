@@ -172,7 +172,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   bool condition_met = false;
   while (true) {
     for (uint32_t i = 0; i < signal_count; i++) {
-      if (!signals[i]->IsValid()) return uint32_t(-1);
+      if (!signals[i]->IsValid()) return UINT32_MAX;
 
       // Handling special event.
       if (signals[i]->EopEvent() != NULL) {
@@ -210,7 +210,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
           break;
         }
         default:
-          return uint32_t(-1);
+          return UINT32_MAX;
       }
       if (condition_met) {
         if (satisfying_value != NULL) *satisfying_value = value;
@@ -220,7 +220,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
 
     timer::fast_clock::time_point time = timer::fast_clock::now();
     if (time - start_time > fast_timeout) {
-      return uint32_t(-1);
+      return UINT32_MAX;
     }
 
     if (wait_hint == HSA_WAIT_STATE_ACTIVE) {

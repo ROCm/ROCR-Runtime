@@ -604,7 +604,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
   }
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX,
                                      HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
@@ -765,7 +765,7 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   ReleaseWriteIndex(write_index, 1);
 
   // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+  if (HSA::hsa_signal_wait_scacquire(completion_signal_, HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX,
                                      HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
@@ -836,7 +836,7 @@ hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
 
   // Wait for the packet to finish.
   if (HSA::hsa_signal_wait_scacquire(packet.completion_signal, HSA_SIGNAL_CONDITION_LT, 1,
-                                     uint64_t(-1), HSA_WAIT_STATE_ACTIVE) != 0) {
+                                     UINT64_MAX, HSA_WAIT_STATE_ACTIVE) != 0) {
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }

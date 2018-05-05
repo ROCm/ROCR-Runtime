@@ -1232,7 +1232,7 @@ hsa_status_t hsa_signal_group_wait_any_relaxed(hsa_signal_group_t signal_group,
   const uint32_t index = AMD::hsa_amd_signal_wait_any(
       group->Count(), const_cast<hsa_signal_t*>(group->List()),
       const_cast<hsa_signal_condition_t*>(conditions),
-      const_cast<hsa_signal_value_t*>(compare_values), uint64_t(-1), wait_state_hint, value);
+      const_cast<hsa_signal_value_t*>(compare_values), UINT64_MAX, wait_state_hint, value);
   if (index >= group->Count()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   *signal = group->List()[index];
   return HSA_STATUS_SUCCESS;
