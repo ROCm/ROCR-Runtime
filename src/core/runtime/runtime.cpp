@@ -472,7 +472,7 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
   // Check for GPU fill
   // Selects GPU fill for SVM and Locked allocations if a GPU address is given and is mapped.
   if (info.agentBaseAddress <= ptr &&
-      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+      endPtr <= (ptrdiff_t)info.agentBaseAddress + (ptrdiff_t)info.sizeInBytes) {
     core::Agent* blit_agent = core::Agent::Convert(info.agentOwner);
     if (blit_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice) {
       blit_agent = nullptr;
@@ -488,7 +488,8 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
   }
 
   // Host and unmapped SVM addresses copy via host.
-  if (info.hostBaseAddress <= ptr && endPtr <= (ptrdiff_t)info.hostBaseAddress + info.sizeInBytes) {
+  if (info.hostBaseAddress <= ptr &&
+      endPtr <= (ptrdiff_t)info.hostBaseAddress + (ptrdiff_t)info.sizeInBytes) {
     memset(ptr, value, count * sizeof(uint32_t));
     return HSA_STATUS_SUCCESS;
   }

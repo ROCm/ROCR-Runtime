@@ -51,7 +51,7 @@ int BusyWaitSignal::rtti_id_ = 0;
 BusyWaitSignal::BusyWaitSignal(SharedSignal* abi_block, bool enableIPC)
     : Signal(abi_block, enableIPC) {
   signal_.kind = AMD_SIGNAL_KIND_USER;
-  signal_.event_mailbox_ptr = NULL;
+  signal_.event_mailbox_ptr = 0;
 }
 
 hsa_signal_value_t BusyWaitSignal::LoadRelaxed() {

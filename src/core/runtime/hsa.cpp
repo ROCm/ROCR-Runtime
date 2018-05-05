@@ -157,7 +157,7 @@ template <class T> struct ValidityError<const T*> {
 
 template <class T>
 static __forceinline bool IsValid(T* ptr) {
-  return (ptr == NULL) ? NULL : ptr->IsValid();
+  return (ptr == NULL) ? false : ptr->IsValid();
 }
 
 namespace AMD {

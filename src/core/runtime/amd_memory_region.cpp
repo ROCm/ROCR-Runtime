@@ -471,8 +471,8 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
                                                  &agent_count, &accessible,
                                                  &blockInfo) == HSA_STATUS_SUCCESS) {
     if (blockInfo.length != size || info.sizeInBytes != size) {
-      for (int i = 0; i < num_agents; i++) union_agents.push_back(agents[i].handle);
-      for (int i = 0; i < agent_count; i++) union_agents.push_back(accessible[i].handle);
+      for (unsigned i = 0; i < num_agents; i++) union_agents.push_back(agents[i].handle);
+      for (unsigned i = 0; i < agent_count; i++) union_agents.push_back(accessible[i].handle);
       std::sort(union_agents.begin(), union_agents.end());
       const auto& last = std::unique(union_agents.begin(), union_agents.end());
       union_agents.erase(last, union_agents.end());
