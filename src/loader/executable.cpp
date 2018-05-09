@@ -1016,6 +1016,71 @@ static uint32_t NextCodeObjectNum()
   return dumpN++;
 }
 
+static std::string ConvertOldTargetNameToNew(
+    const std::string &OldName, bool IsFinalizer, uint32_t EFlags) {
+  std::string NewName = "";
+
+  // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
+  // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
+  if (OldName == "AMD:AMDGPU:7:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx700";
+  else if (OldName == "AMD:AMDGPU:7:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx701";
+  else if (OldName == "AMD:AMDGPU:7:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx702";
+  else if (OldName == "AMD:AMDGPU:7:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx703";
+  else if (OldName == "AMD:AMDGPU:7:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx704";
+  else if (OldName == "AMD:AMDGPU:8:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx800";
+  else if (OldName == "AMD:AMDGPU:8:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx801";
+  else if (OldName == "AMD:AMDGPU:8:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx802";
+  else if (OldName == "AMD:AMDGPU:8:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx803";
+  else if (OldName == "AMD:AMDGPU:8:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx804";
+  else if (OldName == "AMD:AMDGPU:8:1:0")
+    NewName = "amdgcn-amd-amdhsa--gfx810";
+  else if (OldName == "AMD:AMDGPU:9:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx900";
+  else if (OldName == "AMD:AMDGPU:9:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx900";
+  else if (OldName == "AMD:AMDGPU:9:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx902";
+  else if (OldName == "AMD:AMDGPU:9:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx902";
+  else if (OldName == "AMD:AMDGPU:9:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx904";
+  else if (OldName == "AMD:AMDGPU:9:0:6")
+    NewName = "amdgcn-amd-amdhsa--gfx906";
+  else
+    assert(false && "Unhandled target");
+
+  if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
+    NewName = NewName + "+xnack";
+  } else {
+    if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
+      NewName = NewName + "+xnack";
+    } else {
+      if (OldName == "AMD:AMDGPU:8:0:1")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:8:1:0")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:1")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:2")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:3")
+        NewName = NewName + "+xnack";
+    }
+  }
+
+  return NewName;
+}
+
 hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
@@ -1110,9 +1175,6 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   std::string codeIsa;
   if (!code->GetNoteIsa(codeIsa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
 
-  hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
-  if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
-
   uint32_t majorVersion, minorVersion;
   if (!code->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
@@ -1120,17 +1182,27 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
 
   if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
   if (agent.handle == 0 && majorVersion == 1) { return HSA_STATUS_ERROR_INVALID_AGENT; }
-  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) { return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS; }
 
+  bool IsFinalizer = true;
   uint32_t codeHsailMajor;
   uint32_t codeHsailMinor;
   hsa_profile_t codeProfile;
   hsa_machine_model_t codeMachineModel;
   hsa_default_float_rounding_mode_t codeRoundingMode;
   if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor, &codeProfile, &codeMachineModel, &codeRoundingMode)) {
+    // Only finalizer generated the "HSAIL" note.
+    IsFinalizer = false;
     codeProfile = HSA_PROFILE_FULL;
   }
   if (profile_ != codeProfile) {
+    return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+  }
+
+  codeIsa = ConvertOldTargetNameToNew(codeIsa, IsFinalizer, code->EFlags());
+  hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
+  if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
+
+  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) {
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
 
@@ -1673,14 +1745,16 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_INIT_IMAGE:
-    case R_AMDGPU_INIT_SAMPLER:
-      // Images and samplers are not supported in v2.1.
-      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+    case R_AMDGPU_RELATIVE64:
+    {
+      int64_t baseDelta = reinterpret_cast<uint64_t>(relSeg->Address(0)) - relSeg->VAddr();
+      uint64_t relocatedAddr = baseDelta + rel->addend();
+      relSeg->Copy(rel->offset(), &relocatedAddr, sizeof(relocatedAddr));
+      break;
+    }
 
     default:
-      // Ignore.
-      break;
+      return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
   return HSA_STATUS_SUCCESS;
 }

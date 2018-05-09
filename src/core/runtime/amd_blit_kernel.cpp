@@ -587,8 +587,8 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
-                                                 size_t size) {
+hsa_status_t BlitKernel::SubmitLinearCopyCommand(bool p2p, void* dst,
+                                                 const void* src, size_t size) {
   // Protect completion_signal_.
   std::lock_guard<std::mutex> guard(lock_);
 
@@ -597,7 +597,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
   std::vector<core::Signal*> dep_signals(0);
 
   hsa_status_t stat = SubmitLinearCopyCommand(
-      dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
+      p2p, dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
 
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
@@ -614,7 +614,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
 }
 
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(
-    void* dst, const void* src, size_t size,
+    bool p2p, void* dst, const void* src, size_t size,
     std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
   // Reserve write index for barrier(s) + dispatch packet.
   const uint32_t num_barrier_packet = uint32_t((dep_signals.size() + 4) / 5);
@@ -624,6 +624,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
   uint64_t write_index_temp = write_index;
 
   // Insert barrier packets to handle dependent signals.
+  // Barrier bit keeps signal checking traffic from competing with a copy.
   const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
       (1 << HSA_PACKET_HEADER_BARRIER) |
       (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
@@ -775,8 +776,7 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
 }
 
 hsa_status_t BlitKernel::EnableProfiling(bool enable) {
-  AMD_HSA_BITS_SET(queue_->amd_queue_.queue_properties,
-                   AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, enable);
+  queue_->SetProfiling(enable);
   return HSA_STATUS_SUCCESS;
 }
 
@@ -797,51 +797,6 @@ void BlitKernel::ReleaseWriteIndex(uint64_t write_index, uint32_t num_packet) {
   core::Signal* doorbell =
       core::Signal::Convert(queue_->public_handle()->doorbell_signal);
   doorbell->StoreRelease(write_index + num_packet - 1);
-}
-
-hsa_status_t BlitKernel::FenceRelease(uint64_t write_index,
-                                      uint32_t num_copy_packet,
-                                      hsa_fence_scope_t fence) {
-  // This function is not thread safe.
-
-  const uint16_t kBarrierPacketHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKET_HEADER_TYPE) |
-      (1 << HSA_PACKET_HEADER_BARRIER) |
-      (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
-      (fence << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
-
-  hsa_barrier_and_packet_t packet = {0};
-  packet.header = kInvalidPacketHeader;
-
-  HSA::hsa_signal_store_relaxed(completion_signal_, 1);
-  packet.completion_signal = completion_signal_;
-
-  if (num_copy_packet == 0) {
-    assert(write_index == 0);
-    // Reserve write index.
-    write_index = AcquireWriteIndex(1);
-  }
-
-  // Populate queue buffer with AQL packet.
-  hsa_barrier_and_packet_t* queue_buffer =
-      reinterpret_cast<hsa_barrier_and_packet_t*>(
-          queue_->public_handle()->base_address);
-  std::atomic_thread_fence(std::memory_order_acquire);
-  queue_buffer[(write_index + num_copy_packet) & queue_bitmask_] = packet;
-  std::atomic_thread_fence(std::memory_order_release);
-  queue_buffer[(write_index + num_copy_packet) & queue_bitmask_].header =
-      kBarrierPacketHeader;
-
-  // Launch packet.
-  ReleaseWriteIndex(write_index, num_copy_packet + 1);
-
-  // Wait for the packet to finish.
-  if (HSA::hsa_signal_wait_scacquire(packet.completion_signal, HSA_SIGNAL_CONDITION_LT, 1,
-                                     uint64_t(-1), HSA_WAIT_STATE_ACTIVE) != 0) {
-    // Signal wait returned unexpected value.
-    return HSA_STATUS_ERROR;
-  }
-
-  return HSA_STATUS_SUCCESS;
 }
 
 void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,

@@ -31,7 +31,7 @@
 //    permission.
 //
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIESd OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
 // THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
 // OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
@@ -40,48 +40,86 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef AMD_HSA_QUEUE_H
-#define AMD_HSA_QUEUE_H
+#ifndef HSA_RUNTIME_CORE_UTIL_LAZY_PTR_H_
+#define HSA_RUNTIME_CORE_UTIL_LAZY_PTR_H_
 
-#include "amd_hsa_common.h"
-#include "hsa.h"
+#include <memory>
+#include <utility>
+#include <functional>
 
-// AMD Queue Properties.
-typedef uint32_t amd_queue_properties32_t;
-enum amd_queue_properties_t {
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_ENABLE_TRAP_HANDLER, 0, 1),
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_IS_PTR64, 1, 1),
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_ENABLE_TRAP_HANDLER_DEBUG_SGPRS, 2, 1),
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_ENABLE_PROFILING, 3, 1),
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE, 4, 1),
-  AMD_HSA_BITS_CREATE_ENUM_ENTRIES(AMD_QUEUE_PROPERTIES_RESERVED1, 5, 27)
+#include "core/util/utils.h"
+
+/*
+ * Wrapper for a std::unique_ptr that initializes its object at first use.
+ */
+template <typename T> class lazy_ptr {
+ public:
+  lazy_ptr() {}
+
+  explicit lazy_ptr(std::function<T*()> Constructor) { Init(Constructor); }
+
+  void reset(std::function<T*()> Constructor = nullptr) {
+    obj.reset();
+    func = Constructor;
+  }
+
+  void reset(T* ptr) {
+    obj.reset(ptr);
+    func = nullptr;
+  }
+
+  bool operator==(T* rhs) const { return obj.get() == rhs; }
+  bool operator!=(T* rhs) const { return obj.get() != rhs; }
+
+  const std::unique_ptr<T>& operator->() const {
+    make(true);
+    return obj;
+  }
+
+  std::unique_ptr<T>& operator*() {
+    make(true);
+    return obj;
+  }
+
+  const std::unique_ptr<T>& operator*() const {
+    make(true);
+    return obj;
+  }
+
+  /*
+   * Ensures that the object is created or is being created.
+   * This is useful when early consruction of the object is required.
+   */
+  void touch() const { make(false); }
+
+ private:
+  mutable std::unique_ptr<T> obj;
+  mutable std::function<T*(void)> func;
+  mutable KernelMutex lock;
+
+  // Separated from make to improve inlining.
+  void make_body(bool block) const {
+    if (block) {
+      lock.Acquire();
+    } else if (!lock.Try()) {
+      return;
+    }
+    MAKE_SCOPE_GUARD([&]() { lock.Release(); });
+    if (obj != nullptr) return;
+    T* ptr = func();
+    std::atomic_thread_fence(std::memory_order_release);
+    obj.reset(ptr);
+    func = nullptr;
+  }
+
+  __forceinline void make(bool block) const {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    if (obj == nullptr) {
+      make_body(block);
+    }
+  }
+
+  DISALLOW_COPY_AND_ASSIGN(lazy_ptr);
 };
 
-// AMD Queue.
-#define AMD_QUEUE_ALIGN_BYTES 64
-#define AMD_QUEUE_ALIGN __ALIGNED__(AMD_QUEUE_ALIGN_BYTES)
-typedef struct AMD_QUEUE_ALIGN amd_queue_s {
-  hsa_queue_t hsa_queue;
-  uint32_t reserved1[4];
-  volatile uint64_t write_dispatch_id;
-  uint32_t group_segment_aperture_base_hi;
-  uint32_t private_segment_aperture_base_hi;
-  uint32_t max_cu_id;
-  uint32_t max_wave_id;
-  volatile uint64_t max_legacy_doorbell_dispatch_id_plus_1;
-  volatile uint32_t legacy_doorbell_lock;
-  uint32_t reserved2[9];
-  volatile uint64_t read_dispatch_id;
-  uint32_t read_dispatch_id_field_base_byte_offset;
-  uint32_t compute_tmpring_size;
-  uint32_t scratch_resource_descriptor[4];
-  uint64_t scratch_backing_memory_location;
-  uint64_t scratch_backing_memory_byte_size;
-  uint32_t scratch_workitem_byte_size;
-  amd_queue_properties32_t queue_properties;
-  uint32_t reserved3[2];
-  hsa_signal_t queue_inactive_signal;
-  uint32_t reserved4[14];
-} amd_queue_t;
-
-#endif // AMD_HSA_QUEUE_H
+#endif  // HSA_RUNTIME_CORE_UTIL_LAZY_PTR_H_

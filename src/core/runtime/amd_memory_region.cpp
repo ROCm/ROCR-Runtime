@@ -136,8 +136,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owne
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
   }
 
-  max_single_alloc_size_ =
-      AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize_);
+  max_single_alloc_size_ = AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize_);
 
   mem_flag_.ui32.CoarseGrain = (fine_grain) ? 0 : 1;
 
@@ -288,16 +287,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
       }
       break;
     case HSA_REGION_INFO_SIZE:
-      switch (mem_props_.HeapType) {
-        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
-        case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((size_t*)value) = static_cast<size_t>(GetPhysicalSize());
-          break;
-        default:
-          *((size_t*)value) = static_cast<size_t>(
-              (full_profile()) ? GetVirtualSize() : GetPhysicalSize());
-          break;
-      }
+      *((size_t*)value) = static_cast<size_t>(GetPhysicalSize());
       break;
     case HSA_REGION_INFO_ALLOC_MAX_SIZE:
       switch (mem_props_.HeapType) {
@@ -535,7 +525,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   lock.Release();
 
   for (GpuAgentInt* gpu : whitelist_gpus) {
-    gpu->InitDma();
+    gpu->PreloadBlits();
   }
 
   return HSA_STATUS_SUCCESS;
@@ -584,7 +574,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       if (agent->device_type() == core::Agent::kAmdGpuDevice) {
         whitelist_nodes.push_back(agent->node_id());
-        whitelist_gpus.insert(reinterpret_cast<GpuAgentInt*>(agent));
+        whitelist_gpus.insert(agent);
       }
     }
   }
@@ -607,8 +597,9 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
       } else {
         *agent_ptr = host_ptr;
       }
-      for (core::Agent* gpu : whitelist_gpus) {
-        reinterpret_cast<GpuAgentInt*>(gpu)->InitDma();
+
+      for (auto gpu : whitelist_gpus) {
+        static_cast<GpuAgentInt*>(gpu)->PreloadBlits();
       }
 
       return HSA_STATUS_SUCCESS;

@@ -61,6 +61,7 @@ class BlitSdmaBase : public core::Blit {
   static const size_t kCopyPacketSize;
   static const size_t kMaxSingleCopySize;
   static const size_t kMaxSingleFillSize;
+  virtual bool isSDMA() const override { return true; }
 };
 
 // RingIndexTy: 32/64-bit monotonic ring index, counting in bytes.
@@ -69,7 +70,7 @@ class BlitSdmaBase : public core::Blit {
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 class BlitSdma : public BlitSdmaBase {
  public:
-  explicit BlitSdma();
+  explicit BlitSdma(bool copy_direction);
 
   virtual ~BlitSdma() override;
 
@@ -94,24 +95,26 @@ class BlitSdma : public BlitSdmaBase {
 
   /// @brief Submit a linear copy command to the queue buffer.
   ///
+  /// @param p2p true if it is a peer-to-peer copy
   /// @param dst Memory address of the copy destination.
   /// @param src Memory address of the copy source.
   /// @param size Size of the data to be copied.
-  virtual hsa_status_t SubmitLinearCopyCommand(void* dst, const void* src,
-                                               size_t size) override;
+  virtual hsa_status_t SubmitLinearCopyCommand(bool p2p, void* dst,
+                                               const void* src, size_t size) override;
 
   /// @brief Submit a linear copy command to the the underlying compute device's
   /// control block. The call is non blocking. The memory transfer will start
   /// after all dependent signals are satisfied. After the transfer is
   /// completed, the out signal will be decremented.
   ///
+  /// @param p2p true if it is a peer-to-peer copy
   /// @param dst Memory address of the copy destination.
   /// @param src Memory address of the copy source.
   /// @param size Size of the data to be copied.
   /// @param dep_signals Arrays of dependent signal.
   /// @param out_signal Output signal.
   virtual hsa_status_t SubmitLinearCopyCommand(
-      void* dst, const void* src, size_t size,
+      bool p2p, void* dst, const void* src, size_t size,
       std::vector<core::Signal*>& dep_signals,
       core::Signal& out_signal) override;
 
@@ -125,7 +128,7 @@ class BlitSdma : public BlitSdmaBase {
 
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
- protected:
+ private:
   /// @brief Acquires the address into queue buffer where a new command
   /// packet of specified size could be written. The address that is
   /// returned is guaranteed to be unique even in a multi-threaded access
@@ -170,6 +173,9 @@ class BlitSdma : public BlitSdmaBase {
   void BuildFenceCommand(char* fence_command_addr, uint32_t* fence,
                          uint32_t fence_value);
 
+  /// @brief Build Hdp Flush command
+  void BuildHdpFlushCommand(char* cmd_addr);
+
   uint32_t* ObtainFenceObject();
 
   void WaitFence(uint32_t* fence, uint32_t fence_value);
@@ -204,19 +210,25 @@ class BlitSdma : public BlitSdmaBase {
   RingIndexTy cached_reserve_index_;
   RingIndexTy cached_commit_index_;
 
-  uint32_t linear_copy_command_size_;
+  static const uint32_t linear_copy_command_size_;
 
-  uint32_t fill_command_size_;
+  static const uint32_t fill_command_size_;
 
-  uint32_t fence_command_size_;
+  static const uint32_t fence_command_size_;
 
-  uint32_t poll_command_size_;
+  static const uint32_t poll_command_size_;
 
-  uint32_t atomic_command_size_;
+  static const uint32_t flush_command_size_;
 
-  uint32_t timestamp_command_size_;
+  static const uint32_t atomic_command_size_;
 
-  uint32_t trap_command_size_;
+  static const uint32_t timestamp_command_size_;
+
+  static const uint32_t trap_command_size_;
+
+  // Flag to indicate if sDMA queue is used for H2D copy operations
+  // true if used for H2D operations, false otherwise
+  const bool sdma_h2d_;
 
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;
@@ -232,19 +244,20 @@ class BlitSdma : public BlitSdmaBase {
 
   /// True if platform atomic is supported.
   bool platform_atomic_support_;
+
+  /// True if sDMA supports HDP flush
+  bool hdp_flush_support_;
 };
 
-class BlitSdmaV2V3
-    // Ring indices are 32-bit.
-    // HW ring indices are not monotonic (wrap at end of ring).
-    // Count fields of SDMA commands are 0-based.
-    : public BlitSdma<uint32_t, false, 0> {};
+// Ring indices are 32-bit.
+// HW ring indices are not monotonic (wrap at end of ring).
+// Count fields of SDMA commands are 0-based.
+typedef BlitSdma<uint32_t, false, 0> BlitSdmaV2V3;
 
-class BlitSdmaV4
-    // Ring indices are 64-bit.
-    // HW ring indices are monotonic (do not wrap at end of ring).
-    // Count fields of SDMA commands are 1-based.
-    : public BlitSdma<uint64_t, true, -1> {};
+// Ring indices are 64-bit.
+// HW ring indices are monotonic (do not wrap at end of ring).
+// Count fields of SDMA commands are 1-based.
+typedef BlitSdma<uint64_t, true, -1>  BlitSdmaV4;
 
 }  // namespace amd
 
