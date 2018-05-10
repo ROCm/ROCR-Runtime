@@ -76,24 +76,26 @@ class BlitKernel : public core::Blit {
   /// @brief Submit an AQL packet to perform vector copy. The call is blocking
   /// until the command execution is finished.
   ///
+  /// @param p2p true if it is a peer-to-peer copy
   /// @param dst Memory address of the copy destination.
   /// @param src Memory address of the copy source.
   /// @param size Size of the data to be copied.
-  virtual hsa_status_t SubmitLinearCopyCommand(void* dst, const void* src,
-                                               size_t size) override;
+  virtual hsa_status_t SubmitLinearCopyCommand(bool p2p, void* dst,
+                                               const void* src, size_t size) override;
 
   /// @brief Submit a linear copy command to the the underlying compute device's
   /// control block. The call is non blocking. The memory transfer will start
   /// after all dependent signals are satisfied. After the transfer is
   /// completed, the out signal will be decremented.
   ///
+  /// @param p2p true if it is a peer-to-peer copy
   /// @param dst Memory address of the copy destination.
   /// @param src Memory address of the copy source.
   /// @param size Size of the data to be copied.
   /// @param dep_signals Arrays of dependent signal.
   /// @param out_signal Output signal.
   virtual hsa_status_t SubmitLinearCopyCommand(
-      void* dst, const void* src, size_t size,
+      bool p2p, void* dst, const void* src, size_t size,
       std::vector<core::Signal*>& dep_signals,
       core::Signal& out_signal) override;
 
@@ -151,10 +153,6 @@ class BlitKernel : public core::Blit {
   /// function also serializes concurrent doorbell update to ensure that the
   /// packet processor doesn't get invalid packet.
   void ReleaseWriteIndex(uint64_t write_index, uint32_t num_packet);
-
-  /// Wait until all packets are finished.
-  hsa_status_t FenceRelease(uint64_t write_index, uint32_t num_copy_packet,
-                            hsa_fence_scope_t fence);
 
   void PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
                      uint32_t grid_size_x, hsa_signal_t completion_signal);

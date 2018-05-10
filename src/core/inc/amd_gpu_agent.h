@@ -56,6 +56,7 @@
 #include "core/inc/cache.h"
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
+#include "core/util/lazy_ptr.h"
 
 namespace amd {
 class MemoryRegion;
@@ -66,6 +67,8 @@ struct ScratchInfo {
   size_t size;
   size_t size_per_thread;
   ptrdiff_t queue_process_offset;
+  bool large;
+  bool retry;
 };
 
 // @brief Interface to represent a GPU agent.
@@ -75,10 +78,8 @@ class GpuAgentInt : public core::Agent {
   GpuAgentInt(uint32_t node_id)
       : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
-  // @brief Initialize DMA queue.
-  //
-  // @retval HSA_STATUS_SUCCESS DMA queue initialization is successful.
-  virtual void InitDma() = 0;
+  // @brief Ensure blits are ready (performance hint).
+  virtual void PreloadBlits() {}
 
   // @brief Initialization hook invoked after tools library has loaded,
   // to allow tools interception of interface functions.
@@ -104,15 +105,15 @@ class GpuAgentInt : public core::Agent {
 
   // @brief Carve scratch memory from scratch pool.
   //
-  // @param [out] scratch Structure to be populated with the carved memory
+  // @param [in/out] scratch Structure to be populated with the carved memory
   // information.
   virtual void AcquireQueueScratch(ScratchInfo& scratch) = 0;
 
   // @brief Release scratch memory back to scratch pool.
   //
-  // @param [in] base Address of scratch memory previously acquired with
-  // call to ::AcquireQueueScratch.
-  virtual void ReleaseQueueScratch(void* base) = 0;
+  // @param [in/out] scratch Scratch memory previously acquired with call to
+  // ::AcquireQueueScratch.
+  virtual void ReleaseQueueScratch(ScratchInfo& base) = 0;
 
   // @brief Translate the kernel start and end dispatch timestamp from agent
   // domain to host domain.
@@ -185,13 +186,15 @@ class GpuAgent : public GpuAgentInt {
   // @brief GPU agent destructor.
   ~GpuAgent();
 
-  // @brief Override from core::Agent.
-  void InitDma() override;
+  // @brief Ensure blits are ready (performance hint).
+  void PreloadBlits() override;
 
   // @brief Override from core::Agent.
   hsa_status_t PostToolsInit() override;
 
   uint16_t GetMicrocodeVersion() const;
+
+  uint16_t GetSdmaMicrocodeVersion() const;
 
   // @brief Assembles SP3 shader source into ISA or AQL code object.
   //
@@ -256,7 +259,20 @@ class GpuAgent : public GpuAgentInt {
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
   // @brief Override from amd::GpuAgentInt.
-  void ReleaseQueueScratch(void* base) override;
+  void ReleaseQueueScratch(ScratchInfo& scratch) override;
+
+  // @brief Register signal for notification when scratch may become available.
+  // @p signal is notified by OR'ing with @p value.
+  void AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
+    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+    scratch_notifiers_[signal] = value;
+  }
+
+  // @brief Deregister scratch notification signal.
+  void RemoveScratchNotifier(hsa_signal_t signal) {
+    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+    scratch_notifiers_.erase(signal);
+  }
 
   // @brief Override from amd::GpuAgentInt.
   void TranslateTime(core::Signal* signal,
@@ -326,7 +342,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create SDMA blit object.
   //
   // @retval NULL if SDMA blit creation and initialization failed.
-  core::Blit* CreateBlitSdma();
+  core::Blit* CreateBlitSdma(bool h2d);
 
   // @brief Create Kernel blit object using provided compute queue.
   //
@@ -367,6 +383,12 @@ class GpuAgent : public GpuAgentInt {
   // @brief Object to manage scratch memory.
   SmallHeap scratch_pool_;
 
+  // @brief Current short duration scratch memory size.
+  size_t scratch_used_large_;
+
+  // @brief Notifications for scratch release.
+  std::map<hsa_signal_t, hsa_signal_value_t> scratch_notifiers_;
+
   // @brief Default scratch size per queue.
   size_t queue_scratch_len_;
 
@@ -376,7 +398,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Blit interfaces for each data path.
   enum BlitEnum { BlitHostToDev, BlitDevToHost, BlitDevToDev, BlitCount };
 
-  core::Blit* blits_[BlitCount];
+  lazy_ptr<core::Blit> blits_[BlitCount];
 
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
@@ -385,7 +407,7 @@ class GpuAgent : public GpuAgentInt {
     QueueCount
   };
 
-  core::Queue* queues_[QueueCount];
+  lazy_ptr<core::Queue> queues_[QueueCount];
 
   // @brief Mutex to protect the update to coherency type.
   KernelMutex coherency_lock_;
@@ -443,6 +465,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Query the driver to get the cache properties.
   void InitCacheList();
 
+  // @brief Create internal queues and blits.
+  void InitDma();
+
   // @brief Initialize memory pool for end timestamp object.
   // @retval True if the memory pool for end timestamp object is initialized.
   bool InitEndTsPool();
@@ -452,9 +477,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
-
-  // @brief True if blit objects are initialized.
-  std::atomic<bool> blit_initialized_;
 
   // Each end ts is 32 bytes.
   static const size_t kTsSize = 32;

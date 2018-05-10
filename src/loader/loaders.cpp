@@ -87,22 +87,16 @@ namespace loader {
     gfx803.handle = 803;
     gfx804.handle = 804;
     gfx810.handle = 810;
-#if defined(GFX9_BUILD)
     gfx900.handle = 900;
     gfx901.handle = 901;
-    gfx901.handle = 902;
+    gfx902.handle = 902;
     gfx903.handle = 903;
-    gfx903.handle = 904;
-    gfx903.handle = 905;
-    gfx903.handle = 906;
-    gfx907.handle = 907;
-#endif // GFX9_BUILD
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
   {
     std::string sname(name);
-           if (sname == "AMD:AMDGPU:7:0:0") {
+    if (sname == "AMD:AMDGPU:7:0:0") {
       return gfx700;
     } else if (sname == "AMD:AMDGPU:7:0:1") {
       return gfx701;
@@ -118,7 +112,6 @@ namespace loader {
       return gfx804;
     } else if (sname == "AMD:AMDGPU:8:1:0") {
       return gfx810;
-#if defined(GFX9_BUILD)
     } else if (sname == "AMD:AMDGPU:9:0:0") {
       return gfx900;
     } else if (sname == "AMD:AMDGPU:9:0:1") {
@@ -127,19 +120,10 @@ namespace loader {
       return gfx902;
     } else if (sname == "AMD:AMDGPU:9:0:3") {
       return gfx903;
-    } else if (sname == "AMD:AMDGPU:9:0:4") {
-      return gfx904;
-    } else if (sname == "AMD:AMDGPU:9:0:5") {
-      return gfx905;
-    } else if (sname == "AMD:AMDGPU:9:0:6") {
-      return gfx906;
-    } else if (sname == "AMD:AMDGPU:9:0:7") {
-      return gfx907;
-#endif // GFX_BUILD
-    } else {
-      assert(0);
-      return invalid;
     }
+
+    assert(0);
+    return invalid;
   }
 
   bool OfflineLoaderContext::IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa)

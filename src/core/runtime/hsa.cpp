@@ -376,7 +376,7 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       return 0;
   }
 
-  char buff[3];
+  char buff[6];
   sprintf(buff, "%02u", minor);
   name += std::to_string(major) + "_" + buff + "_pfn_t";
 
@@ -1821,6 +1821,71 @@ hsa_status_t hsa_code_object_destroy(
   CATCH;
 }
 
+static std::string ConvertOldTargetNameToNew(
+    const std::string &OldName, bool IsFinalizer, uint32_t EFlags) {
+  std::string NewName = "";
+
+  // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
+  // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
+  if (OldName == "AMD:AMDGPU:7:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx700";
+  else if (OldName == "AMD:AMDGPU:7:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx701";
+  else if (OldName == "AMD:AMDGPU:7:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx702";
+  else if (OldName == "AMD:AMDGPU:7:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx703";
+  else if (OldName == "AMD:AMDGPU:7:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx704";
+  else if (OldName == "AMD:AMDGPU:8:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx800";
+  else if (OldName == "AMD:AMDGPU:8:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx801";
+  else if (OldName == "AMD:AMDGPU:8:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx802";
+  else if (OldName == "AMD:AMDGPU:8:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx803";
+  else if (OldName == "AMD:AMDGPU:8:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx804";
+  else if (OldName == "AMD:AMDGPU:8:1:0")
+    NewName = "amdgcn-amd-amdhsa--gfx810";
+  else if (OldName == "AMD:AMDGPU:9:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx900";
+  else if (OldName == "AMD:AMDGPU:9:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx900";
+  else if (OldName == "AMD:AMDGPU:9:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx902";
+  else if (OldName == "AMD:AMDGPU:9:0:3")
+    NewName = "amdgcn-amd-amdhsa--gfx902";
+  else if (OldName == "AMD:AMDGPU:9:0:4")
+    NewName = "amdgcn-amd-amdhsa--gfx904";
+  else if (OldName == "AMD:AMDGPU:9:0:6")
+    NewName = "amdgcn-amd-amdhsa--gfx906";
+  else
+    assert(false && "Unhandled target");
+
+  if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
+    NewName = NewName + "+xnack";
+  } else {
+    if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
+      NewName = NewName + "+xnack";
+    } else {
+      if (OldName == "AMD:AMDGPU:8:0:1")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:8:1:0")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:1")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:2")
+        NewName = NewName + "+xnack";
+      else if (OldName == "AMD:AMDGPU:9:0:3")
+        NewName = NewName + "+xnack";
+    }
+  }
+
+  return NewName;
+}
+
 /* deprecated */
 hsa_status_t hsa_code_object_get_info(
     hsa_code_object_t code_object,
@@ -1843,8 +1908,26 @@ hsa_status_t hsa_code_object_get_info(
         return status;
       }
 
+      std::string isa_name_str(isa_name);
+
+      bool IsFinalizer = true;
+      uint32_t codeHsailMajor;
+      uint32_t codeHsailMinor;
+      hsa_profile_t codeProfile;
+      hsa_machine_model_t codeMachineModel;
+      hsa_default_float_rounding_mode_t codeRoundingMode;
+      if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor,
+                              &codeProfile, &codeMachineModel,
+                              &codeRoundingMode)) {
+        // Only finalizer generated the "HSAIL" note.
+        IsFinalizer = false;
+      }
+
+      std::string new_isa_name_str =
+          ConvertOldTargetNameToNew(isa_name_str, IsFinalizer, code->EFlags());
+
       hsa_isa_t isa_handle = {0};
-      status = HSA::hsa_isa_from_name(isa_name, &isa_handle);
+      status = HSA::hsa_isa_from_name(new_isa_name_str.c_str(), &isa_handle);
       if (status != HSA_STATUS_SUCCESS) {
         return status;
       }
@@ -2593,22 +2676,26 @@ hsa_status_t hsa_status_string(
       break;
     case HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  *The code object reader is invalid.";
+          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  The code object reader is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_CACHE:
-      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  *The cache is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  The cache is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_WAVEFRONT:
-      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  *The wavefront is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  The wavefront is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:
-      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  *The signal group is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  The signal group is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  *The HSA runtime is not in the configuration "
+          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  The HSA runtime is not in the configuration "
           "state.";
       break;
+    case HSA_STATUS_ERROR_FATAL:
+      *status_string =
+          "HSA_STATUS_ERROR_FATAL:  The queue received an error that may require process "
+          "termination.";
     case HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED:
       *status_string =
           "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "

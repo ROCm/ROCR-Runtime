@@ -67,9 +67,13 @@ bool Wavefront::GetInfo(
 
 std::string Isa::GetFullName() const {
   std::stringstream full_name;
-  full_name << GetVendor() << ":" << GetArchitecture() << ":"
-            << GetMajorVersion() << ":" << GetMinorVersion() << ":"
-            << GetStepping();
+  full_name << GetArchitecture() << "-" << GetVendor() << "-" << GetOS() << "-"
+            << GetEnvironment() << "-gfx" << GetMajorVersion()
+            << GetMinorVersion() << GetStepping();
+
+  if (xnackEnabled_)
+    full_name << "+xnack";
+
   return full_name.str();
 }
 
@@ -176,8 +180,8 @@ const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
-const Isa *IsaRegistry::GetIsa(const Isa::Version &version) {
-  auto isareg_iter = supported_isas_.find(Isa(version).GetFullName());
+const Isa *IsaRegistry::GetIsa(const Isa::Version &version, bool xnack) {
+  auto isareg_iter = supported_isas_.find(Isa(version, xnack).GetFullName());
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
@@ -185,25 +189,27 @@ const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
   IsaRegistry::GetSupportedIsas();
 
 const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
-#define ISAREG_ENTRY_GEN(maj, min, stp)                                        \
-  Isa amd_amdgpu_##maj##min##stp;                                              \
-  amd_amdgpu_##maj##min##stp.version_ = Isa::Version(maj, min, stp);           \
-  supported_isas.insert(                                                       \
-    std::make_pair(                                                            \
-      amd_amdgpu_##maj##min##stp.GetFullName(), amd_amdgpu_##maj##min##stp));  \
+#define ISAREG_ENTRY_GEN(maj, min, stp, xnack)                                 \
+  Isa amd_amdgpu_##maj##min##stp##xnack;                                       \
+  amd_amdgpu_##maj##min##stp##xnack.version_ = Isa::Version(maj, min, stp);    \
+  amd_amdgpu_##maj##min##stp##xnack.xnackEnabled_ = xnack;                     \
+  supported_isas.insert(std::make_pair(                                        \
+      amd_amdgpu_##maj##min##stp##xnack.GetFullName(),                         \
+      amd_amdgpu_##maj##min##stp##xnack));                                     \
 
   IsaMap supported_isas;
 
-  ISAREG_ENTRY_GEN(7, 0, 0)
-  ISAREG_ENTRY_GEN(7, 0, 1)
-  ISAREG_ENTRY_GEN(7, 0, 2)
-  ISAREG_ENTRY_GEN(8, 0, 1)
-  ISAREG_ENTRY_GEN(8, 0, 2)
-  ISAREG_ENTRY_GEN(8, 0, 3)
-  ISAREG_ENTRY_GEN(9, 0, 0)
-  ISAREG_ENTRY_GEN(9, 0, 1)
-  ISAREG_ENTRY_GEN(9, 0, 2)
-  ISAREG_ENTRY_GEN(9, 0, 3)
+  ISAREG_ENTRY_GEN(7, 0, 0, false)
+  ISAREG_ENTRY_GEN(7, 0, 1, false)
+  ISAREG_ENTRY_GEN(7, 0, 2, false)
+  ISAREG_ENTRY_GEN(8, 0, 1, true)
+  ISAREG_ENTRY_GEN(8, 0, 2, false)
+  ISAREG_ENTRY_GEN(8, 0, 3, false)
+  ISAREG_ENTRY_GEN(8, 1, 0, true)
+  ISAREG_ENTRY_GEN(9, 0, 0, false)
+  ISAREG_ENTRY_GEN(9, 0, 2, true)
+  ISAREG_ENTRY_GEN(9, 0, 4, false)
+  ISAREG_ENTRY_GEN(9, 0, 6, false)
 
   return supported_isas;
 }

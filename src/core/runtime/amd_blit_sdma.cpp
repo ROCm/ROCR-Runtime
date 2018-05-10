@@ -360,6 +360,20 @@ typedef struct SDMA_PKT_TRAP_TAG {
   } INT_CONTEXT_UNION;
 } SDMA_PKT_TRAP;
 
+// Initialize Hdp flush packet for use on sDMA of devices
+// from Gfx9 or new  family
+static const SDMA_PKT_POLL_REGMEM hdp_flush_cmd_ {
+                                        { SDMA_OP_POLL_REGMEM },
+                                        { 0x00 },
+                                        { 0x80000000 },
+                                        { 0x00 },
+                                        { 0x00 },
+                                        { 0x00 },
+};
+
+// Version of sDMA microcode supporting Hdp flush
+static const uint16_t sdma_version_ = 0x01A5;
+
 inline uint32_t ptrlow32(const void* p) {
   return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p));
 }
@@ -377,8 +391,33 @@ const size_t BlitSdmaBase::kCopyPacketSize = sizeof(SDMA_PKT_COPY_LINEAR);
 const size_t BlitSdmaBase::kMaxSingleCopySize = 0x3fffe0;  // From HW documentation
 const size_t BlitSdmaBase::kMaxSingleFillSize = 0x3fffe0;
 
+// Initialize size of various sDMA commands use by this module
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
-BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma()
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::linear_copy_command_size_ = sizeof(SDMA_PKT_COPY_LINEAR);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::fill_command_size_ = sizeof(SDMA_PKT_CONSTANT_FILL);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::fence_command_size_ = sizeof(SDMA_PKT_FENCE);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::poll_command_size_ = sizeof(SDMA_PKT_POLL_REGMEM);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::flush_command_size_ = sizeof(SDMA_PKT_POLL_REGMEM);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::atomic_command_size_ = sizeof(SDMA_PKT_ATOMIC);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::timestamp_command_size_ = sizeof(SDMA_PKT_TIMESTAMP);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::trap_command_size_ = sizeof(SDMA_PKT_TRAP);
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma(bool copy_direction)
     : agent_(NULL),
       queue_start_addr_(NULL),
       fence_base_addr_(NULL),
@@ -386,7 +425,9 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma()
       fence_pool_counter_(0),
       cached_reserve_index_(0),
       cached_commit_index_(0),
-      platform_atomic_support_(true) {
+      sdma_h2d_(copy_direction),
+      platform_atomic_support_(true),
+      hdp_flush_support_(false) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
@@ -407,14 +448,6 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
     return HSA_STATUS_ERROR;
   }
 
-  linear_copy_command_size_ = sizeof(SDMA_PKT_COPY_LINEAR);
-  fill_command_size_ = sizeof(SDMA_PKT_CONSTANT_FILL);
-  fence_command_size_ = sizeof(SDMA_PKT_FENCE);
-  poll_command_size_ = sizeof(SDMA_PKT_POLL_REGMEM);
-  atomic_command_size_ = sizeof(SDMA_PKT_ATOMIC);
-  timestamp_command_size_ = sizeof(SDMA_PKT_TIMESTAMP);
-  trap_command_size_ = sizeof(SDMA_PKT_TRAP);
-
   const amd::GpuAgentInt& amd_gpu_agent =
       static_cast<const amd::GpuAgentInt&>(agent);
 
@@ -423,8 +456,14 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
     return HSA_STATUS_ERROR;
   }
 
-  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1)) {
+  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1) ||
+      amd_gpu_agent.isa()->GetMajorVersion() == 9) {
     platform_atomic_support_ = false;
+  }
+
+  // Determine if sDMA microcode supports HDP flush command
+  if (agent_->GetSdmaMicrocodeVersion() >= sdma_version_) {
+    hdp_flush_support_ = true;
   }
 
   // Allocate queue buffer.
@@ -499,7 +538,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Destroy
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitLinearCopyCommand(
-    void* dst, const void* src, size_t size) {
+    bool p2p, void* dst, const void* src, size_t size) {
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
   const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
@@ -507,8 +546,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   const uint32_t total_copy_command_size =
       num_copy_command * linear_copy_command_size_;
 
+  // Add space for acquire or release Hdp flush command
+  uint32_t flush_cmd_size = 0;
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (p2p)) {
+      flush_cmd_size = flush_command_size_;
+    }
+  }
+
   const uint32_t total_command_size =
-      total_copy_command_size + fence_command_size_;
+      total_copy_command_size + fence_command_size_ + flush_cmd_size;
 
   const uint32_t kFenceValue = 2015;
   uint32_t* fence_addr = ObtainFenceObject();
@@ -521,9 +568,24 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  BuildCopyCommand(command_addr, num_copy_command, dst, src, size);
+  // Determine if a Hdp flush cmd is required at the top of cmd stream
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_ == false) && (p2p)) {
+      BuildHdpFlushCommand(command_addr);
+      command_addr += flush_command_size_;
+    }
+  }
 
+  BuildCopyCommand(command_addr, num_copy_command, dst, src, size);
   command_addr += total_copy_command_size;
+
+  // Determine if a Hdp flush cmd is required at the end of cmd stream
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_) && (p2p)) {
+      BuildHdpFlushCommand(command_addr);
+      command_addr += flush_command_size_;
+    }
+  }
 
   BuildFenceCommand(command_addr, fence_addr, kFenceValue);
 
@@ -536,7 +598,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitLinearCopyCommand(
-    void* dst, const void* src, size_t size, std::vector<core::Signal*>& dep_signals,
+    bool p2p, void* dst, const void* src, size_t size, std::vector<core::Signal*>& dep_signals,
     core::Signal& out_signal) {
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
@@ -592,9 +654,17 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
           ? (fence_command_size_ + trap_command_size_)
           : 0;
 
+  // Add space for acquire or release Hdp flush command
+  uint32_t flush_cmd_size = 0;
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (p2p)) {
+      flush_cmd_size = flush_command_size_;
+    }
+  }
+
   const uint32_t total_command_size =
       total_poll_command_size + total_copy_command_size + sync_command_size +
-      total_timestamp_command_size + interrupt_command_size;
+      total_timestamp_command_size + interrupt_command_size + flush_cmd_size;
 
   RingIndexTy curr_index;
   char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
@@ -620,10 +690,25 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
     command_addr += timestamp_command_size_;
   }
 
+  // Determine if a Hdp flush cmd is required at the top of cmd stream
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_ == false) && (p2p)) {
+      BuildHdpFlushCommand(command_addr);
+      command_addr += flush_command_size_;
+    }
+  }
+
   // Do the transfer after all polls are satisfied.
   BuildCopyCommand(command_addr, num_copy_command, dst, src, size);
-
   command_addr += total_copy_command_size;
+
+  // Determine if a Hdp flush cmd is required at the end of cmd stream
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_) && (p2p)) {
+      BuildHdpFlushCommand(command_addr);
+      command_addr += flush_command_size_;
+    }
+  }
 
   if (profiling_enabled) {
     assert(IsMultipleOf(end_ts_addr, 32));
@@ -684,8 +769,24 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   const uint32_t total_fill_command_size =
       num_fill_command * fill_command_size_;
 
+  // Add space for acquire or release Hdp flush command
+  uint32_t flush_cmd_size = 0;
+
+  /*
+   * @note: Commenting this block of code. This is safe since this method
+   * is never entered. Runtime binds client requests to BlitKernels i.e.
+   * the Blit object being chosen is blit[dev-to-dev]
+   */
+  /*
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
+      flush_cmd_size = flush_command_size_;
+    }
+  }
+  */
+
   const uint32_t total_command_size =
-      total_fill_command_size + fence_command_size_;
+      total_fill_command_size + fence_command_size_ + flush_cmd_size;
 
   RingIndexTy curr_index;
   char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
@@ -722,6 +823,17 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   }
 
   assert(cur_size == size);
+
+  // Determine if a Hdp flush cmd is required at the end of cmd stream
+  // @note: Blocked per comments above lines - 776-778
+  /*
+  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
+      BuildHdpFlushCommand(command_addr);
+      command_addr += flush_command_size_;
+    }
+  }
+  */
 
   const uint32_t kFenceValue = 2015;
   uint32_t* fence_addr = ObtainFenceObject();
@@ -1015,6 +1127,14 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildTrapComman
   memset(packet_addr, 0, sizeof(SDMA_PKT_TRAP));
 
   packet_addr->HEADER_UNION.op = SDMA_OP_TRAP;
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildHdpFlushCommand(
+    char* cmd_addr) {
+  assert(cmd_addr != NULL);
+  SDMA_PKT_POLL_REGMEM* addr = reinterpret_cast<SDMA_PKT_POLL_REGMEM*>(cmd_addr);
+  memcpy(addr, &hdp_flush_cmd_, flush_command_size_);
 }
 
 template class BlitSdma<uint32_t, false, 0>;
