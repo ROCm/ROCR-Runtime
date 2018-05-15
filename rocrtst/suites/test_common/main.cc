@@ -52,11 +52,13 @@
 #include "suites/functional/memory_basic.h"
 #include "suites/functional/memory_access.h"
 #include "suites/functional/ipc.h"
+#include "suites/functional/memory_alignment.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
 #include "suites/performance/enqueueLatency.h"
 #include "suites/negative/memory_allocate_negative_tests.h"
+#include "suites/negative/queue_validation.h"
 #include "suites/stress/memory_concurrent_tests.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
@@ -181,12 +183,54 @@ TEST(rocrtstFunc, DebugBasicTests) {
   RunCustomTestEpilog(&mt);
 }
 
+TEST(rocrtstFunc, Memory_Alignment_Test) {
+  MemoryAlignmentTest ma;
+  RunCustomTestProlog(&ma);
+  ma.MemoryPoolAlignment();
+  RunCustomTestEpilog(&ma);
+}
+
 TEST(rocrtstNeg, Memory_Negative_Tests) {
   MemoryAllocateNegativeTest mt;
   RunCustomTestProlog(&mt);
   mt.ZeroMemoryAllocateTest();
   mt.MaxMemoryAllocateTest();
   RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstNeg, Queue_Validation_InvalidDimension) {
+  QueueValidation qv(true, false, false, false, false);
+  RunCustomTestProlog(&qv);
+  qv.QueueValidationForInvalidDimension();
+  RunCustomTestEpilog(&qv);
+}
+
+TEST(rocrtstNeg, Queue_Validation_InvalidGroupMemory) {
+  QueueValidation qv(false, true, false, false, false);
+  RunCustomTestProlog(&qv);
+  qv.QueueValidationInvalidGroupMemory();
+  RunCustomTestEpilog(&qv);
+}
+
+TEST(rocrtstNeg, Queue_Validation_InvalidKernelObject) {
+  QueueValidation qv(false, false, true, false, false);
+  RunCustomTestProlog(&qv);
+  qv.QueueValidationForInvalidKernelObject();
+  RunCustomTestEpilog(&qv);
+}
+
+TEST(rocrtstNeg, Queue_Validation_InvalidPacket) {
+  QueueValidation qv(false, false, false, true, false);
+  RunCustomTestProlog(&qv);
+  qv.QueueValidationForInvalidPacket();
+  RunCustomTestEpilog(&qv);
+}
+
+TEST(rocrtstNeg, Queue_Validation_InvalidWorkGroupSize) {
+  QueueValidation qv(false, false, false, false, true);
+  RunCustomTestProlog(&qv);
+  qv.QueueValidationForInvalidWorkGroupSize();
+  RunCustomTestEpilog(&qv);
 }
 
 TEST(rocrtstStress, Memory_Concurrent_Allocate_Test) {
@@ -203,7 +247,7 @@ TEST(rocrtstStress, Memory_Concurrent_Free_Test) {
   RunCustomTestEpilog(&mt);
 }
 
-TEST(rocrtstStress, Memory_Concurrent_Pool_Info_Test) {
+TEST(rocrtstStress, DISABLED_Memory_Concurrent_Pool_Info_Test) {
   MemoryConcurrentTest mt(false, false, true);
   RunCustomTestProlog(&mt);
   mt.MemoryConcurrentPoolGetInfo();
