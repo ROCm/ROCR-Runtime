@@ -439,7 +439,7 @@ static int handle_concrete_asic(struct queue *q,
 	const struct device_info *dev_info = q->dev_info;
 	bool ret;
 
-	if (!dev_info)
+	if (!dev_info || args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA)
 		return HSAKMT_STATUS_SUCCESS;
 
 	if (dev_info->eop_buffer_size > 0) {
@@ -453,9 +453,6 @@ static int handle_concrete_asic(struct queue *q,
 		args->eop_buffer_address = (uintptr_t)q->eop_buffer;
 		args->eop_buffer_size = dev_info->eop_buffer_size;
 	}
-
-	if (args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA)
-		return HSAKMT_STATUS_SUCCESS;
 
 	ret = update_ctx_save_restore_size(NodeId, q);
 
