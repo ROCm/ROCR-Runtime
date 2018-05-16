@@ -437,32 +437,39 @@ static int handle_concrete_asic(struct queue *q,
 				uint32_t NodeId)
 {
 	const struct device_info *dev_info = q->dev_info;
+	bool ret;
 
-	if (dev_info) {
-		if (dev_info->eop_buffer_size > 0) {
-			q->eop_buffer =
-					allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
-					dev_info->asic_family,
-					NodeId, true);
-			if (!q->eop_buffer)
-				return HSAKMT_STATUS_NO_MEMORY;
+	if (!dev_info)
+		return HSAKMT_STATUS_SUCCESS;
 
-			args->eop_buffer_address = (uintptr_t)q->eop_buffer;
-			args->eop_buffer_size = dev_info->eop_buffer_size;
-		}
-		if (args->queue_type != KFD_IOC_QUEUE_TYPE_SDMA &&
-			update_ctx_save_restore_size(NodeId, q) == true) {
-			args->ctx_save_restore_size = q->ctx_save_restore_size;
-			args->ctl_stack_size = q->ctl_stack_size;
-			q->ctx_save_restore =
-				allocate_exec_aligned_memory(q->ctx_save_restore_size,
-							     dev_info->asic_family,
-							     NodeId, false);
-			if (!q->ctx_save_restore)
-				return HSAKMT_STATUS_NO_MEMORY;
+	if (dev_info->eop_buffer_size > 0) {
+		q->eop_buffer =
+				allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
+				dev_info->asic_family,
+				NodeId, true);
+		if (!q->eop_buffer)
+			return HSAKMT_STATUS_NO_MEMORY;
 
-			args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
-		}
+		args->eop_buffer_address = (uintptr_t)q->eop_buffer;
+		args->eop_buffer_size = dev_info->eop_buffer_size;
+	}
+
+	if (args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA)
+		return HSAKMT_STATUS_SUCCESS;
+
+	ret = update_ctx_save_restore_size(NodeId, q);
+
+	if (ret) {
+		args->ctx_save_restore_size = q->ctx_save_restore_size;
+		args->ctl_stack_size = q->ctl_stack_size;
+		q->ctx_save_restore =
+			allocate_exec_aligned_memory(q->ctx_save_restore_size,
+							 dev_info->asic_family,
+							 NodeId, false);
+		if (!q->ctx_save_restore)
+			return HSAKMT_STATUS_NO_MEMORY;
+
+		args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
 	}
 
 	return HSAKMT_STATUS_SUCCESS;
