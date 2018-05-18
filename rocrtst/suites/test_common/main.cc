@@ -53,6 +53,7 @@
 #include "suites/functional/memory_access.h"
 #include "suites/functional/ipc.h"
 #include "suites/functional/memory_alignment.h"
+#include "suites/functional/memory_atomics.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
@@ -174,6 +175,76 @@ TEST(rocrtstFunc, Memory_Max_Mem) {
   RunCustomTestProlog(&mt);
   mt.MaxSingleAllocationTest();
   RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Add_Test) {
+  MemoryAtomic ma(ADD);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Sub_Test) {
+  MemoryAtomic ma(SUB);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_And_Test) {
+  MemoryAtomic ma(AND);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Or_Test) {
+  MemoryAtomic ma(OR);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Xor_Test) {
+  MemoryAtomic ma(XOR);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Min_Test) {
+  MemoryAtomic ma(MIN);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Max_Test) {
+  MemoryAtomic ma(MAX);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Inc_Test) {
+  MemoryAtomic ma(INC);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Dec_Test) {
+  MemoryAtomic ma(DEC);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Memory_Atomic_Xchg_Test) {
+  MemoryAtomic ma(XCHG);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAtomicTest();
+  RunCustomTestEpilog(&ma);
 }
 
 TEST(rocrtstFunc, DebugBasicTests) {
