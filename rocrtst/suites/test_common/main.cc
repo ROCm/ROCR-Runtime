@@ -61,6 +61,7 @@
 #include "suites/negative/memory_allocate_negative_tests.h"
 #include "suites/negative/queue_validation.h"
 #include "suites/stress/memory_concurrent_tests.h"
+#include "suites/stress/queue_write_index_concurrent_tests.h"
 #include "suites/test_common/test_case_template.h"
 #include "suites/test_common/main.h"
 #include "suites/test_common/test_common.h"
@@ -362,7 +363,29 @@ TEST(rocrtstStress, DISABLED_Memory_Concurrent_Pool_Info_Test) {
   mt.MemoryConcurrentPoolGetInfo();
   RunCustomTestEpilog(&mt);
 }
+
+TEST(rocrtstStress, Queue_Add_Write_Index_ConcurrentTest) {
+  QueueWriteIndexConcurrentTest Qw(true, false, false);
+  RunCustomTestProlog(&Qw);
+  Qw.QueueAddWriteIndexAtomic();
+  RunCustomTestEpilog(&Qw);
+}
+
+TEST(rocrtstStress, Queue_CAS_Write_Index_ConcurrentTest) {
+  QueueWriteIndexConcurrentTest Qw(false, true, false);
+  RunCustomTestProlog(&Qw);
+  Qw.QueueCasWriteIndexAtomic();
+  RunCustomTestEpilog(&Qw);
+}
+
+TEST(rocrtstStress, Queue_LoadStore_Write_Index_ConcurrentTest) {
+  QueueWriteIndexConcurrentTest Qw(false, false, true);
+  RunCustomTestProlog(&Qw);
+  Qw.QueueLoadStoreWriteIndexAtomic();
+  RunCustomTestEpilog(&Qw);
+}
 #endif  // ROCRTST_EMULATOR_BUILD
+
 TEST(rocrtstPerf, ENQUEUE_LATENCY) {
   EnqueueLatency singlePacketequeue(true);
   EnqueueLatency multiPacketequeue(false);
