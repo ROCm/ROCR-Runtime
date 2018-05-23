@@ -81,7 +81,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 			pthread_mutex_unlock(&hsakmt_mutex);
 			return HSAKMT_STATUS_ERROR;
 		}
-		fmm_get_handle(events_page, &args.event_page_offset);
+		fmm_get_handle(events_page, (uint64_t *)&args.event_page_offset);
 	}
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
