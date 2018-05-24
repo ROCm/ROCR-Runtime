@@ -456,9 +456,12 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
     return HSA_STATUS_ERROR;
   }
 
-  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1) ||
-      amd_gpu_agent.isa()->GetMajorVersion() == 9) {
+  if (amd_gpu_agent.isa()->version() == core::Isa::Version(7, 0, 1)) {
     platform_atomic_support_ = false;
+  } else {
+    const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
+        amd_gpu_agent.node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
+    platform_atomic_support_ = link.info.atomic_support_64bit;
   }
 
   // Determine if sDMA microcode supports HDP flush command
