@@ -342,6 +342,11 @@ set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/signal_operations.cl")
 build_sample_for_devices("signal_operations")
 
+# groupMemoryDynamic
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/groupMemoryDynamic_kernels.cl")
+build_sample_for_devices("groupMemoryDynamic")
+
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources} ${stressSources}
                                            ${common_srcs} ${testCommonSources})

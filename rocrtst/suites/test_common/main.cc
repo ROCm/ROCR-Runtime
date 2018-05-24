@@ -54,6 +54,7 @@
 #include "suites/functional/ipc.h"
 #include "suites/functional/memory_alignment.h"
 #include "suites/functional/memory_atomics.h"
+#include "suites/functional/memory_allocation.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
@@ -136,6 +137,20 @@ TEST(rocrtstFunc, MemoryAccessTests) {
   mt.CPUAccessToGPUMemoryTest();
   mt.GPUAccessToCPUMemoryTest();
   RunCustomTestEpilog(&mt);
+}
+
+TEST(rocrtstFunc, GroupMemoryAllocationTest) {
+  MemoryAllocationTest ma(true, false);
+  RunCustomTestProlog(&ma);
+  ma.GroupMemoryDynamicAllocation();
+  RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, MemoryAllocateAndFreeTest) {
+  MemoryAllocationTest ma(false, true);
+  RunCustomTestProlog(&ma);
+  ma.MemoryBasicAllocationAndFree();
+  RunCustomTestEpilog(&ma);
 }
 
 TEST(rocrtstFunc, Concurrent_Init_Test) {
