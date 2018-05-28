@@ -39,6 +39,7 @@ endif ()
 
 ## Include common cmake modules
 include ( utils )
+include ( GNUInstallDirs )
 
 ## Setup the package version.
 get_version ( "1.0.0" )
@@ -137,7 +138,8 @@ add_custom_target ( package-dev DEPENDS build-dev
     WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 
 ## Add the install directives for the runtime library.
-install ( TARGETS ${HSAKMT_TARGET} LIBRARY DESTINATION libhsakmt/lib COMPONENT ${HSAKMT_COMPONENT} )
+install ( TARGETS ${HSAKMT_TARGET} DESTINATION ${CMAKE_INSTALL_LIBDIR} )
+install ( FILES ${SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt )
 
 ## Add the packaging directives for the runtime library.
 set ( CPACK_PACKAGE_NAME ${HSAKMT_PACKAGE} )
@@ -147,6 +149,7 @@ set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
 set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "HSAKMT library for AMD KFD support" )
+set ( CPACK_RESOURCE_FILE_LICENSE "${SOURCE_DIR}/LICENSE.md" )
 
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
