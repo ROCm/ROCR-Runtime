@@ -68,6 +68,7 @@
 #include "suites/functional/concurrent_init_shutdown.h"
 #include "suites/functional/concurrent_shutdown.h"
 #include "suites/functional/reference_count.h"
+#include "suites/functional/signal_concurrent.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -167,6 +168,27 @@ TEST(rocrtstFunc, Max_Reference_Count) {
   RunCustomTestProlog(&rc);
   rc.TestMaxReferenceCount();
   RunCustomTestEpilog(&rc);
+}
+
+TEST(rocrtstFunc, Signal_Destroy_Concurrently) {
+  SignalConcurrentTest sd(true, false, false, false);
+  RunCustomTestProlog(&sd);
+  sd.TestSignalDestroyConcurrent();
+  RunCustomTestEpilog(&sd);
+}
+
+TEST(rocrtstFunc, Signal_Max_Consumer) {
+  SignalConcurrentTest sd(false, true, false, false);
+  RunCustomTestProlog(&sd);
+  sd.TestSignalCreateMaxConsumers();
+  RunCustomTestEpilog(&sd);
+}
+
+TEST(rocrtstFunc, Signal_Create_Concurrently) {
+  SignalConcurrentTest sd(false, false, false, true);
+  RunCustomTestProlog(&sd);
+  sd.TestSignalCreateConcurrent();
+  RunCustomTestEpilog(&sd);
 }
 
 TEST(rocrtstFunc, Memory_Max_Mem) {
