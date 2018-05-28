@@ -29,6 +29,8 @@ set ( HSAKMT_DEV_PACKAGE "hsakmt-roct-dev" )
 
 project ( ${HSAKMT_DEV_PACKAGE} )
 
+include ( GNUInstallDirs )
+
 ## Set the runtime package name.
 set ( HSAKMT_PACKAGE @HSAKMT_PACKAGE@ )
 
@@ -40,18 +42,9 @@ set ( BUILD_VERSION_PATCH @BUILD_VERSION_PATCH@ )
 ## Verbose output.
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
-## Create symlinks for packaging and install
-add_custom_target ( ${HSAKMT_DEV_PACKAGE} ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../libhsakmt/include/libhsakmt libhsakmt-link )
-add_custom_target ( ${HSAKMT_COMPONENT}.so-link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../libhsakmt/lib/libhsakmt.so libhsakmt.so-link )
-
 ## Set the install targets
-install ( FILES ${SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt )
-install ( FILES ${SOURCE_DIR}/include/hsakmt.h DESTINATION libhsakmt/include/libhsakmt )
-install ( FILES ${SOURCE_DIR}/include/hsakmttypes.h DESTINATION libhsakmt/include/libhsakmt )
-install ( FILES ${SOURCE_DIR}/include/linux/kfd_ioctl.h DESTINATION libhsakmt/include/libhsakmt/linux )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt-link DESTINATION include RENAME libhsakmt )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.so-link DESTINATION lib RENAME libhsakmt.so )
 install ( FILES libhsakmt.pc DESTINATION libhsakmt )
+install ( DIRECTORY ${SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${HSAKMT_COMPONENT} )
 
 
 ## Set the default generator types for the devel package.
