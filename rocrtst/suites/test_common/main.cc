@@ -386,7 +386,7 @@ TEST(rocrtstStress, Memory_Concurrent_Free_Test) {
   RunCustomTestEpilog(&mt);
 }
 
-TEST(rocrtstStress, DISABLED_Memory_Concurrent_Pool_Info_Test) {
+TEST(rocrtstStress, Memory_Concurrent_Pool_Info_Test) {
   MemoryConcurrentTest mt(false, false, true);
   RunCustomTestProlog(&mt);
   mt.MemoryConcurrentPoolGetInfo();

@@ -80,7 +80,7 @@ namespace rocrtst {
 // This structure holds memory pool information acquired through hsa info
 // related calls, and is later used for reference when displaying the
 // information.
-typedef struct {
+typedef struct pool_info_t_ {
     uint32_t segment;
     size_t size;
     bool alloc_allowed;
@@ -88,6 +88,17 @@ typedef struct {
     size_t alloc_alignment;
     bool accessible_by_all;
     uint32_t global_flag;
+    inline bool operator==(const pool_info_t_ &a) {
+      if (a.segment == segment && a.size == size
+          && a.alloc_allowed == alloc_allowed
+          && a.alloc_granule == alloc_granule
+          && a.alloc_alignment == alloc_alignment
+          && a.accessible_by_all == accessible_by_all
+          && a.global_flag == global_flag )
+          return true;
+      else
+          return false;
+    }
 } pool_info_t;
 
 
