@@ -71,6 +71,7 @@
 #include "suites/functional/reference_count.h"
 #include "suites/functional/signal_concurrent.h"
 #include "suites/functional/aql_barrier_bit.h"
+#include "suites/functional/signal_kernel.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -194,6 +195,34 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
 }
 
 #ifndef ROCRTST_EMULATOR_BUILD
+TEST(rocrtstFunc, Signal_Kernel_Set) {
+  SignalKernelTest sk(SET);
+  RunCustomTestProlog(&sk);
+  sk.TestSignalKernelSet();
+  RunCustomTestEpilog(&sk);
+}
+
+TEST(rocrtstFunc, Signal_Kernel_Multi_Set) {
+  SignalKernelTest sk(MULTISET);
+  RunCustomTestProlog(&sk);
+  sk.TestSignalKernelMultiSet();
+  RunCustomTestEpilog(&sk);
+}
+
+TEST(rocrtstFunc, Signal_Kernel_Wait) {
+  SignalKernelTest sw(WAIT);
+  RunCustomTestProlog(&sw);
+  sw.TestSignalKernelWait();
+  RunCustomTestEpilog(&sw);
+}
+
+TEST(rocrtstFunc, Signal_Kernel_Multi_Wait) {
+  SignalKernelTest sw(MULTIWAIT);
+  RunCustomTestProlog(&sw);
+  sw.TestSignalKernelMultiWait();
+  RunCustomTestEpilog(&sw);
+}
+
 TEST(rocrtstFunc, DISABLED_Aql_Barrier_Bit_Set) {
   AqlBarrierBitTest ab(true, false);
   RunCustomTestProlog(&ab);
