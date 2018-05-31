@@ -332,6 +332,10 @@ set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/atomicOperations_kernels.cl")
 build_sample_for_devices("atomicOperations")
 
+# Signal Operations
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/signal_operations.cl")
+build_sample_for_devices("signal_operations")
 
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources} ${stressSources}

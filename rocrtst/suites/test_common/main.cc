@@ -69,6 +69,7 @@
 #include "suites/functional/concurrent_shutdown.h"
 #include "suites/functional/reference_count.h"
 #include "suites/functional/signal_concurrent.h"
+#include "suites/functional/aql_barrier_bit.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -189,6 +190,20 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
   RunCustomTestProlog(&sd);
   sd.TestSignalCreateConcurrent();
   RunCustomTestEpilog(&sd);
+}
+
+TEST(rocrtstFunc, Aql_Barrier_Bit_Set) {
+  AqlBarrierBitTest ab(true, false);
+  RunCustomTestProlog(&ab);
+  ab.BarrierBitSet();
+  RunCustomTestEpilog(&ab);
+}
+
+TEST(rocrtstFunc, Aql_Barrier_Bit_Not_Set) {
+  AqlBarrierBitTest ab(false, true);
+  RunCustomTestProlog(&ab);
+  ab.BarrierBitNotSet();
+  RunCustomTestEpilog(&ab);
 }
 
 TEST(rocrtstFunc, Memory_Max_Mem) {
