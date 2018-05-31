@@ -67,17 +67,6 @@ static const uint32_t kMaxAllocSize = 1024 * 1024;
 
 
 
-#define RET_IF_HSA_ERR(err) { \
-  if ((err) != HSA_STATUS_SUCCESS) { \
-    const char* msg = 0; \
-    hsa_status_string(err, &msg); \
-    std::cout << "hsa api call failure at line " << __LINE__ << ", file: " << \
-                          __FILE__ << ". Call returned " << err << std::endl; \
-    std::cout << msg << std::endl; \
-    return (err); \
-  } \
-}
-
 
 typedef struct control_block {
     hsa_amd_memory_pool_t* pool;
@@ -134,7 +123,7 @@ static void CallbackGetPoolInfo(void* data) {
   err = rocrtst::AcquirePoolInfo(thread_data->pool, &info);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
-  if (0 == memcmp(thread_data->info, &info, sizeof(rocrtst::pool_info_t))) {
+  if (*(thread_data->info) == info) {
     // The pool info is consistent with the one got from the main thread
     thread_data->consistency = 1;
   } else {
@@ -533,5 +522,3 @@ void MemoryConcurrentTest::MemoryConcurrentPoolGetInfo(void) {
     std::cout << kSubTestSeparator << std::endl;
   }
 }
-
-#undef RET_IF_HSA_ERR
