@@ -192,14 +192,14 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
   RunCustomTestEpilog(&sd);
 }
 
-TEST(rocrtstFunc, Aql_Barrier_Bit_Set) {
+TEST(rocrtstFunc, DISABLED_Aql_Barrier_Bit_Set) {
   AqlBarrierBitTest ab(true, false);
   RunCustomTestProlog(&ab);
   ab.BarrierBitSet();
   RunCustomTestEpilog(&ab);
 }
 
-TEST(rocrtstFunc, Aql_Barrier_Bit_Not_Set) {
+TEST(rocrtstFunc, DISABLED_Aql_Barrier_Bit_Not_Set) {
   AqlBarrierBitTest ab(false, true);
   RunCustomTestProlog(&ab);
   ab.BarrierBitNotSet();
