@@ -195,6 +195,12 @@ class MemoryAsyncCopy : public TestBase {
 
  protected:
   void PrintTransactionType(Transaction *t);
+#if ROCRTST_EMULATOR_BUILD
+  static const int kNumGranularity = 1;
+  static constexpr const char* Str[kNumGranularity] = {"1k"};
+
+  static constexpr const size_t Size[kNumGranularity] = {1024};
+#else
 
   static const int kNumGranularity = 20;
   static constexpr const char* Str[kNumGranularity] = {
@@ -206,7 +212,7 @@ class MemoryAsyncCopy : public TestBase {
       256*1024, 512*1024, 1024*1024, 2048*1024, 4096*1024, 8*1024*1024,
       16*1024*1024, 32*1024*1024, 64*1024*1024, 128*1024*1024, 256*1024*1024,
       512*1024*1024};
-
+#endif
   static constexpr const int kMaxCopySize = Size[kNumGranularity - 1];
 
   // @Brief: Get real iteration number

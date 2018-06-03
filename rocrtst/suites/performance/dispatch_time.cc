@@ -61,7 +61,12 @@ DispatchTime(bool defaultInterrupt, bool launchSingleKernel) : TestBase(),
               use_default_interupt_(defaultInterrupt),
                                           launch_single_(launchSingleKernel) {
   queue_size_ = 0;
+#ifdef ROCRTST_EMULATOR_BUILD
+  num_batch_ = 10;
+#else
   num_batch_ = 100000;
+#endif
+
   memset(&aql(), 0, sizeof(hsa_kernel_dispatch_packet_t));
   dispatch_time_mean_ = 0.0;
   set_num_iteration(100);

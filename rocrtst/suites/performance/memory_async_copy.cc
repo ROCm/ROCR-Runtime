@@ -449,7 +449,7 @@ void MemoryAsyncCopy::DisplayBenchmark(Transaction *t) const {
   printf("Data Size             Avg Time(us)         Avg BW(GB/s)"
                            "          Min Time(us)          Peak BW(GB/s)\n");
 
-  for (int i = 0; i < 20; i++) {
+  for (int i = 0; i < kNumGranularity; i++) {
     if (Size[i] > size) {
       break;
     }

@@ -192,6 +192,7 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
   RunCustomTestEpilog(&sd);
 }
 
+#ifndef ROCRTST_EMULATOR_BUILD
 TEST(rocrtstFunc, DISABLED_Aql_Barrier_Bit_Set) {
   AqlBarrierBitTest ab(true, false);
   RunCustomTestProlog(&ab);
@@ -361,6 +362,7 @@ TEST(rocrtstStress, DISABLED_Memory_Concurrent_Pool_Info_Test) {
   mt.MemoryConcurrentPoolGetInfo();
   RunCustomTestEpilog(&mt);
 }
+#endif  // ROCRTST_EMULATOR_BUILD
 TEST(rocrtstPerf, ENQUEUE_LATENCY) {
   EnqueueLatency singlePacketequeue(true);
   EnqueueLatency multiPacketequeue(false);

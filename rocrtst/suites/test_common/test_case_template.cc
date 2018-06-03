@@ -109,7 +109,11 @@
 #include "hsa/hsa.h"
 #include "hsa/hsa_ext_finalize.h"
 
+#ifdef ROCRTST_EMULATOR_BUILD
+static const uint32_t kNumBufferElements = 4;
+#else
 static const uint32_t kNumBufferElements = 256;
+#endif
 
 #define RET_IF_HSA_ERR(err) { \
   if ((err) != HSA_STATUS_SUCCESS) { \
