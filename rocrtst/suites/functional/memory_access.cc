@@ -59,11 +59,6 @@
 #include "hsa/hsa.h"
 #include "hsa/hsa_ext_finalize.h"
 
-static const uint32_t kNumBufferElements = 256;
-
-
-
-
 
 #define RET_IF_HSA_ERR(err) { \
   if ((err) != HSA_STATUS_SUCCESS) { \
@@ -156,7 +151,13 @@ static void PrintMemorySubtestHeader(const char *header) {
   std::cout << "  *** Memory Subtest: " << header << " ***" << std::endl;
 }
 
+#if ROCRTST_EMULATOR_BUILD
+static const int kMemoryAllocSize = 8;
+#else
 static const int kMemoryAllocSize = 1024;
+#endif
+
+
 // Test to check GPU can read & write to system memory
 void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
                                                    hsa_agent_t gpuAgent) {
