@@ -562,12 +562,16 @@ void GpuAgent::InitDma() {
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
-    std::string sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
-    bool use_sdma = (sdma_override.size() == 0) ? (isa_->GetMajorVersion() != 8) : (sdma_override == "1");
+    const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
+    const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
+        node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
+
+    bool use_sdma = (isa_->GetMajorVersion() != 8) && link.info.atomic_support_64bit;
+    if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
-        auto ret = CreateBlitSdma(h2d);
-        if (ret != nullptr) return ret;
+      auto ret = CreateBlitSdma(h2d);
+      if (ret != nullptr) return ret;
     }
 
     auto ret = CreateBlitKernel((*queue).get());
@@ -601,40 +605,6 @@ hsa_status_t GpuAgent::PostToolsInit() {
   return HSA_STATUS_SUCCESS;
 }
 
-struct DmaDeps_t {
-  bool p2p;
-  void* dst;
-  const void* src;
-  size_t size;
-  core::Signal* out_signal;
-  core::Blit* blit;
-  std::unique_ptr<std::vector<core::Signal*>> deps;
-};
-
-static bool DmaDeps(hsa_signal_value_t val, void* arg) {
-  DmaDeps_t* Args = (DmaDeps_t*)arg;
-  std::vector<core::Signal*>& deps = *(Args->deps.get());
-  if (val != 0) return true;
-  for (int i = deps.size() - 1; i != 0; i--) {
-    if (deps[i - 1]->LoadRelaxed() != 0) {
-      deps.resize(i);
-      hsa_status_t err = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
-          core::Signal::Convert(deps.back()), HSA_SIGNAL_CONDITION_EQ, 0, DmaDeps, arg);
-      assert(err == HSA_STATUS_SUCCESS && "Failed to update dependency handler.");
-      return false;
-    }
-  }
-  deps.clear();
-  hsa_status_t stat;
-  do {  // Only ready to run copies are on the SDMA queue so if resources are busy they will soon be
-        // free.
-    stat = Args->blit->SubmitLinearCopyCommand(Args->p2p, Args->dst, Args->src, Args->size, deps,
-                                               *(Args->out_signal));
-  } while (stat != HSA_STATUS_SUCCESS);
-  delete Args;
-  return false;
-}
-
 hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
   // This operation is not a P2P operation - uses BlitKernel
   return blits_[BlitDevToDev]->SubmitLinearCopyCommand(false, dst, src, size);
@@ -665,20 +635,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   bool p2p = ((src_agent.node_id() != dst_agent.node_id()) &&
               (src_agent.device_type() == core::Agent::kAmdGpuDevice) &&
               (dst_agent.device_type() == core::Agent::kAmdGpuDevice));
-
-  if ((dep_signals.size() != 0) && blit->isSDMA()) {
-    DmaDeps_t* Arg = new DmaDeps_t;
-    Arg->p2p = p2p;
-    Arg->dst = dst;
-    Arg->src = src;
-    Arg->size = size;
-    Arg->out_signal = &out_signal;
-    Arg->blit = (*blit).get();
-    Arg->deps.reset(new std::vector<core::Signal*>(std::move(dep_signals)));
-    hsa_status_t stat = core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
-        core::Signal::Convert(Arg->deps->back()), HSA_SIGNAL_CONDITION_EQ, 0, DmaDeps, Arg);
-    return stat;
-  }
 
   hsa_status_t stat = blit->SubmitLinearCopyCommand(p2p, dst, src, size, dep_signals, out_signal);
 
