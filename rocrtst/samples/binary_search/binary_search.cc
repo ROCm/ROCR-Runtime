@@ -62,9 +62,15 @@
   } \
 }
 
+#ifndef ROCRTST_EMULATOR_BUILD
 static const uint32_t kBinarySearchLength = 512;
 static const uint32_t kBinarySearchFindMe = 108;
 static const uint32_t kWorkGroupSize = 256;
+#else
+static const uint32_t kBinarySearchLength = 16;
+static const uint32_t kBinarySearchFindMe = 6;
+static const uint32_t kWorkGroupSize = 8;
+#endif
 
 // Hold all the info specific to binary search
 typedef struct BinarySearch {
@@ -110,9 +116,9 @@ typedef struct BinarySearch {
 void InitializeBinarySearch(BinarySearch* bs) {
   bs->kernel_file_name = "./binary_search_kernels.hsaco";
   bs->kernel_name = "binarySearch";
-  bs->length = 512;
-  bs->find_me = 108;
-  bs->work_group_size = 256;
+  bs->length = kBinarySearchLength;
+  bs->find_me = kBinarySearchFindMe;
+  bs->work_group_size = kWorkGroupSize;
   bs->num_sub_divisions = bs->length / bs->work_group_size;
 }
 
@@ -586,13 +592,12 @@ hsa_status_t Run(BinarySearch* bs) {
   if (bs->work_group_size > 64) {
     bs->work_group_size = 64;
     bs->num_sub_divisions = bs->length / bs->work_group_size;
-
-    if (bs->num_sub_divisions < bs->work_group_size) {
-      bs->num_sub_divisions = bs->work_group_size;
-    }
-
-    bs->work_grid_size = bs->num_sub_divisions;
   }
+  if (bs->num_sub_divisions < bs->work_group_size) {
+    bs->num_sub_divisions = bs->work_group_size;
+  }
+
+  bs->work_grid_size = bs->num_sub_divisions;
 
   // Explanation of BinarySearch algorithm.
   /*
