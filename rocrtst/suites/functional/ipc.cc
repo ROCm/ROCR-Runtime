@@ -270,8 +270,12 @@ void IPCTest::Run(void) {
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   size_t gpu_mem_granule;
+#ifdef ROCRTST_EMULATOR_BUILD
+  gpu_mem_granule = 4;
+#else
   err = hsa_amd_memory_pool_get_info(device_pool(),
     HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &gpu_mem_granule);
+#endif
 
   if (verbosity() >= VERBOSE_STANDARD) {
     fprintf(stdout, "Using: %s (%d) and %s (%d)\n", name1, loc1, name2, loc2);

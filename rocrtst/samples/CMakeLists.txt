@@ -126,6 +126,10 @@ else()
   set(ISDEBUG 1)
 endif()
 
+if(${EMULATOR_BUILD})
+add_definitions(-DROCRTST_EMULATOR_BUILD=1)
+endif()
+
 # Set Name for Samples Project
 #
 

@@ -413,14 +413,6 @@ TEST(rocrtstStress, Queue_LoadStore_Write_Index_ConcurrentTest) {
   Qw.QueueLoadStoreWriteIndexAtomic();
   RunCustomTestEpilog(&Qw);
 }
-#endif  // ROCRTST_EMULATOR_BUILD
-
-TEST(rocrtstPerf, ENQUEUE_LATENCY) {
-  EnqueueLatency singlePacketequeue(true);
-  EnqueueLatency multiPacketequeue(false);
-  RunGenericTest(&singlePacketequeue);
-  RunGenericTest(&multiPacketequeue);
-}
 
 TEST(rocrtstPerf, Memory_Async_Copy) {
   MemoryAsyncCopy mac;
@@ -432,6 +424,14 @@ TEST(rocrtstPerf, Memory_Async_Copy) {
   // The default is to and from the cpu to 1 gpu, and to/from a gpu to
   // another gpu
   RunGenericTest(&mac);
+}
+#endif  // ROCRTST_EMULATOR_BUILD
+
+TEST(rocrtstPerf, ENQUEUE_LATENCY) {
+  EnqueueLatency singlePacketequeue(true);
+  EnqueueLatency multiPacketequeue(false);
+  RunGenericTest(&singlePacketequeue);
+  RunGenericTest(&multiPacketequeue);
 }
 
 TEST(rocrtstPerf, Memory_Async_Copy_NUMA) {

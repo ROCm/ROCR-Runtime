@@ -132,9 +132,15 @@ static hsa_status_t FindDevicePool(hsa_amd_memory_pool_t pool, void* data) {
 
   if (err == HSA_STATUS_INFO_BREAK) {
     args->gpu_pool = pool;
+
+
+#ifdef ROCRTST_EMULATOR_BUILD
+  args->gpu_mem_granule = 4;
+#else
     err = hsa_amd_memory_pool_get_info(args->gpu_pool,
       HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &args->gpu_mem_granule);
     RET_IF_HSA_ERR(err);
+#endif
 
     // We found what we were looking for, so return HSA_STATUS_INFO_BREAK
     return HSA_STATUS_INFO_BREAK;
