@@ -176,6 +176,11 @@ static __forceinline T Min(const T& a, const T& b) {
   return (a > b) ? b : a;
 }
 
+template <class T, class... Arg>
+static __forceinline T Min(const T& a, const T& b, Arg... args) {
+  return Min(a, Min(b, args...));
+}
+
 /// @brief: Find out the max one of two inputs, input must support ">" operator.
 /// @param: a(Input), a reference to type T.
 /// @param: b(Input), a reference to type T.
@@ -183,6 +188,11 @@ static __forceinline T Min(const T& a, const T& b) {
 template <class T>
 static __forceinline T Max(const T& a, const T& b) {
   return (b > a) ? b : a;
+}
+
+template <class T, class... Arg>
+static __forceinline T Max(const T& a, const T& b, Arg... args) {
+  return Max(a, Max(b, args...));
 }
 
 /// @brief: Free the memory space which is newed previously.

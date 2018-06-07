@@ -964,6 +964,17 @@ hsa_status_t HSA_API
 }
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
+    const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
+    const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
+    hsa_amd_copy_direction_t dir, uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+    hsa_signal_t completion_signal) {
+  return amdExtTable->hsa_amd_memory_async_copy_rect_fn(dst, dst_offset, src, src_offset, range,
+                                                        copy_agent, dir, num_dep_signals,
+                                                        dep_signals, completion_signal);
+}
+
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
     hsa_agent_t agent, hsa_amd_memory_pool_t memory_pool,
     hsa_amd_agent_memory_pool_info_t attribute, void* value) {

@@ -882,6 +882,43 @@ hsa_status_t HSA_API
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal);
 
+/*
+[Provisional API]
+Pitched memory descriptor.
+All elements must be 4 byte aligned.  Pitch and slice are in bytes.
+*/
+typedef struct hsa_pitched_ptr_s {
+  void* base;
+  size_t pitch;
+  size_t slice;
+} hsa_pitched_ptr_t;
+
+/*
+[Provisional API]
+Copy direction flag.
+*/
+typedef enum {
+  hsaHostToHost = 0,
+  hsaHostToDevice = 1,
+  hsaDeviceToHost = 2,
+  hsaDeviceToDevice = 3
+} hsa_amd_copy_direction_t;
+
+/*
+[Provisional API]
+SDMA 3D memory copy API.  The same requirements must be met by src and dst as in
+hsa_amd_memory_async_copy.
+Both src and dst must be directly accessible to the copy_agent during the copy, src and dst rects
+must not overlap.
+CPU agents are not supported.  API requires SDMA and will return an error if SDMA is not available.
+Offsets and range carry x in bytes, y and z in rows and layers.
+*/
+hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
+    const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
+    const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
+    hsa_amd_copy_direction_t dir, uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+    hsa_signal_t completion_signal);
+
 /**
  * @brief Type of accesses to a memory pool from a given agent.
  */

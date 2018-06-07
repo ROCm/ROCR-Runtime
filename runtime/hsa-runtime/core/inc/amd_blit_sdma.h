@@ -45,6 +45,7 @@
 
 #include <mutex>
 #include <stdint.h>
+#include <vector>
 
 #include "hsakmt.h"
 
@@ -55,6 +56,7 @@
 #include "core/util/utils.h"
 
 namespace amd {
+
 class BlitSdmaBase : public core::Blit {
  public:
   static const size_t kQueueSize;
@@ -62,6 +64,12 @@ class BlitSdmaBase : public core::Blit {
   static const size_t kMaxSingleCopySize;
   static const size_t kMaxSingleFillSize;
   virtual bool isSDMA() const override { return true; }
+  virtual hsa_status_t SubmitCopyRectCommand(const hsa_pitched_ptr_t* dst,
+                                             const hsa_dim3_t* dst_offset,
+                                             const hsa_pitched_ptr_t* src,
+                                             const hsa_dim3_t* src_offset, const hsa_dim3_t* range,
+                                             std::vector<core::Signal*>& dep_signals,
+                                             core::Signal& out_signal) = 0;
 };
 
 // RingIndexTy: 32/64-bit monotonic ring index, counting in bytes.
@@ -115,6 +123,13 @@ class BlitSdma : public BlitSdmaBase {
       void* dst, const void* src, size_t size,
       std::vector<core::Signal*>& dep_signals,
       core::Signal& out_signal) override;
+
+  virtual hsa_status_t SubmitCopyRectCommand(const hsa_pitched_ptr_t* dst,
+                                             const hsa_dim3_t* dst_offset,
+                                             const hsa_pitched_ptr_t* src,
+                                             const hsa_dim3_t* src_offset, const hsa_dim3_t* range,
+                                             std::vector<core::Signal*>& dep_signals,
+                                             core::Signal& out_signal) override;
 
   /// @brief Submit a linear fill command to the queue buffer
   ///
@@ -181,6 +196,11 @@ class BlitSdma : public BlitSdmaBase {
   void BuildCopyCommand(char* cmd_addr, uint32_t num_copy_command, void* dst,
                         const void* src, size_t size);
 
+  void BuildCopyRectCommand(const std::function<void*(size_t)>& append,
+                            const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
+                            const hsa_pitched_ptr_t* src, const hsa_dim3_t* src_offset,
+                            const hsa_dim3_t* range);
+
   void BuildPollCommand(char* cmd_addr, void* addr, uint32_t reference);
 
   void BuildAtomicDecrementCommand(char* cmd_addr, void* addr);
@@ -188,6 +208,9 @@ class BlitSdma : public BlitSdmaBase {
   void BuildGetGlobalTimestampCommand(char* cmd_addr, void* write_address);
 
   void BuildTrapCommand(char* cmd_addr);
+
+  hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size,
+                             std::vector<core::Signal*>& dep_signals, core::Signal& out_signal);
 
   // Agent object owning the SDMA engine.
   GpuAgent* agent_;

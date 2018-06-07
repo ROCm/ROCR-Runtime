@@ -47,6 +47,7 @@
 #include <utility>
 #include <memory>
 #include <map>
+#include <vector>
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
@@ -261,6 +262,52 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   return HSA_STATUS_SUCCESS;
   CATCH;
 }
+
+hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
+    const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
+    const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
+    hsa_amd_copy_direction_t dir, uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+    hsa_signal_t completion_signal) {
+  TRY;
+  if (dst == nullptr || src == nullptr || dst_offset == nullptr || src_offset == nullptr ||
+      range == nullptr) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  if ((num_dep_signals == 0 && dep_signals != NULL) ||
+      (num_dep_signals > 0 && dep_signals == NULL)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  if (dir == hsaHostToHost) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  core::Agent* base_agent = core::Agent::Convert(copy_agent);
+  IS_VALID(base_agent);
+  if (base_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  amd::GpuAgent* agent = static_cast<amd::GpuAgent*>(base_agent);
+
+  std::vector<core::Signal*> dep_signal_list(num_dep_signals);
+  if (num_dep_signals > 0) {
+    for (size_t i = 0; i < num_dep_signals; ++i) {
+      core::Signal* dep_signal_obj = core::Signal::Convert(dep_signals[i]);
+      IS_VALID(dep_signal_obj);
+      dep_signal_list[i] = dep_signal_obj;
+    }
+  }
+
+  core::Signal* out_signal_obj = core::Signal::Convert(completion_signal);
+  IS_VALID(out_signal_obj);
+
+  if ((range->x != 0) && (range->y != 0) && (range->z != 0)) {
+    return agent->DmaCopyRect(dst, dst_offset, src, src_offset, range, dir, dep_signal_list,
+                              *out_signal_obj);
+  }
+
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
 
 hsa_status_t hsa_amd_profiling_set_profiler_enabled(hsa_queue_t* queue, int enable) {
   TRY;
