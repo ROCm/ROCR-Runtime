@@ -216,6 +216,7 @@ global:
 	hsa_amd_ipc_signal_attach;
 	hsa_amd_register_system_event_handler;
 	hsa_amd_queue_set_priority;
+	hsa_amd_memory_async_copy_rect;
 
 local:
     *;
