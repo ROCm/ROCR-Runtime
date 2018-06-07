@@ -154,12 +154,13 @@ typedef struct write_index_store_atomic_thread_data_s {
   int memory_ordering_type;
 } write_index_store_atomic_thread_data_t;
 
+static uint64_t const WRITE_INDEX_FAILURE = 2;
 void thread_proc_write_index_load_atomic(void* data) {
   write_index_load_atomic_thread_data_t* thread_data =
               reinterpret_cast<write_index_load_atomic_thread_data_t*>(data);
   uint32_t ii;
   for (ii = 0; ii < thread_data->num_iterations; ++ii) {
-    uint64_t write_index;
+    uint64_t write_index = WRITE_INDEX_FAILURE;  // initalized with value other than kStoreValue
     if (SCRELEASE == thread_data->memory_ordering_type) {
       write_index = hsa_queue_load_write_index_scacquire(thread_data->queue);
     } else if (RELAXED == thread_data->memory_ordering_type) {
