@@ -195,28 +195,28 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
 }
 
 #ifndef ROCRTST_EMULATOR_BUILD
-TEST(rocrtstFunc, Signal_Kernel_Set) {
+TEST(rocrtstFunc, DISABLED_Signal_Kernel_Set) {
   SignalKernelTest sk(SET);
   RunCustomTestProlog(&sk);
   sk.TestSignalKernelSet();
   RunCustomTestEpilog(&sk);
 }
 
-TEST(rocrtstFunc, Signal_Kernel_Multi_Set) {
+TEST(rocrtstFunc, DISABLED_Signal_Kernel_Multi_Set) {
   SignalKernelTest sk(MULTISET);
   RunCustomTestProlog(&sk);
   sk.TestSignalKernelMultiSet();
   RunCustomTestEpilog(&sk);
 }
 
-TEST(rocrtstFunc, Signal_Kernel_Wait) {
+TEST(rocrtstFunc, DISABLED_Signal_Kernel_Wait) {
   SignalKernelTest sw(WAIT);
   RunCustomTestProlog(&sw);
   sw.TestSignalKernelWait();
   RunCustomTestEpilog(&sw);
 }
 
-TEST(rocrtstFunc, Signal_Kernel_Multi_Wait) {
+TEST(rocrtstFunc, DISABLED_Signal_Kernel_Multi_Wait) {
   SignalKernelTest sw(MULTIWAIT);
   RunCustomTestProlog(&sw);
   sw.TestSignalKernelMultiWait();
