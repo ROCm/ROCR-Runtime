@@ -146,7 +146,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		init_counter_props(sys_props.NumNodes);
 	} else {
 		kfd_open_count++;
-		result = HSAKMT_STATUS_SUCCESS;
+		result = HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
 	}
 
 	pthread_mutex_unlock(&hsakmt_mutex);
