@@ -563,10 +563,8 @@ void GpuAgent::InitDma() {
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
-    const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
-        node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
 
-    bool use_sdma = (isa_->GetMajorVersion() != 8) && link.info.atomic_support_64bit;
+    bool use_sdma = (isa_->GetMajorVersion() != 8);
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
