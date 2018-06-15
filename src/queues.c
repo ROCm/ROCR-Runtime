@@ -149,8 +149,8 @@ struct queue {
 struct process_doorbells {
 	bool use_gpuvm;
 	uint32_t size;
-	void *doorbells;
-	pthread_mutex_t doorbells_mutex;
+	void *mapping;
+	pthread_mutex_t mutex;
 };
 
 static unsigned int num_doorbells;
@@ -171,8 +171,8 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 	for (i = 0; i < NumNodes; i++) {
 		doorbells[i].use_gpuvm = false;
 		doorbells[i].size = 0;
-		doorbells[i].doorbells = NULL;
-		pthread_mutex_init(&doorbells[i].doorbells_mutex, NULL);
+		doorbells[i].mapping = NULL;
+		pthread_mutex_init(&doorbells[i].mutex, NULL);
 	}
 
 	num_doorbells = NumNodes;
@@ -218,10 +218,10 @@ void destroy_process_doorbells(void)
 			continue;
 
 		if (doorbells[i].use_gpuvm) {
-			fmm_unmap_from_gpu(doorbells[i].doorbells);
-			fmm_release(doorbells[i].doorbells);
+			fmm_unmap_from_gpu(doorbells[i].mapping);
+			fmm_release(doorbells[i].mapping);
 		} else
-			munmap(doorbells[i].doorbells, doorbells[i].size);
+			munmap(doorbells[i].mapping, doorbells[i].size);
 	}
 
 	free(doorbells);
@@ -244,7 +244,7 @@ void clear_process_doorbells(void)
 			continue;
 
 		if (!doorbells[i].use_gpuvm)
-			munmap(doorbells[i].doorbells, doorbells[i].size);
+			munmap(doorbells[i].mapping, doorbells[i].size);
 	}
 
 	free(doorbells);
@@ -263,7 +263,7 @@ static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
 	if (ptr == MAP_FAILED)
 		return HSAKMT_STATUS_ERROR;
 
-	doorbells[NodeId].doorbells = ptr;
+	doorbells[NodeId].mapping = ptr;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -285,7 +285,7 @@ static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	doorbells[NodeId].doorbells = ptr;
+	doorbells[NodeId].mapping = ptr;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -295,9 +295,9 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 {
 	HSAKMT_STATUS status = HSAKMT_STATUS_SUCCESS;
 
-	pthread_mutex_lock(&doorbells[NodeId].doorbells_mutex);
+	pthread_mutex_lock(&doorbells[NodeId].mutex);
 	if (doorbells[NodeId].size) {
-		pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
+		pthread_mutex_unlock(&doorbells[NodeId].mutex);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -319,7 +319,7 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 	if (status != HSAKMT_STATUS_SUCCESS)
 		doorbells[NodeId].size = 0;
 
-	pthread_mutex_unlock(&doorbells[NodeId].doorbells_mutex);
+	pthread_mutex_unlock(&doorbells[NodeId].mutex);
 
 	return status;
 }
@@ -620,7 +620,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	}
 
 	QueueResource->QueueId = PORT_VPTR_TO_UINT64(q);
-	QueueResource->Queue_DoorBell = VOID_PTR_ADD(doorbells[NodeId].doorbells,
+	QueueResource->Queue_DoorBell = VOID_PTR_ADD(doorbells[NodeId].mapping,
 						     doorbell_offset);
 
 	return HSAKMT_STATUS_SUCCESS;
