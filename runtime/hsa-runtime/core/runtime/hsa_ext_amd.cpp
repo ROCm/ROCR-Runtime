@@ -46,6 +46,7 @@
 #include <set>
 #include <utility>
 #include <memory>
+#include <map>
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
@@ -849,6 +850,30 @@ hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback
   TRY;
   IS_OPEN();
   return core::Runtime::runtime_singleton_->SetCustomSystemEventHandler(callback, data);
+  CATCH;
+}
+
+hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
+                                                hsa_amd_queue_priority_t priority) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(queue);
+  core::Queue* cmd_queue = core::Queue::Convert(queue);
+  IS_VALID(cmd_queue);
+
+  static std::map<hsa_amd_queue_priority_t, HSA_QUEUE_PRIORITY> ext_kmt_priomap = {
+      {HSA_AMD_QUEUE_PRIORITY_LOW, HSA_QUEUE_PRIORITY_MINIMUM},
+      {HSA_AMD_QUEUE_PRIORITY_NORMAL, HSA_QUEUE_PRIORITY_NORMAL},
+      {HSA_AMD_QUEUE_PRIORITY_HIGH, HSA_QUEUE_PRIORITY_MAXIMUM},
+  };
+
+  auto priority_it = ext_kmt_priomap.find(priority);
+
+  if (priority_it == ext_kmt_priomap.end()) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  return cmd_queue->SetPriority(priority_it->second);
   CATCH;
 }
 

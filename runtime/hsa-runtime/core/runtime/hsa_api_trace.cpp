@@ -380,6 +380,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_register_system_event_handler_fn = AMD::hsa_amd_register_system_event_handler;
   amd_ext_api.hsa_amd_queue_intercept_create_fn = AMD::hsa_amd_queue_intercept_create;
   amd_ext_api.hsa_amd_queue_intercept_register_fn = AMD::hsa_amd_queue_intercept_register;
+  amd_ext_api.hsa_amd_queue_set_priority_fn = AMD::hsa_amd_queue_set_priority;
 }
 
 class Init {

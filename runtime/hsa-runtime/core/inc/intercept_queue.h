@@ -70,6 +70,9 @@ class QueueWrapper : public Queue {
   ~QueueWrapper() {}
 
   hsa_status_t Inactivate() override { return wrapped->Inactivate(); }
+  hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) override {
+    return wrapped->SetPriority(priority);
+  }
   uint64_t LoadReadIndexAcquire() override { return wrapped->LoadReadIndexAcquire(); }
   uint64_t LoadReadIndexRelaxed() override { return wrapped->LoadReadIndexRelaxed(); }
   uint64_t LoadWriteIndexRelaxed() override { return wrapped->LoadWriteIndexRelaxed(); }

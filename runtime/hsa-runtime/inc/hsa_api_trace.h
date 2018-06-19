@@ -171,6 +171,7 @@ struct AmdExtTable {
   decltype(hsa_amd_register_system_event_handler)* hsa_amd_register_system_event_handler_fn;
   decltype(hsa_amd_queue_intercept_create)* hsa_amd_queue_intercept_create_fn;
   decltype(hsa_amd_queue_intercept_register)* hsa_amd_queue_intercept_register_fn;
+  decltype(hsa_amd_queue_set_priority)* hsa_amd_queue_set_priority_fn;
 };
 
 // Table to export HSA Core Runtime Apis

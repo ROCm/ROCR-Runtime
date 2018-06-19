@@ -59,6 +59,9 @@ class HostQueue : public Queue {
   ~HostQueue();
 
   hsa_status_t Inactivate() override { return HSA_STATUS_SUCCESS; }
+  hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) override {
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
 
   uint64_t LoadReadIndexAcquire() override {
     return atomic::Load(&amd_queue_.read_dispatch_id,

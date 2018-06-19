@@ -1697,6 +1697,43 @@ typedef hsa_status_t (*hsa_amd_system_event_callback_t)(const hsa_amd_event_t* e
 hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
                                                    void* data);
 
+/**
+ * @brief Per-queue dispatch and wavefront scheduling priority.
+ */
+typedef enum hsa_amd_queue_priority_s {
+  /*
+  Below normal/high priority compute and all graphics
+  */
+  HSA_AMD_QUEUE_PRIORITY_LOW = 0,
+  /*
+  Above low priority compute, below high priority compute and all graphics
+  */
+  HSA_AMD_QUEUE_PRIORITY_NORMAL = 1,
+  /*
+  Above low/normal priority compute and all graphics
+  */
+  HSA_AMD_QUEUE_PRIORITY_HIGH = 2,
+} hsa_amd_queue_priority_t;
+
+/**
+ * @brief Modifies the dispatch and wavefront scheduling prioirty for a
+ * given compute queue. The default is HSA_AMD_QUEUE_PRIORITY_NORMAL.
+ *
+ * @param[in] queue Compute queue to apply new priority to.
+ *
+ * @param[in] priority Priority to associate with queue.
+ *
+ * @retval HSA_STATUS_SUCCESS if priority was changed successfully.
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_QUEUE if queue is not a valid
+ * compute queue handle.
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT if priority is not a valid
+ * value from hsa_amd_queue_priority_t.
+ */
+hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
+                                                hsa_amd_queue_priority_t priority);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

@@ -93,7 +93,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
       is_kv_queue_(is_kv),
       pm4_ib_buf_(nullptr),
       pm4_ib_size_b_(0x1000),
-      dynamicScratchState(0) {
+      dynamicScratchState(0),
+      suspended_(false),
+      priority_(HSA_QUEUE_PRIORITY_NORMAL) {
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
   // are mapped to the same set of pages backing the lower half.
@@ -150,8 +152,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   }
 
   HSAKMT_STATUS kmt_status;
-  kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100,
-                                 HSA_QUEUE_PRIORITY_NORMAL, ring_buf_,
+  kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
                                  ring_buf_alloc_bytes_, NULL, &queue_rsrc);
   if (kmt_status != HSAKMT_STATUS_SUCCESS)
     throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
@@ -686,7 +687,8 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 }
 
 void AqlQueue::Suspend() {
-  auto err = hsaKmtUpdateQueue(queue_id_, 0, HSA_QUEUE_PRIORITY_NORMAL, NULL, 0, NULL);
+  suspended_ = true;
+  auto err = hsaKmtUpdateQueue(queue_id_, 0, priority_, NULL, 0, NULL);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
 }
 
@@ -698,6 +700,16 @@ hsa_status_t AqlQueue::Inactivate() {
     atomic::Fence(std::memory_order_acquire);
   }
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t AqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
+  if (suspended_) {
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
+
+  priority_ = priority;
+  auto err = hsaKmtUpdateQueue(queue_id_, 100, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL);
+  return (err == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
 }
 
 bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
