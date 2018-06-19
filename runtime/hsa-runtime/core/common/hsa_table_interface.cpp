@@ -1116,3 +1116,9 @@ hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
                                               void* user_data) {
   return amdExtTable->hsa_amd_queue_intercept_register_fn(queue, callback, user_data);
 }
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
+                                                hsa_amd_queue_priority_t priority) {
+  return amdExtTable->hsa_amd_queue_set_priority_fn(queue, priority);
+}

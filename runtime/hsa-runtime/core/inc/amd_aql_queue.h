@@ -71,6 +71,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Queue interfaces
   hsa_status_t Inactivate() override;
 
+  /// @brief Change the scheduling priority of the queue
+  hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) override;
+
   /// @brief Atomically reads the Read index of with Acquire semantics
   ///
   /// @return uint64_t Value of read index
@@ -253,6 +256,12 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   // Error handler control variable.
   std::atomic<uint32_t> dynamicScratchState;
   enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2, ERROR_HANDLER_SCRATCH_RETRY = 4 };
+
+  // Queue currently suspended or scheduled
+  bool suspended_;
+
+  // Thunk dispatch and wavefront scheduling priority
+  HSA_QUEUE_PRIORITY priority_;
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;
