@@ -54,7 +54,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes, uint64_
 void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 			HsaMemFlags flags);
 void fmm_print(uint32_t node);
-void fmm_release(void *address);
+HSAKMT_STATUS fmm_release(void *address);
 int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address);
 int fmm_unmap_from_gpu(void *address);
 bool fmm_get_handle(void *address, uint64_t *handle);

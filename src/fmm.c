@@ -215,7 +215,7 @@ static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 }
 
 extern int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
-static void __fmm_release(void *address, manageable_aperture_t *aperture);
+static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
 				       void *address);
@@ -1055,7 +1055,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 					map_fd, mmap_offset);
 
 		if (ret == MAP_FAILED) {
-			__fmm_release(mem, aperture);
+			__fmm_release(vm_obj, aperture);
 			return NULL;
 		}
 	}
@@ -1108,7 +1108,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 				 MAP_SHARED | MAP_FIXED, kfd_fd,
 				 doorbell_offset);
 		if (ret == MAP_FAILED) {
-			__fmm_release(mem, aperture);
+			__fmm_release(vm_obj, aperture);
 			return NULL;
 		}
 	}
@@ -1262,7 +1262,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
 					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
 			if (ret == MAP_FAILED) {
-				__fmm_release(mem, aperture);
+				__fmm_release(vm_obj, aperture);
 				return NULL;
 			}
 
@@ -1296,23 +1296,13 @@ void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 	return fmm_allocate_host_cpu(MemorySizeInBytes, flags);
 }
 
-static void __fmm_release(void *address, manageable_aperture_t *aperture)
+static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args = {0};
-	vm_object_t *object;
+	void *address;
 
-	if (!address)
+	if (!object)
 		return;
-
-	pthread_mutex_lock(&aperture->fmm_mutex);
-
-	/* Find the object to retrieve the handle */
-	object = vm_find_object_by_address(aperture, address, 0);
-	if (!object) {
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return;
-	}
-
 	/* If memory is user memory and it's still GPU mapped, munmap
 	 * would cause an eviction. If the restore happens quickly
 	 * enough, restore would also fail with an error message. So
@@ -1320,6 +1310,8 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 	 */
 	args.handle = object->handle;
 	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
+
+	address = object->start;
 
 	if (address >= dgpu_shared_aperture_base &&
 	    address <= dgpu_shared_aperture_limit) {
@@ -1334,48 +1326,52 @@ static void __fmm_release(void *address, manageable_aperture_t *aperture)
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 }
 
-void fmm_release(void *address)
+HSAKMT_STATUS fmm_release(void *address)
 {
 	uint32_t i;
-	bool found = false;
 	vm_object_t *object;
+	manageable_aperture_t *aperture = NULL;
 
-	for (i = 0; i < gpu_mem_count && !found; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 		if (address >= gpu_mem[i].scratch_physical.base &&
 			address <= gpu_mem[i].scratch_physical.limit) {
 			fmm_release_scratch(gpu_mem[i].gpu_id);
-			return;
+			return HSAKMT_STATUS_SUCCESS;
 		}
 
 		if (address >= gpu_mem[i].gpuvm_aperture.base &&
 			address <= gpu_mem[i].gpuvm_aperture.limit) {
-			found = true;
-			__fmm_release(address, &gpu_mem[i].gpuvm_aperture);
-			fmm_print(gpu_mem[i].gpu_id);
+			aperture = &gpu_mem[i].gpuvm_aperture;
+			break;
 		}
 	}
 
-	if (!found) {
+	if (!aperture) {
 		if (address >= svm.dgpu_aperture.base &&
 			address <= svm.dgpu_aperture.limit) {
-			found = true;
-			__fmm_release(address, &svm.dgpu_aperture);
-			fmm_print(gpu_mem[i].gpu_id);
+			aperture =  &svm.dgpu_aperture;
 		} else if (address >= svm.dgpu_alt_aperture.base &&
 			address <= svm.dgpu_alt_aperture.limit) {
-			found = true;
-			__fmm_release(address, &svm.dgpu_alt_aperture);
-			fmm_print(gpu_mem[i].gpu_id);
+			aperture =  &svm.dgpu_alt_aperture;
 		}
 	}
 
-	/*
-	 * If memory address isn't inside of any defined GPU aperture - it
-	 * refers to the system memory
-	 */
-	if (!found) {
+	if (aperture) {
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		object = vm_find_object_by_address(aperture, address, 0);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		if (!object)
+			return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+		__fmm_release(object, aperture);
+		if (i < gpu_mem_count)
+			fmm_print(gpu_mem[i].gpu_id);
+	} else {
+		/*
+		 * If memory address isn't inside of any defined GPU aperture - it
+		 * refers to the system memory
+		 */
 		uint64_t size = 0;
 		/* Release the vm object in CPUVM */
 		pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
@@ -1389,6 +1385,7 @@ void fmm_release(void *address)
 		if (size)
 			munmap(address, size);
 	}
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_policy,
@@ -2064,11 +2061,11 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 				   void *address, uint64_t size)
 {
 	int32_t gpu_mem_id;
-	void *mem = NULL;
 	int ret;
 	bool is_debugger = 0;
 	void *mmap_ret = NULL;
 	uint64_t mmap_offset = 0;
+	vm_object_t *obj;
 
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
@@ -2086,7 +2083,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	ret = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
 	/* allocate object within the scratch backing aperture */
 	if (!ret && !is_debugger) {
-		vm_object_t *obj = fmm_allocate_memory_object(
+		obj = fmm_allocate_memory_object(
 			gpu_id, address, size, aperture, NULL,
 			KFD_IOC_ALLOC_MEM_FLAGS_VRAM |
 			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
@@ -2095,7 +2092,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	} else {
 		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
 					gpu_mem[gpu_mem_id].drm_render_fd;
-		fmm_allocate_memory_object(
+		obj = fmm_allocate_memory_object(
 			gpu_id, address, size, aperture, &mmap_offset,
 			KFD_IOC_ALLOC_MEM_FLAGS_GTT |
 			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
@@ -2103,7 +2100,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 				PROT_READ | PROT_WRITE,
 				MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
 		if (mmap_ret == MAP_FAILED) {
-			__fmm_release(mem, aperture);
+			__fmm_release(obj, aperture);
 			return -1;
 		}
 	}
@@ -2112,7 +2109,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	/* map to GPU */
 	ret = _fmm_map_to_gpu(aperture, address, size, NULL, NULL, 0);
 	if (ret != 0)
-		__fmm_release(mem, aperture);
+		__fmm_release(obj, aperture);
 
 	return ret;
 }
@@ -2378,7 +2375,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/* free object in scratch backing aperture */
-	__fmm_release(address, aperture);
+	__fmm_release(object, aperture);
 
 	return 0;
 
@@ -2904,7 +2901,6 @@ static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *obj;
-	void *svm_addr;
 
 	aperture = &svm.dgpu_aperture;
 
@@ -2915,11 +2911,10 @@ static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_ERROR;
 	}
-	svm_addr = obj->start;
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/* Destroy BO */
-	__fmm_release(svm_addr, aperture);
+	__fmm_release(obj, aperture);
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -2984,7 +2979,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		 * userptrs means releasing the BO.
 		 */
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		__fmm_release(address, aperture);
+		__fmm_release(object, aperture);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 

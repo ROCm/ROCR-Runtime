@@ -195,8 +195,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	fmm_release(MemoryAddress);
-	return HSAKMT_STATUS_SUCCESS;
+	return fmm_release(MemoryAddress);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
