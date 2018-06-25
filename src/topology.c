@@ -669,7 +669,7 @@ static HSAKMT_STATUS topology_get_cpu_model_name(HsaNodeProperties *props,
 			if (props->CComputeIdLo == apic_id) {
 				/* Retrieve the CAL name of CPU node */
 				if (!is_apu)
-					strncpy((char *)props->AMDName, cpu_model_name, sizeof(props->AMDName));
+					strncpy((char *)props->AMDName, cpu_model_name, sizeof(props->AMDName)-1);
 				/* Convert from UTF8 to UTF16 */
 				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 					props->MarketingName[i] = cpu_model_name[i];
@@ -867,7 +867,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 		}
 
 		/* Retrieve the CAL name of the node */
-		strncpy((char *)props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName));
+		strncpy((char *)props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName)-1);
 		if (props->NumCPUCores) {
 			/* Is APU node */
 			ret = topology_get_cpu_model_name(props, true);
