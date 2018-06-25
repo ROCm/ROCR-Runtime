@@ -1303,6 +1303,9 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 
 	if (!object)
 		return;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+
 	/* If memory is user memory and it's still GPU mapped, munmap
 	 * would cause an eviction. If the restore happens quickly
 	 * enough, restore would also fail with an error message. So
@@ -1329,7 +1332,7 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 HSAKMT_STATUS fmm_release(void *address)
 {
 	uint32_t i;
-	vm_object_t *object;
+	vm_object_t *object = NULL;
 	manageable_aperture_t *aperture = NULL;
 
 	for (i = 0; i < gpu_mem_count; i++) {
@@ -1362,9 +1365,8 @@ HSAKMT_STATUS fmm_release(void *address)
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		object = vm_find_object_by_address(aperture, address, 0);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		if (!object)
-			return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
-		__fmm_release(object, aperture);
+		if (object)
+			__fmm_release(object, aperture);
 		if (i < gpu_mem_count)
 			fmm_print(gpu_mem[i].gpu_id);
 	} else {
@@ -1385,7 +1387,10 @@ HSAKMT_STATUS fmm_release(void *address)
 		if (size)
 			munmap(address, size);
 	}
-	return HSAKMT_STATUS_SUCCESS;
+
+	return object ?
+		HSAKMT_STATUS_SUCCESS :
+		HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 }
 
 static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_policy,
