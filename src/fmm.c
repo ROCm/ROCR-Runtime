@@ -1704,11 +1704,13 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 		/* Skip non-GPU nodes */
 		if (gpu_id != 0) {
-			gpu_mem[gpu_mem_count].drm_render_fd =
-				open_drm_render_device(props.DrmRenderMinor);
-			if (gpu_mem[gpu_mem_count].drm_render_fd <= 0)
+			int fd = open_drm_render_device(props.DrmRenderMinor);
+			if (fd <= 0) {
+				ret = HSAKMT_STATUS_ERROR;
 				goto sysfs_parse_failed;
+			}
 
+			gpu_mem[gpu_mem_count].drm_render_fd = fd;
 			gpu_mem[gpu_mem_count].gpu_id = gpu_id;
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
