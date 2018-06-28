@@ -38,6 +38,7 @@
 #include <errno.h>
 #include <pci/pci.h>
 #include <numaif.h>
+#include "rbtree.h"
 #ifndef MPOL_F_STATIC_NODES
 /* Bug in numaif.h, this should be defined in there. Definition copied
  * from linux/mempolicy.h.
@@ -53,10 +54,24 @@
 	.align = 0,						\
 	.guard_pages = 1,					\
 	.vm_ranges = NULL,					\
-	.vm_objects = NULL,					\
 	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER,			\
 	.is_coherent = false					\
 	}
+
+#define container_of(ptr, type, member) ({			\
+		char *__mptr = (void *)(ptr);			\
+		((type *)(__mptr - offsetof(type, member))); })
+
+#define rb_entry(ptr, type, member)				\
+		container_of(ptr, type, member)
+
+#define vm_object_entry(n, is_userptr) ({			\
+		(is_userptr) == 0 ?				\
+		rb_entry(n, vm_object_t, node) :		\
+		rb_entry(n, vm_object_t, user_node); })
+
+#define vm_object_tree(app, is_userptr)				\
+		((is_userptr) ? &(app)->user_tree : &(app)->tree)
 
 struct vm_object {
 	void *start;
@@ -68,8 +83,9 @@ struct vm_object {
 			*/
 	uint64_t handle; /* opaque */
 	uint32_t node_id;
-	struct vm_object *next;
-	struct vm_object *prev;
+	rbtree_node_t node;
+	rbtree_node_t user_node;
+
 	uint32_t flags; /* memory allocation flags */
 	/* Registered nodes to map on SVM mGPU */
 	uint32_t *registered_device_id_array;
@@ -105,7 +121,8 @@ typedef struct {
 	uint64_t align;
 	uint32_t guard_pages;
 	vm_area_t *vm_ranges;
-	vm_object_t *vm_objects;
+	rbtree_t tree;
+	rbtree_t user_tree;
 	pthread_mutex_t fmm_mutex;
 	bool is_coherent;
 } manageable_aperture_t;
@@ -263,7 +280,6 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->userptr_size = 0;
 		object->size = size;
 		object->handle = handle;
-		object->next = object->prev = NULL;
 		object->registered_device_id_array_size = 0;
 		object->mapped_device_id_array_size = 0;
 		object->registered_device_id_array = NULL;
@@ -276,6 +292,8 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->metadata = NULL;
 		object->user_data = NULL;
 		object->is_imported_kfd_bo = false;
+		object->node.key = rbtree_key((unsigned long)start, size);
+		object->user_node.key = rbtree_key(0, 0);
 	}
 
 	return object;
@@ -303,9 +321,6 @@ static void vm_remove_area(manageable_aperture_t *app, vm_area_t *area)
 
 static void vm_remove_object(manageable_aperture_t *app, vm_object_t *object)
 {
-	vm_object_t *next;
-	vm_object_t *prev;
-
 	/* Free allocations inside the object */
 	if (object->registered_device_id_array)
 		free(object->registered_device_id_array);
@@ -321,16 +336,9 @@ static void vm_remove_object(manageable_aperture_t *app, vm_object_t *object)
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
 
-	next = object->next;
-	prev = object->prev;
-
-	if (!prev) /* The first element */
-		app->vm_objects = next;
-	else
-		prev->next = next;
-
-	if (next) /* If not the last element */
-		next->prev = prev;
+	rbtree_delete(&app->tree, &object->node);
+	if (object->userptr)
+		rbtree_delete(&app->user_tree, &object->user_node);
 
 	free(object);
 }
@@ -345,19 +353,6 @@ static void vm_add_area_after(vm_area_t *after_this, vm_area_t *new_area)
 	new_area->prev = after_this;
 	if (next)
 		next->prev = new_area;
-}
-
-static void vm_add_object_before(vm_object_t *before_this,
-				vm_object_t *new_object)
-{
-	vm_object_t *prev = before_this->prev;
-
-	before_this->prev = new_object;
-	new_object->next = before_this;
-
-	new_object->prev = prev;
-	if (prev)
-		prev->next = new_object;
 }
 
 static void vm_split_area(manageable_aperture_t *app, vm_area_t *area,
@@ -377,87 +372,129 @@ static void vm_split_area(manageable_aperture_t *app, vm_area_t *area,
 	vm_add_area_after(area, new_area);
 }
 
-static vm_object_t *vm_find_object_by_address(manageable_aperture_t *app,
-					const void *address, uint64_t size)
+static vm_object_t *vm_find_object_by_address_userptr(manageable_aperture_t *app,
+					const void *address, uint64_t size, int is_userptr)
 {
-	vm_object_t *cur = app->vm_objects;
+	vm_object_t *cur = NULL;
 
-	size = ALIGN_UP(size, app->align);
+	if (is_userptr == 0)
+		size = ALIGN_UP(size, app->align);
+	rbtree_t *tree = vm_object_tree(app, is_userptr);
+	rbtree_key_t key = rbtree_key((unsigned long)address, size);
+	void *start;
+	uint64_t s;
 
-	/* Look up the appropriate address range containing the given address */
-	while (cur) {
-		if (cur->start == address && (cur->size == size || size == 0))
-			break;
-		cur = cur->next;
+	/* rbtree_lookup_nearest(,,,RIGHT) will return a node with
+	 * its size >= key.size and its address >= key.address
+	 * if there are two nodes with format(address, size),
+	 * (0x100, 16) and (0x110, 8). the key is (0x100, 0),
+	 * then node (0x100, 16) will be returned.
+	 */
+	rbtree_node_t *n = rbtree_lookup_nearest(tree, &key, LKP_ALL, RIGHT);
+
+	if (n) {
+		cur = vm_object_entry(n, is_userptr);
+		if (is_userptr == 0) {
+			start = cur->start;
+			s = cur->size;
+		} else {
+			start = cur->userptr;
+			s = cur->userptr_size;
+		}
+
+		if (start != address)
+			return NULL;
+
+		if (size)
+			return size == s ? cur : NULL;
+
+		/* size is 0, make sure there is only one node whose address == key.address*/
+		key = rbtree_key((unsigned long)address, (unsigned long)-1);
+		rbtree_node_t *rn = rbtree_lookup_nearest(tree, &key, LKP_ALL, LEFT);
+
+		if (rn != n)
+			return NULL;
 	}
 
 	return cur; /* NULL if not found */
+}
+
+
+static vm_object_t *vm_find_object_by_address_userptr_range(manageable_aperture_t *app,
+						    const void *address, int is_userptr)
+{
+	vm_object_t *cur = NULL;
+	rbtree_t *tree = vm_object_tree(app, is_userptr);
+	rbtree_key_t key = rbtree_key((unsigned long)address, 0);
+	rbtree_node_t *ln = rbtree_lookup_nearest(tree, &key,
+			LKP_ALL, LEFT);
+	rbtree_node_t *rn = rbtree_lookup_nearest(tree, &key,
+			LKP_ALL, RIGHT);
+	void *start;
+	uint64_t size;
+	int bad = 0;
+
+loop:
+	while (ln) {
+		cur = vm_object_entry(ln, is_userptr);
+		if (is_userptr == 0) {
+			start = cur->start;
+			size = cur->size;
+		} else {
+			start = cur->userptr;
+			size = cur->userptr_size;
+		}
+
+		if (address >= start &&
+				(uint64_t)address < ((uint64_t)start + size))
+			break;
+
+		cur = NULL;
+
+		if (ln == rn)
+			break;
+
+		ln = rbtree_next(tree, ln);
+	}
+
+	if (cur == NULL && bad == 0) {
+		/* As there is area overlap, say, (address, size) like
+		 * (0x100, 32), (0x108, 8), and the key.address is 0x118
+		 * The lookup above only find (0x108, 8), but the correct node should
+		 * be (0x100, 16). So try to walk though the tree to find the node.
+		 */
+		rn = ln;
+		key = rbtree_key(0, 0);
+		ln = rbtree_lookup_nearest(tree, &key, LKP_ALL, RIGHT);
+		bad = 1;
+		goto loop;
+	}
+
+	return cur; /* NULL if not found */
+}
+
+static vm_object_t *vm_find_object_by_address(manageable_aperture_t *app,
+					const void *address, uint64_t size)
+{
+	return vm_find_object_by_address_userptr(app, address, size, 0);
 }
 
 static vm_object_t *vm_find_object_by_address_range(manageable_aperture_t *app,
 						    const void *address)
 {
-	vm_object_t *cur = app->vm_objects;
-
-	while (cur) {
-		if (address >= cur->start &&
-			(uint64_t)address < ((uint64_t)cur->start + cur->size))
-			break;
-		cur = cur->next;
-	}
-
-	return cur; /* NULL if not found */
+	return vm_find_object_by_address_userptr_range(app, address, 0);
 }
 
 static vm_object_t *vm_find_object_by_userptr(manageable_aperture_t *app,
 					const void *address, HSAuint64 size)
 {
-	vm_object_t *cur = app->vm_objects, *obj;
-	uint32_t found = 0;
-
-	/* Look up the userptr that matches the address. If size is specified,
-	 * the size needs to match too.
-	 */
-	while (cur) {
-		if ((cur->userptr == address) &&
-				((cur->userptr_size == size) || !size)) {
-			found = 1;
-			break;
-		}
-		cur = cur->next;
-	}
-
-	/* If size is not specified, we need to ensure the vm_obj found is the
-	 * only obj having this address.
-	 */
-	if (found && !size) {
-		obj = cur->next;
-		while (obj) {
-			if (obj->userptr == address) {
-				cur = NULL;
-				break;
-			}
-			obj = obj->next;
-		}
-	}
-
-	return cur; /* NULL if any look-up failure */
+	return vm_find_object_by_address_userptr(app, address, size, 1);
 }
 
 static vm_object_t *vm_find_object_by_userptr_range(manageable_aperture_t *app,
 						const void *address)
 {
-	vm_object_t *cur = app->vm_objects;
-
-	/* Look up the appropriate address range containing the given address */
-	while (cur) {
-		if (address >= cur->userptr &&
-		(uint64_t)address < (uint64_t)cur->userptr + cur->userptr_size)
-			break;
-		cur = cur->next;
-	}
-
-	return cur; /* NULL if not found */
+	return vm_find_object_by_address_userptr_range(app, address, 1);
 }
 
 static vm_area_t *vm_find(manageable_aperture_t *app, void *address)
@@ -615,12 +652,7 @@ static vm_object_t *aperture_allocate_object(manageable_aperture_t *app,
 	if (!new_object)
 		return NULL;
 
-	/* check for non-empty list */
-	if (app->vm_objects)
-		/* Add it before the first element */
-		vm_add_object_before(app->vm_objects, new_object);
-
-	app->vm_objects = new_object; /* Update head */
+	rbtree_insert(&app->tree, &new_object->node);
 
 	return new_object;
 }
@@ -784,7 +816,8 @@ static void aperture_print(aperture_t *app)
 static void manageable_aperture_print(manageable_aperture_t *app)
 {
 	vm_area_t *cur = app->vm_ranges;
-	vm_object_t *object = app->vm_objects;
+	rbtree_node_t *n = rbtree_node_any(&app->tree, LEFT);
+	vm_object_t *object;
 
 	pr_info("\t Base: %p\n", app->base);
 	pr_info("\t Limit: %p\n", app->limit);
@@ -794,11 +827,12 @@ static void manageable_aperture_print(manageable_aperture_t *app)
 		cur = cur->next;
 	};
 	pr_info("\t Objects:\n");
-	while (object) {
+	while (n) {
+		object = vm_object_entry(n, 0);
 		pr_info("\t\t Object [%p - %" PRIu64 "]\n",
 				object->start, object->size);
-		object = object->next;
-	};
+		n = rbtree_next(&app->tree, n);
+	}
 }
 
 void fmm_print(uint32_t gpu_id)
@@ -834,6 +868,7 @@ static void fmm_release_scratch(uint32_t gpu_id)
 	uint64_t size;
 	vm_object_t *obj;
 	manageable_aperture_t *aperture;
+	rbtree_node_t *n;
 
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
@@ -846,7 +881,9 @@ static void fmm_release_scratch(uint32_t gpu_id)
 	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
 		/* unmap and remove all remaining objects */
 		pthread_mutex_lock(&aperture->fmm_mutex);
-		while ((obj = aperture->vm_objects)) {
+		while ((n = rbtree_node_any(&aperture->tree, MID))) {
+			obj = vm_object_entry(n, 0);
+
 			void *obj_addr = obj->start;
 
 			pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1643,6 +1680,30 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+static void fmm_init_rbtree(void)
+{
+	static int once;
+	int i = gpu_mem_count;
+
+	if (once++ == 0) {
+		rbtree_init(&svm.dgpu_aperture.tree);
+		rbtree_init(&svm.dgpu_aperture.user_tree);
+		rbtree_init(&svm.dgpu_alt_aperture.tree);
+		rbtree_init(&svm.dgpu_alt_aperture.user_tree);
+		rbtree_init(&cpuvm_aperture.tree);
+		rbtree_init(&cpuvm_aperture.user_tree);
+	}
+
+	while (i--) {
+		rbtree_init(&gpu_mem[i].scratch_aperture.tree);
+		rbtree_init(&gpu_mem[i].scratch_aperture.user_tree);
+		rbtree_init(&gpu_mem[i].scratch_physical.tree);
+		rbtree_init(&gpu_mem[i].scratch_physical.user_tree);
+		rbtree_init(&gpu_mem[i].gpuvm_aperture.tree);
+		rbtree_init(&gpu_mem[i].gpuvm_aperture.user_tree);
+	}
+}
+
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i = 0;
@@ -1853,6 +1914,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 	cpuvm_aperture.align = PAGE_SIZE;
 	cpuvm_aperture.limit = (void *)0x7FFFFFFFFFFF; /* 2^47 - 1 */
+
+	fmm_init_rbtree();
 
 	free(process_apertures);
 	return ret;
@@ -2570,6 +2633,8 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 		gpuid_to_nodeid(gpu_id, &obj->node_id);
 		obj->userptr_size = size;
 		obj->registration_count = 1;
+		obj->user_node.key = rbtree_key((unsigned long)addr, size);
+		rbtree_insert(&aperture->user_tree, &obj->user_node);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	} else
 		return HSAKMT_STATUS_ERROR;
@@ -3234,8 +3299,10 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 
 static void fmm_clear_aperture(manageable_aperture_t *app)
 {
-	while (app->vm_objects)
-		vm_remove_object(app, app->vm_objects);
+	rbtree_node_t *n;
+
+	while ((n = rbtree_node_any(&app->tree, MID)))
+		vm_remove_object(app, vm_object_entry(n, 0));
 
 	while (app->vm_ranges)
 		vm_remove_area(app, app->vm_ranges);
