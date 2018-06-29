@@ -128,30 +128,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	if (!MemoryAddress || !SizeInBytes || (SizeInBytes & (page_size-1)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (gpu_id == 0 && !MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_host(PreferredNode, SizeInBytes,
-						MemFlags);
-
-		if (!(*MemoryAddress)) {
-			pr_err("[%s] failed to allocate %lu bytes from host\n",
-				__func__, SizeInBytes);
-			return HSAKMT_STATUS_ERROR;
-		}
-
-		return HSAKMT_STATUS_SUCCESS;
-	}
-
-	if (gpu_id && MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes, MemFlags);
-
-		if (!(*MemoryAddress)) {
-			pr_err("[%s] failed to allocate %lu bytes from device\n",
-				__func__, SizeInBytes);
-			return HSAKMT_STATUS_NO_MEMORY;
-		}
-
-		return HSAKMT_STATUS_SUCCESS;
-	}
 	if (MemFlags.ui32.Scratch) {
 		*MemoryAddress = fmm_allocate_scratch(gpu_id, SizeInBytes);
 
@@ -164,15 +140,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	/* Backwards compatibility hack: Allocate system memory if app
-	 * asks for paged memory from a GPU node.
-	 */
-	if (gpu_id && !MemFlags.ui32.NonPaged && !MemFlags.ui32.Scratch) {
+	/* GPU allocated system memory */
+	if (!gpu_id || !MemFlags.ui32.NonPaged) {
+		/* Backwards compatibility hack: Allocate system memory if app
+		 * asks for paged memory from a GPU node.
+		 */
 		*MemoryAddress = fmm_allocate_host(PreferredNode, SizeInBytes,
 						MemFlags);
 
 		if (!(*MemoryAddress)) {
-			pr_err("[%s] failed to allocate %lu bytes from paged\n",
+			pr_err("[%s] failed to allocate %lu bytes from host\n",
 				__func__, SizeInBytes);
 			return HSAKMT_STATUS_ERROR;
 		}
@@ -180,7 +157,17 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	return HSAKMT_STATUS_INVALID_PARAMETER;
+	/* GPU allocated VRAM */
+	*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes, MemFlags);
+
+	if (!(*MemoryAddress)) {
+		pr_err("[%s] failed to allocate %lu bytes from device\n",
+			__func__, SizeInBytes);
+		return HSAKMT_STATUS_NO_MEMORY;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
