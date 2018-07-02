@@ -92,13 +92,7 @@ set ( RUNTIME_HEADER_NAMES
       "hsa_ven_amd_aqlprofile.h"
      )
 
-set ( RUNTIME_TOOLS_HEADER_NAMES
-      "hsa_ext_profiler.h"
-      "hsa_ext_debugger.h"
-      "amd_hsa_tools_interfaces.h"
-    )
-
-set ( RUNTIME_TOOLS_INCLUDE_DIR "${HSA_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
+#set ( RUNTIME_TOOLS_INCLUDE_DIR "${HSA_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
 
 set ( TOPLEVEL_INCLUDE_LINK "${CMAKE_CURRENT_BINARY_DIR}/include/hsa" )
 
@@ -135,17 +129,6 @@ foreach ( HEADER_FILE ${RUNTIME_HEADER_NAMES} )
 
 endforeach()
 
-foreach ( HEADER_FILE ${RUNTIME_TOOLS_HEADER_NAMES} )
-
-    set ( HEADER_TARGET "${CMAKE_CURRENT_BINARY_DIR}/hsa/include/hsa/${HEADER_FILE}" )
-
-    add_custom_command( OUTPUT ${HEADER_TARGET} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                        COMMAND ${CMAKE_COMMAND} -E copy ${RUNTIME_TOOLS_INCLUDE_DIR}/${HEADER_FILE} ${HEADER_TARGET} )
-
-    list ( APPEND RUNTIME_HEADERS ${HEADER_TARGET} )
-
-endforeach()
-
 add_custom_target (copy_headers DEPENDS ${RUNTIME_HEADERS} create_dirs)
 
 add_custom_target (copy_targets ALL DEPENDS create_dirs
@@ -160,7 +143,6 @@ add_custom_target (copy_targets ALL DEPENDS create_dirs
 install (DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/ DESTINATION include USE_SOURCE_PERMISSIONS )
 install (DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/lib/ DESTINATION lib USE_SOURCE_PERMISSIONS )
 install (DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hsa/ DESTINATION hsa USE_SOURCE_PERMISSIONS )
-install (DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/sample DESTINATION hsa USE_SOURCE_PERMISSIONS )
 install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.txt DESTINATION hsa )
 install (FILES ${CMAKE_CURRENT_SOURCE_DIR}/README.md DESTINATION hsa )
 
