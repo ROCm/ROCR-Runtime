@@ -1121,10 +1121,13 @@ static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 {
 	void *mem = NULL;
 	vm_object_t *vm_obj;
-	int mmap_prot = PROT_READ | PROT_WRITE;
+	int mmap_prot = PROT_READ;
 
 	if (flags.ui32.ExecuteAccess)
 		mmap_prot |= PROT_EXEC;
+
+	if (!flags.ui32.ReadOnly)
+		mmap_prot |= PROT_WRITE;
 
 	/* mmap will return a pointer with alignment equal to
 	 * sysconf(_SC_PAGESIZE).
