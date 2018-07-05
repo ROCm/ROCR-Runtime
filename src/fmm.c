@@ -223,11 +223,11 @@ static void print_device_id_array(uint32_t *device_id_array, uint32_t device_id_
 
 static int32_t find_first_dgpu(HSAuint32 *gpu_id)
 {
-	int32_t i;
+	uint32_t i;
 
 	*gpu_id = NON_VALID_GPU_ID;
 
-	for (i = 0; i < NUM_OF_SUPPORTED_GPUS; i++) {
+	for (i = 0; i < gpu_mem_count; i++) {
 		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
 			continue;
 		if (!topology_is_dgpu(gpu_mem[i].device_id))
