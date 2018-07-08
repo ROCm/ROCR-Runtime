@@ -139,7 +139,7 @@ int DumpMonitorInfo() {
   int ret = 0;
   uint64_t value_u64;
   uint32_t value_u32;
-  int64_t value_i64;
+// temp work-around  int64_t value_i64;
   std::string val_str;
   std::vector<std::string> val_vec;
   rsmi_status_t rsmi_ret;
@@ -223,7 +223,7 @@ int DumpMonitorInfo() {
     char mon_name[32];
     rsmi_ret = rsmi_dev_name_get(dindx, mon_name, 32);
     print_val_str(mon_name, "Monitor name: ");
-
+#if 0 // Temp work around for rsmi change
     rsmi_ret = rsmi_dev_temp_get(dindx, &value_i64);
     print_val_str(IntegerToString(value_i64/1000, false) + "C",
                                                             "Temperature: ");
@@ -242,7 +242,7 @@ int DumpMonitorInfo() {
       std::cout << static_cast<float>(value_i64)/value_u64 * 100 << "% (" <<
           value_i64 << "/" << value_u64 << ")" << std::endl;
     }
-
+#endif
     std::cout << "\t=======" << std::endl;
   }
   std::cout << delim << std::endl;
