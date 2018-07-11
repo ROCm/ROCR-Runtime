@@ -524,10 +524,6 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
   lock.Release();
 
-  for (GpuAgentInt* gpu : whitelist_gpus) {
-    gpu->PreloadBlits();
-  }
-
   return HSA_STATUS_SUCCESS;
 }
 
@@ -596,10 +592,6 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
         *agent_ptr = reinterpret_cast<void*>(alternate_va);
       } else {
         *agent_ptr = host_ptr;
-      }
-
-      for (auto gpu : whitelist_gpus) {
-        static_cast<GpuAgentInt*>(gpu)->PreloadBlits();
       }
 
       return HSA_STATUS_SUCCESS;
