@@ -259,6 +259,9 @@ class MemoryAsyncCopy : public TestBase {
   // Verification result
   bool verified_;
 
+  // Should we test p2p copying?
+  bool do_p2p_;
+
   // Store the testing level
   int src_pool_id_;
   int dst_pool_id_;

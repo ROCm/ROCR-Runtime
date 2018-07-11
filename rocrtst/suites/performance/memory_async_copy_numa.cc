@@ -77,6 +77,8 @@ MemoryAsyncCopyNUMA::MemoryAsyncCopyNUMA(void) : MemoryAsyncCopy() {
       "from memory pool to another. Host memory is allocated using NUMA "
       "aware allocators. Bandwidth performance using NUMA should, at worst, "
       "be as good as using the standard hsa allocator.");
+
+  do_p2p_ = false;
 }
 
 MemoryAsyncCopyNUMA::~MemoryAsyncCopyNUMA(void) {
