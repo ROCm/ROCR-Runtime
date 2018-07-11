@@ -92,6 +92,7 @@ MemoryAsyncCopy::MemoryAsyncCopy(void) :
   pool_info()->clear();
   node_info()->clear();
   verified_ = true;
+  do_p2p_ = true;
   src_pool_id_ = -1;
   dst_pool_id_ = -1;
   set_num_iteration(10);  // Default value
@@ -809,7 +810,7 @@ void MemoryAsyncCopy::ConstructTransactionList(void) {
   push_trans(cpu_pool_indx, gpu_local1_pool_indx, H2D);
   push_trans(gpu_local1_pool_indx, cpu_pool_indx, D2H);
 
-  if (gpu_local2_pool_indx != -1) {
+  if (do_p2p_ && gpu_local2_pool_indx != -1) {
     push_trans(gpu_local1_pool_indx, gpu_local2_pool_indx, P2P);
     push_trans(gpu_local2_pool_indx, gpu_local1_pool_indx, P2P);
   }
@@ -817,8 +818,10 @@ void MemoryAsyncCopy::ConstructTransactionList(void) {
   if (gpu_remote_pool_indx != -1) {
     push_trans(cpu_pool_indx, gpu_remote_pool_indx, H2DRemote);
     push_trans(gpu_remote_pool_indx, cpu_pool_indx, D2HRemote);
-    push_trans(gpu_local1_pool_indx, gpu_remote_pool_indx, P2PRemote);
-    push_trans(gpu_remote_pool_indx, gpu_local1_pool_indx, P2PRemote);
+    if (do_p2p_) {
+      push_trans(gpu_local1_pool_indx, gpu_remote_pool_indx, P2PRemote);
+      push_trans(gpu_remote_pool_indx, gpu_local1_pool_indx, P2PRemote);
+    }
   }
 }
 
