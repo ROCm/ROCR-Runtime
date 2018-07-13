@@ -56,6 +56,11 @@ hsaKmtGetTileConfig;
 hsaKmtQueryPointerInfo;
 hsaKmtSetMemoryUserData;
 hsaKmtGetQueueInfo;
+hsaKmtEnableDebugTrap;
+hsaKmtDisableDebugTrap;
+hsaKmtSetDebugTrapData2;
+hsaKmtSetWaveLaunchTrapOverride;
+hsaKmtSetWaveLaunchMode;
 
 local: *;
 };

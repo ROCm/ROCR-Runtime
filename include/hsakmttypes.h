@@ -72,6 +72,8 @@ extern "C" {
 
 typedef void*              HSA_HANDLE;
 typedef HSAuint64          HSA_QUEUEID;
+// An HSA_QUEUEID that is never a valid queue ID.
+#define INVALID_QUEUEID 0xFFFFFFFFFFFFFFFFULL
 
 // This is included in order to force the alignments to be 4 bytes so that
 // it avoids extra padding added by the compiler when a 64-bit binary is generated.
@@ -97,13 +99,14 @@ typedef enum _HSAKMT_STATUS
     HSAKMT_STATUS_NOT_IMPLEMENTED              = 10, // KFD function is not implemented for this set of paramters
     HSAKMT_STATUS_NOT_SUPPORTED                = 11, // KFD function is not supported on this node
     HSAKMT_STATUS_UNAVAILABLE                  = 12, // KFD function is not available currently on this node (but
-                                                  // may be at a later time)
+                                                     // may be at a later time)
+    HSAKMT_STATUS_OUT_OF_RESOURCES             = 13, // KFD function request exceeds the resources currently available.
 
     HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED = 20, // KFD driver path not opened
     HSAKMT_STATUS_KERNEL_COMMUNICATION_ERROR   = 21, // user-kernel mode communication failure
     HSAKMT_STATUS_KERNEL_ALREADY_OPENED        = 22, // KFD driver path already opened
     HSAKMT_STATUS_HSAMMU_UNAVAILABLE           = 23, // ATS/PRI 1.1 (Address Translation Services) not available
-                                                  // (IOMMU driver not installed or not-available)
+                                                     // (IOMMU driver not installed or not-available)
 
     HSAKMT_STATUS_WAIT_FAILURE                 = 30, // The wait operation failed
     HSAKMT_STATUS_WAIT_TIMEOUT                 = 31, // The wait operation timed out
@@ -190,13 +193,20 @@ typedef union
         unsigned int VALimit             : 1;    // This node GPU has limited VA range for platform
                                                  // (typical 40bit). Affects shared VM use for 64bit apps
         unsigned int WatchPointsSupported: 1;	 // Indicates if Watchpoints are available on the node.
-        unsigned int WatchPointsTotalBits: 4;    // ld(Watchpoints) available. To determine the number use 2^value
+        unsigned int WatchPointsTotalBits: 4;    // Watchpoints available. To determine the number use 2^value
 
         unsigned int DoorbellType        : 2;    // 0: This node has pre-1.0 doorbell characteristic
                                                  // 1: This node has 1.0 doorbell characteristic
                                                  // 2,3: reserved for future use
-        unsigned int AQLQueueDoubleMap    : 1;	 // The unit needs a VA “double map”
-        unsigned int Reserved            : 17;
+        unsigned int AQLQueueDoubleMap   : 1;	 // The unit needs a VA “double map”
+        unsigned int WatchAddrMaskLoBit  : 4;    // Only bits WatchAddrMaskLoBit..WatchAddrMaskHiBit of the
+        unsigned int WatchAddrMaskHiBit  : 6;    // watch address mask are used. 0 is the least significant bit.
+        unsigned int DebugTrapSupported  : 1;    // Indicates if Debug Trap is supported on the node.
+        unsigned int TrapDataCount       : 2;    // Number of 32 bit TrapData registers supported.
+        unsigned int WaveLaunchTrapOverrideSupported: 1; // Indicates if Wave Launch Trap Override is supported on the node.
+        unsigned int WaveLaunchModeSupported: 1; // Indicates if Wave Launch Mode is supported on the node.
+        unsigned int PreciseMemoryOperationsSupported: 1; // Indicates if Precise Memory Operations are supported on the node.
+        unsigned int Reserved            : 1;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -690,10 +700,44 @@ typedef enum _HSA_DBG_WATCH_MODE
     HSA_DBG_WATCH_NONREAD     = 1, //Write or Atomic operations only
     HSA_DBG_WATCH_ATOMIC      = 2, //Atomic Operations only
     HSA_DBG_WATCH_ALL         = 3, //Read, Write or Atomic operations
-    HSA_DBG_WATCH_NUM,
-    HSA_DBG_WATCH_SIZE        = 0xFFFFFFFF
+    HSA_DBG_WATCH_NUM
 } HSA_DBG_WATCH_MODE;
 
+typedef enum _HSA_DBG_TRAP_OVERRIDE
+{
+  HSA_DBG_TRAP_OVERRIDE_OR      = 0, // Bitwise OR exception mask with HSA_DBG_TRAP_MASK
+  HSA_DBG_TRAP_OVERRIDE_REPLACE = 1, // Replace exception mask with HSA_DBG_TRAP_MASK
+  HSA_DBG_TRAP_OVERRIDE_NUM
+} HSA_DBG_TRAP_OVERRIDE;
+
+typedef enum _HSA_DBG_TRAP_MASK
+{
+  HSA_DBG_TRAP_MASK_FP_INVALID           = 1,   // Floating point invalid operation
+  HSA_DBG_TRAP_MASK_FP_INPUT_DENOMAL     = 2,   // Floating point input denormal
+  HSA_DBG_TRAP_MASK_FP_DIVIDE_BY_ZERO    = 4,   // Floating point divide by zero
+  HSA_DBG_TRAP_MASK_FP_OVERFLOW          = 8,   // Floating point overflow
+  HSA_DBG_TRAP_MASK_FP_UNDERFLOW         = 16,  // Floating point underflow
+  HSA_DBG_TRAP_MASK_FP_INEXACT           = 32,  // Floating point inexact
+  HSA_DBG_TRAP_MASK_INT_DIVIDE_BY_ZERO   = 64,  // Integer divide by zero
+  HSA_DBG_TRAP_MASK_DBG_ADDRESS_WATCH    = 128, // Debug address watch
+  HSA_DBG_TRAP_MASK_DBG_MEMORY_VIOLATION = 256  // Memory violation
+} HSA_DBG_TRAP_MASK;
+
+typedef enum _HSA_DBG_WAVE_LAUNCH_MODE
+{
+    HSA_DBG_WAVE_LAUNCH_MODE_NORMAL      = 0, // Wavefront launched normally.
+    HSA_DBG_WAVE_LAUNCH_MODE_HALT        = 1, // Wavefront launched in halted mode.
+    HSA_DBG_WAVE_LAUNCH_MODE_KILL        = 2, // Wavefront is launched but immediately
+                                              // terminated before executing any instructions.
+    HSA_DBG_WAVE_LAUNCH_MODE_SINGLE_STEP = 3, // Wavefront is launched in single step (debug)
+                                              // mode. If debug trap is enabled by
+                                              // hsaKmtDbgEnableDebugTrap() then causes a
+                                              // trap after executing each instruction,
+                                              // otherwise behaves the same as
+                                              // HSA_DBG_WAVE_LAUNCH_MODE_NORMAL.
+    HSA_DBG_WAVE_LAUNCH_MODE_DISABLE     = 4, // Disable launching any new waves.
+    HSA_DBG_WAVE_LAUNCH_MODE_NUM
+} HSA_DBG_WAVE_LAUNCH_MODE;
 
 //This structure is hardware specific and may change in the future
 typedef struct _HsaDbgWaveMsgAMDGen2
