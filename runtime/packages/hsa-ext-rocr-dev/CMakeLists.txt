@@ -64,31 +64,41 @@ if ( DEFINED VERSION_BUILD )
 endif ()
 set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
-set ( PACKAGE_DIRECTORIES
-      "hsa/lib")
+set ( PACKAGE_DIRECTORIES "hsa/lib")
 
-add_custom_command ( OUTPUT ${PACKAGE_DIRECTORIES} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                   COMMAND mkdir -p hsa/lib )
+add_custom_command ( OUTPUT ${PACKAGE_DIRECTORIES} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E make_directory "hsa/lib" ) 
 
 add_custom_target (create_dirs DEPENDS ${PACKAGE_DIRECTORIES} )
 
+set ( TOOLS_NAME     "libhsa-runtime-tools64" )
 set ( IMAGE_NAME     "libhsa-ext-image64" )
 
+set ( TOOLS_LIBRARY_SOURCE     "${OUT_DIR}/lib/${TOOLS_NAME}.so.${LIB_VERSION_STRING}" )
 set ( IMAGE_LIBRARY_SOURCE     "${OUT_DIR}/lib/${IMAGE_NAME}.so.${LIB_VERSION_STRING}" )
 
+set ( TOOLS_LIBRARY_TARGET     "${CMAKE_CURRENT_BINARY_DIR}/hsa/lib/${TOOLS_NAME}.so.${LIB_VERSION_STRING}" )
 set ( IMAGE_LIBRARY_TARGET     "${CMAKE_CURRENT_BINARY_DIR}/hsa/lib/${IMAGE_NAME}.so.${LIB_VERSION_STRING}" )
 
+set ( TOOLS_LIBRARY_SONAME     "${CMAKE_CURRENT_BINARY_DIR}/hsa/lib/${TOOLS_NAME}.so.${BUILD_VERSION_MAJOR}" )
 set ( IMAGE_LIBRARY_SONAME     "${CMAKE_CURRENT_BINARY_DIR}/hsa/lib/${IMAGE_NAME}.so.${BUILD_VERSION_MAJOR}" )
+
+add_custom_command ( OUTPUT ${TOOLS_LIBRARY_TARGET} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                     COMMAND ${CMAKE_COMMAND} -E copy ${TOOLS_LIBRARY_SOURCE} ${TOOLS_LIBRARY_TARGET} )
 
 add_custom_command ( OUTPUT ${IMAGE_LIBRARY_TARGET} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                      COMMAND ${CMAKE_COMMAND} -E copy ${IMAGE_LIBRARY_SOURCE} ${IMAGE_LIBRARY_TARGET} )
+
+add_custom_command ( OUTPUT ${TOOLS_LIBRARY_SONAME} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hsa/lib
+                     COMMAND ${CMAKE_COMMAND} -E create_symlink ${TOOLS_NAME}.so.${VERSION_STRING} ${TOOLS_NAME}.so.${BUILD_VERSION_MAJOR} )
 
 add_custom_command ( OUTPUT ${IMAGE_LIBRARY_SONAME} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hsa/lib
                      COMMAND ${CMAKE_COMMAND} -E create_symlink ${IMAGE_NAME}.so.${VERSION_STRING} ${IMAGE_NAME}.so.${BUILD_VERSION_MAJOR} )
 
 add_custom_target ( copy_targets ALL DEPENDS create_dirs
+                                        ${TOOLS_LIBRARY_TARGET}
                                         ${IMAGE_LIBRARY_TARGET}
                                         ${TOOLS_LIBRARY_SONAME}
+                                        ${IMAGE_LIBRARY_SONAME}
                                         )
 
 install ( DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/hsa/ DESTINATION hsa USE_SOURCE_PERMISSIONS )

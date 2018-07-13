@@ -92,15 +92,21 @@ set ( RUNTIME_HEADER_NAMES
       "hsa_ven_amd_aqlprofile.h"
      )
 
-#set ( RUNTIME_TOOLS_INCLUDE_DIR "${HSA_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
+set ( RUNTIME_TOOLS_HEADER_NAMES
+      "hsa_ext_profiler.h"
+      "hsa_ext_debugger.h"
+      "amd_hsa_tools_interfaces.h"
+    )
+
+set ( RUNTIME_TOOLS_INCLUDE_DIR "${HSA_CLOSED_SOURCE_ROOT}/drivers/hsa/runtime/tools/inc" )
 
 set ( TOPLEVEL_INCLUDE_LINK "${CMAKE_CURRENT_BINARY_DIR}/include/hsa" )
 
 add_custom_command(OUTPUT ${PACKAGE_DIRECTORIES} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
-                   COMMAND mkdir -p include
-                   COMMAND mkdir -p lib
-                   COMMAND mkdir -p hsa/lib
-                   COMMAND mkdir -p hsa/include/hsa )
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "include"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "lib"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "hsa/lib"
+                   COMMAND ${CMAKE_COMMAND} -E make_directory "hsa/include/hsa" )
 
 add_custom_target (create_dirs DEPENDS ${PACKAGE_DIRECTORIES} )
 
@@ -124,6 +130,17 @@ foreach ( HEADER_FILE ${RUNTIME_HEADER_NAMES} )
 
     add_custom_command( OUTPUT ${HEADER_TARGET} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
                         COMMAND ${CMAKE_COMMAND} -E copy ${OUT_DIR}/include/hsa/${HEADER_FILE} ${HEADER_TARGET} )
+
+    list ( APPEND RUNTIME_HEADERS ${HEADER_TARGET} )
+
+endforeach()
+
+foreach ( HEADER_FILE ${RUNTIME_TOOLS_HEADER_NAMES} )
+
+    set ( HEADER_TARGET "${CMAKE_CURRENT_BINARY_DIR}/hsa/include/hsa/${HEADER_FILE}" )
+
+    add_custom_command( OUTPUT ${HEADER_TARGET} WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+                        COMMAND ${CMAKE_COMMAND} -E copy ${RUNTIME_TOOLS_INCLUDE_DIR}/${HEADER_FILE} ${HEADER_TARGET} )
 
     list ( APPEND RUNTIME_HEADERS ${HEADER_TARGET} )
 
