@@ -611,6 +611,347 @@ hsaKmtDbgAddressWatch(
     );
 
 /**
+   Suspend the execution of a set of queues. A queue that is suspended
+   allows the context save state to be inspected and modified. If a
+   queue is already suspended it remains suspended. A suspended queue
+   can be resumed by hsaKmtDbgQueueResume().
+
+   If NoGracePeriod is false then the default grace period used for
+   waiting for waves to complete before context switching is used. If
+   NoGracePeriod is true then no grace period us used and waves are
+   context saved as soon as possible.
+
+   If MemFence is true all queues being suspended will perform a
+   sequentially consistent system scope release that synchronizes with
+   a sequentially consistent system scope acquire performed by this
+   call. This ensures any memory updates performed by the suspended
+   queues are visible to the thread calling this operation.
+
+   Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueueSuspend(
+    HSAuint32   NumQueues,     //IN
+    HSA_QUEUEID QueueId[],     //IN
+    bool        NoGracePeriod, //IN
+    bool        MemFence       //IN
+    );
+
+/**
+   Resume the execution of a set of queues. If a queue is not
+   suspended by hsaKmtDbgQueueSuspend() then it remains executing.
+
+   If MemFence is true this call will perform a sequentially
+   consistent system scope release that synchronizes with a
+   sequentially consistent system scope acquire performed by all
+   queues being resumed. This ensures any memory updates performed by
+   the thread calling this operation are visible to the resumed
+   queues.
+
+   Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueueResume(
+    HSAuint32   NumQueues, //IN
+    HSA_QUEUEID QueueId[], //IN
+    bool        MemFence   //IN
+    );
+
+/**
+  Enable debug trap for NodeId. If QueueId is INVALID_QUEUEID then
+  enable for all queues on NodeId, otherwise enable only for QueueId.
+
+  When debug trap is enabled the trap handler behavior changes
+  depending on architecture of the node and can include the following:
+
+  - Initialize Trap Temp Registers: All new waves are launched with
+    specific trap temp registers initialized with:
+
+    - HSA dispatch packet address of the wave.
+
+    - X, Y, Z grid and work-group position of the wave within the
+      dispatch.
+
+    - The value of TrapData registers. hsaKmtEnableDebugTrap() sets
+      these to 0 and they can be changed by hsaKmtSetDebugTrapData2().
+
+    - The scratch backing memory address.
+
+  - Enable wave launch trap override. hsaKmtEnableDebugTrap() sets the
+    TrapMask to 0 and the TrapOverride to HSA_DBG_TRAP_OVERRIDE_OR and
+    they can be changed by hsaKmtSetWaveLaunchTrapOverride().
+
+  If debug trap is already enabled for NodeId, any features controlled
+  by it are still reset to their default values as defined above.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if:
+
+      - NodeId is invalid
+
+      - QueueId is not INVALID_QUEUE, or is not a valid queue of
+        NodeId.
+
+    - HSAKMT_STATUS_UNAVAILABLE if debugging is not available to this
+      process. For example, there may be a limit on number of
+      processes that can perform debugging at the same time.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if debug trap is not supported by
+      NodeId, or if QueueId is not INVALID_QUEUEID and NodeId does not
+      support per queue enabling.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtEnableDebugTrap(
+    HSAuint32   NodeId, //IN
+    HSA_QUEUEID QueueId //IN
+    );
+
+/**
+  Disable debug trap enabled by hsaKmtEnableDebugTrap(). If debug trap
+  is not currently enabled not action is taken.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if debug trap not supported for NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDisableDebugTrap(
+    HSAuint32 NodeId //IN
+    );
+
+/**
+  Set the value to use to initialize the TrapData used when
+  initializing trap temp registers for NodeId when debug trap is enabled.
+
+  An error is returned if debug trap is not currently enabled for
+  NodeId. Debug trap is enabled by hsaKmtEnableDebugTrap() which
+  initializes TrapData to 0.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if debug trap data is not supported
+      by NodeId.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+
+    - HSAKMT_STATUS_INVALID_PARAMETER if TrapDataIndex is larger than
+      trap-data-count - 1.
+
+    - HSAKMT_STATUS_ERROR if debug trap is not currently enabled by
+      hsaKmtEnableDebugTrap() for NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetDebugTrapData2(
+    HSAuint32 NodeId,        //IN
+    HSAuint32 TrapData0,     //IN
+    HSAuint32 TrapData1      //IN
+    );
+
+/**
+  Set the trap override mask. When debug trap is enabled by
+  hsaKmtEnableDebugTrap() each wave launched has its initial
+  MODE.excp_en register overriden by TrapMask as specified by
+  TrapOverride.
+
+  An error is returned if debug trap is not currently enabled for
+  NodeId. Debug trap is enabled by hsaKmtEnableDebugTrap() which
+  initializes TrapMask to 0 and TrapOverride to
+  HSA_DBG_TRAP_OVERRIDE_OR.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if wave launch trap override is not
+      supported by NodeId.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+
+    - HSAKMT_STATUS_INVALID_PARAMETER if TrapOverride is invalid.
+
+    - HSAKMT_STATUS_ERROR if debug trap is not currently enabled by
+      hsaKmtEnableDebugTrap() for NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetWaveLaunchTrapOverride(
+    HSAuint32             NodeId,       //IN
+    HSA_DBG_TRAP_OVERRIDE TrapOverride, //IN
+    HSA_DBG_TRAP_MASK     TrapMask      //IN
+    );
+
+/**
+  Set the mode in which all future waves will be launched for
+  NodeId.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_UNAVAILABLE if debugging is not available to this
+      process. For example, there may be a limit on number of
+      processes that can perform debugging at the same time.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if the WaveLaunchMode requested is
+      not supported by the NodeId. Different implementations and
+      different nodes within an implementation can support different
+      sets of launch modes. Only HSA_DBG_WAVE_LAUNCH_MODE_NORMAL mode
+      is supported by all.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is not a valid node.
+
+    - HSAKMT_STATUS_INVALID_PARAMETER if WaveLaunchMode is not a valid
+      value.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetWaveLaunchMode(
+    HSAuint32                NodeId,        //IN
+    HSA_DBG_WAVE_LAUNCH_MODE WaveLaunchMode //IN
+    );
+
+/**
+  Set a debug memory access watch point. A memory access of the kind
+  specified by WatchMode to an matching address will cause the trap
+  handler to be entered. An address matches if, after ANDing the
+  watch-addr-mask-lo..watch-addr-mask-hi bits of WatchAddrMask, it
+  equals the WatchAddress with the bottom watch-addr-mask-lo bits
+  cleared.
+
+  WatchId will be in the range 0 to watch-count - 1. The WatchId
+  value will match the address watch exception reported to the trap
+  handler.
+
+  hsaKmtGetNodeProperties() can be used to obtain HsaNodeProperties.
+  watch-addr-mask-lo and watch-addr-mask-hi can be obtained from
+  HsaNodeProperties.Capabilities.WatchAddrMaskLoBit and
+  HsaNodeProperties.Capabilities.WatchAddrMaskHiBit respectively.
+  watch-count can be obtained from
+  2^HsaNodeProperties.Capabilities.WatchPointsTotalBits.
+
+  To cause debug memory address watch points to be reported to the
+  trap handler the address watch exception must be enabled. This can
+  be accomplished by using hsaKmtSetWaveLaunchTrapOverride() with a
+  TrapMask that includes HSA_DBG_TRAP_MASK_DBG_ADDRESS_WATCH.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if debug memory watch points are
+      not supported for NodeId.
+
+    - HSAKMT_STATUS_UNAVAILABLE if debugging is not available to this
+      process. For example, there may be a limit on number of
+      processes that can perform debugging at the same time.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId or WatchId* is invalid.
+
+    - HSAKMT_STATUS_INVALID_PARAMETER if:
+
+      - WatchAddrMask contains non-0 bits outside the inclusive range
+        watch-addr-mask-lo to watch-addr-mask-hi.
+
+      - If WatchAddress contain non-0 bits in the inclusive range 0 to
+        watch-addr-mask-lo.
+
+      - If WatchMode is not one of the values of HSA_DBG_WATCH_MODE.
+
+      - WatchId is NULL.
+
+    - HSAKMT_STATUS_OUT_OF_RESOURCES if no more watch points are
+      available to set currently.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetAddressWatch(
+    HSAuint32          NodeId,        //IN
+    HSA_DBG_WATCH_MODE WatchMode,     //IN
+    void*              WatchAddress,  //IN
+    HSAuint64          WatchAddrMask, //IN
+    HSAuint32*         WatchId        //OUT
+    );
+
+/**
+  Clear a debug memory access watch point set by
+  hsaKmtSetAddressWatch().
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if debug memory watch points are
+      not supported for NodeId.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid or WatchId is not valid for this
+      NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtClearAddressWatch(
+    HSAuint32 NodeId, //IN
+    HSAuint32 WatchId //IN
+    );
+
+/**
+  Enable precise memory operations.
+
+  When precise memory operations are enabled a wave waits for each
+  memory operation to complete before executing further
+  operations. This results in more precise reporting of memory related
+  events such as memory violation or address watch points.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_UNAVAILABLE if precise memory operations is not
+      available to this process. For example, the feature may require
+      specific privileges.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if precise memory operations is not
+      supported by NodeId.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtEnablePreciseMemoryOperations(
+    HSAuint32 NodeId //IN
+    );
+
+/**
+  Disable precise memory operations enabled by
+  hsaKmtEnablePreciseMemoryOperations(). If precise memory operations
+  are not currently enabled no action is taken.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful.
+
+    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+
+    - HSAKMT_STATUS_NOT_SUPPORTED if precise memory operations is not
+      supported by NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDisablePreciseMemoryOperations(
+    HSAuint32 NodeId //IN
+    );
+
+/**
   Gets GPU and CPU clock counters for particular Node
 */
 

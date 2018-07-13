@@ -267,3 +267,90 @@ int debug_get_reg_status(uint32_t node_id, bool *is_debugged)
 	*is_debugged = is_device_debugged[node_id];
 	return 0;
 }
+
+static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
+				HSAuint32 op,
+				HSAuint32 data1,
+				HSAuint32 data2)
+{
+	uint32_t gpu_id;
+	HSAKMT_STATUS result;
+	HsaNodeProperties NodeProperties = {0};
+	struct kfd_ioctl_dbg_trap_args args = {0};
+
+	CHECK_KFD_OPEN();
+
+	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
+	result = hsaKmtGetNodeProperties(NodeId, &NodeProperties);
+
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	if (!NodeProperties.Capability.ui32.DebugTrapSupported)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	memset(&args, 0x00, sizeof(args));
+	args.gpu_id = gpu_id;
+	args.op = op;
+	args.data1 = data1;
+	args.data2 = data2;
+
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
+
+	if (err == 0)
+		result = HSAKMT_STATUS_SUCCESS;
+	else
+		result = HSAKMT_STATUS_ERROR;
+
+	return result;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrap(HSAuint32   NodeId,
+					      HSA_QUEUEID QueueId)
+{
+	if (QueueId != INVALID_QUEUEID)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	return debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 1, QueueId);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
+{
+	return  debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 0, 0);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
+					       HSAuint32 TrapData0,
+					       HSAuint32 TrapData1)
+{
+	return debug_trap(NodeId,
+				KFD_IOC_DBG_TRAP_SET_TRAP_DATA,
+				TrapData0,
+				TrapData1);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
+					HSAuint32 NodeId,
+					HSA_DBG_TRAP_OVERRIDE TrapOverride,
+					HSA_DBG_TRAP_MASK     TrapMask)
+{
+	if (TrapOverride >= HSA_DBG_TRAP_OVERRIDE_NUM)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	return debug_trap(NodeId,
+				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE,
+				TrapOverride,
+				TrapMask);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
+				HSAuint32 NodeId,
+				HSA_DBG_WAVE_LAUNCH_MODE WaveLaunchMode)
+{
+	return debug_trap(NodeId,
+				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE,
+				WaveLaunchMode,
+				0);
+}
