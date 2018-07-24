@@ -106,3 +106,5 @@ add_executable(kfdtest ${SRC_FILES})
 
 target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LIBRARIES} ${DRM_AMDGPU_LIBRARIES} pthread m stdc++ rt amdsp3)
 
+configure_file ( scripts/kfdtest.exclude kfdtest.exclude COPYONLY )
+configure_file ( scripts/run_kfdtest.sh run_kfdtest.sh COPYONLY )
