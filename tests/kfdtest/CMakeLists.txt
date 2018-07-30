@@ -21,7 +21,7 @@
 #
 #
 
-# If environment variable DRM_DIR or THUNK_LIB_OUT is set, the script
+# If environment variable DRM_DIR or LIBHSAKMT_PATH is set, the script
 # will pick up the corresponding libraries from those pathes.
 
 cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
@@ -48,24 +48,24 @@ else()
 endif()
 
 
-if( DEFINED ENV{THUNK_LIB_OUT} )
-    set ( THUNK_LIB_OUT $ENV{THUNK_LIB_OUT} )
-    message ( " THUNK_LIB_OUT environment variable is set" )
+if( DEFINED ENV{LIBHSAKMT_PATH} )
+    set ( LIBHSAKMT_PATH $ENV{LIBHSAKMT_PATH} )
+    message ( "LIBHSAKMT_PATH environment variable is set" )
 else()
     set ( ENV{PKG_CONFIG_PATH} /opt/rocm/libhsakmt/ )
     pkg_check_modules(HSAKMT libhsakmt)
     if( NOT HSAKMT_FOUND )
-        set ( THUNK_LIB_OUT $ENV{OUT_DIR} )
+        set ( LIBHSAKMT_PATH $ENV{OUT_DIR} )
     endif()
 endif()
 
-if( DEFINED THUNK_LIB_OUT )
-    set ( HSAKMT_INCLUDE_DIRS ${THUNK_LIB_OUT}/include )
-    set ( HSAKMT_LIBRARY_DIRS ${THUNK_LIB_OUT}/lib )
+if( DEFINED LIBHSAKMT_PATH )
+    set ( HSAKMT_INCLUDE_DIRS ${LIBHSAKMT_PATH}/include )
+    set ( HSAKMT_LIBRARY_DIRS ${LIBHSAKMT_PATH}/lib )
     set ( HSAKMT_LIBRARIES hsakmt )
 endif()
 
-message ( "Find thunk lib at ${HSAKMT_LIBRARY_DIRS}" )
+message ( "Find libhsakmt at ${HSAKMT_LIBRARY_DIRS}" )
 
 set ( SP3_DIR ${PROJECT_SOURCE_DIR}/sp3 )
 
