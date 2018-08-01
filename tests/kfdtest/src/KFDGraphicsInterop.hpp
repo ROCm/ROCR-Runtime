@@ -22,9 +22,6 @@
  */
 
 #include "KFDMemoryTest.hpp"
-extern "C" {
-#include <amdgpu.h>
-}
 
 #ifndef __KFD_GRAPHICS_INTEROP_TEST__H__
 #define __KFD_GRAPHICS_INTEROP_TEST__H__
@@ -36,23 +33,6 @@ class KFDGraphicsInterop :  public KFDMemoryTest
 public:
     KFDGraphicsInterop(void) {};
     ~KFDGraphicsInterop(void) {};
-protected:
-    virtual void SetUp();
-    virtual void TearDown();
-
-protected:
-#define MAX_RENDER_NODES 64
-    struct {
-        int fd;
-        uint32_t major_version;
-        uint32_t minor_version;
-        amdgpu_device_handle device_handle;
-        uint32_t bdf;
-    } m_RenderNodes[MAX_RENDER_NODES];
-
-// @brief Finds DRM Render node corresponding to gpuNode
-// @return DRM Render Node if successful or -1 on failure
-int FindDRMRenderNode(int gpuNode);
 };
 
 #endif

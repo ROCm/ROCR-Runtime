@@ -20,14 +20,20 @@
  * OTHER DEALINGS IN THE SOFTWARE.
  *
  */
+#ifndef __KFD_BASE_COMPONENT_TEST__H__
+#define __KFD_BASE_COMPONENT_TEST__H__
 
 #include <gtest/gtest.h>
 #include "hsakmt.h"
 #include "OSWrapper.hpp"
 #include "KFDTestUtil.hpp"
-
-#ifndef __KFD_BASE_COMPONENT_TEST__H__
-#define __KFD_BASE_COMPONENT_TEST__H__
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <xf86drm.h>
+#include <amdgpu.h>
+#include <amdgpu_drm.h>
+#include <sys/param.h>
 
 //  @class KFDBaseComponentTest
 class KFDBaseComponentTest : public testing::Test {
@@ -37,6 +43,18 @@ class KFDBaseComponentTest : public testing::Test {
 
     HSAuint64 GetSysMemSize();
     HSAuint64 GetVramSize(int defaultGPUNode);
+#define MAX_RENDER_NODES 64
+    struct {
+        int fd;
+        uint32_t major_version;
+        uint32_t minor_version;
+        amdgpu_device_handle device_handle;
+        uint32_t bdf;
+    } m_RenderNodes[MAX_RENDER_NODES];
+
+// @brief Finds DRM Render node corresponding to gpuNode
+// @return DRM Render Node if successful or -1 on failure
+    int FindDRMRenderNode(int gpuNode);
 
  protected:
     HsaVersionInfo  m_VersionInfo;
