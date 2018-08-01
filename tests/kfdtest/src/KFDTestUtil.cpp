@@ -106,7 +106,7 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         break;
     }
 
-    if (familyId == FAMILY_KV || familyId == FAMILY_CZ || familyId == FAMILY_RV)
+    if (props->NumCPUCores && props->NumFComputeCores)
         is_dgpu_dev = false;
     else
         is_dgpu_dev = true;
