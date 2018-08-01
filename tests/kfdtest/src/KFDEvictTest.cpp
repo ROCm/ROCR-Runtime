@@ -34,33 +34,13 @@
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
-HSAint32 KFDEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBufSize) {
-    HSAuint64 vramBufSizeInPages = vramBufSize >> PAGE_SHIFT;
-    HSAuint64 sysMemSize = GetSysMemSize();
-    HSAuint64 size, sizeInPages;
-    HSAuint32 count;
-
-    LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
-
-    /* use one third of total system memory for eviction buffer to test
-     * limit max allocate size to duoble of vramSize
-     * count is zero if not enough memory (sysMemSize/3 + vramSize) < (vramBufSize * N_PROCESSES)
-     */
-    size = sysMemSize/3 + vramSize;
-    size = size > vramSize<<1 ? vramSize<<1 : size;
-    sizeInPages = size >> PAGE_SHIFT;
-    count = sizeInPages / (vramBufSizeInPages * N_PROCESSES);
-
-    return count;
-}
-
 void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
         std::vector<void *> &pBuffers) {
     HSAuint64   totalMB;
 
     totalMB = N_PROCESSES*count*(vramBufSize>>20);
     if (m_IsParent) {
-        LOG() << "Testing " << N_PROCESSES << "*" << count << "*" << (vramBufSize>>20) << "(="<< totalMB << ")MB" << std::endl;
+        LOG() << "Allocating " << N_PROCESSES << "*" << count << "*" << (vramBufSize>>20) << "(="<< totalMB << ")MB VRAM in KFD" << std::endl;
     }
 
     HSAKMT_STATUS ret;
@@ -104,6 +84,164 @@ void KFDEvictTest::FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufS
             EXPECT_SUCCESS(hsaKmtFreeMemory(m_pBuf, vramBufSize));
         }
     }
+}
+
+void KFDEvictTest::AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle) {
+    struct amdgpu_bo_alloc_request alloc;
+
+    alloc.alloc_size = vramBufSize / N_PROCESSES;
+    alloc.phys_alignment = PAGE_SIZE;
+    alloc.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
+    alloc.flags = AMDGPU_GEM_CREATE_VRAM_CLEARED;
+
+    if (m_IsParent) {
+        LOG() << "Allocating " << N_PROCESSES << "*" << (vramBufSize >> 20) / N_PROCESSES << "(=" << (vramBufSize >> 20)  << ")MB VRAM in GFX" << std::endl;
+    }
+    ASSERT_EQ(0, amdgpu_bo_alloc(m_RenderNodes[rn].device_handle, &alloc, &handle));
+}
+
+void KFDEvictTest::FreeAmdgpuBo(amdgpu_bo_handle handle) {
+    ASSERT_EQ(0, amdgpu_bo_free(handle));
+}
+
+static int
+amdgpu_bo_alloc_and_map(amdgpu_device_handle dev, unsigned size,
+			unsigned alignment, unsigned heap, uint64_t flags,
+			amdgpu_bo_handle *bo, void **cpu, uint64_t *mc_address,
+			amdgpu_va_handle *va_handle)
+{
+	struct amdgpu_bo_alloc_request request = {};
+	amdgpu_bo_handle buf_handle;
+	amdgpu_va_handle handle;
+	uint64_t vmc_addr;
+	int r;
+
+	request.alloc_size = size;
+	request.phys_alignment = alignment;
+	request.preferred_heap = heap;
+	request.flags = flags;
+
+	r = amdgpu_bo_alloc(dev, &request, &buf_handle);
+	if (r)
+		return r;
+
+	r = amdgpu_va_range_alloc(dev,
+				  amdgpu_gpu_va_range_general,
+				  size, alignment, 0, &vmc_addr,
+				  &handle, 0);
+	if (r)
+		goto error_va_alloc;
+
+	r = amdgpu_bo_va_op(buf_handle, 0, size, vmc_addr, 0, AMDGPU_VA_OP_MAP);
+	if (r)
+		goto error_va_map;
+
+	r = amdgpu_bo_cpu_map(buf_handle, cpu);
+	if (r)
+		goto error_cpu_map;
+
+	*bo = buf_handle;
+	*mc_address = vmc_addr;
+	*va_handle = handle;
+
+	return 0;
+
+error_cpu_map:
+	amdgpu_bo_cpu_unmap(buf_handle);
+
+error_va_map:
+	amdgpu_bo_va_op(buf_handle, 0, size, vmc_addr, 0, AMDGPU_VA_OP_UNMAP);
+
+error_va_alloc:
+	amdgpu_bo_free(buf_handle);
+	return r;
+}
+
+static inline int
+amdgpu_bo_unmap_and_free(amdgpu_bo_handle bo, amdgpu_va_handle va_handle,
+			 uint64_t mc_addr, uint64_t size)
+{
+	amdgpu_bo_cpu_unmap(bo);
+	amdgpu_bo_va_op(bo, 0, size, mc_addr, 0, AMDGPU_VA_OP_UNMAP);
+	amdgpu_va_range_free(va_handle);
+	amdgpu_bo_free(bo);
+
+	return 0;
+
+}
+
+static inline int
+amdgpu_get_bo_list(amdgpu_device_handle dev, amdgpu_bo_handle bo1,
+		   amdgpu_bo_handle bo2, amdgpu_bo_list_handle *list)
+{
+	amdgpu_bo_handle resources[] = {bo1, bo2};
+
+	return amdgpu_bo_list_create(dev, bo2 ? 2 : 1, resources, NULL, list);
+}
+
+void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
+    amdgpu_context_handle contextHandle;
+    amdgpu_bo_handle ibResultHandle;
+    void *ibResultCpu;
+    uint64_t ibResultMcAddress;
+    struct amdgpu_cs_request ibsRequest;
+    struct amdgpu_cs_ib_info ibInfo;
+    struct amdgpu_cs_fence fenceStatus;
+    amdgpu_bo_list_handle boList;
+    amdgpu_va_handle vaHandle;
+    uint32_t *ptr;
+    uint32_t expired;
+
+    ASSERT_EQ(0, amdgpu_cs_ctx_create(m_RenderNodes[rn].device_handle, &contextHandle));
+
+    ASSERT_EQ(0, amdgpu_bo_alloc_and_map(m_RenderNodes[rn].device_handle,
+        PAGE_SIZE, PAGE_SIZE,
+        AMDGPU_GEM_DOMAIN_GTT, 0,
+        &ibResultHandle, &ibResultCpu,
+        &ibResultMcAddress, &vaHandle));
+
+    ASSERT_EQ(0, amdgpu_get_bo_list(m_RenderNodes[rn].device_handle, ibResultHandle, NULL,
+        &boList));
+
+    /* Fill Nop cammands in IB */
+    ptr = (uint32_t *)ibResultCpu;
+    for (int i = 0; i < 16; i++)
+        ptr[i] = 0xffff1000;
+
+    memset(&ibInfo, 0, sizeof(struct amdgpu_cs_ib_info));
+    ibInfo.ib_mc_address = ibResultMcAddress;
+    ibInfo.size = 16;
+
+    memset(&ibsRequest, 0, sizeof(struct amdgpu_cs_request));
+    ibsRequest.ip_type = AMDGPU_HW_IP_COMPUTE;
+    ibsRequest.ring = 0;
+    ibsRequest.number_of_ibs = 1;
+    ibsRequest.ibs = &ibInfo;
+    ibsRequest.resources = boList;
+    ibsRequest.fence_info.handle = NULL;
+
+    memset(&fenceStatus, 0, sizeof(struct amdgpu_cs_fence));
+    for (int i = 0; i < ALLOCATE_RETRY_TIMES; i++) {
+        ASSERT_EQ(0, amdgpu_cs_submit(contextHandle, 0, &ibsRequest, 1));
+        sleep(1);
+    }
+
+    fenceStatus.context = contextHandle;
+    fenceStatus.ip_type = AMDGPU_HW_IP_COMPUTE;
+    fenceStatus.ip_instance = 0;
+    fenceStatus.ring = 0;
+    fenceStatus.fence = ibsRequest.seq_no;
+
+    ASSERT_EQ(0, amdgpu_cs_query_fence_status(&fenceStatus,
+        g_TestTimeOut,
+        0, &expired));
+
+    ASSERT_EQ(0, amdgpu_bo_list_destroy(boList));
+
+    ASSERT_EQ(0, amdgpu_bo_unmap_and_free(ibResultHandle, vaHandle,
+        ibResultMcAddress, PAGE_SIZE));
+
+    ASSERT_EQ(0, amdgpu_cs_ctx_free(contextHandle));
 }
 
 void KFDEvictTest::ForkChildProcesses(int nprocesses) {
@@ -196,21 +334,30 @@ TEST_F(KFDEvictTest, BasicTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
     }
 
-    HSAuint32 count = GetBufferCounter(vramSize, vramBufSize);
-    if (count == 0) {
-        LOG() << "Not enough system memory, skipping the test" << std::endl;
-        return;
-    }
+    HSAint32 count = vramSize / vramBufSize / N_PROCESSES;
+
+    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
     /* Fork the child processes */
     ForkChildProcesses(N_PROCESSES);
 
+    int rn = FindDRMRenderNode(defaultGPUNode);
+    if (rn < 0) {
+        LOG() << "Skipping test" << std::endl;
+        return;
+    }
+
     std::vector<void *> pBuffers;
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
-    /* wait for other processes to finish allocation, then free buffer */
-    sleep(ALLOCATE_RETRY_TIMES);
+    /* allocate gfx vram size of at most one third system memory */
+    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
+    amdgpu_bo_handle handle;
+    AllocAmdgpuBo(rn, size, handle);
 
+    AmdgpuCommandSubmissionComputeNop(rn);
+
+    FreeAmdgpuBo(handle);
     LOG() << m_psName << "free buffer" << std::endl;
     FreeBuffers(pBuffers, vramBufSize);
 
@@ -388,7 +535,10 @@ TEST_F(KFDEvictTest, QueueTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
     }
 
-    HSAuint32 count = GetBufferCounter(vramSize, vramBufSize);
+    HSAuint32 count = vramSize / vramBufSize / N_PROCESSES;
+
+    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
+
     if (count == 0) {
         LOG() << "Not enough system memory, skipping the test" << std::endl;
         return;
@@ -401,12 +551,25 @@ TEST_F(KFDEvictTest, QueueTest) {
     /* Fork the child processes */
     ForkChildProcesses(N_PROCESSES);
 
+    int rn = FindDRMRenderNode(defaultGPUNode);
+    if (rn < 0) {
+        LOG() << "Skipping test" << std::endl;
+        return;
+    }
+
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer addrBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer resultBuffer(PAGE_SIZE, defaultGPUNode);
 
     std::vector<void *> pBuffers;
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+
+    /* allocate gfx vram size of at most one third system memory */
+    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
+    amdgpu_bo_handle handle;
+    AllocAmdgpuBo(rn, size, handle);
+
+    AmdgpuCommandSubmissionComputeNop(rn);
 
     unsigned int wavefront_num = pBuffers.size();
     LOG() << m_psName << "wavefront number " << wavefront_num << std::endl;
@@ -439,6 +602,8 @@ TEST_F(KFDEvictTest, QueueTest) {
     dispatch0.SyncWithStatus(120000);
 
     ASSERT_SUCCESS(pm4Queue.Destroy());
+
+    FreeAmdgpuBo(handle);
     /* LOG() << m_psName << "free buffer" << std::endl; */
     /* cleanup */
     FreeBuffers(pBuffers, vramBufSize);
