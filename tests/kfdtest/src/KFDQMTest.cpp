@@ -1047,6 +1047,7 @@ TEST_F(KFDQMTest, CreateAqlCpQueue) {
 }
 
 #define ALIGN_UP(x,align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
+#define CounterToNanoSec(x) ((x) * 1000 / (is_dgpu() ? 27 : 100))
 
 #include<algorithm>
 
@@ -1082,7 +1083,7 @@ TEST_F(KFDQMTest, QueueLatency) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode, queueSize));
 
-    LOG() << "Queue Submit Clock Counter (" << slots << " Packets)" << std::endl;
+    LOG() << std::dec << "Queue Submit NanoSeconds (" << slots << " Packets)" << std::endl;
 
     HsaMemoryBuffer buf(ALIGN_UP(slots * sizeof(HsaClockCounters), PAGE_SIZE), 0);
     ts = buf.As<HsaClockCounters*>();
@@ -1152,7 +1153,7 @@ TEST_F(KFDQMTest, QueueLatency) {
         queue_latency_arr[i] -= workload + overhead;
         /* The First submit takes a long time*/
         if (i < skip)
-            LOG() << "Queue Latency " << fs[i] << ": \t" << queue_latency_arr[i] << std::endl;
+            LOG() << "Queue Latency " << fs[i] << ": \t" << CounterToNanoSec(queue_latency_arr[i]) << std::endl;
     } while (++i < slots);
 
     std::sort(queue_latency_arr + skip, queue_latency_arr + slots);
@@ -1161,12 +1162,12 @@ TEST_F(KFDQMTest, QueueLatency) {
     queue_latency_med = queue_latency_arr[(slots+skip)/2];
     queue_latency_max = queue_latency_arr[slots-1];
 
-    LOG() << "Queue Latency Avg:     \t" << queue_latency_avg << std::endl;
-    LOG() << "Queue Latency Min:     \t" << queue_latency_min << std::endl;
-    LOG() << "Queue Latency Median:  \t" << queue_latency_med << std::endl;
-    LOG() << "Queue Latency Max:     \t" << queue_latency_max << std::endl;
-    LOG() << "Queue Packet Workload: \t" << workload << std::endl;
-    LOG() << "Get GpuCounter Overhead: \t" << overhead << std::endl;
+    LOG() << "Queue Latency Avg:     \t" << CounterToNanoSec(queue_latency_avg) << std::endl;
+    LOG() << "Queue Latency Min:     \t" << CounterToNanoSec(queue_latency_min) << std::endl;
+    LOG() << "Queue Latency Median:  \t" << CounterToNanoSec(queue_latency_med) << std::endl;
+    LOG() << "Queue Latency Max:     \t" << CounterToNanoSec(queue_latency_max) << std::endl;
+    LOG() << "Queue Packet Workload: \t" << CounterToNanoSec(workload) << std::endl;
+    LOG() << "Get GpuCounter Overhead: \t" << CounterToNanoSec(overhead) << std::endl;
 
     TEST_END
 }
