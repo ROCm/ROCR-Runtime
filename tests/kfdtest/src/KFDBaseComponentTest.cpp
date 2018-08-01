@@ -36,6 +36,7 @@ void KFDBaseComponentTest::SetUp() {
     ASSERT_SUCCESS(hsaKmtOpenKFD());
     EXPECT_SUCCESS(hsaKmtGetVersion(&m_VersionInfo));
     memset( &m_SystemProperties, 0, sizeof(m_SystemProperties) );
+    memset(m_RenderNodes, 0, sizeof(m_RenderNodes));
 
     /** in order to be correctly testing the KFD interfaces and ensure
      *  that the KFD acknowledges relevant node parameters
@@ -69,6 +70,14 @@ void KFDBaseComponentTest::SetUp() {
 
 void KFDBaseComponentTest::TearDown() {
     ROUTINE_START
+
+    for (int i = 0; i < MAX_RENDER_NODES; i++) {
+        if (m_RenderNodes[i].fd <= 0)
+            continue;
+
+        amdgpu_device_deinitialize(m_RenderNodes[i].device_handle);
+        drmClose(m_RenderNodes[i].fd);
+    }
 
     ASSERT_SUCCESS(hsaKmtReleaseSystemProperties());
     ASSERT_SUCCESS(hsaKmtCloseKFD());
@@ -114,4 +123,53 @@ HSAuint64 KFDBaseComponentTest::GetVramSize(int defaultGPUNode) {
     }
 
     return 0;
+}
+
+int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {
+    char path[PATH_MAX], buf[PAGE_SIZE];
+
+    snprintf(path, PATH_MAX, "/sys/class/kfd/kfd/topology/nodes/%d/properties", gpuNode);
+
+    int fd = open(path, O_RDONLY);
+
+    if (fd < 0) {
+        LOG() << "Failed to open " << path << std::endl;
+        return -EINVAL;
+    }
+
+    read(fd, buf, PAGE_SIZE);
+
+    close(fd);
+
+    char *s = strstr(buf, "drm_render_minor");
+
+    int minor = atoi(s + 17);
+
+    if (minor < 128) {
+        LOG() << "Failed to get minor number " << minor << std::endl;
+        return -EINVAL;
+    }
+
+    int index = minor - 128;
+
+    if (m_RenderNodes[index].fd == 0) {
+        m_RenderNodes[index].fd = drmOpenRender(minor);
+
+        if (m_RenderNodes[index].fd < 0) {
+            LOG() << "Failed to open render node" << std::endl;
+            return -EINVAL;
+        }
+
+        if (amdgpu_device_initialize(m_RenderNodes[index].fd,
+                &m_RenderNodes[index].major_version,
+                &m_RenderNodes[index].minor_version,
+                &m_RenderNodes[index].device_handle) != 0) {
+            drmClose(m_RenderNodes[index].fd);
+            m_RenderNodes[index].fd = 0;
+            LOG() << "Failed to initialize amdgpu device" << std::endl;
+            return -EINVAL;
+        }
+    }
+
+    return index;
 }
