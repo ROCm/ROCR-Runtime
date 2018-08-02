@@ -64,6 +64,7 @@ class SDMACopyDataPacket : public SDMAPacket {
  public:
     // this contructor will also init the packet, no need for adittional calls
     SDMACopyDataPacket(void *dest, void *src, unsigned int size);
+    SDMACopyDataPacket(void *const dst[], void *src, int n, unsigned int surfsize);
 
     virtual ~SDMACopyDataPacket(void);
 

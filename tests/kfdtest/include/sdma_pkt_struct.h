@@ -102,23 +102,26 @@ typedef struct SDMA_PKT_COPY_LINEAR_TAG
         unsigned int DW_4_DATA;
     } SRC_ADDR_HI_UNION;
 
-    union
+    struct
     {
-        struct
+        union
         {
-            unsigned int dst_addr_31_0:32;
-        };
-        unsigned int DW_5_DATA;
-    } DST_ADDR_LO_UNION;
+            struct
+            {
+                unsigned int dst_addr_31_0:32;
+            };
+            unsigned int DW_5_DATA;
+        } DST_ADDR_LO_UNION;
 
-    union
-    {
-        struct
+        union
         {
-            unsigned int dst_addr_63_32:32;
-        };
-        unsigned int DW_6_DATA;
-    } DST_ADDR_HI_UNION;
+            struct
+            {
+                unsigned int dst_addr_63_32:32;
+            };
+            unsigned int DW_6_DATA;
+        } DST_ADDR_HI_UNION;
+    } DST_ADDR[0];
 } SDMA_PKT_COPY_LINEAR, *PSDMA_PKT_COPY_LINEAR;
 
 /*

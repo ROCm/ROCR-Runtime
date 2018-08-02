@@ -1352,6 +1352,31 @@ TEST_F(KFDQMTest, mGPUShareBO) {
     TEST_END
 }
 
+
+static void sdma_copy(HSAint32 node, void *src, void *const dst[], int n, unsigned int size) {
+    ROUTINE_START;
+
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(node));
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(dst, src, n, size));
+    sdmaQueue.Wait4PacketConsumption();
+    ASSERT_SUCCESS(sdmaQueue.Destroy());
+
+    ROUTINE_END;
+}
+
+static void sdma_fill(HSAint32 node, void *dst, unsigned int data, unsigned int size) {
+    ROUTINE_START;
+
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(node));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(dst, data, size));
+    sdmaQueue.Wait4PacketConsumption();
+    ASSERT_SUCCESS(sdmaQueue.Destroy());
+
+    ROUTINE_END;
+}
+
 TEST_F(KFDQMTest, P2PTest) {
     TEST_START(TESTPROFILE_RUNALL);
     if (!is_dgpu()) {
@@ -1364,92 +1389,106 @@ TEST_F(KFDQMTest, P2PTest) {
         LOG() << "Skipping test: Need at least two GPUs" << std::endl;
         return;
     }
-    HSAint32 gpuNode1 = m_NodeInfo.HsaDefaultGPUNode();
-    HSAint32 gpuNode2 = 0;
+    std::vector<HSAuint32> nodes;
 
     /* This test simulates RT team's P2P part in IPCtest:
      *
-     * +--------------------------------------------+
-     * |         gpu1           gpu2                |
-     * |gpu1 mem ----> gpu2 mem ----> system buffer |
-     * +--------------------------------------------+
+     * +------------------------------------------------+
+     * |         gpu1           gpu2           gpuX     |
+     * |gpu1 mem ----> gpu2 mem ----> gpuX mem          |
+     * |        \               \               \       |
+     * |         \               \               \      |
+     * |    system buffer   system buffer  system buffer|
+     * +------------------------------------------------+
      *
-     * Copy data from GPU-1 memory to GPU-2 memory using GPU-1, then GPU-2
-     * memory to system buffer using GPU-2. Verify the system buffer
-     * (initialized with 0) has the same content as gpu1 memory (0x5).
+     * Copy data from current GPU memory to next GPU memory and system memory
+     * Using current GPU, aka p2p push.
+     * Verify the system buffer has the expected content after each push.
      */
 
     /* Users can use "--node=gpu1 --dst_node=gpu2" to specify devices */
     if (g_TestDstNodeId != -1 && g_TestNodeId != -1) {
-        gpuNode1 = g_TestNodeId;
-        gpuNode2 = g_TestDstNodeId;
-    }
-
-    /* GPU-2 must have public memory(large bar) to do GPU-to-GPU copy. If
-     * not specified in the command line, find one.
-     */
-    gpuNode2 = m_NodeInfo.FindLargeBarGPUNode();
-    if (gpuNode2 < 0) {
-        LOG() << "Skipping test: Need at least one large bar GPU" << std::endl;
-        return;
-    }
-    if (gpuNode1 == gpuNode2) {
-        for (unsigned i = 0; i < gpuNodes.size(); i++) {
-            if (gpuNodes.at(i) != gpuNode2) {
-                gpuNode1 = gpuNodes.at(i);
-                break;
-            }
+        nodes.push_back(g_TestNodeId);
+        nodes.push_back(g_TestDstNodeId);
+        if (!m_NodeInfo.IsGPUNodeLargeBar(nodes[1])) {
+            LOG() << "Skipping test: Dst GPU is not a large bar GPU" << std::endl;
+            return;
+        }
+        if (nodes[0] == nodes[1]) {
+            LOG() << "Skipping test: Need different GPUs specified" << std::endl;
+            return;
+        }
+    } else {
+        HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
+        nodes.push_back(defaultGPU);
+        for (unsigned i = 0; i < gpuNodes.size(); i++)
+            if (m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i)) && gpuNodes.at(i) != defaultGPU)
+                nodes.push_back(gpuNodes.at(i));
+        if (nodes.size() < 2) {
+            LOG() << "Skipping test: Need at least one large bar GPU" << std::endl;
+            return;
         }
     }
 
     HSAuint32 *sysBuf;
-    HSAuint32 size = 0xc00000;  // bigger than 4MB to test non-contiguous memory
+    HSAuint32 size = 16ULL<<20;  // bigger than 16MB to test non-contiguous memory
     HsaMemFlags memFlags = {0};
     HsaMemMapFlags mapFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.NonPaged = 1;
+    unsigned int end = size / sizeof(HSAuint32) - 1;
 
-    /* 1. Allocate a system buffer and allow the access to GPU-2 */
+    /* 1. Allocate a system buffer and allow the access to GPUs */
     EXPECT_SUCCESS(hsaKmtAllocMemory(0, size, memFlags,
                                      (void **)&sysBuf));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sysBuf, size, NULL,
-                                             mapFlags, 1, (HSAuint32*)&gpuNode2));
+                                             mapFlags, nodes.size(), &nodes[0]));
+#define MAGIC_NUM 0xdeadbeaf
 
-    /* 2.- Allocate local memory on GPU-1
-     *   - Allocate local memory on GPU-2 and allow access to both GPUs
-     */
-    HsaMemoryBuffer gpu1Mem(size, gpuNode1, false, true /*isLocal*/);
-    HsaMemoryBuffer gpu2Mem(size, gpuNode2, false, true);
+    /* First GPU fills mem with MAGIC_NUM*/
+    void *src, *dst;
+    HSAuint32 cur = nodes[0], next;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(cur, size, memFlags, (void**)&src));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(src, size, NULL));
+    sdma_fill(cur, src, MAGIC_NUM, size);
 
-    SDMAQueue sdmaQueue1, sdmaQueue2;
-    ASSERT_SUCCESS(sdmaQueue1.Create(gpuNode1));
-    ASSERT_SUCCESS(sdmaQueue2.Create(gpuNode2));
+    for (unsigned i = 1; i <= nodes.size(); i++) {
+        int n;
+        memset(sysBuf, 0, size);
 
-    /* initialize sysBuf as 0 and fill up gpu1 mem with 0x5 */
-    memset(sysBuf, 0, size);
-    sdmaQueue1.PlaceAndSubmitPacket(SDMAFillDataPacket(gpu1Mem.As<void*>(),
-                                                       0x5, size));
-    sdmaQueue1.Wait4PacketConsumption();
+        /* Last GPU just copy mem to sysBuf*/
+        if (i == nodes.size()) {
+               n = 1;
+               next = 0;/*system memory node*/
+               dst = 0;
+        } else {
+            n = 2;
+            next = nodes[i];
+            ASSERT_SUCCESS(hsaKmtAllocMemory(next, size, memFlags, (void**)&dst));
+            ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(dst, size, NULL));
+        }
 
-    /* 3. Copy data from gpuNode1 to gpuNode2 */
-    sdmaQueue1.PlaceAndSubmitPacket(SDMACopyDataPacket(gpu2Mem.As<HSAuint32*>(),
-                                         gpu1Mem.As<HSAuint32*>(), size));
-    sdmaQueue1.Wait4PacketConsumption();
+        LOG() << "Test " << cur << " -> " << next << std::endl;
+        /* copy to sysBuf and next GPU*/
+        void *dst_array[] = {sysBuf, dst};
+        sdma_copy(cur, src, dst_array, n, size);
 
-    /* 4. Copy data from gpuNode2 to system buffer */
-    sdmaQueue2.PlaceAndSubmitPacket(SDMACopyDataPacket(sysBuf,
-                                         gpu2Mem.As<HSAuint32*>(), size));
-    sdmaQueue2.Wait4PacketConsumption();
+        /* verify the data*/
+        ASSERT_EQ(sysBuf[0], MAGIC_NUM);
+        ASSERT_EQ(sysBuf[end], MAGIC_NUM);
 
-    /* 5. Verify the data */
-    ASSERT_EQ(sysBuf[0], 0x5);
-    unsigned int end = size / sizeof(HSAuint32) - 1;
-    ASSERT_EQ(sysBuf[end], 0x5);
+        LOG() << "PASS " << cur << " -> " << next << std::endl;
+
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(src));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(src, size));
+
+        cur = next;
+        src = dst;
+    }
 
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(sysBuf));
     EXPECT_SUCCESS(hsaKmtFreeMemory(sysBuf, size));
-    EXPECT_SUCCESS(sdmaQueue1.Destroy());
-    EXPECT_SUCCESS(sdmaQueue2.Destroy());
 
     TEST_END
 }
