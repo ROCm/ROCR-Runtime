@@ -1712,7 +1712,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 				   enum perf_block_id block_id,
 				   struct perf_counter_block *block)
 {
-	uint16_t dev_id = get_device_id_by_node(node_id);
+	uint16_t dev_id = get_device_id_by_node_id(node_id);
 	enum asic_family_type asic;
 
 	if (block_id > PERFCOUNTER_BLOCKID__MAX ||

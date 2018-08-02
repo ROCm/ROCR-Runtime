@@ -50,68 +50,68 @@ struct device_info {
 	uint32_t doorbell_size;
 };
 
-struct device_info kaveri_device_info = {
+const struct device_info kaveri_device_info = {
 	.asic_family = CHIP_KAVERI,
 	.eop_buffer_size = 0,
 	.doorbell_size = DOORBELL_SIZE_GFX7,
 };
 
-struct device_info hawaii_device_info = {
+const struct device_info hawaii_device_info = {
 	.asic_family = CHIP_HAWAII,
 	.eop_buffer_size = 0,
 	.doorbell_size = DOORBELL_SIZE_GFX7,
 };
 
-struct device_info carrizo_device_info = {
+const struct device_info carrizo_device_info = {
 	.asic_family = CHIP_CARRIZO,
 	.eop_buffer_size = 4096,
 	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
-struct device_info tonga_device_info = {
+const struct device_info tonga_device_info = {
 	.asic_family = CHIP_TONGA,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
-struct device_info fiji_device_info = {
+const struct device_info fiji_device_info = {
 	.asic_family = CHIP_FIJI,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
-struct device_info polaris10_device_info = {
+const struct device_info polaris10_device_info = {
 	.asic_family = CHIP_POLARIS10,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
-struct device_info polaris11_device_info = {
+const struct device_info polaris11_device_info = {
 	.asic_family = CHIP_POLARIS11,
 	.eop_buffer_size = TONGA_PAGE_SIZE,
 	.doorbell_size = DOORBELL_SIZE_GFX8,
 };
 
-struct device_info vega10_device_info = {
+const struct device_info vega10_device_info = {
 	.asic_family = CHIP_VEGA10,
 	.eop_buffer_size = 4096,
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
-struct device_info raven_device_info = {
+const struct device_info raven_device_info = {
 	.asic_family = CHIP_RAVEN,
 	.eop_buffer_size = 4096,
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
-struct device_info vega20_device_info = {
+const struct device_info vega20_device_info = {
 	.asic_family = CHIP_VEGA20,
 	.eop_buffer_size = 4096,
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
 
-static struct device_info *dev_lookup_table[] = {
+static const struct device_info *dev_lookup_table[] = {
 	[CHIP_KAVERI] = &kaveri_device_info,
 	[CHIP_HAWAII] = &hawaii_device_info,
 	[CHIP_CARRIZO] = &carrizo_device_info,
@@ -124,11 +124,6 @@ static struct device_info *dev_lookup_table[] = {
 	[CHIP_RAVEN] = &raven_device_info
 };
 
-struct device_id {
-	uint16_t dev_id;
-	struct device_info *dev_info;
-};
-
 struct queue {
 	uint32_t queue_id;
 	uint64_t wptr;
@@ -138,6 +133,7 @@ struct queue {
 	uint32_t ctx_save_restore_size;
 	uint32_t ctl_stack_size;
 	const struct device_info *dev_info;
+	bool use_ats;
 	/* This queue structure is allocated from GPU with page aligned size
 	 * but only small bytes are used. We use the extra space in the end for
 	 * cu_mask bits array.
@@ -180,7 +176,7 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 	return ret;
 }
 
-static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
+static const struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 {
 	enum asic_family_type asic;
 
@@ -193,7 +189,7 @@ static struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
 static void get_doorbell_map_info(uint16_t dev_id,
 				  struct process_doorbells *doorbell)
 {
-	struct device_info *dev_info;
+	const struct device_info *dev_info;
 
 	dev_info = get_device_info_by_dev_id(dev_id);
 
@@ -301,7 +297,7 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	get_doorbell_map_info(get_device_id_by_node(NodeId),
+	get_doorbell_map_info(get_device_id_by_node_id(NodeId),
 			      &doorbells[NodeId]);
 
 	if (doorbells[NodeId].use_gpuvm) {
@@ -414,20 +410,20 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
  * Allocates memory aligned to sysconf(_SC_PAGESIZE)
  */
 static void *allocate_exec_aligned_memory(uint32_t size,
-					  enum asic_family_type type,
+					  bool use_ats,
 					  uint32_t NodeId,
 					  bool DeviceLocal)
 {
-	if (IS_DGPU(type))
+	if (!use_ats)
 		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
 							DeviceLocal, DeviceLocal);
 	return allocate_exec_aligned_memory_cpu(size);
 }
 
 static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
-				     enum asic_family_type type)
+				     bool use_ats)
 {
-	if (IS_DGPU(type))
+	if (!use_ats)
 		free_exec_aligned_memory_gpu(addr, size, align);
 	else
 		munmap(addr, size);
@@ -438,11 +434,11 @@ static void free_queue(struct queue *q)
 	if (q->eop_buffer)
 		free_exec_aligned_memory(q->eop_buffer,
 					 q->dev_info->eop_buffer_size,
-					 PAGE_SIZE, q->dev_info->asic_family);
+					 PAGE_SIZE, q->use_ats);
 	if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
 					 q->ctx_save_restore_size,
-					 PAGE_SIZE, q->dev_info->asic_family);
+					 PAGE_SIZE, q->use_ats);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
 }
@@ -460,7 +456,7 @@ static int handle_concrete_asic(struct queue *q,
 	if (dev_info->eop_buffer_size > 0) {
 		q->eop_buffer =
 				allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
-				dev_info->asic_family,
+				q->use_ats,
 				NodeId, true);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
@@ -476,7 +472,7 @@ static int handle_concrete_asic(struct queue *q,
 		args->ctl_stack_size = q->ctl_stack_size;
 		q->ctx_save_restore =
 			allocate_exec_aligned_memory(q->ctx_save_restore_size,
-							 dev_info->asic_family,
+							 q->use_ats,
 							 NodeId, false);
 		if (!q->ctx_save_restore)
 			return HSAKMT_STATUS_NO_MEMORY;
@@ -507,10 +503,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	uint16_t dev_id;
 	uint64_t doorbell_mmap_offset;
 	unsigned int doorbell_offset;
-	struct device_info *dev_info;
+	const struct device_info *dev_info;
 	int err;
 	HsaNodeProperties props;
 	uint32_t cu_num, i;
+	bool use_ats;
 
 	CHECK_KFD_OPEN();
 
@@ -522,16 +519,21 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	dev_id = get_device_id_by_node(NodeId);
+	use_ats = prefer_ats(NodeId);
+
+	dev_id = get_device_id_by_node_id(NodeId);
 	dev_info = get_device_info_by_dev_id(dev_id);
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
-			dev_info->asic_family,
+			use_ats,
 			NodeId, false);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	memset(q, 0, sizeof(*q));
+
+	q->use_ats = use_ats;
+	q->dev_info = dev_info;
 
 	/* By default, CUs are all turned on. Initialize cu_mask to '1
 	 * for all CU bits.
@@ -549,8 +551,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	struct kfd_ioctl_create_queue_args args = {0};
 
 	args.gpu_id = gpu_id;
-
-	q->dev_info = dev_info;
 
 	switch (Type) {
 	case HSA_QUEUE_COMPUTE:

@@ -100,13 +100,13 @@ enum asic_family_type {
 	CHIP_RAVEN,
 	CHIP_VEGA20
 };
-#define IS_DGPU(chip) ((chip) != CHIP_KAVERI && (chip) != CHIP_CARRIZO && \
-		       (chip) != CHIP_RAVEN)
+
 #define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
-uint16_t get_device_id_by_node(HSAuint32 node_id);
+bool prefer_ats(HSAuint32 node_id);
+uint16_t get_device_id_by_node_id(HSAuint32 node_id);
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id);
 int get_drm_render_fd_by_gpu_id(HSAuint32 gpu_id);
 HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,

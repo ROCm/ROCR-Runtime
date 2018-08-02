@@ -1939,12 +1939,19 @@ out:
 	return err;
 }
 
-uint16_t get_device_id_by_node(HSAuint32 node_id)
+uint16_t get_device_id_by_node_id(HSAuint32 node_id)
 {
 	if (!g_props || !_system || _system->NumNodes <= node_id)
 		return 0;
 
 	return g_props[node_id].node.DeviceId;
+}
+
+bool prefer_ats(HSAuint32 node_id)
+{
+	return g_props[node_id].node.Capability.ui32.HSAMMUPresent
+			&& g_props[node_id].node.NumCPUCores
+			&& g_props[node_id].node.NumFComputeCores;
 }
 
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
