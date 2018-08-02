@@ -72,14 +72,24 @@ void SDMAWriteDataPacket::InitPacket(void* destAddr, unsigned int ndw,
     memcpy(&packetData->DATA0_UNION.DW_4_DATA, data, ndw*sizeof(unsigned int));
 }
 
-#define TWO_MEG (1 << 21)
+#define BITS (21)
+#define TWO_MEG (1 << BITS)
 SDMACopyDataPacket::~SDMACopyDataPacket(void) {
     free(packetData);
 }
 
-SDMACopyDataPacket::SDMACopyDataPacket(void* dst, void *src, unsigned int surfsize) {
-    int32_t size = 0;
-    packetSize = ((surfsize + TWO_MEG - 1) >> 21) * sizeof(SDMA_PKT_COPY_LINEAR);
+SDMACopyDataPacket::SDMACopyDataPacket(void *const dsts[], void *src, int n, unsigned int surfsize) {
+    int32_t size = 0, i;
+    void **dst = (void**)malloc(sizeof(void*) * n);
+    const int singlePacketSize = sizeof(SDMA_PKT_COPY_LINEAR) +
+                        sizeof(SDMA_PKT_COPY_LINEAR::DST_ADDR[0]) * n;
+
+    if (n > 2)
+        WARN() << "SDMACopyDataPacket does not support more than 2 dst addresses!" << std::endl;
+
+    memcpy(dst, dsts, sizeof(void*) * n);
+
+    packetSize = ((surfsize + TWO_MEG - 1) >> BITS) * singlePacketSize;
 
     SDMA_PKT_COPY_LINEAR *pSDMA = (SDMA_PKT_COPY_LINEAR *)malloc(packetSize);
     packetData = pSDMA;
@@ -91,22 +101,31 @@ SDMACopyDataPacket::SDMACopyDataPacket(void* dst, void *src, unsigned int surfsi
         else
             size = surfsize;
 
-        memset(pSDMA, 0, sizeof(SDMA_PKT_COPY_LINEAR));
+        memset(pSDMA, 0, singlePacketSize);
         pSDMA->HEADER_UNION.op           = SDMA_OP_COPY;
         pSDMA->HEADER_UNION.sub_op       = SDMA_SUBOP_COPY_LINEAR;
+        pSDMA->HEADER_UNION.broadcast       = n > 1 ? 1 : 0;
         pSDMA->COUNT_UNION.count             = SDMA_COUNT(size);
         SplitU64(reinterpret_cast<unsigned long long>(src),
                  pSDMA->SRC_ADDR_LO_UNION.DW_3_DATA,  // src_addr_31_0
                  pSDMA->SRC_ADDR_HI_UNION.DW_4_DATA);  // src_addr_63_32
-        SplitU64(reinterpret_cast<unsigned long long>(dst),
-                 pSDMA->DST_ADDR_LO_UNION.DW_5_DATA,  // dst_addr_31_0
-                 pSDMA->DST_ADDR_HI_UNION.DW_6_DATA);  // dst_addr_63_32
 
-        pSDMA++;
+        for (i = 0; i < n; i++)
+            SplitU64(reinterpret_cast<unsigned long long>(dst[i]),
+                    pSDMA->DST_ADDR[i].DST_ADDR_LO_UNION.DW_5_DATA,  // dst_addr_31_0
+                    pSDMA->DST_ADDR[i].DST_ADDR_HI_UNION.DW_6_DATA);  // dst_addr_63_32
+
+        pSDMA = (SDMA_PKT_COPY_LINEAR *)((char *)pSDMA + singlePacketSize);
+        for (i = 0; i < n; i++)
+            dst[i] = (char *)dst[i] + size;
         src = (char *)src + size;
-        dst = (char *)dst + size;
         surfsize -= size;
     }
+    free(dst);
+}
+
+SDMACopyDataPacket::SDMACopyDataPacket(void* dst, void *src, unsigned int surfsize) {
+    new (this)SDMACopyDataPacket(&dst, src, 1, surfsize);
 }
 
 SDMAFillDataPacket::~SDMAFillDataPacket() {
@@ -118,7 +137,7 @@ SDMAFillDataPacket::SDMAFillDataPacket(void *dst, unsigned int data, unsigned in
     SDMA_PKT_CONSTANT_FILL *pSDMA;
 
     /* SDMA support maximum 0x3fffe0 byte in one copy. Use 2M copy_size */
-    m_PacketSize = ((size + TWO_MEG - 1) >> 21) * sizeof(SDMA_PKT_CONSTANT_FILL);
+    m_PacketSize = ((size + TWO_MEG - 1) >> BITS) * sizeof(SDMA_PKT_CONSTANT_FILL);
     pSDMA = (SDMA_PKT_CONSTANT_FILL *)calloc(1, m_PacketSize);
     m_PacketData = pSDMA;
 
