@@ -171,6 +171,8 @@ typedef struct {
  */
 static gpu_mem_t *gpu_mem;
 static unsigned int gpu_mem_count;
+static gpu_mem_t *g_first_gpu_mem;
+
 static bool hsa_debug;
 static void *dgpu_shared_aperture_base;
 static void *dgpu_shared_aperture_limit;
@@ -237,24 +239,6 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
 				       void *address);
 static void print_device_id_array(uint32_t *device_id_array, uint32_t device_id_array_size);
-
-static int32_t find_first_dgpu(HSAuint32 *gpu_id)
-{
-	uint32_t i;
-
-	*gpu_id = NON_VALID_GPU_ID;
-
-	for (i = 0; i < gpu_mem_count; i++) {
-		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
-			continue;
-		if (!topology_is_dgpu(gpu_mem[i].device_id))
-			continue;
-		*gpu_id = gpu_mem[i].gpu_id;
-		return i;
-	}
-
-	return -1;
-}
 
 static vm_area_t *vm_create_and_init_area(void *start, void *end)
 {
@@ -1213,13 +1197,15 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 	uint64_t mmap_offset;
 	uint32_t ioc_flags;
 	uint64_t size;
-	int32_t gpu_mem_id;
+	int32_t gpu_drm_fd;
 	uint32_t gpu_id;
 	vm_object_t *vm_obj = NULL;
 
-	gpu_mem_id = find_first_dgpu(&gpu_id);
-	if (gpu_mem_id < 0)
+	if (!g_first_gpu_mem)
 		return NULL;
+
+	gpu_id = g_first_gpu_mem->gpu_id;
+	gpu_drm_fd = g_first_gpu_mem->drm_render_fd;
 
 	size = MemorySizeInBytes;
 	ioc_flags = 0;
@@ -1296,8 +1282,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 					     ioc_flags, &vm_obj);
 
 		if (mem && flags.ui32.HostAccess) {
-			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-						gpu_mem[gpu_mem_id].drm_render_fd;
+			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd : gpu_drm_fd;
 			void *ret = mmap(mem, MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
 					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
@@ -1709,7 +1694,7 @@ static void fmm_init_rbtree(void)
 
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
-	uint32_t i = 0;
+	uint32_t i;
 	int32_t gpu_mem_id = 0;
 	uint32_t gpu_id;
 	HsaNodeProperties props;
@@ -1748,6 +1733,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	if (!guardPagesStr || sscanf(guardPagesStr, "%u", &guardPages) != 1)
 		guardPages = 1;
 
+	gpu_mem_count = 0;
+	g_first_gpu_mem = NULL;
+
 	/* Trade off - NumNodes includes GPU nodes + CPU Node. So in
 	 * systems with CPU node, slightly more memory is allocated than
 	 * necessary
@@ -1760,10 +1748,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * set to 0 by calloc. This is necessary because this function
 	 * gets called before hsaKmtAcquireSystemProperties() is called.
 	 */
-	gpu_mem_count = 0;
+
 	pacc = pci_alloc();
 	pci_init(pacc);
-	while (i < NumNodes) {
+	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
 		if (ret != HSAKMT_STATUS_SUCCESS)
@@ -1790,9 +1778,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				get_vm_alignment(props.DeviceId);
 			gpu_mem[gpu_mem_count].gpuvm_aperture.guard_pages = guardPages;
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].gpuvm_aperture.fmm_mutex, NULL);
+
+			if (!g_first_gpu_mem)
+				g_first_gpu_mem = &gpu_mem[gpu_mem_count];
+
 			gpu_mem_count++;
 		}
-		i++;
 	}
 	pci_cleanup(pacc);
 
@@ -2592,7 +2583,6 @@ static HSAuint8 fmm_check_user_memory(const void *addr, HSAuint64 size)
 
 static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_object_t **obj_ret)
 {
-	int32_t i;
 	HSAuint32 gpu_id;
 	manageable_aperture_t *aperture;
 	void *svm_addr = NULL;
@@ -2601,10 +2591,12 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 	HSAuint64 aligned_addr = (HSAuint64)addr - page_offset;
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
 
-	/* Find first dGPU for creating the userptr BO */
-	i = find_first_dgpu(&gpu_id);
-	if (i < 0)
+	/* Find first GPU for creating the userptr BO */
+	if (!g_first_gpu_mem)
 		return HSAKMT_STATUS_ERROR;
+
+	gpu_id = g_first_gpu_mem->gpu_id;
+
 	aperture = &svm.dgpu_aperture;
 
 	/* Check if this address was already registered */
@@ -2856,12 +2848,13 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	if (r != HSAKMT_STATUS_SUCCESS)
 		return r;
 	if (!gpu_id && is_dgpu) {
-		/* Sharing non paged system memory. Use first dgpu which was
+		/* Sharing non paged system memory. Use first GPU which was
 		 * used during allocation. See fmm_allocate_host_gpu()
 		 */
-		r = find_first_dgpu(&gpu_id);
-		if (r != HSAKMT_STATUS_SUCCESS)
-			return r;
+		if (!g_first_gpu_mem)
+			return HSAKMT_STATUS_ERROR;
+
+		gpu_id = g_first_gpu_mem->gpu_id;
 	}
 	exportArgs.handle = obj->handle;
 	exportArgs.gpu_id = gpu_id;
