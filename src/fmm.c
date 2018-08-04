@@ -55,7 +55,8 @@
 	.guard_pages = 1,					\
 	.vm_ranges = NULL,					\
 	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER,			\
-	.is_coherent = false					\
+	.is_coherent = false,					\
+	.is_cpu_accessible = false				\
 	}
 
 #define container_of(ptr, type, member) ({			\
@@ -125,6 +126,7 @@ typedef struct {
 	rbtree_t user_tree;
 	pthread_mutex_t fmm_mutex;
 	bool is_coherent;
+	bool is_cpu_accessible;
 } manageable_aperture_t;
 
 typedef struct {
@@ -546,6 +548,28 @@ static void aperture_release_area(manageable_aperture_t *app, void *address,
 		else
 			vm_split_area(app, area, address, MemorySizeInBytes);
 	}
+
+	if (app->is_cpu_accessible) {
+		void *mmap_ret;
+
+		/* Reset NUMA policy */
+		mbind(address, MemorySizeInBytes, MPOL_DEFAULT, NULL, 0, 0);
+
+		/* Remove any CPU mapping, but keep the address range reserved */
+		mmap_ret = mmap(address, MemorySizeInBytes, PROT_NONE,
+			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+			-1, 0);
+		if (mmap_ret == MAP_FAILED && errno == ENOMEM) {
+			/* When mmap count reaches max_map_count, any mmap will
+			 * fail. Reduce the count with munmap then map it as
+			 * NORESERVE immediately.
+			 */
+			munmap(address, MemorySizeInBytes);
+			mmap(address, MemorySizeInBytes, PROT_NONE,
+				MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+				-1, 0);
+		}
+	}
 }
 
 /*
@@ -957,6 +981,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	/* Remember scratch backing aperture for later */
 	aperture_phy->base = mem;
 	aperture_phy->limit = VOID_PTR_ADD(mem, aligned_size-1);
+	aperture_phy->is_cpu_accessible = true;
 
 	/* Program SH_HIDDEN_PRIVATE_BASE */
 	args.gpu_id = gpu_id;
@@ -1156,26 +1181,6 @@ static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-/* Remove any CPU mapping, but keep the address range reserved */
-static void munmap_and_reserve_address(void *address, uint64_t size)
-{
-	void *mmap_ret;
-
-	mmap_ret = mmap(address, size, PROT_NONE,
-			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
-			-1, 0);
-	if (mmap_ret == MAP_FAILED && errno == ENOMEM) {
-		/* When mmap count reaches max_map_count, any mmap will
-		 * fail. Reduce the count with munmap then map it as
-		 * NORESERVE immediately.
-		 */
-		munmap(address, size);
-		mmap(address, size, PROT_NONE,
-			MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
-			-1, 0);
-	}
-}
-
 static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 				   HsaMemFlags flags)
 {
@@ -1259,7 +1264,6 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 			pthread_mutex_lock(&aperture->fmm_mutex);
 			aperture_release_area(aperture, mem, size);
 			pthread_mutex_unlock(&aperture->fmm_mutex);
-			munmap_and_reserve_address(mem, MemorySizeInBytes);
 			return NULL;
 		}
 	} else {
@@ -1310,7 +1314,6 @@ void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
 static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args = {0};
-	void *address;
 
 	if (!object)
 		return;
@@ -1325,16 +1328,7 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	args.handle = object->handle;
 	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
 
-	address = object->start;
-
-	if (address >= dgpu_shared_aperture_base &&
-	    address <= dgpu_shared_aperture_limit) {
-		/* Reset NUMA policy */
-		mbind(address, object->size, MPOL_DEFAULT, NULL, 0, 0);
-		munmap_and_reserve_address(address, object->size);
-	}
-
-	aperture_release_area(aperture, address, object->size);
+	aperture_release_area(aperture, object->start, object->size);
 	vm_remove_object(aperture, object);
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -1628,6 +1622,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	svm.dgpu_aperture.align = align;
 	svm.dgpu_aperture.guard_pages = guard_pages;
 	svm.dgpu_aperture.is_coherent = disable_cache;
+	svm.dgpu_aperture.is_cpu_accessible = true;
 
 	/* Use the first 1/4 of the dGPU aperture as
 	 * alternate aperture for coherent access.
@@ -1643,6 +1638,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	svm.dgpu_alt_aperture.align = align;
 	svm.dgpu_alt_aperture.guard_pages = guard_pages;
 	svm.dgpu_alt_aperture.is_coherent = true;
+	svm.dgpu_alt_aperture.is_cpu_accessible = true;
 
 	svm.dgpu_aperture.base = VOID_PTR_ADD(svm.dgpu_alt_aperture.limit, 1);
 
