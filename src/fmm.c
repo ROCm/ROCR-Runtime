@@ -554,7 +554,6 @@ static void aperture_release_area(manageable_aperture_t *app, void *address,
  */
 static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 					    uint64_t MemorySizeInBytes,
-					    uint64_t offset,
 					    uint64_t align)
 {
 	vm_area_t *cur, *next;
@@ -574,8 +573,7 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 	/* Find a big enough "hole" in the address space */
 	cur = NULL;
 	next = app->vm_ranges;
-	start = (void *)ALIGN_UP((uint64_t)VOID_PTR_ADD(app->base, offset),
-				 align);
+	start = (void *)ALIGN_UP((uint64_t)app->base, align);
 	while (next) {
 		if (next->start > start &&
 		    VOID_PTRS_SUB(next->start, start) >= MemorySizeInBytes)
@@ -612,10 +610,9 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 	return start;
 }
 static void *aperture_allocate_area(manageable_aperture_t *app,
-				    uint64_t MemorySizeInBytes,
-				    uint64_t offset)
+				    uint64_t MemorySizeInBytes)
 {
-	return aperture_allocate_area_aligned(app, MemorySizeInBytes, offset, app->align);
+	return aperture_allocate_area_aligned(app, MemorySizeInBytes, app->align);
 }
 
 /* returns 0 on success. Assumes, that fmm_mutex is locked on entry */
@@ -933,7 +930,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 		pthread_mutex_lock(&svm.dgpu_aperture.fmm_mutex);
 		mem = aperture_allocate_area_aligned(
 			&svm.dgpu_aperture,
-			aligned_size, 0, SCRATCH_ALIGN);
+			aligned_size, SCRATCH_ALIGN);
 		pthread_mutex_unlock(&svm.dgpu_aperture.fmm_mutex);
 	} else {
 		uint64_t aligned_padded_size = aligned_size +
@@ -974,7 +971,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 }
 
 static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
-		manageable_aperture_t *aperture, uint64_t offset, uint64_t *mmap_offset,
+		manageable_aperture_t *aperture, uint64_t *mmap_offset,
 		uint32_t flags, vm_object_t **vm_obj)
 {
 	void *mem = NULL;
@@ -986,8 +983,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 
 	/* Allocate address space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture,
-					MemorySizeInBytes, offset);
+	mem = aperture_allocate_area(aperture, MemorySizeInBytes);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/*
@@ -1014,16 +1010,11 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-/*
- * The offset from GPUVM aperture base address to ensure that address 0
- * (after base subtraction) won't be used
- */
-#define GPUVM_APP_OFFSET 0x10000
 void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
-	uint32_t ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_VRAM, offset;
+	uint32_t ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_VRAM;
 	uint64_t size, mmap_offset;
 	void *mem;
 	vm_object_t *vm_obj = NULL;
@@ -1042,20 +1033,17 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 
 	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id))) {
 		aperture = &svm.dgpu_aperture;
-		offset = 0;
 		if (flags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
-		offset = GPUVM_APP_OFFSET;
 	}
 
 	if (aperture->is_coherent)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	mem = __fmm_allocate_device(gpu_id, size,
-			aperture, offset, &mmap_offset,
-			ioc_flags, &vm_obj);
+	mem = __fmm_allocate_device(gpu_id, size, aperture, &mmap_offset,
+				    ioc_flags, &vm_obj);
 
 	if (mem && vm_obj) {
 		pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1104,9 +1092,8 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		    KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 		    KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	mem = __fmm_allocate_device(gpu_id, MemorySizeInBytes,
-			aperture, 0, NULL,
-			ioc_flags, &vm_obj);
+	mem = __fmm_allocate_device(gpu_id, MemorySizeInBytes, aperture, NULL,
+				    ioc_flags, &vm_obj);
 
 	if (mem && vm_obj) {
 		HsaMemFlags flags;
@@ -1231,7 +1218,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 		/* Allocate address space */
 		pthread_mutex_lock(&aperture->fmm_mutex);
-		mem = aperture_allocate_area(aperture, size, 0);
+		mem = aperture_allocate_area(aperture, size);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		if (!mem)
 			return NULL;
@@ -1277,9 +1264,8 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		}
 	} else {
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
-		mem =  __fmm_allocate_device(gpu_id, size,
-					     aperture, 0, &mmap_offset,
-					     ioc_flags, &vm_obj);
+		mem =  __fmm_allocate_device(gpu_id, size, aperture,
+					     &mmap_offset, ioc_flags, &vm_obj);
 
 		if (mem && flags.ui32.HostAccess) {
 			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd : gpu_drm_fd;
@@ -1862,6 +1848,13 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_base);
 			gpu_mem[gpu_mem_id].gpuvm_aperture.limit =
 				PORT_UINT64_TO_VPTR(process_apertures[i].gpuvm_limit);
+			/* Reserve space at the start of the
+			 * aperture. After subtracting the base, we
+			 * don't want valid pointers to become NULL.
+			 */
+			aperture_allocate_area(
+				&gpu_mem[gpu_mem_id].gpuvm_aperture,
+				gpu_mem[gpu_mem_id].gpuvm_aperture.align);
 		}
 
 		/* Acquire the VM from the DRM render node for KFD use */
@@ -2615,7 +2608,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 		fmm_check_user_memory(addr, size);
 
 	/* Allocate BO, userptr address is passed in mmap_offset */
-	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture, 0,
+	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture,
 			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR |
 			 KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE, &obj);
@@ -2728,7 +2721,6 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	void *metadata;
 	void *mem, *aperture_base;
 	int32_t gpu_mem_id;
-	uint64_t offset;
 	int r;
 	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
 	static const uint64_t IMAGE_ALIGN = 256*1024;
@@ -2763,16 +2755,14 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id)) {
 		aperture = &svm.dgpu_aperture;
 		aperture_base = NULL;
-		offset = 0;
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 		aperture_base = aperture->base;
-		offset = GPUVM_APP_OFFSET;
 	}
 	if (!aperture_is_valid(aperture->base, aperture->limit))
 		goto error_free_metadata;
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area_aligned(aperture, infoArgs.size, offset,
+	mem = aperture_allocate_area_aligned(aperture, infoArgs.size,
 					     MAX(aperture->align, IMAGE_ALIGN));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!mem)
@@ -2900,8 +2890,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	reservedMem = aperture_allocate_area(aperture,
-					     (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
-					     0);
+			(SharedMemoryStruct->SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!reservedMem) {
 		err = HSAKMT_STATUS_NO_MEMORY;
