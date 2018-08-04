@@ -1,9 +1,15 @@
 # Permanent exclusions
-# These tests are included for debugging, but are not executed in normal execution on any ASIC
+# These tests are included for debugging, but are not executed in normal execution on any ASIC:
+#
+# Fragmentation test fails intermittently on different systems (see KFD-344). It
+# stresses memory management in unusual ways by having lots of memory allocated but
+# not mapped, which is not relevant to compute applications over ROCr.
+#
 # CU Masking Linear/Split are not working correctly due to how the HW distributes work over CUs.
-# They are available for testing but are not currently expected to pass on CI/VI/AI
+# They are available for testing but are not currently expected to pass on CI/VI/AI.
 PERMANENT_BLACKLIST_ALL_ASICS=\
 "-KFDEventTest.MeasureInterruptConsumption:"\
+"KFDLocalMemoryTest.Fragmentation:"\
 "KFDQMTest.BasicCuMaskingLinear:"\
 "RDMATest.GPUDirect"
 
@@ -92,25 +98,20 @@ TONGA_TESTS_BLACKLIST=\
 "KFDDBGTest.BasicAddressWatch:"\
 "KFDQMTest.*"
 
-# Fragmentation test intermittently failing on 4096 order 3 blocks. Investigating in conjunction with KFD-344
 FIJI_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDLocalMemoryTest.Fragmentation:"\
 "$SDMA_BLACKLIST"
 
 ELLESMERE_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"
 
-# Fragmentation test failing on 4096 order 3 blocks. Investigating in conjunction with KFD-344
 BAFFIN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDLocalMemoryTest.Fragmentation:"\
 "$SDMA_BLACKLIST"
 
 # KFDDBG.BasicAddressWatch fails with message "E,INTERR: Setting ASIC VI (was previously set to GFX9), this changes the backend after we have already started parsing the shader, not currently supported by sp3, sorry." (KFD-317)
 # KFDExceptionTest.InvalidBadAddress causes some following tests to fail on SRIOV (KFD-343)
-# KFDLocalMemoryTest.Fragmentation is still flaking out intermittently (KFD-344)
 # KFDQMTest.BasicCuMaskingEven fails intermittently (WIP)
 # KFDExceptionTest.InvalidWriteAddress is failing once we enable no-retry (KFD-380)
 VEGA10_TESTS_BLACKLIST=\
@@ -120,8 +121,7 @@ VEGA10_TESTS_BLACKLIST=\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
 "KFDQMTest.GPUDoorbellWrite:"\
-"KFDMemoryTest.MemoryRegister:"\
-"KFDLocalMemoryTest.Fragmentation"
+"KFDMemoryTest.MemoryRegister"
 
 VEGA20_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
@@ -130,8 +130,7 @@ VEGA20_TESTS_BLACKLIST=\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
 "KFDQMTest.GPUDoorbellWrite:"\
-"KFDMemoryTest.MemoryRegister:"\
-"KFDLocalMemoryTest.Fragmentation"
+"KFDMemoryTest.MemoryRegister"
 
 
 RAVEN_TESTS_BLACKLIST=\
