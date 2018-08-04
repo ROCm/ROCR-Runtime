@@ -138,7 +138,7 @@ typedef struct {
 	uint32_t node_id;
 	uint64_t local_mem_size;
 	aperture_t lds_aperture;
-	manageable_aperture_t scratch_aperture;
+	aperture_t scratch_aperture;
 	manageable_aperture_t scratch_physical; /* For dGPU, scratch physical is allocated from
 						 * dgpu_aperture. When requested by RT, each
 						 * GPU will get a differnt range
@@ -826,7 +826,7 @@ void fmm_print(uint32_t gpu_id)
 		pr_info("GPUVM aperture:\n");
 		manageable_aperture_print(&gpu_mem[gpu_mem_id].gpuvm_aperture);
 		pr_info("Scratch aperture:\n");
-		manageable_aperture_print(&gpu_mem[gpu_mem_id].scratch_aperture);
+		aperture_print(&gpu_mem[gpu_mem_id].scratch_aperture);
 		pr_info("Scratch backing memory:\n");
 		manageable_aperture_print(&gpu_mem[gpu_mem_id].scratch_physical);
 	}
@@ -1669,8 +1669,6 @@ static void fmm_init_rbtree(void)
 	}
 
 	while (i--) {
-		rbtree_init(&gpu_mem[i].scratch_aperture.tree);
-		rbtree_init(&gpu_mem[i].scratch_aperture.user_tree);
 		rbtree_init(&gpu_mem[i].scratch_physical.tree);
 		rbtree_init(&gpu_mem[i].scratch_physical.user_tree);
 		rbtree_init(&gpu_mem[i].gpuvm_aperture.tree);
@@ -1758,8 +1756,6 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_count].node_id = i;
 			gpu_mem[gpu_mem_count].scratch_physical.align = PAGE_SIZE;
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_physical.fmm_mutex, NULL);
-			gpu_mem[gpu_mem_count].scratch_aperture.align = PAGE_SIZE;
-			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_aperture.fmm_mutex, NULL);
 			gpu_mem[gpu_mem_count].gpuvm_aperture.align =
 				get_vm_alignment(props.DeviceId);
 			gpu_mem[gpu_mem_count].gpuvm_aperture.guard_pages = guardPages;
@@ -3318,7 +3314,6 @@ void fmm_clear_all_mem(void)
 
 	for (i = 0; i < gpu_mem_count; i++) {
 		fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
-		fmm_clear_aperture(&gpu_mem[i].scratch_aperture);
 		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
 	}
 
