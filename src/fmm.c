@@ -1569,7 +1569,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 					bool disable_cache)
 {
 	const HSAuint64 ADDR_INC = GPU_HUGE_PAGE_SIZE;
-	HSAuint64 len, alt_base, alt_size;
+	HSAuint64 len, map_size, alt_base, alt_size;
 	bool found = false;
 	void *addr, *ret_addr;
 
@@ -1602,12 +1602,13 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 		     (HSAuint64)addr + ((len + 1) >> 1) - 1 <= limit;
 		     addr = (void *)((HSAuint64)addr + ADDR_INC)) {
 			HSAuint64 top = MIN((HSAuint64)addr + len, limit+1);
-			HSAuint64 size = (top - (HSAuint64)addr) &
-				~(HSAuint64)(PAGE_SIZE - 1);
 
-			if (size < SVM_MIN_VM_SIZE)
+			map_size = (top - (HSAuint64)addr) &
+				~(HSAuint64)(PAGE_SIZE - 1);
+			if (map_size < SVM_MIN_VM_SIZE)
 				break;
-			ret_addr = reserve_address(addr, size);
+
+			ret_addr = reserve_address(addr, map_size);
 			if (!ret_addr)
 				break;
 			if ((HSAuint64)ret_addr + ((len + 1) >> 1) - 1 <= limit)
@@ -1616,7 +1617,8 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 				 * take it
 				 */
 				break;
-			munmap(ret_addr, size);
+			munmap(ret_addr, map_size);
+			ret_addr = NULL;
 		}
 		if (!ret_addr) {
 			pr_warn("Failed to reserve %uGB for SVM ...\n",
@@ -1626,9 +1628,10 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 		if ((HSAuint64)ret_addr + SVM_MIN_VM_SIZE - 1 > limit) {
 			/* addressable size is less than the minimum */
 			pr_warn("Got %uGB for SVM at %p with only %dGB usable ...\n",
-				(unsigned int)(len >> 30), ret_addr,
+				(unsigned int)(map_size >> 30), ret_addr,
 				(int)((limit - (HSAint64)ret_addr) >> 30));
-			munmap(ret_addr, len);
+			munmap(ret_addr, map_size);
+			ret_addr = NULL;
 			continue;
 		} else {
 			found = true;
@@ -1642,11 +1645,11 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	}
 
 	base = (HSAuint64)ret_addr;
-	if (base + len - 1 > limit)
+	if (base + map_size - 1 > limit)
 		/* trim the tail that's not GPU-addressable */
-		munmap((void *)(limit + 1), base + len - 1 - limit);
+		munmap((void *)(limit + 1), base + map_size - 1 - limit);
 	else
-		limit = base + len - 1;
+		limit = base + map_size - 1;
 
 	/* init aperture */
 	svm.dgpu_aperture.base  = dgpu_shared_aperture_base  = ret_addr;
