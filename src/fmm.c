@@ -139,8 +139,13 @@ static const manageable_aperture_ops_t reserved_aperture_ops = {
 };
 
 /* Unreserved aperture type using mmap to allocate virtual address space */
+static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
+					    uint64_t size, uint64_t align);
+static void mmap_aperture_release(manageable_aperture_t *aper,
+				  void *addr, uint64_t size);
 static const manageable_aperture_ops_t mmap_aperture_ops = {
-	NULL, NULL /* TODO */
+	mmap_aperture_allocate_aligned,
+	mmap_aperture_release
 };
 
 struct manageable_aperture {
@@ -671,6 +676,84 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	}
 
 	return start;
+}
+
+static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
+					    uint64_t size, uint64_t align)
+{
+	uint64_t aligned_padded_size, guard_size;
+	void *addr, *aligned_addr, *aligned_end, *mapping_end;
+
+	if (!aper->is_cpu_accessible) {
+		pr_err("MMap Aperture must be CPU accessible\n");
+		return NULL;
+	}
+
+	if (align < aper->align)
+		align = aper->align;
+
+	/* Align big buffers to the next power-of-2 up to huge page
+	 * size for flexible fragment size TLB optimizations
+	 */
+	while (align < GPU_HUGE_PAGE_SIZE && size >= (align << 1))
+		align <<= 1;
+
+	/* Align memory size to match aperture requirements */
+	size = ALIGN_UP(size, aper->align);
+
+	/* Add padding to guarantee proper alignment and leave guard
+	 * pages on both sides
+	 */
+	guard_size = (uint64_t)aper->guard_pages * PAGE_SIZE;
+	aligned_padded_size = size + align +
+		2*guard_size - PAGE_SIZE;
+
+	/* Map memory */
+	addr = mmap(0, aligned_padded_size, PROT_NONE,
+		    MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
+	if (addr == MAP_FAILED) {
+		pr_err("mmap failed: %s\n", strerror(errno));
+		return NULL;
+	}
+
+	/* Adjust for alignment and guard pages, range-check the reslt */
+	aligned_addr = (void *)ALIGN_UP((uint64_t)addr + guard_size, align);
+	if (aligned_addr < aper->base ||
+	    VOID_PTR_ADD(aligned_addr, size - 1) > aper->limit) {
+		pr_err("mmap returned %p, out of range %p-%p\n", aligned_addr,
+		       aper->base, aper->limit);
+		munmap(addr, aligned_padded_size);
+		return NULL;
+	}
+
+	/* Unmap padding and guard pages */
+	if (aligned_addr > addr)
+		munmap(addr, VOID_PTRS_SUB(aligned_addr, addr));
+
+	aligned_end = VOID_PTR_ADD(aligned_addr, size);
+	mapping_end = VOID_PTR_ADD(addr, aligned_padded_size);
+	if (mapping_end > aligned_end)
+		munmap(aligned_end, VOID_PTRS_SUB(mapping_end, aligned_end));
+
+	return aligned_addr;
+}
+
+static void mmap_aperture_release(manageable_aperture_t *aper,
+				  void *addr, uint64_t size)
+{
+	if (!aper->is_cpu_accessible) {
+		pr_err("MMap Aperture must be CPU accessible\n");
+		return;
+	}
+
+	/* Align memory size to match aperture requirements */
+	size = ALIGN_UP(size, aper->align);
+
+	/* Reset NUMA policy */
+	mbind(addr, size, MPOL_DEFAULT, NULL, 0, 0);
+
+	/* Unmap memory */
+	munmap(addr, size);
 }
 
 /* Wrapper functions to call aperture-specific VA management functions */
@@ -1561,6 +1644,43 @@ static HSAKMT_STATUS acquire_vm(uint32_t gpu_id, int fd)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+static HSAKMT_STATUS init_mmap_apertures(HSAuint64 base, HSAuint64 limit,
+					 HSAuint32 align, HSAuint32 guard_pages)
+{
+	void *addr;
+
+	/* Set up one SVM aperture */
+	svm.apertures[SVM_DEFAULT].base  = (void *)base;
+	svm.apertures[SVM_DEFAULT].limit = (void *)limit;
+	svm.apertures[SVM_DEFAULT].align = align;
+	svm.apertures[SVM_DEFAULT].guard_pages = guard_pages;
+	svm.apertures[SVM_DEFAULT].is_cpu_accessible = true;
+	svm.apertures[SVM_DEFAULT].ops = &mmap_aperture_ops;
+
+	svm.apertures[SVM_COHERENT].base = svm.apertures[SVM_COHERENT].limit =
+		NULL;
+
+	/* Try to allocate one page. If it fails, we'll fall back to
+	 * managing our own reserved address range.
+	 */
+	addr = aperture_allocate_area(&svm.apertures[SVM_DEFAULT], PAGE_SIZE);
+	if (addr) {
+		aperture_release_area(&svm.apertures[SVM_DEFAULT], addr,
+				      PAGE_SIZE);
+
+		svm.dgpu_aperture = svm.dgpu_alt_aperture =
+			&svm.apertures[SVM_DEFAULT];
+		pr_info("Initialized unreserved SVM apertures: %p - %p\n",
+			svm.apertures[SVM_DEFAULT].base,
+			svm.apertures[SVM_DEFAULT].limit);
+	} else {
+		pr_info("Failed to allocate unreserved SVM address space.\n");
+		pr_info("Falling back to reserved SVM apertures.\n");
+	}
+
+	return addr ? HSAKMT_STATUS_SUCCESS : HSAKMT_STATUS_ERROR;
+}
+
 static void *reserve_address(void *addr, unsigned long long int len)
 {
 	void *ret_addr;
@@ -1597,8 +1717,26 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	if (dgpu_shared_aperture_limit)
 		return HSAKMT_STATUS_SUCCESS;
 
+	/* Align base and limit to huge page size */
 	base = ALIGN_UP(base, GPU_HUGE_PAGE_SIZE);
 	limit = ((limit + 1) & ~(HSAuint64)(GPU_HUGE_PAGE_SIZE - 1)) - 1;
+
+	/* If the limit is greater or equal 47-bits of address space,
+	 * it means we have GFXv9 or later GPUs only. We don't need
+	 * apertures to determine the MTYPE and the virtual address
+	 * space of the GPUs covers the full CPU address range (on
+	 * x86_64) or at least mmap is unlikely to run out of
+	 * addresses the GPUs can handle.
+	 */
+	if (limit >= (1ULL << 47) - 1) {
+		HSAKMT_STATUS status = init_mmap_apertures(base, limit, align,
+							   guard_pages);
+
+		if (status == HSAKMT_STATUS_SUCCESS)
+			return status;
+		/* fall through: fall back to reserved address space */
+	}
+
 	if (limit > SVM_RESERVATION_LIMIT)
 		limit = SVM_RESERVATION_LIMIT;
 	if (base >= limit) {
@@ -3431,10 +3569,10 @@ void fmm_clear_all_mem(void)
 		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
 	}
 
-	if (dgpu_shared_aperture_limit) {
-		fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
-		fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
+	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
+	fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
 
+	if (dgpu_shared_aperture_limit) {
 		/* Use the same dgpu range as the parent. If failed, then set
 		 * is_dgpu_mem_init to false. Later on dgpu_mem_init will try
 		 * to get a new range
