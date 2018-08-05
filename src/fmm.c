@@ -502,6 +502,38 @@ loop:
 	return cur; /* NULL if not found */
 }
 
+/* Returns true if there is any object in GPU VM address space
+ * overlapping the specified address range
+ */
+static bool vm_exists_overlapping_object(manageable_aperture_t *aper,
+					 const void *addr, uint64_t size)
+{
+	unsigned long start_addr = (unsigned long)addr;
+	unsigned long end_addr = start_addr + size;
+	rbtree_t *tree = vm_object_tree(aper, 0);
+	rbtree_key_t start_key, end_key;
+	rbtree_node_t *rn_start, *ln_end;
+	vm_object_t *cur;
+
+	start_key = rbtree_key(start_addr, 0);
+	rn_start = rbtree_lookup_nearest(tree, &start_key, LKP_ALL, RIGHT);
+	if (rn_start) {
+		cur = vm_object_entry(rn_start, 0);
+		if ((unsigned long)cur->start < end_addr)
+			return true;
+	}
+
+	end_key = rbtree_key(end_addr, 0);
+	ln_end = rbtree_lookup_nearest(tree, &end_key, LKP_ALL, LEFT);
+	if (ln_end) {
+		cur = vm_object_entry(ln_end, 0);
+		if ((unsigned long)cur->start + cur->size > start_addr)
+			return true;
+	}
+
+	return false;
+}
+
 static vm_object_t *vm_find_object_by_address(manageable_aperture_t *app,
 					const void *address, uint64_t size)
 {
@@ -1136,7 +1168,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		manageable_aperture_t *aperture, uint64_t *mmap_offset,
 		uint32_t flags, vm_object_t **vm_obj)
 {
-	void *mem = NULL;
+	void *mem = NULL, *userpage = NULL;
 	vm_object_t *obj;
 
 	/* Check that aperture is properly initialized/supported */
@@ -1145,8 +1177,26 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 
 	/* Allocate address space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture, MemorySizeInBytes);
+	/* If it's a userptr within the GPU-addressable address space,
+	 * and no object is registered yet in the same address range,
+	 * then use the CPU address as GPU address
+	 */
+	if ((flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR) && mmap_offset) {
+		userpage = (void *)*mmap_offset;
+		if (userpage >= aperture->base &&
+		    VOID_PTR_ADD(userpage, MemorySizeInBytes - 1) <= aperture->limit &&
+		    !vm_exists_overlapping_object(aperture, userpage, MemorySizeInBytes))
+			mem = userpage;
+	}
+	if (!mem)
+		mem = aperture_allocate_area(aperture, MemorySizeInBytes);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (!mem) {
+		pr_err("Failed to allocate %ld bytes virtual address space\n",
+			MemorySizeInBytes);
+		return NULL;
+	}
 
 	/*
 	 * Now that we have the area reserved, allocate memory in the device
@@ -1159,9 +1209,11 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		 * allocation of memory in device failed.
 		 * Release region in aperture
 		 */
-		pthread_mutex_lock(&aperture->fmm_mutex);
-		aperture_release_area(aperture, mem, MemorySizeInBytes);
-		pthread_mutex_unlock(&aperture->fmm_mutex);
+		if (mem != userpage) {
+			pthread_mutex_lock(&aperture->fmm_mutex);
+			aperture_release_area(aperture, mem, MemorySizeInBytes);
+			pthread_mutex_unlock(&aperture->fmm_mutex);
+		}
 
 		/* Assign NULL to mem to indicate failure to calling function */
 		mem = NULL;
@@ -1465,7 +1517,12 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	args.handle = object->handle;
 	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
 
-	aperture_release_area(aperture, object->start, object->size);
+	/* Userptrs with CPU addr == GPU addr don't have aperture
+	 * space allocated to them
+	 */
+	if (!object->userptr ||
+	    (void *)PAGE_ALIGN_DOWN(object->userptr) != object->start)
+		aperture_release_area(aperture, object->start, object->size);
 	vm_remove_object(aperture, object);
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
