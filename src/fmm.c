@@ -55,7 +55,8 @@
 	.guard_pages = 1,					\
 	.vm_ranges = NULL,					\
 	.fmm_mutex = PTHREAD_MUTEX_INITIALIZER,			\
-	.is_cpu_accessible = false				\
+	.is_cpu_accessible = false,				\
+	.ops = &reserved_aperture_ops				\
 	}
 
 #define container_of(ptr, type, member) ({			\
@@ -115,7 +116,36 @@ struct vm_area {
 typedef struct vm_area vm_area_t;
 
 /* Memory manager for an aperture */
+typedef struct manageable_aperture manageable_aperture_t;
+
+/* Aperture management function pointers to allow different management
+ * schemes.
+ */
 typedef struct {
+	void *(*allocate_area_aligned)(manageable_aperture_t *aper,
+				       uint64_t size, uint64_t align);
+	void (*release_area)(manageable_aperture_t *aper,
+			     void *addr, uint64_t size);
+} manageable_aperture_ops_t;
+
+/* Reserved aperture type managed by its own address allocator */
+static void *reserved_aperture_allocate_aligned(manageable_aperture_t *aper,
+						uint64_t size, uint64_t align);
+static void reserved_aperture_release(manageable_aperture_t *aper,
+				      void *addr, uint64_t size);
+static const manageable_aperture_ops_t reserved_aperture_ops = {
+	reserved_aperture_allocate_aligned,
+	reserved_aperture_release
+};
+
+#if 0
+/* Unreserved aperture type using mmap to allocate virtual address space */
+static const manageable_aperture_ops_t mmap_aperture_ops = {
+	NULL, NULL /* TODO */
+};
+#endif
+
+struct manageable_aperture {
 	void *base;
 	void *limit;
 	uint64_t align;
@@ -125,7 +155,8 @@ typedef struct {
 	rbtree_t user_tree;
 	pthread_mutex_t fmm_mutex;
 	bool is_cpu_accessible;
-} manageable_aperture_t;
+	const manageable_aperture_ops_t *ops;
+};
 
 typedef struct {
 	void *base;
@@ -527,8 +558,9 @@ static uint64_t vm_align_area_size(manageable_aperture_t *app, uint64_t size)
 /*
  * Assumes that fmm_mutex is locked on entry.
  */
-static void aperture_release_area(manageable_aperture_t *app, void *address,
-					uint64_t MemorySizeInBytes)
+static void reserved_aperture_release(manageable_aperture_t *app,
+				      void *address,
+				      uint64_t MemorySizeInBytes)
 {
 	vm_area_t *area;
 	uint64_t SizeOfRegion;
@@ -585,9 +617,9 @@ static void aperture_release_area(manageable_aperture_t *app, void *address,
  * returns allocated address or NULL. Assumes, that fmm_mutex is locked
  * on entry.
  */
-static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
-					    uint64_t MemorySizeInBytes,
-					    uint64_t align)
+static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
+						uint64_t MemorySizeInBytes,
+						uint64_t align)
 {
 	vm_area_t *cur, *next;
 	void *start;
@@ -642,10 +674,23 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 
 	return start;
 }
+
+/* Wrapper functions to call aperture-specific VA management functions */
+static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
+					    uint64_t MemorySizeInBytes,
+					    uint64_t align)
+{
+	return app->ops->allocate_area_aligned(app, MemorySizeInBytes, align);
+}
 static void *aperture_allocate_area(manageable_aperture_t *app,
 				    uint64_t MemorySizeInBytes)
 {
-	return aperture_allocate_area_aligned(app, MemorySizeInBytes, app->align);
+	return app->ops->allocate_area_aligned(app, MemorySizeInBytes, app->align);
+}
+static void aperture_release_area(manageable_aperture_t *app, void *address,
+				  uint64_t MemorySizeInBytes)
+{
+	app->ops->release_area(app, address, MemorySizeInBytes);
 }
 
 /* returns 0 on success. Assumes, that fmm_mutex is locked on entry */
@@ -1632,6 +1677,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	svm.apertures[SVM_DEFAULT].align = align;
 	svm.apertures[SVM_DEFAULT].guard_pages = guard_pages;
 	svm.apertures[SVM_DEFAULT].is_cpu_accessible = true;
+	svm.apertures[SVM_DEFAULT].ops = &reserved_aperture_ops;
 
 	/* Use the first 1/4 of the dGPU aperture as
 	 * alternate aperture for coherent access.
@@ -1647,6 +1693,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	svm.apertures[SVM_COHERENT].align = align;
 	svm.apertures[SVM_COHERENT].guard_pages = guard_pages;
 	svm.apertures[SVM_COHERENT].is_cpu_accessible = true;
+	svm.apertures[SVM_COHERENT].ops = &reserved_aperture_ops;
 
 	svm.apertures[SVM_DEFAULT].base = VOID_PTR_ADD(svm.apertures[SVM_COHERENT].limit, 1);
 
@@ -1760,11 +1807,15 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
 			gpu_mem[gpu_mem_count].node_id = i;
+
 			gpu_mem[gpu_mem_count].scratch_physical.align = PAGE_SIZE;
+			gpu_mem[gpu_mem_count].scratch_physical.ops = &reserved_aperture_ops;
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].scratch_physical.fmm_mutex, NULL);
+
 			gpu_mem[gpu_mem_count].gpuvm_aperture.align =
 				get_vm_alignment(props.DeviceId);
 			gpu_mem[gpu_mem_count].gpuvm_aperture.guard_pages = guardPages;
+			gpu_mem[gpu_mem_count].gpuvm_aperture.ops = &reserved_aperture_ops;
 			pthread_mutex_init(&gpu_mem[gpu_mem_count].gpuvm_aperture.fmm_mutex, NULL);
 
 			if (!g_first_gpu_mem)
