@@ -1780,7 +1780,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 	uint32_t i, gpu_id;
 	HSAuint64 aperture_limit;
-	bool nodeIsDGPU;
 
 	if (!MemoryProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -1816,8 +1815,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	if (gpu_id == 0)
 		goto out;
 
-	nodeIsDGPU = topology_is_dgpu(get_device_id_by_gpu_id(gpu_id));
-
 	/*Add LDS*/
 	if (i < NumBanks &&
 		fmm_get_aperture_base_and_limit(FMM_LDS, gpu_id,
@@ -1831,7 +1828,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	 * For dGPU the topology node contains Local Memory and it is added by
 	 * the for loop above
 	 */
-	if (!nodeIsDGPU && i < NumBanks && g_props[NodeId].node.LocalMemSize > 0 &&
+	if (is_kaveri(NodeId) && i < NumBanks && g_props[NodeId].node.LocalMemSize > 0 &&
 		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
@@ -1848,8 +1845,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 		i++;
 	}
 
-	/* On dGPUs add SVM aperture */
-	if (nodeIsDGPU && i < NumBanks &&
+	/* Add SVM aperture */
+	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id)) && i < NumBanks &&
 	    fmm_get_aperture_base_and_limit(
 		    FMM_SVM, gpu_id, &MemoryProperties[i].VirtualBaseAddress,
 		    &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
@@ -1952,6 +1949,12 @@ bool prefer_ats(HSAuint32 node_id)
 	return g_props[node_id].node.Capability.ui32.HSAMMUPresent
 			&& g_props[node_id].node.NumCPUCores
 			&& g_props[node_id].node.NumFComputeCores;
+}
+
+bool is_kaveri(HSAuint32 node_id)
+{
+	return g_props[node_id].node.EngineId.ui32.Major == 7
+			&& g_props[node_id].node.EngineId.ui32.Minor == 0;
 }
 
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
