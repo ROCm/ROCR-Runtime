@@ -47,6 +47,7 @@
 
 #include <map>
 #include <functional>
+#include <memory>
 
 #include "hsakmt.h"
 
@@ -547,6 +548,12 @@ class SignalGroup : public Checked<0xBD35DDDD578F091> {
   const uint32_t count;
   DISALLOW_COPY_AND_ASSIGN(SignalGroup);
 };
+
+class SignalDeleter {
+ public:
+  void operator()(Signal* ptr) { ptr->DestroySignal(); }
+};
+using unique_signal_ptr = ::std::unique_ptr<::core::Signal, SignalDeleter>;
 
 }  // namespace core
 #endif  // header guard

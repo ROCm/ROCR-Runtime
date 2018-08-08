@@ -53,6 +53,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/sdma_registers.h"
 #include "core/inc/signal.h"
+#include "core/inc/interrupt_signal.h"
 
 namespace amd {
 
@@ -102,9 +103,7 @@ template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma(bool copy_direction)
     : agent_(NULL),
       queue_start_addr_(NULL),
-      fence_base_addr_(NULL),
-      fence_pool_size_(0),
-      fence_pool_counter_(0),
+      parity_(false),
       cached_reserve_index_(0),
       cached_commit_index_(0),
       sdma_h2d_(copy_direction),
@@ -155,7 +154,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
   if (queue_start_addr_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
-
+  MAKE_NAMED_SCOPE_GUARD(cleanupOnException, [&]() { Destroy(agent); };);
   std::memset(queue_start_addr_, 0, kQueueSize);
 
   // Access kernel driver to initialize the queue control block
@@ -165,28 +164,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
   if (HSAKMT_STATUS_SUCCESS != hsaKmtCreateQueue(agent_->node_id(), kQueueType_, 100,
                                                  HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
                                                  kQueueSize, NULL, &queue_resource_)) {
-    Destroy(agent);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   cached_reserve_index_ = *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_write_ptr);
   cached_commit_index_ = cached_reserve_index_;
 
-  fence_pool_size_ =
-      static_cast<uint32_t>((kQueueSize + fence_command_size_ - 1) / fence_command_size_);
+  signals_[0].reset(new core::InterruptSignal(0));
+  signals_[1].reset(new core::InterruptSignal(0));
 
-  fence_pool_mask_ = fence_pool_size_ - 1;
-
-  fence_base_addr_ = reinterpret_cast<uint32_t*>(
-      core::Runtime::runtime_singleton_->system_allocator()(
-          fence_pool_size_ * sizeof(uint32_t), 256,
-          core::MemoryRegion::AllocateNoFlags));
-
-  if (fence_base_addr_ == NULL) {
-    Destroy(agent);
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
+  cleanupOnException.Dismiss();
   return HSA_STATUS_SUCCESS;
 }
 
@@ -207,20 +194,47 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Destroy
     core::Runtime::runtime_singleton_->system_deallocator()(queue_start_addr_);
   }
 
-  if (fence_base_addr_ != NULL) {
-    core::Runtime::runtime_singleton_->system_deallocator()(fence_base_addr_);
-  }
-
   queue_start_addr_ = NULL;
   cached_reserve_index_ = 0;
   cached_commit_index_ = 0;
+
+  signals_[0].reset();
+  signals_[1].reset();
 
   return HSA_STATUS_SUCCESS;
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitBlockingCommand(
+    const void* cmd, size_t cmd_size) {
+  ScopedAcquire<KernelMutex> lock(&lock_);
+
+  // Alternate between completion signals
+  // Using two allows overlapping command writing and copies
+  core::Signal* completionSignal;
+  if (parity_)
+    completionSignal = signals_[0].get();
+  else
+    completionSignal = signals_[1].get();
+  parity_ ^= true;
+
+  // Wait for prior operation with this signal to complete
+  completionSignal->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, -1, HSA_WAIT_STATE_BLOCKED);
+
+  // Mark signal as in use, guard against exception leaving the signal in an unusable state.
+  completionSignal->StoreRelaxed(2);
+  MAKE_SCOPE_GUARD([&]() { completionSignal->StoreRelaxed(0); });
+  lock.Release();
+
+  // Submit command and wait for completion
+  hsa_status_t ret = SubmitCommand(cmd, cmd_size, std::vector<core::Signal*>(), *completionSignal);
+  completionSignal->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 1, -1, HSA_WAIT_STATE_BLOCKED);
+  return ret;
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitCommand(
-    const void* cmd, size_t cmd_size, std::vector<core::Signal*>& dep_signals,
+    const void* cmd, size_t cmd_size, const std::vector<core::Signal*>& dep_signals,
     core::Signal& out_signal) {
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
@@ -378,56 +392,10 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
   // the SDMA linear copy limit.
   const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
 
-  const uint32_t total_copy_command_size = num_copy_command * linear_copy_command_size_;
+  std::vector<SDMA_PKT_COPY_LINEAR> buff(num_copy_command);
+  BuildCopyCommand(reinterpret_cast<char*>(&buff[0]), num_copy_command, dst, src, size);
 
-  // Add space for acquire or release Hdp flush command
-  uint32_t flush_cmd_size = 0;
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
-      flush_cmd_size = flush_command_size_;
-    }
-  }
-
-  const uint32_t total_command_size =
-      total_copy_command_size + fence_command_size_ + flush_cmd_size;
-
-  const uint32_t kFenceValue = 2015;
-  uint32_t* fence_addr = ObtainFenceObject();
-  *fence_addr = 0;
-
-  RingIndexTy curr_index;
-  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
-
-  if (command_addr == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  // Determine if a Hdp flush cmd is required at the top of cmd stream
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_ == false)) {
-      BuildHdpFlushCommand(command_addr);
-      command_addr += flush_command_size_;
-    }
-  }
-
-  BuildCopyCommand(command_addr, num_copy_command, dst, src, size);
-  command_addr += total_copy_command_size;
-
-  // Determine if a Hdp flush cmd is required at the end of cmd stream
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_)) {
-      BuildHdpFlushCommand(command_addr);
-      command_addr += flush_command_size_;
-    }
-  }
-
-  BuildFenceCommand(command_addr, fence_addr, kFenceValue);
-
-  ReleaseWriteAddress(curr_index, total_command_size);
-
-  WaitFence(fence_addr, kFenceValue);
-
-  return HSA_STATUS_SUCCESS;
+  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR));
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
@@ -514,79 +482,12 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitL
     void* ptr, uint32_t value, size_t count) {
   const size_t size = count * sizeof(uint32_t);
 
-  // Break the copy into multiple copy operation incase the copy size exceeds
-  // the SDMA linear copy limit.
   const uint32_t num_fill_command = (size + kMaxSingleFillSize - 1) / kMaxSingleFillSize;
 
-  const uint32_t total_fill_command_size =
-      num_fill_command * fill_command_size_;
+  std::vector<SDMA_PKT_CONSTANT_FILL> buff(num_fill_command);
+  BuildFillCommand(reinterpret_cast<char*>(&buff[0]), num_fill_command, ptr, value, count);
 
-  // Add space for acquire or release Hdp flush command
-  uint32_t flush_cmd_size = 0;
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
-      flush_cmd_size = flush_command_size_;
-    }
-  }
-
-  const uint32_t total_command_size =
-      total_fill_command_size + fence_command_size_ + flush_cmd_size;
-
-  RingIndexTy curr_index;
-  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
-
-  if (command_addr == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  const uint32_t fill_command_size = fill_command_size_;
-  size_t cur_size = 0;
-  for (uint32_t i = 0; i < num_fill_command; ++i) {
-    const uint32_t fill_size =
-        static_cast<uint32_t>(std::min((size - cur_size), kMaxSingleFillSize));
-
-    void* cur_ptr = static_cast<char*>(ptr) + cur_size;
-
-    SDMA_PKT_CONSTANT_FILL* packet_addr =
-        reinterpret_cast<SDMA_PKT_CONSTANT_FILL*>(command_addr);
-
-    memset(packet_addr, 0, sizeof(SDMA_PKT_CONSTANT_FILL));
-
-    packet_addr->HEADER_UNION.op = SDMA_OP_CONST_FILL;
-    packet_addr->HEADER_UNION.fillsize = 2;  // DW fill
-
-    packet_addr->DST_ADDR_LO_UNION.dst_addr_31_0 = ptrlow32(cur_ptr);
-    packet_addr->DST_ADDR_HI_UNION.dst_addr_63_32 = ptrhigh32(cur_ptr);
-
-    packet_addr->DATA_UNION.src_data_31_0 = value;
-
-    packet_addr->COUNT_UNION.count = fill_size + SizeToCountOffset;
-
-    command_addr += fill_command_size;
-    cur_size += fill_size;
-  }
-
-  assert(cur_size == size);
-
-  // Determine if a Hdp flush cmd is required at the end of cmd stream
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
-      BuildHdpFlushCommand(command_addr);
-      command_addr += flush_command_size_;
-    }
-  }
-
-  const uint32_t kFenceValue = 2015;
-  uint32_t* fence_addr = ObtainFenceObject();
-  *fence_addr = 0;
-
-  BuildFenceCommand(command_addr, fence_addr, kFenceValue);
-
-  ReleaseWriteAddress(curr_index, total_command_size);
-
-  WaitFence(fence_addr, kFenceValue);
-
-  return HSA_STATUS_SUCCESS;
+  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_CONSTANT_FILL));
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
@@ -752,27 +653,6 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildFenceComma
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
-uint32_t* BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::ObtainFenceObject() {
-  const uint32_t fence_index =
-      atomic::Add(&fence_pool_counter_, 1U, std::memory_order_acquire);
-  uint32_t* fence_addr = &fence_base_addr_[fence_index & fence_pool_mask_];
-  assert(IsMultipleOf(fence_addr, 4));
-  return fence_addr;
-}
-
-template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
-void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::WaitFence(uint32_t* fence,
-                                                                           uint32_t fence_value) {
-  int spin_count = 51;
-  while (atomic::Load(fence, std::memory_order_acquire) != fence_value) {
-    if (--spin_count > 0) {
-      continue;
-    }
-    os::YieldThread();
-  }
-}
-
-template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildCopyCommand(
     char* cmd_addr, uint32_t num_copy_command, void* dst, const void* src, size_t size) {
   size_t cur_size = 0;
@@ -929,6 +809,36 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildCopyRectCo
       }
     }
   }
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildFillCommand(
+    char* cmd_addr, uint32_t num_fill_command, void* ptr, uint32_t value, size_t count) {
+  char* cur_ptr = reinterpret_cast<char*>(ptr);
+  const uint32_t maxDwordCount = kMaxSingleFillSize / sizeof(uint32_t);
+  SDMA_PKT_CONSTANT_FILL* packet_addr = reinterpret_cast<SDMA_PKT_CONSTANT_FILL*>(cmd_addr);
+
+  for (uint32_t i = 0; i < num_fill_command; i++) {
+    assert(count != 0 && "SDMA fill command count error.");
+    const uint32_t fill_count = Min(count, maxDwordCount);
+
+    memset(packet_addr, 0, sizeof(SDMA_PKT_CONSTANT_FILL));
+
+    packet_addr->HEADER_UNION.op = SDMA_OP_CONST_FILL;
+    packet_addr->HEADER_UNION.fillsize = 2;  // DW fill
+
+    packet_addr->DST_ADDR_LO_UNION.dst_addr_31_0 = ptrlow32(cur_ptr);
+    packet_addr->DST_ADDR_HI_UNION.dst_addr_63_32 = ptrhigh32(cur_ptr);
+
+    packet_addr->DATA_UNION.src_data_31_0 = value;
+
+    packet_addr->COUNT_UNION.count = (fill_count + SizeToCountOffset) * sizeof(uint32_t);
+
+    packet_addr++;
+    cur_ptr += fill_count * sizeof(uint32_t);
+    count -= fill_count;
+  }
+  assert(count == 0 && "SDMA fill command count error.");
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>

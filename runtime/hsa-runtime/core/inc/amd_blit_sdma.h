@@ -189,10 +189,6 @@ class BlitSdma : public BlitSdmaBase {
   /// @brief Build Hdp Flush command
   void BuildHdpFlushCommand(char* cmd_addr);
 
-  uint32_t* ObtainFenceObject();
-
-  void WaitFence(uint32_t* fence, uint32_t fence_value);
-
   void BuildCopyCommand(char* cmd_addr, uint32_t num_copy_command, void* dst,
                         const void* src, size_t size);
 
@@ -200,6 +196,9 @@ class BlitSdma : public BlitSdmaBase {
                             const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
                             const hsa_pitched_ptr_t* src, const hsa_dim3_t* src_offset,
                             const hsa_dim3_t* range);
+
+  void BuildFillCommand(char* cmd_addr, uint32_t num_fill_command, void* ptr, uint32_t value,
+                        size_t count);
 
   void BuildPollCommand(char* cmd_addr, void* addr, uint32_t reference);
 
@@ -210,7 +209,10 @@ class BlitSdma : public BlitSdmaBase {
   void BuildTrapCommand(char* cmd_addr);
 
   hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size,
-                             std::vector<core::Signal*>& dep_signals, core::Signal& out_signal);
+                             const std::vector<core::Signal*>& dep_signals,
+                             core::Signal& out_signal);
+
+  hsa_status_t SubmitBlockingCommand(const void* cmds, size_t cmd_size);
 
   // Agent object owning the SDMA engine.
   GpuAgent* agent_;
@@ -218,10 +220,10 @@ class BlitSdma : public BlitSdmaBase {
   /// Base address of the Queue buffer at construction time.
   char* queue_start_addr_;
 
-  uint32_t* fence_base_addr_;
-  uint32_t fence_pool_size_;
-  uint32_t fence_pool_mask_;
-  volatile uint32_t fence_pool_counter_;
+  // Internal signals for blocking APIs
+  core::unique_signal_ptr signals_[2];
+  KernelMutex lock_;
+  bool parity_;
 
   /// Queue resource descriptor for doorbell, read
   /// and write indices
