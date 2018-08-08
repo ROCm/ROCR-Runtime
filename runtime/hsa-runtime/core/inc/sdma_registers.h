@@ -241,7 +241,6 @@ typedef struct SDMA_PKT_COPY_LINEAR_RECT_TAG {
     unsigned int DW_12_DATA;
   } RECT_PARAMETER_2_UNION;
 
-  // static const unsigned int pitch_bits = 19;
 } SDMA_PKT_COPY_LINEAR_RECT;
 
 typedef struct SDMA_PKT_CONSTANT_FILL_TAG {
