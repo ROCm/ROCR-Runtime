@@ -509,7 +509,7 @@ static bool aperture_is_valid(void *app_base, void *app_limit)
  */
 static uint64_t vm_align_area_size(manageable_aperture_t *app, uint64_t size)
 {
-	return ALIGN_UP(size + (uint64_t)app->guard_pages * PAGE_SIZE,
+	return ALIGN_UP(ALIGN_UP(size, app->align) + (uint64_t)app->guard_pages * PAGE_SIZE,
 			app->align);
 }
 
