@@ -97,6 +97,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_SDMA_HDP_FLUSH");
     enable_sdma_hdp_flush_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_REV_COPY_DIR");
+    rev_copy_dir_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -117,6 +120,8 @@ class Flag {
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
 
+  bool rev_copy_dir() const { return rev_copy_dir_; }
+
   std::string enable_sdma() const { return enable_sdma_; }
 
   uint32_t max_queues() const { return max_queues_; }
@@ -135,6 +140,7 @@ class Flag {
   bool enable_queue_fault_message_;
   bool report_tool_load_failures_;
   bool disable_fragment_alloc_;
+  bool rev_copy_dir_;
 
   std::string enable_sdma_;
 
