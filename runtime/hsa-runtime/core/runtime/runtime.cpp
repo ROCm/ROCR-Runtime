@@ -416,9 +416,11 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
   const bool src_gpu =
       (src_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   if (dst_gpu || src_gpu) {
-    core::Agent& copy_agent = (src_gpu) ? src_agent : dst_agent;
-    return copy_agent.DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
-                              completion_signal);
+    core::Agent* copy_agent = (src_gpu) ? &src_agent : &dst_agent;
+    if (flag_.rev_copy_dir() && dst_gpu && src_gpu)
+      copy_agent = (copy_agent == &src_agent) ? &dst_agent : &src_agent;
+    return copy_agent->DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
+                               completion_signal);
   }
 
   // For cpu to cpu, fire and forget a copy thread.
