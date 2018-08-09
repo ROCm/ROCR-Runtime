@@ -273,7 +273,10 @@ typedef struct _HsaNodeProperties
                                        // Unicode string
     HSAuint8        AMDName[HSA_PUBLIC_NAME_SIZE];   //CAL Name of the "device", ASCII
     HSA_ENGINE_VERSION uCodeEngineVersions;
-    HSAuint8        Reserved[60];
+    HSAuint64       DebugProperties;
+    HSAuint64       HiveID;            // XGMI Hive the GPU node belongs to in the system. It is an opaque and static
+                                       // number hash created by the PSP
+    HSAuint8        Reserved[44];
 } HsaNodeProperties;
 
 
@@ -398,7 +401,12 @@ typedef enum _HSA_IOLINKTYPE {
     HSA_IOLINK_TYPE_RAPID_IO      = 8,
     HSA_IOLINK_TYPE_INFINIBAND    = 9,
     HSA_IOLINK_TYPE_RESERVED3     = 10,
-    HSA_IOLINKTYPE_OTHER          = 11,
+    HSA_IOLINK_TYPE_XGMI          = 11,
+    HSA_IOLINK_TYPE_XGOP          = 12,
+    HSA_IOLINK_TYPE_GZ            = 13,
+    HSA_IOLINK_TYPE_ETHERNET_RDMA = 14,
+    HSA_IOLINK_TYPE_RDMA_OTHER    = 15,
+    HSA_IOLINK_TYPE_OTHER         = 16,
     HSA_IOLINKTYPE_NUMIOLINKTYPES,
     HSA_IOLINKTYPE_SIZE           = 0xFFFFFFFF
 } HSA_IOLINKTYPE;
