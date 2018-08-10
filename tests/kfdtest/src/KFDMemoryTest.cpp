@@ -168,7 +168,7 @@ TEST_F(KFDMemoryTest, MMapLarge) {
             break;
         if (hsaKmtMapMemoryToGPUNodes(addr + i, s - i,
                     &AlternateVAGPU[i], mapFlags, 1, (HSAuint32 *)&defaultGPUNode)) {
-            hsaKmtDeregisterMemory((void*)AlternateVAGPU[i]);
+            hsaKmtDeregisterMemory(addr + i);
             break;
         }
     }
