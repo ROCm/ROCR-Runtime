@@ -440,7 +440,7 @@ static void free_queue(struct queue *q)
 					 q->ctx_save_restore_size,
 					 PAGE_SIZE, q->use_ats);
 
-	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->dev_info->asic_family);
+	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->use_ats);
 }
 
 static int handle_concrete_asic(struct queue *q,
