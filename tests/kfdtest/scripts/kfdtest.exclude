@@ -110,18 +110,10 @@ BAFFIN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"
 
-# KFDDBG.BasicAddressWatch fails with message "E,INTERR: Setting ASIC VI (was previously set to GFX9), this changes the backend after we have already started parsing the shader, not currently supported by sp3, sorry." (KFD-317)
-# KFDExceptionTest.InvalidBadAddress causes some following tests to fail on SRIOV (KFD-343)
-# KFDQMTest.BasicCuMaskingEven fails intermittently (WIP)
-# KFDExceptionTest.InvalidWriteAddress is failing once we enable no-retry (KFD-380)
+# KFDDBG.BasicAddressWatch is not supported on GFXv9 and later. FIXME: it should disable itself
 VEGA10_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDDBGTest.BasicAddressWatch:"\
-"KFDExceptionTest.InvalidBadAddress:"\
-"KFDExceptionTest.InvalidWriteAddress:"\
-"KFDQMTest.CreateQueueStressSingleThreaded:"\
-"KFDQMTest.GPUDoorbellWrite:"\
-"KFDMemoryTest.MemoryRegister"
+"KFDDBGTest.BasicAddressWatch"
 
 VEGA20_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
