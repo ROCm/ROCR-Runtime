@@ -167,7 +167,7 @@ TEST_F(KFDIPCTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skip the test because of no VRAM found" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
@@ -606,7 +606,7 @@ TEST_F(KFDIPCTest, CrossMemoryAttachTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skip the test because of no VRAM found" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
@@ -670,7 +670,7 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skip the test because of no VRAM found" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 

@@ -141,7 +141,7 @@ TEST_F(KFDMemoryTest, MMapLarge) {
     TEST_START(TESTPROFILE_RUNALL)
 
     if (!is_dgpu()) {
-        LOG() << "Skip the test on APU" << std::endl;
+        LOG() << "Skipping test: Test not supported on APU." << std::endl;
         return;
     }
 
@@ -207,13 +207,13 @@ TEST_F(KFDMemoryTest, MMapLarge) {
 TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId != FAMILY_AI) {
-        LOG() << "Skipping test: Test uses gfx9-based shader, skip on other ASICs" << std::endl;
+        LOG() << "Skipping test: GFX9-based shader not supported on other ASICs." << std::endl;
         return;
     }
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two GPUs" << std::endl;
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
         return;
     }
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
@@ -316,7 +316,7 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (is_dgpu()) {
-        LOG() << "Not an APU, no PPR available, skip the test" << std::endl;
+        LOG() << "Skipping test: Test requires APU." << std::endl;
         return;
     }
 
@@ -353,7 +353,7 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
 TEST_F(KFDMemoryTest, MemoryRegister) {
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
     if (isTonga(pNodeProperties)) {
-        LOG() << "Skipping test: Workaround in thunk for Tonga causes failure:" << std::endl;
+        LOG() << "Skipping test: Workaround in thunk for Tonga causes failure." << std::endl;
         return;
     }
 
@@ -453,7 +453,7 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
 
 TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
     if (!is_dgpu()) {
-        LOG() << "Skipping test: Will run on APU once APU+dGPU supported:" << std::endl;
+        LOG() << "Skipping test: Will run on APU once APU+dGPU supported." << std::endl;
         return;
     }
 
@@ -529,7 +529,7 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
 TEST_F(KFDMemoryTest, FlatScratchAccess) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId == FAMILY_CI || m_FamilyId == FAMILY_KV) {
-        LOG() << "Skipping test: Test uses VI-based shader, fails on CI" << std::endl;
+        LOG() << "Skipping test: VI-based shader not supported on other ASICs." << std::endl;
         return;
     }
 
@@ -784,7 +784,7 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
  * the onerous memory swap operation. So we limit the buffer size that way.*/
 TEST_F(KFDMemoryTest, BigBufferStressTest) {
     if (!is_dgpu()) {
-        LOG() << "Skipping test: Running on APU fails and locks the system" << std::endl;
+        LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
         return;
     }
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
@@ -1236,12 +1236,12 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     char *hsaDebug = getenv("HSA_DEBUG");
 
     if (!is_dgpu()) {
-        LOG() << "Skipping test: No VRAM on APU" << std::endl;
+        LOG() << "Skipping test: There is no VRAM on APU." << std::endl;
         return;
     }
 
     if (!hsaDebug || !strcmp(hsaDebug, "0")) {
-        LOG() << "Skipping test: HSA_DEBUG environment variable not set" << std::endl;
+        LOG() << "Skipping test: HSA_DEBUG environment variable not set." << std::endl;
         return;
     }
 
@@ -1382,7 +1382,7 @@ TEST_F(KFDMemoryTest, SignalHandling) {
     TEST_START(TESTPROFILE_RUNALL)
 
     if (!is_dgpu()) {
-        LOG() << "Skip the test on APU" << std::endl;
+        LOG() << "Skipping test: Test not supported on APU." << std::endl;
         return;
     }
 
@@ -1547,7 +1547,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
 
     if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode) || !vramSizeMB) {
-        LOG() << "not a largebar system, skip!" << std::endl;
+        LOG() << "Skipping test: Test requires a large bar GPU." << std::endl;
         return;
     }
 

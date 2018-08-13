@@ -36,7 +36,7 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     const HSAuint32 familyID = FamilyIdFromNode(pNodeProps);
 
     if (isTonga(pNodeProps)) {
-        LOG() << "Skipping test: Tonga workaround in thunk returns incorrect allocation size" << std::endl;
+        LOG() << "Skipping test: Tonga workaround in thunk returns incorrect allocation size." << std::endl;
         return;
     }
 
@@ -47,7 +47,7 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     int rn = FindDRMRenderNode(defaultGPUNode);
 
     if (rn < 0) {
-        LOG() << "Skipping test" << std::endl;
+        LOG() << "Skipping test: Could not find render node for default GPU node." << std::endl;
         return;
     }
 
@@ -141,13 +141,13 @@ TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
     TEST_START(TESTPROFILE_RUNALL)
 
     if (!is_dgpu()) {
-        LOG() << "Skipping test: Supports only multi-dGPU system" << std::endl;
+        LOG() << "Skipping test: Only supported on multi-dGPU system." << std::endl;
         return;
     }
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two GPUs" << std::endl;
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
         return;
     }
 
@@ -159,7 +159,7 @@ TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
 
     gpuNode2 = m_NodeInfo.FindLargeBarGPUNode();
     if (gpuNode2 < 0) {
-        LOG() << "Skipping test: Need at least one large bar GPU" << std::endl;
+        LOG() << "Skipping test: At least one large bar GPU is required." << std::endl;
         return;
     }
     if (gpuNode1 == gpuNode2) {
@@ -177,7 +177,7 @@ TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
 
     int rn = FindDRMRenderNode(gpuNode2);
     if (rn < 0) {
-        LOG() << "Skipping test" << std::endl;
+        LOG() << "Skipping test: Cound not find render node for 2nd GPU." << std::endl;
         return;
     }
 

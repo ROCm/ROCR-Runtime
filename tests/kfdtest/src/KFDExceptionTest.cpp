@@ -124,7 +124,7 @@ TEST_F(KFDExceptionTest, InvalidBadAddress) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (m_FamilyId == FAMILY_RV) {
-        LOG() << "Skip the test on Raven due to IOMMU issues" << std::endl;
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
@@ -172,12 +172,12 @@ TEST_F(KFDExceptionTest, InvalidPPRWriteProtection) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (is_dgpu()) {
-        LOG() << "Not an APU, no PPR available, skip the test" << std::endl;
+        LOG() << "Skipping test: Test requires APU." << std::endl;
         return;
     }
 
     if (m_FamilyId == FAMILY_RV) {
-        LOG() << "Skip the test on Raven due to IOMMU issues" << std::endl;
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
@@ -223,12 +223,12 @@ TEST_F(KFDExceptionTest, InvalidPPRReadProtection) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (is_dgpu()) {
-        LOG() << "Not an APU, no PPR available, skip the test" << std::endl;
+        LOG() << "Skipping test: Test requires APU." << std::endl;
         return;
     }
 
     if (m_FamilyId == FAMILY_RV) {
-        LOG() << "Skip the test on Raven due to IOMMU issues" << std::endl;
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
@@ -275,7 +275,7 @@ TEST_F(KFDExceptionTest, InvalidWriteAddress) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (m_FamilyId == FAMILY_RV) {
-        LOG() << "Skip the test on Raven due to IOMMU issues" << std::endl;
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
@@ -323,7 +323,7 @@ TEST_F(KFDExceptionTest, FaultStorm) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (m_FamilyId == FAMILY_RV) {
-        LOG() << "Skip the test on Raven due to IOMMU issues" << std::endl;
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
