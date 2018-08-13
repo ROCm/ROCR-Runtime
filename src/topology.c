@@ -964,6 +964,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->DrmRenderMinor = (int32_t)prop_val;
 		else if (strcmp(prop_name, "sdma_fw_version") == 0)
 			props->uCodeEngineVersions.Value = (uint32_t)prop_val & 0x3ff;
+		else if (strcmp(prop_name, "hive_id") == 0)
+			props->HiveID = prop_val;
 	}
 
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
@@ -1572,6 +1574,11 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 	/* CPU->CPU is not an indirect link */
 	if (!node_props[node1].gpu_id && !node_props[node2].gpu_id)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	if (node_props[node1].node.HiveID &&
+	    node_props[node2].node.HiveID &&
+	    node_props[node1].node.HiveID == node_props[node2].node.HiveID)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (node_props[node1].gpu_id)
 		dir_cpu1 = gpu_get_direct_link_cpu(node1, node_props);
