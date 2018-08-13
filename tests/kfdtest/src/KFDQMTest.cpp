@@ -417,7 +417,7 @@ TEST_F(KFDQMTest, CreateQueueStressSingleThreaded) {
 TEST_F(KFDQMTest, OverSubscribeCpQueues) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId == FAMILY_CI || m_FamilyId == FAMILY_KV) {
-        LOG() << "Skipping test: CI doesn't have HW scheduling" << std::endl;
+        LOG() << "Skipping test: CI doesn't have HW scheduling." << std::endl;
         return;
     }
 
@@ -660,7 +660,7 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
             ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
     } else {
-        LOG() << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
     }
 
     TEST_END
@@ -683,7 +683,7 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
         uint32_t ActiveCU = (pNodeProperties->NumFComputeCores / pNodeProperties->NumSIMDPerCU);
         uint32_t numShaderEngines = pNodeProperties->NumShaderBanks;
         if (numShaderEngines == 1) {
-            LOG() << "Only 1 Shader Engine. Skipping test." << std::endl;
+            LOG() << "Skipping test: Only 1 Shader Engine present." << std::endl;
             return;
         }
 
@@ -731,7 +731,7 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
             ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
     } else {
-        LOG() << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
     }
 
     TEST_END
@@ -741,7 +741,7 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
     TEST_START(TESTPROFILE_RUNALL);
 
     if (m_FamilyId < FAMILY_VI) {
-        LOG() << "Skipping test: Shader won't run on CI" << std::endl;
+        LOG() << "Skipping test: Shader won't run on CI." << std::endl;
         return;
     }
 
@@ -806,7 +806,7 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
     TEST_START(TESTPROFILE_RUNALL);
 
     if (m_FamilyId < FAMILY_VI) {
-        LOG() << "Skipping test: Shader won't run on CI" << std::endl;
+        LOG() << "Skipping test: Shader won't run on CI." << std::endl;
         return;
     }
 
@@ -1274,7 +1274,7 @@ TEST_F(KFDQMTest, Atomics) {
     TEST_START(TESTPROFILE_RUNALL);
     /* CI doesn't support Atomics. KV does, but gets its own FAMILY_KV def */
     if (m_FamilyId == FAMILY_CI) {
-        LOG() << "Skipping test: CI doesn't support Atomics" << std::endl;
+        LOG() << "Skipping test: CI doesn't support Atomics." << std::endl;
         return;
     }
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
@@ -1388,13 +1388,13 @@ static void sdma_fill(HSAint32 node, void *dst, unsigned int data, unsigned int 
 TEST_F(KFDQMTest, P2PTest) {
     TEST_START(TESTPROFILE_RUNALL);
     if (!is_dgpu()) {
-        LOG() << "Skipping test: Can't have 2 APUs on the same system" << std::endl;
+        LOG() << "Skipping test: Two GPUs are required, but no dGPUs are present." << std::endl;
         return;
     }
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two GPUs" << std::endl;
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
         return;
     }
     std::vector<HSAuint32> nodes;
@@ -1419,11 +1419,11 @@ TEST_F(KFDQMTest, P2PTest) {
         nodes.push_back(g_TestNodeId);
         nodes.push_back(g_TestDstNodeId);
         if (!m_NodeInfo.IsGPUNodeLargeBar(nodes[1])) {
-            LOG() << "Skipping test: Dst GPU is not a large bar GPU" << std::endl;
+            LOG() << "Skipping test: Dst GPU is not a large bar GPU." << std::endl;
             return;
         }
         if (nodes[0] == nodes[1]) {
-            LOG() << "Skipping test: Need different GPUs specified" << std::endl;
+            LOG() << "Skipping test: Different GPUs must be specified (2 GPUs required)." << std::endl;
             return;
         }
     } else {
@@ -1433,7 +1433,7 @@ TEST_F(KFDQMTest, P2PTest) {
             if (m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i)) && gpuNodes.at(i) != defaultGPU)
                 nodes.push_back(gpuNodes.at(i));
         if (nodes.size() < 2) {
-            LOG() << "Skipping test: Need at least one large bar GPU" << std::endl;
+            LOG() << "Skipping test: Test requires at least one large bar GPU." << std::endl;
             return;
         }
     }

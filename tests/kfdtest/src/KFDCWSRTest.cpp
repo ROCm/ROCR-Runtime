@@ -178,7 +178,7 @@ TEST_F(KFDCWSRTest, BasicTest) {
         delete dispatch2;
 
     } else {
-        LOG() << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
 
     TEST_END

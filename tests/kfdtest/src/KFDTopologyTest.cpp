@@ -116,7 +116,7 @@ TEST_F(KFDTopologyTest, GpuvmApertureValidate) {
         pNodeProperties = m_NodeInfo.GetNodeProperties(GpuNodes.at(i));
         if (pNodeProperties != NULL) {
             if (!is_dgpu() && !(FamilyIdFromNode(pNodeProperties) == FAMILY_KV)) {
-                LOG() << "Skipping test: GPUVM framebuffer heap not exposed on APU except Kaveri" << std::endl;
+                LOG() << "Skipping test: GPUVM framebuffer heap not exposed on APU except Kaveri." << std::endl;
                 return;
             }
             HsaMemoryProperties *memoryProperties =  new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];

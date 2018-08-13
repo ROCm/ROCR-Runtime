@@ -166,7 +166,7 @@ TEST_F(KFDPerfCountersTest, RegisterTrace) {
     }
 
     if (!priv_block_found) {
-        LOG() << "No privileged block is found. Skipping RegisterTrace test."
+        LOG() << "Skipping test: No privileged block is found."
             << std::endl;
         return;
     }
@@ -207,14 +207,13 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
     }
 
     if (!priv_block_found) {
-        LOG() << "No privileged block is found. Skipping StartStopQuery test."
+        LOG() << "Skipping test: No privileged block is found."
              << std::endl;
         return;
     }
 
     if (getuid()) { /* Non-root */
-        LOG() << "Privileged counters requires the user as root." << std::endl
-            << "Skipping StartStopQuery test." << std::endl;
+        LOG() << "Skipping test: Privileged counters requires the user as root." << std::endl;
         return;
     }
 

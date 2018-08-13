@@ -169,7 +169,7 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
         ASSERT_SUCCESS(queue.Destroy());
         ASSERT_SUCCESS(queue_flush.Destroy());
     } else {
-        LOG() << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        LOG() << "Skipping test: Test not supported on family ID 0x" << m_FamilyId << "." << std::endl;
     }
     TEST_END
 }

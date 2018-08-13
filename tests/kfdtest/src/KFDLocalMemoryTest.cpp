@@ -64,7 +64,7 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "No VRAM found, skipping the test" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
@@ -119,7 +119,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "No VRAM found, skipping the test" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
@@ -239,7 +239,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     fbSize = GetVramSize(defaultGPUNode);
 
     if (!fbSize) {
-        LOG() << "No VRAM found, skipping test." << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     } else {
         LOG() << "Found VRAM of " << std::dec << (fbSize >> 20) << "MB." << std::endl;
@@ -396,7 +396,7 @@ TEST_F(KFDLocalMemoryTest, CheckZeroInitializationVram) {
     HSAuint64 vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
 
     if (!vramSizeMB) {
-        LOG() << "No VRAM found, skipping the test" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
@@ -450,7 +450,7 @@ TEST_F(KFDLocalMemoryTest, MapVramToGPUNodesTest) {
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two GPUs" << std::endl;
+        LOG() << "Skipping test: Test requires at least two GPUs." << std::endl;
         return;
     }
 
@@ -462,7 +462,7 @@ TEST_F(KFDLocalMemoryTest, MapVramToGPUNodesTest) {
 
         dst_node = m_NodeInfo.FindLargeBarGPUNode();
         if (dst_node < 0) {
-            LOG() << "Skipping test: Need at least one large bar GPU" << std::endl;
+            LOG() << "Skipping test: Test requires at least one large bar GPU." << std::endl;
             return;
         }
 

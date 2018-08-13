@@ -323,7 +323,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
 
     if (!vramSize) {
-        LOG() << "No VRAM found, skipping the test" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     } else {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
@@ -338,7 +338,7 @@ TEST_F(KFDEvictTest, BasicTest) {
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
-        LOG() << "Skipping test" << std::endl;
+        LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
         return;
     }
 
@@ -516,7 +516,7 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     /* Skip test for chip it doesn't have CWSR, which the test depends on */
     if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties)) {
-        LOG() << std::hex << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        LOG() << std::hex << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
 
@@ -524,7 +524,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
 
     if (!vramSize) {
-        LOG() << "No VRAM found, skipping the test" << std::endl;
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     } else {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
@@ -535,7 +535,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
     if (count == 0) {
-        LOG() << "Not enough system memory, skipping the test" << std::endl;
+        LOG() << "Skipping test: Not enough system memory available." << std::endl;
         return;
     }
     /* assert all buffer address can be stored within one page
@@ -548,7 +548,7 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
-        LOG() << "Skipping test" << std::endl;
+        LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
         return;
     }
 
