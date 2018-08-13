@@ -462,7 +462,7 @@ CMA_TEST_STATUS KFDCMAArray::recvCMAArray(int readPipe) {
 
 
 CMA_TEST_STATUS KFDIPCTest::CrossMemoryAttachChildProcess(int defaultGPUNode, int writePipe,
-                                              int readPipe, CMA_TEST_TYPE testType) {
+                                                          int readPipe, CMA_TEST_TYPE testType) {
     KFDCMAArray cmaLocalArray;
     char msg[16];
     int testNo;
@@ -516,8 +516,8 @@ CMA_TEST_STATUS KFDIPCTest::CrossMemoryAttachChildProcess(int defaultGPUNode, in
 
 
 CMA_TEST_STATUS KFDIPCTest::CrossMemoryAttachParentProcess(int defaultGPUNode, pid_t cid,
-                                                int writePipe, int readPipe,
-                                                CMA_TEST_TYPE testType) {
+                                                           int writePipe, int readPipe,
+                                                           CMA_TEST_TYPE testType) {
     KFDCMAArray cmaLocalArray, cmaRemoteArray;
     HSAuint64 copied = 0;
     int testNo;

@@ -52,7 +52,7 @@ class KFDEvictTest :  public KFDLocalMemoryTest {
  protected:
     std::string CreateShader();
     void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
-                    std::vector<void *> &pBuffers);
+                      std::vector<void *> &pBuffers);
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
     void AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
     void FreeAmdgpuBo(amdgpu_bo_handle handle);

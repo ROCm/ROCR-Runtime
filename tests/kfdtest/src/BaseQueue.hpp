@@ -45,7 +45,7 @@ class BaseQueue {
      *  @param pointers is used only for creating AQL queues. Otherwise it is omitted.
      */
     virtual HSAKMT_STATUS Create(unsigned int NodeId, unsigned int size = DEFAULT_QUEUE_SIZE,
-                                HSAuint64 *pointers = NULL);
+                                 HSAuint64 *pointers = NULL);
     /** Update the queue.
      *  @see hsaKmtUpdateQueue
      *  @param percent the new queue percentage

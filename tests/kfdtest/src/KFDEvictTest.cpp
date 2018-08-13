@@ -35,7 +35,7 @@
 #define ALLOCATE_RETRY_TIMES    (3)
 
 void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
-        std::vector<void *> &pBuffers) {
+                                std::vector<void *> &pBuffers) {
     HSAuint64   totalMB;
 
     totalMB = N_PROCESSES*count*(vramBufSize>>20);

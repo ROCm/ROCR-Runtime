@@ -123,9 +123,9 @@ class KFDIPCTest :  public KFDBaseComponentTest {
 
     /* For CMA testing */
     CMA_TEST_STATUS CrossMemoryAttachChildProcess(int defaultGPUNode, int writePipe,
-                        int readPipe, CMA_TEST_TYPE testType);
+                                                  int readPipe, CMA_TEST_TYPE testType);
     CMA_TEST_STATUS CrossMemoryAttachParentProcess(int defaultGPUNode, pid_t cid,
-                        int writePipe, int readPipe, CMA_TEST_TYPE testType);
+                                                   int writePipe, int readPipe, CMA_TEST_TYPE testType);
  protected:
     pid_t m_ChildPid;
 };
