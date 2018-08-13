@@ -271,7 +271,8 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithNullAddress) {
     // don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF) << "Packet executed even though the queue is supposed to be disabled!";
+    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+        << "Packet executed even though the queue is supposed to be disabled!";
 
     ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
@@ -311,7 +312,8 @@ TEST_F(KFDQMTest, DisableSdmaQueueByUpdateWithNullAddress) {
     // don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF) << "Packet executed even though the queue is supposed to be disabled!";
+    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+        << "Packet executed even though the queue is supposed to be disabled!";
 
     ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
@@ -357,7 +359,8 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
     // don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF) << "Packet executed even though the queue is supposed to be disabled!";
+    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+        << "Packet executed even though the queue is supposed to be disabled!";
 
     ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
@@ -373,13 +376,13 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
 TEST_F(KFDQMTest, CreateQueueStressSingleThreaded) {
     TEST_START(TESTPROFILE_RUNALL)
 
-    static const unsigned long long TEST_TIME_SEC = 15;
+    static const HSAuint64 TEST_TIME_SEC = 15;
 
-    unsigned long long initialTime = GetSystemTickCountInMicroSec();
+    HSAuint64 initialTime = GetSystemTickCountInMicroSec();
 
     unsigned int numIter = 0;
 
-    unsigned long long timePassed = 0;
+    HSAuint64 timePassed = 0;
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -404,7 +407,7 @@ TEST_F(KFDQMTest, CreateQueueStressSingleThreaded) {
         delete queues[1];
         ++numIter;
 
-        unsigned long long curTime = GetSystemTickCountInMicroSec();
+        HSAuint64 curTime = GetSystemTickCountInMicroSec();
         timePassed = (curTime - initialTime) / 1000000;
     } while (timePassed < TEST_TIME_SEC);
 
@@ -553,7 +556,7 @@ s_waitcnt     lgkmcnt(0)\n\
     end\n\
 ";
 
-long long KFDQMTest::TimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t mask_count) {
+HSAint64 KFDQMTest::TimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t mask_count) {
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, node, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, node, true, false, false);
     HsaMemoryBuffer ctlBuffer(PAGE_SIZE, node, true, false, false);
@@ -580,9 +583,9 @@ long long KFDQMTest::TimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t m
 }
 
 /* To cover for outliers, allow us to get the Average time based on a specified number of iterations */
-long long KFDQMTest::GetAverageTimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t mask_count, int iterations) {
-    long long timeArray[iterations];
-    long long timeTotal = 0;
+HSAint64 KFDQMTest::GetAverageTimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t mask_count, int iterations) {
+    HSAint64 timeArray[iterations];
+    HSAint64 timeTotal = 0;
     if (iterations < 1) {
         LOG() << "ERROR: At least 1 iteration must be performed" << std::endl;
         return 0;
@@ -599,9 +602,11 @@ long long KFDQMTest::GetAverageTimeConsumedwithCUMask(int node, uint32_t* mask, 
     }
 
     for (int x = 0; x < iterations; x++) {
-        long long variance = timeArray[x] / (timeTotal / iterations);
+        HSAint64 variance = timeArray[x] / (timeTotal / iterations);
         if (variance < CuNegVariance || variance > CuPosVariance)
-            LOG() << "WARNING: Measurement #" << x << "/" << iterations << " (" << timeArray[x] << ") is at least " << CuVariance*100 << "% away from the mean (" << timeTotal/iterations << ")" << std::endl;
+            LOG() << "WARNING: Measurement #" << x << "/" << iterations << " (" << timeArray[x]
+                  << ") is at least " << CuVariance*100 << "% away from the mean (" << timeTotal/iterations << ")"
+                  << std::endl;
     }
 
     return timeTotal / iterations;
@@ -625,7 +630,7 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
         LOG() << std::hex << "# SIMDs per CPU: 0x" << pNodeProperties->NumSIMDPerCU << std::endl;
         LOG() << std::hex << "# Shader engines: 0x" << numSEs << std::endl;
         LOG() << std::hex << "# Active CUs: 0x" << ActiveCU << std::endl;
-        long long TimewithCU1, TimewithCU;
+        HSAint64 TimewithCU1, TimewithCU;
         uint32_t maskNumDwords = (ActiveCU + 31) / 32; /* Round up to the nearest multiple of 32 */
         uint32_t maskNumBits = maskNumDwords * 32;
         uint32_t mask[maskNumDwords];
@@ -646,10 +651,11 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
             mask[maskIndex] |= 1 << ((nCUs - 1) % 32);
 
             TimewithCU = TimeConsumedwithCUMask(defaultGPUNode, mask, maskNumBits);
-            ratio = (double)TimewithCU1 / ((double)TimewithCU * nCUs);
+            ratio = (double)(TimewithCU1) / ((double)(TimewithCU) * nCUs);
 
             LOG() << "Expected performance of " << nCUs << " CUs vs 1 CU:" << std::endl;
-            LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8) << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
+            LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8)
+                  << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
             ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
@@ -685,7 +691,7 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
         LOG() << std::hex << "# SIMDs per CPU: 0x" << pNodeProperties->NumSIMDPerCU << std::endl;
         LOG() << std::hex << "# Shader engines: 0x" << numShaderEngines << std::endl;
         LOG() << std::hex << "# Active CUs: 0x" << ActiveCU << std::endl;
-        long long TimewithCU1, TimewithCU;
+        HSAint64 TimewithCU1, TimewithCU;
         uint32_t maskNumDwords = (ActiveCU + 31) / 32; /* Round up to the nearest multiple of 32 */
         uint32_t maskNumBits = maskNumDwords * 32;
         uint32_t mask[maskNumDwords];
@@ -716,10 +722,11 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
             int nCUs = numShaderEngines * (x + 1);
 
             TimewithCU = TimeConsumedwithCUMask(defaultGPUNode, mask, maskNumBits);
-            ratio = (double)TimewithCU1 / ((double)TimewithCU * nCUs);
+            ratio = (double)(TimewithCU1) / ((double)(TimewithCU) * nCUs);
 
             LOG() << "Expected performance of " << nCUs << " CUs vs 1 CU:" << std::endl;
-            LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8) << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
+            LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8)
+                  << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
             ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
@@ -945,10 +952,10 @@ TEST_F(KFDQMTest, MultipleCpQueuesStressDispatch) {
     unsigned int* src = srcBuffer.As<unsigned int*>();
     unsigned int* dst = destBuffer.As<unsigned int*>();
 
-    static const unsigned long long TEST_TIME_SEC = 15;
-    unsigned long long initialTime, curTime;
+    static const HSAuint64 TEST_TIME_SEC = 15;
+    HSAuint64 initialTime, curTime;
     unsigned int numIter = 0;
-    unsigned long long timePassed = 0;
+    HSAuint64 timePassed = 0;
 
     unsigned int i;
     PM4Queue queues[MAX_CP_QUEUES];
@@ -1019,7 +1026,8 @@ TEST_F(KFDQMTest, CpuWriteCoherence) {
 
     EXPECT_EQ(0, queue.Rptr());
 
-    // now that the GPU has cached the PQ contents, we modify them in CPU cache and ensure that the GPU sees the updated value:
+    // now that the GPU has cached the PQ contents, we modify them in CPU cache and
+    // ensure that the GPU sees the updated value:
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0x42, 0x42));
 
     queue.Wait4PacketConsumption();
@@ -1046,7 +1054,7 @@ TEST_F(KFDQMTest, CreateAqlCpQueue) {
     TEST_END
 }
 
-#define ALIGN_UP(x,align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
+#define ALIGN_UP(x, align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
 #define CounterToNanoSec(x) ((x) * 1000 / (is_dgpu() ? 27 : 100))
 
 #include<algorithm>
@@ -1056,7 +1064,7 @@ TEST_F(KFDQMTest, QueueLatency) {
 
     PM4Queue queue;
     const int queueSize = PAGE_SIZE * 2;
-    const int packetSize = PM4ReleaseMemoryPacket(0,0,0,0,0).SizeInBytes();
+    const int packetSize = PM4ReleaseMemoryPacket(0, 0, 0, 0, 0).SizeInBytes();
     /* We always leave one NOP(dword) empty after packet which is required by ring itself.
      * We also place NOPs when queue wraparound to avoid crossing buffer end. See PlacePacket().
      * So the worst case is that we need two packetSize space to place one packet.
@@ -1067,16 +1075,16 @@ TEST_F(KFDQMTest, QueueLatency) {
      */
     const int reservedSpace = packetSize + queueSize % packetSize;
     const int slots = (queueSize - reservedSpace) / packetSize;
-    long queue_latency_avg = 0, queue_latency_min, queue_latency_max, queue_latency_med;
-    long overhead, workload;
-    long *queue_latency_arr = (long*)calloc(slots, sizeof(long));
+    HSAint64 queue_latency_avg = 0, queue_latency_min, queue_latency_max, queue_latency_med;
+    HSAint64 overhead, workload;
+    HSAint64 *queue_latency_arr = reinterpret_cast<HSAint64*>(calloc(slots, sizeof(HSAint64)));
     const int skip = 2;
     const char *fs[skip] = {"1st", "2nd"};
     HsaClockCounters *ts;
     HSAuint64 *qts;
     int i = 0;
 
-    ASSERT_NE((unsigned long)queue_latency_arr, 0);
+    ASSERT_NE((unsigned HSAint64)queue_latency_arr, 0);
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -1102,7 +1110,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     i = 0;
     do {
         queue.PlacePacket(PM4ReleaseMemoryPacket(true,
-                    (unsigned long)&qts[i],
+                    (unsigned HSAint64)&qts[i],
                     0,
                     true,
                     1));
@@ -1114,7 +1122,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     /* Calculate timing which includes workload and overhead*/
     i = 0;
     do {
-        long queue_latency = qts[i] - ts[i].GPUClockCounter;
+        HSAint64 queue_latency = qts[i] - ts[i].GPUClockCounter;
 
         ASSERT_GE(queue_latency, 0);
 
@@ -1129,7 +1137,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     i = 0;
     do {
         queue.PlacePacket(PM4ReleaseMemoryPacket(true,
-                    (unsigned long)&qts[i],
+                    (unsigned HSAint64)&qts[i],
                     0,
                     true,
                     1));
@@ -1151,7 +1159,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     do {
         /* The queue_latency is not that correct as the workload and overhead are average*/
         queue_latency_arr[i] -= workload + overhead;
-        /* The First submit takes a long time*/
+        /* The First submit takes a HSAint64 time*/
         if (i < skip)
             LOG() << "Queue Latency " << fs[i] << ": \t" << CounterToNanoSec(queue_latency_arr[i]) << std::endl;
     } while (++i < slots);
@@ -1243,13 +1251,13 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
 }
 
 struct AtomicIncThreadParams {
-    long* pDest;
+    HSAint64* pDest;
     volatile unsigned int count;
     volatile bool stop;
 };
 
 unsigned int AtomicIncThread(void* pCtx) {
-    AtomicIncThreadParams* pArgs = (AtomicIncThreadParams*)pCtx;
+    AtomicIncThreadParams* pArgs = reinterpret_cast<AtomicIncThreadParams*>(pCtx);
 
     while (pArgs->stop)
         {}
@@ -1288,7 +1296,7 @@ TEST_F(KFDQMTest, Atomics) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     AtomicIncThreadParams params;
-    params.pDest = destBuf.As<long*>();
+    params.pDest = destBuf.As<HSAint64*>();
     params.stop = true;
     params.count = 0;
 
@@ -1441,7 +1449,7 @@ TEST_F(KFDQMTest, P2PTest) {
 
     /* 1. Allocate a system buffer and allow the access to GPUs */
     EXPECT_SUCCESS(hsaKmtAllocMemory(0, size, memFlags,
-                                     (void **)&sysBuf));
+                                     reinterpret_cast<void **>(&sysBuf)));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sysBuf, size, NULL,
                                              mapFlags, nodes.size(), &nodes[0]));
 #define MAGIC_NUM 0xdeadbeaf
@@ -1449,7 +1457,7 @@ TEST_F(KFDQMTest, P2PTest) {
     /* First GPU fills mem with MAGIC_NUM*/
     void *src, *dst;
     HSAuint32 cur = nodes[0], next;
-    ASSERT_SUCCESS(hsaKmtAllocMemory(cur, size, memFlags, (void**)&src));
+    ASSERT_SUCCESS(hsaKmtAllocMemory(cur, size, memFlags, reinterpret_cast<void**>(&src)));
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(src, size, NULL));
     sdma_fill(cur, src, MAGIC_NUM, size);
 
@@ -1465,7 +1473,7 @@ TEST_F(KFDQMTest, P2PTest) {
         } else {
             n = 2;
             next = nodes[i];
-            ASSERT_SUCCESS(hsaKmtAllocMemory(next, size, memFlags, (void**)&dst));
+            ASSERT_SUCCESS(hsaKmtAllocMemory(next, size, memFlags, reinterpret_cast<void**>(&dst)));
             ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(dst, size, NULL));
         }
 
@@ -1506,7 +1514,7 @@ TEST_F(KFDQMTest, SdmaEventInterrupt) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    queue.PlaceAndSubmitPacket(SDMAFencePacket((void*)event->EventData.HWData2, event->EventId));
+    queue.PlaceAndSubmitPacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
 
     queue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
 

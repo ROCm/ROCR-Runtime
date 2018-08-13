@@ -28,8 +28,7 @@
 
 /* isa generation class - interface */
 class IsaGenerator {
-
-public:
+ public:
     static IsaGenerator* Create(unsigned int familyId);
 
     virtual ~IsaGenerator() {}
@@ -43,11 +42,11 @@ public:
 
     void CompileShader(const char* shaderCode, const char* shaderName, HsaMemoryBuffer& rBuf);
 
-protected:
+ protected:
     virtual const std::string& GetAsicName() = 0;
 
-private:
+ private:
     static const std::string ADDRESS_WATCH_SP3;
 };
 
-#endif //_ISAGENERATOR_H_
+#endif  // _ISAGENERATOR_H_

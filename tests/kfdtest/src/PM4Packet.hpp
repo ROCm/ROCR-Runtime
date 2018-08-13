@@ -112,7 +112,7 @@ class PM4IndirectBufPacket : public PM4Packet {
     // empty constructor, befor using the packet call the init func
     PM4IndirectBufPacket(void) {}
     // this contructor will also init the packet, no need for adittional calls
-    PM4IndirectBufPacket(IndirectBuffer *pIb);
+    explicit PM4IndirectBufPacket(IndirectBuffer *pIb);
 
     virtual ~PM4IndirectBufPacket(void) {}
     // @returns the packet size in bytes

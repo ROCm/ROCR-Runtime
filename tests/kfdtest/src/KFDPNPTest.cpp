@@ -93,7 +93,8 @@ TEST_F(KFDPNPTest, DisableAndCreateQueue) {
     DisableKfd();
     EnableKfd();
 
-    ASSERT_NE(HSAKMT_STATUS_SUCCESS, queue.Create(defaultGPUNode)) << "Queue creation should fail after a topology change.";
+    ASSERT_NE(HSAKMT_STATUS_SUCCESS, queue.Create(defaultGPUNode))
+        << "Queue creation should fail after a topology change.";
 
     TEST_END
 }

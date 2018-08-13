@@ -57,7 +57,7 @@ void Dispatch::SetDim(unsigned int x, unsigned int y, unsigned int z) {
     m_DimZ = z;
 }
 
-void Dispatch::SetScratch(int numWaves, int waveSize, unsigned long long scratch_base) {
+void Dispatch::SetScratch(int numWaves, int waveSize, HSAuint64 scratch_base) {
     m_ComputeTmpringSize = ((waveSize << 12) | (numWaves));
     m_ScratchEn = true;
     m_scratch_base = scratch_base;
@@ -98,7 +98,7 @@ int Dispatch::SyncWithStatus(unsigned int timeout) {
 }
 
 void Dispatch::BuildIb() {
-    unsigned long long shiftedIsaAddr = m_IsaBuf.As<uint64_t>() >> 8;
+    HSAuint64 shiftedIsaAddr = m_IsaBuf.As<uint64_t>() >> 8;
     unsigned int arg0, arg1, arg2, arg3;
     SplitU64(reinterpret_cast<uint64_t>(m_pArg1), arg0, arg1);
     SplitU64(reinterpret_cast<uint64_t>(m_pArg2), arg2, arg3);
@@ -118,7 +118,7 @@ void Dispatch::BuildIb() {
     unsigned int pgmRsrc2 = 0;
     pgmRsrc2 |= (m_ScratchEn << COMPUTE_PGM_RSRC2__SCRATCH_EN__SHIFT)
             & COMPUTE_PGM_RSRC2__SCRATCH_EN_MASK;
-    pgmRsrc2 |= ((m_scratch_base ? 6 : 4 ) << COMPUTE_PGM_RSRC2__USER_SGPR__SHIFT)
+    pgmRsrc2 |= ((m_scratch_base ? 6 : 4) << COMPUTE_PGM_RSRC2__USER_SGPR__SHIFT)
             & COMPUTE_PGM_RSRC2__USER_SGPR_MASK;
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__TRAP_PRESENT__SHIFT)
             & COMPUTE_PGM_RSRC2__TRAP_PRESENT_MASK;
@@ -132,7 +132,9 @@ void Dispatch::BuildIb() {
             & COMPUTE_PGM_RSRC2__EXCP_EN_MSB_MASK;
 
     const unsigned int COMPUTE_PGM_RSRC[] = {
-        0x000c0084 | ((m_SpiPriority & 3) << 10),         // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0 PRIV: 0 DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
+        // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0 PRIV: 0
+        // DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
+        0x000c0084 | ((m_SpiPriority & 3) << 10),
         pgmRsrc2
     };
 
@@ -200,18 +202,24 @@ void Dispatch::BuildIb() {
 
     m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket());
 
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_START_X, COMPUTE_DISPATCH_DIMS_VALUES,  ARRAY_SIZE(COMPUTE_DISPATCH_DIMS_VALUES)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_START_X, COMPUTE_DISPATCH_DIMS_VALUES,
+                                                  ARRAY_SIZE(COMPUTE_DISPATCH_DIMS_VALUES)));
 
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_LO,
         (g_TestGPUFamilyId >= FAMILY_AI) ? COMPUTE_PGM_VALUES_GFX9 : COMPUTE_PGM_VALUES_GFX8,
         (g_TestGPUFamilyId >= FAMILY_AI) ? ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX9) : ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX8)));
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC1, COMPUTE_PGM_RSRC, ARRAY_SIZE(COMPUTE_PGM_RSRC)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC1, COMPUTE_PGM_RSRC,
+                                                  ARRAY_SIZE(COMPUTE_PGM_RSRC)));
 
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_RESOURCE_LIMITS, COMPUTE_RESOURCE_LIMITS, ARRAY_SIZE(COMPUTE_RESOURCE_LIMITS)));
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_TMPRING_SIZE, COMPUTE_TMPRING_SIZE, ARRAY_SIZE(COMPUTE_TMPRING_SIZE)));
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_RESTART_X, COMPUTE_RESTART_VALUES, ARRAY_SIZE(COMPUTE_RESTART_VALUES)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_RESOURCE_LIMITS, COMPUTE_RESOURCE_LIMITS,
+                                                  ARRAY_SIZE(COMPUTE_RESOURCE_LIMITS)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_TMPRING_SIZE, COMPUTE_TMPRING_SIZE,
+                                                  ARRAY_SIZE(COMPUTE_TMPRING_SIZE)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_RESTART_X, COMPUTE_RESTART_VALUES,
+                                                  ARRAY_SIZE(COMPUTE_RESTART_VALUES)));
 
-    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_USER_DATA_0, COMPUTE_USER_DATA_VALUES, ARRAY_SIZE(COMPUTE_USER_DATA_VALUES)));
+    m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_USER_DATA_0, COMPUTE_USER_DATA_VALUES,
+                                                  ARRAY_SIZE(COMPUTE_USER_DATA_VALUES)));
 
     m_IndirectBuf.AddPacket(PM4DispatchDirectPacket(m_DimX, m_DimY, m_DimZ, DISPATCH_INIT_VALUE));
 

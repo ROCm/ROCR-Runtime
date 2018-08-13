@@ -43,7 +43,7 @@ bool WaitOnValue(const volatile unsigned int *buf, unsigned int value) {
     return *buf == value;
 }
 
-void SplitU64(const unsigned long long value, unsigned int& rLoPart, unsigned int& rHiPart) {
+void SplitU64(const HSAuint64 value, unsigned int& rLoPart, unsigned int& rHiPart) {
     rLoPart = static_cast<unsigned int>(value);
     rHiPart = static_cast<unsigned int>(value >> 32);
 }
@@ -125,7 +125,8 @@ bool isTonga(const HsaNodeProperties *props) {
 
 const HsaMemoryBuffer HsaMemoryBuffer::Null;
 
-HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, bool isLocal, bool isExec, bool isScratch, bool isReadOnly)
+HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, bool isLocal, bool isExec,
+                                 bool isScratch, bool isReadOnly)
     :m_Size(size),
     m_pUser(NULL),
     m_pBuf(NULL),
@@ -153,7 +154,7 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
     if (isReadOnly)
         m_Flags.ui32.ReadOnly = 1;
 
-    EXPECT_SUCCESS(hsaKmtAllocMemory( m_Node, m_Size, m_Flags, &m_pBuf));
+    EXPECT_SUCCESS(hsaKmtAllocMemory(m_Node, m_Size, m_Flags, &m_pBuf));
     if (is_dgpu()) {
         EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(m_pBuf, m_Size, NULL));
         m_MappedNodes = 1 << m_Node;
@@ -189,9 +190,9 @@ void HsaMemoryBuffer::Fill(unsigned char value, HSAuint64 offset, HSAuint64 size
     ASSERT_TRUE(size + offset <= m_Size) << "Buffer Overflow" << std::endl;
 
     if (m_pUser != NULL)
-        memset((char *)m_pUser + offset, value, size);
+        memset(reinterpret_cast<char *>(m_pUser) + offset, value, size);
     else if (m_pBuf != NULL)
-        memset((char *)m_pBuf + offset, value, size);
+        memset(reinterpret_cast<char *>(m_pBuf) + offset, value, size);
     else
         ASSERT_TRUE(0) << "Invalid HsaMemoryBuffer";
 }
@@ -207,9 +208,9 @@ void HsaMemoryBuffer::Fill(HSAuint32 value, HSAuint64 offset, HSAuint64 size) {
     ASSERT_TRUE(size + offset <= m_Size) << "Buffer Overflow" << std::endl;
 
     if (m_pUser != NULL)
-        ptr = (HSAuint32 *)((char *)m_pUser + offset);
+        ptr = reinterpret_cast<HSAuint32 *>(reinterpret_cast<char *>(m_pUser) + offset);
     else if (m_pBuf != NULL)
-        ptr = (HSAuint32 *)((char *)m_pBuf + offset);
+        ptr = reinterpret_cast<HSAuint32 *>(reinterpret_cast<char *>(m_pBuf) + offset);
 
     ASSERT_NOTNULL(ptr);
 
@@ -229,8 +230,8 @@ void HsaMemoryBuffer::Fill(HSAuint32 value, BaseQueue& baseQueue, HSAuint64 offs
     size = size ? size : m_Size;
     ASSERT_TRUE(size + offset <= m_Size) << "Buffer Overflow" << std::endl;
 
-    baseQueue.PlacePacket(SDMAFillDataPacket((void *)(this->As<char*>() + offset), value, size));
-    baseQueue.PlacePacket(SDMAFencePacket((void*)event->EventData.HWData2, event->EventId));
+    baseQueue.PlacePacket(SDMAFillDataPacket((reinterpret_cast<void *>(this->As<char*>() + offset)), value, size));
+    baseQueue.PlacePacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
     baseQueue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
     ASSERT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
 
@@ -250,9 +251,9 @@ bool HsaMemoryBuffer::IsPattern(HSAuint64 location, HSAuint32 pattern) {
         return false;
 
     if (m_pUser != NULL)
-        ptr = (HSAuint32 *)m_pUser;
+        ptr = reinterpret_cast<HSAuint32 *>(m_pUser);
     else if (m_pBuf != NULL)
-        ptr = (HSAuint32 *)m_pBuf;
+        ptr = reinterpret_cast<HSAuint32 *>(m_pBuf);
     else
         return false;
 
@@ -284,9 +285,9 @@ bool HsaMemoryBuffer::IsPattern(HSAuint64 location, HSAuint32 pattern, BaseQueue
 
     *tmp = ~pattern;
     baseQueue.PlacePacket(SDMACopyDataPacket((void *)tmp,
-            (void *)(this->As<HSAuint64>() + location),
+            reinterpret_cast<void *>(this->As<HSAuint64>() + location),
             sizeof(HSAuint32)));
-    baseQueue.PlacePacket(SDMAFencePacket((void*)event->EventData.HWData2,
+    baseQueue.PlacePacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2),
             event->EventId));
     baseQueue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
 
@@ -394,14 +395,15 @@ HsaMemoryBuffer::~HsaMemoryBuffer() {
     m_pBuf = NULL;
 }
 
-HsaInteropMemoryBuffer::HsaInteropMemoryBuffer(unsigned long long device_handle, unsigned long long buffer_handle, unsigned long long size, unsigned int node)
+HsaInteropMemoryBuffer::HsaInteropMemoryBuffer(HSAuint64 device_handle, HSAuint64 buffer_handle,
+                                               HSAuint64 size, unsigned int node)
     :m_Size(0),
      m_pBuf(NULL),
      m_graphic_handle(0),
      m_Node(node) {
     HSAuint64 flat_address;
     EXPECT_SUCCESS(hsaKmtMapGraphicHandle(m_Node, device_handle, buffer_handle, 0, size, &flat_address));
-    m_pBuf = (void*)flat_address;
+    m_pBuf = reinterpret_cast<void*>(flat_address);
 }
 
 HsaInteropMemoryBuffer::~HsaInteropMemoryBuffer() {

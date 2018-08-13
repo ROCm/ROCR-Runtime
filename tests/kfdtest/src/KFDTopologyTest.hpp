@@ -33,8 +33,8 @@ class KFDTopologyTest : public KFDBaseComponentTest {
  public:
     KFDTopologyTest(void) {}
     ~KFDTopologyTest(void) {}
-    static const unsigned long long c_4Gigabyte;
-    static const unsigned long long c_40BitAddressSpace;
+    static const HSAuint64 c_4Gigabyte;
+    static const HSAuint64 c_40BitAddressSpace;
 };
 
 #endif  // __KFD_TOPOLOGY_TEST__H__

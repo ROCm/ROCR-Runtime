@@ -125,7 +125,8 @@ bool BaseQueue::AllPacketsSubmitted() {
 }
 
 void BaseQueue::PlacePacket(const BasePacket &packet) {
-    ASSERT_EQ(packet.PacketType(), PacketTypeSupported()) << "Cannot add a packet since packet type doesn't match queue";
+    ASSERT_EQ(packet.PacketType(), PacketTypeSupported())
+        << "Cannot add a packet since packet type doesn't match queue";
 
     unsigned int readPtr = Rptr();
     unsigned int writePtr = m_pendingWptr;

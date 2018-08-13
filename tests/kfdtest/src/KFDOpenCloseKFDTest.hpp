@@ -34,7 +34,8 @@ class KFDOpenCloseKFDTest : public testing::Test {
     ~KFDOpenCloseKFDTest(void) {}
 
  protected:
-    // @brief SetUp function run before every test that uses KFDOpenCloseKFDTest class fixture, sets all common settings for the tests.
+    // @brief SetUp function run before every test that uses KFDOpenCloseKFDTest class fixture,
+    //        sets all common settings for the tests.
     virtual void SetUp();
     // @brief TearDown function run after every test that uses KFDOpenCloseKFDTest class fixture.
     virtual void TearDown();

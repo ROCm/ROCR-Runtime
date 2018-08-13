@@ -42,7 +42,7 @@ class Dispatch {
 
     int  SyncWithStatus(unsigned int timeout);
 
-    void SetScratch(int numWaves, int waveSize, unsigned long long scratch_base);
+    void SetScratch(int numWaves, int waveSize, HSAuint64 scratch_base);
 
     void SetSpiPriority(unsigned int priority);
 
@@ -68,7 +68,7 @@ class Dispatch {
     bool            m_ScratchEn;
     unsigned int    m_ComputeTmpringSize;
 
-    unsigned long long  m_scratch_base;
+    HSAuint64  m_scratch_base;
     unsigned int m_SpiPriority;
 };
 

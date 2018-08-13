@@ -24,9 +24,6 @@
 #define __KFD_BASE_COMPONENT_TEST__H__
 
 #include <gtest/gtest.h>
-#include "hsakmt.h"
-#include "OSWrapper.hpp"
-#include "KFDTestUtil.hpp"
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -34,6 +31,9 @@
 #include <amdgpu.h>
 #include <amdgpu_drm.h>
 #include <sys/param.h>
+#include "hsakmt.h"
+#include "OSWrapper.hpp"
+#include "KFDTestUtil.hpp"
 
 //  @class KFDBaseComponentTest
 class KFDBaseComponentTest : public testing::Test {
@@ -63,13 +63,17 @@ class KFDBaseComponentTest : public testing::Test {
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;
 
-    // @brief SetUpTestCase function run before the first test that uses KFDOpenCloseKFDTest class fixture, and opens KFD.
+    // @brief SetUpTestCase function run before the first test that uses
+    // KFDOpenCloseKFDTest class fixture, and opens KFD.
     static  void SetUpTestCase();
-    // @brief TearDownTestCase function run after the last test from  KFDOpenCloseKFDTest class fixture and calls close KFD.
+    // @brief TearDownTestCase function run after the last test from
+    // KFDOpenCloseKFDTest class fixture and calls close KFD.
     static  void TearDownTestCase();
-    // @brief SetUp function run before every test that uses KFDOpenCloseKFDTest class fixture, sets all common settings for the tests.
+    // @brief SetUp function run before every test that uses
+    // KFDOpenCloseKFDTest class fixture, sets all common settings for the tests.
     virtual void SetUp();
-    // @brief TearDown function run after every test that uses KFDOpenCloseKFDTest class fixture.
+    // @brief TearDown function run after every test that uses
+    // KFDOpenCloseKFDTest class fixture.
     virtual void TearDown();
 };
 

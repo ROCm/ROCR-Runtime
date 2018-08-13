@@ -125,7 +125,7 @@ class SDMAFencePacket : public SDMAPacket {
 class SDMATrapPacket : public SDMAPacket {
  public:
     // empty constructor, befor using the packet call the init func
-    SDMATrapPacket(unsigned int eventID = 0);
+    explicit SDMATrapPacket(unsigned int eventID = 0);
 
     virtual ~SDMATrapPacket(void);
 

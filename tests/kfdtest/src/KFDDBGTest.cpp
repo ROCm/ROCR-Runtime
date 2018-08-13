@@ -140,18 +140,17 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
         ASSERT_SUCCESS(hsaKmtDbgRegister(defaultGPUNode));
 
         AddressWatchSuccess = hsaKmtDbgAddressWatch(
-                defaultGPUNode,              // IN
-                2,                           // # watch points
-                &WatchMode[0],               // IN
-                (void **) &WatchAddress[0],  // IN
-                &WatchMask[0],               // IN, optional
-                NULL                         // IN, optional
-                );
+                defaultGPUNode,                                 // IN
+                2,                                              // # watch points
+                &WatchMode[0],                                  // IN
+                reinterpret_cast<void **>(&WatchAddress[0]),    // IN
+                &WatchMask[0],                                  // IN, optional
+                NULL);                                          // IN, optional
 
         EXPECT_EQ(AddressWatchSuccess, HSAKMT_STATUS_SUCCESS);
 
         Dispatch dispatch(isaBuf);
-        dispatch.SetArgs(dstBuf.As<void*>(), (void *)secDstBuf);
+        dispatch.SetArgs(dstBuf.As<void*>(), reinterpret_cast<void *>(secDstBuf));
         dispatch.SetDim(1, 1, 1);
 
         // TODO: use Memory ordering rules w/ atomics

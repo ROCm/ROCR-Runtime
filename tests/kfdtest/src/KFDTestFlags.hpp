@@ -54,12 +54,12 @@ enum ENVCAPS{
 
 enum KfdFamilyId {
     FAMILY_UNKNOWN = 0,
-    FAMILY_CI, // Sea Islands: Hawaii (P), Maui (P), Bonaire (M)
-    FAMILY_KV, // Fusion Kaveri: Spectre, Spooky; Fusion Kabini: Kalindi
-    FAMILY_VI, // Volcanic Islands: Iceland (V), Tonga (M)
-    FAMILY_CZ, // Carrizo, Nolan, Amur
-    FAMILY_AI, // Arctic Islands
-    FAMILY_RV, // Raven
+    FAMILY_CI,  // Sea Islands: Hawaii (P), Maui (P), Bonaire (M)
+    FAMILY_KV,  // Fusion Kaveri: Spectre, Spooky; Fusion Kabini: Kalindi
+    FAMILY_VI,  // Volcanic Islands: Iceland (V), Tonga (M)
+    FAMILY_CZ,  // Carrizo, Nolan, Amur
+    FAMILY_AI,  // Arctic Islands
+    FAMILY_RV,  // Raven
 };
 
 #endif  //  __KFD_TEST_FLAGS__H__
