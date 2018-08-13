@@ -34,7 +34,7 @@ enum LOGTYPE {
 };
 
 class KFDLog{};
-std::ostream& operator << (KFDLog log ,LOGTYPE level);
+std::ostream& operator << (KFDLog log, LOGTYPE level);
 
 // @brief  log additional details, to be displayed in the same format as other google test outputs
 // currently not supported by google test

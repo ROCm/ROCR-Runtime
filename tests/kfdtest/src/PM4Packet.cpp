@@ -21,11 +21,11 @@
  *
  */
 
-#include "PM4Packet.hpp"
-#include "hsakmttypes.h"
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include "PM4Packet.hpp"
+#include "hsakmttypes.h"
 
 #include "asic_reg/gfx_7_2_enum.h"
 
@@ -52,7 +52,7 @@ unsigned int PM4WriteDataPacket::SizeInBytes() const {
 }
 
 void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
-    m_pPacketData = (PM4WRITE_DATA_CI *)calloc(1, SizeInBytes());
+    m_pPacketData = reinterpret_cast<PM4WRITE_DATA_CI *>(calloc(1, SizeInBytes()));
     // verify that the memory is allocated successfully, cannot use assert here
     EXPECT_NOTNULL(m_pPacketData);
 
@@ -84,7 +84,7 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
         PM4_RELEASE_MEM_CI *pkt;
 
         m_packetSize = sizeof(PM4_RELEASE_MEM_CI);
-        pkt = (PM4_RELEASE_MEM_CI *)calloc(1, m_packetSize);
+        pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(calloc(1, m_packetSize));
         m_pPacketData = pkt;
                 EXPECT_NOTNULL(m_pPacketData);
 
@@ -147,7 +147,7 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
         PM4MEC_RELEASE_MEM_AI *pkt;
 
         m_packetSize = sizeof(PM4MEC_RELEASE_MEM_AI);
-        pkt = (PM4MEC_RELEASE_MEM_AI *)calloc(1, m_packetSize);
+        pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(calloc(1, m_packetSize));
         m_pPacketData = pkt;
                 EXPECT_NOTNULL(m_pPacketData);
 
@@ -233,7 +233,8 @@ PM4SetShaderRegPacket::PM4SetShaderRegPacket(void)
     : m_packetDataAllocated(false) {
 }
 
-PM4SetShaderRegPacket::PM4SetShaderRegPacket(unsigned int baseOffset, const unsigned int regValues[], unsigned int numRegs)
+PM4SetShaderRegPacket::PM4SetShaderRegPacket(unsigned int baseOffset, const unsigned int regValues[],
+                                             unsigned int numRegs)
     : m_packetDataAllocated(false) {
     InitPacket(baseOffset, regValues, numRegs);
 }
@@ -243,11 +244,15 @@ PM4SetShaderRegPacket::~PM4SetShaderRegPacket(void) {
         free(m_pPacketData);
 }
 
-void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned int regValues[], unsigned int numRegs) {
-    m_packetSize = sizeof(PM4SET_SH_REG) + (numRegs-1)*sizeof(uint32_t);  // 1st register is a part of the packet struct.
+void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned int regValues[],
+                                       unsigned int numRegs) {
+    // 1st register is a part of the packet struct.
+    m_packetSize = sizeof(PM4SET_SH_REG) + (numRegs-1)*sizeof(uint32_t);
 
-    // allocating the size of the packet, since the packet is assembled from a struct followed by an additional DWORD data
-    m_pPacketData = (PM4SET_SH_REG *)malloc(m_packetSize);
+    /* allocating the size of the packet, since the packet is assembled from a struct
+     * followed by an additional DWORD data
+     */
+    m_pPacketData = reinterpret_cast<PM4SET_SH_REG *>(malloc(m_packetSize));
 
     ASSERT_NOTNULL(m_pPacketData);
 
@@ -262,11 +267,13 @@ void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned i
     memcpy(m_pPacketData->reg_data, regValues, numRegs*sizeof(uint32_t));
 }
 
-PM4DispatchDirectPacket::PM4DispatchDirectPacket(unsigned int dimX, unsigned int dimY, unsigned int dimZ, unsigned int dispatchInit) {
+PM4DispatchDirectPacket::PM4DispatchDirectPacket(unsigned int dimX, unsigned int dimY,
+                                                 unsigned int dimZ, unsigned int dispatchInit) {
     InitPacket(dimX, dimY, dimZ, dispatchInit);
 }
 
-void PM4DispatchDirectPacket::InitPacket(unsigned int dimX, unsigned int dimY, unsigned int dimZ, unsigned int dispatchInit) {
+void PM4DispatchDirectPacket::InitPacket(unsigned int dimX, unsigned int dimY, unsigned int dimZ,
+                                         unsigned int dispatchInit) {
     memset(&m_packetData, 0, SizeInBytes());
     InitPM4Header(m_packetData.header, IT_DISPATCH_DIRECT);
 

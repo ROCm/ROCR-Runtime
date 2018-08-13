@@ -136,7 +136,7 @@ class QueueAndSignalBenchmark {
         uint64_t startTime;
         PM4Queue queue;
 
-        HsaEvent** pHsaEvent = (HsaEvent**) calloc(eventCount, sizeof(HsaEvent*));
+        HsaEvent** pHsaEvent = reinterpret_cast<HsaEvent**>(calloc(eventCount, sizeof(HsaEvent*)));
         size_t packetSize = PM4ReleaseMemoryPacket(false, 0, 0).SizeInBytes();
         int qSize = fmax(PAGE_SIZE, pow2_round_up(packetSize*eventCount + 1));
 
@@ -268,7 +268,8 @@ TEST_F(KFDEventTest, SignalMultipleEventsWaitForAll) {
 
     unsigned int pktSizeDwords = 0;
     for (i = 0; i < EVENT_NUMBER; i++) {
-        queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false, pHsaEvent[i]->EventData.HWData2, pHsaEvent[i]->EventId));
+        queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false, pHsaEvent[i]->EventData.HWData2,
+                                   pHsaEvent[i]->EventId));
         queue.Wait4PacketConsumption();
 
         Delay(WAIT_BETWEEN_SUBMISSIONS_MS);

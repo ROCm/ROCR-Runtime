@@ -85,7 +85,7 @@ void KFDExceptionTest::TestMemoryException(int defaultGPUNode, HSAuint64 pSrc,
     }
 
     dispatch.SetDim(dimX, dimY, dimZ);
-    dispatch.SetArgs((void *)pSrc, (void *)pDst);
+    dispatch.SetArgs(reinterpret_cast<void *>(pSrc), reinterpret_cast<void *>(pDst));
     dispatch.Submit(queue);
 
     m_ChildStatus = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);

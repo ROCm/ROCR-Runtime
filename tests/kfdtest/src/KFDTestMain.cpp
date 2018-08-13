@@ -42,7 +42,7 @@ std::ostream& operator << (std::ostream& out, TESTPROFILE profile) {
         break;
     default:
         out << "INVALID";
-    };
+    }
 
     return out;
 }
@@ -71,7 +71,8 @@ GTEST_API_ int main(int argc, char **argv) {
     bool success = GetCommandLineArguments(argc, argv, args);
 
     if (success) {
-        if ((GetHwCapabilityHWS() || args.HwsEnabled == HWCAP__FORCE_ENABLED) && (args.HwsEnabled != HWCAP__FORCE_DISABLED))
+        if ((GetHwCapabilityHWS() || args.HwsEnabled == HWCAP__FORCE_ENABLED) &&
+                (args.HwsEnabled != HWCAP__FORCE_DISABLED))
             g_TestENVCaps |= ENVCAPS_HWSCHEDULING;
 
         g_TestRunProfile = args.TestProfile;

@@ -36,7 +36,7 @@ class BaseQueue;
 // @brief: waits until the value is written to the buffer or until time out if received through args
 bool WaitOnValue(const volatile unsigned int *buf, unsigned int value);
 
-void SplitU64(const unsigned long long value, unsigned int& rLoPart, unsigned int& rHiPart);
+void SplitU64(const HSAuint64 value, unsigned int& rLoPart, unsigned int& rHiPart);
 
 bool GetHwCapabilityHWS();
 
@@ -106,14 +106,14 @@ class HsaMemoryBuffer {
     void* m_pBuf;
     bool m_Local;
     unsigned int m_Node;
-    unsigned short m_MappedNodes;
+    HSAuint64 m_MappedNodes;
 };
 
 
 
 class HsaInteropMemoryBuffer {
  public:
-    HsaInteropMemoryBuffer(unsigned long long device_handle, unsigned long long buffer_handle, unsigned long long size, unsigned int node);
+    HsaInteropMemoryBuffer(HSAuint64 device_handle, HSAuint64 buffer_handle, HSAuint64 size, unsigned int node);
 
     template<typename RetType>
     RetType As() {
@@ -135,9 +135,9 @@ class HsaInteropMemoryBuffer {
     const HsaInteropMemoryBuffer& operator=(const HsaInteropMemoryBuffer&);
 
  private:
-    unsigned long long m_Size;
+    HSAuint64 m_Size;
     void* m_pBuf;
-    unsigned long long m_graphic_handle;
+    HSAuint64 m_graphic_handle;
     unsigned int m_Node;
 };
 

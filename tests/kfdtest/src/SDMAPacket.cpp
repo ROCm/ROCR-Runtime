@@ -59,12 +59,12 @@ void SDMAWriteDataPacket::InitPacket(void* destAddr, unsigned int ndw,
                                      void *data) {
     packetSize = sizeof(SDMA_PKT_WRITE_UNTILED) +
         (ndw - 1) * sizeof(unsigned int);
-    packetData = (SDMA_PKT_WRITE_UNTILED *)calloc(1, packetSize);
+    packetData = reinterpret_cast<SDMA_PKT_WRITE_UNTILED *>(calloc(1, packetSize));
 
     packetData->HEADER_UNION.op = SDMA_OP_WRITE;
     packetData->HEADER_UNION.sub_op = SDMA_SUBOP_WRITE_LINEAR;
 
-    SplitU64(reinterpret_cast<unsigned long long>(destAddr),
+    SplitU64(reinterpret_cast<HSAuint64>(destAddr),
              packetData->DST_ADDR_LO_UNION.DW_1_DATA,  // dst_addr_31_0
              packetData->DST_ADDR_HI_UNION.DW_2_DATA);  // dst_addr_63_32
 
@@ -80,7 +80,7 @@ SDMACopyDataPacket::~SDMACopyDataPacket(void) {
 
 SDMACopyDataPacket::SDMACopyDataPacket(void *const dsts[], void *src, int n, unsigned int surfsize) {
     int32_t size = 0, i;
-    void **dst = (void**)malloc(sizeof(void*) * n);
+    void **dst = reinterpret_cast<void**>(malloc(sizeof(void*) * n));
     const int singlePacketSize = sizeof(SDMA_PKT_COPY_LINEAR) +
                         sizeof(SDMA_PKT_COPY_LINEAR::DST_ADDR[0]) * n;
 
@@ -91,7 +91,7 @@ SDMACopyDataPacket::SDMACopyDataPacket(void *const dsts[], void *src, int n, uns
 
     packetSize = ((surfsize + TWO_MEG - 1) >> BITS) * singlePacketSize;
 
-    SDMA_PKT_COPY_LINEAR *pSDMA = (SDMA_PKT_COPY_LINEAR *)malloc(packetSize);
+    SDMA_PKT_COPY_LINEAR *pSDMA = reinterpret_cast<SDMA_PKT_COPY_LINEAR *>(malloc(packetSize));
     packetData = pSDMA;
 
     while (surfsize > 0) {
@@ -106,19 +106,19 @@ SDMACopyDataPacket::SDMACopyDataPacket(void *const dsts[], void *src, int n, uns
         pSDMA->HEADER_UNION.sub_op       = SDMA_SUBOP_COPY_LINEAR;
         pSDMA->HEADER_UNION.broadcast       = n > 1 ? 1 : 0;
         pSDMA->COUNT_UNION.count             = SDMA_COUNT(size);
-        SplitU64(reinterpret_cast<unsigned long long>(src),
+        SplitU64(reinterpret_cast<HSAuint64>(src),
                  pSDMA->SRC_ADDR_LO_UNION.DW_3_DATA,  // src_addr_31_0
                  pSDMA->SRC_ADDR_HI_UNION.DW_4_DATA);  // src_addr_63_32
 
         for (i = 0; i < n; i++)
-            SplitU64(reinterpret_cast<unsigned long long>(dst[i]),
+            SplitU64(reinterpret_cast<HSAuint64>(dst[i]),
                     pSDMA->DST_ADDR[i].DST_ADDR_LO_UNION.DW_5_DATA,  // dst_addr_31_0
                     pSDMA->DST_ADDR[i].DST_ADDR_HI_UNION.DW_6_DATA);  // dst_addr_63_32
 
-        pSDMA = (SDMA_PKT_COPY_LINEAR *)((char *)pSDMA + singlePacketSize);
+        pSDMA = reinterpret_cast<SDMA_PKT_COPY_LINEAR *>(reinterpret_cast<char *>(pSDMA) + singlePacketSize);
         for (i = 0; i < n; i++)
-            dst[i] = (char *)dst[i] + size;
-        src = (char *)src + size;
+            dst[i] = reinterpret_cast<char *>(dst[i]) + size;
+        src = reinterpret_cast<char *>(src) + size;
         surfsize -= size;
     }
     free(dst);
@@ -138,7 +138,7 @@ SDMAFillDataPacket::SDMAFillDataPacket(void *dst, unsigned int data, unsigned in
 
     /* SDMA support maximum 0x3fffe0 byte in one copy. Use 2M copy_size */
     m_PacketSize = ((size + TWO_MEG - 1) >> BITS) * sizeof(SDMA_PKT_CONSTANT_FILL);
-    pSDMA = (SDMA_PKT_CONSTANT_FILL *)calloc(1, m_PacketSize);
+    pSDMA = reinterpret_cast<SDMA_PKT_CONSTANT_FILL *>(calloc(1, m_PacketSize));
     m_PacketData = pSDMA;
 
     while (size > 0) {
@@ -158,14 +158,14 @@ SDMAFillDataPacket::SDMAFillDataPacket(void *dst, unsigned int data, unsigned in
 
         pSDMA->COUNT_UNION.count = SDMA_COUNT(copy_size);
 
-        SplitU64(reinterpret_cast<unsigned long long>(dst),
+        SplitU64(reinterpret_cast<HSAuint64>(dst),
             pSDMA->DST_ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
             pSDMA->DST_ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
 
         pSDMA->DATA_UNION.DW_3_DATA = data;
         pSDMA++;
 
-        dst = (char *)dst + copy_size;
+        dst = reinterpret_cast<char *>(dst) + copy_size;
         size -= copy_size;
     }
 }
@@ -185,7 +185,7 @@ void SDMAFencePacket::InitPacket(void* destAddr, unsigned int data) {
 
     packetData.HEADER_UNION.op = SDMA_OP_FENCE;
 
-    SplitU64(reinterpret_cast<unsigned long long>(destAddr),
+    SplitU64(reinterpret_cast<HSAuint64>(destAddr),
              packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
              packetData.ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
 

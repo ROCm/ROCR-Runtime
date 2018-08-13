@@ -70,7 +70,8 @@ static struct block_name_table {
     {"DRIVER ", {0xea9b5ae1, 0x6c3f, 0x44b3, 0x89, 0x54, 0xda, 0xf0, 0x75, 0x65, 0xa9, 0xa}}
 };
 
-void KFDPerfCountersTest::GetBlockName(HSA_UUID uuid, char *name, uint32_t name_len, char *uuid_str, uint32_t uuid_str_len) {
+void KFDPerfCountersTest::GetBlockName(HSA_UUID uuid, char *name, uint32_t name_len,
+                                       char *uuid_str, uint32_t uuid_str_len) {
     uint32_t i, table_size;
 
     table_size = sizeof(block_lookup_table) / sizeof(struct block_name_table);
@@ -134,7 +135,7 @@ TEST_F(KFDPerfCountersTest, GetCounterProperties) {
 
         LOG() << name << " (" << uuid_string << "): " << type << ", " <<
             block->NumCounters << " counter IDs" << std::endl;
-        block = (HsaCounterBlockProperties *)&block->Counters[block->NumCounters];
+        block = reinterpret_cast<HsaCounterBlockProperties *>(&block->Counters[block->NumCounters]);
     }
 
     TEST_END
@@ -161,7 +162,7 @@ TEST_F(KFDPerfCountersTest, RegisterTrace) {
             priv_block_found = true;
             break;
         }
-        block = (HsaCounterBlockProperties *)&block->Counters[block->NumCounters];
+        block = reinterpret_cast<HsaCounterBlockProperties *>(&block->Counters[block->NumCounters]);
     }
 
     if (!priv_block_found) {
@@ -202,7 +203,7 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
             priv_block_found = true;
             break;
         }
-        block = (HsaCounterBlockProperties *)&block->Counters[block->NumCounters];
+        block = reinterpret_cast<HsaCounterBlockProperties *>(&block->Counters[block->NumCounters]);
     }
 
     if (!priv_block_found) {

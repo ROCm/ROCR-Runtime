@@ -77,10 +77,10 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     HSAuint32 *sharedLocalBuffer = NULL;
 
     /* Read from Pipe the shared Handle. Import shared Local Memory */
-    ASSERT_GE(read(pipefd[0], (void*)&sharedHandleLM, sizeof(sharedHandleLM)), 0);
+    ASSERT_GE(read(pipefd[0], reinterpret_cast<void*>(&sharedHandleLM), sizeof(sharedHandleLM)), 0);
 
     ASSERT_SUCCESS(hsaKmtRegisterSharedHandle(&sharedHandleLM,
-                  (void**)&sharedLocalBuffer, &sharedSize));
+                  reinterpret_cast<void**>(&sharedLocalBuffer), &sharedSize));
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(sharedLocalBuffer, sharedSize, NULL));
 
     /* Check for pattern in the shared Local Memory */
@@ -128,7 +128,7 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
     /* Share it with the child process */
     ASSERT_SUCCESS(hsaKmtShareMemory(toShareLocalBuffer.As<void*>(), size, &sharedHandleLM));
 
-    ASSERT_GE(write(pipefd[1], (void*)&sharedHandleLM, sizeof(sharedHandleLM)), 0);
+    ASSERT_GE(write(pipefd[1], reinterpret_cast<void*>(&sharedHandleLM), sizeof(sharedHandleLM)), 0);
 
     /* Wait for the child to finish */
     waitpid(cpid, &status, 0);
@@ -413,7 +413,7 @@ static int read_non_block(int fd, void *buf, int size) {
     int total_bytes = 0, cur_bytes = 0;
     int retries = 5;
     struct timespec tm = { 0, 100000000ULL };
-    char *ptr = (char *)buf;
+    char *ptr = reinterpret_cast<char *>(buf);
 
     do {
         cur_bytes = read(fd, ptr, (size - total_bytes));
@@ -439,7 +439,7 @@ static int read_non_block(int fd, void *buf, int size) {
 
 /* Send HsaMemoryRange to another process that is connected via writePipe */
 CMA_TEST_STATUS KFDCMAArray::sendCMAArray(int writePipe) {
-    if (write_non_block(writePipe, (void*)&m_HsaMemoryRange, sizeof(m_HsaMemoryRange)) !=
+    if (write_non_block(writePipe, reinterpret_cast<void*>(&m_HsaMemoryRange), sizeof(m_HsaMemoryRange)) !=
                 sizeof(m_HsaMemoryRange))
         return CMA_IPC_PIPE_ERROR;
     return CMA_TEST_SUCCESS;
@@ -449,7 +449,7 @@ CMA_TEST_STATUS KFDCMAArray::sendCMAArray(int writePipe) {
 CMA_TEST_STATUS KFDCMAArray::recvCMAArray(int readPipe) {
     int i;
 
-    if (read_non_block(readPipe, (void*)&m_HsaMemoryRange, sizeof(m_HsaMemoryRange)) !=
+    if (read_non_block(readPipe, reinterpret_cast<void*>(&m_HsaMemoryRange), sizeof(m_HsaMemoryRange)) !=
                 sizeof(m_HsaMemoryRange))
         return CMA_IPC_PIPE_ERROR;
 
@@ -704,10 +704,13 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     HSAuint32 expected_pattern;
 
     srcRange.MemoryAddress = testLocalBuffer.As<void*>();
-    srcRange.SizeInBytes = size; /* Deliberately set to value > unaligned_size. Only unaligned_size
-                                  * should be copied since dstRange.SizeInBytes == unaligned_size
-                                  */
-    dstRange.MemoryAddress = (void *)(testLocalBuffer.As<char*>() + (size / 2) + unaligned_offset);
+
+    /* Deliberately set to value > unaligned_size. Only unaligned_size
+     * should be copied since dstRange.SizeInBytes == unaligned_size
+     */
+    srcRange.SizeInBytes = size;
+
+    dstRange.MemoryAddress = reinterpret_cast<void *>(testLocalBuffer.As<char*>() + (size / 2) + unaligned_offset);
     dstRange.SizeInBytes = unaligned_size;
     ASSERT_SUCCESS(hsaKmtProcessVMRead(getpid(), &dstRange, 1, &srcRange, 1, &copied));
     ASSERT_EQ(copied, unaligned_size);
@@ -719,7 +722,7 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     /* Test3. Test overflow and expect failure */
     srcRange.MemoryAddress = testLocalBuffer.As<void*>();
     srcRange.SizeInBytes = size;
-    dstRange.MemoryAddress = (void *)(testLocalBuffer.As<char*>() + 4);
+    dstRange.MemoryAddress = reinterpret_cast<void *>(testLocalBuffer.As<char*>() + 4);
     dstRange.SizeInBytes = size; /* This should overflow since offset is VA + 4 */
     status = hsaKmtProcessVMRead(getpid(), &dstRange, 1, &srcRange, 1, &copied);
     EXPECT_NE(status, HSAKMT_STATUS_SUCCESS);

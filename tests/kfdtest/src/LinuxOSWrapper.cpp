@@ -41,7 +41,9 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 
-static int protection_flags[8] = {int(PROT_NONE), int(PROT_READ), int(PROT_WRITE), int(PROT_READ | PROT_WRITE), int(PROT_EXEC), int(PROT_EXEC | PROT_READ), int(PROT_EXEC | PROT_WRITE), int(PROT_EXEC | PROT_WRITE | PROT_READ)};
+static int protection_flags[8] = {PROT_NONE, PROT_READ, PROT_WRITE, PROT_READ | PROT_WRITE,
+                                  PROT_EXEC, PROT_EXEC | PROT_READ, PROT_EXEC | PROT_WRITE,
+                                  PROT_EXEC | PROT_WRITE | PROT_READ};
 
 void SetConsoleTextColor(TEXTCOLOR color) {
     // TODO complete
@@ -69,8 +71,8 @@ bool VirtualFreeMemory(void *address, unsigned int size) {
         return false;
 }
 
-unsigned long GetLastErrorNo() {
-    return  errno;
+HSAuint64 GetLastErrorNo() {
+    return errno;
 }
 
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess) {
@@ -78,7 +80,7 @@ bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProc
     return false;
 }
 
-unsigned long long GetSystemTickCountInMicroSec() {
+HSAuint64 GetSystemTickCountInMicroSec() {
     struct timeval t;
     gettimeofday(&t, 0);
     return t.tv_sec * 1000000ULL + t.tv_usec;
@@ -229,7 +231,7 @@ bool WaitForThread(uint64_t threadId) {
     return 0 == pthread_join((pthread_t)threadId, NULL);
 }
 
-long AtomicInc(volatile long* pValue) {
+HSAint64 AtomicInc(volatile HSAint64* pValue) {
     return __sync_add_and_fetch(pValue, 1);
 }
 

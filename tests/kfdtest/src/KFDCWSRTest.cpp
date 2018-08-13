@@ -89,7 +89,8 @@ void KFDCWSRTest::SetUp() {
 
     m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
-    // TODO: Seems in the ISA, I can not get the workitem_id as expected, so I can not set the destination based on workitem_id.
+    // TODO: Seems in the ISA, I can not get the workitem_id as expected, so I can not
+    // set the destination based on workitem_id.
     // Set the wave_num to 1 for now as a workarpound. Will set it to 8 or even 256 in the future.
     wave_number = 1;
 

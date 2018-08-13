@@ -316,7 +316,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
                 break;
             }
 
-            void *bufferEnd = (void *)((unsigned long)pages[order].pointers[p]
+            void *bufferEnd = reinterpret_cast<void *>(reinterpret_cast<unsigned long>(pages[order].pointers[p])
                                        + size - sizeof(unsigned));
             sysBuffer.As<unsigned *>()[0] = ++value;
 
@@ -340,7 +340,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
 
             Dispatch dispatch3(isaBuffer);
             dispatch3.SetArgs(bufferEnd,
-                              (void *)&(sysBuffer.As<unsigned*>()[1]));
+                              reinterpret_cast<void *>(&(sysBuffer.As<unsigned*>()[1])));
             dispatch3.Submit(queue);
             dispatch3.Sync(g_TestTimeOut);
             EXPECT_EQ(value, sysBuffer.As<unsigned *>()[1]);
@@ -349,7 +349,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
         }
         LOG() << "  Got " << pages[order].nPages
               << ", end of last block addr: "
-              << (void *)((unsigned long)pages[order].pointers[p-1] + size - 1)
+              << reinterpret_cast<void *>(reinterpret_cast<unsigned long>(pages[order].pointers[p-1]) + size - 1)
               << std::endl;
 
         // Now free half the memory

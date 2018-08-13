@@ -26,6 +26,7 @@
 #include <string>
 
 #include "KFDTestFlags.hpp"
+#include "hsakmt.h"
 
 #ifndef __OS__WRAPPER__H__
 #define __OS__WRAPPER__H__
@@ -82,19 +83,20 @@ void *VirtualAllocMemory(void *address, unsigned int size, int memProtection = M
 // @brief replacement for windows FreeVirtual func
 bool VirtualFreeMemory(void *address, unsigned int size);
 // @brief retrieve the last error number
-unsigned long GetLastErrorNo();
+HSAuint64 GetLastErrorNo();
 
-long AtomicInc(volatile long* pValue);
+HSAint64 AtomicInc(volatile HSAint64* pValue);
 
 void MemoryBarrier();
 
 // @brief: runs the selected test case number of times required, each in a separate process
-// @params testToRun : can be a specific test testcase like TestCase.TestName or if you want to run all tests in a test case: TestCase.* and so on
+// @params testToRun : can be a specific test testcase like TestCase.TestName or if you want
+// to run all tests in a test case: TestCase.* and so on
 // @params numOfProcesses : how many processes to run in parallel
 // @params runsPerProcess : how many iteration a test should do per process, must be a positive number
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess = 1);
 
-unsigned long long GetSystemTickCountInMicroSec();
+HSAuint64 GetSystemTickCountInMicroSec();
 
 /**Put the system to S3/S4 power state and bring it back to S0.
 @return 'true' on success, 'false' on failure.

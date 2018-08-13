@@ -94,14 +94,14 @@ shader ReadMemory\n\
 asic(GFX9)\n\
 type(CS)\n\
 /* Assume src address in s0, s1 and dst address in s2, s3*/\n\
-   s_movk_i32 s18, 0x5678\n\
-   LOOP:\n\
-   s_load_dword s16, s[0:1], 0x0 glc\n\
-   s_cmp_eq_i32 s16, s18\n\
-   s_cbranch_scc0   LOOP\n\
-   s_store_dword s18, s[2:3], 0x0 glc\n\
-   s_endpgm\n\
-   end\n\
+    s_movk_i32 s18, 0x5678\n\
+    LOOP:\n\
+    s_load_dword s16, s[0:1], 0x0 glc\n\
+    s_cmp_eq_i32 s16, s18\n\
+    s_cbranch_scc0   LOOP\n\
+    s_store_dword s18, s[2:3], 0x0 glc\n\
+    s_endpgm\n\
+    end\n\
 ";
 
 void KFDMemoryTest::SetUp() {
@@ -127,7 +127,7 @@ void KFDMemoryTest::TearDown() {
 }
 
 #include <sys/mman.h>
-#define GB(x) ((x)<<30)
+#define GB(x) ((x) << 30)
 
 /*
  * try to map as much as possible system memory to gpu.
@@ -147,17 +147,17 @@ TEST_F(KFDMemoryTest, MMapLarge) {
 
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-    const unsigned long nObjects = 1<<14;
+    const HSAuint64 nObjects = 1<<14;
     HSAuint64 *AlternateVAGPU = new HSAuint64[nObjects];
-    ASSERT_NE((unsigned long)AlternateVAGPU, 0);
+    ASSERT_NE((HSAuint64)AlternateVAGPU, 0);
     HsaMemMapFlags mapFlags = {0};
-    unsigned long s;
+    HSAuint64 s;
     char *addr;
-    unsigned long flags = MAP_ANONYMOUS | MAP_PRIVATE;
+    HSAuint64 flags = MAP_ANONYMOUS | MAP_PRIVATE;
 
     /* Test up to 1TB memory*/
     s = GB(1024ULL) / nObjects;
-    addr = (char*)mmap(0, s, PROT_READ | PROT_WRITE, flags, -1, 0);
+    addr = reinterpret_cast<char*>(mmap(0, s, PROT_READ | PROT_WRITE, flags, -1, 0));
     ASSERT_NE(addr, MAP_FAILED);
     memset(addr, 0, s);
 
@@ -167,7 +167,7 @@ TEST_F(KFDMemoryTest, MMapLarge) {
         if (hsaKmtRegisterMemory(addr + i, s - i))
             break;
         if (hsaKmtMapMemoryToGPUNodes(addr + i, s - i,
-                    &AlternateVAGPU[i], mapFlags, 1, (HSAuint32 *)&defaultGPUNode)) {
+                    &AlternateVAGPU[i], mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode))) {
             hsaKmtDeregisterMemory(addr + i);
             break;
         }
@@ -177,8 +177,8 @@ TEST_F(KFDMemoryTest, MMapLarge) {
             << "GB system memory to gpu" << std::endl;
 
     while (i--) {
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU((void*)AlternateVAGPU[i]));
-        ASSERT_SUCCESS(hsaKmtDeregisterMemory((void*)AlternateVAGPU[i]));
+        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void*>(AlternateVAGPU[i])));
+        ASSERT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void*>(AlternateVAGPU[i])));
     }
 
     munmap(addr, s);
@@ -268,7 +268,8 @@ TEST_F(KFDMemoryTest , MapMemoryToGPU) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode /* system */, PAGE_SIZE, m_MemoryFlags, (void**)&pDb));
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode /* system */, PAGE_SIZE, m_MemoryFlags,
+                   reinterpret_cast<void**>(&pDb)));
     // verify that pDb is not null before it's being used
     ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(pDb, PAGE_SIZE, NULL));
@@ -292,7 +293,8 @@ TEST_F(KFDMemoryTest, ZeroMemorySizeAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
     unsigned int* pDb = NULL;
-    EXPECT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtAllocMemory(0 /* system */, 0, m_MemoryFlags, (void**)&pDb));
+    EXPECT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtAllocMemory(0 /* system */, 0, m_MemoryFlags,
+              reinterpret_cast<void**>(&pDb)));
 
     TEST_END
 }
@@ -302,7 +304,7 @@ TEST_F(KFDMemoryTest, MemoryAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
     unsigned int* pDb = NULL;
-    EXPECT_SUCCESS(hsaKmtAllocMemory(0 /* system */, PAGE_SIZE, m_MemoryFlags, (void**)&pDb));
+    EXPECT_SUCCESS(hsaKmtAllocMemory(0 /* system */, PAGE_SIZE, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
 
     TEST_END
 }
@@ -340,7 +342,7 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
      * consumed by IOMMU HW. Because of that, a kernel driver workaround
      * is put in place to address that, so we don't need to wait here.
      */
-    //sleep(5);
+    // sleep(5);
 
     VirtualFreeMemory(destBuf, PAGE_SIZE);
 
@@ -472,10 +474,10 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPU((void *)&mem[0], sizeof(HSAuint32),
                                         &gpuva2));
     EXPECT_TRUE(gpuva1 != gpuva2);
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU((void *)gpuva1));
-    EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)gpuva1));
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU((void *)gpuva2));
-    EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)gpuva2));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva1)));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(gpuva1)));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva2)));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(gpuva2)));
 
     /* Same address, same size */
     HsaMemMapFlags memFlags = {0};
@@ -496,20 +498,20 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
                                         sizeof(HSAuint32) * 2,
                                         &gpuva2, memFlags, nGPU, nodes));
     EXPECT_EQ(gpuva1, gpuva2);
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU((void *)gpuva1));
-    EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)gpuva1));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva1)));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(gpuva1)));
     /* Confirm that we still have access to the memory, mem[2] */
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     mem[2] = 0x0;
-    queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)gpuva2,
+    queue.PlaceAndSubmitPacket(PM4WriteDataPacket(reinterpret_cast<unsigned int *>(gpuva2),
                                                   0xdeadbeef));
     queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(true, 0, 0));
     queue.Wait4PacketConsumption();
-    EXPECT_EQ(true, WaitOnValue((unsigned int *)&mem[2], 0xdeadbeef));
+    EXPECT_EQ(true, WaitOnValue((unsigned int *)(&mem[2]), 0xdeadbeef));
     EXPECT_SUCCESS(queue.Destroy());
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU((void *)gpuva2));
-    EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)gpuva2));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva2)));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(gpuva2)));
 
     TEST_END
 }
@@ -535,7 +537,8 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    HsaMemoryBuffer scratchBuffer(SCRATCH_SIZE, defaultGPUNode, false/*zero*/, false/*local*/, false/*exec*/, true /*scratch*/);
+    HsaMemoryBuffer scratchBuffer(SCRATCH_SIZE, defaultGPUNode, false/*zero*/, false/*local*/,
+                                  false/*exec*/, true /*scratch*/);
 
     // Unmap scratch for sub-allocation mapping tests
     ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<void*>()));
@@ -576,7 +579,8 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     if (pNodeProperties != NULL) {
         // Get the aperture of the scratch buffer
         HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
-        EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(defaultGPUNode, pNodeProperties->NumMemoryBanks, memoryProperties));
+        EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(defaultGPUNode, pNodeProperties->NumMemoryBanks,
+                       memoryProperties));
 
         for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
             if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_GPU_SCRATCH) {
@@ -684,14 +688,14 @@ void KFDMemoryTest::BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granular
         sizeMB = (lowMB + highMB) / 2;
         size = sizeMB * 1024 * 1024;
         ret = hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags,
-                                (void**)&pDb);
+                                reinterpret_cast<void**>(&pDb));
         if (ret) {
             highMB = sizeMB;
             continue;
         }
 
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
-                        mapFlags, 1, (HSAuint32 *)&defaultGPUNode);
+                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
             ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
             highMB = sizeMB;
@@ -740,14 +744,14 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
         sizeMB = (lowMB + highMB) / 2;
         size = sizeMB * 1024 * 1024;
         ret = hsaKmtAllocMemory(defaultGPUNode, size, memFlags,
-                                (void**)&pDb);
+                                reinterpret_cast<void**>(&pDb));
         if (ret) {
             highMB = sizeMB;
             continue;
         }
 
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
-                        mapFlags, 1, (HSAuint32 *)&defaultGPUNode);
+                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
             ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
             highMB = sizeMB;
@@ -810,13 +814,13 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
 
     do {
         ret = hsaKmtAllocMemory(0 /* system */, block_size, m_MemoryFlags,
-                                (void**)&pDb_array[i]);
+                                reinterpret_cast<void**>(&pDb_array[i]));
         if (ret) {
             break;
         }
 
         ret = hsaKmtMapMemoryToGPUNodes(pDb_array[i], block_size,
-                &AlternateVAGPU, mapFlags, 1, (HSAuint32 *)&defaultGPUNode);
+                &AlternateVAGPU, mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
             ASSERT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
             break;
@@ -849,7 +853,7 @@ TEST_F(KFDMemoryTest, MMBench) {
 #define TEST_SDMA(index)    (((index / nSizes) >> 1) & 0x1)
 
     void *bufs[nBufs];
-    unsigned long long start, end;
+    HSAuint64 start, end;
     unsigned i;
     HSAKMT_STATUS ret;
     HsaMemFlags memFlags = {0};
@@ -898,7 +902,7 @@ TEST_F(KFDMemoryTest, MMBench) {
         unsigned bufSize = TEST_BUFSIZE(testIndex);
         unsigned memType = TEST_MEMTYPE(testIndex);
         bool interleaveSDMA = TEST_SDMA(testIndex);
-        unsigned long long allocTime, map1Time, unmap1Time, mapAllTime, unmapAllTime, freeTime;
+        HSAuint64 allocTime, map1Time, unmap1Time, mapAllTime, unmapAllTime, freeTime;
         HSAuint32 allocNode;
 
         if ((testIndex & (nSizes-1)) == 0)
@@ -1033,16 +1037,16 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
         EXPECT_EQ(ptrInfo.SizeInBytes, (HSAuint64)localBuffer.Size());
 
         HSAuint32 *addr = localBuffer.As<HSAuint32 *>() + 4;
-        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)addr, &ptrInfo));
+        EXPECT_SUCCESS(hsaKmtQueryPointerInfo(reinterpret_cast<void *>(addr), &ptrInfo));
         EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)localBuffer.As<void*>());
     }
 
     /** Registered memory: user pointer */
     static volatile HSAuint32 mem[4];  // 8 bytes for register only and
                                        // 8 bytes for register to nodes
-    HsaMemoryBuffer hsaBuffer((void *)&mem[0], sizeof(HSAuint32)*2);
+    HsaMemoryBuffer hsaBuffer((void *)(&mem[0]), sizeof(HSAuint32)*2);
     if (is_dgpu()) {  // APU doesn't use userptr
-        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)&mem[0], &ptrInfo));
+        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[0]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
         EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)hsaBuffer.As<void*>());
@@ -1053,29 +1057,29 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
         HSAuint32 nodes[nGPU];
         for (unsigned int i = 0; i < nGPU; i++)
             nodes[i] = gpuNodes.at(i);
-        EXPECT_SUCCESS(hsaKmtRegisterMemoryToNodes((void *)&mem[2],
+        EXPECT_SUCCESS(hsaKmtRegisterMemoryToNodes((void *)(&mem[2]),
                                 sizeof(HSAuint32)*2, nGPU, nodes));
-        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)&mem[2], &ptrInfo));
+        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[2]), &ptrInfo));
         EXPECT_EQ(ptrInfo.NRegisteredNodes, nGPU);
-        EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)&mem[2]));
+        EXPECT_SUCCESS(hsaKmtDeregisterMemory((void *)(&mem[2])));
     }
 
     /* Not a starting address, but an address inside the memory range
      * should also get the memory information
      */
     HSAuint32 *address = hostBuffer.As<HSAuint32 *>() + 1;
-    EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)address, &ptrInfo));
+    EXPECT_SUCCESS(hsaKmtQueryPointerInfo(reinterpret_cast<void *>(address), &ptrInfo));
     EXPECT_EQ(ptrInfo.Type, HSA_POINTER_ALLOCATED);
     EXPECT_EQ(ptrInfo.CPUAddress, hostBuffer.As<void*>());
     if (is_dgpu()) {
-        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)&mem[1], &ptrInfo));
+        EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[1]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
     }
 
     /*** Set user data ***/
     char userData[16] = "This is a test.";
-    EXPECT_SUCCESS(hsaKmtSetMemoryUserData(hostBuffer.As<HSAuint32 *>(), (void *)userData));
+    EXPECT_SUCCESS(hsaKmtSetMemoryUserData(hostBuffer.As<HSAuint32 *>(), reinterpret_cast<void *>(userData)));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(hostBuffer.As<void*>(), &ptrInfo));
     EXPECT_EQ(ptrInfo.UserData, (void *)userData);
 
@@ -1106,16 +1110,16 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
 
     // Offset in the VRAM buffer to test crossing non-contiguous
     // buffer boundaries. The second access starting from offset
-    // sizeof(long)+1 will cross a node boundary in a single access,
+    // sizeof(HSAint64)+1 will cross a node boundary in a single access,
     // for node sizes of 4MB or smaller.
-    const HSAuint64 VRAM_OFFSET = (4 << 20) - 2 * sizeof(long);
+    const HSAuint64 VRAM_OFFSET = (4 << 20) - 2 * sizeof(HSAint64);
 
     // alloc system memory from node 0 and initialize it
     memFlags.ui32.NonPaged = 0;
     ASSERT_SUCCESS(hsaKmtAllocMemory(0, PAGE_SIZE*2, memFlags, &mem[0]));
-    for (i = 0; i < 4*sizeof(long) + 4; i++) {
-        ((HSAuint8 *)mem[0])[i] = i;            // source
-        ((HSAuint8 *)mem[0])[PAGE_SIZE+i] = 0;  // destination
+    for (i = 0; i < 4*sizeof(HSAint64) + 4; i++) {
+        (reinterpret_cast<HSAuint8 *>(mem[0]))[i] = i;            // source
+        (reinterpret_cast<HSAuint8 *>(mem[0]))[PAGE_SIZE+i] = 0;  // destination
     }
 
     // try to alloc local memory from GPU node
@@ -1123,10 +1127,10 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
     if (m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode)) {
         EXPECT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE*2 + (4 << 20),
                                             memFlags, &mem[1]));
-        mem[1] = (void *)((HSAuint8 *)mem[1] + VRAM_OFFSET);
-        for (i = 0; i < 4*sizeof(long) + 4; i++) {
-            ((HSAuint8 *)mem[1])[i] = i;
-            ((HSAuint8 *)mem[1])[PAGE_SIZE+i] = 0;
+        mem[1] = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem[1]) + VRAM_OFFSET);
+        for (i = 0; i < 4*sizeof(HSAint64) + 4; i++) {
+            (reinterpret_cast<HSAuint8 *>(mem[1]))[i] = i;
+            (reinterpret_cast<HSAuint8 *>(mem[1]))[PAGE_SIZE+i] = 0;
         }
     } else {
         LOG() << "Not testing local memory, it's invisible" << std::endl;
@@ -1168,22 +1172,22 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
             for (i = 0; i < 4; i++) {
                 // Test 4 different (mis-)alignments, leaving 1-byte
                 // gaps between longs
-                HSAuint8 *addr = (HSAuint8 *)((long *)mem[0] + i) + i;
+                HSAuint8 *addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[0]) + i) + i;
                 errno = 0;
                 long data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
                 EXPECT_EQ(0, errno);
                 EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
-                                    (void *)data));
+                                    reinterpret_cast<void *>(data)));
 
                 if (mem[1] == NULL)
                     continue;
 
-                addr = (HSAuint8 *)((long *)mem[1] + i) + i;
+                addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[1]) + i) + i;
                 errno = 0;
                 data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
                 EXPECT_EQ(0, errno);
                 EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
-                                (void *)data));
+                                reinterpret_cast<void *>(data)));
             }
         } catch (...) {
             err = 1;
@@ -1204,32 +1208,31 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
     }
 
     // Clear gaps in the source that should not have been copied
-    ((uint8_t*)mem[0])[  sizeof(long)    ] = 0;
-    ((uint8_t*)mem[0])[2*sizeof(long) + 1] = 0;
-    ((uint8_t*)mem[0])[3*sizeof(long) + 2] = 0;
-    ((uint8_t*)mem[0])[4*sizeof(long) + 3] = 0;
+    (reinterpret_cast<uint8_t*>(mem[0]))[  sizeof(long)    ] = 0;
+    (reinterpret_cast<uint8_t*>(mem[0]))[2*sizeof(long) + 1] = 0;
+    (reinterpret_cast<uint8_t*>(mem[0]))[3*sizeof(long) + 2] = 0;
+    (reinterpret_cast<uint8_t*>(mem[0]))[4*sizeof(long) + 3] = 0;
     // Check results
-    EXPECT_EQ(0, memcmp(mem[0], (HSAuint8 *)mem[0] + PAGE_SIZE,
+    EXPECT_EQ(0, memcmp(mem[0], reinterpret_cast<HSAuint8 *>(mem[0]) + PAGE_SIZE,
                         sizeof(long)*4 + 4));
     // Free memory
     EXPECT_SUCCESS(hsaKmtFreeMemory(mem[0], PAGE_SIZE*2));
 
     if (mem[1]) {
-        ((uint8_t*)mem[1])[  sizeof(long)    ] = 0;
-        ((uint8_t*)mem[1])[2*sizeof(long) + 1] = 0;
-        ((uint8_t*)mem[1])[3*sizeof(long) + 2] = 0;
-        ((uint8_t*)mem[1])[4*sizeof(long) + 3] = 0;
-        EXPECT_EQ(0, memcmp(mem[1], (HSAuint8 *)mem[1] + PAGE_SIZE,
-                            sizeof(long)*4 + 4));
-        mem[1] = (void *)((HSAuint8 *)mem[1] - VRAM_OFFSET);
+        (reinterpret_cast<uint8_t*>(mem[1]))[  sizeof(HSAint64)    ] = 0;
+        (reinterpret_cast<uint8_t*>(mem[1]))[2*sizeof(HSAint64) + 1] = 0;
+        (reinterpret_cast<uint8_t*>(mem[1]))[3*sizeof(HSAint64) + 2] = 0;
+        (reinterpret_cast<uint8_t*>(mem[1]))[4*sizeof(HSAint64) + 3] = 0;
+        EXPECT_EQ(0, memcmp(mem[1], reinterpret_cast<HSAuint8 *>(mem[1]) + PAGE_SIZE,
+                            sizeof(HSAint64)*4 + 4));
+        mem[1] = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem[1]) - VRAM_OFFSET);
         EXPECT_SUCCESS(hsaKmtFreeMemory(mem[1], PAGE_SIZE*2));
     }
 
     TEST_END
 }
 
-TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram)
-{
+TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     char *hsaDebug = getenv("HSA_DEBUG");
 
     if (!is_dgpu()) {
@@ -1266,8 +1269,8 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram)
     /* set the word before 4M boundary to 0xdeadbeefdeadbeef
      * and the word after 4M boundary to 0xcafebabecafebabe
      */
-    mem0 = (void *)((HSAuint8 *)mem + VRAM_OFFSET);
-    mem1 = (void *)((HSAuint8 *)mem + VRAM_OFFSET + sizeof(HSAuint64));
+    mem0 = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem) + VRAM_OFFSET);
+    mem1 = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem) + VRAM_OFFSET + sizeof(HSAuint64));
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem0,
@@ -1313,17 +1316,17 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram)
 
             /* peek the memory */
             errno = 0;
-            long data0 = ptrace(PTRACE_PEEKDATA, tracePid, mem0, NULL);
+            HSAint64 data0 = ptrace(PTRACE_PEEKDATA, tracePid, mem0, NULL);
             EXPECT_EQ(0, errno);
             EXPECT_EQ(data[0], data0);
-            long data1 = ptrace(PTRACE_PEEKDATA, tracePid, mem1, NULL);
+            HSAint64 data1 = ptrace(PTRACE_PEEKDATA, tracePid, mem1, NULL);
             EXPECT_EQ(0, errno);
             EXPECT_EQ(data[1], data1);
 
             /* swap mem0 and mem1 by poking */
-            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, (void *)data[1]));
+            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
             EXPECT_EQ(0, errno);
-            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, (void *)data[0]));
+            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
             EXPECT_EQ(0, errno);
         } catch (...) {
             err = 1;
@@ -1345,10 +1348,10 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram)
 
     /* Use shader to read back data to check poke results */
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    //dstBuffer is cpu accessible gtt memory
+    // dstBuffer is cpu accessible gtt memory
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
     m_pIsaGen->CompileShader((m_FamilyId >= FAMILY_AI) ? gfx9_ScratchCopyDword : gfx8_ScratchCopyDword,
-            "ScratchCopyDword",isaBuffer);
+            "ScratchCopyDword", isaBuffer);
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(mem0, dstBuffer.As<void*>());
     dispatch0.Submit(queue);
@@ -1405,7 +1408,7 @@ TEST_F(KFDMemoryTest, SignalHandling) {
      */
     size = (sysMemSize >> 2) & ~(HSAuint64)(PAGE_SIZE - 1);
 
-    ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, (void**)&pDb));
+    ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
     // verify that pDb is not null before it's being used
     ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
 
@@ -1468,7 +1471,7 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
 
     while (count--) {
         ret = hsaKmtAllocMemory(0 /* system */, sysBufSize, m_MemoryFlags,
-                                (void**)&pDb);
+                                reinterpret_cast<void**>(&pDb));
         if (ret) {
             LOG() << "Failed to allocate system buffer of" << std::dec << sysBufSizeMB
                     << "MB" << std::endl;
@@ -1496,8 +1499,7 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
     TEST_END
 }
 
-static inline void access(volatile void *sd, int size, int rw)
-{
+static inline void access(volatile void *sd, int size, int rw) {
     /* Most like sit in cache*/
     static struct DUMMY {
         char dummy[1024];
@@ -1531,7 +1533,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
 #define _TEST_MEMTYPE(index) ((index / nSizes) % nMemTypes)
 
     void *bufs[nBufs];
-    unsigned long long start;
+    HSAuint64 start;
     unsigned i;
     HSAKMT_STATUS ret;
     HsaMemFlags memFlags = {0};
@@ -1545,7 +1547,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
 
     if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode) || !vramSizeMB) {
-        LOG() << "not a largebar system, skip!"<<std::endl;
+        LOG() << "not a largebar system, skip!" << std::endl;
         return;
     }
 
@@ -1562,7 +1564,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     for (testIndex = 0; testIndex < nTests; testIndex++) {
         unsigned bufSize = _TEST_BUFSIZE(testIndex);
         unsigned memType = _TEST_MEMTYPE(testIndex);
-        unsigned long long mcpRTime, mcpWTime, accessRTime, accessWTime;
+        HSAuint64 mcpRTime, mcpWTime, accessRTime, accessWTime;
         HSAuint32 allocNode;
 
         if ((testIndex & (nSizes-1)) == 0)

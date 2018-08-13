@@ -27,8 +27,8 @@
 
 // @todo complete topology test according to whats in: hsathk\source\windows\kmt_topology.cpp
 
-const unsigned long long KFDTopologyTest::c_4Gigabyte = (1ull << 32) - 1;
-const unsigned long long KFDTopologyTest::c_40BitAddressSpace = (1ull << 40);
+const HSAuint64 KFDTopologyTest::c_4Gigabyte = (1ull << 32) - 1;
+const HSAuint64 KFDTopologyTest::c_40BitAddressSpace = (1ull << 40);
 
 TEST_F(KFDTopologyTest , BasicTest) {
     TEST_START(TESTPROFILE_RUNALL)
@@ -41,12 +41,14 @@ TEST_F(KFDTopologyTest , BasicTest) {
         if (pNodeProperties != NULL) {
             // checking for cpu core only if it's a cpu only node or if its KAVERY apu.
             if (pNodeProperties->DeviceId == 0 || FamilyIdFromNode(pNodeProperties) == FAMILY_KV) {
-                EXPECT_GT(pNodeProperties->NumCPUCores, HSAuint32(0)) << "Node index: " << node << " No CPUs core are connected for node index";
+                EXPECT_GT(pNodeProperties->NumCPUCores, HSAuint32(0)) << "Node index: " << node
+                                                                      << " No CPUs core are connected for node index";
             }
 
             // if it's not a cpu only node, look for a gpu core
             if (pNodeProperties->DeviceId != 0) {
-                EXPECT_GT(pNodeProperties->NumFComputeCores, HSAuint32(0)) << "Node index: " << node << "No GPUs core are connected.";
+                EXPECT_GT(pNodeProperties->NumFComputeCores, HSAuint32(0)) << "Node index: " << node
+                                                                           << "No GPUs core are connected.";
                 // EngineId only applies to GPU, not CPU-only nodes
                 EXPECT_GT(pNodeProperties->EngineId.ui32.uCode, 0) << "uCode version is 0";
                 EXPECT_GE(pNodeProperties->EngineId.ui32.Major, 7) << "Major Version is less than 7";
@@ -118,7 +120,8 @@ TEST_F(KFDTopologyTest, GpuvmApertureValidate) {
                 return;
             }
             HsaMemoryProperties *memoryProperties =  new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
-            EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(GpuNodes.at(i), pNodeProperties->NumMemoryBanks, memoryProperties));
+            EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(GpuNodes.at(i), pNodeProperties->NumMemoryBanks,
+                                                         memoryProperties));
             bool GpuVMHeapFound = false;
             for (unsigned int bank = 0 ; bank  < pNodeProperties->NumMemoryBanks ; bank++) {
                 // Check for either private (small-bar/APU) or public (large-bar)
@@ -145,9 +148,11 @@ TEST_F(KFDTopologyTest, GetNodeCacheProperties) {
         pNodeProperties = m_NodeInfo.GetNodeProperties(node);
         if (pNodeProperties != NULL) {
             HsaCacheProperties *cacheProperties = new HsaCacheProperties[pNodeProperties->NumCaches];
-            EXPECT_SUCCESS(hsaKmtGetNodeCacheProperties(node, pNodeProperties->CComputeIdLo, pNodeProperties->NumCaches, cacheProperties));
+            EXPECT_SUCCESS(hsaKmtGetNodeCacheProperties(node, pNodeProperties->CComputeIdLo,
+                           pNodeProperties->NumCaches, cacheProperties));
             if (pNodeProperties->NumCPUCores > 0) {  // this is a CPU node
-                LOG() << "CPU Node " << std::dec << node << ": " << pNodeProperties->NumCaches << " caches" << std::endl;
+                LOG() << "CPU Node " << std::dec << node << ": " << pNodeProperties->NumCaches << " caches"
+                      << std::endl;
                 for (unsigned n = 0; n < pNodeProperties->NumCaches; n++) {
                     LOG()<< n << " - Level " << cacheProperties[n].CacheLevel <<
                     " Type " << cacheProperties[n].CacheType.Value <<

@@ -29,7 +29,8 @@
 
 IndirectBuffer::IndirectBuffer(PACKETTYPE type,  unsigned int sizeInDWords, unsigned int NodeId)
     :m_NumOfPackets(0), m_MaxSize(sizeInDWords), m_ActualSize(0), m_PacketTypeAllowed(type) {
-    m_IndirectBuf = new HsaMemoryBuffer(sizeInDWords*sizeof(unsigned int), NodeId, true/*zero*/, false/*local*/, true/*exec*/);
+    m_IndirectBuf = new HsaMemoryBuffer(sizeInDWords*sizeof(unsigned int), NodeId, true/*zero*/,
+                                        false/*local*/, true/*exec*/);
 }
 
 IndirectBuffer::~IndirectBuffer(void) {
