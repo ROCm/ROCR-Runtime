@@ -34,6 +34,7 @@
 #include <ctype.h>
 #include <sched.h>
 #include <pci/pci.h>
+#include <errno.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -58,6 +59,12 @@ typedef struct {
 static HsaSystemProperties *_system = NULL;
 static node_props_t *g_props;
 static int is_valgrind;
+
+/* This array caches sysfs based node IDs of CPU nodes + all supported GPU nodes.
+ * It will be used to map user-node IDs to sysfs-node IDs.
+ */
+static uint32_t *map_user_to_sysfs_node_id;
+static uint32_t map_user_to_sysfs_node_id_size;
 
 static int processor_vendor;
 /* Supported System Vendors */
@@ -473,6 +480,113 @@ err:
 	return ret;
 }
 
+static HSAKMT_STATUS topology_sysfs_map_node_id(uint32_t node_id, uint32_t *sys_node_id)
+{
+	if ((!map_user_to_sysfs_node_id) || (node_id >= map_user_to_sysfs_node_id_size))
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	*sys_node_id = map_user_to_sysfs_node_id[node_id];
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t sysfs_node_id, uint32_t *gpu_id)
+{
+	FILE *fd;
+	char path[256];
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	assert(gpu_id);
+	snprintf(path, 256, "%s/%d/gpu_id", KFD_SYSFS_PATH_NODES, sysfs_node_id);
+	fd = fopen(path, "r");
+	if (!fd)
+		return HSAKMT_STATUS_ERROR;
+	if (fscanf(fd, "%ul", gpu_id) != 1)
+		ret = HSAKMT_STATUS_ERROR;
+	fclose(fd);
+
+	return ret;
+}
+
+/* Check if the sysfs node is supported. This function will be passed with sysfs node id.
+ * This function can not use topology_* help functions, because those functions are
+ * using user node id. A sysfs node is supported only if corresponding drm render node is available.
+ */
+static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id, bool *is_node_supported)
+{
+	uint32_t gpu_id;
+	FILE *fd;
+	char *read_buf, *p;
+	int read_size;
+	char prop_name[256];
+	char path[256];
+	unsigned long long prop_val;
+	uint32_t prog;
+	uint32_t drm_render_minor = 0;
+	int ret_value;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	*is_node_supported = false;
+
+	/* Retrieve the GPU ID */
+	ret = topology_sysfs_get_gpu_id(sysfs_node_id, &gpu_id);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	if (gpu_id == 0) {
+		*is_node_supported = true;
+		return HSAKMT_STATUS_SUCCESS;
+	}
+
+	read_buf = malloc(PAGE_SIZE);
+	if (!read_buf)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	/* Retrieve the node properties */
+	snprintf(path, 256, "%s/%d/properties", KFD_SYSFS_PATH_NODES, sysfs_node_id);
+	fd = fopen(path, "r");
+	if (!fd) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto err;
+	}
+
+	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
+	if (read_size <= 0) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto err;
+	}
+
+	/* Since we're using the buffer as a string, we make sure the string terminates */
+	if (read_size >= PAGE_SIZE)
+		read_size = PAGE_SIZE - 1;
+	read_buf[read_size] = 0;
+
+	/* Read the node properties */
+	prog = 0;
+	p = read_buf;
+	while (sscanf(p += prog, "%s %llu\n%n", prop_name, &prop_val, &prog) == 2) {
+		if (strcmp(prop_name, "drm_render_minor") == 0) {
+			drm_render_minor = (int32_t)prop_val;
+			break;
+		}
+	}
+	if (!drm_render_minor) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto err;
+	}
+
+	/* Open DRM Render device */
+	ret_value = open_drm_render_device(drm_render_minor);
+	if (ret_value > 0)
+		*is_node_supported = true;
+	else if (ret_value != -ENOENT)
+		ret = HSAKMT_STATUS_ERROR;
+
+err:
+	free(read_buf);
+	fclose(fd);
+	return ret;
+}
+
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
 {
 	FILE *fd;
@@ -482,6 +596,9 @@ HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
 	uint32_t prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	uint32_t num_sysfs_nodes = 0;
+	bool is_node_supported = true;
+	uint32_t num_supported_nodes = 0;
 
 
 	assert(props);
@@ -519,34 +636,52 @@ HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
 	}
 
 	/*
-	 * Discover the number of nodes:
+	 * Discover the number of sysfs nodes:
 	 * Assuming that inside nodes folder there are only folders
 	 * which represent the node numbers
 	 */
-	props->NumNodes = num_subdirs(KFD_SYSFS_PATH_NODES, "");
+	num_sysfs_nodes = num_subdirs(KFD_SYSFS_PATH_NODES, "");
 
+	if (map_user_to_sysfs_node_id == NULL) {
+		/* Trade off - num_sysfs_nodes includes all CPU and GPU nodes.
+		 * Slightly more memory is allocated than necessary.
+		 */
+		map_user_to_sysfs_node_id = calloc(num_sysfs_nodes, sizeof(uint32_t));
+		if (map_user_to_sysfs_node_id == NULL) {
+			ret = HSAKMT_STATUS_NO_MEMORY;
+			goto err2;
+		}
+		map_user_to_sysfs_node_id_size = num_sysfs_nodes;
+	} else if (num_sysfs_nodes > map_user_to_sysfs_node_id_size) {
+		free(map_user_to_sysfs_node_id);
+		map_user_to_sysfs_node_id = calloc(num_sysfs_nodes, sizeof(uint32_t));
+		if (map_user_to_sysfs_node_id == NULL) {
+			ret = HSAKMT_STATUS_NO_MEMORY;
+			goto err2;
+		}
+		map_user_to_sysfs_node_id_size = num_sysfs_nodes;
+	}
+
+	for (uint32_t i = 0; i < num_sysfs_nodes; i++) {
+		ret = topology_sysfs_check_node_supported(i, &is_node_supported);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto sysfs_parse_failed;
+		if (is_node_supported)
+			map_user_to_sysfs_node_id[num_supported_nodes++] = i;
+	}
+	props->NumNodes = num_supported_nodes;
+
+	free(read_buf);
+	fclose(fd);
+	return ret;
+
+sysfs_parse_failed:
+	free(map_user_to_sysfs_node_id);
+	map_user_to_sysfs_node_id = NULL;
 err2:
 	free(read_buf);
 err1:
 	fclose(fd);
-	return ret;
-}
-
-HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id)
-{
-	FILE *fd;
-	char path[256];
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	assert(gpu_id);
-	snprintf(path, 256, "%s/%d/gpu_id", KFD_SYSFS_PATH_NODES, node_id);
-	fd = fopen(path, "r");
-	if (!fd)
-		return HSAKMT_STATUS_ERROR;
-	if (fscanf(fd, "%ul", gpu_id) != 1)
-		ret = HSAKMT_STATUS_ERROR;
-	fclose(fd);
-
 	return ret;
 }
 
@@ -737,20 +872,25 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	const struct hsa_gfxip_table *hsa_gfxip;
 	char namebuf[HSA_PUBLIC_NAME_SIZE];
 	const char *name;
+	uint32_t sys_node_id;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
 	assert(gpu_id);
+	ret = topology_sysfs_map_node_id(node_id, &sys_node_id);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
 	/* Retrieve the GPU ID */
-	ret = topology_sysfs_get_gpu_id(node_id, gpu_id);
+	ret = topology_sysfs_get_gpu_id(sys_node_id, gpu_id);
 
 	read_buf = malloc(PAGE_SIZE);
 	if (!read_buf)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	/* Retrieve the node properties */
-	snprintf(path, 256, "%s/%d/properties", KFD_SYSFS_PATH_NODES, node_id);
+	snprintf(path, 256, "%s/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id);
 	fd = fopen(path, "r");
 	if (!fd) {
 		free(read_buf);
@@ -907,9 +1047,14 @@ static HSAKMT_STATUS topology_sysfs_get_mem_props(uint32_t node_id,
 	uint32_t prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	uint32_t sys_node_id;
 
 	assert(props);
-	snprintf(path, 256, "%s/%d/mem_banks/%d/properties", KFD_SYSFS_PATH_NODES, node_id, mem_id);
+	ret = topology_sysfs_map_node_id(node_id, &sys_node_id);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	snprintf(path, 256, "%s/%d/mem_banks/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, mem_id);
 	fd = fopen(path, "r");
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
@@ -1160,9 +1305,14 @@ static HSAKMT_STATUS topology_sysfs_get_cache_props(uint32_t node_id,
 	uint32_t i, prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	uint32_t sys_node_id;
 
 	assert(props);
-	snprintf(path, 256, "%s/%d/caches/%d/properties", KFD_SYSFS_PATH_NODES, node_id, cache_id);
+	ret = topology_sysfs_map_node_id(node_id, &sys_node_id);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	snprintf(path, 256, "%s/%d/caches/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, cache_id);
 	fd = fopen(path, "r");
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
@@ -1233,9 +1383,14 @@ static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 	uint32_t prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	uint32_t sys_node_id;
 
 	assert(props);
-	snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, node_id, iolink_id);
+	ret = topology_sysfs_map_node_id(node_id, &sys_node_id);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
+
+	snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, iolink_id);
 	fd = fopen(path, "r");
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
@@ -1659,6 +1814,13 @@ HSAKMT_STATUS topology_drop_snapshot(void)
 
 	free(_system);
 	_system = NULL;
+
+	if (map_user_to_sysfs_node_id) {
+		free(map_user_to_sysfs_node_id);
+		map_user_to_sysfs_node_id = NULL;
+		map_user_to_sysfs_node_id_size = 0;
+	}
+
 	err = HSAKMT_STATUS_SUCCESS;
 
 out:
