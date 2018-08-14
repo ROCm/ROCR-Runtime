@@ -130,10 +130,10 @@ void KFDMemoryTest::TearDown() {
 #define GB(x) ((x) << 30)
 
 /*
- * try to map as much as possible system memory to gpu.
- * lets see if kfd support 1TB memory correctly or not.
- * And after this test case, we can observe if there is any sideeffect.
- * NOTICE: there are memory usage limit checks in hsa/kfd according to the total
+ * Try to map as much as possible system memory to gpu
+ * to see if KFD supports 1TB memory correctly or not.
+ * After this test case, we can observe if there are any side effects.
+ * NOTICE: There are memory usage limit checks in hsa/kfd according to the total
  * physical system memory.
  */
 TEST_F(KFDMemoryTest, MMapLarge) {
@@ -187,19 +187,19 @@ TEST_F(KFDMemoryTest, MMapLarge) {
     TEST_END
 }
 
-/* keep memory mapped to default node
+/* Keep memory mapped to default node
  * Keep mapping/unmapping memory to/from non-default node
- * A shader running on default node  consistantly access
- * memory - make sure memory is always accessible on default,
- * i.e., there is no gpu vm fault.
+ * A shader running on default node consistantly accesses
+ * memory - make sure memory is always accessible by default,
+ * i.e. there is no gpu vm fault.
  * Synchronization b/t host program and shader:
- * 1. host initialize src and dst buffer to 0
- * 2. shader keep reading src buffer and check value
- * 3. host write src buffer to 0x5678 to indicate quit, polling dst until it becomes 0x5678
- * 4. shader write dst buffer to 0x5678 after src changed to 0x5678, quit
- * 5. host program quit after dst becomes 0x5678
- * Need at least two gpu nodes to run the test. The defaut node has to be a gfx9 node.
- * Otherwise, test is skipped. Use kfdtest --node=$$ to specify the defaut node
+ * 1. Host initializes src and dst buffer to 0
+ * 2. Shader keeps reading src buffer and check value
+ * 3. Host writes src buffer to 0x5678 to indicate quit, polling dst until it becomes 0x5678
+ * 4. Shader write dst buffer to 0x5678 after src changes to 0x5678, then quits
+ * 5. Host program quits after dst becomes 0x5678
+ * Need at least two gpu nodes to run the test. The default node has to be a gfx9 node,
+ * otherwise, test is skipped. Use kfdtest --node=$$ to specify the default node
  * This test case is introduced as a side-result of investigation of SWDEV-134798, which
  * is a gpu vm fault while running rocr conformance test. Here we try to simulate the
  * same test behaviour.
@@ -250,7 +250,7 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
         hsaKmtMapMemoryToGPUNodes(srcBuffer.As<void*>(), PAGE_SIZE, NULL, memFlags, (i>>5)&1+1, mapNodes);
     }
 
-    /* fill src buffer so shader quits */
+    /* Fill src buffer so shader quits */
     srcBuffer.Fill(0x5678);
     WaitOnValue(dstBuffer.As<uint32_t *>(), 0x5678);
     ASSERT_EQ(*dstBuffer.As<uint32_t *>(), 0x5678);
@@ -258,7 +258,7 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     TEST_END
 }
 
-// basic test of hsaKmtMapMemoryToGPU and hsaKmtUnmapMemoryToGPU
+// Basic test of hsaKmtMapMemoryToGPU and hsaKmtUnmapMemoryToGPU
 TEST_F(KFDMemoryTest , MapMemoryToGPU) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -280,7 +280,7 @@ TEST_F(KFDMemoryTest , MapMemoryToGPU) {
     TEST_END
 }
 
-// following tests are for hsaKmtAllocMemory with invalid params
+// Following tests are for hsaKmtAllocMemory with invalid params
 TEST_F(KFDMemoryTest, InvalidMemoryPointerAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -299,7 +299,7 @@ TEST_F(KFDMemoryTest, ZeroMemorySizeAlloc) {
     TEST_END
 }
 
-// basic test  for hsaKmtAllocMemory
+// Basic test for hsaKmtAllocMemory
 TEST_F(KFDMemoryTest, MemoryAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -381,7 +381,8 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
     HsaMemoryBuffer sdmaBuffer((void *)&stackData[sdmaOffset], sizeof(HSAuint32));
 
     /* Create PM4 and SDMA queues before fork+COW to test queue
-     * eviction and restore */
+     * eviction and restore
+     */
     PM4Queue pm4Queue;
     SDMAQueue sdmaQueue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
@@ -392,7 +393,8 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
 
     /* First submit just so the queues are not empty, and to get the
      * TLB populated (in case we need to flush TLBs somewhere after
-     * updating the page tables) */
+     * updating the page tables)
+     */
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(srcBuffer.As<void*>(), dstBuffer.As<void*>());
     dispatch0.Submit(pm4Queue);
@@ -410,7 +412,8 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
          * make any write access to the stack because we want the
          * parent to make the first write access and get a new copy. A
          * busy loop is the safest way to do that, since any function
-         * call (e.g. sleep) would write to the stack. */
+         * call (e.g. sleep) would write to the stack.
+         */
         while (1)
         {}
         WARN() << "Shouldn't get here!" << std::endl;
@@ -419,13 +422,15 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
 
     /* Parent process writes to COW page(s) and gets a new copy. MMU
      * notifier needs to update the GPU mapping(s) for the test to
-     * pass. */
+     * pass.
+     */
     globalData = 0xD00BED00;
     stackData[dstOffset] = 0xdeadbeef;
     stackData[sdmaOffset] = 0xdeadbeef;
 
     /* Terminate the child process before a possible test failure that
-     * would leave it spinning in the background indefinitely. */
+     * would leave it spinning in the background indefinitely.
+     */
     int status;
     EXPECT_EQ(0, kill(pid, SIGTERM));
     EXPECT_EQ(pid, waitpid(pid, &status, 0));
@@ -516,10 +521,11 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
     TEST_END
 }
 
-// FlatScratchAccess
-// Since HsaMemoryBuffer has to be associated with a specific GPU node, this function in the current form
-// will not work for multiple GPU nodes. For now test only one default GPU node.
-// TODO: Generalize it to support multiple nodes
+/* FlatScratchAccess
+ * Since HsaMemoryBuffer has to be associated with a specific GPU node, this function in the current form
+ * will not work for multiple GPU nodes. For now test only one default GPU node.
+ * TODO: Generalize it to support multiple nodes
+ */
 
 #define SCRATCH_SLICE_SIZE 0x10000
 #define SCRATCH_SLICE_NUM 3
@@ -558,24 +564,23 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     // Map everything for test below
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(scratchBuffer.As<char*>(), SCRATCH_SIZE, NULL));
 
-    // source & destination memory buffers
     HsaMemoryBuffer srcMemBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer dstMemBuffer(PAGE_SIZE, defaultGPUNode);
-
 
     // Initialize the srcBuffer to some fixed value
     srcMemBuffer.Fill(0x01010101);
 
-    // Initialize a buffer with a DWORD copy ISA
+    // Initialize a buffer with a dword copy ISA
     m_pIsaGen->CompileShader((m_FamilyId >= FAMILY_AI) ? gfx9_ScratchCopyDword : gfx8_ScratchCopyDword,
             "ScratchCopyDword", isaBuffer);
 
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.GetNodeProperties(defaultGPUNode);
 
-    // TODO: Add support to all GPU Nodes.
-    // The loop over the system nodes is removed as the test can be executed only on GPU nodes. This
-    // also requires changes to be made to all the HsaMemoryBuffer variables defined above, as
-    // HsaMemoryBuffer is now associated with a Node.
+    /* TODO: Add support to all GPU Nodes.
+     * The loop over the system nodes is removed as the test can be executed only on GPU nodes. This
+     * also requires changes to be made to all the HsaMemoryBuffer variables defined above, as
+     * HsaMemoryBuffer is now associated with a Node.
+     */
     if (pNodeProperties != NULL) {
         // Get the aperture of the scratch buffer
         HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
@@ -585,7 +590,7 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
         for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
             if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_GPU_SCRATCH) {
                 int numWaves = 4;  // WAVES must be >= # SE
-                int waveSize = 1;  // amount of space used by each wave in units of 256 dwords...
+                int waveSize = 1;  // Amount of space used by each wave in units of 256 dwords
 
                 PM4Queue queue;
                 ASSERT_SUCCESS(queue.Create(defaultGPUNode));
@@ -595,25 +600,24 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
                 // Create a dispatch packet to copy
                 Dispatch dispatchSrcToScratch(isaBuffer);
 
-                // setup the dispatch packet
+                // Setup the dispatch packet
                 // Copying from the source Memory Buffer to the scratch buffer
                 dispatchSrcToScratch.SetArgs(srcMemBuffer.As<void*>(), reinterpret_cast<void*>(scratchApertureAddr));
                 dispatchSrcToScratch.SetDim(1, 1, 1);
                 dispatchSrcToScratch.SetScratch(numWaves, waveSize, scratchBuffer.As<uint64_t>());
-                // submit the packet
+                // Submit the packet
                 dispatchSrcToScratch.Submit(queue);
                 dispatchSrcToScratch.Sync();
 
                 // Create another dispatch packet to copy scratch buffer contents to destination buffer.
                 Dispatch dispatchScratchToDst(isaBuffer);
 
-                // set the arguments to copy from the scratch buffer
-                // to the destination buffer
+                // Set the arguments to copy from the scratch buffer to the destination buffer
                 dispatchScratchToDst.SetArgs(reinterpret_cast<void*>(scratchApertureAddr), dstMemBuffer.As<void*>());
                 dispatchScratchToDst.SetDim(1, 1, 1);
                 dispatchScratchToDst.SetScratch(numWaves, waveSize, scratchBuffer.As<uint64_t>());
 
-                // submit the packet
+                // Submit the packet
                 dispatchScratchToDst.Submit(queue);
                 dispatchScratchToDst.Sync();
 
@@ -708,7 +712,7 @@ void KFDMemoryTest::BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granular
         lastTestedSize = sizeMB;
     }
 
-    /* Save the biggest allocated system buffer forsignal handling test */
+    /* Save the biggest allocated system buffer for signal handling test */
     LOG() << "The biggest allocated system buffer is " << std::dec
             << lastTestedSize << "MB" << std::endl;
     if (lastSize)
@@ -781,7 +785,8 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
  * is small. For example, on a typical Carrizo platform, the biggest allocated
  * system buffer could be more than 14G even though it only has 4G memory.
  * In that situation, it will take too much time to finish the test, because of
- * the onerous memory swap operation. So we limit the buffer size that way.*/
+ * the onerous memory swap operation. So we limit the buffer size that way.
+ */
 TEST_F(KFDMemoryTest, BigBufferStressTest) {
     if (!is_dgpu()) {
         LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
@@ -804,7 +809,8 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
 
     /* Repeatedly allocate and map big buffers in system memory until it fails,
-     * then unmap and free them. */
+     * then unmap and free them.
+     */
 #define ARRAY_ENTRIES 2048
 
     int i = 0;
@@ -875,7 +881,8 @@ TEST_F(KFDMemoryTest, MMBench) {
     /* Two SDMA queues to interleave user mode SDMA with memory
      * management on either SDMA engine. Make the queues long enough
      * to buffer at least nBufs x WriteData packets (7 dwords per
-     * packet). */
+     * packet).
+     */
     SDMAQueue sdmaQueue[2];
     ASSERT_SUCCESS(sdmaQueue[0].Create(defaultGPUNode, PAGE_SIZE*8));
     ASSERT_SUCCESS(sdmaQueue[1].Create(defaultGPUNode, PAGE_SIZE*8));
@@ -1094,7 +1101,8 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
  * to access its memory like a debugger would. Child copies data in
  * the parent process using PTRACE_PEEKDATA and PTRACE_POKEDATA. After
  * the child terminates, the parent checks that the copy was
- * successful. */
+ * successful.
+ */
 TEST_F(KFDMemoryTest, PtraceAccess) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -1108,13 +1116,14 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
     void *mem[2];
     unsigned i;
 
-    // Offset in the VRAM buffer to test crossing non-contiguous
-    // buffer boundaries. The second access starting from offset
-    // sizeof(HSAint64)+1 will cross a node boundary in a single access,
-    // for node sizes of 4MB or smaller.
+    /* Offset in the VRAM buffer to test crossing non-contiguous
+     * buffer boundaries. The second access starting from offset
+     * sizeof(HSAint64)+1 will cross a node boundary in a single access,
+     * for node sizes of 4MB or smaller.
+     */
     const HSAuint64 VRAM_OFFSET = (4 << 20) - 2 * sizeof(HSAint64);
 
-    // alloc system memory from node 0 and initialize it
+    // Alloc system memory from node 0 and initialize it
     memFlags.ui32.NonPaged = 0;
     ASSERT_SUCCESS(hsaKmtAllocMemory(0, PAGE_SIZE*2, memFlags, &mem[0]));
     for (i = 0; i < 4*sizeof(HSAint64) + 4; i++) {
@@ -1122,7 +1131,7 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
         (reinterpret_cast<HSAuint8 *>(mem[0]))[PAGE_SIZE+i] = 0;  // destination
     }
 
-    // try to alloc local memory from GPU node
+    // Try to alloc local memory from GPU node
     memFlags.ui32.NonPaged = 1;
     if (m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode)) {
         EXPECT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE*2 + (4 << 20),
@@ -1137,13 +1146,14 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
         mem[1] = NULL;
     }
 
-    // Allow any process to trace this one. If kernel is built without
-    // Yama, this is not needed, and this call will fail.
+    /* Allow any process to trace this one. If kernel is built without
+     * Yama, this is not needed, and this call will fail.
+     */
 #ifdef PR_SET_PTRACER
     prctl(PR_SET_PTRACER, PR_SET_PTRACER_ANY, 0, 0, 0);
 #endif
 
-    // Find out my pid so the child can trace it
+    // Find current pid so the child can trace it
     pid_t tracePid = getpid();
 
     // Fork the child
@@ -1168,8 +1178,7 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
             } while (!WIFSTOPPED(traceStatus));
 
             for (i = 0; i < 4; i++) {
-                // Test 4 different (mis-)alignments, leaving 1-byte
-                // gaps between longs
+                // Test 4 different (mis-)alignments, leaving 1-byte gaps between longs
                 HSAuint8 *addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[0]) + i) + i;
                 errno = 0;
                 long data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
@@ -1264,7 +1273,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
 
     ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, size, memFlags, &mem));
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(mem, size, NULL));
-    /* set the word before 4M boundary to 0xdeadbeefdeadbeef
+    /* Set the word before 4M boundary to 0xdeadbeefdeadbeef
      * and the word after 4M boundary to 0xcafebabecafebabe
      */
     mem0 = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem) + VRAM_OFFSET);
@@ -1309,7 +1318,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
                 waitpid(tracePid, &traceStatus, 0);
             } while (!WIFSTOPPED(traceStatus));
 
-            /* peek the memory */
+            /* Peek the memory */
             errno = 0;
             HSAint64 data0 = ptrace(PTRACE_PEEKDATA, tracePid, mem0, NULL);
             ASSERT_EQ(0, errno);
@@ -1318,7 +1327,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
             ASSERT_EQ(0, errno);
             ASSERT_EQ(data[1], data1);
 
-            /* swap mem0 and mem1 by poking */
+            /* Swap mem0 and mem1 by poking */
             ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
             ASSERT_EQ(0, errno);
             ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
@@ -1404,7 +1413,7 @@ TEST_F(KFDMemoryTest, SignalHandling) {
     size = (sysMemSize >> 2) & ~(HSAuint64)(PAGE_SIZE - 1);
 
     ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
-    // verify that pDb is not null before it's being used
+    // Verify that pDb is not null before it's being used
     ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
 
     pid_t childPid = fork();
@@ -1473,7 +1482,7 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
             return;
         }
 
-        /* check the first 64 bit */
+        /* Check the first 64 bits */
         EXPECT_EQ(0, pDb[0]);
         pDb[0] = 1;
 
@@ -1495,7 +1504,7 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
 }
 
 static inline void access(volatile void *sd, int size, int rw) {
-    /* Most like sit in cache*/
+    /* Most likely sitting in cache*/
     static struct DUMMY {
         char dummy[1024];
     } dummy;
@@ -1509,8 +1518,8 @@ static inline void access(volatile void *sd, int size, int rw) {
 }
 
 /*
- * on large-ber system, test the visible vram access speed.
- * kfd is not allowd to alloc visible vram on non-largebar system.
+ * On large-bar system, test the visible vram access speed.
+ * KFD is not allowed to alloc visible vram on non-largebar system.
  */
 TEST_F(KFDMemoryTest, MMBandWidth) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
@@ -1571,7 +1580,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
             memFlags.ui32.HostAccess = 1;
             memFlags.ui32.NonPaged = 0;
         } else {
-            /* alloc visible vram*/
+            /* Alloc visible vram*/
             allocNode = defaultGPUNode;
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 1;

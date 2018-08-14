@@ -41,7 +41,7 @@ void KFDEventTest::SetUp() {
 void KFDEventTest::TearDown() {
     ROUTINE_START
 
-    // not all tests create event, destroy only if there is one
+    // Not all tests create an event, destroy only if there is one
     if (m_pHsaEvent != NULL) {
         // hsaKmtDestroyEvent moved to TearDown to make sure it is being called
         EXPECT_SUCCESS(hsaKmtDestroyEvent(m_pHsaEvent));
@@ -58,7 +58,7 @@ TEST_F(KFDEventTest, CreateDestroyEvent) {
     ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, m_NodeInfo.HsaDefaultGPUNode(), &m_pHsaEvent));
     EXPECT_NE(0, m_pHsaEvent->EventData.HWData2);
 
-    // destroy event is being called in test TearDown
+    // Destroy event is being called in test TearDown
     TEST_END;
 }
 

@@ -60,7 +60,7 @@ KFDIPCTest::~KFDIPCTest(void) {
         exit(0);
 }
 
-/* Imort shared Local Memory from parent process. Check for the pattern
+/* Import shared Local Memory from parent process. Check for the pattern
  * filled in by the parent process. Then fill a new pattern.
  */
 void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
@@ -101,9 +101,9 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     ASSERT_SUCCESS(hsaKmtDeregisterMemory(sharedLocalBuffer));
 }
 
-/* Fill a pattern in to Local Memory and share with the child process.
+/* Fill a pattern into Local Memory and share with the child process.
  * Then wait until Child process to exit and check for the new pattern
- * fill in by the child process.
+ * filled in by the child process.
  */
 
 void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pipefd) {
@@ -213,7 +213,7 @@ TEST_F(KFDIPCTest, BasicTest) {
  *                  dstBuf3[0x800-0x1000] is expected to be 0xAAAAAAAA
  *              and dstBuf4[0x0-0x1000] is expected to be 0xAAAAAAAA
  *
- * For this CMA test after copy only the first and the last of dstBuf is checked
+ * For this CMA test, after copying only the first and the last of dstBuf is checked
  */
 
 static testMemoryDescriptor srcRange[CMA_TEST_COUNT][CMA_MEMORY_TEST_ARRAY_SIZE] = {
@@ -490,7 +490,7 @@ CMA_TEST_STATUS KFDIPCTest::CrossMemoryAttachChildProcess(int defaultGPUNode, in
             break;
         }
 
-        /* Wait till the test is over */
+        /* Wait until the test is over */
         memset(msg, 0, sizeof(msg));
         if (read_non_block(readPipe, msg, 4) < 0) {
             status = CMA_IPC_PIPE_ERROR;
@@ -523,7 +523,7 @@ CMA_TEST_STATUS KFDIPCTest::CrossMemoryAttachParentProcess(int defaultGPUNode, p
     int testNo;
     CMA_TEST_STATUS status;
 
-    /* Recevie buffer array from child and then initialize and fill in Local Buffer Array.
+    /* Receive buffer array from child and then initialize and fill in Local Buffer Array.
      * READ_TEST: Copy remote buffer array into Local Buffer Array and then check
      *              for the new pattern.
      * WRITE_TEST: Write Local Buffer Array into remote buffer array. Notify child to
@@ -615,7 +615,6 @@ TEST_F(KFDIPCTest, CrossMemoryAttachTest) {
     ASSERT_EQ(pipe2(pipePtoC, O_NONBLOCK), 0);
 
     /* Create a child process and share the above Local Memory with it */
-
     m_ChildPid = fork();
     if (m_ChildPid == 0 && hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS) {
         /* Child Process */

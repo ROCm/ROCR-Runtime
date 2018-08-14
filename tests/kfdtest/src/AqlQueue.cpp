@@ -45,7 +45,7 @@ unsigned int AqlQueue::RptrWhenConsumed() {
 }
 
 void AqlQueue::SubmitPacket() {
-    // m_pending Wptr is in DWORDs
+    // m_pending Wptr is in dwords
     *m_Resources.Queue_write_ptr = m_pendingWptr;
     *(m_Resources.Queue_DoorBell) = Wptr();
 }

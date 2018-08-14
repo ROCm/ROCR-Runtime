@@ -25,8 +25,6 @@
 #include <vector>
 #include <string>
 
-// @todo complete topology test according to whats in: hsathk\source\windows\kmt_topology.cpp
-
 const HSAuint64 KFDTopologyTest::c_4Gigabyte = (1ull << 32) - 1;
 const HSAuint64 KFDTopologyTest::c_40BitAddressSpace = (1ull << 40);
 
@@ -35,17 +33,17 @@ TEST_F(KFDTopologyTest , BasicTest) {
 
     const HsaNodeProperties *pNodeProperties;
 
-    // goes over all nodes in the sytem properties and check the basic info received
+    // Goes over all nodes in the sytem properties and check the basic info received
     for (unsigned node = 0; node < m_SystemProperties.NumNodes; node++) {
         pNodeProperties = m_NodeInfo.GetNodeProperties(node);
         if (pNodeProperties != NULL) {
-            // checking for cpu core only if it's a cpu only node or if its KAVERY apu.
+            // Checking for cpu core only if it's a cpu only node or if its KAVERI apu.
             if (pNodeProperties->DeviceId == 0 || FamilyIdFromNode(pNodeProperties) == FAMILY_KV) {
                 EXPECT_GT(pNodeProperties->NumCPUCores, HSAuint32(0)) << "Node index: " << node
                                                                       << " No CPUs core are connected for node index";
             }
 
-            // if it's not a cpu only node, look for a gpu core
+            // If it's not a cpu only node, look for a gpu core
             if (pNodeProperties->DeviceId != 0) {
                 EXPECT_GT(pNodeProperties->NumFComputeCores, HSAuint32(0)) << "Node index: " << node
                                                                            << "No GPUs core are connected.";
@@ -64,7 +62,7 @@ TEST_F(KFDTopologyTest , BasicTest) {
     TEST_END
 }
 
-// this test verify failure status on hsaKmtGetNodeProperties with invalid params
+// This test verifies failure status on hsaKmtGetNodeProperties with invalid params
 TEST_F(KFDTopologyTest, GetNodePropertiesInvalidParams) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -73,7 +71,7 @@ TEST_F(KFDTopologyTest, GetNodePropertiesInvalidParams) {
     TEST_END
 }
 
-// this test verify failure status on hsaKmtGetNodeProperties with invalid params
+// This test verifies failure status on hsaKmtGetNodeProperties with invalid params
 TEST_F(KFDTopologyTest, GetNodePropertiesInvalidNodeNum) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -84,8 +82,8 @@ TEST_F(KFDTopologyTest, GetNodePropertiesInvalidNodeNum) {
     TEST_END
 }
 
-// test that we can get memory property successfully per node
-// @todo check validity of values returned
+// Test that we can get memory properties successfully per node
+// TODO: Check validity of values returned
 TEST_F(KFDTopologyTest, GetNodeMemoryProperties) {
     TEST_START(TESTPROFILE_RUNALL)
     const HsaNodeProperties *pNodeProperties;
@@ -104,7 +102,7 @@ TEST_F(KFDTopologyTest, GetNodeMemoryProperties) {
 }
 
 
-// test the GPU local memory aperture is valid.
+// Test that the GPU local memory aperture is valid.
 TEST_F(KFDTopologyTest, GpuvmApertureValidate) {
     TEST_REQUIRE_NO_ENV_CAPABILITIES(ENVCAPS_32BITLINUX);
 
@@ -137,8 +135,8 @@ TEST_F(KFDTopologyTest, GpuvmApertureValidate) {
     TEST_END
 }
 
-// test that we can get cache property successfully per node
-// @todo check validity of values returned
+// Test that we can get cache property successfully per node
+// TODO: Check validity of values returned
 TEST_F(KFDTopologyTest, GetNodeCacheProperties) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -179,8 +177,8 @@ TEST_F(KFDTopologyTest, GetNodeCacheProperties) {
     TEST_END
 }
 
-// test that we can get NodeIoLink property successfully per node
-// @todo check validity of values returned
+// Test that we can get NodeIoLink property successfully per node
+// TODO: Check validity of values returned
 // GetNodeIoLinkProperties is disabled for now, test fails due to bug in BIOS
 TEST_F(KFDTopologyTest, GetNodeIoLinkProperties) {
     TEST_START(TESTPROFILE_RUNALL)
@@ -197,7 +195,7 @@ TEST_F(KFDTopologyTest, GetNodeIoLinkProperties) {
             HsaIoLinkProperties  *IolinkProperties =  new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
             EXPECT_SUCCESS(hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties));
             if (pNodeProperties->NumIOLinks == 0) {
-                // No io_links. Just Print the node
+                // No io_links. Just print the node
                 LOG() << "[" << node << "]" << std::endl;
                 continue;
             }

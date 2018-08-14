@@ -32,20 +32,22 @@ SDMAQueue::~SDMAQueue(void) {
 
 unsigned int SDMAQueue::Wptr() {
     /* In SDMA queues write pointers are saved in bytes, convert the
-     * wptr value to DWORD to fit the way BaseQueue works. On Vega10
+     * wptr value to dword to fit the way BaseQueue works. On Vega10
      * the write ptr is 64-bit. We only read the low 32 bit (assuming
      * the queue buffer is smaller than 4GB) and modulo divide by the
-     * queue size to simulate a 32-bit read pointer. */
+     * queue size to simulate a 32-bit read pointer.
+     */
     return (*m_Resources.Queue_write_ptr % m_QueueBuf->Size()) /
         sizeof(unsigned int);
 }
 
 unsigned int SDMAQueue::Rptr() {
     /* In SDMA queues read pointers are saved in bytes, convert the
-     * read value to DWORD to fit the way BaseQueue works. On Vega10
+     * read value to dword to fit the way BaseQueue works. On Vega10
      * the read ptr is 64-bit. We only read the low 32 bit (assuming
      * the queue buffer is smaller than 4GB) and modulo divide by the
-     * queue size to simulate a 32-bit read pointer. */
+     * queue size to simulate a 32-bit read pointer.
+     */
     return (*m_Resources.Queue_read_ptr % m_QueueBuf->Size()) /
         sizeof(unsigned int);
 }
@@ -53,12 +55,13 @@ unsigned int SDMAQueue::Rptr() {
 unsigned int SDMAQueue::RptrWhenConsumed() {
     /* Rptr is same size and byte units as Wptr. Here we only care
      * about the low 32-bits. When all packets are consumed, read and
-     * write pointers should have the same value. */
+     * write pointers should have the same value.
+     */
     return *m_Resources.Queue_write_ptr;
 }
 
 void SDMAQueue::SubmitPacket() {
-    // m_pending Wptr is in DWORDs
+    // m_pending Wptr is in dwords
     if (g_TestGPUFamilyId < FAMILY_AI) {
         // Pre-Vega10 uses 32-bit wptr and doorbell
         unsigned int wPtrInBytes = m_pendingWptr * sizeof(unsigned int);

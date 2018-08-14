@@ -28,8 +28,6 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
-// All tests are marked by their serial number in the QCM FDD
-
 void KFDLocalMemoryTest::SetUp() {
     ROUTINE_START
 
@@ -285,7 +283,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     unsigned value = 0;
     memset(pages, 0, sizeof(pages));
     for (order = 0; order <= maxOrder; order++) {
-        // At maxOrder, block sizes is 1/4 of available memory
+        // At maxOrder, block size is 1/4 of available memory
         pages[order].nPages = 1UL << (maxOrder - order + 2);
         // At order != 0, 1/2 the memory is already allocated
         if (order > 0)
@@ -467,7 +465,7 @@ TEST_F(KFDLocalMemoryTest, MapVramToGPUNodesTest) {
         }
 
         if (dst_node != defaultGPUNode) {
-            /* at least one node should be defaultGPUNode */
+            /* At least one node should be defaultGPUNode */
             src_node = defaultGPUNode;
         } else {
             for (auto node : gpuNodes) {

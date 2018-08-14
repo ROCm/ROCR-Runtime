@@ -41,7 +41,7 @@ HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint6
     HSAKMT_STATUS status;
 
     if (m_QueueBuf != NULL) {
-        // queue already exist, one queue per object
+        // Queue already exists, one queue per object
         Destroy();
     }
 
@@ -78,7 +78,7 @@ HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint6
         status = HSAKMT_STATUS_ERROR;
     }
 
-    // needs to match the queue write ptr
+    // Needs to match the queue write ptr
     m_pendingWptr = 0;
     m_pendingWptr64 = 0;
     m_Node = NodeId;
@@ -137,7 +137,7 @@ void BaseQueue::PlacePacket(const BasePacket &packet) {
     unsigned int queueSizeInDWord = m_QueueBuf->Size() / sizeof(uint32_t);
 
     if (writePtr + packetSizeInDwords > queueSizeInDWord) {
-        // wraparound expected. We need enough room to also place NOPs to avoid crossing the buffer end.
+        // Wraparound expected. We need enough room to also place NOPs to avoid crossing the buffer end.
         dwordsRequired +=  queueSizeInDWord - writePtr;
     }
 
@@ -147,14 +147,14 @@ void BaseQueue::PlacePacket(const BasePacket &packet) {
     ASSERT_GE(queueSizeInDWord, packetSizeInDwords) << "Cannot add a packet, packet size too large";
 
     if (writePtr + packetSizeInDwords >= queueSizeInDWord) {
-        // wraparound
+        // Wraparound
         while (writePtr + packetSizeInDwords > queueSizeInDWord) {
             m_QueueBuf->As<unsigned int *>()[writePtr] = CMD_NOP;
             writePtr = (writePtr + 1) % queueSizeInDWord;
             writePtr64++;
         }
 
-        // not updating Wptr since we might want to do place packet without submission
+        // Not updating Wptr since we might want to place the packet without submission
         m_pendingWptr = (writePtr % queueSizeInDWord);
         m_pendingWptr64 = writePtr64;
     }

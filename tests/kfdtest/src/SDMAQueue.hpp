@@ -31,15 +31,15 @@ class SDMAQueue : public BaseQueue {
     SDMAQueue(void);
     virtual ~SDMAQueue(void);
 
-    // @brief update queue write pointer and sets the queue doorbell to the queue write pointer
+    // @brief Update queue write pointer and set the queue doorbell to the queue write pointer
     virtual void SubmitPacket();
 
  protected:
-    // @ return write pointer modulo queue size in DWORDs
+    // @ return Write pointer modulo queue size in dwords
     virtual unsigned int Wptr();
-    // @ return read pointer modulo queue size in DWORDs
+    // @ return Read pointer modulo queue size in dwords
     virtual unsigned int Rptr();
-    // @ return expected m_Resources.Queue_read_ptr when all packets consumed
+    // @ return Expected m_Resources.Queue_read_ptr when all packets are consumed
     virtual unsigned int RptrWhenConsumed();
 
     virtual PACKETTYPE PacketTypeSupported() { return PACKETTYPE_SDMA; }

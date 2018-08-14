@@ -35,7 +35,7 @@ void KFDPMTest::SetUpTestCase() {
     m_SetupSuccess = false;
     AcquirePrivilege(OS_SUSPEND);
 
-    // if AcquirePrivilege fails, it will throw and we will not reach here.
+    // If AcquirePrivilege fails, it will throw and we will not reach here.
     m_SetupSuccess = true;
 
     ROUTINE_END
@@ -119,4 +119,4 @@ TEST_F(KFDPMTest, SuspendWithIdleQueueAfterWork) {
     TEST_END
 }
 
-// TODO suspend while workload is being executed by a queue
+// TODO: Suspend while workload is being executed by a queue

@@ -27,9 +27,10 @@
 #ifndef __KFD_MEMORY_TEST__H__
 #define __KFD_MEMORY_TEST__H__
 
-// @class KFDTopologyTest
-// this class has no additional features to KFDBaseComponentTest
-// the separation was made so we are able to goup all memeory tests together
+/* @class KFDTopologyTest
+ * This class has no additional features to KFDBaseComponentTest
+ * The separation was made so we are able to group all memory tests together
+ */
 class KFDMemoryTest :  public KFDBaseComponentTest {
  public:
     KFDMemoryTest(void) :m_pIsaGen(NULL) {}

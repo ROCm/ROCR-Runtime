@@ -32,13 +32,12 @@ extern int g_TestDstNodeId;
 extern bool g_IsChildProcess;
 extern unsigned int g_TestGPUFamilyId;
 
-// each test should call TEST_START with the test custome profile and HW scheduling
-
+// Each test should call TEST_START with the test custom profile and HW scheduling
 enum TESTPROFILE{
     TESTPROFILE_DEV =          0x1,
     TESTPROFILE_PROMO =    0x2,
-    // 0x4 - 0x8000 - unsed flags
-    // can add any flag that will mark only part of the tests to run
+    // 0x4 - 0x8000 - unused flags
+    // Can add any flag that will mark only part of the tests to run
     TESTPROFILE_RUNALL = 0xFFFF
 };
 
@@ -48,8 +47,8 @@ enum ENVCAPS{
     ENVCAPS_16BITPASID             =  0x2,
     ENVCAPS_32BITLINUX              =  0x4,
     ENVCAPS_64BITLINUX              =  0x8
-    // 0x8 - 0x8000 - unsed flags
-    // can add any flag that will mark specific hw limitation \ capability
+    // 0x8 - 0x8000 - unused flags
+    // Can add any flag that will mark specific hw limitation or capability
 };
 
 enum KfdFamilyId {

@@ -53,8 +53,9 @@ enum CMA_TEST_STATUS {
     CMA_TEST_HSA_WRITE_FAIL
 };
 
-// @struct testMemoryDescriptor
-//   Describes test buffers for Cross Memory Attach Test.
+/* @struct testMemoryDescriptor
+ * @brief Describes test buffers for Cross Memory Attach Test.
+ */
 struct testMemoryDescriptor {
     CMA_MEM_TYPE m_MemType;
     HSAuint64 m_MemSize;
@@ -76,9 +77,10 @@ struct testMemoryDescriptor {
     ~testMemoryDescriptor(){}
 };
 
-// @class KFDCMAArray
-//   Array of buffers that will be passed between the parent and child
-//   process for Cross memory read and write tests
+/* @class KFDCMAArray
+ * @brief Array of buffers that will be passed between the parent and child
+ *        process for Cross memory read and write tests
+ */
 class KFDCMAArray {
     /* Used to store the actual buffer array */
     HsaMemoryBuffer* m_MemArray[CMA_MEMORY_TEST_ARRAY_SIZE];
@@ -130,5 +132,4 @@ class KFDIPCTest :  public KFDBaseComponentTest {
     pid_t m_ChildPid;
 };
 
-#endif
-
+#endif  // __KFD_MEMORY_TEST__H__

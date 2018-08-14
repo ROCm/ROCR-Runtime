@@ -72,35 +72,34 @@ struct CommandLineArguments {
 #define MEM_WRITE 0x02
 #define MEM_EXECUTE 0x4
 
-
-
-// @brief change console text color
+// @brief Change console text color
 void SetConsoleTextColor(TEXTCOLOR color);
 // @params delayCount : delay time in milliseconds
 void Delay(int delayCount);
-// @brief replacement for windows VirtualAlloc func
+// @brief Replacement for windows VirtualAlloc func
 void *VirtualAllocMemory(void *address, unsigned int size, int memProtection = MEM_READ | MEM_WRITE);
-// @brief replacement for windows FreeVirtual func
+// @brief Replacement for windows FreeVirtual func
 bool VirtualFreeMemory(void *address, unsigned int size);
-// @brief retrieve the last error number
+// @brief Retrieve the last error number
 HSAuint64 GetLastErrorNo();
 
 HSAint64 AtomicInc(volatile HSAint64* pValue);
 
 void MemoryBarrier();
 
-// @brief: runs the selected test case number of times required, each in a separate process
-// @params testToRun : can be a specific test testcase like TestCase.TestName or if you want
-// to run all tests in a test case: TestCase.* and so on
-// @params numOfProcesses : how many processes to run in parallel
-// @params runsPerProcess : how many iteration a test should do per process, must be a positive number
+/* @brief: Runs the selected test case number of times required, each in a separate process
+ * @params testToRun : Can be a specific test testcase like TestCase.TestName or if you want
+ *                     to run all tests in a test case: TestCase.* and so on
+ * @params numOfProcesses : How many processes to run in parallel
+ * @params runsPerProcess : How many iteration a test should do per process, must be a positive number
+ */
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess = 1);
 
 HSAuint64 GetSystemTickCountInMicroSec();
 
-/**Put the system to S3/S4 power state and bring it back to S0.
-@return 'true' on success, 'false' on failure.
-*/
+/* Put the system to S3/S4 power state and bring it back to S0.
+ * @return 'true' on success, 'false' on failure.
+ */
 bool SuspendAndWakeUp();
 
 void AcquirePrivilege(OS_PRIVILEGE priv);

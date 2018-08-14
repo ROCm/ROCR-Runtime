@@ -38,9 +38,9 @@ void KFDBaseComponentTest::SetUp() {
     memset( &m_SystemProperties, 0, sizeof(m_SystemProperties) );
     memset(m_RenderNodes, 0, sizeof(m_RenderNodes));
 
-    /** in order to be correctly testing the KFD interfaces and ensure
+    /** In order to be correctly testing the KFD interfaces and ensure
      *  that the KFD acknowledges relevant node parameters
-     *  for the rest of the tests and used for more specific topology tests
+     *  for the rest of the tests and used for more specific topology tests,
      *  call to GetSystemProperties for a system snapshot of the topology here
      */
     ASSERT_SUCCESS(hsaKmtAcquireSystemProperties(&m_SystemProperties));
@@ -53,8 +53,8 @@ void KFDBaseComponentTest::SetUp() {
     m_MemoryFlags.ui32.CachePolicy = HSA_CACHING_NONCACHED;  // Non cached
     m_MemoryFlags.ui32.ReadOnly = 0;                         // Read/Write
     m_MemoryFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;         // 4KB page
-    m_MemoryFlags.ui32.HostAccess = 1;                       // host accessible
-    m_MemoryFlags.ui32.NoSubstitute = 0;                     // fall back to node 0 if needed
+    m_MemoryFlags.ui32.HostAccess = 1;                       // Host accessible
+    m_MemoryFlags.ui32.NoSubstitute = 0;                     // Fall back to node 0 if needed
     m_MemoryFlags.ui32.GDSMemory = 0;
     m_MemoryFlags.ui32.Scratch = 0;
 
@@ -94,7 +94,7 @@ HSAuint64 KFDBaseComponentTest::GetSysMemSize() {
     for (unsigned node = 0; node < m_SystemProperties.NumNodes; node++) {
         nodeProps = m_NodeInfo.GetNodeProperties(node);
         if (nodeProps != NULL && nodeProps->NumCPUCores > 0 && nodeProps->NumMemoryBanks > 0) {
-            /* For NUMA nodes, memory is distributed among differnt nodes.
+            /* For NUMA nodes, memory is distributed among different nodes.
              * Compute total system memory size. KFD driver also computes
              * the system memory (si_meminfo) similarly
              */

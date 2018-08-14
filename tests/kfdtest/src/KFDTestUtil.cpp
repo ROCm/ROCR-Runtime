@@ -52,7 +52,7 @@ bool GetHwCapabilityHWS() {
     unsigned int value = 0;
     bool valExists = ReadDriverConfigValue(CONFIG_HWS, value);
 
-    /* HWS is enabled by default, so... */
+    /* HWS is enabled by default */
     return ( (!valExists) || ( value > 0));
 }
 
@@ -64,7 +64,7 @@ HSAKMT_STATUS CreateQueueTypeEvent(
     ) {
     HsaEventDescriptor Descriptor;
 
-// TODO Create per-OS header with this sort of definitions
+// TODO: Create per-OS header with this sort of definitions
 #ifdef _WIN32
     Descriptor.EventType = HSA_EVENTTYPE_QUEUE_EVENT;
 #else
@@ -369,7 +369,7 @@ void HsaMemoryBuffer::UnmapAllNodes() {
     }
 
     /*
-     * TODO: when thunk will be updated use hsaKmtRegisterToNodes. and then nodes will be used
+     * TODO: When thunk is updated, use hsaKmtRegisterToNodes. Then nodes will be used
      */
     hsaKmtUnmapMemoryToGPU(m_pBuf);
     hsaKmtDeregisterMemory(m_pBuf);
@@ -414,10 +414,10 @@ HsaInteropMemoryBuffer::~HsaInteropMemoryBuffer() {
 HsaNodeInfo::HsaNodeInfo() {
 }
 
-// Init - Get and store information about all the HSA nodes from the Thunk Library.
-// @NumOfNodes - Number to system nodes returned by hsaKmtAcquireSystemProperties
-// @Return - false: if no node information is available
-//
+/* Init - Get and store information about all the HSA nodes from the Thunk Library.
+ * @NumOfNodes - Number to system nodes returned by hsaKmtAcquireSystemProperties
+ * @Return - false: if no node information is available
+ */
 bool HsaNodeInfo::Init(int NumOfNodes) {
     HsaNodeProperties *nodeProperties;
     _HSAKMT_STATUS status;
@@ -427,8 +427,9 @@ bool HsaNodeInfo::Init(int NumOfNodes) {
         nodeProperties = new HsaNodeProperties();
 
         status = hsaKmtGetNodeProperties(i, nodeProperties);
-        /* this is not a fatal test (not using assert), since even when it fails for one node
-         * we want to get information regarding others. */
+        /* This is not a fatal test (not using assert), since even when it fails for one node
+         * we want to get information regarding others.
+         */
         EXPECT_SUCCESS(status) << "Node index: " << i << "hsaKmtGetNodeProperties returned status " << status;
 
         if (status == HSAKMT_STATUS_SUCCESS) {
@@ -476,8 +477,7 @@ const int HsaNodeInfo::HsaDefaultGPUNode() const {
         return -1;
 
     if (g_TestNodeId >= 0) {
-        // Check if this is a valid Id, if so use this else use first
-        // available
+        // Check if this is a valid Id, if so use this else use first available
         for (unsigned int i = 0; i < m_NodesWithGPU.size(); i++) {
             if (g_TestNodeId == m_NodesWithGPU.at(i))
                 return g_TestNodeId;

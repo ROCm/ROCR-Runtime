@@ -24,7 +24,7 @@
 #include "KFDOpenCloseKFDTest.hpp"
 #include "KFDTestUtil.hpp"
 
-// before every test from this class fixture - open KFD
+// Before every test from this class fixture, open KFD
 void KFDOpenCloseKFDTest::SetUp() {
     ROUTINE_START
 
@@ -33,7 +33,7 @@ void KFDOpenCloseKFDTest::SetUp() {
     ROUTINE_END
 }
 
-// after every test from this class fixture - close KFD
+// After every test from this class fixture, close KFD
 void KFDOpenCloseKFDTest::TearDown() {
     ROUTINE_START
 
@@ -42,9 +42,10 @@ void KFDOpenCloseKFDTest::TearDown() {
     ROUTINE_END
 }
 
-// this test does not use class KFDOpenCloseKFDTest but is placed here
-// since it's testing same topic as other test
-// verify that calling hsaKmtCloseKFD on a closed KFD will return right status
+/* This test does not use class KFDOpenCloseKFDTest but is placed here
+ * since it's testing same topic as other test
+ * Verify that calling hsaKmtCloseKFD on a closed KFD will return right status
+ */
 TEST(KFDCloseKFDTest, CloseAClosedKfd ) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -53,8 +54,7 @@ TEST(KFDCloseKFDTest, CloseAClosedKfd ) {
     TEST_END
 }
 
-// verify that calling hsaKmtCloseKFD on an already opened KFD will return
-// right status
+// Verify that calling hsaKmtCloseKFD on an already opened KFD will return right status
 TEST_F(KFDOpenCloseKFDTest, OpenAlreadyOpenedKFD ) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -65,8 +65,7 @@ TEST_F(KFDOpenCloseKFDTest, OpenAlreadyOpenedKFD ) {
     TEST_END
 }
 
-// testing the normal scenario: open followed by close (done in the setup and
-// teardown functions)
+// Testing the normal scenario: open followed by close (done in the setup and teardown functions)
 TEST_F(KFDOpenCloseKFDTest, OpenCloseKFD ) {
 }
 

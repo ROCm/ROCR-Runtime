@@ -25,8 +25,8 @@
 #define __KFD_BASE_PACKET__H__
 
 /**
- * all packets profiles must be defined here
- * every type defined here has sub-types
+ * All packets profiles must be defined here
+ * Every type defined here has sub-types
  */
 enum PACKETTYPE {
     PACKETTYPE_PM4,
@@ -40,13 +40,13 @@ class BasePacket {
     BasePacket(void) {}
     virtual ~BasePacket(void) {}
 
-    // @returns the packet type
+    // @returns Packet type
     virtual PACKETTYPE PacketType() const = 0;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const = 0;
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const = 0;
-    // @returns the packet size in DWORDS
+    // @returns Packet size in dwordS
     unsigned int SizeInDWords() const { return SizeInBytes()/sizeof(unsigned int); }
 
     void Dump() const;
@@ -54,4 +54,4 @@ class BasePacket {
  protected:
 };
 
-#endif
+#endif  // __KFD_BASE_PACKET__H__

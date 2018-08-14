@@ -36,7 +36,8 @@ PM4Queue::~PM4Queue(void) {
 
 unsigned int PM4Queue::Wptr() {
     /* Write pointer in dwords. Simulate 32-bit wptr that wraps at
-     * queue size even on Vega10 and later chips with 64-bit wptr. */
+     * queue size even on Vega10 and later chips with 64-bit wptr.
+     */
     return *m_Resources.Queue_write_ptr % (m_QueueBuf->Size() / 4);
 }
 
@@ -48,12 +49,13 @@ unsigned int PM4Queue::Rptr() {
 unsigned int PM4Queue::RptrWhenConsumed() {
     /* On PM4 queues Rptr is always 32-bit in dword units and wraps at
      * queue size. The expected value when all packets are consumed is
-     * exactly the value returned by Wptr(). */
+     * exactly the value returned by Wptr().
+     */
     return Wptr();
 }
 
 void PM4Queue::SubmitPacket() {
-    // m_pending Wptr is in DWORDs
+    // m_pending Wptr is in dwords
     if (g_TestGPUFamilyId < FAMILY_AI) {
         // Pre-Vega10 uses 32-bit wptr and doorbell
         MemoryBarrier();

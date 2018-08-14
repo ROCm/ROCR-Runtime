@@ -55,7 +55,7 @@ class KFDExceptionTest : public KFDBaseComponentTest {
                              unsigned int dimX = 1, unsigned int dimY = 1,
                              unsigned int dimZ = 1);
 
- protected:  // members
+ protected:  // Members
     pid_t m_ChildPid;
     HSAKMT_STATUS m_ChildStatus;
 

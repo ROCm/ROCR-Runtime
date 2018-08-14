@@ -63,17 +63,13 @@ class KFDBaseComponentTest : public testing::Test {
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;
 
-    // @brief SetUpTestCase function run before the first test that uses
-    // KFDOpenCloseKFDTest class fixture, and opens KFD.
+    // @brief Executed before the first test that uses KFDOpenCloseKFDTest class and opens KFD.
     static  void SetUpTestCase();
-    // @brief TearDownTestCase function run after the last test from
-    // KFDOpenCloseKFDTest class fixture and calls close KFD.
+    // @brief Executed after the last test from KFDOpenCloseKFDTest class and closes KFD.
     static  void TearDownTestCase();
-    // @brief SetUp function run before every test that uses
-    // KFDOpenCloseKFDTest class fixture, sets all common settings for the tests.
+    // @brief Executed before every test that uses KFDOpenCloseKFDTest class and sets all common settings for the tests.
     virtual void SetUp();
-    // @brief TearDown function run after every test that uses
-    // KFDOpenCloseKFDTest class fixture.
+    // @brief Executed after every test that uses KFDOpenCloseKFDTest class.
     virtual void TearDown();
 };
 

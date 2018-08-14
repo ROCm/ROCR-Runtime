@@ -30,7 +30,7 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
-#define N_PROCESSES             (8)     /* number of processes running in parallel, at least 2 */
+#define N_PROCESSES             (8)     /* Number of processes running in parallel, must be at least 2 */
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
@@ -70,7 +70,7 @@ void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAui
                 break;
             }
 
-            /* wait for 1 second to try allocate again */
+            /* Wait for 1 second to try allocate again */
             sleep(1);
         }
     }
@@ -268,7 +268,7 @@ void KFDEvictTest::ForkChildProcesses(int nprocesses) {
 
 void KFDEvictTest::WaitChildProcesses() {
     if (m_IsParent) {
-        /* only run by parent process */
+        /* Only run by parent process */
         int childStatus;
         int childExitOkNum = 0;
         int size = m_ChildPids.size();
@@ -286,7 +286,7 @@ void KFDEvictTest::WaitChildProcesses() {
         ASSERT_EQ(childExitOkNum, size);
     }
 
-    /* child process or parent process finished successfullly */
+    /* Child process or parent process finished successfully */
     m_ChildStatus = HSAKMT_STATUS_SUCCESS;
 }
 
@@ -296,19 +296,19 @@ void KFDEvictTest::WaitChildProcesses() {
  *
  * ALLOCATE_BUF_SIZE_MB buf allocation size
  *
- * number of buf is equal to (vramSizeMB / (vramBufSizeMB * N_PROCESSES) ) + 8
+ * buf is equal to (vramSizeMB / (vramBufSizeMB * N_PROCESSES) ) + 8
  * Total vram all processes allocated: 8GB for 4GB Fiji, and 20GB for 16GB Vega10
  *
- * many times of eviction and restore will happen:
- * ttm will evict buffers of another process if not enough free vram
+ * Eviction and restore will happen many times:
+ * ttm will evict buffers of another process if there is not enough free vram
  * process restore will evict buffers of another process
  *
- * Sometimes the allocate may fail (maybe that is normal)
+ * Sometimes the allocation may fail (maybe that is normal)
  * ALLOCATE_RETRY_TIMES max retry times to allocate
  *
- * This is basic test, no queue so vram are not used by GPU during test
+ * This is basic test with no queue, so vram is not used by the GPU during test
  *
- * Todo:
+ * TODO:
  *    - Synchronization between the processes, so they know for sure when
  *        they are done allocating memory
  */
@@ -345,7 +345,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     std::vector<void *> pBuffers;
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
-    /* allocate gfx vram size of at most one third system memory */
+    /* Allocate gfx vram size of at most one third system memory */
     HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
@@ -365,12 +365,12 @@ TEST_F(KFDEvictTest, BasicTest) {
  * until address buffer is filled with specific value 0x5678 by host program,
  * then each wavefront fills value 0x5678 at corresponding result buffer and quit
  *
- * initial state:
+ * Initial state:
  *   s[0:1] - address buffer base address
  *   s[2:3] - result buffer base address
  *   s4 - workgroup id
  *   v0 - workitem id, always 0 because NUM_THREADS_X(number of threads) in workgroup set to 1
- * registers:
+ * Registers:
  *   v0 - calculated workitem id, v0 = v0 + s4 * NUM_THREADS_X
  *   v[2:3] - address of corresponding local buf address offset: s[0:1] + v0 * 8
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
@@ -514,7 +514,7 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
-    /* Skip test for chip it doesn't have CWSR, which the test depends on */
+    /* Skip test for chip if it doesn't have CWSR, which the test depends on */
     if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties)) {
         LOG() << std::hex << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
@@ -538,7 +538,7 @@ TEST_F(KFDEvictTest, QueueTest) {
         LOG() << "Skipping test: Not enough system memory available." << std::endl;
         return;
     }
-    /* assert all buffer address can be stored within one page
+    /* Assert all buffer address can be stored within one page
      * because only one page host memory srcBuf is allocated
      */
     ASSERT_LE(count, PAGE_SIZE/sizeof(unsigned int *));
@@ -559,7 +559,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     std::vector<void *> pBuffers;
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
-    /* allocate gfx vram size of at most one third system memory */
+    /* Allocate gfx vram size of at most one third system memory */
     HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
@@ -583,27 +583,32 @@ TEST_F(KFDEvictTest, QueueTest) {
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(localBufAddr, result);
     dispatch0.SetDim(wavefront_num, 1, 1);
-    /* submit the packet and start shader */
+    /* Submit the packet and start shader */
     dispatch0.Submit(pm4Queue);
 
-    /* doing evict/restore queue test for 5 seconds while queue is running */
+    /* Doing evict/restore queue test for 5 seconds while queue is running */
     sleep(5);
 
-    /* LOG() << m_psName << "notify shader to quit" << std::endl; */
-    /* fill address buffer so shader quits */
+    /* Uncomment this line for debugging */
+    // LOG() << m_psName << "notify shader to quit" << std::endl;
+
+    /* Fill address buffer so shader quits */
     addrBuffer.Fill(0x5678);
 
-    /* wait for shader to finish or timeout if shade has vm page fault */
+    /* Wait for shader to finish or timeout if shader has vm page fault */
     dispatch0.SyncWithStatus(120000);
 
     ASSERT_SUCCESS(pm4Queue.Destroy());
 
     FreeAmdgpuBo(handle);
-    /* LOG() << m_psName << "free buffer" << std::endl; */
-    /* cleanup */
+
+    /* Uncomment this line for debugging */
+    // LOG() << m_psName << "free buffer" << std::endl;
+
+    /* Cleanup */
     FreeBuffers(pBuffers, vramBufSize);
 
-    /* check if all wavefronts finish successfully */
+    /* Check if all wavefronts finished successfully */
     for (i = 0; i < wavefront_num; i++)
         ASSERT_EQ(0x5678, *(result + i));
 
