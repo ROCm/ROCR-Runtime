@@ -27,8 +27,9 @@
 #include "SDMAPacket.hpp"
 #include "KFDTestUtil.hpp"
 
-/* Byte/dword cound in many SDMA packets is 1-based in AI, meaning a
- * count of 1 is encoded as 0. */
+/* Byte/dword count in many SDMA packets is 1-based in AI, meaning a
+ * count of 1 is encoded as 0.
+ */
 #define SDMA_COUNT(c) (g_TestGPUFamilyId < FAMILY_AI ? (c) : (c)-1)
 
 SDMAWriteDataPacket::SDMAWriteDataPacket(void):
@@ -95,7 +96,7 @@ SDMACopyDataPacket::SDMACopyDataPacket(void *const dsts[], void *src, int n, uns
     packetData = pSDMA;
 
     while (surfsize > 0) {
-        /* sdma support maximum 0x3fffe0 byte in one copy, take 2M here */
+        /* SDMA support maximum 0x3fffe0 byte in one copy, take 2M here */
         if (surfsize > TWO_MEG)
             size = TWO_MEG;
         else
@@ -150,7 +151,7 @@ SDMAFillDataPacket::SDMAFillDataPacket(void *dst, unsigned int data, unsigned in
         pSDMA->HEADER_UNION.op = SDMA_OP_CONST_FILL;
         pSDMA->HEADER_UNION.sub_op = 0;
 
-        /* If Both size and address are DW aligned, then use DW fill */
+        /* If both size and address are DW aligned, then use DW fill */
         if (!(copy_size & 0x3) && !((HSAuint64)dst & 0x3))
             pSDMA->HEADER_UNION.fillsize = 2; /* DW Fill */
         else

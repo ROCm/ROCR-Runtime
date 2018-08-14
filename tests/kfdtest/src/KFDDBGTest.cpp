@@ -79,7 +79,7 @@ void KFDDBGTest::TearDown() {
         delete m_pIsaGen;
     m_pIsaGen = NULL;
 
-    /* reset the user trap handler */
+    /* Reset the user trap handler */
     hsaKmtSetTrapHandler(m_NodeInfo.HsaDefaultGPUNode(), 0, 0, 0, 0);
 
     KFDBaseComponentTest::TearDown();
@@ -118,7 +118,7 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
         ASSERT_SUCCESS(queue_flush.Create(defaultGPUNode));
 
         // Set Address Watch Params
-        // TODO: Set atchMode[1] to Atomic in case we want to test this mode.
+        // TODO: Set WatchMode[1] to Atomic in case we want to test this mode.
 
         HSA_DBG_WATCH_MODE  WatchMode[2];
         HSAuint64           WatchAddress[2];
@@ -153,9 +153,9 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
         dispatch.SetArgs(dstBuf.As<void*>(), reinterpret_cast<void *>(secDstBuf));
         dispatch.SetDim(1, 1, 1);
 
-        // TODO: use Memory ordering rules w/ atomics
-        //       for host-GPU memory syncs.
-        //       set to: std::memory_order_seq_cst
+        /* TODO: Use Memory ordering rules w/ atomics for host-GPU memory syncs.
+         * Set to std::memory_order_seq_cst
+         */
 
         dispatch.Submit(queue);
 

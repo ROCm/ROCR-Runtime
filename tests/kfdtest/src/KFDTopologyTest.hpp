@@ -26,9 +26,10 @@
 #ifndef __KFD_TOPOLOGY_TEST__H__
 #define __KFD_TOPOLOGY_TEST__H__
 
-// @class KFDTopologyTest
-// this class has no additional features to KFDBaseComponentTest
-// the separation was made so we are able to goup all topology tests together
+/* @class KFDTopologyTest
+ * This class has no additional features to KFDBaseComponentTest
+ * The separation was made so we are able to group all topology tests together
+ */
 class KFDTopologyTest : public KFDBaseComponentTest {
  public:
     KFDTopologyTest(void) {}

@@ -53,7 +53,7 @@ unsigned int PM4WriteDataPacket::SizeInBytes() const {
 
 void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
     m_pPacketData = reinterpret_cast<PM4WRITE_DATA_CI *>(calloc(1, SizeInBytes()));
-    // verify that the memory is allocated successfully, cannot use assert here
+    // Verify that the memory is allocated successfully, cannot use assert here
     EXPECT_NOTNULL(m_pPacketData);
 
     InitPM4Header(m_pPacketData->header, IT_WRITE_DATA);
@@ -249,8 +249,8 @@ void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned i
     // 1st register is a part of the packet struct.
     m_packetSize = sizeof(PM4SET_SH_REG) + (numRegs-1)*sizeof(uint32_t);
 
-    /* allocating the size of the packet, since the packet is assembled from a struct
-     * followed by an additional DWORD data
+    /* Allocating the size of the packet, since the packet is assembled from a struct
+     * followed by an additional dword data
      */
     m_pPacketData = reinterpret_cast<PM4SET_SH_REG *>(malloc(m_packetSize));
 
@@ -296,7 +296,7 @@ PM4PartialFlushPacket::PM4PartialFlushPacket(void) {
 }
 
 unsigned int PM4PartialFlushPacket::SizeInBytes() const {
-    // for PARTIAL_FLUSH_CS packets, the last 2 DWORDS don't exist.
+    // For PARTIAL_FLUSH_CS packets, the last 2 dwordS don't exist.
     return sizeof(PM4EVENT_WRITE) - sizeof(uint32_t)*2;
 }
 

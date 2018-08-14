@@ -28,8 +28,6 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
-// All tests are marked by their serial number in the QCM FDD
-
 void KFDExceptionTest::SetUp() {
     ROUTINE_START
 
@@ -198,7 +196,7 @@ TEST_F(KFDExceptionTest, InvalidPPRWriteProtection) {
         TestMemoryException(defaultGPUNode, srcBuffer.As<HSAuint64>(),
                             (HSAuint64)pDst);
 
-        /* Wait enough time here to ensure this process got killed by kernel
+        /* Wait for enough time here to ensure this process got killed by kernel
          * due to PPR exception.
          */
         sleep(5);
@@ -213,8 +211,7 @@ TEST_F(KFDExceptionTest, InvalidPPRWriteProtection) {
     TEST_END
 }
 
-/* TODO: Same as previous test InvalidPPRWriteProtection
- */
+/* TODO: Same as previous test InvalidPPRWriteProtection */
 TEST_F(KFDExceptionTest, InvalidPPRReadProtection) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
@@ -249,7 +246,7 @@ TEST_F(KFDExceptionTest, InvalidPPRReadProtection) {
         TestMemoryException(defaultGPUNode, (HSAuint64)pSrc,
                             dstBuffer.As<HSAuint64>());
 
-        /* Wait enough time here to ensure this process got killed by kernel
+        /* Wait for enough time here to ensure this process got killed by kernel
          * due to PPR exception.
          */
         sleep(5);

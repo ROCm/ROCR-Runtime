@@ -31,9 +31,9 @@ class KFDEventTest :  public KFDBaseComponentTest {
     KFDEventTest(void) {}
     ~KFDEventTest(void) {}
 
-    // @brief SetUp function runs before every test in KFDEventTest.
+    // @brief Executed before every test in KFDEventTest.
     virtual void SetUp();
-    // @brief TearDown function runs after every test in KFDEventTest.
+    // @brief Executed after every test in KFDEventTest.
     virtual void TearDown();
 
  protected:

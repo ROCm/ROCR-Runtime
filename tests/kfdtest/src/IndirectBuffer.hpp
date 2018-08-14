@@ -28,32 +28,32 @@
 #include "KFDTestUtil.hpp"
 
 /** @class IndirectBuffer
- *  when working with indirect buffer, create IndirectBuffer, fill it with all the packets you want
+ *  When working with an indirect buffer, create IndirectBuffer, fill it with all the packets you want,
  *  create an indirect packet to point to it, and submit the packet to queue
  */
 class IndirectBuffer {
  public:
-    // @param[size] queue max size in DWords
-    // @param[type] packets type allowed in queue
+    // @param[size] Queue max size in DWords
+    // @param[type] Packet type allowed in queue
     IndirectBuffer(PACKETTYPE type, unsigned int sizeInDWords, unsigned int NodeId);
     ~IndirectBuffer(void);
 
-    // @brief add packet to queue, all validations are done with gtest ASSERT and EXPECT
+    // @brief Add packet to queue, all validations are done with gtest ASSERT and EXPECT
     void AddPacket(const BasePacket &packet);
-    // @returns the actual size of the indirect queue in DWord, equivalent to write pointer
+    // @returns Actual size of the indirect queue in DWords, equivalent to write pointer
     unsigned int SizeInDWord() { return m_ActualSize; }
-    // @returns indirect queue address
+    // @returns Indirect queue address
     unsigned int *Addr() { return m_IndirectBuf->As<unsigned int*>(); }
 
  protected:
-    // how many packets in queue
+    // Number of packets in the queue
     unsigned int m_NumOfPackets;
-    // max size of queue in DWords
+    // Max size of queue in DWords
     unsigned int m_MaxSize;
-    // current size of queue in DWords
+    // Current size of queue in DWords
     unsigned int m_ActualSize;
     HsaMemoryBuffer *m_IndirectBuf;
-    // defines what packets are supported in this queue
+    // What packets are supported in this queue
     PACKETTYPE m_PacketTypeAllowed;
 };
 

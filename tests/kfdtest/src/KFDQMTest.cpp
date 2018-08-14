@@ -32,8 +32,6 @@
 
 #include "Dispatch.hpp"
 
-// All tests are marked by their serial number in the QCM FDD
-
 void KFDQMTest::SetUp() {
     ROUTINE_START
 
@@ -155,7 +153,8 @@ TEST_F(KFDQMTest, CreateMultipleSdmaQueues) {
  * Fiji and other VI/Polaris GPUs. This test typically hangs in a few
  * seconds. According to analysis done by HW engineers, the culprit
  * seems to be PCIe speed switching. The problem can be worked around
- * by disabling the lowest DPM level on Fiji. */
+ * by disabling the lowest DPM level on Fiji.
+ */
 TEST_F(KFDQMTest, SdmaConcurrentCopies) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -189,14 +188,16 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
                                    srcBuf.As<char *>()+COPY_SIZE*j, COPY_SIZE));
         queue.SubmitPacket();
 
-        // Waste a variable amount of time. Submission timing
-        // while SDMA runs concurrently seems to be critical for
-        // reproducing the hang
+        /* Waste a variable amount of time. Submission timing
+         * while SDMA runs concurrently seems to be critical for
+         * reproducing the hang
+         */
         for (int k = 0; k < (i & 0xfff); k++)
             memcpy(srcBuf.As<char *>()+PAGE_SIZE, srcBuf.As<char *>(), 1024);
 
-        // Wait for idle every 8 packets to allow the SDMA engine to
-        // run concurrently for a bit without getting too far ahead
+        /* Wait for idle every 8 packets to allow the SDMA engine to
+         * run concurrently for a bit without getting too far ahead
+         */
         if ((i & 0x7) == 0)
             queue.Wait4PacketConsumption();
     }
@@ -268,7 +269,7 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithNullAddress) {
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 1, 1));
 
-    // don't sync since we don't expect rptr to change when the queue is disabled.
+    // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
     ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
@@ -309,7 +310,7 @@ TEST_F(KFDQMTest, DisableSdmaQueueByUpdateWithNullAddress) {
 
     queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void*>(), 0));
 
-    // don't sync since we don't expect rptr to change when the queue is disabled.
+    // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
     ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
@@ -356,7 +357,7 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
 
     queue.PlaceAndSubmitPacket(packet2);
 
-    // don't sync since we don't expect rptr to change when the queue is disabled.
+    // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
     ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
@@ -388,7 +389,7 @@ TEST_F(KFDQMTest, CreateQueueStressSingleThreaded) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     do {
-        // the following means we'll get the order 0,0 => 0,1 => 1,0 => 1,1 so we cover all options.
+        // The following means we'll get the order 0,0 => 0,1 => 1,0 => 1,1 so we cover all options.
         unsigned int firstToCreate = (numIter % 2 != 0) ? 1 : 0;
         unsigned int firstToDestroy = (numIter % 4 > 1) ? 1 : 0;
 
@@ -440,7 +441,7 @@ TEST_F(KFDQMTest, OverSubscribeCpQueues) {
         unsigned int pktSizeDw = 0;
         for (unsigned int i = 0; i < MAX_PACKETS; i++) {
             PM4WriteDataPacket packet;
-            packet.InitPacket(destBuf.As<unsigned int*>()+qidx*2, qidx+i, qidx+i);  // two DWORDs per packet
+            packet.InitPacket(destBuf.As<unsigned int*>()+qidx*2, qidx+i, qidx+i);  // two dwords per packet
             queues[qidx].PlacePacket(packet);
         }
     }
@@ -612,9 +613,9 @@ HSAint64 KFDQMTest::GetAverageTimeConsumedwithCUMask(int node, uint32_t* mask, u
     return timeTotal / iterations;
 }
 
-/**
+/*
  * Apply CU masking in a linear fashion, adding 1 CU per iteration
- * until all Shader Engines are full ...
+ * until all Shader Engines are full
  */
 TEST_F(KFDQMTest, BasicCuMaskingLinear) {
     TEST_START(TESTPROFILE_RUNALL);
@@ -1026,8 +1027,9 @@ TEST_F(KFDQMTest, CpuWriteCoherence) {
 
     EXPECT_EQ(0, queue.Rptr());
 
-    // now that the GPU has cached the PQ contents, we modify them in CPU cache and
-    // ensure that the GPU sees the updated value:
+    /* Now that the GPU has cached the PQ contents, we modify them in CPU cache and
+     * ensure that the GPU sees the updated value:
+     */
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0x42, 0x42));
 
     queue.Wait4PacketConsumption();
@@ -1130,10 +1132,10 @@ TEST_F(KFDQMTest, QueueLatency) {
         if (i >= skip)
             queue_latency_avg += queue_latency;
     } while (++i < slots);
-    /*Calculate avg from packet[skip, slots-1]*/
+    /* Calculate avg from packet[skip, slots-1] */
     queue_latency_avg /= (slots - skip);
 
-    /*workload of queue packet itself*/
+    /* Workload of queue packet itself */
     i = 0;
     do {
         queue.PlacePacket(PM4ReleaseMemoryPacket(true,
@@ -1159,7 +1161,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     do {
         /* The queue_latency is not that correct as the workload and overhead are average*/
         queue_latency_arr[i] -= workload + overhead;
-        /* The First submit takes a HSAint64 time*/
+        /* The First submit takes an HSAint64 time*/
         if (i < skip)
             LOG() << "Queue Latency " << fs[i] << ": \t" << CounterToNanoSec(queue_latency_arr[i]) << std::endl;
     } while (++i < slots);
@@ -1454,7 +1456,7 @@ TEST_F(KFDQMTest, P2PTest) {
                                              mapFlags, nodes.size(), &nodes[0]));
 #define MAGIC_NUM 0xdeadbeaf
 
-    /* First GPU fills mem with MAGIC_NUM*/
+    /* First GPU fills mem with MAGIC_NUM */
     void *src, *dst;
     HSAuint32 cur = nodes[0], next;
     ASSERT_SUCCESS(hsaKmtAllocMemory(cur, size, memFlags, reinterpret_cast<void**>(&src)));
@@ -1478,11 +1480,11 @@ TEST_F(KFDQMTest, P2PTest) {
         }
 
         LOG() << "Test " << cur << " -> " << next << std::endl;
-        /* copy to sysBuf and next GPU*/
+        /* Copy to sysBuf and next GPU*/
         void *dst_array[] = {sysBuf, dst};
         sdma_copy(cur, src, dst_array, n, size);
 
-        /* verify the data*/
+        /* Verify the data*/
         ASSERT_EQ(sysBuf[0], MAGIC_NUM);
         ASSERT_EQ(sysBuf[end], MAGIC_NUM);
 
@@ -1558,7 +1560,8 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
 #ifdef DOORBELL_WRITE_USE_SDMA
         /* Write the wptr and doorbell update using the GPU's SDMA
          * engine. This should submit the PM4 packet on the first
-         * queue. */
+         * queue.
+         */
         otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_write_ptr,
                                                    pendingWptr));
         otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_DoorBell,
@@ -1566,7 +1569,8 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
 #else
         /* Write the wptr and doorbell update using WRITE_DATA packets
          * on a second PM4 queue. This should submit the PM4 packet on
-         * the first queue. */
+         * the first queue.
+         */
         otherQueue.PlacePacket(
             PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_write_ptr,
                                    pendingWptr, false));
@@ -1582,7 +1586,8 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
 #ifdef DOORBELL_WRITE_USE_SDMA
         /* Write the wptr and doorbell update using the GPU's SDMA
          * engine. This should submit the PM4 packet on the first
-         * queue. */
+         * queue.
+         */
         otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_write_ptr,
                                                    2, &pendingWptr64));
         otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_DoorBell,
@@ -1591,7 +1596,8 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
         /* Write the 64-bit wptr and doorbell update using RELEASE_MEM
          * packets without IRQs on a second PM4 queue. RELEASE_MEM
          * should perform one atomic 64-bit access. This should submit
-         * the PM4 packet on the first queue. */
+         * the PM4 packet on the first queue.
+         */
         otherQueue.PlacePacket(
             PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_write_ptr,
                                    pendingWptr64, true));

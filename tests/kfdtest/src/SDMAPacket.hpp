@@ -27,7 +27,7 @@
 #include "BasePacket.hpp"
 #include "sdma_pkt_struct.h"
 
-// @class SDMSPacket: marks a group of all SDMA packets
+// @class SDMAPacket: Marks a group of all SDMA packets
 class SDMAPacket : public BasePacket {
  public:
         SDMAPacket(void) {}
@@ -38,44 +38,44 @@ class SDMAPacket : public BasePacket {
 
 class SDMAWriteDataPacket : public SDMAPacket {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     SDMAWriteDataPacket(void);
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     SDMAWriteDataPacket(void* destAddr, unsigned int data);
     SDMAWriteDataPacket(void* destAddr, unsigned int ndw, void *data);
 
     virtual ~SDMAWriteDataPacket(void);
 
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
-    // @breif initialise the packet
+    // @breif Initialise the packet
     void InitPacket(void* destAddr, unsigned int data);
     void InitPacket(void* destAddr, unsigned int ndw, void *data);
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return packetSize; }
 
  protected:
-    // SDMA_PKT_WRITE_UNTILED struct contains all the packets data
+    // SDMA_PKT_WRITE_UNTILED struct contains all the packet's data
     SDMA_PKT_WRITE_UNTILED *packetData;
     unsigned int packetSize;
 };
 
 class SDMACopyDataPacket : public SDMAPacket {
  public:
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     SDMACopyDataPacket(void *dest, void *src, unsigned int size);
     SDMACopyDataPacket(void *const dst[], void *src, int n, unsigned int surfsize);
 
     virtual ~SDMACopyDataPacket(void);
 
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return packetSize; }
 
  protected:
-    // SDMA_PKT_COPY_LINEAR struct contains all the packets data
+    // SDMA_PKT_COPY_LINEAR struct contains all the packet's data
     SDMA_PKT_COPY_LINEAR  *packetData;
 
     unsigned int packetSize;
@@ -83,19 +83,19 @@ class SDMACopyDataPacket : public SDMAPacket {
 
 class SDMAFillDataPacket : public SDMAPacket {
  public:
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     SDMAFillDataPacket(void *dest, unsigned int data, unsigned int size);
 
     virtual ~SDMAFillDataPacket(void);
 
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return m_PacketData; }
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_PacketSize; }
 
  protected:
-    // SDMA_PKT_CONSTANT_FILL struct contains all the packets data
+    // SDMA_PKT_CONSTANT_FILL struct contains all the packet's data
     SDMA_PKT_CONSTANT_FILL  *m_PacketData;
 
     unsigned int m_PacketSize;
@@ -103,41 +103,41 @@ class SDMAFillDataPacket : public SDMAPacket {
 
 class SDMAFencePacket : public SDMAPacket {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     SDMAFencePacket(void);
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     SDMAFencePacket(void* destAddr, unsigned int data);
 
     virtual ~SDMAFencePacket(void);
 
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return &packetData; }
-    // @brief initialise the packet
+    // @brief Initialise the packet
     void InitPacket(void* destAddr, unsigned int data);
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return sizeof(SDMA_PKT_FENCE ); }
 
  protected:
-    // SDMA_PKT_FENCE struct contains all the packets data
+    // SDMA_PKT_FENCE struct contains all the packet's data
     SDMA_PKT_FENCE  packetData;
 };
 
 class SDMATrapPacket : public SDMAPacket {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     explicit SDMATrapPacket(unsigned int eventID = 0);
 
     virtual ~SDMATrapPacket(void);
 
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return &packetData; }
-    // @brief initialise the packet
+    // @brief Initialise the packet
     void InitPacket(unsigned int eventID);
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return sizeof(SDMA_PKT_TRAP); }
 
  protected:
-    // SDMA_PKT_TRAP struct contains all the packets data
+    // SDMA_PKT_TRAP struct contains all the packet's data
     SDMA_PKT_TRAP  packetData;
 };
 

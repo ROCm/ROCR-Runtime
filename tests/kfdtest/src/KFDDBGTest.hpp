@@ -38,7 +38,7 @@ class KFDDBGTest : public KFDBaseComponentTest {
     virtual void SetUp();
     virtual void TearDown();
 
- protected:  // members
+ protected:  // Members
     IsaGenerator* m_pIsaGen;
 };
 

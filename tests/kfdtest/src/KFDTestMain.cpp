@@ -56,11 +56,13 @@ bool g_IsChildProcess;
 unsigned int g_TestGPUFamilyId;
 
 GTEST_API_ int main(int argc, char **argv) {
-    // default values for run parameters
+    // Default values for run parameters
     g_TestRunProfile = TESTPROFILE_RUNALL;
     g_TestENVCaps = ENVCAPS_NOADDEDCAPS | ENVCAPS_64BITLINUX;
     g_TestTimeOut = KFD_TEST_DEFAULT_TIMEOUT;
 
+    // Every fatal fail ( = assert that failed ) will throw an exception
+    testing::GTEST_FLAG(throw_on_failure) = true;
     testing::InitGoogleTest(&argc, argv);
 
     CommandLineArguments args;

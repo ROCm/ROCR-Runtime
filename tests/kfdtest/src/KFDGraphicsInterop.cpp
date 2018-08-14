@@ -83,8 +83,9 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     ASSERT_SUCCESS(hsaKmtRegisterGraphicsHandleToNodes(dmabufFd, &info,
                                                        1, nodes));
 
-    // DMA buffer handle and GEM handle are no longer needed, KFD
-    // should have taken a reference to the BO
+    /* DMA buffer handle and GEM handle are no longer needed, KFD
+     * should have taken a reference to the BO
+     */
     ASSERT_EQ(0, close(dmabufFd));
     ASSERT_EQ(0, amdgpu_bo_free(handle));
 

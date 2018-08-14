@@ -46,11 +46,11 @@ static int protection_flags[8] = {PROT_NONE, PROT_READ, PROT_WRITE, PROT_READ | 
                                   PROT_EXEC | PROT_WRITE | PROT_READ};
 
 void SetConsoleTextColor(TEXTCOLOR color) {
-    // TODO complete
+    // TODO: Complete
 }
 
 void Delay(int delayCount) {
-    // usleeps accept time in microseconds
+    // usleep accepts time in microseconds
     usleep(delayCount * 1000);
 }
 
@@ -76,7 +76,7 @@ HSAuint64 GetLastErrorNo() {
 }
 
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess) {
-    // TODO IMPLEMENT
+    // TODO: Implement
     return false;
 }
 
@@ -87,20 +87,20 @@ HSAuint64 GetSystemTickCountInMicroSec() {
 }
 
 bool SuspendAndWakeUp() {
-    // TODO IMPLEMENT
+    // TODO: Implement
     return false;
 }
 
 void AcquirePrivilege(OS_PRIVILEGE priv) {
-    // TODO IMPLEMENT
+    // TODO: Implement
 }
 
 void DisableKfd() {
-    // TODO IMPLEMENT
+    // TODO: Implement
 }
 
 void EnableKfd() {
-    // TODO IMPLEMENT
+    // TODO: Implement
 }
 
 bool ReadDriverConfigValue(CONFIG_VALUE config, unsigned int& rValue) {
@@ -145,7 +145,7 @@ bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs)
         if (c != 0)
             break;
 
-        /* If this option set a flag, do nothing else now. */
+        /* If this option sets a flag, do nothing else. */
         if (long_options[option_index].flag != 0)
             continue;
 

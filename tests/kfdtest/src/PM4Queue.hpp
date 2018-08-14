@@ -35,9 +35,9 @@ class PM4Queue : public BaseQueue {
     // @brief update queue write pointer and sets the queue doorbell to the queue write pointer
     virtual void SubmitPacket();
 
-    // @ return read pointer modulo queue size in DWORDs
+    // @ return read pointer modulo queue size in dwords
     virtual unsigned int Rptr();
-    // @ return write pointer modulo queue size in DWORDs
+    // @ return write pointer modulo queue size in dwords
     virtual unsigned int Wptr();
     // @ return expected m_Resources.Queue_read_ptr when all packets consumed
     virtual unsigned int RptrWhenConsumed();

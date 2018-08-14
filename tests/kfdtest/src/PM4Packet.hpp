@@ -31,7 +31,7 @@
 #include "pm4_pkt_struct_ai.h"
 #include "IndirectBuffer.hpp"
 
-// @class PM4Packet: marks a group of all PM4 packets
+// @class PM4Packet: Marks a group of all PM4 packets
 class PM4Packet : public BasePacket {
  public:
         PM4Packet(void) {}
@@ -47,9 +47,9 @@ class PM4Packet : public BasePacket {
 // @class PM4WriteDataPacket
 class PM4WriteDataPacket : public PM4Packet {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     PM4WriteDataPacket(void): m_ndw(0), m_pPacketData(NULL) {}
-    // this contructor will also init the packet, no need for additional calls
+    // This contructor will also init the packet, no need for additional calls
     PM4WriteDataPacket(unsigned int *destBuf, unsigned int data1):
         m_ndw(1), m_pPacketData(NULL) {InitPacket(destBuf, &data1);}
     PM4WriteDataPacket(unsigned int *destBuf, unsigned int data1, unsigned int data2):
@@ -59,11 +59,11 @@ class PM4WriteDataPacket : public PM4Packet {
     }
 
     virtual ~PM4WriteDataPacket(void);
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return m_pPacketData; }
-    // @brief initialise the packet
+    // @brief Initialise the packet
     void InitPacket(unsigned int *destBuf, unsigned int data1) {
         m_ndw = 1;
         InitPacket(destBuf, &data1);
@@ -77,27 +77,27 @@ class PM4WriteDataPacket : public PM4Packet {
 
  protected:
     unsigned int m_ndw;
-    // PM4WRITE_DATA_CI struct contains all the packets data
+    // PM4WRITE_DATA_CI struct contains all the packet's data
     PM4WRITE_DATA_CI  *m_pPacketData;
 };
 
 // @class PM4ReleaseMemoryPacket
 class PM4ReleaseMemoryPacket : public PM4Packet {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     PM4ReleaseMemoryPacket(void): m_pPacketData(NULL) {}
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     PM4ReleaseMemoryPacket(bool isPolling, uint64_t address, uint64_t data,
                            bool is64bit = false, bool isTimeStamp = false): m_pPacketData(NULL) {
         InitPacket(isPolling, address, data, is64bit, isTimeStamp);
     }
 
     virtual ~PM4ReleaseMemoryPacket(void);
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return m_pPacketData; }
-    // @brief initialise the packet
+    // @brief Initialise the packet
     void InitPacket(bool isPolling, uint64_t address, uint64_t data,
                     bool is64bit = false, bool isTimeStamp = false);
 
@@ -109,21 +109,21 @@ class PM4ReleaseMemoryPacket : public PM4Packet {
 // @class PM4IndirectBufPacket
 class PM4IndirectBufPacket : public PM4Packet {
  public:
-    // empty constructor, befor using the packet call the init func
+    // Empty constructor, before using the packet call the init func
     PM4IndirectBufPacket(void) {}
-    // this contructor will also init the packet, no need for adittional calls
+    // This contructor will also init the packet, no need for additional calls
     explicit PM4IndirectBufPacket(IndirectBuffer *pIb);
 
     virtual ~PM4IndirectBufPacket(void) {}
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return &m_packetData; }
-    // @breif initialise the packet
+    // @breif Initialise the packet
     void InitPacket(IndirectBuffer *pIb);
 
  private:
-    // PM4MEC_INDIRECT_BUFFER struct contains all the packets data
+    // PM4MEC_INDIRECT_BUFFER struct contains all the packet's data
     PM4MEC_INDIRECT_BUFFER  m_packetData;
 };
 
@@ -139,11 +139,11 @@ class PM4AcquireMemoryPacket : public PM4Packet {
     virtual const void *GetPacket() const { return &m_packetData; }
 
  private:
-    // PM4ACQUIRE_MEM struct contains all the packets data
+    // PM4ACQUIRE_MEM struct contains all the packet's data
     PM4ACQUIRE_MEM  m_packetData;
 };
 
-// @class PM4SetShaderRegPacket   packet that writes to consecutive registers starting at baseOffset.
+// @class PM4SetShaderRegPacket Packet that writes to consecutive registers starting at baseOffset.
 class PM4SetShaderRegPacket : public PM4Packet {
  public:
     PM4SetShaderRegPacket(void);
@@ -152,9 +152,9 @@ class PM4SetShaderRegPacket : public PM4Packet {
 
     virtual ~PM4SetShaderRegPacket(void);
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return m_pPacketData; }
 
     void InitPacket(unsigned int baseOffset, const unsigned int regValues[], unsigned int numRegs);
@@ -162,7 +162,7 @@ class PM4SetShaderRegPacket : public PM4Packet {
  private:
     unsigned int m_packetSize;
     bool m_packetDataAllocated;
-    // PM4SET_SH_REG struct contains all the packets data
+    // PM4SET_SH_REG struct contains all the packet's data
     PM4SET_SH_REG  *m_pPacketData;
 };
 
@@ -175,15 +175,15 @@ class PM4DispatchDirectPacket : public PM4Packet {
 
     virtual ~PM4DispatchDirectPacket(void) {}
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return &m_packetData; }
 
     void InitPacket(unsigned int dimX, unsigned int dimY, unsigned int dimZ, unsigned int dispatchInit);
 
  private:
-    // PM4DISPATCH_DIRECT struct contains all the packets data
+    // PM4DISPATCH_DIRECT struct contains all the packet's data
     PM4DISPATCH_DIRECT  m_packetData;
 };
 
@@ -193,13 +193,13 @@ class PM4PartialFlushPacket : public PM4Packet {
     PM4PartialFlushPacket(void);
     virtual ~PM4PartialFlushPacket(void) {}
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return &m_packetData; }
 
  private:
-    // PM4EVENT_WRITE struct contains all the packets data
+    // PM4EVENT_WRITE struct contains all the packet's data
     PM4EVENT_WRITE  m_packetData;
 };
 
@@ -209,9 +209,9 @@ class PM4NopPacket : public PM4Packet {
     PM4NopPacket(void);
     virtual ~PM4NopPacket(void) {}
 
-    // @returns the packet size in bytes
+    // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
+    // @returns Pointer to the packet
     virtual const void *GetPacket() const { return &m_packetData; }
 
  private:

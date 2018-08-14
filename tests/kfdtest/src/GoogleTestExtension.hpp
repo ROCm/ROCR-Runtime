@@ -29,24 +29,24 @@
 #include "KFDTestFlags.hpp"
 
 enum LOGTYPE {
-    LOGTYPE_INFO,            // msg header in green
+    LOGTYPE_INFO,      // msg header in green
     LOGTYPE_WARNING    // msg header in yellow
 };
 
 class KFDLog{};
 std::ostream& operator << (KFDLog log, LOGTYPE level);
 
-// @brief  log additional details, to be displayed in the same format as other google test outputs
-// currently not supported by google test
-// should be used like cout: LOG() << "message" << value << std::endl;
+// @brief  Log additional details, to be displayed in the same format as other google test outputs
+// Currently not supported by gtest
+// Should be used like cout: LOG() << "message" << value << std::endl;
 #define LOG()      KFDLog() << LOGTYPE_INFO
 #define WARN()     KFDLog() << LOGTYPE_WARNING
 
-// all test MUST be in a try catch since google test flag to throw exception on any fatal fail is on
+// All tests MUST be in a try catch since the gtest flag to throw an exception on any fatal failure is enabled
 #define TEST_START(testProfile)   if (Ok2Run(testProfile)) try {
 #define TEST_END       } catch (...) {}
 
-// used to wrape setup and teardown functions, anything that is build-in gtest  and is not a test
+// Used to wrap setup and teardown functions, anything that is built-in gtest and is not a test
 #define ROUTINE_START   try {
 #define ROUTINE_END       }catch(...) {}
 
@@ -59,13 +59,13 @@ std::ostream& operator << (KFDLog log, LOGTYPE level);
 #define ASSERT_NOTNULL(_val) ASSERT_NE((void *)NULL, _val)
 #define EXPECT_NOTNULL(_val) EXPECT_NE((void *)NULL, _val)
 
-// @brief  determines if its ok to run a test given input flags
+// @brief  Determines if it is ok to run a test given input flags
 bool Ok2Run(unsigned int testProfile);
 
-// @brief  checks if all HW capabilities needed for a test to run exist
+// @brief  Checks if all HW capabilities needed for a test to run exist
 bool TestReqEnvCaps(unsigned int hwCaps);
 
-// @brief  checks if all HW capabilities that prevents a test from running are non existing
+// @brief  Checks if all HW capabilities that prevents a test from running are absent
 bool TestReqNoEnvCaps(unsigned int hwCaps);
 
 #endif

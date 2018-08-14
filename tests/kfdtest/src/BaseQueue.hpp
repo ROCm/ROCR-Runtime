@@ -48,10 +48,10 @@ class BaseQueue {
                                  HSAuint64 *pointers = NULL);
     /** Update the queue.
      *  @see hsaKmtUpdateQueue
-     *  @param percent the new queue percentage
-     *  @param priority the new queue priority
+     *  @param percent New queue percentage
+     *  @param priority New queue priority
      *  @param nullifyBuffer
-     *      if 'true', set the new buffer address to NULL and the size to 0. Otherwise
+     *      If 'true', set the new buffer address to NULL and the size to 0. Otherwise
      *      don't change the queue buffer address/size.
      */
     virtual HSAKMT_STATUS Update(unsigned int percent, HSA_QUEUE_PRIORITY priority, bool nullifyBuffer);
@@ -64,17 +64,17 @@ class BaseQueue {
      *  Note that all packets being consumed is not the same as all packets being processed.
      */
     virtual void Wait4PacketConsumption();
-    /** @brief place packet and submit it in one go
+    /** @brief Place packet and submit it in one function
      */
     virtual void PlaceAndSubmitPacket(const BasePacket &packet);
-    /** @brief copy packet to queue and update write pointer
+    /** @brief Copy packet to queue and update write pointer
      */
     virtual void PlacePacket(const BasePacket &packet);
-    /** @brief update queue write pointer and sets the queue doorbell to the queue write pointer
+    /** @brief Update queue write pointer and set the queue doorbell to the queue write pointer
      */
     virtual void SubmitPacket() = 0;
-    /** @brief checkes if all packets in queue already processed
-     *  compares queue read and write pointers
+    /** @brief Check if all packets in queue are already processed
+     *  Compare queue read and write pointers
      */
     bool AllPacketsSubmitted();
 
@@ -100,11 +100,11 @@ class BaseQueue {
     HsaMemoryBuffer *m_QueueBuf;
     unsigned int m_Node;
 
-    // @ return write pointer modulo queue size in DWORDs
+    // @return Write pointer modulo queue size in dwords
     virtual unsigned int Wptr() = 0;
-    // @ return read pointer modulo queue size in DWORDs
+    // @return Read pointer modulo queue size in dwords
     virtual unsigned int Rptr() = 0;
-    // @ return expected m_Resources.Queue_read_ptr when all packets consumed
+    // @return Expected m_Resources.Queue_read_ptr when all packets consumed
     virtual unsigned int RptrWhenConsumed() = 0;
     virtual PACKETTYPE PacketTypeSupported() = 0;
 
@@ -131,4 +131,4 @@ class QueueArray {
     void Destroy();
 };
 
-#endif
+#endif  // __KFD_BASE_QUEUE__H__

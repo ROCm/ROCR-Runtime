@@ -34,7 +34,7 @@ void KFDPNPTest::SetUpTestCase() {
 
     AcquirePrivilege(OS_DRIVER_OPERATIONS);
 
-    // if AcquirePrivilege fails, it will throw and we will not reach here.
+    // If AcquirePrivilege fails, it will throw and we will not reach here.
     m_SetupSuccess = true;
 
     ROUTINE_END

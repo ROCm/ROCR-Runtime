@@ -92,7 +92,7 @@ class HsaMemoryBuffer {
     ~HsaMemoryBuffer();
 
  private:
-    // disable copy
+    // Disable copy
     HsaMemoryBuffer(const HsaMemoryBuffer&);
     const HsaMemoryBuffer& operator=(const HsaMemoryBuffer&);
 
@@ -130,7 +130,7 @@ class HsaInteropMemoryBuffer {
     ~HsaInteropMemoryBuffer();
 
  private:
-    // disable copy
+    // Disable copy
     HsaInteropMemoryBuffer(const HsaInteropMemoryBuffer&);
     const HsaInteropMemoryBuffer& operator=(const HsaInteropMemoryBuffer&);
 
@@ -141,8 +141,7 @@ class HsaInteropMemoryBuffer {
     unsigned int m_Node;
 };
 
-// Class HsaNodeInfo - Gather and store all HSA node information from Thunk.
-//
+// @class HsaNodeInfo - Gather and store all HSA node information from Thunk.
 class HsaNodeInfo {
     // List containing HsaNodeProperties of all Nodes available
     std::vector<HsaNodeProperties*> m_HsaNodeProps;
@@ -159,16 +158,17 @@ class HsaNodeInfo {
 
     bool Init(int NumOfNodes);
 
-    // This function should be soon depricated. This for transistion purpose only
-    // Currently, KfdTest is designed to test only ONE node. This function acts
-    // as transistion.
+    /* This function should be deprecated soon. This for transistion purpose only
+     * Currently, KfdTest is designed to test only ONE node. This function acts
+     * as transition.
+     */
     const HsaNodeProperties* HsaDefaultGPUNodeProperties() const;
     const int HsaDefaultGPUNode() const;
 
-    // Future use the following two functions to support multi-GPU.
-    // const std::vector<int>& GpuNodes = GetNodesWithGPU()
-    // for (..GpuNodes.size()..) GetNodeProperties(GpuNodes.at(i))
-    //
+    /* TODO: Use the following two functions to support multi-GPU.
+     * const std::vector<int>& GpuNodes = GetNodesWithGPU()
+     * for (..GpuNodes.size()..) GetNodeProperties(GpuNodes.at(i))
+     */
     const std::vector<int>& GetNodesWithGPU() const;
 
     // @param node index of the node we are looking at

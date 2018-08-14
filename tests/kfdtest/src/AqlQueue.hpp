@@ -31,14 +31,14 @@ class AqlQueue : public BaseQueue {
     AqlQueue();
     virtual ~AqlQueue();
 
-    // @brief update queue write pointer and sets the queue doorbell to the queue write pointer
+    // @brief Updates queue write pointer and sets the queue doorbell to the queue write pointer
     virtual void SubmitPacket();
 
-    // @ return read pointer are in DWORDs
+    // @return Read pointer in dwords
     virtual unsigned int Rptr();
-    // @ return write pointer are in DWORDs
+    // @return Write pointer in dwords
     virtual unsigned int Wptr();
-    // @ return expected m_Resources.Queue_read_ptr when all packets consumed
+    // @return Expected m_Resources.Queue_read_ptr when all packets are consumed
     virtual unsigned int RptrWhenConsumed();
 
  protected:
@@ -47,4 +47,4 @@ class AqlQueue : public BaseQueue {
     virtual _HSA_QUEUE_TYPE GetQueueType() { return HSA_QUEUE_COMPUTE_AQL; }
 };
 
-#endif
+#endif  // __KFD_AQL_QUEUE__H__

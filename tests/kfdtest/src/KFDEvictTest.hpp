@@ -38,7 +38,7 @@ class KFDEvictTest :  public KFDLocalMemoryTest {
 
     ~KFDEvictTest(void) {
         if (!m_IsParent) {
-            /* child process has to exit
+            /* Child process has to exit
              * otherwise gtest will continue other tests
              */
             exit(m_ChildStatus);
@@ -60,7 +60,7 @@ class KFDEvictTest :  public KFDLocalMemoryTest {
     void ForkChildProcesses(int nprocesses);
     void WaitChildProcesses();
 
- protected:  // members
+ protected:  // Members
     std::string     m_psName;
     std::vector<pid_t> m_ChildPids;
     HsaMemFlags     m_Flags;

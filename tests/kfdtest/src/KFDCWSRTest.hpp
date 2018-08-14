@@ -39,7 +39,7 @@ class KFDCWSRTest : public KFDBaseComponentTest {
     virtual void SetUp();
     virtual void TearDown();
 
- protected:  // members
+ protected:  // Members
     unsigned wave_number;
     IsaGenerator* m_pIsaGen;
 };

@@ -27,7 +27,6 @@
 bool Ok2Run(unsigned int testProfile) {
     bool testMatchProfile = true;
     if ((testProfile & g_TestRunProfile) == 0) {
-        // display msg to notify a test that is not running
         WARN() << "Test is skipped beacuse profile does not match current run mode" << std::endl;
         testMatchProfile = false;
     }
@@ -35,11 +34,10 @@ bool Ok2Run(unsigned int testProfile) {
     return testMatchProfile;
 }
 
-// This predication is used when specific HW capabilites must exist for the test to succeed.
+// This predication is used when specific HW capabilities must exist for the test to succeed.
 bool TestReqEnvCaps(unsigned int envCaps) {
     bool testMatchEnv = true;
     if ((envCaps & g_TestENVCaps) != envCaps) {
-        // display msg to notify a test that is not running
         WARN() << "Test is skipped due to HW capability issues" << std::endl;
         testMatchEnv = false;
     }
@@ -47,12 +45,11 @@ bool TestReqEnvCaps(unsigned int envCaps) {
     return testMatchEnv;
 }
 
-// This predication is used when specific HW capabilites must abscent for the test to succeed.
-// e.g testing capabilites not supported by HW scheduling
+// This predication is used when specific HW capabilities must be absent for the test to succeed.
+// e.g Testing capabilities not supported by HW scheduling
 bool TestReqNoEnvCaps(unsigned int envCaps) {
     bool testMatchEnv = true;
     if ((envCaps & g_TestENVCaps) != 0) {
-        // display msg to notify a test that is not running
         WARN() << "Test is skipped due to HW capability issues" << std::endl;
         testMatchEnv = false;
     }

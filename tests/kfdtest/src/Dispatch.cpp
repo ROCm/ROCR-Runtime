@@ -90,7 +90,7 @@ void Dispatch::Sync(unsigned int timeout) {
     ASSERT_SUCCESS(hsaKmtWaitOnEvent(m_pEop, timeout));
 }
 
-// returning  with status in order to allow to take actions before proc termination
+// Returning with status in order to allow actions to be performed before process termination
 int Dispatch::SyncWithStatus(unsigned int timeout) {
     int stat;
 
@@ -103,7 +103,7 @@ void Dispatch::BuildIb() {
     SplitU64(reinterpret_cast<uint64_t>(m_pArg1), arg0, arg1);
     SplitU64(reinterpret_cast<uint64_t>(m_pArg2), arg2, arg3);
 
-    // starts at COMPUTE_START_X
+    // Starts at COMPUTE_START_X
     const unsigned int COMPUTE_DISPATCH_DIMS_VALUES[] = {
         0,      // START_X
         0,      // START_Y
@@ -138,14 +138,14 @@ void Dispatch::BuildIb() {
         pgmRsrc2
     };
 
-    // starts at COMPUTE_PGM_LO
+    // Starts at COMPUTE_PGM_LO
     const unsigned int COMPUTE_PGM_VALUES_GFX8[] = {
         static_cast<uint32_t>(shiftedIsaAddr),                  // PGM_LO
         static_cast<uint32_t>(shiftedIsaAddr >> 32)             // PGM_HI
             | (is_dgpu() ? 0 : (1<<8))                          // including PGM_ATC=?
     };
 
-    // starts at COMPUTE_PGM_LO
+    // Starts at COMPUTE_PGM_LO
     const unsigned int COMPUTE_PGM_VALUES_GFX9[] = {
         static_cast<uint32_t>(shiftedIsaAddr),                  // PGM_LO
         static_cast<uint32_t>(shiftedIsaAddr >> 32)             // PGM_HI
@@ -156,17 +156,17 @@ void Dispatch::BuildIb() {
         static_cast<uint32_t>(m_scratch_base >> 40)
     };
 
-    // starts at COMPUTE_RESOURCE_LIMITS
+    // Starts at COMPUTE_RESOURCE_LIMITS
     const unsigned int COMPUTE_RESOURCE_LIMITS[] = {
         0,                      // COMPUTE_RESOURCE_LIMITS
     };
 
-    // starts at COMPUTE_TMPRING_SIZE
+    // Starts at COMPUTE_TMPRING_SIZE
     const unsigned int COMPUTE_TMPRING_SIZE[] = {
         m_ComputeTmpringSize,   // COMPUTE_TMPRING_SIZE
     };
 
-    // starts at COMPUTE_RESTART_X
+    // Starts at COMPUTE_RESTART_X
     const unsigned int COMPUTE_RESTART_VALUES[] = {
         0,                      // COMPUTE_RESTART_X
         0,                      // COMPUTE_RESTART_Y
@@ -174,13 +174,13 @@ void Dispatch::BuildIb() {
         0                       // COMPUTE_THREAD_TRACE_ENABLE
     };
 
-    // starts at COMPUTE_USER_DATA_0
+    // Starts at COMPUTE_USER_DATA_0
     const unsigned int COMPUTE_USER_DATA_VALUES[] = {
                 // Reg name             - use in KFDtest - use in ABI
-        arg0,   // COMPUTE_USER_DATA_0  - arg0           - resource descriptor for the scratch buffer - 1st DWORD
-        arg1,   // COMPUTE_USER_DATA_1  - arg1           - resource descriptor for the scratch buffer - 2nd DWORD
-        arg2,   // COMPUTE_USER_DATA_2  - arg2           - resource descriptor for the scratch buffer - 3rd DWORD
-        arg3,   // COMPUTE_USER_DATA_3  - arg3           - resource descriptor for the scratch buffer - 4th DWORD
+        arg0,   // COMPUTE_USER_DATA_0  - arg0           - resource descriptor for the scratch buffer - 1st dword
+        arg1,   // COMPUTE_USER_DATA_1  - arg1           - resource descriptor for the scratch buffer - 2nd dword
+        arg2,   // COMPUTE_USER_DATA_2  - arg2           - resource descriptor for the scratch buffer - 3rd dword
+        arg3,   // COMPUTE_USER_DATA_3  - arg3           - resource descriptor for the scratch buffer - 4th dword
         static_cast<uint32_t>(m_scratch_base),  // COMPUTE_USER_DATA_4  - flat_scratch_lo
         static_cast<uint32_t>(m_scratch_base >> 32),  // COMPUTE_USER_DATA_4  - flat_scratch_hi
         0,      // COMPUTE_USER_DATA_6  -                - AQL queue address, low part

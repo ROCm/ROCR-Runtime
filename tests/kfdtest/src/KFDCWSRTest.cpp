@@ -89,9 +89,10 @@ void KFDCWSRTest::SetUp() {
 
     m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
-    // TODO: Seems in the ISA, I can not get the workitem_id as expected, so I can not
-    // set the destination based on workitem_id.
-    // Set the wave_num to 1 for now as a workarpound. Will set it to 8 or even 256 in the future.
+    /* TODO: In the ISA, the workitem_id is not obtained as expected, so the destination cannot
+     * be set based on workitem_id. Set the wave_num to 1 for now as a workarpound.
+     * Will set it to 8 or even 256 in the future.
+     */
     wave_number = 1;
 
     ROUTINE_END
@@ -149,15 +150,15 @@ TEST_F(KFDCWSRTest, BasicTest) {
         iter[0] = 40000000;
         iter[1] = 20000000;
 
-        // submit the shader, queue1
+        // Submit the shader, queue1
         dispatch1->Submit(queue1);
         // Create queue2 during queue1 still running will trigger the CWSR
         EXPECT_SUCCESS(queue2.Create(defaultGPUNode));
-        // submit the shader
+        // Submit the shader
         dispatch2->Submit(queue2);
         dispatch1->Sync();
         dispatch2->Sync();
-        // ensure all the waves complete as expected
+        // Ensure all the waves complete as expected
         int i;
         for (i = 0 ; i < wave_number; ++i) {
              if (result[i] != iter[0]) {
