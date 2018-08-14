@@ -115,7 +115,6 @@ int get_drm_render_fd_by_gpu_id(HSAuint32 gpu_id);
 HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray);
 
-HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t node_id, uint32_t *gpu_id);
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props,
 		uint32_t *gpu_id, struct pci_access* pacc);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);

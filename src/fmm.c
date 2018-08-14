@@ -1659,7 +1659,7 @@ static HSAKMT_STATUS get_process_apertures(
 #define DRM_LAST_RENDER_NODE 255
 static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
 
-static int open_drm_render_device(int minor)
+int open_drm_render_device(int minor)
 {
 	char path[128];
 	int index, fd;
