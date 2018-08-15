@@ -61,8 +61,6 @@ GTEST_API_ int main(int argc, char **argv) {
     g_TestENVCaps = ENVCAPS_NOADDEDCAPS | ENVCAPS_64BITLINUX;
     g_TestTimeOut = KFD_TEST_DEFAULT_TIMEOUT;
 
-    // every fatal fail ( = assert that failed ) will throw an exption
-    testing::GTEST_FLAG(throw_on_failure) = true;
     testing::InitGoogleTest(&argc, argv);
 
     CommandLineArguments args;
