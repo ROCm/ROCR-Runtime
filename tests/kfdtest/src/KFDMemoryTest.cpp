@@ -1153,12 +1153,10 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
         int traceStatus;
         int err = 0, r;
 
-        // Child process: don't use ASSERTs after attaching to parent
-        // process because terminating without detaching from the
-        // traced process leaves it stopped. Unfortunately, main()
-        // sets throw_on_failure to true, which seems to affect EXPECT
-        // as well. So we catch any exceptions and detach before
-        // terminating.
+        /* Child process: we catch any exceptions to make sure we detach
+         * from the traced process, because terminating without detaching
+         * leaves the traced process stopped.
+         */
         r = ptrace(PTRACE_ATTACH, tracePid, NULL, NULL);
         if (r) {
             WARN() << "PTRACE_ATTACH failed: " << r << std::endl;
@@ -1175,8 +1173,8 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
                 HSAuint8 *addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[0]) + i) + i;
                 errno = 0;
                 long data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
-                EXPECT_EQ(0, errno);
-                EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
+                ASSERT_EQ(0, errno);
+                ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
                                     reinterpret_cast<void *>(data)));
 
                 if (mem[1] == NULL)
@@ -1185,8 +1183,8 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
                 addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[1]) + i) + i;
                 errno = 0;
                 data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
-                EXPECT_EQ(0, errno);
-                EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
+                ASSERT_EQ(0, errno);
+                ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
                                 reinterpret_cast<void *>(data)));
             }
         } catch (...) {
@@ -1297,12 +1295,9 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
         int traceStatus;
         int err = 0, r;
 
-        /* Child process: don't use ASSERTs after attaching to parent
-         * process because terminating without detaching from the
-         * traced process leaves it stopped. Unfortunately, main()
-         * sets throw_on_failure to true, which seems to affect EXPECT
-         * as well. So we catch any exceptions and detach before
-         * terminating.
+        /* Child process: we catch any exceptions to make sure we detach
+         * from the traced process, because terminating without detaching
+         * leaves the traced process stopped.
          */
         r = ptrace(PTRACE_ATTACH, tracePid, NULL, NULL);
         if (r) {
@@ -1317,17 +1312,17 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
             /* peek the memory */
             errno = 0;
             HSAint64 data0 = ptrace(PTRACE_PEEKDATA, tracePid, mem0, NULL);
-            EXPECT_EQ(0, errno);
-            EXPECT_EQ(data[0], data0);
+            ASSERT_EQ(0, errno);
+            ASSERT_EQ(data[0], data0);
             HSAint64 data1 = ptrace(PTRACE_PEEKDATA, tracePid, mem1, NULL);
-            EXPECT_EQ(0, errno);
-            EXPECT_EQ(data[1], data1);
+            ASSERT_EQ(0, errno);
+            ASSERT_EQ(data[1], data1);
 
             /* swap mem0 and mem1 by poking */
-            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
-            EXPECT_EQ(0, errno);
-            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
-            EXPECT_EQ(0, errno);
+            ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
+            ASSERT_EQ(0, errno);
+            ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
+            ASSERT_EQ(0, errno);
         } catch (...) {
             err = 1;
         }
