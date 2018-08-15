@@ -1034,6 +1034,11 @@ void GpuAgent::TranslateTime(core::Signal* signal,
     SyncClocks();
   }
 
+  if ((signal->signal_.start_ts == 0) || (signal->signal_.end_ts == 0) ||
+      (signal->signal_.start_ts > t1_.GPUClockCounter) ||
+      (signal->signal_.end_ts > t1_.GPUClockCounter))
+    debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
+
   time.start = uint64_t(
       (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /
        double(int64_t(t0_.GPUClockCounter - t1_.GPUClockCounter))) *
