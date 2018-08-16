@@ -1084,7 +1084,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     HSAuint64 *qts;
     int i = 0;
 
-    ASSERT_NE((unsigned HSAint64)queue_latency_arr, 0);
+    ASSERT_NE((HSAuint64)queue_latency_arr, 0);
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -1110,7 +1110,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     i = 0;
     do {
         queue.PlacePacket(PM4ReleaseMemoryPacket(true,
-                    (unsigned HSAint64)&qts[i],
+                    (HSAuint64)&qts[i],
                     0,
                     true,
                     1));
@@ -1137,7 +1137,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     i = 0;
     do {
         queue.PlacePacket(PM4ReleaseMemoryPacket(true,
-                    (unsigned HSAint64)&qts[i],
+                    (HSAuint64)&qts[i],
                     0,
                     true,
                     1));
