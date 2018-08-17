@@ -313,7 +313,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 	else {
 		result = HSAKMT_STATUS_SUCCESS;
 		for (HSAuint32 i = 0; i < NumEvents; i++) {
-			if (Events[i]->EventData.EventType == HSA_EVENTTYPE_MEMORY) {
+			if (Events[i]->EventData.EventType == HSA_EVENTTYPE_MEMORY &&
+			    event_data[i].memory_exception_data.gpu_id) {
 				Events[i]->EventData.EventData.MemoryAccessFault.VirtualAddress = event_data[i].memory_exception_data.va;
 				result = gpuid_to_nodeid(event_data[i].memory_exception_data.gpu_id, &Events[i]->EventData.EventData.MemoryAccessFault.NodeId);
 				if (result != HSAKMT_STATUS_SUCCESS)
