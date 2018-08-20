@@ -227,16 +227,16 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
     fenceStatus.ring = 0;
     fenceStatus.fence = ibsRequest.seq_no;
 
-    ASSERT_EQ(0, amdgpu_cs_query_fence_status(&fenceStatus,
+    EXPECT_EQ(0, amdgpu_cs_query_fence_status(&fenceStatus,
         g_TestTimeOut,
         0, &expired));
 
-    ASSERT_EQ(0, amdgpu_bo_list_destroy(boList));
+    EXPECT_EQ(0, amdgpu_bo_list_destroy(boList));
 
-    ASSERT_EQ(0, amdgpu_bo_unmap_and_free(ibResultHandle, vaHandle,
+    EXPECT_EQ(0, amdgpu_bo_unmap_and_free(ibResultHandle, vaHandle,
         ibResultMcAddress, PAGE_SIZE));
 
-    ASSERT_EQ(0, amdgpu_cs_ctx_free(contextHandle));
+    EXPECT_EQ(0, amdgpu_cs_ctx_free(contextHandle));
 }
 
 void KFDEvictTest::ForkChildProcesses(int nprocesses) {
@@ -283,7 +283,7 @@ void KFDEvictTest::WaitChildProcesses() {
             m_ChildPids.erase(m_ChildPids.begin());
         }
 
-        ASSERT_EQ(childExitOkNum, size);
+        EXPECT_EQ(childExitOkNum, size);
     }
 
     /* Child process or parent process finished successfully */
@@ -598,7 +598,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     /* Wait for shader to finish or timeout if shader has vm page fault */
     dispatch0.SyncWithStatus(120000);
 
-    ASSERT_SUCCESS(pm4Queue.Destroy());
+    EXPECT_SUCCESS(pm4Queue.Destroy());
 
     FreeAmdgpuBo(handle);
 
@@ -610,7 +610,7 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     /* Check if all wavefronts finished successfully */
     for (i = 0; i < wavefront_num; i++)
-        ASSERT_EQ(0x5678, *(result + i));
+        EXPECT_EQ(0x5678, *(result + i));
 
     WaitChildProcesses();
 

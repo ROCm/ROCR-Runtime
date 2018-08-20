@@ -99,9 +99,9 @@ TEST_F(KFDEventTest, SignalEvent) {
 
     queue.Wait4PacketConsumption();
 
-    ASSERT_SUCCESS(hsaKmtWaitOnEvent(m_pHsaEvent, g_TestTimeOut));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pHsaEvent, g_TestTimeOut));
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END;
 }
@@ -184,8 +184,7 @@ exit:
         uint64_t minTime = ULONG_MAX, maxTime = 0;
         uint64_t minLat = ULONG_MAX, maxLat = 0;
 
-        r = queueAndSignalEvents(node, mNumEvents, time, latency);
-        ASSERT_EQ(r, HSAKMT_STATUS_SUCCESS);
+        ASSERT_EQ(queueAndSignalEvents(node, mNumEvents, time, latency), HSAKMT_STATUS_SUCCESS);
 
         mTimeHistory[mHistorySlot%HISTORY_SIZE] = time;
         mLatHistory[mHistorySlot%HISTORY_SIZE] = latency;
@@ -275,9 +274,9 @@ TEST_F(KFDEventTest, SignalMultipleEventsWaitForAll) {
         Delay(WAIT_BETWEEN_SUBMISSIONS_MS);
     }
 
-    ASSERT_SUCCESS(hsaKmtWaitOnMultipleEvents(pHsaEvent, EVENT_NUMBER, true, g_TestTimeOut));
+    EXPECT_SUCCESS(hsaKmtWaitOnMultipleEvents(pHsaEvent, EVENT_NUMBER, true, g_TestTimeOut));
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     for (i = 0; i < EVENT_NUMBER; i++)
         EXPECT_SUCCESS(hsaKmtDestroyEvent(pHsaEvent[i]));

@@ -96,11 +96,11 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(srcLocalBuffer.As<void*>()));
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(dstLocalBuffer.As<void*>()));
-    ASSERT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(srcLocalBuffer.As<void*>()));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(dstLocalBuffer.As<void*>()));
+    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
 
     TEST_END
 }
@@ -142,17 +142,17 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
+    EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU));
 
     dispatch.SetArgs(LocalBuffer.As<void*>(), SysBufferB.As<void*>());
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    ASSERT_SUCCESS(queue.Destroy());
-    ASSERT_EQ(SysBufferB.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_EQ(SysBufferB.As<unsigned int*>()[0], 0x01010101);
     if (!is_dgpu())
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
 
     TEST_END
 }
@@ -378,7 +378,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
         delete[] pages[order].pointers;
     }
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }

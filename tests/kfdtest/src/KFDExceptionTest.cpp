@@ -144,11 +144,11 @@ TEST_F(KFDExceptionTest, InvalidBadAddress) {
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (is_dgpu()) {
-            ASSERT_EQ(WIFEXITED(childStatus), true);
-            ASSERT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
-            ASSERT_EQ(WIFSIGNALED(childStatus), true);
-            ASSERT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ(WIFSIGNALED(childStatus), true);
+            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
         }
     }
 
@@ -204,8 +204,8 @@ TEST_F(KFDExceptionTest, InvalidPPRWriteProtection) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        ASSERT_EQ(WIFSIGNALED(childStatus), true);
-        ASSERT_EQ(WTERMSIG(childStatus), SIGSEGV);
+        EXPECT_EQ(WIFSIGNALED(childStatus), true);
+        EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
     }
 
     TEST_END
@@ -254,8 +254,8 @@ TEST_F(KFDExceptionTest, InvalidPPRReadProtection) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        ASSERT_EQ(WIFSIGNALED(childStatus), true);
-        ASSERT_EQ(WTERMSIG(childStatus), SIGSEGV);
+        EXPECT_EQ(WIFSIGNALED(childStatus), true);
+        EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
     }
 
     TEST_END
@@ -298,11 +298,11 @@ TEST_F(KFDExceptionTest, InvalidWriteAddress) {
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (is_dgpu()) {
-            ASSERT_EQ(WIFEXITED(childStatus), true);
-            ASSERT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
-            ASSERT_EQ(WIFSIGNALED(childStatus), true);
-            ASSERT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ(WIFSIGNALED(childStatus), true);
+            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
         }
     }
 
@@ -340,11 +340,11 @@ TEST_F(KFDExceptionTest, FaultStorm) {
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (is_dgpu()) {
-            ASSERT_EQ(WIFEXITED(childStatus), true);
-            ASSERT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
-            ASSERT_EQ(WIFSIGNALED(childStatus), true);
-            ASSERT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ(WIFSIGNALED(childStatus), true);
+            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
         }
     }
 

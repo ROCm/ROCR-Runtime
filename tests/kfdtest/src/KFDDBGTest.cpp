@@ -163,11 +163,11 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
         dispatch.Sync(g_TestTimeOut);
 
         // Check that we got trap handler calls due to add watch triggers
-        ASSERT_GE(*(tmaBuf.As<unsigned int*>()+ TMA_TRAP_COUNT_OFFSET), TMA_TRAP_COUNT_VALUE);
+        EXPECT_GE(*(tmaBuf.As<unsigned int*>()+ TMA_TRAP_COUNT_OFFSET), TMA_TRAP_COUNT_VALUE);
 
-        ASSERT_SUCCESS(hsaKmtDbgUnregister(defaultGPUNode));
-        ASSERT_SUCCESS(queue.Destroy());
-        ASSERT_SUCCESS(queue_flush.Destroy());
+        EXPECT_SUCCESS(hsaKmtDbgUnregister(defaultGPUNode));
+        EXPECT_SUCCESS(queue.Destroy());
+        EXPECT_SUCCESS(queue_flush.Destroy());
     } else {
         LOG() << "Skipping test: Test not supported on family ID 0x" << m_FamilyId << "." << std::endl;
     }

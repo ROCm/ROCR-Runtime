@@ -79,8 +79,8 @@ void KFDBaseComponentTest::TearDown() {
         drmClose(m_RenderNodes[i].fd);
     }
 
-    ASSERT_SUCCESS(hsaKmtReleaseSystemProperties());
-    ASSERT_SUCCESS(hsaKmtCloseKFD());
+    EXPECT_SUCCESS(hsaKmtReleaseSystemProperties());
+    EXPECT_SUCCESS(hsaKmtCloseKFD());
 
     ROUTINE_END
 }

@@ -233,7 +233,7 @@ void HsaMemoryBuffer::Fill(HSAuint32 value, BaseQueue& baseQueue, HSAuint64 offs
     baseQueue.PlacePacket(SDMAFillDataPacket((reinterpret_cast<void *>(this->As<char*>() + offset)), value, size));
     baseQueue.PlacePacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
     baseQueue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
-    ASSERT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
 
     hsaKmtDestroyEvent(event);
 }

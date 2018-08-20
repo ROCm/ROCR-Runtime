@@ -74,7 +74,7 @@ TEST_F(KFDQMTest, CreateCpQueue) {
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -97,9 +97,9 @@ TEST_F(KFDQMTest, CreateSdmaQueue) {
 
     queue.Wait4PacketConsumption();
 
-    ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0x02020202));
+    EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0x02020202));
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -137,14 +137,14 @@ TEST_F(KFDQMTest, CreateMultipleSdmaQueues) {
 
         queues[qidx].Wait4PacketConsumption();
 
-        ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
 
-        ASSERT_SUCCESS(memcmp(
+        EXPECT_SUCCESS(memcmp(
             destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
     }
 
     for (unsigned int qidx = 0; qidx < MAX_SDMA_QUEUES; ++qidx)
-        ASSERT_SUCCESS(queues[qidx].Destroy());
+        EXPECT_SUCCESS(queues[qidx].Destroy());
 
     TEST_END
 }
@@ -205,9 +205,9 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
 
     queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(srcBuf.As<unsigned *>(), 0x02020202));
     queue.Wait4PacketConsumption();
-    ASSERT_TRUE(WaitOnValue(srcBuf.As<unsigned int*>(), 0x02020202));
+    EXPECT_TRUE(WaitOnValue(srcBuf.As<unsigned int*>(), 0x02020202));
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -238,7 +238,7 @@ TEST_F(KFDQMTest, CreateMultipleCpQueues) {
     }
 
     for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
-       ASSERT_SUCCESS(queues[qidx].Destroy());
+       EXPECT_SUCCESS(queues[qidx].Destroy());
 
     TEST_END
 }
@@ -265,23 +265,23 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithNullAddress) {
 
     destBuf.Fill(0xFFFFFFFF);
 
-    ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, true));
+    EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, true));
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 1, 1));
 
     // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+    EXPECT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
         << "Packet executed even though the queue is supposed to be disabled!";
 
-    ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
+    EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
     queue.Wait4PacketConsumption();
 
     WaitOnValue(destBuf.As<unsigned int*>(), 1);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -306,23 +306,23 @@ TEST_F(KFDQMTest, DisableSdmaQueueByUpdateWithNullAddress) {
 
     destBuf.Fill(0xFFFFFFFF);
 
-    ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, true));
+    EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, true));
 
     queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void*>(), 0));
 
     // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+    EXPECT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
         << "Packet executed even though the queue is supposed to be disabled!";
 
-    ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
+    EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
     queue.Wait4PacketConsumption();
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -353,23 +353,23 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
 
     destBuf.Fill(0xFFFFFFFF);
 
-    ASSERT_SUCCESS(queue.Update(0/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
+    EXPECT_SUCCESS(queue.Update(0/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
 
     queue.PlaceAndSubmitPacket(packet2);
 
     // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
 
-    ASSERT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
+    EXPECT_EQ(destBuf.As<unsigned int*>()[0], 0xFFFFFFFF)
         << "Packet executed even though the queue is supposed to be disabled!";
 
-    ASSERT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
+    EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
     queue.Wait4PacketConsumption();
 
     WaitOnValue(destBuf.As<unsigned int*>(), 1);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -401,8 +401,8 @@ TEST_F(KFDQMTest, CreateQueueStressSingleThreaded) {
         ASSERT_SUCCESS(queues[firstToCreate]->Create(defaultGPUNode));
         ASSERT_SUCCESS(queues[secondToCreate]->Create(defaultGPUNode));
 
-        ASSERT_SUCCESS(queues[firstToDestroy]->Destroy());
-        ASSERT_SUCCESS(queues[secondToDestroy]->Destroy());
+        EXPECT_SUCCESS(queues[firstToDestroy]->Destroy());
+        EXPECT_SUCCESS(queues[secondToDestroy]->Destroy());
 
         delete queues[0];
         delete queues[1];
@@ -453,10 +453,10 @@ TEST_F(KFDQMTest, OverSubscribeCpQueues) {
     Delay(5000);
 
     for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
-        ASSERT_TRUE(queues[qidx].AllPacketsSubmitted())<< "QueueId=" << qidx;;
+        EXPECT_TRUE(queues[qidx].AllPacketsSubmitted())<< "QueueId=" << qidx;;
 
     for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
-        ASSERT_SUCCESS(queues[qidx].Destroy());
+        EXPECT_SUCCESS(queues[qidx].Destroy());
 
     TEST_END
 }
@@ -658,7 +658,7 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
             LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8)
                   << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
-            ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
+            EXPECT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
     } else {
         LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
@@ -729,7 +729,7 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
             LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8)
                   << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
-            ASSERT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
+            EXPECT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
         }
     } else {
         LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
@@ -772,7 +772,7 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
 
     for (i = 0; i < 2; i++) {
         syncBuffer[i] = -1;
-        EXPECT_SUCCESS(queue[i].Create(node));
+        ASSERT_SUCCESS(queue[i].Create(node));
         queue[i].Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, priority[i], false);
         pHsaEvent[i] = dispatch[i].GetHsaEvent();
         pHsaEvent[i]->EventData.EventData.SyncVar.SyncVar.UserData = &syncBuffer[i];
@@ -899,7 +899,7 @@ void KFDQMTest::SyncDispatch(const HsaMemoryBuffer& isaBuffer, void* pSrcBuf, vo
     dispatch.Submit(queue);
     dispatch.Sync();
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 }
 
 TEST_F(KFDQMTest, EmptyDispatch) {
@@ -933,7 +933,7 @@ TEST_F(KFDQMTest, SimpleWriteDispatch) {
 
     SyncDispatch(isaBuffer, srcBuffer.As<void*>(), destBuffer.As<void*>());
 
-    ASSERT_EQ(destBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_EQ(destBuffer.As<unsigned int*>()[0], 0x01010101);
 
     TEST_END
 }
@@ -982,7 +982,7 @@ TEST_F(KFDQMTest, MultipleCpQueuesStressDispatch) {
         }
         for (i = 0; i < MAX_CP_QUEUES; ++i) {
             dispatch[i]->Sync();
-            ASSERT_EQ(dst[i], src[i]);
+            EXPECT_EQ(dst[i], src[i]);
             delete dispatch[i];
         }
         ++numIter;
@@ -993,7 +993,7 @@ TEST_F(KFDQMTest, MultipleCpQueuesStressDispatch) {
     LOG() << "Total iterated : " << std::dec << numIter << std::endl;
 
     for (i = 0; i < MAX_CP_QUEUES; ++i)
-       ASSERT_SUCCESS(queues[i].Destroy());
+       EXPECT_SUCCESS(queues[i].Destroy());
 
     TEST_END
 }
@@ -1051,7 +1051,7 @@ TEST_F(KFDQMTest, CreateAqlCpQueue) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode, PAGE_SIZE, pointers.As<HSAuint64 *>()));
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -1126,7 +1126,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     do {
         HSAint64 queue_latency = qts[i] - ts[i].GPUClockCounter;
 
-        ASSERT_GE(queue_latency, 0);
+        EXPECT_GE(queue_latency, 0);
 
         queue_latency_arr[i] = queue_latency;
         if (i >= skip)
@@ -1155,7 +1155,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     workload = qts[slots - 1] - qts[skip];
     workload /= (slots - 1 - skip);
 
-    ASSERT_GE(workload, 0);
+    EXPECT_GE(workload, 0);
 
     i = 0;
     do {
@@ -1207,7 +1207,7 @@ TEST_F(KFDQMTest, CpQueueWraparound) {
         WaitOnValue(destBuf.As<unsigned int*>(), pktIdx);
     }
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -1235,9 +1235,9 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
                 SDMAWriteDataPacket(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
         queue.Wait4PacketConsumption();
 
-        ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
 
-        ASSERT_SUCCESS(memcmp(
+        EXPECT_SUCCESS(memcmp(
                 destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
     }
 
@@ -1247,7 +1247,7 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
         WaitOnValue(destBuf.As<unsigned int*>(), pktIdx);
     }
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -1355,7 +1355,7 @@ TEST_F(KFDQMTest, mGPUShareBO) {
     m_pIsaGen->GetCopyDwordIsa(isaBufferDst);
     SyncDispatch(isaBufferDst, shared_addr.As<void *>(), dstNodeMem.As<void*>(), dst_node);
 
-    ASSERT_EQ(dstNodeMem.As<unsigned int*>()[0], 0x05050505);
+    EXPECT_EQ(dstNodeMem.As<unsigned int*>()[0], 0x05050505);
 
     EXPECT_SUCCESS(shared_addr.UnmapMemToNodes(&dst_node, 1));
 
@@ -1370,7 +1370,7 @@ static void sdma_copy(HSAint32 node, void *src, void *const dst[], int n, unsign
     ASSERT_SUCCESS(sdmaQueue.Create(node));
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(dst, src, n, size));
     sdmaQueue.Wait4PacketConsumption();
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
 
     ROUTINE_END;
 }
@@ -1382,7 +1382,7 @@ static void sdma_fill(HSAint32 node, void *dst, unsigned int data, unsigned int 
     ASSERT_SUCCESS(sdmaQueue.Create(node));
     sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(dst, data, size));
     sdmaQueue.Wait4PacketConsumption();
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
 
     ROUTINE_END;
 }
@@ -1485,8 +1485,8 @@ TEST_F(KFDQMTest, P2PTest) {
         sdma_copy(cur, src, dst_array, n, size);
 
         /* Verify the data*/
-        ASSERT_EQ(sysBuf[0], MAGIC_NUM);
-        ASSERT_EQ(sysBuf[end], MAGIC_NUM);
+        EXPECT_EQ(sysBuf[0], MAGIC_NUM);
+        EXPECT_EQ(sysBuf[end], MAGIC_NUM);
 
         LOG() << "PASS " << cur << " -> " << next << std::endl;
 
@@ -1522,11 +1522,11 @@ TEST_F(KFDQMTest, SdmaEventInterrupt) {
 
     queue.Wait4PacketConsumption();
 
-    ASSERT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
 
     hsaKmtDestroyEvent(event);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -1610,11 +1610,11 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
     }
 
     /* Check that the PM4 packet has been executed */
-    ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int *>(), 0x12345678));
-    ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int *>()+1, 0x87654321));
+    EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int *>(), 0x12345678));
+    EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int *>()+1, 0x87654321));
 
-    ASSERT_SUCCESS(pm4Queue.Destroy());
-    ASSERT_SUCCESS(otherQueue.Destroy());
+    EXPECT_SUCCESS(pm4Queue.Destroy());
+    EXPECT_SUCCESS(otherQueue.Destroy());
 
     TEST_END
 }

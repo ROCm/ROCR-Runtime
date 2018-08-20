@@ -176,7 +176,7 @@ TEST_F(KFDPerfCountersTest, RegisterTrace) {
                                           block->NumConcurrent,
                                           block->Counters,
                                           &root));
-    ASSERT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
+    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
 
     TEST_END
 }
@@ -237,7 +237,7 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
     /* Delay between START and STOP tracing */
     Delay(START_STOP_DELAY);
 
-    /* Stopping th trace */
+    /* Stopping the trace */
     ASSERT_SUCCESS(hsaKmtPmcStopTrace(root.TraceId));
 
     /* Querying the trace */
@@ -247,9 +247,9 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
         LOG() << "Counter " << std::dec << i << ": " << *buf << std::endl;
 
     /* Releasing the trace */
-    ASSERT_SUCCESS(hsaKmtPmcReleaseTraceAccess(0, root.TraceId));
+    EXPECT_SUCCESS(hsaKmtPmcReleaseTraceAccess(0, root.TraceId));
 
-    ASSERT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
+    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
 
     TEST_END
 }
