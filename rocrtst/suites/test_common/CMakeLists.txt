@@ -233,7 +233,7 @@ LINK_DIRECTORIES(${ROCR_LIB_DIR})
 # Extend the list of libraries to be used for linking ROC Perf Apps
 #
 set(ROCRTST_LIBS ${ROCRTST_LIBS} hsa-runtime${ONLY64STR})
-set(ROCRTST_LIBS ${ROCRTST_LIBS} rocm_smi)
+set(ROCRTST_LIBS ${ROCRTST_LIBS} rocm_smi${ONLY64STR})
 
 
 # Set Name for rocrtst 
