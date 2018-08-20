@@ -135,7 +135,7 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
         PM4Queue queue1, queue2;
 
-        EXPECT_SUCCESS(queue1.Create(defaultGPUNode));
+        ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
 
         Dispatch *dispatch1, *dispatch2;
 
@@ -153,7 +153,7 @@ TEST_F(KFDCWSRTest, BasicTest) {
         // Submit the shader, queue1
         dispatch1->Submit(queue1);
         // Create queue2 during queue1 still running will trigger the CWSR
-        EXPECT_SUCCESS(queue2.Create(defaultGPUNode));
+        ASSERT_SUCCESS(queue2.Create(defaultGPUNode));
         // Submit the shader
         dispatch2->Submit(queue2);
         dispatch1->Sync();

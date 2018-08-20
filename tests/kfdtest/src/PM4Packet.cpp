@@ -254,7 +254,7 @@ void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned i
      */
     m_pPacketData = reinterpret_cast<PM4SET_SH_REG *>(malloc(m_packetSize));
 
-    ASSERT_NOTNULL(m_pPacketData);
+    EXPECT_NOTNULL(m_pPacketData);
 
     m_packetDataAllocated = true;
 

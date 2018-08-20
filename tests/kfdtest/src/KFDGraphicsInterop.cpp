@@ -66,17 +66,17 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     void *pCpuMap;
     ASSERT_EQ(0, amdgpu_bo_cpu_map(handle, &pCpuMap));
     memset(pCpuMap, 0xaa, PAGE_SIZE);
-    ASSERT_EQ(0, amdgpu_bo_cpu_unmap(handle));
+    EXPECT_EQ(0, amdgpu_bo_cpu_unmap(handle));
 
     struct amdgpu_bo_metadata meta;
     meta.flags = 0;
     meta.tiling_info = 0;
     meta.size_metadata = metadata_size;
     memcpy(meta.umd_metadata, metadata, metadata_size);
-    ASSERT_EQ(0, amdgpu_bo_set_metadata(handle, &meta));
+    EXPECT_EQ(0, amdgpu_bo_set_metadata(handle, &meta));
 
     uint32_t dmabufFd;
-    ASSERT_EQ(0, amdgpu_bo_export(handle, amdgpu_bo_handle_type_dma_buf_fd, &dmabufFd));
+    EXPECT_EQ(0, amdgpu_bo_export(handle, amdgpu_bo_handle_type_dma_buf_fd, &dmabufFd));
 
     // Register it with HSA
     HsaGraphicsResourceInfo info;
@@ -86,13 +86,13 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     /* DMA buffer handle and GEM handle are no longer needed, KFD
      * should have taken a reference to the BO
      */
-    ASSERT_EQ(0, close(dmabufFd));
-    ASSERT_EQ(0, amdgpu_bo_free(handle));
+    EXPECT_EQ(0, close(dmabufFd));
+    EXPECT_EQ(0, amdgpu_bo_free(handle));
 
     // Check that buffer size and metadata match
-    ASSERT_EQ(info.SizeInBytes, alloc.alloc_size);
-    ASSERT_EQ(info.MetadataSizeInBytes, metadata_size);
-    ASSERT_EQ(0, strcmp(metadata, (const char *)info.Metadata));
+    EXPECT_EQ(info.SizeInBytes, alloc.alloc_size);
+    EXPECT_EQ(info.MetadataSizeInBytes, metadata_size);
+    EXPECT_EQ(0, strcmp(metadata, (const char *)info.Metadata));
 
     // Map the buffer
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(info.MemoryAddress,
@@ -113,9 +113,9 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
-    ASSERT_EQ(dstBuffer.As<unsigned int *>()[0], 0xaaaaaaaa);
+    EXPECT_EQ(dstBuffer.As<unsigned int *>()[0], 0xaaaaaaaa);
 
     // Test QueryMem before the cleanup
     HsaPointerInfo ptrInfo;
@@ -126,8 +126,8 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     EXPECT_EQ(ptrInfo.SizeInBytes, alloc.alloc_size);
 
     // Cleanup
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(info.MemoryAddress));
-    ASSERT_SUCCESS(hsaKmtDeregisterMemory(info.MemoryAddress));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(info.MemoryAddress));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(info.MemoryAddress));
 
     TEST_END
 }
@@ -214,11 +214,11 @@ TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    ASSERT_SUCCESS(queue.Destroy());
-    ASSERT_EQ(dstBuffer.As<HSAuint32*>()[0], 0xAAAAAAAA);
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_EQ(dstBuffer.As<HSAuint32*>()[0], 0xAAAAAAAA);
 
-    ASSERT_EQ(0, amdgpu_bo_cpu_unmap(handle));
-    ASSERT_EQ(0, amdgpu_bo_free(handle));
+    EXPECT_EQ(0, amdgpu_bo_cpu_unmap(handle));
+    EXPECT_EQ(0, amdgpu_bo_free(handle));
 
     TEST_END
 }

@@ -89,16 +89,16 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(tempSysBuffer.As<HSAuint32*>(),
         sharedLocalBuffer, size));
     sdmaQueue.Wait4PacketConsumption();
-    ASSERT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xAAAAAAAA));
+    EXPECT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xAAAAAAAA));
 
     /* Fill in the Local Memory with different pattern */
     sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sharedLocalBuffer, 0xBBBBBBBB));
     sdmaQueue.Wait4PacketConsumption();
 
     /* Clean up */
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(sharedLocalBuffer));
-    ASSERT_SUCCESS(hsaKmtDeregisterMemory(sharedLocalBuffer));
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(sharedLocalBuffer));
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(sharedLocalBuffer));
 }
 
 /* Fill a pattern into Local Memory and share with the child process.
@@ -133,18 +133,18 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
     /* Wait for the child to finish */
     waitpid(cpid, &status, 0);
 
-    ASSERT_EQ(WIFEXITED(status), 1);
-    ASSERT_EQ(WEXITSTATUS(status), 0);
+    EXPECT_EQ(WIFEXITED(status), 1);
+    EXPECT_EQ(WEXITSTATUS(status), 0);
 
     /* Check for the new pattern filled in by child process */
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(tempSysBuffer.As<HSAuint32*>(),
         toShareLocalBuffer.As<HSAuint32*>(), size));
     sdmaQueue.Wait4PacketConsumption();
-    ASSERT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xBBBBBBBB));
+    EXPECT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xBBBBBBBB));
 
     /* Clean up */
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(toShareLocalBuffer.As<void*>()));
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(toShareLocalBuffer.As<void*>()));
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
 }
 
 /* Test IPC memory.
@@ -620,23 +620,23 @@ TEST_F(KFDIPCTest, CrossMemoryAttachTest) {
         /* Child Process */
         status = CrossMemoryAttachChildProcess(defaultGPUNode, pipeCtoP[1],
             pipePtoC[0], CMA_READ_TEST);
-        ASSERT_EQ(status, CMA_TEST_SUCCESS) << "Child: Read Test Fail";
+        EXPECT_EQ(status, CMA_TEST_SUCCESS) << "Child: Read Test Fail";
         status = CrossMemoryAttachChildProcess(defaultGPUNode, pipeCtoP[1],
                 pipePtoC[0], CMA_WRITE_TEST);
-        ASSERT_EQ(status, CMA_TEST_SUCCESS) << "Child: Write Test Fail";
+        EXPECT_EQ(status, CMA_TEST_SUCCESS) << "Child: Write Test Fail";
     } else {
         int childStatus;
 
         status = CrossMemoryAttachParentProcess(defaultGPUNode, m_ChildPid,
                                 pipePtoC[1], pipeCtoP[0], CMA_READ_TEST); /* Parent proces */
-        ASSERT_EQ(status, CMA_TEST_SUCCESS) << "Parent: Read Test Fail";
+        EXPECT_EQ(status, CMA_TEST_SUCCESS) << "Parent: Read Test Fail";
         status = CrossMemoryAttachParentProcess(defaultGPUNode, m_ChildPid,
                                 pipePtoC[1], pipeCtoP[0], CMA_WRITE_TEST);
-        ASSERT_EQ(status, CMA_TEST_SUCCESS) << "Parent: Write Test Fail";
+        EXPECT_EQ(status, CMA_TEST_SUCCESS) << "Parent: Write Test Fail";
 
         waitpid(m_ChildPid, &childStatus, 0);
-        ASSERT_EQ(WIFEXITED(childStatus), true);
-        ASSERT_EQ(WEXITSTATUS(childStatus), 0);
+        EXPECT_EQ(WIFEXITED(childStatus), true);
+        EXPECT_EQ(WEXITSTATUS(childStatus), 0);
     }
 
     /* Code path executed by both parent and child with respective fds */
@@ -690,10 +690,10 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     dstRange.MemoryAddress = testLocalBuffer.As<void*>();
     dstRange.SizeInBytes = size;
     ASSERT_SUCCESS(hsaKmtProcessVMRead(getpid(), &dstRange, 1, &srcRange, 1, &copied));
-    ASSERT_EQ(copied, size);
+    EXPECT_EQ(copied, size);
 
-    ASSERT_TRUE(testLocalBuffer.IsPattern(0, PATTERN1, sdmaQueue, tmp));
-    ASSERT_TRUE(testLocalBuffer.IsPattern(size - 4, PATTERN2, sdmaQueue, tmp));
+    EXPECT_TRUE(testLocalBuffer.IsPattern(0, PATTERN1, sdmaQueue, tmp));
+    EXPECT_TRUE(testLocalBuffer.IsPattern(size - 4, PATTERN2, sdmaQueue, tmp));
 
 
     /* Test2. Test unaligned byte copy. Write 3 bytes to an unaligned destination address */
@@ -712,10 +712,10 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     dstRange.MemoryAddress = reinterpret_cast<void *>(testLocalBuffer.As<char*>() + (size / 2) + unaligned_offset);
     dstRange.SizeInBytes = unaligned_size;
     ASSERT_SUCCESS(hsaKmtProcessVMRead(getpid(), &dstRange, 1, &srcRange, 1, &copied));
-    ASSERT_EQ(copied, unaligned_size);
+    EXPECT_EQ(copied, unaligned_size);
 
     expected_pattern = (PATTERN2 & ~unaligned_mask | (PATTERN1 & unaligned_mask));
-    ASSERT_TRUE(testLocalBuffer.IsPattern(size/2, expected_pattern, sdmaQueue, tmp));
+    EXPECT_TRUE(testLocalBuffer.IsPattern(size/2, expected_pattern, sdmaQueue, tmp));
 
 
     /* Test3. Test overflow and expect failure */
@@ -727,7 +727,7 @@ TEST_F(KFDIPCTest, CMABasicTest) {
     EXPECT_NE(status, HSAKMT_STATUS_SUCCESS);
     EXPECT_LE(copied, (size - 4));
 
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
 
     TEST_END
 }

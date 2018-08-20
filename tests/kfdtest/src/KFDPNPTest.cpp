@@ -88,12 +88,12 @@ TEST_F(KFDPNPTest, DisableAndCreateQueue) {
     WaitOnValue(&(destBuffer.As<unsigned int*>()[0]), 0x1);
     WaitOnValue(&(destBuffer.As<unsigned int*>()[1]), 0x2);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     DisableKfd();
     EnableKfd();
 
-    ASSERT_NE(HSAKMT_STATUS_SUCCESS, queue.Create(defaultGPUNode))
+    EXPECT_NE(HSAKMT_STATUS_SUCCESS, queue.Create(defaultGPUNode))
         << "Queue creation should fail after a topology change.";
 
     TEST_END

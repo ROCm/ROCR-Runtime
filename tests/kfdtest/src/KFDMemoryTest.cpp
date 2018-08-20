@@ -177,8 +177,8 @@ TEST_F(KFDMemoryTest, MMapLarge) {
             << "GB system memory to gpu" << std::endl;
 
     while (i--) {
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void*>(AlternateVAGPU[i])));
-        ASSERT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void*>(AlternateVAGPU[i])));
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void*>(AlternateVAGPU[i])));
+        EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void*>(AlternateVAGPU[i])));
     }
 
     munmap(addr, s);
@@ -253,8 +253,8 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     /* Fill src buffer so shader quits */
     srcBuffer.Fill(0x5678);
     WaitOnValue(dstBuffer.As<uint32_t *>(), 0x5678);
-    ASSERT_EQ(*dstBuffer.As<uint32_t *>(), 0x5678);
-    ASSERT_SUCCESS(pm4Queue.Destroy());
+    EXPECT_EQ(*dstBuffer.As<uint32_t *>(), 0x5678);
+    EXPECT_SUCCESS(pm4Queue.Destroy());
     TEST_END
 }
 
@@ -273,9 +273,9 @@ TEST_F(KFDMemoryTest , MapMemoryToGPU) {
     // verify that pDb is not null before it's being used
     ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(pDb, PAGE_SIZE, NULL));
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
     // Release the buffers
-    ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, PAGE_SIZE));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, PAGE_SIZE));
 
     TEST_END
 }
@@ -335,7 +335,7 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
     WaitOnValue(destBuf, 0xABCDEF09);
     WaitOnValue(destBuf + 1, 0x12345678);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     /* This sleep hides the dmesg PPR message storm on Raven, which happens
      * when the CPU buffer is freed before the excessive PPRs are all
@@ -402,7 +402,7 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
 
     sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>(), 0x12345678));
     sdmaQueue.Wait4PacketConsumption();
-    ASSERT_TRUE(WaitOnValue(&stackData[sdmaOffset], 0x12345678));
+    EXPECT_TRUE(WaitOnValue(&stackData[sdmaOffset], 0x12345678));
 
     /* Fork a child process to mark pages as COW */
     pid_t pid = fork();
@@ -446,12 +446,12 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
     sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>(), 0xD0BED0BE));
     sdmaQueue.Wait4PacketConsumption();
 
-    ASSERT_SUCCESS(pm4Queue.Destroy());
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS(pm4Queue.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
 
-    ASSERT_EQ(0xD00BED00, globalData);
-    ASSERT_EQ(0xD00BED00, stackData[dstOffset]);
-    ASSERT_EQ(0xD0BED0BE, stackData[sdmaOffset]);
+    EXPECT_EQ(0xD00BED00, globalData);
+    EXPECT_EQ(0xD00BED00, stackData[dstOffset]);
+    EXPECT_EQ(0xD0BED0BE, stackData[sdmaOffset]);
 
     TEST_END
 }
@@ -557,9 +557,9 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(1),
                                         SCRATCH_SLICE_SIZE, NULL));
 
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(1)));
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(2)));
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(0)));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(1)));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(2)));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(scratchBuffer.As<char*>() + SCRATCH_SLICE_OFFSET(0)));
 
     // Map everything for test below
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(scratchBuffer.As<char*>(), SCRATCH_SIZE, NULL));
@@ -622,7 +622,7 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
                 dispatchScratchToDst.Sync();
 
                 // Check that the scratch buffer contents were correctly copied over to the system memory buffer
-                ASSERT_EQ(dstMemBuffer.As<unsigned int*>()[0], 0x01010101);
+                EXPECT_EQ(dstMemBuffer.As<unsigned int*>()[0], 0x01010101);
             }
         }
 
@@ -701,12 +701,12 @@ void KFDMemoryTest::BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granular
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
                         mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
-            ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
             highMB = sizeMB;
             continue;
         }
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
-        ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
 
         lowMB = sizeMB;
         lastTestedSize = sizeMB;
@@ -757,12 +757,12 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
                         mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
-            ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
             highMB = sizeMB;
             continue;
         }
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
-        ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
 
         lowMB = sizeMB;
         lastTestedSize = sizeMB;
@@ -828,7 +828,7 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
         ret = hsaKmtMapMemoryToGPUNodes(pDb_array[i], block_size,
                 &AlternateVAGPU, mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
         if (ret) {
-            ASSERT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
             break;
         }
     } while (++i < ARRAY_ENTRIES);
@@ -837,8 +837,8 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
                         << block_size_mb << "MB" << std::endl;
 
     while (i--) {
-        ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[i]));
-        ASSERT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
+        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[i]));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
     }
 
     TEST_END
@@ -954,7 +954,7 @@ TEST_F(KFDMemoryTest, MMBench) {
         /* Unmap from GPU */
         start = GetSystemTickCountInMicroSec();
         for (i = 0; i < nBufs; i++) {
-            ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
+            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
             INTERLEAVE_SDMA();
         }
         unmap1Time = GetSystemTickCountInMicroSec() - start;
@@ -972,7 +972,7 @@ TEST_F(KFDMemoryTest, MMBench) {
         /* Unmap from all GPUs */
         start = GetSystemTickCountInMicroSec();
         for (i = 0; i < nBufs; i++) {
-            ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
+            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
             INTERLEAVE_SDMA();
         }
         unmapAllTime = GetSystemTickCountInMicroSec() - start;
@@ -981,7 +981,7 @@ TEST_F(KFDMemoryTest, MMBench) {
         /* Free */
         start = GetSystemTickCountInMicroSec();
         for (i = 0; i < nBufs; i++) {
-            ASSERT_SUCCESS(hsaKmtFreeMemory(bufs[i], bufSize));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(bufs[i], bufSize));
             INTERLEAVE_SDMA();
         }
         freeTime = GetSystemTickCountInMicroSec() - start;
@@ -1182,8 +1182,8 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
                 HSAuint8 *addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[0]) + i) + i;
                 errno = 0;
                 long data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
-                ASSERT_EQ(0, errno);
-                ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
+                EXPECT_EQ(0, errno);
+                EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
                                     reinterpret_cast<void *>(data)));
 
                 if (mem[1] == NULL)
@@ -1192,8 +1192,8 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
                 addr = reinterpret_cast<HSAuint8 *>(reinterpret_cast<long *>(mem[1]) + i) + i;
                 errno = 0;
                 data = ptrace(PTRACE_PEEKDATA, tracePid, addr, NULL);
-                ASSERT_EQ(0, errno);
-                ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
+                EXPECT_EQ(0, errno);
+                EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, addr + PAGE_SIZE,
                                 reinterpret_cast<void *>(data)));
             }
         } catch (...) {
@@ -1321,17 +1321,17 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
             /* Peek the memory */
             errno = 0;
             HSAint64 data0 = ptrace(PTRACE_PEEKDATA, tracePid, mem0, NULL);
-            ASSERT_EQ(0, errno);
-            ASSERT_EQ(data[0], data0);
+            EXPECT_EQ(0, errno);
+            EXPECT_EQ(data[0], data0);
             HSAint64 data1 = ptrace(PTRACE_PEEKDATA, tracePid, mem1, NULL);
-            ASSERT_EQ(0, errno);
-            ASSERT_EQ(data[1], data1);
+            EXPECT_EQ(0, errno);
+            EXPECT_EQ(data[1], data1);
 
             /* Swap mem0 and mem1 by poking */
-            ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
-            ASSERT_EQ(0, errno);
-            ASSERT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
-            ASSERT_EQ(0, errno);
+            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem0, reinterpret_cast<void *>(data[1])));
+            EXPECT_EQ(0, errno);
+            EXPECT_EQ(0, ptrace(PTRACE_POKEDATA, tracePid, mem1, reinterpret_cast<void *>(data[0])));
+            EXPECT_EQ(0, errno);
         } catch (...) {
             err = 1;
         }
@@ -1360,19 +1360,19 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     dispatch0.SetArgs(mem0, dstBuffer.As<void*>());
     dispatch0.Submit(queue);
     dispatch0.Sync();
-    ASSERT_EQ(data1[0], dstBuffer.As<unsigned int*>()[0]);
+    EXPECT_EQ(data1[0], dstBuffer.As<unsigned int*>()[0]);
 
     Dispatch dispatch1(isaBuffer);
     dispatch1.SetArgs(mem1, dstBuffer.As<int*>());
     dispatch1.Submit(queue);
     dispatch1.Sync();
     WaitOnValue(dstBuffer.As<uint32_t *>(), data0[0]);
-    ASSERT_EQ(data0[0], dstBuffer.As<unsigned int*>()[0]);
+    EXPECT_EQ(data0[0], dstBuffer.As<unsigned int*>()[0]);
 
     // Clean up
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(mem));
-    ASSERT_SUCCESS(hsaKmtFreeMemory(mem, size));
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(mem));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(mem, size));
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -1414,12 +1414,12 @@ TEST_F(KFDMemoryTest, SignalHandling) {
 
     ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
     // Verify that pDb is not null before it's being used
-    ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
+    EXPECT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
 
     pid_t childPid = fork();
     ASSERT_GE(childPid, 0);
     if (childPid == 0) {
-        ASSERT_EQ(0, kill(ParentPid, SIGUSR1));
+        EXPECT_EQ(0, kill(ParentPid, SIGUSR1));
         exit(0);
     } else {
         LOG() << "Start Memory Mapping..." << std::endl;
@@ -1428,21 +1428,21 @@ TEST_F(KFDMemoryTest, SignalHandling) {
         int childStatus;
 
         // Parent process, just wait for the child to finish
-        ASSERT_EQ(childPid, waitpid(childPid, &childStatus, 0));
-        ASSERT_NE(0, WIFEXITED(childStatus));
-        ASSERT_EQ(0, WEXITSTATUS(childStatus));
+        EXPECT_EQ(childPid, waitpid(childPid, &childStatus, 0));
+        EXPECT_NE(0, WIFEXITED(childStatus));
+        EXPECT_EQ(0, WEXITSTATUS(childStatus));
     }
 
     pDb[0] = 0x02020202;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(pDb, 0x01010101) );
     queue.Wait4PacketConsumption();
-    ASSERT_TRUE(WaitOnValue(pDb, 0x01010101));
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_TRUE(WaitOnValue(pDb, 0x01010101));
+    EXPECT_SUCCESS(queue.Destroy());
 
-    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
     // Release the buffers
-    ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, size));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
 
     TEST_END
 }
@@ -1497,7 +1497,7 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
         EXPECT_EQ(0, pDb[size-1]);
         pDb[size-1] = size;
 
-        ASSERT_SUCCESS(hsaKmtFreeMemory(pDb, sysBufSize));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, sysBufSize));
     }
 
     TEST_END
@@ -1561,7 +1561,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
             MAP_ANONYMOUS | MAP_PRIVATE,
             -1,
             0);
-    ASSERT_NE(tmp, MAP_FAILED);
+    EXPECT_NE(tmp, MAP_FAILED);
     memset(tmp, 0, tmpBufferSize);
 
     LOG() << "Test (avg. ns)\t  memcpyRTime memcpyWTime accessRTime accessWTime" << std::endl;
@@ -1616,7 +1616,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
         accessRTime = GetSystemTickCountInMicroSec() - start;
 
         for (i = 0; i < nBufs; i++)
-            ASSERT_SUCCESS(hsaKmtFreeMemory(bufs[i], bufSize));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(bufs[i], bufSize));
 
         LOG() << std::dec << std::setiosflags(std::ios::right)
             << std::setw(3) << (bufSize >> 10) << "K-"

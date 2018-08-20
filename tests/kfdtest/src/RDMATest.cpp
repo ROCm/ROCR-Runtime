@@ -89,7 +89,7 @@ TEST_F(RDMATest, GPUDirect) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);  // GPU executed the command
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     LocalMemoryAccess Rdma;
 
@@ -109,7 +109,7 @@ TEST_F(RDMATest, GPUDirect) {
     /* Read the memory to confirm that application can read the local memory
      * correctly from the mapped address.
      */
-    ASSERT_EQ(memcmp(gpuAddr, srcSysBuffer.As<void*>(), 4), 0);
+    EXPECT_EQ(memcmp(gpuAddr, srcSysBuffer.As<void*>(), 4), 0);
 
     Rdma.UnMap(gpuAddr, PAGE_SIZE);
     Rdma.Close();

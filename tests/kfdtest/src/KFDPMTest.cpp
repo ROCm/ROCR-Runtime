@@ -64,7 +64,7 @@ void KFDPMTest::TearDown() {
 TEST_F(KFDPMTest, SuspendWithActiveProcess) {
     TEST_START(TESTPROFILE_RUNALL)
 
-    ASSERT_EQ(true, SuspendAndWakeUp());
+    EXPECT_EQ(true, SuspendAndWakeUp());
 
     TEST_END
 }
@@ -78,9 +78,9 @@ TEST_F(KFDPMTest, SuspendWithIdleQueue) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    ASSERT_EQ(true, SuspendAndWakeUp());
+    EXPECT_EQ(true, SuspendAndWakeUp());
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
@@ -103,18 +103,18 @@ TEST_F(KFDPMTest, SuspendWithIdleQueueAfterWork) {
 
     destBuffer.Fill(0);
 
-    ASSERT_EQ(true, SuspendAndWakeUp());
+    EXPECT_EQ(true, SuspendAndWakeUp());
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(&(destBuffer.As<unsigned int*>()[2]), 0x3, 0x4));
     queue.Wait4PacketConsumption();
 
-    ASSERT_EQ(destBuffer.As<unsigned int*>()[0], 0);
-    ASSERT_EQ(destBuffer.As<unsigned int*>()[1], 0);
+    EXPECT_EQ(destBuffer.As<unsigned int*>()[0], 0);
+    EXPECT_EQ(destBuffer.As<unsigned int*>()[1], 0);
 
     WaitOnValue(&(destBuffer.As<unsigned int*>()[2]), 0x3);
     WaitOnValue(&(destBuffer.As<unsigned int*>()[3]), 0x4);
 
-    ASSERT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
