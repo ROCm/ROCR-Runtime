@@ -501,15 +501,19 @@ static HSAKMT_STATUS topology_sysfs_get_gpu_id(uint32_t sysfs_node_id, uint32_t 
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
 	if (fscanf(fd, "%ul", gpu_id) != 1)
-		ret = HSAKMT_STATUS_ERROR;
+		ret = (errno == EPERM) ? HSAKMT_STATUS_NOT_SUPPORTED :
+					 HSAKMT_STATUS_ERROR;
 	fclose(fd);
 
 	return ret;
 }
 
-/* Check if the sysfs node is supported. This function will be passed with sysfs node id.
+/* Check if the @sysfs_node_id is supported. This function will be passed with sysfs node id.
  * This function can not use topology_* help functions, because those functions are
- * using user node id. A sysfs node is supported only if corresponding drm render node is available.
+ * using user node id.
+ * A sysfs node is not supported
+ *	- if corresponding drm render node is not available.
+ *	- if node information is not accessible (EPERM)
  */
 static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id, bool *is_node_supported)
 {
@@ -529,6 +533,8 @@ static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id,
 
 	/* Retrieve the GPU ID */
 	ret = topology_sysfs_get_gpu_id(sysfs_node_id, &gpu_id);
+	if (ret == HSAKMT_STATUS_NOT_SUPPORTED)
+		return HSAKMT_STATUS_SUCCESS;
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
