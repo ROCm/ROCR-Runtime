@@ -1373,6 +1373,25 @@ err1:
 	return ret;
 }
 
+static HSAKMT_STATUS topology_map_sysfs_to_user_node_id(uint32_t sys_node_id, uint32_t *user_node_id)
+{
+	uint32_t node_id;
+
+	for (node_id = 0; node_id < map_user_to_sysfs_node_id_size; node_id++)
+		if (map_user_to_sysfs_node_id[node_id] == sys_node_id) {
+			*user_node_id = node_id;
+			return HSAKMT_STATUS_SUCCESS;
+		}
+	return HSAKMT_STATUS_INVALID_NODE_UNIT;
+}
+
+
+/* For a give Node @node_id the function gets @iolink_id information i.e. parses sysfs the following sysfs entry
+ * ./nodes/@node_id/io_links/@iolink_id/properties. @node_id has to be valid accessible node.
+ *
+ * If node_to specified by the @iolink_id is not accessible the function returns HSAKMT_STATUS_NOT_SUPPORTED.
+ * If node_to is accessible, then node_to is mapped from sysfs_node to user_node and returns HSAKMT_STATUS_SUCCESS.
+ */
 static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 						     uint32_t iolink_id,
 						     HsaIoLinkProperties *props)
@@ -1422,11 +1441,27 @@ static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 			props->VersionMajor = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "version_minor") == 0)
 			props->VersionMinor = (uint32_t)prop_val;
-		else if (strcmp(prop_name, "node_from") == 0)
-			props->NodeFrom = (uint32_t)prop_val;
-		else if (strcmp(prop_name, "node_to") == 0)
-			props->NodeTo = (uint32_t)prop_val;
-		else if (strcmp(prop_name, "weight") == 0)
+		else if (strcmp(prop_name, "node_from") == 0) {
+			if (sys_node_id != (uint32_t)prop_val) {
+				ret = HSAKMT_STATUS_INVALID_NODE_UNIT;
+				goto err2;
+			}
+			props->NodeFrom = node_id;
+		} else if (strcmp(prop_name, "node_to") == 0) {
+			bool is_node_supported;
+			uint32_t sysfs_node_id;
+
+			sysfs_node_id = (uint32_t)prop_val;
+			ret = topology_sysfs_check_node_supported(sysfs_node_id, &is_node_supported);
+			if (!is_node_supported) {
+				ret = HSAKMT_STATUS_NOT_SUPPORTED;
+				memset(props, 0, sizeof(*props));
+				goto err2;
+			}
+			ret = topology_map_sysfs_to_user_node_id(sysfs_node_id, &props->NodeTo);
+			if (ret != HSAKMT_STATUS_SUCCESS)
+				goto err2;
+		} else if (strcmp(prop_name, "weight") == 0)
 			props->Weight = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "min_latency") == 0)
 			props->MinimumLatency = (uint32_t)prop_val;
@@ -1677,7 +1712,7 @@ try_alt_dir:
 
 HSAKMT_STATUS topology_take_snapshot(void)
 {
-	uint32_t gen_start, gen_end, i, mem_id, cache_id, link_id;
+	uint32_t gen_start, gen_end, i, mem_id, cache_id;
 	HsaSystemProperties sys_props;
 	node_props_t *temp_props = 0;
 	void *cpu_ci_list = NULL;
@@ -1764,13 +1799,26 @@ retry:
 			}
 
 			if (temp_props[i].node.NumIOLinks) {
-				for (link_id = 0; link_id < temp_props[i].node.NumIOLinks; link_id++) {
-					ret = topology_sysfs_get_iolink_props(i, link_id, &temp_props[i].link[link_id]);
-					if (ret != HSAKMT_STATUS_SUCCESS) {
-						free_properties(temp_props, i+1);
+				uint32_t sys_link_id = 0, link_id = 0;
+
+				/* Parse all the sysfs specified io links. Skip the ones where the
+				 * remote node (node_to) is not accessible
+				 */
+				while (sys_link_id < temp_props[i].node.NumIOLinks &&
+				       link_id < sys_props.NumNodes - 1) {
+					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
+									      &temp_props[i].link[link_id]);
+					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+						ret = HSAKMT_STATUS_SUCCESS;
+						continue;
+					} else if (ret != HSAKMT_STATUS_SUCCESS) {
+						free_properties(temp_props, i + 1);
 						goto err;
 					}
+					link_id++;
 				}
+				/* sysfs specifies all the io links. Limit the number to valid ones */
+				temp_props[i].node.NumIOLinks = link_id;
 			}
 		}
 		pci_cleanup(pacc);
