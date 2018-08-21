@@ -56,7 +56,7 @@ typedef struct {
 	HsaIoLinkProperties *link;
 } node_props_t;
 
-static HsaSystemProperties *_system = NULL;
+static HsaSystemProperties *g_system;
 static node_props_t *g_props;
 static int is_valgrind;
 
@@ -1793,15 +1793,15 @@ retry:
 		goto retry;
 	}
 
-	if (!_system) {
-		_system = malloc(sizeof(HsaSystemProperties));
-		if (!_system) {
+	if (!g_system) {
+		g_system = malloc(sizeof(HsaSystemProperties));
+		if (!g_system) {
 			free_properties(temp_props, sys_props.NumNodes);
 			return HSAKMT_STATUS_NO_MEMORY;
 		}
 	}
 
-	*_system = sys_props;
+	*g_system = sys_props;
 	if (g_props)
 		free(g_props);
 	g_props = temp_props;
@@ -1815,7 +1815,7 @@ HSAKMT_STATUS topology_drop_snapshot(void)
 {
 	HSAKMT_STATUS err;
 
-	if (!!_system != !!g_props) {
+	if (!!g_system != !!g_props) {
 		pr_warn("Probably inconsistency?\n");
 		err = HSAKMT_STATUS_SUCCESS;
 		goto out;
@@ -1823,12 +1823,12 @@ HSAKMT_STATUS topology_drop_snapshot(void)
 
 	if (g_props) {
 		/* Remove state */
-		free_properties(g_props, _system->NumNodes);
+		free_properties(g_props, g_system->NumNodes);
 		g_props = NULL;
 	}
 
-	free(_system);
-	_system = NULL;
+	free(g_system);
+	g_system = NULL;
 
 	if (map_user_to_sysfs_node_id) {
 		free(map_user_to_sysfs_node_id);
@@ -1844,7 +1844,7 @@ out:
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 {
-	if (!g_props || !_system || _system->NumNodes <= nodeid)
+	if (!g_props || !g_system || g_system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 	if (gpu_id)
 		*gpu_id = g_props[nodeid].gpu_id;
@@ -1856,7 +1856,7 @@ HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
 {
 	uint64_t node_idx;
 
-	for (node_idx = 0; node_idx < _system->NumNodes; node_idx++) {
+	for (node_idx = 0; node_idx < g_system->NumNodes; node_idx++) {
 		if (g_props[node_idx].gpu_id == gpu_id) {
 			*node_id = node_idx;
 			return HSAKMT_STATUS_SUCCESS;
@@ -1882,9 +1882,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *Syste
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
-	assert(_system);
+	assert(g_system);
 
-	*SystemProperties = *_system;
+	*SystemProperties = *g_system;
 	err = HSAKMT_STATUS_SUCCESS;
 
 out:
@@ -1920,13 +1920,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!_system) {
+	if (!g_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(_system);
+		assert(g_system);
 		goto out;
 	}
 
-	if (NodeId >= _system->NumNodes) {
+	if (NodeId >= g_system->NumNodes) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -1965,14 +1965,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!_system) {
+	if (!g_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(_system);
+		assert(g_system);
 		goto out;
 	}
 
 	/* Check still necessary */
-	if (NodeId >= _system->NumNodes) {
+	if (NodeId >= g_system->NumNodes) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -2052,13 +2052,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeCacheProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!_system) {
+	if (!g_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(_system);
+		assert(g_system);
 		goto out;
 	}
 
-	if (NodeId >= _system->NumNodes || NumCaches > g_props[NodeId].node.NumCaches) {
+	if (NodeId >= g_system->NumNodes || NumCaches > g_props[NodeId].node.NumCaches) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -2090,13 +2090,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!_system) {
+	if (!g_system) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(_system);
+		assert(g_system);
 		goto out;
 	}
 
-	if (NodeId >= _system->NumNodes || NumIoLinks > g_props[NodeId].node.NumIOLinks) {
+	if (NodeId >= g_system->NumNodes || NumIoLinks > g_props[NodeId].node.NumIOLinks) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -2115,7 +2115,7 @@ out:
 
 uint16_t get_device_id_by_node_id(HSAuint32 node_id)
 {
-	if (!g_props || !_system || _system->NumNodes <= node_id)
+	if (!g_props || !g_system || g_system->NumNodes <= node_id)
 		return 0;
 
 	return g_props[node_id].node.DeviceId;
@@ -2138,10 +2138,10 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 {
 	unsigned int i;
 
-	if (!g_props || !_system)
+	if (!g_props || !g_system)
 		return 0;
 
-	for (i = 0; i < _system->NumNodes; i++) {
+	for (i = 0; i < g_system->NumNodes; i++) {
 		if (g_props[i].gpu_id == gpu_id)
 			return g_props[i].node.DeviceId;
 	}
