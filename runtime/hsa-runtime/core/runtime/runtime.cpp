@@ -585,6 +585,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
 
       break;
     }
+    case HSA_AMD_SYSTEM_INFO_BUILD_VERSION: {
+      *(const char**)value = STRING(ROCR_BUILD_ID);
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
