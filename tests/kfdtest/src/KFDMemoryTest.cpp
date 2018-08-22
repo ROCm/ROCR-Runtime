@@ -772,6 +772,12 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
             << lastTestedSize << "MB" << std::endl;
     if (lastSize)
         *lastSize = lastTestedSize * 1024 * 1024;
+
+    /* Make sure 3/4 vram can be allocated.*/
+    EXPECT_GE(lastTestedSize * 4, vramSizeMB * 3);
+    if (lastTestedSize * 16 < vramSizeMB * 15)
+        WARN() << "The biggest allocated VRAM buffer size is smaller than the expected "
+            << vramSizeMB * 15 / 16 << "MB" << std::endl;
 }
 
 /* BigBufferStressTest allocs, maps/unmaps, and frees the biggest possible system
