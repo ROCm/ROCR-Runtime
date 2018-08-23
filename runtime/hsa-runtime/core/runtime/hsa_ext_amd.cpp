@@ -211,7 +211,7 @@ hsa_status_t hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
   TRY;
   IS_OPEN();
 
-  if (ptr == NULL) {
+  if ((ptr == nullptr) || (uintptr_t(ptr) % 4 != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
