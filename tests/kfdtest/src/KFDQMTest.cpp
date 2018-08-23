@@ -1503,6 +1503,69 @@ TEST_F(KFDQMTest, P2PTest) {
     TEST_END
 }
 
+TEST_F(KFDQMTest, PM4EventInterrupt) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    const HSAuint64 bufSize = PAGE_SIZE;
+    const int packetCount = bufSize / sizeof(unsigned int);
+    const int totalPacketSize = packetCount * PM4WriteDataPacket(0, 0).SizeInBytes() +
+                                                PM4ReleaseMemoryPacket(0, 0, 0).SizeInBytes();
+    const int queueSize = RoundToPowerOf2(totalPacketSize);
+
+    /* 4 PM4 queues will be running at same time.*/
+    const int numPM4Queue = 4;
+    HsaEvent *event[numPM4Queue];
+    PM4Queue queue[numPM4Queue];
+    HsaMemoryBuffer *destBuf[numPM4Queue];
+    unsigned int *buf[numPM4Queue];
+
+    for (int i = 0; i < numPM4Queue; i++) {
+        destBuf[i] = new HsaMemoryBuffer(bufSize, defaultGPUNode, true, false); // System memory
+        buf[i] = destBuf[i]->As<unsigned int *>();
+    }
+
+    /* A simple loop here to give more pressure.*/
+    for (int test_count = 0; test_count < 1024; test_count++) {
+        for (int i = 0; i < numPM4Queue; i++) {
+            ASSERT_SUCCESS(queue[i].Create(defaultGPUNode, queueSize));
+            ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event[i]));
+
+            /* Let CP have some workload first.*/
+            for(int index = 0; index < packetCount; index++)
+                queue[i].PlacePacket(PM4WriteDataPacket(buf[i] + index, 0xdeadbeaf));
+
+            /* releaseMemory packet makes sure all previous written data is visible.*/
+            queue[i].PlacePacket(PM4ReleaseMemoryPacket(0,
+                        reinterpret_cast<HSAuint64>(event[i]->EventData.HWData2),
+                        event[i]->EventId,
+                        true));
+        }
+
+        for (int i = 0; i < numPM4Queue; i++)
+            queue[i].SubmitPacket();
+
+        for (int i = 0; i < numPM4Queue; i++) {
+            EXPECT_SUCCESS(hsaKmtWaitOnEvent(event[i], g_TestTimeOut));
+            EXPECT_EQ(buf[i][0], 0xdeadbeaf);
+            EXPECT_EQ(buf[i][packetCount - 1], 0xdeadbeaf);
+            memset(buf[i], 0, bufSize);
+        }
+
+        for (int i = 0; i < numPM4Queue; i++) {
+            EXPECT_SUCCESS(queue[i].Destroy());
+            EXPECT_SUCCESS(hsaKmtDestroyEvent(event[i]));
+        }
+    }
+
+    for (int i = 0; i < numPM4Queue; i++)
+        delete destBuf[i];
+
+    TEST_END
+}
+
 TEST_F(KFDQMTest, SdmaEventInterrupt) {
     TEST_START(TESTPROFILE_RUNALL)
 

@@ -30,6 +30,20 @@
 #include "Dispatch.hpp"
 #include "SDMAPacket.hpp"
 
+uint64_t RoundToPowerOf2(uint64_t val) {
+  int bytes = sizeof(uint64_t);
+
+  val--;
+
+  for (int i = 0; i < bytes; i++) {
+    val |= val >> (1 << i);
+  }
+
+  val++;
+
+  return val;
+}
+
 bool WaitOnValue(const volatile unsigned int *buf, unsigned int value) {
     unsigned int  timeOut = g_TestTimeOut;
 
