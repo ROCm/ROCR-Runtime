@@ -33,6 +33,8 @@
 class BaseQueue;
 #define ARRAY_SIZE(_x) (sizeof(_x)/sizeof(_x[0]))
 
+uint64_t RoundToPowerOf2(uint64_t val);
+
 // @brief: waits until the value is written to the buffer or until time out if received through args
 bool WaitOnValue(const volatile unsigned int *buf, unsigned int value);
 
