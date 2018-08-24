@@ -819,33 +819,50 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
      */
 #define ARRAY_ENTRIES 2048
 
-    int i = 0;
+    int i = 0, allocationCount = 0;
     unsigned int* pDb_array[ARRAY_ENTRIES];
     HSAuint64 block_size_mb = 128;
     HSAuint64 block_size = block_size_mb * 1024 * 1024;
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    do {
-        ret = hsaKmtAllocMemory(0 /* system */, block_size, m_MemoryFlags,
-                                reinterpret_cast<void**>(&pDb_array[i]));
-        if (ret) {
-            break;
+    /* Test 4 times to see if there is any memory leak.*/
+    for (int repeat = 1; repeat < 5; repeat++) {
+        for (i = 0; i < ARRAY_ENTRIES; i++) {
+            ret = hsaKmtAllocMemory(0 /* system */, block_size, m_MemoryFlags,
+                    reinterpret_cast<void**>(&pDb_array[i]));
+            if (ret)
+                break;
+
+            ret = hsaKmtMapMemoryToGPUNodes(pDb_array[i], block_size,
+                    &AlternateVAGPU, mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
+            if (ret) {
+                EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
+                break;
+            }
         }
 
-        ret = hsaKmtMapMemoryToGPUNodes(pDb_array[i], block_size,
-                &AlternateVAGPU, mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
-        if (ret) {
+        LOG() << "Allocated system buffers time " << std::dec << repeat << ": " << i << "x"
+            << block_size_mb << "MB" << std::endl;
+
+        if (allocationCount == 0)
+            allocationCount = i;
+        EXPECT_GE(i, allocationCount) << "There might be memory leak!" << std::endl;
+
+        while (i--) {
+            /* To see if GPU can access the memory correctly*/
+            unsigned int *begin = pDb_array[i];
+            *begin = 0;
+            queue.PlaceAndSubmitPacket(
+                    PM4WriteDataPacket(begin, 0xdeadbeaf));
+            queue.Wait4PacketConsumption();
+            EXPECT_TRUE(WaitOnValue(begin, 0xdeadbeaf));
+
+            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[i]));
             EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
-            break;
         }
-    } while (++i < ARRAY_ENTRIES);
-
-    LOG() << "Allocated system buffers: " << std::dec << i << "x"
-                        << block_size_mb << "MB" << std::endl;
-
-    while (i--) {
-        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[i]));
-        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
     }
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }
