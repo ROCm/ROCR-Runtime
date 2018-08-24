@@ -1509,24 +1509,40 @@ TEST_F(KFDQMTest, SdmaEventInterrupt) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    HsaEvent* event = NULL;
-    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, m_NodeInfo.HsaDefaultGPUNode(), &event));
+    const HSAuint64 bufSize = 4 << 20;
+    HsaMemoryBuffer srcBuf(bufSize, 0); // System memory.
+    HsaMemoryBuffer destBuf(bufSize, defaultGPUNode, true, true); // local vram.
 
-    SDMAQueue queue;
+    /* Two sdma queues will be running at same time.*/
+    const int numSDMAQueue = 2;
+    HsaEvent *event[numSDMAQueue];
+    SDMAQueue queue[numSDMAQueue];
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    /* A simple loop here to give more pressure.*/
+    for (int test_count = 0; test_count < 4096; test_count++) {
+        for (int i = 0; i < numSDMAQueue; i++) {
+            ASSERT_SUCCESS(queue[i].Create(defaultGPUNode));
+            ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event[i]));
 
-    queue.PlaceAndSubmitPacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
+            /* Let sDMA have some workload first.*/
+            queue[i].PlacePacket(
+                    SDMACopyDataPacket(destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+            queue[i].PlacePacket(
+                    SDMAFencePacket(reinterpret_cast<void*>(event[i]->EventData.HWData2), event[i]->EventId));
+            queue[i].PlacePacket(SDMATrapPacket(event[i]->EventId));
+        }
 
-    queue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
+        for (int i = 0; i < numSDMAQueue; i++)
+            queue[i].SubmitPacket();
 
-    queue.Wait4PacketConsumption();
+        for (int i = 0; i < numSDMAQueue; i++)
+            EXPECT_SUCCESS(hsaKmtWaitOnEvent(event[i], g_TestTimeOut));
 
-    EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
-
-    hsaKmtDestroyEvent(event);
-
-    EXPECT_SUCCESS(queue.Destroy());
+        for (int i = 0; i < numSDMAQueue; i++) {
+            EXPECT_SUCCESS(queue[i].Destroy());
+            EXPECT_SUCCESS(hsaKmtDestroyEvent(event[i]));
+        }
+    }
 
     TEST_END
 }
