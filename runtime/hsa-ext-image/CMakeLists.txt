@@ -108,26 +108,35 @@ include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/core/inc )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/core )
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/r800 )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/gfx9 )
+
+# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip )
+# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/r800 )
+#include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/gfx9 )
+
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800 )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
+# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/r800 )
+
 include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9 )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9/chip )
+# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9/chip )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/gfx9 )
+
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx10 )
+include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/gfx10 )
 
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrobject.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/core/coord.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/ciaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/egbaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/r800/siaddrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/r800/r800addrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib1.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib2.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/coord.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/gfx9/gfx9addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/rbmap.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/gfx10/gfx10addrlib.cpp
                  ${EXT_SOURCE_DIR}/runtime/amd_ext.cpp
                  ${EXT_SOURCE_DIR}/runtime/device_info.cpp
                  ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp
