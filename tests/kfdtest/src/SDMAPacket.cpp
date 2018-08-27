@@ -207,3 +207,24 @@ void SDMATrapPacket::InitPacket(unsigned int eventID) {
     packetData.HEADER_UNION.op = SDMA_OP_TRAP;
     packetData.INT_CONTEXT_UNION.int_context = eventID;
 }
+
+SDMATimePacket::SDMATimePacket(void *destaddr) {
+    InitPacket(destaddr);
+}
+
+SDMATimePacket::~SDMATimePacket(void) {
+}
+
+void SDMATimePacket::InitPacket(void *destaddr) {
+    memset(&packetData, 0, SizeInBytes());
+
+    packetData.HEADER_UNION.op = SDMA_OP_TIMESTAMP;
+    packetData.HEADER_UNION.sub_op = 1 << 1; /* Get Global GPU Timestamp*/
+
+    if (reinterpret_cast<unsigned long long>(destaddr) & 0x1f)
+        WARN() << "SDMATimePacket dst address must aligned to 32bytes boundary" << std::endl;
+
+    SplitU64(reinterpret_cast<unsigned long long>(destaddr),
+            packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
+            packetData.ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
+}
