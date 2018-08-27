@@ -41,6 +41,14 @@ class PM4Queue : public BaseQueue {
     virtual unsigned int Wptr();
     // @ return expected m_Resources.Queue_read_ptr when all packets consumed
     virtual unsigned int RptrWhenConsumed();
+    /** Wait for all the packets submitted to the queue to be consumed. (i.e. wait until RPTR=WPTR).
+     *  Note that all packets being consumed is not the same as all packets being processed.
+     *  If event is set, wait all packets being processed.
+     *  And we can benefit from that as it has
+     *  1) Less CPU usage (process can sleep, waiting for interrupt).
+     *  2) Lower latency (GPU only updates RPTR in memory periodically).
+     */
+    virtual void Wait4PacketConsumption(HsaEvent *event = NULL);
 
  protected:
     virtual PACKETTYPE PacketTypeSupported() { return PACKETTYPE_PM4; }

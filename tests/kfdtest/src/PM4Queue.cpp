@@ -71,3 +71,15 @@ void PM4Queue::SubmitPacket() {
     }
 }
 
+void PM4Queue::Wait4PacketConsumption(HsaEvent *event) {
+    if (event) {
+        PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(0,
+                    event->EventData.HWData2,
+                    event->EventId,
+                    true));
+
+        EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
+    } else {
+        BaseQueue::Wait4PacketConsumption();
+    }
+}

@@ -22,6 +22,7 @@
  */
 
 #include "SDMAQueue.hpp"
+#include "SDMAPacket.hpp"
 
 SDMAQueue::SDMAQueue(void) {
      CMD_NOP = 0;
@@ -79,3 +80,14 @@ void SDMAQueue::SubmitPacket() {
     }
 }
 
+void SDMAQueue::Wait4PacketConsumption(HsaEvent *event) {
+    if (event) {
+        PlacePacket(SDMAFencePacket((void*)event->EventData.HWData2, event->EventId));
+
+        PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
+
+        EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
+    } else {
+        BaseQueue::Wait4PacketConsumption();
+    }
+}

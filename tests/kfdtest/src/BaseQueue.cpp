@@ -116,7 +116,8 @@ void BaseQueue::PlaceAndSubmitPacket(const BasePacket &packet) {
     SubmitPacket();
 }
 
-void BaseQueue::Wait4PacketConsumption() {
+void BaseQueue::Wait4PacketConsumption(HsaEvent *event) {
+    ASSERT_TRUE(!event) << "Not supported!" << std::endl;
     ASSERT_TRUE(WaitOnValue(m_Resources.Queue_read_ptr, RptrWhenConsumed()));
 }
 
