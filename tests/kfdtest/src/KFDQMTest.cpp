@@ -29,6 +29,7 @@
 #include "SDMAPacket.hpp"
 #include "SDMAQueue.hpp"
 #include "AqlQueue.hpp"
+#include <algorithm>
 
 #include "Dispatch.hpp"
 
@@ -1060,10 +1061,6 @@ TEST_F(KFDQMTest, CreateAqlCpQueue) {
     TEST_END
 }
 
-#define ALIGN_UP(x, align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
-#define CounterToNanoSec(x) ((x) * 1000 / (is_dgpu() ? 27 : 100))
-
-#include<algorithm>
 
 TEST_F(KFDQMTest, QueueLatency) {
     TEST_START(TESTPROFILE_RUNALL);
@@ -1378,29 +1375,28 @@ TEST_F(KFDQMTest, mGPUShareBO) {
     TEST_END
 }
 
-
-static void sdma_copy(HSAint32 node, void *src, void *const dst[], int n, unsigned int size) {
-    ROUTINE_START;
-
+static void
+sdma_copy(HSAuint32 node, void *src, void *const dst[], int n, HSAuint64 size) {
     SDMAQueue sdmaQueue;
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, node, &event));
     ASSERT_SUCCESS(sdmaQueue.Create(node));
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(dst, src, n, size));
-    sdmaQueue.Wait4PacketConsumption();
+    sdmaQueue.Wait4PacketConsumption(event);
     EXPECT_SUCCESS(sdmaQueue.Destroy());
-
-    ROUTINE_END;
+    hsaKmtDestroyEvent(event);
 }
 
-static void sdma_fill(HSAint32 node, void *dst, unsigned int data, unsigned int size) {
-    ROUTINE_START;
-
+static void
+sdma_fill(HSAint32 node, void *dst, unsigned int data, HSAuint64 size) {
     SDMAQueue sdmaQueue;
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, node, &event));
     ASSERT_SUCCESS(sdmaQueue.Create(node));
     sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(dst, data, size));
-    sdmaQueue.Wait4PacketConsumption();
+    sdmaQueue.Wait4PacketConsumption(event);
     EXPECT_SUCCESS(sdmaQueue.Destroy());
-
-    ROUTINE_END;
+    hsaKmtDestroyEvent(event);
 }
 
 TEST_F(KFDQMTest, P2PTest) {

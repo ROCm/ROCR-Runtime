@@ -43,7 +43,8 @@ SDMA_BLACKLIST=\
 "KFDIPCTest.*:"\
 "KFDMemoryTest.MMBench:"\
 "KFDQMTest.*Sdma*:"\
-"KFDQMTest.P2PTest"
+"KFDQMTest.P2PTest:"\
+"KFDPerformanceTest.P2PBandWidthTest"
 
 # Anything involving CP queue creation is failing on Kaveri. Separate them here for convenience (KFD-336)
 KV_QUEUE_BLACKLIST=\
