@@ -30,6 +30,7 @@ const unsigned int SDMA_OP_WRITE = 2;
 
 const unsigned int SDMA_OP_FENCE = 5;
 const unsigned int SDMA_OP_TRAP = 6;
+const unsigned int SDMA_OP_TIMESTAMP = 13;
 
 const unsigned int SDMA_OP_CONST_FILL = 11;
 
@@ -315,5 +316,42 @@ typedef struct SDMA_PKT_TRAP_TAG
     } INT_CONTEXT_UNION;
 } SDMA_PKT_TRAP, *PSDMA_PKT_TRAP;
 
+
+/*
+** Definitions for SDMA_PKT_TIMESTAMP packet
+*/
+
+typedef struct SDMA_PKT_TIMESTAMP_TAG
+{
+
+    union
+    {
+        struct
+        {
+            unsigned int op:8;
+            unsigned int sub_op:8;
+            unsigned int reserved_0:16;
+        };
+        unsigned int DW_0_DATA;
+    } HEADER_UNION;
+
+    union
+    {
+        struct
+        {
+            unsigned int addr_31_0:32;
+        };
+        unsigned int DW_1_DATA;
+    } ADDR_LO_UNION;
+
+    union
+    {
+        struct
+        {
+            unsigned int addr_63_32:32;
+        };
+        unsigned int DW_2_DATA;
+    } ADDR_HI_UNION;
+} SDMA_PKT_TIMESTAMP, *PSDMA_PKT_TIMESTAMP;
 
 #endif // __SDMA_PKT_STRUCT_H__

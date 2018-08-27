@@ -141,4 +141,23 @@ class SDMATrapPacket : public SDMAPacket {
     SDMA_PKT_TRAP  packetData;
 };
 
+class SDMATimePacket : public SDMAPacket {
+ public:
+    // Empty constructor, before using the packet call the init func
+    SDMATimePacket(void*);
+
+    virtual ~SDMATimePacket(void);
+
+    // @returns Pointer to the packet
+    virtual const void *GetPacket() const  { return &packetData; }
+    // @brief Initialise the packet
+    void InitPacket(void*);
+    // @returns Packet size in bytes
+    virtual unsigned int SizeInBytes() const { return sizeof(SDMA_PKT_TIMESTAMP); }
+
+ protected:
+    SDMA_PKT_TIMESTAMP  packetData;
+};
+
+
 #endif  // __KFD_SDMA_PACKET__H__
