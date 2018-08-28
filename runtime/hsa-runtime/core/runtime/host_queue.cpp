@@ -67,6 +67,12 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t
   assert(IsMultipleOf(ring_, kRingAlignment));
   assert(ring_ != NULL);
 
+  // Fill the ring buffer with invalid packet headers.
+  // Leave packet content uninitialized to help track errors.
+  for (uint32_t pkt_id = 0; pkt_id < size_; pkt_id++) {
+    (((AqlPacket*)ring_)[pkt_id]).dispatch.header = HSA_PACKET_TYPE_INVALID;
+  }
+
   amd_queue_.hsa_queue.base_address = ring_;
   amd_queue_.hsa_queue.size = size_;
   amd_queue_.hsa_queue.doorbell_signal = doorbell_signal;
