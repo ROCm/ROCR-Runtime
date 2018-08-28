@@ -962,7 +962,12 @@ typedef enum {
   /**
   * Infiniband bus type.
   */
-  HSA_AMD_LINK_INFO_TYPE_INFINBAND = 3
+  HSA_AMD_LINK_INFO_TYPE_INFINBAND = 3,
+
+  /**
+  * xGMI link type.
+  */
+  HSA_AMD_LINK_INFO_TYPE_XGMI = 4
 
 } hsa_amd_link_info_type_t;
 
