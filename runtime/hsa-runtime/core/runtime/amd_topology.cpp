@@ -120,6 +120,12 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
         link_info.link_type = HSA_AMD_LINK_INFO_TYPE_INFINBAND;
         debug_print("IOLINK is missing atomic and coherency defaults.\n");
         break;
+      case HSA_IOLINK_TYPE_XGMI:
+        link_info.link_type = HSA_AMD_LINK_INFO_TYPE_XGMI;
+        link_info.atomic_support_32bit = true;
+        link_info.atomic_support_64bit = true;
+        link_info.coherent_support = true;
+        break;
       default:
         debug_print("Unrecognized IOLINK type.\n");
         break;
