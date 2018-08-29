@@ -1479,37 +1479,28 @@ static HsaIoLinkProperties *topology_get_free_io_link_slot_for_node(uint32_t nod
 }
 
 /* topology_add_io_link_for_node - If a free slot is available,
- * add io_link for the given Node. If bi_directional is true, set up two
- * links for both directions.
+ * add io_link for the given Node.
  * TODO: Add other members of HsaIoLinkProperties
  */
-static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_id,
+static HSAKMT_STATUS topology_add_io_link_for_node(uint32_t node_from,
 						   const HsaSystemProperties *sys_props,
 						   node_props_t *node_props,
 						   HSA_IOLINKTYPE IoLinkType,
-						   uint32_t NodeTo,
-						   uint32_t Weight, bool bi_dir)
+						   uint32_t node_to,
+						   uint32_t Weight)
 {
 	HsaIoLinkProperties *props;
-	/* If bi-directional is set true, it's two links to add. */
-	uint32_t i, num_links = (bi_dir == true) ? 2 : 1;
-	uint32_t node_from = node_id, node_to = NodeTo;
 
-	for (i = 0; i < num_links; i++) {
-		props = topology_get_free_io_link_slot_for_node(node_from,
+	props = topology_get_free_io_link_slot_for_node(node_from,
 			sys_props, node_props);
-		if (!props)
-			return HSAKMT_STATUS_NO_MEMORY;
+	if (!props)
+		return HSAKMT_STATUS_NO_MEMORY;
 
-		props->IoLinkType = IoLinkType;
-		props->NodeFrom = node_from;
-		props->NodeTo = node_to;
-		props->Weight = Weight;
-		node_props[node_from].node.NumIOLinks++;
-		/* switch direction on the 2nd link when num_links=2 */
-		node_from = NodeTo;
-		node_to = node_id;
-	}
+	props->IoLinkType = IoLinkType;
+	props->NodeFrom = node_from;
+	props->NodeTo = node_to;
+	props->Weight = Weight;
+	node_props[node_from].node.NumIOLinks++;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -1564,6 +1555,7 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 	int32_t dir_cpu1 = -1, dir_cpu2 = -1;
 	HSAuint32 weight1 = 0, weight2 = 0, weight3 = 0;
 	HSAKMT_STATUS ret;
+	uint32_t i;
 
 	*weight = 0;
 	*type = HSA_IOLINKTYPE_UNDEFINED;
@@ -1588,6 +1580,15 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 	if (dir_cpu1 < 0 && dir_cpu2 < 0)
 		return HSAKMT_STATUS_ERROR;
 
+	/* if the node2(dst) is GPU , it need to be large bar for host access*/
+	if (node_props[node2].gpu_id) {
+		for (i = 0; i < node_props[node2].node.NumMemoryBanks; ++i)
+			if (node_props[node2].mem[i].HeapType ==
+				HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC)
+				break;
+		if (i >=  node_props[node2].node.NumMemoryBanks)
+			return HSAKMT_STATUS_ERROR;
+	}
 	/* Possible topology:
 	 *   GPU --(weight1) -- CPU -- (weight2) -- GPU
 	 *   GPU --(weight1) -- CPU -- (weight2) -- CPU -- (weight3) -- GPU
@@ -1659,10 +1660,17 @@ static void topology_create_indirect_gpu_links(const HsaSystemProperties *sys_pr
 		for (j = i + 1; j < sys_props->NumNodes; j++) {
 			get_indirect_iolink_info(i, j, node_props, &weight, &type);
 			if (!weight)
-				continue;
+				goto try_alt_dir;
 			if (topology_add_io_link_for_node(i, sys_props, node_props,
-				type, j, weight, true) != HSAKMT_STATUS_SUCCESS)
+				type, j, weight) != HSAKMT_STATUS_SUCCESS)
 				pr_err("Fail to add IO link %d->%d\n", i, j);
+try_alt_dir:
+			get_indirect_iolink_info(j, i, node_props, &weight, &type);
+			if (!weight)
+				continue;
+			if (topology_add_io_link_for_node(j, sys_props, node_props,
+				type, i, weight) != HSAKMT_STATUS_SUCCESS)
+				pr_err("Fail to add IO link %d->%d\n", j, i);
 		}
 	}
 }
