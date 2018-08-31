@@ -65,10 +65,8 @@ extern int PAGE_SHIFT;
 	do { if ((uint64_t)PORT_VPTR_TO_UINT64(x) % PAGE_SIZE) return HSAKMT_STATUS_INVALID_PARAMETER; } while(0)
 
 #define ALIGN_UP(x,align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
-#define ALIGN_DOWN(x,align) ((uint64_t)(x) & ~(uint64_t)((align)-1))
 #define ALIGN_UP_32(x,align) (((uint32_t)(x) + (align) - 1) & ~(uint32_t)((align)-1))
-#define PAGE_ALIGN_UP(x) ALIGN_UP((x),PAGE_SIZE)
-#define PAGE_ALIGN_DOWN(x) ALIGN_DOWN((x),PAGE_SIZE)
+#define PAGE_ALIGN_UP(x) ALIGN_UP(x,PAGE_SIZE)
 #define BITMASK(n) (((n) < sizeof(1ULL) * CHAR_BIT ? (1ULL << (n)) : 0) - 1ULL)
 #define ARRAY_LEN(array) (sizeof(array) / sizeof(array[0]))
 
