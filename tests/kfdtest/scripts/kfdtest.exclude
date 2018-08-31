@@ -124,10 +124,8 @@ VEGA20_TESTS_BLACKLIST=\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDMemoryTest.MemoryRegister"
 
-
 RAVEN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDDBGTest.BasicAddressWatch:"\
-"KFDQMTest.CreateQueueStressSingleThreaded:"\
-"KFDQMTest.GPUDoorbellWrite:"\
-"KFDMemoryTest.MemoryRegister"
+"KFDQMTest.QueueLatency:"\
+"KFDQMTest.SdmaEventInterrupt"
