@@ -1036,6 +1036,115 @@ void fmm_print(uint32_t gpu_id)
 }
 #endif
 
+/* vm_find_object - Find a VM object in any aperture
+ *
+ * @addr: VM address of the object
+ * @size: size of the object, 0 means "don't care",
+ *        UINT64_MAX means addr can match any address within the object
+ * @out_aper: Aperture where the object was found
+ *
+ * Returns a pointer to the object if found, NULL otherwise. If an
+ * object is found, this function returns with the
+ * (*out_aper)->fmm_mutex locked.
+ */
+static vm_object_t *vm_find_object(const void *addr, uint64_t size,
+				   manageable_aperture_t **out_aper)
+{
+	manageable_aperture_t *aper = NULL;
+	bool range = (size == UINT64_MAX);
+	bool userptr = false;
+	vm_object_t *obj = NULL;
+	uint32_t i;
+
+	for (i = 0; i < gpu_mem_count; i++)
+		if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
+		    addr >= gpu_mem[i].gpuvm_aperture.base &&
+		    addr <= gpu_mem[i].gpuvm_aperture.limit) {
+			aper = &gpu_mem[i].gpuvm_aperture;
+			break;
+		}
+
+	if (!aper) {
+		if ((addr >= svm.dgpu_aperture->base) &&
+		    (addr <= svm.dgpu_aperture->limit))
+			aper = svm.dgpu_aperture;
+		else if ((addr >= svm.dgpu_alt_aperture->base) &&
+			 (addr <= svm.dgpu_alt_aperture->limit))
+			aper = svm.dgpu_alt_aperture;
+		else {
+			aper = svm.dgpu_aperture;
+			userptr = true;
+		}
+	}
+
+	pthread_mutex_lock(&aper->fmm_mutex);
+	if (range) {
+		/* mmap_apertures can have userptrs in them. Try to
+		 * look up addresses as userptrs first to sort out any
+		 * ambiguity of multiple overlapping mappings at
+		 * different GPU addresses.
+		 */
+		if (userptr || aper->ops == &mmap_aperture_ops)
+			obj = vm_find_object_by_userptr_range(aper, addr);
+		if (!obj && !userptr)
+			obj = vm_find_object_by_address_range(aper, addr);
+	} else {
+		if (userptr || aper->ops == &mmap_aperture_ops)
+			obj = vm_find_object_by_userptr(aper, addr, size);
+		if (!obj && !userptr) {
+			long page_offset = (long)addr & (PAGE_SIZE-1);
+			const void *page_addr = (const uint8_t *)addr - page_offset;
+
+			obj = vm_find_object_by_address(aper, page_addr, 0);
+			/* If we find a userptr here, it's a match on
+			 * the aligned GPU address. Make sure that the
+			 * page offset and size match too.
+			 */
+			if (obj && obj->userptr &&
+			    (((long)obj->userptr & (PAGE_SIZE - 1)) != page_offset ||
+			     (size && size != obj->userptr_size)))
+				obj = NULL;
+		}
+	}
+
+	if (!obj && !is_dgpu) {
+		/* On APUs try finding it in the CPUVM aperture */
+		pthread_mutex_unlock(&aper->fmm_mutex);
+
+		aper = &cpuvm_aperture;
+
+		pthread_mutex_lock(&aper->fmm_mutex);
+		if (range)
+			obj = vm_find_object_by_address_range(aper, addr);
+		else
+			obj = vm_find_object_by_address(aper, addr, 0);
+	}
+
+	if (obj) {
+		*out_aper = aper;
+		return obj;
+	}
+
+	pthread_mutex_unlock(&aper->fmm_mutex);
+	return NULL;
+}
+
+static HSAuint8 fmm_check_user_memory(const void *addr, HSAuint64 size)
+{
+	volatile const HSAuint8 *ptr = addr;
+	volatile const HSAuint8 *end = ptr + size;
+	HSAuint8 sum = 0;
+
+	/* Access every page in the buffer to make sure the mapping is
+	 * valid. If it's not, it will die with a segfault that's easy
+	 * to debug.
+	 */
+	for (; ptr < end; ptr = (void *)PAGE_ALIGN_UP(ptr + 1))
+		sum += *ptr;
+
+	return sum;
+}
+
 static void fmm_release_scratch(uint32_t gpu_id)
 {
 	int32_t gpu_mem_id;
@@ -1530,66 +1639,41 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 
 HSAKMT_STATUS fmm_release(void *address)
 {
-	uint32_t i;
-	vm_object_t *object = NULL;
 	manageable_aperture_t *aperture = NULL;
+	vm_object_t *object = NULL;
+	uint32_t i;
 
-	for (i = 0; i < gpu_mem_count; i++) {
-		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
-			continue;
-		if (address >= gpu_mem[i].scratch_physical.base &&
-			address <= gpu_mem[i].scratch_physical.limit) {
+	/* Special handling for scratch memory */
+	for (i = 0; i < gpu_mem_count; i++)
+		if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
+		    address >= gpu_mem[i].scratch_physical.base &&
+		    address <= gpu_mem[i].scratch_physical.limit) {
 			fmm_release_scratch(gpu_mem[i].gpu_id);
 			return HSAKMT_STATUS_SUCCESS;
 		}
 
-		if (address >= gpu_mem[i].gpuvm_aperture.base &&
-			address <= gpu_mem[i].gpuvm_aperture.limit) {
-			aperture = &gpu_mem[i].gpuvm_aperture;
-			break;
-		}
-	}
+	object = vm_find_object(address, 0, &aperture);
 
-	if (!aperture) {
-		if (address >= svm.dgpu_aperture->base &&
-			address <= svm.dgpu_aperture->limit) {
-			aperture = svm.dgpu_aperture;
-		} else if (address >= svm.dgpu_alt_aperture->base &&
-			address <= svm.dgpu_alt_aperture->limit) {
-			aperture = svm.dgpu_alt_aperture;
-		}
-	}
+	if (!object)
+		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 
-	if (aperture) {
-		pthread_mutex_lock(&aperture->fmm_mutex);
-		object = vm_find_object_by_address(aperture, address, 0);
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		if (object)
-			__fmm_release(object, aperture);
-		if (i < gpu_mem_count)
-			fmm_print(gpu_mem[i].gpu_id);
-	} else {
-		/*
-		 * If memory address isn't inside of any defined GPU aperture - it
-		 * refers to the system memory
-		 */
+	if (aperture == &cpuvm_aperture) {
+		/* APU system memory */
 		uint64_t size = 0;
-		/* Release the vm object in CPUVM */
-		pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
-		object = vm_find_object_by_address(&cpuvm_aperture, address, 0);
-		if (object) {
-			size = object->size;
-			vm_remove_object(&cpuvm_aperture, object);
-		}
-		pthread_mutex_unlock(&cpuvm_aperture.fmm_mutex);
-		/* Free the memory from the system */
-		if (size)
-			munmap(address, size);
+
+		size = object->size;
+		vm_remove_object(&cpuvm_aperture, object);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		munmap(address, size);
+	} else {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+
+		__fmm_release(object, aperture);
+		if (!aperture->is_cpu_accessible)
+			fmm_print(gpu_mem[i].gpu_id);
 	}
 
-	return object ?
-		HSAKMT_STATUS_SUCCESS :
-		HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_policy,
@@ -2420,46 +2504,10 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	return ret;
 }
 
-static int _fmm_map_to_apu_local(uint32_t gpu_id,
-				manageable_aperture_t *aperture,
-				void *address, uint64_t size,
-				uint64_t *gpuvm_address)
-{
-	vm_object_t *object;
-
-	if (gpuvm_address)
-		*gpuvm_address = 0;
-	/* Check that address space was previously reserved */
-	if (!vm_find(aperture, address))
-		return -1;
-
-	pthread_mutex_lock(&aperture->fmm_mutex);
-
-	/* Find the object to retrieve the handle */
-	object = vm_find_object_by_address(aperture, address, 0);
-	if (!object) {
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return -1;
-	}
-	pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	if (_fmm_map_to_gpu(aperture, address, size, object, NULL, 0))
-		return -1;
-
-	if (gpuvm_address) {
-		*gpuvm_address = (uint64_t)object->start;
-		if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)))
-			*gpuvm_address = VOID_PTRS_SUB(object->start, aperture->base);
-	}
-
-	return 0;
-}
-
 static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 				   uint64_t *gpuvm_addr, vm_object_t *object)
 {
 	manageable_aperture_t *aperture;
-	vm_object_t *obj;
 	void *svm_addr;
 	HSAuint64 svm_size;
 	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
@@ -2467,30 +2515,15 @@ static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 
 	aperture = svm.dgpu_aperture;
 
-	/* Find the start address in SVM space for GPU mapping */
-	if (!object)
-		pthread_mutex_lock(&aperture->fmm_mutex);
-
-	obj = object;
-	if (!obj) {
-		obj = vm_find_object_by_userptr(aperture, addr, size);
-		if (!obj) {
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-			return HSAKMT_STATUS_ERROR;
-		}
-	}
-	svm_addr = obj->start;
-	svm_size = obj->size;
+	svm_addr = object->start;
+	svm_size = object->size;
 
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	ret = _fmm_map_to_gpu(aperture, svm_addr, svm_size, obj, NULL, 0);
+	ret = _fmm_map_to_gpu(aperture, svm_addr, svm_size, object, NULL, 0);
 	if (ret == 0 && gpuvm_addr)
 		*gpuvm_addr = (uint64_t)svm_addr + page_offset;
-
-	if (!object)
-		pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	return ret;
 }
@@ -2499,83 +2532,47 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object;
-	bool userptr = false;
 	uint32_t i;
-	uint64_t pi;
 	int ret;
 
-	/* Find an aperture the requested address belongs to */
-	for (i = 0; i < gpu_mem_count; i++) {
-		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
-			continue;
-
-		if ((address >= gpu_mem[i].scratch_physical.base) &&
-			(address <= gpu_mem[i].scratch_physical.limit))
+	/* Special handling for scratch memory */
+	for (i = 0; i < gpu_mem_count; i++)
+		if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
+		    address >= gpu_mem[i].scratch_physical.base &&
+		    address <= gpu_mem[i].scratch_physical.limit)
 			return _fmm_map_to_gpu_scratch(gpu_mem[i].gpu_id,
 							&gpu_mem[i].scratch_physical,
 							address, size);
 
-		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
-			(address <= gpu_mem[i].gpuvm_aperture.limit))
-			/* map it */
-			return _fmm_map_to_apu_local(gpu_mem[i].gpu_id,
-						&gpu_mem[i].gpuvm_aperture,
-						address, size, gpuvm_address);
-	}
-
-	if ((address >= svm.dgpu_aperture->base) &&
-		(address <= svm.dgpu_aperture->limit))
-		aperture = svm.dgpu_aperture;
-	else if ((address >= svm.dgpu_alt_aperture->base) &&
-		(address <= svm.dgpu_alt_aperture->limit))
-		aperture = svm.dgpu_alt_aperture;
-	else {
-		aperture = svm.dgpu_aperture;
-		userptr = true;
-	}
-
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	if (userptr && is_dgpu)
-		object = vm_find_object_by_userptr(aperture, address, size);
-	else {
-		object = vm_find_object_by_address(aperture, address, 0);
-		/* If the object wasn't found in an unreserved
-		 * aperture, it may be a userptr
-		 */
-		if (!object && aperture->ops == &mmap_aperture_ops) {
-			object = vm_find_object_by_userptr(aperture, address,
-							   size);
-			userptr = true;
-		} else if (object && object->userptr == address) {
-			/* We found a userptr, but make sure we get
-			 * the right one
-			 */
-			object = vm_find_object_by_userptr(aperture, address,
-							   size);
-			userptr = true;
+	object = vm_find_object(address, size, &aperture);
+	if (!object) {
+		if (!is_dgpu) {
+			/* Prefetch memory on APUs with dummy-reads */
+			fmm_check_user_memory(address, size);
+			return 0;
 		}
+		pr_err("Object not found at %p\n", address);
+		return -EINVAL;
 	}
+	/* Successful vm_find_object returns with the aperture locked */
 
-	if (object) {
-		if (userptr && is_dgpu)
-			ret = _fmm_map_to_gpu_userptr(address, size, gpuvm_address, object);
-		else
-			ret = _fmm_map_to_gpu(aperture, address, size, object, NULL, 0);
-
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return ret;
+	if (aperture == &cpuvm_aperture) {
+		/* Prefetch memory on APUs with dummy-reads */
+		fmm_check_user_memory(address, size);
+		ret = 0;
+	} else if (object->userptr) {
+		ret = _fmm_map_to_gpu_userptr(address, size, gpuvm_address, object);
+	} else {
+		ret = _fmm_map_to_gpu(aperture, address, size, object, NULL, 0);
+		/* Update alternate GPUVM address only for
+		 * CPU-invisible apertures on old APUs
+		 */
+		if (!ret && gpuvm_address && !aperture->is_cpu_accessible)
+			*gpuvm_address = VOID_PTRS_SUB(object->start, aperture->base);
 	}
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	/*
-	 * On an APU a system memory address is accessed through
-	 * IOMMU. Thus we "prefetch" it.
-	 */
-	for (pi = 0; pi < size / PAGE_SIZE; pi++)
-		((char *) address)[pi * PAGE_SIZE] = 0;
-
-	return 0;
+	return ret;
 }
 
 static void print_device_id_array(uint32_t *device_id_array, uint32_t device_id_array_size)
@@ -2719,78 +2716,37 @@ err:
 	return ret;
 }
 
-static int _fmm_unmap_from_gpu_userptr(void *addr)
-{
-	manageable_aperture_t *aperture;
-	vm_object_t *obj;
-	void *svm_addr;
-
-	aperture = svm.dgpu_aperture;
-
-	/* Find the start address in SVM space for GPU unmapping */
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr, 0);
-	if (!obj) {
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return HSAKMT_STATUS_ERROR;
-	}
-	svm_addr = obj->start;
-	pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	/* Unmap */
-	return _fmm_unmap_from_gpu(aperture, svm_addr, NULL, 0, NULL);
-}
-
 int fmm_unmap_from_gpu(void *address)
 {
-	manageable_aperture_t *aperture = NULL;
+	manageable_aperture_t *aperture;
+	vm_object_t *object;
 	uint32_t i;
 	int ret;
 
-	/* Find the aperture the requested address belongs to */
-	for (i = 0; i < gpu_mem_count; i++) {
-		if (gpu_mem[i].gpu_id == NON_VALID_GPU_ID)
-			continue;
-
-		if ((address >= gpu_mem[i].scratch_physical.base) &&
-			(address <= gpu_mem[i].scratch_physical.limit))
+	/* Special handling for scratch memory */
+	for (i = 0; i < gpu_mem_count; i++)
+		if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
+		    address >= gpu_mem[i].scratch_physical.base &&
+		    address <= gpu_mem[i].scratch_physical.limit)
 			return _fmm_unmap_from_gpu_scratch(gpu_mem[i].gpu_id,
 							&gpu_mem[i].scratch_physical,
 							address);
 
-		if ((address >= gpu_mem[i].gpuvm_aperture.base) &&
-			(address <= gpu_mem[i].gpuvm_aperture.limit))
-			/* unmap it */
-			return _fmm_unmap_from_gpu(&gpu_mem[i].gpuvm_aperture,
-							address, NULL, 0, NULL);
-	}
+	object = vm_find_object(address, 0, &aperture);
+	if (!object)
+		/* On APUs GPU unmapping of system memory is a no-op */
+		return is_dgpu ? -EINVAL : 0;
+	/* Successful vm_find_object returns with the aperture locked */
 
-	if ((address >= svm.dgpu_aperture->base) &&
-		(address <= svm.dgpu_aperture->limit))
-		aperture = svm.dgpu_aperture;
-	else if ((address >= svm.dgpu_alt_aperture->base) &&
-		(address <= svm.dgpu_alt_aperture->limit))
-		aperture = svm.dgpu_alt_aperture;
+	if (aperture == &cpuvm_aperture)
+		/* On APUs GPU unmapping of system memory is a no-op */
+		ret = 0;
+	else
+		ret = _fmm_unmap_from_gpu(aperture, address, NULL, 0, object);
 
-	if (aperture) {
-		ret = _fmm_unmap_from_gpu(aperture, address, NULL, 0, NULL);
-		/* If unmap failed for an address in a reserved
-		 * aperture, it can't be a userptr address
-		 */
-		if (!ret || aperture->ops == &reserved_aperture_ops)
-			return ret;
-		/* fall through: try userptr */
-	}
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 
-	/*
-	 * If address isn't an SVM address, we assume that this is
-	 * system memory address.
-	 */
-	if (is_dgpu)
-		/* TODO: support mixed APU and dGPU configurations */
-		return _fmm_unmap_from_gpu_userptr(address);
-
-	return 0;
+	return ret;
 }
 
 bool fmm_get_handle(void *address, uint64_t *handle)
@@ -2841,50 +2797,21 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	return found;
 }
 
-static HSAuint8 fmm_check_user_memory(const void *addr, HSAuint64 size)
-{
-	volatile const HSAuint8 *ptr = addr;
-	volatile const HSAuint8 *end = ptr + size;
-	HSAuint8 sum = 0;
-
-	/* Access every page in the buffer to make sure the mapping is
-	 * valid. If it's not, it will die with a segfault that's easy
-	 * to debug.
-	 */
-	for (; ptr < end; ptr = (void *)PAGE_ALIGN_UP(ptr + 1))
-		sum += *ptr;
-
-	return sum;
-}
-
 static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_object_t **obj_ret)
 {
-	HSAuint32 gpu_id;
-	manageable_aperture_t *aperture;
-	void *svm_addr = NULL;
-	vm_object_t *obj;
+	manageable_aperture_t *aperture = svm.dgpu_aperture;
 	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
 	HSAuint64 aligned_addr = (HSAuint64)addr - page_offset;
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
+	void *svm_addr;
+	HSAuint32 gpu_id;
+	vm_object_t *obj;
 
 	/* Find first GPU for creating the userptr BO */
 	if (!g_first_gpu_mem)
 		return HSAKMT_STATUS_ERROR;
 
 	gpu_id = g_first_gpu_mem->gpu_id;
-
-	aperture = svm.dgpu_aperture;
-
-	/* Check if this address was already registered */
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr, size);
-	if (obj) {
-		++obj->registration_count;
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		*obj_ret = obj;
-		return HSAKMT_STATUS_SUCCESS;
-	}
-	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/* Optionally check that the CPU mapping is valid */
 	if (svm.check_userptr)
@@ -2926,31 +2853,13 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if ((address >= svm.dgpu_aperture->base) &&
-	    (address <= svm.dgpu_aperture->limit))
-		aperture = svm.dgpu_aperture;
-	else if ((address >= svm.dgpu_alt_aperture->base) &&
-		 (address <= svm.dgpu_alt_aperture->limit))
-		aperture = svm.dgpu_alt_aperture;
-	/* else it's probably a userptr, handled later */
-
-	if (aperture) {
-		pthread_mutex_lock(&aperture->fmm_mutex);
-		object = vm_find_object_by_address(aperture, address, 0);
-		/* If the SVM aperture is reserved, it can't be a userptr */
-		if (!object && aperture->ops == &reserved_aperture_ops) {
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-			return HSAKMT_STATUS_NOT_SUPPORTED;
-		}
-	}
-
+	object = vm_find_object(address, size_in_bytes, &aperture);
 	if (!object) {
-		if (aperture)
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-		/*
-		 * If address isn't SVM address, we assume that this
-		 * is system memory address.
-		 */
+		if (!is_dgpu)
+			/* System memory registration on APUs is a no-op */
+			return HSAKMT_STATUS_SUCCESS;
+
+		/* Register a new user ptr */
 		ret = fmm_register_user_memory(address, size_in_bytes, &object);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			return ret;
@@ -2959,7 +2868,11 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 		aperture = svm.dgpu_aperture;
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		/* fall through for registered device ID array setup */
+	} else if (object->userptr) {
+		/* Update an existing userptr */
+		++object->registration_count;
 	}
+	/* Successful vm_find_object returns with aperture locked */
 
 	if (object->registered_device_id_array_size > 0) {
 		/* Multiple registration is allowed, but not changing nodes */
@@ -3246,74 +3159,27 @@ err_import:
 	return err;
 }
 
-static HSAKMT_STATUS fmm_deregister_user_memory(void *addr)
-{
-	manageable_aperture_t *aperture;
-	vm_object_t *obj;
-
-	aperture = svm.dgpu_aperture;
-
-	/* Find the size and start address in SVM space */
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	obj = vm_find_object_by_userptr(aperture, addr, 0);
-	if (!obj || obj->registration_count > 1) {
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return HSAKMT_STATUS_ERROR;
-	}
-	pthread_mutex_unlock(&aperture->fmm_mutex);
-
-	/* Destroy BO */
-	__fmm_release(obj, aperture);
-
-	return HSAKMT_STATUS_SUCCESS;
-}
-
 HSAKMT_STATUS fmm_deregister_memory(void *address)
 {
-	manageable_aperture_t *aperture = NULL;
-	vm_object_t *object = NULL;
-	unsigned int i;
-	HSAuint32 page_offset = (HSAint64)address & (PAGE_SIZE - 1);
+	manageable_aperture_t *aperture;
+	vm_object_t *object;
 
-	if ((address >= svm.dgpu_aperture->base) &&
-	    (address <= svm.dgpu_aperture->limit))
-		aperture = svm.dgpu_aperture;
-	else if ((address >= svm.dgpu_alt_aperture->base) &&
-		 (address <= svm.dgpu_alt_aperture->limit))
-		aperture = svm.dgpu_alt_aperture;
-	else
-		for (i = 0; i < gpu_mem_count; i++) {
-			if (gpu_mem[i].gpu_id != NON_VALID_GPU_ID &&
-			    address >= gpu_mem[i].gpuvm_aperture.base &&
-			    address <= gpu_mem[i].gpuvm_aperture.limit) {
-				aperture = &gpu_mem[i].gpuvm_aperture;
-				break;
-			}
-		}
-
-	if (!aperture) {
-		/* If address isn't found in any aperture, we assume
-		 * that this is system memory address. On APUs, there
-		 * is nothing to do (for now).
+	object = vm_find_object(address, 0, &aperture);
+	if (!object)
+		/* On APUs we assume it's a random system memory address
+		 * where registration and dergistration is a no-op
 		 */
-		if (!is_dgpu)
-			return HSAKMT_STATUS_SUCCESS;
-		/* If the userptr object had a
-		 * registered_device_id_array, it will be freed by
-		 * __fmm_release. Also the object will be
-		 * removed. Therefore we can short-circuit the rest of
-		 * the function below.
+		return is_dgpu ?
+			HSAKMT_STATUS_MEMORY_NOT_REGISTERED :
+			HSAKMT_STATUS_SUCCESS;
+	/* Successful vm_find_object returns with aperture locked */
+
+	if (aperture == &cpuvm_aperture) {
+		/* API-allocated system memory on APUs, deregistration
+		 * is a no-op
 		 */
-		return fmm_deregister_user_memory(address);
-	}
-
-	pthread_mutex_lock(&aperture->fmm_mutex);
-
-	object = vm_find_object_by_address(aperture,
-				VOID_PTR_SUB(address, page_offset), 0);
-	if (!object) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
+		return HSAKMT_STATUS_SUCCESS;
 	}
 
 	if (object->registration_count > 1) {
@@ -3363,9 +3229,8 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint64_t *gpuvm_address)
 {
 	manageable_aperture_t *aperture;
-	vm_object_t *object = NULL;
+	vm_object_t *object;
 	uint32_t i;
-	bool userptr = false;
 	uint32_t *registered_node_id_array, registered_node_id_array_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_ERROR;
 	int retcode = 0;
@@ -3373,41 +3238,13 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	if (!num_of_nodes || !nodes_to_map || !address)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	/* Find object by address */
-	if ((address >= svm.dgpu_aperture->base) &&
-	    (address <= svm.dgpu_aperture->limit))
-		aperture = svm.dgpu_aperture;
-	else if ((address >= svm.dgpu_alt_aperture->base) &&
-		 (address <= svm.dgpu_alt_aperture->limit))
-		aperture = svm.dgpu_alt_aperture;
-	else {
-		aperture = svm.dgpu_aperture;
-		userptr = true;
-	}
+	object = vm_find_object(address, size, &aperture);
+	if (!object)
+		return HSAKMT_STATUS_ERROR;
+	/* Successful vm_find_object returns with aperture locked */
 
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	if (userptr && is_dgpu)
-		object = vm_find_object_by_userptr(aperture, address, size);
-	else {
-		object = vm_find_object_by_address(aperture, address, 0);
-		/* If the object wasn't found in an unreserved
-		 * aperture, it may be a userptr
-		 */
-		if (!object && aperture->ops == &mmap_aperture_ops) {
-			object = vm_find_object_by_userptr(aperture, address,
-							   size);
-			userptr = true;
-		} else if (object && object->userptr == address) {
-			/* We found a userptr, but make sure we get
-			 * the right one
-			 */
-			object = vm_find_object_by_userptr(aperture, address,
-							   size);
-			userptr = true;
-		}
-	}
-
-	if (!object) {
+	/* APU memory is not supported by this function */
+	if (aperture == &cpuvm_aperture || !aperture->is_cpu_accessible) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -3416,11 +3253,11 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	 * This is to simply the implementation of allowing the same memory
 	 * region to be registered multiple times.
 	 */
-	if (userptr && is_dgpu) {
+	if (object->userptr) {
 		retcode = _fmm_map_to_gpu_userptr(address, size,
 					gpuvm_address, object);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return retcode;
+		return retcode ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 	}
 
 	/* Verify that all nodes to map are registered already */
@@ -3501,18 +3338,12 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 
 	memset(info, 0, sizeof(HsaPointerInfo));
 
-	aperture = fmm_find_aperture(address, NULL);
-
-	pthread_mutex_lock(&aperture->fmm_mutex);
-	vm_obj = vm_find_object_by_address_range(aperture, address);
-	if (!vm_obj)
-		vm_obj = vm_find_object_by_userptr_range(aperture, address);
-
+	vm_obj = vm_find_object(address, UINT64_MAX, &aperture);
 	if (!vm_obj) {
 		info->Type = HSA_POINTER_UNKNOWN;
-		ret = HSAKMT_STATUS_ERROR;
-		goto exit;
+		return HSAKMT_STATUS_ERROR;
 	}
+	/* Successful vm_find_object returns with the aperture locked */
 
 	if (vm_obj->metadata)
 		info->Type = HSA_POINTER_REGISTERED_GRAPHICS;
@@ -3565,7 +3396,6 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		info->CPUAddress = vm_obj->start;
 	}
 
-exit:
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return ret;
 }
@@ -3575,15 +3405,13 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 	manageable_aperture_t *aperture;
 	vm_object_t *vm_obj;
 
-	aperture = fmm_find_aperture(mem, NULL);
-
-	vm_obj = vm_find_object_by_address(aperture, mem, 0);
-	if (!vm_obj)
-		vm_obj = vm_find_object_by_userptr(aperture, mem, 0);
+	vm_obj = vm_find_object(mem, 0, &aperture);
 	if (!vm_obj)
 		return HSAKMT_STATUS_ERROR;
 
 	vm_obj->user_data = usr_data;
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
