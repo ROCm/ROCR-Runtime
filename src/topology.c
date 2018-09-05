@@ -169,6 +169,15 @@ static struct hsa_gfxip_table {
 	{ 0x67EB, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	{ 0x67EF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	{ 0x67FF, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
+	/* Polaris12 */
+	{ 0x6980, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6981, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6985, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6986, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6987, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6995, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x6997, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	{ 0x699F, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
 	/* Vega10 */
 	{ 0x6860, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6861, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
@@ -180,10 +189,11 @@ static struct hsa_gfxip_table {
 	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	/* Vega12 */
-	{ 0x69A0, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
-	{ 0x69A1, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
-	{ 0x69A3, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
-	{ 0x69Af, 9, 0, 4, 1, "Vega12", CHIP_VEGA10 },
+	{ 0x69A0, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
+	{ 0x69A1, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
+	{ 0x69A2, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
+	{ 0x69A3, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
+	{ 0x69Af, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
 	/* Raven */
 	{ 0x15DD, 9, 0, 2, 0, "Raven", CHIP_RAVEN },
 	/* Vega20 */

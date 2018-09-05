@@ -437,7 +437,7 @@ static uint32_t gfx8_sq_counter_ids[] = {
 279, 280, 281, 282, 283, 284, 285, 286, 287, 288, 289, 290, 291, 298
 };
 
-/* Polaris 10/11 have the same SQ cpunter IDs but different from other gfx8's. */
+/* Polaris 10/11/12 have the same SQ cpunter IDs but different from other gfx8's. */
 /* Unused counters - 167 and 275 are *_DUMMY_LAST */
 static uint32_t gfx8_pl_sq_counter_ids[] = {
 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21,
@@ -1742,9 +1742,11 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 		break;
 	case CHIP_POLARIS10:
 	case CHIP_POLARIS11:
+	case CHIP_POLARIS12:
 		*block = polaris_blocks[block_id];
 		break;
 	case CHIP_VEGA10:
+	case CHIP_VEGA12:
 	case CHIP_VEGA20:
 	case CHIP_RAVEN:
 		*block = vega_blocks[block_id];
