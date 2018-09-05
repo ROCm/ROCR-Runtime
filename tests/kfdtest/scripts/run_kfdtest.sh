@@ -49,7 +49,7 @@ printUsage() {
     echo
     echo "Gtest arguments will be forwarded to the app"
     echo
-    echo "Valid platform options: cz, kv, tg, fj, hi, pl/el, plb/bf, vg10, all"
+    echo "Valid platform options: cz, kv, tg, fj, hi, pl10/el, pl11/bf, pl12/lx, vg10, vg12, vg20, all"
     echo "'all' option runs all tests"
 
     return 0
@@ -66,9 +66,11 @@ getFilter() {
         kv ) FILTER="--gtest_filter=$KV_TESTS_BLACKLIST" ;;
         tg ) FILTER="--gtest_filter=$TONGA_TESTS_BLACKLIST" ;;
         fj ) FILTER="--gtest_filter=$FIJI_TESTS_BLACKLIST" ;;
-        pl | el ) FILTER="--gtest_filter=$ELLESMERE_TESTS_BLACKLIST" ;;
-        plb | bf ) FILTER="--gtest_filter=$BAFFIN_TESTS_BLACKLIST" ;;
+        pl10 | el ) FILTER="--gtest_filter=$ELLESMERE_TESTS_BLACKLIST" ;;
+        pl11 | bf ) FILTER="--gtest_filter=$BAFFIN_TESTS_BLACKLIST" ;;
+        pl12 | lx ) FILTER="--gtest_filter=$LEXA_TESTS_BLACKLIST" ;;
         vg10 ) FILTER="--gtest_filter=$VEGA10_TESTS_BLACKLIST" ;;
+        vg12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
         vg20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
         rv ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
         all ) FILTER="" ;;
@@ -109,11 +111,15 @@ deviceIdToGpuName() {
         7300 | 730f)
             platformName="fj" ;;
         67c0 | 67c1 | 67c2 | 67c4 | 67c7 | 67c8 | 67c9 | 67ca | 67cc | 67cf | 67d0 | 67df )
-            platformName="pl" ;;
+            platformName="pl10" ;;
         67e0 | 67e1 | 67e3 | 67e7 | 67e8 | 67e9 | 67eb | 67ef | 67ff )
-            platformName="plb" ;;
+            platformName="pl11" ;;
+        6980 | 6981 | 6985 | 6986 | 6987 | 6995 | 6997 | 699f)
+            platformName="pl12" ;;
         6860 | 6861 | 6862 | 6863 | 6864 | 6867 | 6868 | 6869 | 686a | 686b | 686c | 687f)
             platformName="vg10" ;;
+        69a0 | 69a1 | 69a2 | 69a3 | 69af)
+            platformName="vg12" ;;
         66a0 | 66a1 | 66a2 | 66a3 |66a7 | 66af)
             platformName="vg20" ;;
         15dd )
