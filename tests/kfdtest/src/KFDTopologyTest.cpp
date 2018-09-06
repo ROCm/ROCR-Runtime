@@ -203,7 +203,9 @@ TEST_F(KFDTopologyTest, GetNodeIoLinkProperties) {
             for (linkId = 0; linkId < pNodeProperties->NumIOLinks; linkId++) {
                 if (linkId == 0) {
                     // First io_link. Print Parent Node and io_link Node
-                    LOG() << "[" << node << "]--(" << IolinkProperties[linkId].Weight << ")-->" <<
+                    EXPECT_EQ(node, IolinkProperties[linkId].NodeFrom);
+                    LOG() << "[" << IolinkProperties[linkId].NodeFrom << "]--(" <<
+                        IolinkProperties[linkId].Weight << ")-->" <<
                         "[" << IolinkProperties[linkId].NodeTo << "]" << std::endl;
                     continue;
                 }
