@@ -63,21 +63,20 @@ set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUIL
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler flags
-set ( CMAKE_C_FLAGS "-fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden" )
+set (HSAKMT_C_FLAGS -fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden)
 if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
-    set ( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Werror" )
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -Werror )
 endif ()
-
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    set ( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O2" )
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -O2 )
 else ()
-    set ( CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -g" )
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -g )
 endif ()
 
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
 ## Linker Flags
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete -Wl,-no-undefined" )
+set (HSAKMT_LINK_FLAGS "-Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete -Wl,-no-undefined" )
 
 ## Source files
 set ( HSAKMT_SRC "src/debug.c"
@@ -101,6 +100,8 @@ include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/src )
 
 ## Add the library
 add_library ( ${HSAKMT_TARGET} SHARED ${HSAKMT_SRC} )
+target_compile_options(${HSAKMT_TARGET} PRIVATE ${HSAKMT_C_FLAGS})
+set_property(TARGET ${HSAKMT_TARGET} PROPERTY LINK_FLAGS ${HSAKMT_LINK_FLAGS})
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
