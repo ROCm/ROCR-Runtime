@@ -1033,6 +1033,9 @@ static vm_object_t *vm_find_object(const void *addr, uint64_t size,
 		}
 
 	if (!aper) {
+		if (!svm.dgpu_aperture)
+			goto no_svm;
+
 		if ((addr >= svm.dgpu_aperture->base) &&
 		    (addr <= svm.dgpu_aperture->limit))
 			aper = svm.dgpu_aperture;
@@ -1075,9 +1078,11 @@ static vm_object_t *vm_find_object(const void *addr, uint64_t size,
 		}
 	}
 
+no_svm:
 	if (!obj && !is_dgpu) {
 		/* On APUs try finding it in the CPUVM aperture */
-		pthread_mutex_unlock(&aper->fmm_mutex);
+		if (aper)
+			pthread_mutex_unlock(&aper->fmm_mutex);
 
 		aper = &cpuvm_aperture;
 
@@ -1093,7 +1098,8 @@ static vm_object_t *vm_find_object(const void *addr, uint64_t size,
 		return obj;
 	}
 
-	pthread_mutex_unlock(&aper->fmm_mutex);
+	if (aper)
+		pthread_mutex_unlock(&aper->fmm_mutex);
 	return NULL;
 }
 
