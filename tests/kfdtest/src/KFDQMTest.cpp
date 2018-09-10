@@ -1074,8 +1074,9 @@ TEST_F(KFDQMTest, QueueLatency) {
      * |E|E|E|E|E|E|E|rptr...wptr|E|E|E|E|E| ---> |P|P|P|P|P|P|E|rptr...wptr|N|N|N|N|N|
      * So to respect that, we reserve packetSize space for these additional NOPs.
      * Also we reserve the remainder of the division by packetSize explicitly.
+     * Reserve another packetSize for event-based wait which uses a releseMemory packet.
      */
-    const int reservedSpace = packetSize + queueSize % packetSize;
+    const int reservedSpace = packetSize + queueSize % packetSize + packetSize;
     const int slots = (queueSize - reservedSpace) / packetSize;
     HSAint64 queue_latency_avg = 0, queue_latency_min, queue_latency_max, queue_latency_med;
     HSAint64 overhead, workload;
@@ -1101,6 +1102,9 @@ TEST_F(KFDQMTest, QueueLatency) {
     HsaMemoryBuffer qbuf(ALIGN_UP(slots * sizeof(HSAuint64), PAGE_SIZE), 0);
     qts = qbuf.As<HSAuint64*>();
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     /* GpuCounter overhead*/
     do {
         hsaKmtGetClockCounters(defaultGPUNode, &ts[i]);
@@ -1118,7 +1122,7 @@ TEST_F(KFDQMTest, QueueLatency) {
                     1));
         hsaKmtGetClockCounters(defaultGPUNode, &ts[i]);
         queue.SubmitPacket();
-        queue.Wait4PacketConsumption();
+        queue.Wait4PacketConsumption(event);
     } while (++i < slots);
 
     /* Calculate timing which includes workload and overhead*/
@@ -1145,8 +1149,9 @@ TEST_F(KFDQMTest, QueueLatency) {
                     1));
     } while (++i < slots);
     queue.SubmitPacket();
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
+    hsaKmtDestroyEvent(event);
     /* qts[i] records the timestamp of the end of packet[i] which is
      * approximate that of the beginging of packet[i+1].
      * The workload total is [0, skip], [skip+1, slots-1].
