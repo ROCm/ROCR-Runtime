@@ -659,6 +659,8 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
                   << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
             EXPECT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
+
+            RECORD(ratio) << "Ratio-" << nCUs << "-CUs";
         }
     } else {
         LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
@@ -730,6 +732,8 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
                   << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
             EXPECT_TRUE((ratio >= CuNegVariance) && (ratio <= CuPosVariance));
+
+            RECORD(ratio) << "Ratio-" << nCUs << "-CUs";
         }
     } else {
         LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
@@ -1183,6 +1187,13 @@ TEST_F(KFDQMTest, QueueLatency) {
     LOG() << "Queue Latency Max:     \t" << CounterToNanoSec(queue_latency_max) << std::endl;
     LOG() << "Queue Packet Workload: \t" << CounterToNanoSec(workload) << std::endl;
     LOG() << "Get GpuCounter Overhead: \t" << CounterToNanoSec(overhead) << std::endl;
+
+    RECORD(CounterToNanoSec(queue_latency_avg)) << "Queue-Latency-Avg";
+    RECORD(CounterToNanoSec(queue_latency_min)) << "Queue-Latency-Min";
+    RECORD(CounterToNanoSec(queue_latency_med)) << "Queue-Latency-Med";
+    RECORD(CounterToNanoSec(queue_latency_max)) << "Queue-Latency-Max";
+    RECORD(CounterToNanoSec(workload)) << "Queue-Packet-Workload";
+    RECORD(CounterToNanoSec(overhead)) << "GpuCounter-Overhead";
 
     TEST_END
 }
