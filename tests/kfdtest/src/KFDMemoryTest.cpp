@@ -176,6 +176,8 @@ TEST_F(KFDMemoryTest, MMapLarge) {
     LOG() << "Successfully registered and mapped " << (i * s >> 30)
             << "GB system memory to gpu" << std::endl;
 
+    RECORD(i * s >> 30) << "Mmap-SysMem-Size";
+
     while (i--) {
         EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void*>(AlternateVAGPU[i])));
         EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void*>(AlternateVAGPU[i])));
@@ -1020,6 +1022,16 @@ TEST_F(KFDMemoryTest, MMBench) {
               << std::setw(8) << mapAllTime
               << std::setw(8) << unmapAllTime
               << std::setw(8) << freeTime << std::endl;
+
+#define MMBENCH_KEY_PREFIX memTypeStrings[memType] << "-" \
+                           << (interleaveSDMA ? "SDMA" : "noSDMA") << "-" \
+                           << (bufSize >> 10) << "K-"
+        RECORD(allocTime) << MMBENCH_KEY_PREFIX << "alloc";
+        RECORD(map1Time) << MMBENCH_KEY_PREFIX << "mapOne";
+        RECORD(unmap1Time) << MMBENCH_KEY_PREFIX << "unmapOne";
+        RECORD(mapAllTime) << MMBENCH_KEY_PREFIX << "mapAll";
+        RECORD(unmapAllTime) << MMBENCH_KEY_PREFIX << "unmapAll";
+        RECORD(freeTime) << MMBENCH_KEY_PREFIX << "free";
     }
 
     TEST_END
@@ -1551,7 +1563,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     const unsigned nBufs = 1000; /* measure us, report ns */
     unsigned testIndex, sizeIndex, memType;
     const unsigned nMemTypes = 2;
-    const char *memTypeStrings[nMemTypes] = {"SysMem", "VRAM  "};
+    const char *memTypeStrings[nMemTypes] = {"SysMem", "VRAM"};
     const unsigned nSizes = 4;
     const unsigned bufSizes[nSizes] = {PAGE_SIZE, PAGE_SIZE*4, PAGE_SIZE*16, PAGE_SIZE*64};
     const unsigned nTests = nSizes * nMemTypes;
@@ -1641,14 +1653,22 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
         for (i = 0; i < nBufs; i++)
             EXPECT_SUCCESS(hsaKmtFreeMemory(bufs[i], bufSize));
 
-        LOG() << std::dec << std::setiosflags(std::ios::right)
-            << std::setw(3) << (bufSize >> 10) << "K-"
-            << memTypeStrings[memType] << "\t"
+        LOG() << std::dec
+            << std::right << std::setw(3) << (bufSize >> 10) << "K-"
+            << std::left << std::setw(14) << memTypeStrings[memType]
+            << std::right
             << std::setw(12) << mcpRTime
             << std::setw(12) << mcpWTime
             << std::setw(12) << accessRTime
             << std::setw(12) << accessWTime
             << std::endl;
+
+#define MMBANDWIDTH_KEY_PREFIX memTypeStrings[memType] << "-" \
+                               << (bufSize >> 10) << "K" << "-"
+        RECORD(mcpRTime) << MMBANDWIDTH_KEY_PREFIX << "mcpRTime";
+        RECORD(mcpWTime) << MMBANDWIDTH_KEY_PREFIX << "mcpWTime";
+        RECORD(accessRTime) << MMBANDWIDTH_KEY_PREFIX << "accessRTime";
+        RECORD(accessWTime) << MMBANDWIDTH_KEY_PREFIX << "accessWTime";
     }
 
     munmap(tmp, tmpBufferSize);

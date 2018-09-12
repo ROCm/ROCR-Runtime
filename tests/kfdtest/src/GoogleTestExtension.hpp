@@ -42,6 +42,27 @@ std::ostream& operator << (KFDLog log, LOGTYPE level);
 #define LOG()      KFDLog() << LOGTYPE_INFO
 #define WARN()     KFDLog() << LOGTYPE_WARNING
 
+class KFDRecord: public testing::Test {
+public:
+    KFDRecord(const char *val): m_val(val) {}
+    KFDRecord(std::string &val): m_val(val) {}
+    KFDRecord(HSAint64 val): m_val(std::to_string(val)) {}
+    KFDRecord(HSAuint64 val): m_val(std::to_string(val)) {}
+    KFDRecord(double val): m_val(std::to_string(val)) {}
+    ~KFDRecord() {
+        RecordProperty(m_key.str().c_str(), m_val.c_str());
+    }
+    std::stringstream &get_key_stream() {
+        return m_key;
+    }
+    virtual void TestBody() {};
+private:
+    std::string m_val;
+    std::stringstream m_key;
+};
+
+#define RECORD(val)     (KFDRecord(val).get_key_stream())
+
 // All tests MUST be in a try catch since the gtest flag to throw an exception on any fatal failure is enabled
 #define TEST_START(testProfile)   if (Ok2Run(testProfile)) try {
 #define TEST_END       } catch (...) {}
