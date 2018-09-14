@@ -563,10 +563,9 @@ void GpuAgent::InitDma() {
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
-    const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
-        node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
 
-    bool use_sdma = (isa_->GetMajorVersion() != 8) && link.info.atomic_support_64bit;
+    // Per-ASIC disables for firmware stability.
+    bool use_sdma = (isa_->GetMajorVersion() != 8) && (isa_->version() != core::Isa::Version(9, 0, 6));
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
@@ -606,8 +605,7 @@ hsa_status_t GpuAgent::PostToolsInit() {
 }
 
 hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
-  // This operation is not a P2P operation - uses BlitKernel
-  return blits_[BlitDevToDev]->SubmitLinearCopyCommand(false, dst, src, size);
+  return blits_[BlitDevToDev]->SubmitLinearCopyCommand(dst, src, size);
 }
 
 hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
@@ -631,12 +629,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
-  // Determine if this is a Peer-To-Peer copy operation
-  bool p2p = ((src_agent.node_id() != dst_agent.node_id()) &&
-              (src_agent.device_type() == core::Agent::kAmdGpuDevice) &&
-              (dst_agent.device_type() == core::Agent::kAmdGpuDevice));
-
-  hsa_status_t stat = blit->SubmitLinearCopyCommand(p2p, dst, src, size, dep_signals, out_signal);
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
 
   return stat;
 }

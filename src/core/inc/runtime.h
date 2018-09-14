@@ -53,6 +53,7 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
+#include "core/inc/exceptions.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
 #include "core/util/flag.h"
@@ -318,9 +319,14 @@ class Runtime {
 
   ExtensionEntryPoints extensions_;
 
-  hsa_status_t SetCustomVMFaultHandler(hsa_status_t (*callback)(const void* event_specific_data,
-                                                                void* data),
-                                       void* data);
+  hsa_status_t SetCustomSystemEventHandler(hsa_amd_system_event_callback_t callback,
+                                           void* data);
+
+  void* GetCustomSystemEventData() { return system_event_handler_user_data_; }
+
+  AMD::callback_t<hsa_amd_system_event_callback_t> GetCustomSystemEventHandler() {
+    return system_event_handler_;
+  }
 
  protected:
   static void AsyncEventsLoop(void*);
@@ -504,10 +510,10 @@ class Runtime {
   // @brief HSA signal to contain the VM fault event.
   Signal* vm_fault_signal_;
 
-  // custom VM fault handler.
-  hsa_status_t (*vm_fault_handler_custom_)(const void* event_specific_data,
-                                           void* data);
-  void* vm_fault_handler_user_data_;
+  // Custom system event handler.
+  AMD::callback_t<hsa_amd_system_event_callback_t> system_event_handler_;
+
+  void* system_event_handler_user_data_;
 
   // Holds reference count to runtime object.
   std::atomic<uint32_t> ref_count_;

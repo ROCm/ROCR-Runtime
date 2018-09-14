@@ -46,6 +46,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_
 
 #include <vector>
+#include <map>
 
 #include "hsakmt.h"
 

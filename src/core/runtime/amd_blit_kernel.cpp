@@ -587,8 +587,8 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t BlitKernel::SubmitLinearCopyCommand(bool p2p, void* dst,
-                                                 const void* src, size_t size) {
+hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
+                                                 size_t size) {
   // Protect completion_signal_.
   std::lock_guard<std::mutex> guard(lock_);
 
@@ -597,7 +597,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(bool p2p, void* dst,
   std::vector<core::Signal*> dep_signals(0);
 
   hsa_status_t stat = SubmitLinearCopyCommand(
-      p2p, dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
+      dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
 
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
@@ -614,7 +614,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(bool p2p, void* dst,
 }
 
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(
-    bool p2p, void* dst, const void* src, size_t size,
+    void* dst, const void* src, size_t size,
     std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
   // Reserve write index for barrier(s) + dispatch packet.
   const uint32_t num_barrier_packet = uint32_t((dep_signals.size() + 4) / 5);
