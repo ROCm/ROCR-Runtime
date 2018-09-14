@@ -46,6 +46,7 @@
 #define HSA_RUNTME_CORE_INC_SIGNAL_H_
 
 #include <map>
+#include <functional>
 
 #include "hsakmt.h"
 

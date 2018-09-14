@@ -86,7 +86,11 @@ class Flag {
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 
     var = os::GetEnvVar("HSA_TOOLS_REPORT_LOAD_FAILURE");
+#ifdef NDEBUG
+    report_tool_load_failures_ = (var == "1") ? true : false;
+#else
     report_tool_load_failures_ = (var == "0") ? false : true;
+#endif
 
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;

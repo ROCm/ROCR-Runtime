@@ -54,6 +54,8 @@
 
 #include "inc/amd_hsa_queue.h"
 
+#include "hsakmt.h"
+
 namespace core {
 struct AqlPacket {
 
@@ -175,6 +177,9 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   ///
   /// @return hsa_status_t Status of request
   virtual hsa_status_t Inactivate() = 0;
+
+  /// @brief Change the scheduling priority of the queue
+  virtual hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) = 0;
 
   /// @brief Reads the Read Index of Queue using Acquire semantics
   ///

@@ -50,9 +50,17 @@
 #include <stdint.h>
 #include "hsa.h"
 
+#define HSA_AQLPROFILE_VERSION_MAJOR 2
+#define HSA_AQLPROFILE_VERSION_MINUR 0
+
 #ifdef __cplusplus
 extern "C" {
 #endif  // __cplusplus
+
+////////////////////////////////////////////////////////////////////////////////
+// Library version
+uint32_t hsa_ven_amd_aqlprofile_version_major();
+uint32_t hsa_ven_amd_aqlprofile_version_minor();
 
 ///////////////////////////////////////////////////////////////////////
 // Library API:
@@ -136,7 +144,8 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK = 1,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK = 2,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK = 3,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -201,6 +210,13 @@ hsa_status_t hsa_ven_amd_aqlprofile_start(
 hsa_status_t hsa_ven_amd_aqlprofile_stop(
     const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
     hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);   // [out] profile stop AQL packet
+
+// Method to populate the provided AQL packet with profiling read commands
+// Only 'pm4_command' fields of the packet are set and the application
+// is responsible to set Vendor Specific header type and a completion signal
+hsa_status_t hsa_ven_amd_aqlprofile_read(
+    const hsa_ven_amd_aqlprofile_profile_t* profile,  // [in] profile contex object
+    hsa_ext_amd_aql_pm4_packet_t* aql_read_packet);   // [out] profile stop AQL packet
 
 // Legacy devices, PM4 profiling packet size
 const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
@@ -284,6 +300,9 @@ static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile.so.1";
  * @brief Extension function table.
  */
 typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
+  uint32_t (*hsa_ven_amd_aqlprofile_version_major)();
+  uint32_t (*hsa_ven_amd_aqlprofile_version_minor)();
+
   hsa_status_t (*hsa_ven_amd_aqlprofile_error_string)(
       const char** str);
 
@@ -298,7 +317,11 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_stop)(
       const hsa_ven_amd_aqlprofile_profile_t* profile,
-      hsa_ext_amd_aql_pm4_packet_t* aql_start_packet);
+      hsa_ext_amd_aql_pm4_packet_t* aql_stop_packet);
+
+  hsa_status_t (*hsa_ven_amd_aqlprofile_read)(
+      const hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_read_packet);
 
   hsa_status_t (*hsa_ven_amd_aqlprofile_legacy_get_pm4)(
       const hsa_ext_amd_aql_pm4_packet_t* aql_packet,

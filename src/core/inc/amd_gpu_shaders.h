@@ -109,12 +109,101 @@ static const unsigned int kCodeTrapHandler8[] = {
 };
 
 static const unsigned int kCodeTrapHandler9[] = {
-	  0xc0061b80, 0x000000c0, 0xbf8cc07f, 0xbefe0181, 0x806e886e, 0x826f806f,
-	  0x7e00026e, 0x7e02026f, 0x7e0402ff, 0x80000000, 0x7e060280, 0xdd800000,
-	  0x007f0200, 0xbf8c0f70, 0x7dd40500, 0xbf870011, 0xc0061c37, 0x00000008,
-	  0xbf8cc07f, 0x86f07070, 0xbf84000c, 0x806e906e, 0x826f806f, 0xc0021bb7,
-	  0x00000000, 0xbf8cc07f, 0x7e000270, 0x7e020271, 0x7e04026e, 0xdc700000,
-	  0x007f0200, 0xbf8c0f70, 0xbf900001, 0xbf8d0001, 0xbe801f6c, 0x00000000,
+/*
+  var SQ_WAVE_PC_HI_TRAP_ID_SHIFT           = 16
+  var SQ_WAVE_PC_HI_TRAP_ID_SIZE            = 8
+  var SQ_WAVE_PC_HI_TRAP_ID_BFE             = (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
+  var SQ_WAVE_STATUS_HALT_MASK              = 0x2000
+  var SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK = 0x8000
+  var SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     = 15
+  var IB_STS_SAVE_RCNT_FIRST_REPLAY_SHIFT   = 26
+
+  // ABI between first and second level trap handler.
+  var s_trap_info_lo = ttmp0
+  var s_trap_info_hi = ttmp1
+  var s_ib_sts_save  = ttmp11 // [31:26] = SQ_WAVE_IB_STS[20:15]
+  var s_status_save  = ttmp12
+
+  // SPI debug data is not present/needed in these registers.
+  var s_tmp0         = ttmp2
+  var s_tmp1         = ttmp3
+  var s_tmp2         = ttmp4
+  var s_tmp3         = ttmp5
+
+  shader main
+    type(CS)
+
+    // If this is not a trap then return to the shader.
+    s_bfe_u32            s_tmp0, s_trap_info_hi, SQ_WAVE_PC_HI_TRAP_ID_BFE
+    s_cbranch_scc0       L_EXIT_TRAP
+
+    // If llvm.trap then signal queue error.
+    s_cmp_eq_u32         s_tmp0, 0x2
+    s_cbranch_scc1       L_SIGNAL_QUEUE
+
+    // For other traps advance PC and return to shader.
+    s_add_u32            s_trap_info_lo, s_trap_info_lo, 0x4
+    s_addc_u32           s_trap_info_hi, s_trap_info_hi, 0x0
+    s_branch             L_EXIT_TRAP
+
+  L_SIGNAL_QUEUE:
+    // Retrieve queue_inactive_signal from amd_queue_t* passed in s[0:1].
+    s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0 glc:1
+    s_waitcnt            lgkmcnt(0)
+
+    // Set queue signal value to unhandled exception error.
+    s_mov_b32            s_tmp2, 0x80000000
+    s_mov_b32            s_tmp3, 0x0
+    s_atomic_swap_x2     [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x8 glc:1
+    s_waitcnt            lgkmcnt(0)
+
+    // Skip event trigger if the signal value was already non-zero.
+    s_or_b32             s_tmp2, s_tmp2, s_tmp3
+    s_cbranch_scc1       L_SIGNAL_DONE
+
+    // Check for a non-NULL signal event mailbox.
+    s_load_dwordx2       [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x10 glc:1
+    s_waitcnt            lgkmcnt(0)
+    s_and_b64            [s_tmp2, s_tmp3], [s_tmp2, s_tmp3], [s_tmp2, s_tmp3]
+    s_cbranch_scc0       L_SIGNAL_DONE
+
+    // Load the signal event value.
+    s_load_dword         s_tmp0, [s_tmp0, s_tmp1], 0x18 glc:1
+    s_waitcnt            lgkmcnt(0)
+
+    // Write the signal event value to the mailbox.
+    s_store_dword        s_tmp0, [s_tmp2, s_tmp3], 0x0 glc:1
+    s_waitcnt            lgkmcnt(0)
+
+    // Send an interrupt to trigger event notification.
+    s_sendmsg            sendmsg(MSG_INTERRUPT)
+
+  L_SIGNAL_DONE:
+    // Halt the wavefront.
+    s_or_b32             s_status_save, s_status_save, SQ_WAVE_STATUS_HALT_MASK
+
+  L_EXIT_TRAP:
+    // Restore SQ_WAVE_IB_STS.
+    s_lshr_b32           s_tmp0, s_ib_sts_save, (IB_STS_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+    s_and_b32            s_tmp0, s_tmp0, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
+    s_setreg_b32         hwreg(HW_REG_IB_STS), s_tmp0
+
+    // Restore SQ_WAVE_STATUS.
+    s_and_b64            exec, exec, exec // Restore STATUS.EXECZ, not writable by s_setreg_b32
+    s_and_b64            vcc, vcc, vcc    // Restore STATUS.VCCZ, not writable by s_setreg_b32
+    s_setreg_b32         hwreg(HW_REG_STATUS), s_status_save
+
+    // Return to shader at unmodified PC.
+    s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
+  end
+*/
+    0x92eeff6d, 0x00080010, 0xbf84001e, 0xbf06826e, 0xbf850003, 0x806c846c,
+    0x826d806d, 0xbf820019, 0xc0071b80, 0x000000c0, 0xbf8cc07f, 0xbef000ff,
+    0x80000000, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
+    0xbf85000c, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070, 0xbf840007,
+    0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000, 0xbf8cc07f,
+    0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e, 0x00008000,
+    0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c, 0x00000000,
 };
 
 static const unsigned int kCodeCopyAligned8[] = {

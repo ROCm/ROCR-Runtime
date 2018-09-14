@@ -47,11 +47,11 @@
 #ifndef HSA_RUNTME_CORE_UTIL_SMALL_HEAP_H_
 #define HSA_RUNTME_CORE_UTIL_SMALL_HEAP_H_
 
-#include "utils.h"
-
 #include <map>
 #include <set>
 
+#include "utils.h"
+  
 class SmallHeap {
  private:
   struct Node;
