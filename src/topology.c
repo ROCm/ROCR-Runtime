@@ -1141,7 +1141,7 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 	void *p_temp_cpu_ci_list;
 	int procs_online;
 	cpu_set_t orig_cpuset;
-	int i;
+	int i, j = 0;
 	uint32_t cpuid_op_cache;
 	uint32_t eax, ebx, ecx = 0, edx; /* cpuid registers */
 	cpu_cacheinfo_t *cpu_ci_list, *this_cpu;
@@ -1152,8 +1152,21 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 	}
 	*temp_cpu_ci_list = NULL;
 
-	procs_online = (int)sysconf(_SC_NPROCESSORS_ONLN);
+	/* Find the number of processors available to the current process, based
+	 * on a system call that returns the "affinity" between the current process
+	 * and each CPU. For getting each CPU cache information the process affinity
+	 * is modified. Save the original affinity mask so that it can be restored
+	 * after finding the cache information.
+	 */
+	CPU_ZERO(&orig_cpuset);
+	if (sched_getaffinity(0, sizeof(cpu_set_t), &orig_cpuset)) {
+		pr_warn("Failed to get CPU affinity %s\n", strerror(errno));
+		ret = HSAKMT_STATUS_ERROR;
+		goto exit;
+	}
+	procs_online = CPU_COUNT(&orig_cpuset);
 	if (procs_online <= 0) {
+		pr_warn("Invalid number of online processors %d\n", procs_online);
 		ret = HSAKMT_STATUS_ERROR;
 		goto exit;
 	}
@@ -1172,20 +1185,19 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 	else
 		cpuid_op_cache = 0x4;
 
-	/* lock_to_processor() changes the affinity. Save the current affinity
-	 * so we can restore it after cpuid is done.
-	 */
-	CPU_ZERO(&orig_cpuset);
-	if (sched_getaffinity(0, sizeof(cpu_set_t), &orig_cpuset) != 0) {
-		pr_err("Failed to get CPU affinity\n");
-		free(p_temp_cpu_ci_list);
-		ret = HSAKMT_STATUS_ERROR;
-		goto exit;
-	}
+	for (i = 0; i < CPU_SETSIZE && j < procs_online; i++) {
+		/* Ignore the CPUs that is not available for the current process */
+		if (!CPU_ISSET(i, &orig_cpuset))
+			continue;
 
-	for (i = 0; i < procs_online; i++) {
-		this_cpu = cpu_ci_list + i;
-		lock_to_processor(i); /* so cpuid is executed in correct cpu */
+		this_cpu = cpu_ci_list + j++;
+		/* so cpuid is executed in correct cpu */
+		if (lock_to_processor(i)) {
+			pr_err("Failed to set CPU affinity %s\n", strerror(errno));
+			free(p_temp_cpu_ci_list);
+			ret = HSAKMT_STATUS_ERROR;
+			goto exit;
+		}
 
 		eax = 0x1;
 		cpuid(&eax, &ebx, &ecx, &edx);
@@ -1196,10 +1208,16 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 		this_cpu->cache_info = calloc(
 				sizeof(cacheinfo_t) * this_cpu->num_caches, 1);
 		if (!this_cpu->cache_info) {
+			free(p_temp_cpu_ci_list);
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto err;
 		}
 		cpuid_get_cpu_cache_info(cpuid_op_cache, this_cpu);
+	}
+
+	if (j < procs_online) {
+		pr_warn("CPU cache information missing\n");
+		cpu_ci_list->len = j;
 	}
 
 	find_cpu_cache_siblings(cpu_ci_list);
