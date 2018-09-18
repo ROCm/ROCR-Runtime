@@ -67,6 +67,7 @@ struct ScratchInfo {
   void* queue_base;
   size_t size;
   size_t size_per_thread;
+  uint32_t lanes_per_wave;
   ptrdiff_t queue_process_offset;
   bool large;
   bool retry;

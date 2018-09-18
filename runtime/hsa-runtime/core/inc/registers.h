@@ -85,6 +85,10 @@ BUF_NUM_FORMAT_RESERVED_6__VI            = 0x00000006,
 BUF_NUM_FORMAT_FLOAT                     = 0x00000007,
 } BUF_NUM_FORMAT;
 
+typedef enum BUF_FORMAT {
+BUF_FORMAT_32_UINT                       = 0x00000014,
+} BUF_FORMAT;
+
 typedef enum SQ_SEL_XYZW01 {
 SQ_SEL_0                                 = 0x00000000,
 SQ_SEL_1                                 = 0x00000001,
@@ -201,4 +205,38 @@ SQ_SEL_W                                 = 0x00000007,
 	float	f32All;
 	};
 
+	union SQ_BUF_RSRC_WORD3_GFX10 {
+	struct {
+#if		defined(LITTLEENDIAN_CPU)
+                unsigned int                       DST_SEL_X : 3;
+                unsigned int                       DST_SEL_Y : 3;
+                unsigned int                       DST_SEL_Z : 3;
+                unsigned int                       DST_SEL_W : 3;
+                unsigned int                          FORMAT : 7;
+                unsigned int                       RESERVED1 : 2;
+                unsigned int                    INDEX_STRIDE : 2;
+                unsigned int                  ADD_TID_ENABLE : 1;
+                unsigned int                  RESOURCE_LEVEL : 1;
+                unsigned int                       RESERVED2 : 3;
+                unsigned int                      OOB_SELECT : 2;
+                unsigned int                            TYPE : 2;
+#elif		defined(BIGENDIAN_CPU)
+                unsigned int                            TYPE : 2;
+                unsigned int                      OOB_SELECT : 2;
+                unsigned int                       RESERVED2 : 3;
+                unsigned int                  RESOURCE_LEVEL : 1;
+                unsigned int                  ADD_TID_ENABLE : 1;
+                unsigned int                    INDEX_STRIDE : 2;
+                unsigned int                       RESERVED1 : 2;
+                unsigned int                          FORMAT : 7;
+                unsigned int                       DST_SEL_W : 3;
+                unsigned int                       DST_SEL_Z : 3;
+                unsigned int                       DST_SEL_Y : 3;
+                unsigned int                       DST_SEL_X : 3;
+#endif
+	} bitfields, bits;
+	unsigned int	u32All;
+	signed int	i32All;
+	float	f32All;
+	};
 #endif  // header guard

@@ -77,7 +77,7 @@ typedef struct AMD_QUEUE_ALIGN amd_queue_s {
   uint32_t scratch_resource_descriptor[4];
   uint64_t scratch_backing_memory_location;
   uint64_t scratch_backing_memory_byte_size;
-  uint32_t scratch_workitem_byte_size;
+  uint32_t scratch_wave64_lane_byte_size;
   amd_queue_properties32_t queue_properties;
   uint32_t reserved3[2];
   hsa_signal_t queue_inactive_signal;
