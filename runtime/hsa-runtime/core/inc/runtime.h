@@ -504,6 +504,9 @@ class Runtime {
   // System clock frequency.
   uint64_t sys_clock_freq_;
 
+  // Number of Numa Nodes
+  size_t num_nodes_;
+
   // @brief AMD HSA event to monitor for virtual memory access fault.
   HsaEvent* vm_fault_event_;
 
