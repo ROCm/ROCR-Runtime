@@ -253,6 +253,7 @@ void Runtime::DestroyAgents() {
 }
 
 void Runtime::SetLinkCount(size_t num_nodes) {
+  num_nodes_ = num_nodes;
   link_matrix_.resize(num_nodes * num_nodes);
 }
 
@@ -276,7 +277,7 @@ const Runtime::LinkInfo Runtime::GetLinkInfo(uint32_t node_id_from,
 }
 
 uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
-  return ((node_id_from * agents_by_node_.size()) + node_id_to);
+  return ((node_id_from * num_nodes_) + node_id_to);
 }
 
 hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
