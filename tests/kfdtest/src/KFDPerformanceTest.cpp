@@ -66,7 +66,8 @@ enum P2PDirection {
  */
 static void
 testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirection n1Direction,
-        P2PDirection n2Direction, HSAuint64 size, HSAuint64 &speed, HSAuint64 &speed2, std::stringstream &msg) {
+        P2PDirection n2Direction, HSAuint64 size, HSAuint64 *speed, HSAuint64 *speed2, std::stringstream *msg,
+        bool isTestOverhead = false, HSAuint64 *time = 0) {
     ASSERT_GT(16, unsigned(n - 1));
     HSAuint32 n2[n];
     void *n1Mem, *n2Mem[n];
@@ -76,15 +77,17 @@ testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirectio
     memFlags.ui32.NonPaged = 1;
     SDMACopyParams array[n * 4];
     int array_count = 0;
+    HSAuint64 alloc_size = ALIGN_UP(size, PAGE_SIZE);
+    std::vector<SDMACopyParams> copyArray;
     int i;
 
-    ASSERT_SUCCESS(hsaKmtAllocMemory(n1, size, memFlags, &n1Mem));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(n1Mem, size, NULL));
+    ASSERT_SUCCESS(hsaKmtAllocMemory(n1, alloc_size, memFlags, &n1Mem));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(n1Mem, alloc_size, NULL));
 
     for (i = 0; i < n; i++) {
         n2[i] = n2Array[i];
-        ASSERT_SUCCESS(hsaKmtAllocMemory(n2[i], size, memFlags, &n2Mem[i]));
-        ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(n2Mem[i], size, NULL));
+        ASSERT_SUCCESS(hsaKmtAllocMemory(n2[i], alloc_size, memFlags, &n2Mem[i]));
+        ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(n2Mem[i], alloc_size, NULL));
     }
 
     for (i = 0; i < n; i++) {
@@ -96,10 +99,10 @@ testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirectio
         do {
             if (n1Direction == IN || n1Direction == IN_OUT)
                 /* n2Mem -> n1Mem*/
-                array[array_count++] = {n1, n2Mem[i], n1Mem, size};
+                array[array_count++] = {n1, n2Mem[i], n1Mem, size, n1/*group id, just a hint*/};
             if (n1Direction == OUT || n1Direction == IN_OUT)
                 /* n1Mem -> n2Mem*/
-                array[array_count++] = {n1, n1Mem, n2Mem[i], size};
+                array[array_count++] = {n1, n1Mem, n2Mem[i], size, n1};
             /* Issue two copies to make full use of sdma.*/
         } while (n1Direction < IN_OUT && n == 1 && array_count % 2);
         /* Do nothing if no IN or OUT specified.*/
@@ -107,21 +110,30 @@ testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirectio
         do {
             if (n2Direction == IN || n2Direction == IN_OUT)
                 /* n1Mem -> n2Mem*/
-                array[array_count++] = {n2[i], n1Mem, n2Mem[i], size};
+                array[array_count++] = {n2[i], n1Mem, n2Mem[i], size, n2[i]};
             if (n2Direction == OUT || n2Direction == IN_OUT)
                 /* n2Mem -> n1Mem*/
-                array[array_count++] = {n2[i], n2Mem[i], n1Mem, size};
+                array[array_count++] = {n2[i], n2Mem[i], n1Mem, size, n2[i]};
         } while (n2Direction < IN_OUT && array_count % 2);
     }
 
-    sdma_multicopy(array, array_count, &speed, &speed2, &msg);
+    /* We measure a bunch of packets.*/
+    if (isTestOverhead) {
+            for (i = 0; i < 1000; i++)
+                for (int j = 0; j < array_count; j++)
+                    copyArray.push_back(array[j]);
+        sdma_multicopy(copyArray, 1, HEAD_TAIL);
+        *time = CounterToNanoSec(copyArray[0].timeConsumption / (1000 * array_count));
+    } else
+        /* It did not respect the group id we set above.*/
+        sdma_multicopy(array, array_count, speed, speed2, msg);
 
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(n1Mem));
-    EXPECT_SUCCESS(hsaKmtFreeMemory(n1Mem, size));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(n1Mem, alloc_size));
 
     for (i = 0; i < n; i++) {
         EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(n2Mem[i]));
-        EXPECT_SUCCESS(hsaKmtFreeMemory(n2Mem[i], size));
+        EXPECT_SUCCESS(hsaKmtFreeMemory(n2Mem[i], alloc_size));
     }
 }
 
@@ -196,7 +208,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
 
                 snprintf(str, sizeof(str), "[%d -> %d] ", n1, n2);
                 msg << str << std::endl;
-                testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, speed, speed2, msg);
+                testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
 
                 LOG() << std::dec << str << (float)speed / 1024 << " - " <<
                                             (float)speed2 / 1024 << " GB/s" << std::endl;
@@ -217,7 +229,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
 
                 snprintf(str, sizeof(str), "[%d <-> %d] ", n1, n2);
                 msg << str << std::endl;
-                testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, speed, speed2, msg);
+                testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
 
                 LOG() << std::dec << str << (float)speed / 1024 << " - " <<
                                             (float)speed2 / 1024 << " GB/s" << std::endl;
@@ -251,7 +263,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
             else
                 snprintf(str, sizeof(str), "[%d -> [%d...%d]] ", n1, dst.front(), dst.back());
             msg << str << std::endl;
-            testNodeToNodes(n1, n2, n, test_suits[s][0], test_suits[s][1], size, speed, speed2, msg);
+            testNodeToNodes(n1, n2, n, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
 
             LOG() << std::dec << str << (float)speed / 1024 << " - " <<
                                         (float)speed2 / 1024 << " GB/s" << std::endl;
@@ -260,6 +272,71 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
 
     /* New line.*/
     LOG() << std::endl << msg.str() << std::endl;
+
+    TEST_END
+}
+
+TEST_F(KFDPerformanceTest, P2POverheadTest) {
+    TEST_START(TESTPROFILE_RUNALL);
+    if (!is_dgpu()) {
+        LOG() << "Skipping test: Can't have 2 APUs on the same system." << std::endl;
+        return;
+    }
+
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    std::vector<HSAuint32> nodes;
+
+    for (unsigned i = 0; i < gpuNodes.size(); i++)
+        if (m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i)))
+            nodes.push_back(gpuNodes.at(i));
+
+    if (nodes.size() < 2) {
+        LOG() << "Skipping test: Need at least two large bar GPU." << std::endl;
+        return;
+    }
+
+    std::vector<HSAuint32> sysNodes(nodes); // include sysMem node 0...
+    sysNodes.insert(sysNodes.begin(),0);
+
+    /* size should be small.*/
+    const HSAuint32 sizeArray[] = {4, 8, 16, 64, 256, 1024};
+    const int total_tests = 3;
+    const char *test_suits_string[total_tests] = {
+        "[push]     ",
+        "[pull]     ",
+        "[push|pull]",
+    };
+    const P2PDirection test_suits[total_tests] = {OUT, IN, IN_OUT};
+    std::stringstream msg;
+    int s; //test index;
+
+    msg << "Test (avg. ns) | Size";
+    for (auto &size : sizeArray)
+        msg << "\t" << size;
+    LOG() << msg.str() << std::endl;
+    LOG() << "-----------------------------------------------------------------------" << std::endl;
+
+    for (s = 0; s < total_tests; s++) {
+
+        for (unsigned i = 0; i < nodes.size(); i++) {
+            /* Src node is a GPU.*/
+            HSAuint32 n1 = nodes[i];
+            HSAuint64 time;
+
+            /* Pick up dst node which can be sysMem.*/
+            for (unsigned j = 0; j < sysNodes.size(); j++) {
+                HSAuint32 n2 = sysNodes[j];
+                std::stringstream msg;
+
+                msg << test_suits_string[s] << "[" << n1 << " -> " << n2 << "]";
+                for (auto &size : sizeArray) {
+                    testNodeToNodes(n1, &n2, 1, test_suits[s], NONE, size, 0, 0, 0, 1, &time);
+                    msg << "\t" << time;
+                }
+                LOG() << msg.str() << std::endl;
+            }
+        }
+    }
 
     TEST_END
 }
