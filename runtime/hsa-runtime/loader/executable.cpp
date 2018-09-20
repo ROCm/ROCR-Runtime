@@ -1697,6 +1697,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   switch (rel->symbol()->type()) {
     case STT_OBJECT:
     case STT_AMDGPU_HSA_KERNEL:
+    case STT_FUNC:
     {
       Segment* symSeg = VirtualAddressSegment(rel->symbol()->value());
       symAddr = reinterpret_cast<uint64_t>(symSeg->Address(rel->symbol()->value()));
