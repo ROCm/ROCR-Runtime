@@ -1964,7 +1964,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t gpu_id;
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures *process_apertures;
-	uint32_t num_of_nodes;
+	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr;
 	char *hsaDebug;
@@ -2058,39 +2058,49 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * required since Number of nodes is already known. Kernel will fill in
 	 * the apertures in kfd_process_device_apertures_ptr
 	 */
-	num_of_nodes = gpu_mem_count;
-	process_apertures = calloc(num_of_nodes, sizeof(struct kfd_process_device_apertures));
+	num_of_sysfs_nodes = get_num_sysfs_nodes();
+	if (num_of_sysfs_nodes < gpu_mem_count) {
+		ret = HSAKMT_STATUS_ERROR;
+		goto sysfs_parse_failed;
+	}
+
+	process_apertures = calloc(num_of_sysfs_nodes, sizeof(struct kfd_process_device_apertures));
 	if (!process_apertures) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto sysfs_parse_failed;
 	}
 
-	ret = get_process_apertures(process_apertures, &num_of_nodes);
+	/* GPU Resource management can disable some of the GPU nodes.
+	 * The Kernel driver could be not aware of this.
+	 * Get from Kernel driver information of all the nodes and then filter it.
+	 */
+	ret = get_process_apertures(process_apertures, &num_of_sysfs_nodes);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		goto get_aperture_ioctl_failed;
 
 	all_gpu_id_array_size = 0;
 	all_gpu_id_array = NULL;
-	if (num_of_nodes > 0) {
-		all_gpu_id_array = malloc(sizeof(uint32_t) * num_of_nodes);
+	if (num_of_sysfs_nodes > 0) {
+		all_gpu_id_array = malloc(sizeof(uint32_t) * gpu_mem_count);
 		if (!all_gpu_id_array) {
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto get_aperture_ioctl_failed;
 		}
 	}
 
-	for (i = 0 ; i < num_of_nodes ; i++) {
+	for (i = 0 ; i < num_of_sysfs_nodes ; i++) {
 		/* Map Kernel process device data node i <--> gpu_mem_id which
 		 * indexes into gpu_mem[] based on gpu_id
 		 */
 		gpu_mem_id = gpu_mem_find_by_gpu_id(process_apertures[i].gpu_id);
-		if (gpu_mem_id < 0) {
+		if (gpu_mem_id < 0)
+			continue;
+
+		if (all_gpu_id_array_size == gpu_mem_count) {
 			ret = HSAKMT_STATUS_ERROR;
 			goto invalid_gpu_id;
 		}
-
-		all_gpu_id_array[i] = process_apertures[i].gpu_id;
-		all_gpu_id_array_size += sizeof(uint32_t);
+		all_gpu_id_array[all_gpu_id_array_size++] = process_apertures[i].gpu_id;
 
 		gpu_mem[gpu_mem_id].lds_aperture.base =
 			PORT_UINT64_TO_VPTR(process_apertures[i].lds_base);
@@ -2143,6 +2153,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto acquire_vm_failed;
 	}
+	all_gpu_id_array_size *= sizeof(uint32_t);
 
 	if (svm_limit) {
 		/* At least one GPU uses GPUVM in canonical address
@@ -2153,7 +2164,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto init_svm_failed;
 
-		for (i = 0 ; i < num_of_nodes ; i++) {
+		for (i = 0 ; i < num_of_sysfs_nodes ; i++) {
 			uintptr_t alt_base;
 			uint64_t alt_size;
 			int err;
@@ -2175,6 +2186,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				pr_err("Failed to set mem policy for GPU [0x%x]\n",
 				       process_apertures[i].gpu_id);
 				ret = HSAKMT_STATUS_ERROR;
+				goto set_memory_policy_failed;
 			}
 		}
 	}
@@ -2187,10 +2199,13 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	free(process_apertures);
 	return ret;
 
+invalid_gpu_id:
 init_svm_failed:
 acquire_vm_failed:
+set_memory_policy_failed:
+	free(all_gpu_id_array);
+	all_gpu_id_array = NULL;
 get_aperture_ioctl_failed:
-invalid_gpu_id:
 	free(process_apertures);
 sysfs_parse_failed:
 	fmm_destroy_process_apertures();

@@ -65,6 +65,7 @@ static int is_valgrind;
  */
 static uint32_t *map_user_to_sysfs_node_id;
 static uint32_t map_user_to_sysfs_node_id_size;
+static uint32_t num_sysfs_nodes;
 
 static int processor_vendor;
 /* Supported System Vendors */
@@ -602,7 +603,6 @@ HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
 	uint32_t prog;
 	int read_size;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	uint32_t num_sysfs_nodes = 0;
 	bool is_node_supported = true;
 	uint32_t num_supported_nodes = 0;
 
@@ -2243,4 +2243,9 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 	}
 
 	return ret;
+}
+
+inline uint32_t get_num_sysfs_nodes(void)
+{
+	return num_sysfs_nodes;
 }
