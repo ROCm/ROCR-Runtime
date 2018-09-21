@@ -1711,7 +1711,8 @@ int open_drm_render_device(int minor)
 	sprintf(path, "/dev/dri/renderD%d", minor);
 	fd = open(path, O_RDWR | O_CLOEXEC);
 	if (fd < 0) {
-		pr_err("Failed to open %s: %s\n", path, strerror(errno));
+		if (errno != ENOENT)
+			pr_err("Failed to open %s: %s\n", path, strerror(errno));
 		return -errno;
 	}
 	drm_render_fds[index] = fd;
