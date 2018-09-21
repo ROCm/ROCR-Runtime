@@ -126,25 +126,20 @@ HSAuint64 KFDBaseComponentTest::GetVramSize(int defaultGPUNode) {
 }
 
 int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {
-    char path[PATH_MAX], buf[PAGE_SIZE];
+    HsaNodeProperties *nodeProperties;
+    _HSAKMT_STATUS status;
 
-    snprintf(path, PATH_MAX, "/sys/class/kfd/kfd/topology/nodes/%d/properties", gpuNode);
+    nodeProperties = new HsaNodeProperties();
 
-    int fd = open(path, O_RDONLY);
+    status = hsaKmtGetNodeProperties(gpuNode, nodeProperties);
+    EXPECT_SUCCESS(status) << "Node index: " << gpuNode << "hsaKmtGetNodeProperties returned status " << status;
 
-    if (fd < 0) {
-        LOG() << "Failed to open " << path << std::endl;
+    if (status != HSAKMT_STATUS_SUCCESS) {
+        delete nodeProperties;
         return -EINVAL;
     }
 
-    read(fd, buf, PAGE_SIZE);
-
-    close(fd);
-
-    char *s = strstr(buf, "drm_render_minor");
-
-    int minor = atoi(s + 17);
-
+    int minor = nodeProperties->DrmRenderMinor;
     if (minor < 128) {
         LOG() << "Failed to get minor number " << minor << std::endl;
         return -EINVAL;
