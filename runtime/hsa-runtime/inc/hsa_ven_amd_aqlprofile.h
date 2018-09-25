@@ -342,6 +342,8 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       void* data);
 } hsa_ven_amd_aqlprofile_1_00_pfn_t;
 
+typedef hsa_ven_amd_aqlprofile_1_00_pfn_t hsa_ven_amd_aqlprofile_pfn_t;
+
 #ifdef __cplusplus
 }
 #endif  // __cplusplus
