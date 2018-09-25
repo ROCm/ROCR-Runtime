@@ -67,4 +67,32 @@ set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-T
 # RPM package specific variables
 set ( CPACK_RPM_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} = ${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
 
+# Create cmake configuration files
+include(CMakePackageConfigHelpers)
+
+set(HSAKMT_LIBRARY_NAME ${CMAKE_SHARED_LIBRARY_PREFIX}${PROJECT_NAME}${CMAKE_SHARED_LIBRARY_SUFFIX})
+
+set(INCLUDE_INSTALL_DIR ${CMAKE_INSTALL_INCLUDEDIR}/${PROJECT_NAME} CACHE INTERNAL "")
+set(LIB_INSTALL_DIR ${CMAKE_INSTALL_LIBDIR} CACHE INTERNAL "")
+
+configure_package_config_file(${SOURCE_DIR}/${HSAKMT_BIN_NAME}-config.cmake.in
+                              ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_BIN_NAME}-config.cmake
+                              PATH_VARS
+                                  INCLUDE_INSTALL_DIR LIB_INSTALL_DIR
+                              INSTALL_DESTINATION
+                                  ${CMAKE_INSTALL_LIBDIR}/cmake/${HSAKMT_BIN_NAME})
+
+write_basic_package_version_file(${HSAKMT_BIN_NAME}-config-version.cmake
+				 VERSION ${VERSION}
+                                 COMPATIBILITY
+                                     AnyNewerVersion)
+
+install(FILES
+            ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_BIN_NAME}-config.cmake
+            ${CMAKE_CURRENT_BINARY_DIR}/${HSAKMT_BIN_NAME}-config-version.cmake
+        DESTINATION
+            ${CMAKE_INSTALL_LIBDIR}/cmake/${HSAKMT_BIN_NAME}
+        COMPONENT
+            devel)
+
 include ( CPack )

@@ -30,7 +30,7 @@ set ( HSAKMT_PACKAGE "hsakmt-roct" )
 set ( HSAKMT_COMPONENT "lib${HSAKMT}" )
 set ( HSAKMT_TARGET "${HSAKMT}" )
 
-project ( ${HSAKMT_TARGET} )
+project ( ${HSAKMT_TARGET} VERSION 1.9.0)
 
 ## Set default module path if not already set
 if ( NOT DEFINED CMAKE_MODULE_PATH )
@@ -133,6 +133,8 @@ add_custom_target ( build-dev
         -DCMAKE_INSTALL_PREFIX="${CMAKE_INSTALL_PREFIX}"
         -DCPACK_RPM_PACKAGE_REQUIRES="hsakmt-roct"
         -DCPACK_PACKAGING_INSTALL_PREFIX="${CPACK_PACKAGING_INSTALL_PREFIX}"
+        -DVERSION="${BUILD_VERSION_STRING}"
+        -DHSAKMT_BIN_NAME="${HSAKMT}"
     WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 
 ## Custom targets for the devel package 
