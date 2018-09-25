@@ -113,11 +113,6 @@ target_link_libraries ( ${HSAKMT_TARGET}
   pthread rt numa ${PC_LIBPCI_LIBRARIES}
 )
 
-## If the library is a release, strip the target library
-if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    add_custom_command ( TARGET ${HSAKMT_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} ${HSAKMT_COMPONENT}.so )
-endif ()
-
 ## Define default variable and variables for the optional build target hsakmt-dev
 set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
 set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
