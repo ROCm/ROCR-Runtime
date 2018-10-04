@@ -102,7 +102,8 @@ enum asic_family_type {
 	CHIP_VEGA12,
 	CHIP_VEGA20,
 	CHIP_RAVEN,
-	CHIP_NAVI10
+	CHIP_ARCTURUS,
+	CHIP_NAVI10,
 };
 
 #define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
