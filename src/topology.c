@@ -220,6 +220,10 @@ static struct hsa_gfxip_table {
 	{ 0x66A4, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66A7, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66AF, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	/* Arcturus */
+	{ 0x7388, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
+	{ 0x738C, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
+	{ 0x738E, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
 	/* Navi10 */
 	{ 0x7310, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
 	{ 0x7312, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
