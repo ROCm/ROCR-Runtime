@@ -55,6 +55,8 @@
 #include "amd_hsa_code_util.hpp"
 #include "amd_options.hpp"
 
+#include "AMDHSAKernelDescriptor.h"
+
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
@@ -1332,6 +1334,14 @@ hsa_status_t ExecutableImpl::LoadSymbol(hsa_agent_t agent,
   }
 }
 
+namespace {
+
+bool string_ends_with(const std::string &str, const std::string &suf) {
+  return str.size() >= suf.size() ? str.compare(str.size() - suf.size(), suf.size(), suf) == 0 : false;
+}
+
+}
+
 hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                                   code::Symbol* sym,
                                                   uint32_t majorVersion)
@@ -1417,6 +1427,33 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
       uint64_t target_address = sym->GetSection()->addr() + sym->SectionOffset() + ((size_t)(&((amd_kernel_code_t*)0)->runtime_loader_kernel_symbol));
       uint64_t source_value = (uint64_t) (uintptr_t) &kernel_symbol->debug_info;
       SymbolSegment(agent, sym)->Copy(target_address, &source_value, sizeof(source_value));
+  } else if (string_ends_with(sym->GetSymbolName(), ".kd")) {
+    // V3.
+    llvm::amdhsa::kernel_descriptor_t kd;
+    sym->GetSection()->getData(sym->SectionOffset(), &kd, sizeof(kd));
+
+    uint32_t kernarg_segment_size = 0;      // FIXME.
+    uint32_t kernarg_segment_alignment = 0; // FIXME.
+    uint32_t group_segment_size = kd.group_segment_fixed_size;
+    uint32_t private_segment_size = kd.private_segment_fixed_size;
+    bool is_dynamic_callstack = false;
+
+    uint64_t size = sym->Size();
+
+    KernelSymbol *kernel_symbol = new KernelSymbol(true,
+                                    sym->GetModuleName(),
+                                    sym->GetSymbolName(),
+                                    sym->Linkage(),
+                                    true, // sym->IsDefinition()
+                                    kernarg_segment_size,
+                                    kernarg_segment_alignment,
+                                    group_segment_size,
+                                    private_segment_size,
+                                    is_dynamic_callstack,
+                                    size,
+                                    64,
+                                    address);
+    symbol = kernel_symbol;
   } else {
     assert(!"Unexpected symbol type in LoadDefinitionSymbol");
     return HSA_STATUS_ERROR;
