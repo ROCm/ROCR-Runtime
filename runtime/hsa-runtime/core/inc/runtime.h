@@ -409,21 +409,6 @@ class Runtime {
   // @brief Binds virtual memory access fault handler to this node.
   void BindVmFaultHandler();
 
-  /// @brief Blocking memory copy from src to dst. One of the src or dst
-  /// is user pointer. A particular setup need to be made if the DMA queue
-  /// for the memory copy belongs to a dGPU agent. E.g: pin the user pointer
-  /// before copying, or using a staging buffer.
-  ///
-  /// @param [in] dst Memory address of the destination.
-  /// @param [in] src Memory address of the source.
-  /// @param [in] size Copy size in bytes.
-  /// @param [in] dst_malloc If true, then @p dst is the user pointer. Otherwise
-  /// @p src is the user pointer.
-  ///
-  /// @retval ::HSA_STATUS_SUCCESS if memory copy is successful and completed.
-  hsa_status_t CopyMemoryHostAlloc(void* dst, const void* src, size_t size,
-                                   bool dst_malloc);
-
   /// @brief Get the index of ::link_matrix_.
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
