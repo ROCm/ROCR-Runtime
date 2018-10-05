@@ -344,61 +344,84 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
-  assert(dst != NULL && src != NULL && size != 0);
-
+  // Choose agents from pointer info
+  hsa_amd_pointer_info_t info;
   bool is_src_system = false;
   bool is_dst_system = false;
-  const uintptr_t src_uptr = reinterpret_cast<uintptr_t>(src);
-  const uintptr_t dst_uptr = reinterpret_cast<uintptr_t>(dst);
+  core::Agent* src_agent;
+  core::Agent* dst_agent;
+  info.size = sizeof(info);
 
-  if ((reinterpret_cast<amd::GpuAgentInt*>(blit_agent_)->profile() ==
-       HSA_PROFILE_FULL)) {
-    is_src_system = (src_uptr < end_svm_address_);
-    is_dst_system = (dst_uptr < end_svm_address_);
+  // Fetch ownership
+  hsa_status_t err = PtrInfo(const_cast<void*>(src), &info, nullptr, nullptr, nullptr);
+  if (err != HSA_STATUS_SUCCESS) return err;
+  ptrdiff_t endPtr = (ptrdiff_t)src + size;
+  if (info.agentBaseAddress <= src &&
+      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+    src_agent = core::Agent::Convert(info.agentOwner);
+    is_src_system = (src_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice);
   } else {
-    is_src_system =
-        ((src_uptr < start_svm_address_) || (src_uptr >= end_svm_address_));
-    is_dst_system =
-        ((dst_uptr < start_svm_address_) || (dst_uptr >= end_svm_address_));
-
-    if ((is_src_system && !is_dst_system) ||
-        (!is_src_system && is_dst_system)) {
-      // Use staging buffer or pin if either src or dst is gpuvm and the other
-      // is system memory allocated via OS or C/C++ allocator.
-      return CopyMemoryHostAlloc(dst, src, size, is_dst_system);
-    }
+    src_agent = cpu_agents_[0];
+    is_src_system = true;
   }
 
+  err = PtrInfo(const_cast<void*>(dst), &info, nullptr, nullptr, nullptr);
+  if (err != HSA_STATUS_SUCCESS) return err;
+  endPtr = (ptrdiff_t)dst + size;
+  if (info.agentBaseAddress <= dst &&
+      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+    dst_agent = core::Agent::Convert(info.agentOwner);
+    is_dst_system = (dst_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice);
+  } else {
+    dst_agent = cpu_agents_[0];
+    is_dst_system = true;
+  }
+
+  // CPU-CPU
   if (is_src_system && is_dst_system) {
-    memmove(dst, src, size);
+    memcpy(dst, src, size);
     return HSA_STATUS_SUCCESS;
   }
 
-  return blit_agent_->DmaCopy(dst, src, size);
-}
+  // Same GPU
+  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, src, size);
 
-hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
-                                          size_t size, bool dst_malloc) {
-  void* usrptr = (dst_malloc) ? dst : const_cast<void*>(src);
-  void* agent_ptr = NULL;
-
-  hsa_agent_t blit_agent = core::Agent::Convert(blit_agent_);
-
+  // GPU-CPU
+  // Must ensure that system memory is visible to the GPU during the copy.
   const amd::MemoryRegion* system_region =
-      reinterpret_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
-  hsa_status_t stat =
-      system_region->Lock(1, &blit_agent, usrptr, size, &agent_ptr);
-
-  if (stat != HSA_STATUS_SUCCESS) {
-    return stat;
+      static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
+  if (is_src_system) {
+    void* gpuPtr;
+    hsa_agent_t agent = dst_agent->public_handle();
+    err = system_region->Lock(1, &agent, const_cast<void*>(src), size, &gpuPtr);
+    if (err != HSA_STATUS_SUCCESS) return err;
+    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(const_cast<void*>(src)); });
+    return dst_agent->DmaCopy(dst, gpuPtr, size);
   }
 
-  stat = blit_agent_->DmaCopy((dst_malloc) ? agent_ptr : dst,
-                              (dst_malloc) ? src : agent_ptr, size);
+  if (is_dst_system) {
+    void* gpuPtr;
+    hsa_agent_t agent = src_agent->public_handle();
+    err = system_region->Lock(1, &agent, dst, size, &gpuPtr);
+    if (err != HSA_STATUS_SUCCESS) return err;
+    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(dst); });
+    return src_agent->DmaCopy(gpuPtr, src, size);
+  }
 
-  system_region->Unlock(usrptr);
-
-  return stat;
+  /*
+  GPU-GPU - functional support, not a performance path.
+  
+  This goes through system memory because we have to support copying between non-peer GPUs
+  and we can't use P2P pointers even if the GPUs are peers.  Because hsa_amd_agents_allow_access
+  requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
+  would remain mapped for the duration of the copy.
+  */
+  void* temp = nullptr;
+  system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
+  MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
+  err = src_agent->DmaCopy(temp, src, size);
+  if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
+  return err;
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
