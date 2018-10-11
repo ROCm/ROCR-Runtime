@@ -1578,6 +1578,7 @@ TEST_F(KFDQMTest, PM4EventInterrupt) {
     TEST_END
 }
 
+#include "KFDTestUtilQueue.hpp"
 TEST_F(KFDQMTest, SdmaEventInterrupt) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -1586,38 +1587,97 @@ TEST_F(KFDQMTest, SdmaEventInterrupt) {
 
     const HSAuint64 bufSize = 4 << 20;
     HsaMemoryBuffer srcBuf(bufSize, 0); // System memory.
-    HsaMemoryBuffer destBuf(bufSize, defaultGPUNode, true, true); // local vram.
 
-    /* Two sdma queues will be running at same time.*/
-    const int numSDMAQueue = 2;
+    HSAuint64 *src = srcBuf.As<HSAuint64*>();
+    TimeStamp *tsbuf = srcBuf.As<TimeStamp*>();
+    tsbuf = reinterpret_cast<TimeStamp *>ALIGN_UP(tsbuf, sizeof(TimeStamp));
+
+    /* Have 3 queues created for test.*/
+    const int numSDMAQueue = 3;
     HsaEvent *event[numSDMAQueue];
     SDMAQueue queue[numSDMAQueue];
+    HsaMemoryBuffer *destBuf[numSDMAQueue];
+    HSAuint64 *dst[numSDMAQueue];
 
-    /* A simple loop here to give more pressure.*/
-    for (int test_count = 0; test_count < 4096; test_count++) {
-        for (int i = 0; i < numSDMAQueue; i++) {
-            ASSERT_SUCCESS(queue[i].Create(defaultGPUNode));
-            ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event[i]));
-
-            /* Let sDMA have some workload first.*/
-            queue[i].PlacePacket(
-                    SDMACopyDataPacket(destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
-            queue[i].PlacePacket(
-                    SDMAFencePacket(reinterpret_cast<void*>(event[i]->EventData.HWData2), event[i]->EventId));
-            queue[i].PlacePacket(SDMATrapPacket(event[i]->EventId));
-        }
-
-        for (int i = 0; i < numSDMAQueue; i++)
-            queue[i].SubmitPacket();
-
-        for (int i = 0; i < numSDMAQueue; i++)
-            EXPECT_SUCCESS(hsaKmtWaitOnEvent(event[i], g_TestTimeOut));
-
-        for (int i = 0; i < numSDMAQueue; i++) {
-            EXPECT_SUCCESS(queue[i].Destroy());
-            EXPECT_SUCCESS(hsaKmtDestroyEvent(event[i]));
-        }
+    for (int i = 0; i < numSDMAQueue; i++) {
+        destBuf[i] = new HsaMemoryBuffer(bufSize, defaultGPUNode, true, false); // System memory
+        dst[i] = destBuf[i]->As<HSAuint64*>();
     }
+
+    /* Test 1 queue, 2 queues, 3 queues running at same time one by one.*/
+    for (int testSDMAQueue = 1; testSDMAQueue <= numSDMAQueue; testSDMAQueue++)
+        /* A simple loop here to give more pressure.*/
+        for (int test_count = 0; test_count < 2048; test_count++) {
+            for (int i = 0; i < testSDMAQueue; i++) {
+                TimeStamp *ts = tsbuf + i * 32;
+                ASSERT_SUCCESS(queue[i].Create(defaultGPUNode));
+                /* FIXME
+                 * We create event every time along with queue.
+                 * However that will significantly enhance the failure of sdma event timeout.
+                 */
+                ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event[i]));
+
+                /* Get the timestamp directly. The first member of HsaClockCounters and TimeStamp is GPU clock counter.*/
+                hsaKmtGetClockCounters(defaultGPUNode, reinterpret_cast<HsaClockCounters*>(&ts[0]));
+                /* Let sDMA have some workload first.*/
+                queue[i].PlacePacket(SDMATimePacket(&ts[1]));
+                queue[i].PlacePacket(
+                        SDMACopyDataPacket(dst[i], src, bufSize));
+                queue[i].PlacePacket(SDMATimePacket(&ts[2]));
+                queue[i].PlacePacket(
+                        SDMAFencePacket(reinterpret_cast<void*>(event[i]->EventData.HWData2), event[i]->EventId));
+                queue[i].PlacePacket(SDMATimePacket(&ts[3]));
+                queue[i].PlacePacket(SDMATrapPacket(event[i]->EventId));
+                queue[i].PlacePacket(SDMATimePacket(&ts[4]));
+
+                /* Will verify the value of srcBuf and destBuf later. Give it a different value each time.*/
+                src[0] = ts[0].timestamp;
+            }
+
+            for (int i = 0; i < testSDMAQueue; i++)
+                queue[i].SubmitPacket();
+
+            for (int i = 0; i < testSDMAQueue; i++) {
+                TimeStamp *ts = tsbuf + i * 32;
+                HSAKMT_STATUS ret = hsaKmtWaitOnEvent(event[i], g_TestTimeOut);
+
+                if (dst[i][0] != src[0])
+                    WARN() << "SDMACopyData FAIL! " << std::dec
+                        << dst[i][0] << " VS " << src[0] << std::endl;
+
+                if (ret == HSAKMT_STATUS_SUCCESS) {
+                    for (int i = 1; i <= 4; i++)
+                        /* Is queue latency too big? The workload is really small.*/
+                        if (CounterToNanoSec(ts[i].timestamp - ts[i - 1].timestamp) > 1000000000)
+                            WARN() << "SDMA queue latency is bigger than 1s!" << std::endl;
+                } else {
+                    WARN() << "Event On Queue " << testSDMAQueue << ":" << i
+                        << " Timeout, try to resubmit packets!" << std::endl;
+
+                    queue[i].SubmitPacket();
+
+                    if (hsaKmtWaitOnEvent(event[i], g_TestTimeOut) == HSAKMT_STATUS_SUCCESS)
+                        WARN() << "The timeout event is signaled!" << std::endl;
+                    else
+                        WARN() << "The timeout event is lost after resubmit!" << std::endl;
+
+                    LOG() << "Time Consumption (ns)" << std::endl;
+                    for (int i = 1; i <= 4; i++)
+                        LOG() << std::dec << i << ": "
+                            << CounterToNanoSec(ts[i].timestamp - ts[i - 1].timestamp) << std::endl;
+                }
+
+                EXPECT_SUCCESS(ret);
+            }
+
+            for (int i = 0; i < testSDMAQueue; i++) {
+                EXPECT_SUCCESS(queue[i].Destroy());
+                EXPECT_SUCCESS(hsaKmtDestroyEvent(event[i]));
+            }
+        }
+
+    for (int i = 0; i < numSDMAQueue; i++)
+        delete destBuf[i];
 
     TEST_END
 }
