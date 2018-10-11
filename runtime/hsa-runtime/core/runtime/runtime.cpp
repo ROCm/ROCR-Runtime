@@ -345,37 +345,31 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   // Choose agents from pointer info
-  hsa_amd_pointer_info_t info;
   bool is_src_system = false;
   bool is_dst_system = false;
   core::Agent* src_agent;
   core::Agent* dst_agent;
-  info.size = sizeof(info);
 
   // Fetch ownership
-  hsa_status_t err = PtrInfo(const_cast<void*>(src), &info, nullptr, nullptr, nullptr);
-  if (err != HSA_STATUS_SUCCESS) return err;
-  ptrdiff_t endPtr = (ptrdiff_t)src + size;
-  if (info.agentBaseAddress <= src &&
-      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
-    src_agent = core::Agent::Convert(info.agentOwner);
-    is_src_system = (src_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice);
-  } else {
-    src_agent = cpu_agents_[0];
-    is_src_system = true;
-  }
+  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent) {
+    hsa_amd_pointer_info_t info;
+    info.size = sizeof(info);
+    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr);
+    if (err != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
+    ptrdiff_t endPtr = (ptrdiff_t)ptr + size;
+    if (info.agentBaseAddress <= ptr &&
+        endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+      agent = core::Agent::Convert(info.agentOwner);
+      return agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice;
+    } else {
+      agent = cpu_agents_[0];
+      return true;
+    }
+  };
 
-  err = PtrInfo(const_cast<void*>(dst), &info, nullptr, nullptr, nullptr);
-  if (err != HSA_STATUS_SUCCESS) return err;
-  endPtr = (ptrdiff_t)dst + size;
-  if (info.agentBaseAddress <= dst &&
-      endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
-    dst_agent = core::Agent::Convert(info.agentOwner);
-    is_dst_system = (dst_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice);
-  } else {
-    dst_agent = cpu_agents_[0];
-    is_dst_system = true;
-  }
+  is_src_system = is_system_mem(const_cast<void*>(src), src_agent);
+  is_dst_system = is_system_mem(dst, dst_agent);
 
   // CPU-CPU
   if (is_src_system && is_dst_system) {
@@ -390,23 +384,21 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   // Must ensure that system memory is visible to the GPU during the copy.
   const amd::MemoryRegion* system_region =
       static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
-  if (is_src_system) {
-    void* gpuPtr;
-    hsa_agent_t agent = dst_agent->public_handle();
-    err = system_region->Lock(1, &agent, const_cast<void*>(src), size, &gpuPtr);
-    if (err != HSA_STATUS_SUCCESS) return err;
-    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(const_cast<void*>(src)); });
-    return dst_agent->DmaCopy(dst, gpuPtr, size);
-  }
 
-  if (is_dst_system) {
+  const auto& locked_copy = [&](void* ptr, core::Agent* locking_agent, bool locking_src) {
     void* gpuPtr;
-    hsa_agent_t agent = src_agent->public_handle();
-    err = system_region->Lock(1, &agent, dst, size, &gpuPtr);
+    hsa_agent_t agent = locking_agent->public_handle();
+    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &gpuPtr);
     if (err != HSA_STATUS_SUCCESS) return err;
-    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(dst); });
-    return src_agent->DmaCopy(gpuPtr, src, size);
-  }
+    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(ptr); });
+    if (locking_src)
+      return locking_agent->DmaCopy(dst, gpuPtr, size);
+    else
+      return locking_agent->DmaCopy(gpuPtr, src, size);
+  };
+
+  if (is_src_system) return locked_copy(const_cast<void*>(src), dst_agent, true);
+  if (is_dst_system) return locked_copy(dst, src_agent, false);
 
   /*
   GPU-GPU - functional support, not a performance path.
@@ -419,7 +411,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   void* temp = nullptr;
   system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
   MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
-  err = src_agent->DmaCopy(temp, src, size);
+  hsa_status_t err = src_agent->DmaCopy(temp, src, size);
   if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
   return err;
 }
