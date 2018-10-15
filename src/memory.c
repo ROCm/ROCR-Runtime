@@ -34,6 +34,8 @@
 #include <fcntl.h>
 #include "fmm.h"
 
+extern int zfb_support;
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 					      HSAuint32 DefaultPolicy,
 					      HSAuint32 AlternatePolicy,
@@ -147,10 +149,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated system memory */
-	if (!gpu_id || !MemFlags.ui32.NonPaged) {
+	if (!gpu_id || !MemFlags.ui32.NonPaged || zfb_support) {
 		/* Backwards compatibility hack: Allocate system memory if app
 		 * asks for paged memory from a GPU node.
 		 */
+
+		/* If allocate VRAM under ZFB mode */
+		if (zfb_support && gpu_id && MemFlags.ui32.NonPaged == 1)
+			MemFlags.ui32.CoarseGrain = 1;
+
 		*MemoryAddress = fmm_allocate_host(PreferredNode,  *MemoryAddress,
 						   SizeInBytes,	MemFlags);
 
