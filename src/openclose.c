@@ -39,6 +39,9 @@ static const char kfd_device_name[] = "/dev/kfd";
 static pid_t parent_pid = -1;
 int hsakmt_debug_level;
 
+/* zfb is mainly used during emulation */
+int zfb_support;
+
 static bool is_forked_child(void)
 {
 	pid_t cur_pid = getpid();
@@ -79,14 +82,14 @@ static inline void init_page_size(void)
 	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
 }
 
-/* Normally libraries don't print messages. For debugging purpose, we'll
- * print messages if an environment variable, HSAKMT_DEBUG_LEVEL, is set.
- */
-static void init_debug_level(void)
+static void init_vars_from_env(void)
 {
 	char *envvar;
 	int debug_level;
 
+	/* Normally libraries don't print messages. For debugging purpose, we'll
+	 * print messages if an environment variable, HSAKMT_DEBUG_LEVEL, is set.
+	 */
 	hsakmt_debug_level = HSAKMT_DEBUG_LEVEL_DEFAULT;
 
 	envvar = getenv("HSAKMT_DEBUG_LEVEL");
@@ -96,6 +99,11 @@ static void init_debug_level(void)
 				debug_level <= HSAKMT_DEBUG_LEVEL_DEBUG)
 			hsakmt_debug_level = debug_level;
 	}
+
+	/* Check whether to support Zero frame buffer */
+	envvar = getenv("HSA_ZFB");
+	if (envvar)
+		zfb_support = atoi(envvar);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
@@ -114,7 +122,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		clear_after_fork();
 
 	if (kfd_open_count == 0) {
-		init_debug_level();
+		init_vars_from_env();
 
 		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
