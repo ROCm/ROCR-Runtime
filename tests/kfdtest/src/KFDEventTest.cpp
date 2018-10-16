@@ -86,20 +86,31 @@ TEST_F(KFDEventTest, CreateMaxEvents) {
 TEST_F(KFDEventTest, SignalEvent) {
     TEST_START(TESTPROFILE_RUNALL);
 
-    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, m_NodeInfo.HsaDefaultGPUNode(), &m_pHsaEvent));
-    ASSERT_NE(0, m_pHsaEvent->EventData.HWData2);
-
     PM4Queue queue;
+    HsaEvent *tmp_event;
+
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &tmp_event));
+
+    /* Intentionally let event id for m_pHsaEvent be non zero */
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &m_pHsaEvent));
+    ASSERT_NE(0, m_pHsaEvent->EventData.HWData2);
+
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false, m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+    /* From gfx9 onward, m_pHsaEvent->EventId will also be passed to int_ctxid in
+     * the Release Mem packet, which is used as context id in ISR.
+     */
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false,
+                    m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
 
     queue.Wait4PacketConsumption();
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pHsaEvent, g_TestTimeOut));
+
+    EXPECT_SUCCESS(hsaKmtDestroyEvent(tmp_event));
 
     EXPECT_SUCCESS(queue.Destroy());
 
