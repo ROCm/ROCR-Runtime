@@ -122,7 +122,7 @@ typedef struct manageable_aperture manageable_aperture_t;
  * schemes.
  */
 typedef struct {
-	void *(*allocate_area_aligned)(manageable_aperture_t *aper,
+	void *(*allocate_area_aligned)(manageable_aperture_t *aper, void *addr,
 				       uint64_t size, uint64_t align);
 	void (*release_area)(manageable_aperture_t *aper,
 			     void *addr, uint64_t size);
@@ -130,6 +130,7 @@ typedef struct {
 
 /* Reserved aperture type managed by its own address allocator */
 static void *reserved_aperture_allocate_aligned(manageable_aperture_t *aper,
+						void *addr,
 						uint64_t size, uint64_t align);
 static void reserved_aperture_release(manageable_aperture_t *aper,
 				      void *addr, uint64_t size);
@@ -140,6 +141,7 @@ static const manageable_aperture_ops_t reserved_aperture_ops = {
 
 /* Unreserved aperture type using mmap to allocate virtual address space */
 static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
+					    void *addr,
 					    uint64_t size, uint64_t align);
 static void mmap_aperture_release(manageable_aperture_t *aper,
 				  void *addr, uint64_t size);
@@ -203,6 +205,9 @@ typedef struct {
 
 	/* whether to check userptrs on registration */
 	bool check_userptr;
+
+	/* whether to check reserve svm on registration */
+	bool reserve_svm;
 
 	/* whether all memory is coherent (GPU cache disabled) */
 	bool disable_cache;
@@ -621,6 +626,7 @@ static void reserved_aperture_release(manageable_aperture_t *app,
  * on entry.
  */
 static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
+						void *address,
 						uint64_t MemorySizeInBytes,
 						uint64_t align)
 {
@@ -641,7 +647,7 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	/* Find a big enough "hole" in the address space */
 	cur = NULL;
 	next = app->vm_ranges;
-	start = (void *)ALIGN_UP((uint64_t)app->base, align);
+	start = address ? address : (void *)ALIGN_UP((uint64_t)app->base, align);
 	while (next) {
 		if (next->start > start &&
 		    VOID_PTRS_SUB(next->start, start) >= MemorySizeInBytes)
@@ -649,10 +655,15 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 
 		cur = next;
 		next = next->next;
-		start = (void *)ALIGN_UP((uint64_t)cur->end + 1, align);
+		if (!address)
+			start = (void *)ALIGN_UP((uint64_t)cur->end + 1, align);
 	}
 	if (!next && VOID_PTRS_SUB(app->limit, start) + 1 < MemorySizeInBytes)
 		/* No hole found and not enough space after the last area */
+		return NULL;
+
+	if (cur && address && address < (void *)ALIGN_UP((uint64_t)cur->end + 1, align))
+		/* Required address is not free or overlaps */
 		return NULL;
 
 	if (cur && VOID_PTR_ADD(cur->end, 1) == start) {
@@ -679,10 +690,14 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 }
 
 static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
+					    void *address,
 					    uint64_t size, uint64_t align)
 {
 	uint64_t aligned_padded_size, guard_size;
 	void *addr, *aligned_addr, *aligned_end, *mapping_end;
+
+	if (address)
+		return NULL;
 
 	if (!aper->is_cpu_accessible) {
 		pr_err("MMap Aperture must be CPU accessible\n");
@@ -758,15 +773,16 @@ static void mmap_aperture_release(manageable_aperture_t *aper,
 
 /* Wrapper functions to call aperture-specific VA management functions */
 static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
+					    void *address,
 					    uint64_t MemorySizeInBytes,
 					    uint64_t align)
 {
-	return app->ops->allocate_area_aligned(app, MemorySizeInBytes, align);
+	return app->ops->allocate_area_aligned(app, address, MemorySizeInBytes, align);
 }
-static void *aperture_allocate_area(manageable_aperture_t *app,
+static void *aperture_allocate_area(manageable_aperture_t *app, void *address,
 				    uint64_t MemorySizeInBytes)
 {
-	return app->ops->allocate_area_aligned(app, MemorySizeInBytes, app->align);
+	return app->ops->allocate_area_aligned(app, address, MemorySizeInBytes, app->align);
 }
 static void aperture_release_area(manageable_aperture_t *app, void *address,
 				  uint64_t MemorySizeInBytes)
@@ -1183,7 +1199,7 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 }
 
 #define SCRATCH_ALIGN 0x10000
-void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
+void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes)
 {
 	manageable_aperture_t *aperture_phy;
 	struct kfd_ioctl_set_scratch_backing_va_args args = {0};
@@ -1205,13 +1221,16 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
 		pthread_mutex_lock(&svm.dgpu_aperture->fmm_mutex);
 		mem = aperture_allocate_area_aligned(
-			svm.dgpu_aperture,
+			svm.dgpu_aperture, address,
 			aligned_size, SCRATCH_ALIGN);
 		pthread_mutex_unlock(&svm.dgpu_aperture->fmm_mutex);
 	} else {
 		uint64_t aligned_padded_size = aligned_size +
 			SCRATCH_ALIGN - PAGE_SIZE;
 		void *padded_end, *aligned_start, *aligned_end;
+
+		if (address)
+			return NULL;
 
 		mem = mmap(0, aligned_padded_size,
 			   PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS,
@@ -1247,7 +1266,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, uint64_t MemorySizeInBytes)
 	return mem;
 }
 
-static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
+static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes,
 		manageable_aperture_t *aperture, uint64_t *mmap_offset,
 		uint32_t flags, vm_object_t **vm_obj)
 {
@@ -1260,7 +1279,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 
 	/* Allocate address space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture, MemorySizeInBytes);
+	mem = aperture_allocate_area(aperture, address, MemorySizeInBytes);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/*
@@ -1287,7 +1306,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFlags flags)
+void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
@@ -1319,7 +1338,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint64_t MemorySizeInBytes, HsaMemFla
 	if (!flags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	mem = __fmm_allocate_device(gpu_id, size, aperture, &mmap_offset,
+	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
 				    ioc_flags, &vm_obj);
 
 	if (mem && vm_obj) {
@@ -1369,7 +1388,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		    KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 		    KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	mem = __fmm_allocate_device(gpu_id, MemorySizeInBytes, aperture, NULL,
+	mem = __fmm_allocate_device(gpu_id, NULL, MemorySizeInBytes, aperture, NULL,
 				    ioc_flags, &vm_obj);
 
 	if (mem && vm_obj) {
@@ -1401,12 +1420,15 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
+static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 				HsaMemFlags flags)
 {
 	void *mem = NULL;
 	vm_object_t *vm_obj;
 	int mmap_prot = PROT_READ;
+
+	if (address)
+		return NULL;
 
 	if (flags.ui32.ExecuteAccess)
 		mmap_prot |= PROT_EXEC;
@@ -1433,8 +1455,8 @@ static void *fmm_allocate_host_cpu(uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
-				   HsaMemFlags flags)
+static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
+				   uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
 	void *mem;
 	manageable_aperture_t *aperture;
@@ -1475,7 +1497,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 
 		/* Allocate address space */
 		pthread_mutex_lock(&aperture->fmm_mutex);
-		mem = aperture_allocate_area(aperture, size);
+		mem = aperture_allocate_area(aperture, address, size);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		if (!mem)
 			return NULL;
@@ -1520,7 +1542,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 		}
 	} else {
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
-		mem =  __fmm_allocate_device(gpu_id, size, aperture,
+		mem =  __fmm_allocate_device(gpu_id, address, size, aperture,
 					     &mmap_offset, ioc_flags, &vm_obj);
 
 		if (mem && flags.ui32.HostAccess) {
@@ -1555,12 +1577,12 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
-void *fmm_allocate_host(uint32_t node_id, uint64_t MemorySizeInBytes,
-			HsaMemFlags flags)
+void *fmm_allocate_host(uint32_t node_id, void *address,
+			uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
 	if (is_dgpu)
-		return fmm_allocate_host_gpu(node_id, MemorySizeInBytes, flags);
-	return fmm_allocate_host_cpu(MemorySizeInBytes, flags);
+		return fmm_allocate_host_gpu(node_id, address, MemorySizeInBytes, flags);
+	return fmm_allocate_host_cpu(address, MemorySizeInBytes, flags);
 }
 
 static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
@@ -1757,7 +1779,7 @@ static HSAKMT_STATUS init_mmap_apertures(HSAuint64 base, HSAuint64 limit,
 	/* Try to allocate one page. If it fails, we'll fall back to
 	 * managing our own reserved address range.
 	 */
-	addr = aperture_allocate_area(&svm.apertures[SVM_DEFAULT], PAGE_SIZE);
+	addr = aperture_allocate_area(&svm.apertures[SVM_DEFAULT], NULL, PAGE_SIZE);
 	if (addr) {
 		aperture_release_area(&svm.apertures[SVM_DEFAULT], addr,
 				      PAGE_SIZE);
@@ -1822,7 +1844,7 @@ static HSAKMT_STATUS init_svm_apertures(HSAuint64 base, HSAuint64 limit,
 	 * x86_64) or at least mmap is unlikely to run out of
 	 * addresses the GPUs can handle.
 	 */
-	if (limit >= (1ULL << 47) - 1) {
+	if (limit >= (1ULL << 47) - 1 && !svm.reserve_svm) {
 		HSAKMT_STATUS status = init_mmap_apertures(base, limit, align,
 							   guard_pages);
 
@@ -1969,7 +1991,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	struct kfd_process_device_apertures *process_apertures;
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr;
+	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
 	char *hsaDebug;
 	unsigned int guardPages = 1;
 	struct pci_access *pacc;
@@ -1994,6 +2016,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 */
 	checkUserptr = getenv("HSA_CHECK_USERPTR");
 	svm.check_userptr = (checkUserptr && strcmp(checkUserptr, "0"));
+
+	/* If HSA_RESERVE_SVM is set to a non-0 value,
+	 * enable packet capture and replay mode.
+	 */
+	reserveSvm = getenv("HSA_RESERVE_SVM");
+	svm.reserve_svm = (reserveSvm && strcmp(reserveSvm, "0"));
 
 	/* Specify number of guard pages for SVM apertures, default is 1 */
 	guardPagesStr = getenv("HSA_SVM_GUARD_PAGES");
@@ -2147,6 +2175,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			 */
 			aperture_allocate_area(
 				&gpu_mem[gpu_mem_id].gpuvm_aperture,
+				NULL,
 				gpu_mem[gpu_mem_id].gpuvm_aperture.align);
 		}
 
@@ -2786,7 +2815,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 		fmm_check_user_memory(addr, size);
 
 	/* Allocate BO, userptr address is passed in mmap_offset */
-	svm_addr = __fmm_allocate_device(gpu_id, aligned_size, aperture,
+	svm_addr = __fmm_allocate_device(gpu_id, NULL, aligned_size, aperture,
 			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR |
 			 KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE, &obj);
@@ -2932,7 +2961,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	if (!aperture_is_valid(aperture->base, aperture->limit))
 		goto error_free_metadata;
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area_aligned(aperture, infoArgs.size,
+	mem = aperture_allocate_area_aligned(aperture, NULL, infoArgs.size,
 					     MAX(aperture->align, IMAGE_ALIGN));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!mem)
@@ -3059,7 +3088,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	aperture = fmm_get_aperture(SharedMemoryStruct->ApeInfo);
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	reservedMem = aperture_allocate_area(aperture,
+	reservedMem = aperture_allocate_area(aperture, NULL,
 			(SharedMemoryStruct->SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!reservedMem) {

@@ -518,7 +518,8 @@ typedef struct _HsaMemFlags
             unsigned int AQLQueueMemory: 1; // default = 0; If 1: The caller indicates that the memory will be used as AQL queue memory.
 					    // The KFD will ensure that the memory returned is allocated in the optimal memory location
 					    // and optimal alignment requirements
-            unsigned int Reserved    : 17;
+            unsigned int FixedAddress : 1; // Allocate memory at specified virtual address. Fail if address is not free.
+            unsigned int Reserved    : 16;
 
         } ui32;
         HSAuint32 Value;
