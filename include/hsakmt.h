@@ -360,7 +360,7 @@ hsaKmtAllocMemory(
     HSAuint32       PreferredNode,          //IN
     HSAuint64       SizeInBytes,            //IN  (multiple of page size)
     HsaMemFlags     MemFlags,               //IN
-    void**          MemoryAddress           //OUT (page-aligned)
+    void**          MemoryAddress           //IN/OUT (page-aligned)
     );
 
 /**

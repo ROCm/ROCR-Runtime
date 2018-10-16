@@ -128,8 +128,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	if (!MemoryAddress || !SizeInBytes || (SizeInBytes & (page_size-1)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
+	if (MemFlags.ui32.FixedAddress) {
+		if (*MemoryAddress == NULL)
+			return HSAKMT_STATUS_INVALID_PARAMETER;
+	} else
+		*MemoryAddress = NULL;
+
 	if (MemFlags.ui32.Scratch) {
-		*MemoryAddress = fmm_allocate_scratch(gpu_id, SizeInBytes);
+		*MemoryAddress = fmm_allocate_scratch(gpu_id, *MemoryAddress, SizeInBytes);
 
 		if (!(*MemoryAddress)) {
 			pr_err("[%s] failed to allocate %lu bytes from scratch\n",
@@ -145,8 +151,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 		/* Backwards compatibility hack: Allocate system memory if app
 		 * asks for paged memory from a GPU node.
 		 */
-		*MemoryAddress = fmm_allocate_host(PreferredNode, SizeInBytes,
-						MemFlags);
+		*MemoryAddress = fmm_allocate_host(PreferredNode,  *MemoryAddress,
+						   SizeInBytes,	MemFlags);
 
 		if (!(*MemoryAddress)) {
 			pr_err("[%s] failed to allocate %lu bytes from host\n",
@@ -158,7 +164,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated VRAM */
-	*MemoryAddress = fmm_allocate_device(gpu_id, SizeInBytes, MemFlags);
+	*MemoryAddress = fmm_allocate_device(gpu_id, *MemoryAddress, SizeInBytes, MemFlags);
 
 	if (!(*MemoryAddress)) {
 		pr_err("[%s] failed to allocate %lu bytes from device\n",
