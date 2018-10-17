@@ -86,7 +86,7 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
         m_packetSize = sizeof(PM4_RELEASE_MEM_CI);
         pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(calloc(1, m_packetSize));
         m_pPacketData = pkt;
-                EXPECT_NOTNULL(m_pPacketData);
+        EXPECT_NOTNULL(m_pPacketData);
 
         InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
@@ -106,37 +106,37 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
                         // Possible values:
                         // 0 - memory_controller.
                         // 1 - tc_l2.
-                if (address) {
-                    pkt->bitfields3.int_sel      = (isPolling ?
-            int_sel_mec_release_mem_SEND_DATA_AFTER_WRITE_CONFIRM_3 :
-            int_sel_mec_release_mem_SEND_INTERRUPT_AFTER_WRITE_CONFIRM_2);
-                        // Possible values:
-                        // 0 - None (Do not send an interrupt).
-                        // 1 - Send Interrupt Only. Program DATA_SEL 0".
-                        // 2 - Send Interrupt when Write Confirm (WC) is received from the MC.
-                        // 3 - Wait for WC, but dont send interrupt (applicable to 7.3+) [g73_1]
-                        // 4 - Reserved for INTERRUPT packet
-                    if (isTimeStamp && is64bit)
-                        pkt->bitfields3.data_sel = data_sel_mec_release_mem_SEND_GPU_CLOCK_COUNTER_3;
-                    else
-                        pkt->bitfields3.data_sel     = is64bit ?
-                            data_sel_mec_release_mem_SEND_64_BIT_DATA_2 :
-                            data_sel_mec_release_mem_SEND_32_BIT_LOW_1;
-                        // Possible values:
-                        // 0 - None, i.e., Discard Data.
-                        // 1 - Send 32-bit Data Low (Discard Data High).
-                        // 2 - Send 64-bit Data.
-                        // 3 - Send current value of the 64 bit global GPU clock counter.
-                        // 4 - Send current value of the 64 bit system clock counter.
-                        // 5 - Store GDS Data to memory.
-                        // 6 - Reserved for use by the CP for Signal Semaphore.
-                        // 7 - Reserved for use by the CP for Wait Semaphore.
-                } else {
-                    pkt->bitfields3.int_sel      = (isPolling ?
-            int_sel_mec_release_mem_NONE_0 :
-            int_sel_mec_release_mem_SEND_INTERRUPT_ONLY_1);
-                    pkt->bitfields3.data_sel     = data_sel_mec_release_mem_NONE_0;
-                }
+            if (address) {
+                pkt->bitfields3.int_sel      = (isPolling ?
+                    int_sel_mec_release_mem_SEND_DATA_AFTER_WRITE_CONFIRM_3 :
+                    int_sel_mec_release_mem_SEND_INTERRUPT_AFTER_WRITE_CONFIRM_2);
+                // Possible values:
+                // 0 - None (Do not send an interrupt).
+                // 1 - Send Interrupt Only. Program DATA_SEL 0".
+                // 2 - Send Interrupt when Write Confirm (WC) is received from the MC.
+                // 3 - Wait for WC, but dont send interrupt (applicable to 7.3+) [g73_1]
+                // 4 - Reserved for INTERRUPT packet
+                if (isTimeStamp && is64bit)
+                    pkt->bitfields3.data_sel = data_sel_mec_release_mem_SEND_GPU_CLOCK_COUNTER_3;
+                else
+                    pkt->bitfields3.data_sel     = is64bit ?
+                        data_sel_mec_release_mem_SEND_64_BIT_DATA_2 :
+                        data_sel_mec_release_mem_SEND_32_BIT_LOW_1;
+                    // Possible values:
+                    // 0 - None, i.e., Discard Data.
+                    // 1 - Send 32-bit Data Low (Discard Data High).
+                    // 2 - Send 64-bit Data.
+                    // 3 - Send current value of the 64 bit global GPU clock counter.
+                    // 4 - Send current value of the 64 bit system clock counter.
+                    // 5 - Store GDS Data to memory.
+                    // 6 - Reserved for use by the CP for Signal Semaphore.
+                    // 7 - Reserved for use by the CP for Wait Semaphore.
+            } else {
+                pkt->bitfields3.int_sel      = (isPolling ?
+                    int_sel_mec_release_mem_NONE_0 :
+                    int_sel_mec_release_mem_SEND_INTERRUPT_ONLY_1);
+                pkt->bitfields3.data_sel     = data_sel_mec_release_mem_NONE_0;
+            }
 
         pkt->bitfields4a.address_lo_dword_aligned = static_cast<uint32_t>((address&0xffffffff) >> 2);
         pkt->addr_hi = static_cast<uint32_t>(address>>32);
@@ -149,7 +149,7 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
         m_packetSize = sizeof(PM4MEC_RELEASE_MEM_AI);
         pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(calloc(1, m_packetSize));
         m_pPacketData = pkt;
-                EXPECT_NOTNULL(m_pPacketData);
+        EXPECT_NOTNULL(m_pPacketData);
 
         InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
@@ -163,21 +163,21 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
 
         if (address) {
             pkt->bitfields3.int_sel  = (isPolling ?
-            int_sel__mec_release_mem__send_data_after_write_confirm:
-            int_sel__mec_release_mem__send_interrupt_after_write_confirm);
+                int_sel__mec_release_mem__send_data_after_write_confirm:
+                int_sel__mec_release_mem__send_interrupt_after_write_confirm);
 
-                    if (isTimeStamp && is64bit)
-                        pkt->bitfields3.data_sel = data_sel__mec_release_mem__send_gpu_clock_counter;
-                    else
-                        pkt->bitfields3.data_sel     = is64bit ?
-                            data_sel__mec_release_mem__send_64_bit_data :
-                            data_sel__mec_release_mem__send_32_bit_low;
-                } else {
+            if (isTimeStamp && is64bit)
+                pkt->bitfields3.data_sel = data_sel__mec_release_mem__send_gpu_clock_counter;
+            else
+                pkt->bitfields3.data_sel     = is64bit ?
+                    data_sel__mec_release_mem__send_64_bit_data :
+                    data_sel__mec_release_mem__send_32_bit_low;
+        } else {
             pkt->bitfields3.int_sel  = (isPolling ?
-            int_sel__mec_release_mem__none:
-            int_sel__mec_release_mem__send_interrupt_only);
-                    pkt->bitfields3.data_sel     = data_sel__mec_release_mem__none;
-                }
+                int_sel__mec_release_mem__none:
+                int_sel__mec_release_mem__send_interrupt_only);
+            pkt->bitfields3.data_sel     = data_sel__mec_release_mem__none;
+        }
 
         pkt->bitfields4a.address_lo_32b = static_cast<uint32_t>((address&0xffffffff) >> 2);
         pkt->address_hi = static_cast<uint32_t>(address>>32);
@@ -185,7 +185,7 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
         pkt->data_lo = static_cast<uint32_t>(data);
         pkt->data_hi = static_cast<uint32_t>(data >> 32);
 
-                pkt->int_ctxid = static_cast<uint32_t>(data);
+        pkt->int_ctxid = static_cast<uint32_t>(data);
     }
 }
 
