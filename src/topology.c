@@ -595,7 +595,7 @@ static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id,
 	ret_value = open_drm_render_device(drm_render_minor);
 	if (ret_value > 0)
 		*is_node_supported = true;
-	else if (ret_value != -ENOENT)
+	else if (ret_value != -ENOENT && ret_value != -EPERM)
 		ret = HSAKMT_STATUS_ERROR;
 
 err:
