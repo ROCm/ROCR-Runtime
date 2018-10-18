@@ -1711,8 +1711,11 @@ int open_drm_render_device(int minor)
 	sprintf(path, "/dev/dri/renderD%d", minor);
 	fd = open(path, O_RDWR | O_CLOEXEC);
 	if (fd < 0) {
-		if (errno != ENOENT)
+		if (errno != ENOENT) {
+			if (errno == EPERM)
+				pr_info("Check a) User is in \"video\" group b) cgroup permissions\n");
 			pr_err("Failed to open %s: %s\n", path, strerror(errno));
+		}
 		return -errno;
 	}
 	drm_render_fds[index] = fd;
