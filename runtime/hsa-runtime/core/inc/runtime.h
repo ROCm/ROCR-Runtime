@@ -328,6 +328,11 @@ class Runtime {
     return system_event_handler_;
   }
 
+  hsa_status_t SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
+                                              void* user_data);
+
+  void InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent);
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -502,6 +507,11 @@ class Runtime {
   AMD::callback_t<hsa_amd_system_event_callback_t> system_event_handler_;
 
   void* system_event_handler_user_data_;
+
+  // Internal queue creation notifier
+  AMD::callback_t<hsa_amd_runtime_queue_notifier> internal_queue_create_notifier_;
+
+  void* internal_queue_create_notifier_user_data_;
 
   // Holds reference count to runtime object.
   std::atomic<uint32_t> ref_count_;

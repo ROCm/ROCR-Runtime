@@ -1476,4 +1476,20 @@ hsa_status_t Runtime::SetCustomSystemEventHandler(hsa_amd_system_event_callback_
   }
 }
 
+hsa_status_t Runtime::SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
+                                                     void* user_data) {
+  if (internal_queue_create_notifier_) {
+    return HSA_STATUS_ERROR;
+  } else {
+    internal_queue_create_notifier_ = callback;
+    internal_queue_create_notifier_user_data_ = user_data;
+    return HSA_STATUS_SUCCESS;
+  }
+}
+
+void Runtime::InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent) {
+  if (internal_queue_create_notifier_)
+    internal_queue_create_notifier_(queue, agent, internal_queue_create_notifier_user_data_);
+}
+
 }  // namespace core
