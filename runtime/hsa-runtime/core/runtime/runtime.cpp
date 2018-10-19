@@ -1218,9 +1218,7 @@ hsa_status_t Runtime::Load() {
   // Load extensions
   LoadExtensions();
 
-  // Load tools libraries
-  LoadTools();
-
+  // Initialize per GPU scratch, blits, and trap handler
   for (core::Agent* agent : gpu_agents_) {
     hsa_status_t status =
         reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
@@ -1229,6 +1227,9 @@ hsa_status_t Runtime::Load() {
       return status;
     }
   }
+
+  // Load tools libraries
+  LoadTools();
 
   return HSA_STATUS_SUCCESS;
 }
