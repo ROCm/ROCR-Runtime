@@ -513,6 +513,9 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
   // Disabled intercept of internal queues pending tools updates.
   core::Queue* queue = nullptr;
   QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue);
+  if (queue != nullptr)
+    core::Runtime::runtime_singleton_->InternalQueueCreateNotify(core::Queue::Convert(queue),
+                                                                 this->public_handle());
   return queue;
 }
 

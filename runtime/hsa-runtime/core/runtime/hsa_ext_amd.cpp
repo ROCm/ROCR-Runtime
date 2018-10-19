@@ -924,4 +924,12 @@ hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
   CATCH;
 }
 
+hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
+                                                   void* user_data) {
+  TRY;
+  IS_OPEN();
+  return core::Runtime::runtime_singleton_->SetInternalQueueCreateNotifier(callback, user_data);
+  CATCH;
+}
+
 } // end of AMD namespace

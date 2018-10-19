@@ -92,6 +92,11 @@ hsa_status_t hsa_amd_queue_intercept_create(
     void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
     uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue);
 
+typedef void (*hsa_amd_runtime_queue_notifier)(const hsa_queue_t* queue, hsa_agent_t agent,
+                                               void* data);
+hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
+                                                   void* user_data);
+
 // Structure of Version used to identify an instance of Api table
 // Must be the first member (offsetof == 0) of all API tables.
 // This is the root of the table passing ABI.
@@ -173,6 +178,7 @@ struct AmdExtTable {
   decltype(hsa_amd_queue_intercept_register)* hsa_amd_queue_intercept_register_fn;
   decltype(hsa_amd_queue_set_priority)* hsa_amd_queue_set_priority_fn;
   decltype(hsa_amd_memory_async_copy_rect)* hsa_amd_memory_async_copy_rect_fn;
+  decltype(hsa_amd_runtime_queue_create_register)* hsa_amd_runtime_queue_create_register_fn;
 };
 
 // Table to export HSA Core Runtime Apis
