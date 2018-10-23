@@ -944,6 +944,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->FComputeIdLo = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "capability") == 0)
 			props->Capability.Value = (uint32_t)prop_val;
+		else if (strcmp(prop_name, "debug_prop") == 0)
+			props->DebugProperties.Value = (uint64_t)prop_val;
 		else if (strcmp(prop_name, "max_waves_per_simd") == 0)
 			props->MaxWavesPerSIMD = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "lds_size_in_kb") == 0)
