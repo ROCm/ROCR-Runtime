@@ -104,6 +104,9 @@ class Runtime {
   /// @brief Open connection to kernel driver and increment reference count.
   static hsa_status_t Acquire();
 
+  /// @brief Decrement reference count and close connection to kernel driver.
+  static hsa_status_t Release();
+
   /// @brief Checks if connection to kernel driver is opened.
   /// @retval True if the connection to kernel driver is opened.
   static bool IsOpen();
@@ -113,9 +116,6 @@ class Runtime {
 
   /// @brief Singleton object of the runtime.
   static Runtime* runtime_singleton_;
-
-  /// @brief Decrement reference count and close connection to kernel driver.
-  hsa_status_t Release();
 
   /// @brief Insert agent into agent list ::agents_.
   /// @param [in] agent Pointer to the agent object.
@@ -419,9 +419,6 @@ class Runtime {
   /// @param [in] node_id_to Node id of the destination node.
   /// @retval Index in ::link_matrix_.
   uint32_t GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
-
-  // Mutex object to protect multithreaded access to ::Acquire and ::Release.
-  KernelMutex kernel_lock_;
 
   // Mutex object to protect multithreaded access to ::allocation_map_,
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
