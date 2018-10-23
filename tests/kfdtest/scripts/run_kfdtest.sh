@@ -32,6 +32,7 @@ GDB=""
 NODE=""
 MULTI_GPU=""
 FORCE_HIGH=""
+RUN_IN_DOCKER=""
 
 printUsage() {
     echo
@@ -45,6 +46,7 @@ printUsage() {
                                "not specified test will be run on all nodes"
     echo "  -l            , --list                   List available nodes"
     echo "  --high                                   Force clocks to high for test execution"
+    echo "  -d            , --docker                 Run in docker container"
     echo "  -h            , --help                   Prints this help"
     echo
     echo "Gtest arguments will be forwarded to the app"
@@ -147,6 +149,14 @@ getNodeName() {
 #   NODE - If set tests will be run only on this NODE, else it will be
 #           run on all available HSA Nodes
 runKfdTest() {
+    if [ "$RUN_IN_DOCKER" == "true" ]; then
+        if [ `sudo systemctl is-active docker` != "active" ]; then
+            echo "docker isn't active, install and setup docker first!!!!"
+            exit 0
+        fi
+        PKG_ROOT="$(getPackageRoot)"
+    fi
+
     if [ "$NODE" == "" ]; then
         hsaNodes=$(getHsaNodes)
     else
@@ -164,10 +174,34 @@ runKfdTest() {
 
         gtestFilter=$(getFilter $nodeName)
 
-        echo ""
-        echo "++++ Starting testing node $hsaNode ($nodeName) ++++"
-        $GDB $KFDTEST "--node=$hsaNode" $gtestFilter $GTEST_ARGS
-        echo "---- Finished testing node $hsaNode ($nodeName) ----"
+        if [ "$RUN_IN_DOCKER" == "true" ]; then
+            if [ "$NODE" == "" ]; then
+                DEVICE_NODE="/dev/dri"
+            else
+                RENDER_NODE=$(($hsaNode + 127))
+                DEVICE_NODE="/dev/dri/renderD${RENDER_NODE}"
+            fi
+
+            echo "Starting testing node $hsaNode ($nodeName) in docker container"
+            sudo docker run -it --name kfdtest_docker --user="jenkins" --network=host \
+            --device=/dev/kfd --device=${DEVICE_NODE} --group-add video --cap-add=SYS_PTRACE \
+            --security-opt seccomp=unconfined -v $PKG_ROOT:/home/jenkins/rocm \
+            compute-artifactory.amd.com:5000/yuho/tianli-ubuntu1604-kfdtest:01 \
+            /home/jenkins/rocm/utils/run_kfdtest.sh -n $hsaNode $gtestFilter $GTEST_ARGS
+            if [ "$?" = "0" ]; then
+                echo "Finished node $hsaNode ($nodeName) successfully in docker container"
+            else
+                echo "Testing failed for node $hsaNode ($nodeName) in docker container"
+            fi
+            sudo docker rm kfdtest_docker
+        else
+            echo ""
+            echo "++++ Starting testing node $hsaNode ($nodeName) ++++"
+            $GDB $KFDTEST "--node=$hsaNode" $gtestFilter $GTEST_ARGS
+            echo "---- Finished testing node $hsaNode ($nodeName) ----"
+        fi
+
+
     done
 
 }
@@ -202,6 +236,8 @@ while [ "$1" != "" ]; do
             shift 1; NODE=$1 ;;
         --high)
             FORCE_HIGH="true" ;;
+        -d  | --docker )
+            RUN_IN_DOCKER="true" ;;
         -h  | --help )
             printUsage; exit 0 ;;
         *)
