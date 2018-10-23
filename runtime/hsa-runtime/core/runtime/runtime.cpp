@@ -93,15 +93,11 @@ hsa_status_t Runtime::Acquire() {
   // Check to see if HSA has been cleaned up (process exit)
   if (!loaded) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
-  // Handle initialization races
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
 
   if (runtime_singleton_ == NULL) {
     runtime_singleton_ = new Runtime();
   }
-
-  // Serialize with release
-  ScopedAcquire<KernelMutex> lock(&runtime_singleton_->kernel_lock_);
 
   if (runtime_singleton_->ref_count_ == INT32_MAX) {
     return HSA_STATUS_ERROR_REFCOUNT_OVERFLOW;
@@ -123,17 +119,24 @@ hsa_status_t Runtime::Acquire() {
 }
 
 hsa_status_t Runtime::Release() {
-  ScopedAcquire<KernelMutex> lock(&kernel_lock_);
-  if (ref_count_ == 0) {
-    return HSA_STATUS_ERROR_NOT_INITIALIZED;
-  }
+  // Check to see if HSA has been cleaned up (process exit)
+  if (!loaded) return HSA_STATUS_SUCCESS;
 
-  if (ref_count_ == 1) {
+  ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
+
+  if (runtime_singleton_ == nullptr) return HSA_STATUS_ERROR_NOT_INITIALIZED;
+
+  if (runtime_singleton_->ref_count_ == 1) {
     // Release all registered memory, then unload backends
-    Unload();
+    runtime_singleton_->Unload();
   }
 
-  ref_count_--;
+  runtime_singleton_->ref_count_--;
+
+  if (runtime_singleton_->ref_count_ == 0) {
+    delete runtime_singleton_;
+    runtime_singleton_ = nullptr;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
