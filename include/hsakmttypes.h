@@ -199,17 +199,31 @@ typedef union
                                                  // 1: This node has 1.0 doorbell characteristic
                                                  // 2,3: reserved for future use
         unsigned int AQLQueueDoubleMap   : 1;	 // The unit needs a VA “double map”
-        unsigned int WatchAddrMaskLoBit  : 4;    // Only bits WatchAddrMaskLoBit..WatchAddrMaskHiBit of the
-        unsigned int WatchAddrMaskHiBit  : 6;    // watch address mask are used. 0 is the least significant bit.
         unsigned int DebugTrapSupported  : 1;    // Indicates if Debug Trap is supported on the node.
-        unsigned int TrapDataCount       : 2;    // Number of 32 bit TrapData registers supported.
         unsigned int WaveLaunchTrapOverrideSupported: 1; // Indicates if Wave Launch Trap Override is supported on the node.
         unsigned int WaveLaunchModeSupported: 1; // Indicates if Wave Launch Mode is supported on the node.
         unsigned int PreciseMemoryOperationsSupported: 1; // Indicates if Precise Memory Operations are supported on the node.
-        unsigned int Reserved            : 1;
+        unsigned int Reserved            : 13;
     } ui32;
 } HSA_CAPABILITY;
 
+// Debug Properties and values
+// HSA runtime may expose a subset of the capabilities outlined to the applicati
+typedef union
+{
+    HSAuint64 Value;
+    struct
+    {
+        HSAuint64 WatchAddrMaskLoBit: 6; // Only bits
+                                        // WatchAddrMaskLoBit..WatchAddrMaskHiBit
+                                        // of the
+        HSAuint64 WatchAddrMaskHiBit: 4; // watch address mask are used.
+                                         // 0 is the least significant bit.
+        HSAuint64 TrapDataCount: 4;      // Number of 32 bit TrapData
+                                         // registers supported.
+        HSAuint64 Reserved: 50;              //
+    };
+} HSA_DEBUG_PROPERTIES;
 
 //
 // HSA node properties. This structure is an output parameter of hsaKmtGetNodeProperties()
@@ -273,7 +287,7 @@ typedef struct _HsaNodeProperties
                                        // Unicode string
     HSAuint8        AMDName[HSA_PUBLIC_NAME_SIZE];   //CAL Name of the "device", ASCII
     HSA_ENGINE_VERSION uCodeEngineVersions;
-    HSAuint64       DebugProperties;
+    HSA_DEBUG_PROPERTIES DebugProperties; // Debug properties of this node.
     HSAuint64       HiveID;            // XGMI Hive the GPU node belongs to in the system. It is an opaque and static
                                        // number hash created by the PSP
     HSAuint8        Reserved[44];
