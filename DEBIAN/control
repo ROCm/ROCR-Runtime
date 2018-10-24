@@ -1,7 +1,7 @@
 Package: hsakmt-rocm-dev
 Architecture: $arch
 Maintainer: Advanced Micro Devices Inc.
-Depends:libpci3
+Depends:libpci3, libnuma1
 Priority: optional
 Version: $version
 Description: Thunk library for AMD KFD
