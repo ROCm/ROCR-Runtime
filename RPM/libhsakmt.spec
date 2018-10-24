@@ -9,6 +9,8 @@ Summary:    Thunk libraries for AMD KFD
 
 Group:      System Environment/Libraries
 License:    Advanced Micro Devices Inc.
+Requires:   numactl-libs
+
 
 %description
 This package includes the libhsakmt (Thunk) libraries
