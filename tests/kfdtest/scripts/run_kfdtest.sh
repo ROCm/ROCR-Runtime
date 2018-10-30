@@ -75,6 +75,7 @@ getFilter() {
         vg12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
         vg20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
         rv ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
+	core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
         all ) FILTER="" ;;
         *) die "Unsupported platform $PLATFORM or node $NODE. Exiting" ;;
     esac
