@@ -162,3 +162,14 @@ RAVEN_TESTS_BLACKLIST=\
 "KFDDBGTest.BasicAddressWatch:"\
 "KFDQMTest.QueueLatency:"\
 "KFDQMTest.SdmaEventInterrupt"
+
+# Core tests, used in scenarios like bringup
+CORE_TESTS=\
+"KFDQMTest.CreateDestroyCpQueue:"\
+"KFDQMTest.SubmitPacketCpQueue:"\
+"KFDQMTest.MultipleCpQueues:"\
+"KFDQMTest.CreateDestroySdmaQueue:"\
+"KFDQMTest.SubmitPacketSdmaQueue:"\
+"KFDQMTest.MultipleSdmaQueues:"\
+"KFDCWSRTest.BasicTest:"\
+"KFDEventTest.SignalEvent"
