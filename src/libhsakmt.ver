@@ -61,6 +61,8 @@ hsaKmtDisableDebugTrap;
 hsaKmtSetDebugTrapData2;
 hsaKmtSetWaveLaunchTrapOverride;
 hsaKmtSetWaveLaunchMode;
+hsaKmtNodeSuspend;
+hsaKmtNodeResume;
 
 local: *;
 };

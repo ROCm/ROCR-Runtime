@@ -633,14 +633,11 @@ hsaKmtDbgAddressWatch(
     - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
 */
 HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtQueueSuspend(
-    HSAuint32   NumQueues,     //IN
-    HSA_QUEUEID QueueId[],     //IN
-    bool        NoGracePeriod, //IN
-    bool        MemFence       //IN
-    );
-
+    HSAKMTAPI
+    hsaKmtNodeSuspend(
+            HSAuint32 Pid,
+            HSAuint32 NodeId,
+            HSAuint32 Flags);
 /**
    Resume the execution of a set of queues. If a queue is not
    suspended by hsaKmtDbgQueueSuspend() then it remains executing.
@@ -658,12 +655,11 @@ hsaKmtQueueSuspend(
     - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
 */
 HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtQueueResume(
-    HSAuint32   NumQueues, //IN
-    HSA_QUEUEID QueueId[], //IN
-    bool        MemFence   //IN
-    );
+    HSAKMTAPI
+    hsaKmtNodeResume(
+            HSAuint32 Pid,
+            HSAuint32 NodeId,
+            HSAuint32 Flags);
 
 /**
   Enable debug trap for NodeId. If QueueId is INVALID_QUEUEID then
