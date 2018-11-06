@@ -75,6 +75,12 @@ typedef HSAuint64          HSA_QUEUEID;
 // An HSA_QUEUEID that is never a valid queue ID.
 #define INVALID_QUEUEID 0xFFFFFFFFFFFFFFFFULL
 
+// A PID that is never a valid process ID.
+#define INVALID_PID 0xFFFFFFFF
+
+// // A HSA_NODEID that is never a valid node ID.
+#define INVALID_NODEID 0xFFFFFFFF
+
 // This is included in order to force the alignments to be 4 bytes so that
 // it avoids extra padding added by the compiler when a 64-bit binary is generated.
 #pragma pack(push, hsakmttypes_h, 4)
@@ -784,6 +790,13 @@ typedef enum _HSA_DBG_WAVE_LAUNCH_MODE
     HSA_DBG_WAVE_LAUNCH_MODE_DISABLE     = 4, // Disable launching any new waves.
     HSA_DBG_WAVE_LAUNCH_MODE_NUM
 } HSA_DBG_WAVE_LAUNCH_MODE;
+
+typedef enum HSA_DBG_NODE_CONTROL {
+      HSA_DBG_NODE_CONTROL_NO_GRACE_PERIOD = 0x01,
+      HSA_DBG_NODE_CONTROL_MEMORY_FENCE = 0x02,
+      HSA_DBG_NODE_CONTROL_UPDATE_CONTEXT = 0x04,
+} HSA_DBG_NODE_CONTROL;
+
 
 //This structure is hardware specific and may change in the future
 typedef struct _HsaDbgWaveMsgAMDGen2

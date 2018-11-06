@@ -27,6 +27,7 @@
 #include "linux/kfd_ioctl.h"
 #include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 
 static bool *is_device_debugged;
 int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
@@ -271,7 +272,8 @@ int debug_get_reg_status(uint32_t node_id, bool *is_debugged)
 static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 				HSAuint32 op,
 				HSAuint32 data1,
-				HSAuint32 data2)
+				HSAuint32 data2,
+				HSAuint32 data3)
 {
 	uint32_t gpu_id;
 	HSAKMT_STATUS result;
@@ -296,6 +298,8 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 	args.op = op;
 	args.data1 = data1;
 	args.data2 = data2;
+	args.data3 = data3;
+	args.data4 = 0;
 
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
 
@@ -313,12 +317,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrap(HSAuint32   NodeId,
 	if (QueueId != INVALID_QUEUEID)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	return debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 1, QueueId);
+	return debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 1, QueueId, 0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
 {
-	return  debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 0, 0);
+	return  debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 0, 0, 0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
@@ -328,7 +332,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
 	return debug_trap(NodeId,
 				KFD_IOC_DBG_TRAP_SET_TRAP_DATA,
 				TrapData0,
-				TrapData1);
+				TrapData1,
+				0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
@@ -342,7 +347,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
 	return debug_trap(NodeId,
 				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE,
 				TrapOverride,
-				TrapMask);
+				TrapMask,
+				0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
@@ -352,5 +358,52 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
 	return debug_trap(NodeId,
 				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE,
 				WaveLaunchMode,
+				0,
 				0);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtNodeSuspend(
+		HSAuint32 Pid,
+		HSAuint32 NodeId,
+		HSAuint32 Flags)
+{
+	pid_t current_pid = INVALID_PID;
+
+	CHECK_KFD_OPEN();
+
+	if (Pid == INVALID_PID) {
+		current_pid = getpid();
+		if (current_pid == 0)
+			return HSAKMT_STATUS_INVALID_HANDLE;
+		Pid = (HSAuint32) current_pid;
+	}
+
+	return debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_NODE_SUSPEND,
+			Pid,
+			NodeId,
+			Flags);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtNodeResume(
+		HSAuint32 Pid,
+		HSAuint32 NodeId,
+		HSAuint32 Flags)
+{
+	pid_t current_pid = INVALID_PID;
+
+	CHECK_KFD_OPEN();
+
+	if (Pid == INVALID_PID) {
+		current_pid = getpid();
+		if (current_pid == 0)
+			return HSAKMT_STATUS_INVALID_HANDLE;
+		Pid = (HSAuint32) current_pid;
+	}
+
+	return debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_NODE_RESUME,
+			Pid,
+			NodeId,
+			Flags);
 }
