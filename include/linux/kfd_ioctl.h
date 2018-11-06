@@ -35,9 +35,13 @@ struct kfd_ioctl_get_version_args {
 };
 
 /* For kfd_ioctl_create_queue_args.queue_type. */
-#define KFD_IOC_QUEUE_TYPE_COMPUTE	0
-#define KFD_IOC_QUEUE_TYPE_SDMA		1
-#define KFD_IOC_QUEUE_TYPE_COMPUTE_AQL	2
+#define KFD_IOC_QUEUE_TYPE_COMPUTE		0x0
+#define KFD_IOC_QUEUE_TYPE_SDMA			0x1
+#define KFD_IOC_QUEUE_TYPE_COMPUTE_AQL		0x2
+#define KFD_IOC_QUEUE_TYPE_SDMA_ENGINE(e)	(0x10000 + (e))
+#define KFD_IOC_QUEUE_TYPE_SDMA_AQL_ENGINE(e)	(0x20000 + (e))
+#define KFD_IOC_QUEUE_TYPE_SDMA_ENGINE_MAX	(KFD_IOC_QUEUE_TYPE_SDMA_ENGINE(0xffff))
+#define KFD_IOC_QUEUE_TYPE_SDMA_AQL_ENGINE_MAX	(KFD_IOC_QUEUE_TYPE_SDMA_AQL_ENGINE(0xffff))
 
 #define KFD_MAX_QUEUE_PERCENTAGE	100
 #define KFD_MAX_QUEUE_PRIORITY		15
@@ -86,7 +90,7 @@ struct kfd_ioctl_get_queue_wave_state_args {
 	__u64 ctl_stack_address;	/* to KFD */
 	__u32 ctl_stack_used_size;	/* from KFD */
 	__u32 save_area_used_size;	/* from KFD */
-	__u32 queue_id;		/* to KFD */
+	__u32 queue_id;			/* to KFD */
 	__u32 pad;
 };
 
@@ -234,6 +238,15 @@ struct kfd_ioctl_dbg_trap_args {
 
 #define KFD_SIGNAL_EVENT_LIMIT			4096
 
+/* For kfd_event_data.hw_exception_data.reset_type. */
+#define KFD_HW_EXCEPTION_WHOLE_GPU_RESET	0
+#define KFD_HW_EXCEPTION_PER_ENGINE_RESET	1
+
+/* For kfd_event_data.hw_exception_data.reset_cause. */
+#define KFD_HW_EXCEPTION_GPU_HANG	0
+#define KFD_HW_EXCEPTION_ECC		1
+
+
 struct kfd_ioctl_create_event_args {
 	__u64 event_page_offset;	/* from KFD */
 	__u32 event_trigger_data;	/* from KFD - signal events only */
@@ -275,10 +288,19 @@ struct kfd_hsa_memory_exception_data {
 	__u32 pad;
 };
 
+/* hw exception data */
+struct kfd_hsa_hw_exception_data {
+	__u32 reset_type;
+	__u32 reset_cause;
+	__u32 memory_lost;
+	__u32 gpu_id;
+};
+
 /* Event data */
 struct kfd_event_data {
 	union {
 		struct kfd_hsa_memory_exception_data memory_exception_data;
+		struct kfd_hsa_hw_exception_data hw_exception_data;
 	};				/* From KFD */
 	__u64 kfd_event_data_ext;	/* pointer to an extension structure
 					   for future exception types */
