@@ -95,7 +95,6 @@ class BaseQueue {
     unsigned int CMD_NOP;
     unsigned int m_pendingWptr;
     HSAuint64 m_pendingWptr64;
-    HSA_QUEUE_TYPE m_Type;
     HsaQueueResource m_Resources;
     HsaMemoryBuffer *m_QueueBuf;
     unsigned int m_Node;
