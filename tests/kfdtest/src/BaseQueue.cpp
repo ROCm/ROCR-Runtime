@@ -28,8 +28,7 @@
 #include "hsakmt.h"
 
 BaseQueue::BaseQueue()
-    :m_Type(HSA_QUEUE_TYPE_SIZE),
-    m_QueueBuf(NULL),
+    :m_QueueBuf(NULL),
     m_SkipWaitConsumption(true) {
 }
 
@@ -39,6 +38,7 @@ BaseQueue::~BaseQueue(void) {
 
 HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint64 *pointers) {
     HSAKMT_STATUS status;
+    HSA_QUEUE_TYPE type = GetQueueType();
 
     if (m_QueueBuf != NULL) {
         // Queue already exists, one queue per object
@@ -47,16 +47,15 @@ HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint6
 
     memset(&m_Resources, 0, sizeof(m_Resources));
 
-    m_Type = GetQueueType();
     m_QueueBuf = new HsaMemoryBuffer(size, NodeId, true/*zero*/, false/*local*/, true/*exec*/);
 
-    if (m_Type == HSA_QUEUE_COMPUTE_AQL) {
+    if (type == HSA_QUEUE_COMPUTE_AQL) {
         m_Resources.Queue_read_ptr_aql = &pointers[0];
         m_Resources.Queue_write_ptr_aql = &pointers[1];
     }
 
     status = hsaKmtCreateQueue(NodeId,
-                               m_Type,
+                               type,
                                DEFAULT_QUEUE_PERCENTAGE,
                                DEFAULT_PRIORITY,
                                m_QueueBuf->As<unsigned int*>(),
