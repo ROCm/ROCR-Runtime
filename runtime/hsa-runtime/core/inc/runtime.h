@@ -333,6 +333,8 @@ class Runtime {
 
   void InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent);
 
+  SharedSignalPool_t* GetSharedSignalPool() { return &SharedSignalPool; }
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -504,6 +506,9 @@ class Runtime {
 
   // Track environment variables.
   Flag flag_;
+
+  // Pools memory for SharedSignal (Signal ABI blocks)
+  SharedSignalPool_t SharedSignalPool;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
