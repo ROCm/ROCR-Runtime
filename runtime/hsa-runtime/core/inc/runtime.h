@@ -56,6 +56,7 @@
 #include "core/inc/exceptions.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
+#include "core/inc/interrupt_signal.h"
 #include "core/util/flag.h"
 #include "core/util/locks.h"
 #include "core/util/os.h"
@@ -335,6 +336,8 @@ class Runtime {
 
   SharedSignalPool_t* GetSharedSignalPool() { return &SharedSignalPool; }
 
+  InterruptSignal::EventPool* GetEventPool() { return &EventPool; }
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -509,6 +512,9 @@ class Runtime {
 
   // Pools memory for SharedSignal (Signal ABI blocks)
   SharedSignalPool_t SharedSignalPool;
+
+  // Pools KFD Events for InterruptSignal
+  InterruptSignal::EventPool EventPool;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
