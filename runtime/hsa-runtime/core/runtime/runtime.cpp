@@ -146,6 +146,8 @@ bool Runtime::IsOpen() {
          (Runtime::runtime_singleton_->ref_count_ != 0);
 }
 
+// Register agent information only.  Must not call anything that may use the registered information
+// since those tables are incomplete.
 void Runtime::RegisterAgent(Agent* agent) {
   // Record the agent in the node-to-agent reverse lookup table.
   agents_by_node_[agent->node_id()].push_back(agent);
@@ -225,10 +227,6 @@ void Runtime::RegisterAgent(Agent* agent) {
         start_svm_address_ =
             static_cast<uintptr_t>(svm_region->GetBaseAddress());
         end_svm_address_ = start_svm_address_ + svm_region->GetPhysicalSize();
-
-        // Bind VM fault handler when we detect the first GPU agent.
-        // TODO: validate if it works on APU.
-        BindVmFaultHandler();
       } else {
         start_svm_address_ = 0;
         end_svm_address_ = os::GetUserModeVirtualMemoryBase() +
@@ -1030,7 +1028,7 @@ void Runtime::AsyncEventsLoop(void*) {
 }
 
 void Runtime::BindVmFaultHandler() {
-  if (core::g_use_interrupt_wait) {
+  if (core::g_use_interrupt_wait && !gpu_agents_.empty()) {
     // Create memory event with manual reset to avoid racing condition
     // with driver in case of multiple concurrent VM faults.
     vm_fault_event_ =
@@ -1215,6 +1213,7 @@ hsa_status_t Runtime::Load() {
   if (!amd::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+  BindVmFaultHandler();
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
 
