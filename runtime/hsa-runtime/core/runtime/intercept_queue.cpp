@@ -69,7 +69,7 @@ int InterceptQueue::rtti_id_ = 0;
 
 InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
     : QueueProxy(std::move(queue)),
-      LocalSignal(0),
+      LocalSignal(0, false),
       DoorbellSignal(signal()),
       next_packet_(0),
       retry_index_(0),

@@ -170,7 +170,7 @@ class DefaultSignal : private LocalSignal, public BusyWaitSignal {
 
   /// @brief See base class Signal.
   explicit DefaultSignal(hsa_signal_value_t initial_value, bool enableIPC = false)
-      : LocalSignal(initial_value), BusyWaitSignal(signal(), enableIPC) {}
+      : LocalSignal(initial_value, enableIPC), BusyWaitSignal(signal(), enableIPC) {}
 
  protected:
   bool _IsA(rtti_t id) const {

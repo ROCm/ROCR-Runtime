@@ -1219,6 +1219,8 @@ void Runtime::Unload() {
   core::InterruptSignal::DestroyEvent(vm_fault_event_);
   vm_fault_event_ = nullptr;
 
+  SharedSignalPool.clear();
+
   DestroyAgents();
 
   CloseTools();
