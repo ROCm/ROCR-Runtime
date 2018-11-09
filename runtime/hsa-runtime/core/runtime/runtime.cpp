@@ -202,37 +202,8 @@ void Runtime::RegisterAgent(Agent* agent) {
 
     gpu_ids_.push_back(agent->node_id());
 
-    // Assign the first discovered gpu agent as blit agent that will provide
-    // DMA operation for hsa_memory_copy.
-    if (blit_agent_ == NULL) {
-      blit_agent_ = agent;
-
-      // Query the start and end address of the SVM address space in this
-      // platform.
-      if (reinterpret_cast<amd::GpuAgentInt*>(blit_agent_)->profile() ==
-          HSA_PROFILE_BASE) {
-        std::vector<const core::MemoryRegion*>::const_iterator it =
-            std::find_if(blit_agent_->regions().begin(),
-                         blit_agent_->regions().end(),
-                         [](const core::MemoryRegion* region) {
-              return (
-                  reinterpret_cast<const amd::MemoryRegion*>(region)->IsSvm());
-            });
-
-        assert(it != blit_agent_->regions().end());
-
-        const amd::MemoryRegion* svm_region =
-            reinterpret_cast<const amd::MemoryRegion*>(*it);
-
-        start_svm_address_ =
-            static_cast<uintptr_t>(svm_region->GetBaseAddress());
-        end_svm_address_ = start_svm_address_ + svm_region->GetPhysicalSize();
-      } else {
-        start_svm_address_ = 0;
-        end_svm_address_ = os::GetUserModeVirtualMemoryBase() +
-                           os::GetUserModeVirtualMemorySize();
-      }
-    }
+    // Assign the first discovered gpu agent as region gpu.
+    if (region_gpu_ == NULL) region_gpu_ = agent;
   }
 }
 
@@ -247,7 +218,7 @@ void Runtime::DestroyAgents() {
   std::for_each(cpu_agents_.begin(), cpu_agents_.end(), DeleteObject());
   cpu_agents_.clear();
 
-  blit_agent_ = NULL;
+  region_gpu_ = NULL;
 
   system_regions_fine_.clear();
   system_regions_coarse_.clear();
@@ -1191,19 +1162,12 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
 }
 
 Runtime::Runtime()
-    : blit_agent_(NULL),
+    : region_gpu_(nullptr),
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
       system_event_handler_user_data_(nullptr),
-      ref_count_(0) {
-  start_svm_address_ = 0;
-#if defined(HSA_LARGE_MODEL)
-  end_svm_address_ = UINT64_MAX;
-#else
-  end_svm_address_ = UINT32_MAX;
-#endif
-}
+      ref_count_(0) {}
 
 hsa_status_t Runtime::Load() {
   flag_.Refresh();
