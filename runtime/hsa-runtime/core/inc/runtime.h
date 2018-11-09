@@ -290,7 +290,7 @@ class Runtime {
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
-  Agent* blit_agent() { return blit_agent_; }
+  Agent* region_gpu() { return region_gpu_; }
 
   const std::vector<const MemoryRegion*>& system_regions_fine() const {
     return system_regions_fine_;
@@ -468,25 +468,14 @@ class Runtime {
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;
 
-  // Pointer to DMA agent.
-  Agent* blit_agent_;
+  // Deprecated HSA Region API GPU (for legacy APU support only)
+  Agent* region_gpu_;
 
   AsyncEventsControl async_events_control_;
 
   AsyncEvents async_events_;
 
   AsyncEvents new_async_events_;
-
-  // Starting address of SVM address space.
-  // On APU the cpu and gpu could access the area inside starting and end of
-  // the SVM address space.
-  // On dGPU, only the gpu is guaranteed to have access to the area inside the
-  // SVM address space, since it maybe backed by private gpu VRAM.
-  uintptr_t start_svm_address_;
-
-  // End address of SVM address space.
-  // start_svm_address_ + size
-  uintptr_t end_svm_address_;
 
   // System clock frequency.
   uint64_t sys_clock_freq_;

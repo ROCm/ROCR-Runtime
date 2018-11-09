@@ -461,8 +461,7 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
                                    void* data) const {
   if (include_peer) {
     // Only expose system, local, and LDS memory of the blit agent.
-    if (this->node_id() ==
-        core::Runtime::runtime_singleton_->blit_agent()->node_id()) {
+    if (this->node_id() == core::Runtime::runtime_singleton_->region_gpu()->node_id()) {
       hsa_status_t stat = VisitRegion(regions_, callback, data);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
