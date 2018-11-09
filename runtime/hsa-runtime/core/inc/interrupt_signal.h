@@ -45,9 +45,11 @@
 #ifndef HSA_RUNTME_CORE_INC_INTERRUPT_SIGNAL_H_
 #define HSA_RUNTME_CORE_INC_INTERRUPT_SIGNAL_H_
 
+#include <memory>
+#include <vector>
+
 #include "hsakmt.h"
 
-#include "core/inc/runtime.h"
 #include "core/inc/signal.h"
 #include "core/util/utils.h"
 
@@ -63,6 +65,28 @@ namespace core {
 /// signaling.
 class InterruptSignal : private LocalSignal, public Signal {
  public:
+  class EventPool {
+   public:
+    struct Deleter {
+      void operator()(HsaEvent* evt) { InterruptSignal::DestroyEvent(evt); }
+    };
+    using unique_event_ptr = ::std::unique_ptr<HsaEvent, Deleter>;
+
+    EventPool() : allEventsAllocated(false) {}
+
+    HsaEvent* alloc();
+    void free(HsaEvent* evt);
+    void clear() {
+      events_.clear();
+      allEventsAllocated = false;
+    }
+
+   private:
+    KernelMutex lock_;
+    std::vector<unique_event_ptr> events_;
+    bool allEventsAllocated;
+  };
+
   static HsaEvent* CreateEvent(HSA_EVENTTYPE type, bool manual_reset);
   static void DestroyEvent(HsaEvent* evt);
 

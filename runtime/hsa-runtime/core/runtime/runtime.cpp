@@ -1221,6 +1221,8 @@ void Runtime::Unload() {
 
   SharedSignalPool.clear();
 
+  EventPool.clear();
+
   DestroyAgents();
 
   CloseTools();
