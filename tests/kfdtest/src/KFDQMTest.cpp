@@ -105,6 +105,35 @@ TEST_F(KFDQMTest, CreateSdmaQueue) {
     TEST_END
 }
 
+TEST_F(KFDQMTest, CreateSdmaQueueOnEngine) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    unsigned int numSdmaEngine;
+
+    if (m_FamilyId == FAMILY_RV)
+        numSdmaEngine = 1;
+    else
+        numSdmaEngine = 2;
+
+    HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false);
+
+    SDMAQueue queue;
+
+    //How to get number of sdma engine?
+    for (int i = 0; i < numSdmaEngine; i++) {
+        destBuf.Fill(0xFF);
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode, BaseQueue::DEFAULT_QUEUE_SIZE, NULL, i));
+        queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void *>(), 0x02020202));
+        queue.Wait4PacketConsumption();
+        ASSERT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0x02020202));
+        ASSERT_SUCCESS(queue.Destroy());
+    }
+
+    TEST_END
+}
+
 TEST_F(KFDQMTest, CreateMultipleSdmaQueues) {
     TEST_START(TESTPROFILE_RUNALL)
 
