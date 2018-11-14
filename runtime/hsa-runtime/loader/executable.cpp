@@ -1748,11 +1748,8 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       // we distinguish between program allocation and agent allocation
       // variables?
       auto agent_symbol = agent_symbols_.find(std::make_pair(rel->symbol()->name(), agent));
-      if (agent_symbol == agent_symbols_.end()) {
-        // External symbols must be defined prior loading.
-        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
-      }
-      symAddr = agent_symbol->second->address;
+      if (agent_symbol != agent_symbols_.end())
+        symAddr = agent_symbol->second->address;
       break;
     }
 
@@ -1765,6 +1762,9 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   switch (rel->type()) {
     case R_AMDGPU_32_HIGH:
     {
+      if (!symAddr)
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+
       uint32_t symAddr32 = uint32_t((symAddr >> 32) & 0xFFFFFFFF);
       relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
       break;
@@ -1772,6 +1772,9 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
 
     case R_AMDGPU_32_LOW:
     {
+      if (!symAddr)
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+
       uint32_t symAddr32 = uint32_t(symAddr & 0xFFFFFFFF);
       relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
       break;
@@ -1779,6 +1782,9 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
 
     case R_AMDGPU_64:
     {
+      if (!symAddr)
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+
       relSeg->Copy(rel->offset(), &symAddr, sizeof(symAddr));
       break;
     }
