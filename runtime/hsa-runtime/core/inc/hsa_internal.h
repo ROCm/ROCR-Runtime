@@ -417,7 +417,7 @@ namespace HSA
 #ifdef BUILDING_HSA_CORE_RUNTIME
 //This using declaration is deliberate!
 //We want unqualified name resolution to fail when building the runtime.  This is a guard against accidental use of the intercept layer in the runtime.
-using namespace HSA;
+//using namespace HSA;
 #endif
 
 #endif
