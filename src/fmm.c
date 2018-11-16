@@ -2494,7 +2494,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 
 
 	/* map to GPU */
-	ret = _fmm_map_to_gpu(aperture, address, size, NULL, NULL, 0);
+	ret = _fmm_map_to_gpu(aperture, address, size, NULL, &gpu_id, sizeof(uint32_t));
 	if (ret != 0)
 		__fmm_release(obj, aperture);
 
