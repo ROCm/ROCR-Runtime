@@ -241,6 +241,12 @@ class GpuAgent : public GpuAgentInt {
                        core::Signal& out_signal) override;
 
   // @brief Override from core::Agent.
+  hsa_status_t DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
+                           const hsa_pitched_ptr_t* src, const hsa_dim3_t* src_offset,
+                           const hsa_dim3_t* range, hsa_amd_copy_direction_t dir,
+                           std::vector<core::Signal*>& dep_signals, core::Signal& out_signal);
+
+  // @brief Override from core::Agent.
   hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
 
   // @brief Get the next available end timestamp object.

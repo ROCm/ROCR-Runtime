@@ -23,7 +23,6 @@ Core runtime package:
 
 Runtime extension package:
 
-* A 64-bit version of AMD's finalizer extension for ROCR runtime
 * A 64-bit version of AMD's runtime tools library
 * A 64-bit version of AMD's runtime image library
 
