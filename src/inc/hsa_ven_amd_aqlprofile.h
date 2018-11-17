@@ -51,7 +51,7 @@
 #include "hsa.h"
 
 #define HSA_AQLPROFILE_VERSION_MAJOR 2
-#define HSA_AQLPROFILE_VERSION_MINUR 0
+#define HSA_AQLPROFILE_VERSION_MINOR 0
 
 #ifdef __cplusplus
 extern "C" {
@@ -259,8 +259,11 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3,            // get_info returns SQTT buffer ptr/size
                                                         // in info_data object
   HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS = 4,       // get_info returns number of block counter
-  HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_ID = 5              // get_info returns block id, instances
-                                                        // by name string using hsa_ven_amd_aqlprofile_id_query_t
+  HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_ID = 5,             // get_info returns block id, instances
+                                                        // by name string using _id_query_t
+                                                        //
+  HSA_VEN_AMD_AQLPROFILE_INFO_ENABLE_CMD = 6,           // get_info returns size/pointer for
+                                                        // counters enable command buffer
 } hsa_ven_amd_aqlprofile_info_type_t;
 
 // Definition of output data iterator callback
@@ -288,12 +291,13 @@ hsa_status_t hsa_ven_amd_aqlprofile_error_string(
 /**
  * @brief Extension version.
  */
-#define hsa_ven_amd_aqlprofile 001000
 #define hsa_ven_amd_aqlprofile_VERSION_MAJOR 1
+#define hsa_ven_amd_aqlprofile_LIB(suff) "libhsa-amd-aqlprofile" suff ".so"
+
 #ifdef HSA_LARGE_MODEL
-static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile64.so.1";
+static const char kAqlProfileLib[] = hsa_ven_amd_aqlprofile_LIB("64");
 #else
-static const char kAqlProfileLib[] = "libhsa-amd-aqlprofile.so.1";
+static const char kAqlProfileLib[] = hsa_ven_amd_aqlprofile_LIB("");
 #endif
 
 /**
@@ -337,6 +341,8 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       hsa_ven_amd_aqlprofile_data_callback_t callback,
       void* data);
 } hsa_ven_amd_aqlprofile_1_00_pfn_t;
+
+typedef hsa_ven_amd_aqlprofile_1_00_pfn_t hsa_ven_amd_aqlprofile_pfn_t;
 
 #ifdef __cplusplus
 }

@@ -255,9 +255,6 @@ void Runtime::DestroyAgents() {
 void Runtime::SetLinkCount(size_t num_link) {
   const size_t last_index = GetIndexLinkInfo(0, num_link);
   link_matrix_.resize(last_index);
-
-  memset(&link_matrix_[0], 0,
-         link_matrix_.size() * sizeof(hsa_amd_memory_pool_link_info_t));
 }
 
 void Runtime::RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
