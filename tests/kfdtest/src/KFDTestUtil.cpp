@@ -148,6 +148,9 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
     m_Node(node) {
     m_Flags.Value = 0;
 
+    HsaMemMapFlags mapFlags = {0};
+    bool map_specific_gpu = (node && !isScratch);
+
     if (isScratch) {
         m_Flags.ui32.Scratch = 1;
         m_Flags.ui32.HostAccess = 1;
@@ -170,7 +173,10 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
 
     EXPECT_SUCCESS(hsaKmtAllocMemory(m_Node, m_Size, m_Flags, &m_pBuf));
     if (is_dgpu()) {
-        EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(m_pBuf, m_Size, NULL));
+        if (map_specific_gpu)
+            EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(m_pBuf, m_Size, NULL, mapFlags, 1, &m_Node));
+        else
+            EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(m_pBuf, m_Size, NULL));
         m_MappedNodes = 1 << m_Node;
     }
 

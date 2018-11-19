@@ -44,6 +44,7 @@ void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAui
               << totalMB << ")MB VRAM in KFD" << std::endl;
     }
 
+    HsaMemMapFlags mapFlags = {0};
     HSAKMT_STATUS ret;
     HSAuint32 retry = 0;
 
@@ -56,7 +57,8 @@ void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAui
         ret = hsaKmtAllocMemory(defaultGPUNode, vramBufSize, m_Flags, &m_pBuf);
         if (ret == HSAKMT_STATUS_SUCCESS) {
             if (is_dgpu()) {
-                if (hsaKmtMapMemoryToGPU(m_pBuf, vramBufSize, NULL) == HSAKMT_STATUS_ERROR) {
+                if (hsaKmtMapMemoryToGPUNodes(m_pBuf, vramBufSize, NULL,
+                       mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)) == HSAKMT_STATUS_ERROR) {
                     EXPECT_SUCCESS(hsaKmtFreeMemory(m_pBuf, vramBufSize));
                     break;
                 }
