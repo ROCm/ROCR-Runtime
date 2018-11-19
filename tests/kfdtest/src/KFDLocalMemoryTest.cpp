@@ -57,6 +57,7 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
+    HsaMemMapFlags mapFlags = {0};
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -76,8 +77,10 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
 
     m_pIsaGen->GetCopyDwordIsa(isaBuffer);
 
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(srcLocalBuffer.As<void*>(), srcLocalBuffer.Size(), &AlternateVAGPU));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(dstLocalBuffer.As<void*>(), dstLocalBuffer.Size(), &AlternateVAGPU));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(srcLocalBuffer.As<void*>(), srcLocalBuffer.Size(), &AlternateVAGPU,
+                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(dstLocalBuffer.As<void*>(), dstLocalBuffer.Size(), &AlternateVAGPU,
+                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.SetSkipWaitConsump(0);
@@ -112,6 +115,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
+    HsaMemMapFlags mapFlags = {0};
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -134,7 +138,8 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     queue.SetSkipWaitConsump(0);
 
     if (!is_dgpu())
-        ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU));
+        ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
+                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
     Dispatch dispatch(isaBuffer);
 
@@ -143,7 +148,8 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     dispatch.Sync(g_TestTimeOut);
 
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
-    EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU));
+    EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
+                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
     dispatch.SetArgs(LocalBuffer.As<void*>(), SysBufferB.As<void*>());
     dispatch.Submit(queue);
@@ -270,6 +276,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     /* Allocate and test memory using the strategy explained at the top */
     HSAKMT_STATUS status;
     HsaMemFlags memFlags = {0};
+    HsaMemMapFlags mapFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     memFlags.ui32.HostAccess = 0;
     memFlags.ui32.NonPaged = 1;
@@ -318,8 +325,8 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
                                        + size - sizeof(unsigned));
             sysBuffer.As<unsigned *>()[0] = ++value;
 
-            status = hsaKmtMapMemoryToGPU(pages[order].pointers[p],
-                                                size, NULL);
+            status = hsaKmtMapMemoryToGPUNodes(pages[order].pointers[p], size, NULL,
+                               mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
             if (status != HSAKMT_STATUS_SUCCESS) {
                 ASSERT_SUCCESS(hsaKmtFreeMemory(pages[order].pointers[p],
                                                 size));

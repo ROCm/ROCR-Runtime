@@ -896,6 +896,16 @@ TEST_F(KFDMemoryTest, MMBench) {
 
     HSAuint64 vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
 
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    bool is_all_large_bar = true;
+
+    for (unsigned i = 0; i < gpuNodes.size(); i++) {
+        if (!m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i))) {
+                is_all_large_bar = false;
+                break;
+        }
+    }
+
     LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
 
     if (vramSizeMB == 0)
@@ -986,22 +996,24 @@ TEST_F(KFDMemoryTest, MMBench) {
         IDLE_SDMA();
 
         /* Map to all GPUs */
-        start = GetSystemTickCountInMicroSec();
-        for (i = 0; i < nBufs; i++) {
-            ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(bufs[i], bufSize, &altVa));
-            INTERLEAVE_SDMA();
-        }
-        mapAllTime = GetSystemTickCountInMicroSec() - start;
-        IDLE_SDMA();
+        if (is_all_large_bar) {
+            start = GetSystemTickCountInMicroSec();
+            for (i = 0; i < nBufs; i++) {
+                ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(bufs[i], bufSize, &altVa));
+                INTERLEAVE_SDMA();
+            }
+            mapAllTime = GetSystemTickCountInMicroSec() - start;
+            IDLE_SDMA();
 
-        /* Unmap from all GPUs */
-        start = GetSystemTickCountInMicroSec();
-        for (i = 0; i < nBufs; i++) {
-            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
-            INTERLEAVE_SDMA();
+            /* Unmap from all GPUs */
+            start = GetSystemTickCountInMicroSec();
+            for (i = 0; i < nBufs; i++) {
+                EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(bufs[i]));
+                INTERLEAVE_SDMA();
+            }
+            unmapAllTime = GetSystemTickCountInMicroSec() - start;
+            IDLE_SDMA();
         }
-        unmapAllTime = GetSystemTickCountInMicroSec() - start;
-        IDLE_SDMA();
 
         /* Free */
         start = GetSystemTickCountInMicroSec();
@@ -1292,6 +1304,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
+    HsaMemMapFlags mapFlags = {0};
     HsaMemFlags memFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     /* Allocate host not accessible vram */
@@ -1307,7 +1320,8 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     const HSAuint64 VRAM_OFFSET = (4 << 20) - sizeof(HSAuint64);
 
     ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, size, memFlags, &mem));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(mem, size, NULL));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(mem, size, NULL,
+                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
     /* Set the word before 4M boundary to 0xdeadbeefdeadbeef
      * and the word after 4M boundary to 0xcafebabecafebabe
      */

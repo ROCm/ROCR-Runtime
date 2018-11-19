@@ -75,13 +75,15 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     HSAuint64 size = PAGE_SIZE, sharedSize;
     HsaMemoryBuffer tempSysBuffer(size, defaultGPUNode, false);
     HSAuint32 *sharedLocalBuffer = NULL;
+    HsaMemMapFlags mapFlags = {0};
 
     /* Read from Pipe the shared Handle. Import shared Local Memory */
     ASSERT_GE(read(pipefd[0], reinterpret_cast<void*>(&sharedHandleLM), sizeof(sharedHandleLM)), 0);
 
     ASSERT_SUCCESS(hsaKmtRegisterSharedHandle(&sharedHandleLM,
                   reinterpret_cast<void**>(&sharedLocalBuffer), &sharedSize));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(sharedLocalBuffer, sharedSize, NULL));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sharedLocalBuffer, sharedSize, NULL,
+			mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
     /* Check for pattern in the shared Local Memory */
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
@@ -114,9 +116,11 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
     HsaMemoryBuffer tempSysBuffer(PAGE_SIZE, defaultGPUNode, false);
     SDMAQueue sdmaQueue;
     HsaSharedMemoryHandle sharedHandleLM;
+    HsaMemMapFlags mapFlags = {0};
 
     /* Fill a Local Buffer with a pattern */
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(toShareLocalBuffer.As<void*>(), toShareLocalBuffer.Size(), &AlternateVAGPU));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(toShareLocalBuffer.As<void*>(), toShareLocalBuffer.Size(), &AlternateVAGPU,
+                       mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
     tempSysBuffer.Fill(0xAAAAAAAA);
 
     /* Copy pattern in Local Memory before sharing it */
