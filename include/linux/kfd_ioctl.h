@@ -238,13 +238,28 @@ struct kfd_ioctl_dbg_trap_args {
 
 #define KFD_SIGNAL_EVENT_LIMIT			4096
 
-/* For kfd_event_data.hw_exception_data.reset_type. */
+/* For kfd_event_data.hw_exception_data.type. */
 #define KFD_HW_EXCEPTION_WHOLE_GPU_RESET	0
 #define KFD_HW_EXCEPTION_PER_ENGINE_RESET	1
+#define KFD_HW_EXCEPTION_RAS_FATAL		2
+#define KFD_HW_EXCEPTION_RAS_NOTIFY		3
 
-/* For kfd_event_data.hw_exception_data.reset_cause. */
-#define KFD_HW_EXCEPTION_GPU_HANG	0
-#define KFD_HW_EXCEPTION_ECC		1
+/* For kfd_event_data.hw_exception_data.cause. */
+#define KFD_HW_EXCEPTION_GPU_HANG		0x00000001
+#define KFD_HW_EXCEPTION_PARITY			0x00000002
+#define KFD_HW_EXCEPTION_SINGLE_CORRECTABLE	0x00000004
+#define KFD_HW_EXCEPTION_MULTI_UNCORRECTABLE	0x00000008
+#define KFD_HW_EXCEPTION_POISON			0x00000010
+
+/*For kfd_event_data.hw_exception_data.block_id */
+#define KFD_HW_EXCEPTION_BLOCK_UMC		0
+#define HSA_HW_EXCEPTION_BLOCK_SDMA		1
+#define HSA_HW_EXCEPTION_BLOCK_GFXHUB		2
+#define HSA_HW_EXCEPTION_BLOCK_MMHUB		3
+#define HSA_HW_EXCEPTION_BLOCK_ATHUB		4
+#define HSA_HW_EXCEPTION_BLOCK_PCIE_BIF	5
+#define HSA_HW_EXCEPTION_BLOCK_HDP		6
+#define HSA_HW_EXCEPTION_BLOCK_UNKNOWN		0xffffffff
 
 
 struct kfd_ioctl_create_event_args {
@@ -290,10 +305,12 @@ struct kfd_hsa_memory_exception_data {
 
 /* hw exception data */
 struct kfd_hsa_hw_exception_data {
-	__u32 reset_type;
-	__u32 reset_cause;
+	__u32 type;
+	__u32 cause;
+	__u32 block_id;
 	__u32 memory_lost;
 	__u32 gpu_id;
+	__u32 pad;
 };
 
 /* Event data */
