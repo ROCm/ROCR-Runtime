@@ -203,7 +203,8 @@ typedef union
         unsigned int WaveLaunchTrapOverrideSupported: 1; // Indicates if Wave Launch Trap Override is supported on the node.
         unsigned int WaveLaunchModeSupported: 1; // Indicates if Wave Launch Mode is supported on the node.
         unsigned int PreciseMemoryOperationsSupported: 1; // Indicates if Precise Memory Operations are supported on the node.
-        unsigned int Reserved            : 13;
+        unsigned int RasSupported        : 1;    // Indicates if GPU RAS feature is enabled
+        unsigned int Reserved            : 12;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -916,6 +917,47 @@ typedef struct _HsaMemoryAccessFault
     HSA_EVENTID_MEMORYFLAGS         Flags;              // event flags
 } HsaMemoryAccessFault;
 
+typedef enum _HSA_HW_EXCEPTION_TYPE
+{
+    HSA_HW_EXCEPTION_TYPE_FULL_GPU_RESET   = 0,
+    HSA_HW_EXCEPTION_TYPE_PER_ENGINE_RESET = 1,
+    HSA_HW_EXCEPTION_TYPE_RAS_FATAL        = 2,
+    HSA_HW_EXCEPTION_TYPE_RAS_NOTIFY       = 3
+} HSA_HW_EXCEPTION_TYPE;
+
+typedef struct _HSA_HW_EXCEPTION_CAUSE
+{
+    unsigned int Hang              : 1; // GPU hang
+    unsigned int Parity            : 1; // RAS_ERROR_PARITY
+    unsigned int SingleCorrectable : 1; // ERROR_SINGLE_CORRECTABLE
+    unsigned int MultiUncorrectable: 1; // ERROR_MULTI_UNCORRECTABLE
+    unsigned int Poison            : 1; // ERROR_POISON
+    unsigned int Reserved          : 27;
+} HSA_HW_EXCEPTION_CAUSE;
+
+typedef enum _HSA_HW_EXCEPTION_BLOCK_ID
+{
+    HSA_HW_EXCEPTION_BLOCK_UMC      = 0,
+    HSA_HW_EXCEPTION_BLOCK_SDMA     = 1,
+    HSA_HW_EXCEPTION_BLOCK_GFXHUB   = 2,
+    HSA_HW_EXCEPTION_BLOCK_MMHUB    = 3,
+    HSA_HW_EXCEPTION_BLOCK_ATHUB    = 4,
+    HSA_HW_EXCEPTION_BLOCK_PCIE_BIF = 5,
+    HSA_HW_EXCEPTION_BLOCK_HDP      = 6,
+
+    HSA_HW_EXCEPTION_BLOCK_UNKNOWN  = 0xffffffff
+} HSA_HW_EXCEPTION_BLOCK_ID;
+
+// data associated with HSA_EVENTTYPE_HW_EXCEPTION
+typedef struct _HsaHwException
+{
+    HSA_HW_EXCEPTION_TYPE     Type;
+    HSA_HW_EXCEPTION_CAUSE    Cause;
+    HSA_HW_EXCEPTION_BLOCK_ID BlockId; // Id of block on where RAS error happens
+    bool                      MemoryLost;
+    HSAuint32                 NodeId; // Id of GPU that has hw exception
+} HsaHwException;
+
 typedef struct _HsaEventData
 {
     HSA_EVENTTYPE   EventType;      //event type
@@ -933,6 +975,9 @@ typedef struct _HsaEventData
 
         // data associated with HSA_EVENTTYPE_MEMORY
         HsaMemoryAccessFault    MemoryAccessFault;
+
+        // data associated with HSA_EVENTTYPE_HW_EXCEPTION
+        HsaHwException          HwException;
 
     } EventData;
 
