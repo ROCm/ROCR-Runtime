@@ -467,6 +467,8 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 
   if (extension == HSA_EXTENSION_AMD_AQLPROFILE) {
     if (version_major != hsa_ven_amd_aqlprofile_VERSION_MAJOR) {
+      debug_print("aqlprofile API incompatible ver %d, current ver %d\n",
+        version_major, hsa_ven_amd_aqlprofile_VERSION_MAJOR);
       return HSA_STATUS_ERROR;
     }
 
@@ -476,7 +478,7 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
       return HSA_STATUS_ERROR;
     }
 
-    hsa_ven_amd_aqlprofile_1_00_pfn_t ext_table;
+    hsa_ven_amd_aqlprofile_pfn_t ext_table;
     ext_table.hsa_ven_amd_aqlprofile_version_major =
       (decltype(::hsa_ven_amd_aqlprofile_version_major)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_version_major");
@@ -507,6 +509,19 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_aqlprofile_iterate_data =
       (decltype(::hsa_ven_amd_aqlprofile_iterate_data)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_data");
+
+    bool version_incompatible = true;
+    uint32_t version_curr = 0;
+    version_major = HSA_AQLPROFILE_VERSION_MAJOR;
+    if (ext_table.hsa_ven_amd_aqlprofile_version_major != NULL) {
+      version_curr = ext_table.hsa_ven_amd_aqlprofile_version_major();
+      version_incompatible = (version_major != version_curr);
+    }
+    if (version_incompatible == true) {
+      debug_print("Loading '%s' failed, incompatible ver %d, current ver %d\n",
+        kAqlProfileLib, version_major, version_curr);
+      return HSA_STATUS_ERROR;
+    }
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
