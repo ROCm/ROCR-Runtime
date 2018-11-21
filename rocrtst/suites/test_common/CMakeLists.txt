@@ -265,7 +265,7 @@ function(build_kernel S_NAME TARG_DEV)
   set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME}
                                                  CACHE INTERNAL HSA_TARG_LIST)
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-   "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+   "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
   add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
         "../${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"

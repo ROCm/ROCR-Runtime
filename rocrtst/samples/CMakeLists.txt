@@ -237,7 +237,7 @@ function(process_sample S_NAME TARG_DEV HAS_KERNEL)
   if (${HAS_KERNEL})
     # Build the kernel
     separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-     "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+     "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
     add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
         "../${SNAME_EXE}" "${KERNEL_DIR}/${SNAME_EXE}"
