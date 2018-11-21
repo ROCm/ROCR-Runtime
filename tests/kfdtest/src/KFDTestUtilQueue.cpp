@@ -323,7 +323,7 @@ class AsyncMPMQ {
  * SDMA queue helper functions.
  */
 
-bool sort_SDMACopyParams(SDMACopyParams &a1, SDMACopyParams &a2) {
+bool sort_SDMACopyParams(const SDMACopyParams &a1, const SDMACopyParams &a2) {
     if (a1.node != a2.node)
         return a1.node < a2.node;
     return a1.group < a2.group;
