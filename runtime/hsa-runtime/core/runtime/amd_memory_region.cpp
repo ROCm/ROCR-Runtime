@@ -279,7 +279,8 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
           break;
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((uint32_t*)value) = HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+          *((uint32_t*)value) = fine_grain() ? HSA_REGION_GLOBAL_FLAG_FINE_GRAINED
+                                             : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
           break;
         default:
           *((uint32_t*)value) = 0;

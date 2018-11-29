@@ -103,6 +103,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_REV_COPY_DIR");
     rev_copy_dir_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_FORCE_FINE_GRAIN_PCIE");
+    fine_grain_pcie_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -125,6 +128,8 @@ class Flag {
 
   bool rev_copy_dir() const { return rev_copy_dir_; }
 
+  bool fine_grain_pcie() const { return fine_grain_pcie_; }
+
   std::string enable_sdma() const { return enable_sdma_; }
 
   std::string visible_gpus() const { return visible_gpus_; }
@@ -146,6 +151,7 @@ class Flag {
   bool report_tool_load_failures_;
   bool disable_fragment_alloc_;
   bool rev_copy_dir_;
+  bool fine_grain_pcie_;
 
   std::string enable_sdma_;
 
