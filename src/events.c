@@ -326,26 +326,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 				Events[i]->EventData.EventData.MemoryAccessFault.Flags = HSA_EVENTID_MEMORY_FATAL_PROCESS;
 				analysis_memory_exception(&event_data[i].memory_exception_data);
 			}
-			if (Events[i]->EventData.EventType == HSA_EVENTTYPE_HW_EXCEPTION) {
-				Events[i]->EventData.EventData.HwException.Type =
-						event_data[i].hw_exception_data.type;
-				Events[i]->EventData.EventData.HwException.Cause.Hang =
-						event_data[i].hw_exception_data.cause & KFD_HW_EXCEPTION_GPU_HANG;
-				Events[i]->EventData.EventData.HwException.Cause.Parity =
-						(event_data[i].hw_exception_data.cause & KFD_HW_EXCEPTION_PARITY) >> 1;
-				Events[i]->EventData.EventData.HwException.Cause.SingleCorrectable =
-						(event_data[i].hw_exception_data.cause & KFD_HW_EXCEPTION_SINGLE_CORRECTABLE) >> 2;
-				Events[i]->EventData.EventData.HwException.Cause.MultiUncorrectable =
-						(event_data[i].hw_exception_data.cause & KFD_HW_EXCEPTION_MULTI_UNCORRECTABLE) >> 3;
-				Events[i]->EventData.EventData.HwException.Cause.Poison =
-						(event_data[i].hw_exception_data.cause & KFD_HW_EXCEPTION_POISON) >> 4;
-				Events[i]->EventData.EventData.HwException.BlockId =
-						event_data[i].hw_exception_data.block_id;
-				Events[i]->EventData.EventData.HwException.MemoryLost =
-						event_data[i].hw_exception_data.memory_lost;
-				Events[i]->EventData.EventData.HwException.NodeId =
-						event_data[i].hw_exception_data.gpu_id;
-			}
 		}
 	}
 out:
