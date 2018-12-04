@@ -323,6 +323,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.ReadOnly = event_data[i].memory_exception_data.failure.ReadOnly;
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.NoExecute = event_data[i].memory_exception_data.failure.NoExecute;
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.Imprecise = event_data[i].memory_exception_data.failure.imprecise;
+				Events[i]->EventData.EventData.MemoryAccessFault.Failure.ErrorType = event_data[i].memory_exception_data.ErrorType;
+				Events[i]->EventData.EventData.MemoryAccessFault.Failure.ECC =
+						((event_data[i].memory_exception_data.ErrorType == 1) || (event_data[i].memory_exception_data.ErrorType == 2)) ? 1 : 0;
 				Events[i]->EventData.EventData.MemoryAccessFault.Flags = HSA_EVENTID_MEMORY_FATAL_PROCESS;
 				analysis_memory_exception(&event_data[i].memory_exception_data);
 			}

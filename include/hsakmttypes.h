@@ -203,7 +203,10 @@ typedef union
         unsigned int WaveLaunchTrapOverrideSupported: 1; // Indicates if Wave Launch Trap Override is supported on the node.
         unsigned int WaveLaunchModeSupported: 1; // Indicates if Wave Launch Mode is supported on the node.
         unsigned int PreciseMemoryOperationsSupported: 1; // Indicates if Precise Memory Operations are supported on the node.
-        unsigned int Reserved            : 13;
+        unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
+        unsigned int Mem_EDCSupoort: 1;          // Indicates if GFX internal DRAM/HBM EDC/ECC functionality is active
+        unsigned int RASEventNotify: 1;          // Indicates if GFX extended RASFeatures and RAS EventNotify status is available
+        unsigned int Reserved            : 10;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -902,9 +905,11 @@ typedef struct _HsaAccessAttributeFailure
     unsigned int ReadOnly    : 1;  // Write access to a read-only page
     unsigned int NoExecute   : 1;  // Execute access to a page marked NX
     unsigned int GpuAccess   : 1;  // Host access only
-    unsigned int ECC         : 1;  // ECC failure (if supported by HW)
+    unsigned int ECC         : 1;  // RAS ECC failure (notification of DRAM ECC - non-recoverable - error, if supported by HW)
     unsigned int Imprecise   : 1;  // Can't determine the exact fault address
-    unsigned int Reserved    : 26; // must be 0
+    unsigned int ErrorType   : 3;  // Indicates RAS errors or other errors causing the access to GPU to fail
+                                      // 0 = no RAS error, 1 = ECC_SRAM, 2 = Link_SYNFLOOD (poison), 3 = GPU hang (not attributable to a specific cause), other values reserved
+    unsigned int Reserved    : 23; // must be 0
 } HsaAccessAttributeFailure;
 
 // data associated with HSA_EVENTID_MEMORY

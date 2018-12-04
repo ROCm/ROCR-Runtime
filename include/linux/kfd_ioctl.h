@@ -285,7 +285,11 @@ struct kfd_hsa_memory_exception_data {
 	struct kfd_memory_exception_failure failure;
 	__u64 va;
 	__u32 gpu_id;
-	__u32 pad;
+	__u32 ErrorType; /* 0 = no RAS error,
+				1 = ECC_SRAM,
+				2 = Link_SYNFLOOD (poison),
+				3 = GPU hang (not attributable to a specific cause),
+				other values reserved */
 };
 
 /* hw exception data */
