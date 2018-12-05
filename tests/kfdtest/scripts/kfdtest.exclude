@@ -129,12 +129,12 @@ VEGA12_TESTS_BLACKLIST=\
 
 VEGA20_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST:"\
 "KFDDBGTest.BasicAddressWatch:"\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
 "KFDQMTest.GPUDoorbellWrite:"\
-"KFDQMTest.SdmaConcurrentCopies:"\
 "KFDMemoryTest.MemoryRegister"
 
 RAVEN_TESTS_BLACKLIST=\
