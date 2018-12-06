@@ -42,6 +42,7 @@ BLACKLIST_ALL_ASICS=\
 # disabled on non-Hawaii due to SDMA instability - SWDEV-101666
 SDMA_BLACKLIST=\
 "KFDIPCTest.*:"\
+"KFDLocalMemoryTest.CheckZeroInitializationVram:"\
 "KFDMemoryTest.MMBench:"\
 "KFDQMTest.*Sdma*:"\
 "KFDQMTest.P2PTest:"\
