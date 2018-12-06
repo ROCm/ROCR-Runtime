@@ -43,8 +43,12 @@ BLACKLIST_ALL_ASICS=\
 SDMA_BLACKLIST=\
 "KFDIPCTest.*:"\
 "KFDLocalMemoryTest.CheckZeroInitializationVram:"\
+"KFDMemoryTest.MemoryRegister:"\
 "KFDMemoryTest.MMBench:"\
+"KFDMemoryTest.SignalHandling:"\
 "KFDQMTest.*Sdma*:"\
+"KFDQMTest.CreateQueueStressSingleThreaded:"\
+"KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.P2PTest:"\
 "KFDPerformanceTest.P2PBandWidthTest:"\
 "KFDPerformanceTest.P2POverheadTest"
