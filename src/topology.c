@@ -186,7 +186,12 @@ static struct hsa_gfxip_table {
 	{ 0x6864, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6867, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6868, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x6869, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x686A, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x686B, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x686C, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x686D, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
+	{ 0x686E, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x687F, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	/* Vega12 */
 	{ 0x69A0, 9, 0, 4, 1, "Vega12", CHIP_VEGA12 },
@@ -201,6 +206,7 @@ static struct hsa_gfxip_table {
 	{ 0x66A1, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66A2, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66A3, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
+	{ 0x66A4, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66A7, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 	{ 0x66AF, 9, 0, 6, 1, "Vega20", CHIP_VEGA20 },
 };
