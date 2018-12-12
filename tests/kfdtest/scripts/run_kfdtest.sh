@@ -118,11 +118,11 @@ deviceIdToGpuName() {
             platformName="pl11" ;;
         6980 | 6981 | 6985 | 6986 | 6987 | 6995 | 6997 | 699f)
             platformName="pl12" ;;
-        6860 | 6861 | 6862 | 6863 | 6864 | 6867 | 6868 | 6869 | 686a | 686b | 686c | 687f)
+        6860 | 6861 | 6862 | 6863 | 6864 | 6867 | 6868 | 6869 | 686a | 686b | 686c | 687d | 687e | 687f)
             platformName="vg10" ;;
         69a0 | 69a1 | 69a2 | 69a3 | 69af)
             platformName="vg12" ;;
-        66a0 | 66a1 | 66a2 | 66a3 |66a7 | 66af)
+        66a0 | 66a1 | 66a2 | 66a3 | 66a4 | 66a7 | 66af)
             platformName="vg20" ;;
         15dd )
             platformName="rv" ;;
