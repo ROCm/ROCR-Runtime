@@ -68,7 +68,7 @@ message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 #  message(STATUS "${file}")
 #endforeach()
 
-set ( CMAKE_C_FLAGS "-DSP3_STATIC_LIB -Wno-error -DPUBLIC_RELEASE -DLITTLEENDIAN_CPU" )
+set ( CMAKE_C_FLAGS "-DSP3_STATIC_LIB -Wno-error -DPUBLIC_RELEASE -DLITTLEENDIAN_CPU -fPIC" )
 
 add_library(amdsp3 ${SRC_FILES})
 
