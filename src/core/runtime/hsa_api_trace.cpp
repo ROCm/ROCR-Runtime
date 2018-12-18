@@ -56,6 +56,9 @@ hsa_status_t hsa_amd_queue_intercept_create(
     hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
     void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
     uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue);
+
+hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
+                                                   void* user_data);
 }
 
 namespace core {
@@ -382,6 +385,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_queue_intercept_register_fn = AMD::hsa_amd_queue_intercept_register;
   amd_ext_api.hsa_amd_queue_set_priority_fn = AMD::hsa_amd_queue_set_priority;
   amd_ext_api.hsa_amd_memory_async_copy_rect_fn = AMD::hsa_amd_memory_async_copy_rect;
+  amd_ext_api.hsa_amd_runtime_queue_create_register_fn = AMD::hsa_amd_runtime_queue_create_register;
 }
 
 class Init {

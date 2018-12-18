@@ -93,15 +93,11 @@ hsa_status_t Runtime::Acquire() {
   // Check to see if HSA has been cleaned up (process exit)
   if (!loaded) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
-  // Handle initialization races
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
 
   if (runtime_singleton_ == NULL) {
     runtime_singleton_ = new Runtime();
   }
-
-  // Serialize with release
-  ScopedAcquire<KernelMutex> lock(&runtime_singleton_->kernel_lock_);
 
   if (runtime_singleton_->ref_count_ == INT32_MAX) {
     return HSA_STATUS_ERROR_REFCOUNT_OVERFLOW;
@@ -123,17 +119,24 @@ hsa_status_t Runtime::Acquire() {
 }
 
 hsa_status_t Runtime::Release() {
-  ScopedAcquire<KernelMutex> lock(&kernel_lock_);
-  if (ref_count_ == 0) {
-    return HSA_STATUS_ERROR_NOT_INITIALIZED;
-  }
+  // Check to see if HSA has been cleaned up (process exit)
+  if (!loaded) return HSA_STATUS_SUCCESS;
 
-  if (ref_count_ == 1) {
+  ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
+
+  if (runtime_singleton_ == nullptr) return HSA_STATUS_ERROR_NOT_INITIALIZED;
+
+  if (runtime_singleton_->ref_count_ == 1) {
     // Release all registered memory, then unload backends
-    Unload();
+    runtime_singleton_->Unload();
   }
 
-  ref_count_--;
+  runtime_singleton_->ref_count_--;
+
+  if (runtime_singleton_->ref_count_ == 0) {
+    delete runtime_singleton_;
+    runtime_singleton_ = nullptr;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
@@ -143,6 +146,8 @@ bool Runtime::IsOpen() {
          (Runtime::runtime_singleton_->ref_count_ != 0);
 }
 
+// Register agent information only.  Must not call anything that may use the registered information
+// since those tables are incomplete.
 void Runtime::RegisterAgent(Agent* agent) {
   // Record the agent in the node-to-agent reverse lookup table.
   agents_by_node_[agent->node_id()].push_back(agent);
@@ -197,41 +202,8 @@ void Runtime::RegisterAgent(Agent* agent) {
 
     gpu_ids_.push_back(agent->node_id());
 
-    // Assign the first discovered gpu agent as blit agent that will provide
-    // DMA operation for hsa_memory_copy.
-    if (blit_agent_ == NULL) {
-      blit_agent_ = agent;
-
-      // Query the start and end address of the SVM address space in this
-      // platform.
-      if (reinterpret_cast<amd::GpuAgentInt*>(blit_agent_)->profile() ==
-          HSA_PROFILE_BASE) {
-        std::vector<const core::MemoryRegion*>::const_iterator it =
-            std::find_if(blit_agent_->regions().begin(),
-                         blit_agent_->regions().end(),
-                         [](const core::MemoryRegion* region) {
-              return (
-                  reinterpret_cast<const amd::MemoryRegion*>(region)->IsSvm());
-            });
-
-        assert(it != blit_agent_->regions().end());
-
-        const amd::MemoryRegion* svm_region =
-            reinterpret_cast<const amd::MemoryRegion*>(*it);
-
-        start_svm_address_ =
-            static_cast<uintptr_t>(svm_region->GetBaseAddress());
-        end_svm_address_ = start_svm_address_ + svm_region->GetPhysicalSize();
-
-        // Bind VM fault handler when we detect the first GPU agent.
-        // TODO: validate if it works on APU.
-        BindVmFaultHandler();
-      } else {
-        start_svm_address_ = 0;
-        end_svm_address_ = os::GetUserModeVirtualMemoryBase() +
-                           os::GetUserModeVirtualMemorySize();
-      }
-    }
+    // Assign the first discovered gpu agent as region gpu.
+    if (region_gpu_ == NULL) region_gpu_ = agent;
   }
 }
 
@@ -246,15 +218,15 @@ void Runtime::DestroyAgents() {
   std::for_each(cpu_agents_.begin(), cpu_agents_.end(), DeleteObject());
   cpu_agents_.clear();
 
-  blit_agent_ = NULL;
+  region_gpu_ = NULL;
 
   system_regions_fine_.clear();
   system_regions_coarse_.clear();
 }
 
-void Runtime::SetLinkCount(size_t num_link) {
-  const size_t last_index = GetIndexLinkInfo(0, num_link);
-  link_matrix_.resize(last_index);
+void Runtime::SetLinkCount(size_t num_nodes) {
+  num_nodes_ = num_nodes;
+  link_matrix_.resize(num_nodes * num_nodes);
 }
 
 void Runtime::RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
@@ -277,9 +249,7 @@ const Runtime::LinkInfo Runtime::GetLinkInfo(uint32_t node_id_from,
 }
 
 uint32_t Runtime::GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to) {
-  const uint32_t node_id_max = std::max(node_id_from, node_id_to) - 1;
-  const uint32_t node_id_min = std::min(node_id_from, node_id_to);
-  return ((node_id_max * (node_id_max + 1) / 2) + node_id_min);
+  return ((node_id_from * num_nodes_) + node_id_to);
 }
 
 hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
@@ -346,61 +316,76 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
-  assert(dst != NULL && src != NULL && size != 0);
-
+  // Choose agents from pointer info
   bool is_src_system = false;
   bool is_dst_system = false;
-  const uintptr_t src_uptr = reinterpret_cast<uintptr_t>(src);
-  const uintptr_t dst_uptr = reinterpret_cast<uintptr_t>(dst);
+  core::Agent* src_agent;
+  core::Agent* dst_agent;
 
-  if ((reinterpret_cast<amd::GpuAgentInt*>(blit_agent_)->profile() ==
-       HSA_PROFILE_FULL)) {
-    is_src_system = (src_uptr < end_svm_address_);
-    is_dst_system = (dst_uptr < end_svm_address_);
-  } else {
-    is_src_system =
-        ((src_uptr < start_svm_address_) || (src_uptr >= end_svm_address_));
-    is_dst_system =
-        ((dst_uptr < start_svm_address_) || (dst_uptr >= end_svm_address_));
-
-    if ((is_src_system && !is_dst_system) ||
-        (!is_src_system && is_dst_system)) {
-      // Use staging buffer or pin if either src or dst is gpuvm and the other
-      // is system memory allocated via OS or C/C++ allocator.
-      return CopyMemoryHostAlloc(dst, src, size, is_dst_system);
+  // Fetch ownership
+  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent) {
+    hsa_amd_pointer_info_t info;
+    info.size = sizeof(info);
+    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr);
+    if (err != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
+    ptrdiff_t endPtr = (ptrdiff_t)ptr + size;
+    if (info.agentBaseAddress <= ptr &&
+        endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+      agent = core::Agent::Convert(info.agentOwner);
+      return agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice;
+    } else {
+      agent = cpu_agents_[0];
+      return true;
     }
-  }
+  };
 
+  is_src_system = is_system_mem(const_cast<void*>(src), src_agent);
+  is_dst_system = is_system_mem(dst, dst_agent);
+
+  // CPU-CPU
   if (is_src_system && is_dst_system) {
-    memmove(dst, src, size);
+    memcpy(dst, src, size);
     return HSA_STATUS_SUCCESS;
   }
 
-  return blit_agent_->DmaCopy(dst, src, size);
-}
+  // Same GPU
+  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, src, size);
 
-hsa_status_t Runtime::CopyMemoryHostAlloc(void* dst, const void* src,
-                                          size_t size, bool dst_malloc) {
-  void* usrptr = (dst_malloc) ? dst : const_cast<void*>(src);
-  void* agent_ptr = NULL;
-
-  hsa_agent_t blit_agent = core::Agent::Convert(blit_agent_);
-
+  // GPU-CPU
+  // Must ensure that system memory is visible to the GPU during the copy.
   const amd::MemoryRegion* system_region =
-      reinterpret_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
-  hsa_status_t stat =
-      system_region->Lock(1, &blit_agent, usrptr, size, &agent_ptr);
+      static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
 
-  if (stat != HSA_STATUS_SUCCESS) {
-    return stat;
-  }
+  const auto& locked_copy = [&](void* ptr, core::Agent* locking_agent, bool locking_src) {
+    void* gpuPtr;
+    hsa_agent_t agent = locking_agent->public_handle();
+    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &gpuPtr);
+    if (err != HSA_STATUS_SUCCESS) return err;
+    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(ptr); });
+    if (locking_src)
+      return locking_agent->DmaCopy(dst, gpuPtr, size);
+    else
+      return locking_agent->DmaCopy(gpuPtr, src, size);
+  };
 
-  stat = blit_agent_->DmaCopy((dst_malloc) ? agent_ptr : dst,
-                              (dst_malloc) ? src : agent_ptr, size);
+  if (is_src_system) return locked_copy(const_cast<void*>(src), dst_agent, true);
+  if (is_dst_system) return locked_copy(dst, src_agent, false);
 
-  system_region->Unlock(usrptr);
-
-  return stat;
+  /*
+  GPU-GPU - functional support, not a performance path.
+  
+  This goes through system memory because we have to support copying between non-peer GPUs
+  and we can't use P2P pointers even if the GPUs are peers.  Because hsa_amd_agents_allow_access
+  requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
+  would remain mapped for the duration of the copy.
+  */
+  void* temp = nullptr;
+  system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
+  MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
+  hsa_status_t err = src_agent->DmaCopy(temp, src, size);
+  if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
+  return err;
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
@@ -413,9 +398,11 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
   const bool src_gpu =
       (src_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   if (dst_gpu || src_gpu) {
-    core::Agent& copy_agent = (src_gpu) ? src_agent : dst_agent;
-    return copy_agent.DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
-                              completion_signal);
+    core::Agent* copy_agent = (src_gpu) ? &src_agent : &dst_agent;
+    if (flag_.rev_copy_dir() && dst_gpu && src_gpu)
+      copy_agent = (copy_agent == &src_agent) ? &dst_agent : &src_agent;
+    return copy_agent->DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
+                               completion_signal);
   }
 
   // For cpu to cpu, fire and forget a copy thread.
@@ -578,6 +565,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
 
       setFlag(HSA_EXTENSION_AMD_PROFILER);
 
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_BUILD_VERSION: {
+      *(const char**)value = STRING(ROCR_BUILD_ID);
       break;
     }
     default:
@@ -1008,7 +999,7 @@ void Runtime::AsyncEventsLoop(void*) {
 }
 
 void Runtime::BindVmFaultHandler() {
-  if (core::g_use_interrupt_wait) {
+  if (core::g_use_interrupt_wait && !gpu_agents_.empty()) {
     // Create memory event with manual reset to avoid racing condition
     // with driver in case of multiple concurrent VM faults.
     vm_fault_event_ =
@@ -1171,19 +1162,12 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
 }
 
 Runtime::Runtime()
-    : blit_agent_(NULL),
+    : region_gpu_(nullptr),
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
       system_event_handler_user_data_(nullptr),
-      ref_count_(0) {
-  start_svm_address_ = 0;
-#if defined(HSA_LARGE_MODEL)
-  end_svm_address_ = UINT64_MAX;
-#else
-  end_svm_address_ = UINT32_MAX;
-#endif
-}
+      ref_count_(0) {}
 
 hsa_status_t Runtime::Load() {
   flag_.Refresh();
@@ -1193,15 +1177,14 @@ hsa_status_t Runtime::Load() {
   if (!amd::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+  BindVmFaultHandler();
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
 
   // Load extensions
   LoadExtensions();
 
-  // Load tools libraries
-  LoadTools();
-
+  // Initialize per GPU scratch, blits, and trap handler
   for (core::Agent* agent : gpu_agents_) {
     hsa_status_t status =
         reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
@@ -1210,6 +1193,9 @@ hsa_status_t Runtime::Load() {
       return status;
     }
   }
+
+  // Load tools libraries
+  LoadTools();
 
   return HSA_STATUS_SUCCESS;
 }
@@ -1232,6 +1218,10 @@ void Runtime::Unload() {
   }
   core::InterruptSignal::DestroyEvent(vm_fault_event_);
   vm_fault_event_ = nullptr;
+
+  SharedSignalPool.clear();
+
+  EventPool.clear();
 
   DestroyAgents();
 
@@ -1454,6 +1444,22 @@ hsa_status_t Runtime::SetCustomSystemEventHandler(hsa_amd_system_event_callback_
     system_event_handler_user_data_ = data;
     return HSA_STATUS_SUCCESS;
   }
+}
+
+hsa_status_t Runtime::SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
+                                                     void* user_data) {
+  if (internal_queue_create_notifier_) {
+    return HSA_STATUS_ERROR;
+  } else {
+    internal_queue_create_notifier_ = callback;
+    internal_queue_create_notifier_user_data_ = user_data;
+    return HSA_STATUS_SUCCESS;
+  }
+}
+
+void Runtime::InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent) {
+  if (internal_queue_create_notifier_)
+    internal_queue_create_notifier_(queue, agent, internal_queue_create_notifier_user_data_);
 }
 
 }  // namespace core

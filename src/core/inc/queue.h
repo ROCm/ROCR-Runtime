@@ -130,7 +130,7 @@ class LocalQueue {
   SharedQueue* queue() const { return local_queue_.shared_object(); }
 
  private:
-  Shared<SharedQueue, AMD_QUEUE_ALIGN_BYTES> local_queue_;
+  Shared<SharedQueue> local_queue_;
 };
 
 /// @brief Class Queue which encapsulate user mode queues and

@@ -47,12 +47,14 @@
 
 #include <map>
 #include <functional>
+#include <memory>
+#include <vector>
+#include <utility>
 
 #include "hsakmt.h"
 
 #include "core/common/shared.h"
 
-#include "core/inc/runtime.h"
 #include "core/inc/checked.h"
 #include "core/inc/exceptions.h"
 
@@ -111,16 +113,36 @@ static_assert(std::is_standard_layout<SharedSignal>::value,
 static_assert(std::is_trivially_destructible<SharedSignal>::value,
               "SharedSignal must not be modified on delete for IPC use.");
 
+/// @brief Pool class for SharedSignal suitable for use with Shared.
+class SharedSignalPool_t : private BaseShared {
+ public:
+  SharedSignalPool_t() : block_size_(minblock_) {}
+  ~SharedSignalPool_t() { clear(); }
+
+  SharedSignal* alloc();
+  void free(SharedSignal* ptr);
+  void clear();
+
+ private:
+  static const size_t minblock_ = 4096 / sizeof(SharedSignal);
+  KernelMutex lock_;
+  std::vector<SharedSignal*> free_list_;
+  std::vector<std::pair<void*, size_t>> block_list_;
+  size_t block_size_;
+};
+
 class LocalSignal {
  public:
+  // Temporary, for legacy tools lib support.
   explicit LocalSignal(hsa_signal_value_t initial_value) {
     local_signal_.shared_object()->amd_signal.value = initial_value;
   }
+  LocalSignal(hsa_signal_value_t initial_value, bool exportable);
 
   SharedSignal* signal() const { return local_signal_.shared_object(); }
 
  private:
-  Shared<SharedSignal, AMD_SIGNAL_ALIGN_BYTES> local_signal_;
+  Shared<SharedSignal, SharedSignalPool_t> local_signal_;
 };
 
 /// @brief An abstract base class which helps implement the public hsa_signal_t
@@ -547,6 +569,12 @@ class SignalGroup : public Checked<0xBD35DDDD578F091> {
   const uint32_t count;
   DISALLOW_COPY_AND_ASSIGN(SignalGroup);
 };
+
+class SignalDeleter {
+ public:
+  void operator()(Signal* ptr) { ptr->DestroySignal(); }
+};
+using unique_signal_ptr = ::std::unique_ptr<::core::Signal, SignalDeleter>;
 
 }  // namespace core
 #endif  // header guard

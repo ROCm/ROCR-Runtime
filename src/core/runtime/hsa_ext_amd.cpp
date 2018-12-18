@@ -211,7 +211,7 @@ hsa_status_t hsa_amd_memory_fill(void* ptr, uint32_t value, size_t count) {
   TRY;
   IS_OPEN();
 
-  if (ptr == NULL) {
+  if ((ptr == nullptr) || (uintptr_t(ptr) % 4 != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -921,6 +921,14 @@ hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
   }
 
   return cmd_queue->SetPriority(priority_it->second);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
+                                                   void* user_data) {
+  TRY;
+  IS_OPEN();
+  return core::Runtime::runtime_singleton_->SetInternalQueueCreateNotifier(callback, user_data);
   CATCH;
 }
 

@@ -41,9 +41,34 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/runtime.h"
 #include "core/util/timer.h"
+#include "core/util/locks.h"
 
 namespace core {
+
+HsaEvent* InterruptSignal::EventPool::alloc() {
+  ScopedAcquire<KernelMutex> lock(&lock_);
+  if (events_.empty()) {
+    if (!allEventsAllocated) {
+      HsaEvent* evt = InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
+      if (evt == nullptr) allEventsAllocated = true;
+      return evt;
+    }
+    return nullptr;
+  }
+  HsaEvent* ret = events_.back().release();
+  events_.pop_back();
+  return ret;
+}
+
+void InterruptSignal::EventPool::free(HsaEvent* evt) {
+  if (evt == nullptr) return;
+  ScopedAcquire<KernelMutex> lock(&lock_);
+  events_.push_back(unique_event_ptr(evt));
+}
+
+int InterruptSignal::rtti_id_ = 0;
 
 HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
   HsaEventDescriptor event_descriptor;
@@ -64,21 +89,19 @@ HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
   return ret;
 }
 
-int InterruptSignal::rtti_id_ = 0;
-
 void InterruptSignal::DestroyEvent(HsaEvent* evt) { hsaKmtDestroyEvent(evt); }
 
 InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value, HsaEvent* use_event)
-    : LocalSignal(initial_value), Signal(signal()) {
-  if (use_event != NULL) {
+    : LocalSignal(initial_value, false), Signal(signal()) {
+  if (use_event != nullptr) {
     event_ = use_event;
     free_event_ = false;
   } else {
-    event_ = CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
+    event_ = Runtime::runtime_singleton_->GetEventPool()->alloc();
     free_event_ = true;
   }
 
-  if (event_ != NULL) {
+  if (event_ != nullptr) {
     signal_.event_id = event_->EventId;
     signal_.event_mailbox_ptr = event_->EventData.HWData2;
   } else {
@@ -89,7 +112,7 @@ InterruptSignal::InterruptSignal(hsa_signal_value_t initial_value, HsaEvent* use
 }
 
 InterruptSignal::~InterruptSignal() {
-  if (free_event_) hsaKmtDestroyEvent(event_);
+  if (free_event_) Runtime::runtime_singleton_->GetEventPool()->free(event_);
 }
 
 hsa_signal_value_t InterruptSignal::LoadRelaxed() {
