@@ -408,7 +408,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
       ((IsSystem() && (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
        (agent.node_id() == owner()->node_id()))
           ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
-          : (IsSystem() || (IsPublic() && link_info.num_hop > 0))
+          : (IsSystem() || (IsLocalMemory() && link_info.num_hop > 0))
                 ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
                 : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
 
@@ -502,7 +502,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
   // If this is a local memory region, the owning gpu always needs to be in
   // the whitelist.
-  if (IsPublic() &&
+  if (IsLocalMemory() &&
       std::find(whitelist_nodes.begin(), whitelist_nodes.end(), owner()->node_id()) ==
           whitelist_nodes.end()) {
     whitelist_nodes.push_back(owner()->node_id());
@@ -523,10 +523,6 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   }
 
   lock.Release();
-
-  for (GpuAgentInt* gpu : whitelist_gpus) {
-    gpu->PreloadBlits();
-  }
 
   return HSA_STATUS_SUCCESS;
 }
@@ -596,10 +592,6 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
         *agent_ptr = reinterpret_cast<void*>(alternate_va);
       } else {
         *agent_ptr = host_ptr;
-      }
-
-      for (auto gpu : whitelist_gpus) {
-        static_cast<GpuAgentInt*>(gpu)->PreloadBlits();
       }
 
       return HSA_STATUS_SUCCESS;

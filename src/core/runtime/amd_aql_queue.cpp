@@ -80,7 +80,7 @@ int AqlQueue::rtti_id_ = 0;
 AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(),
-      LocalSignal(0),
+      LocalSignal(0, false),
       DoorbellSignal(signal()),
       ring_buf_(nullptr),
       ring_buf_alloc_bytes_(0),
@@ -1054,12 +1054,12 @@ void AqlQueue::InitScratchSRD() {
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
   // Scratch Size per Wave is specified in terms of kilobytes
   uint32_t wave_size = agent_props.WaveFrontSize;
-  tmpring_size.bits.WAVESIZE =
-        (((wave_size * queue_scratch_.size_per_thread) + 1023) / 1024);
+  uint32_t wave_scratch = (((wave_size * queue_scratch_.size_per_thread) + 1023) / 1024);
+  tmpring_size.bits.WAVESIZE = wave_scratch;
+  assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
   uint32_t num_waves = (queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024));
   tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
-
   return;
 }
 }  // namespace amd

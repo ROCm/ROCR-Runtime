@@ -121,6 +121,12 @@ static __forceinline unsigned long long int strtoull(const char* str,
   } while (false)
 #endif
 
+#ifdef NDEBUG
+#define ifdebug if (false)
+#else
+#define ifdebug if (true)
+#endif
+
 // A macro to disallow the copy and move constructor and operator= functions
 #define DISALLOW_COPY_AND_ASSIGN(TypeName)                                                         \
   TypeName(const TypeName&) = delete;                                                              \

@@ -62,11 +62,12 @@
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
 #include "core/util/os.h"
-#include "hsa_ext_image.h"
+#include "inc/hsa_ext_image.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
+#define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 
 extern core::HsaApiTable hsa_internal_api_table_;
 
@@ -461,8 +462,7 @@ hsa_status_t GpuAgent::VisitRegion(bool include_peer,
                                    void* data) const {
   if (include_peer) {
     // Only expose system, local, and LDS memory of the blit agent.
-    if (this->node_id() ==
-        core::Runtime::runtime_singleton_->blit_agent()->node_id()) {
+    if (this->node_id() == core::Runtime::runtime_singleton_->region_gpu()->node_id()) {
       hsa_status_t stat = VisitRegion(regions_, callback, data);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
@@ -513,6 +513,9 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
   // Disabled intercept of internal queues pending tools updates.
   core::Queue* queue = nullptr;
   QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue);
+  if (queue != nullptr)
+    core::Runtime::runtime_singleton_->InternalQueueCreateNotify(core::Queue::Convert(queue),
+                                                                 this->public_handle());
   return queue;
 }
 
@@ -946,14 +949,18 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 }
 
 void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
+  assert(scratch.queue_base == nullptr && "AcquireQueueScratch called while holding scratch.");
   bool need_queue_scratch_base = (isa_->GetMajorVersion() > 8);
 
   if (scratch.size == 0) {
     scratch.size = queue_scratch_len_;
     scratch.size_per_thread = scratch_per_thread_;
   }
-
   scratch.retry = false;
+
+  // Fail scratch allocation if per wave limits are exceeded.
+  uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
+  if (size_per_wave > MAX_WAVE_SCRATCH) return;
 
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   // Limit to 1/8th of scratch pool for small scratch and 1/4 of that for a single queue.
@@ -1000,7 +1007,6 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
     debug_print("Failed to map requested scratch - reducing queue occupancy.\n");
   uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
   uint64_t total_waves = scratch.size / size_per_wave;
   uint64_t waves_per_cu = total_waves / num_cus;
   while (waves_per_cu != 0) {
@@ -1043,6 +1049,7 @@ void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
     }
   }
   scratch_pool_.free(scratch.queue_base);
+  scratch.queue_base = nullptr;
 
   if (scratch.large) scratch_used_large_ -= scratch.size;
 
@@ -1058,6 +1065,11 @@ void GpuAgent::TranslateTime(core::Signal* signal,
   if (t1_.GPUClockCounter < signal->signal_.end_ts) {
     SyncClocks();
   }
+
+  if ((signal->signal_.start_ts == 0) || (signal->signal_.end_ts == 0) ||
+      (signal->signal_.start_ts > t1_.GPUClockCounter) ||
+      (signal->signal_.end_ts > t1_.GPUClockCounter))
+    debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 
   time.start = uint64_t(
       (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /

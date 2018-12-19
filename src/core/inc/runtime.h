@@ -56,6 +56,7 @@
 #include "core/inc/exceptions.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
+#include "core/inc/interrupt_signal.h"
 #include "core/util/flag.h"
 #include "core/util/locks.h"
 #include "core/util/os.h"
@@ -104,6 +105,9 @@ class Runtime {
   /// @brief Open connection to kernel driver and increment reference count.
   static hsa_status_t Acquire();
 
+  /// @brief Decrement reference count and close connection to kernel driver.
+  static hsa_status_t Release();
+
   /// @brief Checks if connection to kernel driver is opened.
   /// @retval True if the connection to kernel driver is opened.
   static bool IsOpen();
@@ -113,9 +117,6 @@ class Runtime {
 
   /// @brief Singleton object of the runtime.
   static Runtime* runtime_singleton_;
-
-  /// @brief Decrement reference count and close connection to kernel driver.
-  hsa_status_t Release();
 
   /// @brief Insert agent into agent list ::agents_.
   /// @param [in] agent Pointer to the agent object.
@@ -290,7 +291,7 @@ class Runtime {
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
-  Agent* blit_agent() { return blit_agent_; }
+  Agent* region_gpu() { return region_gpu_; }
 
   const std::vector<const MemoryRegion*>& system_regions_fine() const {
     return system_regions_fine_;
@@ -327,6 +328,15 @@ class Runtime {
   AMD::callback_t<hsa_amd_system_event_callback_t> GetCustomSystemEventHandler() {
     return system_event_handler_;
   }
+
+  hsa_status_t SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
+                                              void* user_data);
+
+  void InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent);
+
+  SharedSignalPool_t* GetSharedSignalPool() { return &SharedSignalPool; }
+
+  InterruptSignal::EventPool* GetEventPool() { return &EventPool; }
 
  protected:
   static void AsyncEventsLoop(void*);
@@ -409,29 +419,11 @@ class Runtime {
   // @brief Binds virtual memory access fault handler to this node.
   void BindVmFaultHandler();
 
-  /// @brief Blocking memory copy from src to dst. One of the src or dst
-  /// is user pointer. A particular setup need to be made if the DMA queue
-  /// for the memory copy belongs to a dGPU agent. E.g: pin the user pointer
-  /// before copying, or using a staging buffer.
-  ///
-  /// @param [in] dst Memory address of the destination.
-  /// @param [in] src Memory address of the source.
-  /// @param [in] size Copy size in bytes.
-  /// @param [in] dst_malloc If true, then @p dst is the user pointer. Otherwise
-  /// @p src is the user pointer.
-  ///
-  /// @retval ::HSA_STATUS_SUCCESS if memory copy is successful and completed.
-  hsa_status_t CopyMemoryHostAlloc(void* dst, const void* src, size_t size,
-                                   bool dst_malloc);
-
   /// @brief Get the index of ::link_matrix_.
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
   /// @retval Index in ::link_matrix_.
   uint32_t GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
-
-  // Mutex object to protect multithreaded access to ::Acquire and ::Release.
-  KernelMutex kernel_lock_;
 
   // Mutex object to protect multithreaded access to ::allocation_map_,
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
@@ -481,8 +473,8 @@ class Runtime {
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;
 
-  // Pointer to DMA agent.
-  Agent* blit_agent_;
+  // Deprecated HSA Region API GPU (for legacy APU support only)
+  Agent* region_gpu_;
 
   AsyncEventsControl async_events_control_;
 
@@ -490,19 +482,11 @@ class Runtime {
 
   AsyncEvents new_async_events_;
 
-  // Starting address of SVM address space.
-  // On APU the cpu and gpu could access the area inside starting and end of
-  // the SVM address space.
-  // On dGPU, only the gpu is guaranteed to have access to the area inside the
-  // SVM address space, since it maybe backed by private gpu VRAM.
-  uintptr_t start_svm_address_;
-
-  // End address of SVM address space.
-  // start_svm_address_ + size
-  uintptr_t end_svm_address_;
-
   // System clock frequency.
   uint64_t sys_clock_freq_;
+
+  // Number of Numa Nodes
+  size_t num_nodes_;
 
   // @brief AMD HSA event to monitor for virtual memory access fault.
   HsaEvent* vm_fault_event_;
@@ -515,11 +499,22 @@ class Runtime {
 
   void* system_event_handler_user_data_;
 
+  // Internal queue creation notifier
+  AMD::callback_t<hsa_amd_runtime_queue_notifier> internal_queue_create_notifier_;
+
+  void* internal_queue_create_notifier_user_data_;
+
   // Holds reference count to runtime object.
   std::atomic<uint32_t> ref_count_;
 
   // Track environment variables.
   Flag flag_;
+
+  // Pools memory for SharedSignal (Signal ABI blocks)
+  SharedSignalPool_t SharedSignalPool;
+
+  // Pools KFD Events for InterruptSignal
+  InterruptSignal::EventPool EventPool;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
