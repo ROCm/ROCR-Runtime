@@ -44,9 +44,7 @@ uint64_t RoundToPowerOf2(uint64_t val) {
   return val;
 }
 
-bool WaitOnValue(const volatile unsigned int *buf, unsigned int value) {
-    unsigned int  timeOut = g_TestTimeOut;
-
+bool WaitOnValue(const volatile unsigned int *buf, unsigned int value, unsigned int timeOut) {
     while (timeOut > 0 && *buf != value) {
         Delay(1);
 
