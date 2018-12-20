@@ -64,7 +64,7 @@ class BaseQueue {
     /** Wait for all the packets submitted to the queue to be consumed. (i.e. wait until RPTR=WPTR).
      *  Note that all packets being consumed is not the same as all packets being processed.
      */
-    virtual void Wait4PacketConsumption(HsaEvent *event = NULL);
+    virtual void Wait4PacketConsumption(HsaEvent *event = NULL, unsigned int timeOut = g_TestTimeOut);
     /** @brief Place packet and submit it in one function
      */
     virtual void PlaceAndSubmitPacket(const BasePacket &packet);

@@ -48,7 +48,7 @@ class PM4Queue : public BaseQueue {
      *  1) Less CPU usage (process can sleep, waiting for interrupt).
      *  2) Lower latency (GPU only updates RPTR in memory periodically).
      */
-    virtual void Wait4PacketConsumption(HsaEvent *event = NULL);
+    virtual void Wait4PacketConsumption(HsaEvent *event = NULL, unsigned int timeOut = g_TestTimeOut);
 
  protected:
     virtual PACKETTYPE PacketTypeSupported() { return PACKETTYPE_PM4; }
