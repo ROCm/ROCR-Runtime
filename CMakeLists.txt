@@ -155,9 +155,10 @@ set ( CPACK_RESOURCE_FILE_LICENSE "${SOURCE_DIR}/LICENSE.md" )
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
-set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libpci3" )
+set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libnuma1, libpci3, zlib1g, libudev1" )
 
 # RPM package specific variables
+set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl-libs, pciutils-libs, libgcc" )
 set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 
