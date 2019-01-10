@@ -48,8 +48,11 @@ HSAKMT_STATUS CreateQueueTypeEvent(bool ManualReset, bool IsSignaled, unsigned i
 
 bool is_dgpu();
 bool isTonga(const HsaNodeProperties *props);
-unsigned int FamilyIdFromNode(const HsaNodeProperties * props);
+unsigned int FamilyIdFromNode(const HsaNodeProperties *props);
 
+void GetSdmaInfo(const HsaNodeProperties *props,
+                 unsigned int *p_num_sdma_engines,
+                 unsigned int *p_num_sdma_queues_per_engine);
 
 class HsaMemoryBuffer {
  public:
