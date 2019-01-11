@@ -22,6 +22,7 @@
  */
 
 #include "KFDDBGTest.hpp"
+#include <sys/ptrace.h>
 #include "KFDQMTest.hpp"
 #include "PM4Queue.hpp"
 #include "PM4Packet.hpp"
@@ -62,6 +63,32 @@ trap_present(1)\n\
     \n\
 end\n\
 ";
+
+static const char* iterate_isa_gfx9 = \
+"\
+shader iterate_isa\n\
+asic(GFX9)\n\
+type(CS)\n\
+/*copy the parameters from scalar registers to vector registers*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+    flat_load_dword v4, v[0:1] slc    /*load target iteration value*/\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    v_mov_b32 v5, 0\n\
+LOOP:\n\
+    v_add_co_u32 v5, vcc, 1, v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    /*compare the result value (v5) to iteration value (v4), and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
+    v_cmp_lt_u32 vcc, v5, v4\n\
+    s_cbranch_vccnz LOOP\n\
+    flat_store_dword v[2,3], v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
 
 void KFDDBGTest::SetUp() {
     ROUTINE_START
@@ -173,3 +200,83 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
     }
     TEST_END
 }
+
+TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        HSAuint32 Flags = HSA_DBG_NODE_CONTROL_NO_GRACE_PERIOD;
+        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+        HsaMemoryBuffer iterateBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer resultBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+
+        unsigned int* iter = iterateBuf.As<unsigned int*>();
+        unsigned int* result = resultBuf.As<unsigned int*>();
+
+        int suspendTimeout = 500;
+        int syncStatus;
+
+        m_pIsaGen->CompileShader(iterate_isa_gfx9, "iterate_isa", isaBuffer);
+
+        PM4Queue queue1;
+
+        ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
+
+        Dispatch *dispatch1;
+
+        dispatch1 = new Dispatch(isaBuffer);
+
+        dispatch1->SetArgs(&iter[0], &result[0]);
+        dispatch1->SetDim(1, 1, 1);
+
+        // Need a loop large enough so we don't finish before we call Suspend.
+        //  150000000 takes between 5 and 6 seconds, which is long enough
+        //  to test the suspend/resume.
+        iter[0] = 150000000;
+
+        ASSERT_EQ(ptrace(PTRACE_TRACEME, 0, 0, 0), 0);
+        ASSERT_SUCCESS(hsaKmtEnableDebugTrap(defaultGPUNode, INVALID_QUEUEID));
+
+        // Submit the shader, queue1
+        dispatch1->Submit(queue1);
+
+        ASSERT_SUCCESS(hsaKmtNodeSuspend(INVALID_PID,
+                    defaultGPUNode,
+                    Flags));
+
+        syncStatus = dispatch1->SyncWithStatus(suspendTimeout);
+        ASSERT_NE(syncStatus, HSAKMT_STATUS_SUCCESS);
+
+        ASSERT_NE(iter[0], result[0]);
+
+        // The shader hasn't finished, we will wait for 20 seconds,
+        // and then check if it has finished.  If it was suspended,
+        // it should not have finished.
+        Delay(20000);
+
+        // Check that the shader has not finished yet.
+        syncStatus = dispatch1->SyncWithStatus(suspendTimeout);
+        ASSERT_NE(syncStatus, HSAKMT_STATUS_SUCCESS);
+
+        ASSERT_NE(iter[0], result[0]);
+
+        ASSERT_SUCCESS(hsaKmtNodeResume(INVALID_PID,
+                    defaultGPUNode,
+                    Flags));
+
+        dispatch1->Sync();
+        ASSERT_EQ(iter[0], result[0]);
+
+        EXPECT_SUCCESS(queue1.Destroy());
+
+        ASSERT_SUCCESS(hsaKmtDisableDebugTrap(defaultGPUNode));
+
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x" << m_FamilyId << "." << std::endl;
+    }
+    TEST_END
+}
+
