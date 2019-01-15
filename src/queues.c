@@ -263,12 +263,12 @@ void clear_process_doorbells(void)
 }
 
 static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
-				      HSAuint64 doorbell_offset)
+				      HSAuint64 doorbell_mmap_offset)
 {
 	void *ptr;
 
 	ptr = mmap(0, doorbells[NodeId].size, PROT_READ|PROT_WRITE,
-		   MAP_SHARED, kfd_fd, doorbell_offset);
+		   MAP_SHARED, kfd_fd, doorbell_mmap_offset);
 
 	if (ptr == MAP_FAILED)
 		return HSAKMT_STATUS_ERROR;
@@ -279,12 +279,12 @@ static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
 }
 
 static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
-				       HSAuint64 doorbell_offset)
+				       HSAuint64 doorbell_mmap_offset)
 {
 	void *ptr;
 
 	ptr = fmm_allocate_doorbell(gpu_id, doorbells[NodeId].size,
-				    doorbell_offset);
+				doorbell_mmap_offset);
 
 	if (!ptr)
 		return HSAKMT_STATUS_ERROR;
@@ -301,7 +301,7 @@ static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
 }
 
 static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
-				  HSAuint64 doorbell_offset)
+				  HSAuint64 doorbell_mmap_offset)
 {
 	HSAKMT_STATUS status = HSAKMT_STATUS_SUCCESS;
 
@@ -315,16 +315,16 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 			      &doorbells[NodeId]);
 
 	if (doorbells[NodeId].use_gpuvm) {
-		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_offset);
+		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_mmap_offset);
 		if (status != HSAKMT_STATUS_SUCCESS) {
 			/* Fall back to the old method if KFD doesn't
 			 * support doorbells in GPUVM
 			 */
 			doorbells[NodeId].use_gpuvm = false;
-			status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
+			status = map_doorbell_apu(NodeId, gpu_id, doorbell_mmap_offset);
 		}
 	} else
-		status = map_doorbell_apu(NodeId, gpu_id, doorbell_offset);
+		status = map_doorbell_apu(NodeId, gpu_id, doorbell_mmap_offset);
 
 	if (status != HSAKMT_STATUS_SUCCESS)
 		doorbells[NodeId].size = 0;
