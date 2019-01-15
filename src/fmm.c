@@ -1369,7 +1369,7 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 }
 
 void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
-			    uint64_t doorbell_offset)
+			    uint64_t doorbell_mmap_offset)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
@@ -1410,7 +1410,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		void *ret = mmap(mem, MemorySizeInBytes,
 				 PROT_READ | PROT_WRITE,
 				 MAP_SHARED | MAP_FIXED, kfd_fd,
-				 doorbell_offset);
+				 doorbell_mmap_offset);
 		if (ret == MAP_FAILED) {
 			__fmm_release(vm_obj, aperture);
 			return NULL;
