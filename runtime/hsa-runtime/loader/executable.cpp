@@ -1018,71 +1018,6 @@ static uint32_t NextCodeObjectNum()
   return dumpN++;
 }
 
-static std::string ConvertOldTargetNameToNew(
-    const std::string &OldName, bool IsFinalizer, uint32_t EFlags) {
-  std::string NewName = "";
-
-  // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
-  // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
-  if (OldName == "AMD:AMDGPU:7:0:0")
-    NewName = "amdgcn-amd-amdhsa--gfx700";
-  else if (OldName == "AMD:AMDGPU:7:0:1")
-    NewName = "amdgcn-amd-amdhsa--gfx701";
-  else if (OldName == "AMD:AMDGPU:7:0:2")
-    NewName = "amdgcn-amd-amdhsa--gfx702";
-  else if (OldName == "AMD:AMDGPU:7:0:3")
-    NewName = "amdgcn-amd-amdhsa--gfx703";
-  else if (OldName == "AMD:AMDGPU:7:0:4")
-    NewName = "amdgcn-amd-amdhsa--gfx704";
-  else if (OldName == "AMD:AMDGPU:8:0:0")
-    NewName = "amdgcn-amd-amdhsa--gfx800";
-  else if (OldName == "AMD:AMDGPU:8:0:1")
-    NewName = "amdgcn-amd-amdhsa--gfx801";
-  else if (OldName == "AMD:AMDGPU:8:0:2")
-    NewName = "amdgcn-amd-amdhsa--gfx802";
-  else if (OldName == "AMD:AMDGPU:8:0:3")
-    NewName = "amdgcn-amd-amdhsa--gfx803";
-  else if (OldName == "AMD:AMDGPU:8:0:4")
-    NewName = "amdgcn-amd-amdhsa--gfx804";
-  else if (OldName == "AMD:AMDGPU:8:1:0")
-    NewName = "amdgcn-amd-amdhsa--gfx810";
-  else if (OldName == "AMD:AMDGPU:9:0:0")
-    NewName = "amdgcn-amd-amdhsa--gfx900";
-  else if (OldName == "AMD:AMDGPU:9:0:1")
-    NewName = "amdgcn-amd-amdhsa--gfx900";
-  else if (OldName == "AMD:AMDGPU:9:0:2")
-    NewName = "amdgcn-amd-amdhsa--gfx902";
-  else if (OldName == "AMD:AMDGPU:9:0:3")
-    NewName = "amdgcn-amd-amdhsa--gfx902";
-  else if (OldName == "AMD:AMDGPU:9:0:4")
-    NewName = "amdgcn-amd-amdhsa--gfx904";
-  else if (OldName == "AMD:AMDGPU:9:0:6")
-    NewName = "amdgcn-amd-amdhsa--gfx906";
-  else
-    assert(false && "Unhandled target");
-
-  if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
-    NewName = NewName + "+xnack";
-  } else {
-    if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
-      NewName = NewName + "+xnack";
-    } else {
-      if (OldName == "AMD:AMDGPU:8:0:1")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:8:1:0")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:1")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:2")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:3")
-        NewName = NewName + "+xnack";
-    }
-  }
-
-  return NewName;
-}
-
 hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
@@ -1175,32 +1110,28 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   std::string codeIsa;
-  if (!code->GetNoteIsa(codeIsa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+  if (!code->GetIsa(codeIsa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
 
   uint32_t majorVersion, minorVersion;
-  if (!code->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
+  if (!code->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion != 1 && majorVersion != 2) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+  if (majorVersion != 1 && majorVersion != 2 && majorVersion != 3) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
   if (agent.handle == 0 && majorVersion == 1) { return HSA_STATUS_ERROR_INVALID_AGENT; }
 
-  bool IsFinalizer = true;
   uint32_t codeHsailMajor;
   uint32_t codeHsailMinor;
   hsa_profile_t codeProfile;
   hsa_machine_model_t codeMachineModel;
   hsa_default_float_rounding_mode_t codeRoundingMode;
   if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor, &codeProfile, &codeMachineModel, &codeRoundingMode)) {
-    // Only finalizer generated the "HSAIL" note.
-    IsFinalizer = false;
     codeProfile = HSA_PROFILE_FULL;
   }
   if (profile_ != codeProfile) {
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
 
-  codeIsa = ConvertOldTargetNameToNew(codeIsa, IsFinalizer, code->EFlags());
   hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
   if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
 
@@ -1368,7 +1299,34 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
   if (!address) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
 
   SymbolImpl *symbol = nullptr;
-  if (sym->IsVariableSymbol()) {
+  if (string_ends_with(sym->GetSymbolName(), ".kd")) {
+    // V3.
+    llvm::amdhsa::kernel_descriptor_t kd;
+    sym->GetSection()->getData(sym->SectionOffset(), &kd, sizeof(kd));
+
+    uint32_t kernarg_segment_size = 0;      // FIXME.
+    uint32_t kernarg_segment_alignment = 0; // FIXME.
+    uint32_t group_segment_size = kd.group_segment_fixed_size;
+    uint32_t private_segment_size = kd.private_segment_fixed_size;
+    bool is_dynamic_callstack = false;
+
+    uint64_t size = sym->Size();
+
+    KernelSymbol *kernel_symbol = new KernelSymbol(true,
+                                    sym->GetModuleName(),
+                                    sym->GetSymbolName(),
+                                    sym->Linkage(),
+                                    true, // sym->IsDefinition()
+                                    kernarg_segment_size,
+                                    kernarg_segment_alignment,
+                                    group_segment_size,
+                                    private_segment_size,
+                                    is_dynamic_callstack,
+                                    size,
+                                    64,
+                                    address);
+    symbol = kernel_symbol;
+  } else if (sym->IsVariableSymbol()) {
     symbol = new VariableSymbol(true,
                        sym->GetModuleName(),
                        sym->GetSymbolName(),
@@ -1427,37 +1385,11 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
       uint64_t target_address = sym->GetSection()->addr() + sym->SectionOffset() + ((size_t)(&((amd_kernel_code_t*)0)->runtime_loader_kernel_symbol));
       uint64_t source_value = (uint64_t) (uintptr_t) &kernel_symbol->debug_info;
       SymbolSegment(agent, sym)->Copy(target_address, &source_value, sizeof(source_value));
-  } else if (string_ends_with(sym->GetSymbolName(), ".kd")) {
-    // V3.
-    llvm::amdhsa::kernel_descriptor_t kd;
-    sym->GetSection()->getData(sym->SectionOffset(), &kd, sizeof(kd));
-
-    uint32_t kernarg_segment_size = 0;      // FIXME.
-    uint32_t kernarg_segment_alignment = 0; // FIXME.
-    uint32_t group_segment_size = kd.group_segment_fixed_size;
-    uint32_t private_segment_size = kd.private_segment_fixed_size;
-    bool is_dynamic_callstack = false;
-
-    uint64_t size = sym->Size();
-
-    KernelSymbol *kernel_symbol = new KernelSymbol(true,
-                                    sym->GetModuleName(),
-                                    sym->GetSymbolName(),
-                                    sym->Linkage(),
-                                    true, // sym->IsDefinition()
-                                    kernarg_segment_size,
-                                    kernarg_segment_alignment,
-                                    group_segment_size,
-                                    private_segment_size,
-                                    is_dynamic_callstack,
-                                    size,
-                                    64,
-                                    address);
-    symbol = kernel_symbol;
   } else {
     assert(!"Unexpected symbol type in LoadDefinitionSymbol");
     return HSA_STATUS_ERROR;
   }
+
   assert(symbol);
   if (isAgent) {
     symbol->agent = agent;
@@ -1532,7 +1464,7 @@ hsa_status_t ExecutableImpl::ApplyRelocations(hsa_agent_t agent, amd::hsa::code:
     } else {
       // Dynamic relocations are supported starting code object v2.1.
       uint32_t majorVersion, minorVersion;
-      if (!c->GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
+      if (!c->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
         return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
       }
       if (majorVersion < 2) {
