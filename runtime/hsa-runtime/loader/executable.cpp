@@ -1148,6 +1148,11 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   if (status != HSA_STATUS_SUCCESS) return status;
 
   for (size_t i = 0; i < code->SymbolCount(); ++i) {
+    if (majorVersion >= 2 &&
+        code->GetSymbol(i)->elfSym()->type() != STT_AMDGPU_HSA_KERNEL &&
+        code->GetSymbol(i)->elfSym()->binding() == STB_LOCAL)
+      continue;
+
     status = LoadSymbol(agent, code->GetSymbol(i), majorVersion);
     if (status != HSA_STATUS_SUCCESS) { return status; }
   }
