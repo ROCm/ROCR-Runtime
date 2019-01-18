@@ -291,7 +291,7 @@ namespace code {
     bool AmdHsaCode::PullElf()
     {
       uint32_t majorVersion, minorVersion;
-      if (!GetNoteCodeObjectVersion(&majorVersion, &minorVersion)) {
+      if (!GetCodeObjectVersion(&majorVersion, &minorVersion)) {
         return false;
       }
       if (majorVersion >= 2) {
@@ -459,10 +459,17 @@ namespace code {
       AddAmdNote(NT_AMDGPU_HSA_CODE_OBJECT_VERSION, &desc, sizeof(desc));
     }
 
-    bool AmdHsaCode::GetNoteCodeObjectVersion(uint32_t* major, uint32_t* minor)
+    bool AmdHsaCode::GetCodeObjectVersion(uint32_t* major, uint32_t* minor)
     {
       amdgpu_hsa_note_code_object_version_t* desc;
-      if (!GetAmdNote(NT_AMDGPU_HSA_CODE_OBJECT_VERSION, &desc)) { return false; }
+      if (!GetAmdNote(NT_AMDGPU_HSA_CODE_OBJECT_VERSION, &desc)) {
+        if (img->ABIVersion() != 0 && img->ABIVersion() != 1)
+          return false;
+
+        *major = 3;
+        *minor = 0;
+        return true;
+      }
       *major = desc->major_version;
       *minor = desc->minor_version;
       return true;
@@ -530,22 +537,120 @@ namespace code {
       return true;
     }
 
-    bool AmdHsaCode::GetNoteIsa(std::string& isaName)
+    static std::string ConvertOldTargetNameToNew(
+        const std::string &OldName, bool IsFinalizer, uint32_t EFlags) {
+      std::string NewName = "";
+
+      // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
+      // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
+      if (OldName == "AMD:AMDGPU:7:0:0")
+        NewName = "amdgcn-amd-amdhsa--gfx700";
+      else if (OldName == "AMD:AMDGPU:7:0:1")
+        NewName = "amdgcn-amd-amdhsa--gfx701";
+      else if (OldName == "AMD:AMDGPU:7:0:2")
+        NewName = "amdgcn-amd-amdhsa--gfx702";
+      else if (OldName == "AMD:AMDGPU:7:0:3")
+        NewName = "amdgcn-amd-amdhsa--gfx703";
+      else if (OldName == "AMD:AMDGPU:7:0:4")
+        NewName = "amdgcn-amd-amdhsa--gfx704";
+      else if (OldName == "AMD:AMDGPU:8:0:0")
+        NewName = "amdgcn-amd-amdhsa--gfx800";
+      else if (OldName == "AMD:AMDGPU:8:0:1")
+        NewName = "amdgcn-amd-amdhsa--gfx801";
+      else if (OldName == "AMD:AMDGPU:8:0:2")
+        NewName = "amdgcn-amd-amdhsa--gfx802";
+      else if (OldName == "AMD:AMDGPU:8:0:3")
+        NewName = "amdgcn-amd-amdhsa--gfx803";
+      else if (OldName == "AMD:AMDGPU:8:0:4")
+        NewName = "amdgcn-amd-amdhsa--gfx804";
+      else if (OldName == "AMD:AMDGPU:8:1:0")
+        NewName = "amdgcn-amd-amdhsa--gfx810";
+      else if (OldName == "AMD:AMDGPU:9:0:0")
+        NewName = "amdgcn-amd-amdhsa--gfx900";
+      else if (OldName == "AMD:AMDGPU:9:0:1")
+        NewName = "amdgcn-amd-amdhsa--gfx900";
+      else if (OldName == "AMD:AMDGPU:9:0:2")
+        NewName = "amdgcn-amd-amdhsa--gfx902";
+      else if (OldName == "AMD:AMDGPU:9:0:3")
+        NewName = "amdgcn-amd-amdhsa--gfx902";
+      else if (OldName == "AMD:AMDGPU:9:0:4")
+        NewName = "amdgcn-amd-amdhsa--gfx904";
+      else if (OldName == "AMD:AMDGPU:9:0:6")
+        NewName = "amdgcn-amd-amdhsa--gfx906";
+      else
+        assert(false && "Unhandled target");
+
+      if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
+        NewName = NewName + "+xnack";
+      } else {
+        if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
+          NewName = NewName + "+xnack";
+        } else {
+          if (OldName == "AMD:AMDGPU:8:0:1")
+            NewName = NewName + "+xnack";
+          else if (OldName == "AMD:AMDGPU:8:1:0")
+            NewName = NewName + "+xnack";
+          else if (OldName == "AMD:AMDGPU:9:0:1")
+            NewName = NewName + "+xnack";
+          else if (OldName == "AMD:AMDGPU:9:0:2")
+            NewName = NewName + "+xnack";
+          else if (OldName == "AMD:AMDGPU:9:0:3")
+            NewName = NewName + "+xnack";
+        }
+      }
+
+      return NewName;
+    }
+
+    bool AmdHsaCode::GetIsa(std::string& isaName)
     {
-      std::string vendor_name, architecture_name;
-      uint32_t major_version, minor_version, stepping;
-      if (!GetNoteIsa(vendor_name, architecture_name, &major_version, &minor_version, &stepping)) { return false; }
       isaName.clear();
-      isaName += vendor_name;
-      isaName += ":";
-      isaName += architecture_name;
-      isaName += ":";
-      isaName += std::to_string(major_version);
-      isaName += ":";
-      isaName += std::to_string(minor_version);
-      isaName += ":";
-      isaName += std::to_string(stepping);
-      return true;
+
+      uint32_t codeObjectMajorVersion = 0;
+      uint32_t codeObjectMinorVersion = 0;
+
+      if (!GetCodeObjectVersion(&codeObjectMajorVersion, &codeObjectMinorVersion)) { return false; }
+      if (codeObjectMajorVersion >= 3) {
+        isaName += "amdgcn-amd-amdhsa--";
+        unsigned MACH = img->EFlags() & EF_AMDGPU_MACH_LC;
+        switch (MACH) {
+        case EF_AMDGPU_MACH_AMDGCN_GFX700_LC: isaName += "gfx700"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX701_LC: isaName += "gfx701"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX702_LC: isaName += "gfx702"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX801_LC: isaName += "gfx801"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX802_LC: isaName += "gfx802"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX803_LC: isaName += "gfx803"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX810_LC: isaName += "gfx810"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX900_LC: isaName += "gfx900"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX902_LC: isaName += "gfx902"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX904_LC: isaName += "gfx904"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX906_LC: isaName += "gfx906"; break;
+        default: return false;
+        }
+
+        if (img->EFlags() & EF_AMDGPU_XNACK_LC)
+          isaName += "+xnack";
+
+        return true;
+      } else {
+        std::string vendor_name, architecture_name;
+        uint32_t major_version, minor_version, stepping;
+        if (!GetNoteIsa(vendor_name, architecture_name, &major_version, &minor_version, &stepping)) { return false; }
+        isaName += vendor_name;
+        isaName += ":";
+        isaName += architecture_name;
+        isaName += ":";
+        isaName += std::to_string(major_version);
+        isaName += ":";
+        isaName += std::to_string(minor_version);
+        isaName += ":";
+        isaName += std::to_string(stepping);
+
+        amdgpu_hsa_note_hsail_t *hsailNote;
+        bool IsFinalizer = GetAmdNote(NT_AMDGPU_HSA_HSAIL, &hsailNote);
+        isaName = ConvertOldTargetNameToNew(isaName, IsFinalizer, img->EFlags());
+        return true;
+      }
     }
 
     void AmdHsaCode::AddNoteProducer(uint32_t major, uint32_t minor, const std::string& producer)
@@ -617,7 +722,7 @@ namespace code {
         // TODO: Currently returns string representation instead of hsa_isa_t
         // which is unavailable here.
         std::string isa;
-        if (!GetNoteIsa(isa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
+        if (!GetIsa(isa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
         char *svalue = (char*)value;
         memset(svalue, 0x0, 64);
         memcpy(svalue, isa.c_str(), (std::min)(size_t(63), isa.length()));
@@ -984,7 +1089,7 @@ namespace code {
     {
       {
         uint32_t major_version, minor_version;
-        if (GetNoteCodeObjectVersion(&major_version, &minor_version)) {
+        if (GetCodeObjectVersion(&major_version, &minor_version)) {
           out << "AMD HSA Code Object" << std::endl
               << "  Version " << major_version << "." << minor_version << std::endl;
         }

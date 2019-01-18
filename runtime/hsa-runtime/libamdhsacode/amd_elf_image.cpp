@@ -703,7 +703,8 @@ namespace amd {
 
       uint16_t Machine() override { return ehdr.e_machine; }
       uint16_t Type() override { return ehdr.e_type; }
-      uint32_t EFlags() override{ return ehdr.e_flags; }
+      uint32_t EFlags() override { return ehdr.e_flags; }
+      uint32_t ABIVersion() override { return (uint32_t)(ehdr.e_ident[EI_ABIVERSION]); }
 
       GElfStringTable* shstrtab() override;
       GElfStringTable* strtab() override;
