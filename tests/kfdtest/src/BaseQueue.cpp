@@ -36,7 +36,7 @@ BaseQueue::~BaseQueue(void) {
     Destroy();
 }
 
-HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint64 *pointers, int sdmaEngineId) {
+HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint64 *pointers) {
     HSAKMT_STATUS status;
     HSA_QUEUE_TYPE type = GetQueueType();
 
@@ -53,10 +53,6 @@ HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint6
         m_Resources.Queue_read_ptr_aql = &pointers[0];
         m_Resources.Queue_write_ptr_aql = &pointers[1];
     }
-
-    //TODO: How to get number of SDMA engine?
-    if (type == HSA_QUEUE_SDMA && sdmaEngineId >= 0 && sdmaEngineId < 8)
-        type = (HSA_QUEUE_TYPE) (HSA_QUEUE_SDMA_ENGINE0 + sdmaEngineId);
 
     status = hsaKmtCreateQueue(NodeId,
                                type,
