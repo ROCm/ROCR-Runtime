@@ -43,10 +43,9 @@ class BaseQueue {
     /** Create the queue.
      *  @see hsaKmtCreateQueue
      *  @param pointers is used only for creating AQL queues. Otherwise it is omitted.
-     *  @param sdmaEngineId is used only for creating SDMA queues. -1 means let kfd kernel select a sdma engine
      */
     virtual HSAKMT_STATUS Create(unsigned int NodeId, unsigned int size = DEFAULT_QUEUE_SIZE,
-                                HSAuint64 *pointers = NULL, int sdmaEngineId = -1);
+                                 HSAuint64 *pointers = NULL);
     /** Update the queue.
      *  @see hsaKmtUpdateQueue
      *  @param percent New queue percentage
