@@ -631,26 +631,6 @@ typedef enum _HSA_QUEUE_TYPE
     HSA_QUEUE_COMPUTE_AQL          = 21, // HSA AQL packet compatible Compute Queue
     HSA_QUEUE_DMA_AQL              = 22, // HSA AQL packet compatible DMA Queue
 
-    HSA_QUEUE_SDMA_ENGINE0         =0x10000, //SDMA queue created on SDMA engine 0
-    HSA_QUEUE_SDMA_ENGINE1         =0x10001, //SDMA queue created on SDMA engine 1
-    HSA_QUEUE_SDMA_ENGINE2         =0x10002, //SDMA queue created on SDMA engine 2
-    HSA_QUEUE_SDMA_ENGINE3         =0x10003, //SDMA queue created on SDMA engine 3
-    HSA_QUEUE_SDMA_ENGINE4         =0x10004, //SDMA queue created on SDMA engine 4
-    HSA_QUEUE_SDMA_ENGINE5         =0x10005, //SDMA queue created on SDMA engine 5
-    HSA_QUEUE_SDMA_ENGINE6         =0x10006, //SDMA queue created on SDMA engine 6
-    HSA_QUEUE_SDMA_ENGINE7         =0x10007, //SDMA queue created on SDMA engine 7
-    HSA_QUEUE_SDMA_ENGINE_MAX      =0x1FFFF,
-
-
-    HSA_QUEUE_SDMA_AQL_ENGINE0     =0x20000, //SDMA AQL queue created on SDMA engine 0
-    HSA_QUEUE_SDMA_AQL_ENGINE1     =0x20001, //SDMA AQL queue created on SDMA engine 1
-    HSA_QUEUE_SDMA_AQL_ENGINE2     =0x20002, //SDMA AQL queue created on SDMA engine 2
-    HSA_QUEUE_SDMA_AQL_ENGINE3     =0x20003, //SDMA AQL queue created on SDMA engine 3
-    HSA_QUEUE_SDMA_AQL_ENGINE4     =0x20004, //SDMA AQL queue created on SDMA engine 4
-    HSA_QUEUE_SDMA_AQL_ENGINE5     =0x20005, //SDMA AQL queue created on SDMA engine 5
-    HSA_QUEUE_SDMA_AQL_ENGINE6     =0x20006, //SDMA AQL queue created on SDMA engine 6
-    HSA_QUEUE_SDMA_AQL_ENGINE7     =0x20007, //SDMA AQL queue created on SDMA engine 7
-    HSA_QUEUE_SDMA_AQL_ENGINE_MAX  =0x2FFFF,
     // more types in the future
 
     HSA_QUEUE_TYPE_SIZE            = 0xFFFFFFFF     //aligns to 32bit enum
