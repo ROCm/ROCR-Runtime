@@ -170,20 +170,22 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
   err = hsa_amd_memory_lock(local_alloc, size, &gpu_agent, 1, &locked_mem);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
-  if (t->type == D2H) {
+  if (t->type == D2H || D2HRemote) {
     err = hsa_amd_memory_pool_allocate(src_pool, size, 0, &ptr_src);
     ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
     ptr_dst = locked_mem;
-  } else {
-    ASSERT_EQ(H2D, t->type);
+  } else if (t->type == H2D || H2DRemote) {
     err = hsa_amd_memory_pool_allocate(dst_pool, size, 0, &ptr_dst);
     ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
     ptr_src = locked_mem;
+  } else {
+    ASSERT_EQ(t->type, P2P);
+    std::cout << "Skipping P2P for NUMA test" << std::endl;
+    return;
   }
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
 
   void* host_ptr_src = NULL;
   void* host_ptr_dst = NULL;
@@ -242,6 +244,8 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
     if (cpy_ag == nullptr) {
       std::cout << "Agents " << t->src << " and " << t->dst <<
                               "cannot access each other's pool." << std::endl;
+      std::cout << "Skipping..." << std::endl;
+      return;
     }
     ASSERT_NE(cpy_ag, nullptr);
 
@@ -260,10 +264,12 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
     if (cpy_ag == nullptr) {
       std::cout << "Agents " << t->src << " and " << t->dst <<
                               "cannot access each other's pool." << std::endl;
+      std::cout << "Skipping..." << std::endl;
+      return;
     }
     ASSERT_NE(cpy_ag, nullptr);
 
-    err = hsa_amd_memory_async_copy(ptr_dst, *cpy_ag, host_ptr_dst, *cpy_ag,
+    err = hsa_amd_memory_async_copy(ptr_src, *cpy_ag, host_ptr_src, *cpy_ag,
                                                             size, 0, NULL, s);
     ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
@@ -279,6 +285,16 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
   // **** Next, copy from the test source pool to the test destination pool
   // Prefer a gpu agent to a cpu agent
 
+  ASSERT_NE(cpy_ag, nullptr);
+
+  cpy_ag = AcquireAsyncCopyAccess(ptr_dst, dst_pool, &dst_agent,
+              ptr_src, src_pool, &src_agent);
+  if (cpy_ag == nullptr) {
+    std::cout << "Agents " << t->src << " and " << t->dst <<
+                            "cannot access each other's pool." << std::endl;
+    std::cout << "Skipping..." << std::endl;
+    return;
+  }
   ASSERT_NE(cpy_ag, nullptr);
 
   for (int i = 0; i < kNumGranularity; i++) {
@@ -300,7 +316,7 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
       int index = copy_timer.CreateTimer();
 
       copy_timer.StartTimer(index);
-      err = hsa_amd_memory_async_copy(ptr_dst, gpu_agent, ptr_src, gpu_agent,
+      err = hsa_amd_memory_async_copy(ptr_dst, *cpy_ag, ptr_src, *cpy_ag,
                                                  Size[i], 0, NULL, t->signal);
       ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 

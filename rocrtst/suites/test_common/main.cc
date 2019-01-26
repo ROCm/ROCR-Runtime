@@ -449,7 +449,7 @@ TEST(rocrtstPerf, ENQUEUE_LATENCY) {
   RunGenericTest(&multiPacketequeue);
 }
 
-TEST(rocrtstPerf, Memory_Async_Copy_NUMA) {
+TEST(rocrtstPerf, DISABLED_Memory_Async_Copy_NUMA) {
   MemoryAsyncCopyNUMA numa;
   RunGenericTest(&numa);
 }

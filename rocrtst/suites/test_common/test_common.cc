@@ -170,6 +170,12 @@ int DumpMonitorInfo() {
 
   for (uint32_t dindx = 0; dindx < num_mon_devices; ++dindx) {
     auto print_frequencies = [&](rsmi_frequencies *freqs, std::string label) {
+      if (rsmi_ret != RSMI_STATUS_SUCCESS) {
+        std::cout << "get frequency call  returned " << rsmi_ret << std::endl;
+        dump_ret = 1;
+        return;
+      }
+
       if (print_attr_label(label)) {
         for (uint32_t i = 0; i < freqs->num_supported; ++i) {
           std::cout << "\t**  " << i << ": " <<
@@ -214,6 +220,7 @@ int DumpMonitorInfo() {
 
     rsmi_frequencies freqs;
     rsmi_ret = rsmi_dev_gpu_clk_freq_get(dindx, RSMI_CLK_TYPE_SYS, &freqs);
+
     print_frequencies(&freqs, "Supported GPU clock frequencies:\n");
 
     rsmi_ret = rsmi_dev_gpu_clk_freq_get(dindx, RSMI_CLK_TYPE_MEM, &freqs);
