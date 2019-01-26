@@ -214,6 +214,10 @@ void MemoryAsyncCopy::PrintTransactionType(Transaction *t) {
         printf("(Remote Device To Host)\n");
         break;
 
+      case P2PRemote:
+        printf("(Peer To Remote Peer)\n");
+        break;
+
       default:
         printf("**Unexpected path**\n");
         return;
@@ -288,6 +292,8 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
   if (cpy_ag == nullptr) {
     std::cout << "Agents " << t->src << " and " << t->dst <<
                               "cannot access each other's pool." << std::endl;
+    std::cout << "Skipping..." << std::endl;
+    return;
   }
   ASSERT_NE(cpy_ag, nullptr);
 
@@ -309,8 +315,9 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
   if (cpy_ag == nullptr) {
     std::cout << "Owner agents for pools" << t->src << " and " <<
                    t->dst << " cannot access each other's pool." << std::endl;
+    std::cout << "Skipping..." << std::endl;
+    return;
   }
-  ASSERT_NE(cpy_ag, nullptr);
 
   for (int i = 0; i < kNumGranularity; i++) {
     if (Size[i] > size) {
@@ -434,8 +441,26 @@ void MemoryAsyncCopy::DisplayBenchmark(Transaction *t) const {
       printf("Peer-To-Peer) =============================\n");
       break;
 
+    case P2PRemote:
+      printf("(Peer-To-Remote-Peer) =====================\n");
+      break;
+
+    case H2DRemote:
+      printf("(Host-To-Remote-Device) ===================\n");
+      break;
+
+    case D2HRemote:
+      printf("(Device-To-Remote-Host) ===================\n");
+      break;
+
     default:
-      ASSERT_EQ(t->type == H2D || t->type == D2H || t->type == P2P, true);
+      ASSERT_TRUE(false) << "Unexpected Transaction value:" << t->type <<
+                                                                    std::endl;
+  }
+
+  if ((*t->benchmark_copy_time).size() == 0) {
+    printf("Skipped...\n");
+    return;
   }
   if (verified_) {
     std::cout << "Verification: Pass" << std::endl;
