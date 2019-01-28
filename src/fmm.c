@@ -3077,6 +3077,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	struct kfd_ioctl_free_memory_of_gpu_args freeArgs = {0};
 	const HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_const_hsa_shared_memory_struct(SharedMemoryHandle);
+	HSAuint64 SizeInPages = SharedMemoryStruct->SizeInPages;
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -3089,7 +3090,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	reservedMem = aperture_allocate_area(aperture, NULL,
-			(SharedMemoryStruct->SizeInPages << PAGE_SHIFT));
+			(SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!reservedMem) {
 		err = HSAKMT_STATUS_NO_MEMORY;
@@ -3105,7 +3106,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
-				       (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+				       (SizeInPages << PAGE_SHIFT),
 				       0);
 	if (!obj) {
 		err = HSAKMT_STATUS_NO_MEMORY;
@@ -3124,7 +3125,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 		}
 		map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
 					gpu_mem[gpu_mem_id].drm_render_fd;
-		ret = mmap(reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT),
+		ret = mmap(reservedMem, (SizeInPages << PAGE_SHIFT),
 			   PROT_READ | PROT_WRITE,
 			   MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
 		if (ret == MAP_FAILED) {
@@ -3134,7 +3135,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	}
 
 	*MemoryAddress = reservedMem;
-	*SizeInBytes = (SharedMemoryStruct->SizeInPages << PAGE_SHIFT);
+	*SizeInBytes = (SizeInPages << PAGE_SHIFT);
 
 	if (gpu_id_array_size > 0) {
 		obj->registered_device_id_array = gpu_id_array;
@@ -3147,7 +3148,7 @@ err_free_obj:
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	vm_remove_object(aperture, obj);
 err_free_mem:
-	aperture_release_area(aperture, reservedMem, (SharedMemoryStruct->SizeInPages << PAGE_SHIFT));
+	aperture_release_area(aperture, reservedMem, (SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 err_free_buffer:
 	freeArgs.handle = importArgs.handle;
