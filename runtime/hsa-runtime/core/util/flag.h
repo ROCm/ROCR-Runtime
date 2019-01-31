@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIESd OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -70,6 +70,8 @@ class Flag {
     enable_interrupt_ = (var == "0") ? false : true;
 
     enable_sdma_ = os::GetEnvVar("HSA_ENABLE_SDMA");
+
+    visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
 
     var = os::GetEnvVar("HSA_RUNNING_UNDER_VALGRIND");
     running_valgrind_ = (var == "1") ? true : false;
@@ -125,6 +127,8 @@ class Flag {
 
   std::string enable_sdma() const { return enable_sdma_; }
 
+  std::string visible_gpus() const { return visible_gpus_; }
+
   uint32_t max_queues() const { return max_queues_; }
 
   size_t scratch_mem_size() const { return scratch_mem_size_; }
@@ -144,6 +148,8 @@ class Flag {
   bool rev_copy_dir_;
 
   std::string enable_sdma_;
+
+  std::string visible_gpus_;
 
   uint32_t max_queues_;
 
