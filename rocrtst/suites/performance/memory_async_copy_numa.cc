@@ -170,12 +170,12 @@ void MemoryAsyncCopyNUMA::RunBenchmarkWithVerification(Transaction *t) {
   err = hsa_amd_memory_lock(local_alloc, size, &gpu_agent, 1, &locked_mem);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
-  if (t->type == D2H || D2HRemote) {
+  if (t->type == D2H || t->type == D2HRemote) {
     err = hsa_amd_memory_pool_allocate(src_pool, size, 0, &ptr_src);
     ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
     ptr_dst = locked_mem;
-  } else if (t->type == H2D || H2DRemote) {
+  } else if (t->type == H2D || t->type == H2DRemote) {
     err = hsa_amd_memory_pool_allocate(dst_pool, size, 0, &ptr_dst);
     ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
