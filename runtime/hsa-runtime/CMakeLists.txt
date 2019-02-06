@@ -72,8 +72,8 @@ if ( HAVE_MEMFD_CREATE )
     add_definitions ( -DHAVE_MEMFD_CREATE )
 endif()
 
-## Get the package version. The defaults to 1.0.0.
-get_version ( "1.0.0" )
+## Get the package version.
+get_version ( "1.1.9" )
 
 set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
 set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )

@@ -89,23 +89,23 @@ function ( get_version DEFAULT_VERSION_STRING )
 
     parse_version ( ${DEFAULT_VERSION_STRING} )
 
-    find_program ( GIT NAMES git )
-
-    if ( GIT )
-
-        execute_process ( COMMAND git describe --tags --dirty --long
-                          WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
-                          OUTPUT_VARIABLE GIT_TAG_STRING
-                          OUTPUT_STRIP_TRAILING_WHITESPACE
-                          RESULT_VARIABLE RESULT )
-
-        if ( ${RESULT} EQUAL 0 )
-
-            parse_version ( ${GIT_TAG_STRING} )
-
-        endif ()
-
-    endif ()
+##     find_program ( GIT NAMES git )
+## 
+##     if ( GIT )
+## 
+##         execute_process ( COMMAND git describe --tags --dirty --long
+##                           WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+##                           OUTPUT_VARIABLE GIT_TAG_STRING
+##                           OUTPUT_STRIP_TRAILING_WHITESPACE
+##                           RESULT_VARIABLE RESULT )
+## 
+##         if ( ${RESULT} EQUAL 0 )
+## 
+##             parse_version ( ${GIT_TAG_STRING} )
+## 
+##         endif ()
+## 
+##     endif ()
 
     set( VERSION_STRING "${VERSION_STRING}" PARENT_SCOPE )
     set( VERSION_MAJOR  "${VERSION_MAJOR}" PARENT_SCOPE )
