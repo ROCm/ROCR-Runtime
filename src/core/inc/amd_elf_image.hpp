@@ -208,6 +208,7 @@ namespace amd {
       virtual uint16_t Machine() = 0;
       virtual uint16_t Type() = 0;
       virtual uint32_t EFlags() = 0;
+      virtual uint32_t ABIVersion() = 0;
 
       std::string output() { return out.str(); }
 
