@@ -465,7 +465,8 @@ static int handle_concrete_asic(struct queue *q,
 	const struct device_info *dev_info = q->dev_info;
 	bool ret;
 
-	if (!dev_info || args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA)
+	if (!dev_info || args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA ||
+			args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA_XGMI)
 		return HSAKMT_STATUS_SUCCESS;
 
 	if (dev_info->eop_buffer_size > 0) {
@@ -573,6 +574,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 		break;
 	case HSA_QUEUE_SDMA:
 		args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA;
+		break;
+	case HSA_QUEUE_SDMA_XGMI:
+		args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA_XGMI;
 		break;
 	case HSA_QUEUE_COMPUTE_AQL:
 		args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL;

@@ -617,9 +617,10 @@ typedef enum _HSA_QUEUE_PRIORITY
 typedef enum _HSA_QUEUE_TYPE
 {
     HSA_QUEUE_COMPUTE            = 1,  // AMD PM4 compatible Compute Queue
-    HSA_QUEUE_SDMA               = 2,  // SDMA Queue, used for data transport and format conversion (e.g. (de-)tiling, etc).
+    HSA_QUEUE_SDMA               = 2,  // PCIe optimized SDMA Queue, used for data transport and format conversion (e.g. (de-)tiling, etc).
     HSA_QUEUE_MULTIMEDIA_DECODE  = 3,  // reserved, for HSA multimedia decode queue
     HSA_QUEUE_MULTIMEDIA_ENCODE  = 4,  // reserved, for HSA multimedia encode queue
+    HSA_QUEUE_SDMA_XGMI          = 5,  // XGMI optimized SDMA Queue
 
     // the following values indicate a queue type permitted to reference OS graphics
     // resources through the interoperation API. See [5] "HSA Graphics Interoperation
@@ -632,6 +633,7 @@ typedef enum _HSA_QUEUE_TYPE
 
     HSA_QUEUE_COMPUTE_AQL          = 21, // HSA AQL packet compatible Compute Queue
     HSA_QUEUE_DMA_AQL              = 22, // HSA AQL packet compatible DMA Queue
+    HSA_QUEUE_DMA_AQL_XGMI         = 23, // HSA AQL packet compatible XGMI optimized DMA Queue
 
     // more types in the future
 
