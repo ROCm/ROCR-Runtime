@@ -11,7 +11,8 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 "-KFDEventTest.MeasureInterruptConsumption:"\
 "KFDLocalMemoryTest.Fragmentation:"\
 "KFDQMTest.BasicCuMaskingLinear:"\
-"RDMATest.GPUDirect"
+"RDMATest.GPUDirect:"\
+"KFDRASTest.*"
 
 # This is the temporary blacklist for all ASICs. This is to be used when a test is failing consistently
 # on every ASIC (Kaveri, Carrizo, Hawaii, Tonga, Fiji, Polaris10, Polaris11 and Vega10 .
