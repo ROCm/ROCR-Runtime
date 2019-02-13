@@ -990,6 +990,10 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->uCodeEngineVersions.Value = (uint32_t)prop_val & 0x3ff;
 		else if (strcmp(prop_name, "hive_id") == 0)
 			props->HiveID = prop_val;
+		else if (strcmp(prop_name, "num_sdma_engines") == 0)
+			props->NumSdmaEngines = prop_val;
+		else if (strcmp(prop_name, "num_sdma_xgmi_engines") == 0)
+			props->NumSdmaXgmiEngines = prop_val;
 	}
 
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
