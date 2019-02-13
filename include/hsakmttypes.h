@@ -299,7 +299,9 @@ typedef struct _HsaNodeProperties
     HSA_DEBUG_PROPERTIES DebugProperties; // Debug properties of this node.
     HSAuint64       HiveID;            // XGMI Hive the GPU node belongs to in the system. It is an opaque and static
                                        // number hash created by the PSP
-    HSAuint8        Reserved[44];
+    HSAuint32       NumSdmaEngines;    // number of PCIe optimized SDMA engines
+    HSAuint32       NumSdmaXgmiEngines;// number of XGMI optimized SDMA engines
+    HSAuint8        Reserved[36];
 } HsaNodeProperties;
 
 
