@@ -97,9 +97,10 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
   // Set instruction set architecture via node property, only on GPU device.
-  isa_ = (core::Isa*)core::IsaRegistry::GetIsa(core::Isa::Version(
-      node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
-      node_props.EngineId.ui32.Stepping), profile_ == HSA_PROFILE_FULL);
+  isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
+      core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
+                         node_props.EngineId.ui32.Stepping),
+      profile_ == HSA_PROFILE_FULL, node_props.Capability.ui32.SRAM_EDCSupport == 1);
 
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&

@@ -378,11 +378,17 @@ hsa_status_t IsIsaEquivalent(hsa_isa_t isa, void *data) {
   assert(data_pair->first.handle != 0);
   assert(data_pair->second != true);
 
-  const core::Isa *isa1 = core::Isa::Object(isa);
-  assert(isa1);
-  const core::Isa *isa2 = core::Isa::Object(data_pair->first);
-  assert(isa2);
-  if (isa1->version() == isa2->version()) {
+  const core::Isa *agent_isa = core::Isa::Object(isa);
+  assert(agent_isa);
+  const core::Isa *code_object_isa = core::Isa::Object(data_pair->first);
+  assert(code_object_isa);
+
+  // SRAM ECC enabled code may run on a system without ECC
+  // but a system which has ECC enabled requires ECC enabled code.
+  if (agent_isa->sramEccEnabled() && !code_object_isa->sramEccEnabled())
+    return HSA_STATUS_SUCCESS;
+
+  if (agent_isa->version() == code_object_isa->version()) {
     data_pair->second = true;
     return HSA_STATUS_INFO_BREAK;
   }

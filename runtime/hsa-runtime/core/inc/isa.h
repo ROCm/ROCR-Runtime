@@ -110,6 +110,10 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
   const bool &xnackEnabled() const {
     return xnackEnabled_;
   }
+  /// @returns True if this Isa has sram ecc enabled, false otherwise.
+  const bool &sramEccEnabled() const {
+    return sramEcc_;
+  }
   /// @returns This Isa's supported wavefront.
   const Wavefront &wavefront() const {
     return wavefront_;
@@ -181,19 +185,22 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
 
  private:
   /// @brief Default constructor.
-  Isa(): version_(Version(-1, -1, -1)), xnackEnabled_(false) {}
+  Isa(): version_(Version(-1, -1, -1)), xnackEnabled_(false), sramEcc_(false) {}
 
   /// @brief Construct from @p version.
-  Isa(const Version &version): version_(version), xnackEnabled_(false) {}
+  Isa(const Version &version): version_(version), xnackEnabled_(false), sramEcc_(false) {}
 
   /// @brief Construct from @p version.
-  Isa(const Version &version, const bool xnack): version_(version), xnackEnabled_(xnack) {}
+  Isa(const Version &version, const bool xnack, const bool ecc): version_(version), xnackEnabled_(xnack), sramEcc_(ecc) {}
 
   /// @brief Isa's version.
   Version version_;
 
   /// @brief Isa's supported xnack flag.
   bool xnackEnabled_;
+
+  /// @brief Isa's sram ecc flag.
+  bool sramEcc_;
 
   /// @brief Isa's supported wavefront.
   Wavefront wavefront_;
@@ -209,7 +216,7 @@ class IsaRegistry final {
   /// @returns Isa for requested @p full_name, null pointer if not supported.
   static const Isa *GetIsa(const std::string &full_name);
   /// @returns Isa for requested @p version, null pointer if not supported.
-  static const Isa *GetIsa(const Isa::Version &version, bool xnack);
+  static const Isa *GetIsa(const Isa::Version &version, bool xnack, bool ecc);
 
  private:
   /// @brief IsaRegistry's map type.

@@ -108,7 +108,7 @@ bool IsAccessibleMemoryAddress(uint64_t address)
   int32_t random_fd = 0;
   ssize_t bytes_written = 0;
   if (-1 == (random_fd = open("/dev/random", O_WRONLY))) {
-    return false;
+    return true;  // Skip check if /dev/random is not available.
   }
   bytes_written = write(random_fd, (void*)address, 1);
   if (-1 == close(random_fd)) {
