@@ -583,7 +583,7 @@ namespace code {
       if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
         NewName = NewName + "+xnack";
       } else {
-        if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
+        if (EFlags & EF_AMDGPU_XNACK_LC) {
           NewName = NewName + "+xnack";
         } else {
           if (OldName == "AMD:AMDGPU:8:0:1")
@@ -598,6 +598,9 @@ namespace code {
             NewName = NewName + "+xnack";
         }
       }
+
+      if (EFlags & EF_AMDGPU_SRAM_ECC_LC)
+        NewName += "+sram-ecc";
 
       return NewName;
     }
@@ -630,6 +633,9 @@ namespace code {
 
         if (img->EFlags() & EF_AMDGPU_XNACK_LC)
           isaName += "+xnack";
+
+        if (img->EFlags() & EF_AMDGPU_SRAM_ECC_LC)
+          isaName += "+sram-ecc";
 
         return true;
       } else {
