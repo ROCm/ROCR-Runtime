@@ -133,7 +133,9 @@ hsa_status_t handleException() {
     debug_print("HSA exception: BadAlloc\n");
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   } catch (const hsa_exception& e) {
-    debug_print("HSA exception: %s\n", e.what());
+    ifdebug {
+      if (!strIsEmpty(e.what())) debug_print("HSA exception: %s\n", e.what());
+    }
     return e.error_code();
   } catch (const std::exception& e) {
     debug_print("Unhandled exception: %s\n", e.what());
