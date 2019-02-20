@@ -1037,9 +1037,12 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
       vm_fault_event->EventData.EventData.MemoryAccessFault;
 
   hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
+  auto system_event_handlers = runtime_singleton_->GetSystemEventHandlers();
   // If custom handler is registered, pack the fault info and call the handler
-  if (runtime_singleton_->GetCustomSystemEventHandler()) {
-    hsa_amd_gpu_memory_fault_info_t fault_info;
+  if (!system_event_handlers.empty()) {
+    hsa_amd_event_t memory_fault_event;
+    memory_fault_event.event_type = HSA_AMD_GPU_MEMORY_FAULT_EVENT;
+    hsa_amd_gpu_memory_fault_info_t& fault_info = memory_fault_event.memory_fault;
 
     // Find the faulty agent
     auto it = runtime_singleton_->agents_by_node_.find(fault.NodeId);
@@ -1048,30 +1051,39 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
     fault_info.agent = Agent::Convert(faulty_agent);
 
     fault_info.virtual_address = fault.VirtualAddress;
-    fault_info.fault_reason_mask = 0x00000000;
+    fault_info.fault_reason_mask = 0;
     if (fault.Failure.NotPresent == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00000001;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_PAGE_NOT_PRESENT;
     }
     if (fault.Failure.ReadOnly == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00000010;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_READ_ONLY;
     }
     if (fault.Failure.NoExecute == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00000100;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_NX;
     }
     if (fault.Failure.GpuAccess == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00001000;
-    }
-    if (fault.Failure.ECC == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00010000;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_HOST_ONLY;
     }
     if (fault.Failure.Imprecise == 1) {
-      fault_info.fault_reason_mask = fault_info.fault_reason_mask | 0x00100000;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_IMPRECISE;
     }
-    hsa_amd_event_t memory_fault_event;
-    memory_fault_event.event_type = GPU_MEMORY_FAULT_EVENT;
-    memory_fault_event.memory_fault = fault_info;
-    custom_handler_status = runtime_singleton_->GetCustomSystemEventHandler()(
-        &memory_fault_event, runtime_singleton_->GetCustomSystemEventData());
+    if (fault.Failure.ECC == 1 && fault.Failure.ErrorType == 0) {
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAM_ECC;
+    }
+    if (fault.Failure.ErrorType == 1) {
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_SRAM_ECC;
+    }
+    if (fault.Failure.ErrorType == 2) {
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAM_ECC;
+    }
+    if (fault.Failure.ErrorType == 3) {
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_HANG;
+    }
+
+    for (auto& callback : system_event_handlers) {
+      hsa_status_t err = callback.first(&memory_fault_event, callback.second);
+      if (err == HSA_STATUS_SUCCESS) custom_handler_status = HSA_STATUS_SUCCESS;
+    }
   }
 
   // No custom VM fault handler registered or it failed.
@@ -1086,8 +1098,13 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
         reason += "Execute access to a page marked NX";
       } else if (fault.Failure.GpuAccess == 1) {
         reason += "Host access only";
-      } else if (fault.Failure.ECC == 1) {
-        reason += "ECC failure (if supported by HW)";
+      } else if ((fault.Failure.ECC == 1 && fault.Failure.ErrorType == 0) ||
+                 fault.Failure.ErrorType == 2) {
+        reason += "DRAM ECC failure";
+      } else if (fault.Failure.ErrorType == 1) {
+        reason += "SRAM ECC failure";
+      } else if (fault.Failure.ErrorType == 3) {
+        reason += "Generic hang recovery";
       } else {
         reason += "Unknown";
       }
@@ -1166,7 +1183,6 @@ Runtime::Runtime()
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
-      system_event_handler_user_data_(nullptr),
       ref_count_(0) {}
 
 hsa_status_t Runtime::Load() {
@@ -1437,13 +1453,16 @@ void Runtime::AsyncEvents::Clear() {
 
 hsa_status_t Runtime::SetCustomSystemEventHandler(hsa_amd_system_event_callback_t callback,
                                                   void* data) {
-  if (system_event_handler_) {
-    return HSA_STATUS_ERROR;
-  } else {
-    system_event_handler_ = callback;
-    system_event_handler_user_data_ = data;
-    return HSA_STATUS_SUCCESS;
-  }
+  ScopedAcquire<KernelMutex> lock(&system_event_lock_);
+  system_event_handlers_.push_back(
+      std::make_pair(AMD::callback_t<hsa_amd_system_event_callback_t>(callback), data));
+  return HSA_STATUS_SUCCESS;
+}
+
+std::vector<std::pair<AMD::callback_t<hsa_amd_system_event_callback_t>, void*>>
+Runtime::GetSystemEventHandlers() {
+  ScopedAcquire<KernelMutex> lock(&system_event_lock_);
+  return system_event_handlers_;
 }
 
 hsa_status_t Runtime::SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,

@@ -47,6 +47,7 @@
 
 #include <vector>
 #include <map>
+#include <utility>
 
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/hsa_internal.h"
@@ -323,12 +324,6 @@ class Runtime {
   hsa_status_t SetCustomSystemEventHandler(hsa_amd_system_event_callback_t callback,
                                            void* data);
 
-  void* GetCustomSystemEventData() { return system_event_handler_user_data_; }
-
-  AMD::callback_t<hsa_amd_system_event_callback_t> GetCustomSystemEventHandler() {
-    return system_event_handler_;
-  }
-
   hsa_status_t SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notifier callback,
                                               void* user_data);
 
@@ -419,6 +414,11 @@ class Runtime {
   // @brief Binds virtual memory access fault handler to this node.
   void BindVmFaultHandler();
 
+  // @brief Acquire snapshot of system event handlers.
+  // Returns a copy to avoid holding a lock during callbacks.
+  std::vector<std::pair<AMD::callback_t<hsa_amd_system_event_callback_t>, void*>>
+  GetSystemEventHandlers();
+
   /// @brief Get the index of ::link_matrix_.
   /// @param [in] node_id_from Node id of the source node.
   /// @param [in] node_id_to Node id of the destination node.
@@ -494,10 +494,12 @@ class Runtime {
   // @brief HSA signal to contain the VM fault event.
   Signal* vm_fault_signal_;
 
-  // Custom system event handler.
-  AMD::callback_t<hsa_amd_system_event_callback_t> system_event_handler_;
+  // Custom system event handlers.
+  std::vector<std::pair<AMD::callback_t<hsa_amd_system_event_callback_t>, void*>>
+      system_event_handlers_;
 
-  void* system_event_handler_user_data_;
+  // System event handler lock
+  KernelMutex system_event_lock_;
 
   // Internal queue creation notifier
   AMD::callback_t<hsa_amd_runtime_queue_notifier> internal_queue_create_notifier_;

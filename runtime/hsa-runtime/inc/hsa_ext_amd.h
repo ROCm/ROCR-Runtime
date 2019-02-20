@@ -1675,8 +1675,31 @@ typedef enum hsa_amd_event_type_s {
   /*
    AMD GPU memory fault.
    */
-  GPU_MEMORY_FAULT_EVENT = 0,
+  HSA_AMD_GPU_MEMORY_FAULT_EVENT = 0,
+  GPU_MEMORY_FAULT_EVENT = 0
 } hsa_amd_event_type_t;
+
+/**
+ * @brief Flags denoting the cause of a memory fault.
+ */
+typedef enum {
+  // Page not present or supervisor privilege.
+  HSA_AMD_MEMORY_FAULT_PAGE_NOT_PRESENT = 1 << 0,
+  // Write access to a read-only page.
+  HSA_AMD_MEMORY_FAULT_READ_ONLY = 1 << 1,
+  // Execute access to a page marked NX.
+  HSA_AMD_MEMORY_FAULT_NX = 1 << 2,
+  // GPU attempted access to a host only page.
+  HSA_AMD_MEMORY_FAULT_HOST_ONLY = 1 << 3,
+  // DRAM ECC failure.
+  HSA_AMD_MEMORY_FAULT_DRAM_ECC = 1 << 4,
+  // Can't determine the exact fault address.
+  HSA_AMD_MEMORY_FAULT_IMPRECISE = 1 << 5,
+  // SRAM ECC failure (ie registers, no fault address).
+  HSA_AMD_MEMORY_FAULT_SRAM_ECC = 1 << 6,
+  // GPU reset following unspecified hang.
+  HSA_AMD_MEMORY_FAULT_HANG = 1 << 31
+} hsa_amd_memory_fault_reason_t;
 
 /**
  * @brief AMD GPU memory fault event data.
@@ -1692,13 +1715,7 @@ typedef struct hsa_amd_gpu_memory_fault_info_s {
   uint64_t virtual_address;
   /*
   Bit field encoding the memory access failure reasons. There could be multiple bits set
-  for one fault.
-  0x00000001 Page not present or supervisor privilege.
-  0x00000010 Write access to a read-only page.
-  0x00000100 Execute access to a page marked NX.
-  0x00001000 Host access only.
-  0x00010000 ECC failure (if supported by HW).
-  0x00100000 Can't determine the exact fault address.
+  for one fault.  Bits are defined in hsa_amd_memory_fault_reason_t.
   */
   uint32_t fault_reason_mask;
 } hsa_amd_gpu_memory_fault_info_t;
@@ -1713,7 +1730,7 @@ typedef struct hsa_amd_event_s {
   hsa_amd_event_type_t event_type;
   union {
     /*
-    The memory fault info, only valid when @p event_type is GPU_MEMORY_FAULT_EVENT.
+    The memory fault info, only valid when @p event_type is HSA_AMD_GPU_MEMORY_FAULT_EVENT.
     */
     hsa_amd_gpu_memory_fault_info_t memory_fault;
   };
