@@ -73,7 +73,7 @@ TEST_F(KFDQMTest, CreateCpQueue) {
 
     queue.Wait4PacketConsumption();
 
-    WaitOnValue(destBuf.As<unsigned int*>(), 0);
+    EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0));
 
     EXPECT_SUCCESS(queue.Destroy());
 
