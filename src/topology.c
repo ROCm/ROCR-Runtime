@@ -1163,6 +1163,7 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 	uint32_t cpuid_op_cache;
 	uint32_t eax, ebx, ecx = 0, edx; /* cpuid registers */
 	cpu_cacheinfo_t *cpu_ci_list, *this_cpu;
+	bool x2apic = false;
 
 	if (!temp_cpu_ci_list) {
 		ret = HSAKMT_STATUS_ERROR;
@@ -1217,10 +1218,28 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 			goto exit;
 		}
 
-		eax = 0x1;
+		/* Detect the availability of the extended topology leaf */
+		eax = 0x0;
 		cpuid(&eax, &ebx, &ecx, &edx);
-		this_cpu->apicid = (ebx >> 24) & 0xff;
-		this_cpu->max_num_apicid = (ebx >> 16) & 0x0FF;
+		if (eax >= 11) {
+			eax = 0xb;
+			ecx = 0x0;
+			cpuid(&eax, &ebx, &ecx, &edx);
+			if (ebx)
+				x2apic = true;
+		}
+
+		if (x2apic) {
+			eax = 0xb;
+			cpuid(&eax, &ebx, &ecx, &edx);
+			this_cpu->apicid = edx;
+			cpuid_count(4, 0, &eax, &ebx, &ecx, &edx);
+			this_cpu->max_num_apicid = (eax >> 26) + 1;
+		} else {
+			eax = 0x1;
+			cpuid(&eax, &ebx, &ecx, &edx);
+			this_cpu->max_num_apicid = (ebx >> 16) & 0x0FF;
+		}
 		this_cpu->num_caches = cpuid_find_num_cache_leaves(cpuid_op_cache);
 		this_cpu->num_duplicated_caches = 0;
 		this_cpu->cache_info = calloc(
