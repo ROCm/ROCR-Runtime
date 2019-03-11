@@ -1242,6 +1242,7 @@ static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list
 		} else {
 			eax = 0x1;
 			cpuid(&eax, &ebx, &ecx, &edx);
+			this_cpu->apicid = (ebx >> 24) & 0xff;
 			this_cpu->max_num_apicid = (ebx >> 16) & 0x0FF;
 		}
 		this_cpu->num_caches = cpuid_find_num_cache_leaves(cpuid_op_cache);
