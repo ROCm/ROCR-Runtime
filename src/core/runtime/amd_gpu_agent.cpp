@@ -910,20 +910,13 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   // Allocate scratch memory
   ScratchInfo scratch;
   if (private_segment_size == UINT_MAX) {
-    private_segment_size = (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
+    private_segment_size = 0;
   }
-
-  if (private_segment_size > 262128) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  scratch.size_per_thread = AlignUp(private_segment_size, 16);
-  if (scratch.size_per_thread > 262128) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
+  scratch.size_per_thread = private_segment_size;
 
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  scratch.size = scratch.size_per_thread * 32 * 64 * num_cu;
+  scratch.size =
+      scratch.size_per_thread * properties_.MaxSlotsScratchCU * properties_.WaveFrontSize * num_cu;
   scratch.queue_base = nullptr;
   scratch.queue_process_offset = 0;
 
@@ -1239,14 +1232,7 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() == 9) {
-    if (properties_.EngineId.ui32.uCode < 334) {
-      static std::once_flag once;
-      std::call_once(
-          once, []() { fprintf(stderr, "warning: code cache invalidation not implemented\n"); });
-      return;
-    }
-  } else {
+  } else if (isa_->GetMajorVersion() > 9) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 
