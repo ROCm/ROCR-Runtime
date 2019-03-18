@@ -125,10 +125,8 @@ LEXA_TESTS_BLACKLIST=\
 "$SDMA_BLACKLIST"
 
 # KFDDBG.BasicAddressWatch is not supported on GFXv9 and later. FIXME: it should disable itself
-# KFDIPCTest is temporarily blacklisted due to recent HMM changes. Philip Yang is investigating
 VEGA10_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDIPCTest.*:"\
 "KFDDBGTest.BasicAddressWatch"
 
 VEGA12_TESTS_BLACKLIST=\
