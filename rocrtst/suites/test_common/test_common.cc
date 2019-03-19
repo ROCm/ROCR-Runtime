@@ -138,7 +138,7 @@ static std::string IntegerToString(T intVal, bool hex = true) {
 int DumpMonitorInfo() {
   int ret = 0;
   uint64_t value_u64;
-//  uint16_t value_u16;
+  uint16_t value_u16;
   uint32_t value_u32;
   int64_t value_i64;
   std::string val_str;
@@ -200,8 +200,8 @@ int DumpMonitorInfo() {
       std::cout << std:: endl;
     };
 
-    // rsmi_ret = rsmi_dev_id_get(dindx, &value_u16);
-    // print_val_str(IntegerToString(value_u16), "Device ID: ");
+    rsmi_ret = rsmi_dev_id_get(dindx, &value_u16);
+    print_val_str(IntegerToString(value_u16), "Device ID: ");
 
     rsmi_dev_perf_level perf;
     std::string perf_str;
