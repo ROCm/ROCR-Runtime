@@ -178,6 +178,10 @@ static struct hsa_gfxip_table {
 	{ 0x6995, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
 	{ 0x6997, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
 	{ 0x699F, 8, 0, 3, 1, "Polaris12", CHIP_POLARIS12 },
+	/* VegaM */
+	{ 0x694C, 8, 0, 3, 1, "VegaM", CHIP_VEGAM },
+	{ 0x694E, 8, 0, 3, 1, "VegaM", CHIP_VEGAM },
+	{ 0x694F, 8, 0, 3, 1, "VegaM", CHIP_VEGAM },
 	/* Vega10 */
 	{ 0x6860, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },
 	{ 0x6861, 9, 0, 0, 1, "Vega10", CHIP_VEGA10 },

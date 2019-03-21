@@ -1743,6 +1743,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 	case CHIP_POLARIS10:
 	case CHIP_POLARIS11:
 	case CHIP_POLARIS12:
+	case CHIP_VEGAM:
 		*block = polaris_blocks[block_id];
 		break;
 	case CHIP_VEGA10:
