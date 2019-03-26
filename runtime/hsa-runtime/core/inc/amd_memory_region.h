@@ -82,8 +82,7 @@ class MemoryRegion : public core::MemoryRegion {
   /// @brief Free agent accessible memory (system / local memory).
   static void FreeKfdMemory(void* ptr, size_t size);
 
-  static bool RegisterMemory(void* ptr, size_t size, size_t num_nodes,
-                             const uint32_t* nodes);
+  static bool RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags);
 
   static void DeregisterMemory(void* ptr);
 

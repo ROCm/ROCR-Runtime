@@ -386,6 +386,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_queue_set_priority_fn = AMD::hsa_amd_queue_set_priority;
   amd_ext_api.hsa_amd_memory_async_copy_rect_fn = AMD::hsa_amd_memory_async_copy_rect;
   amd_ext_api.hsa_amd_runtime_queue_create_register_fn = AMD::hsa_amd_runtime_queue_create_register;
+  amd_ext_api.hsa_amd_memory_lock_to_pool_fn = AMD::hsa_amd_memory_lock_to_pool;
 }
 
 class Init {

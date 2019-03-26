@@ -68,15 +68,11 @@ void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
   assert(status == HSAKMT_STATUS_SUCCESS);
 }
 
-bool MemoryRegion::RegisterMemory(void* ptr, size_t size, size_t num_nodes,
-                                  const uint32_t* nodes) {
+bool MemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags) {
   assert(ptr != NULL);
   assert(size != 0);
-  assert(num_nodes != 0);
-  assert(nodes != NULL);
 
-  const HSAKMT_STATUS status = hsaKmtRegisterMemoryToNodes(
-      ptr, size, num_nodes, const_cast<uint32_t*>(nodes));
+  const HSAKMT_STATUS status = hsaKmtRegisterMemoryWithFlags(ptr, size, MemFlags);
   return (status == HSAKMT_STATUS_SUCCESS);
 }
 
@@ -120,17 +116,12 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owne
         (mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE) ? 0 : 1;
     mem_flag_.ui32.NonPaged = 1;
 
-    map_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-
     virtual_size_ = kGpuVmSize;
   } else if (IsSystem()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     mem_flag_.ui32.NoSubstitute = 1;
     mem_flag_.ui32.HostAccess = 1;
     mem_flag_.ui32.CachePolicy = HSA_CACHING_CACHED;
-
-    map_flag_.ui32.HostAccess = 1;
-    map_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 
     virtual_size_ =
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
@@ -584,8 +575,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
   }
 
   // Call kernel driver to register and pin the memory.
-  if (RegisterMemory(host_ptr, size, whitelist_nodes.size(),
-                     &whitelist_nodes[0])) {
+  if (RegisterMemory(host_ptr, size, mem_flag_)) {
     uint64_t alternate_va = 0;
     if (MakeKfdMemoryResident(whitelist_nodes.size(), &whitelist_nodes[0],
                               host_ptr, size, &alternate_va, map_flag_)) {

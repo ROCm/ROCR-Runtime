@@ -1016,6 +1016,14 @@ hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
 }
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_t* agents,
+                                                 int num_agent, hsa_amd_memory_pool_t pool,
+                                                 uint32_t flags, void** agent_ptr) {
+  return amdExtTable->hsa_amd_memory_lock_to_pool_fn(host_ptr, size, agents, num_agent, pool, flags,
+                                                     agent_ptr);
+}
+
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_memory_unlock(void* host_ptr) {
   return amdExtTable->hsa_amd_memory_unlock_fn(host_ptr);
 

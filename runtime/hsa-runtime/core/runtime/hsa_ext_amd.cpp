@@ -549,11 +549,45 @@ hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  const amd::MemoryRegion* system_region =
-      reinterpret_cast<const amd::MemoryRegion*>(
-          core::Runtime::runtime_singleton_->system_regions_fine()[0]);
+  // Check for APU
+  if (core::Runtime::runtime_singleton_->system_regions_coarse().size() == 0) {
+    assert(core::Runtime::runtime_singleton_->system_regions_fine()[0]->full_profile() &&
+           "Missing coarse grain host memory on dGPU system.");
+    *agent_ptr = host_ptr;
+    return HSA_STATUS_SUCCESS;
+  }
+
+  const amd::MemoryRegion* system_region = static_cast<const amd::MemoryRegion*>(
+      core::Runtime::runtime_singleton_->system_regions_coarse()[0]);
 
   return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_t* agents,
+                                         int num_agent, hsa_amd_memory_pool_t pool, uint32_t flags,
+                                         void** agent_ptr) {
+  TRY;
+  IS_OPEN();
+  *agent_ptr = NULL;
+
+  if (size == 0 || host_ptr == NULL || agent_ptr == NULL || flags != 0) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  if ((agents != NULL && num_agent == 0) || (agents == NULL && num_agent != 0)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  hsa_region_t region = {pool.handle};
+  const amd::MemoryRegion* mem_region = amd::MemoryRegion::Convert(region);
+  if (mem_region == nullptr) {
+    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
+  }
+  if (mem_region->owner()->device_type() != core::Agent::kAmdCpuDevice)
+    return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
+
+  return mem_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
   CATCH;
 }
 
@@ -615,7 +649,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   TRY;
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL) {
+  if (size == 0 || ptr == NULL || flags != 0) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 

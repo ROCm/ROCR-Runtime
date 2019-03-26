@@ -181,7 +181,9 @@ global:
 	hsa_amd_queue_cu_set_mask;
 	hsa_amd_memory_fill;
 	hsa_amd_memory_async_copy;
+	hsa_amd_memory_async_copy_rect;
 	hsa_amd_memory_lock;
+	hsa_amd_memory_lock_to_pool;
 	hsa_amd_memory_unlock;
 	hsa_amd_agent_iterate_memory_pools;
 	hsa_amd_agent_memory_pool_get_info;
@@ -216,7 +218,6 @@ global:
 	hsa_amd_ipc_signal_attach;
 	hsa_amd_register_system_event_handler;
 	hsa_amd_queue_set_priority;
-	hsa_amd_memory_async_copy_rect;
 
 local:
     *;
