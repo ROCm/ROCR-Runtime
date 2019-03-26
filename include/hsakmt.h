@@ -401,6 +401,18 @@ hsaKmtRegisterMemoryToNodes(
 
 
 /**
+  Registers with KFD a memory buffer with memory attributes
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRegisterMemoryWithFlags(
+    void        *MemoryAddress,     // IN (cache-aligned)
+    HSAuint64   MemorySizeInBytes,  // IN (cache-aligned)
+    HsaMemFlags MemFlags            // IN
+    );
+
+/**
   Registers with KFD a graphics buffer and returns graphics metadata
 */
 
@@ -515,7 +527,7 @@ hsaKmtMapMemoryToGPUNodes(
     void*           MemoryAddress,         //IN (page-aligned)
     HSAuint64       MemorySizeInBytes,     //IN (page-aligned)
     HSAuint64*      AlternateVAGPU,        //OUT (page-aligned)
-     HsaMemMapFlags    MemMapFlags,               //IN
+    HsaMemMapFlags  MemMapFlags,           //IN
     HSAuint64       NumberOfNodes,         //IN
     HSAuint32*      NodeArray              //IN
     );

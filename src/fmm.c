@@ -2794,7 +2794,8 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	return found;
 }
 
-static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_object_t **obj_ret)
+static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
+				  vm_object_t **obj_ret, bool coarse_grain)
 {
 	manageable_aperture_t *aperture = svm.dgpu_aperture;
 	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
@@ -2818,7 +2819,8 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 	svm_addr = __fmm_allocate_device(gpu_id, NULL, aligned_size, aperture,
 			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR |
 			 KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
-			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE, &obj);
+			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE |
+			 (coarse_grain ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_COHERENT), &obj);
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
 
@@ -2841,7 +2843,8 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size, vm_obj
 
 HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 				  uint32_t *gpu_id_array,
-				  uint32_t gpu_id_array_size)
+				  uint32_t gpu_id_array_size,
+				  bool coarse_grain)
 {
 	manageable_aperture_t *aperture = NULL;
 	vm_object_t *object = NULL;
@@ -2857,7 +2860,7 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 			return HSAKMT_STATUS_SUCCESS;
 
 		/* Register a new user ptr */
-		ret = fmm_register_user_memory(address, size_in_bytes, &object);
+		ret = fmm_register_user_memory(address, size_in_bytes, &object, coarse_grain);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			return ret;
 		if (gpu_id_array_size == 0)

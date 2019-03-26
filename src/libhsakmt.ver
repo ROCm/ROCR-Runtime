@@ -26,6 +26,7 @@ hsaKmtAllocMemory;
 hsaKmtFreeMemory;
 hsaKmtRegisterMemory;
 hsaKmtRegisterMemoryToNodes;
+hsaKmtRegisterMemoryWithFlags;
 hsaKmtRegisterGraphicsHandleToNodes;
 hsaKmtShareMemory;
 hsaKmtRegisterSharedHandle;
