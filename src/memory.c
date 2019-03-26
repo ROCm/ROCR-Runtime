@@ -210,7 +210,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
 		return HSAKMT_STATUS_SUCCESS;
 
 	return fmm_register_memory(MemoryAddress, MemorySizeInBytes,
-				   NULL, 0);
+				   NULL, 0, true);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryToNodes(void *MemoryAddress,
@@ -235,10 +235,35 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryToNodes(void *MemoryAddress,
 	if (ret == HSAKMT_STATUS_SUCCESS) {
 		ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 					  gpu_id_array,
-					  NumberOfNodes*sizeof(uint32_t));
+					  NumberOfNodes*sizeof(uint32_t),
+					  true);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			free(gpu_id_array);
 	}
+
+	return ret;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryWithFlags(void *MemoryAddress,
+						    HSAuint64 MemorySizeInBytes,
+						    HsaMemFlags MemFlags)
+{
+	CHECK_KFD_OPEN();
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+	pr_debug("[%s] address %p\n",
+		__func__, MemoryAddress);
+
+	// Registered memory should be ordinary paged host memory.
+	if ((MemFlags.ui32.HostAccess != 1) || (MemFlags.ui32.NonPaged == 1))
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	if (!is_dgpu)
+		/* TODO: support mixed APU and dGPU configurations */
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+		NULL, 0, MemFlags.ui32.CoarseGrain);
 
 	return ret;
 }

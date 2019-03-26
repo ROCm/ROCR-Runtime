@@ -69,7 +69,8 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 
 HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 								  uint32_t *gpu_id_array,
-								  uint32_t gpu_id_array_size);
+								  uint32_t gpu_id_array_size,
+								  bool coarse_grain);
 HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
 					   uint32_t *gpu_id_array,
