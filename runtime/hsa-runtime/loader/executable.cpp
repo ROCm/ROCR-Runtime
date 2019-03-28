@@ -1301,8 +1301,6 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
   }
 
   uint64_t address = SymbolAddress(agent, sym);
-  if (!address) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-
   SymbolImpl *symbol = nullptr;
   if (string_ends_with(sym->GetSymbolName(), ".kd")) {
     // V3.
