@@ -353,6 +353,9 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE:
       *((uint32_t*)value) = properties_.NumArrays;
       break;
+    case HSA_AMD_AGENT_INFO_HDP_FLUSH:
+      *((hsa_amd_hdp_flush_t*)value) = {nullptr, nullptr};
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

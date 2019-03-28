@@ -136,8 +136,19 @@ typedef enum hsa_amd_agent_info_s {
    * Number of Shader Arrays Per Shader Engines in Gpu
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE = 0xA00D
+  HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE = 0xA00D,
+  /**
+   * Address of the HDP flush registers.  Use of these registers does not conform to the HSA memory
+   * model and should be treated with caution.
+   * The type of this attribute is hsa_amd_hdp_flush_t.
+   */
+  HSA_AMD_AGENT_INFO_HDP_FLUSH = 0xA00E
 } hsa_amd_agent_info_t;
+
+typedef struct hsa_amd_hdp_flush_s {
+  uint32_t* HDP_MEM_FLUSH_CNTL;
+  uint32_t* HDP_REG_FLUSH_CNTL;
+} hsa_amd_hdp_flush_t;
 
 /**
  * @brief Region attributes.
