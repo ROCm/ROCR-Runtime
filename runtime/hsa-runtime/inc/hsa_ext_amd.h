@@ -1676,7 +1676,6 @@ typedef enum hsa_amd_event_type_s {
    AMD GPU memory fault.
    */
   HSA_AMD_GPU_MEMORY_FAULT_EVENT = 0,
-  GPU_MEMORY_FAULT_EVENT = 0
 } hsa_amd_event_type_t;
 
 /**
