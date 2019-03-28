@@ -461,6 +461,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief The GPU memory maximum frequency in MHz.
   uint32_t memory_max_frequency_;
 
+  // @brief HDP flush registers
+  hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};
+
  private:
   // @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
