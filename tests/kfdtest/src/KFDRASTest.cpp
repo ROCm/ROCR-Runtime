@@ -29,7 +29,7 @@
 #include "PM4Queue.hpp"
 
 #define AMDGPU_DEBUGFS_NODES "/sys/kernel/debug/dri/"
-#define RAS_SDMA_ERR_INJECTION "ras/sdma_err_inject"
+#define RAS_CONTROL "ras/ras_ctrl"
 
 void KFDRASTest::SetUp() {
     ROUTINE_START
@@ -49,7 +49,7 @@ void KFDRASTest::SetUp() {
     renderNode = KFDBaseComponentTest::FindDRMRenderNode(m_defaultGPUNode);
     if (renderNode < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        return;
+        throw;
     }
 
     amdgpu_query_info(m_RenderNodes[renderNode].device_handle,
@@ -60,15 +60,15 @@ void KFDRASTest::SetUp() {
              AMDGPU_INFO_RAS_ENABLED_UMC ||
              AMDGPU_INFO_RAS_ENABLED_GFX))) {
         LOG() << "Skipping test: GPU doesn't support RAS features!" << std::endl;
-        return;
+        throw;
     }
 
-    snprintf(path, sizeof(path), "%s/%d/%s", AMDGPU_DEBUGFS_NODES, renderNode, RAS_SDMA_ERR_INJECTION);
+    snprintf(path, sizeof(path), "%s/%d/%s", AMDGPU_DEBUGFS_NODES, renderNode, RAS_CONTROL);
 
     m_pFile = fopen(path, "w");
     if (!m_pFile) {
         LOG() << "Skipping test: RAS error injection requires root access!" << std::endl;
-        return;
+        throw;
     }
 
     eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
@@ -105,7 +105,7 @@ TEST_F(KFDRASTest, BasicTest) {
     }
 
     // write an uncorrectable error injection at address 1 as value 1
-    ASSERT_SUCCESS(fwrite("ue 1 1", sizeof(char), 6, m_pFile));
+    fwrite("inject umc ue 1 1", sizeof(char), 17, m_pFile);
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pRasEvent, g_TestTimeOut));
 
@@ -136,7 +136,7 @@ TEST_F(KFDRASTest, MixEventsTest) {
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(pHsaEvent, g_TestTimeOut));
 
-    ASSERT_SUCCESS(fwrite("ue 1 1", sizeof(char), 6, m_pFile));
+    fwrite("inject umc ue 1 1", sizeof(char), 17, m_pFile);
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pRasEvent, g_TestTimeOut));
 
