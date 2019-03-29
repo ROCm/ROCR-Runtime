@@ -624,54 +624,88 @@ hsaKmtDbgAddressWatch(
 
 /**
    Suspend the execution of a set of queues. A queue that is suspended
-   allows the context save state to be inspected and modified. If a
+   allows the wave context save state to be inspected and modified. If a
    queue is already suspended it remains suspended. A suspended queue
    can be resumed by hsaKmtDbgQueueResume().
 
-   If NoGracePeriod is false then the default grace period used for
-   waiting for waves to complete before context switching is used. If
-   NoGracePeriod is true then no grace period us used and waves are
-   context saved as soon as possible.
-
-   If MemFence is true all queues being suspended will perform a
-   sequentially consistent system scope release that synchronizes with
-   a sequentially consistent system scope acquire performed by this
+   For each node that has a queue suspended, a sequentially consistent
+   system scope release will be performed that synchronizes with a
+   sequentially consistent system scope acquire performed by this
    call. This ensures any memory updates performed by the suspended
    queues are visible to the thread calling this operation.
 
+   Pid is the process that owns the queues that are to be supended or
+   resumed. If the value is -1 then the Pid of the process calling
+   hsaKmtQueueSuspend or hsaKmtQueueResume is used.
+
+   NumQueues is the number of queues that are being requested to
+   suspend or resume.
+
+   Queues is a pointer to an array with NumQueues entries of
+   HSA_QUEUEID. The queues in the list must be for queues that exist
+   for Pid, and can be a mixture of queues for different nodes.
+
+   GracePeriod to wait after initialiating context save before forcing
+   waves to context save. A value of 0 indicates no grace period.
+   It is ignored by hsaKmtQueueResume.
+
+   Flags is a bit set of the values defined by HSA_DBG_NODE_CONTROL.
    Returns:
     - HSAKMT_STATUS_SUCCESS if successful.
-
-    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
+    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid for Pid.
 */
+
 HSAKMT_STATUS
-    HSAKMTAPI
-    hsaKmtNodeSuspend(
-            HSAuint32 Pid,
-            HSAuint32 NodeId,
-            HSAuint32 Flags);
+HSAKMTAPI
+hsaKmtQueueSuspend(
+        HSAuint32    Pid,          // IN
+        HSAuint32    NumQueues,    // IN
+        HSA_QUEUEID *Queues,       // IN
+        HSAuint32    GracePeriod,  // IN
+        HSAuint32    Flags);       // IN
+
 /**
    Resume the execution of a set of queues. If a queue is not
-   suspended by hsaKmtDbgQueueSuspend() then it remains executing.
+   suspended by hsaKmtDbgQueueSuspend() then it remains executing. Any
+   changes to the wave state data will be used when the waves are
+   restored. Changes to the control stack data will have no effect.
 
-   If MemFence is true this call will perform a sequentially
-   consistent system scope release that synchronizes with a
+   For each node that has a queue resumed, a sequentially consistent
+   system scope release will be performed that synchronizes with a
    sequentially consistent system scope acquire performed by all
    queues being resumed. This ensures any memory updates performed by
    the thread calling this operation are visible to the resumed
    queues.
 
-   Returns:
-    - HSAKMT_STATUS_SUCCESS if successful.
+   For each node that has a queue resumed, the instruction cache will
+   be invalidated. This ensures any instruction code updates performed
+   by the thread calling this operation are visible to the resumed
+   queues.
 
+   Pid is the process that owns the queues that are to be supended or
+   resumed. If the value is -1 then the Pid of the process calling
+   hsaKmtQueueSuspend or hsaKmtQueueResume is used.
+
+   NumQueues is the number of queues that are being requested to
+   suspend or resume.
+
+   Queues is a pointer to an array with NumQueues entries of
+   HSA_QUEUEID. The queues in the list must be for queues that exist
+   for Pid, and can be a mixture of queues for different nodes.
+
+   Flags is a bit set of the values defined by HSA_DBG_NODE_CONTROL.
+   Returns:
+    - HSAKMT_STATUS_SUCCESS if successful
     - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
 */
+
 HSAKMT_STATUS
-    HSAKMTAPI
-    hsaKmtNodeResume(
-            HSAuint32 Pid,
-            HSAuint32 NodeId,
-            HSAuint32 Flags);
+HSAKMTAPI
+hsaKmtQueueResume(
+            HSAuint32   Pid,         // IN
+            HSAuint32   NumQueues,   // IN
+            HSA_QUEUEID *Queues,     // IN
+            HSAuint32   Flags);      // IN
 
 /**
   Enable debug trap for NodeId. If QueueId is INVALID_QUEUEID then

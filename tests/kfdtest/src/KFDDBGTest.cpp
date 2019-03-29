@@ -208,7 +208,7 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-        HSAuint32 Flags = HSA_DBG_NODE_CONTROL_NO_GRACE_PERIOD;
+        HSAuint32 Flags = 0;
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
         HsaMemoryBuffer iterateBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
         HsaMemoryBuffer resultBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
@@ -222,6 +222,7 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
         m_pIsaGen->CompileShader(iterate_isa_gfx9, "iterate_isa", isaBuffer);
 
         PM4Queue queue1;
+        HSA_QUEUEID queue_ids[2];
 
         ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
 
@@ -242,9 +243,13 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
 
         // Submit the shader, queue1
         dispatch1->Submit(queue1);
+        queue_ids[0] = 0;
 
-        ASSERT_SUCCESS(hsaKmtNodeSuspend(INVALID_PID,
-                    defaultGPUNode,
+        ASSERT_SUCCESS(hsaKmtQueueSuspend(
+                    INVALID_PID,
+                    1,  // one queue
+                    queue_ids,
+                    10,  // grace period
                     Flags));
 
         syncStatus = dispatch1->SyncWithStatus(suspendTimeout);
@@ -263,8 +268,10 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
 
         ASSERT_NE(iter[0], result[0]);
 
-        ASSERT_SUCCESS(hsaKmtNodeResume(INVALID_PID,
-                    defaultGPUNode,
+        ASSERT_SUCCESS(hsaKmtQueueResume(
+                    INVALID_PID,
+                    1,  // Num queues
+                    queue_ids,
                     Flags));
 
         dispatch1->Sync();
