@@ -273,7 +273,10 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 				HSAuint32 op,
 				HSAuint32 data1,
 				HSAuint32 data2,
-				HSAuint32 data3)
+				HSAuint32 data3,
+				HSAuint32 pid,
+				HSAuint64 pointer
+				)
 {
 	uint32_t gpu_id;
 	HSAKMT_STATUS result;
@@ -282,16 +285,29 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 
 	CHECK_KFD_OPEN();
 
-	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
-		return HSAKMT_STATUS_INVALID_HANDLE;
+	if (op == KFD_IOC_DBG_TRAP_NODE_RESUME ||
+			op == KFD_IOC_DBG_TRAP_NODE_RESUME) {
+		if  (NodeId != INVALID_NODEID)
+			return HSAKMT_STATUS_INVALID_HANDLE;
 
-	result = hsaKmtGetNodeProperties(NodeId, &NodeProperties);
+		// gpu_id is ignored for suspend/resume queues.
+		gpu_id = INVALID_NODEID;
+	} else {
+		if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+			return HSAKMT_STATUS_INVALID_HANDLE;
 
-	if (result != HSAKMT_STATUS_SUCCESS)
-		return result;
+		result = hsaKmtGetNodeProperties(NodeId, &NodeProperties);
 
-	if (!NodeProperties.Capability.ui32.DebugTrapSupported)
-		return HSAKMT_STATUS_NOT_SUPPORTED;
+		if (result != HSAKMT_STATUS_SUCCESS)
+			return result;
+
+		if (!NodeProperties.Capability.ui32.DebugTrapSupported)
+			return HSAKMT_STATUS_NOT_SUPPORTED;
+	}
+
+	if (pid == INVALID_PID) {
+		pid = (HSAuint32) getpid();
+	}
 
 	memset(&args, 0x00, sizeof(args));
 	args.gpu_id = gpu_id;
@@ -299,7 +315,8 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 	args.data1 = data1;
 	args.data2 = data2;
 	args.data3 = data3;
-	args.data4 = 0;
+	args.pid = pid;
+	args.ptr = pointer;
 
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
 
@@ -317,12 +334,24 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrap(HSAuint32   NodeId,
 	if (QueueId != INVALID_QUEUEID)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	return debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 1, QueueId, 0);
+	return debug_trap(NodeId,
+				KFD_IOC_DBG_TRAP_ENABLE,
+				1,
+				QueueId,
+				0,
+				INVALID_PID,
+				0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
 {
-	return  debug_trap(NodeId, KFD_IOC_DBG_TRAP_ENABLE, 0, 0, 0);
+	return  debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_ENABLE,
+			0,
+			0,
+			0,
+			INVALID_PID,
+			0);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
@@ -333,6 +362,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
 				KFD_IOC_DBG_TRAP_SET_TRAP_DATA,
 				TrapData0,
 				TrapData1,
+				0,
+				INVALID_PID,
 				0);
 }
 
@@ -348,6 +379,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
 				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE,
 				TrapOverride,
 				TrapMask,
+				0,
+				INVALID_PID,
 				0);
 }
 
@@ -359,51 +392,115 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
 				KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE,
 				WaveLaunchMode,
 				0,
+				0,
+				INVALID_PID,
 				0);
 }
 
-HSAKMT_STATUS HSAKMTAPI hsaKmtNodeSuspend(
-		HSAuint32 Pid,
-		HSAuint32 NodeId,
-		HSAuint32 Flags)
-{
-	pid_t current_pid = INVALID_PID;
+/**
+ *   Suspend the execution of a set of queues. A queue that is suspended
+ *   allows the wave context save state to be inspected and modified. If a
+ *   queue is already suspended it remains suspended. A suspended queue
+ *   can be resumed by hsaKmtDbgQueueResume().
+ *
+ *   For each node that has a queue suspended, a sequentially consistent
+ *   system scope release will be performed that synchronizes with a
+ *   sequentially consistent system scope acquire performed by this
+ *   call. This ensures any memory updates performed by the suspended
+ *   queues are visible to the thread calling this operation.
+ *
+ *   Pid is the process that owns the queues that are to be supended or
+ *   resumed. If the value is -1 then the Pid of the process calling
+ *   hsaKmtQueueSuspend or hsaKmtQueueResume is used.
+ *
+ *   NumQueues is the number of queues that are being requested to
+ *   suspend or resume.
+ *
+ *   Queues is a pointer to an array with NumQueues entries of
+ *   HSA_QUEUEID. The queues in the list must be for queues the exist
+ *   for Pid, and can be a mixture of queues for different nodes.
+ *
+ *   GracePeriod is the number of milliseconds  to wait after
+ *   initialiating context save before forcing waves to context save. A
+ *   value of 0 indicates no grace period. It is ignored by
+ *   hsaKmtQueueResume.
+ *
+ *   Flags is a bit set of the values defined by HSA_DBG_NODE_CONTROL.
+ *   Returns:
+ *    - HSAKMT_STATUS_SUCCESS if successful.
+ *    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid for Pid.
+ */
 
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueueSuspend(
+		HSAuint32    Pid,         // IN
+		HSAuint32    NumQueues,   // IN
+		HSA_QUEUEID *Queues,      // IN
+		HSAuint32    GracePeriod, // IN
+		HSAuint32    Flags)       // IN
+{
 	CHECK_KFD_OPEN();
 
-	if (Pid == INVALID_PID) {
-		current_pid = getpid();
-		if (current_pid == 0)
-			return HSAKMT_STATUS_INVALID_HANDLE;
-		Pid = (HSAuint32) current_pid;
-	}
-
-	return debug_trap(NodeId,
-			KFD_IOC_DBG_TRAP_NODE_SUSPEND,
-			Pid,
-			NodeId,
-			Flags);
-}
-
-HSAKMT_STATUS HSAKMTAPI hsaKmtNodeResume(
-		HSAuint32 Pid,
-		HSAuint32 NodeId,
-		HSAuint32 Flags)
-{
-	pid_t current_pid = INVALID_PID;
-
-	CHECK_KFD_OPEN();
-
-	if (Pid == INVALID_PID) {
-		current_pid = getpid();
-		if (current_pid == 0)
-			return HSAKMT_STATUS_INVALID_HANDLE;
-		Pid = (HSAuint32) current_pid;
-	}
-
-	return debug_trap(NodeId,
+	return debug_trap(INVALID_NODEID,
 			KFD_IOC_DBG_TRAP_NODE_RESUME,
+			Flags,
+			NumQueues,
+			GracePeriod,
 			Pid,
-			NodeId,
-			Flags);
+			(HSAuint64)Queues);
+}
+/**
+ *   Resume the execution of a set of queues. If a queue is not
+ *   suspended by hsaKmtDbgQueueSuspend() then it remains executing. Any
+ *   changes to the wave state data will be used when the waves are
+ *   restored. Changes to the control stack data will have no effect.
+ *
+ *   For each node that has a queue resumed, a sequentially consistent
+ *   system scope release will be performed that synchronizes with a
+ *   sequentially consistent system scope acquire performed by all
+ *   queues being resumed. This ensures any memory updates performed by
+ *   the thread calling this operation are visible to the resumed
+ *   queues.
+ *
+ *   For each node that has a queue resumed, the instruction cache will
+ *   be invalidated. This ensures any instruction code updates performed
+ *   by the thread calling this operation are visible to the resumed
+ *   queues.
+ *
+ *   Pid is the process that owns the queues that are to be supended or
+ *   resumed. If the value is -1 then the Pid of the process calling
+ *   hsaKmtQueueSuspend or hsaKmtQueueResume is used.
+ *
+ *   NumQueues is the number of queues that are being requested to
+ *   suspend or resume.
+ *
+ *   Queues is a pointer to an array with NumQueues entries of
+ *   HSA_QUEUEID. The queues in the list must be for queues the exist
+ *   for Pid, and can be a mixture of queues for different nodes.
+ *
+ *   Flags is a bit set of the values defined by HSA_DBG_NODE_CONTROL.
+ *   Returns:
+ *    - HSAKMT_STATUS_SUCCESS if successful
+ *    - HSAKMT_STATUS_INVALID_HANDLE if any QueueId is invalid.
+ */
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueueResume(
+		HSAuint32    Pid,         // IN
+		HSAuint32    NumQueues,   // IN
+		HSA_QUEUEID *Queues,      // IN
+		HSAuint32    Flags)       // IN
+{
+
+	CHECK_KFD_OPEN();
+
+	return debug_trap(INVALID_NODEID,
+			KFD_IOC_DBG_TRAP_NODE_RESUME,
+			Flags,
+			NumQueues,
+			0,
+			Pid,
+			(HSAuint64) Queues);
 }
