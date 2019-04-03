@@ -35,6 +35,7 @@
 #include <sched.h>
 #include <pci/pci.h>
 #include <errno.h>
+#include <sys/sysinfo.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -51,7 +52,6 @@
 #define KFD_SYSFS_PATH_GENERATION_ID "/sys/devices/virtual/kfd/kfd/topology/generation_id"
 #define KFD_SYSFS_PATH_SYSTEM_PROPERTIES "/sys/devices/virtual/kfd/kfd/topology/system_properties"
 #define KFD_SYSFS_PATH_NODES "/sys/devices/virtual/kfd/kfd/topology/nodes"
-#define PROC_CPUINFO_PATH "/proc/cpuinfo"
 
 typedef struct {
 	uint32_t gpu_id;
@@ -72,7 +72,7 @@ static uint32_t *map_user_to_sysfs_node_id;
 static uint32_t map_user_to_sysfs_node_id_size;
 static uint32_t num_sysfs_nodes;
 
-static int processor_vendor;
+static int processor_vendor = -1;
 /* Supported System Vendors */
 enum SUPPORTED_PROCESSOR_VENDORS {
 	GENUINE_INTEL = 0,
@@ -230,6 +230,11 @@ static struct hsa_gfxip_table {
 	{ 0x7318, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
 	{ 0x731A, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
 	{ 0x731F, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
+};
+
+struct proc_cpuinfo {
+	uint32_t apicid;
+	char model_name[HSA_PUBLIC_NAME_SIZE];
 };
 
 enum cache_type {
@@ -782,70 +787,27 @@ bool topology_is_svm_needed(uint16_t device_id)
 }
 
 static HSAKMT_STATUS topology_get_cpu_model_name(HsaNodeProperties *props,
-						 bool is_apu)
+				struct proc_cpuinfo *cpuinfo, int num_procs)
 {
-	FILE *fd;
-	char read_buf[256], cpu_model_name[HSA_PUBLIC_NAME_SIZE];
-	const char *p;
-	uint32_t i = 0, apic_id = 0;
+	int i, j;
 
-	if (!props)
+	if (!props) {
+		pr_err("Invalid props to get cpu model name\n");
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	fd = fopen(PROC_CPUINFO_PATH, "r");
-	if (!fd) {
-		pr_err("Failed to open [%s]. Unable to get CPU Model Name",
-			PROC_CPUINFO_PATH);
-		return HSAKMT_STATUS_ERROR;
 	}
 
-	while (fgets(read_buf, sizeof(read_buf), fd)) {
-		/* Get the model name first, in case matching
-		 * apic IDs are also present in the file
-		 */
-		if (!strncmp("model name", read_buf, sizeof("model name") - 1)) {
-			p = strrchr(read_buf, ':');
-			if (!p)
-				goto err;
-
-			p++; // remove separator ':'
-			for (; isspace(*p); p++)
-				; /* remove white space */
-
-			/* Extract model name from string */
-			for (i = 0; i < sizeof(cpu_model_name) - 1 && p[i] != '\n'; i++)
-				cpu_model_name[i] = p[i];
-			cpu_model_name[i] = '\0';
-		}
-
-		if (!strncmp("apicid", read_buf, sizeof("apicid") - 1)) {
-			p = strrchr(read_buf, ':');
-			if (!p)
-				goto err;
-
-			p++; // remove separator ':'
-			for (; isspace(*p); p++)
-				; /* remove white space */
-
-			/* Extract apic_id from remaining chars */
-			apic_id = atoi(p);
-
-			/* Set CPU model name only if corresponding apic id */
-			if (props->CComputeIdLo == apic_id) {
-				/* Retrieve the CAL name of CPU node */
-				if (!is_apu)
-					strncpy((char *)props->AMDName, cpu_model_name, sizeof(props->AMDName));
-				/* Convert from UTF8 to UTF16 */
-				for (i = 0; cpu_model_name[i] != '\0' && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
-					props->MarketingName[i] = cpu_model_name[i];
-				props->MarketingName[i] = '\0';
-			}
+	for (i = 0; i < num_procs; i++, cpuinfo++) {
+		if (props->CComputeIdLo == cpuinfo->apicid) {
+			if (!props->DeviceId) /* CPU-only node */
+				strncpy((char *)props->AMDName, cpuinfo->model_name, sizeof(props->AMDName));
+			/* Convert from UTF8 to UTF16 */
+			for (j = 0; cpuinfo->model_name[j] != '\0' && j < HSA_PUBLIC_NAME_SIZE - 1; j++)
+				props->MarketingName[j] = cpuinfo->model_name[j];
+			props->MarketingName[j] = '\0';
+			return HSAKMT_STATUS_SUCCESS;
 		}
 	}
-	fclose(fd);
-	return HSAKMT_STATUS_SUCCESS;
-err:
-	fclose(fd);
+
 	return HSAKMT_STATUS_ERROR;
 }
 
@@ -860,44 +822,93 @@ static int topology_search_processor_vendor(const char *processor_name)
 	return -1;
 }
 
-/* topology_set_processor_vendor - Parse /proc/cpuinfo and
- *  to find processor vendor and set global variable processor_vendor
- *
- *  cat /proc/cpuinfo format is - "token       : Value"
- *  where token = "vendor_id" and
- *        Value = indicates System Vendor
+/* topology_parse_cpuinfo - Parse /proc/cpuinfo and fill up required
+ *			topology information
+ * cpuinfo [OUT]: output buffer to hold cpu information
+ * num_procs: number of processors the output buffer can hold
  */
-static void topology_set_processor_vendor(void)
+static HSAKMT_STATUS topology_parse_cpuinfo(struct proc_cpuinfo *cpuinfo,
+					    uint32_t num_procs)
 {
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	FILE *fd;
 	char read_buf[256];
-	const char *p;
+	char *p;
+	uint32_t proc = 0;
+	const char *proc_cpuinfo_path = "/proc/cpuinfo";
 
-	fd = fopen(PROC_CPUINFO_PATH, "r");
-	if (!fd) {
-		pr_err("Failed to open [%s]. Setting Processor Vendor to %s",
-			PROC_CPUINFO_PATH, supported_processor_vendor_name[GENUINE_INTEL]);
-		processor_vendor = GENUINE_INTEL;
-		return;
+	if (!cpuinfo) {
+		pr_err("CPU information will be missing\n");
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
+	fd = fopen(proc_cpuinfo_path, "r");
+	if (!fd) {
+		pr_err("Failed to open [%s]. Unable to get CPU information",
+			proc_cpuinfo_path);
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	/* Each line in /proc/cpuinfo that read_buf is constructed, the format
+	 * is like this:
+	 * "token       : value\n"
+	 * where token is our target like vendor_id, model name, apicid ...
+	 * and value is the answer
+	 */
 	while (fgets(read_buf, sizeof(read_buf), fd)) {
-		if (!strncmp("vendor_id", read_buf, sizeof("vendor_id") - 1)) {
-			p = strrchr(read_buf, ':');
-			p++; // remove separator ':'
-			for (; *p && isspace(*p); p++)
-				;	/* remove white space */
-			processor_vendor = topology_search_processor_vendor(p);
-			if (processor_vendor != -1) {
-				fclose(fd);
-				return;
+		/* processor number */
+		if (!strncmp("processor", read_buf, sizeof("processor") - 1)) {
+			p = strchr(read_buf, ':');
+			p += 2; /* remove ": " */
+			proc = atoi(p);
+			if (proc >= num_procs) {
+				pr_warn("cpuinfo contains processor %d lager than %u\n",
+					proc, num_procs);
+				ret = HSAKMT_STATUS_NO_MEMORY;
+				goto exit;
 			}
+			continue;
+		}
+
+		/* vendor name */
+		if (!strncmp("vendor_id", read_buf, sizeof("vendor_id") - 1) &&
+			(processor_vendor == -1)) {
+			p = strchr(read_buf, ':');
+			p += 2; /* remove ": " */
+			processor_vendor = topology_search_processor_vendor(p);
+			continue;
+		}
+
+		/* model name */
+		if (!strncmp("model name", read_buf, sizeof("model name") - 1)) {
+			p = strchr(read_buf, ':');
+			p += 2; /* remove ": " */
+			if (strlen(p) < HSA_PUBLIC_NAME_SIZE) {
+				/* -1 to remove \n from p */
+				strncpy(cpuinfo[proc].model_name, p, strlen(p) - 1);
+				cpuinfo[proc].model_name[strlen(p) - 1] = '\0';
+			} else
+				strncpy(cpuinfo[proc].model_name, p, HSA_PUBLIC_NAME_SIZE);
+			continue;
+		}
+
+		/* apicid */
+		if (!strncmp("apicid", read_buf, sizeof("apicid") - 1)) {
+			p = strchr(read_buf, ':');
+			p += 2; /* remove ": " */
+			cpuinfo[proc].apicid = atoi(p);
 		}
 	}
+
+	if (processor_vendor < 0) {
+		pr_err("Failed to get Processor Vendor. Setting to %s",
+			supported_processor_vendor_name[GENUINE_INTEL]);
+		processor_vendor = GENUINE_INTEL;
+	}
+
+exit:
 	fclose(fd);
-	pr_err("Failed to get Processor Vendor. Setting to %s",
-		supported_processor_vendor_name[GENUINE_INTEL]);
-	processor_vendor = GENUINE_INTEL;
+	return ret;
 }
 
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
@@ -1048,15 +1059,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 		/* Retrieve the CAL name of the node */
 		strncpy((char *)props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName)-1);
-		if (props->NumCPUCores) {
-			/* Is APU node */
-			ret = topology_get_cpu_model_name(props, true);
-			if (ret != HSAKMT_STATUS_SUCCESS) {
-				pr_err("Failed to get APU Model Name from %s\n", PROC_CPUINFO_PATH);
-				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
-			}
-		} else {
-			/* Is dGPU Node
+		if (!props->NumCPUCores) {
+			/* Is dGPU Node, not APU
 			 * Retrieve the marketing name of the node using pcilib,
 			 * convert UTF8 to UTF16
 			 */
@@ -1065,18 +1069,6 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 				props->MarketingName[i] = name[i];
 			props->MarketingName[i] = '\0';
-		}
-	} else {
-		/* Is CPU Node */
-		if (!props->NumFComputeCores || !props->DeviceId) {
-			ret = topology_get_cpu_model_name(props, false);
-			if (ret != HSAKMT_STATUS_SUCCESS) {
-				pr_err("Failed to get CPU Model Name from %s\n", PROC_CPUINFO_PATH);
-				ret = HSAKMT_STATUS_SUCCESS; /* No hard error, continue regardless */
-			}
-		} else {
-			ret = HSAKMT_STATUS_ERROR;
-			goto err;
 		}
 	}
 	if (props->NumFComputeCores)
@@ -1808,8 +1800,16 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	struct pci_access *pacc;
 	char *envvar;
+	struct proc_cpuinfo *cpuinfo;
+	const uint32_t num_procs = get_nprocs();
 
-	topology_set_processor_vendor();
+	cpuinfo = calloc(num_procs, sizeof(struct proc_cpuinfo));
+	if (!cpuinfo) {
+		pr_err("Fail to allocate memory for CPU info\n");
+		return HSAKMT_STATUS_NO_MEMORY;
+	}
+	topology_parse_cpuinfo(cpuinfo, num_procs);
+
 	envvar = getenv("HSA_RUNNING_UNDER_VALGRIND");
 	if (envvar && !strcmp(envvar, "1"))
 		is_valgrind = 1;
@@ -1819,15 +1819,17 @@ HSAKMT_STATUS topology_take_snapshot(void)
 retry:
 	ret = topology_sysfs_get_generation(&gen_start);
 	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
+		goto err;
 	ret = topology_sysfs_get_system_props(&sys_props);
 	if (ret != HSAKMT_STATUS_SUCCESS)
-		return ret;
+		goto err;
 	if (sys_props.NumNodes > 0) {
 		topology_create_temp_cpu_cache_list(&cpu_ci_list);
 		temp_props = calloc(sys_props.NumNodes * sizeof(node_props_t), 1);
-		if (!temp_props)
-			return HSAKMT_STATUS_NO_MEMORY;
+		if (!temp_props) {
+			ret = HSAKMT_STATUS_NO_MEMORY;
+			goto err;
+		}
 		pacc = pci_alloc();
 		pci_init(pacc);
 		for (i = 0; i < sys_props.NumNodes; i++) {
@@ -1838,6 +1840,11 @@ retry:
 				free_properties(temp_props, i);
 				goto err;
 			}
+
+			if (temp_props[i].node.NumCPUCores)
+				topology_get_cpu_model_name(&temp_props[i].node,
+							cpuinfo, num_procs);
+
 			if (temp_props[i].node.NumMemoryBanks) {
 				temp_props[i].mem = calloc(temp_props[i].node.NumMemoryBanks * sizeof(HsaMemoryProperties), 1);
 				if (!temp_props[i].mem) {
@@ -1934,7 +1941,8 @@ retry:
 		g_system = malloc(sizeof(HsaSystemProperties));
 		if (!g_system) {
 			free_properties(temp_props, sys_props.NumNodes);
-			return HSAKMT_STATUS_NO_MEMORY;
+			ret = HSAKMT_STATUS_NO_MEMORY;
+			goto err;
 		}
 	}
 
@@ -1943,6 +1951,7 @@ retry:
 		free(g_props);
 	g_props = temp_props;
 err:
+	free(cpuinfo);
 	topology_destroy_temp_cpu_cache_list(cpu_ci_list);
 	return ret;
 }
