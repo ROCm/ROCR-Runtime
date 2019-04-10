@@ -641,6 +641,34 @@ typedef enum _HSA_QUEUE_TYPE
     HSA_QUEUE_TYPE_SIZE            = 0xFFFFFFFF     //aligns to 32bit enum
 } HSA_QUEUE_TYPE;
 
+/**
+  The user context save area starts at offset 0 with the
+  HsaUserContextSaveAreaHeader header followed by the space for a
+  user space copy of the control stack and the user space wave save
+  state. The area must be dword aligned. The context save area is
+  valid for the duration that the associated queue exists. When a
+  context save occurs, the HsaUserContextSaveAreaHeader header will
+  be updated with information about the context save. The context save
+  area is not modified by any other operation, including a context
+  resume.
+ */
+
+typedef struct
+{
+    HSAuint32 ControlStackOffset;  // Byte offset from start of user context
+                                 // save area to the last saved top (lowest
+                                 // address) of control stack data. Must be
+                                 // 4 byte aligned.
+    HSAuint32 ControlStackSize;  // Byte size of the last saved control stack
+                                 // data. Must be 4 byte aligned.
+    HSAuint32 WaveStateOffset;   // Byte offset from start of user context save
+                                 // area to the last saved base (lowest address)
+                                 // of wave state data. Must be 4 byte aligned.
+    HSAuint32 WaveStateSize;     // Byte size of the last saved wave state data.
+                                 // Must be 4 byte aligned.
+} HsaUserContextSaveAreaHeader;
+
+
 typedef struct
 {
 	HSAuint32 QueueDetailError;	// HW specific queue error state
@@ -656,7 +684,7 @@ typedef struct
 	HSAuint64 SaveAreaSizeInBytes;	// Must be 4-Byte aligned
 	HSAuint32* ControlStackTop;	// ptr to the TOS
 	HSAuint64 ControlStackUsedInBytes; // Must be 4-Byte aligned
-	HSAuint64 Reserved1;		// runtime/system CU assignment
+	HsaUserContextSaveAreaHeader *SaveAreaHeader;
 	HSAuint64 Reserved2;		// runtime/system CU assignment
 } HsaQueueInfo;
 
