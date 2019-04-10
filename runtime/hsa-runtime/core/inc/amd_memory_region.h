@@ -157,10 +157,6 @@ class MemoryRegion : public core::MemoryRegion {
     return mem_props_.HeapType == HSA_HEAPTYPE_GPU_SCRATCH;
   }
 
-  __forceinline bool IsSvm() const {
-    return mem_props_.HeapType == HSA_HEAPTYPE_DEVICE_SVM;
-  }
-
   __forceinline uint32_t BusWidth() const {
     return static_cast<uint32_t>(mem_props_.Width);
   }

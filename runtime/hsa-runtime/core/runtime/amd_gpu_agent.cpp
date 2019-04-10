@@ -296,8 +296,7 @@ void GpuAgent::InitRegionList() {
           memory_bus_width_ = mem_props[mem_idx].Width;
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
-        case HSA_HEAPTYPE_GPU_SCRATCH:
-        case HSA_HEAPTYPE_DEVICE_SVM: {
+        case HSA_HEAPTYPE_GPU_SCRATCH: {
           MemoryRegion* region =
               new MemoryRegion(false, false, this, mem_props[mem_idx]);
 
