@@ -63,7 +63,7 @@ static const uint16_t kBarrierHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKE
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
 
-static const hsa_barrier_and_packet_t kBarrierPacket = {kInvalidHeader, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static const hsa_barrier_and_packet_t kBarrierPacket = {kInvalidHeader, 0, 0, {}, 0, {}};
 
 int InterceptQueue::rtti_id_ = 0;
 

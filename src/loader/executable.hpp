@@ -115,7 +115,7 @@ protected:
     , is_definition(_is_definition)
     , address(_address) {}
 
-  virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value);
+  virtual bool GetInfo(hsa_symbol_info32_t symbol_info, void *value) override;
 
 private:
   SymbolImpl(const SymbolImpl &s);

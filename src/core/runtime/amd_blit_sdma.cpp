@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -455,8 +455,10 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
     hsa_dim3_t Doff = *dst_offset;
     hsa_dim3_t Range = *range;
 
-    Src.base += Soff.z * Src.slice + Soff.y * Src.pitch;
-    Dst.base += Doff.z * Dst.slice + Doff.y * Dst.pitch;
+    reinterpret_cast<char*&>(Src.base) +=
+      Soff.z * Src.slice + Soff.y * Src.pitch;
+    reinterpret_cast<char*&>(Dst.base) +=
+      Doff.z * Dst.slice + Doff.y * Dst.pitch;
     Soff.y = Soff.z = 0;
     Doff.y = Doff.z = 0;
 
@@ -730,7 +732,7 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildCopyRectCo
     Ex. range->x=71, assume max range is 16 elements:  We can break at 64 giving tiles:
     [0,63], [64-70] (width 64 & 7).  64 is covered by element 4 (16B) and 7 is covered by element 0
     (1B).  Exactly covering 71 requires using element 0.
-  
+
   Base addresses in each tile must be DWORD aligned, if not then the offset from an aligned address
   must be represented in elements.  This may reduce the size of the element, but since elements are
   integer multiples of each other this is harmless.

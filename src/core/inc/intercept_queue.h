@@ -122,7 +122,7 @@ class QueueWrapper : public Queue {
   void SetProfiling(bool enabled) override { wrapped->SetProfiling(enabled); }
 
  protected:
-  void do_set_public_handle(hsa_queue_t* handle) {
+  void do_set_public_handle(hsa_queue_t* handle) override {
     public_handle_ = handle;
     wrapped->set_public_handle(wrapped.get(), handle);
   }
@@ -243,12 +243,12 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
   /// @brief Update signal value using Relaxed semantics
   ///
   /// @param value Value of signal to update with
-  void StoreRelaxed(hsa_signal_value_t value);
+  void StoreRelaxed(hsa_signal_value_t value) override;
 
   /// @brief Update signal value using Release semantics
   ///
   /// @param value Value of signal to update with
-  void StoreRelease(hsa_signal_value_t value) {
+  void StoreRelease(hsa_signal_value_t value) override {
     std::atomic_thread_fence(std::memory_order_release);
     StoreRelaxed(value);
   }
@@ -257,7 +257,7 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
   static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
 
  protected:
-  bool _IsA(Queue::rtti_t id) const { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
  private:
   static int rtti_id_;
