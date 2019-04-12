@@ -277,6 +277,7 @@ static inline HsaSharedMemoryStruct *to_hsa_shared_memory_struct(
 	return (HsaSharedMemoryStruct *)SharedMemoryHandle;
 }
 
+__attribute__((unused))
 static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 			HsaSharedMemoryStruct *SharedMemoryStruct)
 {

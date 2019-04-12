@@ -63,7 +63,10 @@ set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUIL
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Compiler flags
-set (HSAKMT_C_FLAGS -fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wlogical-op -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden)
+set (HSAKMT_C_FLAGS -fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-security -Wswitch-default -Wundef -Wshadow -Wpointer-arith -Wbad-function-cast -Wcast-qual -Wstrict-prototypes -Wmissing-prototypes -Wmissing-declarations -Wredundant-decls -Wunreachable-code -std=gnu99 -fvisibility=hidden)
+if ( CMAKE_COMPILER_IS_GNUCC )
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -Wlogical-op)
+endif ()
 if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
     set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -Werror )
 endif ()
@@ -133,7 +136,7 @@ add_custom_target ( build-dev
         -DHSAKMT_BIN_NAME="${HSAKMT}"
     WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 
-## Custom targets for the devel package 
+## Custom targets for the devel package
 add_custom_target ( install-dev DEPENDS build-dev COMMAND make install WORKING_DIRECTORY ${DEV_BUILD_DIR} )
 add_custom_target ( package-dev DEPENDS build-dev
     COMMAND rm -rf *.deb *.rpm *.tar.gz
