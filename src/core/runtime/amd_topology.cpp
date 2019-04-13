@@ -68,7 +68,7 @@ static const uint kKfdVersionMinor = 99;
 
 #ifndef NDEBUG
 static bool PrintUsrGpuMap(std::map<uint32_t, int32_t>& gpu_usr_map) {
-  (void)PrintUsrGpuMap; //Suppress unused symbol warning.
+  (void)PrintUsrGpuMap;  // Suppress unused symbol warning.
   std::map<uint32_t, int32_t>::iterator it;
   for (it = gpu_usr_map.begin(); it != gpu_usr_map.end(); it++) {
     int32_t usrIdx = it->second;
