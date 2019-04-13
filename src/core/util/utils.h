@@ -305,6 +305,8 @@ static __forceinline uint64_t NextPow2(uint64_t value) {
   return v + 1;
 }
 
+static __forceinline bool strIsEmpty(const char* str) noexcept { return str[0] == '\0'; }
+
 #include "atomic_helpers.h"
 
 #endif  // HSA_RUNTIME_CORE_UTIL_UTIIS_H_
