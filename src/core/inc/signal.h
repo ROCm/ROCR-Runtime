@@ -198,8 +198,7 @@ class Signal {
   /// @brief Converts from public hsa_signal_t type (an opaque handle) to
   /// this interface class object.
   static __forceinline Signal* Convert(hsa_signal_t signal) {
-    if (signal.handle == 0)
-      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "Signal handle is invalid.");
+    if (signal.handle == 0) throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "");
     SharedSignal* shared = SharedSignal::Convert(signal);
     if (!shared->IsValid())
       throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_SIGNAL, "Signal handle is invalid.");
