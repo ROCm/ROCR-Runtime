@@ -455,10 +455,10 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
     hsa_dim3_t Doff = *dst_offset;
     hsa_dim3_t Range = *range;
 
-    reinterpret_cast<char*&>(Src.base) +=
-      Soff.z * Src.slice + Soff.y * Src.pitch;
-    reinterpret_cast<char*&>(Dst.base) +=
-      Doff.z * Dst.slice + Doff.y * Dst.pitch;
+    Src.base =
+      static_cast<char*>(Src.base) + Soff.z * Src.slice + Soff.y * Src.pitch;
+    Dst.base =
+      static_cast<char*>(Dst.base) + Doff.z * Dst.slice + Doff.y * Dst.pitch;
     Soff.y = Soff.z = 0;
     Doff.y = Doff.z = 0;
 
