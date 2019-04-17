@@ -2093,11 +2093,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	disableCache = getenv("HSA_DISABLE_CACHE");
 	svm.disable_cache = (disableCache && strcmp(disableCache, "0"));
 
-	/* If HSA_USERPTR_FOR_PAGED_MEM is set to a non-0 value,
-	 * enable userptr for all paged memory allocations
+	/* If HSA_USERPTR_FOR_PAGED_MEM is not set or set to a non-0
+	 * value, enable userptr for all paged memory allocations
 	 */
 	pagedUserptr = getenv("HSA_USERPTR_FOR_PAGED_MEM");
-	svm.userptr_for_paged_mem = (pagedUserptr && strcmp(pagedUserptr, "0"));
+	svm.userptr_for_paged_mem = (!pagedUserptr || strcmp(pagedUserptr, "0"));
 
 	/* If HSA_CHECK_USERPTR is set to a non-0 value, check all userptrs
 	 * when they are registered
