@@ -55,7 +55,22 @@ void KFDQMTest::TearDown() {
     ROUTINE_END
 }
 
-TEST_F(KFDQMTest, CreateCpQueue) {
+TEST_F(KFDQMTest, CreateDestroyCpQueue) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    PM4Queue queue;
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDQMTest, SubmitPacketCpQueue) {
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
@@ -80,7 +95,53 @@ TEST_F(KFDQMTest, CreateCpQueue) {
     TEST_END
 }
 
-TEST_F(KFDQMTest, CreateSdmaQueue) {
+TEST_F(KFDQMTest, MultipleCpQueues) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    static const unsigned int MAX_CP_QUEUES = 16;
+
+    HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false);
+
+    destBuf.Fill(0xFF);
+
+    PM4Queue queues[MAX_CP_QUEUES];
+
+    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
+        ASSERT_SUCCESS(queues[qidx].Create(defaultGPUNode)) << " QueueId=" << qidx;
+
+    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx) {
+        queues[qidx].PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>()+qidx*2, qidx, qidx));
+
+        queues[qidx].Wait4PacketConsumption();
+
+        WaitOnValue(destBuf.As<unsigned int*>()+qidx*2, qidx);
+    }
+
+    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
+       EXPECT_SUCCESS(queues[qidx].Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDQMTest, CreateDestroySdmaQueue) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    SDMAQueue queue;
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDQMTest, SubmitPacketSdmaQueue) {
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
@@ -105,7 +166,7 @@ TEST_F(KFDQMTest, CreateSdmaQueue) {
     TEST_END
 }
 
-TEST_F(KFDQMTest, CreateMultipleSdmaQueues) {
+TEST_F(KFDQMTest, MultipleSdmaQueues) {
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
@@ -204,37 +265,6 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
     EXPECT_TRUE(WaitOnValue(srcBuf.As<unsigned int*>(), 0x02020202));
 
     EXPECT_SUCCESS(queue.Destroy());
-
-    TEST_END
-}
-
-TEST_F(KFDQMTest, CreateMultipleCpQueues) {
-    TEST_START(TESTPROFILE_RUNALL)
-
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    static const unsigned int MAX_CP_QUEUES = 16;
-
-    HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false);
-
-    destBuf.Fill(0xFF);
-
-    PM4Queue queues[MAX_CP_QUEUES];
-
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
-        ASSERT_SUCCESS(queues[qidx].Create(defaultGPUNode)) << " QueueId=" << qidx;
-
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx) {
-        queues[qidx].PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>()+qidx*2, qidx, qidx));
-
-        queues[qidx].Wait4PacketConsumption();
-
-        WaitOnValue(destBuf.As<unsigned int*>()+qidx*2, qidx);
-    }
-
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
-       EXPECT_SUCCESS(queues[qidx].Destroy());
 
     TEST_END
 }
