@@ -419,19 +419,15 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
         }
 
         if (profiling_enabled) {
-          HsaClockCounters clocks = {0};
-          core::Runtime::runtime_singleton_->GetSystemInfo(
-              HSA_SYSTEM_INFO_TIMESTAMP, reinterpret_cast<void*>(&clocks));
-          completion_signal->signal_.start_ts = clocks.SystemClockCounter;
+          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
+                                                           &completion_signal->signal_.start_ts);
         }
 
         memcpy(dst, src, size);
 
         if (profiling_enabled) {
-          HsaClockCounters clocks = {0};
-          core::Runtime::runtime_singleton_->GetSystemInfo(
-              HSA_SYSTEM_INFO_TIMESTAMP, reinterpret_cast<void*>(&clocks));
-          completion_signal->signal_.end_ts = clocks.SystemClockCounter;
+          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
+                                                           &completion_signal->signal_.end_ts);
         }
 
         completion_signal->SubRelease(1);
@@ -513,7 +509,7 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
     case HSA_SYSTEM_INFO_TIMESTAMP: {
       HsaClockCounters clocks;
       hsaKmtGetClockCounters(0, &clocks);
-      *((uint64_t*)value) = clocks.SystemClockCounter;
+      *((uint64_t*)value) = clocks.CPUClockCounter;
       break;
     }
     case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
