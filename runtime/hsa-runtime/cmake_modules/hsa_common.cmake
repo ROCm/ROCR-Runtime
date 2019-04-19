@@ -10,7 +10,7 @@
 ##                 AMD Research and AMD HSA Software Development
 ##
 ##                 Advanced Micro Devices, Inc.
-## 
+##
 ##                 www.amd.com
 ##
 ## Permission is hereby granted, free of charge, to any person obtaining a copy
@@ -55,7 +55,9 @@ if(UNIX)
   set(PS ":")
   set(CMAKE_CXX_FLAGS "-Wall -std=c++11 ${EXTRA_CFLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpic")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--unresolved-symbols=ignore-in-shared-libs")
+  if (CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--unresolved-symbols=ignore-in-shared-libs")
+  endif ()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing")
   if ( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64" )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2" )
