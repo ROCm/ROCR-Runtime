@@ -676,7 +676,7 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
   }
 
   for (int i = 0; i < BlitCount; ++i) {
-    if (blits_[i] != NULL) {
+    if (blits_[i].created()) {
       const hsa_status_t stat = blits_[i]->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
