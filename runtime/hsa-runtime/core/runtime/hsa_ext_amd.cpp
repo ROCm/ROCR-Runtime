@@ -328,12 +328,13 @@ hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
   TRY;
   IS_OPEN();
 
-  return core::Runtime::runtime_singleton_->IterateAgent(
-      [](hsa_agent_t agent_handle, void* data) -> hsa_status_t {
-        const bool enable = *(reinterpret_cast<bool*>(data));
-        return core::Agent::Convert(agent_handle)->profiling_enabled(enable);
-      },
-      reinterpret_cast<void*>(&enable));
+  hsa_status_t ret = HSA_STATUS_SUCCESS;
+  for (core::Agent* agent : core::Runtime::runtime_singleton_->gpu_agents()) {
+    hsa_status_t err = agent->profiling_enabled(enable);
+    if (err != HSA_STATUS_SUCCESS) ret = err;
+  }
+  return ret;
+
   CATCH;
 }
 
