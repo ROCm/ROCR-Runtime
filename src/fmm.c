@@ -175,6 +175,7 @@ typedef struct {
 	uint64_t local_mem_size;
 	aperture_t lds_aperture;
 	aperture_t scratch_aperture;
+	aperture_t mmio_aperture;
 	manageable_aperture_t scratch_physical; /* For dGPU, scratch physical is allocated from
 						 * dgpu_aperture. When requested by RT, each
 						 * GPU will get a differnt range
@@ -1983,6 +1984,67 @@ static void fmm_init_rbtree(void)
 	}
 }
 
+static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
+{
+	void *mem;
+	manageable_aperture_t *aperture = svm.dgpu_alt_aperture;
+	uint32_t ioc_flags;
+	vm_object_t *vm_obj = NULL;
+	HsaMemFlags flags;
+	void *ret;
+	uint64_t mmap_offset;
+
+	/* Allocate physical memory and vm object*/
+	ioc_flags = KFD_IOC_ALLOC_MEM_FLAGS_MMIO_REMAP |
+		KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
+		KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
+	mem = __fmm_allocate_device(gpu_id, NULL, PAGE_SIZE, aperture,
+			&mmap_offset, ioc_flags, &vm_obj);
+
+	if (!mem || !vm_obj)
+		return NULL;
+
+	flags.Value = 0;
+	flags.ui32.NonPaged = 1;
+	flags.ui32.HostAccess = 1;
+	flags.ui32.Reserved = 0;
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	vm_obj->flags = flags.Value;
+	vm_obj->node_id = node_id;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* Map for CPU access*/
+	ret = mmap(mem, PAGE_SIZE,
+			 PROT_READ | PROT_WRITE,
+			 MAP_SHARED | MAP_FIXED, mmap_fd,
+			 mmap_offset);
+	if (ret == MAP_FAILED) {
+		__fmm_release(vm_obj, aperture);
+		return NULL;
+	}
+
+	/* Map for GPU access*/
+	if (fmm_map_to_gpu(mem, PAGE_SIZE, NULL)) {
+		__fmm_release(vm_obj, aperture);
+		return NULL;
+	}
+
+	return mem;
+}
+
+static void release_mmio(void)
+{
+	uint32_t gpu_mem_id;
+
+	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
+		if (!gpu_mem[gpu_mem_id].mmio_aperture.base)
+			continue;
+		fmm_unmap_from_gpu(gpu_mem[gpu_mem_id].mmio_aperture.base);
+		munmap(gpu_mem[gpu_mem_id].mmio_aperture.base, PAGE_SIZE);
+		fmm_release(gpu_mem[gpu_mem_id].mmio_aperture.base);
+	}
+}
+
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i;
@@ -2229,6 +2291,19 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 	fmm_init_rbtree();
 
+	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
+		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id))
+			continue;
+		gpu_mem[gpu_mem_id].mmio_aperture.base = map_mmio(
+				gpu_mem[gpu_mem_id].node_id,
+				gpu_mem[gpu_mem_id].gpu_id,
+				gpu_mem[gpu_mem_id].drm_render_fd);
+		if (gpu_mem[gpu_mem_id].mmio_aperture.base)
+			gpu_mem[gpu_mem_id].mmio_aperture.limit = (void *)
+			((char *)gpu_mem[gpu_mem_id].mmio_aperture.base +
+			 PAGE_SIZE - 1);
+	}
+
 	free(process_apertures);
 	return ret;
 
@@ -2247,6 +2322,7 @@ sysfs_parse_failed:
 
 void fmm_destroy_process_apertures(void)
 {
+	release_mmio();
 	if (gpu_mem) {
 		free(gpu_mem);
 		gpu_mem = NULL;
