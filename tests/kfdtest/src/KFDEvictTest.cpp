@@ -341,6 +341,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
+        WaitChildProcesses();
         return;
     }
 
@@ -551,6 +552,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
+        WaitChildProcesses();
         return;
     }
 
