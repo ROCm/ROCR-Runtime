@@ -86,6 +86,7 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     AllocateExecutable = (1 << 1),  // Set executable permission
     AllocateDoubleMap = (1 << 2),   // Map twice VA allocation to backing store
     AllocateDirect = (1 << 3),      // Bypass fragment cache.
+    AllocateIPC = (1 << 4),         // System memory that can be IPC-shared
   };
 
   typedef uint32_t AllocateFlags;

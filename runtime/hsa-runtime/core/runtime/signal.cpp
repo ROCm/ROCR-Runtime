@@ -121,7 +121,8 @@ void SharedSignalPool_t::free(SharedSignal* ptr) {
 
 LocalSignal::LocalSignal(hsa_signal_value_t initial_value, bool exportable)
     : local_signal_(exportable ? nullptr
-                               : core::Runtime::runtime_singleton_->GetSharedSignalPool()) {
+                               : core::Runtime::runtime_singleton_->GetSharedSignalPool(),
+                    exportable ? core::MemoryRegion::AllocateIPC : 0) {
   local_signal_.shared_object()->amd_signal.value = initial_value;
 }
 
