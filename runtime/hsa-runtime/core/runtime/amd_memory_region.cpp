@@ -158,6 +158,8 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
       (alloc_flags & AllocateExecutable ? 1 : 0);
   kmt_alloc_flags.ui32.AQLQueueMemory =
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
+  if (IsSystem() && (alloc_flags & AllocateIPC))
+      kmt_alloc_flags.ui32.NonPaged = 1;
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory()) {
