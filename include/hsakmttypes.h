@@ -316,6 +316,7 @@ typedef enum _HSA_HEAPTYPE
     HSA_HEAPTYPE_GPU_LDS               = 4, // GPU internal memory (LDS)
     HSA_HEAPTYPE_GPU_SCRATCH           = 5, // GPU special memory (scratch)
     HSA_HEAPTYPE_DEVICE_SVM            = 6, // sys-memory mapped by device page tables
+    HSA_HEAPTYPE_MMIO_REMAP            = 7, // remapped mmio, such as hdp flush registers
 
     HSA_HEAPTYPE_NUMHEAPTYPES,
     HSA_HEAPTYPE_SIZE                  = 0xFFFFFFFF
