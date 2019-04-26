@@ -39,7 +39,12 @@
 #include "libhsakmt.h"
 #include "fmm.h"
 
-/* Number of memory banks added by thunk on top of topology */
+/* Number of memory banks added by thunk on top of topology
+ * This only includes static heaps like LDS, scratch and SVM,
+ * not for MMIO_REMAP heap. MMIO_REMAP memory bank is reported
+ * dynamically based on whether mmio aperture was mapped
+ * successfully on this node.
+ */
 #define NUM_OF_IGPU_HEAPS 3
 #define NUM_OF_DGPU_HEAPS 3
 /* SYSFS related */
@@ -2057,10 +2062,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	*NodeProperties = g_props[NodeId].node;
 	/* For CPU only node don't add any additional GPU memory banks. */
 	if (gpu_id) {
+		uint64_t base, limit;
 		if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)))
 			NodeProperties->NumMemoryBanks += NUM_OF_DGPU_HEAPS;
 		else
 			NodeProperties->NumMemoryBanks += NUM_OF_IGPU_HEAPS;
+		if (fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id, &base,
+				&limit) == HSAKMT_STATUS_SUCCESS)
+			NodeProperties->NumMemoryBanks += 1;
 	}
 	err = HSAKMT_STATUS_SUCCESS;
 
@@ -2147,6 +2156,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 		    FMM_SVM, gpu_id, &MemoryProperties[i].VirtualBaseAddress,
 		    &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_DEVICE_SVM;
+		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
+		i++;
+	}
+
+	/* Add mmio aperture */
+	if (i < NumBanks &&
+		fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id,
+				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
+		MemoryProperties[i].HeapType = HSA_HEAPTYPE_MMIO_REMAP;
 		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
 		i++;
 	}

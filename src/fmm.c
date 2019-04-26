@@ -2379,6 +2379,15 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 		}
 		break;
 
+	case FMM_MMIO:
+		if (aperture_is_valid(gpu_mem[slot].mmio_aperture.base,
+			gpu_mem[slot].mmio_aperture.limit)) {
+			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].mmio_aperture.base);
+			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].mmio_aperture.limit);
+			err = HSAKMT_STATUS_SUCCESS;
+		}
+		break;
+
 	default:
 		break;
 	}
