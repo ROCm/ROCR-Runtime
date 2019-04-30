@@ -36,6 +36,7 @@
 #include "PM4Packet.hpp"
 #include "SDMAQueue.hpp"
 #include "SDMAPacket.hpp"
+#include "linux/kfd_ioctl.h"
 
 const char* gfx8_ScratchCopyDword =
 "\
@@ -100,6 +101,32 @@ type(CS)\n\
     s_cmp_eq_i32 s16, s18\n\
     s_cbranch_scc0   LOOP\n\
     s_store_dword s18, s[2:3], 0x0 glc\n\
+    s_endpgm\n\
+    end\n\
+";
+
+/* Input: A buffer of at least 3 dwords.
+ * DW0: used as a signal b/t host and device. Host
+ * write 0xcafe to signal device.
+ * DW1: Input buffer for host/device to read/write.
+ * DW2: Output buffer for device to write.
+ * This shader continously poll the signal buffer,
+ * Once signal buffer is signaled, it copies input buffer
+ * to output buffer
+ */
+const char* gfx9_CopyOnSignal =
+"\
+shader CopyOnSignal\n\
+asic(GFX9)\n\
+type(CS)\n\
+/* Assume input buffer in s0, s1 */\n\
+    s_movk_i32 s18, 0xcafe\n\
+    POLLSIGNAL:\n\
+    s_load_dword s16, s[0:1], 0x0 glc\n\
+    s_cmp_eq_i32 s16, s18\n\
+    s_cbranch_scc0   POLLSIGNAL\n\
+    s_load_dword s17, s[0:1], 0x4 glc\n\
+    s_store_dword s17, s[0:1], 0x8 glc\n\
     s_endpgm\n\
     end\n\
 ";
@@ -1686,6 +1713,93 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     }
 
     munmap(tmp, tmpBufferSize);
+
+    TEST_END
+}
+
+/* For the purpose of testing HDP flush from CPU.
+ * Use CPU to write to coherent vram and check
+ * from shader.
+ * Asic before gfx9 doesn't support user space
+ * HDP flush so only run on vega10 and after.
+ * This should only run on large bar system.
+ */
+TEST_F(KFDMemoryTest, HostHdpFlush) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HsaMemFlags memoryFlags = m_MemoryFlags;
+    /* buffer[0]: signal; buffer[1]: Input to shader; buffer[2]: Output to
+     * shader
+     */
+    unsigned int *buffer = NULL;
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    const HsaNodeProperties *pNodeProperties = m_NodeInfo.GetNodeProperties(defaultGPUNode);
+    HSAuint32 *mmioBase = NULL;
+    unsigned int *nullPtr = NULL;
+
+    if (!pNodeProperties) {
+        LOG() << "Failed to get gpu node properties." << std::endl;
+        return;
+    }
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << "Skipping test: Test requires gfx9 and later asics." << std::endl;
+        return;
+    }
+    HSAuint64 vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
+
+    if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode) || !vramSizeMB) {
+        LOG() << "Skipping test: Test requires a large bar GPU." << std::endl;
+        return;
+    }
+
+    HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
+    EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(defaultGPUNode, pNodeProperties->NumMemoryBanks,
+                   memoryProperties));
+    for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
+        if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_MMIO_REMAP) {
+            mmioBase = (unsigned int *)memoryProperties[bank].VirtualBaseAddress;
+	    break;
+        }
+    }
+    ASSERT_NE(mmioBase, nullPtr) << "mmio base is NULL";
+
+    memoryFlags.ui32.NonPaged = 1;
+    memoryFlags.ui32.CoarseGrain = 0;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, memoryFlags,
+                   reinterpret_cast<void**>(&buffer)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(buffer, PAGE_SIZE, NULL));
+
+    /* Signal is dead from the beginning*/
+    buffer[0] = 0xdead;
+    buffer[1] = 0xfeeb;
+    buffer[2] = 0xfeed;
+    /* Submit a shader to poll the signal*/
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_CopyOnSignal,"CopyOnSignal", isaBuffer);
+    Dispatch dispatch0(isaBuffer);
+    dispatch0.SetArgs(buffer, NULL);
+    dispatch0.Submit(queue);
+
+    buffer[1] = 0xbeef;
+    /* Flush HDP */
+    mmioBase[KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL/4] = 0x1;
+    /* Give cafe to wake up */
+    buffer[0] = 0xcafe;
+
+    /* Check test result*/
+    dispatch0.Sync();
+    EXPECT_EQ(0xbeef, buffer[2]);
+
+    // Clean up
+    EXPECT_SUCCESS(queue.Destroy());
+    delete [] memoryProperties;
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(buffer));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
 
     TEST_END
 }
