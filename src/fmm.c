@@ -2333,7 +2333,7 @@ void fmm_destroy_process_apertures(void)
 HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
 			HSAuint64 *aperture_base, HSAuint64 *aperture_limit)
 {
-	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
+	HSAKMT_STATUS err = HSAKMT_STATUS_ERROR;
 	int32_t slot = gpu_mem_find_by_gpu_id(gpu_id);
 
 	if (slot < 0)
@@ -2345,6 +2345,7 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 			gpu_mem[slot].gpuvm_aperture.limit)) {
 			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.base);
 			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].gpuvm_aperture.limit);
+			err = HSAKMT_STATUS_SUCCESS;
 		}
 		break;
 
@@ -2353,6 +2354,7 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 			gpu_mem[slot].scratch_aperture.limit)) {
 			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.base);
 			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].scratch_aperture.limit);
+			err = HSAKMT_STATUS_SUCCESS;
 		}
 		break;
 
@@ -2361,6 +2363,7 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 			gpu_mem[slot].lds_aperture.limit)) {
 			*aperture_base = PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.base);
 			*aperture_limit = PORT_VPTR_TO_UINT64(gpu_mem[slot].lds_aperture.limit);
+			err = HSAKMT_STATUS_SUCCESS;
 		}
 		break;
 
@@ -2372,11 +2375,12 @@ HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSA
 				      svm.dgpu_aperture->limit)) {
 			*aperture_base = PORT_VPTR_TO_UINT64(svm.dgpu_alt_aperture->base);
 			*aperture_limit = PORT_VPTR_TO_UINT64(svm.dgpu_aperture->limit);
+			err = HSAKMT_STATUS_SUCCESS;
 		}
 		break;
 
 	default:
-		err = HSAKMT_STATUS_ERROR;
+		break;
 	}
 
 	return err;
