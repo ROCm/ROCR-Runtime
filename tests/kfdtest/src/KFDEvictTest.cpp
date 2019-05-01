@@ -30,7 +30,7 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
-#define N_PROCESSES             (8)     /* Number of processes running in parallel, must be at least 2 */
+#define N_PROCESSES             (2)     /* Number of processes running in parallel, must be at least 2 */
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
@@ -176,7 +176,7 @@ static inline int amdgpu_get_bo_list(amdgpu_device_handle dev, amdgpu_bo_handle 
     return amdgpu_bo_list_create(dev, bo2 ? 2 : 1, resources, NULL, list);
 }
 
-void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
+void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle) {
     amdgpu_context_handle contextHandle;
     amdgpu_bo_handle ibResultHandle;
     void *ibResultCpu;
@@ -197,7 +197,7 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
         &ibResultHandle, &ibResultCpu,
         &ibResultMcAddress, &vaHandle));
 
-    ASSERT_EQ(0, amdgpu_get_bo_list(m_RenderNodes[rn].device_handle, ibResultHandle, NULL,
+    ASSERT_EQ(0, amdgpu_get_bo_list(m_RenderNodes[rn].device_handle, ibResultHandle, handle,
         &boList));
 
     /* Fill Nop cammands in IB */
@@ -210,7 +210,7 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
     ibInfo.size = 16;
 
     memset(&ibsRequest, 0, sizeof(struct amdgpu_cs_request));
-    ibsRequest.ip_type = AMDGPU_HW_IP_COMPUTE;
+    ibsRequest.ip_type = AMDGPU_HW_IP_GFX;
     ibsRequest.ring = 0;
     ibsRequest.number_of_ibs = 1;
     ibsRequest.ibs = &ibInfo;
@@ -218,20 +218,22 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn) {
     ibsRequest.fence_info.handle = NULL;
 
     memset(&fenceStatus, 0, sizeof(struct amdgpu_cs_fence));
-    for (int i = 0; i < ALLOCATE_RETRY_TIMES; i++) {
+    for (int i = 0; i < 100; i++) {
         ASSERT_EQ(0, amdgpu_cs_submit(contextHandle, 0, &ibsRequest, 1));
-        sleep(1);
+        Delay(50);
+
+        fenceStatus.context = contextHandle;
+        fenceStatus.ip_type = AMDGPU_HW_IP_GFX;
+        fenceStatus.ip_instance = 0;
+        fenceStatus.ring = 0;
+        fenceStatus.fence = ibsRequest.seq_no;
+
+        EXPECT_EQ(0, amdgpu_cs_query_fence_status(&fenceStatus,
+                                                  g_TestTimeOut*1000000,
+                                                  0, &expired));
+        if (!expired)
+            WARN() << "CS did not signal completion" << std::endl;
     }
-
-    fenceStatus.context = contextHandle;
-    fenceStatus.ip_type = AMDGPU_HW_IP_COMPUTE;
-    fenceStatus.ip_instance = 0;
-    fenceStatus.ring = 0;
-    fenceStatus.fence = ibsRequest.seq_no;
-
-    EXPECT_EQ(0, amdgpu_cs_query_fence_status(&fenceStatus,
-        g_TestTimeOut,
-        0, &expired));
 
     EXPECT_EQ(0, amdgpu_bo_list_destroy(boList));
 
@@ -331,7 +333,8 @@ TEST_F(KFDEvictTest, BasicTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
     }
 
-    HSAint32 count = vramSize / vramBufSize / N_PROCESSES;
+    // Use 7/8 of VRAM between all processes
+    HSAuint32 count = vramSize * 7 / (8* vramBufSize * N_PROCESSES);
 
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
@@ -353,7 +356,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
-    AmdgpuCommandSubmissionComputeNop(rn);
+    AmdgpuCommandSubmissionComputeNop(rn, handle);
 
     FreeAmdgpuBo(handle);
     LOG() << m_psName << "free buffer" << std::endl;
@@ -533,7 +536,8 @@ TEST_F(KFDEvictTest, QueueTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
     }
 
-    HSAuint32 count = vramSize / vramBufSize / N_PROCESSES;
+    // Use 7/8 of VRAM between all processes
+    HSAuint32 count = vramSize * 7 / (8 * vramBufSize * N_PROCESSES);
 
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
@@ -568,8 +572,6 @@ TEST_F(KFDEvictTest, QueueTest) {
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
-    AmdgpuCommandSubmissionComputeNop(rn);
-
     unsigned int wavefront_num = pBuffers.size();
     LOG() << m_psName << "wavefront number " << wavefront_num << std::endl;
 
@@ -590,8 +592,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     /* Submit the packet and start shader */
     dispatch0.Submit(pm4Queue);
 
-    /* Doing evict/restore queue test for 5 seconds while queue is running */
-    sleep(5);
+    AmdgpuCommandSubmissionComputeNop(rn, handle);
 
     /* Uncomment this line for debugging */
     // LOG() << m_psName << "notify shader to quit" << std::endl;
@@ -600,7 +601,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     addrBuffer.Fill(0x5678);
 
     /* Wait for shader to finish or timeout if shader has vm page fault */
-    dispatch0.SyncWithStatus(120000);
+    EXPECT_EQ(0, dispatch0.SyncWithStatus(120000));
 
     EXPECT_SUCCESS(pm4Queue.Destroy());
 
