@@ -56,7 +56,7 @@ class KFDEvictTest :  public KFDLocalMemoryTest {
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
     void AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
     void FreeAmdgpuBo(amdgpu_bo_handle handle);
-    void AmdgpuCommandSubmissionComputeNop(int rn);
+    void AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle);
     void ForkChildProcesses(int nprocesses);
     void WaitChildProcesses();
 
