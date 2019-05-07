@@ -285,7 +285,7 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 
 	CHECK_KFD_OPEN();
 
-	if (op == KFD_IOC_DBG_TRAP_NODE_RESUME ||
+	if (op == KFD_IOC_DBG_TRAP_NODE_SUSPEND ||
 			op == KFD_IOC_DBG_TRAP_NODE_RESUME) {
 		if  (NodeId != INVALID_NODEID)
 			return HSAKMT_STATUS_INVALID_HANDLE;
@@ -443,7 +443,7 @@ hsaKmtQueueSuspend(
 	CHECK_KFD_OPEN();
 
 	return debug_trap(INVALID_NODEID,
-			KFD_IOC_DBG_TRAP_NODE_RESUME,
+			KFD_IOC_DBG_TRAP_NODE_SUSPEND,
 			Flags,
 			NumQueues,
 			GracePeriod,
