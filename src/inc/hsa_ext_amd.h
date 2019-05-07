@@ -778,7 +778,7 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
  * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE in @p memory_pool.
  *
  * @param[in] flags A bit-field that is used to specify allocation
- * directives. Must be 0.
+ * directives. Reserved parameter, must be 0.
  *
  * @param[out] ptr Pointer to the location where to store the base virtual
  * address of
@@ -799,7 +799,8 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
  * allocate memory in @p memory_pool, or @p size is greater than the value of
  * HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE in @p memory_pool.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is NULL, or @p size is 0.
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is NULL, or @p size is 0,
+ * or flags is not 0.
  *
  */
 hsa_status_t HSA_API
@@ -1204,11 +1205,12 @@ hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
 
 /**
  *
- * @brief Pin a host pointer allocated by C/C++ or OS allocator (i.e. ordinary system DRAM) and return a new
- * pointer accessible by the @p agents. If the @p host_ptr overlaps with previously locked
- * memory, then the overlap area is kept locked (i.e multiple mappings are permitted). In this case,
- * the same input @p host_ptr may give different locked @p agent_ptr and when it does, they
- * are not necessarily coherent (i.e. accessing either @p agent_ptr is not equivalent).
+ * @brief Pin a host pointer allocated by C/C++ or OS allocator (i.e. ordinary system DRAM) and
+ * return a new pointer accessible by the @p agents. If the @p host_ptr overlaps with previously
+ * locked memory, then the overlap area is kept locked (i.e multiple mappings are permitted). In
+ * this case, the same input @p host_ptr may give different locked @p agent_ptr and when it does,
+ * they are not necessarily coherent (i.e. accessing either @p agent_ptr is not equivalent).
+ * Accesses to @p agent_ptr are coarse grained.
  *
  * @param[in] host_ptr A buffer allocated by C/C++ or OS allocator.
  *
@@ -1235,20 +1237,69 @@ hsa_status_t HSA_API hsa_amd_memory_migrate(const void* ptr,
  * @p agent_ptr is NULL or @p agents not NULL but @p num_agent is 0 or @p agents
  * is NULL but @p num_agent is not 0.
  */
-
 hsa_status_t HSA_API hsa_amd_memory_lock(void* host_ptr, size_t size,
                                          hsa_agent_t* agents, int num_agent,
                                          void** agent_ptr);
 
 /**
  *
- * @brief Unpin the host pointer previously pinned via ::hsa_amd_memory_lock.
+ * @brief Pin a host pointer allocated by C/C++ or OS allocator (i.e. ordinary system DRAM) and
+ * return a new pointer accessible by the @p agents. If the @p host_ptr overlaps with previously
+ * locked memory, then the overlap area is kept locked (i.e. multiple mappings are permitted).
+ * In this case, the same input @p host_ptr may give different locked @p agent_ptr and when it
+ * does, they are not necessarily coherent (i.e. accessing either @p agent_ptr is not equivalent).
+ * Acesses to the memory via @p agent_ptr have the same access properties as memory allocated from
+ * @p pool as determined by ::hsa_amd_memory_pool_get_info and ::hsa_amd_agent_memory_pool_get_info
+ * (ex. coarse/fine grain, platform atomic support, link info).  Physical composition and placement
+ * of the memory (ex. page size, NUMA binding) is not changed.
+ *
+ * @param[in] host_ptr A buffer allocated by C/C++ or OS allocator.
+ *
+ * @param[in] size The size to be locked.
+ *
+ * @param[in] agents Array of agent handle to gain access to the @p host_ptr.
+ * If this parameter is NULL and the @p num_agent is 0, all agents
+ * in the platform will gain access to the @p host_ptr.
+ *
+ * @param[in] pool Global memory pool owned by a CPU agent.
+ *
+ * @param[in] flags A bit-field that is used to specify allocation
+ * directives. Reserved parameter, must be 0.
+ *
+ * @param[out] agent_ptr Pointer to the location where to store the new address.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES There is a failure in
+ * allocating the necessary resources.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT One or more agent in @p agents is
+ * invalid or can not access @p pool.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_MEMORY_POOL @p pool is invalid or not owned
+ * by a CPU agent.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p size is 0 or @p host_ptr or
+ * @p agent_ptr is NULL or @p agents not NULL but @p num_agent is 0 or @p agents
+ * is NULL but @p num_agent is not 0 or flags is not 0.
+ */
+hsa_status_t HSA_API hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_t* agents,
+                                                 int num_agent, hsa_amd_memory_pool_t pool,
+                                                 uint32_t flags, void** agent_ptr);
+
+/**
+ *
+ * @brief Unpin the host pointer previously pinned via ::hsa_amd_memory_lock or
+ * ::hsa_amd_memory_lock_to_pool.
  *
  * @details The behavior is undefined if the host pointer being unpinned does not
  * match previous pinned address or if the host pointer was already deallocated.
  *
  * @param[in] host_ptr A buffer allocated by C/C++ or OS allocator that was
- * pinned previously via ::hsa_amd_memory_lock.
+ * pinned previously via ::hsa_amd_memory_lock or ::hsa_amd_memory_lock_to_pool.
  *
  * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
  *
@@ -1676,7 +1727,6 @@ typedef enum hsa_amd_event_type_s {
    AMD GPU memory fault.
    */
   HSA_AMD_GPU_MEMORY_FAULT_EVENT = 0,
-  GPU_MEMORY_FAULT_EVENT = 0
 } hsa_amd_event_type_t;
 
 /**
