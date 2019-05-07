@@ -67,7 +67,7 @@ set (HSAKMT_C_FLAGS -fPIC -W -Wall -Wextra -Wno-unused-parameter -Wformat-securi
 if ( CMAKE_COMPILER_IS_GNUCC )
     set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -Wlogical-op)
 endif ()
-if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
+if ( ${HSAKMT_WERROR} )
     set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -Werror )
 endif ()
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
