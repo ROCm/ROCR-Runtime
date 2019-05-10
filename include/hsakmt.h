@@ -571,6 +571,18 @@ hsaKmtUnmapGraphicHandle(
                 HSAuint64              SizeInBytes              //IN
                 );
 
+/**
+  Allocate GWS resource for a queue
+ */
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtAllocQueueGWS(
+                HSAuint32          NodeId,                      //IN
+                HSA_QUEUEID        QueueId,                     //IN
+                HSAuint32          nGWS,                        //IN
+                HSAuint32          *firstGWS                    //OUT
+                );
 
 /**
   Notifies the kernel driver that a process wants to use GPU debugging facilities

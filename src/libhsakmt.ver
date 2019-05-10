@@ -64,6 +64,7 @@ hsaKmtSetWaveLaunchTrapOverride;
 hsaKmtSetWaveLaunchMode;
 hsaKmtQueueSuspend;
 hsaKmtQueueResume;
+hsaKmtAllocQueueGWS;
 
 local: *;
 };
