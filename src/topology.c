@@ -1005,6 +1005,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->NumSdmaEngines = prop_val;
 		else if (strcmp(prop_name, "num_sdma_xgmi_engines") == 0)
 			props->NumSdmaXgmiEngines = prop_val;
+		else if (strcmp(prop_name, "num_gws") == 0)
+			props->NumGws = prop_val;
 	}
 
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
