@@ -164,6 +164,7 @@ static struct hsa_gfxip_table {
 	{ 0x67CF, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
 	{ 0x67D0, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
 	{ 0x67DF, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
+	{ 0x6FDF, 8, 0, 3, 1, "Polaris10", CHIP_POLARIS10 },
 	/* Polaris11 */
 	{ 0x67E0, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
 	{ 0x67E1, 8, 0, 3, 1, "Polaris11", CHIP_POLARIS11 },
