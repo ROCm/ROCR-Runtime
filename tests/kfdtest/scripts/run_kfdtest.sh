@@ -112,7 +112,7 @@ deviceIdToGpuName() {
             platformName="tg" ;;
         7300 | 730f)
             platformName="fj" ;;
-        67c0 | 67c1 | 67c2 | 67c4 | 67c7 | 67c8 | 67c9 | 67ca | 67cc | 67cf | 67d0 | 67df )
+        67c0 | 67c1 | 67c2 | 67c4 | 67c7 | 67c8 | 67c9 | 67ca | 67cc | 67cf | 67d0 | 67df | 6fdf )
             platformName="pl10" ;;
         67e0 | 67e1 | 67e3 | 67e7 | 67e8 | 67e9 | 67eb | 67ef | 67ff )
             platformName="pl11" ;;
