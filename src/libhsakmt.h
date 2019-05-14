@@ -136,6 +136,7 @@ HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes);
 void destroy_device_debugging_memory(void);
 HSAKMT_STATUS init_counter_props(unsigned int NumNodes);
 void destroy_counter_props(void);
+uint32_t *convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues);
 
 extern int kmtIoctl(int fd, unsigned long request, void *arg);
 
