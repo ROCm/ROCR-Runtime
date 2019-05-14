@@ -222,6 +222,7 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
         m_pIsaGen->CompileShader(iterate_isa_gfx9, "iterate_isa", isaBuffer);
 
         PM4Queue queue1;
+        HsaQueueResource *qResources;
         HSA_QUEUEID queue_ids[2];
 
         ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
@@ -243,7 +244,8 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
 
         // Submit the shader, queue1
         dispatch1->Submit(queue1);
-        queue_ids[0] = 0;
+        qResources = queue1.GetResource();
+        queue_ids[0] = qResources->QueueId;
 
         ASSERT_SUCCESS(hsaKmtQueueSuspend(
                     INVALID_PID,

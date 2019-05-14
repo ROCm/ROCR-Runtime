@@ -800,3 +800,20 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
 	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 }
 
+uint32_t *convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues)
+{
+	uint32_t *queue_ids_ptr;
+	unsigned int i;
+
+	queue_ids_ptr = malloc(NumQueues * sizeof(uint32_t));
+	if (!queue_ids_ptr)
+		return NULL;
+
+	for (i = 0; i < NumQueues; i++) {
+		struct queue *q = PORT_UINT64_TO_VPTR(Queues[i]);
+
+		queue_ids_ptr[i] = q->queue_id;
+	}
+	return queue_ids_ptr;
+}
+

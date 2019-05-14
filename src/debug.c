@@ -440,15 +440,25 @@ hsaKmtQueueSuspend(
 		HSAuint32    GracePeriod, // IN
 		HSAuint32    Flags)       // IN
 {
+	HSAKMT_STATUS result;
+	uint32_t *queue_ids_ptr;
+
 	CHECK_KFD_OPEN();
 
-	return debug_trap(INVALID_NODEID,
+	queue_ids_ptr = convert_queue_ids(NumQueues, Queues);
+	if (!queue_ids_ptr)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	result = debug_trap(INVALID_NODEID,
 			KFD_IOC_DBG_TRAP_NODE_SUSPEND,
 			Flags,
 			NumQueues,
 			GracePeriod,
 			Pid,
-			(HSAuint64)Queues);
+			(HSAuint64)queue_ids_ptr);
+
+	free(queue_ids_ptr);
+	return result;
 }
 /**
  *   Resume the execution of a set of queues. If a queue is not
@@ -493,14 +503,22 @@ hsaKmtQueueResume(
 		HSA_QUEUEID *Queues,      // IN
 		HSAuint32    Flags)       // IN
 {
+	HSAKMT_STATUS result;
+	uint32_t *queue_ids_ptr;
 
 	CHECK_KFD_OPEN();
 
-	return debug_trap(INVALID_NODEID,
+	queue_ids_ptr = convert_queue_ids(NumQueues, Queues);
+	if (!queue_ids_ptr)
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	result = debug_trap(INVALID_NODEID,
 			KFD_IOC_DBG_TRAP_NODE_RESUME,
 			Flags,
 			NumQueues,
 			0,
 			Pid,
-			(HSAuint64) Queues);
+			(HSAuint64)queue_ids_ptr);
+	free(queue_ids_ptr);
+	return result;
 }
