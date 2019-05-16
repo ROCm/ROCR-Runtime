@@ -141,12 +141,12 @@ Thread CreateThread(ThreadEntry entry_function, void* entry_argument,
 /// @return: void.
 void CloseThread(Thread thread);
 
-/// @brief: Waits for specific thread to finish, if successed, return true.
+/// @brief: Waits for specific thread to finish, if successful, return true.
 /// @param: thread(Input), handle to waiting thread.
 /// @return: bool.
 bool WaitForThread(Thread thread);
 
-/// @brief: Waits for multiple threads to finish, if successed, return ture.
+/// @brief: Waits for multiple threads to finish, if successful, return true.
 /// @param; threads(Input), a pointer to a list of thread handle.
 /// @param: thread_count(Input), number of threads to be waited on.
 /// @return: bool.

@@ -55,15 +55,59 @@
 #include <cstring>
 #include <string>
 #include <atomic>
+#include <utility>
 
 namespace os {
 
-static_assert(sizeof(LibHandle) == sizeof(void*),
-              "OS abstraction size mismatch");
-static_assert(sizeof(Mutex) == sizeof(pthread_mutex_t*),
-              "OS abstraction size mismatch");
-static_assert(sizeof(Thread) == sizeof(pthread_t),
-              "OS abstraction size mismatch");
+// Thread container allows multiple waits and separate close (destroy).
+class os_thread {
+ public:
+  explicit os_thread(pthread_t id) : thread(id), state(1) {
+    lock = CreateMutex();
+    assert(thread != 0 && "Bad Thread ID");
+  }
+
+  os_thread(os_thread&& rhs) {
+    thread = rhs.thread;
+    lock = rhs.lock;
+    state = int(rhs.state);
+    rhs.thread = 0;
+    rhs.lock = nullptr;
+  }
+
+  os_thread(os_thread&) = delete;
+
+  ~os_thread() {
+    if (lock != nullptr) DestroyMutex(lock);
+    if ((state == RUNNING) && (thread != 0)) pthread_detach(thread);
+  }
+
+  bool Valid() { return (lock != nullptr) && (thread != 0); }
+
+  bool Wait() {
+    if (state == FINISHED) return true;
+    AcquireMutex(lock);
+    if (state == FINISHED) {
+      ReleaseMutex(lock);
+      return true;
+    }
+    int err = pthread_join(thread, NULL);
+    bool success = (err == 0);
+    if (success) state = FINISHED;
+    ReleaseMutex(lock);
+    return success;
+  }
+
+ private:
+  pthread_t thread;
+  Mutex lock;
+  std::atomic<int> state;
+  enum { FINISHED = 0, RUNNING = 1 };
+};
+
+static_assert(sizeof(LibHandle) == sizeof(void*), "OS abstraction size mismatch");
+static_assert(sizeof(Mutex) == sizeof(pthread_mutex_t*), "OS abstraction size mismatch");
+static_assert(sizeof(Thread) == sizeof(os_thread*), "OS abstraction size mismatch");
 
 LibHandle LoadLib(std::string filename) {
   void* ret = dlopen(filename.c_str(), RTLD_LAZY);
@@ -146,21 +190,29 @@ Thread CreateThread(ThreadEntry function, void* threadArgument,
   pthread_attr_t attrib;
   pthread_attr_init(&attrib);
   if (stackSize != 0) pthread_attr_setstacksize(&attrib, stackSize);
-  bool success =
-      (pthread_create(&thread, &attrib, ThreadTrampoline, args) == 0);
+  bool success = (pthread_create(&thread, &attrib, ThreadTrampoline, args) == 0);
   pthread_attr_destroy(&attrib);
   if (!success) {
-    pthread_join(thread, NULL);
-    return NULL;
+    delete args;
+    return nullptr;
   }
-  return *(Thread*)&thread;
+
+  // Exception path cleanup if result allocation fails.
+  os_thread temp(thread);
+
+  os_thread* result = new os_thread(std::move(temp));
+  // Check that mutex create succeeded.
+  if (!result->Valid()) {
+    delete result;
+    return nullptr;
+  }
+
+  return reinterpret_cast<Thread>(result);
 }
 
-void CloseThread(Thread thread) { pthread_detach(*(pthread_t*)&thread); }
+void CloseThread(Thread thread) { delete reinterpret_cast<os_thread*>(thread); }
 
-bool WaitForThread(Thread thread) {
-  return pthread_join(*(pthread_t*)&thread, NULL);
-}
+bool WaitForThread(Thread thread) { return reinterpret_cast<os_thread*>(thread)->Wait(); }
 
 bool WaitForAllThreads(Thread* threads, uint threadCount) {
   for (uint i = 0; i < threadCount; i++) WaitForThread(threads[i]);
