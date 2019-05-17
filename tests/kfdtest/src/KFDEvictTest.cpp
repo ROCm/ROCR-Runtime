@@ -176,7 +176,8 @@ static inline int amdgpu_get_bo_list(amdgpu_device_handle dev, amdgpu_bo_handle 
     return amdgpu_bo_list_create(dev, bo2 ? 2 : 1, resources, NULL, list);
 }
 
-void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle) {
+void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle,
+                                                     PM4Queue *computeQueue = NULL) {
     amdgpu_context_handle contextHandle;
     amdgpu_bo_handle ibResultHandle;
     void *ibResultCpu;
@@ -233,6 +234,15 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle ha
                                                   0, &expired));
         if (!expired)
             WARN() << "CS did not signal completion" << std::endl;
+
+        /* If a compute queue is given, submit a short compute job
+         * every 16 loops (about once a second). If the process was
+         * evicted, restore can take quite long.
+         */
+        if (computeQueue && (i & 0xf) == 0) {
+            computeQueue->PlaceAndSubmitPacket(PM4NopPacket());
+            computeQueue->Wait4PacketConsumption(NULL, 10000);
+        }
     }
 
     EXPECT_EQ(0, amdgpu_bo_list_destroy(boList));
@@ -622,3 +632,64 @@ TEST_F(KFDEvictTest, QueueTest) {
     TEST_END
 }
 
+/* Evict a queue running in bursts, so that the process has a chance
+ * to be idle when restored but the queue needs to resume to perform
+ * more work later. This test is designed to stress the idle process
+ * eviction optimization in KFD that leaves idle processes evicted
+ * until the next time the doorbell page is accessed.
+ */
+TEST_F(KFDEvictTest, BurstyTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
+
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+
+    if (!vramSize) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    } else {
+        LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
+    }
+
+    // Use 7/8 of VRAM between all processes
+    HSAuint32 count = vramSize * 7 / (8* vramBufSize * N_PROCESSES);
+
+    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
+
+    /* Fork the child processes */
+    ForkChildProcesses(N_PROCESSES);
+
+    int rn = FindDRMRenderNode(defaultGPUNode);
+    if (rn < 0) {
+        LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
+        WaitChildProcesses();
+        return;
+    }
+
+    PM4Queue pm4Queue;
+    ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
+
+    std::vector<void *> pBuffers;
+    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+
+    /* Allocate gfx vram size of at most one third system memory */
+    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
+    amdgpu_bo_handle handle;
+    AllocAmdgpuBo(rn, size, handle);
+
+    AmdgpuCommandSubmissionComputeNop(rn, handle, &pm4Queue);
+
+    FreeAmdgpuBo(handle);
+    LOG() << m_psName << "free buffer" << std::endl;
+    FreeBuffers(pBuffers, vramBufSize);
+
+    EXPECT_SUCCESS(pm4Queue.Destroy());
+
+    WaitChildProcesses();
+
+    TEST_END
+}

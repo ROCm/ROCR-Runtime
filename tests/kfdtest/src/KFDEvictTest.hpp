@@ -29,6 +29,7 @@
 #include "KFDLocalMemoryTest.hpp"
 #include "KFDBaseComponentTest.hpp"
 #include "IsaGenerator.hpp"
+#include "PM4Queue.hpp"
 
 // @class KFDEvictTest
 // Test eviction and restore procedure using two processes
@@ -56,7 +57,8 @@ class KFDEvictTest :  public KFDLocalMemoryTest {
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
     void AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
     void FreeAmdgpuBo(amdgpu_bo_handle handle);
-    void AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle);
+    void AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle,
+                                           PM4Queue *computeQueue);
     void ForkChildProcesses(int nprocesses);
     void WaitChildProcesses();
 
