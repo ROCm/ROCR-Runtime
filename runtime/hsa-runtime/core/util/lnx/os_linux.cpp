@@ -42,10 +42,12 @@
 
 #ifdef __linux__
 #include "core/util/os.h"
+#include "core/util/utils.h"
 
 #include <link.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <limits.h>
 #include <sched.h>
 #include <sys/sysinfo.h>
 #include <sys/time.h>
@@ -53,18 +55,55 @@
 #include <unistd.h>
 #include <errno.h>
 #include <cstring>
-#include <string>
 #include <atomic>
+#include <memory>
+#include <string>
 #include <utility>
 
 namespace os {
 
+struct ThreadArgs {
+  void* entry_args;
+  ThreadEntry entry_function;
+};
+
+void* __stdcall ThreadTrampoline(void* arg) {
+  ThreadArgs* ar = (ThreadArgs*)arg;
+  ThreadEntry CallMe = ar->entry_function;
+  void* Data = ar->entry_args;
+  delete ar;
+  CallMe(Data);
+  return NULL;
+}
+
 // Thread container allows multiple waits and separate close (destroy).
 class os_thread {
  public:
-  explicit os_thread(pthread_t id) : thread(id), state(1) {
+  explicit os_thread(ThreadEntry function, void* threadArgument, uint stackSize)
+      : thread(0), lock(nullptr), state(RUNNING) {
+    std::unique_ptr<ThreadArgs> args(new ThreadArgs);
     lock = CreateMutex();
-    assert(thread != 0 && "Bad Thread ID");
+    if (lock == nullptr) return;
+
+    args->entry_args = threadArgument;
+    args->entry_function = function;
+
+    stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
+    stackSize = AlignUp(stackSize, 4096);
+    pthread_attr_t attrib;
+    pthread_attr_init(&attrib);
+
+    if (stackSize != 0) {
+      int err = pthread_attr_setstacksize(&attrib, stackSize);
+      assert(err == 0 && "pthread_attr_setstacksize failed.");
+    }
+
+    int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    pthread_attr_destroy(&attrib);
+    if (err == 0)
+      args.release();
+    else
+      thread = 0;
   }
 
   os_thread(os_thread&& rhs) {
@@ -167,41 +206,8 @@ void uSleep(int delayInUs) { usleep(delayInUs); }
 
 void YieldThread() { sched_yield(); }
 
-struct ThreadArgs {
-  void* entry_args;
-  ThreadEntry entry_function;
-};
-
-void* __stdcall ThreadTrampoline(void* arg) {
-  ThreadArgs* ar = (ThreadArgs*)arg;
-  ThreadEntry CallMe = ar->entry_function;
-  void* Data = ar->entry_args;
-  delete ar;
-  CallMe(Data);
-  return NULL;
-}
-
-Thread CreateThread(ThreadEntry function, void* threadArgument,
-                    uint stackSize) {
-  ThreadArgs* args = new ThreadArgs;
-  args->entry_args = threadArgument;
-  args->entry_function = function;
-  pthread_t thread;
-  pthread_attr_t attrib;
-  pthread_attr_init(&attrib);
-  if (stackSize != 0) pthread_attr_setstacksize(&attrib, stackSize);
-  bool success = (pthread_create(&thread, &attrib, ThreadTrampoline, args) == 0);
-  pthread_attr_destroy(&attrib);
-  if (!success) {
-    delete args;
-    return nullptr;
-  }
-
-  // Exception path cleanup if result allocation fails.
-  os_thread temp(thread);
-
-  os_thread* result = new os_thread(std::move(temp));
-  // Check that mutex create succeeded.
+Thread CreateThread(ThreadEntry function, void* threadArgument, uint stackSize) {
+  os_thread* result = new os_thread(function, threadArgument, stackSize);
   if (!result->Valid()) {
     delete result;
     return nullptr;
