@@ -1095,25 +1095,25 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
   if ((t1_.GPUClockCounter < tick) || (t1_.GPUClockCounter == t0_.GPUClockCounter)) SyncClocks();
 
   // Good for ~300 yrs
-  // uint64_t sysdelta = t1_.CPUClockCounter - t0_.CPUClockCounter;
+  // uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
   // uint64_t gpudelta = t1_.GPUClockCounter - t0_.GPUClockCounter;
   // int64_t offtick = int64_t(tick - t1_.GPUClockCounter);
   //__int128 num = __int128(sysdelta)*__int128(offtick) +
-  //__int128(gpudelta)*__int128(t1_.CPUClockCounter);
+  //__int128(gpudelta)*__int128(t1_.SystemClockCounter);
   //__int128 sysLarge = num / __int128(gpudelta);
   // return sysLarge;
 
   // Good for ~3.5 months.
   uint64_t system_tick = 0;
-  double ratio = double(t1_.CPUClockCounter - t0_.CPUClockCounter) /
+  double ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
       double(t1_.GPUClockCounter - t0_.GPUClockCounter);
-  system_tick = uint64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter))) + t1_.CPUClockCounter;
+  system_tick = uint64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter))) + t1_.SystemClockCounter;
 
   // tick predates HSA startup - extrapolate with fixed clock ratio
   if (tick < t0_.GPUClockCounter) {
     if (historical_clock_ratio_ == 0.0) historical_clock_ratio_ = ratio;
     system_tick = uint64_t(historical_clock_ratio_ * double(int64_t(tick - t0_.GPUClockCounter))) +
-        t0_.CPUClockCounter;
+        t0_.SystemClockCounter;
   }
 
   return system_tick;
