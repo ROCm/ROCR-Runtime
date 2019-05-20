@@ -2573,7 +2573,6 @@ hsa_status_t hsa_executable_iterate_program_symbols(
 hsa_status_t hsa_status_string(
     hsa_status_t status,
     const char **status_string) {
-  IS_OPEN();
   IS_BAD_PTR(status_string);
   const size_t status_u = static_cast<size_t>(status);
   switch (status_u) {
