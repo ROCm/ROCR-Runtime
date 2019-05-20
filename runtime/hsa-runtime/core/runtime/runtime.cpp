@@ -509,7 +509,7 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
     case HSA_SYSTEM_INFO_TIMESTAMP: {
       HsaClockCounters clocks;
       hsaKmtGetClockCounters(0, &clocks);
-      *((uint64_t*)value) = clocks.CPUClockCounter;
+      *((uint64_t*)value) = clocks.SystemClockCounter;
       break;
     }
     case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
