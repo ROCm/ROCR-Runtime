@@ -92,15 +92,15 @@ get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY CACHE )
 unset( HSAKMT_INC CACHE )
 unset( HSAKMT_LIB CACHE )
 
-## Set include and link directories for libhsakmt
-include_directories ( ${HSAKMT_INC_PATH} )
-link_directories ( ${HSAKMT_LIB_PATH} )
-
 ## Set include directories for ROCr runtime
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR} )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/core/inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
+
+## Set include and link directories for libhsakmt
+include_directories ( ${HSAKMT_INC_PATH} )
+link_directories ( ${HSAKMT_LIB_PATH} )
 
 ## ROCr build internal versioning
 if ( DEFINED VERSION_BUILD )
