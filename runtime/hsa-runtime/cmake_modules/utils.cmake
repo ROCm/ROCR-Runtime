@@ -73,7 +73,7 @@ function( parse_version VERSION_STRING )
         set ( TEMP_VERSION_STRING "${TEMP_VERSION_STRING}.${PATCH}" )
     endif ()
 
-    if ( DEFINED VERSION_BUILD )
+    if ( VERSION_BUILD )
         set ( VERSION_BUILD "${VERSION_BUILD}" PARENT_SCOPE )
     endif ()
 
