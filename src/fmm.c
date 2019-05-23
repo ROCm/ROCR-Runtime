@@ -2292,7 +2292,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		gpu_mem[gpu_mem_id].mmio_aperture.base = map_mmio(
 				gpu_mem[gpu_mem_id].node_id,
 				gpu_mem[gpu_mem_id].gpu_id,
-				gpu_mem[gpu_mem_id].drm_render_fd);
+				kfd_fd);
 		if (gpu_mem[gpu_mem_id].mmio_aperture.base)
 			gpu_mem[gpu_mem_id].mmio_aperture.limit = (void *)
 			((char *)gpu_mem[gpu_mem_id].mmio_aperture.base +
