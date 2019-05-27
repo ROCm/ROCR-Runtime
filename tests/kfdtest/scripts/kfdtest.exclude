@@ -34,8 +34,7 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.mGPUShareBO:"\
 "KFDQMTest.SdmaEventInterrupt:"\
-"KFDDBGTest.BasicDebuggerSuspendResume:"\
-"KFDMemoryTest.HostHdpFlush"
+"KFDDBGTest.BasicDebuggerSuspendResume"
 
 BLACKLIST_ALL_ASICS=\
 "$PERMANENT_BLACKLIST_ALL_ASICS:"\
