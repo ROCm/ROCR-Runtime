@@ -121,13 +121,15 @@ shader CopyOnSignal\n\
 asic(GFX9)\n\
 type(CS)\n\
 /* Assume input buffer in s0, s1 */\n\
-    s_movk_i32 s18, 0xcafe\n\
-    POLLSIGNAL:\n\
+    s_mov_b32 s18, 0xcafe\n\
+POLLSIGNAL:\n\
     s_load_dword s16, s[0:1], 0x0 glc\n\
     s_cmp_eq_i32 s16, s18\n\
     s_cbranch_scc0   POLLSIGNAL\n\
     s_load_dword s17, s[0:1], 0x4 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     s_store_dword s17, s[0:1], 0x8 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     s_endpgm\n\
     end\n\
 ";
@@ -1794,7 +1796,7 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
     for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
         if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_MMIO_REMAP) {
             mmioBase = (unsigned int *)memoryProperties[bank].VirtualBaseAddress;
-	    break;
+            break;
         }
     }
     ASSERT_NE(mmioBase, nullPtr) << "mmio base is NULL";
@@ -1821,11 +1823,11 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
     buffer[1] = 0xbeef;
     /* Flush HDP */
     mmioBase[KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL/4] = 0x1;
-    /* Give cafe to wake up */
     buffer[0] = 0xcafe;
 
     /* Check test result*/
     dispatch0.Sync();
+    mmioBase[KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL/4] = 0x1;
     EXPECT_EQ(0xbeef, buffer[2]);
 
     // Clean up
