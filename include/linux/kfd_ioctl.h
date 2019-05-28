@@ -236,13 +236,13 @@ struct kfd_ioctl_dbg_wave_control_args {
 #define KFD_IOC_DBG_TRAP_NODE_RESUME 5
 
 struct kfd_ioctl_dbg_trap_args {
-        __u64 ptr;     /* to KFD -- used for pointer arguments: queue arrays */
-        __u32 pid;     /* to KFD */
-        __u32 gpu_id;  /* to KFD */
-        __u32 op;      /* to KFD */
-        __u32 data1;   /* to KFD */
-        __u32 data2;   /* to KFD */
-        __u32 data3;   /* to KFD */
+	__u64 ptr;     /* to KFD -- used for pointer arguments: queue arrays */
+	__u32 pid;     /* to KFD */
+	__u32 gpu_id;  /* to KFD */
+	__u32 op;      /* to KFD */
+	__u32 data1;   /* to KFD */
+	__u32 data2;   /* to KFD */
+	__u32 data3;   /* to KFD */
 };
 
 /* Matching HSA_EVENTTYPE */
@@ -435,14 +435,6 @@ struct kfd_ioctl_free_memory_of_gpu_args {
 	__u64 handle;		/* to KFD */
 };
 
-/* Register offset inside the remapped mmio page
- */
-enum kfd_mmio_remap {
-	KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL = 0,
-	KFD_MMIO_REMAP_HDP_REG_FLUSH_CNTL = 4,
-};
-
-
 /* Map memory to one or more GPUs
  *
  * @handle:                memory handle returned by alloc
@@ -476,11 +468,27 @@ struct kfd_ioctl_unmap_memory_from_gpu_args {
 	__u32 n_success;		/* to/from KFD */
 };
 
+/* Allocate GWS for specific queue
+ *
+ * @gpu_id:      device identifier
+ * @queue_id:    queue's id that GWS is allocated for
+ * @num_gws:     how many GWS to allocate
+ * @first_gws:   index of the first GWS allocated.
+ *               only support contiguous GWS allocation
+ */
+struct kfd_ioctl_alloc_queue_gws_args {
+	__u32 gpu_id;		/* to KFD */
+	__u32 queue_id;		/* to KFD */
+	__u32 num_gws;		/* to KFD */
+	__u32 first_gws;	/* from KFD */
+};
+
 struct kfd_ioctl_get_dmabuf_info_args {
 	__u64 size;		/* from KFD */
 	__u64 metadata_ptr;	/* to KFD */
 	__u32 metadata_size;	/* to KFD (space allocated by user)
-				 * from KFD (actual metadata size) */
+				 * from KFD (actual metadata size)
+				 */
 	__u32 gpu_id;	/* from KFD */
 	__u32 flags;		/* from KFD (KFD_IOC_ALLOC_MEM_FLAGS) */
 	__u32 dmabuf_fd;	/* to KFD */
@@ -491,6 +499,13 @@ struct kfd_ioctl_import_dmabuf_args {
 	__u64 handle;	/* from KFD */
 	__u32 gpu_id;	/* to KFD */
 	__u32 dmabuf_fd;	/* to KFD */
+};
+
+/* Register offset inside the remapped mmio page
+ */
+enum kfd_mmio_remap {
+	KFD_MMIO_REMAP_HDP_MEM_FLUSH_CNTL = 0,
+	KFD_MMIO_REMAP_HDP_REG_FLUSH_CNTL = 4,
 };
 
 struct kfd_ioctl_ipc_export_handle_args {
@@ -634,17 +649,20 @@ struct kfd_ioctl_cross_memory_copy_args {
 #define AMDKFD_IOC_IMPORT_DMABUF		\
 		AMDKFD_IOWR(0x1D, struct kfd_ioctl_import_dmabuf_args)
 
-#define AMDKFD_IOC_IPC_IMPORT_HANDLE		\
-		AMDKFD_IOWR(0x1E, struct kfd_ioctl_ipc_import_handle_args)
+#define AMDKFD_IOC_ALLOC_QUEUE_GWS		\
+		AMDKFD_IOWR(0x1E, struct kfd_ioctl_alloc_queue_gws_args)
+
+#define AMDKFD_IOC_IPC_IMPORT_HANDLE                                    \
+		AMDKFD_IOWR(0x1F, struct kfd_ioctl_ipc_import_handle_args)
 
 #define AMDKFD_IOC_IPC_EXPORT_HANDLE		\
-		AMDKFD_IOWR(0x1F, struct kfd_ioctl_ipc_export_handle_args)
-
-#define AMDKFD_IOC_CROSS_MEMORY_COPY		\
-		AMDKFD_IOWR(0x20, struct kfd_ioctl_cross_memory_copy_args)
+		AMDKFD_IOWR(0x20, struct kfd_ioctl_ipc_export_handle_args)
 
 #define AMDKFD_IOC_DBG_TRAP			\
 		AMDKFD_IOW(0x21, struct kfd_ioctl_dbg_trap_args)
+
+#define AMDKFD_IOC_CROSS_MEMORY_COPY		\
+		AMDKFD_IOWR(0x22, struct kfd_ioctl_cross_memory_copy_args)
 
 #define AMDKFD_COMMAND_START		0x01
 #define AMDKFD_COMMAND_END		0x22
