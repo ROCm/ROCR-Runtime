@@ -138,8 +138,9 @@ TEST_F(KFDRASTest, BasicTest) {
         return;
     }
 
-    // write an uncorrectable error injection at address 1 as value 1
-    fwrite("inject umc ue 1 1", sizeof(char), 17, m_pFile);
+    // write an uncorrectable error injection at address 0 as value 0
+    fwrite("inject umc ue 0 0", sizeof(char), 17, m_pFile);
+    fflush(m_pFile);
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pRasEvent, g_TestTimeOut));
 
@@ -170,7 +171,8 @@ TEST_F(KFDRASTest, MixEventsTest) {
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(pHsaEvent, g_TestTimeOut));
 
-    fwrite("inject umc ue 1 1", sizeof(char), 17, m_pFile);
+    fwrite("inject umc ue 0 0", sizeof(char), 17, m_pFile);
+    fflush(m_pFile);
 
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pRasEvent, g_TestTimeOut));
 
