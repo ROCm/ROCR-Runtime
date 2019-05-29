@@ -334,7 +334,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
 
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
@@ -344,7 +344,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     }
 
     // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize * 7 / (8* vramBufSize * N_PROCESSES);
+    HSAuint32 count = vramSize  / (vramBufSize * N_PROCESSES);
 
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
@@ -537,7 +537,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     }
 
     HSAuint32 i;
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
 
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
@@ -547,7 +547,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     }
 
     // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize * 7 / (8 * vramBufSize * N_PROCESSES);
+    HSAuint32 count = vramSize / (vramBufSize * N_PROCESSES);
 
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
@@ -646,7 +646,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
 
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
@@ -656,7 +656,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     }
 
     // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize * 7 / (8* vramBufSize * N_PROCESSES);
+    HSAuint32 count = vramSize / (vramBufSize * N_PROCESSES);
 
     LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
 
