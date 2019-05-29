@@ -574,6 +574,13 @@ TEST_F(KFDEvictTest, QueueTest) {
     HsaMemoryBuffer addrBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer resultBuffer(PAGE_SIZE, defaultGPUNode);
 
+    m_pIsaGen->CompileShader(CreateShader().c_str(), "ReadMemory", isaBuffer);
+
+    PM4Queue pm4Queue;
+    ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
+
+    Dispatch dispatch0(isaBuffer);
+
     std::vector<void *> pBuffers;
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
@@ -591,12 +598,6 @@ TEST_F(KFDEvictTest, QueueTest) {
     for (i = 0; i < wavefront_num; i++)
         *(localBufAddr + i) = pBuffers[i];
 
-    m_pIsaGen->CompileShader(CreateShader().c_str(), "ReadMemory", isaBuffer);
-
-    PM4Queue pm4Queue;
-    ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
-
-    Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(localBufAddr, result);
     dispatch0.SetDim(wavefront_num, 1, 1);
     /* Submit the packet and start shader */
