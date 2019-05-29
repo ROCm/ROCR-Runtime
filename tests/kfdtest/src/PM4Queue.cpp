@@ -80,6 +80,6 @@ void PM4Queue::Wait4PacketConsumption(HsaEvent *event, unsigned int timeOut) {
 
         EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, timeOut));
     } else {
-        BaseQueue::Wait4PacketConsumption();
+        BaseQueue::Wait4PacketConsumption(NULL, timeOut);
     }
 }
