@@ -30,14 +30,16 @@
 
 #define AMDGPU_DEBUGFS_NODES "/sys/kernel/debug/dri/"
 #define RAS_CONTROL "ras/ras_ctrl"
+#define DRM_RENDER_NUMBER 64
 
 void KFDRASTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
 
-    char path[256];
-    int renderNode;
+    char path[256], name[128], tmp[128];
+    int renderNode, minor, i;
+    FILE *pDriMinor, *pDriPrimary;
     uint32_t rasFeatures = 0;
     HsaEventDescriptor eventDesc;
 
@@ -63,8 +65,40 @@ void KFDRASTest::SetUp() {
         throw;
     }
 
-    snprintf(path, sizeof(path), "%s/%d/%s", AMDGPU_DEBUGFS_NODES, renderNode, RAS_CONTROL);
+    minor = renderNode + 128;
 
+    snprintf(path, sizeof(path), "%s%d/%s", AMDGPU_DEBUGFS_NODES, minor, "name");
+    pDriMinor = fopen(path, "r");
+    if (!pDriMinor) {
+        LOG() << "Skipping test: DRM render debugfs node requires root access!" << std::endl;
+        throw;
+    }
+
+    memset(name, 0, sizeof(name));
+    fread(name, sizeof(name), 1, pDriMinor);
+
+    fclose(pDriMinor);
+
+    for (i = 0; i < DRM_RENDER_NUMBER; i++) {
+        snprintf(path, sizeof(path), "%s%d/%s", AMDGPU_DEBUGFS_NODES, i, "name");
+        pDriPrimary = fopen(path, "r");
+        if (!pDriPrimary)
+            continue;
+        memset(tmp, 0, sizeof(tmp));
+        fread(tmp, sizeof(tmp), 1, pDriPrimary);
+        if (!strcmp(name, tmp)) {
+            fclose(pDriPrimary);
+            break;
+        }
+        fclose(pDriPrimary);
+    }
+
+    if (i == DRM_RENDER_NUMBER) {
+        LOG() << "Skipping test: Could not find the debugfs node!" << std::endl;
+        throw;
+    }
+
+    snprintf(path, sizeof(path), "%s%d/%s", AMDGPU_DEBUGFS_NODES, i, RAS_CONTROL);
     m_pFile = fopen(path, "w");
     if (!m_pFile) {
         LOG() << "Skipping test: RAS error injection requires root access!" << std::endl;
