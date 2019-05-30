@@ -107,10 +107,10 @@ type(CS)\n\
 ";
 
 /* Input: A buffer of at least 3 dwords.
- * DW0: used as a signal b/t host and device. Host
- * write 0xcafe to signal device.
- * DW1: Input buffer for host/device to read/write.
+ * DW0: used as a signal. 0xcafe means it is signaled
+ * DW1: Input buffer for device to read.
  * DW2: Output buffer for device to write.
+ * Once receive signal, device will copy DW1 to DW2
  * This shader continously poll the signal buffer,
  * Once signal buffer is signaled, it copies input buffer
  * to output buffer
@@ -130,6 +130,27 @@ POLLSIGNAL:\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     s_store_dword s17, s[0:1], 0x8 glc\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
+/* Input0: A buffer of at least 2 dwords.
+ * DW0: used as a signal. Write 0xcafe to signal
+ * DW1: Write to this buffer for other device to read.
+ * Input1: mmio base address
+ */
+const char* gfx9_WriteAndSignal =
+"\
+shader WriteAndSignal\n\
+asic(GFX9)\n\
+type(CS)\n\
+/* Assume input buffer in s0, s1 */\n\
+    s_mov_b32 s18, 0xbeef\n\
+    s_store_dword s18, s[0:1], 0x4 glc\n\
+    s_mov_b32 s18, 0x1\n\
+    s_store_dword s18, s[2:3], 0 glc\n\
+    s_mov_b32 s18, 0xcafe\n\
+    s_store_dword s18, s[0:1], 0x0 glc\n\
     s_endpgm\n\
     end\n\
 ";
@@ -1832,6 +1853,129 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
 
     // Clean up
     EXPECT_SUCCESS(queue.Destroy());
+    delete [] memoryProperties;
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(buffer));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
+
+    TEST_END
+}
+
+/* Test HDP flush from device.
+ * Use shader on device 1 to write vram of device 0
+ * and flush HDP of device 0. Read vram from device 0
+ * and write back to vram to check the result from CPU.
+ * Asic before gfx9 doesn't support device HDP flush
+ * so only run on vega10 and after.
+ * This should only run on system with at least one
+ * large bar node (which is used as device 0).
+ */
+TEST_F(KFDMemoryTest, DeviceHdpFlush) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HsaMemFlags memoryFlags = m_MemoryFlags;
+    /* buffer is physically on device 0.
+     * buffer[0]: Use as signaling b/t devices;
+     * buffer[1]: Device 1 write to buffer[1] and device 0 read it
+     * buffer[2]: Device 0 copy buffer[1] to buffer[2] for CPU to check
+     */
+    unsigned int *buffer = NULL;
+    const HsaNodeProperties *pNodeProperties;
+    HSAuint32 *mmioBase = NULL;
+    unsigned int *nullPtr = NULL;
+    std::vector<HSAuint32> nodes;
+
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    if (gpuNodes.size() < 2) {
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
+        return;
+    }
+
+     /* Users can use "--node=gpu1 --dst_node=gpu2" to specify devices */
+    if (g_TestDstNodeId != -1 && g_TestNodeId != -1) {
+        nodes.push_back(g_TestNodeId);
+        nodes.push_back(g_TestDstNodeId);
+        if (!m_NodeInfo.IsGPUNodeLargeBar(nodes[0])) {
+            LOG() << "Skipping test: first GPU specified is not a large bar GPU." << std::endl;
+            return;
+        }
+        if (nodes[0] == nodes[1]) {
+            LOG() << "Skipping test: Different GPUs must be specified (2 GPUs required)." << std::endl;
+            return;
+        }
+    } else {
+        HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
+        if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPU)) {
+            LOG() << "Skipping test: Default GPUs must be large bar." << std::endl;
+            return;
+        }
+        nodes.push_back(defaultGPU);
+        for (unsigned i = 0; i < gpuNodes.size(); i++)
+            if (gpuNodes.at(i) != defaultGPU)
+                nodes.push_back(gpuNodes.at(i));
+        if (nodes.size() < 2) {
+            LOG() << "Skipping test: At least 2 GPUs required." << std::endl;
+            return;
+        }
+    }
+
+    pNodeProperties = m_NodeInfo.GetNodeProperties(nodes[0]);
+    if (!pNodeProperties) {
+        LOG() << "Failed to get gpu node properties." << std::endl;
+        return;
+    }
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << "Skipping test: Test requires gfx9 and later asics." << std::endl;
+        return;
+    }
+
+    HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
+    EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(nodes[0], pNodeProperties->NumMemoryBanks,
+                   memoryProperties));
+    for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
+        if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_MMIO_REMAP) {
+            mmioBase = (unsigned int *)memoryProperties[bank].VirtualBaseAddress;
+            break;
+        }
+    }
+    ASSERT_NE(mmioBase, nullPtr) << "mmio base is NULL";
+
+    memoryFlags.ui32.NonPaged = 1;
+    memoryFlags.ui32.CoarseGrain = 0;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(nodes[0], PAGE_SIZE, memoryFlags,
+                   reinterpret_cast<void**>(&buffer)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(buffer, PAGE_SIZE, NULL));
+
+    /* Signal is dead from the beginning*/
+    buffer[0] = 0xdead;
+    buffer[1] = 0xfeeb;
+    buffer[2] = 0xfeeb;
+    /* Submit shaders*/
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(nodes[0]));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, nodes[0], true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_CopyOnSignal, "CopyOnSignal", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer, NULL);
+    dispatch.Submit(queue);
+
+    PM4Queue queue0;
+    ASSERT_SUCCESS(queue0.Create(nodes[1]));
+    HsaMemoryBuffer isaBuffer0(PAGE_SIZE, nodes[1], true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_WriteAndSignal, "WriteAndSignal", isaBuffer0);
+    Dispatch dispatch0(isaBuffer0);
+    dispatch0.SetArgs(buffer, mmioBase);
+    dispatch0.Submit(queue0);
+
+    /* Check test result*/
+    dispatch0.Sync();
+    dispatch.Sync();
+    EXPECT_EQ(0xbeef, buffer[2]);
+
+    // Clean up
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue0.Destroy());
     delete [] memoryProperties;
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(buffer));
     EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
