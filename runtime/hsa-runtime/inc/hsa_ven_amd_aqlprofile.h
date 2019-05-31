@@ -82,7 +82,11 @@ uint32_t hsa_ven_amd_aqlprofile_version_minor();
 // Supported profiling events
 typedef enum {
   HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC = 0,
-  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT = 1
+#ifdef NEW_TRACE_API
+  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_TRACE = 1,
+#else
+  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT = 1,
+#endif
 } hsa_ven_amd_aqlprofile_event_type_t;
 
 // Supported performance counters (PMC) blocks
@@ -139,13 +143,14 @@ hsa_status_t hsa_ven_amd_aqlprofile_validate_event(
 // All parameters are generic and if not applicable for a specific
 // profile configuration then error status will be returned.
 typedef enum {
-  // SQTT applicable parameters
+  // Trace applicable parameters
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET = 0,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK = 1,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK = 2,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK = 3,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4,
-  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SAMPLE_RATE = 6,
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -233,13 +238,17 @@ hsa_status_t hsa_ven_amd_aqlprofile_legacy_get_pm4(
 //
 // Profile generic output data:
 typedef struct {
-  uint32_t sample_id;  // PMC sample of SQTT buffer index
+  uint32_t sample_id;  // PMC sample or trace buffer index
   union {
     struct {
       hsa_ven_amd_aqlprofile_event_t event;  // PMC event
       uint64_t result;                       // PMC result
     } pmc_data;
+#ifdef NEW_TRACE_API
+    hsa_ven_amd_aqlprofile_descriptor_t trace_data;  // Trace output data descriptor
+#else
     hsa_ven_amd_aqlprofile_descriptor_t sqtt_data;  // SQTT output data descriptor
+#endif
   };
 } hsa_ven_amd_aqlprofile_info_data_t;
 
@@ -256,7 +265,11 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE = 1,        // get_info returns uint32_t value
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA = 2,             // get_info returns PMC uint64_t value
                                                         // in info_data object
+#ifdef NEW_TRACE_API
+  HSA_VEN_AMD_AQLPROFILE_INFO_TRACE_DATA = 3,           // get_info returns trace buffer ptr/size
+#else
   HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3,            // get_info returns SQTT buffer ptr/size
+#endif
                                                         // in info_data object
                                                         //
   HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS = 4,       // get_info returns number of block counter
@@ -269,7 +282,7 @@ typedef enum {
 
 // Definition of output data iterator callback
 typedef hsa_status_t (*hsa_ven_amd_aqlprofile_data_callback_t)(
-    hsa_ven_amd_aqlprofile_info_type_t info_type,   // [in] data type, PMC or SQTT data
+    hsa_ven_amd_aqlprofile_info_type_t info_type,   // [in] data type, PMC or trace data
     hsa_ven_amd_aqlprofile_info_data_t* info_data,  // [in] info_data object
     void* callback_data);                           // [in/out] data passed to the callback
 
