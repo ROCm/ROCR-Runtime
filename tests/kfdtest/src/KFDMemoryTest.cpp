@@ -862,20 +862,61 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
             << vramSizeMB * 15 / 16 << "MB" << std::endl;
 }
 
-/* BigBufferStressTest allocs, maps/unmaps, and frees the biggest possible system
- * buffers. Its size is found using binary search in the range (0, RAM SIZE) with
- * a granularity of 128M. Repeat the similar logic on local buffers (VRAM).
- * Finally, it allocs and maps 128M system buffers in a loop until it
- * fails, then unmaps and frees them afterwards.
- * Please note we limit the biggest possible system buffer to be smaller than
+/*
+ * Largest*BufferTest allocates, maps/unmaps, and frees the largest possible
+ * buffers. Its size is found using binary search in the range
+ * (0, RAM SIZE) with a granularity of 128M. Also, the similar logic is
+ * repeated on local buffers (VRAM).
+ * Please note we limit the largest possible system buffer to be smaller than
  * the RAM size. The reason is that the system buffer can make use of virtual
  * memory so that a system buffer could be very large even though the RAM size
- * is small. For example, on a typical Carrizo platform, the biggest allocated
+ * is small. For example, on a typical Carrizo platform, the largest allocated
  * system buffer could be more than 14G even though it only has 4G memory.
- * In that situation, it will take too much time to finish the test, because of
+ * In that situation, it will take too much time to finish the test because of
  * the onerous memory swap operation. So we limit the buffer size that way.
  */
-TEST_F(KFDMemoryTest, BigBufferStressTest) {
+TEST_F(KFDMemoryTest, LargestSysBufferTest) {
+    if (!is_dgpu()) {
+        LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
+        return;
+    }
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint64 granularityMB = 128;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, LargestVramBufferTest) {
+    if (!is_dgpu()) {
+        LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
+        return;
+    }
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint64 granularityMB = 128;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
+
+    TEST_END
+}
+
+/*
+ * BigSysBufferStressTest allocates and maps 128M system buffers in a loop until it
+ * fails, then unmaps and frees them afterwards. Meanwhile, a queue task is
+ * performed on each buffer.
+ */
+TEST_F(KFDMemoryTest, BigSysBufferStressTest) {
     if (!is_dgpu()) {
         LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
         return;
@@ -887,14 +928,8 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     HsaMemMapFlags mapFlags = {0};
     int ret;
 
-    HSAuint64 granularityMB = 128;
-
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
-
-    BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
 
     /* Repeatedly allocate and map big buffers in system memory until it fails,
      * then unmap and free them.
@@ -923,8 +958,8 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
             }
         }
 
-        LOG() << "Allocated system buffers time " << std::dec << repeat << ": " << i << "x"
-            << block_size_mb << "MB" << std::endl;
+        LOG() << "Allocated system buffers time " << std::dec << repeat << ": "
+            << i << " * " << block_size_mb << "MB" << std::endl;
 
         if (allocationCount == 0)
             allocationCount = i;
