@@ -110,12 +110,13 @@ FILTER[kaveri]=\
 "KFDQMTest.CpuWriteCoherence"
 
 # KFDLocalMemoryTest.BasicTest is failing intermittently (KFD-368)
-# KFDMemoryTest.BigBufferStressTest was failing intermittently on 4.9 and hangs when executed twice (KFD-312)
+# KFDMemoryTest.BigSysBufferStressTest was failing intermittently on 4.9
+# and hangs when executed twice (KFD-312)
 # KFDQMTest.GPUDoorbellWrite fails on Hawaii. Could be HW-related (KFD-342)
 FILTER[hawaii]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDLocalMemoryTest.BasicTest:"\
-"KFDMemoryTest.BigBufferStressTest:"\
+"KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDQMTest.GPUDoorbellWrite"
 
 FILTER[carrizo]=\
