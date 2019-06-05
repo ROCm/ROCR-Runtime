@@ -88,12 +88,14 @@ typedef struct pool_info_t_ {
     size_t alloc_alignment;
     bool accessible_by_all;
     uint32_t global_flag;
+    uint64_t aggregate_alloc_max;
     inline bool operator==(const pool_info_t_ &a) {
       if (a.segment == segment && a.size == size
           && a.alloc_allowed == alloc_allowed
           && a.alloc_granule == alloc_granule
           && a.alloc_alignment == alloc_alignment
           && a.accessible_by_all == accessible_by_all
+          && a.aggregate_alloc_max == aggregate_alloc_max
           && a.global_flag == global_flag )
           return true;
       else

@@ -179,7 +179,7 @@ static void PrintAgentNameAndType(hsa_agent_t agent) {
 static const int kMemoryAllocSize = 1024;
 
 // This test verify that hsa_memory_allocate can't allocate
-// memory more than POOL_INFO_SIZE
+// memory more than HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE
 void MemoryAllocateNegativeTest::MaxMemoryAllocateTest(hsa_agent_t agent,
                                                hsa_amd_memory_pool_t pool) {
   hsa_status_t err;
@@ -193,19 +193,20 @@ void MemoryAllocateNegativeTest::MaxMemoryAllocateTest(hsa_agent_t agent,
   }
 
   // Determine if allocation is allowed in this pool
-  bool alloc = false;
-  err = hsa_amd_memory_pool_get_info(pool,
-                   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED, &alloc);
+  if (!pool_i.alloc_allowed || pool_i.alloc_granule == 0) {
+    if (verbosity() > 0) {
+      std::cout << "  Test not applicable. Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
 
-  if (alloc) {
-    size_t max_size;
-    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
-                                      &max_size);
     char *memoryPtr;
-    err = hsa_amd_memory_pool_allocate(pool, (max_size + 16), 0,
+  auto gran_sz = pool_i.alloc_granule;
+  size_t max_size = pool_i.aggregate_alloc_max;
+  err = hsa_amd_memory_pool_allocate(pool, (max_size + gran_sz), 0,
                                        reinterpret_cast<void**>(&memoryPtr));
     ASSERT_EQ(err, HSA_STATUS_ERROR_INVALID_ALLOCATION);
-  }
   return;
 }
 
