@@ -714,9 +714,9 @@ typedef enum {
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT = 7,
   /**
   * This memory_pool can be made directly accessible by all the agents in the
-  * system (::hsa_amd_agent_memory_pool_get_info returns
-  * ::HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT for all agents). The type of
-  * this attribute is bool.
+  * system (::hsa_amd_agent_memory_pool_get_info does not return 
+  * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
+  * attribute is bool.
   */
   HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL = 15,
 } hsa_amd_memory_pool_info_t;
