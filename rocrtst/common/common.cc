@@ -341,7 +341,7 @@ static hsa_status_t DumpSegment(const pool_info_t *pool_i,
                                  std::string const *ind_lvl) {
   hsa_status_t err;
 
-  fprintf(stdout, "%s%-25s", ind_lvl->c_str(), "Pool Segment:");
+  fprintf(stdout, "%s%-28s", ind_lvl->c_str(), "Pool Segment:");
   std::string seg_str = "";
   std::string tmp_str;
 
@@ -412,6 +412,11 @@ hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
                                                   &pool_i->accessible_by_all);
   RET_IF_HSA_COMMON_ERR(err);
 
+  err = hsa_amd_memory_pool_get_info(pool,
+                       HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
+                       &pool_i->aggregate_alloc_max);
+  RET_IF_HSA_COMMON_ERR(err);
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -422,24 +427,29 @@ hsa_status_t DumpMemoryPoolInfo(const pool_info_t *pool_i,
   DumpSegment(pool_i, &ind_lvl);
 
   std::string sz_str = std::to_string(pool_i->size / 1024) + "KB";
-  fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Size:",
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Size:",
           sz_str.c_str());
 
-  fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Allocatable:",
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Allocatable:",
           (pool_i->alloc_allowed ? "TRUE" : "FALSE"));
 
   std::string gr_str = std::to_string(pool_i->alloc_granule / 1024) + "KB";
-  fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Alloc Granule:",
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Alloc Granule:",
           gr_str.c_str());
 
 
   std::string al_str =
                    std::to_string(pool_i->alloc_alignment / 1024) + "KB";
-  fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Alloc Alignment:",
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Alloc Alignment:",
           al_str.c_str());
 
-  fprintf(stdout, "%s%-25s%-35s\n", ind_lvl.c_str(), "Pool Acessible by all:",
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Acessible by all:",
           (pool_i->accessible_by_all ? "TRUE" : "FALSE"));
+
+  std::string agg_str =
+              std::to_string(pool_i->aggregate_alloc_max / 1024) + "KB";
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Aggregate Alloc Size:",
+          agg_str.c_str());
 
   return HSA_STATUS_SUCCESS;
 }

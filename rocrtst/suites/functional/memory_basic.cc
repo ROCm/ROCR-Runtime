@@ -197,7 +197,7 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   }
   // Do everything in "granule" units
   auto gran_sz = pool_i.alloc_granule;
-  auto pool_sz = pool_i.size / gran_sz;
+  auto pool_sz = pool_i.aggregate_alloc_max / gran_sz;
 
   // Neg. test: Try to allocate more than the pool size
   err = TestAllocate(pool, pool_sz*gran_sz + gran_sz);
