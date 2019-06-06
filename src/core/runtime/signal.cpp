@@ -121,7 +121,8 @@ void SharedSignalPool_t::free(SharedSignal* ptr) {
 
 LocalSignal::LocalSignal(hsa_signal_value_t initial_value, bool exportable)
     : local_signal_(exportable ? nullptr
-                               : core::Runtime::runtime_singleton_->GetSharedSignalPool()) {
+                               : core::Runtime::runtime_singleton_->GetSharedSignalPool(),
+                    exportable ? core::MemoryRegion::AllocateIPC : 0) {
   local_signal_.shared_object()->amd_signal.value = initial_value;
 }
 
@@ -253,9 +254,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
         if (event_type == HSA_EVENTTYPE_MEMORY) {
           const HsaMemoryAccessFault& fault =
               signals[i]->EopEvent()->EventData.EventData.MemoryAccessFault;
-          const uint32_t* failure =
-              reinterpret_cast<const uint32_t*>(&fault.Failure);
-          if (*failure != 0) {
+          if (fault.Flags == HSA_EVENTID_MEMORY_FATAL_PROCESS) {
             return i;
           }
         }

@@ -88,9 +88,12 @@ template <typename T> class lazy_ptr {
 
   /*
    * Ensures that the object is created or is being created.
-   * This is useful when early consruction of the object is required.
+   * This is useful when early construction of the object is required.
    */
   void touch() const { make(false); }
+
+  // Tells if the lazy object has been constructed or not.
+  bool created() const { return obj != nullptr; }
 
  private:
   mutable std::unique_ptr<T> obj;

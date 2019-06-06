@@ -71,8 +71,8 @@ class BaseShared {
 /// @brief Default Allocator for Shared.  Ensures allocations are whole pages.
 template <typename T> class PageAllocator : private BaseShared {
  public:
-  __forceinline static T* alloc() {
-    T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, 0));
+  __forceinline static T* alloc(int flags = 0) {
+    T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, flags));
     if (ret == nullptr) throw std::bad_alloc();
 
     MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(ret); });
@@ -96,14 +96,14 @@ template <typename T> class PageAllocator : private BaseShared {
 template <typename T, typename Allocator = PageAllocator<T>>
 class Shared final : private BaseShared {
  public:
-  explicit Shared(Allocator* pool = nullptr) : pool_(pool) {
+  explicit Shared(Allocator* pool = nullptr, int flags = 0) : pool_(pool) {
     assert(allocate_ != nullptr && free_ != nullptr &&
            "Shared object allocator is not set");
 
     if (pool_)
       shared_object_ = pool_->alloc();
     else
-      shared_object_ = PageAllocator<T>::alloc();
+      shared_object_ = PageAllocator<T>::alloc(flags);
   }
 
   ~Shared() {

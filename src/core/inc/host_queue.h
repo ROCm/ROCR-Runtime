@@ -162,7 +162,7 @@ class HostQueue : public Queue {
   void operator delete(void*, void*) {}
 
  protected:
-  bool _IsA(Queue::rtti_t id) const { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
  private:
   static int rtti_id_;

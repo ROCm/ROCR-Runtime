@@ -296,8 +296,7 @@ void GpuAgent::InitRegionList() {
           memory_bus_width_ = mem_props[mem_idx].Width;
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
-        case HSA_HEAPTYPE_GPU_SCRATCH:
-        case HSA_HEAPTYPE_DEVICE_SVM: {
+        case HSA_HEAPTYPE_GPU_SCRATCH: {
           MemoryRegion* region =
               new MemoryRegion(false, false, this, mem_props[mem_idx]);
 
@@ -315,6 +314,13 @@ void GpuAgent::InitRegionList() {
           if (is_apu_node) {
             memory_bus_width_ = mem_props[mem_idx].Width;
             memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
+          }
+          break;
+        case HSA_HEAPTYPE_MMIO_REMAP:
+          if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie()) {
+            // Remap offsets defined in kfd_ioctl.h
+            HDP_flush_.HDP_MEM_FLUSH_CNTL = (uint32_t*)mem_props[mem_idx].VirtualBaseAddress;
+            HDP_flush_.HDP_REG_FLUSH_CNTL = HDP_flush_.HDP_MEM_FLUSH_CNTL + 1;
           }
           break;
         default:
@@ -677,7 +683,7 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
   }
 
   for (int i = 0; i < BlitCount; ++i) {
-    if (blits_[i] != NULL) {
+    if (blits_[i].created()) {
       const hsa_status_t stat = blits_[i]->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
@@ -890,6 +896,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE:
       *((uint32_t*)value) = properties_.NumArrays;
+      break;
+    case HSA_AMD_AGENT_INFO_HDP_FLUSH:
+      *((hsa_amd_hdp_flush_t*)value) = HDP_flush_;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

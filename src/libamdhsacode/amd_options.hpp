@@ -422,7 +422,7 @@ private:
   /// @brief Not copy-assignable.
   PrefixOption& operator =(const PrefixOption&);
 
-  bool ProcessTokens(std::list<std::string> &tokens);
+  bool ProcessTokens(std::list<std::string>& tokens) override;
 
   std::string::size_type FindPrefix(const std::string& token) const;
 
