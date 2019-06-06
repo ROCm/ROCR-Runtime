@@ -41,19 +41,28 @@ can be obtained from the ROCT-Thunk-Interface repository, available here:
 
 https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface
  
-Specify the directory containing libhsakmt.so.1 and hsakmt.h using the
-cmake variable, CMAKE_PREFIX_PATH:
+Specify the directory containing libhsakmt.so.1 and hsakmt.h using the cmake variables, HSAKMT_LIB_PATH and HSAKMT_INC_PATH.  These can be specified either on the command line
+or via standard cmake configuration tools such as ccmake or cmake-gui.
 
 For example, from the top level ROCR repository execute:
 
     mkdir build
     cd build
-    cmake -D CMAKE_PREFIX_PATH=/opt/rocm/libhsakmt \
+    cmake -DHSAKMT_INC_PATH:STRING=<path to directory holding hsakmt.h> \
+          -DHSAKMT_LIB_PATH:STRING=<path to directory holding libhsakmt.so.1> \
           ..
     make
+    
+alternately using ccmake:
 
-The location specified here is the default installation directory of the
-libhsakmt-roct-dev package.
+    mkdir build
+    cd build
+    ccmake ..
+    press c to configure
+    populate variables as desired
+    press c again
+    press g to generate and exit
+    make
 
 #### Specs
 
