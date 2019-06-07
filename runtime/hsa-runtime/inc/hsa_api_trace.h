@@ -180,6 +180,8 @@ struct AmdExtTable {
   decltype(hsa_amd_memory_async_copy_rect)* hsa_amd_memory_async_copy_rect_fn;
   decltype(hsa_amd_runtime_queue_create_register)* hsa_amd_runtime_queue_create_register_fn;
   decltype(hsa_amd_memory_lock_to_pool)* hsa_amd_memory_lock_to_pool_fn;
+  decltype(hsa_amd_register_deallocation_callback)* hsa_amd_register_deallocation_callback_fn;
+  decltype(hsa_amd_deregister_deallocation_callback)* hsa_amd_deregister_deallocation_callback_fn;
 };
 
 // Table to export HSA Core Runtime Apis
