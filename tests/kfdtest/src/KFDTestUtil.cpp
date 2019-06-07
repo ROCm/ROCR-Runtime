@@ -128,22 +128,20 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
 
 void GetSdmaInfo(const HsaNodeProperties *props,
                  unsigned int *p_num_sdma_engines,
+                 unsigned int *p_num_sdma_xgmi_engines,
                  unsigned int *p_num_sdma_queues_per_engine) {
-    int num_sdma_engines = 2;
     int num_sdma_queues_per_engine = 2;
 
-    switch (props->EngineId.ui32.Major) {
-    case 9:
-        if (props->EngineId.ui32.Stepping == 2)  // RAVEN
-            num_sdma_engines = 1;
-        else if (props->EngineId.ui32.Stepping == 6)  // VEGA20
+    if (props->EngineId.ui32.Major == 9) {
+        if (props->EngineId.ui32.Stepping == 6)  // VEGA20
             num_sdma_queues_per_engine = 8;
-
-        break;
     }
 
     if (p_num_sdma_engines)
-        *p_num_sdma_engines = num_sdma_engines;
+        *p_num_sdma_engines = props->NumSdmaEngines;
+
+    if (p_num_sdma_xgmi_engines)
+        *p_num_sdma_xgmi_engines = props->NumSdmaXgmiEngines;
 
     if (p_num_sdma_queues_per_engine)
         *p_num_sdma_queues_per_engine = num_sdma_queues_per_engine;
