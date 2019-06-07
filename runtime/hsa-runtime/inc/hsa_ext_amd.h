@@ -1814,7 +1814,7 @@ typedef hsa_status_t (*hsa_amd_system_event_callback_t)(const hsa_amd_event_t* e
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p event is invalid.
  */
-hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
+hsa_status_t HSA_API hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
                                                    void* data);
 
 /**
@@ -1853,6 +1853,66 @@ typedef enum hsa_amd_queue_priority_s {
  */
 hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority);
+
+/**
+ * @brief Deallocation notifier function type.
+ */
+typedef void (*hsa_amd_deallocation_callback_t)(void* ptr, void* user_data);
+
+/**
+ * @brief Registers a deallocation notifier monitoring for release of agent
+ * accessible address @p ptr.  If successful, @p callback will be invoked when
+ * @p ptr is removed from accessibility from all agents.
+ *
+ * Notification callbacks are automatically deregistered when they are invoked.
+ *
+ * Note: The current version supports notifications of address release
+ * originating from ::hsa_amd_memory_pool_free.  Support for other address
+ * release APIs will follow.
+ *
+ * @param[in] ptr Agent accessible address to monitor for deallocation.  Passed
+ * to @p callback.
+ *
+ * @param[in] callback Notifier to be invoked when @p ptr is released from
+ * agent accessibility.
+ *
+ * @param[in] user_data User provided value passed to @p callback.  May be NULL.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The notifier registered successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION @p ptr does not refer to a valid agent accessible
+ * address.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p callback is NULL or @p ptr is NULL.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ */
+hsa_status_t HSA_API hsa_amd_register_deallocation_callback(void* ptr,
+                                                    hsa_amd_deallocation_callback_t callback,
+                                                    void* user_data);
+
+/**
+ * @brief Removes a deallocation notifier previously registered with
+ * ::hsa_amd_register_deallocation_callback.  Arguments must be identical to
+ * those given in ::hsa_amd_register_deallocation_callback.
+ *
+ * @param[in] ptr Agent accessible address which was monitored for deallocation.
+ *
+ * @param[in] callback Notifier to be removed.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The notifier has been removed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT The given notifier was not registered.
+ */
+hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
+                                                      hsa_amd_deallocation_callback_t callback);
 
 #ifdef __cplusplus
 }  // end extern "C" block
