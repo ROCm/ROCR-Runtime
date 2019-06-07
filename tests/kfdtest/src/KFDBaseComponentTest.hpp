@@ -61,6 +61,7 @@ class KFDBaseComponentTest : public testing::Test {
     HsaSystemProperties m_SystemProperties;
     unsigned int m_FamilyId;
     unsigned int m_numSdmaEngines;
+    unsigned int m_numSdmaXgmiEngines;
     unsigned int m_numSdmaQueuesPerEngine;
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;

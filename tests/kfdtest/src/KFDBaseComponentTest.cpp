@@ -63,7 +63,8 @@ void KFDBaseComponentTest::SetUp() {
 
     g_TestGPUFamilyId = FamilyIdFromNode(nodeProperties);
 
-    GetSdmaInfo(nodeProperties, &m_numSdmaEngines, &m_numSdmaQueuesPerEngine);
+    GetSdmaInfo(nodeProperties, &m_numSdmaEngines, &m_numSdmaXgmiEngines,
+                    &m_numSdmaQueuesPerEngine);
 
     m_FamilyId = g_TestGPUFamilyId;
 
