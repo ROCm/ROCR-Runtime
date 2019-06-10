@@ -41,17 +41,14 @@ BLACKLIST_ALL_ASICS=\
 "$PERMANENT_BLACKLIST_ALL_ASICS:"\
 "$TEMPORARY_BLACKLIST_ALL_ASICS"
 
-# SDMA-based tests (KFDIPCTest.BasicTest, KFDQM.*Sdma*, KFDMemoryTest.MMBench) are all
+# SDMA-based tests (KFDIPCTest.BasicTest, KFDQMTest.SdmaEventInterrupt) are both
 # disabled on non-Hawaii due to SDMA instability - SWDEV-101666
+# KFDLocalMemoryTest.CheckZeroInitializationVram Passes, but it
+# takes nearly 4 min (229385 ms) to run so it remains blacklisted
 SDMA_BLACKLIST=\
 "KFDIPCTest.*:"\
 "KFDLocalMemoryTest.CheckZeroInitializationVram:"\
-"KFDMemoryTest.MemoryRegister:"\
-"KFDMemoryTest.MMBench:"\
-"KFDMemoryTest.SignalHandling:"\
-"KFDQMTest.*Sdma*:"\
-"KFDQMTest.CreateQueueStressSingleThreaded:"\
-"KFDQMTest.GPUDoorbellWrite:"\
+"KFDQMTest.SdmaEventInterrupt:"\
 "KFDQMTest.P2PTest:"\
 "KFDPerformanceTest.P2PBandWidthTest:"\
 "KFDPerformanceTest.P2POverheadTest"
@@ -141,9 +138,7 @@ VEGA20_TESTS_BLACKLIST=\
 "KFDDBGTest.BasicAddressWatch:"\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
-"KFDQMTest.CreateQueueStressSingleThreaded:"\
-"KFDQMTest.GPUDoorbellWrite:"\
-"KFDMemoryTest.MemoryRegister"
+"KFDQMTest.GPUDoorbellWrite:"
 
 RAVEN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
