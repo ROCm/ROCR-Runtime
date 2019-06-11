@@ -309,8 +309,10 @@ void GpuAgent::InitRegionList() {
           if (region->IsLocalMemory()) {
             local_region_ = region;
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
-            if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())
+            if ((properties_.HiveID != 0) ||
+                (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
               regions_.push_back(new MemoryRegion(true, false, this, mem_props[mem_idx]));
+            }
           }
           break;
         }

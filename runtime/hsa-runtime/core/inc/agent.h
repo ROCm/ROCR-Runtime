@@ -46,7 +46,6 @@
 #define HSA_RUNTME_CORE_INC_AGENT_H_
 
 #include <assert.h>
-
 #include <vector>
 
 #include "core/inc/checked.h"
@@ -233,6 +232,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
 
   // @details Returns the agent's instruction set architecture.
   virtual const Isa* isa() const = 0;
+
+  virtual uint64_t HiveId() const { return 0; }
 
   // @brief Returns the device type (CPU/GPU/Others).
   __forceinline uint32_t device_type() const { return device_type_; }
