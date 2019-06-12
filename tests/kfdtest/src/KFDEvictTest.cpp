@@ -34,6 +34,28 @@
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
+void KFDEvictTest::SetUp() {
+    ROUTINE_START
+
+    KFDBaseComponentTest::SetUp();
+
+    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
+
+    ROUTINE_END
+}
+
+void KFDEvictTest::TearDown() {
+    ROUTINE_START
+
+    if (m_pIsaGen)
+        delete m_pIsaGen;
+    m_pIsaGen = NULL;
+
+    KFDBaseComponentTest::TearDown();
+
+    ROUTINE_END
+}
+
 void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                                 std::vector<void *> &pBuffers) {
     HSAuint64   totalMB;
@@ -251,57 +273,6 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle ha
         ibResultMcAddress, PAGE_SIZE));
 
     EXPECT_EQ(0, amdgpu_cs_ctx_free(contextHandle));
-}
-
-void KFDEvictTest::ForkChildProcesses(int nprocesses) {
-    int i;
-
-    for (i = 0; i < nprocesses - 1; ++i) {
-        pid_t pid = fork();
-        ASSERT_GE(pid, 0);
-
-        if (pid == 0) {
-            /* Child process */
-            /* Cleanup file descriptors copied from parent process
-             * then call SetUp->hsaKmtOpenKFD to create new process
-             */
-            m_psName = "Test process " + std::to_string(i) + " ";
-            TearDown();
-            SetUp();
-            m_ChildPids.clear();
-            m_IsParent = false;
-            return;
-        }
-
-        /* Parent process */
-        m_ChildPids.push_back(pid);
-    }
-
-    m_psName = "Test process " + std::to_string(i) + " ";
-}
-
-void KFDEvictTest::WaitChildProcesses() {
-    if (m_IsParent) {
-        /* Only run by parent process */
-        int childStatus;
-        int childExitOkNum = 0;
-        int size = m_ChildPids.size();
-
-        for (HSAuint32 i = 0; i < size; i++) {
-            pid_t pid = m_ChildPids.front();
-
-            waitpid(pid, &childStatus, 0);
-            if (WIFEXITED(childStatus) == 1 && WEXITSTATUS(childStatus) == 0)
-                childExitOkNum++;
-
-            m_ChildPids.erase(m_ChildPids.begin());
-        }
-
-        EXPECT_EQ(childExitOkNum, size);
-    }
-
-    /* Child process or parent process finished successfully */
-    m_ChildStatus = HSAKMT_STATUS_SUCCESS;
 }
 
 /* Evict and restore procedure basic test
