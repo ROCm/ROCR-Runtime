@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2017-2018 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2019 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,40 +21,42 @@
  *
  */
 
-#ifndef __KFD_EVICT_TEST__H__
-#define __KFD_EVICT_TEST__H__
+#ifndef __KFD_MULTI_PROCESS_TEST__H__
+#define __KFD_MULTI_PROCESS_TEST__H__
 
 #include <string>
 #include <vector>
-#include "KFDMultiProcessTest.hpp"
-#include "IsaGenerator.hpp"
-#include "PM4Queue.hpp"
+#include "KFDBaseComponentTest.hpp"
 
-// @class KFDEvictTest
-// Test eviction and restore procedure using two processes
-class KFDEvictTest :  public KFDMultiProcessTest {
+// @class KFDMultiProcessTest
+// Base class for tests forking multiple child processes
+class KFDMultiProcessTest :  public KFDBaseComponentTest {
  public:
-    KFDEvictTest(void): m_pIsaGen(NULL) {}
+    KFDMultiProcessTest(void): m_ChildStatus(HSAKMT_STATUS_ERROR), m_IsParent(true) {}
 
-    ~KFDEvictTest(void) {}
+    ~KFDMultiProcessTest(void) {
+        if (!m_IsParent) {
+            /* Child process has to exit
+             * otherwise gtest will continue other tests
+             */
+            exit(m_ChildStatus);
+        }
+
+        try {
+            WaitChildProcesses();
+        } catch (...) {}
+    }
 
  protected:
-    virtual void SetUp();
-    virtual void TearDown();
-
-    std::string CreateShader();
-    void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
-                      std::vector<void *> &pBuffers);
-    void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
-    void AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
-    void FreeAmdgpuBo(amdgpu_bo_handle handle);
-    void AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle,
-                                           PM4Queue *computeQueue);
+    void ForkChildProcesses(int nprocesses);
+    void WaitChildProcesses();
 
  protected:  // Members
-    IsaGenerator*   m_pIsaGen;
-    HsaMemFlags     m_Flags;
-    void*           m_pBuf;
+    std::string     m_psName;
+    int             m_ProcessIndex;
+    std::vector<pid_t> m_ChildPids;
+    HSAKMT_STATUS   m_ChildStatus;
+    bool            m_IsParent;
 };
 
-#endif  // __KFD_EVICT_TEST__H__
+#endif  // __KFD_MULTI_PROCESS_TEST__H__
