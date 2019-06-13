@@ -879,10 +879,11 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     HSAuint64 block_size_mb = 128;
     HSAuint64 block_size = block_size_mb * 1024 * 1024;
     PM4Queue queue;
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     /* Test 4 times to see if there is any memory leak.*/
     for (int repeat = 1; repeat < 5; repeat++) {
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
         for (i = 0; i < ARRAY_ENTRIES; i++) {
             ret = hsaKmtAllocMemory(0 /* system */, block_size, m_MemoryFlags,
                     reinterpret_cast<void**>(&pDb_array[i]));
@@ -904,20 +905,23 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
             allocationCount = i;
         EXPECT_GE(i, allocationCount) << "There might be memory leak!" << std::endl;
 
-        while (i--) {
+        for (int j = 0; j < i; j++) {
             /* To see if GPU can access the memory correctly*/
-            unsigned int *begin = pDb_array[i];
+            unsigned int *begin = pDb_array[j];
             *begin = 0;
             queue.PlaceAndSubmitPacket(
                     PM4WriteDataPacket(begin, 0xdeadbeaf));
-            queue.Wait4PacketConsumption();
+            queue.Wait4PacketConsumption(NULL, 300000);
             EXPECT_TRUE(WaitOnValue(begin, 0xdeadbeaf));
+        }
 
-            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[i]));
-            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
+        EXPECT_SUCCESS(queue.Destroy());
+
+        for (int j = 0; j < i; j++) {
+            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[j]));
+            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[j], block_size));
         }
     }
-    EXPECT_SUCCESS(queue.Destroy());
 
     /* Reset to run on all task nodes */
     NumaNodeBind("all");
