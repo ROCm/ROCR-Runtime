@@ -26,6 +26,7 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 # KFDQMTest.GPUDoorbellWrite fails intermittently (KFD-318)
 # KFDQMTest.mGPUShareBO (KFD-334)
 # KFDQMTest.PM4EventInterrupt/KFDDBGTest.BasicAddressWatch (KFD-431)
+# KFDHWSTest.* (SWDEV-193035)
 TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDGraphicsInterop.RegisterForeignDeviceMem:"\
 "KFDPMTest.SuspendWithActiveProcess:"\
@@ -37,7 +38,8 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDDBGTest.BasicAddressWatch*:"\
 "KFDQMTest.PM4EventInterrupt:"\
 "KFDQMTest.SdmaEventInterrupt:"\
-"KFDDBGTest.BasicDebuggerSuspendResume"
+"KFDDBGTest.BasicDebuggerSuspendResume:"\
+"KFDHWSTest.*"
 
 BLACKLIST_ALL_ASICS=\
 "$PERMANENT_BLACKLIST_ALL_ASICS:"\
