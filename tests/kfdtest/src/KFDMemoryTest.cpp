@@ -30,6 +30,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <signal.h>
+#include <numa.h>
 #include <vector>
 #include "Dispatch.hpp"
 #include "PM4Queue.hpp"
@@ -809,6 +810,24 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
             << vramSizeMB * 15 / 16 << "MB" << std::endl;
 }
 
+void KFDMemoryTest::NumaNodeBind(const char *nodeStr) {
+    if (numa_available() != -1) {
+        int num_node = numa_num_task_nodes();
+
+        if (num_node > 1) {
+            struct bitmask *nodemask;
+
+            LOG() << "NUMA total nodes " << num_node << ", bind to " << nodeStr << std::endl;
+
+            nodemask = numa_parse_nodestring(nodeStr);
+            if (nodemask) {
+                numa_bind(nodemask);
+                numa_free_nodemask(nodemask);
+            }
+        }
+    }
+}
+
 /* BigBufferStressTest allocs, maps/unmaps, and frees the biggest possible system
  * buffers. Its size is found using binary search in the range (0, RAM SIZE) with
  * a granularity of 128M. Repeat the similar logic on local buffers (VRAM).
@@ -838,6 +857,13 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    /* Don't run on node 0 on multiple NUMA node machine because dma32 zone is on node 0,
+     * Use all memory including dma32 zone on node 0 will cause TTM eviction to free dma32
+     * zone for other devices which supports 32bit physical address. The eviction and
+     * restore may retry if busy and cause queue timeout and test failure.
+     */
+    NumaNodeBind("!0");
 
     BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
 
@@ -892,6 +918,9 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
         }
     }
     EXPECT_SUCCESS(queue.Destroy());
+
+    /* Reset to run on all task nodes */
+    NumaNodeBind("all");
 
     TEST_END
 }
