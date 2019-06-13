@@ -123,22 +123,34 @@ LEXA_TESTS_BLACKLIST=\
 "$SDMA_BLACKLIST"
 
 # KFDDBG.BasicAddressWatch is not supported on GFXv9 and later. FIXME: it should disable itself
+# KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
+# KFDMemoryTest.BigBufferStressTest (ROCMOPS-462)
+# KFDEvictTest.BurstyTest (ROCMOPS-464)
+# KFDQMTest.MultipleSdmaQueues (ROCMOPS-463)
 VEGA10_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDDBGTest.BasicAddressWatch"
+"KFDDBGTest.BasicAddressWatch:"\
+"KFDIPCTest.BasicTest:"\
+"KFDEvictTest.BurstyTest:"\
+"KFDIPCTest.CMABasicTest:"\
+"KFDIPCTest.CrossMemoryAttachTest:"\
+"KFDMemoryTest.BigBufferStressTest:"\
+"KFDQMTest.MultipleSdmaQueues"
 
 VEGA12_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDDBGTest.BasicAddressWatch"
 
+# KFDEvictTest.BurstyTest (ROCMOPS-464)
 VEGA20_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDDBGTest.BasicAddressWatch:"\
+"KFDEvictTest.BurstyTest:"\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
-"KFDQMTest.GPUDoorbellWrite:"
+"KFDQMTest.GPUDoorbellWrite"
 
 RAVEN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
