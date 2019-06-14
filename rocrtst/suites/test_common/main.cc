@@ -126,7 +126,7 @@ TEST(rocrtst, Test_Example) {
   RunGenericTest(&tst);
 }
 
-TEST(rocrtstFunc, IPC) {
+TEST(rocrtstFunc, DISABLED_IPC) {
   IPCTest ipc;
   RunGenericTest(&ipc);
 }
@@ -454,22 +454,22 @@ TEST(rocrtstPerf, DISABLED_Memory_Async_Copy_NUMA) {
   RunGenericTest(&numa);
 }
 
-TEST(rocrtstPerf, AQL_Dispatch_Time_Single_SpinWait) {
+TEST(rocrtstPerf, DISABLED_AQL_Dispatch_Time_Single_SpinWait) {
   DispatchTime dt(true, true);
   RunGenericTest(&dt);
 }
 
-TEST(rocrtstPerf, AQL_Dispatch_Time_Single_Interrupt) {
+TEST(rocrtstPerf, DISABLED_AQL_Dispatch_Time_Single_Interrupt) {
   DispatchTime dt(false, true);
   RunGenericTest(&dt);
 }
 
-TEST(rocrtstPerf, AQL_Dispatch_Time_Multi_SpinWait) {
+TEST(rocrtstPerf, DISABLED_AQL_Dispatch_Time_Multi_SpinWait) {
   DispatchTime dt(true, false);
   RunGenericTest(&dt);
 }
 
-TEST(rocrtstPerf, AQL_Dispatch_Time_Multi_Interrupt) {
+TEST(rocrtstPerf, DISABLED_AQL_Dispatch_Time_Multi_Interrupt) {
   DispatchTime dt(false, false);
   RunGenericTest(&dt);
 }
