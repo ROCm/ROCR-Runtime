@@ -56,18 +56,21 @@
 #include "common/base_rocr.h"
 #include "common/helper_funcs.h"
 #include "common/os.h"
+#include "gtest/gtest.h"
 #include "hsa/hsa.h"
 
 namespace rocrtst {
 
 
-#define RET_IF_HSA_UTILS_ERR(err) { \
-  if ((err) != HSA_STATUS_SUCCESS) { \
-    std::cout << "hsa api call failure at line " << __LINE__ << ", file: " << \
-              __FILE__ << std::endl; \
-    return (err); \
-  } \
-}
+#define RET_IF_HSA_UTILS_ERR(err)                                                                  \
+  {                                                                                                \
+    if ((err) != HSA_STATUS_SUCCESS) {                                                             \
+      const char* msg = 0;                                                                         \
+      hsa_status_string(err, &msg);                                                                \
+      EXPECT_EQ(HSA_STATUS_SUCCESS, err) << msg;                                                   \
+      return (err);                                                                                \
+    }                                                                                              \
+  }
 
 // Clean up some of the common handles and memory used by BaseRocR code, then
 // shut down hsa. Restore HSA_ENABLE_INTERRUPT to original value, if necessary
@@ -94,8 +97,14 @@ hsa_status_t CommonCleanUp(BaseRocR* test) {
   }
 
   err = hsa_shut_down();
-
   RET_IF_HSA_UTILS_ERR(err);
+
+  // Ensure that HSA is actually closed.
+  hsa_status_t check = hsa_shut_down();
+  if (check != HSA_STATUS_ERROR_NOT_INITIALIZED) {
+    EXPECT_EQ(HSA_STATUS_ERROR_NOT_INITIALIZED, check) << "hsa_init reference count was too high.";
+    return HSA_STATUS_ERROR;
+  }
 
   std::string intr_val;
 

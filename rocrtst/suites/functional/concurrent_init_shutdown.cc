@@ -54,34 +54,34 @@
 #include "hsa/hsa.h"
 #include "hsa/hsa_ext_finalize.h"
 
-void* TestHSAInitShutdownFunction(void* args) {
+static void* TestHSAInitShutdownFunction(void* args) {
   // This is callback function for each thread
   // This will initialize the HSA runtime and shutdown
   hsa_status_t status;
 
   // Initialize hsa runtime
   status = hsa_init();
-  if (status != HSA_STATUS_SUCCESS) std::cout << "Failed" << std::endl;
+  EXPECT_EQ(HSA_STATUS_SUCCESS, status) << "hsa_init failed in worker thread.";
 
   // Shutdown hsa runtime
   status = hsa_shut_down();
-  if (status != HSA_STATUS_SUCCESS) {
-    std::cout << "Failed" << std::endl;
-  }
-  pthread_exit(NULL);
+  EXPECT_EQ(HSA_STATUS_SUCCESS, status) << "hsa_shut_down failed in worker thread.";
+
+  pthread_exit(nullptr);
+  return nullptr;
 }
 
 static const int NumOfThreads = 100;  // Number of thread to be created
 
-#define RET_IF_HSA_ERR(err) { \
-  if ((err) != HSA_STATUS_SUCCESS) { \
-    const char* msg = 0; \
-    hsa_status_string(err, &msg); \
-    std::cout << "hsa api call failure at line " << __LINE__ << ", file: " << \
-                          __FILE__ << ". Call returned " << err << std::endl; \
-    std::cout << msg << std::endl; \
-    return (err); \
-  } \
+#define RET_IF_HSA_ERR(err)                                                                        \
+  {                                                                                                \
+    if ((err) != HSA_STATUS_SUCCESS) {                                                             \
+      const char* msg = 0;                                                                         \
+      hsa_status_string(err, &msg);                                                                \
+      EXPECT_EQ(HSA_STATUS_SUCCESS, err) << msg;                                                   \
+      return (err);                                                                                \
+    }                                                                                              \
+  \
 }
 
 ConcurrentInitShutdownTest::ConcurrentInitShutdownTest(void) : TestBase() {
@@ -131,9 +131,8 @@ void ConcurrentInitShutdownTest::DisplayResults(void) const {
 }
 
 void ConcurrentInitShutdownTest::Close() {
-  // This will close handles opened within rocrtst utility calls and call
-  // hsa_shut_down(), so it should be done after other hsa cleanup
-  TestBase::Close();
+  // TestBase::SetUp() not used.
+  return;
 }
 
 void ConcurrentInitShutdownTest::TestConcurrentInitShutdown(void) {
@@ -141,20 +140,26 @@ void ConcurrentInitShutdownTest::TestConcurrentInitShutdown(void) {
 
   pthread_attr_t attr;
   pthread_attr_init(&attr);
-
-  // Setting the attribute to PTHREAD_CREATE_JOINABLE
   pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_JOINABLE);
 
   // This is to create threads concurrently
-  // HSA runtime will be initialized for each thread
+  // HSA runtime will be initialized and shutdown in each thread
   for (int Id = 0; Id < NumOfThreads; ++Id) {
-    int ThreadStatus = pthread_create(ThreadId + Id, &attr,
-                                      TestHSAInitShutdownFunction, &Id);
-
+    int ThreadStatus = pthread_create(&ThreadId[Id], &attr, TestHSAInitShutdownFunction, nullptr);
     // Check if the thread is created successfully
-    if (ThreadStatus < 0) {
-      std::cout << Id << "Thread creation failed " << std::endl;
-    }
+    // Might want to switch to non-fatal EXPECT_EQ and handle not being able to create so many
+    // threads.
+    ASSERT_EQ(0, ThreadStatus) << "pthead_create failed.";
   }
+
+  // Wait for workers.
+  for (int Id = 0; Id < NumOfThreads; ++Id) {
+    int err = pthread_join(ThreadId[Id], nullptr);
+    ASSERT_EQ(0, err) << "pthread_join failed.";
+  }
+
+  // Check that HSA refcount is exact.
+  hsa_status_t err = hsa_shut_down();
+  ASSERT_EQ(HSA_STATUS_ERROR_NOT_INITIALIZED, err) << "hsa_init reference count was too high.";
 }
 #undef RET_IF_HSA_ERR
