@@ -59,16 +59,15 @@
 #include "common/helper_funcs.h"
 #include "gtest/gtest.h"
 
-#define RET_IF_HSA_ERR(err) { \
-  if ((err) != HSA_STATUS_SUCCESS) { \
-    const char* msg = 0; \
-    hsa_status_string(err, &msg); \
-    std::cout << "hsa api call failure at line " << __LINE__ << ", file: " << \
-                          __FILE__ << ". Call returned " << err << std::endl; \
-    std::cout << msg << std::endl; \
-    return (err); \
-  } \
-}
+#define RET_IF_HSA_ERR(err)                                                                        \
+  {                                                                                                \
+    if ((err) != HSA_STATUS_SUCCESS) {                                                             \
+      const char* msg = 0;                                                                         \
+      hsa_status_string(err, &msg);                                                                \
+      EXPECT_EQ(HSA_STATUS_SUCCESS, err) << msg;                                                   \
+      return (err);                                                                                \
+    }                                                                                              \
+  }
 
 constexpr const size_t MemoryAsyncCopy::Size[kNumGranularity];
 constexpr const char* MemoryAsyncCopy::Str[kNumGranularity];
@@ -499,6 +498,13 @@ void MemoryAsyncCopy::Close() {
     cpu_hwl_numa_nodeset_ = nullptr;
   }
   hwloc_topology_destroy(topology_);
+
+  // hwloc hack - hwloc uses OpenCL which loads ROCr.  As OpenCL does not have a shutdown routine it
+  // can not free HSA state.  This will leak resources but is the only option short of isolating
+  // hwloc in it's own process.
+  while (hsa_shut_down() == HSA_STATUS_SUCCESS)
+    ;
+  hsa_init();
 
   TestBase::Close();
 }
