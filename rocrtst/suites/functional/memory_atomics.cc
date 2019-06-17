@@ -63,18 +63,6 @@
 static const uint32_t kNumBufferElements = 256;
 static const int kValue = 5;
 
-
-// This wrapper atomically writes the provided header and setup to the
-// provided AQL packet. The provided AQL packet address should be in the
-// queue memory space.
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
-
-
 MemoryAtomic::MemoryAtomic(AtomicTest testtype) :
     TestBase() {
   set_num_iteration(10);  // Number of iterations to execute of the main test;
@@ -186,19 +174,6 @@ void MemoryAtomic::Close() {
   TestBase::Close();
 }
 
-void MemoryAtomic::WriteAQLPktToQueue(hsa_queue_t* q) {
-  void* queue_base = q->base_address;
-  const uint32_t queue_mask = q->size - 1;
-  uint64_t index = hsa_queue_add_write_index_relaxed(q, 1);
-
-      reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                                     queue_base)[index & queue_mask] = aql();
-}
-
-
-
-
-
 typedef struct  __attribute__ ((aligned(16)))  args_t {
   int *a;
   int *b;
@@ -206,8 +181,6 @@ typedef struct  __attribute__ ((aligned(16)))  args_t {
   int d;
   int n;
   } args;
-
-
 
 static const char kSubTestSeparator[] = "  **************************";
 
@@ -473,11 +446,9 @@ void MemoryAtomic::MemoryAtomicTest(hsa_agent_t cpuAgent,
 
   // Load index for writing header later to command queue at same index
   uint64_t index = hsa_queue_load_write_index_relaxed(queue);
+  hsa_queue_store_write_index_relaxed(queue, index + 1);
 
-  // This function simply copies the data we've collected so far into our
-  // local AQL packet, except the the setup and header fields.
-  WriteAQLPktToQueue(queue);
-
+  rocrtst::WriteAQLToQueueLoc(queue, index, &aql());
 
   aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
   aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -487,7 +458,7 @@ void MemoryAtomic::MemoryAtomicTest(hsa_agent_t cpuAgent,
 
   void* q_base = queue->base_address;
   // Set the Aql packet header
-  AtomicSetPacketHeader(aql().header, aql().setup,
+  rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                       &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                           (q_base))[index & queue_mask]);
 
@@ -553,8 +524,6 @@ void MemoryAtomic::MemoryAtomicTest(hsa_agent_t cpuAgent,
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
   }
 }
-
-
 
 void MemoryAtomic::MemoryAtomicTest(void) {
   hsa_status_t err;

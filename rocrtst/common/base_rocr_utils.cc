@@ -438,6 +438,35 @@ hsa_kernel_dispatch_packet_t * WriteAQLToQueue(BaseRocR* test, uint64_t *ind) {
   return queue_aql_packet;
 }
 
+void
+WriteAQLToQueueLoc(hsa_queue_t *queue, uint64_t indx,
+                                      hsa_kernel_dispatch_packet_t *aql_pkt) {
+  assert(queue);
+  assert(aql_pkt);
+
+  void *queue_base = queue->base_address;
+  const uint32_t queue_mask = queue->size - 1;
+  hsa_kernel_dispatch_packet_t* queue_aql_packet;
+
+  queue_aql_packet =
+       &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue_base))
+                                                        [indx & queue_mask];
+
+  queue_aql_packet->workgroup_size_x = aql_pkt->workgroup_size_x;
+  queue_aql_packet->workgroup_size_y = aql_pkt->workgroup_size_y;
+  queue_aql_packet->workgroup_size_z = aql_pkt->workgroup_size_z;
+  queue_aql_packet->grid_size_x = aql_pkt->grid_size_x;
+  queue_aql_packet->grid_size_y = aql_pkt->grid_size_y;
+  queue_aql_packet->grid_size_z = aql_pkt->grid_size_z;
+  queue_aql_packet->private_segment_size =
+                                     aql_pkt->private_segment_size;
+  queue_aql_packet->group_segment_size =
+                                       aql_pkt->group_segment_size;
+  queue_aql_packet->kernel_object = aql_pkt->kernel_object;
+  queue_aql_packet->kernarg_address = aql_pkt->kernarg_address;
+  queue_aql_packet->completion_signal = aql_pkt->completion_signal;
+}
+
 // Allocate a buffer in the kern_arg_pool for the kernel arguments and write
 // the arguments to buffer
 hsa_status_t AllocAndSetKernArgs(BaseRocR* test, void* args, size_t arg_size) {

@@ -184,7 +184,9 @@ void EnqueueLatency::EnqueueSinglePacket() {
   ASSERT_EQ(hsa_queue_load_read_index_scacquire(main_queue()),
             hsa_queue_load_write_index_scacquire(main_queue()));
 
-  void *q_base_addr = main_queue()->base_address;
+  hsa_kernel_dispatch_packet_t *q_base_addr =
+                      reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
+                                                  main_queue()->base_address);
   rocrtst::PerfTimer p_timer;
   for (int i = 0; i < it; i++) {
     // Get timing stamp and ring the doorbell to dispatch the kernel.
@@ -196,12 +198,13 @@ void EnqueueLatency::EnqueueSinglePacket() {
     ASSERT_LT(index, main_queue()->size + index);
 
     // Write the aql packet at the calculated queue index address.
-    reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                                     q_base_addr)[index & queue_mask] = aql();
+    rocrtst::WriteAQLToQueueLoc(main_queue(), index, &aql());
 
-    reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                        q_base_addr)[index & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+    rocrtst::AtomicSetPacketHeader(
+        HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE,
+        aql().setup,
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                     (&(q_base_addr)[index & queue_mask]));
 
     p_timer.StopTimer(id);
 
@@ -212,8 +215,6 @@ void EnqueueLatency::EnqueueSinglePacket() {
     while (hsa_signal_wait_scacquire(aql().completion_signal,
          HSA_SIGNAL_CONDITION_LT, 1, (uint64_t) - 1, HSA_WAIT_STATE_ACTIVE)) {
     }
-
-
 
     hsa_signal_store_screlease(aql().completion_signal, 1);
 
@@ -238,8 +239,6 @@ void EnqueueLatency::EnqueueSinglePacket() {
   return;
 }
 
-
-
 void EnqueueLatency::EnqueueMultiPackets() {
   std::vector<double> timer;
   int it = RealIterationNum();
@@ -250,6 +249,10 @@ void EnqueueLatency::EnqueueMultiPackets() {
             hsa_queue_load_write_index_scacquire(main_queue()));
 
   rocrtst::PerfTimer p_timer;
+
+  hsa_kernel_dispatch_packet_t *q_base_addr =
+                      reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
+                                                  main_queue()->base_address);
 
   for (int i = 0; i < it; i++) {
     // Get timing stamp and ring the doorbell to dispatch the kernel.
@@ -265,29 +268,27 @@ void EnqueueLatency::EnqueueMultiPackets() {
       index[j] = hsa_queue_add_write_index_relaxed(main_queue(), 1);
 
       // Write the aql packet at the calculated queue index address.
-      (reinterpret_cast<hsa_kernel_dispatch_packet_t*>((
-                 main_queue()->base_address)))[index[j] & queue_mask] = aql();
-
-      if (j == num_of_pkts_ - 1) {
-        (reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-            main_queue()->base_address))[index[j] & queue_mask].header |=
-                                               1 << HSA_PACKET_HEADER_BARRIER;
-      }
+      rocrtst::WriteAQLToQueueLoc(main_queue(), index[j], &aql());
     }
+    // Write the aql packet at the calculated queue index address.
+
+    rocrtst::AtomicSetPacketHeader(
+        (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
+        (1 << HSA_PACKET_HEADER_BARRIER),
+        aql().setup,
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                      (&(q_base_addr)[index[num_of_pkts_ - 1] & queue_mask]));
+
 
     // Set packet header reversly; set all headers except the very first
     // one, for now.
-    for (uint32_t j = num_of_pkts_ - 1; j > 0; j--) {
-      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-         (main_queue()->base_address))[index[j] & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+    for (int32_t j = num_of_pkts_ - 1; j >= 0; j--) {
+      rocrtst::AtomicSetPacketHeader(
+          HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE,
+          aql().setup,
+          reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                     (&(q_base_addr)[index[j] & queue_mask]));
     }
-
-
-    // Set the very first header...
-    (reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-        main_queue()->base_address))[index[0] & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
 
     p_timer.StopTimer(id);
 

@@ -70,15 +70,6 @@ typedef struct test_debug_data_t {
 
 static void TestDebugTrap(hsa_status_t status, hsa_queue_t *source, void *data);
 
-// This wrapper atomically writes the provided header and setup to the
-// provided AQL packet. The provided AQL packet address should be in the
-// queue memory space.
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
 #define RET_IF_HSA_ERR(err) { \
   if ((err) != HSA_STATUS_SUCCESS) { \
     const char* msg = 0; \
@@ -164,31 +155,6 @@ static const char kSubTestSeparator[] = "  **************************";
 
 static void PrintDebugSubtestHeader(const char *header) {
   std::cout << "  *** Debug Basic Subtest: " << header << " ***" << std::endl;
-}
-
-void WriteAQLToQueue(hsa_kernel_dispatch_packet_t const* in_aql,
-                     hsa_queue_t* q) {
-  void* queue_base = q->base_address;
-  const uint32_t queue_mask = q->size - 1;
-  uint64_t que_idx = hsa_queue_add_write_index_relaxed(q, 1);
-
-  hsa_kernel_dispatch_packet_t* queue_aql_packet;
-
-  queue_aql_packet =
-    &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue_base))
-    [que_idx & queue_mask];
-
-  queue_aql_packet->workgroup_size_x = in_aql->workgroup_size_x;
-  queue_aql_packet->workgroup_size_y = in_aql->workgroup_size_y;
-  queue_aql_packet->workgroup_size_z = in_aql->workgroup_size_z;
-  queue_aql_packet->grid_size_x = in_aql->grid_size_x;
-  queue_aql_packet->grid_size_y = in_aql->grid_size_y;
-  queue_aql_packet->grid_size_z = in_aql->grid_size_z;
-  queue_aql_packet->private_segment_size = in_aql->private_segment_size;
-  queue_aql_packet->group_segment_size = in_aql->group_segment_size;
-  queue_aql_packet->kernel_object = in_aql->kernel_object;
-  queue_aql_packet->kernarg_address = in_aql->kernarg_address;
-  queue_aql_packet->completion_signal = in_aql->completion_signal;
 }
 
 void DebugBasicTest::VectorAddDebugTrapTest(hsa_agent_t cpuAgent,
@@ -323,9 +289,9 @@ void DebugBasicTest::VectorAddDebugTrapTest(hsa_agent_t cpuAgent,
   // write to command queue
   uint64_t index = hsa_queue_load_write_index_relaxed(queue);
 
-  // This function simply copies the data we've collected so far into our
-  // local AQL packet, except the the setup and header fields.
-  WriteAQLToQueue(&aql, queue);
+  hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+  rocrtst::WriteAQLToQueueLoc(queue, index, &aql);
 
   uint32_t aql_header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
   aql_header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -334,11 +300,9 @@ void DebugBasicTest::VectorAddDebugTrapTest(hsa_agent_t cpuAgent,
                 HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
 
   void* q_base = queue->base_address;
-  AtomicSetPacketHeader(aql_header, aql.setup,
+  rocrtst::AtomicSetPacketHeader(aql_header, aql.setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
-
-  hsa_queue_store_write_index_relaxed(queue, index + 1);
 
   // ringdoor bell
   hsa_signal_store_relaxed(queue->doorbell_signal, index);

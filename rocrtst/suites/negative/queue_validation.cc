@@ -70,16 +70,6 @@ typedef struct test_validation_data_t {
 
 static void CallbackQueueErrorHandling(hsa_status_t status, hsa_queue_t *source, void *data);
 
-// This wrapper atomically writes the provided header and setup to the
-// provided AQL packet. The provided AQL packet address should be in the
-// queue memory space.
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
-
 QueueValidation::QueueValidation(bool launch_InvalidDimension,
                                  bool launch_InvalidGroupMemory,
                                  bool launch_InvalidKernelObject,
@@ -182,16 +172,6 @@ static void PrintDebugSubtestHeader(const char *header) {
   std::cout << "  *** QueueValidation Subtest: " << header << " ***" << std::endl;
 }
 
-void QueueValidation::WriteAQLPktToQueue(hsa_queue_t* q) {
-  void* queue_base = q->base_address;
-  const uint32_t queue_mask = q->size - 1;
-  uint64_t index = hsa_queue_add_write_index_relaxed(q, 1);
-
-      reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                                     queue_base)[index & queue_mask] = aql();
-}
-
-
 void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
@@ -234,11 +214,9 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
 
     // Load index for writing header later to command queue at same index
     uint64_t index = hsa_queue_load_write_index_relaxed(queue[ii]);
+    hsa_queue_store_write_index_relaxed(queue[ii], index + 1);
 
-    // This function simply copies the data we've collected so far into our
-    // local AQL packet, except the the setup and header fields.
-    WriteAQLPktToQueue(queue[ii]);
-
+    rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
 
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
     aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -248,7 +226,7 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
 
     void* q_base = queue[ii]->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(aql().header, aql().setup,
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 
@@ -321,11 +299,9 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
 
     // Load index for writing header later to command queue at same index
     uint64_t index = hsa_queue_load_write_index_relaxed(queue[ii]);
+    hsa_queue_store_write_index_relaxed(queue[ii], index + 1);
 
-    // This function simply copies the data we've collected so far into our
-    // local AQL packet, except the the setup and header fields.
-    WriteAQLPktToQueue(queue[ii]);
-
+    rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
 
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
     aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -335,7 +311,7 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
 
     void* q_base = queue[ii]->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(aql().header, aql().setup,
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 
@@ -406,11 +382,9 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
 
     // Load index for writing header later to command queue at same index
     uint64_t index = hsa_queue_load_write_index_relaxed(queue[ii]);
+    hsa_queue_store_write_index_relaxed(queue[ii], index + 1);
 
-    // This function simply copies the data we've collected so far into our
-    // local AQL packet, except the the setup and header fields.
-    WriteAQLPktToQueue(queue[ii]);
-
+    rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
 
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
     aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -420,7 +394,7 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
 
     void* q_base = queue[ii]->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(aql().header, aql().setup,
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 
@@ -488,11 +462,9 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
 
     // Load index for writing header later to command queue at same index
     uint64_t index = hsa_queue_load_write_index_relaxed(queue[ii]);
+    hsa_queue_store_write_index_relaxed(queue[ii], index + 1);
 
-    // This function simply copies the data we've collected so far into our
-    // local AQL packet, except the the setup and header fields.
-    WriteAQLPktToQueue(queue[ii]);
-
+    rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
     // setting the invalid packet type
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
     aql().header |=  -1 << HSA_PACKET_HEADER_TYPE;
@@ -500,7 +472,7 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
 
     void* q_base = queue[ii]->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(aql().header, aql().setup,
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 
@@ -577,11 +549,9 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
 
       // Load index for writing header later to command queue at same index
       uint64_t index = hsa_queue_load_write_index_relaxed(queue[ii]);
+      hsa_queue_store_write_index_relaxed(queue[ii], index + 1);
 
-      // This function simply copies the data we've collected so far into our
-      // local AQL packet, except the the setup and header fields.
-      WriteAQLPktToQueue(queue[ii]);
-
+      rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
       aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
       aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
                     HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
@@ -590,7 +560,7 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
 
       void* q_base = queue[ii]->base_address;
       // Set the Aql packet header
-      AtomicSetPacketHeader(aql().header, aql().setup,
+      rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                           &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                           (q_base))[index & queue_mask]);
 

@@ -64,17 +64,6 @@ static const uint32_t kNumBufferElements = 256;
 static const int kValue = 5;
 
 
-// This wrapper atomically writes the provided header and setup to the
-// provided AQL packet. The provided AQL packet address should be in the
-// queue memory space.
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
-
-
 MemoryAllocationTest::MemoryAllocationTest(bool launch_GroupMemory,
                                            bool launch_BasicAllocateFree) : TestBase() {
   set_num_iteration(10);  // Number of iterations to execute of the main test;
@@ -178,9 +167,6 @@ static void PrintMemorySubtestHeader(const char *header) {
 }
 
 static const int kMemoryAllocSize = 1024;
-
-
-
 
 void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
                                                    hsa_agent_t gpuAgent) {
@@ -312,11 +298,11 @@ void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
 
     // Load index for writing header later to command queue at same index
     uint64_t index = hsa_queue_load_write_index_relaxed(queue);
+    hsa_queue_store_write_index_relaxed(queue, index + 1);
 
     // This function simply copies the data we've collected so far into our
     // local AQL packet, except the the setup and header fields.
-    WriteAQLPktToQueue(queue);
-
+    rocrtst::WriteAQLToQueueLoc(queue, index, &aql());
 
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
     aql().header |= HSA_FENCE_SCOPE_SYSTEM <<
@@ -326,10 +312,9 @@ void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
 
     void* q_base = queue->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(aql().header, aql().setup,
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
-
 
     // ringdoor bell
     hsa_signal_store_relaxed(queue->doorbell_signal, index);
