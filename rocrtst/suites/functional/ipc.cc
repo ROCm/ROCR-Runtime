@@ -243,15 +243,6 @@ void IPCTest::SetUp(void) {
   return;
 }
 
-// This wrapper atomically writes the provided header and setup to the
-// provided AQL packet. The provided AQL packet address should be in the
-// queue memory space.
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
 // Do a few extra iterations as we toss out some of the inital and final
 // iterations when calculating statistics
 uint32_t IPCTest::RealIterationNum(void) {

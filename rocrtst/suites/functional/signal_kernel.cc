@@ -66,12 +66,6 @@ static unsigned int NumOfKernels = 1;
   } \
 }
 
-static inline void AtomicSetPacketHeader(uint16_t header, uint16_t setup,
-                                  hsa_kernel_dispatch_packet_t* queue_packet) {
-  __atomic_store_n(reinterpret_cast<uint32_t*>(queue_packet),
-                   header | (setup << 16), __ATOMIC_RELEASE);
-}
-
 SignalKernelTest::SignalKernelTest(SignalKernelType type_) : TestBase() {
   set_num_iteration(10);  // Number of iterations to execute of the main test;
             // This is a default value which can be overridden
@@ -263,9 +257,10 @@ void SignalKernelTest::KernelSetFunction(SignalKernelType type_) {
 
     // write to command queue
     uint64_t index = hsa_queue_load_write_index_relaxed(queue);
-    reinterpret_cast<hsa_kernel_dispatch_packet_t*>
-        (queue->base_address)[index & queue_mask] = dispatch_packet;
     hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+    rocrtst::WriteAQLToQueueLoc(queue, index, &dispatch_packet);
+
 
     dispatch_packet.header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
     dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
@@ -275,7 +270,7 @@ void SignalKernelTest::KernelSetFunction(SignalKernelType type_) {
 
     void* q_base = queue->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(dispatch_packet.header, dispatch_packet.setup,
+    rocrtst::AtomicSetPacketHeader(dispatch_packet.header, dispatch_packet.setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 
@@ -446,9 +441,10 @@ void SignalKernelTest::TestSignalKernelMultiWait(void) {
     const uint32_t queue_mask = queue->size - 1;
     // write to command queue
     uint64_t index = hsa_queue_load_write_index_relaxed(queue);
-    reinterpret_cast<hsa_kernel_dispatch_packet_t*>
-        (queue->base_address)[index & queue_mask] = dispatch_packet;
     hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+    rocrtst::WriteAQLToQueueLoc(queue, index, &dispatch_packet);
+
 
     dispatch_packet.header |= HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
     dispatch_packet.header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
@@ -458,7 +454,7 @@ void SignalKernelTest::TestSignalKernelMultiWait(void) {
 
     void* q_base = queue->base_address;
     // Set the Aql packet header
-    AtomicSetPacketHeader(dispatch_packet.header, dispatch_packet.setup,
+    rocrtst::AtomicSetPacketHeader(dispatch_packet.header, dispatch_packet.setup,
                         &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>
                             (q_base))[index & queue_mask]);
 

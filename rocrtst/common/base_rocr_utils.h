@@ -98,6 +98,8 @@ hsa_status_t InitializeAQLPacket(const BaseRocR* test,
 /// \returns Pointer to dispatch packet in queue that was written to
 hsa_kernel_dispatch_packet_t* WriteAQLToQueue(BaseRocR* test, uint64_t *ind);
 
+void WriteAQLToQueueLoc(hsa_queue_t *queue, uint64_t indx,
+                                      hsa_kernel_dispatch_packet_t *aql_pkt);
 /// This function writes the first 32 bits of an aql packet to the provided
 /// aql packet. This function is meant to be called immediately before
 /// ringing door_bell signal.

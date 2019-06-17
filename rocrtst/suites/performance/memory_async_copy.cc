@@ -412,9 +412,12 @@ void MemoryAsyncCopy::DisplayResults(void) const {
   }
 
   TestBase::DisplayResults();
-
+  hsa_status_t err;
   for (Transaction t : tran_) {
     DisplayBenchmark(&t);
+    err = hsa_signal_destroy(t.signal);
+    ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
     delete t.benchmark_copy_time;
     delete t.min_time;
   }

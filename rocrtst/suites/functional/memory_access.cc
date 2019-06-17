@@ -281,8 +281,6 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
     err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
-
-
     // Fill the dispatch packet with
     // workgroup_size, grid_size, kernelArgs and completion signal
     // Put it on the queue and launch the kernel by ringing the doorbell
@@ -296,12 +294,6 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
     memset(&aql, 0, sizeof(aql));
 
     // initialize aql packet
-    aql.header =
-      (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
-      (1 << HSA_PACKET_HEADER_BARRIER) |
-      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
-      (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
-    aql.setup = 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
     aql.workgroup_size_x = 256;
     aql.workgroup_size_y = 1;
     aql.workgroup_size_z = 1;
@@ -319,9 +311,20 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
 
     // write to command queue
     uint64_t index = hsa_queue_load_write_index_relaxed(queue);
-    reinterpret_cast<hsa_kernel_dispatch_packet_t*>
-                              (queue->base_address)[index & queue_mask] = aql;
     hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+    rocrtst::WriteAQLToQueueLoc(queue, index, &aql);
+
+    hsa_kernel_dispatch_packet_t *q_base_addr =
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>(queue->base_address);
+    rocrtst::AtomicSetPacketHeader(
+        (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
+           (1 << HSA_PACKET_HEADER_BARRIER) |
+          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+           (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE),
+                  (1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS),
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                          (&q_base_addr[index & queue_mask]));
 
     // ringdoor bell
     hsa_signal_store_relaxed(queue->doorbell_signal, index);
@@ -366,9 +369,6 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
     return;
   }
 }
-
-
-
 
 // Test to check cpu can read & write to GPU memory
 void MemoryAccessTest::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent,

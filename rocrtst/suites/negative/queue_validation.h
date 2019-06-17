@@ -98,7 +98,6 @@ class QueueValidation : public TestBase {
   void QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent, hsa_agent_t gpuAgent);
   void QueueValidationForInvalidPacket(hsa_agent_t cpuAgent, hsa_agent_t gpuAgent);
   void QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgent, hsa_agent_t gpuAgent);
-  void WriteAQLPktToQueue(hsa_queue_t* q);
 };
 
 #endif  // ROCRTST_SUITES_NEGATIVE_QUEUE_VALIDATION_H_

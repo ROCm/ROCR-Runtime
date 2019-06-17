@@ -173,31 +173,37 @@ size_t DispatchTime::RealIterationNum() {
 void DispatchTime::RunSingle() {
   std::vector<double> timer;
 
-  int it = RealIterationNum();
+  uint32_t it = RealIterationNum();
   const uint32_t queue_mask = main_queue()->size - 1;
 
   // queue should be empty
   ASSERT_EQ(hsa_queue_load_read_index_scacquire(main_queue()),
             hsa_queue_load_write_index_scacquire(main_queue()));
 
-  void *q_base_addr = main_queue()->base_address;
-  for (int i = 0; i < it; i++) {
+  hsa_kernel_dispatch_packet_t *q_base_addr =
+      reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                                 (main_queue()->base_address);
+
+  if (it > main_queue()->size) {
+    it = main_queue()->size;
+  }
+  for (uint32_t i = 0; i < it; i++) {
     // Obtain the current queue write index.
     uint64_t index = hsa_queue_add_write_index_relaxed(main_queue(), 1);
 
-    ASSERT_LT(index, main_queue()->size + index);
-
     // Write the aql packet at the calculated queue index address.
+    rocrtst::WriteAQLToQueueLoc(main_queue(), index, &aql());
 
-    reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                                     q_base_addr)[index & queue_mask] = aql();
     // Get timing stamp and ring the doorbell to dispatch the kernel.
     rocrtst::PerfTimer p_timer;
     int id = p_timer.CreateTimer();
     p_timer.StartTimer(id);
-    reinterpret_cast<hsa_kernel_dispatch_packet_t *>(
-                        q_base_addr)[index & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+
+    rocrtst::AtomicSetPacketHeader(
+        HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE,
+        aql().setup,
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                        (&(q_base_addr)[index & queue_mask]));
 
     hsa_signal_store_screlease(main_queue()->doorbell_signal, index);
 
@@ -205,7 +211,6 @@ void DispatchTime::RunSingle() {
     while (hsa_signal_wait_scacquire(aql().completion_signal,
          HSA_SIGNAL_CONDITION_LT, 1, (uint64_t) - 1, HSA_WAIT_STATE_ACTIVE)) {
     }
-
 
     p_timer.StopTimer(id);
 
@@ -237,6 +242,9 @@ void DispatchTime::RunMulti() {
   std::vector<double> timer;
   int it = RealIterationNum();
   const uint32_t queue_mask = main_queue()->size - 1;
+  hsa_kernel_dispatch_packet_t *q_base_addr =
+      reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                                 (main_queue()->base_address);
 
   // queue should be empty
   ASSERT_EQ(hsa_queue_load_read_index_scacquire(main_queue()),
@@ -255,35 +263,37 @@ void DispatchTime::RunMulti() {
       index[j] = hsa_queue_add_write_index_relaxed(main_queue(), 1);
 
       // Write the aql packet at the calculated queue index address.
-      (reinterpret_cast<hsa_kernel_dispatch_packet_t*>((
-                 main_queue()->base_address)))[index[j] & queue_mask] = aql();
-
-      if (j == num_batch_ - 1) {
-        (reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-            main_queue()->base_address))[index[j] & queue_mask].header |=
-                                               1 << HSA_PACKET_HEADER_BARRIER;
-      }
+      rocrtst::WriteAQLToQueueLoc(main_queue(), index[j], &aql());
     }
+
+    rocrtst::AtomicSetPacketHeader(
+        (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
+        (1 << HSA_PACKET_HEADER_BARRIER),
+        aql().setup,
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                          (&q_base_addr[index[num_batch_ - 1] & queue_mask]));
 
     // Set packet header reversly; set all headers except the very first
     // one, for now.
     for (uint32_t j = num_batch_ - 1; j > 0; j--) {
-      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-         (main_queue()->base_address))[index[j] & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+      rocrtst::AtomicSetPacketHeader(
+          HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE,
+          aql().setup,
+          reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                      (&q_base_addr[index[j] & queue_mask]));
     }
 
     // Get timing stamp and ring the doorbell to dispatch the kernel.
     int id = p_timer.CreateTimer();
     p_timer.StartTimer(id);
     // Set the very first header...
-    (reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
-        main_queue()->base_address))[index[0] & queue_mask].header |=
-                    HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE;
+    rocrtst::AtomicSetPacketHeader(
+        HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE,
+        aql().setup,
+        reinterpret_cast<hsa_kernel_dispatch_packet_t *>
+                                     (&(q_base_addr)[index[0] & queue_mask]));
 
-    for (uint32_t j = 0; j < num_batch_; j++) {
-      hsa_signal_store_screlease(main_queue()->doorbell_signal, index[j]);
-    }
+    hsa_signal_store_screlease(main_queue()->doorbell_signal, index[num_batch_ - 1]);
 
     // Wait on the dispatch signal until the kernel is finished.
     while (hsa_signal_wait_scacquire(aql().completion_signal,
