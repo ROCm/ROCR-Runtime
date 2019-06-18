@@ -88,17 +88,29 @@ class os_thread {
     args->entry_args = threadArgument;
     args->entry_function = function;
 
-    stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
-    stackSize = AlignUp(stackSize, 4096);
     pthread_attr_t attrib;
     pthread_attr_init(&attrib);
 
     if (stackSize != 0) {
+      stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
+      stackSize = AlignUp(stackSize, 4096);
       int err = pthread_attr_setstacksize(&attrib, stackSize);
       assert(err == 0 && "pthread_attr_setstacksize failed.");
     }
 
     int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+
+    // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
+    // Attempt to grow the stack within reason.
+    if ((err == EINVAL) && stackSize != 0) {
+      while (stackSize < 20 * 1024 * 1024) {
+        stackSize *= 2;
+        pthread_attr_setstacksize(&attrib, stackSize);
+        err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+        if (err != EINVAL) break;
+      }
+    }
+
     pthread_attr_destroy(&attrib);
     if (err == 0)
       args.release();
