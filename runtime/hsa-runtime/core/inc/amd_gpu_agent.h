@@ -206,8 +206,7 @@ class GpuAgent : public GpuAgentInt {
   // @param [out] code_buf_size Size of code object buffer in bytes.
   enum class AssembleTarget { ISA, AQL };
 
-  void AssembleShader(const char* src_sp3, const char* func_name,
-                      AssembleTarget assemble_target, void*& code_buf,
+  void AssembleShader(const char* func_name, AssembleTarget assemble_target, void*& code_buf,
                       size_t& code_buf_size) const;
 
   // @brief Frees code object created by AssembleShader.

@@ -163,9 +163,8 @@ GpuAgent::~GpuAgent() {
   regions_.clear();
 }
 
-void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
-                              AssembleTarget assemble_target, void*& code_buf,
-                              size_t& code_buf_size) const {
+void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_target,
+                              void*& code_buf, size_t& code_buf_size) const {
   // Select precompiled shader implementation from name/target.
   struct ASICShader {
     const void* code;
@@ -1169,67 +1168,6 @@ void GpuAgent::SyncClocks() {
 }
 
 void GpuAgent::BindTrapHandler() {
-  const char* src_sp3 = R"(
-    var s_trap_info_lo = ttmp0
-    var s_trap_info_hi = ttmp1
-    var s_tmp0         = ttmp2
-    var s_tmp1         = ttmp3
-    var s_tmp2         = ttmp4
-    var s_tmp3         = ttmp5
-
-    shader TrapHandler
-      type(CS)
-
-      // Retrieve the queue inactive signal.
-      s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0
-      s_waitcnt            lgkmcnt(0)
-
-      // Mask all but one lane of the wavefront.
-      s_mov_b64            exec, 0x1
-
-      // Set queue signal value to unhandled exception error.
-      s_add_u32            s_tmp0, s_tmp0, 0x8
-      s_addc_u32           s_tmp1, s_tmp1, 0x0
-      v_mov_b32            v0, s_tmp0
-      v_mov_b32            v1, s_tmp1
-      v_mov_b32            v2, 0x80000000
-      v_mov_b32            v3, 0x0
-      flat_atomic_swap_x2  v[0:1], v[0:1], v[2:3]
-      s_waitcnt            vmcnt(0)
-
-      // Skip event if the signal was already set to unhandled exception.
-      v_cmp_eq_u64         vcc, v[0:1], v[2:3]
-      s_cbranch_vccnz      L_SIGNAL_DONE
-
-      // Check for a non-NULL signal event mailbox.
-      s_load_dwordx2       [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x8
-      s_waitcnt            lgkmcnt(0)
-      s_and_b64            [s_tmp2, s_tmp3], [s_tmp2, s_tmp3], [s_tmp2, s_tmp3]
-      s_cbranch_scc0       L_SIGNAL_DONE
-
-      // Load the signal event value.
-      s_add_u32            s_tmp0, s_tmp0, 0x10
-      s_addc_u32           s_tmp1, s_tmp1, 0x0
-      s_load_dword         s_tmp0, [s_tmp0, s_tmp1], 0x0
-      s_waitcnt            lgkmcnt(0)
-
-      // Write the signal event value to the mailbox.
-      v_mov_b32            v0, s_tmp2
-      v_mov_b32            v1, s_tmp3
-      v_mov_b32            v2, s_tmp0
-      flat_store_dword     v[0:1], v2
-      s_waitcnt            vmcnt(0)
-
-      // Send an interrupt to trigger event notification.
-      s_sendmsg            sendmsg(MSG_INTERRUPT)
-
-    L_SIGNAL_DONE:
-      // Halt wavefront and exit trap.
-      s_sethalt            1
-      s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
-    end
-  )";
-
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
     return;
@@ -1241,8 +1179,7 @@ void GpuAgent::BindTrapHandler() {
   }
 
   // Assemble the trap handler source code.
-  AssembleShader(src_sp3, "TrapHandler", AssembleTarget::ISA, trap_code_buf_,
-                 trap_code_buf_size_);
+  AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
 
   // Bind the trap handler to this node.
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
