@@ -113,7 +113,15 @@ static const unsigned int kCodeTrapHandler9[] = {
   .set SQ_WAVE_PC_HI_TRAP_ID_SHIFT             , 16
   .set SQ_WAVE_PC_HI_TRAP_ID_SIZE              , 8
   .set SQ_WAVE_PC_HI_TRAP_ID_BFE               , (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
+  .set SQ_WAVE_PC_HI_HT_MASK                   , 0x1000000
   .set SQ_WAVE_STATUS_HALT_MASK                , 0x2000
+  .set SQ_WAVE_TRAPSTS_MEM_VIOL_MASK           , 0x100
+  .set SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK       , 0x800
+  .set SQ_WAVE_TRAPSTS_XNACK_ERROR_MASK        , 0x10000000
+  .set SIGNAL_CODE_MEM_VIOL                    , (1 << 29)
+  .set SIGNAL_CODE_ILLEGAL_INST                , (1 << 30)
+  .set SIGNAL_CODE_LLVM_TRAP                   , (1 << 31)
+  .set MAX_NUM_DOORBELLS_MASK                  , ((1 << 10) - 1)
 
   .if .amdgcn.gfx_generation_number == 9
     .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
@@ -124,12 +132,26 @@ static const unsigned int kCodeTrapHandler9[] = {
   .endif
 
   trap_entry:
-    // If this is not a trap then return to the shader.
+    // If memory violation without XNACK error then signal queue error.
+    // XNACK error will be handled by VM interrupt, since it has more information.
+    s_getreg_b32         ttmp2, hwreg(HW_REG_TRAPSTS)
+    s_and_b32            ttmp4, ttmp2, (SQ_WAVE_TRAPSTS_MEM_VIOL_MASK | SQ_WAVE_TRAPSTS_XNACK_ERROR_MASK)
+    s_cmp_eq_u32         ttmp4, SQ_WAVE_TRAPSTS_MEM_VIOL_MASK
+    s_mov_b32            ttmp4, SIGNAL_CODE_MEM_VIOL
+    s_cbranch_scc1       .signal_error
+
+    // If illegal instruction then signal queue error.
+    s_and_b32            ttmp4, ttmp2, SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK
+    s_mov_b32            ttmp4, SIGNAL_CODE_ILLEGAL_INST
+    s_cbranch_scc1       .signal_error
+
+    // If any other exception then return to shader.
     s_bfe_u32            ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
     s_cbranch_scc0       .exit_trap
 
     // If llvm.trap then signal queue error.
     s_cmp_eq_u32         ttmp2, 0x2
+    s_mov_b32            ttmp4, SIGNAL_CODE_LLVM_TRAP
     s_cbranch_scc1       .signal_error
 
     // For other traps advance PC and return to shader.
@@ -138,12 +160,25 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_branch             .exit_trap
 
   .signal_error:
-    // Retrieve queue_inactive_signal from amd_queue_t* passed in s[0:1].
-    s_load_dwordx2       [ttmp2, ttmp3], s[0:1], 0xC0 glc
+    // Fetch doorbell index for our queue.
+    s_mov_b32            exec_lo, 0x80000000
+    s_sendmsg            sendmsg(MSG_GET_DOORBELL)
+  .wait_sendmsg:
+    s_nop                7
+    s_bitcmp0_b32        exec_lo, 0x1F
+    s_cbranch_scc0       .wait_sendmsg
+
+    // Map doorbell index to amd_queue_t* through TMA (doorbell_queue_map).
+    s_and_b32            ttmp2, exec_lo, MAX_NUM_DOORBELLS_MASK
+    s_lshl_b32           ttmp2, ttmp2, 0x3
+    s_load_dwordx2       [ttmp2, ttmp3], [ttmp14, ttmp15], ttmp2 glc
     s_waitcnt            lgkmcnt(0)
 
-    // Set queue signal value to unhandled exception error.
-    s_mov_b32            ttmp4, 0x80000000
+    // Retrieve queue_inactive_signal from amd_queue_t*.
+    s_load_dwordx2       [ttmp2, ttmp3], [ttmp2, ttmp3], 0xC0 glc
+    s_waitcnt            lgkmcnt(0)
+
+    // Set queue signal value to error code.
     s_mov_b32            ttmp5, 0x0
     s_atomic_swap_x2     [ttmp4, ttmp5], [ttmp2, ttmp3], 0x8 glc
     s_waitcnt            lgkmcnt(0)
@@ -189,9 +224,13 @@ static const unsigned int kCodeTrapHandler9[] = {
     // Return to shader at unmodified PC.
     s_rfe_b64            [ttmp0, ttmp1]
 */
-    0x92eeff6d, 0x00080010, 0xbf84001e, 0xbf06826e, 0xbf850003, 0x806c846c,
-    0x826d806d, 0xbf820019, 0xc0071b80, 0x000000c0, 0xbf8cc07f, 0xbef000ff,
-    0x80000000, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
+    0xb8eef803, 0x8670ff6e, 0x10000100, 0xbf06ff70, 0x00000100, 0xbef000ff,
+    0x20000000, 0xbf85000e, 0x8670ff6e, 0x00000800, 0xbef000f4, 0xbf85000a,
+    0x92eeff6d, 0x00080010, 0xbf84002a, 0xbf06826e, 0xbef000ff, 0x80000000,
+    0xbf850003, 0x806c846c, 0x826d806d, 0xbf820023, 0xbefe00ff, 0x80000000,
+    0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0x866eff7e, 0x000003ff,
+    0x8e6e836e, 0xc0051bbd, 0x0000006e, 0xbf8cc07f, 0xc0071bb7, 0x000000c0,
+    0xbf8cc07f, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
     0xbf85000c, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070, 0xbf840007,
     0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000, 0xbf8cc07f,
     0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e, 0x001f8000,

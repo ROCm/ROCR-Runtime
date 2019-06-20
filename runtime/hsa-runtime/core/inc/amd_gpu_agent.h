@@ -456,6 +456,10 @@ class GpuAgent : public GpuAgentInt {
 
   size_t trap_code_buf_size_;
 
+  // @brief Mappings from doorbell index to queue, for trap handler.
+  // Correlates with output of s_sendmsg(MSG_GET_DOORBELL) for queue identification.
+  amd_queue_t** doorbell_queue_map_;
+
   // @brief The GPU memory bus width in bit.
   uint32_t memory_bus_width_;
 
