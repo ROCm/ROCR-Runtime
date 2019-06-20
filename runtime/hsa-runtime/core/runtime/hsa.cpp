@@ -2719,6 +2719,17 @@ hsa_status_t hsa_status_string(
       *status_string =
           "HSA_STATUS_ERROR_FATAL:  The queue received an error that may require process "
           "termination.";
+      break;
+    case HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION:
+      *status_string =
+          "HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION:  The agent attempted to access "
+          "memory beyond the largest legal address.";
+      break;
+    case HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION:
+      *status_string =
+          "HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION:  The agent attempted to execute an "
+          "illegal shader instruction.";
+      break;
     case HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED:
       *status_string =
           "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "

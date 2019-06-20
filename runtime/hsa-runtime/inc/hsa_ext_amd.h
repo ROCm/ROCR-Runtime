@@ -64,7 +64,17 @@ enum {
   /**
    * The memory pool is invalid.
    */
-  HSA_STATUS_ERROR_INVALID_MEMORY_POOL = 40
+  HSA_STATUS_ERROR_INVALID_MEMORY_POOL = 40,
+
+  /**
+   * Agent accessed memory beyond the maximum legal address.
+   */
+  HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION = 41,
+
+  /**
+   * Agent executed an invalid shader instruction.
+   */
+  HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION = 42,
 };
 
 /**
