@@ -55,6 +55,7 @@
 #include "suites/functional/memory_alignment.h"
 #include "suites/functional/memory_atomics.h"
 #include "suites/functional/memory_allocation.h"
+#include "suites/functional/deallocation_notifier.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
@@ -342,6 +343,11 @@ TEST(rocrtstFunc, Memory_Alignment_Test) {
   RunCustomTestProlog(&ma);
   ma.MemoryPoolAlignment();
   RunCustomTestEpilog(&ma);
+}
+
+TEST(rocrtstFunc, Deallocation_Notifier_Test) {
+  DeallocationNotifierTest notifier;
+  RunGenericTest(&notifier);
 }
 
 TEST(rocrtstNeg, Memory_Negative_Tests) {
