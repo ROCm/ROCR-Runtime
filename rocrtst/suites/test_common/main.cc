@@ -330,7 +330,7 @@ TEST(rocrtstFunc, Memory_Atomic_Xchg_Test) {
   RunCustomTestEpilog(&ma);
 }
 
-TEST(rocrtstFunc, DebugBasicTests) {
+TEST(rocrtstFunc, DISABLED_DebugBasicTests) {
   DebugBasicTest mt;
   RunCustomTestProlog(&mt);
   mt.VectorAddDebugTrapTest();
