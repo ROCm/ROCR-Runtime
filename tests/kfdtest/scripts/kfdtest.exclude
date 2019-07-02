@@ -38,7 +38,6 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDPNPTest.DisableAndCreateQueue:"\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.mGPUShareBO:"\
-"KFDQMTest.PM4EventInterrupt:"\
 "KFDQMTest.SdmaEventInterrupt:"\
 "KFDDBGTest.BasicDebuggerSuspendResume:"\
 "KFDHWSTest.*"
@@ -114,8 +113,10 @@ TONGA_TESTS_BLACKLIST=\
 "KFDPerfCountersTest.*:"\
 "KFDQMTest.*"
 
+# Since Navi10 was merged, the PM4Event test takes 6min to run
 FIJI_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.PM4EventInterrupt:"\
 "$SDMA_BLACKLIST"
 
 ELLESMERE_TESTS_BLACKLIST=\
