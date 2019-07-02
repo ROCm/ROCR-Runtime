@@ -114,6 +114,8 @@ void KFDDBGTest::TearDown() {
     ROUTINE_END
 }
 
+#if 0
+// Functionality is deprecated now, keeping code for reference
 TEST_F(KFDDBGTest, BasicAddressWatch) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_VI) {
@@ -200,6 +202,7 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
     }
     TEST_END
 }
+#endif
 
 TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_START(TESTPROFILE_RUNALL)

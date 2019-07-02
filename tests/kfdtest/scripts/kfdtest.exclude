@@ -29,7 +29,6 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 # KFDPNPTest.DisableAndCreateQueue (KFD-329)
 # KFDQMTest.GPUDoorbellWrite fails intermittently (KFD-318)
 # KFDQMTest.mGPUShareBO (KFD-334)
-# KFDQMTest.PM4EventInterrupt/KFDDBGTest.BasicAddressWatch (KFD-431)
 # KFDHWSTest.* (SWDEV-193035)
 TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDGraphicsInterop.RegisterForeignDeviceMem:"\
@@ -39,7 +38,6 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDPNPTest.DisableAndCreateQueue:"\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.mGPUShareBO:"\
-"KFDDBGTest.BasicAddressWatch*:"\
 "KFDQMTest.PM4EventInterrupt:"\
 "KFDQMTest.SdmaEventInterrupt:"\
 "KFDDBGTest.BasicDebuggerSuspendResume:"\
@@ -114,7 +112,6 @@ TONGA_TESTS_BLACKLIST=\
 "KFDMemoryTest.MemoryRegister*:"\
 "KFDMemoryTest.QueryPointerInfo:"\
 "KFDPerfCountersTest.*:"\
-"KFDDBGTest.BasicAddressWatch:"\
 "KFDQMTest.*"
 
 FIJI_TESTS_BLACKLIST=\
@@ -133,14 +130,12 @@ LEXA_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"
 
-# KFDDBG.BasicAddressWatch is not supported on GFXv9 and later. FIXME: it should disable itself
 # KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
 # KFDMemoryTest.BigBufferStressTest (ROCMOPS-462)
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
 # KFDQMTest.MultipleSdmaQueues (ROCMOPS-463)
 VEGA10_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDDBGTest.BasicAddressWatch:"\
 "KFDIPCTest.BasicTest:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDIPCTest.CMABasicTest:"\
@@ -150,14 +145,12 @@ VEGA10_TESTS_BLACKLIST=\
 
 VEGA12_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"$SDMA_BLACKLIST:"\
-"KFDDBGTest.BasicAddressWatch"
+"$SDMA_BLACKLIST"\
 
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
 VEGA20_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
-"KFDDBGTest.BasicAddressWatch:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
@@ -165,7 +158,6 @@ VEGA20_TESTS_BLACKLIST=\
 
 RAVEN_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDDBGTest.BasicAddressWatch:"\
 "KFDQMTest.QueueLatency:"\
 "KFDQMTest.SdmaEventInterrupt"
 
