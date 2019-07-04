@@ -116,6 +116,9 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         if (props->EngineId.ui32.Stepping == 2)
             familyId = FAMILY_RV;
         break;
+    case 10:
+        familyId = FAMILY_NV;
+        break;
     }
 
     if (props->NumCPUCores && props->NumFComputeCores)
