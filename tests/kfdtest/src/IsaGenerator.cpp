@@ -29,6 +29,7 @@
 #include "IsaGenerator_Gfx72.hpp"
 #include "IsaGenerator_Gfx8.hpp"
 #include "IsaGenerator_Gfx9.hpp"
+#include "IsaGenerator_Gfx10.hpp"
 
 #include "GoogleTestExtension.hpp"
 
@@ -91,6 +92,9 @@ IsaGenerator* IsaGenerator::Create(unsigned int familyId) {
     case FAMILY_AI:
     case FAMILY_RV:
         return new IsaGenerator_Gfx9;
+    case FAMILY_NV:
+        return new IsaGenerator_Gfx10;
+
     default:
         LOG() << "Error: Invalid ISA" << std::endl;
         return NULL;
