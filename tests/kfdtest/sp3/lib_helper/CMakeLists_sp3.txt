@@ -58,8 +58,10 @@ aux_source_directory(${SCLIB_SRC}/sp3/ci SRC_FILES)
 aux_source_directory(${SCLIB_SRC}/sp3/gfx8 SRC_FILES)
 aux_source_directory(${SCLIB_SRC}/sp3/gfx81 SRC_FILES)
 aux_source_directory(${SCLIB_SRC}/sp3/gfx9 SRC_FILES)
+aux_source_directory(${SCLIB_SRC}/sp3/gfx10 SRC_FILES)
 aux_source_directory(${SCLIB_SRC}/sp3/release_headers/gfx81 SRC_FILES)
 aux_source_directory(${SCLIB_SRC}/sp3/release_headers/gfx9 SRC_FILES)
+aux_source_directory(${SCLIB_SRC}/sp3/release_headers/gfx10 SRC_FILES)
 
 
 message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
@@ -68,7 +70,7 @@ message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 #  message(STATUS "${file}")
 #endforeach()
 
-set ( CMAKE_C_FLAGS "-DSP3_STATIC_LIB -Wno-error -DPUBLIC_RELEASE -DLITTLEENDIAN_CPU -fPIC" )
+set ( CMAKE_C_FLAGS "-DSP3_STATIC_LIB -Wno-error -DPUBLIC_RELEASE -DLITTLEENDIAN_CPU -fPIC -DGFX10_BUILD" )
 
 add_library(amdsp3 ${SRC_FILES})
 
