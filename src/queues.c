@@ -129,6 +129,11 @@ const struct device_info vega20_device_info = {
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info navi10_device_info = {
+	.asic_family = CHIP_NAVI10,
+	.eop_buffer_size = 4096,
+	.doorbell_size = DOORBELL_SIZE_GFX9,
+};
 
 static const struct device_info *dev_lookup_table[] = {
 	[CHIP_KAVERI] = &kaveri_device_info,
@@ -143,7 +148,8 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_VEGA10] = &vega10_device_info,
 	[CHIP_VEGA12] = &vega12_device_info,
 	[CHIP_VEGA20] = &vega20_device_info,
-	[CHIP_RAVEN] = &raven_device_info
+	[CHIP_RAVEN] = &raven_device_info,
+	[CHIP_NAVI10] = &navi10_device_info,
 };
 
 struct queue {
