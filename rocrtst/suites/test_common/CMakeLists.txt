@@ -32,7 +32,7 @@ cmake_minimum_required(VERSION 2.8.0)
 #   4) Run "make"
 #
 
-set(DEFAULT_TARGET "gfx803")
+set(DEFAULT_TARGETS "gfx803;gfx701;gfx801;gfx802;gfx900;gfx902;gfx906")
 
 #
 # Currently support for Windows platform is not present
@@ -110,10 +110,10 @@ else()
 endif()
 
 if (NOT DEFINED TARGET_DEVICES)
-  message("WARNING: No targets devices provided on command line")
+  message("No targets devices provided on command line")
   message("  e.g., cmake -DTARGET_DEVICES=\"gfx803;gfx900;gfx...\" ..")
-  message("  Using default target of $DEFAULT_TARGET")
-  list(APPEND TARGET_DEVICES "gfx803")
+  message("  Using default target of ${DEFAULT_TARGETS}")
+  list(APPEND TARGET_DEVICES ${DEFAULT_TARGETS})
 endif()
 
 string(TOLOWER "${ROCRTST_BLD_TYPE}" tmp)
