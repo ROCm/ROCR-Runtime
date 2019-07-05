@@ -34,6 +34,8 @@
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
+#define SDMA_NOP  0x0
+
 void KFDEvictTest::SetUp() {
     ROUTINE_START
 
@@ -198,7 +200,7 @@ static inline int amdgpu_get_bo_list(amdgpu_device_handle dev, amdgpu_bo_handle 
     return amdgpu_bo_list_create(dev, bo2 ? 2 : 1, resources, NULL, list);
 }
 
-void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle handle,
+void KFDEvictTest::AmdgpuCommandSubmissionSdmaNop(int rn, amdgpu_bo_handle handle,
                                                      PM4Queue *computeQueue = NULL) {
     amdgpu_context_handle contextHandle;
     amdgpu_bo_handle ibResultHandle;
@@ -226,14 +228,14 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle ha
     /* Fill Nop cammands in IB */
     ptr = reinterpret_cast<uint32_t *>(ibResultCpu);
     for (int i = 0; i < 16; i++)
-        ptr[i] = 0xffff1000;
+        ptr[i] = SDMA_NOP;
 
     memset(&ibInfo, 0, sizeof(struct amdgpu_cs_ib_info));
     ibInfo.ib_mc_address = ibResultMcAddress;
     ibInfo.size = 16;
 
     memset(&ibsRequest, 0, sizeof(struct amdgpu_cs_request));
-    ibsRequest.ip_type = AMDGPU_HW_IP_GFX;
+    ibsRequest.ip_type = AMDGPU_HW_IP_DMA;
     ibsRequest.ring = 0;
     ibsRequest.number_of_ibs = 1;
     ibsRequest.ibs = &ibInfo;
@@ -246,7 +248,7 @@ void KFDEvictTest::AmdgpuCommandSubmissionComputeNop(int rn, amdgpu_bo_handle ha
         Delay(50);
 
         fenceStatus.context = contextHandle;
-        fenceStatus.ip_type = AMDGPU_HW_IP_GFX;
+        fenceStatus.ip_type = AMDGPU_HW_IP_DMA;
         fenceStatus.ip_instance = 0;
         fenceStatus.ring = 0;
         fenceStatus.fence = ibsRequest.seq_no;
@@ -337,7 +339,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
-    AmdgpuCommandSubmissionComputeNop(rn, handle);
+    AmdgpuCommandSubmissionSdmaNop(rn, handle);
 
     FreeAmdgpuBo(handle);
     LOG() << m_psName << "free buffer" << std::endl;
@@ -574,7 +576,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     /* Submit the packet and start shader */
     dispatch0.Submit(pm4Queue);
 
-    AmdgpuCommandSubmissionComputeNop(rn, handle);
+    AmdgpuCommandSubmissionSdmaNop(rn, handle);
 
     /* Uncomment this line for debugging */
     // LOG() << m_psName << "notify shader to quit" << std::endl;
@@ -653,7 +655,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
-    AmdgpuCommandSubmissionComputeNop(rn, handle, &pm4Queue);
+    AmdgpuCommandSubmissionSdmaNop(rn, handle, &pm4Queue);
 
     FreeAmdgpuBo(handle);
     LOG() << m_psName << "free buffer" << std::endl;
