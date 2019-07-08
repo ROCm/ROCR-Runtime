@@ -433,6 +433,8 @@ class GpuAgent : public GpuAgentInt {
 
   HsaClockCounters t1_;
 
+  double historical_clock_ratio_;
+
   // @brief Array of GPU cache property.
   std::vector<HsaCacheProperties> cache_props_;
 
