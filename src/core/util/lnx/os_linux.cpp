@@ -42,10 +42,12 @@
 
 #ifdef __linux__
 #include "core/util/os.h"
+#include "core/util/utils.h"
 
 #include <link.h>
 #include <dlfcn.h>
 #include <pthread.h>
+#include <limits.h>
 #include <sched.h>
 #include <sys/sysinfo.h>
 #include <sys/time.h>
@@ -53,17 +55,110 @@
 #include <unistd.h>
 #include <errno.h>
 #include <cstring>
-#include <string>
 #include <atomic>
+#include <memory>
+#include <string>
+#include <utility>
 
 namespace os {
 
-static_assert(sizeof(LibHandle) == sizeof(void*),
-              "OS abstraction size mismatch");
-static_assert(sizeof(Mutex) == sizeof(pthread_mutex_t*),
-              "OS abstraction size mismatch");
-static_assert(sizeof(Thread) == sizeof(pthread_t),
-              "OS abstraction size mismatch");
+struct ThreadArgs {
+  void* entry_args;
+  ThreadEntry entry_function;
+};
+
+void* __stdcall ThreadTrampoline(void* arg) {
+  ThreadArgs* ar = (ThreadArgs*)arg;
+  ThreadEntry CallMe = ar->entry_function;
+  void* Data = ar->entry_args;
+  delete ar;
+  CallMe(Data);
+  return NULL;
+}
+
+// Thread container allows multiple waits and separate close (destroy).
+class os_thread {
+ public:
+  explicit os_thread(ThreadEntry function, void* threadArgument, uint stackSize)
+      : thread(0), lock(nullptr), state(RUNNING) {
+    std::unique_ptr<ThreadArgs> args(new ThreadArgs);
+    lock = CreateMutex();
+    if (lock == nullptr) return;
+
+    args->entry_args = threadArgument;
+    args->entry_function = function;
+
+    pthread_attr_t attrib;
+    pthread_attr_init(&attrib);
+
+    if (stackSize != 0) {
+      stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
+      stackSize = AlignUp(stackSize, 4096);
+      int err = pthread_attr_setstacksize(&attrib, stackSize);
+      assert(err == 0 && "pthread_attr_setstacksize failed.");
+    }
+
+    int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+
+    // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
+    // Attempt to grow the stack within reason.
+    if ((err == EINVAL) && stackSize != 0) {
+      while (stackSize < 20 * 1024 * 1024) {
+        stackSize *= 2;
+        pthread_attr_setstacksize(&attrib, stackSize);
+        err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+        if (err != EINVAL) break;
+      }
+    }
+
+    pthread_attr_destroy(&attrib);
+    if (err == 0)
+      args.release();
+    else
+      thread = 0;
+  }
+
+  os_thread(os_thread&& rhs) {
+    thread = rhs.thread;
+    lock = rhs.lock;
+    state = int(rhs.state);
+    rhs.thread = 0;
+    rhs.lock = nullptr;
+  }
+
+  os_thread(os_thread&) = delete;
+
+  ~os_thread() {
+    if (lock != nullptr) DestroyMutex(lock);
+    if ((state == RUNNING) && (thread != 0)) pthread_detach(thread);
+  }
+
+  bool Valid() { return (lock != nullptr) && (thread != 0); }
+
+  bool Wait() {
+    if (state == FINISHED) return true;
+    AcquireMutex(lock);
+    if (state == FINISHED) {
+      ReleaseMutex(lock);
+      return true;
+    }
+    int err = pthread_join(thread, NULL);
+    bool success = (err == 0);
+    if (success) state = FINISHED;
+    ReleaseMutex(lock);
+    return success;
+  }
+
+ private:
+  pthread_t thread;
+  Mutex lock;
+  std::atomic<int> state;
+  enum { FINISHED = 0, RUNNING = 1 };
+};
+
+static_assert(sizeof(LibHandle) == sizeof(void*), "OS abstraction size mismatch");
+static_assert(sizeof(Mutex) == sizeof(pthread_mutex_t*), "OS abstraction size mismatch");
+static_assert(sizeof(Thread) == sizeof(os_thread*), "OS abstraction size mismatch");
 
 LibHandle LoadLib(std::string filename) {
   void* ret = dlopen(filename.c_str(), RTLD_LAZY);
@@ -123,44 +218,19 @@ void uSleep(int delayInUs) { usleep(delayInUs); }
 
 void YieldThread() { sched_yield(); }
 
-struct ThreadArgs {
-  void* entry_args;
-  ThreadEntry entry_function;
-};
-
-void* __stdcall ThreadTrampoline(void* arg) {
-  ThreadArgs* ar = (ThreadArgs*)arg;
-  ThreadEntry CallMe = ar->entry_function;
-  void* Data = ar->entry_args;
-  delete ar;
-  CallMe(Data);
-  return NULL;
-}
-
-Thread CreateThread(ThreadEntry function, void* threadArgument,
-                    uint stackSize) {
-  ThreadArgs* args = new ThreadArgs;
-  args->entry_args = threadArgument;
-  args->entry_function = function;
-  pthread_t thread;
-  pthread_attr_t attrib;
-  pthread_attr_init(&attrib);
-  if (stackSize != 0) pthread_attr_setstacksize(&attrib, stackSize);
-  bool success =
-      (pthread_create(&thread, &attrib, ThreadTrampoline, args) == 0);
-  pthread_attr_destroy(&attrib);
-  if (!success) {
-    pthread_join(thread, NULL);
-    return NULL;
+Thread CreateThread(ThreadEntry function, void* threadArgument, uint stackSize) {
+  os_thread* result = new os_thread(function, threadArgument, stackSize);
+  if (!result->Valid()) {
+    delete result;
+    return nullptr;
   }
-  return *(Thread*)&thread;
+
+  return reinterpret_cast<Thread>(result);
 }
 
-void CloseThread(Thread thread) { pthread_detach(*(pthread_t*)&thread); }
+void CloseThread(Thread thread) { delete reinterpret_cast<os_thread*>(thread); }
 
-bool WaitForThread(Thread thread) {
-  return pthread_join(*(pthread_t*)&thread, NULL);
-}
+bool WaitForThread(Thread thread) { return reinterpret_cast<os_thread*>(thread)->Wait(); }
 
 bool WaitForAllThreads(Thread* threads, uint threadCount) {
   for (uint i = 0; i < threadCount; i++) WaitForThread(threads[i]);

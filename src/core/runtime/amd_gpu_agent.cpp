@@ -94,6 +94,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
   HSAKMT_STATUS err = hsaKmtGetClockCounters(node_id(), &t0_);
   t1_ = t0_;
+  historical_clock_ratio_ = 0.0;
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
   // Set instruction set architecture via node property, only on GPU device.
@@ -1067,39 +1068,54 @@ void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
 
 void GpuAgent::TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) {
-  // Ensure interpolation
-  ScopedAcquire<KernelMutex> lock(&t1_lock_);
-  if (t1_.GPUClockCounter < signal->signal_.end_ts) {
-    SyncClocks();
-  }
+  // Order is important, we want to translate the end time first to ensure that packet duration is
+  // not impacted by clock measurement latency jitter.
+  time.end = TranslateTime(signal->signal_.end_ts);
+  time.start = TranslateTime(signal->signal_.start_ts);
 
   if ((signal->signal_.start_ts == 0) || (signal->signal_.end_ts == 0) ||
       (signal->signal_.start_ts > t1_.GPUClockCounter) ||
-      (signal->signal_.end_ts > t1_.GPUClockCounter))
+      (signal->signal_.end_ts > t1_.GPUClockCounter) ||
+      (signal->signal_.start_ts < t0_.GPUClockCounter) ||
+      (signal->signal_.end_ts < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
-
-  time.start = uint64_t(
-      (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /
-       double(int64_t(t0_.GPUClockCounter - t1_.GPUClockCounter))) *
-          double(int64_t(signal->signal_.start_ts - t1_.GPUClockCounter)) +
-      double(t1_.SystemClockCounter));
-  time.end = uint64_t(
-      (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /
-       double(int64_t(t0_.GPUClockCounter - t1_.GPUClockCounter))) *
-          double(int64_t(signal->signal_.end_ts - t1_.GPUClockCounter)) +
-      double(t1_.SystemClockCounter));
 }
 
+/*
+Times during program execution are interpolated to adjust for relative clock drift.
+Interval timing may appear as ticks well before process start, leading to large errors due to
+frequency adjustment (ie the profiling with NTP problem).  This is fixed by using a fixed frequency
+for early times.
+Intervals larger than t0_ will be frequency adjusted.  This admits a numerical error of not more
+than twice the frequency stability (~10^-5).
+*/
 uint64_t GpuAgent::TranslateTime(uint64_t tick) {
+  // Ensure interpolation for times during program execution.
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
-  SyncClocks();
+  if ((t1_.GPUClockCounter < tick) || (t1_.GPUClockCounter == t0_.GPUClockCounter)) SyncClocks();
 
+  // Good for ~300 yrs
+  // uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
+  // uint64_t gpudelta = t1_.GPUClockCounter - t0_.GPUClockCounter;
+  // int64_t offtick = int64_t(tick - t1_.GPUClockCounter);
+  //__int128 num = __int128(sysdelta)*__int128(offtick) +
+  //__int128(gpudelta)*__int128(t1_.SystemClockCounter);
+  //__int128 sysLarge = num / __int128(gpudelta);
+  // return sysLarge;
+
+  // Good for ~3.5 months.
   uint64_t system_tick = 0;
-  system_tick = uint64_t(
-      (double(int64_t(t0_.SystemClockCounter - t1_.SystemClockCounter)) /
-       double(int64_t(t0_.GPUClockCounter - t1_.GPUClockCounter))) *
-          double(int64_t(tick - t1_.GPUClockCounter)) +
-      double(t1_.SystemClockCounter));
+  double ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
+      double(t1_.GPUClockCounter - t0_.GPUClockCounter);
+  system_tick = uint64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter))) + t1_.SystemClockCounter;
+
+  // tick predates HSA startup - extrapolate with fixed clock ratio
+  if (tick < t0_.GPUClockCounter) {
+    if (historical_clock_ratio_ == 0.0) historical_clock_ratio_ = ratio;
+    system_tick = uint64_t(historical_clock_ratio_ * double(int64_t(tick - t0_.GPUClockCounter))) +
+        t0_.SystemClockCounter;
+  }
+
   return system_tick;
 }
 
