@@ -37,6 +37,7 @@
 #include <sys/time.h>
 #include <errno.h>
 #include <pci/pci.h>
+#include <numa.h>
 #include <numaif.h>
 #include "rbtree.h"
 #ifndef MPOL_F_STATIC_NODES
@@ -1456,6 +1457,39 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 	return mem;
 }
 
+static int bind_mem_to_numa(uint32_t node_id, void *mem,
+			    uint64_t MemorySizeInBytes, HsaMemFlags flags)
+{
+	int mode = MPOL_F_STATIC_NODES;
+	struct bitmask *node_mask;
+	int num_node;
+
+	if (numa_available() == -1)
+		return 0;
+
+	num_node = numa_num_task_nodes();
+
+	if (num_node > 1) {
+		node_mask = numa_bitmask_alloc(num_node);
+		if (!node_mask)
+			return -ENOMEM;
+
+		numa_bitmask_setbit(node_mask, node_id);
+		mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
+		if (mbind(mem, MemorySizeInBytes, mode, node_mask->maskp,
+			  num_node + 1, 0)) {
+			pr_warn("Failed to set NUMA policy for %p\n", mem);
+
+			numa_bitmask_free(node_mask);
+			return -EFAULT;
+		}
+
+		numa_bitmask_free(node_mask);
+	}
+
+	return 0;
+}
+
 static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				   uint64_t MemorySizeInBytes, HsaMemFlags flags)
 {
@@ -1492,10 +1526,6 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	 * memory is allocated from KFD
 	 */
 	if (!flags.ui32.NonPaged && svm.userptr_for_paged_mem) {
-		const unsigned int bits_per_long = sizeof(unsigned long) * 8;
-		unsigned long node_mask[node_id / bits_per_long + 1];
-		int mode = MPOL_F_STATIC_NODES;
-
 		/* Allocate address space */
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		mem = aperture_allocate_area(aperture, address, size);
@@ -1503,24 +1533,15 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 		if (!mem)
 			return NULL;
 
-		/* Bind to NUMA node */
-		memset(node_mask, 0, sizeof(node_mask));
-		node_mask[node_id / bits_per_long] = 1UL << (node_id % bits_per_long);
-		mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
-		if (mbind(mem, MemorySizeInBytes, mode, node_mask, node_id+1, 0))
-			pr_warn("Failed to set NUMA policy for %lu pages at %p\n",
-				MemorySizeInBytes >> 12, mem);
-
 		/* Map anonymous pages */
 		if (mmap(mem, MemorySizeInBytes, PROT_READ | PROT_WRITE,
 			 MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0)
-		    == MAP_FAILED) {
-			/* Release address space */
-			pthread_mutex_lock(&aperture->fmm_mutex);
-			aperture_release_area(aperture, mem, size);
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-			return NULL;
-		}
+		    == MAP_FAILED)
+			goto out_release_area;
+
+		/* Bind to NUMA node */
+		if (bind_mem_to_numa(node_id, mem, MemorySizeInBytes, flags))
+			goto out_release_area;
 
 		/* Mappings in the DGPU aperture don't need to be copied on
 		 * fork. This avoids MMU notifiers and evictions due to user
@@ -1534,13 +1555,8 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 		vm_obj = fmm_allocate_memory_object(gpu_id, mem, size,
 						       aperture, &mmap_offset,
 						       ioc_flags);
-		if (!vm_obj) {
-			/* Release address space */
-			pthread_mutex_lock(&aperture->fmm_mutex);
-			aperture_release_area(aperture, mem, size);
-			pthread_mutex_unlock(&aperture->fmm_mutex);
-			return NULL;
-		}
+		if (!vm_obj)
+			goto out_release_area;
 	} else {
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
 		mem =  __fmm_allocate_device(gpu_id, address, size, aperture,
@@ -1576,6 +1592,14 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	}
 
 	return mem;
+
+out_release_area:
+	/* Release address space */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	aperture_release_area(aperture, mem, size);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	return NULL;
 }
 
 void *fmm_allocate_host(uint32_t node_id, void *address,
