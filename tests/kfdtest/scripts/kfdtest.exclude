@@ -7,12 +7,16 @@
 #
 # CU Masking Linear/Split are not working correctly due to how the HW distributes work over CUs.
 # They are available for testing but are not currently expected to pass on CI/VI/AI.
+#
+# The CheckZeroInitializationVram test is no longer expected to pass as KFD no longer
+# clears memory at allocation time.
 PERMANENT_BLACKLIST_ALL_ASICS=\
 "-KFDEventTest.MeasureInterruptConsumption:"\
 "KFDLocalMemoryTest.Fragmentation:"\
 "KFDQMTest.BasicCuMaskingLinear:"\
 "RDMATest.GPUDirect:"\
-"KFDRASTest.*"
+"KFDRASTest.*:"\
+"KFDLocalMemoryTest.CheckZeroInitializationVram"
 
 # This is the temporary blacklist for all ASICs. This is to be used when a test is failing consistently
 # on every ASIC (Kaveri, Carrizo, Hawaii, Tonga, Fiji, Polaris10, Polaris11 and Vega10 .
