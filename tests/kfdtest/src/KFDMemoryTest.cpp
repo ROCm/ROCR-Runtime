@@ -956,17 +956,30 @@ TEST_F(KFDMemoryTest, MMBench) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    const unsigned nBufs = 1000; /* measure us, report ns */
     unsigned testIndex, sizeIndex, memType, nMemTypes;
     const char *memTypeStrings[2] = {"SysMem", "VRAM"};
-    const unsigned nSizes = 4;
-    const unsigned bufSizes[nSizes] = {PAGE_SIZE, PAGE_SIZE*4, PAGE_SIZE*16, PAGE_SIZE*64};
+    const struct {
+        unsigned size;
+        unsigned num;
+    } bufParams[] = {
+        /* Buffer sizes in x16 increments. Limit memory usage to about
+         * 1GB. For small sizes we use 1000 buffers, which means we
+         * conveniently measure microseconds and report nanoseconds.
+         */
+        {PAGE_SIZE      , 1000},  /*  4KB */
+        {PAGE_SIZE <<  4, 1000},  /* 64KB */
+        {PAGE_SIZE <<  9,  500},  /*  2MB */
+        {PAGE_SIZE << 13,   32},  /* 32MB */
+        {PAGE_SIZE << 18,    1},  /*  1GB */
+    };
+    const unsigned nSizes = sizeof(bufParams) / sizeof(bufParams[0]);
     const unsigned nTests = nSizes << 2;
-#define TEST_BUFSIZE(index) (bufSizes[(index) & (nSizes-1)])
+#define TEST_BUFSIZE(index) (bufParams[(index) % nSizes].size)
+#define TEST_NBUFS(index)  (bufParams[(index) % nSizes].num)
 #define TEST_MEMTYPE(index) ((index / nSizes) & 0x1)
 #define TEST_SDMA(index)    (((index / nSizes) >> 1) & 0x1)
 
-    void *bufs[nBufs];
+    void *bufs[1000];
     HSAuint64 start, end;
     unsigned i;
     HSAKMT_STATUS ret;
@@ -1022,16 +1035,17 @@ TEST_F(KFDMemoryTest, MMBench) {
         }                                                               \
     } while (0)
 
-    LOG() << "Test (avg. ns)\t   alloc  mapOne umapOne  mapAll umapAll    free" << std::endl;
+    LOG() << "Test (avg. ns)\t    alloc   mapOne  umapOne   mapAll  umapAll     free" << std::endl;
     for (testIndex = 0; testIndex < nTests; testIndex++) {
         unsigned bufSize = TEST_BUFSIZE(testIndex);
+        unsigned nBufs = TEST_NBUFS(testIndex);
         unsigned memType = TEST_MEMTYPE(testIndex);
         bool interleaveSDMA = TEST_SDMA(testIndex);
         HSAuint64 allocTime, map1Time, unmap1Time, mapAllTime, unmapAllTime, freeTime;
         HSAuint32 allocNode;
 
-        if ((testIndex & (nSizes-1)) == 0)
-            LOG() << "--------------------------------------------------------------------" << std::endl;
+        if ((testIndex % nSizes) == 0)
+            LOG() << "--------------------------------------------------------------------------" << std::endl;
 
         if (memType >= nMemTypes)
             continue;  // skip unsupported mem types
@@ -1107,16 +1121,36 @@ TEST_F(KFDMemoryTest, MMBench) {
         freeTime = GetSystemTickCountInMicroSec() - start;
         IDLE_SDMA();
 
+        allocTime = allocTime * 1000 / nBufs;
+        map1Time = map1Time * 1000 / nBufs;
+        unmap1Time = unmap1Time * 1000 / nBufs;
+        mapAllTime = mapAllTime * 1000 / nBufs;
+        unmapAllTime = unmapAllTime * 1000 / nBufs;
+        freeTime = freeTime * 1000 / nBufs;
+
+        unsigned bufSizeLog;
+        char bufSizeUnit;
+        if (bufSize < (1 << 20)) {
+            bufSizeLog = bufSize >> 10;
+            bufSizeUnit = 'K';
+        } else if (bufSize < (1 << 30)) {
+            bufSizeLog = bufSize >> 20;
+            bufSizeUnit = 'M';
+        } else {
+            bufSizeLog = bufSize >> 30;
+            bufSizeUnit = 'G';
+        }
+
         LOG() << std::dec << std::setiosflags(std::ios::right)
-              << std::setw(3) << (bufSize >> 10) << "K-"
+              << std::setw(3) << bufSizeLog << bufSizeUnit << "-"
               << memTypeStrings[memType] << "-"
               << (interleaveSDMA ? "SDMA\t" : "noSDMA\t")
-              << std::setw(8) << allocTime
-              << std::setw(8) << map1Time
-              << std::setw(8) << unmap1Time
-              << std::setw(8) << mapAllTime
-              << std::setw(8) << unmapAllTime
-              << std::setw(8) << freeTime << std::endl;
+              << std::setw(9) << allocTime
+              << std::setw(9) << map1Time
+              << std::setw(9) << unmap1Time
+              << std::setw(9) << mapAllTime
+              << std::setw(9) << unmapAllTime
+              << std::setw(9) << freeTime << std::endl;
 
 #define MMBENCH_KEY_PREFIX memTypeStrings[memType] << "-" \
                            << (interleaveSDMA ? "SDMA" : "noSDMA") << "-" \
