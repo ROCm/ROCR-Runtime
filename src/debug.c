@@ -275,8 +275,8 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 				HSAuint32 data2,
 				HSAuint32 data3,
 				HSAuint32 pid,
-				HSAuint64 pointer
-				)
+				HSAuint64 pointer,
+				struct kfd_ioctl_dbg_trap_args *argout)
 {
 	uint32_t gpu_id;
 	HSAKMT_STATUS result;
@@ -320,6 +320,9 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
 
+	if (argout)
+		*argout = args;
+
 	if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
 	else
@@ -328,20 +331,44 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 	return result;
 }
 
-HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrap(HSAuint32   NodeId,
-					      HSA_QUEUEID QueueId)
+HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrapWithPollFd(HSAuint32   NodeId,
+							HSA_QUEUEID QueueId,
+							HSAint32 *PollFd) //OUT
 {
+	int result;
+	struct kfd_ioctl_dbg_trap_args argout = {0};
+
 	if (QueueId != INVALID_QUEUEID)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	return debug_trap(NodeId,
+	result =  debug_trap(NodeId,
 				KFD_IOC_DBG_TRAP_ENABLE,
 				1,
 				QueueId,
 				0,
 				INVALID_PID,
-				0);
+				0,
+				&argout);
+
+	*PollFd = argout.data3;
+
+	return result;
 }
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtEnableDebugTrap(HSAuint32   NodeId,
+					      HSA_QUEUEID QueueId)
+{
+	HSAint32 PollFd = 0;
+	HSAKMT_STATUS status = hsaKmtEnableDebugTrapWithPollFd(NodeId,
+							       QueueId,
+							       &PollFd);
+
+	if (status == HSAKMT_STATUS_SUCCESS)
+		close(PollFd);
+	return status;
+}
+
+
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
 {
@@ -351,7 +378,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
 			0,
 			0,
 			INVALID_PID,
-			0);
+			0,
+			NULL);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
@@ -364,7 +392,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
 				TrapData1,
 				0,
 				INVALID_PID,
-				0);
+				0,
+				NULL);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
@@ -381,7 +410,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
 				TrapMask,
 				0,
 				INVALID_PID,
-				0);
+				0,
+				NULL);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
@@ -394,7 +424,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchMode(
 				0,
 				0,
 				INVALID_PID,
-				0);
+				0,
+				NULL);
 }
 
 /**
@@ -455,7 +486,8 @@ hsaKmtQueueSuspend(
 			NumQueues,
 			GracePeriod,
 			Pid,
-			(HSAuint64)queue_ids_ptr);
+			(HSAuint64)queue_ids_ptr,
+			NULL);
 
 	free(queue_ids_ptr);
 	return result;
@@ -518,7 +550,47 @@ hsaKmtQueueResume(
 			NumQueues,
 			0,
 			Pid,
-			(HSAuint64)queue_ids_ptr);
+			(HSAuint64)queue_ids_ptr,
+			NULL);
 	free(queue_ids_ptr);
 	return result;
 }
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueryDebugEvent(
+		HSAuint32		NodeId, //IN
+		HSAuint32		Pid, // IN
+		HSAuint32		*QueueId, // IN/OUT
+		bool			ClearEvents, // IN
+		HSA_DEBUG_EVENT_TYPE	*EventsReceived, // OUT
+		bool			*IsSuspended // OUT
+		)
+{
+	HSAKMT_STATUS result;
+	struct kfd_ioctl_dbg_trap_args argout = {0};
+	uint32_t flags = 0;
+
+	if (ClearEvents)
+		flags |= KFD_DBG_EV_FLAG_CLEAR_STATUS;
+
+	result = debug_trap(NodeId,
+			    KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT,
+			    *QueueId,
+			    flags,
+			    0,
+			    Pid,
+			    0,
+			    &argout);
+
+	if (result)
+		return result;
+
+	*QueueId = argout.data1;
+	*EventsReceived = argout.data3 &
+			(KFD_DBG_EV_STATUS_TRAP | KFD_DBG_EV_STATUS_VMFAULT);
+	*IsSuspended = (argout.data3 & KFD_DBG_EV_STATUS_SUSPENDED) >> 2;
+
+	return result;
+}
+

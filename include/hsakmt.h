@@ -721,6 +721,8 @@ hsaKmtQueueResume(
 /**
   Enable debug trap for NodeId. If QueueId is INVALID_QUEUEID then
   enable for all queues on NodeId, otherwise enable only for QueueId.
+  Return file descriptor PollFd where on poll wake, fd has readable
+  FIFO data for pending debug events.
 
   When debug trap is enabled the trap handler behavior changes
   depending on architecture of the node and can include the following:
@@ -766,8 +768,18 @@ hsaKmtQueueResume(
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtEnableDebugTrap(
-    HSAuint32   NodeId, //IN
-    HSA_QUEUEID QueueId //IN
+    HSAuint32	NodeId, //IN
+    HSA_QUEUEID	QueueId //IN
+    );
+
+
+/* Similar to EnableDebugTrap with polling fd return*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtEnableDebugTrapWithPollFd(
+    HSAuint32	NodeId, //IN
+    HSA_QUEUEID	QueueId, //IN
+    HSAint32	*PollFd //OUT
     );
 
 /**
@@ -785,6 +797,32 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtDisableDebugTrap(
     HSAuint32 NodeId //IN
+    );
+
+
+/**
+  Query pending debug event set by ptrace.
+
+  Can query by target QueueId.  If QueueId is INVALID_QUEUEID, return the
+  first queue id that has a pending event.  Option to clear pending event
+  after query is used by the ClearEvents parameter.
+
+  Pending debug event type will be returned in EventsReceived parameter and is
+  defined by HSA_DEBUG_EVENT_TYPE.  Suspended state of queue is returned in
+  IsSuspended.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful
+ */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtQueryDebugEvent(
+    HSAuint32			NodeId, // IN
+    HSAuint32			Pid, // IN
+    HSAuint32			*QueueId, // IN/OUT
+    bool			ClearEvents, // IN
+    HSA_DEBUG_EVENT_TYPE	*EventsReceived, // OUT
+    bool			*IsSuspended // OUT
     );
 
 /**
