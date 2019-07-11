@@ -866,6 +866,18 @@ typedef enum _HSA_EVENTTYPE
     HSA_EVENTTYPE_TYPE_SIZE                  = 0xFFFFFFFF
 } HSA_EVENTTYPE;
 
+
+//
+// Definitions for types of pending debug events
+//
+typedef enum _HSA_DEBUG_EVENT_TYPE
+{
+	HSA_DEBUG_EVENT_TYPE_NONE				= 0,
+	HSA_DEBUG_EVENT_TYPE_TRAP				= 1,
+	HSA_DEBUG_EVENT_TYPE_VMFAULT			= 2,
+	HSA_DEBUG_EVENT_TYPE_TRAP_VMFAULT		= 3
+} HSA_DEBUG_EVENT_TYPE;
+
 typedef HSAuint32  HSA_EVENTID;
 
 //
