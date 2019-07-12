@@ -1469,6 +1469,12 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 
 	num_node = numa_num_task_nodes();
 
+	/* Ignore binding requests to invalid nodes IDs */
+	if (node_id >= (unsigned)num_node) {
+		pr_warn("node_id %d >= num_node %d\n", node_id, num_node);
+		return 0;
+	}
+
 	if (num_node > 1) {
 		node_mask = numa_bitmask_alloc(num_node);
 		if (!node_mask)
