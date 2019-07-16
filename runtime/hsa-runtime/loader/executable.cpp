@@ -1126,7 +1126,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_machine_model_t codeMachineModel;
   hsa_default_float_rounding_mode_t codeRoundingMode;
   if (!code->GetNoteHsail(&codeHsailMajor, &codeHsailMinor, &codeProfile, &codeMachineModel, &codeRoundingMode)) {
-    codeProfile = HSA_PROFILE_FULL;
+    codeProfile = profile_;
   }
   if (profile_ != codeProfile) {
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
