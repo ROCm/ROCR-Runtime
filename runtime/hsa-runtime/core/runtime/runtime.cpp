@@ -801,11 +801,20 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   // Temp: workaround thunk bug, IPC memory has garbage in Node.
   // retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
-  auto it = agents_by_node_.find(thunkInfo.Node);
-  if (it != agents_by_node_.end())
-    retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+  auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
+  if (nodeAgents != agents_by_node_.end())
+    retInfo.agentOwner = nodeAgents->second[0]->public_handle();
   else
     retInfo.agentOwner.handle = 0;
+
+  // Correct agentOwner for locked memory.  Thunk reports the GPU that owns the
+  // alias but users are expecting to see a CPU when the memory is system.
+  if (retInfo.type == HSA_EXT_POINTER_TYPE_LOCKED) {
+    if ((nodeAgents == agents_by_node_.end()) ||
+        (nodeAgents->second[0]->device_type() != core::Agent::kAmdCpuDevice)) {
+      retInfo.agentOwner = cpu_agents_[0]->public_handle();
+    }
+  }
 
   memcpy(info, &retInfo, retInfo.size);
 
