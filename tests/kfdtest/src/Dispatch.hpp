@@ -70,6 +70,7 @@ class Dispatch {
 
     HSAuint64  m_scratch_base;
     unsigned int m_SpiPriority;
+    unsigned int  m_FamilyId;
 };
 
 #endif  // __KFD_DISPATCH__H__

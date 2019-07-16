@@ -30,7 +30,7 @@
 /* Byte/dword count in many SDMA packets is 1-based in AI, meaning a
  * count of 1 is encoded as 0.
  */
-#define SDMA_COUNT(c) (g_TestGPUFamilyId < FAMILY_AI ? (c) : (c)-1)
+#define SDMA_COUNT(c) (m_FamilyId < FAMILY_AI ? (c) : (c)-1)
 
 SDMAWriteDataPacket::SDMAWriteDataPacket(void):
     packetData(NULL) {

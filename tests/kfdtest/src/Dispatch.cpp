@@ -28,6 +28,8 @@
 #include "asic_reg/gfx_7_2_d.h"
 #include "asic_reg/gfx_7_2_sh_mask.h"
 
+#include "KFDBaseComponentTest.hpp"
+
 Dispatch::Dispatch(const HsaMemoryBuffer& isaBuf, const bool eventAutoReset)
     :m_IsaBuf(isaBuf), m_IndirectBuf(PACKETTYPE_PM4, PAGE_SIZE / sizeof(unsigned int), isaBuf.Node()),
     m_DimX(1), m_DimY(1), m_DimZ(1), m_pArg1(NULL), m_pArg2(NULL), m_pEop(NULL), m_ScratchEn(false),
@@ -39,6 +41,8 @@ Dispatch::Dispatch(const HsaMemoryBuffer& isaBuf, const bool eventAutoReset)
     eventDesc.SyncVar.SyncVarSize = 0;
 
     hsaKmtCreateEvent(&eventDesc, !eventAutoReset, false, &m_pEop);
+
+    m_FamilyId  = g_baseTest->GetFamilyIdFromNodeId(isaBuf.Node());
 }
 
 Dispatch::~Dispatch() {
@@ -69,6 +73,7 @@ void Dispatch::SetSpiPriority(unsigned int priority) {
 
 void Dispatch::Submit(BaseQueue& queue) {
     ASSERT_NE(m_pEop, (void*)0);
+    EXPECT_EQ(m_FamilyId, queue.GetFamilyId());
 
     BuildIb();
 
@@ -80,7 +85,7 @@ void Dispatch::Submit(BaseQueue& queue) {
             EventData.EventData.SyncVar.SyncVar.UserData, m_pEop->EventId));
     }
 
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(g_TestGPUFamilyId, false, m_pEop->EventData.HWData2, m_pEop->EventId));
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false, m_pEop->EventData.HWData2, m_pEop->EventId));
 
     if (!queue.GetSkipWaitConsump())
         queue.Wait4PacketConsumption();
@@ -200,14 +205,14 @@ void Dispatch::BuildIb() {
     // ORDERED_APPEND_MODE=0, USE_THREAD_DIMENSIONS=1, ORDER_MODE=0, DISPATCH_CACHE_CNTL=0,
     // SCALAR_L1_INV_VOL=0, VECTOR_L1_INV_VOL=0, DATA_ATC=?, RESTORE=0}
 
-    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(g_TestGPUFamilyId));
+    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(m_FamilyId));
 
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_START_X, COMPUTE_DISPATCH_DIMS_VALUES,
                                                   ARRAY_SIZE(COMPUTE_DISPATCH_DIMS_VALUES)));
 
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_LO,
-        (g_TestGPUFamilyId >= FAMILY_AI) ? COMPUTE_PGM_VALUES_GFX9 : COMPUTE_PGM_VALUES_GFX8,
-        (g_TestGPUFamilyId >= FAMILY_AI) ? ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX9) : ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX8)));
+        (m_FamilyId >= FAMILY_AI) ? COMPUTE_PGM_VALUES_GFX9 : COMPUTE_PGM_VALUES_GFX8,
+        (m_FamilyId >= FAMILY_AI) ? ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX9) : ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX8)));
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC1, COMPUTE_PGM_RSRC,
                                                   ARRAY_SIZE(COMPUTE_PGM_RSRC)));
 
@@ -225,5 +230,5 @@ void Dispatch::BuildIb() {
 
     m_IndirectBuf.AddPacket(PM4PartialFlushPacket());
 
-    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(g_TestGPUFamilyId));
+    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(m_FamilyId));
 }

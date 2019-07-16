@@ -30,7 +30,6 @@ extern unsigned int g_TestTimeOut;
 extern int g_TestNodeId;
 extern int g_TestDstNodeId;
 extern bool g_IsChildProcess;
-extern unsigned int g_TestGPUFamilyId;
 
 // Each test should call TEST_START with the test custom profile and HW scheduling
 enum TESTPROFILE{

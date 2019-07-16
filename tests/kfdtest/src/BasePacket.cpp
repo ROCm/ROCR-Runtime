@@ -23,6 +23,11 @@
 
 #include "BasePacket.hpp"
 #include "KFDTestUtil.hpp"
+#include "KFDBaseComponentTest.hpp"
+
+BasePacket::BasePacket(void) {
+    m_FamilyId = g_baseTest->GetFamilyIdFromDefaultNode();
+}
 
 void BasePacket::Dump() const {
     unsigned int size = SizeInDWords();
