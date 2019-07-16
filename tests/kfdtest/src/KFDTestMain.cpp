@@ -54,6 +54,7 @@ int g_TestNodeId;
 int g_TestDstNodeId;
 bool g_IsChildProcess;
 unsigned int g_TestGPUFamilyId;
+class KFDBaseComponentTest *g_baseTest;
 
 GTEST_API_ int main(int argc, char **argv) {
     // Default values for run parameters

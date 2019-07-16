@@ -55,6 +55,8 @@ class KFDBaseComponentTest : public testing::Test {
 // @brief Finds DRM Render node corresponding to gpuNode
 // @return DRM Render Node if successful or -1 on failure
     int FindDRMRenderNode(int gpuNode);
+    unsigned int GetFamilyIdFromNodeId(unsigned int nodeId);
+    unsigned int GetFamilyIdFromDefaultNode(){ return m_FamilyId; }
 
  protected:
     HsaVersionInfo  m_VersionInfo;
@@ -76,4 +78,5 @@ class KFDBaseComponentTest : public testing::Test {
     virtual void TearDown();
 };
 
+extern KFDBaseComponentTest* g_baseTest;
 #endif  //  __KFD_BASE_COMPONENT_TEST__H__

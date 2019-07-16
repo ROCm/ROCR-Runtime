@@ -61,12 +61,12 @@ void KFDBaseComponentTest::SetUp() {
     const HsaNodeProperties *nodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
     ASSERT_NOTNULL(nodeProperties) << "failed to get HSA default GPU Node properties";
 
-    g_TestGPUFamilyId = FamilyIdFromNode(nodeProperties);
+    m_FamilyId = FamilyIdFromNode(nodeProperties);
 
     GetSdmaInfo(nodeProperties, &m_numSdmaEngines, &m_numSdmaXgmiEngines,
                     &m_numSdmaQueuesPerEngine);
 
-    m_FamilyId = g_TestGPUFamilyId;
+    g_baseTest = this;
 
     ROUTINE_END
 }
@@ -84,6 +84,7 @@ void KFDBaseComponentTest::TearDown() {
 
     EXPECT_SUCCESS(hsaKmtReleaseSystemProperties());
     EXPECT_SUCCESS(hsaKmtCloseKFD());
+    g_baseTest = NULL;
 
     ROUTINE_END
 }
@@ -126,6 +127,11 @@ HSAuint64 KFDBaseComponentTest::GetVramSize(int defaultGPUNode) {
     }
 
     return 0;
+}
+
+unsigned int KFDBaseComponentTest::GetFamilyIdFromNodeId(unsigned int nodeId)
+{
+    return  FamilyIdFromNode(m_NodeInfo.GetNodeProperties(nodeId));
 }
 
 int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {

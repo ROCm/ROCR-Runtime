@@ -26,6 +26,7 @@
 #include "PM4Queue.hpp"
 #include "AqlQueue.hpp"
 #include "hsakmt.h"
+#include "KFDBaseComponentTest.hpp"
 
 BaseQueue::BaseQueue()
     :m_QueueBuf(NULL),
@@ -81,6 +82,7 @@ HSAKMT_STATUS BaseQueue::Create(unsigned int NodeId, unsigned int size, HSAuint6
     m_pendingWptr = 0;
     m_pendingWptr64 = 0;
     m_Node = NodeId;
+    m_FamilyId = g_baseTest->GetFamilyIdFromNodeId(NodeId);
     return status;
 }
 

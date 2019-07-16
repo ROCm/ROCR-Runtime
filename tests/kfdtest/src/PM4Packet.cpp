@@ -26,6 +26,7 @@
 #include <string.h>
 #include "PM4Packet.hpp"
 #include "hsakmttypes.h"
+#include "KFDBaseComponentTest.hpp"
 
 #include "asic_reg/gfx_7_2_enum.h"
 
@@ -75,7 +76,7 @@ void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
 
 PM4ReleaseMemoryPacket::PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling,
                     uint64_t address, uint64_t data, bool is64bit, bool isTimeStamp):m_pPacketData(NULL) {
-
+    m_FamilyId = familyId;
     if (familyId < FAMILY_AI)
         InitPacketCI(isPolling, address, data, is64bit, isTimeStamp);
     else if (familyId < FAMILY_NV)
@@ -264,6 +265,7 @@ void PM4IndirectBufPacket::InitPacket(IndirectBuffer *pIb) {
 }
 PM4AcquireMemoryPacket::PM4AcquireMemoryPacket(unsigned int familyId):m_pPacketData(NULL)
 {
+    m_FamilyId = familyId;
 
     if (familyId < FAMILY_NV)
         InitPacketAI();
@@ -278,6 +280,7 @@ void PM4AcquireMemoryPacket::InitPacketAI(void) {
     pkt = reinterpret_cast<PM4ACQUIRE_MEM*>(calloc(1, m_packetSize));
     m_pPacketData = pkt;
     EXPECT_NOTNULL(m_pPacketData);
+
     InitPM4Header(pkt->header,  IT_ACQUIRE_MEM);
     pkt->bitfields2.coher_cntl     = 0x28c00000;  // copied from the way the HSART does this.
     pkt->bitfields2.engine         = engine_acquire_mem_PFP_0;

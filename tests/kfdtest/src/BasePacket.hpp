@@ -37,7 +37,7 @@ enum PACKETTYPE {
 // @class BasePacket
 class BasePacket {
  public:
-    BasePacket(void) {}
+    BasePacket(void);
     virtual ~BasePacket(void) {}
 
     // @returns Packet type
@@ -52,6 +52,7 @@ class BasePacket {
     void Dump() const;
 
  protected:
+     unsigned int m_FamilyId;
 };
 
 #endif  // __KFD_BASE_PACKET__H__

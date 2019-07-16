@@ -147,8 +147,9 @@ class QueueAndSignalBenchmark {
         uint64_t startTime;
         PM4Queue queue;
 
+        unsigned int familyId = g_baseTest->GetFamilyIdFromNodeId(node);
         HsaEvent** pHsaEvent = reinterpret_cast<HsaEvent**>(calloc(eventCount, sizeof(HsaEvent*)));
-        size_t packetSize = PM4ReleaseMemoryPacket(g_TestGPUFamilyId, false, 0, 0).SizeInBytes();
+        size_t packetSize = PM4ReleaseMemoryPacket(familyId, false, 0, 0).SizeInBytes();
         int qSize = fmax(PAGE_SIZE, pow2_round_up(packetSize*eventCount + 1));
 
         time = 0;
@@ -162,7 +163,7 @@ class QueueAndSignalBenchmark {
             if (r != HSAKMT_STATUS_SUCCESS)
                 goto exit;
 
-            queue.PlacePacket(PM4ReleaseMemoryPacket(g_TestGPUFamilyId, false, pHsaEvent[i]->EventData.HWData2, pHsaEvent[i]->EventId));
+            queue.PlacePacket(PM4ReleaseMemoryPacket(familyId, false, pHsaEvent[i]->EventData.HWData2, pHsaEvent[i]->EventId));
         }
 
         startTime = gettime();
