@@ -80,7 +80,7 @@ void Dispatch::Submit(BaseQueue& queue) {
             EventData.EventData.SyncVar.SyncVar.UserData, m_pEop->EventId));
     }
 
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false, m_pEop->EventData.HWData2, m_pEop->EventId));
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(g_TestGPUFamilyId, false, m_pEop->EventData.HWData2, m_pEop->EventId));
 
     if (!queue.GetSkipWaitConsump())
         queue.Wait4PacketConsumption();
@@ -200,7 +200,7 @@ void Dispatch::BuildIb() {
     // ORDERED_APPEND_MODE=0, USE_THREAD_DIMENSIONS=1, ORDER_MODE=0, DISPATCH_CACHE_CNTL=0,
     // SCALAR_L1_INV_VOL=0, VECTOR_L1_INV_VOL=0, DATA_ATC=?, RESTORE=0}
 
-    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket());
+    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(g_TestGPUFamilyId));
 
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_START_X, COMPUTE_DISPATCH_DIMS_VALUES,
                                                   ARRAY_SIZE(COMPUTE_DISPATCH_DIMS_VALUES)));
@@ -225,5 +225,5 @@ void Dispatch::BuildIb() {
 
     m_IndirectBuf.AddPacket(PM4PartialFlushPacket());
 
-    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket());
+    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(g_TestGPUFamilyId));
 }

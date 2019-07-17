@@ -564,7 +564,7 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
     mem[2] = 0x0;
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(reinterpret_cast<unsigned int *>(gpuva2),
                                                   0xdeadbeef));
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(true, 0, 0));
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, true, 0, 0));
     queue.Wait4PacketConsumption();
     EXPECT_EQ(true, WaitOnValue((unsigned int *)(&mem[2]), 0xdeadbeef));
     EXPECT_SUCCESS(queue.Destroy());
@@ -1450,7 +1450,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
                                                   data0[0], data0[1]));
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem1,
                                                   data1[0], data1[1]));
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(true, 0, 0));
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, true, 0, 0));
     queue.Wait4PacketConsumption();
 
     /* Allow any process to trace this one. If kernel is built without

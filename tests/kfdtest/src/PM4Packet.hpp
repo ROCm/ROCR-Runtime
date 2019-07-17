@@ -29,6 +29,7 @@
 #include "pm4_pkt_struct_common.h"
 #include "pm4_pkt_struct_ci.h"
 #include "pm4_pkt_struct_ai.h"
+#include "pm4_pkt_struct_nv.h"
 #include "IndirectBuffer.hpp"
 
 // @class PM4Packet: Marks a group of all PM4 packets
@@ -87,21 +88,24 @@ class PM4ReleaseMemoryPacket : public PM4Packet {
     // Empty constructor, before using the packet call the init func
     PM4ReleaseMemoryPacket(void): m_pPacketData(NULL) {}
     // This contructor will also init the packet, no need for additional calls
-    PM4ReleaseMemoryPacket(bool isPolling, uint64_t address, uint64_t data,
-                           bool is64bit = false, bool isTimeStamp = false): m_pPacketData(NULL) {
-        InitPacket(isPolling, address, data, is64bit, isTimeStamp);
-    }
+    PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling, uint64_t address, uint64_t data,
+                           bool is64bit = false, bool isTimeStamp = false);
 
-    virtual ~PM4ReleaseMemoryPacket(void);
+    virtual ~PM4ReleaseMemoryPacket(void) {if (m_pPacketData)free(m_pPacketData);}
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
     // @returns Pointer to the packet
     virtual const void *GetPacket() const { return m_pPacketData; }
     // @brief Initialise the packet
-    void InitPacket(bool isPolling, uint64_t address, uint64_t data,
-                    bool is64bit = false, bool isTimeStamp = false);
 
  private:
+    void InitPacketCI(bool isPolling, uint64_t address, uint64_t data,
+                 bool is64bit = false, bool isTimeStamp = false);
+    void InitPacketAI(bool isPolling, uint64_t address, uint64_t data,
+                 bool is64bit = false, bool isTimeStamp = false);
+    void InitPacketNV(bool isPolling, uint64_t address, uint64_t data,
+                 bool is64bit = false, bool isTimeStamp = false);
+
     void *m_pPacketData;
     unsigned int  m_packetSize;
 };
@@ -130,17 +134,19 @@ class PM4IndirectBufPacket : public PM4Packet {
 // @class PM4AcquireMemoryPacket
 class PM4AcquireMemoryPacket : public PM4Packet {
  public:
-    PM4AcquireMemoryPacket(void);
-    virtual ~PM4AcquireMemoryPacket(void) {}
+    PM4AcquireMemoryPacket(unsigned int familyId);
+    virtual ~PM4AcquireMemoryPacket(void) {if (m_pPacketData)free(m_pPacketData);}
 
     // @returns the packet size in bytes
-    virtual unsigned int SizeInBytes() const;
-    // @returns a pointer to the packet
-    virtual const void *GetPacket() const { return &m_packetData; }
+    virtual unsigned int SizeInBytes() const { return m_packetSize; }
+    // @returns Pointer to the packet
+    virtual const void *GetPacket() const { return m_pPacketData; }
 
  private:
-    // PM4ACQUIRE_MEM struct contains all the packet's data
-    PM4ACQUIRE_MEM  m_packetData;
+    void InitPacketAI(void);
+    void InitPacketNV(void);
+    void *m_pPacketData;
+    unsigned int  m_packetSize;
 };
 
 // @class PM4SetShaderRegPacket Packet that writes to consecutive registers starting at baseOffset.

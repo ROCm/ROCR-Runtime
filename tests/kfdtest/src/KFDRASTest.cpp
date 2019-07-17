@@ -164,7 +164,7 @@ TEST_F(KFDRASTest, MixEventsTest) {
 
     ASSERT_SUCCESS(queue.Create(m_defaultGPUNode));
 
-    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(false,
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
             pHsaEvent->EventData.HWData2, pHsaEvent->EventId));
 
     queue.Wait4PacketConsumption();

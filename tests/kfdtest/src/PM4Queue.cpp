@@ -73,7 +73,7 @@ void PM4Queue::SubmitPacket() {
 
 void PM4Queue::Wait4PacketConsumption(HsaEvent *event, unsigned int timeOut) {
     if (event) {
-        PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(0,
+        PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(g_TestGPUFamilyId, 0,
                     event->EventData.HWData2,
                     event->EventId,
                     true));
