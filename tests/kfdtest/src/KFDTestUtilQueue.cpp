@@ -103,7 +103,7 @@ class AsyncMPSQ {
             if (m_queueType == HSA_QUEUE_SDMA)
                 return SDMATimePacket(0).SizeInBytes();
             else if (m_queueType == HSA_QUEUE_COMPUTE)
-                return PM4ReleaseMemoryPacket(0, 0, 0, 0, 0).SizeInBytes();
+                return PM4ReleaseMemoryPacket(g_TestGPUFamilyId, 0, 0, 0, 0, 0).SizeInBytes();
             return 0;
         }
 
@@ -126,7 +126,7 @@ class AsyncMPSQ {
                 PlacePacket(SDMATimePacket(addr));
             else if (m_queueType == HSA_QUEUE_COMPUTE)
                 PlacePacket(
-                        PM4ReleaseMemoryPacket(true, (HSAuint64)addr, 0, true, true));
+                        PM4ReleaseMemoryPacket(g_TestGPUFamilyId, true, (HSAuint64)addr, 0, true, true));
             else
                 WARN() << "Unsupported queue type!" << std::endl;
         }

@@ -1092,7 +1092,7 @@ TEST_F(KFDQMTest, QueueLatency) {
 
     PM4Queue queue;
     const int queueSize = PAGE_SIZE * 2;
-    const int packetSize = PM4ReleaseMemoryPacket(0, 0, 0, 0, 0).SizeInBytes();
+    const int packetSize = PM4ReleaseMemoryPacket(m_FamilyId, 0, 0, 0, 0, 0).SizeInBytes();
     /* We always leave one NOP(dword) empty after packet which is required by ring itself.
      * We also place NOPs when queue wraparound to avoid crossing buffer end. See PlacePacket().
      * So the worst case is that we need two packetSize space to place one packet.
@@ -1141,7 +1141,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     /* Submit packets serially*/
     i = 0;
     do {
-        queue.PlacePacket(PM4ReleaseMemoryPacket(true,
+        queue.PlacePacket(PM4ReleaseMemoryPacket(m_FamilyId, true,
                     (HSAuint64)&qts[i],
                     0,
                     true,
@@ -1168,7 +1168,7 @@ TEST_F(KFDQMTest, QueueLatency) {
     /* Workload of queue packet itself */
     i = 0;
     do {
-        queue.PlacePacket(PM4ReleaseMemoryPacket(true,
+        queue.PlacePacket(PM4ReleaseMemoryPacket(m_FamilyId, true,
                     (HSAuint64)&qts[i],
                     0,
                     true,
@@ -1549,7 +1549,7 @@ TEST_F(KFDQMTest, PM4EventInterrupt) {
     const HSAuint64 bufSize = PAGE_SIZE;
     const int packetCount = bufSize / sizeof(unsigned int);
     const int totalPacketSize = packetCount * PM4WriteDataPacket(0, 0).SizeInBytes() +
-                                                PM4ReleaseMemoryPacket(0, 0, 0).SizeInBytes();
+                                                PM4ReleaseMemoryPacket(m_FamilyId, 0, 0, 0).SizeInBytes();
     const int queueSize = RoundToPowerOf2(totalPacketSize);
 
     /* 4 PM4 queues will be running at same time.*/
@@ -1575,7 +1575,7 @@ TEST_F(KFDQMTest, PM4EventInterrupt) {
                 queue[i].PlacePacket(PM4WriteDataPacket(buf[i] + index, 0xdeadbeaf));
 
             /* releaseMemory packet makes sure all previous written data is visible.*/
-            queue[i].PlacePacket(PM4ReleaseMemoryPacket(0,
+            queue[i].PlacePacket(PM4ReleaseMemoryPacket(m_FamilyId, 0,
                         reinterpret_cast<HSAuint64>(event[i]->EventData.HWData2),
                         event[i]->EventId,
                         true));
@@ -1748,10 +1748,10 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
          * the first queue.
          */
         otherQueue.PlacePacket(
-            PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_write_ptr,
+            PM4ReleaseMemoryPacket(m_FamilyId, true, (HSAuint64)qRes->Queue_write_ptr,
                                    pendingWptr, false));
         otherQueue.PlacePacket(
-            PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_DoorBell,
+            PM4ReleaseMemoryPacket(m_FamilyId, true, (HSAuint64)qRes->Queue_DoorBell,
                                    pendingWptr, false));
 #endif
 
@@ -1775,10 +1775,10 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
          * the PM4 packet on the first queue.
          */
         otherQueue.PlacePacket(
-            PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_write_ptr,
+            PM4ReleaseMemoryPacket(m_FamilyId, true, (HSAuint64)qRes->Queue_write_ptr,
                                    pendingWptr64, true));
         otherQueue.PlacePacket(
-            PM4ReleaseMemoryPacket(true, (HSAuint64)qRes->Queue_DoorBell,
+            PM4ReleaseMemoryPacket(m_FamilyId, true, (HSAuint64)qRes->Queue_DoorBell,
                                    pendingWptr64, true));
 #endif
 

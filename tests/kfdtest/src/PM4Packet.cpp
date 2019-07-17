@@ -73,41 +73,46 @@ void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
     memcpy(m_pPacketData->data, data, m_ndw * sizeof(uint32_t));
 }
 
-PM4ReleaseMemoryPacket::~PM4ReleaseMemoryPacket(void) {
-    if (m_pPacketData)
-        free(m_pPacketData);
+PM4ReleaseMemoryPacket::PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling,
+                    uint64_t address, uint64_t data, bool is64bit, bool isTimeStamp):m_pPacketData(NULL) {
+
+    if (familyId < FAMILY_AI)
+        InitPacketCI(isPolling, address, data, is64bit, isTimeStamp);
+    else if (familyId < FAMILY_NV)
+        InitPacketAI(isPolling, address, data, is64bit, isTimeStamp);
+    else
+        InitPacketNV(isPolling, address, data, is64bit, isTimeStamp);
 }
 
-void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
-                                        uint64_t data, bool is64bit, bool isTimeStamp) {
-    if (g_TestGPUFamilyId < FAMILY_AI) {
-        PM4_RELEASE_MEM_CI *pkt;
+void PM4ReleaseMemoryPacket::InitPacketCI(bool isPolling, uint64_t address,
+                                    uint64_t data, bool is64bit, bool isTimeStamp) {
+    PM4_RELEASE_MEM_CI *pkt;
 
-        m_packetSize = sizeof(PM4_RELEASE_MEM_CI);
-        pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(calloc(1, m_packetSize));
-        m_pPacketData = pkt;
-        EXPECT_NOTNULL(m_pPacketData);
+    m_packetSize = sizeof(PM4_RELEASE_MEM_CI);
+    pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(calloc(1, m_packetSize));
+    m_pPacketData = pkt;
+    EXPECT_NOTNULL(m_pPacketData);
 
-        InitPM4Header(pkt->header, IT_RELEASE_MEM);
+    InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
-        pkt->bitfields2.event_type       = 0x14;
-        pkt->bitfields2.event_index      = event_index_mec_release_mem_EVENT_WRITE_EOP_5;
+    pkt->bitfields2.event_type       = 0x14;
+    pkt->bitfields2.event_index      = event_index_mec_release_mem_EVENT_WRITE_EOP_5;
                         // Possible values:
                         // 0101(5): EVENT_WRITE_EOP event types
                         // 0110(6): Reserved for EVENT_WRITE_EOS packet.
                         // 0111(7): Reserved (previously) for EVENT_WRITE packet.
-        pkt->bitfields2.l2_wb            = 1;
-        pkt->bitfields2.l2_inv           = 1;
-        pkt->bitfields2.cache_policy     = cache_policy_mec_release_mem_BYPASS_2;
-        pkt->bitfields2.atc = is_dgpu() ?
+    pkt->bitfields2.l2_wb            = 1;
+    pkt->bitfields2.l2_inv           = 1;
+    pkt->bitfields2.cache_policy     = cache_policy_mec_release_mem_BYPASS_2;
+    pkt->bitfields2.atc = is_dgpu() ?
                     atc_mec_release_mem_ci_NOT_USE_ATC_0 :
                     atc_mec_release_mem_ci_USE_ATC_1;  // ATC setting for fences and timestamps to the MC or TCL2.
-        pkt->bitfields3.dst_sel          = dst_sel_mec_release_mem_MEMORY_CONTROLLER_0;
+    pkt->bitfields3.dst_sel          = dst_sel_mec_release_mem_MEMORY_CONTROLLER_0;
                         // Possible values:
                         // 0 - memory_controller.
                         // 1 - tc_l2.
-            if (address) {
-                pkt->bitfields3.int_sel      = (isPolling ?
+    if (address) {
+        pkt->bitfields3.int_sel      = (isPolling ?
                     int_sel_mec_release_mem_SEND_DATA_AFTER_WRITE_CONFIRM_3 :
                     int_sel_mec_release_mem_SEND_INTERRUPT_AFTER_WRITE_CONFIRM_2);
                 // Possible values:
@@ -116,10 +121,10 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
                 // 2 - Send Interrupt when Write Confirm (WC) is received from the MC.
                 // 3 - Wait for WC, but dont send interrupt (applicable to 7.3+) [g73_1]
                 // 4 - Reserved for INTERRUPT packet
-                if (isTimeStamp && is64bit)
-                    pkt->bitfields3.data_sel = data_sel_mec_release_mem_SEND_GPU_CLOCK_COUNTER_3;
-                else
-                    pkt->bitfields3.data_sel     = is64bit ?
+        if (isTimeStamp && is64bit)
+            pkt->bitfields3.data_sel = data_sel_mec_release_mem_SEND_GPU_CLOCK_COUNTER_3;
+        else
+            pkt->bitfields3.data_sel     = is64bit ?
                         data_sel_mec_release_mem_SEND_64_BIT_DATA_2 :
                         data_sel_mec_release_mem_SEND_32_BIT_LOW_1;
                     // Possible values:
@@ -131,62 +136,108 @@ void PM4ReleaseMemoryPacket::InitPacket(bool isPolling, uint64_t address,
                     // 5 - Store GDS Data to memory.
                     // 6 - Reserved for use by the CP for Signal Semaphore.
                     // 7 - Reserved for use by the CP for Wait Semaphore.
-            } else {
-                pkt->bitfields3.int_sel      = (isPolling ?
+    } else {
+        pkt->bitfields3.int_sel      = (isPolling ?
                     int_sel_mec_release_mem_NONE_0 :
                     int_sel_mec_release_mem_SEND_INTERRUPT_ONLY_1);
-                pkt->bitfields3.data_sel     = data_sel_mec_release_mem_NONE_0;
-            }
+        pkt->bitfields3.data_sel     = data_sel_mec_release_mem_NONE_0;
+    }
 
-        pkt->bitfields4a.address_lo_dword_aligned = static_cast<uint32_t>((address&0xffffffff) >> 2);
-        pkt->addr_hi = static_cast<uint32_t>(address>>32);
+    pkt->bitfields4a.address_lo_dword_aligned = static_cast<uint32_t>((address&0xffffffff) >> 2);
+    pkt->addr_hi = static_cast<uint32_t>(address>>32);
 
-        pkt->data_lo = static_cast<uint32_t>(data);
-        pkt->data_hi = static_cast<uint32_t>(data >> 32);
-    } else {
-        PM4MEC_RELEASE_MEM_AI *pkt;
+    pkt->data_lo = static_cast<uint32_t>(data);
+    pkt->data_hi = static_cast<uint32_t>(data >> 32);
+}
+void PM4ReleaseMemoryPacket::InitPacketAI(bool isPolling, uint64_t address,
+                                        uint64_t data, bool is64bit, bool isTimeStamp) {
+    PM4MEC_RELEASE_MEM_AI *pkt;
 
-        m_packetSize = sizeof(PM4MEC_RELEASE_MEM_AI);
-        pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(calloc(1, m_packetSize));
-        m_pPacketData = pkt;
-        EXPECT_NOTNULL(m_pPacketData);
+    m_packetSize = sizeof(PM4MEC_RELEASE_MEM_AI);
+    pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(calloc(1, m_packetSize));
+    m_pPacketData = pkt;
+    EXPECT_NOTNULL(m_pPacketData);
 
-        InitPM4Header(pkt->header, IT_RELEASE_MEM);
+    InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
-        pkt->bitfields2.event_type       = 0x14;
-        pkt->bitfields2.event_index      = event_index__mec_release_mem__end_of_pipe;
-        pkt->bitfields2.tc_wb_action_ena = 1;
-        pkt->bitfields2.tc_action_ena    = 1;
-        pkt->bitfields2.cache_policy     = cache_policy__mec_release_mem__lru;
+    pkt->bitfields2.event_type       = 0x14;
+    pkt->bitfields2.event_index      = event_index__mec_release_mem__end_of_pipe;
+    pkt->bitfields2.tc_wb_action_ena = 1;
+    pkt->bitfields2.tc_action_ena    = 1;
+    pkt->bitfields2.cache_policy     = cache_policy__mec_release_mem__lru;
 
-        pkt->bitfields3.dst_sel          = dst_sel__mec_release_mem__memory_controller;
+    pkt->bitfields3.dst_sel          = dst_sel__mec_release_mem__memory_controller;
 
-        if (address) {
-            pkt->bitfields3.int_sel  = (isPolling ?
+    if (address) {
+        pkt->bitfields3.int_sel  = (isPolling ?
                 int_sel__mec_release_mem__send_data_after_write_confirm:
                 int_sel__mec_release_mem__send_interrupt_after_write_confirm);
 
-            if (isTimeStamp && is64bit)
-                pkt->bitfields3.data_sel = data_sel__mec_release_mem__send_gpu_clock_counter;
-            else
-                pkt->bitfields3.data_sel     = is64bit ?
+        if (isTimeStamp && is64bit)
+            pkt->bitfields3.data_sel = data_sel__mec_release_mem__send_gpu_clock_counter;
+        else
+            pkt->bitfields3.data_sel     = is64bit ?
                     data_sel__mec_release_mem__send_64_bit_data :
                     data_sel__mec_release_mem__send_32_bit_low;
-        } else {
-            pkt->bitfields3.int_sel  = (isPolling ?
+    } else {
+        pkt->bitfields3.int_sel  = (isPolling ?
                 int_sel__mec_release_mem__none:
                 int_sel__mec_release_mem__send_interrupt_only);
-            pkt->bitfields3.data_sel     = data_sel__mec_release_mem__none;
-        }
-
-        pkt->bitfields4a.address_lo_32b = static_cast<uint32_t>((address&0xffffffff) >> 2);
-        pkt->address_hi = static_cast<uint32_t>(address>>32);
-
-        pkt->data_lo = static_cast<uint32_t>(data);
-        pkt->data_hi = static_cast<uint32_t>(data >> 32);
-
-        pkt->int_ctxid = static_cast<uint32_t>(data);
+        pkt->bitfields3.data_sel     = data_sel__mec_release_mem__none;
     }
+
+    pkt->bitfields4a.address_lo_32b = static_cast<uint32_t>((address&0xffffffff) >> 2);
+    pkt->address_hi = static_cast<uint32_t>(address>>32);
+
+    pkt->data_lo = static_cast<uint32_t>(data);
+    pkt->data_hi = static_cast<uint32_t>(data >> 32);
+
+    pkt->int_ctxid = static_cast<uint32_t>(data);
+}
+
+void PM4ReleaseMemoryPacket::InitPacketNV(bool isPolling, uint64_t address,
+                                uint64_t data, bool is64bit, bool isTimeStamp) {
+    PM4MEC_RELEASE_MEM_NV *pkt;
+
+    m_packetSize = sizeof(PM4_MEC_RELEASE_MEM_NV);
+    pkt = reinterpret_cast<PM4_MEC_RELEASE_MEM_NV *>(calloc(1, m_packetSize));
+    m_pPacketData = pkt;
+    EXPECT_NOTNULL(m_pPacketData);
+
+    InitPM4Header(pkt->header, IT_RELEASE_MEM);
+
+    pkt->bitfields2.event_type       = 0x14;
+    pkt->bitfields2.event_index      = event_index__mec_release_mem__end_of_pipe;
+    pkt->bitfields2.gcr_cntl         = (1<<10) | (1<<9) | (1<<8) | (1<<3) | (1<<2);
+    pkt->bitfields2.cache_policy     = cache_policy__mec_release_mem__lru;
+
+    pkt->bitfields3.dst_sel          = dst_sel__mec_release_mem__memory_controller;
+
+    if (address) {
+        pkt->bitfields3.int_sel  = (isPolling ?
+                int_sel__mec_release_mem__send_data_after_write_confirm:
+                int_sel__mec_release_mem__send_interrupt_after_write_confirm);
+
+        if (isTimeStamp && is64bit)
+            pkt->bitfields3.data_sel = data_sel__mec_release_mem__send_gpu_clock_counter;
+        else
+            pkt->bitfields3.data_sel     = is64bit ?
+                    data_sel__mec_release_mem__send_64_bit_data :
+                    data_sel__mec_release_mem__send_32_bit_low;
+    } else {
+        pkt->bitfields3.int_sel  = (isPolling ?
+                int_sel__mec_release_mem__none:
+                int_sel__mec_release_mem__send_interrupt_only);
+        pkt->bitfields3.data_sel     = data_sel__mec_release_mem__none;
+    }
+
+    pkt->bitfields4a.address_lo_32b = static_cast<uint32_t>((address&0xffffffff) >> 2);
+    pkt->address_hi = static_cast<uint32_t>(address>>32);
+
+    pkt->data_lo = static_cast<uint32_t>(data);
+    pkt->data_hi = static_cast<uint32_t>(data >> 32);
+
+    pkt->int_ctxid = static_cast<uint32_t>(data);
 }
 
 PM4IndirectBufPacket::PM4IndirectBufPacket(IndirectBuffer *pIb) {
@@ -211,22 +262,48 @@ void PM4IndirectBufPacket::InitPacket(IndirectBuffer *pIb) {
     m_packetData.bitfields4.vmid             = 0;  // in iommutest:  vmid = queueParams.VMID;
     m_packetData.bitfields4.cache_policy     = cache_policy_indirect_buffer_BYPASS_2;
 }
+PM4AcquireMemoryPacket::PM4AcquireMemoryPacket(unsigned int familyId):m_pPacketData(NULL)
+{
 
-PM4AcquireMemoryPacket::PM4AcquireMemoryPacket(void) {
-    memset(&m_packetData, 0, SizeInBytes());
-    InitPM4Header(m_packetData.header,  IT_ACQUIRE_MEM);
-
-    m_packetData.bitfields2.coher_cntl     = 0x28c00000;  // copied from the way the HSART does this.
-    m_packetData.bitfields2.engine         = engine_acquire_mem_PFP_0;
-    m_packetData.coher_size                = 0xFFFFFFFF;
-    m_packetData.bitfields3.coher_size_hi  = 0;
-    m_packetData.coher_base_lo             = 0;
-    m_packetData.bitfields4.coher_base_hi  = 0;
-    m_packetData.bitfields5.poll_interval  = 4;  // copied from the way the HSART does this.
+    if (familyId < FAMILY_NV)
+        InitPacketAI();
+    else
+        InitPacketNV();
 }
 
-unsigned int PM4AcquireMemoryPacket::SizeInBytes() const {
-    return sizeof(PM4ACQUIRE_MEM);
+void PM4AcquireMemoryPacket::InitPacketAI(void) {
+
+    PM4ACQUIRE_MEM *pkt;
+    m_packetSize = sizeof(PM4ACQUIRE_MEM);
+    pkt = reinterpret_cast<PM4ACQUIRE_MEM*>(calloc(1, m_packetSize));
+    m_pPacketData = pkt;
+    EXPECT_NOTNULL(m_pPacketData);
+    InitPM4Header(pkt->header,  IT_ACQUIRE_MEM);
+    pkt->bitfields2.coher_cntl     = 0x28c00000;  // copied from the way the HSART does this.
+    pkt->bitfields2.engine         = engine_acquire_mem_PFP_0;
+    pkt->coher_size                = 0xFFFFFFFF;
+    pkt->bitfields3.coher_size_hi  = 0;
+    pkt->coher_base_lo             = 0;
+    pkt->bitfields4.coher_base_hi  = 0;
+    pkt->bitfields5.poll_interval  = 4;  // copied from the way the HSART does this.
+}
+void PM4AcquireMemoryPacket::InitPacketNV(void) {
+    PM4ACQUIRE_MEM_NV *pkt;
+    m_packetSize = sizeof(PM4ACQUIRE_MEM_NV);
+    pkt = reinterpret_cast<PM4ACQUIRE_MEM_NV*>(calloc(1, m_packetSize));
+    m_pPacketData = pkt;
+    EXPECT_NOTNULL(m_pPacketData);
+    InitPM4Header(pkt->header,  IT_ACQUIRE_MEM);
+    pkt->coher_size                = 0xFFFFFFFF;
+    pkt->bitfields3.coher_size_hi  = 0;
+    pkt->coher_base_lo             = 0;
+    pkt->bitfields4.coher_base_hi  = 0;
+    pkt->bitfields5.poll_interval  = 4; //copied from the way the HSART does this.
+    /* Invalidate gL2, gL1 with range base
+          * Invalidate GLV, GLK (L0$)
+          * Invalidate all Icache (GLI)
+          */
+    pkt->bitfields6.gcr_cntl = (1<<14|1<<9|1<<8|1<<7|1);
 }
 
 PM4SetShaderRegPacket::PM4SetShaderRegPacket(void)
