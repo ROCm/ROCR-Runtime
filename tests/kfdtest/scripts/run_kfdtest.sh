@@ -51,7 +51,7 @@ printUsage() {
     echo
     echo "Gtest arguments will be forwarded to the app"
     echo
-    echo "Valid platform options: cz, kv, tg, fj, hi, pl10/el, pl11/bf, pl12/lx, vg10, vg12, vg20, all"
+    echo "Valid platform options: polaris10, vega10, vega20, all, and so on"
     echo "'all' option runs all tests"
 
     return 0
@@ -63,22 +63,20 @@ printUsage() {
 getFilter() {
     local platform=$1;
     case "$platform" in
-        cz ) FILTER="--gtest_filter=$CZ_TESTS_BLACKLIST" ;;
-        hi ) FILTER="--gtest_filter=$HI_TESTS_BLACKLIST" ;;
-        kv ) FILTER="--gtest_filter=$KV_TESTS_BLACKLIST" ;;
-        tg ) FILTER="--gtest_filter=$TONGA_TESTS_BLACKLIST" ;;
-        fj ) FILTER="--gtest_filter=$FIJI_TESTS_BLACKLIST" ;;
-        pl10 | el ) FILTER="--gtest_filter=$ELLESMERE_TESTS_BLACKLIST" ;;
-        pl11 | bf ) FILTER="--gtest_filter=$BAFFIN_TESTS_BLACKLIST" ;;
-        pl12 | lx ) FILTER="--gtest_filter=$LEXA_TESTS_BLACKLIST" ;;
-        vg10 ) FILTER="--gtest_filter=$VEGA10_TESTS_BLACKLIST" ;;
-        vg12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
-        vg20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
-        rv ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
-        arct ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
+        carrizo ) FILTER="--gtest_filter=$CZ_TESTS_BLACKLIST" ;;
+        hawaii ) FILTER="--gtest_filter=$HI_TESTS_BLACKLIST" ;;
+        kaveri ) FILTER="--gtest_filter=$KV_TESTS_BLACKLIST" ;;
+        tonga ) FILTER="--gtest_filter=$TONGA_TESTS_BLACKLIST" ;;
+        fiji ) FILTER="--gtest_filter=$FIJI_TESTS_BLACKLIST" ;;
+        polaris10 | polaris11 | polaris12 ) FILTER="--gtest_filter=$POLARIS_TESTS_BLACKLIST" ;;
+        vega10 ) FILTER="--gtest_filter=$VEGA10_TESTS_BLACKLIST" ;;
+        vega12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
+        vega20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
+        raven ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
+        arcturus ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
 	core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
         all ) FILTER="" ;;
-        *) die "Unsupported platform $PLATFORM or node $NODE. Exiting" ;;
+        *) die "Unsupported platform $platform. Exiting" ;;
     esac
     echo "$FILTER"
 }
@@ -98,52 +96,11 @@ getHsaNodes() {
 }
 
 
-# Prints GPU name for a given Device ID
-#   param - Device ID.
-deviceIdToGpuName() {
-    local deviceId=$1; shift;
-    case $deviceId in
-        1304 | 1305 | 1306 | 1307 | 1309 | 130a | 130b | 130c | 130d | 130e | 130f | \
-        1310 | 1311 | 1312 | 1313 | 1315 | 1316 | 1317 | 1318 | 131b | 131c | 131d )
-            platformName="kv" ;;
-        67a0 | 67a1 | 67a2 | 67a8 | 67a9 | 67aa | 67b0 | 67b1 | 67b8 | 67b9 | 67ba | 67be )
-            platformName="hi" ;;
-        9870 | 9874 | 9875 | 9876 | 9877 )
-            platformName="cz" ;;
-        6920 | 6921 | 6928 | 6929 | 692b | 692f | 6930 | 6938 | 6939 )
-            platformName="tg" ;;
-        7300 | 730f)
-            platformName="fj" ;;
-        67c0 | 67c1 | 67c2 | 67c4 | 67c7 | 67c8 | 67c9 | 67ca | 67cc | 67cf | 67d0 | 67df | 6fdf )
-            platformName="pl10" ;;
-        67e0 | 67e1 | 67e3 | 67e7 | 67e8 | 67e9 | 67eb | 67ef | 67ff )
-            platformName="pl11" ;;
-        6980 | 6981 | 6985 | 6986 | 6987 | 6995 | 6997 | 699f)
-            platformName="pl12" ;;
-        6860 | 6861 | 6862 | 6863 | 6864 | 6867 | 6868 | 6869 | 686a | 686b | 686c | 687d | 687e | 687f)
-            platformName="vg10" ;;
-        69a0 | 69a1 | 69a2 | 69a3 | 69af)
-            platformName="vg12" ;;
-        66a0 | 66a1 | 66a2 | 66a3 | 66a4 | 66a7 | 66af)
-            platformName="vg20" ;;
-        15dd )
-            platformName="rv" ;;
-        7380 | 46 | 47 | 48 | 738c | 7388 | 738e)
-            platformName="arct" ;;
-        * )
-            return ;;
-    esac
-    echo "$platformName"
-}
-
-
 # Prints GPU Name for the given Node ID
 #   param - Node ID
 getNodeName() {
     local nodeId=$1; shift;
-    local gpuIdInDec=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep device_id | awk '{print $2}')
-    printf -v gpuIdInHex "%x" "$gpuIdInDec"
-    local gpuName=$(deviceIdToGpuName $gpuIdInHex)
+    local gpuName=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/name)
     echo "$gpuName"
 }
 
