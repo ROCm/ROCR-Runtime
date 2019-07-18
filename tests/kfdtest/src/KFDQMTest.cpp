@@ -155,7 +155,7 @@ TEST_F(KFDQMTest, SubmitPacketSdmaQueue) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void *>(), 0x02020202));
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), destBuf.As<void *>(), 0x02020202));
 
     queue.Wait4PacketConsumption();
 
@@ -188,9 +188,9 @@ TEST_F(KFDQMTest, MultipleSdmaQueues) {
         destBuf.Fill(0x0);
         srcBuf.Fill(qidx + 0xa0);
         queues[qidx].PlaceAndSubmitPacket(
-            SDMACopyDataPacket(destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+            SDMACopyDataPacket(queues[qidx].GetFamilyId(), destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
         queues[qidx].PlaceAndSubmitPacket(
-            SDMAWriteDataPacket(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+            SDMAWriteDataPacket(queues[qidx].GetFamilyId(), destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
 
         queues[qidx].Wait4PacketConsumption();
 
@@ -241,7 +241,7 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
 
         for (unsigned j = 0; j < NPACKETS; j++)
             queue.PlacePacket(
-                SDMACopyDataPacket(dstBuf.As<char *>()+COPY_SIZE*j,
+                SDMACopyDataPacket(queue.GetFamilyId(), dstBuf.As<char *>()+COPY_SIZE*j,
                                    srcBuf.As<char *>()+COPY_SIZE*j, COPY_SIZE));
         queue.SubmitPacket();
 
@@ -260,7 +260,7 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
     }
     log << "Done." << std::endl;
 
-    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(srcBuf.As<unsigned *>(), 0x02020202));
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), srcBuf.As<unsigned *>(), 0x02020202));
     queue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(srcBuf.As<unsigned int*>(), 0x02020202));
 
@@ -326,7 +326,7 @@ TEST_F(KFDQMTest, DisableSdmaQueueByUpdateWithNullAddress) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void*>(), 0));
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), destBuf.As<void*>(), 0));
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0);
 
@@ -334,7 +334,7 @@ TEST_F(KFDQMTest, DisableSdmaQueueByUpdateWithNullAddress) {
 
     EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, true));
 
-    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<void*>(), 0));
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), destBuf.As<void*>(), 0));
 
     // Don't sync since we don't expect rptr to change when the queue is disabled.
     Delay(2000);
@@ -1268,9 +1268,9 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
         destBuf.Fill(0x0);
         srcBuf.Fill(pktIdx);
         queue.PlaceAndSubmitPacket(
-                SDMACopyDataPacket(destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+                SDMACopyDataPacket(queue.GetFamilyId(), destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
         queue.PlaceAndSubmitPacket(
-                SDMAWriteDataPacket(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+                SDMAWriteDataPacket(queue.GetFamilyId(), destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
         queue.Wait4PacketConsumption();
 
         EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
@@ -1280,7 +1280,7 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
     }
 
     for (unsigned int pktIdx = 0; pktIdx <= queue.Size()/sizeof(SDMA_PKT_WRITE_UNTILED); ++pktIdx) {
-        queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(destBuf.As<unsigned int*>(), pktIdx));
+        queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), destBuf.As<unsigned int*>(), pktIdx));
         queue.Wait4PacketConsumption();
         WaitOnValue(destBuf.As<unsigned int*>(), pktIdx);
     }
@@ -1406,7 +1406,7 @@ sdma_copy(HSAuint32 node, void *src, void *const dst[], int n, HSAuint64 size) {
     HsaEvent *event;
     ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, node, &event));
     ASSERT_SUCCESS(sdmaQueue.Create(node));
-    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(dst, src, n, size));
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), dst, src, n, size));
     sdmaQueue.Wait4PacketConsumption(event);
     EXPECT_SUCCESS(sdmaQueue.Destroy());
     hsaKmtDestroyEvent(event);
@@ -1418,7 +1418,7 @@ sdma_fill(HSAint32 node, void *dst, unsigned int data, HSAuint64 size) {
     HsaEvent *event;
     ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, node, &event));
     ASSERT_SUCCESS(sdmaQueue.Create(node));
-    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(dst, data, size));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(), dst, data, size));
     sdmaQueue.Wait4PacketConsumption(event);
     EXPECT_SUCCESS(sdmaQueue.Destroy());
     hsaKmtDestroyEvent(event);
@@ -1647,10 +1647,11 @@ TEST_F(KFDQMTest, SdmaEventInterrupt) {
                 /* Let sDMA have some workload first.*/
                 queue[i].PlacePacket(SDMATimePacket(&ts[1]));
                 queue[i].PlacePacket(
-                        SDMACopyDataPacket(dst[i], src, bufSize));
+                        SDMACopyDataPacket(queue[i].GetFamilyId(), dst[i], src, bufSize));
                 queue[i].PlacePacket(SDMATimePacket(&ts[2]));
                 queue[i].PlacePacket(
-                        SDMAFencePacket(reinterpret_cast<void*>(event[i]->EventData.HWData2), event[i]->EventId));
+                        SDMAFencePacket(queue[i].GetFamilyId(),
+                                reinterpret_cast<void*>(event[i]->EventData.HWData2), event[i]->EventId));
                 queue[i].PlacePacket(SDMATimePacket(&ts[3]));
                 queue[i].PlacePacket(SDMATrapPacket(event[i]->EventId));
                 queue[i].PlacePacket(SDMATimePacket(&ts[4]));
@@ -1738,9 +1739,9 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
          * engine. This should submit the PM4 packet on the first
          * queue.
          */
-        otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_write_ptr,
+        otherQueue.PlacePacket(SDMAWriteDataPacket(otherQueue.GetFamilyId(), qRes->Queue_write_ptr,
                                                    pendingWptr));
-        otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_DoorBell,
+        otherQueue.PlacePacket(SDMAWriteDataPacket(otherQueue.GetFamilyId(), qRes->Queue_DoorBell,
                                                    pendingWptr));
 #else
         /* Write the wptr and doorbell update using WRITE_DATA packets
@@ -1764,9 +1765,9 @@ TEST_F(KFDQMTest, GPUDoorbellWrite) {
          * engine. This should submit the PM4 packet on the first
          * queue.
          */
-        otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_write_ptr,
+        otherQueue.PlacePacket(SDMAWriteDataPacket(otherQueue.GetFamilyId(), qRes->Queue_write_ptr,
                                                    2, &pendingWptr64));
-        otherQueue.PlacePacket(SDMAWriteDataPacket(qRes->Queue_DoorBell,
+        otherQueue.PlacePacket(SDMAWriteDataPacket(otherQueue.GetFamilyId(), qRes->Queue_DoorBell,
                                                    2, &pendingWptr64));
 #else
         /* Write the 64-bit wptr and doorbell update using RELEASE_MEM

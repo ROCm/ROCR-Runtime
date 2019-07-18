@@ -453,7 +453,7 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
     dispatch0.Submit(pm4Queue);
     dispatch0.Sync(g_TestTimeOut);
 
-    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>(), 0x12345678));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaQueue.GetFamilyId(), sdmaBuffer.As<HSAuint32 *>(), 0x12345678));
     sdmaQueue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(&stackData[sdmaOffset], 0x12345678));
 
@@ -496,7 +496,7 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
     dispatch1.Submit(pm4Queue);
     dispatch1.Sync(g_TestTimeOut);
 
-    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>(), 0xD0BED0BE));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaQueue.GetFamilyId(), sdmaBuffer.As<HSAuint32 *>(), 0xD0BED0BE));
     sdmaQueue.Wait4PacketConsumption();
 
     EXPECT_SUCCESS(pm4Queue.Destroy());
@@ -1021,10 +1021,10 @@ TEST_F(KFDMemoryTest, MMBench) {
 #define INTERLEAVE_SDMA() do {                                          \
         if (interleaveSDMA) {                                           \
             sdmaQueue[0].PlaceAndSubmitPacket(                          \
-                SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>(),       \
+                SDMAWriteDataPacket(sdmaQueue[0].GetFamilyId(), sdmaBuffer.As<HSAuint32 *>(),       \
                                     0x12345678));                       \
             sdmaQueue[1].PlaceAndSubmitPacket(                          \
-                SDMAWriteDataPacket(sdmaBuffer.As<HSAuint32 *>()+16,    \
+                SDMAWriteDataPacket(sdmaQueue[1].GetFamilyId(), sdmaBuffer.As<HSAuint32 *>()+16,    \
                                     0x12345678));                       \
         }                                                               \
     } while (0)
@@ -1601,7 +1601,7 @@ TEST_F(KFDMemoryTest, SignalHandling) {
 
     pDb[0] = 0x02020202;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(pDb, 0x01010101) );
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(), pDb, 0x01010101) );
     queue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(pDb, 0x01010101));
     EXPECT_SUCCESS(queue.Destroy());

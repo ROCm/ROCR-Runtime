@@ -272,8 +272,10 @@ void HsaMemoryBuffer::Fill(HSAuint32 value, BaseQueue& baseQueue, HSAuint64 offs
     size = size ? size : m_Size;
     ASSERT_TRUE(size + offset <= m_Size) << "Buffer Overflow" << std::endl;
 
-    baseQueue.PlacePacket(SDMAFillDataPacket((reinterpret_cast<void *>(this->As<char*>() + offset)), value, size));
-    baseQueue.PlacePacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
+    baseQueue.PlacePacket(SDMAFillDataPacket(baseQueue.GetFamilyId(),
+                                (reinterpret_cast<void *>(this->As<char*>() + offset)), value, size));
+    baseQueue.PlacePacket(SDMAFencePacket(baseQueue.GetFamilyId(),
+                                reinterpret_cast<void*>(event->EventData.HWData2), event->EventId));
     baseQueue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
     EXPECT_SUCCESS(hsaKmtWaitOnEvent(event, g_TestTimeOut));
 
@@ -326,10 +328,10 @@ bool HsaMemoryBuffer::IsPattern(HSAuint64 location, HSAuint32 pattern, BaseQueue
         return false;
 
     *tmp = ~pattern;
-    baseQueue.PlacePacket(SDMACopyDataPacket((void *)tmp,
+    baseQueue.PlacePacket(SDMACopyDataPacket(baseQueue.GetFamilyId(), (void *)tmp,
             reinterpret_cast<void *>(this->As<HSAuint64>() + location),
             sizeof(HSAuint32)));
-    baseQueue.PlacePacket(SDMAFencePacket(reinterpret_cast<void*>(event->EventData.HWData2),
+    baseQueue.PlacePacket(SDMAFencePacket(baseQueue.GetFamilyId(), reinterpret_cast<void*>(event->EventData.HWData2),
             event->EventId));
     baseQueue.PlaceAndSubmitPacket(SDMATrapPacket(event->EventId));
 
