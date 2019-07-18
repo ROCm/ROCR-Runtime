@@ -88,13 +88,13 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     /* Check for pattern in the shared Local Memory */
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
     size = size < sharedSize ? size : sharedSize;
-    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(tempSysBuffer.As<HSAuint32*>(),
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), tempSysBuffer.As<HSAuint32*>(),
         sharedLocalBuffer, size));
     sdmaQueue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xAAAAAAAA));
 
     /* Fill in the Local Memory with different pattern */
-    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sharedLocalBuffer, 0xBBBBBBBB));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaQueue.GetFamilyId(), sharedLocalBuffer, 0xBBBBBBBB));
     sdmaQueue.Wait4PacketConsumption();
 
     /* Clean up */
@@ -125,7 +125,7 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
 
     /* Copy pattern in Local Memory before sharing it */
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
-    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(toShareLocalBuffer.As<HSAuint32*>(),
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), toShareLocalBuffer.As<HSAuint32*>(),
         tempSysBuffer.As<HSAuint32*>(), size));
     sdmaQueue.Wait4PacketConsumption();
 
@@ -141,7 +141,7 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
     EXPECT_EQ(WEXITSTATUS(status), 0);
 
     /* Check for the new pattern filled in by child process */
-    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(tempSysBuffer.As<HSAuint32*>(),
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), tempSysBuffer.As<HSAuint32*>(),
         toShareLocalBuffer.As<HSAuint32*>(), size));
     sdmaQueue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xBBBBBBBB));

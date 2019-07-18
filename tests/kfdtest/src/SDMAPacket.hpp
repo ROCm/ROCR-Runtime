@@ -38,18 +38,15 @@ class SDMAPacket : public BasePacket {
 
 class SDMAWriteDataPacket : public SDMAPacket {
  public:
-    // Empty constructor, before using the packet call the init func
-    SDMAWriteDataPacket(void);
     // This contructor will also init the packet, no need for additional calls
-    SDMAWriteDataPacket(void* destAddr, unsigned int data);
-    SDMAWriteDataPacket(void* destAddr, unsigned int ndw, void *data);
+    SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int data);
+    SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int ndw, void *data);
 
     virtual ~SDMAWriteDataPacket(void);
 
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
     // @breif Initialise the packet
-    void InitPacket(void* destAddr, unsigned int data);
     void InitPacket(void* destAddr, unsigned int ndw, void *data);
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return packetSize; }
@@ -63,8 +60,8 @@ class SDMAWriteDataPacket : public SDMAPacket {
 class SDMACopyDataPacket : public SDMAPacket {
  public:
     // This contructor will also init the packet, no need for additional calls
-    SDMACopyDataPacket(void *dest, void *src, unsigned int size);
-    SDMACopyDataPacket(void *const dst[], void *src, int n, unsigned int surfsize);
+    SDMACopyDataPacket(unsigned int familyId, void *dest, void *src, unsigned int size);
+    SDMACopyDataPacket(unsigned int familyId, void *const dst[], void *src, int n, unsigned int surfsize);
 
     virtual ~SDMACopyDataPacket(void);
 
@@ -84,7 +81,7 @@ class SDMACopyDataPacket : public SDMAPacket {
 class SDMAFillDataPacket : public SDMAPacket {
  public:
     // This contructor will also init the packet, no need for additional calls
-    SDMAFillDataPacket(void *dest, unsigned int data, unsigned int size);
+    SDMAFillDataPacket(unsigned int familyId, void *dest, unsigned int data, unsigned int size);
 
     virtual ~SDMAFillDataPacket(void);
 
@@ -106,7 +103,7 @@ class SDMAFencePacket : public SDMAPacket {
     // Empty constructor, before using the packet call the init func
     SDMAFencePacket(void);
     // This contructor will also init the packet, no need for additional calls
-    SDMAFencePacket(void* destAddr, unsigned int data);
+    SDMAFencePacket(unsigned int familyId, void* destAddr, unsigned int data);
 
     virtual ~SDMAFencePacket(void);
 
