@@ -173,18 +173,38 @@ SDMAFencePacket::SDMAFencePacket(void) {
 
 SDMAFencePacket::SDMAFencePacket(unsigned int familyId, void* destAddr, unsigned int data) {
     m_FamilyId = familyId;
-    InitPacket(destAddr, data);
+    if (m_FamilyId < FAMILY_NV)
+        InitPacketCI(destAddr, data);
+    else
+        InitPacketNV(destAddr, data);
 }
 
 SDMAFencePacket::~SDMAFencePacket(void) {
 }
 
-void SDMAFencePacket::InitPacket(void* destAddr, unsigned int data) {
+void SDMAFencePacket::InitPacketCI(void* destAddr, unsigned int data) {
     memset(&packetData, 0, SizeInBytes());
 
     packetData.HEADER_UNION.op = SDMA_OP_FENCE;
 
     SplitU64(reinterpret_cast<HSAuint64>(destAddr),
+             packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
+             packetData.ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
+
+    packetData.DATA_UNION.data = data;
+}
+
+void SDMAFencePacket::InitPacketNV(void * destAddr,unsigned int data) {
+    memset(&packetData, 0, SizeInBytes());
+
+    /* GPA=0 becaue we use virtual address
+     * Snoop = 1 because we want the write be CPU coherent
+     * System = 1 because the memory is system memory
+     * mtype = uncached, for the purpose of CPU coherent, L2 policy doesn't matter in this case
+     */
+    packetData.HEADER_UNION.DW_0_DATA = (0 << 23) | (1 << 22) | (1 << 20) | (3 << 15) | SDMA_OP_FENCE;
+
+    SplitU64(reinterpret_cast<unsigned long long>(destAddr),
              packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
              packetData.ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
 
