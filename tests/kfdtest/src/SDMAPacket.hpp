@@ -110,7 +110,9 @@ class SDMAFencePacket : public SDMAPacket {
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return &packetData; }
     // @brief Initialise the packet
-    void InitPacket(void* destAddr, unsigned int data);
+    void InitPacketCI(void* destAddr, unsigned int data);
+    void InitPacketNV(void* destAddr, unsigned int data);
+
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return sizeof(SDMA_PKT_FENCE ); }
 
