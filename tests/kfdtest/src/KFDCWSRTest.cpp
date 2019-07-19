@@ -77,6 +77,33 @@ LOOP:\n\
 end\n\
 ";
 
+static const char* iterate_isa_gfx10 = \
+"\
+shader iterate_isa\n\
+asic(GFX10)\n\
+wave_size(32)\n\
+type(CS)\n\
+/*copy the parameters from scalar registers to vector registers*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+    flat_load_dword v4, v[0:1] slc    /*load target iteration value*/\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    v_mov_b32 v5, 0\n\
+LOOP:\n\
+    v_add_co_u32 v5, vcc, 1, v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    /*compare the result value (v5) to iteration value (v4), and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
+    v_cmp_lt_u32 vcc, v5, v4\n\
+    s_cbranch_vccnz LOOP\n\
+    flat_store_dword v[2,3], v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    s_endpgm\n\
+end\n\
+";
+
+
 /*
 v[0:1] = target iteration value
 v[2:3] = iterate result
@@ -129,9 +156,16 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
         unsigned int* iter = iterateBuf.As<unsigned int*>();
         unsigned int* result = resultBuf.As<unsigned int*>();
+        const char *pIterateIsa;
 
-        m_pIsaGen->CompileShader((m_FamilyId >= FAMILY_AI) ? iterate_isa_gfx9 : iterate_isa_gfx8 ,
-                "iterate_isa", isaBuffer);
+        if (m_FamilyId < FAMILY_AI)
+            pIterateIsa = iterate_isa_gfx8;
+        else if (m_FamilyId < FAMILY_NV)
+            pIterateIsa = iterate_isa_gfx9;
+        else
+            pIterateIsa = iterate_isa_gfx10;
+
+        m_pIsaGen->CompileShader(pIterateIsa, "iterate_isa", isaBuffer);
 
         PM4Queue queue1, queue2;
 
