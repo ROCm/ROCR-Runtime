@@ -138,6 +138,8 @@ void GetSdmaInfo(const HsaNodeProperties *props,
     if (props->EngineId.ui32.Major == 9) {
         if (props->EngineId.ui32.Stepping == 6)  // VEGA20
             num_sdma_queues_per_engine = 8;
+    } else if (props->EngineId.ui32.Major == 10) { //NAVIi
+            num_sdma_queues_per_engine = 8;
     }
 
     if (p_num_sdma_engines)
