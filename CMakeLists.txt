@@ -156,7 +156,7 @@ add_custom_target ( package-dev DEPENDS build-dev
 
 ## Add the install directives for the runtime library.
 install ( TARGETS ${HSAKMT_TARGET} DESTINATION ${CMAKE_INSTALL_LIBDIR} )
-install ( FILES ${SOURCE_DIR}/LICENSE.md DESTINATION libhsakmt )
+install ( FILES ${SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} )
 
 ## Add the packaging directives for the runtime library.
 set ( CPACK_PACKAGE_NAME ${HSAKMT_PACKAGE} )
