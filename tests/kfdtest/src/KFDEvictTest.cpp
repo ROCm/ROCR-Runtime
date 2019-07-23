@@ -376,13 +376,13 @@ static const char* gfx9_ReadMemory =
     v_lshlrev_b32   v0, 2, v0               // v0 *= 4\n\
     v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4\n\
     v_mov_b32       v5, s3\n\
-    v_add_u32       v5, vcc_lo, v5\n\
+    v_add_co_u32    v5, vcc, v5, vcc_lo\n\
     \n\
     // compute input buffer offset used to store corresponding local buffer address\n\
     v_lshlrev_b32   v0, 1, v0               // v0 *= 8\n\
     v_add_co_u32    v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8\n\
     v_mov_b32       v3, s1\n\
-    v_add_u32       v3, vcc_lo, v3\n\
+    v_add_co_u32    v3, vcc, v3, vcc_lo\n\
     \n\
     // load 64bit local buffer address stored at v[2:3] to v[6:7]\n\
     flat_load_dwordx2   v[6:7], v[2:3] slc\n\
@@ -404,9 +404,9 @@ L_REPEAT:\n\
     v_mov_b32       v13, v7\n\
 L_LOOP_READ:\n\
     flat_load_dwordx2   v[14:15], v[12:13] slc\n\
-    v_add_u32       v9, v9, v10 \n\
+    v_add_co_u32    v9, vcc, v9, v10 \n\
     v_add_co_u32    v12, vcc, v12, v10\n\
-    v_add_u32       v13, vcc_lo, v13\n\
+    v_add_co_u32    v13, vcc, v13, vcc_lo\n\
     v_cmp_lt_u32    vcc, v9, v11\n\
     s_cbranch_vccnz L_LOOP_READ\n\
     s_branch        L_REPEAT\n\
@@ -469,11 +469,67 @@ L_QUIT:\n\
     end\n\
 ";
 
+
+static const char* gfx10_ReadMemory =
+"\
+    shader ReadMemory\n\
+    asic(GFX10)\n\
+    wave_size(32)\n\
+    type(CS)\n\
+    \n\
+    // compute address of corresponding output buffer\n\
+    v_mov_b32       v0, s4                  // use workgroup id as index\n\
+    v_lshlrev_b32   v0, 2, v0               // v0 *= 4\n\
+    v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4\n\
+    v_mov_b32       v5, s3\n\
+    v_add_co_u32    v5, vcc, v5, vcc_lo\n\
+    \n\
+    // compute input buffer offset used to store corresponding local buffer address\n\
+    v_lshlrev_b32   v0, 1, v0               // v0 *= 8\n\
+    v_add_co_u32    v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8\n\
+    v_mov_b32       v3, s1\n\
+    v_add_co_u32    v3, vcc, v3, vcc_lo\n\
+    \n\
+    // load 64bit local buffer address stored at v[2:3] to v[6:7]\n\
+    flat_load_dwordx2   v[6:7], v[2:3] slc\n\
+    s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish\n\
+    \n\
+    v_mov_b32       v8, 0x5678\n\
+    s_movk_i32      s8, 0x5678\n\
+L_REPEAT:\n\
+    s_load_dword    s16, s[0:1], 0x0 glc\n\
+    s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish\n\
+    s_cmp_eq_i32    s16, s8\n\
+    s_cbranch_scc1  L_QUIT                  // if notified to quit by host\n\
+    // loop read 64M local buffer starting at v[6:7]\n\
+    // every 4k page only read once\n\
+    v_mov_b32       v9, 0\n\
+    v_mov_b32       v10, 0x1000             // 4k page\n\
+    v_mov_b32       v11, 0x4000000          // 64M size\n\
+    v_mov_b32       v12, v6\n\
+    v_mov_b32       v13, v7\n\
+L_LOOP_READ:\n\
+    flat_load_dwordx2   v[14:15], v[12:13] slc\n\
+    v_add_co_u32    v9, vcc, v9, v10 \n\
+    v_add_co_u32    v12, vcc, v12, v10\n\
+    v_add_co_u32    v13, vcc, v13, vcc_lo\n\
+    v_cmp_lt_u32    vcc, v9, v11\n\
+    s_cbranch_vccnz L_LOOP_READ\n\
+    s_branch        L_REPEAT\n\
+L_QUIT:\n\
+    flat_store_dword v[4:5], v8\n\
+    s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory writes to finish\n\
+    s_endpgm\n\
+    end\n\
+";
+
 std::string KFDEvictTest::CreateShader() {
-    if (m_FamilyId >= FAMILY_AI)
+    if (m_FamilyId < FAMILY_AI)
+        return gfx8_ReadMemory;
+    else if (m_FamilyId < FAMILY_NV)
         return gfx9_ReadMemory;
     else
-        return gfx8_ReadMemory;
+        return gfx10_ReadMemory;
 }
 
 /* Evict and restore queue test
