@@ -64,6 +64,7 @@ class BlitSdmaBase : public core::Blit {
   static const size_t kMaxSingleCopySize;
   static const size_t kMaxSingleFillSize;
   virtual bool isSDMA() const override { return true; }
+  virtual hsa_status_t Initialize(const core::Agent& agent, bool use_xgmi) = 0;
   virtual hsa_status_t SubmitCopyRectCommand(const hsa_pitched_ptr_t* dst,
                                              const hsa_dim3_t* dst_offset,
                                              const hsa_pitched_ptr_t* src,
@@ -78,7 +79,7 @@ class BlitSdmaBase : public core::Blit {
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 class BlitSdma : public BlitSdmaBase {
  public:
-  explicit BlitSdma(bool copy_direction);
+  BlitSdma();
 
   virtual ~BlitSdma() override;
 
@@ -88,7 +89,7 @@ class BlitSdma : public BlitSdmaBase {
   /// @param agent Pointer to the agent that will execute the PM4 commands.
   ///
   /// @return hsa_status_t
-  virtual hsa_status_t Initialize(const core::Agent& agent) override;
+  virtual hsa_status_t Initialize(const core::Agent& agent, bool use_xgmi) override;
 
   /// @brief Marks the queue object as invalid and uncouples its link with
   /// the underlying compute device's control block. Use of queue object
@@ -248,10 +249,6 @@ class BlitSdma : public BlitSdmaBase {
   static const uint32_t timestamp_command_size_;
 
   static const uint32_t trap_command_size_;
-
-  // Flag to indicate if sDMA queue is used for H2D copy operations
-  // true if used for H2D operations, false otherwise
-  const bool sdma_h2d_;
 
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;

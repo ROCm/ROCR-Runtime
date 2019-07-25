@@ -255,10 +255,12 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   core::Signal* out_signal_obj = core::Signal::Convert(completion_signal);
   IS_VALID(out_signal_obj);
 
+  bool rev_copy_dir = core::Runtime::runtime_singleton_->flag().rev_copy_dir();
   if (size > 0) {
     return core::Runtime::runtime_singleton_->CopyMemory(
-        dst, *dst_agent, src, *src_agent, size, dep_signal_list,
-        *out_signal_obj);
+        dst, (rev_copy_dir ? *src_agent  : *dst_agent),
+        src, (rev_copy_dir ? *dst_agent  : *src_agent),
+        size, dep_signal_list, *out_signal_obj);
   }
 
   return HSA_STATUS_SUCCESS;

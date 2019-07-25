@@ -53,13 +53,6 @@ class Blit {
   explicit Blit() {}
   virtual ~Blit() {}
 
-  /// @brief Initialize a blit object.
-  ///
-  /// @param agent Pointer to the agent that will execute the blit commands.
-  ///
-  /// @return hsa_status_t
-  virtual hsa_status_t Initialize(const core::Agent& agent) = 0;
-
   /// @brief Marks the blit object as invalid and uncouples its link with
   /// the underlying compute device's control block. Use of blit object
   /// once it has been release is illegal and any behavior is indeterminate

@@ -77,7 +77,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
-      blits_(),
       queues_(),
       local_region_(NULL),
       is_kv_device_(false),
@@ -138,9 +137,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 }
 
 GpuAgent::~GpuAgent() {
-  for (int i = 0; i < BlitCount; ++i) {
-    if (blits_[i] != nullptr) {
-      hsa_status_t status = blits_[i]->Destroy(*this);
+  for (auto& blit : blits_) {
+    if (blit.created()) {
+      hsa_status_t status = blit->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
     }
   }
@@ -537,16 +536,16 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
   return queue;
 }
 
-core::Blit* GpuAgent::CreateBlitSdma(bool h2d) {
-  core::Blit* sdma;
+core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
+  amd::BlitSdmaBase* sdma;
 
   if (isa_->GetMajorVersion() <= 8) {
-    sdma = new BlitSdmaV2V3(h2d);
+    sdma = new BlitSdmaV2V3();
   } else {
-    sdma = new BlitSdmaV4(h2d);
+    sdma = new BlitSdmaV4();
   }
 
-  if (sdma->Initialize(*this) != HSA_STATUS_SUCCESS) {
+  if (sdma->Initialize(*this, use_xgmi) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
     delete sdma;
     sdma = NULL;
@@ -582,14 +581,14 @@ void GpuAgent::InitDma() {
   queues_[QueueUtility].reset(queue_lambda);
 
   // Decide which engine to use for blits.
-  auto blit_lambda = [this](bool h2d, lazy_ptr<core::Queue>& queue) {
+  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
     bool use_sdma = (isa_->GetMajorVersion() != 8);
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
-      auto ret = CreateBlitSdma(h2d);
+      auto ret = CreateBlitSdma(use_xgmi);
       if (ret != nullptr) return ret;
     }
 
@@ -599,20 +598,45 @@ void GpuAgent::InitDma() {
     return ret;
   };
 
-  blits_[BlitHostToDev].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueBlitOnly]); });
-  blits_[BlitDevToHost].reset([blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility]); });
+  // Determine and instantiate the number of blit objects to
+  // engage. The total number is sum of three plus number of
+  // sdma-xgmi engines
+  uint32_t blit_cnt_ = DefaultBlitCount + properties_.NumSdmaXgmiEngines;
+  blits_.resize(blit_cnt_);
+
+  // Initialize blit objects used for D2D, H2D, D2H, and
+  // P2P copy operations.
+  // -- Blit at index BlitDevToDev(0) deals with copies within
+  //    local framebuffer and always engages a Blit Kernel
+  // -- Blit at index BlitHostToDev(1) deals with copies from
+  //    Host to Device (H2D) and could engage either a Blit
+  //    Kernel or sDMA
+  // -- Blit at index BlitDevToHost(2) deals with copies from
+  //    Device to Host (D2H) and Peer to Peer (P2P) over PCIe.
+  //    It could engage either a Blit Kernel or sDMA
+  // -- Blit at index DefaultBlitCount(3) and beyond deal
+  //    exclusively P2P over xGMI links
   blits_[BlitDevToDev].reset([this]() {
     auto ret = CreateBlitKernel((*queues_[QueueUtility]).get());
     if (ret == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Blit creation failed.");
     return ret;
   });
+  blits_[BlitHostToDev].reset(
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly]); });
+  blits_[BlitDevToHost].reset(
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility]); });
+
+  // XGMI engines.
+  for (uint32_t idx = DefaultBlitCount; idx < blit_cnt_; idx++) {
+    blits_[idx].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility]); });
+  }
 }
 
 void GpuAgent::PreloadBlits() {
-  blits_[BlitHostToDev].touch();
-  blits_[BlitDevToHost].touch();
-  blits_[BlitDevToDev].touch();
+  for (auto& blit : blits_) {
+    blit.touch();
+  }
 }
 
 hsa_status_t GpuAgent::PostToolsInit() {
@@ -633,15 +657,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
-  lazy_ptr<core::Blit>& blit =
-    (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
-     dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-       ? blits_[BlitHostToDev]
-       : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
-          dst_agent.device_type() == core::Agent::kAmdCpuDevice)
-            ? blits_[BlitDevToHost]
-            : (src_agent.node_id() == dst_agent.node_id())
-              ? blits_[BlitDevToDev] : blits_[BlitDevToHost];
+  // Bind the Blit object that will drive this copy operation
+  lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent);
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
@@ -688,9 +705,9 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  for (int i = 0; i < BlitCount; ++i) {
-    if (blits_[i].created()) {
-      const hsa_status_t stat = blits_[i]->EnableProfiling(enable);
+  for (auto& blit : blits_) {
+    if (blit.created()) {
+      const hsa_status_t stat = blit->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
       }
@@ -701,12 +718,10 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
 }
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
-  
   // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
-  
+
   switch (attribute_u) {
-    
     // Build agent name by concatenating the Major, Minor and Stepping Ids
     // of devices compute capability with a prefix of "gfx"
     case HSA_AGENT_INFO_NAME: {
@@ -878,7 +893,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY:
       *((uint32_t*)value) = memory_max_frequency_;
       break;
-    
+
     // The code copies HsaNodeProperties.MarketingName a Unicode string
     // which is encoded in UTF-16 as a 7-bit ASCII string
     case HSA_AMD_AGENT_INFO_PRODUCT_NAME: {
@@ -1250,6 +1265,83 @@ void GpuAgent::InvalidateCodeCaches() {
 
   // Submit the command to the utility queue and wait for it to complete.
   queues_[QueueUtility]->ExecutePM4(cache_inv, sizeof(cache_inv));
+}
+
+lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
+  // Determine if destination is a member xgmi peers list
+  uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
+  assert((xgmi_engine_cnt > 0) && ("Illegal condition, should not happen"));
+
+  for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
+    uint64_t dst_handle = dst_agent.public_handle().handle;
+    uint64_t peer_handle = xgmi_peer_list_[idx]->public_handle().handle;
+    if (peer_handle == dst_handle) {
+      return blits_[(idx % xgmi_engine_cnt) + DefaultBlitCount];
+    }
+  }
+
+  // Add agent to the xGMI neighbours list
+  xgmi_peer_list_.push_back(&dst_agent);
+  return blits_[((xgmi_peer_list_.size() - 1) % xgmi_engine_cnt) + DefaultBlitCount];
+}
+
+lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
+                                            const core::Agent& src_agent) {
+  lazy_ptr<core::Blit>& blit =
+    (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+     dst_agent.device_type() == core::Agent::kAmdGpuDevice)
+       ? blits_[BlitHostToDev]
+       : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+          dst_agent.device_type() == core::Agent::kAmdCpuDevice)
+            ? blits_[BlitDevToHost] : blits_[BlitDevToHost];
+  return blit;
+}
+
+lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
+                                              const core::Agent& src_agent) {
+  // At this point it is guaranteed that one of
+  // the two devices is a GPU, potentially both
+  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
+         ("Both devices are CPU agents which is not expected"));
+
+  // Determine if Src and Dst devices are same
+  if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle)) {
+    return blits_[BlitDevToDev];
+  }
+
+  // Acquire Hive Id of Src and Dst devices
+  uint64_t src_hive_id = src_agent.HiveId();
+  uint64_t dst_hive_id = dst_agent.HiveId();
+
+  // Bind to a PCIe facing Blit object if the two
+  // devices have different Hive Ids. This can occur
+  // for following scenarios:
+  //
+  //  Neither device claims membership in a Hive
+  //   srcId = 0 <-> dstId = 0;
+  //
+  //  Src device claims membership in a Hive
+  //   srcId = 0x1926 <-> dstId = 0;
+  //
+  //  Dst device claims membership in a Hive
+  //   srcId = 0 <-> dstId = 0x1123;
+  //
+  //  Both device claims membership in a Hive
+  //  and the  Hives are different
+  //   srcId = 0x1926 <-> dstId = 0x1123;
+  //
+  if ((dst_hive_id != src_hive_id) || (dst_hive_id == 0)) {
+    return GetPcieBlit(dst_agent, src_agent);
+  }
+
+  // Accommodates platforms where devices have xGMI
+  // links but without sdmaXgmiEngines e.g. Vega 20
+  if (properties_.NumSdmaXgmiEngines == 0) {
+    return GetPcieBlit(dst_agent, src_agent);
+  }
+
+  return GetXgmiBlit(dst_agent);
 }
 
 }  // namespace
