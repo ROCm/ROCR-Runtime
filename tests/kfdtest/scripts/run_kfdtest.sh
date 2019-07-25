@@ -74,7 +74,8 @@ getFilter() {
         vega20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
         raven ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
         arcturus ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
-	core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
+        navi10 ) FILTER="--gtest_filter=$NAVI10_TESTS_BLACKLIST" ;;
+        core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
         all ) FILTER="" ;;
         *) die "Unsupported platform $platform. Exiting" ;;
     esac

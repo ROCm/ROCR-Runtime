@@ -155,6 +155,15 @@ ARCT_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm"
 
+NAVI10_TESTS_BLACKLIST=\
+"$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST:"\
+"KFDEvictTest.BurstyTest:"\
+"KFDEvictTest.QueueTest:"\
+"KFDExceptionTest.InvalidBadAddress:"\
+"KFDExceptionTest.InvalidWriteAddress:"\
+"KFDQMTest.GPUDoorbellWrite"
+
 # Core tests, used in scenarios like bringup
 CORE_TESTS=\
 "KFDQMTest.CreateDestroyCpQueue:"\
