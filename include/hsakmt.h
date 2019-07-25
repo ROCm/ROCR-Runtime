@@ -578,7 +578,6 @@ hsaKmtUnmapGraphicHandle(
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtAllocQueueGWS(
-                HSAuint32          NodeId,                      //IN
                 HSA_QUEUEID        QueueId,                     //IN
                 HSAuint32          nGWS,                        //IN
                 HSAuint32          *firstGWS                    //OUT

@@ -834,25 +834,15 @@ uint32_t *convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues)
 HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtAllocQueueGWS(
-                HSAuint32          NodeId,
                 HSA_QUEUEID        QueueId,
                 HSAuint32          nGWS,
                 HSAuint32          *firstGWS)
 {
 	struct kfd_ioctl_alloc_queue_gws_args args = {0};
 	struct queue *q = PORT_UINT64_TO_VPTR(QueueId);
-	HSAKMT_STATUS result;
-	uint32_t gpu_id;
 
 	CHECK_KFD_OPEN();
 
-	result = validate_nodeid(NodeId, &gpu_id);
-	if (result != HSAKMT_STATUS_SUCCESS) {
-		pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
-		return result;
-	}
-
-	args.gpu_id = gpu_id;
 	args.queue_id = (HSAuint32)q->queue_id;
 	args.num_gws = nGWS;
 
