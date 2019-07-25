@@ -158,6 +158,13 @@ RAVEN_TESTS_BLACKLIST=\
 "KFDQMTest.QueueLatency:"\
 "KFDQMTest.SdmaEventInterrupt"
 
+# KFDPNPTest.DisableWithActiveProcess (KFD-432)
+# KFDQMTest.BasicCuMaskingEven (KFD-433)
+ARCT_TESTS_BLACKLIST=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDPNPTest.DisableWithActiveProcess"
+
 # Core tests, used in scenarios like bringup
 CORE_TESTS=\
 "KFDQMTest.CreateDestroyCpQueue:"\

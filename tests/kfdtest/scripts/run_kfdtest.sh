@@ -75,6 +75,7 @@ getFilter() {
         vg12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
         vg20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
         rv ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
+        arct ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
 	core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
         all ) FILTER="" ;;
         *) die "Unsupported platform $PLATFORM or node $NODE. Exiting" ;;
@@ -127,6 +128,8 @@ deviceIdToGpuName() {
             platformName="vg20" ;;
         15dd )
             platformName="rv" ;;
+        7380 | 46 | 47 | 48 | 738c | 7388 | 738e)
+            platformName="arct" ;;
         * )
             return ;;
     esac
