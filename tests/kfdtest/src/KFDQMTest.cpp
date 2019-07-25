@@ -489,10 +489,12 @@ TEST_F(KFDQMTest, OverSubscribeCpQueues) {
 
 /* A simple isa loop program with dense mathematic operations
  * s1 controls the number iterations of the loop
+ * This shader can be used by GFX8, GFX9 and GFX10
  */
 static const char *loop_isa = \
 "\
 shader loop_isa\n\
+wave_size(32)\n\
 type(CS)\n\
     s_movk_i32    s0, 0x0008\n\
     s_movk_i32    s1, 0x00ff\n\
