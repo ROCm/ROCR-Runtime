@@ -351,7 +351,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create SDMA blit object.
   //
   // @retval NULL if SDMA blit creation and initialization failed.
-  core::Blit* CreateBlitSdma(bool h2d);
+  core::Blit* CreateBlitSdma(bool use_xgmi);
 
   // @brief Create Kernel blit object using provided compute queue.
   //
@@ -405,9 +405,13 @@ class GpuAgent : public GpuAgentInt {
   size_t scratch_per_thread_;
 
   // @brief Blit interfaces for each data path.
-  enum BlitEnum { BlitHostToDev, BlitDevToHost, BlitDevToDev, BlitCount };
+  enum BlitEnum { BlitDevToDev, BlitHostToDev, BlitDevToHost, DefaultBlitCount };
 
-  lazy_ptr<core::Blit> blits_[BlitCount];
+  // Blit objects managed by an instance of GpuAgent
+  std::vector<lazy_ptr<core::Blit>> blits_;
+
+  // List of agents connected via xGMI
+  std::vector<const core::Agent*> xgmi_peer_list_;
 
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
@@ -489,6 +493,16 @@ class GpuAgent : public GpuAgentInt {
   // @brief Initialize memory pool for end timestamp object.
   // @retval True if the memory pool for end timestamp object is initialized.
   bool InitEndTsPool();
+
+  // Bind index of peer device that is connected via xGMI links
+  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
+
+  // Bind the Blit object that will drive the copy operation
+  // across PCIe links (H2D or D2H) or is within same device D2D
+  lazy_ptr<core::Blit>& GetPcieBlit(const core::Agent& dst_agent, const core::Agent& src_agent);
+
+  // Bind the Blit object that will drive the copy operation
+  lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent);
 
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
