@@ -23,11 +23,12 @@
 
 #include "KFDDBGTest.hpp"
 #include <sys/ptrace.h>
+#include <poll.h>
 #include "KFDQMTest.hpp"
 #include "PM4Queue.hpp"
 #include "PM4Packet.hpp"
 #include "Dispatch.hpp"
-
+#include <string>
 
 static const char* loop_inc_isa = \
 "\
@@ -80,7 +81,8 @@ type(CS)\n\
 LOOP:\n\
     v_add_co_u32 v5, vcc, 1, v5\n\
     s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    /*compare the result value (v5) to iteration value (v4), and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
+    /*compare the result value (v5) to iteration value (v4),*/\n\
+    /*and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
     v_cmp_lt_u32 vcc, v5, v4\n\
     s_cbranch_vccnz LOOP\n\
     flat_store_dword v[2,3], v5\n\
@@ -89,6 +91,82 @@ LOOP:\n\
     end\n\
 ";
 
+static const char* jump_to_trap_gfx9 = \
+"\
+shader jump_to_trap\n\
+asic(GFX9)\n\
+type(CS)\n\
+/*copy the parameters from scalar registers to vector registers*/\n\
+    s_trap 1\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+    flat_load_dword v4, v[0:1] slc    /*load target iteration value*/\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    v_mov_b32 v5, 0\n\
+LOOP:\n\
+    v_add_co_u32 v5, vcc, 1, v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    /*compare the result value (v5) to iteration value (v4),*/\n\
+    /*and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
+    v_cmp_lt_u32 vcc, v5, v4\n\
+    s_cbranch_vccnz LOOP\n\
+    flat_store_dword v[2,3], v5\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
+static const char* trap_handler_gfx9 = \
+"\
+shader trap_handler\n\
+asic(GFX9)\n\
+type(CS)\n\
+CHECK_VMFAULT:\n\
+    /*if trap jumped to by vmfault, restore skip m0 signalling*/\n\
+    s_getreg_b32 ttmp14, hwreg(HW_REG_TRAPSTS)\n\
+    s_and_b32 ttmp2, ttmp14, 0x800\n\
+    s_cbranch_scc1 RESTORE_AND_EXIT\n\
+GET_DOORBELL:\n\
+    s_mov_b32 ttmp2, exec_lo\n\
+    s_mov_b32 ttmp3, exec_hi\n\
+    s_mov_b32 exec_lo, 0x80000000\n\
+    s_sendmsg 10\n\
+WAIT_SENDMSG:\n\
+    /*wait until msb is cleared (i.e. doorbell fetched)*/\n\
+    s_nop 7\n\
+    s_bitcmp0_b32 exec_lo, 0x1F\n\
+    s_cbranch_scc0 WAIT_SENDMSG\n\
+SEND_INTERRUPT:\n\
+    /* set context bit and doorbell and restore exec*/\n\
+    s_mov_b32 exec_hi, ttmp3\n\
+    s_and_b32 exec_lo, exec_lo, 0xfff\n\
+    s_mov_b32 ttmp3, exec_lo\n\
+    s_bitset1_b32 ttmp3, 23\n\
+    s_mov_b32 exec_lo, ttmp2\n\
+    s_mov_b32 ttmp2, m0\n\
+    /* set m0, send interrupt and restore m0 and exit trap*/\n\
+    s_mov_b32 m0, ttmp3\n\
+    s_nop 0x0\n\
+    s_sendmsg sendmsg(MSG_INTERRUPT)\n\
+    s_mov_b32 m0, ttmp2\n\
+RESTORE_AND_EXIT:\n\
+    /* restore and increment program counter to skip shader trap jump*/\n\
+    s_add_u32 ttmp0, ttmp0, 4\n\
+    s_addc_u32 ttmp1, ttmp1, 0\n\
+    s_and_b32 ttmp1, ttmp1, 0xffff\n\
+    /* restore SQ_WAVE_IB_STS */\n\
+    s_lshr_b32 ttmp2, ttmp11, (26 - 15)\n\
+    s_and_b32 ttmp2, ttmp2, (0x8000 | 0x1F0000)\n\
+    s_setreg_b32 hwreg(HW_REG_IB_STS), ttmp2\n\
+    /* restore SQ_WAVE_STATUS */\n\
+    s_and_b64 exec, exec, exec\n\
+    s_and_b64 vcc, vcc, vcc\n\
+    s_setreg_b32 hwreg(HW_REG_STATUS), ttmp12\n\
+    s_rfe_b64 [ttmp0, ttmp1]\n\
+    end\n\
+";
 
 void KFDDBGTest::SetUp() {
     ROUTINE_START
@@ -292,3 +370,320 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_END
 }
 
+TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+        HSAint32 PollFd;
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        // enable debug trap and check poll fd creation
+        ASSERT_SUCCESS(hsaKmtEnableDebugTrapWithPollFd(defaultGPUNode,
+                                                       INVALID_QUEUEID,
+                                                       &PollFd));
+        ASSERT_GT(PollFd, 0) << "failed to create polling file descriptor";
+
+        // create shader and trap bufs then enable 2nd level trap
+        HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer iterBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer resBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+
+        HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false, false);
+
+        ASSERT_SUCCESS(hsaKmtSetTrapHandler(defaultGPUNode,
+                                            trap.As<void *>(),
+                                            0x1000,
+                                            tmaBuf.As<void*>(),
+                                            0x1000));
+
+        // compile and dispatch shader
+        m_pIsaGen->CompileShader(jump_to_trap_gfx9, "jump_to_trap", isaBuf);
+        m_pIsaGen->CompileShader(trap_handler_gfx9, "trap_handler", trap);
+
+        PM4Queue queue;
+        HsaQueueResource *qResources;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+        unsigned int* iter = iterBuf.As<unsigned int*>();
+        unsigned int* result = resBuf.As<unsigned int*>();
+        int suspendTimeout = 500;
+        int syncStatus;
+        iter[0] = 150000000;
+        Dispatch *dispatch;
+        dispatch = new Dispatch(isaBuf);
+        dispatch->SetArgs(&iter[0], &result[0]);
+        dispatch->SetDim(1, 1, 1);
+
+        dispatch->Submit(queue);
+        qResources = queue.GetResource();
+
+        // poll, read and query for pending trap event
+        struct pollfd fds[1];
+        fds[0].fd = PollFd;
+        fds[0].events = POLLIN | POLLRDNORM;
+        ASSERT_GT(poll(fds, 1, 5000), 0);
+
+        char trapChar;
+        ASSERT_GT(read(PollFd, &trapChar, 1), 0);
+        ASSERT_EQ('t', trapChar);
+
+        HSAuint32 invalidQid = 0xffffffff;
+        HSAuint32 qid = invalidQid;
+        HSA_QUEUEID queueIds[1] = { qResources->QueueId};
+        HSA_DEBUG_EVENT_TYPE EventReceived;
+        bool IsSuspended = false;
+
+        ASSERT_SUCCESS(hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID, &qid,
+                                             false, &EventReceived,
+                                             &IsSuspended));
+        ASSERT_NE(qid, invalidQid);
+        ASSERT_EQ(IsSuspended, false);
+        ASSERT_EQ(EventReceived, HSA_DEBUG_EVENT_TYPE_TRAP);
+
+        // suspend queue, query suspended queue and clear pending event
+        ASSERT_SUCCESS(hsaKmtQueueSuspend(INVALID_PID, 1, queueIds, 10, 0));
+
+        syncStatus = dispatch->SyncWithStatus(suspendTimeout);
+        ASSERT_NE(syncStatus, HSAKMT_STATUS_SUCCESS);
+        ASSERT_NE(iter[0], result[0]);
+
+        ASSERT_SUCCESS(hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID,
+                                             &qid, true, &EventReceived,
+                                             &IsSuspended));
+        ASSERT_EQ(IsSuspended, true);
+
+        ASSERT_SUCCESS(hsaKmtQueueResume(INVALID_PID, 1, queueIds, 0));
+
+        ASSERT_SUCCESS(hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID, &qid,
+                                             false, &EventReceived,
+                                             &IsSuspended));
+
+        ASSERT_EQ(IsSuspended, false);
+        ASSERT_EQ(EventReceived, HSA_DEBUG_EVENT_TYPE_NONE);
+
+        dispatch->Sync();
+        ASSERT_EQ(iter[0], result[0]);
+        EXPECT_SUCCESS(queue.Destroy());
+        ASSERT_SUCCESS(hsaKmtDisableDebugTrap(defaultGPUNode));
+        ASSERT_EQ(close(PollFd), 0);
+
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+    TEST_END
+}
+
+// clean up routine
+static void ExitVMFaultQueryChild(std::string errMsg,
+                                  int exitStatus,
+                                  HSAint32 pollFd,
+                                  PM4Queue *queue1,
+                                  PM4Queue *queue2,
+                                  HsaEvent *event) {
+    if (queue1)
+        queue1->Destroy();
+
+    if (queue2)
+        queue2->Destroy();
+
+    if (event) {
+        int ret = hsaKmtDestroyEvent(event);
+        if (ret) {
+            exitStatus = 1;
+            errMsg = "event failed to be destroyed";
+        }
+    }
+
+    if (pollFd >= 0)
+        close(pollFd);
+
+    if (!errMsg.empty())
+        WARN() << errMsg << std::endl;
+
+    exit(exitStatus);
+}
+
+TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        pid_t childPid = fork();
+        ASSERT_GE(childPid, 0);
+
+        // fork to child since vm faults halt all queues
+        if (childPid == 0) {
+            HSAint32 PollFd;
+            HSAKMT_STATUS ret;
+            bool childStatus;
+
+            ret = hsaKmtOpenKFD();
+            if (ret != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("KFD open failed",
+                                      1, -1, NULL, NULL, NULL);
+
+            // enable debug trap and check poll fd creation
+            ret = hsaKmtEnableDebugTrapWithPollFd(defaultGPUNode,
+                                                  INVALID_QUEUEID,
+                                                  &PollFd);
+
+            if (ret != HSAKMT_STATUS_SUCCESS || PollFd <= 0)
+                ExitVMFaultQueryChild("enable debug trap with poll fd failed",
+                                      1, -1, NULL, NULL, NULL);
+
+            // create shader, vmfault and trap bufs then enable 2nd level trap
+            HsaMemoryBuffer vmFaultBuf(PAGE_SIZE, defaultGPUNode, true, false,
+                                       true);
+            HsaMemoryBuffer srcBuf(PAGE_SIZE, defaultGPUNode, false);
+            srcBuf.Fill(0xABCDABCD);
+
+            HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false,
+                                   true);
+            HsaMemoryBuffer iterBuf(PAGE_SIZE, defaultGPUNode, true, false,
+                                    false);
+            HsaMemoryBuffer resBuf(PAGE_SIZE, defaultGPUNode, true, false,
+                                   false);
+
+            HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false,
+                                 true);
+            HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false,
+                                   false);
+
+            ret = hsaKmtSetTrapHandler(defaultGPUNode,
+                                       trap.As<void *>(), 0x1000,
+                                       tmaBuf.As<void*>(), 0x1000);
+
+            if (ret != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("setting trap handler failed",
+                                      1, PollFd, NULL, NULL, NULL);
+
+            // compile and dispatch shader
+            m_pIsaGen->CompileShader(jump_to_trap_gfx9, "jump_to_trap",
+                                     isaBuf);
+            m_pIsaGen->CompileShader(trap_handler_gfx9, "trap_handler", trap);
+
+            PM4Queue queue1, queue2;
+            HSAuint32 qid1;
+            if (queue1.Create(defaultGPUNode) != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("queue 1 creation failed",
+                                      1, PollFd, NULL, NULL, NULL);
+
+            if (queue2.Create(defaultGPUNode) != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("queue 2 creation failed",
+                                      1, PollFd, &queue1, NULL, NULL);
+
+            unsigned int* iter = iterBuf.As<unsigned int*>();
+            unsigned int* result = resBuf.As<unsigned int*>();
+            int suspendTimeout = 500;
+            iter[0] = 150000000;
+            Dispatch *dispatch1;
+            dispatch1 = new Dispatch(isaBuf);
+            dispatch1->SetArgs(&iter[0], &result[0]);
+            dispatch1->SetDim(1, 1, 1);
+            dispatch1->Submit(queue1);
+
+            // poll, read and query pending trap event
+            struct pollfd fds[1];
+            fds[0].fd = PollFd;
+            fds[0].events = POLLIN | POLLRDNORM;
+            if (poll(fds, 1, 5000) <= 0)
+                ExitVMFaultQueryChild("poll wake on pending trap event failed",
+                                      1, PollFd, &queue1, &queue2, NULL);
+
+            int kMaxSize = 4096;
+            char fifoBuf[kMaxSize];
+            childStatus = read(PollFd, fifoBuf, 1) == -1\
+                          || strchr(fifoBuf, 't') == NULL;
+            if (childStatus)
+                ExitVMFaultQueryChild("read on pending trap event failed",
+                                      1, PollFd, &queue1, &queue2, NULL);
+
+            memset(fifoBuf, 0, sizeof(fifoBuf));
+
+            HSA_DEBUG_EVENT_TYPE EventReceived;
+            bool IsSuspended;
+            HSAuint32 invalidQid = 0xffffffff;
+            qid1 = invalidQid;
+
+            ret = hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID, &qid1,
+                                        false, &EventReceived, &IsSuspended);
+
+            childStatus = ret != HSAKMT_STATUS_SUCCESS
+                                 || EventReceived != HSA_DEBUG_EVENT_TYPE_TRAP;
+            if (childStatus)
+                ExitVMFaultQueryChild("query on pending trap event failed",
+                                      1, PollFd, &queue1, &queue2, NULL);
+
+            // create and wait on pending vmfault event
+            HsaEvent *vmFaultEvent;
+            HsaEventDescriptor eventDesc;
+            eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
+            eventDesc.NodeId = defaultGPUNode;
+            eventDesc.SyncVar.SyncVar.UserData = NULL;
+            eventDesc.SyncVar.SyncVarSize = 0;
+            ret = hsaKmtCreateEvent(&eventDesc, true, false,
+                                            &vmFaultEvent);
+            if (ret != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("create vmfault event failed",
+                                      1, PollFd, &queue1, &queue2, NULL);
+
+            Dispatch dispatch2(vmFaultBuf, false);
+            dispatch2.SetArgs(
+                reinterpret_cast<void *>(srcBuf.As<HSAuint64>()),
+                reinterpret_cast<void *>(0xABBAABBAULL));
+            dispatch2.SetDim(1, 1, 1);
+            dispatch2.Submit(queue2);
+
+            ret = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);
+            if (ret != HSAKMT_STATUS_SUCCESS)
+                ExitVMFaultQueryChild("wait on vmfault event failed",
+                                      1, PollFd, &queue1, &queue2,
+                                      vmFaultEvent);
+
+            // poll, read and query on pending vmfault event
+            if (poll(fds, 1, 5000) <= 0)
+                ExitVMFaultQueryChild("poll wake on vmfault event failed",
+                                      1, PollFd, &queue1, &queue2,
+                                      vmFaultEvent);
+
+            childStatus = read(PollFd, fifoBuf, kMaxSize) == -1
+                          || strchr(fifoBuf, 'v') == NULL
+                          || strchr(fifoBuf, 't');
+
+            if (childStatus)
+                ExitVMFaultQueryChild("read on vmfault event failed",
+                                      1, PollFd, &queue1, &queue2,
+                                      vmFaultEvent);
+
+            ret = hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID,
+                                                &qid1, true, &EventReceived,
+                                                &IsSuspended);
+
+            childStatus = ret != HSAKMT_STATUS_SUCCESS
+                                 || EventReceived !=
+                                     HSA_DEBUG_EVENT_TYPE_TRAP_VMFAULT;
+            if (childStatus)
+                ExitVMFaultQueryChild("query on vmfault event failed",
+                                      1, PollFd, &queue1, &queue2,
+                                      vmFaultEvent);
+
+            ExitVMFaultQueryChild("", 0, PollFd, &queue1, &queue2,
+                                  vmFaultEvent);
+
+        } else {
+            int childStatus;
+            ASSERT_EQ(childPid, waitpid(childPid, &childStatus, 0));
+            ASSERT_NE(0, WIFEXITED(childStatus));
+            ASSERT_EQ(0, WEXITSTATUS(childStatus));
+        }
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+    TEST_END
+}
