@@ -315,33 +315,65 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   return region->Free(ptr, size);
 }
 
-hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
-  // Choose agents from pointer info
-  bool is_src_system = false;
-  bool is_dst_system = false;
-  core::Agent* src_agent;
-  core::Agent* dst_agent;
-
-  // Fetch ownership
-  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent) {
+namespace {
+  bool is_system_mem(const void* ptr, std::size_t size, Runtime& rt,
+                     core::Agent*& agent) {
     hsa_amd_pointer_info_t info;
     info.size = sizeof(info);
-    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr);
+    hsa_status_t err =
+      rt.PtrInfo(const_cast<void*>(ptr), &info, nullptr, nullptr, nullptr);
+
     if (err != HSA_STATUS_SUCCESS)
       throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
+
     ptrdiff_t endPtr = (ptrdiff_t)ptr + size;
+
     if (info.agentBaseAddress <= ptr &&
         endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
       agent = core::Agent::Convert(info.agentOwner);
       return agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice;
-    } else {
-      agent = cpu_agents_[0];
-      return true;
     }
-  };
 
-  is_src_system = is_system_mem(const_cast<void*>(src), src_agent);
-  is_dst_system = is_system_mem(dst, dst_agent);
+    agent = rt.cpu_agents().front();
+
+    return true;
+  }
+
+  hsa_status_t locked_copy(void* dst, const void* src, std::size_t size,
+                           const void* to_lock,
+                           const amd::MemoryRegion* system_region,
+                           Runtime& rt, core::Agent* locking_agent) {
+    void* mutable_p = const_cast<void*>(to_lock);
+
+    hsa_amd_pointer_info_t info;
+    info.size = sizeof(info);
+    hsa_status_t err = rt.PtrInfo(mutable_p, &info, nullptr, nullptr, nullptr);
+
+    if (err != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(err, "PtrInfo failed in locked_copy.");
+    if (info.type != hsa_amd_pointer_type_t::HSA_EXT_POINTER_TYPE_UNKNOWN)
+      return locking_agent->DmaCopy(dst, src, size);
+
+    void* gpuPtr;
+    hsa_agent_t agent = locking_agent->public_handle();
+    err = system_region->Lock(1, &agent, mutable_p, size, &gpuPtr);
+
+    if (err != HSA_STATUS_SUCCESS) return err;
+
+    MAKE_SCOPE_GUARD([=]() { system_region->Unlock(mutable_p); });
+
+    return (src == to_lock) ? locking_agent->DmaCopy(dst, gpuPtr, size)
+                            : locking_agent->DmaCopy(gpuPtr, src, size);
+  }
+} // Unnamed namespace.
+
+hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
+  // Choose agents from pointer info
+  core::Agent* src_agent;
+  core::Agent* dst_agent;
+
+  bool is_src_system = is_system_mem(src, size, *this, src_agent);
+  bool is_dst_system = is_system_mem(dst, size, *this, dst_agent);
 
   // CPU-CPU
   if (is_src_system && is_dst_system) {
@@ -357,24 +389,14 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   const amd::MemoryRegion* system_region =
       static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
 
-  const auto& locked_copy = [&](void* ptr, core::Agent* locking_agent, bool locking_src) {
-    void* gpuPtr;
-    hsa_agent_t agent = locking_agent->public_handle();
-    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &gpuPtr);
-    if (err != HSA_STATUS_SUCCESS) return err;
-    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(ptr); });
-    if (locking_src)
-      return locking_agent->DmaCopy(dst, gpuPtr, size);
-    else
-      return locking_agent->DmaCopy(gpuPtr, src, size);
-  };
-
-  if (is_src_system) return locked_copy(const_cast<void*>(src), dst_agent, true);
-  if (is_dst_system) return locked_copy(dst, src_agent, false);
+  if (is_src_system)
+    return locked_copy(dst, src, size, src, system_region, *this, dst_agent);
+  if (is_dst_system)
+    return locked_copy(dst, src, size, dst, system_region, *this, src_agent);
 
   /*
   GPU-GPU - functional support, not a performance path.
-  
+
   This goes through system memory because we have to support copying between non-peer GPUs
   and we can't use P2P pointers even if the GPUs are peers.  Because hsa_amd_agents_allow_access
   requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
@@ -1194,7 +1216,7 @@ hsa_status_t Runtime::Load() {
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
 
   // Load extensions
-  LoadExtensions();
+  //LoadExtensions();
 
   // Initialize per GPU scratch, blits, and trap handler
   for (core::Agent* agent : gpu_agents_) {
