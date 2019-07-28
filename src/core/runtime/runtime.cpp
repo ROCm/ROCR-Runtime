@@ -1216,7 +1216,7 @@ hsa_status_t Runtime::Load() {
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
 
   // Load extensions
-  //LoadExtensions();
+  LoadExtensions();
 
   // Initialize per GPU scratch, blits, and trap handler
   for (core::Agent* agent : gpu_agents_) {
