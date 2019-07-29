@@ -200,10 +200,12 @@ void Dispatch::BuildIb() {
         0,      // COMPUTE_USER_DATA_15 -                - unused
     };
 
-    const unsigned int DISPATCH_INIT_VALUE = 0x00000021 | (is_dgpu() ? 0 : 0x1000);
+    const unsigned int DISPATCH_INIT_VALUE = 0x00000021 | (is_dgpu() ? 0 : 0x1000) |
+                ((m_FamilyId >= FAMILY_NV) ? 0x8000 : 0);
     // {COMPUTE_SHADER_EN=1, PARTIAL_TG_EN=0, FORCE_START_AT_000=0, ORDERED_APPEND_ENBL=0,
     // ORDERED_APPEND_MODE=0, USE_THREAD_DIMENSIONS=1, ORDER_MODE=0, DISPATCH_CACHE_CNTL=0,
     // SCALAR_L1_INV_VOL=0, VECTOR_L1_INV_VOL=0, DATA_ATC=?, RESTORE=0}
+    // Set CS_W32_EN for wave32 workloads for gfx10 since all the shaders used in KFDTest is 32 bit .
 
     m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(m_FamilyId));
 
