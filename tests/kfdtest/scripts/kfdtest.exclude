@@ -130,7 +130,6 @@ LEXA_TESTS_BLACKLIST=\
 "$SDMA_BLACKLIST"
 
 # KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
-# KFDMemoryTest.BigBufferStressTest (ROCMOPS-462)
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
 # KFDQMTest.MultipleSdmaQueues (ROCMOPS-463)
 VEGA10_TESTS_BLACKLIST=\
@@ -139,7 +138,6 @@ VEGA10_TESTS_BLACKLIST=\
 "KFDEvictTest.BurstyTest:"\
 "KFDIPCTest.CMABasicTest:"\
 "KFDIPCTest.CrossMemoryAttachTest:"\
-"KFDMemoryTest.BigBufferStressTest:"\
 "KFDQMTest.MultipleSdmaQueues"
 
 VEGA12_TESTS_BLACKLIST=\
