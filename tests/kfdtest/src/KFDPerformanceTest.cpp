@@ -191,6 +191,21 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
     std::stringstream msg;
     char str[64];
 
+    if (isSpecified) {
+        HSAuint32 n1 = g_TestNodeId;
+        HSAuint32 n2 = g_TestDstNodeId;
+        HSAuint64 speed, speed2;
+
+        LOG() << "Copy from node to node by [push, pull]" << std::endl;
+        snprintf(str, sizeof(str), "[%d -> %d] ", n1, n2);
+        testNodeToNodes(n1, &n2, 1, OUT, IN, size, &speed, &speed2, &msg);
+
+        LOG() << std::dec << str << (float)speed / 1024 << " - " <<
+                                 (float)speed2 / 1024 << " GB/s" << std::endl;
+        goto exit;
+
+    }
+
     for (; s < twoNodesIdx; s++) {
         LOG() << test_suits_string[s] << std::endl;
         msg << test_suits_string[s] << std::endl;
@@ -270,6 +285,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
         }
     }
 
+exit:
     /* New line.*/
     LOG() << std::endl << msg.str() << std::endl;
 
