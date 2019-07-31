@@ -674,7 +674,7 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
 
         for (unsigned int bank = 0; bank < pNodeProperties->NumMemoryBanks; bank++) {
             if (memoryProperties[bank].HeapType == HSA_HEAPTYPE_GPU_SCRATCH) {
-                int numWaves = 4;  // WAVES must be >= # SE
+                int numWaves = pNodeProperties->NumShaderBanks;  // WAVES must be >= # SE
                 int waveSize = 1;  // Amount of space used by each wave in units of 256 dwords
 
                 PM4Queue queue;
