@@ -32,6 +32,17 @@ set ( HSAKMT_TARGET "${HSAKMT}" )
 
 project ( ${HSAKMT_TARGET} VERSION 1.9.0)
 
+# Optionally, build HSAKMT with ccache.
+set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
+if (ROCM_CCACHE_BUILD)
+  find_program(CCACHE_PROGRAM ccache)
+  if (CCACHE_PROGRAM)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_PROGRAM})
+  else()
+    message(WARNING "Unable to find ccache. Falling back to real compiler")
+  endif() # if (CCACHE_PROGRAM)
+endif() # if (ROCM_CCACHE_BUILD)
+
 ## Set default module path if not already set
 if ( NOT DEFINED CMAKE_MODULE_PATH )
     set ( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/" )
