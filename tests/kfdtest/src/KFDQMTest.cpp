@@ -655,10 +655,10 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
         const HsaNodeProperties *pNodeProperties = m_NodeInfo.GetNodeProperties(defaultGPUNode);
         uint32_t ActiveCU = (pNodeProperties->NumFComputeCores / pNodeProperties->NumSIMDPerCU);
         uint32_t numSEs = pNodeProperties->NumShaderBanks;
-        LOG() << std::hex << "# Compute cores: 0x" << pNodeProperties->NumFComputeCores << std::endl;
-        LOG() << std::hex << "# SIMDs per CPU: 0x" << pNodeProperties->NumSIMDPerCU << std::endl;
-        LOG() << std::hex << "# Shader engines: 0x" << numSEs << std::endl;
-        LOG() << std::hex << "# Active CUs: 0x" << ActiveCU << std::endl;
+        LOG() << std::dec << "# Compute cores: " << pNodeProperties->NumFComputeCores << std::endl;
+        LOG() << std::dec << "# SIMDs per CU: " << pNodeProperties->NumSIMDPerCU << std::endl;
+        LOG() << std::dec << "# Shader engines: " << numSEs << std::endl;
+        LOG() << std::dec << "# Active CUs: " << ActiveCU << std::endl;
         HSAint64 TimewithCU1, TimewithCU;
         uint32_t maskNumDwords = (ActiveCU + 31) / 32; /* Round up to the nearest multiple of 32 */
         uint32_t maskNumBits = maskNumDwords * 32;
@@ -718,10 +718,10 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
             return;
         }
 
-        LOG() << std::hex << "# Compute cores: 0x" << pNodeProperties->NumFComputeCores << std::endl;
-        LOG() << std::hex << "# SIMDs per CPU: 0x" << pNodeProperties->NumSIMDPerCU << std::endl;
-        LOG() << std::hex << "# Shader engines: 0x" << numShaderEngines << std::endl;
-        LOG() << std::hex << "# Active CUs: 0x" << ActiveCU << std::endl;
+        LOG() << std::dec << "# Compute cores: " << pNodeProperties->NumFComputeCores << std::endl;
+        LOG() << std::dec << "# SIMDs per CU: " << pNodeProperties->NumSIMDPerCU << std::endl;
+        LOG() << std::dec << "# Shader engines: " << numShaderEngines << std::endl;
+        LOG() << std::dec << "# Active CUs: " << ActiveCU << std::endl;
         HSAint64 TimewithCU1, TimewithCU;
         uint32_t maskNumDwords = (ActiveCU + 31) / 32; /* Round up to the nearest multiple of 32 */
         uint32_t maskNumBits = maskNumDwords * 32;
