@@ -5,7 +5,7 @@
 # stresses memory management in unusual ways by having lots of memory allocated but
 # not mapped, which is not relevant to compute applications over ROCr.
 #
-# CU Masking Linear/Split are not working correctly due to how the HW distributes work over CUs.
+# CU Masking Linear are not working correctly due to how the HW distributes work over CUs.
 # They are available for testing but are not currently expected to pass on CI/VI/AI.
 #
 # The CheckZeroInitializationVram test is no longer expected to pass as KFD no longer
