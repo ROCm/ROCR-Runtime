@@ -201,11 +201,20 @@ void TestGroupThreadCreate(test_group *t_group) {
     thread_list[ii].test_cond = &(t_group->test_cond);
     thread_list[ii].num_running_t = &(t_group->num_running_t);
     int status = pthread_create(t_group->tid + ii, &(t_group->attr), worker, thread_list + ii);
-    if (status < 0) {
+
+    // Print error statements and break
+    if (status != 0) {
+      printf("pthread_create return value %d\n", status);
+      printf("pthread_create error at idx: %d of %d\n", ii, n_threads);
       perror("pthread_create failed");
+      break;
     }
   }
 
+  // Update test group properties to 
+  // accommodate thread creation error
+  t_group->num_test = ii;
+  t_group->n_threads = ii;
   return;
 }
 
