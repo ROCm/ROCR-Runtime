@@ -905,6 +905,7 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     TEST_START(TESTPROFILE_RUNALL);
 
     HSAuint64 AlternateVAGPU;
+    HSAuint64 Available_size;
     HsaMemMapFlags mapFlags = {0};
     int ret;
 
@@ -920,7 +921,7 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
      */
     NumaNodeBind("!0");
 
-    BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
+    BigBufferSystemMemory(defaultGPUNode, granularityMB, &Available_size);
 
     BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
 
@@ -934,6 +935,13 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     HSAuint64 block_size_mb = 128;
     HSAuint64 block_size = block_size_mb * 1024 * 1024;
     PM4Queue queue;
+
+    /* In non-numa system to avoid TTM eviction,
+     * we have to keep half of dma32 zone (2GB) out of allocation.
+     */
+    if (((numa_available() == -1) || (numa_num_task_nodes() < 2)) &&
+            (Available_size > 0x80000000))
+        Available_size -= 0x80000000;
 
     /* Test 4 times to see if there is any memory leak.*/
     for (int repeat = 1; repeat < 5; repeat++) {
@@ -951,6 +959,9 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
                 EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
                 break;
             }
+
+            if ((i + 2) * block_size > Available_size)
+                break;
         }
 
         LOG() << "Allocated system buffers time " << std::dec << repeat << ": " << i << "x"
