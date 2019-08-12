@@ -471,6 +471,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
   // For cpu to cpu, fire and forget a copy thread.
   const bool profiling_enabled =
       (dst_agent.profiling_enabled() || src_agent.profiling_enabled());
+  if (profiling_enabled) completion_signal.async_copy_agent(&dst_agent);
   std::thread(
       [](void* dst, const void* src, size_t size,
          std::vector<core::Signal*> dep_signals,
