@@ -89,6 +89,10 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
   timer::fast_clock::time_point start_time, time;
   start_time = timer::fast_clock::now();
 
+  // Set a polling timeout value
+  // Should be a few times bigger than null kernel latency
+  const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
+
   uint64_t hsa_freq;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
   const timer::fast_clock::duration fast_timeout =
@@ -127,7 +131,9 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
       value = atomic::Load(&signal_.value, std::memory_order_relaxed);
       return hsa_signal_value_t(value);
     }
-    os::uSleep(20);
+    if (time - start_time > kMaxElapsed) {
+      os::uSleep(20);
+    }
   }
 }
 
