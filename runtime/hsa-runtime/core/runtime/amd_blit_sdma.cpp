@@ -141,8 +141,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
     platform_atomic_support_ = link.info.atomic_support_64bit;
   }
 
-  // Determine if sDMA microcode supports HDP flush command
-  if (agent_->GetSdmaMicrocodeVersion() >= SDMA_PKT_HDP_FLUSH::kMinVersion_) {
+  // HDP flush supported on gfx900 and forward.
+  if (agent_->isa()->GetMajorVersion() > 8) {
     hdp_flush_support_ = true;
   }
 
