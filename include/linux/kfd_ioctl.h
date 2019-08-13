@@ -28,8 +28,8 @@
 
 #define KFD_IOCTL_MAJOR_VERSION 1
 #define KFD_IOCTL_MINOR_VERSION 2
-#define KFD_IOCTL_DBG_MAJOR_VERSION	0
-#define KFD_IOCTL_DBG_MINOR_VERSION	2
+#define KFD_IOCTL_DBG_MAJOR_VERSION	1
+#define KFD_IOCTL_DBG_MINOR_VERSION	0
 
 struct kfd_ioctl_get_version_args {
 	__u32 major_version;	/* from KFD */
@@ -206,21 +206,13 @@ struct kfd_ioctl_dbg_wave_control_args {
  */
 #define KFD_IOC_DBG_TRAP_ENABLE 0
 
-/* KFD_IOC_DBG_TRAP_SET_TRAP_DATA:
- * ptr:   unused
- * data1: SPI_GDBG_TRAP_DATA0
- * data2: SPI_GDBG_TRAP_DATA1
- * data3: unused
- */
-#define KFD_IOC_DBG_TRAP_SET_TRAP_DATA 1
-
 /* KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE:
  * ptr:   unused
  * data1: override mode: 0=OR, 1=REPLACE
  * data2: mask
  * data3: unused
  */
-#define KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE 2
+#define KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE 1
 
 /* KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE:
  * ptr:   unused
@@ -228,7 +220,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data2: unused
  * data3: unused
  */
-#define KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE 3
+#define KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_MODE 2
 
 /* KFD_IOC_DBG_TRAP_NODE_SUSPEND:
  * ptr:   pointer to an array of Queues IDs
@@ -236,7 +228,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data2: number of queues
  * data3: grace period
  */
-#define KFD_IOC_DBG_TRAP_NODE_SUSPEND 4
+#define KFD_IOC_DBG_TRAP_NODE_SUSPEND 3
 
 /* KFD_IOC_DBG_TRAP_NODE_RESUME:
  * ptr:   pointer to an array of Queues IDs
@@ -244,7 +236,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data2: number of queues
  * data3: unused
  */
-#define KFD_IOC_DBG_TRAP_NODE_RESUME 5
+#define KFD_IOC_DBG_TRAP_NODE_RESUME 4
 
 /* KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT:
  * ptr: unused
@@ -252,7 +244,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data2: flags (IN)
  * data3: suspend[2:2], event type [1:0] (OUT)
  */
-#define KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT 6
+#define KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT 5
 
 /* KFD_IOC_DBG_TRAP_GET_VERSION:
  * prt: unsused
@@ -260,7 +252,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data2: minor version (OUT)
  * data3: unused
  */
-#define KFD_IOC_DBG_TRAP_GET_VERSION	8
+#define KFD_IOC_DBG_TRAP_GET_VERSION	7
 
 struct kfd_ioctl_dbg_trap_args {
 	__u64 ptr;     /* to KFD -- used for pointer arguments: queue arrays */
