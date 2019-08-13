@@ -1,19 +1,21 @@
 cmake_minimum_required ( VERSION 3.5.0 )
 
-## Verbose output.
-set ( CMAKE_VERBOSE_MAKEFILE on )
-
-## Determine external build folder.
-if( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    set( BUILD_FOLDER "lnx64a/B_rel" )
-else()
-    set( BUILD_FOLDER "lnx64a/B_dbg" )
-endif()
-
 ## Set ext runtime module name and project name.
 set ( IMAGE_NAME "hsa-ext-image" )
 set ( IMAGE_TARGET "${IMAGE_NAME}64" )
+set ( IMAGE_LIBRARY "lib${IMAGE_TARGET}" )
 project ( ${IMAGE_TARGET} )
+
+# Optionally, build with ccache.
+set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
+if (ROCM_CCACHE_BUILD)
+  find_program(CCACHE_PROGRAM ccache)
+  if (CCACHE_PROGRAM)
+    set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE ${CCACHE_PROGRAM})
+  else()
+    message(WARNING "Unable to find ccache. Falling back to real compiler")
+  endif() # if (CCACHE_PROGRAM)
+endif() # if (ROCM_CCACHE_BUILD)
 
 ## Include the cmake_modules utils.cmake
 list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
@@ -30,52 +32,43 @@ add_definitions ( -DLITTLEENDIAN_CPU=1 )
 add_definitions ( -D HSA_DEPRECATED= )
 add_definitions ( -D BRAHMA_BUILD=1 )
 
-## Get the package version. The defaults to 1.0.0.
-get_version ( "1.0.0" )
+## Get the package version.
+get_version( "1.1.9")
+set(SO_MAJOR 1)
+set(SO_MINOR 1)
+set(SO_PATCH 9)
 
-set ( BUILD_VERSION_MAJOR ${VERSION_MAJOR} )
-set ( BUILD_VERSION_MINOR ${VERSION_MINOR} )
-set ( BUILD_VERSION_PATCH ${VERSION_PATCH} )
-set ( LIB_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
-if ( DEFINED VERSION_BUILD )
-    set ( BUILD_VERSION_PATCH "${BUILD_VERSION_PATCH}-${VERSION_BUILD}" )
-endif ()
-set ( BUILD_VERSION_STRING "${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+set( SO_VERSION_STRING "${SO_MAJOR}.${SO_MINOR}.${SO_PATCH}" )
+set( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_COMMIT_COUNT}-${VERSION_JOB}-${VERSION_HASH}" )
 
 ## Find the hsakmt library and include files
-find_file ( HSAKMT_INC NAMES "hsakmt.h" "libhsakmt/hsakmt.h" )
-find_library ( HSAKMT_LIB libhsakmt.so )
-get_filename_component ( HSAKMT_LIB_PATH ${HSAKMT_LIB} DIRECTORY )
-get_filename_component ( HSAKMT_INC_PATH ${HSAKMT_INC} DIRECTORY )
-include_directories ( ${HSAKMT_INC_PATH} )
-link_directories (${HSAKMT_LIB_PATH})
+get_include_path( HSAKMT_INC_PATH "libhsakmt include path" NAMES "hsakmt.h" "libhsakmt/hsakmt.h" HINTS "${CMAKE_BINARY_DIR}/../../include" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../libhsakmt/include" PATHS "/opt/rocm/include")
+get_library_path( HSAKMT_LIB_PATH "libhsakmt library path" NAMES "libhsakmt.so" HINTS "${CMAKE_BINARY_DIR}/../../lib" "${CMAKE_BINARY_DIR}/../roct" PATHS "/opt/rocm/lib")
+include_directories( ${HSAKMT_INC_PATH} )
+link_directories( ${HSAKMT_LIB_PATH} )
 
 ## Find the hsa-runtime and include files
-find_file ( HSA_INC "hsa/hsa.h" )
-find_library ( HSA_LIB libhsa-runtime64.so )
-get_filename_component ( HSA_LIB_PATH ${HSA_LIB} DIRECTORY )
-get_filename_component ( HSA_INC_PATH ${HSA_INC} DIRECTORY )
-include_directories ( ${HSA_INC_PATH} )
-link_directories (${HSA_LIB_PATH})
+get_include_path( HSA_INC_PATH "ROCr include path" NAMES "hsa.h" "hsa/hsa.h" HINTS "${CMAKE_BINARY_DIR}/../../include" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/inc" PATHS "/opt/rocm/include")
+get_library_path( HSA_LIB_PATH "ROCr library path" NAMES "libhsa-runtime64.so" HINTS "${CMAKE_BINARY_DIR}/../../lib" "${CMAKE_BINARY_DIR}/../hsa-core" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/build" PATHS "/opt/rocm/lib")
+include_directories( ${HSA_INC_PATH} )
+link_directories( ${HSA_LIB_PATH} )
 
-## External dependencies and directories
-if ( NOT DEFINED REG_INCLUDE )
-  set(REG_INCLUDE ${HSA_CLOSED_SOURCE_DIR}/drivers/inc/asic_reg)
+## External dependencies
+get_include_path( REG_INCLUDE "ASIC register directory" NAMES "si_id.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../../../../p4/driver/drivers/inc/asic_reg" "${HSA_CLOSED_SOURCE_DIR}/drivers/inc/asic_reg" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../drivers/inc/asic_reg" )
+
+## Find self
+if( "${EXT_SOURCE_DIR}" STREQUAL "" )
+    get_include_path( EXT_SOURCE_FILE null NAMES "image/image_runtime.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../ext/" )
+    get_filename_component( EXT_SOURCE_DIR "${EXT_SOURCE_FILE}/.." ABSOLUTE )
+    unset( EXT_SOURCE_FILE CACHE )
 endif()
+set( EXT_SOURCE_DIR ${EXT_SOURCE_DIR} CACHE PATH "Image lib source dir" FORCE )
 
-if ( NOT EXISTS ${REG_INCLUDE}/si_id.h )
-    MESSAGE ( FATAL_ERROR "Environment variable REG_INCLUDE is not set appropriately. REG_INCLUDE=${REG_INCLUDE}" )
-else ()
-    set ( REG_INCLUDE ${REG_INCLUDE} )
-endif ()
+get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE CACHE )
+set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
 
-if( NOT DEFINED EXT_SOURCE_DIR )
-  set ( EXT_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} )
-endif()
-
-if( NOT DEFINED OPEN_SOURCE_DIR )
-  set ( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." )
-endif()
+## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib")
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "-std=c++11 " )
@@ -94,9 +87,7 @@ endif ()
 
 set ( DRVDEF "${EXT_SOURCE_DIR}/make/image.so.def" )
 
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF}" )
-
-set ( CMAKE_SKIP_BUILD_RPATH TRUE )
+set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 ## Library path(s).
 include_directories ( ${REG_INCLUDE} )
@@ -154,7 +145,6 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
 )
 
-
 add_subdirectory(${EXT_SOURCE_DIR}/image/blit_src ${CMAKE_BINARY_DIR}/image_blit)
 set_source_files_properties(${EXT_SOURCE_DIR}/image/opencl_blit_objects.cpp PROPERTIES GENERATED 1)
 
@@ -162,8 +152,8 @@ add_library ( ${IMAGE_TARGET} SHARED ${IMAGE_SRCS} )
 add_dependencies( ${IMAGE_TARGET} opencl_blit_objects.cpp )
 
 ## Set the VERSION and SOVERSION values
-set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
-set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${BUILD_VERSION_MAJOR}" )
+set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
+set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${SO_MAJOR}" )
 
 ## Add the core runtime in the link
 target_link_libraries (
@@ -178,5 +168,9 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     add_custom_command ( TARGET ${IMAGE_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
 endif ()
 
+## Create symlinks for legacy packaging and install
+add_custom_target ( hsa_images_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${IMAGE_LIBRARY}.so ${IMAGE_LIBRARY}-link.so )
+
 ## Set install information
 install ( TARGETS ${IMAGE_TARGET} LIBRARY DESTINATION hsa/lib )
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${IMAGE_LIBRARY}-link.so DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${IMAGE_LIBRARY}.so )
