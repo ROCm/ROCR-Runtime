@@ -554,8 +554,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   for (auto kernel_name : kernel_names) {
     KernelCode& kernel = kernels_[kernel_name.first];
-    gpuAgent.AssembleShader(kBlitKernelSource.c_str(), kernel_name.second,
-                            GpuAgent::AssembleTarget::AQL, kernel.code_buf_,
+    gpuAgent.AssembleShader(kernel_name.second, GpuAgent::AssembleTarget::AQL, kernel.code_buf_,
                             kernel.code_buf_size_);
   }
 

@@ -961,6 +961,31 @@ hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
   CATCH;
 }
 
+hsa_status_t hsa_amd_register_deallocation_callback(void* ptr,
+                                                    hsa_amd_deallocation_callback_t callback,
+                                                    void* user_data) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(callback);
+
+  return core::Runtime::runtime_singleton_->RegisterReleaseNotifier(ptr, callback, user_data);
+
+  CATCH;
+}
+
+hsa_status_t hsa_amd_deregister_deallocation_callback(void* ptr,
+                                                      hsa_amd_deallocation_callback_t callback) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(callback);
+
+  return core::Runtime::runtime_singleton_->DeregisterReleaseNotifier(ptr, callback);
+
+  CATCH;
+}
+
 // For use by tools only - not in library export table.
 hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
                                                    void* user_data) {

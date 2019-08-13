@@ -48,6 +48,7 @@
 #include "hsakmt.h"
 
 #include "core/inc/agent.h"
+#include "core/inc/runtime.h"
 #include "core/inc/memory_region.h"
 #include "core/util/simple_heap.h"
 #include "core/util/locks.h"
@@ -179,6 +180,10 @@ class MemoryRegion : public core::MemoryRegion {
   mutable KernelMutex access_lock_;
 
   static const size_t kPageSize_ = 4096;
+
+  // Determine access type allowed to requesting device
+  hsa_amd_memory_pool_access_t GetAccessInfo(const core::Agent& agent,
+                                             const core::Runtime::LinkInfo& link_info) const;
 
   class BlockAllocator {
    private:

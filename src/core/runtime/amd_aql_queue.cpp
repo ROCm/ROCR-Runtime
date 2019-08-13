@@ -820,6 +820,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
     } else if ((error_code & 128) == 128) {  // Out of VGPRs
       errorCode = HSA_STATUS_ERROR_INVALID_ISA;
 
+    } else if ((error_code & 0x20000000) == 0x20000000) {  // Memory violation (>48-bit)
+      errorCode = hsa_status_t(HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION);
+
+    } else if ((error_code & 0x40000000) == 0x40000000) {  // Illegal instruction
+      errorCode = hsa_status_t(HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION);
+
     } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
       errorCode = HSA_STATUS_ERROR_EXCEPTION;
       fatal = true;

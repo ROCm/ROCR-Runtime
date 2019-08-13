@@ -1141,3 +1141,16 @@ hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority) {
   return amdExtTable->hsa_amd_queue_set_priority_fn(queue, priority);
 }
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_register_deallocation_callback(void* ptr,
+                                                    hsa_amd_deallocation_callback_t callback,
+                                                    void* user_data) {
+  return amdExtTable->hsa_amd_register_deallocation_callback_fn(ptr, callback, user_data);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
+                                                      hsa_amd_deallocation_callback_t callback) {
+  return amdExtTable->hsa_amd_deregister_deallocation_callback_fn(ptr, callback);
+}
