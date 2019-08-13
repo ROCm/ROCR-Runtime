@@ -383,20 +383,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDisableDebugTrap(HSAuint32 NodeId)
 			NULL);
 }
 
-HSAKMT_STATUS HSAKMTAPI hsaKmtSetDebugTrapData2(HSAuint32 NodeId,
-					       HSAuint32 TrapData0,
-					       HSAuint32 TrapData1)
-{
-	return debug_trap(NodeId,
-				KFD_IOC_DBG_TRAP_SET_TRAP_DATA,
-				TrapData0,
-				TrapData1,
-				0,
-				INVALID_PID,
-				0,
-				NULL);
-}
-
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetWaveLaunchTrapOverride(
 					HSAuint32 NodeId,
 					HSA_DBG_TRAP_OVERRIDE TrapOverride,

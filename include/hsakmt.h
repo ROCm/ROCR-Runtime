@@ -735,9 +735,6 @@ hsaKmtQueueResume(
     - X, Y, Z grid and work-group position of the wave within the
       dispatch.
 
-    - The value of TrapData registers. hsaKmtEnableDebugTrap() sets
-      these to 0 and they can be changed by hsaKmtSetDebugTrapData2().
-
     - The scratch backing memory address.
 
   - Enable wave launch trap override. hsaKmtEnableDebugTrap() sets the
@@ -824,36 +821,6 @@ hsaKmtQueryDebugEvent(
     HSA_DEBUG_EVENT_TYPE	*EventsReceived, // OUT
     bool			*IsSuspended, // OUT
     bool			*IsNew //OUT
-    );
-
-/**
-  Set the value to use to initialize the TrapData used when
-  initializing trap temp registers for NodeId when debug trap is enabled.
-
-  An error is returned if debug trap is not currently enabled for
-  NodeId. Debug trap is enabled by hsaKmtEnableDebugTrap() which
-  initializes TrapData to 0.
-
-  Returns:
-    - HSAKMT_STATUS_SUCCESS if successful.
-
-    - HSAKMT_STATUS_NOT_SUPPORTED if debug trap data is not supported
-      by NodeId.
-
-    - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
-
-    - HSAKMT_STATUS_INVALID_PARAMETER if TrapDataIndex is larger than
-      trap-data-count - 1.
-
-    - HSAKMT_STATUS_ERROR if debug trap is not currently enabled by
-      hsaKmtEnableDebugTrap() for NodeId.
-*/
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSetDebugTrapData2(
-    HSAuint32 NodeId,        //IN
-    HSAuint32 TrapData0,     //IN
-    HSAuint32 TrapData1      //IN
     );
 
 /**
