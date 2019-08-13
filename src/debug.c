@@ -564,7 +564,8 @@ hsaKmtQueryDebugEvent(
 		HSAuint32		*QueueId, // IN/OUT
 		bool			ClearEvents, // IN
 		HSA_DEBUG_EVENT_TYPE	*EventsReceived, // OUT
-		bool			*IsSuspended // OUT
+		bool			*IsSuspended, // OUT
+		bool			*IsNew // OUT
 		)
 {
 	HSAKMT_STATUS result;
@@ -589,7 +590,8 @@ hsaKmtQueryDebugEvent(
 	*QueueId = argout.data1;
 	*EventsReceived = argout.data3 &
 			(KFD_DBG_EV_STATUS_TRAP | KFD_DBG_EV_STATUS_VMFAULT);
-	*IsSuspended = (argout.data3 & KFD_DBG_EV_STATUS_SUSPENDED) >> 2;
+	*IsSuspended = argout.data3 & KFD_DBG_EV_STATUS_SUSPENDED;
+	*IsNew = argout.data3 & KFD_DBG_EV_STATUS_NEW_QUEUE;
 
 	return result;
 }
