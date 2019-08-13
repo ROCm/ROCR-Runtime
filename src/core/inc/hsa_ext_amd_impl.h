@@ -199,36 +199,47 @@ hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,
 hsa_status_t HSA_API hsa_amd_interop_unmap_buffer(void* ptr);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
-                              uint32_t* num_agents_accessible, hsa_agent_t** accessible);
+hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info,
+                                          void* (*alloc)(size_t), uint32_t* num_agents_accessible,
+                                          hsa_agent_t** accessible);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata);
+hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
+hsa_status_t HSA_API hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* handle, size_t len,
-                                       uint32_t num_agents, const hsa_agent_t* mapping_agents,
-                                       void** mapped_ptr);
+hsa_status_t HSA_API hsa_amd_ipc_memory_attach(const hsa_amd_ipc_memory_t* handle, size_t len,
+                                               uint32_t num_agents,
+                                               const hsa_agent_t* mapping_agents,
+                                               void** mapped_ptr);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_ipc_memory_detach(void* mapped_ptr);
+hsa_status_t HSA_API hsa_amd_ipc_memory_detach(void* mapped_ptr);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_signal_t* handle);
+hsa_status_t HSA_API hsa_amd_ipc_signal_create(hsa_signal_t signal, hsa_amd_ipc_signal_t* handle);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle, hsa_signal_t* signal);
+hsa_status_t HSA_API hsa_amd_ipc_signal_attach(const hsa_amd_ipc_signal_t* handle,
+                                               hsa_signal_t* signal);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_register_system_event_handler(
-    hsa_amd_system_event_callback_t callback, void* data);
+hsa_status_t HSA_API hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
+                                                           void* data);
 
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_register_deallocation_callback(
+    void* ptr, hsa_amd_deallocation_callback_t callback, void* user_data);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(
+    void* ptr, hsa_amd_deallocation_callback_t callback);
 
 }  // end of AMD namespace
 

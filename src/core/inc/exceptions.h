@@ -75,6 +75,9 @@ template <class R, class... Args> class callback_t<R (*)(Args...)> {
   callback_t(func_t function_ptr) : function(function_ptr) {}
   callback_t& operator=(func_t function_ptr) { function = function_ptr; return *this; }
 
+  bool operator==(func_t function_ptr) { return function == function_ptr; }
+  bool operator!=(func_t function_ptr) { return function != function_ptr; }
+
   // Allows common function pointer idioms, such as if( func != nullptr )...
   // without allowing silent reversion to the original function pointer type.
   operator void*() { return reinterpret_cast<void*>(function); }

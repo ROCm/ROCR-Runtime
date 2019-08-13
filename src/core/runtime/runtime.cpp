@@ -293,26 +293,91 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
 
   const MemoryRegion* region = nullptr;
   size_t size = 0;
+  std::unique_ptr<std::vector<AllocationRegion::notifier_t>> notifiers;
+
+  {
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+
+    std::map<const void*, AllocationRegion>::iterator it = allocation_map_.find(ptr);
+
+    if (it == allocation_map_.end()) {
+      debug_warning(false && "Can't find address in allocation map");
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    }
+    region = it->second.region;
+    size = it->second.size;
+
+    // Imported fragments can't be released with FreeMemory.
+    if (region == nullptr) {
+      assert(false && "Can't release imported memory with free.");
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    notifiers = std::move(it->second.notifiers);
+
+    allocation_map_.erase(it);
+
+    // Fast path to avoid doubling lock ops in the common case (no notifiers).
+    if (!notifiers) return region->Free(ptr, size);
+  }
+
+  // Notifiers can't run while holding the lock or the callback won't be able to manage memory.
+  // The memory triggering the notification has already been removed from the memory map so can't
+  // be double released during the callback.
+  for (auto& notifier : *notifiers) {
+    notifier.callback(notifier.ptr, notifier.user_data);
+  }
+
+  // Fragment allocator requires protection.
   ScopedAcquire<KernelMutex> lock(&memory_lock_);
-
-  std::map<const void*, AllocationRegion>::const_iterator it = allocation_map_.find(ptr);
-
-  if (it == allocation_map_.end()) {
-    assert(false && "Can't find address in allocation map");
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-  region = it->second.region;
-  size = it->second.size;
-
-  // Imported fragments can't be released with FreeMemory.
-  if (region == nullptr) {
-    assert(false && "Can't release imported memory with free.");
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-
-  allocation_map_.erase(it);
-
   return region->Free(ptr, size);
+}
+
+hsa_status_t Runtime::RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback,
+                                              void* user_data) {
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+
+    // No support for imported fragments yet.
+    if (mem->second.region == nullptr) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      auto& notifiers = mem->second.notifiers;
+      if (!notifiers) notifiers.reset(new std::vector<AllocationRegion::notifier_t>);
+      AllocationRegion::notifier_t notifier = {
+          ptr, AMD::callback_t<hsa_amd_deallocation_callback_t>(callback), user_data};
+      notifiers->push_back(notifier);
+      return HSA_STATUS_SUCCESS;
+    }
+  }
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+}
+
+hsa_status_t Runtime::DeregisterReleaseNotifier(void* ptr,
+                                                hsa_amd_deallocation_callback_t callback) {
+  hsa_status_t ret = HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      auto& notifiers = mem->second.notifiers;
+      if (!notifiers) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      for (size_t i = 0; i < notifiers->size(); i++) {
+        if (((*notifiers)[i].ptr == ptr) && ((*notifiers)[i].callback) == callback) {
+          (*notifiers)[i] = std::move((*notifiers)[notifiers->size() - 1]);
+          notifiers->pop_back();
+          i--;
+          ret = HSA_STATUS_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
@@ -736,11 +801,20 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
 
   // Temp: workaround thunk bug, IPC memory has garbage in Node.
   // retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
-  auto it = agents_by_node_.find(thunkInfo.Node);
-  if (it != agents_by_node_.end())
-    retInfo.agentOwner = agents_by_node_[thunkInfo.Node][0]->public_handle();
+  auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
+  if (nodeAgents != agents_by_node_.end())
+    retInfo.agentOwner = nodeAgents->second[0]->public_handle();
   else
     retInfo.agentOwner.handle = 0;
+
+  // Correct agentOwner for locked memory.  Thunk reports the GPU that owns the
+  // alias but users are expecting to see a CPU when the memory is system.
+  if (retInfo.type == HSA_EXT_POINTER_TYPE_LOCKED) {
+    if ((nodeAgents == agents_by_node_.end()) ||
+        (nodeAgents->second[0]->device_type() != core::Agent::kAmdCpuDevice)) {
+      retInfo.agentOwner = cpu_agents_[0]->public_handle();
+    }
+  }
 
   memcpy(info, &retInfo, retInfo.size);
 

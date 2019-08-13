@@ -68,6 +68,7 @@
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
+#define MAX_NUM_DOORBELLS 0x400
 
 extern core::HsaApiTable hsa_internal_api_table_;
 
@@ -82,6 +83,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
+      doorbell_queue_map_(NULL),
       memory_bus_width_(0),
       memory_max_frequency_(0),
       ape1_base_(0),
@@ -155,6 +157,8 @@ GpuAgent::~GpuAgent() {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
 
+  core::Runtime::runtime_singleton_->system_deallocator()(doorbell_queue_map_);
+
   if (trap_code_buf_ != NULL) {
     ReleaseShader(trap_code_buf_, trap_code_buf_size_);
   }
@@ -163,9 +167,8 @@ GpuAgent::~GpuAgent() {
   regions_.clear();
 }
 
-void GpuAgent::AssembleShader(const char* src_sp3, const char* func_name,
-                              AssembleTarget assemble_target, void*& code_buf,
-                              size_t& code_buf_size) const {
+void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_target,
+                              void*& code_buf, size_t& code_buf_size) const {
   // Select precompiled shader implementation from name/target.
   struct ASICShader {
     const void* code;
@@ -306,8 +309,10 @@ void GpuAgent::InitRegionList() {
           if (region->IsLocalMemory()) {
             local_region_ = region;
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
-            if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())
+            if ((properties_.HiveID != 0) ||
+                (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
               regions_.push_back(new MemoryRegion(true, false, this, mem_props[mem_idx]));
+            }
           }
           break;
         }
@@ -951,7 +956,15 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   queues_[QueueUtility].touch();
 
   // Create an HW AQL queue
-  *queue = new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
+  auto aql_queue =
+      new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
+  *queue = aql_queue;
+
+  // Calculate index of the queue doorbell within the doorbell aperture.
+  auto doorbell_addr = uintptr_t(aql_queue->signal_.hardware_doorbell_ptr);
+  auto doorbell_idx = (doorbell_addr >> 3) & (MAX_NUM_DOORBELLS - 1);
+  doorbell_queue_map_[doorbell_idx] = &aql_queue->amd_queue_;
+
   scratchGuard.Dismiss();
   return HSA_STATUS_SUCCESS;
 }
@@ -1169,67 +1182,6 @@ void GpuAgent::SyncClocks() {
 }
 
 void GpuAgent::BindTrapHandler() {
-  const char* src_sp3 = R"(
-    var s_trap_info_lo = ttmp0
-    var s_trap_info_hi = ttmp1
-    var s_tmp0         = ttmp2
-    var s_tmp1         = ttmp3
-    var s_tmp2         = ttmp4
-    var s_tmp3         = ttmp5
-
-    shader TrapHandler
-      type(CS)
-
-      // Retrieve the queue inactive signal.
-      s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0
-      s_waitcnt            lgkmcnt(0)
-
-      // Mask all but one lane of the wavefront.
-      s_mov_b64            exec, 0x1
-
-      // Set queue signal value to unhandled exception error.
-      s_add_u32            s_tmp0, s_tmp0, 0x8
-      s_addc_u32           s_tmp1, s_tmp1, 0x0
-      v_mov_b32            v0, s_tmp0
-      v_mov_b32            v1, s_tmp1
-      v_mov_b32            v2, 0x80000000
-      v_mov_b32            v3, 0x0
-      flat_atomic_swap_x2  v[0:1], v[0:1], v[2:3]
-      s_waitcnt            vmcnt(0)
-
-      // Skip event if the signal was already set to unhandled exception.
-      v_cmp_eq_u64         vcc, v[0:1], v[2:3]
-      s_cbranch_vccnz      L_SIGNAL_DONE
-
-      // Check for a non-NULL signal event mailbox.
-      s_load_dwordx2       [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x8
-      s_waitcnt            lgkmcnt(0)
-      s_and_b64            [s_tmp2, s_tmp3], [s_tmp2, s_tmp3], [s_tmp2, s_tmp3]
-      s_cbranch_scc0       L_SIGNAL_DONE
-
-      // Load the signal event value.
-      s_add_u32            s_tmp0, s_tmp0, 0x10
-      s_addc_u32           s_tmp1, s_tmp1, 0x0
-      s_load_dword         s_tmp0, [s_tmp0, s_tmp1], 0x0
-      s_waitcnt            lgkmcnt(0)
-
-      // Write the signal event value to the mailbox.
-      v_mov_b32            v0, s_tmp2
-      v_mov_b32            v1, s_tmp3
-      v_mov_b32            v2, s_tmp0
-      flat_store_dword     v[0:1], v2
-      s_waitcnt            vmcnt(0)
-
-      // Send an interrupt to trigger event notification.
-      s_sendmsg            sendmsg(MSG_INTERRUPT)
-
-    L_SIGNAL_DONE:
-      // Halt wavefront and exit trap.
-      s_sethalt            1
-      s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
-    end
-  )";
-
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
     return;
@@ -1241,12 +1193,21 @@ void GpuAgent::BindTrapHandler() {
   }
 
   // Assemble the trap handler source code.
-  AssembleShader(src_sp3, "TrapHandler", AssembleTarget::ISA, trap_code_buf_,
-                 trap_code_buf_size_);
+  AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
+
+  // Make an empty map from doorbell index to queue.
+  // The trap handler uses this to retrieve a wave's amd_queue_t*.
+  auto doorbell_queue_map_size = MAX_NUM_DOORBELLS * sizeof(amd_queue_t*);
+
+  doorbell_queue_map_ = (amd_queue_t**)core::Runtime::runtime_singleton_->system_allocator()(
+      doorbell_queue_map_size, 0x1000, 0);
+  assert(doorbell_queue_map_ != NULL && "Doorbell queue map allocation failed");
+
+  memset(doorbell_queue_map_, 0, doorbell_queue_map_size);
 
   // Bind the trap handler to this node.
-  HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_,
-                                           trap_code_buf_size_, NULL, 0);
+  HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_,
+                                           doorbell_queue_map_, doorbell_queue_map_size);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
 }
 

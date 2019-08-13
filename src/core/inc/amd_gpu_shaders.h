@@ -110,100 +110,131 @@ static const unsigned int kCodeTrapHandler8[] = {
 
 static const unsigned int kCodeTrapHandler9[] = {
 /*
-  var SQ_WAVE_PC_HI_TRAP_ID_SHIFT           = 16
-  var SQ_WAVE_PC_HI_TRAP_ID_SIZE            = 8
-  var SQ_WAVE_PC_HI_TRAP_ID_BFE             = (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
-  var SQ_WAVE_STATUS_HALT_MASK              = 0x2000
-  var SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK = 0x8000
-  var SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     = 15
-  var IB_STS_SAVE_RCNT_FIRST_REPLAY_SHIFT   = 26
+  .set SQ_WAVE_PC_HI_TRAP_ID_SHIFT             , 16
+  .set SQ_WAVE_PC_HI_TRAP_ID_SIZE              , 8
+  .set SQ_WAVE_PC_HI_TRAP_ID_BFE               , (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
+  .set SQ_WAVE_PC_HI_HT_MASK                   , 0x1000000
+  .set SQ_WAVE_STATUS_HALT_MASK                , 0x2000
+  .set SQ_WAVE_TRAPSTS_MEM_VIOL_MASK           , 0x100
+  .set SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK       , 0x800
+  .set SQ_WAVE_TRAPSTS_XNACK_ERROR_MASK        , 0x10000000
+  .set SIGNAL_CODE_MEM_VIOL                    , (1 << 29)
+  .set SIGNAL_CODE_ILLEGAL_INST                , (1 << 30)
+  .set SIGNAL_CODE_LLVM_TRAP                   , (1 << 31)
+  .set MAX_NUM_DOORBELLS_MASK                  , ((1 << 10) - 1)
 
-  // ABI between first and second level trap handler.
-  var s_trap_info_lo = ttmp0
-  var s_trap_info_hi = ttmp1
-  var s_ib_sts_save  = ttmp11 // [31:26] = SQ_WAVE_IB_STS[20:15]
-  var s_status_save  = ttmp12
+  .if .amdgcn.gfx_generation_number == 9
+    .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
+    .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
+    .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x1F8000
+  .else
+    .error "unsupported target"
+  .endif
 
-  // SPI debug data is not present/needed in these registers.
-  var s_tmp0         = ttmp2
-  var s_tmp1         = ttmp3
-  var s_tmp2         = ttmp4
-  var s_tmp3         = ttmp5
+  trap_entry:
+    // If memory violation without XNACK error then signal queue error.
+    // XNACK error will be handled by VM interrupt, since it has more information.
+    s_getreg_b32         ttmp2, hwreg(HW_REG_TRAPSTS)
+    s_and_b32            ttmp4, ttmp2, (SQ_WAVE_TRAPSTS_MEM_VIOL_MASK | SQ_WAVE_TRAPSTS_XNACK_ERROR_MASK)
+    s_cmp_eq_u32         ttmp4, SQ_WAVE_TRAPSTS_MEM_VIOL_MASK
+    s_mov_b32            ttmp4, SIGNAL_CODE_MEM_VIOL
+    s_cbranch_scc1       .signal_error
 
-  shader main
-    type(CS)
+    // If illegal instruction then signal queue error.
+    s_and_b32            ttmp4, ttmp2, SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK
+    s_mov_b32            ttmp4, SIGNAL_CODE_ILLEGAL_INST
+    s_cbranch_scc1       .signal_error
 
-    // If this is not a trap then return to the shader.
-    s_bfe_u32            s_tmp0, s_trap_info_hi, SQ_WAVE_PC_HI_TRAP_ID_BFE
-    s_cbranch_scc0       L_EXIT_TRAP
+    // If any other exception then return to shader.
+    s_bfe_u32            ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
+    s_cbranch_scc0       .exit_trap
 
     // If llvm.trap then signal queue error.
-    s_cmp_eq_u32         s_tmp0, 0x2
-    s_cbranch_scc1       L_SIGNAL_QUEUE
+    s_cmp_eq_u32         ttmp2, 0x2
+    s_mov_b32            ttmp4, SIGNAL_CODE_LLVM_TRAP
+    s_cbranch_scc1       .signal_error
 
     // For other traps advance PC and return to shader.
-    s_add_u32            s_trap_info_lo, s_trap_info_lo, 0x4
-    s_addc_u32           s_trap_info_hi, s_trap_info_hi, 0x0
-    s_branch             L_EXIT_TRAP
+    s_add_u32            ttmp0, ttmp0, 0x4
+    s_addc_u32           ttmp1, ttmp1, 0x0
+    s_branch             .exit_trap
 
-  L_SIGNAL_QUEUE:
-    // Retrieve queue_inactive_signal from amd_queue_t* passed in s[0:1].
-    s_load_dwordx2       [s_tmp0, s_tmp1], s[0:1], 0xC0 glc:1
+  .signal_error:
+    // Fetch doorbell index for our queue.
+    s_mov_b32            exec_lo, 0x80000000
+    s_sendmsg            sendmsg(MSG_GET_DOORBELL)
+  .wait_sendmsg:
+    s_nop                7
+    s_bitcmp0_b32        exec_lo, 0x1F
+    s_cbranch_scc0       .wait_sendmsg
+
+    // Map doorbell index to amd_queue_t* through TMA (doorbell_queue_map).
+    s_and_b32            ttmp2, exec_lo, MAX_NUM_DOORBELLS_MASK
+    s_lshl_b32           ttmp2, ttmp2, 0x3
+    s_load_dwordx2       [ttmp2, ttmp3], [ttmp14, ttmp15], ttmp2 glc
     s_waitcnt            lgkmcnt(0)
 
-    // Set queue signal value to unhandled exception error.
-    s_mov_b32            s_tmp2, 0x80000000
-    s_mov_b32            s_tmp3, 0x0
-    s_atomic_swap_x2     [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x8 glc:1
+    // Retrieve queue_inactive_signal from amd_queue_t*.
+    s_load_dwordx2       [ttmp2, ttmp3], [ttmp2, ttmp3], 0xC0 glc
+    s_waitcnt            lgkmcnt(0)
+
+    // Set queue signal value to error code.
+    s_mov_b32            ttmp5, 0x0
+    s_atomic_swap_x2     [ttmp4, ttmp5], [ttmp2, ttmp3], 0x8 glc
     s_waitcnt            lgkmcnt(0)
 
     // Skip event trigger if the signal value was already non-zero.
-    s_or_b32             s_tmp2, s_tmp2, s_tmp3
-    s_cbranch_scc1       L_SIGNAL_DONE
+    s_or_b32             ttmp4, ttmp4, ttmp5
+    s_cbranch_scc1       .signal_done
 
     // Check for a non-NULL signal event mailbox.
-    s_load_dwordx2       [s_tmp2, s_tmp3], [s_tmp0, s_tmp1], 0x10 glc:1
+    s_load_dwordx2       [ttmp4, ttmp5], [ttmp2, ttmp3], 0x10 glc
     s_waitcnt            lgkmcnt(0)
-    s_and_b64            [s_tmp2, s_tmp3], [s_tmp2, s_tmp3], [s_tmp2, s_tmp3]
-    s_cbranch_scc0       L_SIGNAL_DONE
+    s_and_b64            [ttmp4, ttmp5], [ttmp4, ttmp5], [ttmp4, ttmp5]
+    s_cbranch_scc0       .signal_done
 
     // Load the signal event value.
-    s_load_dword         s_tmp0, [s_tmp0, s_tmp1], 0x18 glc:1
+    s_load_dword         ttmp2, [ttmp2, ttmp3], 0x18 glc
     s_waitcnt            lgkmcnt(0)
 
     // Write the signal event value to the mailbox.
-    s_store_dword        s_tmp0, [s_tmp2, s_tmp3], 0x0 glc:1
+    s_store_dword        ttmp2, [ttmp4, ttmp5], 0x0 glc
     s_waitcnt            lgkmcnt(0)
 
     // Send an interrupt to trigger event notification.
     s_sendmsg            sendmsg(MSG_INTERRUPT)
 
-  L_SIGNAL_DONE:
+  .signal_done:
     // Halt the wavefront.
-    s_or_b32             s_status_save, s_status_save, SQ_WAVE_STATUS_HALT_MASK
+    s_or_b32             ttmp12, ttmp12, SQ_WAVE_STATUS_HALT_MASK
 
-  L_EXIT_TRAP:
+  .exit_trap:
     // Restore SQ_WAVE_IB_STS.
-    s_lshr_b32           s_tmp0, s_ib_sts_save, (IB_STS_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
-    s_and_b32            s_tmp0, s_tmp0, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
-    s_setreg_b32         hwreg(HW_REG_IB_STS), s_tmp0
+  .if .amdgcn.gfx_generation_number == 9
+    s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+    s_and_b32            ttmp2, ttmp2, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
+    s_setreg_b32         hwreg(HW_REG_IB_STS), ttmp2
+  .endif
 
     // Restore SQ_WAVE_STATUS.
     s_and_b64            exec, exec, exec // Restore STATUS.EXECZ, not writable by s_setreg_b32
     s_and_b64            vcc, vcc, vcc    // Restore STATUS.VCCZ, not writable by s_setreg_b32
-    s_setreg_b32         hwreg(HW_REG_STATUS), s_status_save
+    s_setreg_b32         hwreg(HW_REG_STATUS), ttmp12
 
     // Return to shader at unmodified PC.
-    s_rfe_b64            [s_trap_info_lo, s_trap_info_hi]
-  end
+    s_rfe_b64            [ttmp0, ttmp1]
 */
-    0x92eeff6d, 0x00080010, 0xbf84001e, 0xbf06826e, 0xbf850003, 0x806c846c,
-    0x826d806d, 0xbf820019, 0xc0071b80, 0x000000c0, 0xbf8cc07f, 0xbef000ff,
-    0x80000000, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
+    0xb8eef803, 0x8670ff6e, 0x10000100, 0xbf06ff70, 0x00000100, 0xbef000ff,
+    0x20000000, 0xbf85000e, 0x8670ff6e, 0x00000800, 0xbef000f4, 0xbf85000a,
+    0x92eeff6d, 0x00080010, 0xbf84002a, 0xbf06826e, 0xbef000ff, 0x80000000,
+    0xbf850003, 0x806c846c, 0x826d806d, 0xbf820023, 0xbefe00ff, 0x80000000,
+    0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0x866eff7e, 0x000003ff,
+    0x8e6e836e, 0xc0051bbd, 0x0000006e, 0xbf8cc07f, 0xc0071bb7, 0x000000c0,
+    0xbf8cc07f, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
     0xbf85000c, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070, 0xbf840007,
     0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000, 0xbf8cc07f,
-    0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e, 0x00008000,
-    0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c, 0x00000000,
+    0xbf900001, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e, 0x001f8000,
+    0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c,
 };
 
 static const unsigned int kCodeCopyAligned8[] = {
