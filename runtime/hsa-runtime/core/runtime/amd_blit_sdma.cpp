@@ -248,22 +248,13 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
   // profiling in the middle of the call.
   const bool profiling_enabled = agent_->profiling_enabled();
 
-  uint64_t* end_ts_addr = NULL;
+  uint64_t* start_ts_addr = nullptr;
+  uint64_t* end_ts_addr = nullptr;
   uint32_t total_timestamp_command_size = 0;
 
   if (profiling_enabled) {
-    // SDMA timestamp packet requires 32 byte of aligned memory, but
-    // amd_signal_t::end_ts is not 32 byte aligned. So an extra copy packet to
-    // read from a 32 byte aligned bounce buffer is required to avoid changing
-    // the amd_signal_t ABI.
-
-    end_ts_addr = agent_->ObtainEndTsObject();
-    if (end_ts_addr == NULL) {
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    total_timestamp_command_size =
-        (2 * timestamp_command_size_) + linear_copy_command_size_;
+    out_signal.GetSdmaTsAddresses(start_ts_addr, end_ts_addr);
+    total_timestamp_command_size = 2 * timestamp_command_size_;
   }
 
   // On agent that does not support platform atomic, we replace it with
@@ -315,8 +306,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
   }
 
   if (profiling_enabled) {
-    BuildGetGlobalTimestampCommand(
-        command_addr, reinterpret_cast<void*>(&out_signal.signal_.start_ts));
+    BuildGetGlobalTimestampCommand(command_addr, reinterpret_cast<void*>(start_ts_addr));
     command_addr += timestamp_command_size_;
   }
 
@@ -337,11 +327,6 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
     BuildGetGlobalTimestampCommand(command_addr,
                                    reinterpret_cast<void*>(end_ts_addr));
     command_addr += timestamp_command_size_;
-
-    BuildCopyCommand(command_addr, 1,
-                     reinterpret_cast<void*>(&out_signal.signal_.end_ts),
-                     reinterpret_cast<void*>(end_ts_addr), sizeof(uint64_t));
-    command_addr += linear_copy_command_size_;
   }
 
   // After transfer is completed, decrement the signal value.
