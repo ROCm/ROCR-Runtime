@@ -51,7 +51,7 @@ printUsage() {
     echo
     echo "Gtest arguments will be forwarded to the app"
     echo
-    echo "Valid platform options: polaris10, vega10, vega20, all, and so on"
+    echo "Valid platform options: pm, core, polaris10, vega10, vega20, all, and so on"
     echo "'all' option runs all tests"
 
     return 0
@@ -76,6 +76,7 @@ getFilter() {
         arcturus ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
         navi10 ) FILTER="--gtest_filter=$NAVI10_TESTS_BLACKLIST" ;;
         core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
+        pm ) FILTER="--gtest_filter=$PM_TESTS" ;;
         all ) FILTER="" ;;
         *) die "Unsupported platform $platform. Exiting" ;;
     esac
