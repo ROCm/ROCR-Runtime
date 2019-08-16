@@ -105,18 +105,6 @@ bool SuspendAndWakeUp() {
     return true;
 }
 
-void AcquirePrivilege(OS_PRIVILEGE priv) {
-    // TODO: Implement
-}
-
-void DisableKfd() {
-    // TODO: Implement
-}
-
-void EnableKfd() {
-    // TODO: Implement
-}
-
 bool ReadDriverConfigValue(CONFIG_VALUE config, unsigned int& rValue) {
     return false;
 }

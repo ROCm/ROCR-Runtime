@@ -102,11 +102,6 @@ HSAuint64 GetSystemTickCountInMicroSec();
  */
 bool SuspendAndWakeUp();
 
-void AcquirePrivilege(OS_PRIVILEGE priv);
-
-void DisableKfd();
-void EnableKfd();
-
 bool ReadDriverConfigValue(CONFIG_VALUE config, unsigned int& rValue);
 
 bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs);
