@@ -27,24 +27,6 @@
 #include "PM4Queue.hpp"
 #include "hsakmt.h"
 
-bool KFDPMTest::m_SetupSuccess = false;
-
-void KFDPMTest::SetUpTestCase() {
-    ROUTINE_START
-
-    m_SetupSuccess = false;
-    AcquirePrivilege(OS_SUSPEND);
-
-    // If AcquirePrivilege fails, it will throw and we will not reach here.
-    m_SetupSuccess = true;
-
-    ROUTINE_END
-}
-
-void KFDPMTest::TearDownTestCase() {
-}
-
-
 void KFDPMTest::SetUp() {
     ROUTINE_START
 

@@ -33,14 +33,8 @@ class KFDPMTest : public KFDBaseComponentTest {
     ~KFDPMTest() {}
 
  protected:
-    static void SetUpTestCase();
-    static void TearDownTestCase();
-
     virtual void SetUp();
     virtual void TearDown();
-
- protected:
-    static bool m_SetupSuccess;
 };
 
 #endif  // __KFDPMTEST_HPP__
