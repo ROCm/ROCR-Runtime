@@ -2345,37 +2345,14 @@ sysfs_parse_failed:
 	return ret;
 }
 
-static void fmm_clear_aperture(manageable_aperture_t *app)
-{
-	rbtree_node_t *n;
-
-	while ((n = rbtree_node_any(&app->tree, MID)))
-		vm_remove_object(app, vm_object_entry(n, 0));
-
-	while (app->vm_ranges)
-		vm_remove_area(app, app->vm_ranges);
-}
-
 void fmm_destroy_process_apertures(void)
 {
-	unsigned int i;
-
 	release_mmio();
-
-	fmm_clear_aperture(&cpuvm_aperture);
-	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
-	fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
-
 	if (gpu_mem) {
-		for (i = 0; i < gpu_mem_count; i++) {
-			fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
-			fmm_clear_aperture(&gpu_mem[i].scratch_physical);
-		}
-
 		free(gpu_mem);
 		gpu_mem = NULL;
-		gpu_mem_count = 0;
 	}
+	gpu_mem_count = 0;
 }
 
 HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
@@ -3554,6 +3531,18 @@ HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+static void fmm_clear_aperture(manageable_aperture_t *app)
+{
+	rbtree_node_t *n;
+
+	while ((n = rbtree_node_any(&app->tree, MID)))
+		vm_remove_object(app, vm_object_entry(n, 0));
+
+	while (app->vm_ranges)
+		vm_remove_area(app, app->vm_ranges);
+
+}
+
 /* This is a special funcion that should be called only from the child process
  * after a fork(). This will clear all vm_objects and mmaps duplicated from
  * the parent.
@@ -3570,7 +3559,19 @@ void fmm_clear_all_mem(void)
 			drm_render_fds[i] = 0;
 		}
 
-	fmm_destroy_process_apertures();
+	/* Nothing is initialized. */
+	if (!gpu_mem)
+		return;
+
+	fmm_clear_aperture(&cpuvm_aperture);
+
+	for (i = 0; i < gpu_mem_count; i++) {
+		fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
+		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
+	}
+
+	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
+	fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
 
 	if (dgpu_shared_aperture_limit) {
 		/* Use the same dgpu range as the parent. If failed, then set
@@ -3596,4 +3597,7 @@ void fmm_clear_all_mem(void)
 
 	all_gpu_id_array_size = 0;
 	all_gpu_id_array = NULL;
+
+	gpu_mem_count = 0;
+	free(gpu_mem);
 }
