@@ -23,7 +23,6 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
-#define _GNU_SOURCE
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +31,6 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <sched.h>
 #include <pci/pci.h>
 #include <errno.h>
 #include <sys/sysinfo.h>
@@ -63,7 +61,6 @@ typedef struct {
 
 static HsaSystemProperties *g_system;
 static node_props_t *g_props;
-static int is_valgrind;
 
 /* This array caches sysfs based node IDs of CPU nodes + all supported GPU nodes.
  * It will be used to map user-node IDs to sysfs-node IDs.
@@ -232,57 +229,22 @@ static struct hsa_gfxip_table {
 	{ 0x731F, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
 };
 
+/* information from /proc/cpuinfo */
 struct proc_cpuinfo {
-	uint32_t apicid;
-	char model_name[HSA_PUBLIC_NAME_SIZE];
+	uint32_t proc_num; /* processor */
+	uint32_t apicid; /* apicid */
+	char model_name[HSA_PUBLIC_NAME_SIZE]; /* model name */
 };
-
-enum cache_type {
-	CACHE_TYPE_NULL = 0,
-	CACHE_TYPE_DATA = 1,
-	CACHE_TYPE_INST = 2,
-	CACHE_TYPE_UNIFIED = 3
-};
-
-typedef struct cacheinfo {
-	HsaCacheProperties hsa_cache_prop;
-	uint32_t num_threads_sharing; /* how many CPUs share this cache */
-} cacheinfo_t;
 
 /* CPU cache table for all CPUs on the system. Each entry has the relative CPU
  * info and caches connected to that CPU.
  */
 typedef struct cpu_cacheinfo {
-	uint32_t len; /* length of the table -> number of online procs */
-	uint32_t num_caches; /* number of caches connected to this cpu */
-	uint32_t num_duplicated_caches; /* to count caches being shared */
-	uint32_t apicid; /* this cpu's apic id */
-	uint32_t max_num_apicid; /* max number of addressable IDs */
-	cacheinfo_t *cache_info; /* an array for cache information */
+	uint32_t len; /* length of the table = number of online procs */
+	int32_t proc_num; /* this cpu's processor number */
+	uint32_t num_caches; /* number of caches reported by this cpu */
+	HsaCacheProperties *cache_prop; /* a list of cache properties */
 } cpu_cacheinfo_t;
-
-/* Deterministic Cache Parameters Leaf in cpuid */
-union _cpuid_leaf_eax { /* Register EAX */
-	struct {
-		enum cache_type	type:5;
-		uint32_t	level:3;
-		uint32_t	is_self_initializing:1;
-		uint32_t	is_fully_associative:1;
-		uint32_t	reserved:4;
-		uint32_t	num_threads_sharing:12;
-		uint32_t	num_cores_on_die:6;
-	} split;
-	uint32_t full;
-};
-
-union _cpuid_leaf_ebx { /* Register EBX */
-	struct {
-		uint32_t	coherency_line_size:12;
-		uint32_t	physical_line_partition:10;
-		uint32_t	ways_of_associativity:10;
-	} split;
-	uint32_t full;
-};
 
 static void free_properties(node_props_t *props, int size)
 {
@@ -328,181 +290,203 @@ static int num_subdirs(char *dirpath, char *prefix)
 	return count;
 }
 
-#if defined(__x86_64__) || defined(__i386__)
-/* cpuid instruction returns processor identification and feature information
- * to the EAX, EBX, ECX, and EDX registers, as determined by input entered in
- * EAX (in some cases, ECX as well).
+/* fscanf_dec - read a file whose content is a decimal number
+ *      @file [IN ] file to read
+ *      @num [OUT] number in the file
  */
-static inline void cpuid(uint32_t *eax, uint32_t *ebx, uint32_t *ecx,
-			 uint32_t *edx)
+static HSAKMT_STATUS fscanf_dec(char *file, uint32_t *num)
 {
-	__asm__ __volatile__(
-		"cpuid;"
-		: "=a" (*eax),
-		  "=b" (*ebx),
-		  "=c" (*ecx),
-		  "=d" (*edx)
-		: "0" (*eax), "2" (*ecx)
-		: "memory"
-	);
-}
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-/* In cases ECX is also used as an input for cpuid, i.e. cache leaf */
-static void cpuid_count(uint32_t op, int count, uint32_t *eax, uint32_t *ebx,
-			uint32_t *ecx, uint32_t *edx)
-{
-	*eax = op;
-	*ecx = count;
-	cpuid(eax, ebx, ecx, edx);
-}
-
-/* Lock current process to the specified processor */
-static int lock_to_processor(int processor)
-{
-	cpu_set_t cpuset;
-
-	memset(&cpuset, 0, sizeof(cpu_set_t));
-	CPU_SET(processor, &cpuset);
-	/* 0: this process */
-	return sched_setaffinity(0, sizeof(cpu_set_t), &cpuset);
-}
-
-/* Get count's order of 2. In other words, 2^rtn_value = count
- * When count is not an order of 2, round it up to the closest.
- */
-static int get_count_order(unsigned int count)
-{
-	int bit;
-	uint32_t num;
-
-	for (bit = 31; bit >= 0; bit--) {
-		num = 1 << bit;
-		if (count >= num)
-			break;
+	fd = fopen(file, "r");
+	if (!fd) {
+		pr_err("Failed to open %s\n", file);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
-	if (count & (count - 1))
-		++bit;
-
-	return bit;
-}
-
-/* cpuid_find_num_cache_leaves - Use cpuid instruction to find out how many
- *		cache leaves the CPU has.
- *	@op - cpuid opcode to get cache information
- *	Return - the number of cache leaves
- */
-static int cpuid_find_num_cache_leaves(uint32_t op)
-{
-	union _cpuid_leaf_eax eax;
-	union _cpuid_leaf_ebx ebx;
-	unsigned int ecx;
-	unsigned int edx;
-	int idx = -1;
-
-	do {
-		++idx;
-		cpuid_count(op, idx, &eax.full, &ebx.full, &ecx, &edx);
-		/* Modern systems have cache levels up to 3. */
-	} while (eax.split.type != CACHE_TYPE_NULL && idx < 4);
-	return idx;
-}
-
-/* cpuid_get_cpu_cache_info - Use cpuid instruction to get cache information
- *	@op - cpuid opcode to get cache information
- *	@cpu_ci - this parameter is an input and also an output.
- *		  [IN] cpu_ci->num_caches: the number of caches of this cpu
- *		  [OUT] cpu_ci->cache_info: to store cache info collected
- */
-static void cpuid_get_cpu_cache_info(uint32_t op, cpu_cacheinfo_t *cpu_ci)
-{
-	union _cpuid_leaf_eax eax;
-	union _cpuid_leaf_ebx ebx;
-	uint32_t ecx;
-	uint32_t edx;
-	uint32_t index;
-	cacheinfo_t *this_leaf;
-
-	for (index = 0; index < cpu_ci->num_caches; index++) {
-		cpuid_count(op, index, &eax.full, &ebx.full, &ecx, &edx);
-		this_leaf = cpu_ci->cache_info + index;
-		this_leaf->hsa_cache_prop.ProcessorIdLow = cpu_ci->apicid;
-		this_leaf->num_threads_sharing =
-				eax.split.num_threads_sharing + 1;
-		this_leaf->hsa_cache_prop.CacheLevel = eax.split.level;
-		this_leaf->hsa_cache_prop.CacheType.ui32.CPU = 1;
-		if (eax.split.type & CACHE_TYPE_DATA)
-			this_leaf->hsa_cache_prop.CacheType.ui32.Data = 1;
-		if (eax.split.type & CACHE_TYPE_INST)
-			this_leaf->hsa_cache_prop.CacheType.ui32.Instruction = 1;
-		this_leaf->hsa_cache_prop.CacheLineSize =
-				ebx.split.coherency_line_size + 1;
-		this_leaf->hsa_cache_prop.CacheAssociativity =
-				ebx.split.ways_of_associativity + 1;
-		this_leaf->hsa_cache_prop.CacheLinesPerTag =
-				ebx.split.physical_line_partition + 1;
-		this_leaf->hsa_cache_prop.CacheSize = (ecx + 1) *
-				(ebx.split.coherency_line_size	   + 1) *
-				(ebx.split.physical_line_partition + 1) *
-				(ebx.split.ways_of_associativity   + 1);
+	if (fscanf(fd, "%u", num) != 1) {
+		pr_err("Failed to parse %s as a decimal.\n", file);
+		ret = HSAKMT_STATUS_ERROR;
 	}
+
+	fclose(fd);
+	return ret;
 }
 
-/* find_cpu_cache_siblings - In the cache list, some caches may be listed more
- *	than once if they are shared by multiple CPUs. Identify the cache's CPU
- *	siblings, record it to SiblingMap[], then remove the duplicated cache by
- *	changing the cache size to 0.
+/* fscanf_str - read a file whose content is a string
+ *      @file [IN ] file to read
+ *      @str [OUT] string in the file
  */
-static void find_cpu_cache_siblings(cpu_cacheinfo_t *cpu_ci_list)
+static HSAKMT_STATUS fscanf_str(char *file, char *str)
 {
-	cacheinfo_t *this_leaf, *leaf2;
-	uint32_t n, j, idx_msb, apicid1, apicid2;
-	cpu_cacheinfo_t *this_cpu, *cpu2;
-	uint32_t index;
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	/* FixMe: cpuid under Valgrind doesn't return data from the processor we set
-	 * affinity to. We can't use that data to calculate siblings.
-	 */
-	if (is_valgrind)
-		return;
+	fd = fopen(file, "r");
+	if (!fd) {
+		pr_err("Failed to open %s\n", file);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+	if (fscanf(fd, "%s", str) != 1) {
+		pr_err("Failed to parse %s as a string.\n", file);
+		ret = HSAKMT_STATUS_ERROR;
+	}
 
-	for (n = 0; n < cpu_ci_list->len; n++) {
-		this_cpu = cpu_ci_list + n;
-		for (index = 0; index < this_cpu->num_caches; index++) {
-			this_leaf = this_cpu->cache_info + index;
-			/* CacheSize 0 means an invalid cache */
-			if (!this_leaf->hsa_cache_prop.CacheSize)
-				continue;
-			if (this_leaf->num_threads_sharing == 1) // no siblings
-				continue;
-			idx_msb = get_count_order(this_leaf->num_threads_sharing);
-			for (j = n + 1; j < cpu_ci_list->len; j++) {
-				cpu2 = cpu_ci_list + j;
-				leaf2 = cpu2->cache_info + index;
-				apicid1 = this_leaf->hsa_cache_prop.ProcessorIdLow;
-				apicid2 = leaf2->hsa_cache_prop.ProcessorIdLow;
-				if ((apicid2 >> idx_msb) != (apicid1 >> idx_msb))
-					continue;
-				/* A sibling leaf is found. Cache properties
-				 * use ProcIdLow as offset to represent siblings
-				 * in SiblingMap, so keep the lower apicid and
-				 * delete the other by changing CacheSize to 0.
-				 */
-				if (apicid1 < apicid2) {
-					this_leaf->hsa_cache_prop.SiblingMap[0] = 1;
-					this_leaf->hsa_cache_prop.SiblingMap[apicid2 - apicid1] = 1;
-					leaf2->hsa_cache_prop.CacheSize = 0;
-					cpu2->num_duplicated_caches++;
-				} else {
-					leaf2->hsa_cache_prop.SiblingMap[0] = 1;
-					leaf2->hsa_cache_prop.SiblingMap[apicid1 - apicid2] = 1;
-					this_leaf->hsa_cache_prop.CacheSize = 0;
-					this_cpu->num_duplicated_caches++;
-				}
-			}
+	fclose(fd);
+	return ret;
+}
+
+/* fscanf_size - read a file whose content represents size as a string
+ *      @file [IN ] file to read
+ *      @bytes [OUT] sizes in bytes
+ */
+static HSAKMT_STATUS fscanf_size(char *file, uint32_t *bytes)
+{
+	FILE *fd;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	char unit;
+	int n;
+
+	fd = fopen(file, "r");
+	if (!fd) {
+		pr_err("Failed to open %s\n", file);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+
+	n = fscanf(fd, "%u%c", bytes, &unit);
+	if (n < 1) {
+		pr_err("Failed to parse %s\n", file);
+		ret = HSAKMT_STATUS_ERROR;
+	}
+
+	if (n == 2) {
+		switch (unit) {
+		case 'K':
+			*bytes <<= 10; break;
+		case 'M':
+			*bytes <<= 20; break;
+		case 'G':
+			*bytes <<= 30; break;
+		default:
+			ret = HSAKMT_STATUS_ERROR; break;
 		}
 	}
+
+	fclose(fd);
+	return ret;
 }
-#endif /* X86 platform */
+
+/* cpumap_to_cpu_ci - translate shared_cpu_map string + cpuinfo->apicid into
+ *		      SiblingMap in cache
+ *	@shared_cpu_map [IN ] shared_cpu_map string
+ *	@cpuinfo [IN ] cpuinfo to get apicid
+ *	@this_cache [OUT] CPU cache to fill in SiblingMap
+ */
+static void cpumap_to_cpu_ci(char *shared_cpu_map,
+			     struct proc_cpuinfo *cpuinfo,
+			     HsaCacheProperties *this_cache)
+{
+	int num_hexs, bit;
+	uint32_t proc, apicid, mask;
+	char *ch_ptr;
+
+	/* shared_cpu_map is shown as ...X3,X2,X1 Each X is a hex without 0x
+	 * and it's up to 8 characters(32 bits). For the first 32 CPUs(actually
+	 * procs), it's presented in X1. The next 32 is in X2, and so on.
+	 */
+	num_hexs = (strlen(shared_cpu_map) + 8) / 9; /* 8 characters + "," */
+	ch_ptr = strtok(shared_cpu_map, ",");
+	while (num_hexs-- > 0) {
+		mask = strtol(ch_ptr, NULL, 16); /* each X */
+		for (bit = 0; bit < 32; bit++) {
+			if (!((1 << bit) & mask))
+				continue;
+			proc = num_hexs * 32 + bit;
+			apicid = cpuinfo[proc].apicid;
+			if (apicid >= HSA_CPU_SIBLINGS) {
+				pr_warn("SiblingMap buffer %d is too small\n",
+					HSA_CPU_SIBLINGS);
+				continue;
+			}
+			this_cache->SiblingMap[apicid] = 1;
+		}
+		ch_ptr = strtok(NULL, ",");
+	}
+}
+
+/* get_cpu_cache_info - get specified CPU's cache information from sysfs
+ *     @prefix [IN] sysfs path for target cpu cache,
+ *                  /sys/devices/system/node/nodeX/cpuY/cache
+ *     @cpuinfo [IN] /proc/cpuinfo data to get apicid
+ *     @cpu_ci: CPU specified. This parameter is an input and also an output.
+ *             [IN] cpu_ci->num_caches: number of index dirs
+ *             [OUT] cpu_ci->cache_info: to store cache info collected
+ *             [OUT] cpu_ci->num_caches: reduces when shared with other cpu(s)
+ * Return: number of cache reported from this cpu
+ */
+static int get_cpu_cache_info(const char *prefix, struct proc_cpuinfo *cpuinfo,
+			      cpu_cacheinfo_t *cpu_ci)
+{
+	int idx, num_idx, n;
+	HsaCacheProperties *this_cache;
+	char path[256], str[256];
+
+	this_cache = cpu_ci->cache_prop;
+	num_idx = cpu_ci->num_caches;
+	for (idx = 0; idx < num_idx; idx++) {
+		/* If this cache is shared by multiple CPUs, we only need
+		 * to list it in the first CPU.
+		 */
+		snprintf(path, 256, "%s/index%d/shared_cpu_list", prefix, idx);
+		/* shared_cpu_list is shown as n1,n2... or n1-n2,n3-n4...
+		 * For both cases, this cache is listed to proc n1 only.
+		 */
+		fscanf_dec(path, (uint32_t *)&n);
+		if (cpu_ci->proc_num != n) {
+			/* proc is not n1. Skip and reduce the cache count. */
+			--cpu_ci->num_caches;
+			continue;
+		}
+
+		this_cache->ProcessorIdLow = cpuinfo[cpu_ci->proc_num].apicid;
+
+		/* CacheLevel */
+		snprintf(path, 256, "%s/index%d/level", prefix, idx);
+		fscanf_dec(path, &this_cache->CacheLevel);
+		/* CacheType */
+		snprintf(path, 256, "%s/index%d/type", prefix, idx);
+		fscanf_str(path, str);
+		if (!strcmp(str, "Data"))
+			this_cache->CacheType.ui32.Data = 1;
+		if (!strcmp(str, "Instruction"))
+			this_cache->CacheType.ui32.Instruction = 1;
+		if (!strcmp(str, "Unified")) {
+			this_cache->CacheType.ui32.Data = 1;
+			this_cache->CacheType.ui32.Instruction = 1;
+		}
+		this_cache->CacheType.ui32.CPU = 1;
+		/* CacheSize */
+		snprintf(path, 256, "%s/index%d/size", prefix, idx);
+		fscanf_size(path, &this_cache->CacheSize);
+		/* CacheLineSize */
+		snprintf(path, 256, "%s/index%d/coherency_line_size", prefix, idx);
+		fscanf_dec(path, &this_cache->CacheLineSize);
+		/* CacheAssociativity */
+		snprintf(path, 256, "%s/index%d/ways_of_associativity", prefix, idx);
+		fscanf_dec(path, &this_cache->CacheAssociativity);
+		/* CacheLinesPerTag */
+		snprintf(path, 256, "%s/index%d/physical_line_partition", prefix, idx);
+		fscanf_dec(path, &this_cache->CacheLinesPerTag);
+		/* CacheSiblings */
+		snprintf(path, 256, "%s/index%d/shared_cpu_map", prefix, idx);
+		fscanf_str(path, str);
+		cpumap_to_cpu_ci(str, cpuinfo, this_cache);
+
+		++this_cache;
+	}
+
+	return cpu_ci->num_caches;
+}
 
 static HSAKMT_STATUS topology_sysfs_get_generation(uint32_t *gen)
 {
@@ -1144,22 +1128,19 @@ err1:
 	return ret;
 }
 
-#if defined(__x86_64__) || defined(__i386__)
-/* topology_destroy_temp_cpu_cache_list - Free the memory allocated in
- *		topology_create_temp_cpu_cache_list().
+/* topology_destroy_temp_cpu_cache_list -
+ *	Free the memory allocated in topology_create_temp_cpu_cache_list().
  */
-static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
+static void topology_destroy_temp_cpu_cache_list(
+					cpu_cacheinfo_t *temp_cpu_ci_list)
 {
 	uint32_t n;
-	cpu_cacheinfo_t *p_temp_cpu_ci_list = (cpu_cacheinfo_t *)temp_cpu_ci_list;
-	cpu_cacheinfo_t *this_cpu;
+	cpu_cacheinfo_t *p_temp_cpu_ci_list = temp_cpu_ci_list;
+	cpu_cacheinfo_t *cpu_ci = p_temp_cpu_ci_list;
 
 	if (p_temp_cpu_ci_list) {
-		for (n = 0; n < p_temp_cpu_ci_list->len; n++) {
-			this_cpu = p_temp_cpu_ci_list + n;
-			if (this_cpu->cache_info)
-				free(this_cpu->cache_info);
-		}
+		for (n = 0; n < p_temp_cpu_ci_list->len; n++, cpu_ci++)
+			free(cpu_ci->cache_prop);
 		free(p_temp_cpu_ci_list);
 	}
 
@@ -1168,176 +1149,103 @@ static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
 
 /* topology_create_temp_cpu_cache_list - Create a temporary cpu-cache list to
  *		store cpu cache information. This list will be used to copy
- *		cache information to each CPU node. Must call
- *		topology_destroy_temp_cpu_cache_list to free the memory after
- *		the information is copied.
- *	@temp_cpu_ci_list - [OUT] temporary cpu-cache-info list to store data
- *	Return - HSAKMT_STATUS_SUCCESS in success or error number in failure
+ *		HsaCacheProperties in the CPU node. Two buffers are allocated
+ *		inside this function: cpu_ci list and cache_prop under each
+ *		cpu_ci. Must call topology_destroy_temp_cpu_cache_list to free
+ *		the memory after the information is copied.
+ *	@node [IN] CPU node number
+ *	@cpuinfo [IN] /proc/cpuinfo data
+ *	@temp_cpu_ci_list [OUT] cpu-cache-info list with data filled
+ * Return: total number of caches under this CPU node
  */
-static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
+static int topology_create_temp_cpu_cache_list(int node,
+	struct proc_cpuinfo *cpuinfo, cpu_cacheinfo_t **temp_cpu_ci_list)
 {
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	void *p_temp_cpu_ci_list;
-	int procs_online;
-	cpu_set_t orig_cpuset;
-	int i, j = 0;
-	uint32_t cpuid_op_cache;
-	uint32_t eax, ebx, ecx = 0, edx; /* cpuid registers */
-	cpu_cacheinfo_t *cpu_ci_list, *this_cpu;
-	bool x2apic = false;
+	cpu_cacheinfo_t *p_temp_cpu_ci_list; /* a list of cpu_ci */
+	char path[256], node_dir[256];
+	int max_cpus;
+	cpu_cacheinfo_t *this_cpu; /* one cpu_ci in cpu_ci_list */
+	int cache_cnt = 0;
+	DIR *dirp;
+	struct dirent *dir;
+	char *p;
 
 	if (!temp_cpu_ci_list) {
-		ret = HSAKMT_STATUS_ERROR;
+		pr_err("Invalid temp_cpu_ci_list\n");
 		goto exit;
 	}
 	*temp_cpu_ci_list = NULL;
 
-	/* Find the number of processors available to the current process, based
-	 * on a system call that returns the "affinity" between the current process
-	 * and each CPU. For getting each CPU cache information the process affinity
-	 * is modified. Save the original affinity mask so that it can be restored
-	 * after finding the cache information.
-	 */
-	CPU_ZERO(&orig_cpuset);
-	if (sched_getaffinity(0, sizeof(cpu_set_t), &orig_cpuset)) {
-		pr_warn("Failed to get CPU affinity %s\n", strerror(errno));
-		ret = HSAKMT_STATUS_ERROR;
-		goto exit;
-	}
-	procs_online = CPU_COUNT(&orig_cpuset);
-	if (procs_online <= 0) {
-		pr_warn("Invalid number of online processors %d\n", procs_online);
-		ret = HSAKMT_STATUS_ERROR;
+	/* Get info from /sys/devices/system/node/nodeX/cpuY/cache */
+	snprintf(node_dir, 256, "/sys/devices/system/node/node%d", node);
+	/* Other than cpuY folders, this dir also has cpulist and cpumap */
+	max_cpus = num_subdirs(node_dir, "cpu");
+	if (max_cpus <= 0) {
+		pr_err("Fail to get cpu* dirs under %s\n", path);
 		goto exit;
 	}
 
-	p_temp_cpu_ci_list = calloc(sizeof(cpu_cacheinfo_t) * procs_online, 1);
+	p_temp_cpu_ci_list = calloc(max_cpus, sizeof(cpu_cacheinfo_t));
 	if (!p_temp_cpu_ci_list) {
-		ret = HSAKMT_STATUS_NO_MEMORY;
+		pr_err("Fail to allocate p_temp_cpu_ci_list\n");
 		goto exit;
 	}
+	p_temp_cpu_ci_list->len = 0;
 
-	cpu_ci_list = (cpu_cacheinfo_t *)p_temp_cpu_ci_list;
-	cpu_ci_list->len = procs_online;
-
-	if (processor_vendor == AUTHENTIC_AMD)
-		cpuid_op_cache = 0x8000001d;
-	else
-		cpuid_op_cache = 0x4;
-
-	for (i = 0; i < CPU_SETSIZE && j < procs_online; i++) {
-		/* Ignore the CPUs that is not available for the current process */
-		if (!CPU_ISSET(i, &orig_cpuset))
+	this_cpu = p_temp_cpu_ci_list;
+	dirp = opendir(node_dir);
+	while ((dir = readdir(dirp)) != 0) {
+		if (strncmp(dir->d_name, "cpu", 3))
 			continue;
-
-		this_cpu = cpu_ci_list + j++;
-		/* so cpuid is executed in correct cpu */
-		if (lock_to_processor(i)) {
-			pr_err("Failed to set CPU affinity %s\n", strerror(errno));
-			free(p_temp_cpu_ci_list);
-			ret = HSAKMT_STATUS_ERROR;
+		if (!isdigit(dir->d_name[3])) /* ignore files like cpulist */
+			continue;
+		snprintf(path, 256, "/sys/devices/system/node/node%d/%s/cache",
+			node, dir->d_name);
+		this_cpu->num_caches = num_subdirs(path, "index");
+		this_cpu->cache_prop = calloc(this_cpu->num_caches,
+					sizeof(HsaCacheProperties));
+		if (!this_cpu->cache_prop) {
+			pr_err("Fail to allocate cache_info\n");
 			goto exit;
 		}
-
-		/* Detect the availability of the extended topology leaf */
-		eax = 0x0;
-		cpuid(&eax, &ebx, &ecx, &edx);
-		if (eax >= 11) {
-			eax = 0xb;
-			ecx = 0x0;
-			cpuid(&eax, &ebx, &ecx, &edx);
-			if (ebx)
-				x2apic = true;
-		}
-
-		if (x2apic) {
-			eax = 0xb;
-			cpuid(&eax, &ebx, &ecx, &edx);
-			this_cpu->apicid = edx;
-			cpuid_count(4, 0, &eax, &ebx, &ecx, &edx);
-			this_cpu->max_num_apicid = (eax >> 26) + 1;
-		} else {
-			eax = 0x1;
-			cpuid(&eax, &ebx, &ecx, &edx);
-			this_cpu->apicid = (ebx >> 24) & 0xff;
-			this_cpu->max_num_apicid = (ebx >> 16) & 0x0FF;
-		}
-		this_cpu->num_caches = cpuid_find_num_cache_leaves(cpuid_op_cache);
-		this_cpu->num_duplicated_caches = 0;
-		this_cpu->cache_info = calloc(
-				sizeof(cacheinfo_t) * this_cpu->num_caches, 1);
-		if (!this_cpu->cache_info) {
-			free(p_temp_cpu_ci_list);
-			ret = HSAKMT_STATUS_NO_MEMORY;
-			goto err;
-		}
-		cpuid_get_cpu_cache_info(cpuid_op_cache, this_cpu);
+		p = &dir->d_name[3];
+		this_cpu->proc_num = atoi(p);
+		cache_cnt += get_cpu_cache_info(path, cpuinfo, this_cpu);
+		++p_temp_cpu_ci_list->len;
+		++this_cpu;
 	}
-
-	if (j < procs_online) {
-		pr_warn("CPU cache information missing\n");
-		cpu_ci_list->len = j;
-	}
-
-	find_cpu_cache_siblings(cpu_ci_list);
 	*temp_cpu_ci_list = p_temp_cpu_ci_list;
 
-err:
-	/* restore affinity to original */
-	sched_setaffinity(0, sizeof(cpu_set_t), &orig_cpuset);
 exit:
-	if (ret != HSAKMT_STATUS_SUCCESS) {
-		pr_warn("Topology fails to create cpu cache list\n");
-		topology_destroy_temp_cpu_cache_list(*temp_cpu_ci_list);
-	}
-	return ret;
+	if (dirp)
+		closedir(dirp);
+	return cache_cnt;
 }
 
-/* topology_get_cpu_cache_props - Read CPU cache information from the temporary
- *		cache list and put them to the node's cache properties entry.
- *	@tbl - the node table to fill up
- *	@cpu_ci_list - the cpu cache information list to look up cache info
- *	Return - HSAKMT_STATUS_SUCCESS in success or error number in failure
+/* topology_get_cpu_cache_props - Read CPU cache information from sysfs
+ *	@node [IN] CPU node number
+ *	@cpuinfo [IN] /proc/cpuinfo data
+ *	@tbl [OUT] the node table to fill up
+ * Return: HSAKMT_STATUS_SUCCESS in success or error number in failure
  */
-static HSAKMT_STATUS topology_get_cpu_cache_props(node_props_t *tbl,
-						  cpu_cacheinfo_t *cpu_ci_list)
+static HSAKMT_STATUS topology_get_cpu_cache_props(int node,
+			struct proc_cpuinfo *cpuinfo, node_props_t *tbl)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	uint32_t apicid_low = tbl->node.CComputeIdLo, apicid_max = 0;
-	uint32_t n, cache_cnt, idx;
-	cpu_cacheinfo_t *this_cpu;
-	cacheinfo_t *this_leaf;
+	cpu_cacheinfo_t *cpu_ci_list = NULL;
+	uint32_t n, cache_cnt, i;
+	cpu_cacheinfo_t *cpu_ci;
+	HsaCacheProperties *this_cache;
 
-	/* CPU cache info list contains all CPUs. Find out CPUs belonging to
-	 * this node and number of caches under, so we can allocate the cache
-	 * properties in the node.
-	 */
-	tbl->node.NumCaches = 0;
-	for (n = 0; n < cpu_ci_list->len; n++) {
-		this_cpu = cpu_ci_list + n;
-		if (this_cpu->apicid == apicid_low)
-			/* found the first cpu in the node */
-			apicid_max = apicid_low + this_cpu->max_num_apicid - 1;
-
-		if ((this_cpu->apicid < apicid_low) ||
-			(this_cpu->apicid > apicid_max))
-			continue; /* this cpu doesn't belong to the node */
-		tbl->node.NumCaches +=
-			this_cpu->num_caches - this_cpu->num_duplicated_caches;
+	tbl->node.NumCaches = topology_create_temp_cpu_cache_list(
+					node, cpuinfo, &cpu_ci_list);
+	if (!tbl->node.NumCaches) {
+		pr_err("Fail to get cache info for node %d\n", node);
+		ret = HSAKMT_STATUS_ERROR;
+		goto exit;
 	}
 
-	/* FixMe: cpuid under Valgrind doesn't return data from the processor we set
-	 * affinity to. All the data come from one specific processor. We'll report
-	 * this one processor's cache and ignore others.
-	 */
-	if (is_valgrind) {
-		this_cpu = cpu_ci_list;
-		tbl->node.NumCaches = this_cpu->num_caches;
-		apicid_low = apicid_max = this_cpu->apicid;
-	}
-
-	tbl->cache = calloc(
-			sizeof(HsaCacheProperties) * tbl->node.NumCaches, 1);
+	tbl->cache = calloc(tbl->node.NumCaches, sizeof(HsaCacheProperties));
 	if (!tbl->cache) {
 		ret = HSAKMT_STATUS_NO_MEMORY;
 		goto exit;
@@ -1345,38 +1253,23 @@ static HSAKMT_STATUS topology_get_cpu_cache_props(node_props_t *tbl,
 
 	/* Now fill in the information to cache properties. */
 	cache_cnt = 0;
-	for (n = 0; n < cpu_ci_list->len; n++) {
-		this_cpu = cpu_ci_list + n;
-		if ((this_cpu->apicid < apicid_low) || this_cpu->apicid > apicid_max)
-			continue; /* this cpu doesn't belong to the node */
-		for (idx = 0; idx < this_cpu->num_caches; idx++) {
-			this_leaf = this_cpu->cache_info + idx;
-			if (this_leaf->hsa_cache_prop.CacheSize > 0)
-				memcpy(&tbl->cache[cache_cnt++], &this_leaf->hsa_cache_prop, sizeof(HsaCacheProperties));
+	cpu_ci = cpu_ci_list;
+	for (n = 0; n < cpu_ci_list->len; n++, cpu_ci++) {
+		this_cache = cpu_ci->cache_prop;
+		for (i = 0; i < cpu_ci->num_caches; i++, this_cache++) {
+			memcpy(&tbl->cache[cache_cnt++],
+			       this_cache,
+			       sizeof(HsaCacheProperties));
 			if (cache_cnt >= tbl->node.NumCaches)
 				goto exit;
 		}
 	}
 
 exit:
+	topology_destroy_temp_cpu_cache_list(cpu_ci_list);
+
 	return ret;
 }
-#else /* not X86 */
-static void topology_destroy_temp_cpu_cache_list(void *temp_cpu_ci_list)
-{
-}
-
-static HSAKMT_STATUS topology_create_temp_cpu_cache_list(void **temp_cpu_ci_list)
-{
-	return HSAKMT_STATUS_SUCCESS;
-}
-
-static HSAKMT_STATUS topology_get_cpu_cache_props(node_props_t *tbl,
-						  cpu_cacheinfo_t *cpu_ci_list)
-{
-	return HSAKMT_STATUS_SUCCESS;
-}
-#endif
 
 static HSAKMT_STATUS topology_sysfs_get_cache_props(uint32_t node_id,
 						    uint32_t cache_id,
@@ -1798,10 +1691,8 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	uint32_t gen_start, gen_end, i, mem_id, cache_id;
 	HsaSystemProperties sys_props;
 	node_props_t *temp_props = 0;
-	void *cpu_ci_list = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	struct pci_access *pacc;
-	char *envvar;
 	struct proc_cpuinfo *cpuinfo;
 	const uint32_t num_procs = get_nprocs();
 
@@ -1812,12 +1703,6 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	}
 	topology_parse_cpuinfo(cpuinfo, num_procs);
 
-	envvar = getenv("HSA_RUNNING_UNDER_VALGRIND");
-	if (envvar && !strcmp(envvar, "1"))
-		is_valgrind = 1;
-	else
-		is_valgrind = 0;
-
 retry:
 	ret = topology_sysfs_get_generation(&gen_start);
 	if (ret != HSAKMT_STATUS_SUCCESS)
@@ -1826,7 +1711,6 @@ retry:
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		goto err;
 	if (sys_props.NumNodes > 0) {
-		topology_create_temp_cpu_cache_list(&cpu_ci_list);
 		temp_props = calloc(sys_props.NumNodes * sizeof(node_props_t), 1);
 		if (!temp_props) {
 			ret = HSAKMT_STATUS_NO_MEMORY;
@@ -1879,7 +1763,7 @@ retry:
 				}
 			} else if (!temp_props[i].gpu_id) { /* a CPU node */
 				ret = topology_get_cpu_cache_props(
-						&temp_props[i], cpu_ci_list);
+						i, cpuinfo, &temp_props[i]);
 				if (ret != HSAKMT_STATUS_SUCCESS) {
 					free_properties(temp_props, i + 1);
 					goto err;
@@ -1954,7 +1838,6 @@ retry:
 	g_props = temp_props;
 err:
 	free(cpuinfo);
-	topology_destroy_temp_cpu_cache_list(cpu_ci_list);
 	return ret;
 }
 
