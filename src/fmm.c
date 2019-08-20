@@ -3559,17 +3559,7 @@ void fmm_clear_all_mem(void)
 			drm_render_fds[i] = 0;
 		}
 
-	/* Nothing is initialized. */
-	if (!gpu_mem)
-		return;
-
 	fmm_clear_aperture(&cpuvm_aperture);
-
-	for (i = 0; i < gpu_mem_count; i++) {
-		fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
-		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
-	}
-
 	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
 	fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
 
@@ -3598,6 +3588,16 @@ void fmm_clear_all_mem(void)
 	all_gpu_id_array_size = 0;
 	all_gpu_id_array = NULL;
 
+	/* Nothing is initialized. */
+	if (!gpu_mem)
+		return;
+
+	for (i = 0; i < gpu_mem_count; i++) {
+		fmm_clear_aperture(&gpu_mem[i].gpuvm_aperture);
+		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
+	}
+
 	gpu_mem_count = 0;
 	free(gpu_mem);
+	gpu_mem = NULL;
 }
