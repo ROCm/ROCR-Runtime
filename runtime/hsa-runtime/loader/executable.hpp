@@ -46,6 +46,7 @@
 #include <array>
 #include <cassert>
 #include <cstdint>
+#include <iostream>
 #include <libelf.h>
 #include <list>
 #include <string>
@@ -222,6 +223,38 @@ public:
 private:
   VariableSymbol(const VariableSymbol &vs);
   VariableSymbol& operator=(const VariableSymbol &vs);
+};
+
+//===----------------------------------------------------------------------===//
+// Logger.                                                                    //
+//===----------------------------------------------------------------------===//
+
+class Logger final {
+public:
+  Logger(std::ostream &Stream = std::cerr) : OutStream(Stream) {}
+
+  template <typename T>
+  Logger &operator<<(const T &Data) {
+    if (!IsLoggingEnabled())
+      return *this;
+    OutStream << Data;
+    return *this;
+  }
+
+private:
+  Logger(const Logger &L);
+  Logger& operator=(const Logger &L);
+
+  bool IsLoggingEnabled() const {
+    const char *enable_logging = getenv("LOADER_ENABLE_LOGGING");
+    if (!enable_logging)
+      return false;
+    if (std::string(enable_logging) == "0")
+      return false;
+    return true;
+  }
+
+  std::ostream &OutStream;
 };
 
 //===----------------------------------------------------------------------===//
@@ -501,6 +534,7 @@ private:
   amd::hsa::common::ReaderWriterLock rw_lock_;
   hsa_profile_t profile_;
   Context *context_;
+  Logger logger_;
   const size_t id_;
   hsa_default_float_rounding_mode_t default_float_rounding_mode_;
   hsa_executable_state_t state_;

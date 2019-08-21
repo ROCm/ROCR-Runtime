@@ -1036,6 +1036,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   if (HSA_EXECUTABLE_STATE_FROZEN == state_) {
+    logger_ << "LoaderError: executable is already frozen\n";
     return HSA_STATUS_ERROR_FROZEN_EXECUTABLE;
   }
 
@@ -1110,15 +1111,25 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   std::string codeIsa;
-  if (!code->GetIsa(codeIsa)) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-
-  uint32_t majorVersion, minorVersion;
-  if (!code->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
+  if (!code->GetIsa(codeIsa)) {
+    logger_ << "LoaderError: failed to determine code object's ISA\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion != 1 && majorVersion != 2 && majorVersion != 3) { return HSA_STATUS_ERROR_INVALID_CODE_OBJECT; }
-  if (agent.handle == 0 && majorVersion == 1) { return HSA_STATUS_ERROR_INVALID_AGENT; }
+  uint32_t majorVersion, minorVersion;
+  if (!code->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
+    logger_ << "LoaderError: failed to determine code object's version\n";
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
+  if (majorVersion != 1 && majorVersion != 2 && majorVersion != 3) {
+    logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+  if (agent.handle == 0 && majorVersion == 1) {
+    logger_ << "LoaderError: code object v1 requires non-null agent\n";
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
 
   uint32_t codeHsailMajor;
   uint32_t codeHsailMinor;
@@ -1129,13 +1140,18 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     codeProfile = profile_;
   }
   if (profile_ != codeProfile) {
+    logger_ << "LoaderError: mismatched profiles\n";
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
 
   hsa_isa_t objectsIsa = context_->IsaFromName(codeIsa.c_str());
-  if (!objectsIsa.handle) { return HSA_STATUS_ERROR_INVALID_ISA_NAME; }
+  if (!objectsIsa.handle) {
+    logger_ << "LoaderError: code object's ISA (" << codeIsa.c_str() << ") is invalid\n";
+    return HSA_STATUS_ERROR_INVALID_ISA_NAME;
+  }
 
   if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) {
+    logger_ << "LoaderError: code object's ISA (" << codeIsa.c_str() << ") is not supported by the agent\n";
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
 
@@ -1411,6 +1427,8 @@ hsa_status_t ExecutableImpl::LoadDeclarationSymbol(hsa_agent_t agent,
   if (program_symbol == program_symbols_.end()) {
     auto agent_symbol = agent_symbols_.find(std::make_pair(sym->Name(), agent));
     if (agent_symbol == agent_symbols_.end()) {
+      logger_ << "LoaderError: symbol \"" << sym->Name() << "\" is undefined\n";
+
       // TODO(spec): this is not spec compliant.
       return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
     }
@@ -1523,7 +1541,10 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
             sagent = nullptr;
           }
           SymbolImpl* esym = (SymbolImpl*) GetSymbolInternal(sym->name().c_str(), sagent);
-          if (!esym) { return HSA_STATUS_ERROR_VARIABLE_UNDEFINED; }
+          if (!esym) {
+            logger_ << "LoaderError: symbol \"" << sym->name() << "\" is undefined\n";
+            return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+          }
           addr = esym->address;
           break;
         }
@@ -1697,8 +1718,10 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   switch (rel->type()) {
     case R_AMDGPU_32_HIGH:
     {
-      if (!symAddr)
+      if (!symAddr) {
+        logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
         return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
 
       uint32_t symAddr32 = uint32_t((symAddr >> 32) & 0xFFFFFFFF);
       relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
@@ -1707,8 +1730,10 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
 
     case R_AMDGPU_32_LOW:
     {
-      if (!symAddr)
+      if (!symAddr) {
+        logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
         return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
 
       uint32_t symAddr32 = uint32_t(symAddr & 0xFFFFFFFF);
       relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
@@ -1717,8 +1742,10 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
 
     case R_AMDGPU_64:
     {
-      if (!symAddr)
+      if (!symAddr) {
+        logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
         return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
 
       relSeg->Copy(rel->offset(), &symAddr, sizeof(symAddr));
       break;
