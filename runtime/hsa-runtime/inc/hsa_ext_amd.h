@@ -152,7 +152,13 @@ typedef enum hsa_amd_agent_info_s {
    * model and should be treated with caution.
    * The type of this attribute is hsa_amd_hdp_flush_t.
    */
-  HSA_AMD_AGENT_INFO_HDP_FLUSH = 0xA00E
+  HSA_AMD_AGENT_INFO_HDP_FLUSH = 0xA00E,
+  /**
+   * PCIe domain for the agent.  Pairs with HSA_AMD_AGENT_INFO_BDFID
+   * to give the full physical location of the Agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
