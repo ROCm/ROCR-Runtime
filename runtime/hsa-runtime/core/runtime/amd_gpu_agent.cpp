@@ -906,6 +906,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_HDP_FLUSH:
       *((hsa_amd_hdp_flush_t*)value) = HDP_flush_;
       break;
+    case HSA_AMD_AGENT_INFO_DOMAIN:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.Domain);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
