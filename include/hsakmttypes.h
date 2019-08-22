@@ -302,7 +302,8 @@ typedef struct _HsaNodeProperties
     HSAuint32       NumSdmaEngines;    // number of PCIe optimized SDMA engines
     HSAuint32       NumSdmaXgmiEngines;// number of XGMI optimized SDMA engines
     HSAuint32       NumGws;            // number of GWS barriers
-    HSAuint8        Reserved[32];
+    HSAuint32       Domain;            // PCI domain of the GPU
+    HSAuint8        Reserved[28];
 } HsaNodeProperties;
 
 

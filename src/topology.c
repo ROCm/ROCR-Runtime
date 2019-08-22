@@ -1010,6 +1010,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->DeviceId = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "location_id") == 0)
 			props->LocationId = (uint32_t)prop_val;
+		else if (strcmp(prop_name, "domain") == 0)
+			props->Domain = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "max_engine_clk_fcompute") == 0)
 			props->MaxEngineClockMhzFCompute = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "max_engine_clk_ccompute") == 0)
