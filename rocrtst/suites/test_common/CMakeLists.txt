@@ -53,8 +53,9 @@ endif()
 # Required Defines first:
 
 set(ROCR_INC_DIR ${ROCM_DIR}/include)
-set(ROCR_LIB_DIR ${ROCM_DIR}/lib)
+set(ROCR_LIB_DIR ${ROCM_DIR}/hsa/lib)
 set(ROCM_SMI_INC_DIR ${ROCM_DIR}/include)
+set(ROCM_SMI_LIB_DIR ${ROCM_DIR}/lib)
 #
 # Determine ROCR Header files are present
 #
@@ -227,7 +228,7 @@ aux_source_directory(${ROCRTST_ROOT}/common common_srcs)
 # Specify the directory containing various libraries of ROCR
 # to be linked against for building ROC Perf applications
 #
-LINK_DIRECTORIES(${ROCR_LIB_DIR})
+LINK_DIRECTORIES(${ROCR_LIB_DIR} ${ROCM_SMI_LIB_DIR})
 
 #
 # Extend the list of libraries to be used for linking ROC Perf Apps
