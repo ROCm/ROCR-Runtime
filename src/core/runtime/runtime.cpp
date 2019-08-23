@@ -333,6 +333,53 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   return region->Free(ptr, size);
 }
 
+hsa_status_t Runtime::RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback,
+                                              void* user_data) {
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+
+    // No support for imported fragments yet.
+    if (mem->second.region == nullptr) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      auto& notifiers = mem->second.notifiers;
+      if (!notifiers) notifiers.reset(new std::vector<AllocationRegion::notifier_t>);
+      AllocationRegion::notifier_t notifier = {
+          ptr, AMD::callback_t<hsa_amd_deallocation_callback_t>(callback), user_data};
+      notifiers->push_back(notifier);
+      return HSA_STATUS_SUCCESS;
+    }
+  }
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+}
+
+hsa_status_t Runtime::DeregisterReleaseNotifier(void* ptr,
+                                                hsa_amd_deallocation_callback_t callback) {
+  hsa_status_t ret = HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      auto& notifiers = mem->second.notifiers;
+      if (!notifiers) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      for (size_t i = 0; i < notifiers->size(); i++) {
+        if (((*notifiers)[i].ptr == ptr) && ((*notifiers)[i].callback) == callback) {
+          (*notifiers)[i] = std::move((*notifiers)[notifiers->size() - 1]);
+          notifiers->pop_back();
+          i--;
+          ret = HSA_STATUS_SUCCESS;
+        }
+      }
+    }
+  }
+  return ret;
+}
+
 namespace {
   bool is_system_mem(const void* ptr, std::size_t size, Runtime& rt,
                      core::Agent*& agent) {
