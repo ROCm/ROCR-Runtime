@@ -47,6 +47,8 @@
 
 #include <vector>
 #include <map>
+#include <memory>
+#include <tuple>
 #include <utility>
 
 #include "core/inc/hsa_ext_interface.h"
@@ -177,6 +179,11 @@ class Runtime {
   /// allocation via ::core::Runtime::AllocateMemory
   /// @retval ::HSA_STATUS_SUCCESS if @p ptr is successfully released.
   hsa_status_t FreeMemory(void* ptr);
+
+  hsa_status_t RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback,
+                                       void* user_data);
+
+  hsa_status_t DeregisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback);
 
   /// @brief Blocking memory copy from src to dst.
   ///
@@ -341,9 +348,16 @@ class Runtime {
     AllocationRegion(const MemoryRegion* region_arg, size_t size_arg)
         : region(region_arg), size(size_arg), user_ptr(nullptr) {}
 
+    struct notifier_t {
+      void* ptr;
+      AMD::callback_t<hsa_amd_deallocation_callback_t> callback;
+      void* user_data;
+    };
+
     const MemoryRegion* region;
     size_t size;
     void* user_ptr;
+    std::unique_ptr<std::vector<notifier_t>> notifiers;
   };
 
   struct AsyncEventsControl {

@@ -206,8 +206,7 @@ class GpuAgent : public GpuAgentInt {
   // @param [out] code_buf_size Size of code object buffer in bytes.
   enum class AssembleTarget { ISA, AQL };
 
-  void AssembleShader(const char* src_sp3, const char* func_name,
-                      AssembleTarget assemble_target, void*& code_buf,
+  void AssembleShader(const char* func_name, AssembleTarget assemble_target, void*& code_buf,
                       size_t& code_buf_size) const;
 
   // @brief Frees code object created by AssembleShader.
@@ -299,6 +298,9 @@ class GpuAgent : public GpuAgentInt {
   }
 
   // Getter & setters.
+
+  // @brief Returns Hive ID
+  __forceinline uint64_t HiveId() const { return  properties_.HiveID; }
 
   // @brief Returns node property.
   __forceinline const HsaNodeProperties& properties() const {
@@ -456,6 +458,10 @@ class GpuAgent : public GpuAgentInt {
   void* trap_code_buf_;
 
   size_t trap_code_buf_size_;
+
+  // @brief Mappings from doorbell index to queue, for trap handler.
+  // Correlates with output of s_sendmsg(MSG_GET_DOORBELL) for queue identification.
+  amd_queue_t** doorbell_queue_map_;
 
   // @brief The GPU memory bus width in bit.
   uint32_t memory_bus_width_;

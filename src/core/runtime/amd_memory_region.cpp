@@ -376,6 +376,67 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
+    const core::Agent& agent, const core::Runtime::LinkInfo& link_info) const {
+
+  // Return allowed by default if memory pool is owned by requesting device
+  if (agent.public_handle().handle == owner()->public_handle().handle) {
+    return HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT;
+  }
+
+  // Requesting device does not have a link
+  if (link_info.num_hop < 1) {
+    return HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+  }
+
+  // Determine access to fine and coarse grained system memory
+  // Return allowed by default if requesting device is a CPU
+  // Return disallowed by default if requesting device is not a CPU
+  if (IsSystem()) {
+    return (agent.device_type() == core::Agent::kAmdCpuDevice) ?
+            (HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT) :
+            (HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT);
+  }
+
+  // Determine access type for device local memory which is
+  // guaranteed to be HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC
+  // Return disallowed by default if framebuffer is coarse grained
+  // without regard to type of requesting device (CPU / GPU)
+  // Return disallowed by default if framebuffer is fine grained
+  // and requesting device is connected via xGMI link
+  // Return never allowed if framebuffer is fine grained and
+  // requesting device is connected via PCIe link
+  if (IsLocalMemory()) {
+
+    // Return disallowed by default if memory is coarse
+    // grained without regard to link type
+    if  (fine_grain() == false) {
+      return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
+    }
+
+    // Determine if pool is pseudo fine-grained due to env flag
+    // Return disallowed by default
+    if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie()) {
+      return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
+    }
+
+    // Return disallowed by default if memory is fine
+    // grained and link type is xGMI.
+    if (agent.HiveId() == owner()->HiveId()) {
+      return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
+    }
+
+    // Return never allowed if memory is fine grained
+    // link type is not xGMI i.e. link is PCIe
+    return HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+  }
+
+  // Return never allowed if above conditions are not satisified
+  // This can happen when memory pool references neither system
+  // or device local memory
+  return HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+}
+
 hsa_status_t MemoryRegion::GetAgentPoolInfo(
     const core::Agent& agent, hsa_amd_agent_memory_pool_info_t attribute,
     void* value) const {
@@ -385,26 +446,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   const core::Runtime::LinkInfo link_info =
       core::Runtime::runtime_singleton_->GetLinkInfo(node_id_from, node_id_to);
 
-  /**
-   *  ---------------------------------------------------
-   *  |              |CPU        |GPU (owner)|GPU (peer) |
-   *  ---------------------------------------------------
-   *  |system memory |allowed    |disallowed |disallowed |
-   *  ---------------------------------------------------
-   *  |fb private    |never      |allowed    |never      |
-   *  ---------------------------------------------------
-   *  |fb public     |disallowed |allowed    |disallowed |
-   *  ---------------------------------------------------
-   *  |others        |never      |allowed    |never      |
-   *  ---------------------------------------------------
-   */
-  const hsa_amd_memory_pool_access_t access_type =
-      ((IsSystem() && (agent.device_type() == core::Agent::kAmdCpuDevice)) ||
-       (agent.node_id() == owner()->node_id()))
-          ? HSA_AMD_MEMORY_POOL_ACCESS_ALLOWED_BY_DEFAULT
-          : (IsSystem() || (IsLocalMemory() && link_info.num_hop > 0))
-                ? HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT
-                : HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+  const hsa_amd_memory_pool_access_t access_type = GetAccessInfo(agent, link_info);
 
   switch (attribute) {
     case HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS:
