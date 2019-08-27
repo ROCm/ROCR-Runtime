@@ -1166,7 +1166,7 @@ static int topology_create_temp_cpu_cache_list(int node,
 	int max_cpus;
 	cpu_cacheinfo_t *this_cpu; /* one cpu_ci in cpu_ci_list */
 	int cache_cnt = 0;
-	DIR *dirp;
+	DIR *dirp = NULL;
 	struct dirent *dir;
 	char *p;
 
