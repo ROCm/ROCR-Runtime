@@ -948,7 +948,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     rel_mem[4] = 0;
     rel_mem[5] = 0;
     rel_mem[6] = 0;
-  } else if (agent_->isa()->GetMajorVersion() == 9) {
+  } else if (agent_->isa()->GetMajorVersion() >= 9) {
     // Construct an AQL packet to jump to the PM4 IB.
     struct amd_aql_pm4_ib {
       uint16_t header;
