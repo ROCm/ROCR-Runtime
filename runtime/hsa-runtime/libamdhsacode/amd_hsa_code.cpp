@@ -1348,6 +1348,8 @@ namespace code {
           asic = "VI";
         } else if (major_version == 9) {
           asic = "GFX9";
+        } else if (major_version == 10) {
+          asic = "GFX10";
         } else {
           assert(!"unknown compute capability");
         }
