@@ -1161,8 +1161,14 @@ static void topology_destroy_temp_cpu_cache_list(
 static int topology_create_temp_cpu_cache_list(int node,
 	struct proc_cpuinfo *cpuinfo, cpu_cacheinfo_t **temp_cpu_ci_list)
 {
+	/* Get max path size from /sys/devices/system/node/node%d/%s/cache
+	 * below, which will max out according to the largest filename,
+	 * which can be present twice in the string above. 29 is for the prefix
+	 * and the +6 is for the cache suffix
+	 */
+	const uint32_t MAXPATHSIZE = 29 + MAXNAMLEN + (MAXNAMLEN + 6);
 	cpu_cacheinfo_t *p_temp_cpu_ci_list; /* a list of cpu_ci */
-	char path[256], node_dir[256];
+	char path[MAXPATHSIZE], node_dir[MAXPATHSIZE];
 	int max_cpus;
 	cpu_cacheinfo_t *this_cpu; /* one cpu_ci in cpu_ci_list */
 	int cache_cnt = 0;
@@ -1177,7 +1183,7 @@ static int topology_create_temp_cpu_cache_list(int node,
 	*temp_cpu_ci_list = NULL;
 
 	/* Get info from /sys/devices/system/node/nodeX/cpuY/cache */
-	snprintf(node_dir, 256, "/sys/devices/system/node/node%d", node);
+	snprintf(node_dir, MAXPATHSIZE, "/sys/devices/system/node/node%d", node);
 	/* Other than cpuY folders, this dir also has cpulist and cpumap */
 	max_cpus = num_subdirs(node_dir, "cpu");
 	if (max_cpus <= 0) {
@@ -1199,7 +1205,7 @@ static int topology_create_temp_cpu_cache_list(int node,
 			continue;
 		if (!isdigit(dir->d_name[3])) /* ignore files like cpulist */
 			continue;
-		snprintf(path, 256, "/sys/devices/system/node/node%d/%s/cache",
+		snprintf(path, MAXPATHSIZE, "/sys/devices/system/node/node%d/%s/cache",
 			node, dir->d_name);
 		this_cpu->num_caches = num_subdirs(path, "index");
 		this_cpu->cache_prop = calloc(this_cpu->num_caches,
