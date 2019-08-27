@@ -41,7 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "amd_hsa_code_util.hpp"
-#include "libelf.h"
+#include <libelf.h>
 #include <fstream>
 #include <cstring>
 #include <iomanip>
