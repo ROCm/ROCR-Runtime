@@ -126,13 +126,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 
 		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
-		if (fd != -1) {
-			kfd_fd = fd;
-			kfd_open_count = 1;
-		} else {
+		if (fd == -1) {
 			result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
 			goto open_failed;
 		}
+
+		kfd_fd = fd;
+		kfd_open_count = 1;
 
 		init_page_size();
 
