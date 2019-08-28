@@ -295,7 +295,14 @@ typedef struct SDMA_PKT_FENCE_TAG {
     struct {
       unsigned int op : 8;
       unsigned int sub_op : 8;
-      unsigned int reserved_0 : 16;
+      unsigned int mtype : 3;
+      unsigned int gcc : 1;
+      unsigned int sys : 1;
+      unsigned int pad1 : 1;
+      unsigned int snp : 1;
+      unsigned int gpa : 1;
+      unsigned int l2_policy : 2;
+      unsigned int reserved_0 : 6;
     };
     unsigned int DW_0_DATA;
   } HEADER_UNION;
