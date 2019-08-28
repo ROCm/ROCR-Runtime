@@ -168,13 +168,28 @@ set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "HSAKMT library for AMD KFD support" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${SOURCE_DIR}/LICENSE.md" )
 
+#checking for OS-version
+if( EXISTS "/etc/os-release" )
+    file( STRINGS "/etc/os-release" DISTRO_ID REGEX "^ID=" )
+    file( STRINGS "/etc/os-release" DISTRO_RELEASE REGEX "^VERSION_ID=" )
+    string( REPLACE "ID=" "" DISTRO_ID "${DISTRO_ID}" )
+    string( REPLACE "VERSION_ID=" "" DISTRO_RELEASE "${DISTRO_RELEASE}" )
+    message( STATUS "Detected distribution: ${DISTRO_ID}:${DISTRO_RELEASE}" )
+else()
+     message( STATUS "Not able to detect OS" )
+endif()
+
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libnuma1, libpci3, zlib1g, libudev1" )
 
 # RPM package specific variables
-set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl-libs, pciutils-libs, libgcc" )
+if( DISTRO_ID MATCHES "sles" )
+    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, libnuma-devel, pciutils, libgcc_s1")
+else()
+    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl-libs, pciutils-libs, libgcc" )
+endif()
 set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 
