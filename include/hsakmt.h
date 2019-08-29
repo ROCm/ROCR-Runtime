@@ -824,6 +824,27 @@ hsaKmtQueryDebugEvent(
     );
 
 /**
+  Newly created queue snapshot per ptraced process.
+
+  Returns queue snapshot including queue id, gpuid, context save base address,
+  queue status word, queue address and size, and queue read and write pointer.
+
+  ClearEvents set will clear new queue bit and queue status word bits.
+
+  Returns:
+    - HSAKMT_STATUS_SUCCESS if successful
+ */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetQueueSnapshot(
+    HSAuint32			NodeId, // IN
+    HSAuint32			Pid, // IN
+    bool			ClearEvents, // IN
+    void			*SnapshotBuf, // IN
+    HSAuint32			*QssEntries // IN/OUT
+    );
+
+/**
   Set the trap override mask. When debug trap is enabled by
   hsaKmtEnableDebugTrap() each wave launched has its initial
   MODE.excp_en register overriden by TrapMask as specified by

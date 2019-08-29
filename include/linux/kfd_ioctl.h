@@ -93,6 +93,19 @@ struct kfd_ioctl_get_queue_wave_state_args {
 	__u32 pad;
 };
 
+struct kfd_queue_snapshot_entry {
+	__u64 ring_base_address;
+	__u64 write_pointer_address;
+	__u64 read_pointer_address;
+	__u64 ctx_save_restore_address;
+	__u32 queue_id;
+	__u32 gpu_id;
+	__u32 ring_size;
+	__u32 queue_type;
+	__u32 queue_status;
+	__u32 reserved[19];
+};
+
 /* For kfd_ioctl_set_memory_policy_args.default_policy and alternate_policy */
 #define KFD_IOC_CACHE_POLICY_COHERENT 0
 #define KFD_IOC_CACHE_POLICY_NONCOHERENT 1
@@ -246,6 +259,14 @@ struct kfd_ioctl_dbg_wave_control_args {
  */
 #define KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT 5
 
+/* KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT:
+ * ptr: user buffer (IN)
+ * data1: flags (IN)
+ * data2: number of queue snapshot entries (IN/OUT)
+ * data3: unused
+ */
+#define KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT 6
+
 /* KFD_IOC_DBG_TRAP_GET_VERSION:
  * prt: unsused
  * data1: major version (OUT)
@@ -253,6 +274,7 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data3: unused
  */
 #define KFD_IOC_DBG_TRAP_GET_VERSION	7
+
 
 struct kfd_ioctl_dbg_trap_args {
 	__u64 ptr;     /* to KFD -- used for pointer arguments: queue arrays */
@@ -677,7 +699,7 @@ struct kfd_ioctl_cross_memory_copy_args {
 		AMDKFD_IOWR(0x20, struct kfd_ioctl_ipc_export_handle_args)
 
 #define AMDKFD_IOC_DBG_TRAP			\
-		AMDKFD_IOW(0x21, struct kfd_ioctl_dbg_trap_args)
+		AMDKFD_IOWR(0x21, struct kfd_ioctl_dbg_trap_args)
 
 #define AMDKFD_IOC_CROSS_MEMORY_COPY		\
 		AMDKFD_IOWR(0x22, struct kfd_ioctl_cross_memory_copy_args)

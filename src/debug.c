@@ -287,7 +287,8 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 
 	if (op == KFD_IOC_DBG_TRAP_NODE_SUSPEND ||
 			op == KFD_IOC_DBG_TRAP_NODE_RESUME ||
-			op == KFD_IOC_DBG_TRAP_GET_VERSION) {
+			op == KFD_IOC_DBG_TRAP_GET_VERSION ||
+			op == KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT) {
 		if  (NodeId != INVALID_NODEID)
 			return HSAKMT_STATUS_INVALID_HANDLE;
 
@@ -629,4 +630,38 @@ hsaKmtGetThunkDebugTrapVersionInfo(
 {
 	*Major = KFD_IOCTL_DBG_MAJOR_VERSION;
 	*Minor = KFD_IOCTL_DBG_MINOR_VERSION;
+}
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetQueueSnapshot(
+		HSAuint32	NodeId, //IN
+		HSAuint32	Pid, // IN
+		bool		ClearEvents, //IN
+		void		*SnapshotBuf, //IN
+		HSAuint32	*QssEntries //IN/OUT
+		)
+{
+	HSAKMT_STATUS result;
+	struct kfd_ioctl_dbg_trap_args argout = {0};
+	uint32_t flags = 0;
+
+	if (ClearEvents)
+		flags |= KFD_DBG_EV_FLAG_CLEAR_STATUS;
+
+	result = debug_trap(NodeId,
+			    KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT,
+			    flags,
+			    *QssEntries,
+			    0,
+			    Pid,
+			    (HSAuint64)SnapshotBuf,
+			    &argout);
+
+	if (result)
+		return result;
+
+	*QssEntries = argout.data2;
+
+	return 0;
 }
