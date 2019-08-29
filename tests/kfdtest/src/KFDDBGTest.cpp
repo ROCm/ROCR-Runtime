@@ -24,6 +24,7 @@
 #include "KFDDBGTest.hpp"
 #include <sys/ptrace.h>
 #include <poll.h>
+#include "linux/kfd_ioctl.h"
 #include "KFDQMTest.hpp"
 #include "PM4Queue.hpp"
 #include "PM4Packet.hpp"
@@ -439,7 +440,7 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-        if(!checkDebugVersion(0, 2)) {
+        if (!checkDebugVersion(0, 2)) {
                 LOG() << "Test disabled due to debug API version mismatch";
                 goto exit;
         }
@@ -510,12 +511,39 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
         ASSERT_EQ(IsNew, true);
         ASSERT_EQ(EventReceived, HSA_DEBUG_EVENT_TYPE_TRAP);
 
-        // suspend queue, query suspended queue and clear pending event
+        // suspend queue, get snapshot, query suspended queue
+        // and clear pending event
         ASSERT_SUCCESS(hsaKmtQueueSuspend(INVALID_PID, 1, queueIds, 10, 0));
 
         syncStatus = dispatch->SyncWithStatus(suspendTimeout);
         ASSERT_NE(syncStatus, HSAKMT_STATUS_SUCCESS);
         ASSERT_NE(iter[0], result[0]);
+
+        struct kfd_queue_snapshot_entry qssBuf[1] = {};
+        HSAuint32 QssEntries = 0;
+
+        // get only number of queues and don't update the snapshot buffer
+        ASSERT_SUCCESS(hsaKmtGetQueueSnapshot(INVALID_NODEID, INVALID_PID,
+                                              false,
+                                              reinterpret_cast<void *>(qssBuf),
+                                              &QssEntries));
+
+        ASSERT_EQ(QssEntries, 1);
+        ASSERT_EQ(qssBuf[0].ctx_save_restore_address, 0);
+        ASSERT_EQ(qssBuf[0].ring_base_address, 0);
+        ASSERT_EQ(qssBuf[0].ring_size, 0);
+
+        // update the snapshot buffer
+        QssEntries = 1;
+        ASSERT_SUCCESS(hsaKmtGetQueueSnapshot(INVALID_NODEID, INVALID_PID,
+                                              false,
+                                              reinterpret_cast<void *>(qssBuf),
+                                              &QssEntries));
+
+        ASSERT_EQ(QssEntries, 1);
+        ASSERT_NE(qssBuf[0].ctx_save_restore_address, 0);
+        ASSERT_NE(qssBuf[0].ring_base_address, 0);
+        ASSERT_NE(qssBuf[0].ring_size, 0);
 
         ASSERT_SUCCESS(hsaKmtQueryDebugEvent(defaultGPUNode, INVALID_PID,
                                              &qid, true, &EventReceived,
@@ -593,7 +621,7 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-        if(!checkDebugVersion(0, 2)) {
+        if (!checkDebugVersion(0, 2)) {
                 LOG() << "Test disabled due to debug API version mismatch";
                 goto exit;
         }
