@@ -413,8 +413,6 @@ static vm_object_t *vm_find_object_by_address_userptr(manageable_aperture_t *app
 {
 	vm_object_t *cur = NULL;
 
-	if (is_userptr == 0)
-		size = ALIGN_UP(size, app->align);
 	rbtree_t *tree = vm_object_tree(app, is_userptr);
 	rbtree_key_t key = rbtree_key((unsigned long)address, size);
 	void *start;
@@ -561,8 +559,7 @@ static bool aperture_is_valid(void *app_base, void *app_limit)
  */
 static uint64_t vm_align_area_size(manageable_aperture_t *app, uint64_t size)
 {
-	return ALIGN_UP(ALIGN_UP(size, app->align) + (uint64_t)app->guard_pages * PAGE_SIZE,
-			app->align);
+	return size + (uint64_t)app->guard_pages * PAGE_SIZE;
 }
 
 /*
@@ -632,6 +629,7 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 						uint64_t MemorySizeInBytes,
 						uint64_t align)
 {
+	uint64_t offset = 0, orig_align = align;
 	vm_area_t *cur, *next;
 	void *start;
 
@@ -644,12 +642,22 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	while (align < GPU_HUGE_PAGE_SIZE && MemorySizeInBytes >= (align << 1))
 		align <<= 1;
 
+	/* If no specific alignment was requested, align the end of
+	 * buffers instead of the start. For fragment optimizations,
+	 * aligning the start or the end achieves the same effective
+	 * optimization. End alignment to the TLB cache line size is
+	 * needed as a workaround for TLB issues on some older GPUs.
+	 */
+	if (orig_align <= (uint64_t)PAGE_SIZE)
+		offset = align - (MemorySizeInBytes & (align - 1));
+
 	MemorySizeInBytes = vm_align_area_size(app, MemorySizeInBytes);
 
 	/* Find a big enough "hole" in the address space */
 	cur = NULL;
 	next = app->vm_ranges;
-	start = address ? address : (void *)ALIGN_UP((uint64_t)app->base, align);
+	start = address ? address :
+		(void *)(ALIGN_UP((uint64_t)app->base, align) + offset);
 	while (next) {
 		if (next->start > start &&
 		    VOID_PTRS_SUB(next->start, start) >= MemorySizeInBytes)
@@ -658,7 +666,7 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 		cur = next;
 		next = next->next;
 		if (!address)
-			start = (void *)ALIGN_UP((uint64_t)cur->end + 1, align);
+			start = (void *)(ALIGN_UP((uint64_t)cur->end + 1, align) + offset);
 	}
 	if (!next && VOID_PTRS_SUB(app->limit, start) + 1 < MemorySizeInBytes)
 		/* No hole found and not enough space after the last area */
@@ -706,17 +714,11 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 		return NULL;
 	}
 
-	if (align < aper->align)
-		align = aper->align;
-
 	/* Align big buffers to the next power-of-2 up to huge page
 	 * size for flexible fragment size TLB optimizations
 	 */
 	while (align < GPU_HUGE_PAGE_SIZE && size >= (align << 1))
 		align <<= 1;
-
-	/* Align memory size to match aperture requirements */
-	size = ALIGN_UP(size, aper->align);
 
 	/* Add padding to guarantee proper alignment and leave guard
 	 * pages on both sides
@@ -763,9 +765,6 @@ static void mmap_aperture_release(manageable_aperture_t *aper,
 		return;
 	}
 
-	/* Align memory size to match aperture requirements */
-	size = ALIGN_UP(size, aper->align);
-
 	/* Reset NUMA policy */
 	mbind(addr, size, MPOL_DEFAULT, NULL, 0, 0);
 
@@ -800,8 +799,6 @@ static vm_object_t *aperture_allocate_object(manageable_aperture_t *app,
 					     uint32_t flags)
 {
 	vm_object_t *new_object;
-
-	MemorySizeInBytes = ALIGN_UP(MemorySizeInBytes, app->align);
 
 	/* Allocate new object */
 	new_object = vm_create_and_init_object(new_address,
@@ -929,7 +926,7 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 
 	/* Allocate memory from amdkfd */
 	args.gpu_id = gpu_id;
-	args.size = ALIGN_UP(MemorySizeInBytes, aperture->align);
+	args.size = MemorySizeInBytes;
 
 	args.flags = flags |
 		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
@@ -1579,7 +1576,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 			}
 
 			if (flags.ui32.AQLQueueMemory) {
-				uint64_t my_buf_size = ALIGN_UP(size, aperture->align) / 2;
+				uint64_t my_buf_size = size / 2;
 
 				memset(ret, 0, MemorySizeInBytes);
 				mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
@@ -1795,6 +1792,15 @@ static HSAKMT_STATUS init_mmap_apertures(HSAuint64 base, HSAuint64 limit,
 					 HSAuint32 align, HSAuint32 guard_pages)
 {
 	void *addr;
+
+	if (align > (HSAuint32)PAGE_SIZE) {
+		/* This should never happen. Alignment constraints
+		 * only apply to old GPUs that don't support 48-bit
+		 * virtual addresses.
+		 */
+		pr_info("Falling back to reserved SVM apertures due to alignment contraints.\n");
+		return HSAKMT_STATUS_ERROR;
+	}
 
 	/* Set up one SVM aperture */
 	svm.apertures[SVM_DEFAULT].base  = (void *)base;
@@ -3080,7 +3086,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		goto error_free_metadata;
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	mem = aperture_allocate_area_aligned(aperture, NULL, infoArgs.size,
-					     MAX(aperture->align, IMAGE_ALIGN));
+					     IMAGE_ALIGN);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!mem)
 		goto error_free_metadata;
