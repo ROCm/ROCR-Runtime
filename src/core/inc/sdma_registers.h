@@ -43,8 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_SDMA_REGISTERS_H_
 #define HSA_RUNTIME_CORE_INC_SDMA_REGISTERS_H_
 
-#include <cstddef>
-#include <cstdint>
+#include <stddef.h>
+#include <stdint.h>
 
 namespace amd {
 
