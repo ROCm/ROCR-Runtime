@@ -102,14 +102,8 @@ TONGA_TESTS_BLACKLIST=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDCWSRTest.BasicTest:"\
-"KFDEventTest.*:"\
-"KFDLocalMemoryTest.*:"\
-"KFDMemoryTest.FlatScratchAccess:"\
-"KFDMemoryTest.MapMemoryToGPU:"\
-"KFDMemoryTest.MemoryRegister*:"\
-"KFDMemoryTest.QueryPointerInfo:"\
 "KFDPerfCountersTest.*:"\
-"KFDQMTest.*"
+"KFDQMTest.OverSubscribeCpQueues"
 
 # Since Navi10 was merged, the PM4Event test takes 6min to run
 FIJI_TESTS_BLACKLIST=\

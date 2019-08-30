@@ -432,11 +432,6 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
 // Linux OS-specific Test for registering OS allocated memory
 TEST_F(KFDMemoryTest, MemoryRegister) {
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
-    if (isTonga(pNodeProperties)) {
-        LOG() << "Skipping test: Workaround in thunk for Tonga causes failure." << std::endl;
-        return;
-    }
-
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
