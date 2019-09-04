@@ -108,6 +108,7 @@ enum asic_family_type {
 	CHIP_RAVEN,	/* 12 */
 	CHIP_ARCTURUS,	/* 13 */
 	CHIP_NAVI10,	/* 14 */
+	CHIP_NAVI14,	/* 15 */
 	CHIP_LAST
 };
 
