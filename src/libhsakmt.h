@@ -37,6 +37,10 @@ extern unsigned long kfd_open_count;
 extern pthread_mutex_t hsakmt_mutex;
 extern bool is_dgpu;
 
+extern int force_asic;
+extern char force_asic_name[HSA_PUBLIC_NAME_SIZE];
+extern struct hsa_gfxip_table force_asic_entry;
+
 #undef HSAKMTAPI
 #define HSAKMTAPI __attribute__((visibility ("default")))
 
@@ -90,20 +94,31 @@ extern int hsakmt_debug_level;
 
 enum asic_family_type {
 	CHIP_KAVERI = 0,
-	CHIP_HAWAII,
-	CHIP_CARRIZO,
-	CHIP_TONGA,
-	CHIP_FIJI,
-	CHIP_POLARIS10,
-	CHIP_POLARIS11,
-	CHIP_POLARIS12,
-	CHIP_VEGAM,
-	CHIP_VEGA10,
-	CHIP_VEGA12,
-	CHIP_VEGA20,
-	CHIP_RAVEN,
-	CHIP_ARCTURUS,
-	CHIP_NAVI10,
+	CHIP_HAWAII,	/* 1 */
+	CHIP_CARRIZO,	/* 2 */
+	CHIP_TONGA,	/* 3 */
+	CHIP_FIJI,	/* 4 */
+	CHIP_POLARIS10,	/* 5 */
+	CHIP_POLARIS11,	/* 6 */
+	CHIP_POLARIS12,	/* 7 */
+	CHIP_VEGAM,	/* 8 */
+	CHIP_VEGA10,	/* 9 */
+	CHIP_VEGA12,	/* 10 */
+	CHIP_VEGA20,	/* 11 */
+	CHIP_RAVEN,	/* 12 */
+	CHIP_ARCTURUS,	/* 13 */
+	CHIP_NAVI10,	/* 14 */
+	CHIP_LAST
+};
+
+struct hsa_gfxip_table {
+	uint16_t device_id;		// Device ID
+	unsigned char major;		// GFXIP Major engine version
+	unsigned char minor;		// GFXIP Minor engine version
+	unsigned char stepping;		// GFXIP Stepping info
+	unsigned char is_dgpu;		// Predicate for dGPU devices
+	const char *amd_name;		// CALName of the device
+	enum asic_family_type asic_family;	// Device family id
 };
 
 #define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)

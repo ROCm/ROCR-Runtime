@@ -82,7 +82,7 @@ static inline void init_page_size(void)
 	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
 }
 
-static void init_vars_from_env(void)
+static HSAKMT_STATUS init_vars_from_env(void)
 {
 	char *envvar;
 	int debug_level;
@@ -104,6 +104,34 @@ static void init_vars_from_env(void)
 	envvar = getenv("HSA_ZFB");
 	if (envvar)
 		zfb_support = atoi(envvar);
+
+	/* Force all the GPUs to a certain type, use the below command:
+	 * export HSA_FORCE_ASIC_TYPE="10.1.0 1 Navi10 14"
+	 * meaning major.minor.step dgpu asic_name asic_id
+	 */
+	envvar = getenv("HSA_FORCE_ASIC_TYPE");
+	if (envvar) {
+		uint32_t major, minor, step, dgpu, asic_family;
+
+		if ((sscanf(envvar, "%u.%u.%u %u %63s %u", &major, &minor, &step,
+				&dgpu, force_asic_name, &asic_family) != 6)
+			|| (major > 63 || minor > 255 || step > 255)
+			|| dgpu > 1 || asic_family >= CHIP_LAST) {
+			pr_err("HSA_FORCE_ASIC_TYPE %s is invalid\n", envvar);
+			return HSAKMT_STATUS_ERROR;
+		}
+
+		force_asic_entry.major = major;
+		force_asic_entry.minor = minor;
+		force_asic_entry.stepping = step;
+		force_asic_entry.is_dgpu = dgpu;
+
+		force_asic_entry.asic_family = asic_family;
+
+		force_asic = 1;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
@@ -122,7 +150,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		clear_after_fork();
 
 	if (kfd_open_count == 0) {
-		init_vars_from_env();
+		result = init_vars_from_env();
+		if (result != HSAKMT_STATUS_SUCCESS)
+			goto open_failed;
 
 		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
