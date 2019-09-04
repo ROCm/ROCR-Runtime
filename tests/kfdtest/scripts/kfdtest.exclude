@@ -164,6 +164,15 @@ NAVI10_TESTS_BLACKLIST=\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.GPUDoorbellWrite"
 
+NAVI14_TESTS_BLACKLIST=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDDBGTest.*:"\
+"KFDExceptionTest.*:"\
+"KFDPerfCountersTest.*:"\
+"KFDQMTest.CreateQueueStressSingleThreaded:"\
+"KFDPNPTest.DisableWithActiveProcess"
+
 # Core tests, used in scenarios like bringup
 CORE_TESTS=\
 "KFDQMTest.CreateDestroyCpQueue:"\
