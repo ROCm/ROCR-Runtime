@@ -84,15 +84,13 @@ static const char *supported_processor_vendor_name[] = {
 static HSAKMT_STATUS topology_take_snapshot(void);
 static HSAKMT_STATUS topology_drop_snapshot(void);
 
-static struct hsa_gfxip_table {
-	uint16_t device_id;		// Device ID
-	unsigned char major;		// GFXIP Major engine version
-	unsigned char minor;		// GFXIP Minor engine version
-	unsigned char stepping;		// GFXIP Stepping info
-	unsigned char is_dgpu;		// Predicate for dGPU devices
-	const char *amd_name;		// CALName of the device
-	enum asic_family_type asic_family;
-} gfxip_lookup_table[] = {
+int force_asic;
+char force_asic_name[HSA_PUBLIC_NAME_SIZE];
+struct hsa_gfxip_table force_asic_entry = {
+	.amd_name = force_asic_name,
+};
+
+static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	/* Kaveri Family */
 	{ 0x1304, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
 	{ 0x1305, 7, 0, 0, 0, "Spectre", CHIP_KAVERI },
@@ -721,6 +719,9 @@ err1:
 static const struct hsa_gfxip_table *find_hsa_gfxip_device(uint16_t device_id)
 {
 	uint32_t i, table_size;
+
+	if (force_asic)
+		return &force_asic_entry;
 
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
 	for (i = 0; i < table_size; i++) {
