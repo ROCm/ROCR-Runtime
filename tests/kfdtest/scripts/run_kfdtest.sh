@@ -75,6 +75,7 @@ getFilter() {
         raven ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
         arcturus ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
         navi10 ) FILTER="--gtest_filter=$NAVI10_TESTS_BLACKLIST" ;;
+        navi14 ) FILTER="--gtest_filter=$NAVI14_TESTS_BLACKLIST" ;;
         core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
         pm ) FILTER="--gtest_filter=$PM_TESTS" ;;
         all ) FILTER="" ;;
