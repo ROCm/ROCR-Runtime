@@ -1164,11 +1164,6 @@ void GpuAgent::BindTrapHandler() {
     return;
   }
 
-  // Disable trap handler on APUs until KFD is fixed.
-  if (profile_ == HSA_PROFILE_FULL) {
-    return;
-  }
-
   // Assemble the trap handler source code.
   AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
 
