@@ -91,6 +91,7 @@ IsaGenerator* IsaGenerator::Create(unsigned int familyId) {
         return new IsaGenerator_Gfx8;
     case FAMILY_AI:
     case FAMILY_RV:
+    case FAMILY_AR:
         return new IsaGenerator_Gfx9;
     case FAMILY_NV:
         return new IsaGenerator_Gfx10;

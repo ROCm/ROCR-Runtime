@@ -58,6 +58,7 @@ enum KfdFamilyId {
     FAMILY_CZ,  // Carrizo, Nolan, Amur
     FAMILY_AI,  // Arctic Islands
     FAMILY_RV,  // Raven
+    FAMILY_AR,  // Arcturus
     FAMILY_NV,  // Navi10
 };
 
