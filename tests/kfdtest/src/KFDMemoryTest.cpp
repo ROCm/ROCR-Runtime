@@ -2065,3 +2065,181 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
 
     TEST_END
 }
+
+/* Test should only run on Arcturus series which has the new RW mtype
+ * Map a local VRAM with RW mtype (coarse grain for upper layer),
+ * read it locally to cache it and write with local SDMA, remote devices(
+ * CPU or Remote GPU shader connected with PCIe or XGMI),
+ * then read again. The second read should get back what SDMA wrote,
+ * since the cache should be invalidated on write and second read
+ * should go to physical VRAM instead of cache.
+ */
+TEST_F(KFDMemoryTest, CacheInvalidateOnSdmaWrite) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    HsaMemoryBuffer tmpBuffer(PAGE_SIZE, 0, true /* zero */);
+    volatile HSAuint32 *tmp = tmpBuffer.As<volatile HSAuint32 *>();
+    const int dwLocation = 100;
+
+    if (m_FamilyId != FAMILY_AR) {
+        LOG() << "Skipping test: Test requires arcturus series asics." << std::endl;
+        return;
+    }
+
+    HsaMemoryBuffer buffer(PAGE_SIZE, defaultGPUNode, false/*zero*/, true/*local*/, false/*exec*/);
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    buffer.Fill(0, sdmaQueue, 0, PAGE_SIZE);
+    sdmaQueue.PlacePacket(SDMAWriteDataPacket(sdmaQueue.GetFamilyId(), buffer.As<int*>(), 0x5678));
+
+    /* Read buffer from shader to fill cache */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer.As<int*>(), buffer.As<int*>()+dwLocation);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* SDMA writes to buffer. Shader should get what sdma writes and quits*/
+    sdmaQueue.SubmitPacket();
+    sdmaQueue.Wait4PacketConsumption();
+
+    /* Check test result*/
+    dispatch.Sync();
+    EXPECT_EQ(buffer.IsPattern(dwLocation*sizeof(int), 0x5678, sdmaQueue, tmp), true);
+
+    // Clean up
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, CacheInvalidateOnCPUWrite) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+    if (m_FamilyId != FAMILY_AR) {
+        LOG() << "Skipping test: Test requires arcturus series asics." << std::endl;
+        return;
+    }
+
+    if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPUNode)) {
+        LOG() << "Skipping test: Test requires a large bar GPU." << std::endl;
+        return;
+    }
+
+    int *buffer;
+    HsaMemFlags memFlags = {0};
+    /* Host accessible vram */
+    memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.NonPaged = 1;
+    memFlags.ui32.CoarseGrain = 1;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, memFlags, reinterpret_cast<void**>(&buffer)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(buffer, PAGE_SIZE, NULL));
+    *buffer = 0;
+
+    /* Read buffer from shader to fill cache */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer, buffer+100);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* CPU writes to buffer. Shader should get what CPU writes and quits*/
+    *buffer = 0x5678;
+
+    /* Check test result*/
+    dispatch.Sync();
+    EXPECT_EQ(buffer[100], 0x5678);
+
+    // Clean up
+    EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, CacheInvalidateOnRemoteWrite) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    HsaMemoryBuffer tmpBuffer(PAGE_SIZE, 0, true /* zero */);
+    volatile HSAuint32 *tmp = tmpBuffer.As<volatile HSAuint32 *>();
+    const int dwLocation = 100;
+    const int dwLocation1 = 50;
+
+    if (m_FamilyId != FAMILY_AR) {
+        LOG() << "Skipping test: Test requires arcturus series asics." << std::endl;
+        return;
+    }
+
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    if (gpuNodes.size() < 2) {
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
+        return;
+    }
+
+    HSAuint32 nondefaultNode;
+    for (unsigned i = 0; i < gpuNodes.size(); i++) {
+        if (gpuNodes.at(i) != defaultGPUNode) {
+            nondefaultNode = gpuNodes.at(i);
+            break;
+        }
+    }
+
+    HsaMemoryBuffer buffer(PAGE_SIZE, defaultGPUNode, false/*zero*/, true/*local*/, false/*exec*/);
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    buffer.Fill(0, sdmaQueue, 0, PAGE_SIZE);
+
+    /* Read buffer from shader to fill cache */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer.As<int*>(), buffer.As<int*>()+dwLocation);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* Using a remote shader to copy data from dwLocation1 to the beginning of the buffer.
+     * Local shader should get what remote writes and quits
+     */
+    PM4Queue queue1;
+    ASSERT_SUCCESS(queue1.Create(nondefaultNode));
+    buffer.Fill(0x5678, sdmaQueue, dwLocation1*sizeof(int), 4);
+    HsaMemoryBuffer isaBuffer1(PAGE_SIZE, nondefaultNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->GetCopyDwordIsa(isaBuffer1);
+    Dispatch dispatch1(isaBuffer1);
+    dispatch1.SetArgs(buffer.As<int*>()+dwLocation1, buffer.As<int*>());
+    dispatch1.Submit(queue1);
+    dispatch1.Sync(g_TestTimeOut);
+
+    /* Check test result*/
+    dispatch.Sync();
+    EXPECT_EQ(buffer.IsPattern(dwLocation*sizeof(int), 0x5678, sdmaQueue, tmp), true);
+
+    // Clean up
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue1.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+
+    TEST_END
+}
