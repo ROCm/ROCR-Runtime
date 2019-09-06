@@ -107,7 +107,7 @@ class CpuAgent : public core::Agent {
   __forceinline size_t num_cache() const { return cache_props_.size(); }
 
   // @brief Returns Hive ID
-  __forceinline uint64_t HiveId() const { return  properties_.HiveID; }
+  __forceinline uint64_t HiveId() const override { return  properties_.HiveID; }
 
   // @brief Returns data cache property.
   //

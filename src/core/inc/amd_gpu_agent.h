@@ -300,7 +300,7 @@ class GpuAgent : public GpuAgentInt {
   // Getter & setters.
 
   // @brief Returns Hive ID
-  __forceinline uint64_t HiveId() const { return  properties_.HiveID; }
+  __forceinline uint64_t HiveId() const override { return  properties_.HiveID; }
 
   // @brief Returns node property.
   __forceinline const HsaNodeProperties& properties() const {
