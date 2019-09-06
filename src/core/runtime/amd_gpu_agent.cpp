@@ -1182,19 +1182,6 @@ void GpuAgent::SyncClocks() {
 }
 
 void GpuAgent::BindTrapHandler() {
-  if (isa_->GetMajorVersion() == 7) {
-    // No trap handler support on Gfx7, soft error.
-    return;
-  }
-
-  // Disable trap handler on Carrizo until KFD is fixed.
-  if (profile_ == HSA_PROFILE_FULL) {
-    return;
-  }
-
-  // Assemble the trap handler source code.
-  AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
-
   // Make an empty map from doorbell index to queue.
   // The trap handler uses this to retrieve a wave's amd_queue_t*.
   auto doorbell_queue_map_size = MAX_NUM_DOORBELLS * sizeof(amd_queue_t*);
@@ -1204,6 +1191,19 @@ void GpuAgent::BindTrapHandler() {
   assert(doorbell_queue_map_ != NULL && "Doorbell queue map allocation failed");
 
   memset(doorbell_queue_map_, 0, doorbell_queue_map_size);
+
+  if (isa_->GetMajorVersion() == 7) {
+    // No trap handler support on Gfx7, soft error.
+    return;
+  }
+
+  // Disable trap handler on APUs until KFD is fixed.
+  if (profile_ == HSA_PROFILE_FULL) {
+    return;
+  }
+
+  // Assemble the trap handler source code.
+  AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
 
   // Bind the trap handler to this node.
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_,
