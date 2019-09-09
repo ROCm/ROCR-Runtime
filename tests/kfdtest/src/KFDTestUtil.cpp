@@ -197,6 +197,9 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
     if (isReadOnly)
         m_Flags.ui32.ReadOnly = 1;
 
+    if (zero)
+        EXPECT_EQ(m_Flags.ui32.HostAccess, 1);
+
     EXPECT_SUCCESS(hsaKmtAllocMemory(m_Node, m_Size, m_Flags, &m_pBuf));
     if (is_dgpu()) {
         if (map_specific_gpu)
