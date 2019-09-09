@@ -1,13 +1,27 @@
+declare -A FILTER
 
 # Power management tests
-PM_TESTS=\
+FILTER[pm]=\
 "KFDPMTest.SuspendWithActiveProcess:"\
 "KFDPMTest.SuspendWithIdleQueue:"\
-"KFDPMTest.SuspendWithIdleQueueAfterWork:"\
+"KFDPMTest.SuspendWithIdleQueueAfterWork"
+
+
+# Core tests, used in scenarios like bringup
+FILTER[core]=\
+"KFDQMTest.CreateDestroyCpQueue:"\
+"KFDQMTest.SubmitPacketCpQueue:"\
+"KFDQMTest.MultipleCpQueues:"\
+"KFDQMTest.CreateDestroySdmaQueue:"\
+"KFDQMTest.SubmitPacketSdmaQueue:"\
+"KFDQMTest.MultipleSdmaQueues:"\
+"KFDCWSRTest.BasicTest:"\
+"KFDEventTest.SignalEvent"
+
 
 # Permanent exclusions
 # These tests are included for debugging, but are not executed in normal execution on any ASIC:
-# PM_TESTS need human intervention, so put it here. Developers can run them
+# FILTER[pm] need human intervention, so put it here. Developers can run them
 # manually through "-p pm" option.
 #
 # Fragmentation test fails intermittently on different systems (see KFD-344). It
@@ -21,7 +35,7 @@ PM_TESTS=\
 # clears memory at allocation time.
 PERMANENT_BLACKLIST_ALL_ASICS=\
 "-KFDEventTest.MeasureInterruptConsumption:"\
-"$PM_TESTS:"\
+"${FILTER[pm]}:"\
 "KFDLocalMemoryTest.Fragmentation:"\
 "KFDQMTest.BasicCuMaskingLinear:"\
 "RDMATest.GPUDirect:"\
@@ -80,7 +94,7 @@ KV_QUEUE_BLACKLIST=\
 
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
 # KFDMemoryTest.MemoryRegister fails on SDMA queue creation (KFD-337)
-KV_TESTS_BLACKLIST=\
+FILTER[kaveri]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "$KV_QUEUE_BLACKLIST:"\
@@ -90,13 +104,13 @@ KV_TESTS_BLACKLIST=\
 # KFDLocalMemoryTest.BasicTest is failing intermittently (KFD-368)
 # KFDMemoryTest.BigBufferStressTest was failing intermittently on 4.9 and hangs when executed twice (KFD-312)
 # KFDQMTest.GPUDoorbellWrite fails on Hawaii. Could be HW-related (KFD-342)
-HI_TESTS_BLACKLIST=\
+FILTER[hawaii]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDLocalMemoryTest.BasicTest:"\
 "KFDMemoryTest.BigBufferStressTest:"\
 "KFDQMTest.GPUDoorbellWrite"
 
-CZ_TESTS_BLACKLIST=\
+FILTER[carrizo]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDExceptionTest.InvalidWriteAddress"
@@ -104,7 +118,7 @@ CZ_TESTS_BLACKLIST=\
 # KFDPerfCountersTest.*Trace fail (KFD-339)
 # KFDMemoryTest.QueryPointerInfo/MemoryRegister* (KFD-341)
 # The remaining tests listed here fail on map memory to GPU with a VA conflict (KFD-340)
-TONGA_TESTS_BLACKLIST=\
+FILTER[tonga]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDCWSRTest.BasicTest:"\
@@ -112,19 +126,27 @@ TONGA_TESTS_BLACKLIST=\
 "KFDQMTest.OverSubscribeCpQueues"
 
 # Since Navi10 was merged, the PM4Event test takes 6min to run
-FIJI_TESTS_BLACKLIST=\
+FILTER[fiji]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.PM4EventInterrupt:"\
 "$SDMA_BLACKLIST"
 
-POLARIS_TESTS_BLACKLIST=\
+FILTER[polaris10]=\
+"$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST"
+
+FILTER[polaris11]=\
+"$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST"
+
+FILTER[polaris12]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"
 
 # KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
 # KFDQMTest.MultipleSdmaQueues (ROCMOPS-463)
-VEGA10_TESTS_BLACKLIST=\
+FILTER[vega10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDIPCTest.BasicTest:"\
 "KFDEvictTest.BurstyTest:"\
@@ -132,12 +154,12 @@ VEGA10_TESTS_BLACKLIST=\
 "KFDIPCTest.CrossMemoryAttachTest:"\
 "KFDQMTest.MultipleSdmaQueues"
 
-VEGA12_TESTS_BLACKLIST=\
+FILTER[vega12]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"\
 
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
-VEGA20_TESTS_BLACKLIST=\
+FILTER[vega20]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDEvictTest.BurstyTest:"\
@@ -145,17 +167,17 @@ VEGA20_TESTS_BLACKLIST=\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.GPUDoorbellWrite"
 
-RAVEN_TESTS_BLACKLIST=\
+FILTER[raven]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.QueueLatency:"\
 "KFDQMTest.SdmaEventInterrupt"
 
 # KFDExceptionTest.* (KFD-435)
-ARCT_TESTS_BLACKLIST=\
+FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm"
 
-NAVI10_TESTS_BLACKLIST=\
+FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDEvictTest.BurstyTest:"\
@@ -164,7 +186,7 @@ NAVI10_TESTS_BLACKLIST=\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.GPUDoorbellWrite"
 
-NAVI14_TESTS_BLACKLIST=\
+FILTER[navi14]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
@@ -172,14 +194,3 @@ NAVI14_TESTS_BLACKLIST=\
 "KFDPerfCountersTest.*:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
 "KFDPNPTest.DisableWithActiveProcess"
-
-# Core tests, used in scenarios like bringup
-CORE_TESTS=\
-"KFDQMTest.CreateDestroyCpQueue:"\
-"KFDQMTest.SubmitPacketCpQueue:"\
-"KFDQMTest.MultipleCpQueues:"\
-"KFDQMTest.CreateDestroySdmaQueue:"\
-"KFDQMTest.SubmitPacketSdmaQueue:"\
-"KFDQMTest.MultipleSdmaQueues:"\
-"KFDCWSRTest.BasicTest:"\
-"KFDEventTest.SignalEvent"

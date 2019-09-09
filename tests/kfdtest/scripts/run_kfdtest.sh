@@ -40,7 +40,8 @@ printUsage() {
     echo
     echo "Options:"
     echo "  -p <platform> , --platform <platform>    Only run tests that"\
-                                           "pass on the specified platform"
+                               "pass on the specified platform. Usually you"\
+                               "don't need this option"
     echo "  -g            , --gdb                    Run in debugger"
     echo "  -n            , --node                   NodeId to test. If"\
                                "not specified test will be run on all nodes"
@@ -61,27 +62,21 @@ printUsage() {
 # pass in Multi GPU environment, this flag can be removed
 #    param - Platform.
 getFilter() {
+# For regular platforms such as vega10, this will automatically generate
+# the valid variable BLACKLIST based on the variable platform.
     local platform=$1;
+
     case "$platform" in
-        carrizo ) FILTER="--gtest_filter=$CZ_TESTS_BLACKLIST" ;;
-        hawaii ) FILTER="--gtest_filter=$HI_TESTS_BLACKLIST" ;;
-        kaveri ) FILTER="--gtest_filter=$KV_TESTS_BLACKLIST" ;;
-        tonga ) FILTER="--gtest_filter=$TONGA_TESTS_BLACKLIST" ;;
-        fiji ) FILTER="--gtest_filter=$FIJI_TESTS_BLACKLIST" ;;
-        polaris10 | polaris11 | polaris12 ) FILTER="--gtest_filter=$POLARIS_TESTS_BLACKLIST" ;;
-        vega10 ) FILTER="--gtest_filter=$VEGA10_TESTS_BLACKLIST" ;;
-        vega12 ) FILTER="--gtest_filter=$VEGA12_TESTS_BLACKLIST" ;;
-        vega20 ) FILTER="--gtest_filter=$VEGA20_TESTS_BLACKLIST" ;;
-        raven ) FILTER="--gtest_filter=$RAVEN_TESTS_BLACKLIST" ;;
-        arcturus ) FILTER="--gtest_filter=$ARCT_TESTS_BLACKLIST" ;;
-        navi10 ) FILTER="--gtest_filter=$NAVI10_TESTS_BLACKLIST" ;;
-        navi14 ) FILTER="--gtest_filter=$NAVI14_TESTS_BLACKLIST" ;;
-        core ) FILTER="--gtest_filter=$CORE_TESTS" ;;
-        pm ) FILTER="--gtest_filter=$PM_TESTS" ;;
-        all ) FILTER="" ;;
-        *) die "Unsupported platform $platform. Exiting" ;;
+        all ) gtestFilter="" ;;
+        * )
+            if [ -z "${FILTER[$platform]}" ]; then
+                echo "Unsupported platform $platform. Exiting"
+                exit 1
+            fi
+
+            gtestFilter="--gtest_filter=${FILTER[$platform]}"
+            ;;
     esac
-    echo "$FILTER"
 }
 
 TOPOLOGY_SYSFS_DIR=/sys/devices/virtual/kfd/kfd/topology/nodes
@@ -136,7 +131,7 @@ runKfdTest() {
             nodeName="$PLATFORM"
         fi
 
-        gtestFilter=$(getFilter $nodeName)
+        getFilter $nodeName
 
         if [ "$RUN_IN_DOCKER" == "true" ]; then
             if [ "$NODE" == "" ]; then
