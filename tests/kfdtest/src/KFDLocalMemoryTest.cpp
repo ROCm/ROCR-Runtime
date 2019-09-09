@@ -128,7 +128,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer SysBufferA(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer SysBufferB(BufferSize, defaultGPUNode, true);
-    HsaMemoryBuffer LocalBuffer(BufferSize, defaultGPUNode, true, true);
+    HsaMemoryBuffer LocalBuffer(BufferSize, defaultGPUNode, false, true);
 
     SysBufferA.Fill(0x01010101);
 
