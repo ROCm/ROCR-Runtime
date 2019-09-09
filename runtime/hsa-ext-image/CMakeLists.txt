@@ -90,44 +90,35 @@ set ( DRVDEF "${EXT_SOURCE_DIR}/make/image.so.def" )
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 ## Library path(s).
-include_directories ( ${REG_INCLUDE} )
-include_directories ( ${EXT_SOURCE_DIR}/.. )
-include_directories ( ${EXT_SOURCE_DIR}/inc )
-include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime )
-include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/inc )
-include_directories ( ${OPEN_SOURCE_DIR}/hsa-runtime/core/inc )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/core )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc )
-
-# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip )
-# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/r800 )
-#include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/inc/chip/gfx9 )
-
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800 )
-# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/r800/chip )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/r800 )
-
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9 )
-# include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx9/chip )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/gfx9 )
-
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/gfx10 )
-include_directories ( ${EXT_SOURCE_DIR}/image/addrlib/chip/gfx10 )
-
-set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrelemlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrobject.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/coord.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/r800/ciaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/r800/egbaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/r800/siaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/r800/r800addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib1.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/core/addrlib2.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/gfx9/gfx9addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/gfx10/gfx10addrlib.cpp
+include_directories(${REG_INCLUDE})
+include_directories(${EXT_SOURCE_DIR}/..)
+include_directories(${EXT_SOURCE_DIR}/inc)
+include_directories(${OPEN_SOURCE_DIR}/hsa-runtime)
+include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/inc)
+include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/core/inc)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/inc)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/core)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx10)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx9)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/r800)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/r800)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx9)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx10)
+set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/src/addrinterface.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrelemlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib1.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib2.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrobject.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp    
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx10/gfx10addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx9/gfx9addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/ciaddrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/egbaddrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/siaddrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/r800addrlib.cpp
                  ${EXT_SOURCE_DIR}/runtime/amd_ext.cpp
                  ${EXT_SOURCE_DIR}/runtime/device_info.cpp
                  ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp
@@ -135,6 +126,7 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_kv.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager_ai.cpp
+                 ${EXT_SOURCE_DIR}/image/image_manager_nv.cpp
                  ${EXT_SOURCE_DIR}/image/image_lut_kv.cpp
                  ${EXT_SOURCE_DIR}/image/blit_object_gfx7xx.cpp
                  ${EXT_SOURCE_DIR}/image/blit_object_gfx8xx.cpp

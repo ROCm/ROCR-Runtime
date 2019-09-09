@@ -494,12 +494,14 @@ int main(int argc, char** argv) {
     return 1;
   }
   sRocrtstGlvalues = &settings;
-  rsmi_status_t rsmi_ret = rsmi_init(0);
-  if (rsmi_ret != RSMI_STATUS_SUCCESS) {
-    std::cout << "Failed to initialize ROCm smi" << std::endl;
-    return 1;
-  }
-  DumpMonitorInfo();
 
+  if (settings.monitor_verbosity > 0) {
+    rsmi_status_t rsmi_ret = rsmi_init(0);
+    if (rsmi_ret != RSMI_STATUS_SUCCESS) {
+      std::cout << "Failed to initialize ROCm smi" << std::endl;
+      return 1;
+    }
+    DumpMonitorInfo();
+  }
   return RUN_ALL_TESTS();
 }
