@@ -91,6 +91,22 @@ extern int hsakmt_debug_level;
 	hsakmt_print(HSAKMT_DEBUG_LEVEL_INFO, fmt, ##__VA_ARGS__)
 #define pr_debug(fmt, ...) \
 	hsakmt_print(HSAKMT_DEBUG_LEVEL_DEBUG, fmt, ##__VA_ARGS__)
+#define pr_err_once(fmt, ...)                   \
+({                                              \
+        static bool __print_once;               \
+        if (!__print_once) {                    \
+                __print_once = true;            \
+                pr_err(fmt, ##__VA_ARGS__);     \
+        }                                       \
+})
+#define pr_warn_once(fmt, ...)                  \
+({                                              \
+        static bool __print_once;               \
+        if (!__print_once) {                    \
+                __print_once = true;            \
+                pr_warn(fmt, ##__VA_ARGS__);    \
+        }                                       \
+})
 
 enum asic_family_type {
 	CHIP_KAVERI = 0,

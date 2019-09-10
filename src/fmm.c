@@ -1455,11 +1455,12 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 }
 
 static int bind_mem_to_numa(uint32_t node_id, void *mem,
-			    uint64_t MemorySizeInBytes, HsaMemFlags flags)
+			    uint64_t SizeInBytes, HsaMemFlags flags)
 {
 	int mode = MPOL_F_STATIC_NODES;
 	struct bitmask *node_mask;
 	int num_node;
+	long r;
 
 	if (numa_available() == -1)
 		return 0;
@@ -1472,22 +1473,33 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 		return 0;
 	}
 
-	if (num_node > 1) {
-		node_mask = numa_bitmask_alloc(num_node);
-		if (!node_mask)
-			return -ENOMEM;
+	if (num_node <= 1)
+		return 0;
 
-		numa_bitmask_setbit(node_mask, node_id);
-		mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
-		if (mbind(mem, MemorySizeInBytes, mode, node_mask->maskp,
-			  num_node + 1, 0)) {
-			pr_warn("Failed to set NUMA policy for %p\n", mem);
+	node_mask = numa_bitmask_alloc(num_node);
+	if (!node_mask)
+		return -ENOMEM;
 
-			numa_bitmask_free(node_mask);
-			return -EFAULT;
+	numa_bitmask_setbit(node_mask, node_id);
+	mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
+	r = mbind(mem, SizeInBytes, mode, node_mask->maskp, num_node + 1, 0);
+	numa_bitmask_free(node_mask);
+
+	if (r) {
+		pr_warn_once("Failed to set NUMA policy for %p: %s\n", mem,
+			     strerror(errno));
+
+		/* If applcation is running inside docker, still return
+		 * ok because docker seccomp blocks mbind by default,
+		 * otherwise application cannot allocate system memory.
+		 */
+		if (errno == EPERM) {
+			pr_err_once("mbind is blocked by seccomp\n");
+
+			return 0;
 		}
 
-		numa_bitmask_free(node_mask);
+		return -EFAULT;
 	}
 
 	return 0;
