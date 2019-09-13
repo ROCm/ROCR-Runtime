@@ -424,6 +424,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 	flags.ui32.CoarseGrain = DeviceLocal;
+	flags.ui32.NoNUMABind = 1;
 
 	size = ALIGN_UP(size, align);
 
