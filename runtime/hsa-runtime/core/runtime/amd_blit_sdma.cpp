@@ -142,7 +142,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
   }
 
   // HDP flush supported on gfx900 and forward.
-  if (agent_->isa()->GetMajorVersion() > 8) {
+  // FIXME: Not working on gfx10, raises SRBM write protection interrupt.
+  if (agent_->isa()->GetMajorVersion() == 9) {
     hdp_flush_support_ = true;
   }
 
