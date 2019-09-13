@@ -1397,7 +1397,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		flags.Value = 0;
 		flags.ui32.NonPaged = 1;
 		flags.ui32.HostAccess = 1;
-		flags.ui32.Reserved = 0xBe11;
+		flags.ui32.Reserved = 0xBe1;
 
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		vm_obj->flags = flags.Value;
@@ -1462,10 +1462,13 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	int num_node;
 	long r;
 
+	if (flags.ui32.NoNUMABind)
+		return 0;
+
 	if (numa_available() == -1)
 		return 0;
 
-	num_node = numa_num_task_nodes();
+	num_node = numa_max_node();
 
 	/* Ignore binding requests to invalid nodes IDs */
 	if (node_id >= (unsigned)num_node) {

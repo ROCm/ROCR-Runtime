@@ -533,7 +533,8 @@ typedef struct _HsaMemFlags
 					    // The KFD will ensure that the memory returned is allocated in the optimal memory location
 					    // and optimal alignment requirements
             unsigned int FixedAddress : 1; // Allocate memory at specified virtual address. Fail if address is not free.
-            unsigned int Reserved    : 16;
+            unsigned int NoNUMABind:    1; // Don't bind system memory to a specific NUMA node
+            unsigned int Reserved    : 15;
 
         } ui32;
         HSAuint32 Value;
