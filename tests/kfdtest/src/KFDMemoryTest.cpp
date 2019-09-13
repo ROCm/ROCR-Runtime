@@ -364,6 +364,7 @@ TEST_F(KFDMemoryTest , MapMemoryToGPU) {
 TEST_F(KFDMemoryTest, InvalidMemoryPointerAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
+    m_MemoryFlags.ui32.NoNUMABind = 1;
     EXPECT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtAllocMemory(0 /* system */, PAGE_SIZE, m_MemoryFlags, NULL));
 
     TEST_END
@@ -1684,6 +1685,8 @@ TEST_F(KFDMemoryTest, CheckZeroInitializationSysMem) {
 
     unsigned int offset = 257;  // a constant offset, should be smaller than 512.
     unsigned int size = sysBufSize / sizeof(*pDb);
+
+    m_MemoryFlags.ui32.NoNUMABind = 1;
 
     while (count--) {
         ret = hsaKmtAllocMemory(0 /* system */, sysBufSize, m_MemoryFlags,
