@@ -623,6 +623,10 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildFenceComma
 
   packet_addr->HEADER_UNION.op = SDMA_OP_FENCE;
 
+  if (agent_->isa()->GetMajorVersion() >= 10) {
+    packet_addr->HEADER_UNION.mtype = 3;
+  }
+
   packet_addr->ADDR_LO_UNION.addr_31_0 = ptrlow32(fence);
 
   packet_addr->ADDR_HI_UNION.addr_63_32 = ptrhigh32(fence);
