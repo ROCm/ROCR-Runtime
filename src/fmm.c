@@ -1468,7 +1468,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	if (numa_available() == -1)
 		return 0;
 
-	num_node = numa_max_node();
+	num_node = numa_max_node() + 1;
 
 	/* Ignore binding requests to invalid nodes IDs */
 	if (node_id >= (unsigned)num_node) {
