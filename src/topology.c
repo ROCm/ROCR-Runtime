@@ -235,7 +235,6 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	/* Navi12 */
 	{ 0x7360, 10, 1, 1, 1, "Navi12", CHIP_NAVI12 },
 	{ 0x7362, 10, 1, 1, 1, "Navi12", CHIP_NAVI12 },
-
 };
 
 /* information from /proc/cpuinfo */

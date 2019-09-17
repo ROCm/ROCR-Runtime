@@ -128,6 +128,7 @@ enum asic_family_type {
 	CHIP_NAVI10,	/* 15 */
 	CHIP_NAVI12,	/* 16 */
 	CHIP_NAVI14,	/* 17 */
+	CHIP_SIENNA_CICHLID,	/* 18 */
 	CHIP_LAST
 };
 
