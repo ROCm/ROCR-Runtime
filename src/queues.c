@@ -164,6 +164,12 @@ const struct device_info navi14_device_info = {
     .doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info sienna_cichlid_device_info = {
+    .asic_family = CHIP_SIENNA_CICHLID,
+    .eop_buffer_size = 4096,
+    .doorbell_size = DOORBELL_SIZE_GFX9,
+};
+
 static const struct device_info *dev_lookup_table[] = {
 	[CHIP_KAVERI] = &kaveri_device_info,
 	[CHIP_HAWAII] = &hawaii_device_info,
@@ -183,6 +189,7 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_NAVI10] = &navi10_device_info,
 	[CHIP_NAVI12] = &navi12_device_info,
 	[CHIP_NAVI14] = &navi14_device_info,
+	[CHIP_SIENNA_CICHLID] = &sienna_cichlid_device_info,
 };
 
 struct queue {
