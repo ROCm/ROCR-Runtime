@@ -198,3 +198,9 @@ FILTER[navi10]=\
 
 FILTER[navi14]=\
 "$BLACKLIST_ALL_ASICS"
+
+FILTER[sienna_cichlid]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDDBGTest.*:"\
+"KFDPerfCountersTest.*:"\
