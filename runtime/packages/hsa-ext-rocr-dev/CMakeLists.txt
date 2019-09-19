@@ -55,6 +55,9 @@ include ( utils )
 
 ## Get the package version.
 get_version ( "1.1.9" )
+if ( ${ROCM_PATCH_VERSION} )
+    set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
+endif ()
 
 set( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_COMMIT_COUNT}-${VERSION_JOB}-${VERSION_HASH}" )
 
