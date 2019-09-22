@@ -11,9 +11,11 @@ FILTER[pm]=\
 # Software scheduler mode, i. e. non HWS mode
 FILTER[core_sws]=\
 "KFDQMTest.CreateDestroyCpQueue:"\
+"KFDQMTest.SubmitNopCpQueue:"\
 "KFDQMTest.SubmitPacketCpQueue:"\
 "KFDQMTest.MultipleCpQueues:"\
 "KFDQMTest.CreateDestroySdmaQueue:"\
+"KFDQMTest.SubmitNopSdmaQueue:"\
 "KFDQMTest.SubmitPacketSdmaQueue:"\
 "KFDQMTest.MultipleSdmaQueues:"\
 "KFDEventTest.SignalEvent"
