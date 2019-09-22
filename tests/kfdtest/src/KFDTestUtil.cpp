@@ -30,6 +30,14 @@
 #include "Dispatch.hpp"
 #include "SDMAPacket.hpp"
 
+void WaitUntilInput() {
+    char dummy;
+    printf("Press enter to continue: ");
+    do {
+        scanf("%c", &dummy);
+    } while (dummy != 10); // enter key's ascii value is 10
+}
+
 uint64_t RoundToPowerOf2(uint64_t val) {
   int bytes = sizeof(uint64_t);
 

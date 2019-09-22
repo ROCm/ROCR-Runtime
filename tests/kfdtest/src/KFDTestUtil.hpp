@@ -35,6 +35,7 @@ class BaseQueue;
 #define ALIGN_UP(x, align) (((uint64_t)(x) + (align) - 1) & ~(uint64_t)((align)-1))
 #define CounterToNanoSec(x) ((x) * 1000 / (is_dgpu() ? 27 : 100))
 
+void WaitUntilInput();
 uint64_t RoundToPowerOf2(uint64_t val);
 
 // @brief: waits until the value is written to the buffer or until time out if received through args
