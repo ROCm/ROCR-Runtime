@@ -158,5 +158,20 @@ class SDMATimePacket : public SDMAPacket {
     SDMA_PKT_TIMESTAMP  packetData;
 };
 
+class SDMANopPacket : public SDMAPacket {
+ public:
+    SDMANopPacket(unsigned int count = 1);
+    virtual ~SDMANopPacket(void);
+
+    // @returns Pointer to the packet
+    virtual const void *GetPacket() const { return packetData; }
+    // @returns Packet size in bytes
+    virtual unsigned int SizeInBytes() const { return packetSize; }
+
+ private:
+    SDMA_PKT_NOP *packetData;
+    unsigned int packetSize;
+};
+
 
 #endif  // __KFD_SDMA_PACKET__H__
