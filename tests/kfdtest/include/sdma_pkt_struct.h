@@ -25,6 +25,7 @@
 #define __SDMA_PKT_STRUCT_H__
 
 
+const unsigned int SDMA_OP_NOP = 0;
 const unsigned int SDMA_OP_COPY = 1;
 const unsigned int SDMA_OP_WRITE = 2;
 
@@ -353,5 +354,34 @@ typedef struct SDMA_PKT_TIMESTAMP_TAG
         unsigned int DW_2_DATA;
     } ADDR_HI_UNION;
 } SDMA_PKT_TIMESTAMP, *PSDMA_PKT_TIMESTAMP;
+
+
+/*
+** Definitions for SDMA_PKT_NOP packet
+*/
+
+typedef struct SDMA_PKT_NOP_TAG
+{
+    union
+    {
+        struct
+        {
+            unsigned int op:8;
+            unsigned int sub_op:8;
+            unsigned int count:14;
+            unsigned int reserved_0:2;
+        };
+        unsigned int DW_0_DATA;
+    } HEADER_UNION;
+
+    union
+    {
+        struct
+        {
+            unsigned int data0:32;
+        };
+        unsigned int DW_1_DATA;
+    } DATA0_UNION;
+} SDMA_PKT_NOP, *PSDMA_PKT_NOP;
 
 #endif // __SDMA_PKT_STRUCT_H__

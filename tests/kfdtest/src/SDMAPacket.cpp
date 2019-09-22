@@ -246,3 +246,16 @@ void SDMATimePacket::InitPacket(void *destaddr) {
             packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
             packetData.ADDR_HI_UNION.DW_2_DATA); /*dst_addr_63_32*/
 }
+
+SDMANopPacket::SDMANopPacket(unsigned int count) {
+    packetSize = count;
+    packetData = reinterpret_cast<SDMA_PKT_NOP *>(calloc(count, sizeof(unsigned int)));
+
+    packetData->HEADER_UNION.op = SDMA_OP_NOP;
+    packetData->HEADER_UNION.sub_op = 0;
+    packetData->HEADER_UNION.count = count - 1;
+}
+
+SDMANopPacket::~SDMANopPacket() {
+    free(packetData);
+}
