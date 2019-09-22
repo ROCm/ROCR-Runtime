@@ -52,7 +52,7 @@ printUsage() {
     echo
     echo "Gtest arguments will be forwarded to the app"
     echo
-    echo "Valid platform options: pm, core, polaris10, vega10, vega20, all, and so on"
+    echo "Valid platform options: core_sws, core, polaris10, vega10, vega20, pm, all, and so on"
     echo "'all' option runs all tests"
 
     return 0

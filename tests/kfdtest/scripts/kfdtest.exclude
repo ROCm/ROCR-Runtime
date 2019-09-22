@@ -8,15 +8,20 @@ FILTER[pm]=\
 
 
 # Core tests, used in scenarios like bringup
-FILTER[core]=\
+# Software scheduler mode, i. e. non HWS mode
+FILTER[core_sws]=\
 "KFDQMTest.CreateDestroyCpQueue:"\
 "KFDQMTest.SubmitPacketCpQueue:"\
 "KFDQMTest.MultipleCpQueues:"\
 "KFDQMTest.CreateDestroySdmaQueue:"\
 "KFDQMTest.SubmitPacketSdmaQueue:"\
 "KFDQMTest.MultipleSdmaQueues:"\
-"KFDCWSRTest.BasicTest:"\
 "KFDEventTest.SignalEvent"
+
+# HWS mode
+FILTER[core]=\
+"${FILTER[core_sws]}:"\
+"KFDCWSRTest.BasicTest"
 
 
 # Permanent exclusions
