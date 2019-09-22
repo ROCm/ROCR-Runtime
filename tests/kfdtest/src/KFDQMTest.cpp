@@ -71,6 +71,25 @@ TEST_F(KFDQMTest, CreateDestroyCpQueue) {
     TEST_END
 }
 
+TEST_F(KFDQMTest, SubmitNopCpQueue) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    PM4Queue queue;
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    queue.PlaceAndSubmitPacket(PM4NopPacket());
+
+    queue.Wait4PacketConsumption();
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
 TEST_F(KFDQMTest, SubmitPacketCpQueue) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -136,6 +155,25 @@ TEST_F(KFDQMTest, CreateDestroySdmaQueue) {
     SDMAQueue queue;
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
+TEST_F(KFDQMTest, SubmitNopSdmaQueue) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    SDMAQueue queue;
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    queue.PlaceAndSubmitPacket(SDMANopPacket());
+
+    queue.Wait4PacketConsumption();
 
     EXPECT_SUCCESS(queue.Destroy());
 
