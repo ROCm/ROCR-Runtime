@@ -1435,13 +1435,6 @@ namespace amd {
         if (section->Name() == ".note") { noteSection = static_cast<GElfNoteSection*>(section.get()); }
       }
 
-      size_t phnum;
-      if (elf_getphdrnum(e, &phnum) < 0) { return elfError("elf_getphdrnum failed"); }
-      for (size_t i = 0; i < phnum; ++i) {
-        segments.push_back(std::unique_ptr<GElfSegment>(new GElfSegment(this, i)));
-        if (!segments[i]->pull()) { return false; }
-      }
-
       return true;
     }
 
