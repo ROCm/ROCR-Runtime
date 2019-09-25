@@ -1408,23 +1408,7 @@ namespace amd {
 
       for (size_t n = 1; n < sections.size(); ++n) {
         GElfSection* section = sections[n].get();
-        if (section->type() == SHT_STRTAB) {
-          if (!section->pullData()) { return false; }
-        }
-      }
-
-      for (size_t n = 1; n < sections.size(); ++n) {
-        GElfSection* section = sections[n].get();
-        if (section->type() == SHT_SYMTAB || section->type() == SHT_DYNSYM) {
-          if (!section->pullData()) { return false; }
-        }
-      }
-
-      for (size_t n = 1; n < sections.size(); ++n) {
-        GElfSection* section = sections[n].get();
-        if (section->type() != SHT_STRTAB && section->type() != SHT_SYMTAB && section->type() != SHT_DYNSYM) {
-          if (!section->pullData()) { return false; }
-        }
+        if (!section->pullData()) { return false; }
       }
 
       for (size_t i = 1; i < sections.size(); ++i) {
