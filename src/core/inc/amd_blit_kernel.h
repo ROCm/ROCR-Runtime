@@ -60,7 +60,7 @@ class BlitKernel : public core::Blit {
   /// @param agent Pointer to the agent that will execute the AQL packets.
   ///
   /// @return hsa_status_t
-  virtual hsa_status_t Initialize(const core::Agent& agent) override;
+  hsa_status_t Initialize(const core::Agent& agent);
 
   /// @brief Marks the blit kernel object as invalid and uncouples its link with
   /// the underlying AQL kernel queue. Use of the blit object
