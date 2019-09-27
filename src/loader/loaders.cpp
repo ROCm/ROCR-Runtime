@@ -91,6 +91,7 @@ namespace loader {
     gfx901.handle = 901;
     gfx902.handle = 902;
     gfx903.handle = 903;
+    gfx908.handle = 908;
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -120,6 +121,8 @@ namespace loader {
       return gfx902;
     } else if (sname == "AMD:AMDGPU:9:0:3") {
       return gfx903;
+    } else if (sname == "AMD:AMDGPU:9:0:8") {
+      return gfx908;
     }
 
     assert(0);

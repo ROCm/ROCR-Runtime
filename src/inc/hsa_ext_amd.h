@@ -152,7 +152,13 @@ typedef enum hsa_amd_agent_info_s {
    * model and should be treated with caution.
    * The type of this attribute is hsa_amd_hdp_flush_t.
    */
-  HSA_AMD_AGENT_INFO_HDP_FLUSH = 0xA00E
+  HSA_AMD_AGENT_INFO_HDP_FLUSH = 0xA00E,
+  /**
+   * PCIe domain for the agent.  Pairs with HSA_AMD_AGENT_INFO_BDFID
+   * to give the full physical location of the Agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -648,8 +654,26 @@ typedef enum {
 } hsa_amd_segment_t;
 
 /**
- * @brief A memory pool represents physical storage on an agent.
- */
+ * @brief A memory pool encapsulates physical storage on an agent
+ * along with a memory access model.
+ *
+ * @details A memory pool encapsulates a physical partition of an agent's
+ * memory system along with a memory access model.  Division of a single
+ * memory system into separate pools allows querying each partition's access
+ * path properties (see ::hsa_amd_agent_memory_pool_get_info). Allocations
+ * from a pool are preferentially bound to that pool's physical partition.
+ * Binding to the pool's preferential physical partition may not be
+ * possible or persistent depending on the system's memory policy
+ * and/or state which is beyond the scope of HSA APIs.
+ *
+ * For example, a multi-node NUMA memory system may be represented by multiple
+ * pool's with each pool providing size and access path information for the
+ * partition it represents.  Allocations from a pool are preferentially bound
+ * to the pool's partition (which in this example is a NUMA node) while
+ * following its memory access model. The actual placement may vary or migrate
+ * due to the system's NUMA policy and state, which is beyond the scope of
+ * HSA APIs.
+ */ 
 typedef struct hsa_amd_memory_pool_s {
   /**
    * Opaque handle.
@@ -729,6 +753,11 @@ typedef enum {
   * attribute is bool.
   */
   HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL = 15,
+  /**
+  * Maximum aggregate allocation size in bytes. The type of this attribute
+  * is size_t.
+  */
+  HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE = 16,
 } hsa_amd_memory_pool_info_t;
 
 /**
@@ -817,8 +846,8 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
  * @retval ::HSA_STATUS_ERROR_INVALID_MEMORY_POOL The memory pool is invalid.
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION The host is not allowed to
- * allocate memory in @p memory_pool, or @p size is greater than the value of
- * HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE in @p memory_pool.
+ * allocate memory in @p memory_pool, or @p size is greater than
+ * the value of HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE in @p memory_pool.
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is NULL, or @p size is 0,
  * or flags is not 0.

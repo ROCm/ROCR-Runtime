@@ -175,6 +175,9 @@ class MemoryRegion : public core::MemoryRegion {
 
   size_t max_single_alloc_size_;
 
+  // Used to collect total system memory
+  static size_t max_sysmem_alloc_size_;
+
   HSAuint64 virtual_size_;
 
   mutable KernelMutex access_lock_;
