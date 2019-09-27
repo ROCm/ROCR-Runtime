@@ -47,6 +47,7 @@
 #include <utility>
 #include <functional>
 
+#include "core/util/locks.h"
 #include "core/util/utils.h"
 
 /*
