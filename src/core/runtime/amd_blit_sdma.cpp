@@ -100,13 +100,12 @@ template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 const uint32_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::trap_command_size_ = sizeof(SDMA_PKT_TRAP);
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
-BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma(bool copy_direction)
+BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BlitSdma()
     : agent_(NULL),
       queue_start_addr_(NULL),
       parity_(false),
       cached_reserve_index_(0),
       cached_commit_index_(0),
-      sdma_h2d_(copy_direction),
       platform_atomic_support_(true),
       hdp_flush_support_(false) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
@@ -117,7 +116,7 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::~BlitSdma() {}
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initialize(
-    const core::Agent& agent) {
+    const core::Agent& agent, bool use_xgmi) {
   if (queue_start_addr_ != NULL) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
@@ -159,8 +158,10 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
 
   // Access kernel driver to initialize the queue control block
   // This call binds user mode queue object to underlying compute
-  // device.
-  const HSA_QUEUE_TYPE kQueueType_ = HSA_QUEUE_SDMA;
+  // device. ROCr creates queues that are of two kinds: PCIe optimized
+  // and xGMI optimized. Which queue to create is indicated via input
+  // boolean flag
+  const HSA_QUEUE_TYPE kQueueType_ = use_xgmi ? HSA_QUEUE_SDMA_XGMI : HSA_QUEUE_SDMA;
   if (HSAKMT_STATUS_SUCCESS != hsaKmtCreateQueue(agent_->node_id(), kQueueType_, 100,
                                                  HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
                                                  kQueueSize, NULL, &queue_resource_)) {
@@ -319,9 +320,9 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
     command_addr += timestamp_command_size_;
   }
 
-  // Determine if a Hdp flush cmd is required at the top of cmd stream
+  // Issue a Hdp flush cmd
   if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_ == false)) {
+    if ((HwIndexMonotonic) && (hdp_flush_support_)) {
       BuildHdpFlushCommand(command_addr);
       command_addr += flush_command_size_;
     }
@@ -330,14 +331,6 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::SubmitC
   // Do the command after all polls are satisfied.
   memcpy(command_addr, cmd, cmd_size);
   command_addr += cmd_size;
-
-  // Determine if a Hdp flush cmd is required at the end of cmd stream
-  if (core::Runtime::runtime_singleton_->flag().enable_sdma_hdp_flush()) {
-    if ((HwIndexMonotonic) && (hdp_flush_support_) && (sdma_h2d_)) {
-      BuildHdpFlushCommand(command_addr);
-      command_addr += flush_command_size_;
-    }
-  }
 
   if (profiling_enabled) {
     assert(IsMultipleOf(end_ts_addr, 32));

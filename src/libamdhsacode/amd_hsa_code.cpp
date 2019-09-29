@@ -577,6 +577,8 @@ namespace code {
         NewName = "amdgcn-amd-amdhsa--gfx904";
       else if (OldName == "AMD:AMDGPU:9:0:6")
         NewName = "amdgcn-amd-amdhsa--gfx906";
+      else if (OldName == "AMD:AMDGPU:9:0:8")
+        NewName = "amdgcn-amd-amdhsa--gfx908";
       else
         assert(false && "Unhandled target");
 
@@ -628,6 +630,7 @@ namespace code {
         case EF_AMDGPU_MACH_AMDGCN_GFX902_LC: isaName += "gfx902"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX904_LC: isaName += "gfx904"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX906_LC: isaName += "gfx906"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX908_LC: isaName += "gfx908"; break;
         default: return false;
         }
 

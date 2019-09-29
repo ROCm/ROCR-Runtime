@@ -47,6 +47,7 @@
 #include <utility>
 #include <functional>
 
+#include "core/util/locks.h"
 #include "core/util/utils.h"
 
 /*
@@ -57,6 +58,19 @@ template <typename T> class lazy_ptr {
   lazy_ptr() {}
 
   explicit lazy_ptr(std::function<T*()> Constructor) { Init(Constructor); }
+
+  lazy_ptr(lazy_ptr&& rhs) {
+    obj = std::move(rhs.obj);
+    func = std::move(rhs.func);
+  }
+
+  lazy_ptr& operator=(lazy_ptr&& rhs) {
+    obj = std::move(rhs.obj);
+    func = std::move(rhs.func);
+  }
+
+  lazy_ptr(lazy_ptr&) = delete;
+  lazy_ptr& operator=(lazy_ptr&) = delete;
 
   void reset(std::function<T*()> Constructor = nullptr) {
     obj.reset();
@@ -122,7 +136,6 @@ template <typename T> class lazy_ptr {
     }
   }
 
-  DISALLOW_COPY_AND_ASSIGN(lazy_ptr);
 };
 
 #endif  // HSA_RUNTIME_CORE_UTIL_LAZY_PTR_H_
