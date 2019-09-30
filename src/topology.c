@@ -1193,7 +1193,7 @@ static int topology_create_temp_cpu_cache_list(int node,
 	/* Other than cpuY folders, this dir also has cpulist and cpumap */
 	max_cpus = num_subdirs(node_dir, "cpu");
 	if (max_cpus <= 0) {
-		pr_err("Fail to get cpu* dirs under %s\n", path);
+		pr_err("Fail to get cpu* dirs under %s\n", node_dir);
 		goto exit;
 	}
 
