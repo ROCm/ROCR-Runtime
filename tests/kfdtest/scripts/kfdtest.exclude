@@ -173,9 +173,11 @@ FILTER[raven]=\
 "KFDQMTest.SdmaEventInterrupt"
 
 # KFDExceptionTest.* (KFD-435)
+# KFDEvictTest.BurstyTest (KFD-425)
 FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDExceptionTest.FaultStorm"
+"KFDExceptionTest.FaultStorm:"\
+"KFDEvictTest.BurstyTest"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
