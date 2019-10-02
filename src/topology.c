@@ -1066,7 +1066,11 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 				props->MarketingName[i] = name[i];
 			props->MarketingName[i] = '\0';
 		}
-	}
+	} else if (props->DeviceId)
+		/* still return success */
+		pr_err("device ID 0x%x is not supported in libhsakmt\n",
+				props->DeviceId);
+
 	if (props->NumFComputeCores)
 		assert(props->EngineId.ui32.Major);
 
