@@ -2348,6 +2348,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_id].mmio_aperture.limit = (void *)
 			((char *)gpu_mem[gpu_mem_id].mmio_aperture.base +
 			 PAGE_SIZE - 1);
+		else
+			pr_err("Failed to map remapped mmio page on gpu_mem %d\n",
+					gpu_mem_id);
 	}
 
 	free(process_apertures);
