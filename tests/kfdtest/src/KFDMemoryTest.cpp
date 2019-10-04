@@ -1967,6 +1967,7 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     HSAuint32 *mmioBase = NULL;
     unsigned int *nullPtr = NULL;
     std::vector<HSAuint32> nodes;
+    int numPeers;
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     if (gpuNodes.size() < 2) {
@@ -1978,26 +1979,23 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     if (g_TestDstNodeId != -1 && g_TestNodeId != -1) {
         nodes.push_back(g_TestNodeId);
         nodes.push_back(g_TestDstNodeId);
-        if (!m_NodeInfo.IsGPUNodeLargeBar(nodes[0])) {
-            LOG() << "Skipping test: first GPU specified is not a large bar GPU." << std::endl;
+
+        if (!m_NodeInfo.IsGPUNodeLargeBar(g_TestNodeId) &&
+            !m_NodeInfo.AreGPUNodesXGMI(g_TestNodeId, g_TestDstNodeId)) {
+            LOG() << "Skipping test: first GPU specified is not peer-accessible." << std::endl;
             return;
         }
+
         if (nodes[0] == nodes[1]) {
             LOG() << "Skipping test: Different GPUs must be specified (2 GPUs required)." << std::endl;
             return;
         }
     } else {
         HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
-        if (!m_NodeInfo.IsGPUNodeLargeBar(defaultGPU)) {
-            LOG() << "Skipping test: Default GPUs must be large bar." << std::endl;
-            return;
-        }
-        nodes.push_back(defaultGPU);
-        for (unsigned i = 0; i < gpuNodes.size(); i++)
-            if (gpuNodes.at(i) != defaultGPU)
-                nodes.push_back(gpuNodes.at(i));
+        m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, false);
         if (nodes.size() < 2) {
-            LOG() << "Skipping test: At least 2 GPUs required." << std::endl;
+            LOG() << "Skipping test: Test requires at least one large bar GPU." << std::endl;
+            LOG() << "               or two GPUs are XGMI connected." << std::endl;
             return;
         }
     }
