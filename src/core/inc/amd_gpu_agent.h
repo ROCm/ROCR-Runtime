@@ -129,10 +129,7 @@ class GpuAgentInt : public core::Agent {
   //
   // @param [in] signal Pointer to signal that provides the async copy timing.
   // @param [out] time Structure to be populated with the host domain value.
-  virtual void TranslateTime(core::Signal* signal,
-                             hsa_amd_profiling_async_copy_time_t& time) {
-    return TranslateTime(signal, (hsa_amd_profiling_dispatch_time_t&)time);
-  }
+  virtual void TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) = 0;
 
   // @brief Translate timestamp agent domain to host domain.
   //
@@ -248,9 +245,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from core::Agent.
   hsa_status_t DmaFill(void* ptr, uint32_t value, size_t count) override;
 
-  // @brief Get the next available end timestamp object.
-  uint64_t* ObtainEndTsObject();
-
   // @brief Override from core::Agent.
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void* value) const override;
 
@@ -283,6 +277,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from amd::GpuAgentInt.
   void TranslateTime(core::Signal* signal,
                      hsa_amd_profiling_dispatch_time_t& time) override;
+
+  // @brief Override from amd::GpuAgentInt.
+  void TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) override;
 
   // @brief Override from amd::GpuAgentInt.
   uint64_t TranslateTime(uint64_t tick) override;
@@ -490,9 +487,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create internal queues and blits.
   void InitDma();
 
-  // @brief Initialize memory pool for end timestamp object.
-  // @retval True if the memory pool for end timestamp object is initialized.
-  bool InitEndTsPool();
 
   // Bind index of peer device that is connected via xGMI links
   lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
@@ -503,22 +497,11 @@ class GpuAgent : public GpuAgentInt {
 
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent);
-
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
-
-  // Each end ts is 32 bytes.
-  static const size_t kTsSize = 32;
-
-  // Number of element in the pool.
-  uint32_t end_ts_pool_size_;
-
-  std::atomic<uint32_t> end_ts_pool_counter_;
-
-  std::atomic<uint64_t*> end_ts_base_addr_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

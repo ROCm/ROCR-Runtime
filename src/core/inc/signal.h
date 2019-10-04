@@ -82,8 +82,12 @@ class Signal;
 /// @brief ABI and object conversion struct for signals.  May be shared between processes.
 struct SharedSignal {
   amd_signal_t amd_signal;
+  uint64_t sdma_start_ts;
   Signal* core_signal;
   Check<0x71FCCA6A3D5D5276, true> id;
+  uint8_t reserved[8];
+  uint64_t sdma_end_ts;
+  uint8_t reserved2[24];
 
   SharedSignal() {
     memset(&amd_signal, 0, sizeof(amd_signal));
@@ -94,6 +98,39 @@ struct SharedSignal {
   bool IsValid() const { return (Convert(this).handle != 0) && id.IsValid(); }
 
   bool IsIPC() const { return core_signal == nullptr; }
+
+  void GetSdmaTsAddresses(uint64_t*& start, uint64_t*& end) {
+    /*
+    SDMA timestamps on gfx7xx/8xxx require 32 byte alignment (gfx9xx relaxes
+    alignment to 8 bytes).  This conflicts with the frozen format for amd_signal_t
+    so we place the time stamps in sdma_start/end_ts instead (amd_signal.start_ts
+    is also properly aligned).  Reading of the timestamps occurs in GetRawTs().
+    */
+    start = &sdma_start_ts;
+    end = &sdma_end_ts;
+  }
+
+  void CopyPrep() {
+    // Clear sdma_end_ts before a copy so we can detect if the copy was done via
+    // SDMA or blit kernel.
+    sdma_start_ts = 0;
+    sdma_end_ts = 0;
+  }
+
+  void GetRawTs(bool FetchCopyTs, uint64_t& start, uint64_t& end) {
+    /*
+    If the read is for a copy we need to check if it was done by blit kernel or SDMA.
+    Since we clear sdma_start/end_ts during CopyPrep we know it was a SDMA copy if one
+    of those is non-zero.  Otherwise return compute kernel stamps from amd_signal.
+    */
+    if (FetchCopyTs && sdma_end_ts != 0) {
+      start = sdma_start_ts;
+      end = sdma_end_ts;
+      return;
+    }
+    start = amd_signal.start_ts;
+    end = amd_signal.end_ts;
+  }
 
   static __forceinline SharedSignal* Convert(hsa_signal_t signal) {
     SharedSignal* ret = reinterpret_cast<SharedSignal*>(static_cast<uintptr_t>(signal.handle) -
@@ -112,6 +149,12 @@ static_assert(std::is_standard_layout<SharedSignal>::value,
               "SharedSignal must remain standard layout for IPC use.");
 static_assert(std::is_trivially_destructible<SharedSignal>::value,
               "SharedSignal must not be modified on delete for IPC use.");
+static_assert((offsetof(SharedSignal, sdma_start_ts) % 32) == 0,
+              "Bad SDMA time stamp alignment.");
+static_assert((offsetof(SharedSignal, sdma_end_ts) % 32) == 0,
+              "Bad SDMA time stamp alignment.");
+static_assert(sizeof(SharedSignal) == 128,
+              "Bad SharedSignal size.");
 
 /// @brief Pool class for SharedSignal suitable for use with Shared.
 class SharedSignalPool_t : private BaseShared {
@@ -318,11 +361,22 @@ class Signal {
   /// @brief Checks if signal is currently in use by a wait API.
   bool InWaiting() const { return waiting_ != 0; }
 
+  // Prep for copy profiling.  Store copy agent and ready API block.
   __forceinline void async_copy_agent(core::Agent* agent) {
     async_copy_agent_ = agent;
+    core::SharedSignal::Convert(Convert(this))->CopyPrep();
   }
 
   __forceinline core::Agent* async_copy_agent() { return async_copy_agent_; }
+
+  void GetSdmaTsAddresses(uint64_t*& start, uint64_t*& end) {
+    core::SharedSignal::Convert(Convert(this))->GetSdmaTsAddresses(start, end);
+  }
+
+  // Set FetchCopyTs = true when reading time stamps from a copy operation.
+  void GetRawTs(bool FetchCopyTs, uint64_t& start, uint64_t& end) {
+    core::SharedSignal::Convert(Convert(this))->GetRawTs(FetchCopyTs, start, end);
+  }
 
   /// @brief Structure which defines key signal elements like type and value.
   /// Address of this struct is used as a value for the opaque handle of type

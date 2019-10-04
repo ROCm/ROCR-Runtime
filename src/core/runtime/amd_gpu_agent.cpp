@@ -86,10 +86,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       memory_bus_width_(0),
       memory_max_frequency_(0),
       ape1_base_(0),
-      ape1_size_(0),
-      end_ts_pool_size_(0),
-      end_ts_pool_counter_(0),
-      end_ts_base_addr_(NULL) {
+      ape1_size_(0) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -142,10 +139,6 @@ GpuAgent::~GpuAgent() {
       hsa_status_t status = blit->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
     }
-  }
-
-  if (end_ts_base_addr_ != NULL) {
-    core::Runtime::runtime_singleton_->FreeMemory(end_ts_base_addr_);
   }
 
   if (ape1_base_ != 0) {
@@ -405,58 +398,6 @@ void GpuAgent::InitCacheList() {
                                      cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
 }
 
-bool GpuAgent::InitEndTsPool() {
-  if (HSA_PROFILE_FULL == profile_) {
-    return true;
-  }
-
-  if (end_ts_base_addr_.load(std::memory_order_acquire) != NULL) {
-    return true;
-  }
-
-  ScopedAcquire<KernelMutex> lock(&blit_lock_);
-
-  if (end_ts_base_addr_.load(std::memory_order_relaxed) != NULL) {
-    return true;
-  }
-
-  end_ts_pool_size_ =
-      static_cast<uint32_t>((BlitSdmaBase::kQueueSize + BlitSdmaBase::kCopyPacketSize - 1) /
-                            (BlitSdmaBase::kCopyPacketSize));
-
-  // Allocate end timestamp object for both h2d and d2h DMA.
-  const size_t alloc_size = 2 * end_ts_pool_size_ * kTsSize;
-
-  core::Runtime* runtime = core::Runtime::runtime_singleton_;
-
-  uint64_t* buff = NULL;
-  if (HSA_STATUS_SUCCESS !=
-      runtime->AllocateMemory(local_region_, alloc_size,
-                              MemoryRegion::AllocateRestrict,
-                              reinterpret_cast<void**>(&buff))) {
-    return false;
-  }
-
-  end_ts_base_addr_.store(buff, std::memory_order_release);
-
-  return true;
-}
-
-uint64_t* GpuAgent::ObtainEndTsObject() {
-  if (end_ts_base_addr_ == NULL) {
-    return NULL;
-  }
-
-  const uint32_t end_ts_index =
-      end_ts_pool_counter_.fetch_add(1U, std::memory_order_acq_rel) %
-      end_ts_pool_size_;
-  const static size_t kNumU64 = kTsSize / sizeof(uint64_t);
-  uint64_t* end_ts_addr = &end_ts_base_addr_[end_ts_index * kNumU64];
-  assert(IsMultipleOf(end_ts_addr, kTsSize));
-
-  return end_ts_addr;
-}
-
 hsa_status_t GpuAgent::IterateRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
@@ -701,10 +642,6 @@ hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
 }
 
 hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
-  if (enable && !InitEndTsPool()) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
   for (auto& blit : blits_) {
     if (blit.created()) {
       const hsa_status_t stat = blit->EnableProfiling(enable);
@@ -1099,16 +1036,28 @@ void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
 
 void GpuAgent::TranslateTime(core::Signal* signal,
                              hsa_amd_profiling_dispatch_time_t& time) {
+  uint64_t start, end;
+  signal->GetRawTs(false, start, end);
   // Order is important, we want to translate the end time first to ensure that packet duration is
   // not impacted by clock measurement latency jitter.
-  time.end = TranslateTime(signal->signal_.end_ts);
-  time.start = TranslateTime(signal->signal_.start_ts);
+  time.end = TranslateTime(end);
+  time.start = TranslateTime(start);
 
-  if ((signal->signal_.start_ts == 0) || (signal->signal_.end_ts == 0) ||
-      (signal->signal_.start_ts > t1_.GPUClockCounter) ||
-      (signal->signal_.end_ts > t1_.GPUClockCounter) ||
-      (signal->signal_.start_ts < t0_.GPUClockCounter) ||
-      (signal->signal_.end_ts < t0_.GPUClockCounter))
+  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
+      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
+    debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
+}
+
+void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) {
+  uint64_t start, end;
+  signal->GetRawTs(true, start, end);
+  // Order is important, we want to translate the end time first to ensure that packet duration is
+  // not impacted by clock measurement latency jitter.
+  time.end = TranslateTime(end);
+  time.start = TranslateTime(start);
+
+  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
+      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 }
 
@@ -1212,11 +1161,6 @@ void GpuAgent::BindTrapHandler() {
 
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
-    return;
-  }
-
-  // Disable trap handler on APUs until KFD is fixed.
-  if (profile_ == HSA_PROFILE_FULL) {
     return;
   }
 
