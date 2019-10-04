@@ -589,3 +589,39 @@ const int HsaNodeInfo::FindLargeBarGPUNode() const {
 
     return -1;
 }
+
+const bool HsaNodeInfo::AreGPUNodesXGMI(int node0, int node1) const {
+    const HsaNodeProperties *pNodeProperties0 = GetNodeProperties(node0);
+    const HsaNodeProperties *pNodeProperties1 = GetNodeProperties(node1);
+
+    if ((pNodeProperties0->HiveID != 0) && (pNodeProperties1->HiveID != 0) &&
+        (pNodeProperties0->HiveID == pNodeProperties1->HiveID))
+        return true;
+
+    return false;
+}
+
+int HsaNodeInfo::FindAccessiblePeers(std::vector<HSAuint32> *peers, HSAuint32 dstNode,
+        bool bidirectional) const {
+    peers->push_back(dstNode);
+    if (IsGPUNodeLargeBar(dstNode)) {
+        for (unsigned i = 0; i < m_NodesWithGPU.size(); i++) {
+            if (m_NodesWithGPU.at(i) == dstNode)
+                continue;
+
+            if (!bidirectional || IsGPUNodeLargeBar(m_NodesWithGPU.at(i)) ||
+                AreGPUNodesXGMI(dstNode, m_NodesWithGPU.at(i)))
+                peers->push_back(m_NodesWithGPU.at(i));
+        }
+    } else {
+        for (unsigned i = 0; i < m_NodesWithGPU.size(); i++) {
+            if (m_NodesWithGPU.at(i) == dstNode)
+                continue;
+
+            if (AreGPUNodesXGMI(dstNode, m_NodesWithGPU.at(i)))
+                peers->push_back(m_NodesWithGPU.at(i));
+        }
+    }
+
+    return peers->size();
+}

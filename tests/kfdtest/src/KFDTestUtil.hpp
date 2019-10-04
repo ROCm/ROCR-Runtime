@@ -188,6 +188,9 @@ class HsaNodeInfo {
     // @brief Find the first available Large-BAR GPU node
     // @return: Node ID if successful or -1
     const int FindLargeBarGPUNode() const;
+    const bool AreGPUNodesXGMI(int node0, int node1) const;
+    int FindAccessiblePeers(std::vector<HSAuint32> *peers, HSAuint32 dstNode,
+            bool bidirectional) const;
 };
 
 #endif  // __KFD__TEST__UTIL__H__

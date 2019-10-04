@@ -147,15 +147,24 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     std::vector<HSAuint32> nodes;
     const bool isSpecified = g_TestDstNodeId != -1 && g_TestNodeId != -1;
+    int numPeers = 0;
 
-    for (unsigned i = 0; i < gpuNodes.size(); i++)
-        if (m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i)) &&
-                /* Users can use "--node=gpu1 --dst_node=gpu2" to specify devices */
-                (!isSpecified || gpuNodes.at(i) == g_TestDstNodeId || gpuNodes.at(i) == g_TestNodeId))
-            nodes.push_back(gpuNodes.at(i));
+    if (isSpecified) {
+        if (g_TestNodeId != g_TestDstNodeId) {
+            nodes.push_back(g_TestNodeId);
+            nodes.push_back(g_TestDstNodeId);
+            if ((m_NodeInfo.IsGPUNodeLargeBar(g_TestNodeId) &&
+                 m_NodeInfo.IsGPUNodeLargeBar(g_TestDstNodeId)) ||
+                m_NodeInfo.AreGPUNodesXGMI(g_TestNodeId, g_TestDstNodeId))
+                numPeers = 2;
+        }
+    } else {
+        HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
+        numPeers = m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, true);
+    }
 
-    if (nodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two large bar GPU." << std::endl;
+    if (numPeers < 2) {
+        LOG() << "Skipping test: Need at least two large bar GPU or XGMI connected." << std::endl;
         return;
     }
 
@@ -302,12 +311,11 @@ TEST_F(KFDPerformanceTest, P2POverheadTest) {
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
     std::vector<HSAuint32> nodes;
 
-    for (unsigned i = 0; i < gpuNodes.size(); i++)
-        if (m_NodeInfo.IsGPUNodeLargeBar(gpuNodes.at(i)))
-            nodes.push_back(gpuNodes.at(i));
+    HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
+    int numPeers = m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, true);
 
-    if (nodes.size() < 2) {
-        LOG() << "Skipping test: Need at least two large bar GPU." << std::endl;
+    if (numPeers < 2) {
+        LOG() << "Skipping test: Need at least two large bar GPU or XGMI connected." << std::endl;
         return;
     }
 
