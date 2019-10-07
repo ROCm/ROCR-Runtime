@@ -282,6 +282,55 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
 }
 #endif
 
+/**
+ * checkDebugVersion:
+ *   Inputs:
+ *       HSAuint32 requiredMajor
+ *           -- Required major version number
+ *       HSAuint32 requiredMinor
+ *           -- Required minor version number
+ *   Output:
+ *     bool:
+ *            i)   false if major version of thunk and kernel are not the same
+ *            ii)  false if kernel minor version is less than the required
+ *                    version if the major version is the required version.
+ *            iii) false if thunk minor version is less than the required
+ *                    version if the major version is the required version.
+ *            iv)  false if hsaKmtGetKernelDebugTrapVersionInfo() call fails.
+ *            v)   true otherwise.
+ *
+*/
+static bool checkDebugVersion(HSAuint32 requiredMajor, HSAuint32 requiredMinor)
+{
+    HSAuint32 kernelMajorNumber = 0;
+    HSAuint32 kernelMinorNumber = 0;
+    HSAuint32 thunkMajorNumber = 0;
+    HSAuint32 thunkMinorNumber = 0;
+
+    hsaKmtGetThunkDebugTrapVersionInfo(&thunkMajorNumber, &thunkMinorNumber);
+
+    if (hsaKmtGetKernelDebugTrapVersionInfo(&kernelMajorNumber,
+                &kernelMinorNumber)) {
+        LOG() << "Failed to get kernel debugger version!" << std::endl;
+        return false;
+    }
+
+    if (kernelMajorNumber != thunkMajorNumber)
+        return false;
+
+    if (kernelMajorNumber < requiredMajor ||
+            (kernelMajorNumber == requiredMajor &&
+             kernelMinorNumber < requiredMinor))
+        return false;
+
+    if (thunkMajorNumber < requiredMajor ||
+            (thunkMajorNumber == requiredMajor &&
+             thunkMinorNumber < requiredMinor))
+        return false;
+
+    return true;
+}
+
 TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
@@ -290,6 +339,12 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
         HSAuint32 Flags = 0;
+
+        if(!checkDebugVersion(0, 2)) {
+                LOG() << "Test disabled due to debug API version mismatch";
+                goto exit;
+        }
+
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
         HsaMemoryBuffer iterateBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
         HsaMemoryBuffer resultBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
@@ -367,6 +422,8 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     } else {
         LOG() << "Skipping test: Test not supported on family ID 0x" << m_FamilyId << "." << std::endl;
     }
+exit:
+    LOG() << std::endl;
     TEST_END
 }
 
@@ -377,6 +434,11 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
         HSAint32 PollFd;
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        if(!checkDebugVersion(0, 2)) {
+                LOG() << "Test disabled due to debug API version mismatch";
+                goto exit;
+        }
 
         // enable debug trap and check poll fd creation
         ASSERT_SUCCESS(hsaKmtEnableDebugTrapWithPollFd(defaultGPUNode,
@@ -476,6 +538,8 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
         LOG() << "Skipping test: Test not supported on family ID 0x"
               << m_FamilyId << "." << std::endl;
     }
+exit:
+    LOG() << std::endl;
     TEST_END
 }
 
@@ -524,6 +588,11 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        if(!checkDebugVersion(0, 2)) {
+                LOG() << "Test disabled due to debug API version mismatch";
+                goto exit;
+        }
 
         pid_t childPid = fork();
         ASSERT_GE(childPid, 0);
@@ -706,5 +775,7 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
         LOG() << "Skipping test: Test not supported on family ID 0x"
               << m_FamilyId << "." << std::endl;
     }
+exit:
+    LOG() << std::endl;
     TEST_END
 }
