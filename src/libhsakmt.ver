@@ -67,6 +67,8 @@ hsaKmtSetWaveLaunchMode;
 hsaKmtQueueSuspend;
 hsaKmtQueueResume;
 hsaKmtAllocQueueGWS;
+hsaKmtGetKernelDebugTrapVersionInfo;
+hsaKmtGetThunkDebugTrapVersionInfo;
 
 local: *;
 };
