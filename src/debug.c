@@ -286,7 +286,8 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 	CHECK_KFD_OPEN();
 
 	if (op == KFD_IOC_DBG_TRAP_NODE_SUSPEND ||
-			op == KFD_IOC_DBG_TRAP_NODE_RESUME) {
+			op == KFD_IOC_DBG_TRAP_NODE_RESUME ||
+			op == KFD_IOC_DBG_TRAP_GET_VERSION) {
 		if  (NodeId != INVALID_NODEID)
 			return HSAKMT_STATUS_INVALID_HANDLE;
 
@@ -596,3 +597,50 @@ hsaKmtQueryDebugEvent(
 	return result;
 }
 
+/**
+ * Get the major and minor version of the kernel debugger support.
+ *
+ * Returns:
+ *   - HSAKMT_STATUS_SUCCESS if successful.
+ *
+ *   - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+ *
+ *   - HSAKMT_STATUS_NOT_SUPPORTED if debug trap not supported for NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetKernelDebugTrapVersionInfo(
+    HSAuint32 *Major,  //Out
+    HSAuint32 *Minor   //Out
+)
+{
+	HSAKMT_STATUS result;
+	struct kfd_ioctl_dbg_trap_args argout = {0};
+
+	result =  debug_trap(INVALID_NODEID,
+				KFD_IOC_DBG_TRAP_GET_VERSION,
+				0,
+				0,
+				0,
+				INVALID_PID,
+				0,
+				&argout);
+
+	*Major = argout.data1;
+	*Minor = argout.data2;
+	return result;
+}
+
+/**
+ * Get the major and minor version of the Thunk debugger support.
+*/
+void
+HSAKMTAPI
+hsaKmtGetThunkDebugTrapVersionInfo(
+    HSAuint32 *Major,  //Out
+    HSAuint32 *Minor   //Out
+)
+{
+	*Major = KFD_IOCTL_DBG_MAJOR_VERSION;
+	*Minor = KFD_IOCTL_DBG_MINOR_VERSION;
+}

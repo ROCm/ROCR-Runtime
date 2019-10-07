@@ -918,6 +918,36 @@ hsaKmtSetWaveLaunchMode(
     );
 
 /**
+  * Get the major and minor version of the kernel debugger support.
+  *
+  * Returns:
+  *  - HSAKMT_STATUS_SUCCESS if successful.
+  *
+  *  - HSAKMT_STATUS_INVALID_HANDLE if NodeId is invalid.
+  *
+  *  - HSAKMT_STATUS_NOT_SUPPORTED if debug trap not supported for NodeId.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetKernelDebugTrapVersionInfo(
+    HSAuint32 *Major,  //Out
+    HSAuint32 *Minor   //Out
+    );
+
+/**
+  * Get the major and minor version of the thunk debugger support.
+*/
+void
+HSAKMTAPI
+hsaKmtGetThunkDebugTrapVersionInfo(
+    HSAuint32 *Major,  //Out
+    HSAuint32 *Minor   //Out
+    );
+
+
+
+
+/**
   Set a debug memory access watch point. A memory access of the kind
   specified by WatchMode to an matching address will cause the trap
   handler to be entered. An address matches if, after ANDing the
