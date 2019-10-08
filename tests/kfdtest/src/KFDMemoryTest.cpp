@@ -2203,6 +2203,7 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnRemoteWrite) {
     }
 
     HsaMemoryBuffer buffer(PAGE_SIZE, defaultGPUNode, false/*zero*/, true/*local*/, false/*exec*/);
+    buffer.MapMemToNodes(&nondefaultNode, 1);
     SDMAQueue sdmaQueue;
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
     buffer.Fill(0, sdmaQueue, 0, PAGE_SIZE);
