@@ -284,7 +284,7 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
 
 TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI) {
+    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -372,7 +372,7 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
 
 TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI) {
+    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
         HSAint32 PollFd;
 
@@ -520,7 +520,7 @@ static void ExitVMFaultQueryChild(std::string errMsg,
 
 TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI) {
+    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
