@@ -74,6 +74,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Change the scheduling priority of the queue
   hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) override;
 
+  /// @brief Destroy ref counted queue
+  void Destroy() override;
+
   /// @brief Atomically reads the Read index of with Acquire semantics
   ///
   /// @return uint64_t Value of read index
