@@ -2193,7 +2193,19 @@ typedef enum {
    * that support a single producer may be more efficient than queues supporting
    * multiple producers.
    */
-  HSA_QUEUE_TYPE_SINGLE = 1
+  HSA_QUEUE_TYPE_SINGLE = 1,
+  /**
+   * Queue supports cooperative dispatches able to use GWS synchronization.
+   * Queues of this type must also be of type HSA_QUEUE_TYPE_MULTI and
+   * may be limited in number.  The runtime may return the same queue to serve
+   * multiple hsa_queue_create calls when this type is given.  Callers must
+   * inspect the returned queue to discover queue size.  Queues of this type
+   * are reference counted and require a matching number of hsa_queue_destroy
+   * calls to release.  Use of multiproducer queue mechanics is required.  See
+   * ::HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES to query agent support for this
+   * type.
+   */
+  HSA_QUEUE_TYPE_COOPERATIVE = 2
 } hsa_queue_type_t;
 
 /**
@@ -2300,9 +2312,9 @@ typedef struct hsa_queue_s {
  * created queue is the maximum of @p size and the value of
  * ::HSA_AGENT_INFO_QUEUE_MIN_SIZE in @p agent.
  *
- * @param[in] type Type of the queue. If the value of
- * ::HSA_AGENT_INFO_QUEUE_TYPE in @p agent is ::HSA_QUEUE_TYPE_SINGLE, then @p
- * type must also be ::HSA_QUEUE_TYPE_SINGLE.
+ * @param[in] type Type of the queue, a bitwise OR of hsa_queue_type_t values.
+ * If the value of ::HSA_AGENT_INFO_QUEUE_TYPE in @p agent is ::HSA_QUEUE_TYPE_SINGLE,
+ * then @p type must also be ::HSA_QUEUE_TYPE_SINGLE.
  *
  * @param[in] callback Callback invoked by the HSA runtime for every
  * asynchronous event related to the newly created queue. May be NULL. The HSA

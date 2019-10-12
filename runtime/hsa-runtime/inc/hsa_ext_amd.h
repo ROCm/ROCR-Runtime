@@ -158,7 +158,12 @@ typedef enum hsa_amd_agent_info_s {
    * to give the full physical location of the Agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F
+  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F,
+  /**
+   * Queries for support of cooperative queues.  See ::HSA_QUEUE_TYPE_COOPERATIVE.
+   * The type of this attribute is bool.
+   */
+  HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES = 0xA010
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {

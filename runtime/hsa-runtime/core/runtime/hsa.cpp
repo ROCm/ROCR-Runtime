@@ -687,8 +687,8 @@ hsa_status_t hsa_queue_create(
   TRY;
   IS_OPEN();
 
-  if ((queue == nullptr) || (size == 0) || (!IsPowerOfTwo(size)) || (type < HSA_QUEUE_TYPE_MULTI) ||
-      (type > HSA_QUEUE_TYPE_SINGLE)) {
+  if ((queue == nullptr) || (size == 0) || (!IsPowerOfTwo(size)) ||
+      (type > HSA_QUEUE_TYPE_COOPERATIVE)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -701,7 +701,12 @@ hsa_status_t hsa_queue_create(
   assert(HSA_STATUS_SUCCESS == status);
 
   if (agent_queue_type == HSA_QUEUE_TYPE_SINGLE &&
-      type != HSA_QUEUE_TYPE_SINGLE) {
+      ((type & HSA_QUEUE_TYPE_SINGLE) != HSA_QUEUE_TYPE_SINGLE)) {
+    return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
+  }
+
+  if ((type & HSA_QUEUE_TYPE_COOPERATIVE) &&
+      ((type & HSA_QUEUE_TYPE_SINGLE) != HSA_QUEUE_TYPE_MULTI)) {
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
@@ -758,7 +763,7 @@ hsa_status_t hsa_queue_destroy(hsa_queue_t* queue) {
   IS_BAD_PTR(queue);
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
-  delete cmd_queue;
+  cmd_queue->Destroy();
   return HSA_STATUS_SUCCESS;
   CATCH;
 }

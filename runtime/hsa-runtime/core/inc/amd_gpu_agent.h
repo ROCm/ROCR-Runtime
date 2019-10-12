@@ -256,6 +256,9 @@ class GpuAgent : public GpuAgentInt {
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
 
+  // @brief Decrement GWS ref count.
+  void GWSRelease();
+
   // @brief Override from amd::GpuAgentInt.
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
@@ -488,6 +491,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create internal queues and blits.
   void InitDma();
 
+  // @brief Setup GWS accessing queue.
+  void InitGWS();
+
 
   // Bind index of peer device that is connected via xGMI links
   lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
@@ -503,6 +509,13 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
+
+  // @brief Queue with GWS access.
+  struct {
+    lazy_ptr<core::Queue> queue_;
+    int ref_ct_;
+    KernelMutex lock_;
+  } gws_queue_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

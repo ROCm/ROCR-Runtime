@@ -306,6 +306,14 @@ AqlQueue::~AqlQueue() {
   core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
 }
 
+void AqlQueue::Destroy() {
+  if (amd_queue_.hsa_queue.type & HSA_QUEUE_TYPE_COOPERATIVE) {
+    agent_->GWSRelease();
+    return;
+  }
+  delete this;
+}
+
 uint64_t AqlQueue::LoadReadIndexAcquire() {
   return atomic::Load(&amd_queue_.read_dispatch_id, std::memory_order_acquire);
 }
