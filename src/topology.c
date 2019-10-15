@@ -1193,8 +1193,20 @@ static int topology_create_temp_cpu_cache_list(int node,
 	/* Other than cpuY folders, this dir also has cpulist and cpumap */
 	max_cpus = num_subdirs(node_dir, "cpu");
 	if (max_cpus <= 0) {
-		pr_err("Fail to get cpu* dirs under %s\n", node_dir);
-		goto exit;
+		/* If CONFIG_NUMA is not enabled in the kernel,
+		 * /sys/devices/system/node doesn't exist.
+		 */
+		if (node) { /* CPU node must be 0 or something is wrong */
+			pr_err("Fail to get cpu* dirs under %s.", node_dir);
+			goto exit;
+		}
+		/* Fall back to use /sys/devices/system/cpu */
+		snprintf(node_dir, MAXPATHSIZE, "/sys/devices/system/cpu");
+		max_cpus = num_subdirs(node_dir, "cpu");
+		if (max_cpus <= 0) {
+			pr_err("Fail to get cpu* dirs under %s\n", node_dir);
+			goto exit;
+		}
 	}
 
 	p_temp_cpu_ci_list = calloc(max_cpus, sizeof(cpu_cacheinfo_t));
@@ -1211,8 +1223,7 @@ static int topology_create_temp_cpu_cache_list(int node,
 			continue;
 		if (!isdigit(dir->d_name[3])) /* ignore files like cpulist */
 			continue;
-		snprintf(path, MAXPATHSIZE, "/sys/devices/system/node/node%d/%s/cache",
-			node, dir->d_name);
+		snprintf(path, MAXPATHSIZE, "%s/%s/cache", node_dir, dir->d_name);
 		this_cpu->num_caches = num_subdirs(path, "index");
 		this_cpu->cache_prop = calloc(this_cpu->num_caches,
 					sizeof(HsaCacheProperties));
