@@ -32,7 +32,7 @@ cmake_minimum_required(VERSION 2.8.0)
 #   4) Run "make"
 #
 
-set(DEFAULT_TARGETS "gfx803;gfx701;gfx801;gfx802;gfx900;gfx902;gfx906;gfx908")
+set(DEFAULT_TARGETS "gfx803;gfx701;gfx801;gfx802;gfx900;gfx902;gfx906;gfx908;gfx1010;gfx1011;gfx1012")
 
 #
 # Currently support for Windows platform is not present
