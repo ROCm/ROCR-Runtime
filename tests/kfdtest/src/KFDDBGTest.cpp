@@ -30,6 +30,7 @@
 #include "Dispatch.hpp"
 #include <string>
 
+#if 0
 static const char* loop_inc_isa = \
 "\
 shader loop_inc_isa\n\
@@ -64,11 +65,12 @@ trap_present(1)\n\
     \n\
 end\n\
 ";
+#endif
 
-static const char* iterate_isa_gfx9 = \
+static const char* iterate_isa_gfx = \
 "\
 shader iterate_isa\n\
-asic(GFX9)\n\
+wave_size(32) \n\
 type(CS)\n\
 /*copy the parameters from scalar registers to vector registers*/\n\
     v_mov_b32 v0, s0\n\
@@ -91,10 +93,10 @@ LOOP:\n\
     end\n\
 ";
 
-static const char* jump_to_trap_gfx9 = \
+static const char* jump_to_trap_gfx = \
 "\
 shader jump_to_trap\n\
-asic(GFX9)\n\
+wave_size(32) \n\
 type(CS)\n\
 /*copy the parameters from scalar registers to vector registers*/\n\
     s_trap 1\n\
@@ -118,10 +120,10 @@ LOOP:\n\
     end\n\
 ";
 
-static const char* trap_handler_gfx9 = \
+static const char* trap_handler_gfx = \
 "\
 shader trap_handler\n\
-asic(GFX9)\n\
+wave_size(32) \n\
 type(CS)\n\
 CHECK_VMFAULT:\n\
     /*if trap jumped to by vmfault, restore skip m0 signalling*/\n\
@@ -333,7 +335,7 @@ static bool checkDebugVersion(HSAuint32 requiredMajor, HSAuint32 requiredMinor)
 
 TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
+    if (m_FamilyId >= FAMILY_AI) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -355,7 +357,9 @@ TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
         int suspendTimeout = 500;
         int syncStatus;
 
-        m_pIsaGen->CompileShader(iterate_isa_gfx9, "iterate_isa", isaBuffer);
+        m_pIsaGen->CompileShader(iterate_isa_gfx,
+                                    "iterate_isa",
+                                    isaBuffer);
 
         PM4Queue queue1;
         HsaQueueResource *qResources;
@@ -429,7 +433,7 @@ exit:
 
 TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
+    if (m_FamilyId >= FAMILY_AI) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
         HSAint32 PollFd;
 
@@ -461,8 +465,8 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
                                             0x1000));
 
         // compile and dispatch shader
-        m_pIsaGen->CompileShader(jump_to_trap_gfx9, "jump_to_trap", isaBuf);
-        m_pIsaGen->CompileShader(trap_handler_gfx9, "trap_handler", trap);
+        m_pIsaGen->CompileShader(jump_to_trap_gfx, "jump_to_trap", isaBuf);
+        m_pIsaGen->CompileShader(trap_handler_gfx, "trap_handler", trap);
 
         PM4Queue queue;
         HsaQueueResource *qResources;
@@ -584,7 +588,7 @@ static void ExitVMFaultQueryChild(std::string errMsg,
 
 TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
-    if (m_FamilyId >= FAMILY_AI && m_FamilyId <= FAMILY_AR) {
+    if (m_FamilyId >= FAMILY_AI) {
         int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
         ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
@@ -645,9 +649,9 @@ TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
                                       defaultGPUNode);
 
             // compile and dispatch shader
-            m_pIsaGen->CompileShader(jump_to_trap_gfx9, "jump_to_trap",
+            m_pIsaGen->CompileShader(jump_to_trap_gfx, "jump_to_trap",
                                      isaBuf);
-            m_pIsaGen->CompileShader(trap_handler_gfx9, "trap_handler", trap);
+            m_pIsaGen->CompileShader(trap_handler_gfx, "trap_handler", trap);
 
             PM4Queue queue1, queue2;
             HSAuint32 qid1;
