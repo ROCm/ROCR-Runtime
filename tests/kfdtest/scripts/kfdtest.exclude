@@ -185,6 +185,7 @@ FILTER[navi10]=\
 "$SDMA_BLACKLIST:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDEvictTest.QueueTest:"\
+"KFDPerfCountersTest.*:"\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
 "KFDQMTest.GPUDoorbellWrite"
