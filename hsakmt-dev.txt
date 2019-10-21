@@ -43,7 +43,7 @@ set ( BUILD_VERSION_PATCH @BUILD_VERSION_PATCH@ )
 set ( CMAKE_VERBOSE_MAKEFILE on )
 
 ## Set the install targets
-install ( FILES libhsakmt.pc DESTINATION ${CMAKE_INSTALL_PREFIX}/share/pkgconfig )
+install ( FILES libhsakmt.pc DESTINATION ${CMAKE_INSTALL_DATADIR}/pkgconfig )
 install ( DIRECTORY ${SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${HSAKMT_COMPONENT} PATTERN "linux" EXCLUDE )
 
 
