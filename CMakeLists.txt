@@ -131,7 +131,7 @@ target_link_libraries ( ${HSAKMT_TARGET}
 ## Define default variable and variables for the optional build target hsakmt-dev
 set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
 set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
-set ( CPACK_PACKAGING_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
 set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 
 ## Specify build, install and package targets hsakmt-dev
