@@ -2165,6 +2165,7 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnCPUWrite) {
     EXPECT_EQ(buffer[100], 0x5678);
 
     // Clean up
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(buffer));
     EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
     EXPECT_SUCCESS(queue.Destroy());
 
