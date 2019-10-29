@@ -286,7 +286,7 @@ static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 }
 
 extern int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
-static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture);
+static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
 				       void *address);
@@ -1628,12 +1628,12 @@ void *fmm_allocate_host(uint32_t node_id, void *address,
 	return fmm_allocate_host_cpu(address, MemorySizeInBytes, flags);
 }
 
-static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
+static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 {
 	struct kfd_ioctl_free_memory_of_gpu_args args = {0};
 
 	if (!object)
-		return;
+		return -EINVAL;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
@@ -1643,12 +1643,16 @@ static void __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	 * free the BO before unmapping the pages.
 	 */
 	args.handle = object->handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args);
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return -errno;
+	}
 
 	aperture_release_area(aperture, object->start, object->size);
 	vm_remove_object(aperture, object);
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return 0;
 }
 
 HSAKMT_STATUS fmm_release(void *address)
@@ -1682,7 +1686,9 @@ HSAKMT_STATUS fmm_release(void *address)
 	} else {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 
-		__fmm_release(object, aperture);
+		if (__fmm_release(object, aperture))
+			return HSAKMT_STATUS_ERROR;
+
 		if (!aperture->is_cpu_accessible)
 			fmm_print(gpu_mem[i].gpu_id);
 	}
@@ -2843,9 +2849,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/* free object in scratch backing aperture */
-	__fmm_release(object, aperture);
-
-	return 0;
+	return __fmm_release(object, aperture);
 
 err:
 	pthread_mutex_unlock(&aperture->fmm_mutex);
