@@ -37,16 +37,16 @@ IndirectBuffer::~IndirectBuffer(void) {
     delete m_IndirectBuf;
 }
 
-void IndirectBuffer::AddPacket(const BasePacket &packet) {
-    ASSERT_EQ(packet.PacketType(), m_PacketTypeAllowed) << "Cannot add a packet since packet type doesn't match queue";
+uint32_t *IndirectBuffer::AddPacket(const BasePacket &packet) {
+    EXPECT_EQ(packet.PacketType(), m_PacketTypeAllowed) << "Cannot add a packet since packet type doesn't match queue";
 
     unsigned int writePtr = m_ActualSize;
 
-    ASSERT_GE(m_MaxSize, packet.SizeInDWords() + writePtr) << "Cannot add a packet, not enough room";
+    EXPECT_GE(m_MaxSize, packet.SizeInDWords() + writePtr) << "Cannot add a packet, not enough room";
 
     memcpy(m_IndirectBuf->As<unsigned int*>() + writePtr , packet.GetPacket(),  packet.SizeInBytes());
     m_ActualSize += packet.SizeInDWords();
     m_NumOfPackets++;
+
+    return m_IndirectBuf->As<HSAuint32 *>() + writePtr;
 }
-
-

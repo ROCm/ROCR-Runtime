@@ -39,7 +39,7 @@ class IndirectBuffer {
     ~IndirectBuffer(void);
 
     // @brief Add packet to queue, all validations are done with gtest ASSERT and EXPECT
-    void AddPacket(const BasePacket &packet);
+    uint32_t *AddPacket(const BasePacket &packet);
     // @returns Actual size of the indirect queue in DWords, equivalent to write pointer
     unsigned int SizeInDWord() { return m_ActualSize; }
     // @returns Indirect queue address
