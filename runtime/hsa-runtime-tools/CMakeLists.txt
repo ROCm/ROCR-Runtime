@@ -232,7 +232,7 @@ target_link_libraries (
 
 ## If the build is Release, strip the target library
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-    add_custom_command ( TARGET ${TOOLS_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
+    add_custom_command ( TARGET ${TOOLS_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} $<TARGET_FILE_NAME:${TOOLS_TARGET}> )
 endif ()
 
 ## Create symlinks for legacy packaging and install

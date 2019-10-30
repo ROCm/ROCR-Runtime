@@ -169,7 +169,7 @@ target_link_libraries ( ${CORE_RUNTIME_TARGET}
 
 ## Strip should be optional or not at all
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
-#    add_custom_command ( TARGET ${CORE_RUNTIME_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} *.so )
+#    add_custom_command ( TARGET ${CORE_RUNTIME_TARGET} POST_BUILD COMMAND ${CMAKE_STRIP} $<TARGET_FILE_NAME:${CORE_RUNTIME_TARGET}> )
 endif ()
 
 ## Set the VERSION and SOVERSION values
