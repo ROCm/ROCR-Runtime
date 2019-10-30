@@ -236,6 +236,7 @@ const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN(10, 1, 1, true,  false)
   ISAREG_ENTRY_GEN(10, 1, 2, false, false)
   ISAREG_ENTRY_GEN(10, 1, 2, true,  false)
+  ISAREG_ENTRY_GEN(10, 3, 0, false, false)
 
   return supported_isas;
 }
