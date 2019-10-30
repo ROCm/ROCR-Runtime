@@ -643,6 +643,7 @@ namespace code {
         case EF_AMDGPU_MACH_AMDGCN_GFX1010_LC: isaName += "gfx1010"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX1011_LC: isaName += "gfx1011"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX1012_LC: isaName += "gfx1012"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX1030_LC: isaName += "gfx1030"; break;
         default: return false;
         }
 
