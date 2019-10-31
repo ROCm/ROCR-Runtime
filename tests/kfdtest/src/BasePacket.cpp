@@ -25,8 +25,13 @@
 #include "KFDTestUtil.hpp"
 #include "KFDBaseComponentTest.hpp"
 
-BasePacket::BasePacket(void) {
+BasePacket::BasePacket(void): m_packetAllocation(NULL) {
     m_FamilyId = g_baseTest->GetFamilyIdFromDefaultNode();
+}
+
+BasePacket::~BasePacket(void) {
+    if (m_packetAllocation)
+        free(m_packetAllocation);
 }
 
 void BasePacket::Dump() const {
@@ -39,4 +44,17 @@ void BasePacket::Dump() const {
     for (i = 0; i < size; i++)
         log << " " << std::setw(8) << std::setfill('0') << packet[i];
     log << std::endl;
+}
+
+void *BasePacket::AllocPacket(void) {
+    unsigned int size = SizeInBytes();
+
+    EXPECT_NE(0, size);
+    if (!size)
+        return NULL;
+
+    m_packetAllocation = calloc(1, size);
+    EXPECT_NOTNULL(m_packetAllocation);
+
+    return m_packetAllocation;
 }

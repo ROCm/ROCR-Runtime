@@ -45,16 +45,11 @@ SDMAWriteDataPacket::SDMAWriteDataPacket(unsigned int familyId, void* destAddr, 
     InitPacket(destAddr, ndw, data);
 }
 
-SDMAWriteDataPacket::~SDMAWriteDataPacket(void) {
-    if (packetData)
-        free(packetData);
-}
-
 void SDMAWriteDataPacket::InitPacket(void* destAddr, unsigned int ndw,
                                      void *data) {
     packetSize = sizeof(SDMA_PKT_WRITE_UNTILED) +
         (ndw - 1) * sizeof(unsigned int);
-    packetData = reinterpret_cast<SDMA_PKT_WRITE_UNTILED *>(calloc(1, packetSize));
+    packetData = reinterpret_cast<SDMA_PKT_WRITE_UNTILED *>(AllocPacket());
 
     packetData->HEADER_UNION.op = SDMA_OP_WRITE;
     packetData->HEADER_UNION.sub_op = SDMA_SUBOP_WRITE_LINEAR;
@@ -69,10 +64,6 @@ void SDMAWriteDataPacket::InitPacket(void* destAddr, unsigned int ndw,
 
 #define BITS (21)
 #define TWO_MEG (1 << BITS)
-SDMACopyDataPacket::~SDMACopyDataPacket(void) {
-    free(packetData);
-}
-
 SDMACopyDataPacket::SDMACopyDataPacket(unsigned int familyId,
                         void *const dsts[], void *src, int n, unsigned int surfsize) {
     int32_t size = 0, i;
@@ -88,7 +79,7 @@ SDMACopyDataPacket::SDMACopyDataPacket(unsigned int familyId,
 
     packetSize = ((surfsize + TWO_MEG - 1) >> BITS) * singlePacketSize;
 
-    SDMA_PKT_COPY_LINEAR *pSDMA = reinterpret_cast<SDMA_PKT_COPY_LINEAR *>(malloc(packetSize));
+    SDMA_PKT_COPY_LINEAR *pSDMA = reinterpret_cast<SDMA_PKT_COPY_LINEAR *>(AllocPacket());
     packetData = pSDMA;
 
     while (surfsize > 0) {
@@ -125,10 +116,6 @@ SDMACopyDataPacket::SDMACopyDataPacket(unsigned int familyId, void* dst, void *s
     new (this)SDMACopyDataPacket(familyId, &dst, src, 1, surfsize);
 }
 
-SDMAFillDataPacket::~SDMAFillDataPacket() {
-    free(m_PacketData);
-}
-
 SDMAFillDataPacket::SDMAFillDataPacket(unsigned int familyId, void *dst, unsigned int data, unsigned int size) {
     unsigned int copy_size;
     SDMA_PKT_CONSTANT_FILL *pSDMA;
@@ -136,7 +123,7 @@ SDMAFillDataPacket::SDMAFillDataPacket(unsigned int familyId, void *dst, unsigne
     m_FamilyId = familyId;
     /* SDMA support maximum 0x3fffe0 byte in one copy. Use 2M copy_size */
     m_PacketSize = ((size + TWO_MEG - 1) >> BITS) * sizeof(SDMA_PKT_CONSTANT_FILL);
-    pSDMA = reinterpret_cast<SDMA_PKT_CONSTANT_FILL *>(calloc(1, m_PacketSize));
+    pSDMA = reinterpret_cast<SDMA_PKT_CONSTANT_FILL *>(AllocPacket());
     m_PacketData = pSDMA;
 
     while (size > 0) {
@@ -249,13 +236,9 @@ void SDMATimePacket::InitPacket(void *destaddr) {
 
 SDMANopPacket::SDMANopPacket(unsigned int count) {
     packetSize = count * sizeof(unsigned int);
-    packetData = reinterpret_cast<SDMA_PKT_NOP *>(calloc(count, sizeof(unsigned int)));
+    packetData = reinterpret_cast<SDMA_PKT_NOP *>(AllocPacket());
 
     packetData->HEADER_UNION.op = SDMA_OP_NOP;
     packetData->HEADER_UNION.sub_op = 0;
     packetData->HEADER_UNION.count = count - 1;
-}
-
-SDMANopPacket::~SDMANopPacket() {
-    free(packetData);
 }

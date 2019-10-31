@@ -59,7 +59,7 @@ class PM4WriteDataPacket : public PM4Packet {
         InitPacket(destBuf, data);
     }
 
-    virtual ~PM4WriteDataPacket(void);
+    virtual ~PM4WriteDataPacket(void) {}
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const;
     // @returns Pointer to the packet
@@ -91,7 +91,7 @@ class PM4ReleaseMemoryPacket : public PM4Packet {
     PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling, uint64_t address, uint64_t data,
                            bool is64bit = false, bool isTimeStamp = false);
 
-    virtual ~PM4ReleaseMemoryPacket(void) {if (m_pPacketData)free(m_pPacketData);}
+    virtual ~PM4ReleaseMemoryPacket(void) {}
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
     // @returns Pointer to the packet
@@ -135,7 +135,7 @@ class PM4IndirectBufPacket : public PM4Packet {
 class PM4AcquireMemoryPacket : public PM4Packet {
  public:
     PM4AcquireMemoryPacket(unsigned int familyId);
-    virtual ~PM4AcquireMemoryPacket(void) {if (m_pPacketData)free(m_pPacketData);}
+    virtual ~PM4AcquireMemoryPacket(void) {}
 
     // @returns the packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
@@ -156,7 +156,7 @@ class PM4SetShaderRegPacket : public PM4Packet {
 
     PM4SetShaderRegPacket(unsigned int baseOffset, const unsigned int regValues[], unsigned int numRegs);
 
-    virtual ~PM4SetShaderRegPacket(void);
+    virtual ~PM4SetShaderRegPacket(void) {}
 
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return m_packetSize; }
@@ -167,7 +167,6 @@ class PM4SetShaderRegPacket : public PM4Packet {
 
  private:
     unsigned int m_packetSize;
-    bool m_packetDataAllocated;
     // PM4SET_SH_REG struct contains all the packet's data
     PM4SET_SH_REG  *m_pPacketData;
 };
