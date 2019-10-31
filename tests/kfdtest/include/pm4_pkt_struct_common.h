@@ -255,6 +255,97 @@ typedef struct _PM4_MEC_INDIRECT_BUFFER
 
 }  PM4MEC_INDIRECT_BUFFER, *PPM4MEC_INDIRECT_BUFFER;
 
+//--------------------MEC_WAIT_REG_MEM--------------------
+
+enum MEC_WAIT_REG_MEM_function_enum {
+     function__mec_wait_reg_mem__always_pass = 0,
+     function__mec_wait_reg_mem__less_than_ref_value = 1,
+     function__mec_wait_reg_mem__less_than_equal_to_the_ref_value = 2,
+     function__mec_wait_reg_mem__equal_to_the_reference_value = 3,
+     function__mec_wait_reg_mem__not_equal_reference_value = 4,
+     function__mec_wait_reg_mem__greater_than_or_equal_reference_value = 5,
+     function__mec_wait_reg_mem__greater_than_reference_value = 6 };
+
+enum MEC_WAIT_REG_MEM_mem_space_enum {
+     mem_space__mec_wait_reg_mem__register_space = 0,
+     mem_space__mec_wait_reg_mem__memory_space = 1 };
+
+enum MEC_WAIT_REG_MEM_operation_enum {
+     operation__mec_wait_reg_mem__wait_reg_mem = 0,
+     operation__mec_wait_reg_mem__wr_wait_wr_reg = 1,
+     operation__mec_wait_reg_mem__wait_mem_preemptable = 3 };
+
+
+typedef struct PM4_MEC_WAIT_REG_MEM
+{
+    union
+    {
+        PM4_TYPE_3_HEADER   header;            ///header
+        uint32_t            ordinal1;
+    };
+
+    union
+    {
+        struct
+        {
+            MEC_WAIT_REG_MEM_function_enum function:3;
+            uint32_t reserved1:1;
+            MEC_WAIT_REG_MEM_mem_space_enum mem_space:2;
+            MEC_WAIT_REG_MEM_operation_enum operation:2;
+            uint32_t reserved2:24;
+        } bitfields2;
+        uint32_t ordinal2;
+    };
+
+    union
+    {
+        struct
+        {
+            uint32_t reserved3:2;
+            uint32_t mem_poll_addr_lo:30;
+        } bitfields3a;
+        struct
+        {
+            uint32_t reg_poll_addr:18;
+            uint32_t reserved4:14;
+        } bitfields3b;
+        struct
+        {
+            uint32_t reg_write_addr1:18;
+            uint32_t reserved5:14;
+        } bitfields3c;
+        uint32_t ordinal3;
+    };
+
+    union
+    {
+        uint32_t mem_poll_addr_hi;
+
+        struct
+        {
+            uint32_t reg_write_addr2:18;
+            uint32_t reserved6:14;
+        } bitfields4b;
+        uint32_t ordinal4;
+    };
+
+    uint32_t reference;
+
+    uint32_t mask;
+
+    union
+    {
+        struct
+        {
+            uint32_t poll_interval:16;
+            uint32_t reserved7:15;
+            uint32_t optimize_ace_offload_mode:1;
+        } bitfields7;
+        uint32_t ordinal7;
+    };
+
+} PM4MEC_WAIT_REG_MEM, *PPM4MEC_WAIT_REG_MEM;
+
 //--------------------MEC_WRITE_DATA--------------------
 
 enum MEC_WRITE_DATA_dst_sel_enum { dst_sel_mec_write_data_MEM_MAPPED_REGISTER_0 = 0, dst_sel_mec_write_data_TC_L2_2 = 2, dst_sel_mec_write_data_GDS_3 = 3, dst_sel_mec_write_data_MEMORY_5 = 5 };

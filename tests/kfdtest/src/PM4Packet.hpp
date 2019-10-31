@@ -224,4 +224,25 @@ class PM4NopPacket : public PM4Packet {
     PM4_TYPE_3_HEADER *m_packetData;
 };
 
+// @class PM4WaitRegMemPacket
+class PM4WaitRegMemPacket : public PM4Packet {
+ public:
+    PM4WaitRegMemPacket(void) {}
+    PM4WaitRegMemPacket(bool memory, uint64_t addr, uint32_t ref, uint16_t pollInterval);
+    PM4WaitRegMemPacket(unsigned int function, unsigned int space, unsigned int operation,
+                        uint64_t addr, uint32_t ref, uint32_t mask, uint16_t pollInterval);
+    virtual ~PM4WaitRegMemPacket(void) {}
+
+    // @returns Packet size in bytes
+    virtual unsigned int SizeInBytes() const;
+    // @returns Pointer to the packet
+    virtual const void *GetPacket() const { return &m_packetData; }
+
+    void InitPacket(unsigned int function, unsigned int space, unsigned int operation,
+                    uint64_t addr, uint32_t ref, uint32_t mask, uint16_t pollInterval);
+
+ private:
+    PM4MEC_WAIT_REG_MEM m_packetData;
+};
+
 #endif  // __KFD_PM4_PACKET__H__
