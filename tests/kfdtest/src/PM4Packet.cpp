@@ -43,19 +43,12 @@ void PM4Packet::InitPM4Header(PM4_TYPE_3_HEADER &header, it_opcode_type opCode) 
     header.reserved1             = 0;
 }
 
-PM4WriteDataPacket::~PM4WriteDataPacket(void) {
-    if (m_pPacketData)
-        free(m_pPacketData);
-}
-
 unsigned int PM4WriteDataPacket::SizeInBytes() const {
     return (offsetof(PM4WRITE_DATA_CI, data) + m_ndw*sizeof(uint32_t));
 }
 
 void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
-    m_pPacketData = reinterpret_cast<PM4WRITE_DATA_CI *>(calloc(1, SizeInBytes()));
-    // Verify that the memory is allocated successfully, cannot use assert here
-    EXPECT_NOTNULL(m_pPacketData);
+    m_pPacketData = reinterpret_cast<PM4WRITE_DATA_CI *>(AllocPacket());
 
     InitPM4Header(m_pPacketData->header, IT_WRITE_DATA);
 
@@ -90,9 +83,8 @@ void PM4ReleaseMemoryPacket::InitPacketCI(bool isPolling, uint64_t address,
     PM4_RELEASE_MEM_CI *pkt;
 
     m_packetSize = sizeof(PM4_RELEASE_MEM_CI);
-    pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(calloc(1, m_packetSize));
+    pkt = reinterpret_cast<PM4_RELEASE_MEM_CI *>(AllocPacket());
     m_pPacketData = pkt;
-    EXPECT_NOTNULL(m_pPacketData);
 
     InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
@@ -155,9 +147,8 @@ void PM4ReleaseMemoryPacket::InitPacketAI(bool isPolling, uint64_t address,
     PM4MEC_RELEASE_MEM_AI *pkt;
 
     m_packetSize = sizeof(PM4MEC_RELEASE_MEM_AI);
-    pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(calloc(1, m_packetSize));
+    pkt = reinterpret_cast<PM4MEC_RELEASE_MEM_AI *>(AllocPacket());
     m_pPacketData = pkt;
-    EXPECT_NOTNULL(m_pPacketData);
 
     InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
@@ -201,9 +192,8 @@ void PM4ReleaseMemoryPacket::InitPacketNV(bool isPolling, uint64_t address,
     PM4MEC_RELEASE_MEM_NV *pkt;
 
     m_packetSize = sizeof(PM4_MEC_RELEASE_MEM_NV);
-    pkt = reinterpret_cast<PM4_MEC_RELEASE_MEM_NV *>(calloc(1, m_packetSize));
+    pkt = reinterpret_cast<PM4_MEC_RELEASE_MEM_NV *>(AllocPacket());
     m_pPacketData = pkt;
-    EXPECT_NOTNULL(m_pPacketData);
 
     InitPM4Header(pkt->header, IT_RELEASE_MEM);
 
@@ -277,9 +267,8 @@ void PM4AcquireMemoryPacket::InitPacketAI(void) {
 
     PM4ACQUIRE_MEM *pkt;
     m_packetSize = sizeof(PM4ACQUIRE_MEM);
-    pkt = reinterpret_cast<PM4ACQUIRE_MEM*>(calloc(1, m_packetSize));
+    pkt = reinterpret_cast<PM4ACQUIRE_MEM*>(AllocPacket());
     m_pPacketData = pkt;
-    EXPECT_NOTNULL(m_pPacketData);
 
     InitPM4Header(pkt->header,  IT_ACQUIRE_MEM);
     pkt->bitfields2.coher_cntl     = 0x28c00000;  // copied from the way the HSART does this.
@@ -293,9 +282,9 @@ void PM4AcquireMemoryPacket::InitPacketAI(void) {
 void PM4AcquireMemoryPacket::InitPacketNV(void) {
     PM4ACQUIRE_MEM_NV *pkt;
     m_packetSize = sizeof(PM4ACQUIRE_MEM_NV);
-    pkt = reinterpret_cast<PM4ACQUIRE_MEM_NV*>(calloc(1, m_packetSize));
+    pkt = reinterpret_cast<PM4ACQUIRE_MEM_NV*>(AllocPacket());
     m_pPacketData = pkt;
-    EXPECT_NOTNULL(m_pPacketData);
+
     InitPM4Header(pkt->header,  IT_ACQUIRE_MEM);
     pkt->coher_size                = 0xFFFFFFFF;
     pkt->bitfields3.coher_size_hi  = 0;
@@ -309,19 +298,12 @@ void PM4AcquireMemoryPacket::InitPacketNV(void) {
     pkt->bitfields6.gcr_cntl = (1<<14|1<<9|1<<8|1<<7|1);
 }
 
-PM4SetShaderRegPacket::PM4SetShaderRegPacket(void)
-    : m_packetDataAllocated(false) {
+PM4SetShaderRegPacket::PM4SetShaderRegPacket(void) {
 }
 
 PM4SetShaderRegPacket::PM4SetShaderRegPacket(unsigned int baseOffset, const unsigned int regValues[],
-                                             unsigned int numRegs)
-    : m_packetDataAllocated(false) {
+                                             unsigned int numRegs) {
     InitPacket(baseOffset, regValues, numRegs);
-}
-
-PM4SetShaderRegPacket::~PM4SetShaderRegPacket(void) {
-    if (m_packetDataAllocated)
-        free(m_pPacketData);
 }
 
 void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned int regValues[],
@@ -332,11 +314,7 @@ void PM4SetShaderRegPacket::InitPacket(unsigned int baseOffset, const unsigned i
     /* Allocating the size of the packet, since the packet is assembled from a struct
      * followed by an additional dword data
      */
-    m_pPacketData = reinterpret_cast<PM4SET_SH_REG *>(malloc(m_packetSize));
-
-    EXPECT_NOTNULL(m_pPacketData);
-
-    m_packetDataAllocated = true;
+    m_pPacketData = reinterpret_cast<PM4SET_SH_REG *>(AllocPacket());
 
     memset(m_pPacketData, 0, m_packetSize);
 

@@ -42,7 +42,7 @@ class SDMAWriteDataPacket : public SDMAPacket {
     SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int data);
     SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int ndw, void *data);
 
-    virtual ~SDMAWriteDataPacket(void);
+    virtual ~SDMAWriteDataPacket(void) {}
 
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
@@ -63,7 +63,7 @@ class SDMACopyDataPacket : public SDMAPacket {
     SDMACopyDataPacket(unsigned int familyId, void *dest, void *src, unsigned int size);
     SDMACopyDataPacket(unsigned int familyId, void *const dst[], void *src, int n, unsigned int surfsize);
 
-    virtual ~SDMACopyDataPacket(void);
+    virtual ~SDMACopyDataPacket(void) {}
 
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
@@ -83,7 +83,7 @@ class SDMAFillDataPacket : public SDMAPacket {
     // This contructor will also init the packet, no need for additional calls
     SDMAFillDataPacket(unsigned int familyId, void *dest, unsigned int data, unsigned int size);
 
-    virtual ~SDMAFillDataPacket(void);
+    virtual ~SDMAFillDataPacket(void) {}
 
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return m_PacketData; }
@@ -161,7 +161,7 @@ class SDMATimePacket : public SDMAPacket {
 class SDMANopPacket : public SDMAPacket {
  public:
     SDMANopPacket(unsigned int count = 1);
-    virtual ~SDMANopPacket(void);
+    virtual ~SDMANopPacket(void) {}
 
     // @returns Pointer to the packet
     virtual const void *GetPacket() const { return packetData; }
