@@ -211,16 +211,17 @@ class PM4PartialFlushPacket : public PM4Packet {
 // @class PM4NopPacket
 class PM4NopPacket : public PM4Packet {
  public:
-    PM4NopPacket(void);
+    PM4NopPacket(unsigned int count = 1);
     virtual ~PM4NopPacket(void) {}
 
     // @returns Packet size in bytes
-    virtual unsigned int SizeInBytes() const;
+    virtual unsigned int SizeInBytes() const { return m_packetSize; }
     // @returns Pointer to the packet
-    virtual const void *GetPacket() const { return &m_packetData; }
+    virtual const void *GetPacket() const { return m_packetData; }
 
  private:
-    PM4_TYPE_3_HEADER m_packetData;
+    unsigned int m_packetSize;
+    PM4_TYPE_3_HEADER *m_packetData;
 };
 
 #endif  // __KFD_PM4_PACKET__H__

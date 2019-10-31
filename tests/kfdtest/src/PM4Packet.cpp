@@ -358,10 +358,7 @@ unsigned int PM4PartialFlushPacket::SizeInBytes() const {
     return sizeof(PM4EVENT_WRITE) - sizeof(uint32_t)*2;
 }
 
-PM4NopPacket::PM4NopPacket(void) {
-    InitPM4Header(m_packetData, IT_NOP);
-}
-
-unsigned int PM4NopPacket::SizeInBytes() const {
-    return sizeof(m_packetData);
+PM4NopPacket::PM4NopPacket(unsigned int count): m_packetSize(count * 4) {
+    m_packetData = reinterpret_cast<PM4_TYPE_3_HEADER *>(AllocPacket());
+    InitPM4Header(*m_packetData, IT_NOP);
 }
