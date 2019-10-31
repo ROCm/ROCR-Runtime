@@ -362,3 +362,46 @@ PM4NopPacket::PM4NopPacket(unsigned int count): m_packetSize(count * 4) {
     m_packetData = reinterpret_cast<PM4_TYPE_3_HEADER *>(AllocPacket());
     InitPM4Header(*m_packetData, IT_NOP);
 }
+
+PM4WaitRegMemPacket::PM4WaitRegMemPacket(bool memory, uint64_t addr,
+                                         uint32_t ref, uint16_t pollInterval) {
+    InitPacket(function__mec_wait_reg_mem__equal_to_the_reference_value,
+               memory ?
+               mem_space__mec_wait_reg_mem__memory_space :
+               mem_space__mec_wait_reg_mem__register_space,
+               operation__mec_wait_reg_mem__wait_reg_mem,
+               addr, ref, 0xffffffff, pollInterval);
+}
+PM4WaitRegMemPacket::PM4WaitRegMemPacket(unsigned int function,
+                                         unsigned int space,
+                                         unsigned int operation,
+                                         uint64_t addr, uint32_t ref,
+                                         uint32_t mask, uint16_t pollInterval) {
+    InitPacket(function, space, operation, addr, ref, mask, pollInterval);
+}
+
+void PM4WaitRegMemPacket::InitPacket(unsigned int function,
+                                     unsigned int space,
+                                     unsigned int operation,
+                                     uint64_t addr, uint32_t ref,
+                                     uint32_t mask, uint16_t pollInterval) {
+    memset(&m_packetData, 0, SizeInBytes());
+    InitPM4Header(m_packetData.header, IT_WAIT_REG_MEM);
+
+    m_packetData.bitfields2.function = (MEC_WAIT_REG_MEM_function_enum)function;
+    m_packetData.bitfields2.mem_space = (MEC_WAIT_REG_MEM_mem_space_enum)space;
+    m_packetData.bitfields2.operation = (MEC_WAIT_REG_MEM_operation_enum)operation;
+
+    m_packetData.ordinal3 = addr;
+    m_packetData.mem_poll_addr_hi = addr >> 32;
+
+    m_packetData.reference = ref;
+    m_packetData.mask = mask;
+
+    m_packetData.bitfields7.poll_interval = pollInterval;
+    m_packetData.bitfields7.optimize_ace_offload_mode = 1;
+}
+
+unsigned int PM4WaitRegMemPacket::SizeInBytes() const {
+    return sizeof(m_packetData);
+}
