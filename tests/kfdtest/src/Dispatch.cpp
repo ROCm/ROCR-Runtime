@@ -230,7 +230,15 @@ void Dispatch::BuildIb() {
 
     m_IndirectBuf.AddPacket(PM4DispatchDirectPacket(m_DimX, m_DimY, m_DimZ, DISPATCH_INIT_VALUE));
 
-    m_IndirectBuf.AddPacket(PM4PartialFlushPacket());
-
-    m_IndirectBuf.AddPacket(PM4AcquireMemoryPacket(m_FamilyId));
+    // EVENT_WRITE.partial_flush causes problems with preemptions in
+    // GWS testing. Since this is specific to this PM4 command and
+    // doesn't affect AQL, it's easier to fix KFDTest than the
+    // firmware.
+    //
+    // Replace PartialFlush with an ReleaseMem (with no interrupt) + WaitRegMem
+    //
+    // Original: m_IndirectBuf.AddPacket(PM4PartialFlushPacket());
+    uint32_t *nop = m_IndirectBuf.AddPacket(PM4NopPacket(2)); // NOP packet with one dword payload for the release-mem fence
+    m_IndirectBuf.AddPacket(PM4ReleaseMemoryPacket(m_FamilyId, true, (uint64_t)&nop[1], 0xdeadbeef));
+    m_IndirectBuf.AddPacket(PM4WaitRegMemPacket(true, (uint64_t)&nop[1], 0xdeadbeef, 4));
 }
