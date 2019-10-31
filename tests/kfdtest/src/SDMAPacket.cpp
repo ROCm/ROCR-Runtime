@@ -248,7 +248,7 @@ void SDMATimePacket::InitPacket(void *destaddr) {
 }
 
 SDMANopPacket::SDMANopPacket(unsigned int count) {
-    packetSize = count;
+    packetSize = count * sizeof(unsigned int);
     packetData = reinterpret_cast<SDMA_PKT_NOP *>(calloc(count, sizeof(unsigned int)));
 
     packetData->HEADER_UNION.op = SDMA_OP_NOP;
