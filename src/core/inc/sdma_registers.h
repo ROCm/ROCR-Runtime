@@ -120,6 +120,8 @@ typedef struct SDMA_PKT_COPY_LINEAR_TAG {
     unsigned int DW_6_DATA;
   } DST_ADDR_HI_UNION;
 
+  unsigned int DW_7_PAD;
+
   static const size_t kMaxSize_ = 0x3fffe0;
 } SDMA_PKT_COPY_LINEAR;
 
@@ -244,6 +246,9 @@ typedef struct SDMA_PKT_COPY_LINEAR_RECT_TAG {
     unsigned int DW_12_DATA;
   } RECT_PARAMETER_2_UNION;
 
+  unsigned int DW_13_PAD;
+  unsigned int DW_14_PAD;
+  unsigned int DW_15_PAD;
 } SDMA_PKT_COPY_LINEAR_RECT;
 
 typedef struct SDMA_PKT_CONSTANT_FILL_TAG {
@@ -287,6 +292,10 @@ typedef struct SDMA_PKT_CONSTANT_FILL_TAG {
     unsigned int DW_4_DATA;
   } COUNT_UNION;
 
+  unsigned int DW_5_PAD;
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
+
   static const size_t kMaxSize_ = 0x3fffe0;
 } SDMA_PKT_CONSTANT_FILL;
 
@@ -320,6 +329,11 @@ typedef struct SDMA_PKT_FENCE_TAG {
     };
     unsigned int DW_3_DATA;
   } DATA_UNION;
+
+  unsigned int DW_4_PAD;
+  unsigned int DW_5_PAD;
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
 } SDMA_PKT_FENCE;
 
 typedef struct SDMA_PKT_POLL_REGMEM_TAG {
@@ -372,6 +386,9 @@ typedef struct SDMA_PKT_POLL_REGMEM_TAG {
     };
     unsigned int DW_5_DATA;
   } DW5_UNION;
+
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
 } SDMA_PKT_POLL_REGMEM;
 
 typedef struct SDMA_PKT_ATOMIC_TAG {
@@ -461,6 +478,11 @@ typedef struct SDMA_PKT_TIMESTAMP_TAG {
     unsigned int DW_2_DATA;
   } ADDR_HI_UNION;
 
+  unsigned int DW_3_PAD;
+  unsigned int DW_4_PAD;
+  unsigned int DW_5_PAD;
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
 } SDMA_PKT_TIMESTAMP;
 
 typedef struct SDMA_PKT_TRAP_TAG {
@@ -480,6 +502,13 @@ typedef struct SDMA_PKT_TRAP_TAG {
     };
     unsigned int DW_1_DATA;
   } INT_CONTEXT_UNION;
+
+  unsigned int DW_2_PAD;
+  unsigned int DW_3_PAD;
+  unsigned int DW_4_PAD;
+  unsigned int DW_5_PAD;
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
 } SDMA_PKT_TRAP;
 
 // HDP flush packet, no parameters.
@@ -490,6 +519,8 @@ typedef struct SDMA_PKT_HDP_FLUSH_TAG {
   unsigned int DW_3_DATA;
   unsigned int DW_4_DATA;
   unsigned int DW_5_DATA;
+  unsigned int DW_6_PAD;
+  unsigned int DW_7_PAD;
 
   // Version of gfx9 sDMA microcode introducing SDMA_PKT_HDP_FLUSH
   static const uint16_t kMinVersion_ = 0x1A5;
