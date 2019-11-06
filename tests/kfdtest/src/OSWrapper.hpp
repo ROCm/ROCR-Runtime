@@ -95,8 +95,6 @@ void MemoryBarrier();
  */
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess = 1);
 
-HSAuint64 GetSystemTickCountInMicroSec();
-
 /* Put the system to S3/S4 power state and bring it back to S0.
  * @return 'true' on success, 'false' on failure.
  */

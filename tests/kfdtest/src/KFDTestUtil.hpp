@@ -56,6 +56,8 @@ void GetSdmaInfo(const HsaNodeProperties *props,
                  unsigned int *p_num_sdma_xgmi_engines,
                  unsigned int *p_num_sdma_queues_per_engine);
 
+HSAuint64 GetSystemTickCountInMicroSec();
+
 class HsaMemoryBuffer {
  public:
     static const HsaMemoryBuffer Null;
