@@ -385,6 +385,7 @@ TEST_F(KFDMemoryTest, MemoryAlloc) {
     TEST_START(TESTPROFILE_RUNALL)
 
     unsigned int* pDb = NULL;
+    m_MemoryFlags.ui32.NoNUMABind = 1;
     EXPECT_SUCCESS(hsaKmtAllocMemory(0 /* system */, PAGE_SIZE, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
 
     TEST_END
@@ -1094,6 +1095,7 @@ TEST_F(KFDMemoryTest, MMBench) {
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 1;
             memFlags.ui32.NonPaged = 0;
+            memFlags.ui32.NoNUMABind = 1;
         } else {
             allocNode = defaultGPUNode;
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
@@ -1328,6 +1330,7 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
 
     // Alloc system memory from node 0 and initialize it
     memFlags.ui32.NonPaged = 0;
+    memFlags.ui32.NoNUMABind = 1;
     ASSERT_SUCCESS(hsaKmtAllocMemory(0, PAGE_SIZE*2, memFlags, &mem[0]));
     for (i = 0; i < 4*sizeof(HSAint64) + 4; i++) {
         (reinterpret_cast<HSAuint8 *>(mem[0]))[i] = i;            // source
@@ -1624,7 +1627,7 @@ TEST_F(KFDMemoryTest, SignalHandling) {
      * Try to allocate 1/4th System RAM
      */
     size = (sysMemSize >> 2) & ~(HSAuint64)(PAGE_SIZE - 1);
-
+    m_MemoryFlags.ui32.NoNUMABind = 1;
     ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
     // Verify that pDb is not null before it's being used
     EXPECT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
@@ -1794,6 +1797,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 1;
             memFlags.ui32.NonPaged = 0;
+            memFlags.ui32.NoNUMABind = 1;
         } else {
             /* Alloc visible vram*/
             allocNode = defaultGPUNode;
