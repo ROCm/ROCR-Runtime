@@ -1462,6 +1462,9 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	int num_node;
 	long r;
 
+	pr_debug("%s mem %p flags 0x%x size 0x%lx node_id %d\n", __func__,
+		mem, flags.Value, SizeInBytes, node_id);
+
 	if (flags.ui32.NoNUMABind)
 		return 0;
 

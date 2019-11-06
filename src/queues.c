@@ -424,6 +424,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	HSAuint64 gpu_va;
 	HsaMemFlags flags;
 	HSAKMT_STATUS ret;
+	HSAuint32 cpu_id = 0;
 
 	flags.Value = 0;
 	flags.ui32.HostAccess = !DeviceLocal;
@@ -431,11 +432,21 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 	flags.ui32.CoarseGrain = DeviceLocal;
-	flags.ui32.NoNUMABind = 1;
+
+	/* Get the closest cpu_id to GPU NodeId for system memory allocation
+	 * nonPaged=1 system memory allocation uses GTT path
+	 */
+	if (!DeviceLocal && !nonPaged) {
+		cpu_id = get_direct_link_cpu(NodeId);
+		if (cpu_id == INVALID_NODEID) {
+			flags.ui32.NoNUMABind = 1;
+			cpu_id = 0;
+		}
+	}
 
 	size = ALIGN_UP(size, align);
 
-	ret = hsaKmtAllocMemory(DeviceLocal ? NodeId : 0, size, flags, &mem);
+	ret = hsaKmtAllocMemory(DeviceLocal ? NodeId : cpu_id, size, flags, &mem);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return NULL;
 
