@@ -39,7 +39,6 @@
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <sys/time.h>
 
 static int protection_flags[8] = {PROT_NONE, PROT_READ, PROT_WRITE, PROT_READ | PROT_WRITE,
                                   PROT_EXEC, PROT_EXEC | PROT_READ, PROT_EXEC | PROT_WRITE,
@@ -78,12 +77,6 @@ HSAuint64 GetLastErrorNo() {
 bool MultiProcessTest(const char *testToRun, int numOfProcesses, int runsPerProcess) {
     // TODO: Implement
     return false;
-}
-
-HSAuint64 GetSystemTickCountInMicroSec() {
-    struct timeval t;
-    gettimeofday(&t, 0);
-    return t.tv_sec * 1000000ULL + t.tv_usec;
 }
 
 bool SuspendAndWakeUp() {

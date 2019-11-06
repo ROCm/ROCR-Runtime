@@ -24,6 +24,7 @@
 #include "KFDTestUtil.hpp"
 
 #include <stdlib.h>
+#include <sys/time.h>
 #include <algorithm>
 #include <vector>
 #include "BaseQueue.hpp"
@@ -169,6 +170,12 @@ bool isTonga(const HsaNodeProperties *props) {
     }
 
     return false;
+}
+
+HSAuint64 GetSystemTickCountInMicroSec() {
+    struct timeval t;
+    gettimeofday(&t, 0);
+    return t.tv_sec * 1000000ULL + t.tv_usec;
 }
 
 const HsaMemoryBuffer HsaMemoryBuffer::Null;

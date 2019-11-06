@@ -640,14 +640,13 @@ HSAint64 KFDQMTest::TimeConsumedwithCUMask(int node, uint32_t* mask, uint32_t ma
     EXPECT_SUCCESS(queue.SetCUMask(mask, mask_count));
     queue.SetSkipWaitConsump(true);
 
-    struct timeval start, now;
-    gettimeofday(&start, NULL);
+    HSAuint64 startTime = GetSystemTickCountInMicroSec();
     dispatch.Submit(queue);
     dispatch.Sync();
-    gettimeofday(&now, NULL);
+    HSAuint64 endTime = GetSystemTickCountInMicroSec();
 
     EXPECT_SUCCESS(queue.Destroy());
-    return (now.tv_sec *1000LL + now.tv_usec/1000LL - start.tv_sec * 1000LL - start.tv_usec/1000LL);
+    return endTime - startTime;
 }
 
 /* To cover for outliers, allow us to get the Average time based on a specified number of iterations */
@@ -831,7 +830,7 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
     };
 
     int activeTaskBitmap = 0x3;
-    struct timeval start, end[2];
+    HSAuint64 startTime, endTime[2];
     HsaEvent *pHsaEvent[2];
     int numEvent = 2;
     PM4Queue queue[2];
@@ -850,7 +849,7 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
         dispatch[i].SetDim(1024, 16, 16);
     }
 
-    gettimeofday(&start, NULL);
+    startTime = GetSystemTickCountInMicroSec();
     for (i = 0; i < 2; i++)
         dispatch[i].Submit(queue[i]);
 
@@ -858,7 +857,7 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
         hsaKmtWaitOnMultipleEvents(pHsaEvent, numEvent, false, g_TestTimeOut);
         for (i = 0; i < 2; i++) {
             if ((activeTaskBitmap & (1 << i)) && (syncBuffer[i] == pHsaEvent[i]->EventId)) {
-                gettimeofday(&end[i], NULL);
+                endTime[i] = GetSystemTickCountInMicroSec();
                 activeTaskBitmap &= ~(1 << i);
             }
         }
@@ -866,9 +865,9 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
 
     for (i = 0; i < 2; i++) {
         EXPECT_SUCCESS(queue[i].Destroy());
-        int ms = end[i].tv_sec *1000LL + end[i].tv_usec/1000LL - start.tv_sec * 1000LL - start.tv_usec/1000LL;
+        int usecs = endTime[i] - startTime;
         LOG() << "Task priority: " << std::dec << priority[i] << "\t";
-        LOG() << "Task duration: " << std::dec << ms << "ms" << std::endl;
+        LOG() << "Task duration: " << std::dec << usecs << "usecs" << std::endl;
     }
 
     TEST_END
@@ -896,7 +895,7 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
     };
 
     int activeTaskBitmap = 0x3;
-    struct timeval start, end[2];
+    HSAuint64 startTime, endTime[2];
     HsaEvent *pHsaEvent[2];
     int numEvent = 2;
     PM4Queue queue[13];
@@ -924,7 +923,7 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
         dispatch[i].SetDim(1024, 16, 16);
     }
 
-    gettimeofday(&start, NULL);
+    startTime = GetSystemTickCountInMicroSec();
     for (i = 0; i < 2; i++)
         dispatch[i].Submit(queue[i]);
 
@@ -932,16 +931,16 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
         hsaKmtWaitOnMultipleEvents(pHsaEvent, numEvent, false, g_TestTimeOut);
         for (i = 0; i < 2; i++) {
             if ((activeTaskBitmap & (1 << i)) && (syncBuffer[i] == pHsaEvent[i]->EventId)) {
-                gettimeofday(&end[i], NULL);
+                endTime[i] = GetSystemTickCountInMicroSec();
                 activeTaskBitmap &= ~(1 << i);
             }
         }
     }
 
     for (i = 0; i < 2; i++) {
-        int ms = end[i].tv_sec *1000LL + end[i].tv_usec/1000LL - start.tv_sec * 1000LL - start.tv_usec/1000LL;
+        int usecs = endTime[i] - startTime;
         LOG() << "Task priority: " << std::dec << priority[i] << "\t";
-        LOG() << "Task duration: " << std::dec << ms << "ms" << std::endl;
+        LOG() << "Task duration: " << std::dec << usecs << "usecs" << std::endl;
     }
 
     for (i = 0; i <= 12; i++) {
