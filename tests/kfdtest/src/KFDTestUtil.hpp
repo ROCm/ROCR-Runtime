@@ -36,6 +36,7 @@ class BaseQueue;
 #define CounterToNanoSec(x) ((x) * 1000 / (is_dgpu() ? 27 : 100))
 
 void WaitUntilInput();
+HSAKMT_STATUS fscanf_dec(const char *file, uint32_t *num);
 uint64_t RoundToPowerOf2(uint64_t val);
 
 // @brief: waits until the value is written to the buffer or until time out if received through args
