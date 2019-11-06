@@ -199,6 +199,7 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
             m_Flags.ui32.HostAccess = 1;
             m_Flags.ui32.NonPaged = 0;
             m_Flags.ui32.CoarseGrain = 0;
+            m_Flags.ui32.NoNUMABind = 1;
         }
 
         if (isExec)
