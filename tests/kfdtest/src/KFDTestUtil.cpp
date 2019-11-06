@@ -39,6 +39,31 @@ void WaitUntilInput() {
     } while (dummy != 10); // enter key's ascii value is 10
 }
 
+/* fscanf_dec - read a file whose content is a decimal number
+ *      @file [IN ] file to read
+ *      @num [OUT] number in the file
+ *
+ * It is copied from the same function in libhsakmt
+ */
+HSAKMT_STATUS fscanf_dec(const char *file, uint32_t *num)
+{
+    FILE *fd;
+    HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+
+    fd = fopen(file, "r");
+    if (!fd) {
+        LOG() << "Failed to open " << file << std::endl;
+        return HSAKMT_STATUS_INVALID_PARAMETER;
+    }
+    if (fscanf(fd, "%u", num) != 1) {
+        LOG() << "Failed to parse as a decimal: " << file << std::endl;;
+        ret = HSAKMT_STATUS_ERROR;
+    }
+
+    fclose(fd);
+    return ret;
+}
+
 uint64_t RoundToPowerOf2(uint64_t val) {
   int bytes = sizeof(uint64_t);
 

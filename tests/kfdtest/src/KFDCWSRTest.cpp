@@ -114,6 +114,14 @@ void KFDCWSRTest::TearDown() {
     ROUTINE_END
 }
 
+bool isOnEmulator() {
+    uint32_t isEmuMode = 0;
+
+    fscanf_dec("/sys/module/amdgpu/parameters/emu_mode", &isEmuMode);
+
+    return isEmuMode;
+}
+
 /**
  * KFDCWSRTest.BasicTest
  *
@@ -134,6 +142,14 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
         int count1 = 40000000;
         int count2 = 20000000;
+
+        if (isOnEmulator()) {
+            // Divide the iterator times by 1000 so that the test can
+            // finish in a reasonable time.
+            count1 /= 1000;
+            count2 /= 1000;
+            LOG() << "On Emulators" << std::endl;
+        }
 
         unsigned int* result1 = resultBuf1.As<unsigned int*>();
         unsigned int* result2 = resultBuf2.As<unsigned int*>();
