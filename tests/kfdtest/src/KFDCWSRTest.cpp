@@ -24,32 +24,44 @@
 #include "KFDCWSRTest.hpp"
 #include "Dispatch.hpp"
 
+
+/* Initial state:
+ *   s[0:1] - 64 bits iteration number; only the lower 32 bits are useful.
+ *   s[2:3] - result buffer base address
+ *   s4 - workgroup id
+ *   v0 - workitem id, always 0 because
+ *        NUM_THREADS_X(number of threads) in workgroup set to 1
+ * Registers:
+ *   v0 - calculated workitem = v0 + s4 * NUM_THREADS_X, which is s4
+ *   v2 - = s0, 32 bits iteration number
+ *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
+ *   v6 - counter
+ */
+
 static const char* iterate_isa_gfx8 = \
 "\
 shader iterate_isa\n\
-asic(VI)\n\
+wave_size(32)\n\
 type(CS)\n\
-/*copy the parameters from scalar registers to vector registers*/\n\
-    v_mov_b32 v1, s1\n\
-    v_mov_b32 v2, s2\n\
-    v_mov_b32 v3, s3\n\
-/*v0 stores the workitem ID inside the workgroup, use it to caculate the dest*/\n\
-//    v_lshlrev_b32 v0, 2, v0\n\
-//    v_add_u32 v2, vcc, v0, v2\n\
-    v_mov_b32 v0, s0\n\
-    flat_load_dword v4, v[0:1] slc  /*load target iteration value*/\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    v_mov_b32 v5, 0\n\
-LOOP:\n\
-    v_add_u32 v5, vcc, 1, v5\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    /*compare the result value (v5) to iteration value (v4), and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
-    v_cmp_lt_u32 vcc, v5, v4\n\
-    s_cbranch_vccnz LOOP\n\
-    flat_store_dword v[2,3], v5\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    s_endpgm\n\
-end\n\
+    // copy the parameters from scalar registers to vector registers\n\
+    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
+    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
+    v_mov_b32       v0, s4   // use workgroup id as index \n\
+    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
+    v_add_u32       v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_add_u32       v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_mov_b32       v6, 0 \n\
+LOOP: \n\
+    v_add_u32       v6, vcc, 1, v6 \n\
+    // compare the result value (v6) to iteration value (v2), and \n\
+    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
+    v_cmp_lt_u32 vcc, v6, v2 \n\
+    s_cbranch_vccnz LOOP \n\
+    flat_store_dword v[4:5], v6 \n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
+    s_endpgm \n\
+end \n\
 ";
 
 //This shader can be used by gfx9 and gfx10
@@ -58,31 +70,26 @@ static const char* iterate_isa_gfx9 = \
 shader iterate_isa\n\
 wave_size(32)\n\
 type(CS)\n\
-/*copy the parameters from scalar registers to vector registers*/\n\
-    v_mov_b32 v0, s0\n\
-    v_mov_b32 v1, s1\n\
-    v_mov_b32 v2, s2\n\
-    v_mov_b32 v3, s3\n\
-    flat_load_dword v4, v[0:1] slc    /*load target iteration value*/\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    v_mov_b32 v5, 0\n\
-LOOP:\n\
-    v_add_co_u32 v5, vcc, 1, v5\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    /*compare the result value (v5) to iteration value (v4), and jump if equal (i.e. if VCC is not zero after the comparison)*/\n\
-    v_cmp_lt_u32 vcc, v5, v4\n\
-    s_cbranch_vccnz LOOP\n\
-    flat_store_dword v[2,3], v5\n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
-    s_endpgm\n\
-end\n\
+    // copy the parameters from scalar registers to vector registers\n\
+    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
+    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
+    v_mov_b32       v0, s4   // use workgroup id as index \n\
+    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
+    v_add_co_u32    v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_add_co_u32    v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
+    v_mov_b32       v6, 0 \n\
+LOOP: \n\
+    v_add_co_u32    v6, vcc, 1, v6 \n\
+    // compare the result value (v6) to iteration value (v2), and \n\
+    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
+    v_cmp_lt_u32 vcc, v6, v2 \n\
+    s_cbranch_vccnz LOOP \n\
+    flat_store_dword v[4:5], v6 \n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
+    s_endpgm \n\
+end \n\
 ";
-
-
-/*
-v[0:1] = target iteration value
-v[2:3] = iterate result
-*/
 
 void KFDCWSRTest::SetUp() {
     ROUTINE_START
@@ -91,10 +98,6 @@ void KFDCWSRTest::SetUp() {
 
     m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
-    /* TODO: In the ISA, the workitem_id is not obtained as expected, so the destination cannot
-     * be set based on workitem_id. Set the wave_num to 1 for now as a workarpound.
-     * Will set it to 8 or even 256 in the future.
-     */
     wave_number = 1;
 
     ROUTINE_END
@@ -126,11 +129,14 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
     if (m_FamilyId >= FAMILY_VI) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-        HsaMemoryBuffer iterateBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
-        HsaMemoryBuffer resultBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer resultBuf1(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer resultBuf2(PAGE_SIZE, defaultGPUNode, true, false, false);
 
-        unsigned int* iter = iterateBuf.As<unsigned int*>();
-        unsigned int* result = resultBuf.As<unsigned int*>();
+        int count1 = 40000000;
+        int count2 = 20000000;
+
+        unsigned int* result1 = resultBuf1.As<unsigned int*>();
+        unsigned int* result2 = resultBuf2.As<unsigned int*>();
         const char *pIterateIsa;
 
         if (m_FamilyId < FAMILY_AI)
@@ -149,13 +155,10 @@ TEST_F(KFDCWSRTest, BasicTest) {
         dispatch1 = new Dispatch(isaBuffer);
         dispatch2 = new Dispatch(isaBuffer);
 
-        dispatch1->SetArgs(&iter[0], &result[0]);
+        dispatch1->SetArgs(reinterpret_cast<void *>(count1), result1);
         dispatch1->SetDim(wave_number, 1, 1);
-        dispatch2->SetArgs(&iter[1], &result[wave_number]);
+        dispatch2->SetArgs(reinterpret_cast<void *>(count2), result2);
         dispatch2->SetDim(wave_number, 1, 1);
-
-        iter[0] = 40000000;
-        iter[1] = 20000000;
 
         // Submit the shader, queue1
         dispatch1->Submit(queue1);
@@ -168,12 +171,12 @@ TEST_F(KFDCWSRTest, BasicTest) {
         // Ensure all the waves complete as expected
         int i;
         for (i = 0 ; i < wave_number; ++i) {
-             if (result[i] != iter[0]) {
-                 LOG() << "Dispatch 1, work item " << i << ' ' << result[i] << std::endl;
+             if (result1[i] != count1) {
+                 LOG() << "Dispatch 1, work item " << i << ' ' << result1[i] << std::endl;
                  break;
              }
-             if (result[i + wave_number] != iter[1]) {
-                 LOG() << "Dispatch 2, work item " << i << ' ' << result[i] << std::endl;
+             if (result2[i] != count2) {
+                 LOG() << "Dispatch 2, work item " << i << ' ' << result2[i] << std::endl;
                  break;
              }
         }
