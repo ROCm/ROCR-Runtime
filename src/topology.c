@@ -2224,6 +2224,25 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 	return 0;
 }
 
+uint32_t get_direct_link_cpu(uint32_t gpu_node)
+{
+	HSAuint64 size = 0;
+	int32_t cpu_id;
+	HSAuint32 i;
+
+	cpu_id = gpu_get_direct_link_cpu(gpu_node, g_props);
+	if (cpu_id == -1)
+		return INVALID_NODEID;
+
+	assert(g_props[cpu_id].mem);
+
+	for (i = 0; i < g_props[cpu_id].node.NumMemoryBanks; i++)
+		size += g_props[cpu_id].mem[i].SizeInBytes;
+
+	return size ? (uint32_t)cpu_id : INVALID_NODEID;
+}
+
+
 HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray)
 {
