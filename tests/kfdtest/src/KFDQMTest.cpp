@@ -243,6 +243,67 @@ TEST_F(KFDQMTest, AllSdmaQueues) {
     TEST_END
 }
 
+TEST_F(KFDQMTest, AllQueues) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    int bufSize = PAGE_SIZE;
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    unsigned int i, j;
+
+    const unsigned int numCpQueues = m_numCpQueues;
+    const unsigned int numSdmaQueues = m_numSdmaEngines * m_numSdmaQueuesPerEngine;
+
+    HsaMemoryBuffer destBufCp(PAGE_SIZE, defaultGPUNode, false);
+    destBufCp.Fill(0xFF);
+
+    HsaMemoryBuffer destBuf(bufSize << 1 , defaultGPUNode, false);
+    HsaMemoryBuffer srcBuf(bufSize, defaultGPUNode, false);
+    destBuf.Fill(0xFF);
+
+    std::vector<PM4Queue> cpQueues(numCpQueues);
+    std::vector<SDMAQueue> sdmaQueues(numSdmaQueues);
+
+    for (i = 0; i < numCpQueues; ++i)
+        ASSERT_SUCCESS(cpQueues[i].Create(defaultGPUNode)) << " QueueId=" << i;
+
+    for (j = 0; j < numSdmaQueues; ++j)
+        ASSERT_SUCCESS(sdmaQueues[j].Create(defaultGPUNode));
+
+    for (i = 0; i < numCpQueues; ++i) {
+        cpQueues[i].PlaceAndSubmitPacket(PM4WriteDataPacket(destBufCp.As<unsigned int*>()+i*2, i, i));
+
+        cpQueues[i].Wait4PacketConsumption();
+
+        EXPECT_TRUE(WaitOnValue(destBufCp.As<unsigned int*>()+i*2, i));
+    }
+
+    for (j = 0; j < numSdmaQueues; ++j) {
+        destBuf.Fill(0x0);
+        srcBuf.Fill(j + 0xa0);
+        sdmaQueues[j].PlaceAndSubmitPacket(
+            SDMACopyDataPacket(sdmaQueues[j].GetFamilyId(), destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+        sdmaQueues[j].PlaceAndSubmitPacket(
+            SDMAWriteDataPacket(sdmaQueues[j].GetFamilyId(), destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        sdmaQueues[j].Wait4PacketConsumption();
+
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        EXPECT_SUCCESS(memcmp(
+            destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+    }
+
+    for (i = 0; i < numCpQueues; ++i)
+       EXPECT_SUCCESS(cpQueues[i].Destroy());
+
+    for (j = 0; j < numSdmaQueues; ++j)
+        EXPECT_SUCCESS(sdmaQueues[j].Destroy());
+
+    TEST_END
+}
+
 /* The following test is designed to reproduce an intermittent hang on
  * Fiji and other VI/Polaris GPUs. This test typically hangs in a few
  * seconds. According to analysis done by HW engineers, the culprit
