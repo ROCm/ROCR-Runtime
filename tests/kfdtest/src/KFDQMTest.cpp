@@ -115,32 +115,30 @@ TEST_F(KFDQMTest, SubmitPacketCpQueue) {
     TEST_END
 }
 
-TEST_F(KFDQMTest, MultipleCpQueues) {
+TEST_F(KFDQMTest, AllCpQueues) {
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    static const unsigned int MAX_CP_QUEUES = 16;
-
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false);
 
     destBuf.Fill(0xFF);
 
-    PM4Queue queues[MAX_CP_QUEUES];
+    std::vector<PM4Queue> queues(m_numCpQueues);
 
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
+    for (unsigned int qidx = 0; qidx < m_numCpQueues; ++qidx)
         ASSERT_SUCCESS(queues[qidx].Create(defaultGPUNode)) << " QueueId=" << qidx;
 
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx) {
+    for (unsigned int qidx = 0; qidx < m_numCpQueues; ++qidx) {
         queues[qidx].PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>()+qidx*2, qidx, qidx));
 
         queues[qidx].Wait4PacketConsumption();
 
-        WaitOnValue(destBuf.As<unsigned int*>()+qidx*2, qidx);
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>()+qidx*2, qidx));
     }
 
-    for (unsigned int qidx = 0; qidx < MAX_CP_QUEUES; ++qidx)
+    for (unsigned int qidx = 0; qidx < m_numCpQueues; ++qidx)
        EXPECT_SUCCESS(queues[qidx].Destroy());
 
     TEST_END

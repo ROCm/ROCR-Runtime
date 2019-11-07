@@ -51,7 +51,8 @@ bool is_dgpu();
 bool isTonga(const HsaNodeProperties *props);
 unsigned int FamilyIdFromNode(const HsaNodeProperties *props);
 
-void GetSdmaInfo(const HsaNodeProperties *props,
+void GetHwQueueInfo(const HsaNodeProperties *props,
+                 unsigned int *p_num_cp_queues,
                  unsigned int *p_num_sdma_engines,
                  unsigned int *p_num_sdma_xgmi_engines,
                  unsigned int *p_num_sdma_queues_per_engine);

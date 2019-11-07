@@ -140,17 +140,19 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
     return familyId;
 }
 
-void GetSdmaInfo(const HsaNodeProperties *props,
+void GetHwQueueInfo(const HsaNodeProperties *props,
+                 unsigned int *p_num_cp_queues,
                  unsigned int *p_num_sdma_engines,
                  unsigned int *p_num_sdma_xgmi_engines,
                  unsigned int *p_num_sdma_queues_per_engine) {
+    int num_cp_queues = 24;
     int num_sdma_queues_per_engine = 2;
 
     if (props->EngineId.ui32.Major == 9) {
         if (props->EngineId.ui32.Stepping == 6)  // VEGA20
             num_sdma_queues_per_engine = 8;
-    } else if (props->EngineId.ui32.Major == 10) { //NAVIi
-            num_sdma_queues_per_engine = 8;
+    } else if (props->EngineId.ui32.Major == 10) {  // NAVI
+        num_sdma_queues_per_engine = 8;
     }
 
     if (p_num_sdma_engines)
@@ -161,6 +163,9 @@ void GetSdmaInfo(const HsaNodeProperties *props,
 
     if (p_num_sdma_queues_per_engine)
         *p_num_sdma_queues_per_engine = num_sdma_queues_per_engine;
+
+    if (p_num_cp_queues)
+        *p_num_cp_queues = num_cp_queues;
 }
 
 bool isTonga(const HsaNodeProperties *props) {
