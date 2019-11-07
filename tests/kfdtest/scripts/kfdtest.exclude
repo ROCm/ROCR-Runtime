@@ -13,7 +13,7 @@ FILTER[core_sws]=\
 "KFDQMTest.CreateDestroyCpQueue:"\
 "KFDQMTest.SubmitNopCpQueue:"\
 "KFDQMTest.SubmitPacketCpQueue:"\
-"KFDQMTest.MultipleCpQueues:"\
+"KFDQMTest.AllCpQueues:"\
 "KFDQMTest.CreateDestroySdmaQueue:"\
 "KFDQMTest.SubmitNopSdmaQueue:"\
 "KFDQMTest.SubmitPacketSdmaQueue:"\
