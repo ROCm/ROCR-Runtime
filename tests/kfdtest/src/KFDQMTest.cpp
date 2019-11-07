@@ -205,7 +205,7 @@ TEST_F(KFDQMTest, SubmitPacketSdmaQueue) {
     TEST_END
 }
 
-TEST_F(KFDQMTest, MultipleSdmaQueues) {
+TEST_F(KFDQMTest, AllSdmaQueues) {
     TEST_START(TESTPROFILE_RUNALL)
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
