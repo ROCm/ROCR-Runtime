@@ -17,7 +17,7 @@ FILTER[core_sws]=\
 "KFDQMTest.CreateDestroySdmaQueue:"\
 "KFDQMTest.SubmitNopSdmaQueue:"\
 "KFDQMTest.SubmitPacketSdmaQueue:"\
-"KFDQMTest.MultipleSdmaQueues:"\
+"KFDQMTest.AllSdmaQueues:"\
 "KFDEventTest.SignalEvent"
 
 # HWS mode
@@ -153,14 +153,14 @@ FILTER[polaris12]=\
 
 # KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
-# KFDQMTest.MultipleSdmaQueues (ROCMOPS-463)
+# KFDQMTest.AllSdmaQueues (ROCMOPS-463)
 FILTER[vega10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDIPCTest.BasicTest:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDIPCTest.CMABasicTest:"\
 "KFDIPCTest.CrossMemoryAttachTest:"\
-"KFDQMTest.MultipleSdmaQueues"
+"KFDQMTest.AllSdmaQueues"
 
 FILTER[vega12]=\
 "$BLACKLIST_ALL_ASICS:"\
