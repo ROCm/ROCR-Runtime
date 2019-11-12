@@ -180,6 +180,11 @@ FILTER[raven]=\
 "KFDQMTest.QueueLatency:"\
 "KFDQMTest.SdmaEventInterrupt"
 
+FILTER[renoir]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.QueueLatency:"\
+"KFDQMTest.SdmaEventInterrupt"
+
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
 FILTER[arcturus]=\

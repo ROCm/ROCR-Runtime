@@ -2126,6 +2126,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 	case CHIP_VEGA12:
 	case CHIP_VEGA20:
 	case CHIP_RAVEN:
+	case CHIP_RENOIR:
 	case CHIP_ARCTURUS:
 		*block = vega_blocks[block_id];
 		break;

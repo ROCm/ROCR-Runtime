@@ -122,10 +122,11 @@ enum asic_family_type {
 	CHIP_VEGA12,	/* 10 */
 	CHIP_VEGA20,	/* 11 */
 	CHIP_RAVEN,	/* 12 */
-	CHIP_ARCTURUS,	/* 13 */
-	CHIP_NAVI10,	/* 14 */
-	CHIP_NAVI12,	/* 15 */
-	CHIP_NAVI14,	/* 16 */
+	CHIP_RENOIR,	/* 13 */
+	CHIP_ARCTURUS,	/* 14 */
+	CHIP_NAVI10,	/* 15 */
+	CHIP_NAVI12,	/* 16 */
+	CHIP_NAVI14,	/* 17 */
 	CHIP_LAST
 };
 
