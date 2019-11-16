@@ -963,6 +963,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   bool large = (scratch.size > single_limit) ||
       (scratch_pool_.size() - scratch_pool_.remaining() + scratch.size > small_limit);
   large = (isa_->GetMajorVersion() < 8) ? false : large;
+  large = core::Runtime::runtime_singleton_->flag().no_scratch_reclaim() ? false : large;
   if (large)
     scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
   else
