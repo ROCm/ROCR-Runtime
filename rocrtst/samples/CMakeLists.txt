@@ -89,8 +89,12 @@ endif()
 if (DEFINED LLVM_DIR)
   set(CLANG ${LLVM_DIR}/clang)
   if (NOT EXISTS ${CLANG})
+    # SPK temp until Jenkins script input is corrected.
+    set (CLANG ${OPENCL_DIR}/bin/clang)
+    if (NOT EXISTS ${CLANG})
     message("ERROR: path to clang (${CLANG}) is not valid. Is define LLVM_DIR correct?")
     return()
+    endif()
   endif()
 else()
     message("WARNING: LLVM_DIR define is not set. Kernels will not be built.")
@@ -108,6 +112,13 @@ if (DEFINED OPENCL_VER)
 else()
   message("OPENCL_VER define is not set. Using default")
   set(OPENCL_VER "2.0")
+endif()
+
+if(NOT EXISTS "${OPENCL_INC_DIR}/opencl-c.h")
+  set(OPENCL_INC_DIR "${OPENCL_DIR}/../../../external/llvm-clang/lib/Headers/")
+  if(NOT EXISTS "${OPENCL_INC_DIR}/opencl-c.h")
+    message(WARNING "opencl-c.h not found.")
+  endif()
 endif()
 
 if (NOT DEFINED TARGET_DEVICES)
@@ -223,7 +234,7 @@ link_directories(${ROCR_LIB_DIR})
 #
 set(ROCR_LIBS ${ROCR_LIBS} hsa-runtime${ONLY64STR})
 
-include_directories(${ROCR_INC_DIR} ${OPENCL_INC_DIR})
+include_directories(${ROCR_INC_DIR} "${OPENCL_DIR}/include")
 
 # Use this function to build any samples that have kernels to be built
 function(process_sample S_NAME TARG_DEV HAS_KERNEL)
@@ -237,7 +248,7 @@ function(process_sample S_NAME TARG_DEV HAS_KERNEL)
   if (${HAS_KERNEL})
     # Build the kernel
     separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-     "-x cl -Xclang -finclude-default-header -target amdgcn-amdh-amdhsa -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+     "-x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
     add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
         "../${SNAME_EXE}" "${KERNEL_DIR}/${SNAME_EXE}"
