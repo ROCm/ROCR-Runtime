@@ -54,6 +54,7 @@ class KFDExceptionTest : public KFDBaseComponentTest {
     void TestMemoryException(int defaultGPUNode, HSAuint64 pSrc, HSAuint64 pDst,
                              unsigned int dimX = 1, unsigned int dimY = 1,
                              unsigned int dimZ = 1);
+    void TestSdmaException(int defaultGPUNode, void *pDst);
 
  protected:  // Members
     pid_t m_ChildPid;
