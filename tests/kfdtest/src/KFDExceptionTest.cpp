@@ -113,6 +113,59 @@ queuefail:
     queue.Destroy();
 }
 
+void KFDExceptionTest::TestSdmaException(int defaultGPUNode, void *pDst) {
+    SDMAQueue queue;
+    HsaEvent *vmFaultEvent;
+    HSAuint64 faultAddress, page_mask = ~((HSAuint64)PAGE_SIZE - 1);
+
+
+    HsaEventDescriptor eventDesc;
+    eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
+    eventDesc.NodeId = defaultGPUNode;
+    eventDesc.SyncVar.SyncVar.UserData = NULL;
+    eventDesc.SyncVar.SyncVarSize = 0;
+
+    m_ChildStatus = queue.Create(defaultGPUNode);
+    if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Queue create failed" << std::endl;
+        return;
+    }
+
+    m_ChildStatus = hsaKmtCreateEvent(&eventDesc, true, false, &vmFaultEvent);
+    if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Event create failed" << std::endl;
+        goto queuefail;
+    }
+
+    queue.PlaceAndSubmitPacket(SDMAWriteDataPacket(queue.GetFamilyId(),
+                                                   reinterpret_cast<void *>(pDst),
+                                                   0x02020202));
+
+    m_ChildStatus = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);
+    if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Wait failed. No Exception triggered" << std::endl;
+        goto eventfail;
+    }
+
+    if (vmFaultEvent->EventData.EventType != HSA_EVENTTYPE_MEMORY) {
+        WARN() << "Unexpected Event Received " << vmFaultEvent->EventData.EventType
+               << std::endl;
+        m_ChildStatus = HSAKMT_STATUS_ERROR;
+        goto eventfail;
+    }
+    faultAddress = vmFaultEvent->EventData.EventData.MemoryAccessFault.VirtualAddress;
+    if (faultAddress != ((HSAuint64)pDst & page_mask) ) {
+        WARN() << "Unexpected Fault Address " << faultAddress
+               << " expected " << ((HSAuint64)pDst & page_mask) << std::endl;
+        m_ChildStatus = HSAKMT_STATUS_ERROR;
+    }
+
+eventfail:
+    hsaKmtDestroyEvent(vmFaultEvent);
+queuefail:
+    queue.Destroy();
+}
+
 /* Test Bad Address access in a child process */
 TEST_F(KFDExceptionTest, AddressFault) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
@@ -229,6 +282,57 @@ TEST_F(KFDExceptionTest, FaultStorm) {
         }
 
         TestMemoryException(defaultGPUNode, 0x12345678, 0x76543210, 1024, 1024, 1);
+    } else {
+        int childStatus;
+
+        waitpid(m_ChildPid, &childStatus, 0);
+        if (is_dgpu()) {
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+        } else {
+            EXPECT_EQ(WIFSIGNALED(childStatus), true);
+            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
+        }
+    }
+
+    TEST_END
+}
+
+/*
+ */
+TEST_F(KFDExceptionTest, SdmaQueueException) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId == FAMILY_RV) {
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
+        return;
+    }
+
+    HSAKMT_STATUS status;
+
+    m_ChildPid = fork();
+    if (m_ChildPid == 0) {
+	unsigned int* pDb = NULL;
+	unsigned int *nullPtr = NULL;
+        m_ChildStatus = hsaKmtOpenKFD();
+        if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
+            WARN() << "KFD open failed in child process" << std::endl;
+            return;
+        }
+	m_MemoryFlags.ui32.NonPaged = 1;
+	ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, m_MemoryFlags,
+				reinterpret_cast<void**>(&pDb)));
+	// verify that pDb is not null before it's being used
+	ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
+	ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(pDb, PAGE_SIZE, NULL));
+	EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+
+	TestSdmaException(defaultGPUNode, pDb);
+	EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, PAGE_SIZE));
     } else {
         int childStatus;
 
