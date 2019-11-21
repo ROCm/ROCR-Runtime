@@ -42,8 +42,9 @@ class KFDMemoryTest :  public KFDBaseComponentTest {
  protected:
     IsaGenerator* m_pIsaGen;
 
-    void BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB, HSAuint64 *lastSize);
-    void BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granularityMB, HSAuint64 *lastSize);
+    void BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
+                                            HSAuint64 highMB, int nodeToMap,
+                                            HSAuint64 *lastSizeMB);
 };
 
 #endif  // __KFD_MEMORY_TEST__H__

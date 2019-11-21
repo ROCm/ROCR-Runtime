@@ -749,95 +749,35 @@ TEST_F(KFDMemoryTest, GetTileConfigTest) {
     TEST_END
 }
 
-void KFDMemoryTest::BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granularityMB,
-                                                HSAuint64 *lastSize) {
-    HSAuint64 sysMemSizeMB;
-    HsaMemMapFlags mapFlags = {0};
-    HSAuint64 AlternateVAGPU;
+void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
+                                        HSAuint64 highMB, int nodeToMap,
+                                        HSAuint64 *lastSizeMB) {
     int ret;
 
-    sysMemSizeMB = GetSysMemSize() >> 20;
-
-    LOG() << "Found System Memory of " << std::dec << sysMemSizeMB
-                << "MB" << std::endl;
-
-    /* Testing big buffers in system memory */
-    unsigned int * pDb = NULL;
-    HSAuint64 lowMB = 0;
-    HSAuint64 highMB = (sysMemSizeMB + granularityMB - 1) & ~(granularityMB - 1);
-
-    HSAuint64 sizeMB;
-    HSAuint64 size = 0;
-    HSAuint64 lastTestedSize = 0;
-
-    while (highMB - lowMB > granularityMB) {
-        sizeMB = (lowMB + highMB) / 2;
-        size = sizeMB * 1024 * 1024;
-        ret = hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags,
-                                reinterpret_cast<void**>(&pDb));
-        if (ret) {
-            highMB = sizeMB;
-            continue;
-        }
-
-        ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
-                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
-        if (ret) {
-            EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
-            highMB = sizeMB;
-            continue;
-        }
-        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
-        EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
-
-        lowMB = sizeMB;
-        lastTestedSize = sizeMB;
-    }
-
-    /* Save the biggest allocated system buffer for signal handling test */
-    LOG() << "The biggest allocated system buffer is " << std::dec
-            << lastTestedSize << "MB" << std::endl;
-    if (lastSize)
-        *lastSize = lastTestedSize * 1024 *1024;
-}
-
-void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
-                                        HSAuint64 *lastSize) {
-    HSAuint64 AlternateVAGPU;
-    int ret;
-    HSAuint64 vramSizeMB;
-    HsaMemFlags memFlags;
     HsaMemMapFlags mapFlags = {0};
-
-    vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
-
-    LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
+    HSAuint64 granularityMB = 128;
 
     /* Testing big buffers in VRAM */
     unsigned int * pDb = NULL;
     HSAuint64 lowMB = 0;
-    HSAuint64 highMB = (vramSizeMB + granularityMB - 1) & ~(granularityMB - 1);
+
+    highMB = (highMB + granularityMB - 1) & ~(granularityMB - 1);
 
     HSAuint64 sizeMB;
     HSAuint64 size = 0;
-    HSAuint64 lastTestedSize = 0;
-
-    memset(&memFlags, 0, sizeof(memFlags));
-    memFlags.ui32.HostAccess = 0;
-    memFlags.ui32.NonPaged = 1;
 
     while (highMB - lowMB > granularityMB) {
         sizeMB = (lowMB + highMB) / 2;
         size = sizeMB * 1024 * 1024;
-        ret = hsaKmtAllocMemory(defaultGPUNode, size, memFlags,
+        ret = hsaKmtAllocMemory(allocNode, size, memFlags,
                                 reinterpret_cast<void**>(&pDb));
         if (ret) {
             highMB = sizeMB;
             continue;
         }
 
-        ret = hsaKmtMapMemoryToGPUNodes(pDb, size, &AlternateVAGPU,
-                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
+        ret = hsaKmtMapMemoryToGPUNodes(pDb, size, NULL,
+                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&nodeToMap));
         if (ret) {
             EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
             highMB = sizeMB;
@@ -847,19 +787,10 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
         EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
 
         lowMB = sizeMB;
-        lastTestedSize = sizeMB;
     }
 
-    LOG() << "The biggest allocated VRAM buffer is " << std::dec
-            << lastTestedSize << "MB" << std::endl;
-    if (lastSize)
-        *lastSize = lastTestedSize * 1024 * 1024;
-
-    /* Make sure 3/4 vram can be allocated.*/
-    EXPECT_GE(lastTestedSize * 4, vramSizeMB * 3);
-    if (lastTestedSize * 16 < vramSizeMB * 15)
-        WARN() << "The biggest allocated VRAM buffer size is smaller than the expected "
-            << vramSizeMB * 15 / 16 << "MB" << std::endl;
+    if (lastSizeMB)
+        *lastSizeMB = lowMB;
 }
 
 /*
@@ -883,12 +814,22 @@ TEST_F(KFDMemoryTest, LargestSysBufferTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    HSAuint64 granularityMB = 128;
-
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
+    HSAuint64 lastTestedSizeMB = 0;
+
+    HSAuint64 sysMemSizeMB;
+    sysMemSizeMB = GetSysMemSize() >> 20;
+
+    LOG() << "Found System Memory of " << std::dec << sysMemSizeMB
+                << "MB" << std::endl;
+
+    BinarySearchLargestBuffer(0, m_MemoryFlags, sysMemSizeMB, defaultGPUNode,
+                    &lastTestedSizeMB);
+
+    LOG() << "The largest allocated system buffer is " << std::dec
+            << lastTestedSizeMB << "MB" << std::endl;
 
     TEST_END
 }
@@ -901,12 +842,31 @@ TEST_F(KFDMemoryTest, LargestVramBufferTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    HSAuint64 granularityMB = 128;
-
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
+    HSAuint64 lastTestedSizeMB = 0;
+
+    HsaMemFlags memFlags = {0};
+    memFlags.ui32.HostAccess = 0;
+    memFlags.ui32.NonPaged = 1;
+
+    HSAuint64 vramSizeMB;
+    vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
+
+    LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
+
+    BinarySearchLargestBuffer(defaultGPUNode, memFlags, vramSizeMB, defaultGPUNode,
+                    &lastTestedSizeMB);
+
+    LOG() << "The largest allocated VRAM buffer is " << std::dec
+            << lastTestedSizeMB << "MB" << std::endl;
+
+    /* Make sure 3/4 vram can be allocated.*/
+    EXPECT_GE(lastTestedSizeMB * 4, vramSizeMB * 3);
+    if (lastTestedSizeMB * 16 < vramSizeMB * 15)
+        WARN() << "The largest allocated VRAM buffer size is smaller than the expected "
+            << vramSizeMB * 15 / 16 << "MB" << std::endl;
 
     TEST_END
 }
