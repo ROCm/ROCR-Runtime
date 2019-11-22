@@ -44,7 +44,6 @@ class KFDMemoryTest :  public KFDBaseComponentTest {
 
     void BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB, HSAuint64 *lastSize);
     void BigBufferSystemMemory(int defaultGPUNode, HSAuint64 granularityMB, HSAuint64 *lastSize);
-    void NumaNodeBind(const char *nodeStr);
 };
 
 #endif  // __KFD_MEMORY_TEST__H__
