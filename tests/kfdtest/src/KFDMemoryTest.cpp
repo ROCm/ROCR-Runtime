@@ -862,24 +862,6 @@ void KFDMemoryTest::BigBufferVRAM(int defaultGPUNode, HSAuint64 granularityMB,
             << vramSizeMB * 15 / 16 << "MB" << std::endl;
 }
 
-void KFDMemoryTest::NumaNodeBind(const char *nodeStr) {
-    if (numa_available() != -1) {
-        int num_node = numa_num_task_nodes();
-
-        if (num_node > 1) {
-            struct bitmask *nodemask;
-
-            LOG() << "NUMA total nodes " << num_node << ", bind to " << nodeStr << std::endl;
-
-            nodemask = numa_parse_nodestring(nodeStr);
-            if (nodemask) {
-                numa_bind(nodemask);
-                numa_free_nodemask(nodemask);
-            }
-        }
-    }
-}
-
 /* BigBufferStressTest allocs, maps/unmaps, and frees the biggest possible system
  * buffers. Its size is found using binary search in the range (0, RAM SIZE) with
  * a granularity of 128M. Repeat the similar logic on local buffers (VRAM).
@@ -902,7 +884,6 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     TEST_START(TESTPROFILE_RUNALL);
 
     HSAuint64 AlternateVAGPU;
-    HSAuint64 Available_size;
     HsaMemMapFlags mapFlags = {0};
     int ret;
 
@@ -911,14 +892,7 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    /* Don't run on node 0 on multiple NUMA node machine because dma32 zone is on node 0,
-     * Use all memory including dma32 zone on node 0 will cause TTM eviction to free dma32
-     * zone for other devices which supports 32bit physical address. The eviction and
-     * restore may retry if busy and cause queue timeout and test failure.
-     */
-    NumaNodeBind("!0");
-
-    BigBufferSystemMemory(defaultGPUNode, granularityMB, &Available_size);
+    BigBufferSystemMemory(defaultGPUNode, granularityMB, NULL);
 
     BigBufferVRAM(defaultGPUNode, granularityMB, NULL);
 
@@ -931,18 +905,9 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
     unsigned int* pDb_array[ARRAY_ENTRIES];
     HSAuint64 block_size_mb = 128;
     HSAuint64 block_size = block_size_mb * 1024 * 1024;
-    PM4Queue queue;
-
-    /* In non-numa system to avoid TTM eviction,
-     * we have to keep half of dma32 zone (2GB) out of allocation.
-     */
-    if (((numa_available() == -1) || (numa_num_task_nodes() < 2)) &&
-            (Available_size > 0x80000000))
-        Available_size -= 0x80000000;
 
     /* Test 4 times to see if there is any memory leak.*/
     for (int repeat = 1; repeat < 5; repeat++) {
-        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
         for (i = 0; i < ARRAY_ENTRIES; i++) {
             ret = hsaKmtAllocMemory(0 /* system */, block_size, m_MemoryFlags,
@@ -956,9 +921,6 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
                 EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[i], block_size));
                 break;
             }
-
-            if ((i + 2) * block_size > Available_size)
-                break;
         }
 
         LOG() << "Allocated system buffers time " << std::dec << repeat << ": " << i << "x"
@@ -969,25 +931,10 @@ TEST_F(KFDMemoryTest, BigBufferStressTest) {
         EXPECT_GE(i, allocationCount) << "There might be memory leak!" << std::endl;
 
         for (int j = 0; j < i; j++) {
-            /* To see if GPU can access the memory correctly*/
-            unsigned int *begin = pDb_array[j];
-            *begin = 0;
-            queue.PlaceAndSubmitPacket(
-                    PM4WriteDataPacket(begin, 0xdeadbeaf));
-            queue.Wait4PacketConsumption(NULL, 300000);
-            EXPECT_TRUE(WaitOnValue(begin, 0xdeadbeaf));
-        }
-
-        EXPECT_SUCCESS(queue.Destroy());
-
-        for (int j = 0; j < i; j++) {
             EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb_array[j]));
             EXPECT_SUCCESS(hsaKmtFreeMemory(pDb_array[j], block_size));
         }
     }
-
-    /* Reset to run on all task nodes */
-    NumaNodeBind("all");
 
     TEST_END
 }
