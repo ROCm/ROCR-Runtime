@@ -676,9 +676,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	if (IS_SOC15(dev_info->asic_family)) {
 		/* On SOC15 chips, the doorbell offset within the
 		 * doorbell page is included in the doorbell offset
-		 * returned by KFD. This allows doorbells to be
-		 * allocated per-device, independent of the
-		 * per-process queue ID.
+		 * returned by KFD. This allows CP queue doorbells to be
+		 * allocated dynamically (while SDMA queue doorbells fixed)
+		 * rather than based on the its process queue ID.
 		 */
 		doorbell_mmap_offset = args.doorbell_offset &
 			~(HSAuint64)(doorbells[NodeId].size - 1);
