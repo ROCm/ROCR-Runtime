@@ -56,6 +56,7 @@ namespace loader {
     hsa_isa_t invalid;
     hsa_isa_t gfx700, gfx701, gfx800, gfx801, gfx802, gfx803, gfx804, gfx810;
     hsa_isa_t gfx900, gfx901, gfx902, gfx903, gfx908;
+    hsa_isa_t gfx1010, gfx1011, gfx1012;
     std::ostream& out;
     typedef std::set<void*> PointerSet;
     PointerSet pointers;

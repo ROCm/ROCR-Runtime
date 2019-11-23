@@ -1887,6 +1887,12 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx906";
   else if (OldName == "AMD:AMDGPU:9:0:8")
     NewName = "amdgcn-amd-amdhsa--gfx908";
+  else if (OldName == "AMD:AMDGPU:10:1:0")
+    NewName = "amdgcn-amd-amdhsa--gfx1010";
+  else if (OldName == "AMD:AMDGPU:10:1:1")
+    NewName = "amdgcn-amd-amdhsa--gfx1011";
+  else if (OldName == "AMD:AMDGPU:10:1:2")
+    NewName = "amdgcn-amd-amdhsa--gfx1012";
   else
     assert(false && "Unhandled target");
 

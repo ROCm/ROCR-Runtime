@@ -142,7 +142,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::Initial
   }
 
   // HDP flush supported on gfx900 and forward.
-  if (agent_->isa()->GetMajorVersion() > 8) {
+  // FIXME: Not working on gfx10, raises SRBM write protection interrupt.
+  if (agent_->isa()->GetMajorVersion() == 9) {
     hdp_flush_support_ = true;
   }
 
@@ -622,6 +623,10 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset>::BuildFenceComma
   memset(packet_addr, 0, sizeof(SDMA_PKT_FENCE));
 
   packet_addr->HEADER_UNION.op = SDMA_OP_FENCE;
+
+  if (agent_->isa()->GetMajorVersion() >= 10) {
+    packet_addr->HEADER_UNION.mtype = 3;
+  }
 
   packet_addr->ADDR_LO_UNION.addr_31_0 = ptrlow32(fence);
 
