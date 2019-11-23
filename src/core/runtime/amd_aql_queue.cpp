@@ -749,7 +749,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
     }
 
     // Process only one queue error.
-    if (error_code == 1) {
+    if (error_code & 0x401) {  // insufficient scratch, wave64 or wave32
       // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
       auto& scratch = queue->queue_scratch_;
 
@@ -764,10 +764,11 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
       scratch.size_per_thread = scratch_request;
+      scratch.lanes_per_wave = (error_code & 0x400) ? 32 : 64;
       // Align whole waves to 1KB.
-      scratch.size_per_thread = AlignUp(scratch.size_per_thread, 16);
+      scratch.size_per_thread = AlignUp(scratch.size_per_thread, 1024 / scratch.lanes_per_wave);
       scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
-          queue->agent_->properties().MaxSlotsScratchCU * queue->agent_->properties().WaveFrontSize;
+          queue->agent_->properties().MaxSlotsScratchCU * scratch.lanes_per_wave;
 
       queue->agent_->AcquireQueueScratch(scratch);
 
@@ -948,7 +949,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     rel_mem[4] = 0;
     rel_mem[5] = 0;
     rel_mem[6] = 0;
-  } else if (agent_->isa()->GetMajorVersion() == 9) {
+  } else if (agent_->isa()->GetMajorVersion() >= 9) {
     // Construct an AQL packet to jump to the PM4 IB.
     struct amd_aql_pm4_ib {
       uint16_t header;
@@ -1001,7 +1002,7 @@ void AqlQueue::InitScratchSRD() {
   SQ_BUF_RSRC_WORD0 srd0;
   SQ_BUF_RSRC_WORD1 srd1;
   SQ_BUF_RSRC_WORD2 srd2;
-  SQ_BUF_RSRC_WORD3 srd3;
+  uint32_t srd3_u32;
 
   uint32_t scratch_base_hi = 0;
   uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
@@ -1017,33 +1018,60 @@ void AqlQueue::InitScratchSRD() {
 
   srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size);
 
-  srd3.bits.DST_SEL_X = SQ_SEL_X;
-  srd3.bits.DST_SEL_Y = SQ_SEL_Y;
-  srd3.bits.DST_SEL_Z = SQ_SEL_Z;
-  srd3.bits.DST_SEL_W = SQ_SEL_W;
-  srd3.bits.NUM_FORMAT = BUF_NUM_FORMAT_UINT;
-  srd3.bits.DATA_FORMAT = BUF_DATA_FORMAT_32;
-  srd3.bits.ELEMENT_SIZE = 1;  // 4
-  srd3.bits.INDEX_STRIDE = 3;  // 64
-  srd3.bits.ADD_TID_ENABLE = 1;
-  srd3.bits.ATC__CI__VI = (agent_->profile() == HSA_PROFILE_FULL);
-  srd3.bits.HASH_ENABLE = 0;
-  srd3.bits.HEAP = 0;
-  srd3.bits.MTYPE__CI__VI = 0;
-  srd3.bits.TYPE = SQ_RSRC_BUF;
+  if (agent_->isa()->GetMajorVersion() < 10) {
+    SQ_BUF_RSRC_WORD3 srd3;
+
+    srd3.bits.DST_SEL_X = SQ_SEL_X;
+    srd3.bits.DST_SEL_Y = SQ_SEL_Y;
+    srd3.bits.DST_SEL_Z = SQ_SEL_Z;
+    srd3.bits.DST_SEL_W = SQ_SEL_W;
+    srd3.bits.NUM_FORMAT = BUF_NUM_FORMAT_UINT;
+    srd3.bits.DATA_FORMAT = BUF_DATA_FORMAT_32;
+    srd3.bits.ELEMENT_SIZE = 1;  // 4
+    srd3.bits.INDEX_STRIDE = 3;  // 64
+    srd3.bits.ADD_TID_ENABLE = 1;
+    srd3.bits.ATC__CI__VI = (agent_->profile() == HSA_PROFILE_FULL);
+    srd3.bits.HASH_ENABLE = 0;
+    srd3.bits.HEAP = 0;
+    srd3.bits.MTYPE__CI__VI = 0;
+    srd3.bits.TYPE = SQ_RSRC_BUF;
+
+    srd3_u32 = srd3.u32All;
+  } else {
+    SQ_BUF_RSRC_WORD3_GFX10 srd3;
+
+    srd3.bits.DST_SEL_X = SQ_SEL_X;
+    srd3.bits.DST_SEL_Y = SQ_SEL_Y;
+    srd3.bits.DST_SEL_Z = SQ_SEL_Z;
+    srd3.bits.DST_SEL_W = SQ_SEL_W;
+    srd3.bits.FORMAT = BUF_FORMAT_32_UINT;
+    srd3.bits.RESERVED1 = 0;
+    srd3.bits.INDEX_STRIDE = 0;  // filled in by CP
+    srd3.bits.ADD_TID_ENABLE = 1;
+    srd3.bits.RESOURCE_LEVEL = 1;
+    srd3.bits.RESERVED2 = 0;
+    srd3.bits.OOB_SELECT = 2;  // no bounds check in swizzle mode
+    srd3.bits.TYPE = SQ_RSRC_BUF;
+
+    srd3_u32 = srd3.u32All;
+  }
 
   // Update Queue's Scratch descriptor's property
   amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
   amd_queue_.scratch_resource_descriptor[1] = srd1.u32All;
   amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
-  amd_queue_.scratch_resource_descriptor[3] = srd3.u32All;
+  amd_queue_.scratch_resource_descriptor[3] = srd3_u32;
 
   // Populate flat scratch parameters in amd_queue_.
   amd_queue_.scratch_backing_memory_location =
       queue_scratch_.queue_process_offset;
   amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size;
-  amd_queue_.scratch_workitem_byte_size =
-      uint32_t(queue_scratch_.size_per_thread);
+
+  // For backwards compatibility this field records the per-lane scratch
+  // for a 64 lane wavefront. If scratch was allocated for 32 lane waves
+  // then the effective size for a 64 lane wave is halved.
+  amd_queue_.scratch_wave64_lane_byte_size =
+      uint32_t((queue_scratch_.size_per_thread * queue_scratch_.lanes_per_wave) / 64);
 
   // Set concurrent wavefront limits only when scratch is being used.
   COMPUTE_TMPRING_SIZE tmpring_size = {};
@@ -1059,8 +1087,8 @@ void AqlQueue::InitScratchSRD() {
 
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
   // Scratch Size per Wave is specified in terms of kilobytes
-  uint32_t wave_size = agent_props.WaveFrontSize;
-  uint32_t wave_scratch = (((wave_size * queue_scratch_.size_per_thread) + 1023) / 1024);
+  uint32_t wave_scratch = (((queue_scratch_.lanes_per_wave *
+                               queue_scratch_.size_per_thread) + 1023) / 1024);
   tmpring_size.bits.WAVESIZE = wave_scratch;
   assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
   uint32_t num_waves = (queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024));

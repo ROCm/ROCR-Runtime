@@ -579,6 +579,12 @@ namespace code {
         NewName = "amdgcn-amd-amdhsa--gfx906";
       else if (OldName == "AMD:AMDGPU:9:0:8")
         NewName = "amdgcn-amd-amdhsa--gfx908";
+      else if (OldName == "AMD:AMDGPU:10:1:0")
+        NewName = "amdgcn-amd-amdhsa--gfx1010";
+      else if (OldName == "AMD:AMDGPU:10:1:1")
+        NewName = "amdgcn-amd-amdhsa--gfx1011";
+      else if (OldName == "AMD:AMDGPU:10:1:2")
+        NewName = "amdgcn-amd-amdhsa--gfx1012";
       else
         assert(false && "Unhandled target");
 
@@ -631,6 +637,9 @@ namespace code {
         case EF_AMDGPU_MACH_AMDGCN_GFX904_LC: isaName += "gfx904"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX906_LC: isaName += "gfx906"; break;
         case EF_AMDGPU_MACH_AMDGCN_GFX908_LC: isaName += "gfx908"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX1010_LC: isaName += "gfx1010"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX1011_LC: isaName += "gfx1011"; break;
+        case EF_AMDGPU_MACH_AMDGCN_GFX1012_LC: isaName += "gfx1012"; break;
         default: return false;
         }
 
@@ -1348,6 +1357,8 @@ namespace code {
           asic = "VI";
         } else if (major_version == 9) {
           asic = "GFX9";
+        } else if (major_version == 10) {
+          asic = "GFX10";
         } else {
           assert(!"unknown compute capability");
         }

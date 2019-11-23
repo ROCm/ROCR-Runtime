@@ -173,6 +173,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_7;
     ASICShader compute_8;
     ASICShader compute_9;
+    ASICShader compute_10;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
@@ -181,24 +182,28 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {NULL, 0, 0, 0},
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
            {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
        }},
       {"CopyAligned",
        {
            {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
        }},
       {"CopyMisaligned",
        {
            {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
        }},
       {"Fill",
        {
            {kCodeFill7, sizeof(kCodeFill7), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},
        }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
@@ -216,6 +221,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       break;
     case 9:
       asic_shader = &compiled_shader_it->second.compute_9;
+      break;
+    case 10:
+      asic_shader = &compiled_shader_it->second.compute_10;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
@@ -886,13 +894,22 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   // Allocate scratch memory
   ScratchInfo scratch;
   if (private_segment_size == UINT_MAX) {
-    private_segment_size = 0;
+    private_segment_size = (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
+  }
+
+  if (private_segment_size > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  scratch.lanes_per_wave = 64;
+  scratch.size_per_thread = AlignUp(private_segment_size, 1024 / scratch.lanes_per_wave);
+  if (scratch.size_per_thread > 262128) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
   scratch.size_per_thread = private_segment_size;
 
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  scratch.size =
-      scratch.size_per_thread * properties_.MaxSlotsScratchCU * properties_.WaveFrontSize * num_cu;
+  scratch.size = scratch.size_per_thread * 32 * scratch.lanes_per_wave * num_cu;
   scratch.queue_base = nullptr;
   scratch.queue_process_offset = 0;
 
@@ -941,7 +958,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   // Limit to 1/8th of scratch pool for small scratch and 1/4 of that for a single queue.
   size_t small_limit = scratch_pool_.size() >> 3;
-  size_t single_limit = small_limit >> 2;
+  // Lift limit for 2.10 release RCCL workaround.
+  size_t single_limit = 146800640; //small_limit >> 2;
   bool large = (scratch.size > single_limit) ||
       (scratch_pool_.size() - scratch_pool_.remaining() + scratch.size > small_limit);
   large = (isa_->GetMajorVersion() < 8) ? false : large;
@@ -1186,29 +1204,40 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() > 9) {
+  } else if (isa_->GetMajorVersion() > 10) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 
   // Invalidate caches which may hold lines of code object allocation.
-  constexpr uint32_t cache_inv_size_dw = 7;
-  uint32_t cache_inv[cache_inv_size_dw];
+  uint32_t cache_inv[8] = {0};
+  uint32_t cache_inv_size_dw;
+
+  if (isa_->GetMajorVersion() < 10) {
+      cache_inv[1] = PM4_ACQUIRE_MEM_DW1_COHER_CNTL(
+          PM4_ACQUIRE_MEM_COHER_CNTL_SH_ICACHE_ACTION_ENA |
+          PM4_ACQUIRE_MEM_COHER_CNTL_SH_KCACHE_ACTION_ENA |
+          PM4_ACQUIRE_MEM_COHER_CNTL_TC_ACTION_ENA |
+          PM4_ACQUIRE_MEM_COHER_CNTL_TC_WB_ACTION_ENA);
+
+      cache_inv_size_dw = 7;
+  } else {
+      cache_inv[7] = PM4_ACQUIRE_MEM_DW7_GCR_CNTL(
+          PM4_ACQUIRE_MEM_GCR_CNTL_GLI_INV(1) |
+          PM4_ACQUIRE_MEM_GCR_CNTL_GLK_INV |
+          PM4_ACQUIRE_MEM_GCR_CNTL_GLV_INV |
+          PM4_ACQUIRE_MEM_GCR_CNTL_GL1_INV |
+          PM4_ACQUIRE_MEM_GCR_CNTL_GL2_INV);
+
+      cache_inv_size_dw = 8;
+  }
 
   cache_inv[0] = PM4_HDR(PM4_HDR_IT_OPCODE_ACQUIRE_MEM, cache_inv_size_dw,
-                         isa_->GetMajorVersion());
-  cache_inv[1] = PM4_ACQUIRE_MEM_DW1_COHER_CNTL(
-      PM4_ACQUIRE_MEM_COHER_CNTL_SH_ICACHE_ACTION_ENA |
-      PM4_ACQUIRE_MEM_COHER_CNTL_SH_KCACHE_ACTION_ENA |
-      PM4_ACQUIRE_MEM_COHER_CNTL_TC_ACTION_ENA |
-      PM4_ACQUIRE_MEM_COHER_CNTL_TC_WB_ACTION_ENA);
+             isa_->GetMajorVersion());
   cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
   cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
-  cache_inv[4] = 0;
-  cache_inv[5] = 0;
-  cache_inv[6] = 0;
 
   // Submit the command to the utility queue and wait for it to complete.
-  queues_[QueueUtility]->ExecutePM4(cache_inv, sizeof(cache_inv));
+  queues_[QueueUtility]->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
