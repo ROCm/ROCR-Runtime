@@ -182,7 +182,11 @@ class MemoryRegion : public core::MemoryRegion {
 
   mutable KernelMutex access_lock_;
 
+#ifdef __PPC64__
+  static const size_t kPageSize_ = 65536;
+#else
   static const size_t kPageSize_ = 4096;
+#endif
 
   // Determine access type allowed to requesting device
   hsa_amd_memory_pool_access_t GetAccessInfo(const core::Agent& agent,
