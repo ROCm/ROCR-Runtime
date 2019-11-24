@@ -1514,7 +1514,11 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	if (!node_mask)
 		return -ENOMEM;
 
+#ifdef __PPC64__
+	numa_bitmask_setbit(node_mask, node_id * 8);
+#else
 	numa_bitmask_setbit(node_mask, node_id);
+#endif
 	mode |= mflags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
 	r = mbind(mem, SizeInBytes, mode, node_mask->maskp, num_node + 1, 0);
 	numa_bitmask_free(node_mask);
