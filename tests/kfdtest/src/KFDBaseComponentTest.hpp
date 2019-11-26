@@ -58,6 +58,11 @@ class KFDBaseComponentTest : public testing::Test {
     unsigned int GetFamilyIdFromNodeId(unsigned int nodeId);
     unsigned int GetFamilyIdFromDefaultNode(){ return m_FamilyId; }
 
+    // @brief Executed before the first test that uses KFDBaseComponentTest.
+    static  void SetUpTestCase();
+    // @brief Executed after the last test from KFDBaseComponentTest.
+    static  void TearDownTestCase();
+
  protected:
     HsaVersionInfo  m_VersionInfo;
     HsaSystemProperties m_SystemProperties;
@@ -69,13 +74,9 @@ class KFDBaseComponentTest : public testing::Test {
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;
 
-    // @brief Executed before the first test that uses KFDOpenCloseKFDTest class and opens KFD.
-    static  void SetUpTestCase();
-    // @brief Executed after the last test from KFDOpenCloseKFDTest class and closes KFD.
-    static  void TearDownTestCase();
-    // @brief Executed before every test that uses KFDOpenCloseKFDTest class and sets all common settings for the tests.
+    // @brief Executed before every test that uses KFDBaseComponentTest class and sets all common settings for the tests.
     virtual void SetUp();
-    // @brief Executed after every test that uses KFDOpenCloseKFDTest class.
+    // @brief Executed after every test that uses KFDBaseComponentTest class.
     virtual void TearDown();
 };
 
