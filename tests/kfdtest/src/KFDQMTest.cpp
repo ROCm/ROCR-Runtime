@@ -1331,19 +1331,18 @@ TEST_F(KFDQMTest, SdmaQueueWraparound) {
 struct AtomicIncThreadParams {
     HSAint64* pDest;
     volatile unsigned int count;
-    volatile bool stop;
+    volatile bool loop;
 };
 
 unsigned int AtomicIncThread(void* pCtx) {
     AtomicIncThreadParams* pArgs = reinterpret_cast<AtomicIncThreadParams*>(pCtx);
 
-    while (pArgs->stop)
-        {}
-
-    while (!pArgs->stop) {
+    while (pArgs->loop) {
         AtomicInc(pArgs->pDest);
         ++pArgs->count;
     }
+
+    LOG() << "CPU atomic increments finished" << std::endl;
 
     return 0;
 }
@@ -1375,28 +1374,31 @@ TEST_F(KFDQMTest, Atomics) {
 
     AtomicIncThreadParams params;
     params.pDest = destBuf.As<HSAint64*>();
-    params.stop = true;
+    params.loop = true;
     params.count = 0;
 
     uint64_t threadId;
 
     ASSERT_EQ(true, StartThread(&AtomicIncThread, &params, threadId));
 
-    params.stop = false;
+    LOG() << "Waiting for CPU to atomic increment 1000 times" << std::endl;
 
-    while (params.count == 0)
+    while (params.count < 1000)
         {}
+
+    LOG() << "Submitting the GPU atomic increment shader" << std::endl;
 
     dispatch.Submit(queue);
     dispatch.Sync();
 
-    params.stop = true;
+    params.loop = false;
 
     WaitForThread(threadId);
 
     EXPECT_EQ(destBuf.As<unsigned int*>()[0], 1024 + params.count);
 
-    LOG() << "GPU increments: 1024, CPU increments: " << params.count << std::endl;
+    LOG() << "GPU increments: 1024, CPU increments: " << std::dec
+            << params.count << std::endl;
 
     queue.Destroy();
 
