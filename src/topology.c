@@ -243,6 +243,8 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x73AB, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
 	{ 0x73AE, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
 	{ 0x73BF, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	/* VanGogh */
+	{ 0x163F, 10, 3, 3, "VanGogh", CHIP_VANGOGH },
 };
 
 /* information from /proc/cpuinfo */

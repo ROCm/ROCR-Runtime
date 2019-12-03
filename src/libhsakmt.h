@@ -131,6 +131,7 @@ enum asic_family_type {
 	CHIP_SIENNA_CICHLID,	/* 18 */
 	CHIP_NAVY_FLOUNDER,	/* 19 */
 	CHIP_DIMGREY_CAVEFISH,	/* 20 */
+	CHIP_VANGOGH,	/* 21 */
 	CHIP_LAST
 };
 
