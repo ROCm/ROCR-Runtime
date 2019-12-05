@@ -47,7 +47,6 @@ set ( PROJECT_STRING hsa-ext-rocr-dev )
 project ( ${PROJECT_STRING} )
 
 add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../hsa-ext-image" "../hsa-ext-image")
-add_subdirectory("${CMAKE_CURRENT_SOURCE_DIR}/../../hsa-runtime-tools" "../hsa-tools")
 
 ## Include the cmake_modules utils.cmake
 list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake_modules" )
