@@ -3566,6 +3566,8 @@ static void fmm_clear_aperture(manageable_aperture_t *app)
 {
 	rbtree_node_t *n;
 
+	pthread_mutex_init(&app->fmm_mutex, NULL);
+
 	while ((n = rbtree_node_any(&app->tree, MID)))
 		vm_remove_object(app, vm_object_entry(n, 0));
 

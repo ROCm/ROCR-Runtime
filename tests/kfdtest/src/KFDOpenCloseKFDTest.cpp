@@ -75,7 +75,7 @@ TEST_F(KFDOpenCloseKFDTest, InvalidKFDHandleTest ) {
     HsaVersionInfo  m_VersionInfo;
     pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        EXPECT_EQ(HSAKMT_STATUS_ERROR, hsaKmtGetVersion(&m_VersionInfo));
+        EXPECT_EQ(HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED, hsaKmtGetVersion(&m_VersionInfo));
         exit(0);
     } else {
         int childStatus;
