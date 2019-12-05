@@ -765,15 +765,24 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
         int numCuPerShader = ActiveCU / numShaderEngines;
         double ratio;
 
-        /* Set Mask to 1 for a single CU */
-        mask[0] = 0x1;
-        for (int i = 1; i < maskNumDwords; i++)
-            mask[i] = 0x0;
+        /* In KFD we symmetrically map mask to all SEs:
+         * mask[0] bit0 -> se0 cu0;
+         * mask[0] bit1 -> se1 cu0;
+         * ... (if # SE is 4)
+         * mask[0] bit4 -> se0 cu1;
+         * ...
+         */
+        /* Set Mask to 1 CU per SE */
+        memset(mask, 0, maskNumDwords * sizeof(uint32_t));
+        for (int i = 0; i < numShaderEngines; i++) {
+            int maskIndex = (i / 32) % maskNumDwords;
+            mask[maskIndex] |= 1 << (i % 32);
+        }
 
         /* Execute once to get any HW optimizations out of the way */
         TimeConsumedwithCUMask(defaultGPUNode, mask, maskNumBits);
 
-        LOG() << "Getting baseline performance numbers (1 CU)" << std::endl;
+        LOG() << "Getting baseline performance numbers (1 CU per SE)" << std::endl;
         TimewithCU1 = GetAverageTimeConsumedwithCUMask(defaultGPUNode, mask, maskNumBits, 3);
 
         /* Each loop will add 1 more CU per SE. We use the mod and divide to handle
@@ -786,12 +795,12 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
                 int maskIndex = (offset / 32) % maskNumDwords;
                 mask[maskIndex] |= 1 << (offset % 32);
             }
-            int nCUs = numShaderEngines * (x + 1);
+            int nCUs = x + 1;
 
             TimewithCU = TimeConsumedwithCUMask(defaultGPUNode, mask, maskNumBits);
             ratio = (double)(TimewithCU1) / ((double)(TimewithCU) * nCUs);
 
-            LOG() << "Expected performance of " << nCUs << " CUs vs 1 CU:" << std::endl;
+            LOG() << "Expected performance of " << nCUs << " CU(s)/SE vs 1 CU/SE:" << std::endl;
             LOG() << std::setprecision(2) << CuNegVariance << " <= " << std::fixed << std::setprecision(8)
                   << ratio << " <= " << std::setprecision(2) << CuPosVariance << std::endl;
 
