@@ -38,23 +38,51 @@
 static const char kfd_device_name[] = "/dev/kfd";
 static pid_t parent_pid = -1;
 int hsakmt_debug_level;
+bool hsakmt_forked;
 
 /* zfb is mainly used during emulation */
 int zfb_support;
 
+/* is_forked_child detects when the process has forked since the last
+ * time this function was called. We cannot rely on pthread_atfork
+ * because the process can fork without calling the fork function in
+ * libc (using clone or calling the system call directly).
+ */
 static bool is_forked_child(void)
 {
-	pid_t cur_pid = getpid();
+	pid_t cur_pid;
+
+	if (hsakmt_forked)
+		return true;
+
+	cur_pid = getpid();
 
 	if (parent_pid == -1) {
 		parent_pid = cur_pid;
 		return false;
 	}
 
-	if (parent_pid != cur_pid)
+	if (parent_pid != cur_pid) {
+		hsakmt_forked = true;
 		return true;
+	}
 
 	return false;
+}
+
+/* Callbacks from pthread_atfork */
+static void prepare_fork_handler(void)
+{
+	pthread_mutex_lock(&hsakmt_mutex);
+}
+static void parent_fork_handler(void)
+{
+	pthread_mutex_unlock(&hsakmt_mutex);
+}
+static void child_fork_handler(void)
+{
+	pthread_mutex_init(&hsakmt_mutex, NULL);
+	hsakmt_forked = true;
 }
 
 /* Call this from the child process after fork. This will clear all
@@ -74,6 +102,8 @@ static void clear_after_fork(void)
 		kfd_fd = 0;
 	}
 	kfd_open_count = 0;
+	parent_pid = -1;
+	hsakmt_forked = false;
 }
 
 static inline void init_page_size(void)
@@ -150,6 +180,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		clear_after_fork();
 
 	if (kfd_open_count == 0) {
+		static bool atfork_installed = false;
+
 		result = init_vars_from_env();
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto open_failed;
@@ -182,6 +214,18 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 			pr_warn("Insufficient Memory. Debugging unavailable\n");
 
 		init_counter_props(sys_props.NumNodes);
+
+		if (!atfork_installed) {
+			/* Atfork handlers cannot be uninstalled and
+			 * must be installed only once. Otherwise
+			 * prepare will deadlock when trying to take
+			 * the same lock multiple times.
+			 */
+			pthread_atfork(prepare_fork_handler,
+				       parent_fork_handler,
+				       child_fork_handler);
+			atfork_installed = true;
+		}
 	} else {
 		kfd_open_count++;
 		result = HSAKMT_STATUS_KERNEL_ALREADY_OPENED;

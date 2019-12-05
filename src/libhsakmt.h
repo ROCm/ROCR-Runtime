@@ -34,6 +34,7 @@
 
 extern int kfd_fd;
 extern unsigned long kfd_open_count;
+extern bool hsakmt_forked;
 extern pthread_mutex_t hsakmt_mutex;
 extern bool is_dgpu;
 
@@ -51,7 +52,7 @@ extern struct hsa_gfxip_table force_asic_entry;
 #define PORT_UINT64_TO_VPTR(v) ((void*)(unsigned long)(v))
 
 #define CHECK_KFD_OPEN() \
-	do { if (kfd_open_count == 0) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
+	do { if (kfd_open_count == 0 || hsakmt_forked) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
 
 extern int PAGE_SIZE;
 extern int PAGE_SHIFT;

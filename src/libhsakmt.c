@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <errno.h>
 #include <sys/ioctl.h>
 
@@ -11,6 +12,14 @@ int kmtIoctl(int fd, unsigned long request, void *arg)
 	do {
 		ret = ioctl(fd, request, arg);
 	} while (ret == -1 && (errno == EINTR || errno == EAGAIN));
+
+	if (errno == EBADF) {
+		/* In case pthread_atfork didn't catch it, this will
+		 * make any subsequent hsaKmt calls fail in CHECK_KFD_OPEN.
+		 */
+		pr_err("KFD file descriptor not valid in this process\n");
+		hsakmt_forked = true;
+	}
 
 	return ret;
 }
