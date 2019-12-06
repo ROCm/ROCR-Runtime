@@ -115,7 +115,7 @@ else()
 endif()
 
 if(NOT EXISTS "${OPENCL_INC_DIR}/opencl-c.h")
-  set(OPENCL_INC_DIR "${OPENCL_DIR}/../../../external/llvm-clang/lib/Headers/")
+  set(OPENCL_INC_DIR "${OPENCL_DIR}/../../../external/llvm-project/clang/lib/Headers/")
   if(NOT EXISTS "${OPENCL_INC_DIR}/opencl-c.h")
     message(WARNING "opencl-c.h not found.")
   endif()
