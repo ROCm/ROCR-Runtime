@@ -192,6 +192,11 @@ FILTER[arcturus]=\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDEvictTest.BurstyTest"
 
+FILTER[aldebaran]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDExceptionTest.FaultStorm:"\
+"KFDEvictTest.BurstyTest"
+
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDMemoryTest.MMBench"
