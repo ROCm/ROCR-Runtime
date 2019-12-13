@@ -92,7 +92,6 @@ SDMA_BLACKLIST=\
 KV_QUEUE_BLACKLIST=\
 "KFDExceptionTest.InvalidBadAddress:"\
 "KFDExceptionTest.InvalidWriteAddress:"\
-"KFDExceptionTest.InvalidPPR*:"\
 "KFDLocalMemoryTest.*:"\
 "KFDEventTest.Signal*Event*:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
