@@ -114,7 +114,7 @@ queuefail:
 }
 
 /* Test Bad Address access in a child process */
-TEST_F(KFDExceptionTest, InvalidBadAddress) {
+TEST_F(KFDExceptionTest, AddressFault) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -158,7 +158,7 @@ TEST_F(KFDExceptionTest, InvalidBadAddress) {
 /* Allocate Read Only buffer. Test Memory Exception failure by
  * attempting to write to that buffer in the child process.
  */
-TEST_F(KFDExceptionTest, InvalidWriteAddress) {
+TEST_F(KFDExceptionTest, PermissionFault) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL)
 
