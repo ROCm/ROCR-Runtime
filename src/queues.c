@@ -42,7 +42,8 @@
 #define DOORBELL_SIZE_GFX9 8
 #define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
 
-#define VGPR_SIZE_PER_CU(asic_family)	(asic_family == CHIP_ARCTURUS ? 0x80000 : 0x40000)
+#define VGPR_SIZE_PER_CU(asic_family)	((asic_family == CHIP_ARCTURUS || \
+                        asic_family == CHIP_ALDEBARAN) ? 0x80000 : 0x40000)
 #define SGPR_SIZE_PER_CU	0x4000
 #define LDS_SIZE_PER_CU		0x10000
 #define HWREG_SIZE_PER_CU	0x1000
@@ -146,6 +147,12 @@ const struct device_info arcturus_device_info = {
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info aldebaran_device_info = {
+    .asic_family = CHIP_ALDEBARAN,
+    .eop_buffer_size = 4096,
+    .doorbell_size = DOORBELL_SIZE_GFX9,
+};
+
 const struct device_info navi10_device_info = {
 	.asic_family = CHIP_NAVI10,
 	.eop_buffer_size = 4096,
@@ -186,6 +193,7 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_RAVEN] = &raven_device_info,
 	[CHIP_RENOIR] = &renoir_device_info,
 	[CHIP_ARCTURUS] = &arcturus_device_info,
+	[CHIP_ALDEBARAN] = &aldebaran_device_info,
 	[CHIP_NAVI10] = &navi10_device_info,
 	[CHIP_NAVI12] = &navi12_device_info,
 	[CHIP_NAVI14] = &navi14_device_info,
