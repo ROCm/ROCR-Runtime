@@ -222,6 +222,12 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x738C, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
 	{ 0x738E, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
 	{ 0x7390, 9, 0, 8, 1, "Arcturus", CHIP_ARCTURUS },
+	/* Aldebaran */
+	{ 0x50, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
+	{ 0x51, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
+	{ 0x52, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
+	{ 0x60, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
+	{ 0x62, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	/* Navi10 */
 	{ 0x7310, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
 	{ 0x7312, 10, 1, 0, 1, "Navi10", CHIP_NAVI10 },
