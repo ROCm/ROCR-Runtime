@@ -301,7 +301,12 @@ typedef struct _HsaNodeProperties
                                        // number hash created by the PSP
     HSAuint32       NumSdmaEngines;    // number of PCIe optimized SDMA engines
     HSAuint32       NumSdmaXgmiEngines;// number of XGMI optimized SDMA engines
-    HSAuint32       NumGws;            // number of GWS barriers
+
+    HSAuint8        NumSdmaQueuesPerEngine;// number of SDMA queue per one engine
+    HSAuint8        NumCpQueues; // number of Compute queues
+    HSAuint8        NumGws;            // number of GWS barriers
+    HSAuint8        Reserved2;
+
     HSAuint32       Domain;            // PCI domain of the GPU
     HSAuint8        Reserved[28];
 } HsaNodeProperties;
