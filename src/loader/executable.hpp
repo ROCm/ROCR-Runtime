@@ -48,6 +48,7 @@
 #include <cstdint>
 #include <iostream>
 #include <libelf.h>
+#include <link.h>
 #include <list>
 #include <string>
 #include <unordered_map>
@@ -283,6 +284,7 @@ public:
 };
 
 class LoadedCodeObjectImpl : public LoadedCodeObject, public ExecutableObject {
+friend class AmdHsaCodeLoader;
 private:
   LoadedCodeObjectImpl(const LoadedCodeObjectImpl&);
   LoadedCodeObjectImpl& operator=(const LoadedCodeObjectImpl&);
@@ -319,6 +321,8 @@ public:
   uint64_t getLoadBase() const override;
   uint64_t getLoadSize() const override;
   int64_t getDelta() const override;
+
+  link_map r_debug_info;
 };
 
 class Segment : public LoadedSegment, public ExecutableObject {
@@ -396,6 +400,7 @@ struct ASH {
 typedef std::unordered_map<AgentSymbol, SymbolImpl*, ASH, ASC> AgentSymbolMap;
 
 class ExecutableImpl final: public Executable {
+friend class AmdHsaCodeLoader;
 public:
   const hsa_profile_t& profile() const {
     return profile_;
@@ -563,6 +568,7 @@ public:
       const char *options,
       hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) override;
 
+  hsa_status_t FreezeExecutable(Executable *executable, const char *options) override;
   void DestroyExecutable(Executable *executable) override;
 
   hsa_status_t IterateExecutables(
