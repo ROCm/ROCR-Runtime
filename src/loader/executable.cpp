@@ -49,16 +49,26 @@
 #include <atomic>
 #include <fstream>
 #include <libelf.h>
+#include <unistd.h>
 #include "amd_hsa_elf.h"
 #include "amd_hsa_kernel_code.h"
 #include "amd_hsa_code.hpp"
 #include "amd_hsa_code_util.hpp"
 #include "amd_options.hpp"
+#include "core/util/utils.h"
 
 #include "AMDHSAKernelDescriptor.h"
 
 using namespace amd::hsa;
 using namespace amd::hsa::common;
+
+static void __attribute__((noinline, optimize(0))) _loader_debug_state() {};
+r_debug _amdgpu_r_debug __attribute__((visibility("default"))) = {1,
+                                                                  nullptr,
+                                                                  reinterpret_cast<uintptr_t>(&_loader_debug_state),
+                                                                  r_debug::RT_CONSISTENT,
+                                                                  0};
+static link_map* r_debug_tail = nullptr;
 
 namespace amd {
 namespace hsa {
@@ -140,6 +150,10 @@ Loader* Loader::Create(Context* context)
 
 void Loader::Destroy(Loader *loader)
 {
+  // Loader resets the link_map, but the executables and loaded code objects are not deleted.
+  _amdgpu_r_debug.r_map = nullptr;
+  _amdgpu_r_debug.r_state = r_debug::RT_CONSISTENT;
+  r_debug_tail = nullptr;
   delete loader;
 }
 
@@ -152,9 +166,66 @@ Executable* AmdHsaCodeLoader::CreateExecutable(
   return executables.back();
 }
 
-void AmdHsaCodeLoader::DestroyExecutable(Executable *executable)
-{
+static void AddCodeObjectInfoIntoDebugMap(link_map* map) {
+  if (r_debug_tail) {
+      r_debug_tail->l_next = map;
+      map->l_prev = r_debug_tail;
+      map->l_next = nullptr;
+  } else {
+      _amdgpu_r_debug.r_map = map;
+      map->l_prev = nullptr;
+      map->l_next = nullptr;
+  }
+  r_debug_tail = map;
+}
+
+static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
+  if (r_debug_tail == map) {
+      r_debug_tail = map->l_prev;
+  }
+  if (map->l_prev) {
+      map->l_prev->l_next = map->l_next;
+  }
+  if (map->l_next) {
+      map->l_next->l_prev = map->l_prev;
+  }
+
+  delete map->l_name;
+}
+
+hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const char *options) {
+  hsa_status_t  status = executable->Freeze(options);
+  if (status != HSA_STATUS_SUCCESS) {
+    return status;
+  }
+
+  // Assumeing runtime atomic implements C++ std::memory_order
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
+  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_ADD, std::memory_order_relaxed);
+  atomic::Fence(std::memory_order_acq_rel);
+  _loader_debug_state();
+  atomic::Fence(std::memory_order_acq_rel);
+  for (auto &lco : reinterpret_cast<ExecutableImpl*>(executable)->loaded_code_objects) {
+    AddCodeObjectInfoIntoDebugMap(&(lco->r_debug_info));
+  }
+  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_CONSISTENT, std::memory_order_release);
+  _loader_debug_state();
+
+  return HSA_STATUS_SUCCESS;
+}
+
+void AmdHsaCodeLoader::DestroyExecutable(Executable *executable) {
+  // Assumeing runtime atomic implements C++ std::memory_order
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
+  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_DELETE, std::memory_order_relaxed);
+  atomic::Fence(std::memory_order_acq_rel);
+  _loader_debug_state();
+  atomic::Fence(std::memory_order_acq_rel);
+  for (auto &lco : reinterpret_cast<ExecutableImpl*>(executable)->loaded_code_objects) {
+    RemoveCodeObjectInfoFromDebugMap(&(lco->r_debug_info));
+  }
+  atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_CONSISTENT, std::memory_order_release);
+  _loader_debug_state();
 
   executables[((ExecutableImpl*)executable)->id()] = nullptr;
   delete executable;
@@ -1066,8 +1137,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
       s2 = range.substr(mi + 1);
       std::istringstream is1(s1); is1 >> n1;
       std::istringstream is2(s2); is2 >> n2;
-    }
-    else {
+    } else {
       std::istringstream is(range); is >> n1;
       n2 = n1;
     }
@@ -1775,6 +1845,17 @@ hsa_status_t ExecutableImpl::Freeze(const char *options) {
     for (auto &ls : lco->LoadedSegments()) {
       ls->Freeze();
     }
+    // Update code object debug info after it is frozen.
+    std::stringstream ss;
+    uint64_t elf_begin = lco->getElfData();
+    uint64_t elf_size = lco->getElfSize();
+    ss << "file:///proc/" << getpid() << "/mem#"
+       << "offset=" << std::hex << std::showbase << elf_begin << "&"
+       << "size=" << elf_size;
+    lco->r_debug_info.l_addr = lco->getDelta();
+    lco->r_debug_info.l_name = strdup(ss.str().c_str());
+    lco->r_debug_info.l_prev = nullptr;
+    lco->r_debug_info.l_next = nullptr;
   }
 
   state_ = HSA_EXECUTABLE_STATE_FROZEN;
