@@ -188,9 +188,11 @@ FILTER[renoir]=\
 
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
+# KFQMTest.BasicCuMaskingEven (Issues with baseline measurement)
 FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
+"KFDQMTest.BasicCuMaskingEven:"\
 "KFDEvictTest.BurstyTest"
 
 FILTER[navi10]=\
