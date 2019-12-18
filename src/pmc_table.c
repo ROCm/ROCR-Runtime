@@ -2131,6 +2131,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 		*block = vega_blocks[block_id];
 		break;
 	case CHIP_NAVI10:
+	case CHIP_NAVI14:
 		*block = navi_blocks[block_id];
 		break;
 	default:
