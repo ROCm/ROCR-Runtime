@@ -1569,6 +1569,13 @@ TEST_F(KFDMemoryTest, SignalHandling) {
      * Try to allocate 1/4th System RAM
      */
     size = (sysMemSize >> 2) & ~(HSAuint64)(PAGE_SIZE - 1);
+
+    /* We don't need a too large buffer for this test. If it is too large,
+     * on some platform, the upcoming hsaKmtAllocMemory() might fail. In
+     * order to avoid this flaky behavior, limit the size to 3G.
+     */
+    size = size > (3ULL << 30) ? (3ULL << 30) : size;
+
     m_MemoryFlags.ui32.NoNUMABind = 1;
     ASSERT_SUCCESS(hsaKmtAllocMemory(0 /* system */, size, m_MemoryFlags, reinterpret_cast<void**>(&pDb)));
     // Verify that pDb is not null before it's being used
