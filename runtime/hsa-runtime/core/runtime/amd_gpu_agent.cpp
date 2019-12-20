@@ -533,7 +533,7 @@ void GpuAgent::InitDma() {
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
-    bool use_sdma = (isa_->GetMajorVersion() != 8);
+    bool use_sdma = ((isa_->GetMajorVersion() != 8) && (isa_->GetMajorVersion() != 10));
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
