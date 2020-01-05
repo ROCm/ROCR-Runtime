@@ -107,8 +107,7 @@ TEST_F(KFDGWSTest, Allocate) {
     }
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    ASSERT_SUCCESS(hsaKmtAllocQueueGWS(defaultGPUNode,
-			    queue.GetResource()->QueueId,
+    ASSERT_SUCCESS(hsaKmtAllocQueueGWS(queue.GetResource()->QueueId,
 			    pNodeProperties->NumGws,&firstGWS));
     EXPECT_EQ(0, firstGWS);
     EXPECT_SUCCESS(queue.Destroy());
@@ -134,8 +133,7 @@ TEST_F(KFDGWSTest, Semaphore) {
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer buffer(PAGE_SIZE, defaultGPUNode, true, false, false);
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    ASSERT_SUCCESS(hsaKmtAllocQueueGWS(defaultGPUNode,
-			    queue.GetResource()->QueueId,
+    ASSERT_SUCCESS(hsaKmtAllocQueueGWS(queue.GetResource()->QueueId,
 			    pNodeProperties->NumGws,&firstGWS));
     EXPECT_EQ(0, firstGWS);
 
