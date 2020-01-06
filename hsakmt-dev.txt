@@ -25,7 +25,17 @@
 
 cmake_minimum_required ( VERSION 3.5.0 )
 
-set ( HSAKMT_DEV_PACKAGE "hsakmt-roct-dev" )
+#checking for OS-version
+if( EXISTS "/etc/os-release" )
+    file( STRINGS "/etc/os-release" DISTRO_ID REGEX "^ID=" )
+    string( REPLACE "ID=" "" DISTRO_ID "${DISTRO_ID}" )
+endif()
+
+if (DISTRO_ID STREQUAL "ubuntu" )
+	set ( HSAKMT_DEV_PACKAGE "hsakmt-roct-dev" )
+else()
+	set ( HSAKMT_DEV_PACKAGE "hsakmt-roct-devel" )
+endif()
 
 project ( ${HSAKMT_DEV_PACKAGE} )
 
@@ -52,7 +62,6 @@ set ( CPACK_GENERATOR "DEB;RPM;TGZ"  CACHE STRING "Default packaging generators.
 
 ## Packaging directives
 set ( CPACK_PACKAGE_NAME ${HSAKMT_DEV_PACKAGE} )
-set ( CPACK_RPM_PACKAGE_NAME "hsakmt-roct-devel" )
 set ( CPACK_PACKAGE_VENDOR "AMD" )
 set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
 set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
@@ -61,8 +70,6 @@ set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "HSAKMT development package." )
 set ( CPACK_RESOURCE_FILE_LICENSE "${SOURCE_DIR}/LICENSE.md" )
 set ( CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.x86_64" )
-set ( CPACK_RPM_FILE_NAME "${CPACK_RPM_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.x86_64.rpm" )
-
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH})" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
