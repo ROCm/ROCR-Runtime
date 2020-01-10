@@ -28,7 +28,7 @@
 #include "PM4Queue.hpp"
 #include "PM4Packet.hpp"
 #include "SDMAPacket.hpp"
-#include "SDMAQueue.hpp"
+#include "XgmiOptimizedSDMAQueue.hpp"
 #include "AqlQueue.hpp"
 #include <algorithm>
 
@@ -212,6 +212,9 @@ TEST_F(KFDQMTest, AllSdmaQueues) {
 
     const unsigned int numSdmaQueues = m_numSdmaEngines * m_numSdmaQueuesPerEngine;
 
+    LOG() << "Regular SDMA engines number: " << m_numSdmaEngines
+            << " SDMA queues per engine: " << m_numSdmaQueuesPerEngine << std::endl;
+
     HsaMemoryBuffer destBuf(bufSize << 1 , defaultGPUNode, false);
     HsaMemoryBuffer srcBuf(bufSize, defaultGPUNode, false);
     destBuf.Fill(0xFF);
@@ -243,6 +246,53 @@ TEST_F(KFDQMTest, AllSdmaQueues) {
     TEST_END
 }
 
+TEST_F(KFDQMTest, AllXgmiSdmaQueues) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    int bufSize = PAGE_SIZE;
+    int j;
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    const unsigned int numXgmiSdmaQueues =
+            m_numSdmaXgmiEngines * m_numSdmaQueuesPerEngine;
+
+    LOG() << "XGMI SDMA engines number: " << m_numSdmaXgmiEngines
+            << " SDMA queues per engine: " << m_numSdmaQueuesPerEngine << std::endl;
+
+    HsaMemoryBuffer destBuf(bufSize << 1 , defaultGPUNode, false);
+    HsaMemoryBuffer srcBuf(bufSize, defaultGPUNode, false);
+    destBuf.Fill(0xFF);
+
+    std::vector<XgmiOptimizedSDMAQueue> xgmiSdmaQueues(numXgmiSdmaQueues);
+
+    for (j = 0; j < numXgmiSdmaQueues; ++j)
+        ASSERT_SUCCESS(xgmiSdmaQueues[j].Create(defaultGPUNode));
+
+    for (j = 0; j < numXgmiSdmaQueues; ++j) {
+        destBuf.Fill(0x0);
+        srcBuf.Fill(j + 0xa0);
+        xgmiSdmaQueues[j].PlaceAndSubmitPacket(
+            SDMACopyDataPacket(xgmiSdmaQueues[j].GetFamilyId(),
+                    destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+        xgmiSdmaQueues[j].PlaceAndSubmitPacket(
+            SDMAWriteDataPacket(xgmiSdmaQueues[j].GetFamilyId(),
+                    destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        xgmiSdmaQueues[j].Wait4PacketConsumption();
+
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        EXPECT_SUCCESS(memcmp(
+            destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+    }
+
+    for (j = 0; j < numXgmiSdmaQueues; ++j)
+        EXPECT_SUCCESS(xgmiSdmaQueues[j].Destroy());
+
+    TEST_END
+}
+
 TEST_F(KFDQMTest, AllQueues) {
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -254,6 +304,8 @@ TEST_F(KFDQMTest, AllQueues) {
 
     const unsigned int numCpQueues = m_numCpQueues;
     const unsigned int numSdmaQueues = m_numSdmaEngines * m_numSdmaQueuesPerEngine;
+    const unsigned int numXgmiSdmaQueues =
+            m_numSdmaXgmiEngines * m_numSdmaQueuesPerEngine;
 
     HsaMemoryBuffer destBufCp(PAGE_SIZE, defaultGPUNode, false);
     destBufCp.Fill(0xFF);
@@ -264,12 +316,17 @@ TEST_F(KFDQMTest, AllQueues) {
 
     std::vector<PM4Queue> cpQueues(numCpQueues);
     std::vector<SDMAQueue> sdmaQueues(numSdmaQueues);
+    std::vector<XgmiOptimizedSDMAQueue> xgmiSdmaQueues(numXgmiSdmaQueues);
 
     for (i = 0; i < numCpQueues; ++i)
         ASSERT_SUCCESS(cpQueues[i].Create(defaultGPUNode)) << " QueueId=" << i;
 
     for (j = 0; j < numSdmaQueues; ++j)
         ASSERT_SUCCESS(sdmaQueues[j].Create(defaultGPUNode));
+
+    for (j = 0; j < numXgmiSdmaQueues; ++j)
+        ASSERT_SUCCESS(xgmiSdmaQueues[j].Create(defaultGPUNode));
+
 
     for (i = 0; i < numCpQueues; ++i) {
         cpQueues[i].PlaceAndSubmitPacket(PM4WriteDataPacket(destBufCp.As<unsigned int*>()+i*2, i, i));
@@ -295,11 +352,33 @@ TEST_F(KFDQMTest, AllQueues) {
             destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
     }
 
+    for (j = 0; j < numXgmiSdmaQueues; ++j) {
+        destBuf.Fill(0x0);
+        srcBuf.Fill(j + 0xa0);
+        xgmiSdmaQueues[j].PlaceAndSubmitPacket(
+            SDMACopyDataPacket(xgmiSdmaQueues[j].GetFamilyId(),
+                    destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+        xgmiSdmaQueues[j].PlaceAndSubmitPacket(
+            SDMAWriteDataPacket(xgmiSdmaQueues[j].GetFamilyId(),
+                    destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        xgmiSdmaQueues[j].Wait4PacketConsumption();
+
+        EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>() + bufSize/4, 0x02020202));
+
+        EXPECT_SUCCESS(memcmp(
+            destBuf.As<unsigned int*>(), srcBuf.As<unsigned int*>(), bufSize));
+    }
+
+
     for (i = 0; i < numCpQueues; ++i)
        EXPECT_SUCCESS(cpQueues[i].Destroy());
 
     for (j = 0; j < numSdmaQueues; ++j)
         EXPECT_SUCCESS(sdmaQueues[j].Destroy());
+
+    for (j = 0; j < numXgmiSdmaQueues; ++j)
+        EXPECT_SUCCESS(xgmiSdmaQueues[j].Destroy());
 
     TEST_END
 }
