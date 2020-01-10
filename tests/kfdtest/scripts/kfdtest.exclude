@@ -18,6 +18,7 @@ FILTER[core_sws]=\
 "KFDQMTest.SubmitNopSdmaQueue:"\
 "KFDQMTest.SubmitPacketSdmaQueue:"\
 "KFDQMTest.AllSdmaQueues:"\
+"KFDQMTest.AllXgmiSdmaQueues:"\
 "KFDQMTest.AllQueues:"\
 "KFDEventTest.SignalEvent"
 
