@@ -2329,7 +2329,7 @@ hsa_status_t hsa_executable_freeze(
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
 
-  return exec->Freeze(options);
+  return GetLoader()->FreezeExecutable(exec, options);
   CATCH;
 }
 
