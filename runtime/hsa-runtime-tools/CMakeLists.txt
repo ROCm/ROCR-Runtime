@@ -72,7 +72,7 @@ get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUT
 set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
 
 ## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib")
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64")
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "-std=c++11 ")
