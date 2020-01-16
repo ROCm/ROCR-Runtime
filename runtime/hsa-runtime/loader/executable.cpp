@@ -62,9 +62,7 @@
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
-#ifdef __GNUC__
-#define NONOPTIMIZE __attribute__((noinline, optimize(0)))
-#elif defined __clang__
+#if defined __clang__
 #define NONOPTIMIZE __attribute__((noinline, optnone))
 #else
 #define NONOPTIMIZE __attribute__((noinline, optimize(0)))
