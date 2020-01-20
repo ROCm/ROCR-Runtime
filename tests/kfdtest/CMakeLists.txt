@@ -28,6 +28,16 @@ cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
 
 project(KFDTest)
 
+# For DEB/RPM generation
+set ( CPACK_PACKAGE_FILE_NAME "kfdtest" )
+set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
+set ( CPACK_PACKAGE_DESCRIPTION "This package includes kfdtest, the list of excluded tests for each ASIC, and a convenience script to run the test suite" )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCK/KFD" )
+set ( CPACK_PACKAGE_VERSION_MAJOR "1" )
+set ( CPACK_PACKAGE_VERSION_MINOR "0" )
+set ( CPACK_PACKAGE_VERSION_PATCH "0" )
+set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
+
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 find_package(PkgConfig)
@@ -47,6 +57,14 @@ else()
     include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
 endif()
 
+## Define default variable and variables for the optional build target hsakmt-dev
+set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
+set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
+
+# Debian package specific variables
+set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 
 if( DEFINED ENV{LIBHSAKMT_PATH} )
     set ( LIBHSAKMT_PATH $ENV{LIBHSAKMT_PATH} )
@@ -159,3 +177,11 @@ target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LIBRARIES} ${DRM_AMDGPU_
 
 configure_file ( scripts/kfdtest.exclude kfdtest.exclude COPYONLY )
 configure_file ( scripts/run_kfdtest.sh run_kfdtest.sh COPYONLY )
+
+install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest ${CMAKE_CURRENT_BINARY_DIR}/run_kfdtest.sh
+	PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_WRITE GROUP_READ WORLD_EXECUTE WORLD_READ
+	DESTINATION bin )
+install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest.exclude
+	PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ
+	DESTINATION share/kfdtest )
+include ( CPack )
