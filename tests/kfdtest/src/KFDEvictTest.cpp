@@ -277,79 +277,6 @@ void KFDEvictTest::AmdgpuCommandSubmissionSdmaNop(int rn, amdgpu_bo_handle handl
     EXPECT_EQ(0, amdgpu_cs_ctx_free(contextHandle));
 }
 
-/* Evict and restore procedure basic test
- *
- * Use N_PROCESSES processes to allocate vram buf size larger than total vram size
- *
- * ALLOCATE_BUF_SIZE_MB buf allocation size
- *
- * buf is equal to (vramSizeMB / (vramBufSizeMB * N_PROCESSES) ) + 8
- * Total vram all processes allocated: 8GB for 4GB Fiji, and 20GB for 16GB Vega10
- *
- * Eviction and restore will happen many times:
- * ttm will evict buffers of another process if there is not enough free vram
- * process restore will evict buffers of another process
- *
- * Sometimes the allocation may fail (maybe that is normal)
- * ALLOCATE_RETRY_TIMES max retry times to allocate
- *
- * This is basic test with no queue, so vram is not used by the GPU during test
- *
- * TODO:
- *    - Synchronization between the processes, so they know for sure when
- *        they are done allocating memory
- */
-TEST_F(KFDEvictTest, BasicTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
-
-    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-    HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
-
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
-
-    if (!vramSize) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
-        return;
-    } else {
-        LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
-    }
-
-    // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize  / (vramBufSize * N_PROCESSES);
-
-    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
-
-    /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
-
-    int rn = FindDRMRenderNode(defaultGPUNode);
-    if (rn < 0) {
-        LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
-        return;
-    }
-
-    std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
-
-    /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
-    amdgpu_bo_handle handle;
-    AllocAmdgpuBo(rn, size, handle);
-
-    AmdgpuCommandSubmissionSdmaNop(rn, handle);
-
-    FreeAmdgpuBo(handle);
-    LOG() << m_psName << "free buffer" << std::endl;
-    FreeBuffers(pBuffers, vramBufSize);
-
-    WaitChildProcesses();
-
-    TEST_END
-}
-
 /* Shader to read local buffers using multiple wavefronts in parallel
  * until address buffer is filled with specific value 0x5678 by host program,
  * then each wavefront fills value 0x5678 at corresponding result buffer and quit
@@ -480,6 +407,85 @@ std::string KFDEvictTest::CreateShader() {
         return gfx9_ReadMemory;
 }
 
+/* Evict and restore procedure basic test
+ *
+ * Use N_PROCESSES processes to allocate vram buf size larger than total vram size
+ *
+ * ALLOCATE_BUF_SIZE_MB buf allocation size
+ *
+ * buf is equal to (vramSizeMB / (vramBufSizeMB * N_PROCESSES) ) + 8
+ * Total vram all processes allocated: 8GB for 4GB Fiji, and 20GB for 16GB Vega10
+ *
+ * Eviction and restore will happen many times:
+ * ttm will evict buffers of another process if there is not enough free vram
+ * process restore will evict buffers of another process
+ *
+ * Sometimes the allocation may fail (maybe that is normal)
+ * ALLOCATE_RETRY_TIMES max retry times to allocate
+ *
+ * This is basic test with no queue, so vram is not used by the GPU during test
+ *
+ * TODO:
+ *    - Synchronization between the processes, so they know for sure when
+ *        they are done allocating memory
+ */
+TEST_F(KFDEvictTest, BasicTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
+
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 sysMemSize = GetSysMemSize();
+
+    if (!vramSize) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
+    LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
+
+    // Use 7/8 of VRAM between all processes
+    HSAuint64 testSize = vramSize * 7 / 8;
+    HSAuint32 count = testSize / (vramBufSize * N_PROCESSES);
+
+    if (count == 0) {
+        LOG() << "Skipping test: Not enough system memory available." << std::endl;
+        return;
+    }
+
+    /* Fork the child processes */
+    ForkChildProcesses(N_PROCESSES);
+
+    int rn = FindDRMRenderNode(defaultGPUNode);
+    if (rn < 0) {
+        LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
+        WaitChildProcesses();
+        return;
+    }
+
+    std::vector<void *> pBuffers;
+    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+
+    /* Allocate gfx vram size of at most one third system memory */
+    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
+    amdgpu_bo_handle handle;
+    AllocAmdgpuBo(rn, size, handle);
+
+    AmdgpuCommandSubmissionSdmaNop(rn, handle);
+
+    FreeAmdgpuBo(handle);
+    LOG() << m_psName << "free buffer" << std::endl;
+    FreeBuffers(pBuffers, vramBufSize);
+
+    WaitChildProcesses();
+
+    TEST_END
+}
+
 /* Evict and restore queue test
  *
  * N_PROCESSES processes read all local buffers in parallel while buffers are evicted and restored
@@ -514,19 +520,20 @@ TEST_F(KFDEvictTest, QueueTest) {
     }
 
     HSAuint32 i;
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 sysMemSize = GetSysMemSize();
 
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
-    } else {
-        LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
     }
 
-    // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize / (vramBufSize * N_PROCESSES);
+    LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
+    LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
 
-    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
+    // Use 7/8 of VRAM between all processes
+    HSAuint64 testSize = vramSize * 7 / 8;
+    HSAuint32 count = testSize / (vramBufSize * N_PROCESSES);
 
     if (count == 0) {
         LOG() << "Skipping test: Not enough system memory available." << std::endl;
@@ -562,7 +569,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
+    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
@@ -624,19 +631,25 @@ TEST_F(KFDEvictTest, BurstyTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode) * 7 / 8;
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 sysMemSize = GetSysMemSize();
 
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
-    } else {
-        LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
     }
 
-    // Use 7/8 of VRAM between all processes
-    HSAuint32 count = vramSize / (vramBufSize * N_PROCESSES);
+    LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
+    LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
 
-    LOG() << "Found System RAM of " << std::dec << (GetSysMemSize() >> 20) << "MB" << std::endl;
+    // Use 7/8 of VRAM between all processes
+    HSAuint64 testSize = vramSize * 7 / 8;
+    HSAuint32 count = testSize / (vramBufSize * N_PROCESSES);
+
+    if (count == 0) {
+        LOG() << "Skipping test: Not enough system memory available." << std::endl;
+        return;
+    }
 
     /* Fork the child processes */
     ForkChildProcesses(N_PROCESSES);
@@ -655,7 +668,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = GetSysMemSize() / 3 < vramSize ? GetSysMemSize() / 3 : vramSize;
+    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
