@@ -132,6 +132,12 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     TEST_END
 }
 
+#if 0
+/* This test isn't testing things the way we wanted it to. It is flaky and
+ * will end up failing if the memory is evicted, which isn't possible for what 
+ * it is intended to test. It needs a rework
+ */
+
 /* Third-party device memory can be registered for GPU access in
  * ROCm stack. Test this feature. Third party device is mimicked
  * in multi-GPU system using Graphics stack (libdrm). CPU accessible
@@ -222,3 +228,4 @@ TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
 
     TEST_END
 }
+#endif
