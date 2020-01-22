@@ -82,8 +82,52 @@ include_directories(${SP3_DIR})
 
 include_directories(${DRM_INCLUDE_DIRS})
 
-aux_source_directory(${PROJECT_SOURCE_DIR}/gtest-1.6.0 SRC_FILES)
-aux_source_directory(${PROJECT_SOURCE_DIR}/src SRC_FILES)
+set (SRC_FILES gtest-1.6.0/gtest-all.cpp
+
+  src/AqlQueue.cpp
+  src/BasePacket.cpp
+  src/BaseQueue.cpp
+  src/Dispatch.cpp
+  src/GoogleTestExtension.cpp
+  src/IndirectBuffer.cpp
+  src/IsaGenerator.cpp
+  src/IsaGenerator_Gfx10.cpp
+  src/IsaGenerator_Gfx72.cpp
+  src/IsaGenerator_Gfx8.cpp
+  src/IsaGenerator_Gfx9.cpp
+  src/LinuxOSWrapper.cpp
+  src/PM4Packet.cpp
+  src/PM4Queue.cpp
+  src/RDMAUtil.cpp
+  src/SDMAPacket.cpp
+  src/SDMAQueue.cpp
+  src/KFDBaseComponentTest.cpp
+  src/KFDMultiProcessTest.cpp
+  src/KFDTestMain.cpp
+  src/KFDTestUtil.cpp
+  src/KFDTestUtilQueue.cpp
+
+  src/KFDOpenCloseKFDTest.cpp
+  src/KFDTopologyTest.cpp
+  src/KFDMemoryTest.cpp
+  src/KFDLocalMemoryTest.cpp
+  src/KFDEventTest.cpp
+  src/KFDQMTest.cpp
+  src/KFDCWSRTest.cpp
+  src/KFDExceptionTest.cpp
+  src/KFDGraphicsInterop.cpp
+  src/KFDPerfCounters.cpp
+  src/KFDDBGTest.cpp
+  src/KFDGWSTest.cpp
+  src/KFDIPCTest.cpp
+
+  src/KFDEvictTest.cpp
+  src/KFDHWSTest.cpp
+  src/KFDPerformanceTest.cpp
+  src/KFDPMTest.cpp
+
+  src/KFDRASTest.cpp
+  src/RDMATest.cpp)
 
 message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 #message( STATUS "SRC_FILES: ")
