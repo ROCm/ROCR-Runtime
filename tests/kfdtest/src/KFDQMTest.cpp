@@ -1671,7 +1671,7 @@ TEST_F(KFDQMTest, P2PTest) {
     HsaMemFlags memFlags = {0};
     HsaMemMapFlags mapFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.HostAccess = 0;
     memFlags.ui32.NonPaged = 1;
     memFlags.ui32.NoNUMABind = 1;
     unsigned int end = size / sizeof(HSAuint32) - 1;

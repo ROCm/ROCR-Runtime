@@ -73,7 +73,7 @@ testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirectio
     void *n1Mem, *n2Mem[n];
     HsaMemFlags memFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.HostAccess = 0;
     memFlags.ui32.NonPaged = 1;
     SDMACopyParams array[n * 4];
     int array_count = 0;
