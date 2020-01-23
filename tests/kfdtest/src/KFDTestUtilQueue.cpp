@@ -422,6 +422,9 @@ void sdma_multicopy_report(std::vector<SDMACopyParams> &array, HSAuint64 countPe
         begin = array[base].timeBegin;
         end = array[base + countPerGroup - 1].timeEnd;
 
+        if (begin == 0 && end == 0)
+            continue;
+
         if (timeConsumptionMax < end - begin)
             timeConsumptionMax = end - begin;
 
