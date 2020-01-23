@@ -1492,9 +1492,6 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	numa_bitmask_free(node_mask);
 
 	if (r) {
-		pr_warn_once("Failed to set NUMA policy for %p: %s\n", mem,
-			     strerror(errno));
-
 		/* If applcation is running inside docker, still return
 		 * ok because docker seccomp blocks mbind by default,
 		 * otherwise application cannot allocate system memory.
@@ -1504,6 +1501,13 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 
 			return 0;
 		}
+
+		/* Ignore mbind failure if no memory available on node */
+		if (!flags.ui32.NoSubstitute)
+			return 0;
+
+		pr_warn_once("Failed to set NUMA policy for %p: %s\n", mem,
+			     strerror(errno));
 
 		return -EFAULT;
 	}
