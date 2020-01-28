@@ -487,7 +487,7 @@ int main(int argc, char** argv) {
 
   // Set some default values
   settings.verbosity = 1;
-  settings.monitor_verbosity = 1;
+  settings.monitor_verbosity = 0;
   settings.num_iterations = 5;
 
   if (ProcessCmdline(&settings, argc, argv)) {
