@@ -3276,6 +3276,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 			err = HSAKMT_STATUS_ERROR;
 			goto err_free_obj;
 		}
+		obj->node_id = gpu_mem[gpu_mem_id].node_id;
 		map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
 					gpu_mem[gpu_mem_id].drm_render_fd;
 		ret = mmap(reservedMem, (SizeInPages << PAGE_SHIFT),
@@ -3496,7 +3497,9 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 	}
 	/* Successful vm_find_object returns with the aperture locked */
 
-	if (vm_obj->metadata)
+	if (vm_obj->is_imported_kfd_bo)
+		info->Type = HSA_POINTER_REGISTERED_SHARED;
+	else if (vm_obj->metadata)
 		info->Type = HSA_POINTER_REGISTERED_GRAPHICS;
 	else if (vm_obj->userptr)
 		info->Type = HSA_POINTER_REGISTERED_USER;
