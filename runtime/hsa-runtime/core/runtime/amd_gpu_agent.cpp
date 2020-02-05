@@ -324,11 +324,9 @@ void GpuAgent::InitRegionList() {
           }
           break;
         case HSA_HEAPTYPE_MMIO_REMAP:
-          if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie()) {
-            // Remap offsets defined in kfd_ioctl.h
-            HDP_flush_.HDP_MEM_FLUSH_CNTL = (uint32_t*)mem_props[mem_idx].VirtualBaseAddress;
-            HDP_flush_.HDP_REG_FLUSH_CNTL = HDP_flush_.HDP_MEM_FLUSH_CNTL + 1;
-          }
+          // Remap offsets defined in kfd_ioctl.h
+          HDP_flush_.HDP_MEM_FLUSH_CNTL = (uint32_t*)mem_props[mem_idx].VirtualBaseAddress;
+          HDP_flush_.HDP_REG_FLUSH_CNTL = HDP_flush_.HDP_MEM_FLUSH_CNTL + 1;
           break;
         default:
           continue;
