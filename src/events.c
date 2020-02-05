@@ -250,6 +250,9 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 	pr_err("GPU address 0x%lx, node id %d, size in byte 0x%lx\n",
 			info.GPUAddress, info.Node, info.SizeInBytes);
 	switch (info.Type) {
+	case HSA_POINTER_REGISTERED_SHARED:
+		pr_err("Memory is registered shared buffer (IPC)\n");
+		break;
 	case HSA_POINTER_REGISTERED_GRAPHICS:
 		pr_err("Memory is registered graphics buffer\n");
 		break;
