@@ -1962,8 +1962,6 @@ out:
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtReleaseSystemProperties(void)
 {
-	CHECK_KFD_OPEN();
-
 	HSAKMT_STATUS err;
 
 	pthread_mutex_lock(&hsakmt_mutex);
