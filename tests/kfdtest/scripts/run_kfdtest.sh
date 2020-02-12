@@ -163,6 +163,11 @@ runKfdTest() {
 
     if [ "$NODE" == "" ]; then
         hsaNodes=$(getHsaNodes)
+
+        if [ "$hsaNodes" == "" ]; then
+            echo "No GPU found in the system."
+            exit 1
+        fi
     else
         hsaNodes=$NODE
     fi
