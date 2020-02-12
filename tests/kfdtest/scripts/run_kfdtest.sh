@@ -78,7 +78,6 @@ fi
 PLATFORM=""
 GDB=""
 NODE=""
-MULTI_GPU=""
 FORCE_HIGH=""
 RUN_IN_DOCKER=""
 
@@ -106,8 +105,6 @@ printUsage() {
     return 0
 }
 # Print gtest_filter for the given Platform
-# If MULTI_GPU flag is set, then Multi-GPU Tests are selected. Once all tests
-# pass in Multi GPU environment, this flag can be removed
 #    param - Platform.
 getFilter() {
 # For regular platforms such as vega10, this will automatically generate
@@ -219,16 +216,6 @@ getGPUCount() {
     echo "$gpuCount"
 }
 
-# set $MULTI_GPU flag if the system has more than 1 GPU
-setMultiGPUFlag() {
-    gpuCount=$(getGPUCount)
-    if [ $gpuCount -gt 1 ]; then
-        MULTI_GPU=1
-    else
-        MULTI_GPU=0
-    fi
-}
-
 while [ "$1" != "" ]; do
     case "$1" in
         -p  | --platform )
@@ -257,7 +244,6 @@ if [ "$FORCE_HIGH" == "true" ]; then
     pushTrap "popGpuDpmState" EXIT
 fi
 
-setMultiGPUFlag
 # Set HSA_DEBUG env to run KFDMemoryTest.PtraceAccessInvisibleVram
 export HSA_DEBUG=1
 runKfdTest
