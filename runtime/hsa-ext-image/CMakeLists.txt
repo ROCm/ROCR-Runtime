@@ -73,7 +73,7 @@ get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUT
 set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
 
 ## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64")
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64")
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "-std=c++11 " )
@@ -117,7 +117,7 @@ set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/src/addrinterface.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib1.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib2.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrobject.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp    
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/gfx10/gfx10addrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/gfx9/gfx9addrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/r800/ciaddrlib.cpp

@@ -72,7 +72,7 @@ get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUT
 set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
 
 ## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
-set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64")
+set(CMAKE_INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64")
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( CMAKE_CXX_FLAGS "-std=c++11 ")
@@ -146,7 +146,7 @@ set ( INTERCEPT_SRC   ${TOOLS_SOURCE_DIR}/intercept/amd_sw_aql_command_processor
                       ${TOOLS_SOURCE_DIR}/intercept/aql_proxy_queue.cpp
                       ${TOOLS_SOURCE_DIR}/intercept/profiler.cpp )
 
-set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp 
+set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/gpu_counter.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/var_data.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/info_set.cpp
@@ -159,7 +159,7 @@ set ( PROFILER_SRC    ${TOOLS_SOURCE_DIR}/profiler/gpu_countergroup.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/ai_pmu.cpp
                       ${TOOLS_SOURCE_DIR}/profiler/hsa_ext_profiler.cpp )
 
-set ( THREAD_TRACE_SRC    ${TOOLS_SOURCE_DIR}/threadtrace/thread_trace.cpp 
+set ( THREAD_TRACE_SRC    ${TOOLS_SOURCE_DIR}/threadtrace/thread_trace.cpp
                           ${TOOLS_SOURCE_DIR}/threadtrace/gfx9_factory.cpp
                           ${TOOLS_SOURCE_DIR}/threadtrace/gfx9_thread_trace.cpp
                           ${TOOLS_SOURCE_DIR}/threadtrace/pre_gfx9_factory.cpp
