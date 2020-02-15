@@ -77,6 +77,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
+      scratch_used_large_(0),
       queues_(),
       local_region_(NULL),
       is_kv_device_(false),
@@ -936,7 +937,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   }
 
   // Allocate scratch memory
-  ScratchInfo scratch;
+  ScratchInfo scratch = {0};
   if (private_segment_size == UINT_MAX) {
     private_segment_size = (profile_ == HSA_PROFILE_BASE) ? 0 : scratch_per_thread_;
   }
@@ -1038,15 +1039,16 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
 
   // Retry if large may yield needed space.
   if (scratch_used_large_ != 0) {
-    scratch.retry = true;
+    if (AddScratchNotifier(scratch.queue_retry, 0x8000000000000000ull)) scratch.retry = true;
     return;
   }
 
   // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    debug_print("Failed to map requested scratch - reducing queue occupancy.\n");
-  uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  uint64_t total_waves = scratch.size / size_per_wave;
+    debug_print("Failed to map requested scratch (%ld) - reducing queue occupancy.\n",
+                scratch.size);
+  const uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+  const uint64_t total_waves = scratch.size / size_per_wave;
   uint64_t waves_per_cu = total_waves / num_cus;
   while (waves_per_cu != 0) {
     size_t size = waves_per_cu * num_cus * size_per_wave;
@@ -1058,12 +1060,14 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       // Scratch allocated and either full profile or map succeeded.
       scratch.queue_base = base;
       scratch.size = size;
-      scratch.queue_process_offset =
-          (need_queue_scratch_base)
-              ? uintptr_t(scratch.queue_base)
-              : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+      scratch.queue_process_offset = (need_queue_scratch_base)
+          ? uintptr_t(scratch.queue_base)
+          : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
       scratch.large = true;
       scratch_used_large_ += scratch.size;
+      if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+        debug_print("  %ld scratch mapped, %.2f%% occupancy.\n", scratch.size,
+                    float(waves_per_cu * num_cus) / scratch.wanted_slots * 100.0f);
       return;
     }
     scratch_pool_.free(base);
@@ -1073,7 +1077,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   // Failed to allocate minimal scratch
   assert(scratch.queue_base == nullptr && "bad scratch data");
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    debug_print("Could not allocate scratch for one wave per CU.\n");
+    debug_print("  Could not allocate scratch for one wave per CU.\n");
 }
 
 void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
@@ -1093,12 +1097,13 @@ void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
   if (scratch.large) scratch_used_large_ -= scratch.size;
 
   // Notify waiters that additional scratch may be available.
-  for (auto notifier : scratch_notifiers_)
+  for (auto notifier : scratch_notifiers_) {
     HSA::hsa_signal_or_relaxed(notifier.first, notifier.second);
+  }
+  ClearScratchNotifiers();
 }
 
-void GpuAgent::TranslateTime(core::Signal* signal,
-                             hsa_amd_profiling_dispatch_time_t& time) {
+void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) {
   uint64_t start, end;
   signal->GetRawTs(false, start, end);
   // Order is important, we want to translate the end time first to ensure that packet duration is
