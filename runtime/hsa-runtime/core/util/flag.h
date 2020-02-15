@@ -109,6 +109,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_NO_SCRATCH_RECLAIM");
     no_scratch_reclaim_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_NO_SCRATCH_THREAD_LIMITER");
+    no_scratch_thread_limit_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -135,6 +138,8 @@ class Flag {
 
   bool no_scratch_reclaim() const { return no_scratch_reclaim_; }
 
+  bool no_scratch_thread_limiter() const { return no_scratch_thread_limit_; }
+
   std::string enable_sdma() const { return enable_sdma_; }
 
   std::string visible_gpus() const { return visible_gpus_; }
@@ -158,6 +163,7 @@ class Flag {
   bool rev_copy_dir_;
   bool fine_grain_pcie_;
   bool no_scratch_reclaim_;
+  bool no_scratch_thread_limit_;
 
   std::string enable_sdma_;
 

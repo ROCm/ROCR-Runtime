@@ -1043,6 +1043,9 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     return;
   }
 
+  // Fail scratch allocation if reducing occupancy is disabled.
+  if (core::Runtime::runtime_singleton_->flag().no_scratch_thread_limiter()) return;
+
   // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
     debug_print("Failed to map requested scratch (%ld) - reducing queue occupancy.\n",
