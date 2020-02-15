@@ -189,9 +189,6 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
                    0);
 #endif
 
-  // Initialize scratch memory related entities
-  InitScratchSRD();
-
   // Set group and private memory apertures in amd_queue_.
   auto& regions = agent->regions();
 
@@ -257,6 +254,11 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::DefaultSignal::Convert(Signal);
   }
+
+  // Initialize scratch memory related entities
+  queue_scratch_.queue_retry = amd_queue_.queue_inactive_signal;
+  InitScratchSRD();
+
   if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
                                         0, DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
     throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
@@ -729,7 +731,6 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
   if ((queue->dynamicScratchState & ERROR_HANDLER_SCRATCH_RETRY) == ERROR_HANDLER_SCRATCH_RETRY) {
     queue->dynamicScratchState &= ~ERROR_HANDLER_SCRATCH_RETRY;
-    queue->agent_->RemoveScratchNotifier(queue->amd_queue_.queue_inactive_signal);
     changeWait = true;
     waitVal = 0;
     HSA::hsa_signal_and_relaxed(queue->amd_queue_.queue_inactive_signal, ~0x8000000000000000ull);
@@ -771,18 +772,23 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
+      const uint32_t MaxScratchSlots =
+          (queue->amd_queue_.max_cu_id + 1) * queue->agent_->properties().MaxSlotsScratchCU;
+
       scratch.size_per_thread = scratch_request;
       scratch.lanes_per_wave = (error_code & 0x400) ? 32 : 64;
       // Align whole waves to 1KB.
       scratch.size_per_thread = AlignUp(scratch.size_per_thread, 1024 / scratch.lanes_per_wave);
-      scratch.size = scratch.size_per_thread * (queue->amd_queue_.max_cu_id + 1) *
-          queue->agent_->properties().MaxSlotsScratchCU * scratch.lanes_per_wave;
+      scratch.size = scratch.size_per_thread * MaxScratchSlots * scratch.lanes_per_wave;
+#ifndef NDEBUG
+      scratch.wanted_slots = ((uint64_t(pkt.dispatch.grid_size_x) * pkt.dispatch.grid_size_y) *
+                              pkt.dispatch.grid_size_z) / scratch.lanes_per_wave;
+      scratch.wanted_slots = Min(scratch.wanted_slots, MaxScratchSlots);
+#endif
 
       queue->agent_->AcquireQueueScratch(scratch);
 
       if (scratch.retry) {
-        queue->agent_->AddScratchNotifier(queue->amd_queue_.queue_inactive_signal,
-                                          0x8000000000000000ull);
         queue->dynamicScratchState |= ERROR_HANDLER_SCRATCH_RETRY;
         changeWait = true;
         waitVal = error_code;
