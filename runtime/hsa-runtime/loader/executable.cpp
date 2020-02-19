@@ -188,6 +188,10 @@ static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
   if (r_debug_tail == map) {
       r_debug_tail = map->l_prev;
   }
+  if (_amdgpu_r_debug.r_map == map) {
+      _amdgpu_r_debug.r_map = map->l_next;
+  }
+
   if (map->l_prev) {
       map->l_prev->l_next = map->l_next;
   }
@@ -196,6 +200,7 @@ static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
   }
 
   delete map->l_name;
+  memset(map, 0, sizeof(link_map));
 }
 
 hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const char *options) {
