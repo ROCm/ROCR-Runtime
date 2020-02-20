@@ -381,6 +381,8 @@ hsa_status_t Runtime::DeregisterReleaseNotifier(void* ptr,
 }
 
 hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
+  void* source = const_cast<void*>(src);
+
   // Choose agents from pointer info
   bool is_src_system = false;
   bool is_dst_system = false;
@@ -388,54 +390,65 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   core::Agent* dst_agent;
 
   // Fetch ownership
-  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent) {
+  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent, bool& need_lock) {
     hsa_amd_pointer_info_t info;
+    uint32_t count;
+    hsa_agent_t* accessible = nullptr;
+    MAKE_SCOPE_GUARD([&]() { free(accessible); });
     info.size = sizeof(info);
-    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr);
+    hsa_status_t err = PtrInfo(ptr, &info, malloc, &count, &accessible);
     if (err != HSA_STATUS_SUCCESS)
       throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
     ptrdiff_t endPtr = (ptrdiff_t)ptr + size;
     if (info.agentBaseAddress <= ptr &&
         endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+      if (info.agentOwner.handle == 0) info.agentOwner = accessible[0];
       agent = core::Agent::Convert(info.agentOwner);
+      need_lock = false;
       return agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice;
     } else {
+      need_lock = true;
       agent = cpu_agents_[0];
       return true;
     }
   };
 
-  is_src_system = is_system_mem(const_cast<void*>(src), src_agent);
-  is_dst_system = is_system_mem(dst, dst_agent);
+  bool src_lock, dst_lock;
+  is_src_system = is_system_mem(source, src_agent, src_lock);
+  is_dst_system = is_system_mem(dst, dst_agent, dst_lock);
 
   // CPU-CPU
   if (is_src_system && is_dst_system) {
-    memcpy(dst, src, size);
+    memcpy(dst, source, size);
     return HSA_STATUS_SUCCESS;
   }
 
   // Same GPU
-  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, src, size);
+  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, source, size);
 
   // GPU-CPU
   // Must ensure that system memory is visible to the GPU during the copy.
   const amd::MemoryRegion* system_region =
       static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
 
-  const auto& locked_copy = [&](void* ptr, core::Agent* locking_agent, bool locking_src) {
-    void* gpuPtr;
+  void* gpuPtr = nullptr;
+  const auto& locked_copy = [&](void*& ptr, core::Agent* locking_agent) {
+    void* tmp;
     hsa_agent_t agent = locking_agent->public_handle();
-    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &gpuPtr);
-    if (err != HSA_STATUS_SUCCESS) return err;
-    MAKE_SCOPE_GUARD([&]() { system_region->Unlock(ptr); });
-    if (locking_src)
-      return locking_agent->DmaCopy(dst, gpuPtr, size);
-    else
-      return locking_agent->DmaCopy(gpuPtr, src, size);
+    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &tmp);
+    if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "Lock failed in hsa_memory_copy.");
+    gpuPtr = ptr;
+    ptr = tmp;
   };
 
-  if (is_src_system) return locked_copy(const_cast<void*>(src), dst_agent, true);
-  if (is_dst_system) return locked_copy(dst, src_agent, false);
+  MAKE_SCOPE_GUARD([&]() {
+    if (gpuPtr != nullptr) system_region->Unlock(gpuPtr);
+  });
+
+  if (src_lock) locked_copy(source, dst_agent);
+  if (dst_lock) locked_copy(dst, src_agent);
+  if (is_src_system) return dst_agent->DmaCopy(dst, source, size);
+  if (is_dst_system) return src_agent->DmaCopy(dst, source, size);
 
   /*
   GPU-GPU - functional support, not a performance path.
@@ -448,7 +461,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   void* temp = nullptr;
   system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
   MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
-  hsa_status_t err = src_agent->DmaCopy(temp, src, size);
+  hsa_status_t err = src_agent->DmaCopy(temp, source, size);
   if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
   return err;
 }
