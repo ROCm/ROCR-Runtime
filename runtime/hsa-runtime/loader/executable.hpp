@@ -55,11 +55,11 @@
 #include <utility>
 #include <vector>
 #include <cstring>
-#include "hsa.h"
-#include "hsa_ext_image.h"
-#include "amd_hsa_loader.hpp"
-#include "amd_hsa_code.hpp"
-#include "amd_hsa_kernel_code.h"
+#include "inc/hsa.h"
+#include "inc/hsa_ext_image.h"
+#include "core/inc/amd_hsa_loader.hpp"
+#include "core/inc/amd_hsa_code.hpp"
+#include "inc/amd_hsa_kernel_code.h"
 #include "amd_hsa_locks.hpp"
 
 namespace amd {

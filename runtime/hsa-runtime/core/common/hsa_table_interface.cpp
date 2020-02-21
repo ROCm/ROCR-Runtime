@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "hsa_api_trace.h"
+#include "inc/hsa_api_trace.h"
 #include "core/inc/hsa_api_trace_int.h"
 
 static const HsaApiTable* hsaApiTable;

@@ -44,10 +44,10 @@
 #include <cstring>
 #include <iomanip>
 #include <algorithm>
-#include "amd_hsa_code.hpp"
+#include "core/inc/amd_hsa_code.hpp"
 #include "amd_hsa_code_util.hpp"
 #include <libelf.h>
-#include "amd_hsa_elf.h"
+#include "inc/amd_hsa_elf.h"
 #include <fstream>
 #include <sstream>
 #include <cstdlib>

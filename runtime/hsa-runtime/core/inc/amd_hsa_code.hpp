@@ -82,11 +82,11 @@ mes of its
 #ifndef AMD_HSA_CODE_HPP_
 #define AMD_HSA_CODE_HPP_
 
-#include "amd_elf_image.hpp"
-#include "amd_hsa_elf.h"
-#include "amd_hsa_kernel_code.h"
-#include "hsa.h"
-#include "hsa_ext_finalize.h"
+#include "core/inc/amd_elf_image.hpp"
+#include "inc/amd_hsa_elf.h"
+#include "inc/amd_hsa_kernel_code.h"
+#include "inc/hsa.h"
+#include "inc/hsa_ext_finalize.h"
 #include <memory>
 #include <sstream>
 #include <cassert>

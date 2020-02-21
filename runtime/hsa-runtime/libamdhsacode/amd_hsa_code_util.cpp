@@ -59,7 +59,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif // _WIN32
-#include "Brig.h"
+#include "inc/Brig.h"
 
 namespace {
 auto eq = " = ";

@@ -66,7 +66,7 @@
 #include "core/util/utils.h"
 
 #include "core/inc/amd_loader_context.hpp"
-#include "amd_hsa_code.hpp"
+#include "core/inc/amd_hsa_code.hpp"
 
 //---------------------------------------------------------------------------//
 //    Constants                                                              //

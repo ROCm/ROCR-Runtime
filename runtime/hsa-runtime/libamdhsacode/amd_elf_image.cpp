@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "amd_elf_image.hpp"
+#include "core/inc/amd_elf_image.hpp"
 #include "amd_hsa_code_util.hpp"
 #include <gelf.h>
 #include <errno.h>

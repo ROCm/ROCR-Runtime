@@ -45,9 +45,9 @@
 #ifndef HSA_RUNTIME_CORE_INC_EXT_AMD_H_
 #define HSA_RUNTIME_CORE_INC_EXT_AMD_H_
 
-#include "hsa.h"
-#include "hsa_ext_image.h"
-#include "hsa_ext_amd.h"
+#include "inc/hsa.h"
+#include "inc/hsa_ext_image.h"
+#include "inc/hsa_ext_amd.h"
 
 // Wrap internal implementation inside AMD namespace
 namespace AMD {
