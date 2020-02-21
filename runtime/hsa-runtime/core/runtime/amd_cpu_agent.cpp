@@ -48,7 +48,7 @@
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/host_queue.h"
 
-#include "hsa_ext_image.h"
+#include "inc/hsa_ext_image.h"
 
 namespace amd {
 CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)

@@ -53,7 +53,7 @@ include_directories( ${HSAKMT_INC_PATH} )
 link_directories( ${HSAKMT_LIB_PATH} )
 
 ## Find the hsa-runtime and include files
-get_include_path( HSA_INC_PATH "ROCr include path" NAMES "hsa.h" "hsa/hsa.h" HINTS "${CMAKE_BINARY_DIR}/../../include" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/inc" PATHS "/opt/rocm/include")
+get_include_path( HSA_INC_PATH "ROCr include path" NAMES "inc/hsa.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime" "${CMAKE_BINARY_DIR}/../../include" PATHS "/opt/rocm/include")
 get_library_path( HSA_LIB_PATH "ROCr library path" NAMES "libhsa-runtime64.so" HINTS "${CMAKE_BINARY_DIR}/../../lib" "${CMAKE_BINARY_DIR}/../hsa-core" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/build" PATHS "/opt/rocm/lib")
 include_directories( ${HSA_INC_PATH} )
 link_directories( ${HSA_LIB_PATH} )

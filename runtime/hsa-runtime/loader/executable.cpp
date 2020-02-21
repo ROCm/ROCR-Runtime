@@ -50,9 +50,9 @@
 #include <fstream>
 #include <libelf.h>
 #include <unistd.h>
-#include "amd_hsa_elf.h"
-#include "amd_hsa_kernel_code.h"
-#include "amd_hsa_code.hpp"
+#include "inc/amd_hsa_elf.h"
+#include "inc/amd_hsa_kernel_code.h"
+#include "core/inc/amd_hsa_code.hpp"
 #include "amd_hsa_code_util.hpp"
 #include "amd_options.hpp"
 #include "core/util/utils.h"

@@ -43,7 +43,7 @@
 #ifndef LOADERS_HPP_
 #define LOADERS_HPP_
 
-#include "amd_hsa_loader.hpp"
+#include "core/inc/amd_hsa_loader.hpp"
 #include <set>
 #include <iostream>
 
