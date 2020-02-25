@@ -58,9 +58,6 @@ get_library_path( HSA_LIB_PATH "ROCr library path" NAMES "libhsa-runtime64.so" H
 include_directories( ${HSA_INC_PATH} )
 link_directories( ${HSA_LIB_PATH} )
 
-## External dependencies
-get_include_path( REG_INCLUDE "ASIC register directory" NAMES "si_id.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../../../../p4/driver/drivers/inc/asic_reg" "${HSA_CLOSED_SOURCE_DIR}/drivers/inc/asic_reg" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../drivers/inc/asic_reg" )
-
 ## Find self
 if( "${EXT_SOURCE_DIR}" STREQUAL "" )
     get_include_path( EXT_SOURCE_FILE null NAMES "image/image_runtime.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../ext/" )
@@ -95,37 +92,35 @@ set ( DRVDEF "${EXT_SOURCE_DIR}/make/image.so.def" )
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 ## Library path(s).
-include_directories(${REG_INCLUDE})
 include_directories(${EXT_SOURCE_DIR}/..)
-include_directories(${EXT_SOURCE_DIR}/inc)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/inc)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/core/inc)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/inc)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/core)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx10)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx9)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/r800)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx9)
+include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx10)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/r800)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx9)
 include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx10)
+
 set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/src/addrinterface.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrelemlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib1.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib2.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrobject.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx10/gfx10addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx9/gfx9addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrelemlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/r800/ciaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/r800/egbaddrlib.cpp
                  ${EXT_SOURCE_DIR}/image/addrlib/src/r800/siaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/r800addrlib.cpp
-                 ${EXT_SOURCE_DIR}/runtime/amd_ext.cpp
-                 ${EXT_SOURCE_DIR}/runtime/device_info.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx9/gfx9addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx10/gfx10addrlib.cpp
+                 ${EXT_SOURCE_DIR}/image/amd_ext.cpp
+                 ${EXT_SOURCE_DIR}/image/device_info.cpp
                  ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp
                  ${EXT_SOURCE_DIR}/image/image_runtime.cpp
                  ${EXT_SOURCE_DIR}/image/image_manager.cpp
