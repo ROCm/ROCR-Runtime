@@ -62,17 +62,18 @@
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
-// Having a side effect prevents call site optimization that allows removal of a noinline function call
-// with no side effect.
-__attribute__((noinline)) static void _loader_debug_state() {
-  static volatile int function_needs_a_side_effect = 0;
-  function_needs_a_side_effect ^= 1;
-};
-HSA_API r_debug _amdgpu_r_debug = {1,
-                           nullptr,
-                           reinterpret_cast<uintptr_t>(&_loader_debug_state),
-                           r_debug::RT_CONSISTENT,
-                           0};
+#if defined __clang__
+#define NONOPTIMIZE __attribute__((noinline, optnone))
+#else
+#define NONOPTIMIZE __attribute__((noinline, optimize(0)))
+#endif
+
+NONOPTIMIZE static void _loader_debug_state() {};
+r_debug _amdgpu_r_debug __attribute__((visibility("default"))) = {1,
+                                                                  nullptr,
+                                                                  reinterpret_cast<uintptr_t>(&_loader_debug_state),
+                                                                  r_debug::RT_CONSISTENT,
+                                                                  0};
 static link_map* r_debug_tail = nullptr;
 
 namespace amd {
