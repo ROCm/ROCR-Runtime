@@ -533,7 +533,7 @@ void GpuAgent::InitDma() {
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
-    bool use_sdma = (isa_->GetMajorVersion() != 8);
+    bool use_sdma = ((isa_->GetMajorVersion() != 8) && (isa_->GetMajorVersion() != 10));
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
@@ -580,6 +580,35 @@ void GpuAgent::InitDma() {
   for (uint32_t idx = DefaultBlitCount; idx < blit_cnt_; idx++) {
     blits_[idx].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility]); });
   }
+
+  // GWS queues.
+  InitGWS();
+}
+
+void GpuAgent::InitGWS() {
+  gws_queue_.queue_.reset([this]() {
+    if (properties_.NumGws == 0) return (core::Queue*)nullptr;
+    std::unique_ptr<core::Queue> queue(CreateInterceptibleQueue());
+    if (queue == nullptr)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Internal queue creation failed.");
+
+    uint32_t discard;
+    auto status = hsaKmtAllocQueueGWS(queue->amd_queue_.hsa_queue.id, 1, &discard);
+    if (status != HSAKMT_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "GWS allocation failed.");
+
+    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE | HSA_QUEUE_TYPE_MULTI;
+    gws_queue_.ref_ct_ = 0;
+    return queue.release();
+  });
+}
+
+void GpuAgent::GWSRelease() {
+  ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
+  gws_queue_.ref_ct_--;
+  if (gws_queue_.ref_ct_ != 0) return;
+  InitGWS();
 }
 
 void GpuAgent::PreloadBlits() {
@@ -869,6 +898,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_DOMAIN:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.Domain);
       break;
+    case HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES:
+      *((bool*)value) = properties_.NumGws != 0;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -881,6 +913,18 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    void* data, uint32_t private_segment_size,
                                    uint32_t group_segment_size,
                                    core::Queue** queue) {
+  // Handle GWS queues.
+  if (queue_type & HSA_QUEUE_TYPE_COOPERATIVE) {
+    ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
+    auto ret = (*gws_queue_.queue_).get();
+    if (ret != nullptr) {
+      gws_queue_.ref_ct_++;
+      *queue = ret;
+      return HSA_STATUS_SUCCESS;
+    }
+    return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
+  }
+
   // AQL queues must be a power of two in length.
   if (!IsPowerOfTwo(size)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;

@@ -62,7 +62,13 @@
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
-static void __attribute__((noinline, optimize(0))) _loader_debug_state() {};
+#if defined __clang__
+#define NONOPTIMIZE __attribute__((noinline, optnone))
+#else
+#define NONOPTIMIZE __attribute__((noinline, optimize(0)))
+#endif
+
+NONOPTIMIZE static void _loader_debug_state() {};
 r_debug _amdgpu_r_debug __attribute__((visibility("default"))) = {1,
                                                                   nullptr,
                                                                   reinterpret_cast<uintptr_t>(&_loader_debug_state),
