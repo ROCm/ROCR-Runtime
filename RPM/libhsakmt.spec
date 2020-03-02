@@ -9,7 +9,12 @@ Summary:    Thunk libraries for AMD KFD
 
 Group:      System Environment/Libraries
 License:    Advanced Micro Devices Inc.
+
+%if 0%{?centos} == 6
+Requires:   numactl
+%else
 Requires:   numactl-libs
+%endif
 
 
 %description
