@@ -23,7 +23,7 @@
 #
 
 # See if we can find the SHARE/BIN dirs in their expected locations
-CWD="${0%/*}"
+CWD="${BASH_SOURCE%/*}"
 while read candidate; do
     if [ -e "$candidate/kfdtest.exclude" ]; then
         source "$candidate/kfdtest.exclude"
