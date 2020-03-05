@@ -51,6 +51,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <iomanip>
 
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
@@ -900,6 +901,25 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES:
       *((bool*)value) = properties_.NumGws != 0;
       break;
+    case HSA_AMD_AGENT_INFO_UUID: {
+      uint64_t uuid_value = static_cast<uint64_t>(properties_.UniqueID);
+
+      // Either device does not support UUID e.g. a Gfx8 device,
+      // or runtime is using an older thunk library that does not
+      // support UUID's
+      if (uuid_value == 0) {
+        char uuid_tmp[] = "GPU-XX";
+        snprintf((char*)value, sizeof(uuid_tmp), "%s", uuid_tmp);
+        break;
+      }
+
+      // Device supports UUID, build UUID string to return
+      std::stringstream ss;
+      ss << "GPU-" << std::setfill('0') << std::setw(sizeof(uint64_t) * 2) << std::hex
+         << uuid_value;
+      snprintf((char*)value, (ss.str().length() + 1), "%s", (char*)ss.str().c_str());
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
