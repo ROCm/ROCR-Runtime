@@ -84,14 +84,19 @@ static bool PrintUsrGpuMap(std::map<uint32_t, int32_t>& gpu_usr_map) {
  * subset of Gpu's are desired to be surfaced. If defined the
  * set of Gpu's are captured into a map of Gpu index and
  *
- * @return true if env is not blank, false otherwise. It is
- * possible to have zero devices surfaced even when env is
- * not blank.
+ * @return true if env is defined i.e. has some value including
+ * empty string, false otherwise. It is possible to have zero
+ * devices surfaced even when env is not blank.
  */
 static bool MapUsrGpuList(int32_t numNodes, std::map<uint32_t, int32_t>& gpu_usr_map) {
+  bool filter = core::Runtime::runtime_singleton_->flag().filter_visible_gpus();
+  if (filter == false) {
+    return false;
+  }
+
   const std::string& env_value = core::Runtime::runtime_singleton_->flag().visible_gpus();
   if (env_value.empty()) {
-    return false;
+    return true;
   }
 
   // Capture the env value string as a parsable stream

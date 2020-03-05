@@ -357,6 +357,12 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_DOMAIN:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.Domain);
       break;
+    case HSA_AMD_AGENT_INFO_UUID: {
+      // At this point CPU devices do not support UUID's.
+      char uuid_tmp[] = "CPU-XX";
+      snprintf((char*)value, sizeof(uuid_tmp), "%s", uuid_tmp);
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

@@ -163,7 +163,17 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for support of cooperative queues.  See ::HSA_QUEUE_TYPE_COOPERATIVE.
    * The type of this attribute is bool.
    */
-  HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES = 0xA010
+  HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES = 0xA010,
+  /**
+   * Queries UUID of an agent. The value is an Ascii string with a maximum
+   * of 21 chars including NUL. The string value consists of two parts: header
+   * and body. The header identifies device type (GPU, CPU, DSP) while body
+   * encodes UUID as a 16 digit hex string
+   *
+   * Agents that do not support UUID will return the string "GPU-XX" or
+   * "CPU-XX" or "DSP-XX" depending upon their device type ::hsa_device_type_t
+   */
+  HSA_AMD_AGENT_INFO_UUID = 0xA011
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
