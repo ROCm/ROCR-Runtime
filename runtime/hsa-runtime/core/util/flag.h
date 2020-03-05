@@ -144,6 +144,7 @@ class Flag {
   std::string enable_sdma() const { return enable_sdma_; }
 
   std::string visible_gpus() const { return visible_gpus_; }
+
   bool filter_visible_gpus() const { return filter_visible_gpus_; }
 
   uint32_t max_queues() const { return max_queues_; }
