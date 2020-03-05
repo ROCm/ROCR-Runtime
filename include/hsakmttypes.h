@@ -308,7 +308,8 @@ typedef struct _HsaNodeProperties
     HSAuint8        Reserved2;
 
     HSAuint32       Domain;            // PCI domain of the GPU
-    HSAuint8        Reserved[28];
+    HSAuint64       UniqueID;          // Globally unique immutable id
+    HSAuint8        Reserved[20];
 } HsaNodeProperties;
 
 
