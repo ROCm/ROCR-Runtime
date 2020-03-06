@@ -37,6 +37,13 @@ TEST_F(KFDTopologyTest , BasicTest) {
     for (unsigned node = 0; node < m_SystemProperties.NumNodes; node++) {
         pNodeProperties = m_NodeInfo.GetNodeProperties(node);
         if (pNodeProperties != NULL) {
+            HSAuint64 uniqueid;
+            if (!pNodeProperties->UniqueID)
+                uniqueid = 0;
+            else
+                uniqueid = pNodeProperties->UniqueID;
+            LOG() << "UniqueID : " << std::dec << uniqueid <<
+                     " Node index: " << node << std::endl;
             // Checking for cpu core only if it's a cpu only node or if its KAVERI apu.
             if (pNodeProperties->DeviceId == 0 || FamilyIdFromNode(pNodeProperties) == FAMILY_KV) {
                 EXPECT_GT(pNodeProperties->NumCPUCores, HSAuint32(0)) << "Node index: " << node
