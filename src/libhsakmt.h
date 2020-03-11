@@ -196,4 +196,6 @@ void clear_events_page(void);
 void fmm_clear_all_mem(void);
 void clear_process_doorbells(void);
 uint32_t get_num_sysfs_nodes(void);
+
+bool is_forked_child(void);
 #endif

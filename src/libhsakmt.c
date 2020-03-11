@@ -18,7 +18,7 @@ int kmtIoctl(int fd, unsigned long request, void *arg)
 		 * make any subsequent hsaKmt calls fail in CHECK_KFD_OPEN.
 		 */
 		pr_err("KFD file descriptor not valid in this process\n");
-		hsakmt_forked = true;
+		is_forked_child();
 	}
 
 	return ret;
