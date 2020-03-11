@@ -48,7 +48,7 @@ int zfb_support;
  * because the process can fork without calling the fork function in
  * libc (using clone or calling the system call directly).
  */
-static bool is_forked_child(void)
+bool is_forked_child(void)
 {
 	pid_t cur_pid;
 
