@@ -77,11 +77,11 @@ struct perf_shared_table {
 struct perf_counts_values {
 	union {
 		struct {
-			u64 val;
-			u64 ena;
-			u64 run;
+			uint64_t val;
+			uint64_t ena;
+			uint64_t run;
 		};
-		u64 values[3];
+		uint64_t values[3];
 	};
 };
 

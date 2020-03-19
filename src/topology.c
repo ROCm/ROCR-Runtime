@@ -31,7 +31,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
-#include <pci/pci.h>
+
 #include <errno.h>
 #include <sys/sysinfo.h>
 
@@ -910,7 +910,7 @@ exit:
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 					    HsaNodeProperties *props,
 					    uint32_t *gpu_id,
-					    struct pci_access *pacc)
+					    struct pci_ids pacc)
 {
 	FILE *fd;
 	char *read_buf, *p, *envvar, dummy;
@@ -1068,7 +1068,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			 * Retrieve the marketing name of the node using pcilib,
 			 * convert UTF8 to UTF16
 			 */
-			name = pci_lookup_name(pacc, namebuf, sizeof(namebuf), PCI_LOOKUP_DEVICE,
+			name = pci_ids_lookup(pacc, namebuf, sizeof(namebuf),
 								   props->VendorId, props->DeviceId);
 			for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
 				props->MarketingName[i] = name[i];
@@ -1731,7 +1731,7 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	HsaSystemProperties sys_props;
 	node_props_t *temp_props = 0;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	struct pci_access *pacc;
+	struct pci_ids pacc;
 	struct proc_cpuinfo *cpuinfo;
 	const uint32_t num_procs = get_nprocs();
 
@@ -1755,8 +1755,7 @@ retry:
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto err;
 		}
-		pacc = pci_alloc();
-		pci_init(pacc);
+		pacc = pci_ids_create();
 		for (i = 0; i < sys_props.NumNodes; i++) {
 			ret = topology_sysfs_get_node_props(i,
 					&temp_props[i].node,
@@ -1826,7 +1825,7 @@ retry:
 				 * remote node (node_to) is not accessible
 				 */
 				while (sys_link_id < temp_props[i].node.NumIOLinks &&
-				       link_id < sys_props.NumNodes - 1) {
+					link_id < sys_props.NumNodes - 1) {
 					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
 									      &temp_props[i].link[link_id]);
 					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
@@ -1842,7 +1841,7 @@ retry:
 				temp_props[i].node.NumIOLinks = link_id;
 			}
 		}
-		pci_cleanup(pacc);
+		pci_ids_destroy(pacc);
 	}
 
 	/* All direct IO links are created in the kernel. Here we need to

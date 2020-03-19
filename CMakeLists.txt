@@ -105,6 +105,7 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/libhsakmt.c"
                  "src/memory.c"
                  "src/openclose.c"
+                 "src/pci_ids.c"
                  "src/perfctr.c"
                  "src/pmc_table.c"
                  "src/queues.c"
@@ -127,10 +128,8 @@ set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" 
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
 
 find_package(PkgConfig)
-pkg_check_modules(PC_LIBPCI REQUIRED libpci)
-include_directories ( ${PC_LIBPCI_INCLUDEDIR} )
 target_link_libraries ( ${HSAKMT_TARGET}
-  pthread rt numa ${PC_LIBPCI_LIBRARIES}
+  pthread rt numa
 )
 
 ## Define default variable and variables for the optional build target hsakmt-dev
@@ -195,15 +194,15 @@ endif()
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
-set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libnuma1, libpci3, zlib1g, libudev1" )
+set ( CPACK_DEBIAN_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1" )
 
 # RPM package specific variables
 if( DISTRO_ID MATCHES "sles" )
-    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, libnuma-devel, pciutils, libgcc_s1")
+    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1")
 elseif( DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6" )
-    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl, pciutils-libs, libgcc" )
+    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl, libgcc" )
 else()
-    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl-libs, pciutils-libs, libgcc" )
+    set ( CPACK_RPM_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc" )
 endif()
 set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
