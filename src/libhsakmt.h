@@ -27,10 +27,10 @@
 #define LIBHSAKMT_H_INCLUDED
 
 #include "hsakmt.h"
+#include "pci_ids.h"
 #include <pthread.h>
 #include <stdint.h>
 #include <limits.h>
-#include <pci/pci.h>
 
 extern int kfd_fd;
 extern unsigned long kfd_open_count;
@@ -155,7 +155,7 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray);
 
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props,
-		uint32_t *gpu_id, struct pci_access* pacc);
+		uint32_t *gpu_id, struct pci_ids pacc);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 bool topology_is_dgpu(uint16_t device_id);
 bool topology_is_svm_needed(uint16_t device_id);

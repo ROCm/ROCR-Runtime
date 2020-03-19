@@ -36,7 +36,7 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <errno.h>
-#include <pci/pci.h>
+
 #include <numa.h>
 #include <numaif.h>
 #include "rbtree.h"
@@ -2119,7 +2119,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
 	unsigned int guardPages = 1;
-	struct pci_access *pacc;
+	struct pci_ids pacc;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0;
 
@@ -2166,8 +2166,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * gets called before hsaKmtAcquireSystemProperties() is called.
 	 */
 
-	pacc = pci_alloc();
-	pci_init(pacc);
+	pacc = pci_ids_create();
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
@@ -2204,7 +2203,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem_count++;
 		}
 	}
-	pci_cleanup(pacc);
+	pci_ids_destroy(pacc);
 
 	/* The ioctl will also return Number of Nodes if
 	 * args.kfd_process_device_apertures_ptr is set to NULL. This is not
