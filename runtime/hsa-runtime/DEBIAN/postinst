@@ -9,6 +9,8 @@ do_ldconfig() {
 case "$1" in
    configure)
        do_ldconfig
+       mkdir -p /opt/rocm/include
+       ln -s ../hsa/include/hsa /opt/rocm/include/hsa
    ;;
    abort-upgrade|abort-remove|abort-deconfigure)
        echo "$1"
