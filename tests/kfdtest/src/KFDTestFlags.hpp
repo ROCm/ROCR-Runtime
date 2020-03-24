@@ -59,6 +59,7 @@ enum KfdFamilyId {
     FAMILY_AI,  // Arctic Islands
     FAMILY_RV,  // Raven
     FAMILY_AR,  // Arcturus
+    FAMILY_AL,  // Aldebaran
     FAMILY_NV,  // Navi10
 };
 

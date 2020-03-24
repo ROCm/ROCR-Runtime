@@ -30,6 +30,8 @@
 
 #include "KFDBaseComponentTest.hpp"
 
+#define mmCOMPUTE_PGM_RSRC3                                                     0x2e2d
+
 Dispatch::Dispatch(const HsaMemoryBuffer& isaBuf, const bool eventAutoReset)
     :m_IsaBuf(isaBuf), m_IndirectBuf(PACKETTYPE_PM4, PAGE_SIZE / sizeof(unsigned int), isaBuf.Node()),
     m_DimX(1), m_DimY(1), m_DimZ(1), m_pArg1(NULL), m_pArg2(NULL), m_pEop(NULL), m_ScratchEn(false),
@@ -217,6 +219,12 @@ void Dispatch::BuildIb() {
         (m_FamilyId >= FAMILY_AI) ? ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX9) : ARRAY_SIZE(COMPUTE_PGM_VALUES_GFX8)));
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC1, COMPUTE_PGM_RSRC,
                                                   ARRAY_SIZE(COMPUTE_PGM_RSRC)));
+
+    if (m_FamilyId == FAMILY_AL) {
+        const unsigned int COMPUTE_PGM_RSRC3[] = {9};
+        m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC3, COMPUTE_PGM_RSRC3,
+                                                      ARRAY_SIZE(COMPUTE_PGM_RSRC3)));
+    }
 
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_RESOURCE_LIMITS, COMPUTE_RESOURCE_LIMITS,
                                                   ARRAY_SIZE(COMPUTE_RESOURCE_LIMITS)));
