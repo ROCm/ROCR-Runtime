@@ -149,8 +149,10 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         familyId = FAMILY_AI;
         if (props->EngineId.ui32.Stepping == 2)
             familyId = FAMILY_RV;
-        if (props->EngineId.ui32.Stepping == 8)
+        else if (props->EngineId.ui32.Stepping == 8)
             familyId = FAMILY_AR;
+        else if (props->EngineId.ui32.Stepping == 10)
+            familyId = FAMILY_AL;
         break;
     case 10:
         familyId = FAMILY_NV;
