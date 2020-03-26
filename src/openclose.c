@@ -194,7 +194,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		}
 
 		kfd_fd = fd;
-		kfd_open_count = 1;
 
 		init_page_size();
 
@@ -209,6 +208,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		result = init_process_doorbells(sys_props.NumNodes);
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto init_doorbell_failed;
+
+		kfd_open_count = 1;
 
 		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
 			pr_warn("Insufficient Memory. Debugging unavailable\n");
