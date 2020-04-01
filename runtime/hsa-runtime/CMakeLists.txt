@@ -206,6 +206,10 @@ set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
+## Process the install scripts to update the CPACK variables
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/post_install ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/pre_remove ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm @ONLY)
+
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
