@@ -103,8 +103,6 @@ link_directories ( ${HSAKMT_LIB_PATH} )
 
 ## Set include directories for ROCr runtime
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR} )
-include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/inc )
-include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/core/inc )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
 
 ## ROCr build internal versioning

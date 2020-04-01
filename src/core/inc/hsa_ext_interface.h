@@ -46,7 +46,7 @@
 #include <string>
 #include <vector>
 
-#include "hsa_api_trace_int.h"
+#include "core/inc/hsa_api_trace_int.h"
 
 #include "core/util/os.h"
 #include "core/util/utils.h"

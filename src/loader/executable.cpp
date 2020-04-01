@@ -50,9 +50,9 @@
 #include <fstream>
 #include <libelf.h>
 #include <unistd.h>
-#include "amd_hsa_elf.h"
-#include "amd_hsa_kernel_code.h"
-#include "amd_hsa_code.hpp"
+#include "inc/amd_hsa_elf.h"
+#include "inc/amd_hsa_kernel_code.h"
+#include "core/inc/amd_hsa_code.hpp"
 #include "amd_hsa_code_util.hpp"
 #include "amd_options.hpp"
 #include "core/util/utils.h"
@@ -62,18 +62,17 @@
 using namespace amd::hsa;
 using namespace amd::hsa::common;
 
-#if defined __clang__
-#define NONOPTIMIZE __attribute__((noinline, optnone))
-#else
-#define NONOPTIMIZE __attribute__((noinline, optimize(0)))
-#endif
-
-NONOPTIMIZE static void _loader_debug_state() {};
-r_debug _amdgpu_r_debug __attribute__((visibility("default"))) = {1,
-                                                                  nullptr,
-                                                                  reinterpret_cast<uintptr_t>(&_loader_debug_state),
-                                                                  r_debug::RT_CONSISTENT,
-                                                                  0};
+// Having a side effect prevents call site optimization that allows removal of a noinline function call
+// with no side effect.
+__attribute__((noinline)) static void _loader_debug_state() {
+  static volatile int function_needs_a_side_effect = 0;
+  function_needs_a_side_effect ^= 1;
+}
+HSA_API r_debug _amdgpu_r_debug = {1,
+                           nullptr,
+                           reinterpret_cast<uintptr_t>(&_loader_debug_state),
+                           r_debug::RT_CONSISTENT,
+                           0};
 static link_map* r_debug_tail = nullptr;
 
 namespace amd {
@@ -189,6 +188,10 @@ static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
   if (r_debug_tail == map) {
       r_debug_tail = map->l_prev;
   }
+  if (_amdgpu_r_debug.r_map == map) {
+      _amdgpu_r_debug.r_map = map->l_next;
+  }
+
   if (map->l_prev) {
       map->l_prev->l_next = map->l_next;
   }
@@ -197,6 +200,7 @@ static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
   }
 
   delete map->l_name;
+  memset(map, 0, sizeof(link_map));
 }
 
 hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const char *options) {
