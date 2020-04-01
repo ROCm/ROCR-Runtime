@@ -30,6 +30,8 @@
 #include <unistd.h>
 
 static bool *is_device_debugged;
+
+
 int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
 
 HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
@@ -668,4 +670,64 @@ hsaKmtGetQueueSnapshot(
 	*QssEntries = argout.data2;
 
 	return 0;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtSetAddressWatch(
+		HSAuint32		NodeId,
+		HSAuint32		Pid,
+		HSA_DBG_WATCH_MODE	WatchMode,
+		void			*WatchAddress,
+		HSAuint64		WatchAddrMask,
+		HSAuint32		*WatchId
+		)
+{
+
+	HSAKMT_STATUS result;
+	HSAuint32     TruncatedWatchAddressMask;
+	struct kfd_ioctl_dbg_trap_args argout = {0};
+
+	/* Right now we only support 32 bit watch address masks, so we need
+	 * to check that we aren't losing data when we truncate the mask
+	 * to be passed to the kernel.
+	 */
+	if (WatchAddrMask > (HSAuint64) UINT_MAX)
+	{
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+	TruncatedWatchAddressMask = (HSAuint32) WatchAddrMask;
+
+	if (WatchId == NULL)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	result = debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_SET_ADDRESS_WATCH, // op
+			*WatchId,
+			WatchMode,
+			TruncatedWatchAddressMask,
+			Pid,
+			(HSAuint64) WatchAddress,
+			&argout);
+	*WatchId = argout.data1;
+
+	return result;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtClearAddressWatch(
+		HSAuint32 NodeId,
+		HSAuint32 Pid,
+		HSAuint32 WatchId
+		)
+{
+
+	HSAKMT_STATUS result;
+
+	result = debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_CLEAR_ADDRESS_WATCH, // op
+			WatchId,
+			0,
+			0,
+			Pid,
+			0,
+			NULL);
+	return result;
 }

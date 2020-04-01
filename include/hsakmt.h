@@ -990,6 +990,7 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtSetAddressWatch(
     HSAuint32          NodeId,        //IN
+    HSAuint32          Pid,           //IN
     HSA_DBG_WATCH_MODE WatchMode,     //IN
     void*              WatchAddress,  //IN
     HSAuint64          WatchAddrMask, //IN
@@ -1013,6 +1014,7 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtClearAddressWatch(
     HSAuint32 NodeId, //IN
+    HSAuint32 Pid,    //IN
     HSAuint32 WatchId //IN
     );
 

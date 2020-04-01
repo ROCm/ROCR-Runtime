@@ -223,10 +223,10 @@ typedef union
     HSAuint64 Value;
     struct
     {
-        HSAuint64 WatchAddrMaskLoBit: 6; // Only bits
+        HSAuint64 WatchAddrMaskLoBit: 4; // Only bits
                                         // WatchAddrMaskLoBit..WatchAddrMaskHiBit
                                         // of the
-        HSAuint64 WatchAddrMaskHiBit: 4; // watch address mask are used.
+        HSAuint64 WatchAddrMaskHiBit: 6; // watch address mask are used.
                                          // 0 is the least significant bit.
         HSAuint64 TrapDataCount: 4;      // Number of 32 bit TrapData
                                          // registers supported.
