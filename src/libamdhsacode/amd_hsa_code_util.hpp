@@ -52,10 +52,10 @@
 #else // _WIN32
 #include <cstdlib>
 #endif // _WIN32
-#include "amd_hsa_kernel_code.h"
-#include "amd_hsa_elf.h"
-#include "hsa.h"
-#include "hsa_ext_finalize.h"
+#include "inc/amd_hsa_kernel_code.h"
+#include "inc/amd_hsa_elf.h"
+#include "inc/hsa.h"
+#include "inc/hsa_ext_finalize.h"
 
 #define hsa_error(e) static_cast<hsa_status_t>(e)
 

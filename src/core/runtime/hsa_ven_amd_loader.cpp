@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "hsa_ven_amd_loader.h"
+#include "inc/hsa_ven_amd_loader.h"
 
 #include "core/inc/amd_hsa_loader.hpp"
 #include "core/inc/runtime.h"
