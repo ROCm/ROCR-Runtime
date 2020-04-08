@@ -1348,12 +1348,14 @@ void Runtime::LoadExtensions() {
                                           "libhsa-ext-image.so.1"};
 #endif
 
-  // Update Hsa Api Table with handle of Image extension Apis
-  extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
+  // Update Hsa Api Table with handle of Finalizer extension Apis
+  // Skipping finalizer loading since finalizer is no longer distributed.
+  // LinkExts will expose the finalizer-not-present implementation.
+  // extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.finalizer_api,
                           core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
-  // Update Hsa Api Table with handle of Finalizer extension Apis
+  // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
