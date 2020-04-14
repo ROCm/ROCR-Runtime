@@ -48,6 +48,7 @@
 #include <memory>
 
 #include "gtest/gtest.h"
+#include "suites/functional/agent_props.h"
 #include "suites/functional/debug_basic.h"
 #include "suites/functional/memory_basic.h"
 #include "suites/functional/memory_access.h"
@@ -348,6 +349,13 @@ TEST(rocrtstFunc, Memory_Alignment_Test) {
 TEST(rocrtstFunc, Deallocation_Notifier_Test) {
   DeallocationNotifierTest notifier;
   RunGenericTest(&notifier);
+}
+
+TEST(rocrtstFunc, AgentProp_UUID) {
+  AgentPropTest propTest;
+  RunCustomTestProlog(&propTest);
+  propTest.QueryAgentUUID();
+  RunCustomTestEpilog(&propTest);
 }
 
 TEST(rocrtstNeg, Memory_Negative_Tests) {
