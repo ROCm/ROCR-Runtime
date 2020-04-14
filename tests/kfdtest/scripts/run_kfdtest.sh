@@ -243,12 +243,25 @@ while [ "$1" != "" ]; do
     shift 1
 done
 
-# If compute_utils.sh doesn't exist, this will just silently do nothing
+# If the SMI is missing, just report and continue
 if [ "$FORCE_HIGH" == "true" ]; then
-    pushGpuDpmState high
-    pushTrap "popGpuDpmState" EXIT
+    if [ -e "/opt/rocm/bin/rocm-smi" ]; then
+        OLDPERF=$(/opt/rocm/bin/rocm-smi -p | awk '/Performance Level/ {print $NF; exit}')
+	$(/opt/rocm/bin/rocm-smi --setperflevel high &> /dev/null)
+	if [ $? != 0 ]; then
+            echo "SMI failed to set perf level"
+	    OLDPERF=""
+        fi
+    else
+        echo "Unable to set clocks to high"
+    fi
 fi
 
 # Set HSA_DEBUG env to run KFDMemoryTest.PtraceAccessInvisibleVram
 export HSA_DEBUG=1
 runKfdTest
+
+# OLDPERF is only set if FORCE_HIGH and SMI both exist
+if [ -n "$OLDPERF" ]; then
+    /opt/rocm/bin/rocm-smi --setperflevel $OLDPERF &> /dev/null
+fi
