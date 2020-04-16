@@ -150,6 +150,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
 
   virtual ~Queue() {}
 
+  virtual void Destroy() { delete this; }
+
   /// @brief Returns the handle of Queue's public data type
   ///
   /// @param queue Pointer to an instance of Queue implementation object

@@ -54,11 +54,12 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-#include "hsa.h"
-#include "hsa_ext_image.h"
-#include "amd_hsa_loader.hpp"
-#include "amd_hsa_code.hpp"
-#include "amd_hsa_kernel_code.h"
+#include <cstring>
+#include "inc/hsa.h"
+#include "inc/hsa_ext_image.h"
+#include "core/inc/amd_hsa_loader.hpp"
+#include "core/inc/amd_hsa_code.hpp"
+#include "inc/amd_hsa_kernel_code.h"
 #include "amd_hsa_locks.hpp"
 
 namespace amd {
@@ -295,7 +296,9 @@ private:
 
 public:
   LoadedCodeObjectImpl(ExecutableImpl *owner_, hsa_agent_t agent_, const void *elf_data_, size_t elf_size_)
-    : ExecutableObject(owner_, agent_), elf_data(elf_data_), elf_size(elf_size_) {}
+    : ExecutableObject(owner_, agent_), elf_data(elf_data_), elf_size(elf_size_) {
+      memset(&r_debug_info, 0, sizeof(r_debug_info));
+    }
 
   const void* ElfData() const { return elf_data; }
   size_t ElfSize() const { return elf_size; }

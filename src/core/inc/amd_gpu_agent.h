@@ -71,6 +71,8 @@ struct ScratchInfo {
   ptrdiff_t queue_process_offset;
   bool large;
   bool retry;
+  hsa_signal_t queue_retry;
+  uint64_t wanted_slots;
 };
 
 // @brief Interface to represent a GPU agent.
@@ -256,28 +258,17 @@ class GpuAgent : public GpuAgentInt {
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
 
+  // @brief Decrement GWS ref count.
+  void GWSRelease();
+
   // @brief Override from amd::GpuAgentInt.
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
   // @brief Override from amd::GpuAgentInt.
   void ReleaseQueueScratch(ScratchInfo& scratch) override;
 
-  // @brief Register signal for notification when scratch may become available.
-  // @p signal is notified by OR'ing with @p value.
-  void AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
-    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-    scratch_notifiers_[signal] = value;
-  }
-
-  // @brief Deregister scratch notification signal.
-  void RemoveScratchNotifier(hsa_signal_t signal) {
-    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-    scratch_notifiers_.erase(signal);
-  }
-
   // @brief Override from amd::GpuAgentInt.
-  void TranslateTime(core::Signal* signal,
-                     hsa_amd_profiling_dispatch_time_t& time) override;
+  void TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) override;
 
   // @brief Override from amd::GpuAgentInt.
   void TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) override;
@@ -488,6 +479,19 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create internal queues and blits.
   void InitDma();
 
+  // @brief Setup GWS accessing queue.
+  void InitGWS();
+
+  // @brief Register signal for notification when scratch may become available.
+  // @p signal is notified by OR'ing with @p value.
+  bool AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
+    if (signal.handle != 0) return false;
+    scratch_notifiers_[signal] = value;
+    return true;
+  }
+
+  // @brief Deregister scratch notification signals.
+  void ClearScratchNotifiers() { scratch_notifiers_.clear(); }
 
   // Bind index of peer device that is connected via xGMI links
   lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
@@ -503,6 +507,13 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Alternative aperture size. Only on KV.
   size_t ape1_size_;
+
+  // @brief Queue with GWS access.
+  struct {
+    lazy_ptr<core::Queue> queue_;
+    int ref_ct_;
+    KernelMutex lock_;
+  } gws_queue_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

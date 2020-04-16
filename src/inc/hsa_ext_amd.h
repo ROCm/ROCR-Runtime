@@ -158,7 +158,12 @@ typedef enum hsa_amd_agent_info_s {
    * to give the full physical location of the Agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F
+  HSA_AMD_AGENT_INFO_DOMAIN = 0xA00F,
+  /**
+   * Queries for support of cooperative queues.  See ::HSA_QUEUE_TYPE_COOPERATIVE.
+   * The type of this attribute is bool.
+   */
+  HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES = 0xA010
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -1162,8 +1167,7 @@ hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
  * ignored.
  *
  * @param[in] flags A list of bit-field that is used to specify access
- * information in a per-agent basis. The size of this list must match that of @p
- * agents. Must be NULL.
+ * information in a per-agent basis. This is currently reserved and must be NULL.
  *
  * @param[in] ptr A buffer previously allocated using ::hsa_amd_memory_pool_allocate.
  *
@@ -1173,8 +1177,8 @@ hsa_status_t HSA_API hsa_amd_agent_memory_pool_get_info(
  * initialized.
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_agents is 0, or @p agents
- * is NULL, @p flags is NULL, or attempting to enable access to agent(s) because
- * @p ptr is allocated from an inaccessible pool.
+ * is NULL, @p flags is not NULL, or attempting to enable access to agent(s)
+ * because @p ptr is allocated from an inaccessible pool.
  *
  */
 hsa_status_t HSA_API

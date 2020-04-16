@@ -45,10 +45,10 @@
 
 #include <cstddef>
 #include <cstdint>
-#include "hsa.h"
-#include "hsa_ext_image.h"
-#include "hsa_ven_amd_loader.h"
-#include "amd_hsa_elf.h"
+#include "inc/hsa.h"
+#include "inc/hsa_ext_image.h"
+#include "inc/hsa_ven_amd_loader.h"
+#include "inc/amd_hsa_elf.h"
 #include <string>
 #include <mutex>
 #include <vector>
