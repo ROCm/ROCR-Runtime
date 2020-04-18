@@ -70,7 +70,6 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 static const int NumOfTimes = 1000;  // No of times the hsa runtime will be initialized
 static const double MaxRefCount = 2147483649;  // Setting to max value to test to INIT_MAX+2 as defined in hsa runtime

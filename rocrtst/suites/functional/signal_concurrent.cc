@@ -54,7 +54,6 @@
 #include "common/concurrent_utils.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 static const int N = 8;
 static const int M = 32;

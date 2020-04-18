@@ -54,7 +54,6 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 static void* TestHSAInitFunction(void* args) {
   // This function called for each thread

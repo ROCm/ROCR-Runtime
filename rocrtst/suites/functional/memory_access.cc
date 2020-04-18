@@ -57,7 +57,6 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 
 #define RET_IF_HSA_ERR(err) { \

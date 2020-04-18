@@ -57,7 +57,6 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 static const uint32_t kMaxQueueSizeForAgent = 1024;
 static const uint32_t kMaxQueue = 64;

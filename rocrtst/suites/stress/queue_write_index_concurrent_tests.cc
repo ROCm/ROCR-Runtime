@@ -59,7 +59,6 @@
 #include "common/concurrent_utils.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 enum memoryOrdering {
   SCACQ_SCREL,
