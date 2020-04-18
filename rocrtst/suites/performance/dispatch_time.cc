@@ -54,7 +54,6 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 DispatchTime::
 DispatchTime(bool defaultInterrupt, bool launchSingleKernel) : TestBase(),

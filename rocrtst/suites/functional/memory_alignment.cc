@@ -58,7 +58,6 @@
 #include "common/concurrent_utils.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
-#include "hsa/hsa_ext_finalize.h"
 
 
 static const uint32_t kNumThreads = 4096;
