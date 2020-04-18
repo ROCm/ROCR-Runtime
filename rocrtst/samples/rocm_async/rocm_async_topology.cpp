@@ -27,10 +27,16 @@ hsa_status_t MemPoolInfo(hsa_amd_memory_pool_t pool, void* data) {
     return HSA_STATUS_SUCCESS;
   }
 
+  // Query the pool size
+  size_t size = 0;
+  status = hsa_amd_memory_pool_get_info(pool,
+                   HSA_AMD_MEMORY_POOL_INFO_SIZE, &size);
+  ErrorCheck(status);
+
   // Query the max allocatable size
   size_t max_size = 0;
   status = hsa_amd_memory_pool_get_info(pool,
-                   HSA_AMD_MEMORY_POOL_INFO_SIZE, &max_size);
+                   HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE, &max_size);
   ErrorCheck(status);
 
   // Determine if the pools is accessible to all agents
@@ -61,7 +67,7 @@ hsa_status_t MemPoolInfo(hsa_amd_memory_pool_t pool, void* data) {
 
   // Create an instance of agent_pool_info and add it to the list
   pool_info_t pool_info(agent, asyncDrvr->agent_index_, pool,
-                        segment, max_size, asyncDrvr->pool_index_,
+                        segment, size, max_size, asyncDrvr->pool_index_,
                         is_fine_grained, is_kernarg,
                         access_to_all, owner_access);
   asyncDrvr->pool_list_.push_back(pool_info);

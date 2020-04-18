@@ -31,8 +31,8 @@ typedef struct pool_info {
 
   pool_info(hsa_agent_t agent, uint32_t agent_index,
             hsa_amd_memory_pool_t pool, hsa_amd_segment_t segment,
-            size_t size, uint32_t index, bool is_fine_grained,
-            bool is_kernarg, bool access_to_all,
+            size_t size, size_t alloc_max_size, uint32_t index,
+            bool is_fine_grained, bool is_kernarg, bool access_to_all,
             hsa_amd_memory_pool_access_t owner_access) {
 
     pool_ = pool;
@@ -40,7 +40,8 @@ typedef struct pool_info {
     segment_ = segment;
     owner_agent_ = agent;
     agent_index_ = agent_index;
-    allocable_size_ = size;
+    size_ = size;
+    allocable_size_ = alloc_max_size;
     is_kernarg_ = is_kernarg;
     owner_access_ = owner_access;
     access_to_all_ = access_to_all;
@@ -53,6 +54,7 @@ typedef struct pool_info {
   bool is_kernarg_;
   bool access_to_all_;
   bool is_fine_grained_;
+  size_t size_;
   size_t allocable_size_;
   uint32_t agent_index_;
   hsa_agent_t owner_agent_;

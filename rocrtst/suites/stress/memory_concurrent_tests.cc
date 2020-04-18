@@ -269,7 +269,7 @@ void MemoryConcurrentTest::MemoryConcurrentAllocate(hsa_agent_t agent,
 
   if (alloc) {
     size_t alloc_size;
-    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &alloc_size);
     // Adjust the size to the minimum of 1024 or max alloc size
     alloc_size = (alloc_size < kMaxAllocSize) ? alloc_size: kMaxAllocSize;
@@ -351,7 +351,7 @@ void MemoryConcurrentTest::MemoryConcurrentFree(hsa_agent_t agent,
   if (alloc) {
     // Get the maximum allocation size
     size_t alloc_size;
-    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &alloc_size);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 

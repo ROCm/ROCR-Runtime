@@ -535,9 +535,15 @@ static hsa_status_t GetPoolInfo(hsa_amd_memory_pool_t pool, void* data) {
     return HSA_STATUS_SUCCESS;
   }
 
+  // Query the pool size
+  size_t size = 0;
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+                                     &size);
+  RET_IF_HSA_ERR(err);
+
   // Query the max allocable size
   size_t alloc_max_size = 0;
-  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                      &alloc_max_size);
   RET_IF_HSA_ERR(err);
 
@@ -553,7 +559,7 @@ static hsa_status_t GetPoolInfo(hsa_amd_memory_pool_t pool, void* data) {
   int pool_i = ptr->pool_index();
   int ag_ind = ptr->agent_index();
   ptr->pool_info()->push_back(
-    new PoolInfo(pool, pool_i, region_segment, is_fine_grained,
+    new PoolInfo(pool, pool_i, region_segment, is_fine_grained, size,
                                   alloc_max_size, ptr->agent_info()->back()));
 
   // Construct node_info and push back to agent_info_
