@@ -105,12 +105,13 @@ class AgentInfo {
 class PoolInfo {
  public:
     PoolInfo(hsa_amd_memory_pool_t pool, int index,
-               hsa_amd_segment_t segment, bool is_fine_graind, size_t size,
-               AgentInfo *agent_info) {
+               hsa_amd_segment_t segment, bool is_fine_grained, size_t size,
+               size_t max_alloc_size, AgentInfo *agent_info) {
       pool_ = pool;
       index_ = index;
       segment_ = segment;
-      is_fine_grained_ = is_fine_graind;
+      is_fine_grained_ = is_fine_grained;
+      size_ = size;
       allocable_size_ = size;
       owner_agent_info_ = agent_info;
     }
@@ -121,6 +122,7 @@ class PoolInfo {
     int index_;
     hsa_amd_segment_t segment_;
     bool is_fine_grained_;
+    size_t size_;
     size_t allocable_size_;
  private:
     AgentInfo *owner_agent_info_;

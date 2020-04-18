@@ -443,7 +443,7 @@ void MemoryAllocationTest::MemoryBasicAllocationAndFree(hsa_agent_t agent,
       PrintSegmentNameAndType(pool_i.segment);
     }
     size_t max_size;
-    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE,
+    err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &max_size);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
     max_size = (max_size > kMemoryAllocSize) ? kMemoryAllocSize : max_size;
