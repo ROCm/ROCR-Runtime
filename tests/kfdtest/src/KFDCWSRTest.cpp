@@ -188,11 +188,13 @@ TEST_F(KFDCWSRTest, BasicTest) {
         int i;
         for (i = 0 ; i < wave_number; ++i) {
              if (result1[i] != count1) {
-                 LOG() << "Dispatch 1, work item " << i << ' ' << result1[i] << std::endl;
+                 LOG() << "Dispatch 1, work item [" << std::dec << i << "] "
+                         << result1[i] << " != " << count1 << std::endl;
                  break;
              }
              if (result2[i] != count2) {
-                 LOG() << "Dispatch 2, work item " << i << ' ' << result2[i] << std::endl;
+                 LOG() << "Dispatch 2, work item [" << std::dec << i << "] "
+                         << result2[i] << " != " << count2 << std::endl;
                  break;
              }
         }
