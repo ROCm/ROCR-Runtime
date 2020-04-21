@@ -32,6 +32,11 @@ set ( HSAKMT_TARGET "${HSAKMT}" )
 
 project ( ${HSAKMT_TARGET} VERSION 1.9.0)
 
+if ( NOT DEFINED BUILD_SHARED_LIBS )
+  set ( BUILD_SHARED_LIBS "on" )
+endif()
+set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
+
 # Optionally, build HSAKMT with ccache.
 set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
 if (ROCM_CCACHE_BUILD)
@@ -119,7 +124,7 @@ include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/include )
 include_directories ( ${CMAKE_CURRENT_SOURCE_DIR}/src )
 
 ## Add the library
-add_library ( ${HSAKMT_TARGET} SHARED ${HSAKMT_SRC} )
+add_library ( ${HSAKMT_TARGET} ${HSAKMT_SRC} )
 target_compile_options(${HSAKMT_TARGET} PRIVATE ${HSAKMT_C_FLAGS})
 set_property(TARGET ${HSAKMT_TARGET} PROPERTY LINK_FLAGS ${HSAKMT_LINK_FLAGS})
 
