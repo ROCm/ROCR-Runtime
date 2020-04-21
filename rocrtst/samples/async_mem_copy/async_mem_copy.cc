@@ -73,6 +73,11 @@ struct async_mem_cpy_agent {
     void *ptr;
 };
 
+struct async_mem_cpy_pool_query {
+  async_mem_cpy_agent* pool_info;
+  hsa_agent_t peer_device;
+};
+
 struct callback_args {
     struct async_mem_cpy_agent cpu;
     struct async_mem_cpy_agent gpu1;
@@ -113,7 +118,7 @@ FindPool(hsa_amd_memory_pool_t in_pool, void* data) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  struct async_mem_cpy_agent *args = (struct async_mem_cpy_agent *)data;
+  struct async_mem_cpy_pool_query *args = (struct async_mem_cpy_pool_query *)data;
 
   err = hsa_amd_memory_pool_get_info(in_pool,
                                   HSA_AMD_MEMORY_POOL_INFO_SEGMENT, &segment);
@@ -130,21 +135,23 @@ FindPool(hsa_amd_memory_pool_t in_pool, void* data) {
      return HSA_STATUS_SUCCESS;
   }
 
-  hsa_amd_memory_pool_access_t access =
-                                     HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
-  err = hsa_amd_agent_memory_pool_get_info(args->dev, in_pool,
-                              HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS, &access);
-  RET_IF_HSA_ERR(err);
+  if(args->peer_device.handle != 0) {
+    hsa_amd_memory_pool_access_t access =
+      HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+    err = hsa_amd_agent_memory_pool_get_info(args->peer_device, in_pool,
+      HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS, &access);
+    RET_IF_HSA_ERR(err);
 
-  if (access == HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) {
-    return HSA_STATUS_SUCCESS;
+    if (access == HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) {
+      return HSA_STATUS_SUCCESS;
+    }
   }
 
   err = hsa_amd_memory_pool_get_info(in_pool,
-    HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &args->granule);
+    HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &args->pool_info->granule);
   RET_IF_HSA_ERR(err);
 
-  args->pool = in_pool;
+  args->pool_info->pool = in_pool;
 
   return HSA_STATUS_INFO_BREAK;
 }
@@ -175,7 +182,11 @@ static hsa_status_t FindCPUDevice(hsa_agent_t agent, void *data) {
 
     args->dev = agent;
 
-    err = hsa_amd_agent_iterate_memory_pools(agent, FindPool, args);
+    async_mem_cpy_pool_query pool_query;
+    pool_query.peer_device.handle = 0;
+    pool_query.pool_info = args;
+
+    err = hsa_amd_agent_iterate_memory_pools(agent, FindPool, &pool_query);
 
     if (err == HSA_STATUS_INFO_BREAK) {  // we found what we were looking for
       return HSA_STATUS_INFO_BREAK;
@@ -216,15 +227,21 @@ static hsa_status_t FindGPUs(hsa_agent_t agent, void *data) {
   struct callback_args *args = (struct callback_args *)data;
   struct async_mem_cpy_agent *gpu;
 
+  async_mem_cpy_pool_query pool_query = {0,0};
+
   if (args->gpu1.dev.handle == 0) {
     gpu = &args->gpu1;
   } else {
     gpu = &args->gpu2;
+    // Check that gpu1 has peer access into the selected pool.
+    pool_query.peer_device = args->gpu1.dev;
   }
 
   // Make sure GPU device has pool host can access
   gpu->dev = agent;
-  err = hsa_amd_agent_iterate_memory_pools(agent, FindPool, gpu);
+  pool_query.pool_info = gpu;
+
+  err = hsa_amd_agent_iterate_memory_pools(agent, FindPool, &pool_query);
 
   if (err == HSA_STATUS_INFO_BREAK) {
     if (gpu == &args->gpu2) {
@@ -254,12 +271,17 @@ AsyncCpyTest(async_mem_cpy_agent *dst, async_mem_cpy_agent *src,
   hsa_status_t err;
   hsa_signal_t copy_signal;
 
-  // Initialize the system buffer with a value so we can later validate it has
+  // Initialize the system and destination buffers with a value so we can later validate it has
   // been overwritten
   void *sysPtr = args->cpu.ptr;
 
   err = hsa_amd_memory_fill(sysPtr, kTestInitValue, sz/sizeof(uint32_t));
   RET_IF_HSA_ERR(err);
+
+  if(dst->ptr != sysPtr) {
+    err = hsa_amd_memory_fill(dst->ptr, kTestInitValue, sz/sizeof(uint32_t));
+    RET_IF_HSA_ERR(err);
+  }
 
   // Fill the source buffer with the provided uint32_t value
   err = hsa_amd_memory_fill(src->ptr, val, sz/sizeof(uint32_t));
