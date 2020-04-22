@@ -889,6 +889,8 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if ((info.agentBaseAddress != ptr) || (info.sizeInBytes != len))
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   if ((block.base != ptr) || (block.length != len)) {
     if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
       assert(false && "Fragment's block not aligned to 2MB!");
