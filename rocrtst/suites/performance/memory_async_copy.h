@@ -112,7 +112,7 @@ class PoolInfo {
       segment_ = segment;
       is_fine_grained_ = is_fine_grained;
       size_ = size;
-      allocable_size_ = size;
+      allocable_size_ = max_alloc_size;
       owner_agent_info_ = agent_info;
     }
     PoolInfo() {}
