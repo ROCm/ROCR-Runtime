@@ -72,7 +72,10 @@ __attribute__((noinline)) static void _loader_debug_state() {
   static volatile int function_needs_a_side_effect = 0;
   function_needs_a_side_effect ^= 1;
 }
-HSA_API r_debug _amdgpu_r_debug = {1,
+// r_version history:
+// 1: Initial debug protocol
+// 2: New trap handler ABI. The reason for halting a wave is recorded in ttmp11[8:7].
+HSA_API r_debug _amdgpu_r_debug = {2,
                            nullptr,
                            reinterpret_cast<uintptr_t>(&_loader_debug_state),
                            r_debug::RT_CONSISTENT,
