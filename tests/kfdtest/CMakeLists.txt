@@ -38,6 +38,16 @@ set ( CPACK_PACKAGE_VERSION_MINOR "0" )
 set ( CPACK_PACKAGE_VERSION_PATCH "0" )
 set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 
+## Define default variable and variables for the optional build target hsakmt-dev
+set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
+set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
+
+# Debian package specific variables
+set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
+
+
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 find_package(PkgConfig)
@@ -56,15 +66,6 @@ else()
     pkg_check_modules(DRM_AMDGPU REQUIRED libdrm_amdgpu)
     include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
 endif()
-
-## Define default variable and variables for the optional build target hsakmt-dev
-set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
-set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
-set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
-set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
-
-# Debian package specific variables
-set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 
 if( DEFINED ENV{LIBHSAKMT_PATH} )
     set ( LIBHSAKMT_PATH $ENV{LIBHSAKMT_PATH} )
