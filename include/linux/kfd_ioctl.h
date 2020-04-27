@@ -628,6 +628,53 @@ struct kfd_ioctl_cross_memory_copy_args {
 	__u64 bytes_copied;
 };
 
+/**
+ * kfd_ioctl_spm_op - SPM ioctl operations
+ *
+ * @KFD_IOCTL_SPM_OP_ACQUIRE: acquire exclusive access to SPM
+ * @KFD_IOCTL_SPM_OP_RELEASE: release exclusive access to SPM
+ * @KFD_IOCTL_SPM_OP_SET_DEST_BUF: set or unset destination buffer for SPM streaming
+ */
+enum kfd_ioctl_spm_op {
+	KFD_IOCTL_SPM_OP_ACQUIRE,
+	KFD_IOCTL_SPM_OP_RELEASE,
+	KFD_IOCTL_SPM_OP_SET_DEST_BUF
+};
+
+
+/**
+ * kfd_ioctl_spm_args - Arguments for SPM ioctl
+ *
+ * @op:     specifies the operation to perform
+ * @destptr:used for the address of the destination buffer in @KFD_IOCTL_SPM_SET_DEST_BUFFER
+ * @buf_size:size  of the destination buffer in @KFD_IOCTL_SPM_SET_DEST_BUFFER
+ * @timeout: timeout to wait for the buffer to get  filled
+ * @gpu_id: gpu ID
+ * @bytes_copied: bytes copied from streaming performance ring buffer
+ *
+ * If @ptr is NULL, the destination buffer address is unset and copying of counters
+ * is stopped.
+ *
+ * Returns negative error code on failure. On success, @KFD_IOCTL_SPM_OP_ACQUIRE and
+ * @KFD_IOCTL_SPM_OP_RELEASE return 0, @KFD_IOCTL_SPM_OP_SET_DEST_BUF returns the fill
+ * level of the previous buffer.
+ */
+struct kfd_ioctl_spm_args {
+	__u64 destptr;
+	__u64 spmtptr;
+	__u32 buf_size;
+	__u32 op;
+	__u32 timeout;
+	__u32 gpu_id;	/* to KFD */
+	/* from KFD: Total amount of bytes copied */
+	__u64 bytes_copied;
+};
+
+struct kfd_spm_set_reg {
+	__u64 reg;
+	__u32 value;
+};
+
 #define AMDKFD_IOCTL_BASE 'K'
 #define AMDKFD_IO(nr)			_IO(AMDKFD_IOCTL_BASE, nr)
 #define AMDKFD_IOR(nr, type)		_IOR(AMDKFD_IOCTL_BASE, nr, type)
@@ -725,8 +772,12 @@ struct kfd_ioctl_cross_memory_copy_args {
 #define AMDKFD_IOC_ALLOC_QUEUE_GWS		\
 		AMDKFD_IOWR(0x1E, struct kfd_ioctl_alloc_queue_gws_args)
 
+#define AMDKFD_IOC_RLC_SPM		\
+		AMDKFD_IOWR(0x20, struct kfd_ioctl_spm_args)
+
+
 #define AMDKFD_COMMAND_START		0x01
-#define AMDKFD_COMMAND_END		0x1F
+#define AMDKFD_COMMAND_END		0x21
 
 /* non-upstream ioctls */
 #define AMDKFD_IOC_IPC_IMPORT_HANDLE                                    \
