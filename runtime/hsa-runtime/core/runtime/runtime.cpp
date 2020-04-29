@@ -800,12 +800,11 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
       block_info->base = (retInfo.hostBaseAddress ? retInfo.hostBaseAddress : retInfo.agentBaseAddress);
       block_info->length = retInfo.sizeInBytes;
     }
-    if (retInfo.type == HSA_EXT_POINTER_TYPE_HSA) {
-      auto fragment = allocation_map_.upper_bound(ptr);
-      if (fragment != allocation_map_.begin()) {
-        fragment--;
-        if ((fragment->first <= ptr) &&
-            (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
+    auto fragment = allocation_map_.upper_bound(ptr);
+    if (fragment != allocation_map_.begin()) {
+      fragment--;
+      if ((fragment->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
           // agent and host address must match here.  Only lock memory is allowed to have differing
           // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
           // suballocated.
@@ -813,7 +812,6 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
           retInfo.hostBaseAddress = retInfo.agentBaseAddress;
           retInfo.sizeInBytes = fragment->second.size;
           retInfo.userData = fragment->second.user_ptr;
-        }
       }
     }
   }  // end lock scope
