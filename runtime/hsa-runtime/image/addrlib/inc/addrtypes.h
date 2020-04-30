@@ -87,9 +87,7 @@ typedef int            INT;
 #endif
 
 #ifndef ADDR_FASTCALL
-    #if defined(BRAHMA_ARM)
-        #define ADDR_FASTCALL
-    #elif defined(__GNUC__)
+    #if defined(__GNUC__)
         #define ADDR_FASTCALL __attribute__((regparm(0)))
     #else
         #define ADDR_FASTCALL __fastcall
@@ -115,7 +113,11 @@ typedef int            INT;
     #define ADDR_INLINE   __inline
 #endif // #if defined(__GNUC__)
 
-#define ADDR_API ADDR_FASTCALL //default call convention is fast call
+#if defined(__amd64__) || defined(__x86_64__) || defined(__i386__)
+    #define ADDR_API ADDR_FASTCALL // default call convention is fast call
+#else
+    #define ADDR_API
+#endif
 
 /**
 ****************************************************************************************************
@@ -263,12 +265,6 @@ typedef enum _AddrSwizzleMode
     ADDR_SW_RESERVED5       = 30,
     ADDR_SW_VAR_R_X         = 31,
     ADDR_SW_LINEAR_GENERAL  = 32,
-
-    // Used for represent block with identical size
-    ADDR_SW_256B            = ADDR_SW_256B_S,
-    ADDR_SW_4KB             = ADDR_SW_4KB_S_X,
-    ADDR_SW_64KB            = ADDR_SW_64KB_S_X,
-    ADDR_SW_VAR             = ADDR_SW_RESERVED4,
     ADDR_SW_MAX_TYPE        = 33,
 } AddrSwizzleMode;
 
