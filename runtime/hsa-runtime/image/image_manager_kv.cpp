@@ -794,7 +794,7 @@ bool ImageManagerKv::GetAddrlibSurfaceInfo(
 
   uint32_t major_ver = MajorVerFromDevID(chip_id_);
 
-    if (major_ver >= 9) {
+  if (major_ver >= 9) {
     ADDR2_COMPUTE_SURFACE_INFO_INPUT in = {0};
     in.size = sizeof(ADDR2_COMPUTE_SURFACE_INFO_INPUT);
     in.format = addrlib_format;
@@ -819,7 +819,6 @@ bool ImageManagerKv::GetAddrlibSurfaceInfo(
       in.resourceType = ADDR_RSRC_TEX_3D;
       break;
     }
-    in.swizzleMode  = (tileMode == Image::TileMode::LINEAR)? ADDR_SW_LINEAR : ADDR_SW_4KB;
     in.flags.texture = 1;
 
     ADDR2_GET_PREFERRED_SURF_SETTING_INPUT  prefSettingsInput = { 0 };
@@ -840,16 +839,16 @@ bool ImageManagerKv::GetAddrlibSurfaceInfo(
 
     if (tileMode == Image::TileMode::LINEAR)
     {
-        // this should force linear.
-        prefSettingsInput.forbiddenBlock.macroThin4KB = 1;
-        prefSettingsInput.forbiddenBlock.macroThick4KB = 1;
-        prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
-        prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
+      // this should force linear.
+      prefSettingsInput.forbiddenBlock.macroThin4KB = 1;
+      prefSettingsInput.forbiddenBlock.macroThick4KB = 1;
+      prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
+      prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
     }
     else
     {
-        // this should not allow linear.
-        prefSettingsInput.forbiddenBlock.linear = 1;
+      // this should not allow linear.
+      prefSettingsInput.forbiddenBlock.linear = 1;
     }
 
     prefSettingsInput.forbiddenBlock.micro = 1; // but don't ever allow the 256b swizzle modes
