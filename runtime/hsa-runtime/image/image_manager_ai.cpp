@@ -498,7 +498,6 @@ uint32_t ImageManagerAi::GetAddrlibSurfaceInfoAi(
     in.resourceType = ADDR_RSRC_TEX_3D;
     break;
   }
-  in.swizzleMode  = (tileMode == Image::TileMode::LINEAR)? ADDR_SW_LINEAR : ADDR_SW_4KB;
   in.flags.texture = 1;
 
   ADDR2_GET_PREFERRED_SURF_SETTING_INPUT  prefSettingsInput = { 0 };
