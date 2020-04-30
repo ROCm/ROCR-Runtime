@@ -205,3 +205,15 @@ function ( get_version DEFAULT_VERSION_STRING )
     #message("${VERSION_JOB}")
 
 endfunction()
+
+## Collects subdirectory names and returns them in a list
+function ( listsubdirs DIRPATH SUBDIRECTORIES )
+    file( GLOB CONTENTS RELATIVE ${DIRPATH} "${DIRPATH}/*" )
+    set ( FOLDERS, "" )
+    foreach( ITEM IN LISTS CONTENTS)
+        if( IS_DIRECTORY "${DIRPATH}/${ITEM}" )
+            list( APPEND FOLDERS ${ITEM} )
+        endif()
+    endforeach()
+    set (${SUBDIRECTORIES} ${FOLDERS} PARENT_SCOPE)
+endfunction()

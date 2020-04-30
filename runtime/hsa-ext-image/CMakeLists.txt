@@ -18,7 +18,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Include the cmake_modules utils.cmake
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/cmake_modules" )
 include ( utils )
 
 ## Compiler preproc definitions.
@@ -59,12 +59,12 @@ include_directories( ${HSA_INC_PATH} )
 link_directories( ${HSA_LIB_PATH} )
 
 ## Find self
-if( "${EXT_SOURCE_DIR}" STREQUAL "" )
-    get_include_path( EXT_SOURCE_FILE null NAMES "image/image_runtime.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../ext/" )
-    get_filename_component( EXT_SOURCE_DIR "${EXT_SOURCE_FILE}/.." ABSOLUTE )
-    unset( EXT_SOURCE_FILE CACHE )
+if( "${IMAGE_SOURCE_DIR}" STREQUAL "" )
+    get_include_path( IMG_SOURCE_FILE null NAMES "image_runtime.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/image/" )
+    get_filename_component( IMAGE_SOURCE_DIR "${IMG_SOURCE_FILE}" ABSOLUTE )
+    unset( IMG_SOURCE_FILE CACHE )
 endif()
-set( EXT_SOURCE_DIR ${EXT_SOURCE_DIR} CACHE PATH "Image lib source dir" FORCE )
+set( IMAGE_SOURCE_DIR ${IMAGE_SOURCE_DIR} CACHE PATH "Image lib source dir" FORCE )
 
 get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE CACHE )
 set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
@@ -87,58 +87,58 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Debug )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb" )
 endif ()
 
-set ( DRVDEF "${EXT_SOURCE_DIR}/make/image.so.def" )
+set ( DRVDEF "${IMAGE_SOURCE_DIR}/image.so.def" )
 
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 ## Library path(s).
-include_directories(${EXT_SOURCE_DIR}/..)
+include_directories(${IMAGE_SOURCE_DIR}/)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/inc)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/core/inc)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/inc)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/core)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/r800)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx9)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/gfx10)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/r800)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx9)
-include_directories(${EXT_SOURCE_DIR}/image/addrlib/src/chip/gfx10)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/inc)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/core)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/r800)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/gfx9)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/gfx10)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/r800)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/gfx9)
+include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/gfx10)
 
-set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/addrlib/src/addrinterface.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/coord.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib1.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrlib2.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrobject.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/core/addrelemlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/ciaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/egbaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/r800/siaddrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx9/gfx9addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/addrlib/src/gfx10/gfx10addrlib.cpp
-                 ${EXT_SOURCE_DIR}/image/amd_ext.cpp
-                 ${EXT_SOURCE_DIR}/image/device_info.cpp
-                 ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp
-                 ${EXT_SOURCE_DIR}/image/image_runtime.cpp
-                 ${EXT_SOURCE_DIR}/image/image_manager.cpp
-                 ${EXT_SOURCE_DIR}/image/image_manager_kv.cpp
-                 ${EXT_SOURCE_DIR}/image/image_manager_ai.cpp
-                 ${EXT_SOURCE_DIR}/image/image_manager_nv.cpp
-                 ${EXT_SOURCE_DIR}/image/image_lut_kv.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx7xx.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx8xx.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_object_gfx9xx.cpp
-                 ${EXT_SOURCE_DIR}/image/opencl_blit_objects.cpp
-                 ${EXT_SOURCE_DIR}/image/blit_kernel.cpp
+set ( IMAGE_SRCS ${IMAGE_SOURCE_DIR}/addrlib/src/addrinterface.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/coord.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib1.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib2.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrobject.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrelemlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/ciaddrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/egbaddrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/siaddrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/gfx9/gfx9addrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/addrlib/src/gfx10/gfx10addrlib.cpp
+                 ${IMAGE_SOURCE_DIR}/amd_ext.cpp
+                 ${IMAGE_SOURCE_DIR}/device_info.cpp
+                 ${IMAGE_SOURCE_DIR}/hsa_ext_image.cpp
+                 ${IMAGE_SOURCE_DIR}/image_runtime.cpp
+                 ${IMAGE_SOURCE_DIR}/image_manager.cpp
+                 ${IMAGE_SOURCE_DIR}/image_manager_kv.cpp
+                 ${IMAGE_SOURCE_DIR}/image_manager_ai.cpp
+                 ${IMAGE_SOURCE_DIR}/image_manager_nv.cpp
+                 ${IMAGE_SOURCE_DIR}/image_lut_kv.cpp
+                 ${IMAGE_SOURCE_DIR}/blit_object_gfx7xx.cpp
+                 ${IMAGE_SOURCE_DIR}/blit_object_gfx8xx.cpp
+                 ${IMAGE_SOURCE_DIR}/blit_object_gfx9xx.cpp
+                 ${IMAGE_SOURCE_DIR}/opencl_blit_objects.cpp
+                 ${IMAGE_SOURCE_DIR}/blit_kernel.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
                  ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
 )
 
-add_subdirectory(${EXT_SOURCE_DIR}/image/blit_src ${CMAKE_BINARY_DIR}/image_blit)
-set_source_files_properties(${EXT_SOURCE_DIR}/image/opencl_blit_objects.cpp PROPERTIES GENERATED 1)
+add_subdirectory(${IMAGE_SOURCE_DIR}/blit_src ${CMAKE_CURRENT_BINARY_DIR}/image_blit)
+set_source_files_properties(${IMAGE_SOURCE_DIR}/opencl_blit_objects.cpp PROPERTIES GENERATED 1)
 
 add_library ( ${IMAGE_TARGET} SHARED ${IMAGE_SRCS} )
 add_dependencies( ${IMAGE_TARGET} opencl_blit_objects.cpp )
