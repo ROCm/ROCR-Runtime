@@ -262,6 +262,12 @@ hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
   return HSA_STATUS_SUCCESS;
 }
 
+// TODO:  Look into a better name and/or making this process transparent to exporting.
+hsa_status_t MemoryRegion::IPCFragmentExport(void* address) const {
+  if (!fragment_allocator_.discardBlock(address)) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
                                    void* value) const {
   switch (attribute) {

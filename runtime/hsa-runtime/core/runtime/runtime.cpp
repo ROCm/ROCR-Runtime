@@ -904,6 +904,11 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
         (reinterpret_cast<uint8_t*>(ptr) - reinterpret_cast<uint8_t*>(block.base)) / 4096;
     // Holds size in (4K?) pages in thunk handle: Mark as a fragment and denote offset.
     handle->handle[6] |= 0x80000000 | offset;
+    // Mark block for IPC.  Prevents reallocation of exported memory.
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    hsa_status_t err = allocation_map_[ptr].region->IPCFragmentExport(ptr);
+    assert(err == HSA_STATUS_SUCCESS && "Region inconsistent with address map.");
+    return err;
   } else {
     if (hsaKmtShareMemory(ptr, len, reinterpret_cast<HsaSharedMemoryHandle*>(handle)) !=
         HSAKMT_STATUS_SUCCESS)

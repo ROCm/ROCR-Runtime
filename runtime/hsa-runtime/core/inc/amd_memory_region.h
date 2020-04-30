@@ -103,6 +103,8 @@ class MemoryRegion : public core::MemoryRegion {
 
   hsa_status_t Free(void* address, size_t size) const;
 
+  hsa_status_t IPCFragmentExport(void* address) const;
+
   hsa_status_t GetInfo(hsa_region_info_t attribute, void* value) const;
 
   hsa_status_t GetPoolInfo(hsa_amd_memory_pool_info_t attribute,

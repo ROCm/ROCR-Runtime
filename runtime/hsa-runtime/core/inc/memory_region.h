@@ -95,6 +95,9 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
 
   virtual hsa_status_t Free(void* address, size_t size) const = 0;
 
+  // Prepares suballocated memory for IPC export.
+  virtual hsa_status_t IPCFragmentExport(void* address) const = 0;
+
   // Translate memory properties into HSA region attribute.
   virtual hsa_status_t GetInfo(hsa_region_info_t attribute,
                                void* value) const = 0;
