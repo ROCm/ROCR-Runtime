@@ -2603,6 +2603,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	bool is_debugger = 0;
 	void *mmap_ret = NULL;
 	uint64_t mmap_offset = 0;
+	int map_fd;
 	vm_object_t *obj;
 
 	/* Retrieve gpu_mem id according to gpu_id */
@@ -2622,18 +2623,27 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	/* allocate object within the scratch backing aperture */
 	if (!ret && !is_debugger) {
 		obj = fmm_allocate_memory_object(
-			gpu_id, address, size, aperture, NULL,
+			gpu_id, address, size, aperture, &mmap_offset,
 			KFD_IOC_ALLOC_MEM_FLAGS_VRAM |
 			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
 		if (!obj)
 			return -1;
-	} else {
-		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
+		/* Create a CPU mapping for the debugger */
+		map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
 					gpu_mem[gpu_mem_id].drm_render_fd;
+		mmap_ret = mmap(address, size, PROT_NONE,
+				MAP_PRIVATE | MAP_FIXED, map_fd, mmap_offset);
+		if (mmap_ret == MAP_FAILED) {
+			__fmm_release(obj, aperture);
+			return -1;
+		}
+	} else {
 		obj = fmm_allocate_memory_object(
 			gpu_id, address, size, aperture, &mmap_offset,
 			KFD_IOC_ALLOC_MEM_FLAGS_GTT |
 			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
+		map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
+					gpu_mem[gpu_mem_id].drm_render_fd;
 		mmap_ret = mmap(address, size,
 				PROT_READ | PROT_WRITE,
 				MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
@@ -2840,6 +2850,11 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	args.n_devices = object->mapped_device_id_array_size / sizeof(uint32_t);
 	args.n_success = 0;
 	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+
+	/* unmap from CPU while keeping the address space reserved */
+	mmap(address, object->size, PROT_NONE,
+	     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+	     -1, 0);
 
 	remove_device_ids_from_mapped_array(object,
 			(uint32_t *)args.device_ids_array_ptr,
