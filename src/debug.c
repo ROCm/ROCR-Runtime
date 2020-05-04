@@ -325,7 +325,11 @@ static HSAKMT_STATUS debug_trap(HSAuint32 NodeId,
 	if (argout)
 		*argout = args;
 
-	if (err == 0)
+	if ((op == KFD_IOC_DBG_TRAP_NODE_SUSPEND ||
+			op == KFD_IOC_DBG_TRAP_NODE_RESUME) && err >= 0 &&
+				err <= args.data2)
+		result = HSAKMT_STATUS_SUCCESS;
+	else if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
 	else
 		result = HSAKMT_STATUS_ERROR;
