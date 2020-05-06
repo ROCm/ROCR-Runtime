@@ -107,10 +107,7 @@ if (QUIT)
   return()
 endif()
 
-# Determine the target triple
-execute_process(COMMAND ${LLVM_DIS} ${BITCODE_LIB} -o - OUTPUT_VARIABLE LLVM_DIS_OUTPUT)
-string(REGEX MATCH "(amdgcn-amd-.*)\"[\r\n]" QUOTED_TRIPLE "${LLVM_DIS_OUTPUT}")
-string(REGEX REPLACE "[\"\r\n]" "" TARGET_TRIPLE "${QUOTED_TRIPLE}")
+set(TARGET_TRIPLE "amdgcn-amd-amdhsa")
 
 message("")
 message("Build Setting:")
