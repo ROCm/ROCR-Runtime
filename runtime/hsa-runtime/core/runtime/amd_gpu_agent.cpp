@@ -137,7 +137,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
 GpuAgent::~GpuAgent() {
   for (auto& blit : blits_) {
-    if (blit.created()) {
+    if (!blit.empty()) {
       hsa_status_t status = blit->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
     }
@@ -680,7 +680,7 @@ hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
 
 hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
   for (auto& blit : blits_) {
-    if (blit.created()) {
+    if (!blit.empty()) {
       const hsa_status_t stat = blit->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;

@@ -87,6 +87,7 @@ template <typename T> class lazy_ptr {
 
   const std::unique_ptr<T>& operator->() const {
     make(true);
+    assert(obj != nullptr && "Null dereference through lazy_ptr.");
     return obj;
   }
 
@@ -107,7 +108,17 @@ template <typename T> class lazy_ptr {
   void touch() const { make(false); }
 
   // Tells if the lazy object has been constructed or not.
-  bool created() const { return obj != nullptr; }
+  // Construction may fail silently (return nullptr).
+  bool created() const {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    return func == nullptr;
+  }
+
+  // Tells if the lazy object exists or not.
+  bool empty() const {
+    std::atomic_thread_fence(std::memory_order_acquire);
+    return obj == nullptr;
+  }
 
  private:
   mutable std::unique_ptr<T> obj;
@@ -122,16 +133,15 @@ template <typename T> class lazy_ptr {
       return;
     }
     MAKE_SCOPE_GUARD([&]() { lock.Release(); });
-    if (obj != nullptr) return;
+    if (func == nullptr) return;
     T* ptr = func();
-    std::atomic_thread_fence(std::memory_order_release);
     obj.reset(ptr);
+    std::atomic_thread_fence(std::memory_order_release);
     func = nullptr;
   }
 
   __forceinline void make(bool block) const {
-    std::atomic_thread_fence(std::memory_order_acquire);
-    if (obj == nullptr) {
+    if (!created()) {
       make_body(block);
     }
   }
