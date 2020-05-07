@@ -598,7 +598,7 @@ void GpuAgent::InitGWS() {
     if (status != HSAKMT_STATUS_SUCCESS)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "GWS allocation failed.");
 
-    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE | HSA_QUEUE_TYPE_MULTI;
+    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
     gws_queue_.ref_ct_ = 0;
     return queue.release();
   });
@@ -933,7 +933,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    uint32_t group_segment_size,
                                    core::Queue** queue) {
   // Handle GWS queues.
-  if (queue_type & HSA_QUEUE_TYPE_COOPERATIVE) {
+  if (queue_type == HSA_QUEUE_TYPE_COOPERATIVE) {
     ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
     auto ret = (*gws_queue_.queue_).get();
     if (ret != nullptr) {

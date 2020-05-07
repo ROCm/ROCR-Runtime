@@ -700,13 +700,8 @@ hsa_status_t hsa_queue_create(
       agent->GetInfo(HSA_AGENT_INFO_QUEUE_TYPE, &agent_queue_type);
   assert(HSA_STATUS_SUCCESS == status);
 
-  if (agent_queue_type == HSA_QUEUE_TYPE_SINGLE &&
-      ((type & HSA_QUEUE_TYPE_SINGLE) != HSA_QUEUE_TYPE_SINGLE)) {
-    return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
-  }
-
-  if ((type & HSA_QUEUE_TYPE_COOPERATIVE) &&
-      ((type & HSA_QUEUE_TYPE_SINGLE) != HSA_QUEUE_TYPE_MULTI)) {
+  if ((agent_queue_type == HSA_QUEUE_TYPE_SINGLE) &&
+      (type != HSA_QUEUE_TYPE_SINGLE)) {
     return HSA_STATUS_ERROR_INVALID_QUEUE_CREATION;
   }
 
