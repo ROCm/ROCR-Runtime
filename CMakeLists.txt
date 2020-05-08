@@ -23,19 +23,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.5.0 )
-
-## Cosmetic Cmake version warnings.
-if(NOT EXISTS VERSION_WARNED)
-  set (VERSION_WARNED FALSE CACHE BOOL "")
-endif()
-if(${CMAKE_VERSION} VERSION_LESS "3.6.0" AND NOT ${VERSION_WARNED})
-  message("Your CMake version is too old for full functionality.
-Generated package file names may be incorrect.
-Please update to CMake 3.6 or newer to generate correct package file names")
-  set( VERSION_WARNED TRUE CACHE BOOL "Suppress cosmetic build errors due to CMake version after first warning." FORCE )
-  mark_as_advanced( FORCE VERSION_WARNED )
-endif()
+cmake_minimum_required ( VERSION 3.6.3 )
 
 set ( HSAKMT "hsakmt" )
 set ( HSAKMT_PACKAGE "hsakmt-roct" )
@@ -226,74 +214,80 @@ configure_file ( libhsakmt.pc.in libhsakmt.pc @ONLY )
 
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INSTALL_DATADIR}/pkgconfig COMPONENT devel)
 
+###########################
+# Packaging directives
+###########################
 # Use component packaging
-set ( CPACK_COMPONENTS_GROUPING IGNORE )
-set ( CPACK_COMPONENTS_ALL binary devel )
-set ( CPACK_DEB_COMPONENT_INSTALL ON )
-set ( CPACK_RPM_COMPONENT_INSTALL ON )
-
-## Add the packaging directives for the runtime library.
-set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
-set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
-set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
-set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
-set ( CPACK_PACKAGE_CONTACT "AMD GFX mailing list <amd-gfx@lists.freedesktop.org>" )
-set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
-
-## Component packaging, BINARY
-set ( CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support\n This repository includes the user-mode API interfaces\n used to interact with the ROCk driver." )
-set ( CPACK_DEBIAN_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE} )
-set ( CPACK_DEBIAN_BINARY_FILE_NAME "${CPACK_DEBIAN_BINARY_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}_amd64.deb" )
-set ( CPACK_RPM_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE} )
-set ( CPACK_RPM_BINARY_FILE_NAME "${CPACK_RPM_BINARY_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.x86_64.rpm" )
-
-#checking for OS-version
-if( EXISTS "/etc/os-release" )
-    file( STRINGS "/etc/os-release" DISTRO_ID REGEX "^ID=" )
-    file( STRINGS "/etc/os-release" DISTRO_RELEASE REGEX "^VERSION_ID=" )
-    string( REPLACE "ID=" "" DISTRO_ID "${DISTRO_ID}" )
-    string( REPLACE "VERSION_ID=" "" DISTRO_RELEASE "${DISTRO_RELEASE}" )
-    message( STATUS "Detected distribution: ${DISTRO_ID}:${DISTRO_RELEASE}" )
-elseif( EXISTS "/etc/centos-release" )
-    # Example: CentOS release 6.10 (Final)
-    file( STRINGS "/etc/centos-release" DISTRO_FULL_STR REGEX "release" )
-    string( REGEX MATCH "^[a-zA-Z]+" DISTRO_ID "${DISTRO_FULL_STR}" )
-    string( TOLOWER "${DISTRO_ID}" DISTRO_ID )
-    string( REGEX MATCH "[0-9]+" DISTRO_RELEASE "${DISTRO_FULL_STR}" )
-    message( STATUS "Detected distribution: ${DISTRO_ID}:${DISTRO_RELEASE}" )
-else()
-     message( STATUS "Not able to detect OS" )
-endif()
-
-# Debian package specific variables
-set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
-set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
-set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1" )
-
-# RPM package specific variables
-if( DISTRO_ID MATCHES "sles" )
-    set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1")
-elseif( DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6" )
-    set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc" )
-else()
-    set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc" )
-endif()
-set ( CPACK_RPM_BINARY_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
-set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
+set(CPACK_COMPONENTS_GROUPING IGNORE)
+set(CPACK_DEB_COMPONENT_INSTALL ON)
+set(CPACK_RPM_COMPONENT_INSTALL ON)
+set(CPACK_DEBIAN_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE})
+set(CPACK_RPM_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE})
+set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
+set(CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH})
+set(CPACK_PACKAGE_CONTACT "AMD GFX mailing list <amd-gfx@lists.freedesktop.org>")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
+set(CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support\n This repository includes the user-mode API interfaces\n used to interact with the ROCk driver.")
 
 ## Component packaging, DEVEL
-set ( CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package" )
+set(CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package")
+
+# Make proper version for appending
+# Default Value is 99999, setting it first
+set(ROCM_VERSION_FOR_PACKAGE "99999")
+if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
+  set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
+endif()
 
 # Debian package specific variables
-set ( CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev" )
-set ( CPACK_DEBIAN_DEVEL_FILE_NAME "${CPACK_DEBIAN_DEVEL_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}_amd64.deb" )
-set ( CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH})" )
+set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface")
+set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm")
+set(CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1")
+set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev")
+if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
+   set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
+else()
+   set(CPACK_DEBIAN_PACKAGE_RELEASE "local")
+endif()
 
 # RPM package specific variables
-set ( CPACK_RPM_DEVEL_PACKAGE_NAME "hsakmt-roct-devel" )
-set ( CPACK_RPM_DEVEL_FILE_NAME "${CPACK_RPM_DEVEL_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.x86_64.rpm" )
-set ( CPACK_RPM_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} = ${BUILD_VERSION_MAJOR}.${BUILD_VERSION_MINOR}.${BUILD_VERSION_PATCH}" )
+# get OS-info
+get_os_info()
+if(DISTRO_ID MATCHES "sles" )
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1")
+elseif(DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6")
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc")
+else()
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc")
+endif()
+set(CPACK_RPM_BINARY_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post")
+set(CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun")
+if(DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
+  set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "${CPACK_PACKAGING_INSTALL_PREFIX} ${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
+endif()
+set(CPACK_RPM_DEVEL_PACKAGE_NAME "hsakmt-roct-devel")
 # Since we changed the package name to match RPM specs, take care of older builds that had -dev installed
-set ( CPACK_RPM_DEVEL_PACKAGE_OBSOLETES "hsakmt-roct-dev" )
+set(CPACK_RPM_DEVEL_PACKAGE_OBSOLETES "hsakmt-roct-dev")
+if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
+  set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
+else()
+  set(CPACK_RPM_PACKAGE_RELEASE "local")
+endif()
+# Set rpm distro
+set(CPACK_RPM_PACKAGE_RELEASE_DIST ON)
 
-include ( CPack )
+# Prepare final version for the CPACK use
+set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
+set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
+
+# Setting devel package dependendent version
+set(CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${PACKAGE_VERSION_STR}-${CPACK_RPM_PACKAGE_RELEASE})")
+set(CPACK_RPM_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} =${PACKAGE_VERSION_STR}-${CPACK_RPM_PACKAGE_RELEASE}")
+
+# Set the names now using CPACK utility
+set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+
+include(CPack)
