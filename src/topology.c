@@ -831,6 +831,7 @@ static HSAKMT_STATUS topology_parse_cpuinfo(struct proc_cpuinfo *cpuinfo,
 	char read_buf[256];
 	char *p;
 	uint32_t proc = 0;
+	size_t p_len;
 	const char *proc_cpuinfo_path = "/proc/cpuinfo";
 
 	if (!cpuinfo) {
@@ -879,10 +880,11 @@ static HSAKMT_STATUS topology_parse_cpuinfo(struct proc_cpuinfo *cpuinfo,
 		if (!strncmp("model name", read_buf, sizeof("model name") - 1)) {
 			p = strchr(read_buf, ':');
 			p += 2; /* remove ": " */
-			if (strlen(p) < HSA_PUBLIC_NAME_SIZE) {
+			p_len = strlen(p);
+			if (p_len < HSA_PUBLIC_NAME_SIZE) {
 				/* -1 to remove \n from p */
-				strncpy(cpuinfo[proc].model_name, p, strlen(p) - 1);
-				cpuinfo[proc].model_name[strlen(p) - 1] = '\0';
+				strncpy(cpuinfo[proc].model_name, p, p_len - 1);
+				cpuinfo[proc].model_name[p_len - 1] = '\0';
 			} else
 				strncpy(cpuinfo[proc].model_name, p, HSA_PUBLIC_NAME_SIZE);
 			continue;
