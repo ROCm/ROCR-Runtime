@@ -629,8 +629,8 @@ uint32_t ImageManagerNv::GetAddrlibSurfaceInfoNv(
   prefSettingsInput.resourceLoction = ADDR_RSRC_LOC_UNDEF;
   prefSettingsInput.resourceType    = in.resourceType;
 
+  // Disallow all swizzles but linear.
   if (tileMode == Image::TileMode::LINEAR) {
-      // this should force linear.
       prefSettingsInput.forbiddenBlock.macroThin4KB = 1;
       prefSettingsInput.forbiddenBlock.macroThick4KB = 1;
       prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
@@ -638,9 +638,8 @@ uint32_t ImageManagerNv::GetAddrlibSurfaceInfoNv(
       prefSettingsInput.forbiddenBlock.micro = 1;
       prefSettingsInput.forbiddenBlock.var = 1;
   } else {
-      // this should not allow linear.
-      prefSettingsInput.forbiddenBlock.linear = 1;
-      // Debug setting, simplifies buffer alignment.
+      // Debug setting, simplifies buffer alignment until language runtimes have official gfx10
+      // support.
       prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
       prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
   }

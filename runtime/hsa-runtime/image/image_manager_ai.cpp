@@ -516,18 +516,13 @@ uint32_t ImageManagerAi::GetAddrlibSurfaceInfoAi(
   prefSettingsInput.resourceLoction = ADDR_RSRC_LOC_UNDEF;
   prefSettingsInput.resourceType    = in.resourceType;
 
+  // Disallow all swizzles but linear.
   if (tileMode == Image::TileMode::LINEAR) 
   {
-      // this should force linear.
       prefSettingsInput.forbiddenBlock.macroThin4KB = 1;
       prefSettingsInput.forbiddenBlock.macroThick4KB = 1;
       prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
       prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
-  }
-  else
-  {
-      // this should not allow linear.
-      prefSettingsInput.forbiddenBlock.linear = 1;
   }
 
   prefSettingsInput.forbiddenBlock.micro = 1; // but don't ever allow the 256b swizzle modes
