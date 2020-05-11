@@ -53,6 +53,16 @@
 #include <mutex>
 #include <vector>
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <io.h>
+#define __read__  _read
+#define __lseek__ _lseek
+#else
+#include <unistd.h>
+#define __read__  read
+#define __lseek__ lseek
+#endif  // _WIN32 || _WIN64
+
 /// @brief Major version of the AMD HSA Loader. Major versions are not backwards
 /// compatible.
 #define AMD_HSA_LOADER_VERSION_MAJOR 0
@@ -95,6 +105,60 @@ enum amd_loaded_segment_info_t {
 namespace amd {
 namespace hsa {
 namespace loader {
+
+/// @class CodeObjectReaderWrapper.
+/// @brief Code Object Reader Wrapper.
+struct CodeObjectReaderWrapper final {
+ private:
+  std::string GetUriFromFile(int Fd, size_t Offset, size_t Size) const;
+  std::string GetUriFromMemoryBasic(const void *Mem, size_t Size) const;
+  std::string GetUriFromMemory(const void *Mem, size_t Size) const;
+
+ public:
+  /// @returns Handle equivalent of @p object.
+  static hsa_code_object_reader_t Handle(
+      const CodeObjectReaderWrapper *object) {
+    hsa_code_object_reader_t handle = {reinterpret_cast<uint64_t>(object)};
+    return handle;
+  }
+
+  /// @returns Object equivalent of @p handle.
+  static CodeObjectReaderWrapper *Object(
+      const hsa_code_object_reader_t &handle) {
+    CodeObjectReaderWrapper *object =
+      reinterpret_cast<CodeObjectReaderWrapper*>(handle.handle);
+    return object;
+  }
+
+  /// @brief Default constructor.
+  CodeObjectReaderWrapper(
+      const void *_code_object_memory, size_t _code_object_size,
+      size_t _code_object_offset, hsa_file_t _code_object_file_descriptor)
+    : code_object_memory(_code_object_memory)
+    , code_object_size(_code_object_size)
+    , code_object_offset(_code_object_offset)
+    , code_object_file_descriptor(_code_object_file_descriptor) {}
+
+  /// @brief Default destructor.
+  ~CodeObjectReaderWrapper() {}
+
+  bool ComesFromFile() {
+    return code_object_file_descriptor != -1;
+  }
+
+  std::string GetUri() {
+    if (ComesFromFile()) {
+      return GetUriFromFile(code_object_file_descriptor, code_object_offset, code_object_size);
+    } else {
+      return GetUriFromMemory(code_object_memory, code_object_size);
+    }
+  }
+
+  const void *code_object_memory;
+  size_t code_object_size;
+  size_t code_object_offset;
+  hsa_file_t code_object_file_descriptor;
+};
 
 //===----------------------------------------------------------------------===//
 // Context.                                                                   //
@@ -216,6 +280,7 @@ public:
   virtual uint64_t getLoadBase() const = 0;
   virtual uint64_t getLoadSize() const = 0;
   virtual int64_t getDelta() const = 0;
+  virtual std::string getUri() const = 0;
 
 protected:
   LoadedCodeObject() {}
@@ -291,6 +356,7 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t LoadCodeObject(
@@ -298,6 +364,7 @@ public:
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t Freeze(const char *options) = 0;

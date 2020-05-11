@@ -324,6 +324,7 @@ public:
   uint64_t getLoadBase() const override;
   uint64_t getLoadSize() const override;
   int64_t getDelta() const override;
+  std::string getUri() const override;
 
   link_map r_debug_info;
 };
@@ -435,6 +436,7 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t LoadCodeObject(
@@ -442,6 +444,7 @@ public:
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t Freeze(const char *options) override;

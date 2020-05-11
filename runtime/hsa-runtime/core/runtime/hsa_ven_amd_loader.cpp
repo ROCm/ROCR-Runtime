@@ -48,6 +48,7 @@
 using namespace amd::hsa;
 using namespace core;
 
+using loader::CodeObjectReaderWrapper;
 using loader::Executable;
 using loader::LoadedCodeObject;
 
@@ -205,10 +206,60 @@ hsa_status_t hsa_ven_amd_loader_loaded_code_object_get_info(
       *((uint64_t*)value) = lcobj->getLoadSize();
       break;
     }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_URI_LENGTH: {
+      *(reinterpret_cast<uint32_t*>(value)) = lcobj->getUri().size();
+      break;
+    }
+    case HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_URI: {
+      memcpy(value, lcobj->getUri().c_str(), lcobj->getUri().size());
+      break;
+    }
     default: {
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
   }
 
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t
+hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
+    hsa_file_t file,
+    size_t offset,
+    size_t size,
+    hsa_code_object_reader_t *code_object_reader) {
+  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+    return HSA_STATUS_ERROR_NOT_INITIALIZED;
+  }
+  if (nullptr == code_object_reader) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  if (size == 0) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
+  if (__lseek__(file, offset, SEEK_SET) == (off_t)-1) {
+    return HSA_STATUS_ERROR_INVALID_FILE;
+  }
+
+  unsigned char *code_object_memory = new unsigned char[size];
+  if (!code_object_memory) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  if (__read__(file, code_object_memory, size) != size) {
+    delete [] code_object_memory;
+    return HSA_STATUS_ERROR_INVALID_FILE;
+  }
+
+  CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
+      code_object_memory, size, offset, file);
+  if (!wrapper) {
+    delete [] code_object_memory;
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  *code_object_reader = CodeObjectReaderWrapper::Handle(wrapper);
   return HSA_STATUS_SUCCESS;
 }

@@ -47,16 +47,6 @@
 #include <string>
 #include <sys/types.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-#include <io.h>
-#define __read__  _read
-#define __lseek__ _lseek
-#else
-#include <unistd.h>
-#define __read__  read
-#define __lseek__ lseek
-#endif // _WIN32 || _WIN64
-
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/host_queue.h"
@@ -2054,44 +2044,11 @@ hsa_status_t hsa_code_object_iterate_symbols(
 //===--- Executable -------------------------------------------------------===//
 
 using common::Signed;
+using loader::CodeObjectReaderWrapper;
 using loader::Executable;
 using loader::Loader;
 
 namespace {
-
-/// @class CodeObjectReaderWrapper.
-/// @brief Code Object Reader Wrapper.
-struct CodeObjectReaderWrapper final : Signed<0x266E71EDBC718D2C> {
-  /// @returns Handle equivalent of @p object.
-  static hsa_code_object_reader_t Handle(
-      const CodeObjectReaderWrapper *object) {
-    hsa_code_object_reader_t handle = {reinterpret_cast<uint64_t>(object)};
-    return handle;
-  }
-
-  /// @returns Object equivalent of @p handle.
-  static CodeObjectReaderWrapper *Object(
-      const hsa_code_object_reader_t &handle) {
-    CodeObjectReaderWrapper *object = common::ObjectAt<CodeObjectReaderWrapper>(
-        handle.handle);
-    return object;
-  }
-
-  /// @brief Default constructor.
-  CodeObjectReaderWrapper(
-      const void *_code_object_memory, size_t _code_object_size,
-      bool _comes_from_file)
-    : code_object_memory(_code_object_memory)
-    , code_object_size(_code_object_size)
-    , comes_from_file(_comes_from_file) {}
-
-  /// @brief Default destructor.
-  ~CodeObjectReaderWrapper() {}
-
-  const void *code_object_memory;
-  const size_t code_object_size;
-  const bool comes_from_file;
-};
 
 Loader *GetLoader() {
   return core::Runtime::runtime_singleton_->loader();
@@ -2111,6 +2068,10 @@ hsa_status_t hsa_code_object_reader_create_from_file(
     return HSA_STATUS_ERROR_INVALID_FILE;
   }
 
+  if (file_size == 0) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
   if (__lseek__(file, 0, SEEK_SET) == (off_t)-1) {
     return HSA_STATUS_ERROR_INVALID_FILE;
   }
@@ -2124,7 +2085,7 @@ hsa_status_t hsa_code_object_reader_create_from_file(
   }
 
   CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
-      code_object_memory, file_size, true);
+      code_object_memory, file_size, 0, file);
   if (!wrapper) {
     delete [] code_object_memory;
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -2149,7 +2110,7 @@ hsa_status_t hsa_code_object_reader_create_from_memory(
   }
 
   CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
-      code_object, size, false);
+      code_object, size, 0, -1);
   CHECK_ALLOC(wrapper);
 
   *code_object_reader = CodeObjectReaderWrapper::Handle(wrapper);
@@ -2168,7 +2129,7 @@ hsa_status_t hsa_code_object_reader_destroy(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER;
   }
 
-  if (wrapper->comes_from_file) {
+  if (wrapper->ComesFromFile()) {
     delete [] (unsigned char*)wrapper->code_object_memory;
   }
   delete wrapper;
@@ -2261,7 +2222,7 @@ hsa_status_t hsa_executable_load_code_object(
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
 
-  return exec->LoadCodeObject(agent, code_object, options);
+  return exec->LoadCodeObject(agent, code_object, options, std::string());
   CATCH;
 }
 
@@ -2287,7 +2248,7 @@ hsa_status_t hsa_executable_load_program_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      {0}, code_object, options, loaded_code_object);
+      {0}, code_object, options, wrapper->GetUri(), loaded_code_object);
   CATCH;
 }
 
@@ -2314,7 +2275,7 @@ hsa_status_t hsa_executable_load_agent_code_object(
   hsa_code_object_t code_object =
       {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
   return exec->LoadCodeObject(
-      agent, code_object, options, loaded_code_object);
+      agent, code_object, options, wrapper->GetUri(), loaded_code_object);
   CATCH;
 }
 
