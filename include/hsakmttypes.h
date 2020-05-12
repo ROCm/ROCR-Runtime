@@ -541,7 +541,8 @@ typedef struct _HsaMemFlags
 					    // and optimal alignment requirements
             unsigned int FixedAddress : 1; // Allocate memory at specified virtual address. Fail if address is not free.
             unsigned int NoNUMABind:    1; // Don't bind system memory to a specific NUMA node
-            unsigned int Reserved    : 15;
+            unsigned int Uncached:      1; // Caching flag for fine-grained memory on A+A HW platform
+            unsigned int Reserved    : 14;
 
         } ui32;
         HSAuint32 Value;
