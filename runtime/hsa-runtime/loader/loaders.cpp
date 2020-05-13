@@ -99,6 +99,7 @@ namespace loader {
     gfx1030.handle = 1030;
     gfx1031.handle = 1031;
     gfx1032.handle = 1032;
+    gfx1033.handle = 1033;
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -148,6 +149,8 @@ namespace loader {
       return gfx1031;
     } else if (sname == "AMD:AMDGPU:10:3:2") {
       return gfx1032;
+    } else if (sname == "AMD:AMDGPU:10:3:3") {
+      return gfx1033;
     }
 
     // The offline loader only supports code object v2 which only supports

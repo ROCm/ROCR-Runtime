@@ -293,6 +293,7 @@ constexpr size_t hsa_name_size = 63;
   ISAREG_ENTRY_GEN("gfx1030",                10, 3, 0, unsupported, unsupported)
   ISAREG_ENTRY_GEN("gfx1031",                10, 3, 1, unsupported, unsupported)
   ISAREG_ENTRY_GEN("gfx1032",                10, 3, 2, unsupported, unsupported)
+  ISAREG_ENTRY_GEN("gfx1033",                10, 3, 3, unsupported, unsupported)
 #undef ISAREG_ENTRY_GEN
   return supported_isas;
 }
