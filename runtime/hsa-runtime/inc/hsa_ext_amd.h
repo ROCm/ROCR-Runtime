@@ -105,7 +105,8 @@ typedef enum hsa_amd_agent_info_s {
   HSA_AMD_AGENT_INFO_DRIVER_NODE_ID = 0xA004,
   /**
    * Max number of watch points on memory address ranges to generate exception
-   * events when the watched addresses are accessed.
+   * events when the watched addresses are accessed.  The type of this
+   * attribute is uint32_t.
    */
   HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS = 0xA005,
   /**
@@ -115,7 +116,7 @@ typedef enum hsa_amd_agent_info_s {
   HSA_AMD_AGENT_INFO_BDFID = 0xA006,
   /**
    * Memory Interface width, the return value type is uint32_t.
-   * This attribute is deprecated. Use
+   * This attribute is deprecated.
    */
   HSA_AMD_AGENT_INFO_MEMORY_WIDTH = 0xA007,
   /**
