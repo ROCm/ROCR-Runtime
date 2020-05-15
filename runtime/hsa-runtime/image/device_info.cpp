@@ -156,7 +156,7 @@ uint32_t DevIDToAddrLibFamily(uint32_t dev_id) {
 
       case 10:
         switch (minor_ver) {
-          case 0:  // Ariel
+          case 0:
           case 1:  // Navi
             switch (step) {
               case 0:
