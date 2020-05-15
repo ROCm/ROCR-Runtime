@@ -269,7 +269,7 @@ static void write_fallback_to_buffer(char *buf, size_t size, uint16_t DeviceId)
 {
 	char tmp[] = "Device xxxx";
 
-	static_assert(sizeof(tmp) == 12, "");
+	_Static_assert(sizeof(tmp) == 12, "");
 	write_as_hex(DeviceId, &tmp[7]);
 
 	size_t to_copy = (sizeof(tmp) <= size) ? sizeof(tmp) : size;
