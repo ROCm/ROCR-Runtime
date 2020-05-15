@@ -261,7 +261,7 @@ struct sq_img_rsrc_word4_t {
 #if defined(LITTLEENDIAN_CPU)
   // For arrays this is last slice in view, for 3D this is depth-1, For remaining this is pitch-1
   unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ;
-  unsigned int            : 1; //Pitch[13] in gfx10.3 (NV21)
+  unsigned int            : 1; //Pitch[13] in gfx1030
   unsigned int            : 2;
   unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
   unsigned int            : 3;
@@ -269,8 +269,8 @@ struct sq_img_rsrc_word4_t {
   unsigned int            : 3;
   unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
   unsigned int            : 2;
-  unsigned int            : 1; //Pitch[13] in gfx10.3 (NV21)
-  unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ; //Pitch[0:12] in gfx10.3 (NV21)
+  unsigned int            : 1; //Pitch[13] in gfx1030
+  unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ; //Pitch[0:12] in gfx1030
 #endif
 };
 union SQ_IMG_RSRC_WORD4 {
