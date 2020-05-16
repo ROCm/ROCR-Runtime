@@ -118,6 +118,9 @@ class Runtime {
   // @brief Callback handler for VM fault access.
   static bool VMFaultHandler(hsa_signal_value_t val, void* arg);
 
+  // @brief Print known allocations near ptr.
+  static void PrintMemoryMapNear(void* ptr);
+
   /// @brief Singleton object of the runtime.
   static Runtime* runtime_singleton_;
 
