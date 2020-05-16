@@ -19,28 +19,30 @@ std::atomic<ImageRuntime*> ImageRuntime::instance_(NULL);
 std::mutex ImageRuntime::instance_mutex_;
 
 hsa_status_t FindKernelArgPool(hsa_amd_memory_pool_t pool, void* data) {
-  if (NULL == data) {
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
+  assert(data != nullptr);
 
   hsa_status_t err;
   hsa_amd_segment_t segment;
   uint32_t flag;
+  size_t size;
 
   err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
                                      &segment);
   assert(err == HSA_STATUS_SUCCESS);
 
+  if (segment != HSA_AMD_SEGMENT_GLOBAL) return HSA_STATUS_SUCCESS;
+
   err = hsa_amd_memory_pool_get_info(
       pool, HSA_AMD_MEMORY_POOL_INFO_GLOBAL_FLAGS, &flag);
-
   assert(err == HSA_STATUS_SUCCESS);
 
-  if (HSA_AMD_SEGMENT_GLOBAL == segment &&
-      (HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT & flag) == 1) {
-        *(reinterpret_cast<hsa_amd_memory_pool_t*>(data)) = pool;
-        // Found the kernarg pool, stop the iteration. 
-        return HSA_STATUS_INFO_BREAK;
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_SIZE, &size);
+  assert(err == HSA_STATUS_SUCCESS);
+
+  if (((HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT & flag) == 1) && (size != 0)) {
+    *(reinterpret_cast<hsa_amd_memory_pool_t*>(data)) = pool;
+    // Found the kernarg pool, stop the iteration.
+    return HSA_STATUS_INFO_BREAK;
     }
 
   return HSA_STATUS_SUCCESS;
@@ -90,13 +92,8 @@ hsa_status_t ImageRuntime::CreateImageManager(hsa_agent_t agent, void* data) {
 
     runtime->cpu_l2_cache_size_ = caches[1];
 
-    hsa_error_code = hsa_amd_agent_iterate_memory_pools(
-        agent, FindKernelArgPool, &runtime->kernarg_pool_);
-
-    if (hsa_error_code != HSA_STATUS_INFO_BREAK) {
-        return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
-    }
-
+    if (runtime->kernarg_pool_.handle == 0)
+      hsa_amd_agent_iterate_memory_pools(agent, FindKernelArgPool, &runtime->kernarg_pool_);
   }
 
   return HSA_STATUS_SUCCESS;
@@ -140,8 +137,8 @@ ImageRuntime* ImageRuntime::CreateSingleton() {
     return NULL;
   }
 
+  assert(instance->kernarg_pool_.handle != 0);
   assert(instance->image_managers_.size() != 0);
-  //assert(instance->cpu_l2_cache_size_ != 0);
 
   instance_.store(instance, std::memory_order_release);
   return instance;
