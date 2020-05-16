@@ -1207,63 +1207,64 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
           (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "", reason.c_str());
 
 #ifndef NDEBUG
-      runtime_singleton_->memory_lock_.Acquire();
-      auto it = runtime_singleton_->allocation_map_.upper_bound(
-          reinterpret_cast<void*>(fault.VirtualAddress));
-      for (int i = 0; i < 2; i++) {
-        if (it != runtime_singleton_->allocation_map_.begin()) it--;
-      }
-      fprintf(stderr, "Nearby memory map:\n");
-      auto start = it;
-      for (int i = 0; i < 3; i++) {
-        if (it == runtime_singleton_->allocation_map_.end()) break;
-        std::string kind = "Non-HSA";
-        if (it->second.region != nullptr) {
-          const amd::MemoryRegion* region =
-              static_cast<const amd::MemoryRegion*>(it->second.region);
-          if (region->IsSystem())
-            kind = "System";
-          else if (region->IsLocalMemory())
-            kind = "VRAM";
-          else if (region->IsScratch())
-            kind = "Scratch";
-          else if (region->IsLDS())
-            kind = "LDS";
-        }
-        fprintf(stderr, "%p, 0x%lx, %s\n", it->first, it->second.size, kind.c_str());
-        it++;
-      }
-      fprintf(stderr, "\n");
-      it = start;
-      runtime_singleton_->memory_lock_.Release();
-      hsa_amd_pointer_info_t info;
-      PtrInfoBlockData block;
-      uint32_t count;
-      hsa_agent_t* canAccess;
-      info.size = sizeof(info);
-      for (int i = 0; i < 3; i++) {
-        if (it == runtime_singleton_->allocation_map_.end()) break;
-        runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc, &count, &canAccess,
-                                    &block);
-        fprintf(stderr,
-                "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
-                info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
-                info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes,
-                info.sizeInBytes, info.type, reinterpret_cast<void*>(info.agentOwner.handle));
-        fprintf(stderr, "\tCanAccess: %u\n", count);
-        for (int t = 0; t < count; t++)
-          fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
-        fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
-        free(canAccess);
-        it++;
-      }
-#endif  //! NDEBUG
+      PrintMemoryMapNear(reinterpret_cast<void*>(fault.VirtualAddress));
+#endif
     }
     assert(false && "GPU memory access fault.");
     std::abort();
   }
   // No need to keep the signal because we are done.
   return false;
+}
+
+void Runtime::PrintMemoryMapNear(void* ptr) {
+  runtime_singleton_->memory_lock_.Acquire();
+  auto it = runtime_singleton_->allocation_map_.upper_bound(ptr);
+  for (int i = 0; i < 2; i++) {
+    if (it != runtime_singleton_->allocation_map_.begin()) it--;
+  }
+  fprintf(stderr, "Nearby memory map:\n");
+  auto start = it;
+  for (int i = 0; i < 3; i++) {
+    if (it == runtime_singleton_->allocation_map_.end()) break;
+    std::string kind = "Non-HSA";
+    if (it->second.region != nullptr) {
+      const amd::MemoryRegion* region = static_cast<const amd::MemoryRegion*>(it->second.region);
+      if (region->IsSystem())
+        kind = "System";
+      else if (region->IsLocalMemory())
+        kind = "VRAM";
+      else if (region->IsScratch())
+        kind = "Scratch";
+      else if (region->IsLDS())
+        kind = "LDS";
+    }
+    fprintf(stderr, "%p, 0x%lx, %s\n", it->first, it->second.size, kind.c_str());
+    it++;
+  }
+  fprintf(stderr, "\n");
+  it = start;
+  runtime_singleton_->memory_lock_.Release();
+  hsa_amd_pointer_info_t info;
+  PtrInfoBlockData block;
+  uint32_t count;
+  hsa_agent_t* canAccess;
+  info.size = sizeof(info);
+  for (int i = 0; i < 3; i++) {
+    if (it == runtime_singleton_->allocation_map_.end()) break;
+    runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc, &count, &canAccess,
+                                &block);
+    fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
+            info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
+            info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes, info.sizeInBytes,
+            info.type, reinterpret_cast<void*>(info.agentOwner.handle));
+    fprintf(stderr, "\tCanAccess: %u\n", count);
+    for (int t = 0; t < count; t++)
+      fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
+    fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
+    free(canAccess);
+    it++;
+  }
 }
 
 Runtime::Runtime()
