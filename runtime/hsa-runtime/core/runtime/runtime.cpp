@@ -189,14 +189,6 @@ void Runtime::RegisterAgent(Agent* agent) {
 
       BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
     }
-
-    // Setup system clock frequency for the first time.
-    if (sys_clock_freq_ == 0) {
-      // Cache system clock frequency
-      HsaClockCounters clocks;
-      hsaKmtGetClockCounters(0, &clocks);
-      sys_clock_freq_ = clocks.SystemClockFrequencyHz;
-    }
   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
     gpu_agents_.push_back(agent);
 
@@ -1289,6 +1281,15 @@ hsa_status_t Runtime::Load() {
   if (!amd::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+
+  // Setup system clock frequency for the first time.
+  if (sys_clock_freq_ == 0) {
+    // Cache system clock frequency
+    HsaClockCounters clocks;
+    hsaKmtGetClockCounters(0, &clocks);
+    sys_clock_freq_ = clocks.SystemClockFrequencyHz;
+  }
+
   BindVmFaultHandler();
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
