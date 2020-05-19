@@ -7,6 +7,7 @@
 #include <climits>
 
 #include "inc/hsa_ext_amd.h"
+#include "core/inc/hsa_internal.h"
 #include "addrlib/src/core/addrlib.h"
 #include "image_runtime.h"
 #include "resource.h"
@@ -14,7 +15,8 @@
 #include "util.h"
 #include "device_info.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
 
 //-----------------------------------------------------------------------------
 // Workaround switch to combined format/type codes and missing gfx10
@@ -143,8 +145,7 @@ hsa_status_t ImageManagerNv::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR2_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
-  hsa_status_t status = hsa_agent_get_info(component,
-                                            HSA_AGENT_INFO_PROFILE, &profile);
+  hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&
@@ -217,10 +218,10 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
     SQ_BUF_RSRC_WORD3 word3;
 
     word0.val = 0;
-    word0.f.BASE_ADDRESS = ext_image::PtrLow32(image_data_addr);
+    word0.f.BASE_ADDRESS = PtrLow32(image_data_addr);
 
     word1.val = image.srd[1];
-    word1.f.BASE_ADDRESS_HI = ext_image::PtrHigh32(image_data_addr);
+    word1.f.BASE_ADDRESS_HI = PtrHigh32(image_data_addr);
     word1.f.STRIDE = image_prop.element_size;
 
     word3.val = image.srd[3];
@@ -242,9 +243,9 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
       return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
     }
     reinterpret_cast<SQ_IMG_RSRC_WORD0*>(&image.srd[0])->bits.BASE_ADDRESS =
-                                   ext_image::PtrLow40Shift8(image_data_addr);
-    reinterpret_cast<SQ_IMG_RSRC_WORD1*>(&image.srd[1])->bits.BASE_ADDRESS_HI
-                               = ext_image::PtrHigh64Shift40(image_data_addr);
+        PtrLow40Shift8(image_data_addr);
+    reinterpret_cast<SQ_IMG_RSRC_WORD1*>(&image.srd[1])->bits.BASE_ADDRESS_HI =
+        PtrHigh64Shift40(image_data_addr);
     reinterpret_cast<SQ_IMG_RSRC_WORD1*>(&image.srd[1])->bits.FORMAT = GetCombinedFormat(image_prop.data_format, image_prop.data_type);
     reinterpret_cast<SQ_IMG_RSRC_WORD3*>(&image.srd[3])->bits.DST_SEL_X =
                                                                     swizzle.x;
@@ -264,9 +265,10 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
     uintptr_t meta = uintptr_t(((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS_HI) << 16;
     meta |= uintptr_t(((SQ_IMG_RSRC_WORD6*)(&image.srd[6]))->bits.META_DATA_ADDRESS) << 8;
     meta += reinterpret_cast<uintptr_t>(image_data_addr);
-    
-    ((SQ_IMG_RSRC_WORD6*)(&image.srd[6]))->bits.META_DATA_ADDRESS = ext_image::PtrLow16Shift8((void*)meta);
-    ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS_HI = ext_image::PtrHigh64Shift16((void*)meta);
+
+    ((SQ_IMG_RSRC_WORD6*)(&image.srd[6]))->bits.META_DATA_ADDRESS = PtrLow16Shift8((void*)meta);
+    ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS_HI =
+        PtrHigh64Shift16((void*)meta);
   }
   // Looks like this is only used for CPU copies.
   image.row_pitch = 0;
@@ -352,10 +354,10 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
     SQ_BUF_RSRC_WORD3 word3;
 
     word0.val = 0;
-    word0.f.BASE_ADDRESS = ext_image::PtrLow32(image_data_addr);
+    word0.f.BASE_ADDRESS = PtrLow32(image_data_addr);
 
     word1.val = 0;
-    word1.f.BASE_ADDRESS_HI = ext_image::PtrHigh32(image_data_addr);
+    word1.f.BASE_ADDRESS_HI = PtrHigh32(image_data_addr);
     word1.f.STRIDE = image_prop.element_size;
     word1.f.SWIZZLE_ENABLE = false;
     word1.f.CACHE_SWIZZLE = false;
@@ -404,18 +406,18 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
 
     const size_t row_pitch_size = out.pitch * image_prop.element_size;
 
-    word0.f.BASE_ADDRESS = ext_image::PtrLow40Shift8(image_data_addr);
+    word0.f.BASE_ADDRESS = PtrLow40Shift8(image_data_addr);
 
     word1.val = 0;
-    word1.f.BASE_ADDRESS_HI = ext_image::PtrHigh64Shift40(image_data_addr);
+    word1.f.BASE_ADDRESS_HI = PtrHigh64Shift40(image_data_addr);
     word1.f.MIN_LOD = 0;
     word1.f.FORMAT = GetCombinedFormat(image_prop.data_format, image_prop.data_type);
     // Only take the lowest 2 bits of (image.desc.width - 1)
-    word1.f.WIDTH = ext_image::BitSelect<0, 1>(image.desc.width - 1);
+    word1.f.WIDTH = BitSelect<0, 1>(image.desc.width - 1);
 
     word2.val = 0;
     // Take the high 12 bits of (image.desc.width - 1)
-    word2.f.WIDTH_HI = ext_image::BitSelect<2, 13>(image.desc.width - 1);
+    word2.f.WIDTH_HI = BitSelect<2, 13>(image.desc.width - 1);
     word2.f.HEIGHT = image.desc.height ? image.desc.height - 1 : 0;
     word2.f.RESOURCE_LEVEL = 1;
 
@@ -507,7 +509,7 @@ hsa_status_t ImageManagerNv::ModifyImageSrd(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ImageManagerNv::PopulateSamplerSrd(amd::Sampler& sampler) const {
+hsa_status_t ImageManagerNv::PopulateSamplerSrd(Sampler& sampler) const {
   const hsa_ext_sampler_descriptor_t sampler_descriptor = sampler.desc;
 
   SQ_IMG_SAMP_WORD0 word0;
@@ -720,9 +722,8 @@ hsa_status_t ImageManagerNv::FillImage(const Image& image, const void* pattern,
       break;
   }
 
-  hsa_status_t status =
-      ext_image::ImageRuntime::instance()->blit_kernel().FillImage(
-          blit_queue_, blit_code_catalog_, *image_view, new_pattern, region);
+  hsa_status_t status = ImageRuntime::instance()->blit_kernel().FillImage(
+      blit_queue_, blit_code_catalog_, *image_view, new_pattern, region);
 
   // Revert back original configuration.
   if (word3_buff != NULL) {
@@ -740,4 +741,5 @@ hsa_status_t ImageManagerNv::FillImage(const Image& image, const void* pattern,
   return status;
 }
 
-}  // namespace amd
+}  // namespace image
+}  // namespace rocr

@@ -7,7 +7,9 @@
 #include "resource.h"
 #include "util.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 /// @brief Abstract class for creating AMD agent specific image / sampler
 /// resources and data transfer.
 class ImageManager {
@@ -94,5 +96,6 @@ class ImageManager {
   DISALLOW_COPY_AND_ASSIGN(ImageManager);
 };
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // AMD_HSA_EXT_IMAGE_IMAGE_MANAGER_H

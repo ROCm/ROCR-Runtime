@@ -7,7 +7,8 @@
 #error "BIGENDIAN_CPU or LITTLEENDIAN_CPU must be defined"
 #endif
 
-namespace amd {
+namespace rocr {
+namespace image {
 
 /**********************************************************/
 /**********************************************************/
@@ -830,5 +831,6 @@ typedef struct metadata_amd_nv_s {
     uint32_t mip_offsets[0];
 } metadata_amd_nv_t;
 
-}  // namespace amd
+}  // namespace image
+}  // namespace rocr
 #endif  // EXT_IMAGE_RESOURCE_NV_H_

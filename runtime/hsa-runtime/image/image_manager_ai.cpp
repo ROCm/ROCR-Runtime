@@ -8,6 +8,7 @@
 
 #include "hsakmt.h"
 #include "inc/hsa_ext_amd.h"
+#include "core/inc/hsa_internal.h"
 #include "addrlib/src/core/addrlib.h"
 #include "image_runtime.h"
 #include "resource.h"
@@ -15,7 +16,9 @@
 #include "util.h"
 #include "device_info.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 ImageManagerAi::ImageManagerAi() : ImageManagerKv() {}
 
 ImageManagerAi::~ImageManagerAi() {}
@@ -28,7 +31,7 @@ hsa_status_t ImageManagerAi::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR2_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
-  hsa_status_t status = hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
+  hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&
@@ -97,10 +100,10 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
     sq_buf_rsrc_word3_u word3;
 
     word0.val = 0;
-    word0.f.base_address = ext_image::PtrLow32(image_data_addr);
+    word0.f.base_address = PtrLow32(image_data_addr);
 
     word1.val = image.srd[1];
-    word1.f.base_address_hi = ext_image::PtrHigh32(image_data_addr);
+    word1.f.base_address_hi = PtrHigh32(image_data_addr);
     word1.f.stride = image_prop.element_size;
 
     word3.val = image.srd[3];
@@ -120,8 +123,8 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
     if(image_prop.element_size!=hwPixelSize)
       return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
-    ((SQ_IMG_RSRC_WORD0*)(&image.srd[0]))->bits.BASE_ADDRESS = ext_image::PtrLow40Shift8(image_data_addr);
-    ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.BASE_ADDRESS_HI = ext_image::PtrHigh64Shift40(image_data_addr);
+    ((SQ_IMG_RSRC_WORD0*)(&image.srd[0]))->bits.BASE_ADDRESS = PtrLow40Shift8(image_data_addr);
+    ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.BASE_ADDRESS_HI = PtrHigh64Shift40(image_data_addr);
     ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.DATA_FORMAT = image_prop.data_format;
     ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.NUM_FORMAT = image_prop.data_type;
     ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.DST_SEL_X = swizzle.x;
@@ -137,9 +140,10 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
     uintptr_t meta = uintptr_t(((SQ_IMG_RSRC_WORD5*)(&image.srd[5]))->bits.META_DATA_ADDRESS_HI) << 40;
     meta |= uintptr_t(((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS) << 8;
     meta += reinterpret_cast<uintptr_t>(image_data_addr);
-    
-    ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS = ext_image::PtrLow40Shift8((void*)meta);
-    ((SQ_IMG_RSRC_WORD5*)(&image.srd[5]))->bits.META_DATA_ADDRESS_HI = ext_image::PtrHigh64Shift40((void*)meta);
+
+    ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.META_DATA_ADDRESS = PtrLow40Shift8((void*)meta);
+    ((SQ_IMG_RSRC_WORD5*)(&image.srd[5]))->bits.META_DATA_ADDRESS_HI =
+        PtrHigh64Shift40((void*)meta);
   }
   //Looks like this is only used for CPU copies.
   image.row_pitch = 0;//desc->word4.bits.pitch+1*desc->word3.bits.element_size;
@@ -240,10 +244,10 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
     sq_buf_rsrc_word3_u word3;
 
     word0.val = 0;
-    word0.f.base_address = ext_image::PtrLow32(image_data_addr);
+    word0.f.base_address = PtrLow32(image_data_addr);
 
     word1.val = 0;
-    word1.f.base_address_hi = ext_image::PtrHigh32(image_data_addr);
+    word1.f.base_address_hi = PtrHigh32(image_data_addr);
     word1.f.stride = image_prop.element_size;
     word1.f.swizzle_enable = false;
     word1.f.cache_swizzle = false;
@@ -291,10 +295,10 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
 
     const size_t row_pitch_size = out.pitch * image_prop.element_size;
 
-    word0.f.base_address = ext_image::PtrLow40Shift8(image_data_addr);
+    word0.f.base_address = PtrLow40Shift8(image_data_addr);
 
     word1.val = 0;
-    word1.f.base_address_hi = ext_image::PtrHigh64Shift40(image_data_addr);
+    word1.f.base_address_hi = PtrHigh64Shift40(image_data_addr);
     word1.f.min_lod = 0;
     word1.f.data_format = image_prop.data_format;
     word1.f.num_format = image_prop.data_type;
@@ -395,7 +399,7 @@ hsa_status_t ImageManagerAi::ModifyImageSrd(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ImageManagerAi::PopulateSamplerSrd(amd::Sampler& sampler) const {
+hsa_status_t ImageManagerAi::PopulateSamplerSrd(Sampler& sampler) const {
   const hsa_ext_sampler_descriptor_t sampler_descriptor = sampler.desc;
 
   SQ_IMG_SAMP_WORD0 word0;
@@ -545,4 +549,5 @@ uint32_t ImageManagerAi::GetAddrlibSurfaceInfoAi(
   return in.swizzleMode;
 }
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr

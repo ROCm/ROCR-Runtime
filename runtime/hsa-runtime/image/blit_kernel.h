@@ -9,7 +9,9 @@
 #include "inc/hsa.h"
 #include "resource.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 typedef struct BlitQueue {
   hsa_queue_t* queue_;
   volatile std::atomic<uint64_t> cached_index_;
@@ -118,6 +120,8 @@ class BlitKernel {
   // Get the patched code object
   hsa_status_t GetPatchedBlitObject(const char* agent_name, uint8_t** code_object_handle);
 };
-}  // namespace amd
+
+}  // namespace image
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_EXT_IMAGE_BLIT_KERNEL_H

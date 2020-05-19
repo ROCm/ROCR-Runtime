@@ -9,16 +9,15 @@
 
 #include "inc/hsa.h"
 
-#undef HSA_API
-#define HSA_API
-
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "blit_kernel.h"
 #include "image_manager.h"
 #include "util.h"
 
-namespace ext_image {
+namespace rocr {
+namespace image {
+
 class ImageRuntime {
  public:
   /// @brief Getter for the ImageRuntime singleton object.
@@ -98,13 +97,12 @@ class ImageRuntime {
   /// @brief Destroy the device sampler object referenced by the handle.
   hsa_status_t DestroySamplerHandle(hsa_ext_sampler_t& sampler);
 
-  amd::ImageManager* image_manager(hsa_agent_t agent) {
-    std::map<uint64_t, amd::ImageManager*>::iterator it =
-        image_managers_.find(agent.handle);
+  ImageManager* image_manager(hsa_agent_t agent) {
+    std::map<uint64_t, ImageManager*>::iterator it = image_managers_.find(agent.handle);
     return (it != image_managers_.end()) ? it->second : NULL;
   }
 
-  amd::BlitKernel& blit_kernel() { return blit_kernel_; }
+  BlitKernel& blit_kernel() { return blit_kernel_; }
 
   size_t cpu_l2_cache_size() const { return cpu_l2_cache_size_; }
 
@@ -131,10 +129,10 @@ class ImageRuntime {
 
   /// @brief Contains mapping of agent and its corresponding ::ImageManager
   ///        object.
-  std::map<uint64_t, amd::ImageManager*> image_managers_;
+  std::map<uint64_t, ImageManager*> image_managers_;
 
   /// @brief Manages kernel for accessing images.
-  amd::BlitKernel blit_kernel_;
+  BlitKernel blit_kernel_;
 
   size_t cpu_l2_cache_size_;
 
@@ -143,5 +141,6 @@ class ImageRuntime {
   DISALLOW_COPY_AND_ASSIGN(ImageRuntime);
 };
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // HSA_RUNTIME_EXT_IMAGE_IMAGE_RUNTIME_H

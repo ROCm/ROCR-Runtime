@@ -40,134 +40,18 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
+#include "image/inc/hsa_ext_image_impl.h"
 #include "core/inc/hsa_ext_interface.h"
+#include "core/inc/runtime.h"
 
 #include <string>
 
-#include "core/inc/runtime.h"
+// Implementations for missing / unsupported extensions
+template <class R, class... ARGS> static R hsa_ext_null(ARGS...) {
+  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+}
 
 namespace core {
-// Implementations for missing / unsupported extensions
-template <class T0>
-static T0 hsa_ext_null() {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1>
-static T0 hsa_ext_null(T1) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2>
-static T0 hsa_ext_null(T1, T2) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3>
-static T0 hsa_ext_null(T1, T2, T3) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4>
-static T0 hsa_ext_null(T1, T2, T3, T4) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15, class T16>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15, T16) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15, class T16, class T17>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15, T16, T17) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15, class T16, class T17, class T18>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15, T16, T17, T18) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15, class T16, class T17, class T18,
-          class T19>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15, T16, T17, T18, T19) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6,
-          class T7, class T8, class T9, class T10, class T11, class T12,
-          class T13, class T14, class T15, class T16, class T17, class T18,
-          class T19, class T20>
-static T0 hsa_ext_null(T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13,
-                       T14, T15, T16, T17, T18, T19, T20) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-template <class T0, class T1, class T2, class T3, class T4, class T5, class T6>
-static T0 hsa_amd_null(T1, T2, T3, T4, T5, T6) {
-  return HSA_STATUS_ERROR_NOT_INITIALIZED;
-}
-
 ExtensionEntryPoints::ExtensionEntryPoints() {
   InitFinalizerExtTable();
   InitImageExtTable();
@@ -223,21 +107,28 @@ void ExtensionEntryPoints::InitAmdExtTable() {
 // Update Amd Ext table for Api related to Images.
 // @note: Interface should be updated when Amd Ext table
 // begins hosting Api's from other extension libraries
-void ExtensionEntryPoints::UpdateAmdExtTable(void *func_ptr) {
-  
+void ExtensionEntryPoints::UpdateAmdExtTable(decltype(::hsa_amd_image_create)* func_ptr) {
   assert(hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
              (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
   assert(hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
              (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
-  hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(hsa_amd_image_create)*)func_ptr;
-  hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = 
-             (decltype(hsa_amd_image_create)*)func_ptr;
+  hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = func_ptr;
+  hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = func_ptr;
+}
+
+void ExtensionEntryPoints::UnloadImage() {
+  InitAmdExtTable();
+  InitImageExtTable();
+  core::hsa_internal_api_table_.Reset();
+  rocr::image::ReleaseImageRsrcs();
 }
 
 void ExtensionEntryPoints::Unload() {
+  // Reset Image apis to hsa_ext_null function
+  UnloadImage();
+
   for (auto lib : libs_) {
     void* ptr = os::GetExportAddress(lib, "Unload");
     if (ptr) {
@@ -259,138 +150,17 @@ void ExtensionEntryPoints::Unload() {
   core::hsa_internal_api_table_.Reset();
 }
 
-bool ExtensionEntryPoints::LoadImage(std::string library_name) {
-  os::LibHandle lib = os::LoadLib(library_name);
-  if (lib == NULL) {
-    return false;
-  }
-  libs_.push_back(lib);
-  
-  void* ptr;
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_get_capability_fn ==
-               (decltype(::hsa_ext_image_get_capability)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_get_capability_fn =
-        (decltype(::hsa_ext_image_get_capability)*)ptr;
+bool ExtensionEntryPoints::LoadImage() {
+  // Consult user input on linking to Image implementation
+  bool disable_image = core::Runtime::runtime_singleton_->flag().disable_image();
+  if (disable_image) {
+    return true;
   }
 
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_data_get_info_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_data_get_info_fn ==
-               (decltype(::hsa_ext_image_data_get_info)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_data_get_info_fn =
-        (decltype(::hsa_ext_image_data_get_info)*)ptr;
-  }
+  // Bind to Image implementation api's
+  decltype(::hsa_amd_image_create)* func;
+  rocr::image::LoadImage(&image_api, &func);
 
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_create_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_create_fn ==
-               (decltype(::hsa_ext_image_create)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_create_fn = (decltype(::hsa_ext_image_create)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_import_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_import_fn ==
-               (decltype(::hsa_ext_image_import)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_import_fn = (decltype(::hsa_ext_image_import)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_export_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_export_fn ==
-               (decltype(::hsa_ext_image_export)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_export_fn = (decltype(::hsa_ext_image_export)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_copy_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_copy_fn ==
-               (decltype(::hsa_ext_image_copy)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_copy_fn = (decltype(::hsa_ext_image_copy)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_clear_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_clear_fn ==
-               (decltype(::hsa_ext_image_clear)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_clear_fn = (decltype(::hsa_ext_image_clear)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_destroy_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_destroy_fn ==
-               (decltype(::hsa_ext_image_destroy)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_destroy_fn = (decltype(::hsa_ext_image_destroy)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_sampler_create_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_sampler_create_fn ==
-               (decltype(::hsa_ext_sampler_create)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_sampler_create_fn = (decltype(::hsa_ext_sampler_create)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_sampler_destroy_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_sampler_destroy_fn ==
-               (decltype(::hsa_ext_sampler_destroy)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_sampler_destroy_fn =
-        (decltype(::hsa_ext_sampler_destroy)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_get_capability_with_layout_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_get_capability_with_layout_fn ==
-               (decltype(::hsa_ext_image_get_capability_with_layout)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_get_capability_with_layout_fn =
-        (decltype(::hsa_ext_image_get_capability_with_layout)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_data_get_info_with_layout_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_data_get_info_with_layout_fn ==
-               (decltype(::hsa_ext_image_data_get_info_with_layout)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_data_get_info_with_layout_fn =
-        (decltype(::hsa_ext_image_data_get_info_with_layout)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_ext_image_create_with_layout_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_ext_image_create_with_layout_fn ==
-               (decltype(::hsa_ext_image_create_with_layout)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_ext_image_create_with_layout_fn = (decltype(::hsa_ext_image_create_with_layout)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_amd_image_get_info_max_dim_impl");
-  if (ptr != NULL) {
-    assert(image_api.hsa_amd_image_get_info_max_dim_fn ==
-               (decltype(::hsa_amd_image_get_info_max_dim)*)hsa_ext_null &&
-           "Duplicate load of extension import.");
-    image_api.hsa_amd_image_get_info_max_dim_fn =
-        (decltype(::hsa_amd_image_get_info_max_dim)*)ptr;
-  }
-
-  ptr = os::GetExportAddress(lib, "hsa_amd_image_create_impl");
-  if (ptr != NULL) {
-    UpdateAmdExtTable(ptr);
-  }
- 
   // Initialize Version of Api Table
   image_api.version.major_id = HSA_IMAGE_API_TABLE_MAJOR_VERSION;
   image_api.version.minor_id = sizeof(ImageExtTable);
@@ -400,11 +170,8 @@ bool ExtensionEntryPoints::LoadImage(std::string library_name) {
   hsa_internal_api_table_.CloneExts(&image_api,
                                     core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
-  ptr = os::GetExportAddress(lib, "Load");
-  if (ptr != NULL) {
-    ((Load_t)ptr)(&core::hsa_internal_api_table_.hsa_api);
-  }
-
+  // Update Amd Ext Api table Api that deals with Images
+  UpdateAmdExtTable(func);
   return true;
 }
 

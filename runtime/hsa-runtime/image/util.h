@@ -1,40 +1,46 @@
 #ifndef HSA_RUNTIME_EXT_IMAGE_UTIL_H
 #define HSA_RUNTIME_EXT_IMAGE_UTIL_H
 
+#include "stdint.h"
+#include "stddef.h"
+#include "stdlib.h"
 #include <assert.h>
-#include <stdint.h>
+#include <iostream>
+#include <string>
+#include <algorithm>
 
 #include "inc/hsa.h"
 
-// A macro to disallow the copy and move constructor and operator= functions
-// This should be used in the private: declarations for a class
-#define DISALLOW_COPY_AND_ASSIGN(TypeName) \
-  TypeName(const TypeName&);               \
-  TypeName(TypeName&&);                    \
-  void operator=(const TypeName&);         \
-  void operator=(TypeName&&);
+namespace rocr {
+namespace image {
 
 #if defined(_MSC_VER)
 #define ALIGNED_(x) __declspec(align(x))
 #else
 #if defined(__GNUC__)
-#define ALIGNED_(x) __attribute__ ((aligned(x)))
-#endif // __GNUC__
+#define ALIGNED_(x) __attribute__((aligned(x)))
+#endif  // __GNUC__
 #endif // _MSC_VER
 
 #define MULTILINE(...) # __VA_ARGS__
+
+}  // namespace image
+}  // namespace rocr
+
 
 #if defined(__GNUC__)
 #include "mm_malloc.h"
 #if defined(__i386__) || defined(__x86_64__)
 #include <x86intrin.h>
 #else
-#error \
+#error                                                                                             \
     "Processor not identified.  " \
-          "Need to provide a lightweight approximate clock interface (aka __rdtsc())."
+            "Need to provide a lightweight approximate clock interface (aka __rdtsc())."
 #endif
 
-namespace ext_image {
+namespace rocr {
+namespace image {
+
 #define __forceinline __inline__ __attribute__((always_inline))
 static __forceinline void __debugbreak() { __builtin_trap(); }
 #define __declspec(x) __attribute__((x))
@@ -43,16 +49,93 @@ static __forceinline void __debugbreak() { __builtin_trap(); }
 #define __ALIGNED__(x) __attribute__((aligned(x)))
 
 static __forceinline void* _aligned_malloc(size_t size, size_t alignment) {
-  return _mm_malloc(size, alignment);
+#ifdef _ISOC11_SOURCE
+  return aligned_alloc(alignment, size);
+#else
+  void* mem = NULL;
+  if (NULL != posix_memalign(&mem, alignment, size)) return NULL;
+  return mem;
+#endif
 }
-static __forceinline void _aligned_free(void* ptr) { return _mm_free(ptr); }
+static __forceinline void _aligned_free(void* ptr) { return free(ptr); }
 #elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
 #include "intrin.h"
 #define __ALIGNED__(x) __declspec(align(x))
-namespace ext_image {
+
+namespace rocr {
+namespace image {
 #else
 #error "Compiler and/or processor not identified."
 #endif
+
+// A macro to disallow the copy and move constructor and operator= functions
+#define DISALLOW_COPY_AND_ASSIGN(TypeName)                                                         \
+  TypeName(const TypeName&) = delete;                                                              \
+  TypeName(TypeName&&) = delete;                                                                   \
+  void operator=(const TypeName&) = delete;                                                        \
+  void operator=(TypeName&&) = delete;
+
+template <typename lambda> class ScopeGuard {
+ public:
+  explicit __forceinline ScopeGuard(const lambda& release) : release_(release), dismiss_(false) {}
+
+  ScopeGuard(ScopeGuard& rhs) { *this = rhs; }
+
+  __forceinline ~ScopeGuard() {
+    if (!dismiss_) release_();
+  }
+  __forceinline ScopeGuard& operator=(ScopeGuard& rhs) {
+    dismiss_ = rhs.dismiss_;
+    release_ = rhs.release_;
+    rhs.dismiss_ = true;
+  }
+  __forceinline void Dismiss() { dismiss_ = true; }
+
+ private:
+  lambda release_;
+  bool dismiss_;
+};
+
+template <typename lambda> static __forceinline ScopeGuard<lambda> MakeScopeGuard(lambda rel) {
+  return ScopeGuard<lambda>(rel);
+}
+
+#define MAKE_SCOPE_GUARD_HELPER(lname, sname, ...)                                                 \
+  auto lname = __VA_ARGS__;                                                                        \
+  ScopeGuard<decltype(lname)> sname(lname);
+#define MAKE_SCOPE_GUARD(...)                                                                      \
+  MAKE_SCOPE_GUARD_HELPER(PASTE(scopeGuardLambda, __COUNTER__), PASTE(scopeGuard, __COUNTER__),    \
+                          __VA_ARGS__)
+#define MAKE_NAMED_SCOPE_GUARD(name, ...)                                                          \
+  MAKE_SCOPE_GUARD_HELPER(PASTE(scopeGuardLambda, __COUNTER__), name, __VA_ARGS__)
+
+/// @brief: Finds out the min one of two inputs, input must support ">"
+/// operator.
+/// @param: a(Input), a reference to type T.
+/// @param: b(Input), a reference to type T.
+/// @return: T.
+template <class T> static __forceinline T Min(const T& a, const T& b) { return (a > b) ? b : a; }
+
+template <class T, class... Arg> static __forceinline T Min(const T& a, const T& b, Arg... args) {
+  return Min(a, Min(b, args...));
+}
+
+/// @brief: Find out the max one of two inputs, input must support ">" operator.
+/// @param: a(Input), a reference to type T.
+/// @param: b(Input), a reference to type T.
+/// @return: T.
+template <class T> static __forceinline T Max(const T& a, const T& b) { return (b > a) ? b : a; }
+
+template <class T, class... Arg> static __forceinline T Max(const T& a, const T& b, Arg... args) {
+  return Max(a, Max(b, args...));
+}
+
+/// @brief: Free the memory space which is newed previously.
+/// @param: ptr(Input), a pointer to memory space. Can't be NULL.
+/// @return: void.
+struct DeleteObject {
+  template <typename T> void operator()(const T* ptr) const { delete ptr; }
+};
 
 /// @brief: Checks if a value is power of two, if it is, return true. Be careful
 /// when passing 0.
@@ -148,6 +231,24 @@ static __forceinline uint64_t NextPow2(uint64_t value) {
   return v + 1;
 }
 
+static __forceinline bool strIsEmpty(const char* str) noexcept { return str[0] == '\0'; }
+
+static __forceinline std::string& ltrim(std::string& s) {
+  auto it = std::find_if(s.begin(), s.end(),
+                         [](char c) { return !std::isspace<char>(c, std::locale::classic()); });
+  s.erase(s.begin(), it);
+  return s;
+}
+
+static __forceinline std::string& rtrim(std::string& s) {
+  auto it = std::find_if(s.rbegin(), s.rend(),
+                         [](char c) { return !std::isspace<char>(c, std::locale::classic()); });
+  s.erase(it.base(), s.end());
+  return s;
+}
+
+static __forceinline std::string& trim(std::string& s) { return ltrim(rtrim(s)); }
+
 template<uint32_t lowBit, uint32_t highBit, typename T>
 static __forceinline uint32_t BitSelect(T p) {
   static_assert(sizeof(T) <= sizeof(uintptr_t), "Type out of range.");
@@ -192,22 +293,7 @@ inline uint32_t PtrHigh32(const void* p) {
   return ptr;
 }
 
-/**
-* Generic functor compatible with the STL algorithms that enables proper
-* destruction of a container of pointers. If (for instance), \c v is a vector
-* of pointers to objects of type T, then the destructors of the elements in
-* \c v are invoked when calling
-* \code{std::for_each(v.begin(), v.end(), DeleteObject())}
-*
-* The original code and further information about this function object can be
-* found in "Effective STL", 1st edition, item 7.
-*/
-struct DeleteObject {
-  template<typename T>
-  void operator()(const T *ptr) const {
-    delete ptr;
-  }
-};
-}  // namespace ext_image
+}  // namespace image
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_EXT_IMAGE_UTIL_H

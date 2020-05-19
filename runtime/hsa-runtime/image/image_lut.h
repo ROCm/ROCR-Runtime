@@ -7,7 +7,9 @@
 #include "resource.h"
 #include "util.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 class ImageLut {
  public:
   ImageLut() {}
@@ -33,5 +35,6 @@ class ImageLut {
    DISALLOW_COPY_AND_ASSIGN(ImageLut);
 };
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // AMD_HSA_EXT_IMAGE_IMAGE_LUT_H

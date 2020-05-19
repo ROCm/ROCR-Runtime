@@ -3,7 +3,9 @@
 
 #include "image_lut.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 class ImageLutKv : public ImageLut {
  public:
   ImageLutKv() {}
@@ -46,5 +48,6 @@ class ImageLutKv : public ImageLut {
   DISALLOW_COPY_AND_ASSIGN(ImageLutKv);
 };
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // AMD_HSA_EXT_IMAGE_IMAGE_LUT_KV_H

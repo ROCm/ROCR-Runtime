@@ -16,7 +16,12 @@
 #undef HSA_ARGUMENT_ALIGN_BYTES
 #define HSA_ARGUMENT_ALIGN_BYTES 16
 
+#include "core/inc/hsa_internal.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/hsa_table_interface.h"
+
+namespace rocr {
+namespace image {
 
 extern uint8_t blit_object_gfx7xx[14608];
 extern uint8_t blit_object_gfx8xx[15424];
@@ -37,8 +42,6 @@ extern uint8_t ocl_blit_object_gfx1010[];
 extern uint8_t ocl_blit_object_gfx1011[];
 extern uint8_t ocl_blit_object_gfx1012[];
 
-namespace amd {
-
 // Arguments inserted by OCL compiler, all zero here.
 struct OCLHiddenArgs {
   uint64_t offset_x;
@@ -52,20 +55,20 @@ struct OCLHiddenArgs {
 
 static void* Allocate(hsa_agent_t agent, size_t size) {
   //use the host accessible kernarg pool
-  hsa_amd_memory_pool_t pool = ext_image::ImageRuntime::instance()->kernarg_pool();
+  hsa_amd_memory_pool_t pool = ImageRuntime::instance()->kernarg_pool();
 
   void* ptr = NULL;
 
-  hsa_status_t status = hsa_amd_memory_pool_allocate(pool, size, 0, &ptr);
+  hsa_status_t status = AMD::hsa_amd_memory_pool_allocate(pool, size, 0, &ptr);
   assert(status == HSA_STATUS_SUCCESS);
 
   if (status != HSA_STATUS_SUCCESS) return NULL;
 
-  status = hsa_amd_agents_allow_access(1, &agent, NULL, ptr);
+  status = AMD::hsa_amd_agents_allow_access(1, &agent, NULL, ptr);
   assert(status == HSA_STATUS_SUCCESS);
 
   if (status != HSA_STATUS_SUCCESS) {
-    hsa_amd_memory_pool_free(ptr);
+    AMD::hsa_amd_memory_pool_free(ptr);
     return NULL;
   }
   return ptr;
@@ -82,7 +85,7 @@ hsa_status_t BlitKernel::Cleanup() {
 
   for (std::pair<const uint64_t, hsa_executable_t> pair :
        code_executable_map_) {
-    hsa_executable_destroy(pair.second);
+    HSA::hsa_executable_destroy(pair.second);
   }
 
   code_executable_map_.clear();
@@ -96,8 +99,7 @@ hsa_status_t BlitKernel::BuildBlitCode(
     hsa_agent_t agent, std::vector<BlitCodeInfo>& blit_code_catalog) {
   // Find existing kernels in the list that have compatible ISA.
   hsa_isa_t agent_isa = {0};
-  hsa_status_t status =
-      hsa_agent_get_info(agent, HSA_AGENT_INFO_ISA, &agent_isa);
+  hsa_status_t status = HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_ISA, &agent_isa);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -108,7 +110,7 @@ hsa_status_t BlitKernel::BuildBlitCode(
     bool isa_compatible = false;
     hsa_isa_t code_isa = {pair.first};
 
-    status = hsa_isa_compatible(code_isa, agent_isa, &isa_compatible);
+    status = HSA::hsa_isa_compatible(code_isa, agent_isa, &isa_compatible);
     if (HSA_STATUS_SUCCESS != status) {
       return status;
     }
@@ -123,7 +125,7 @@ hsa_status_t BlitKernel::BuildBlitCode(
 
   // Get the target name
   char agent_name[64] = {0};
-  status = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, &agent_name);
+  status = HSA::hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, &agent_name);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -142,8 +144,8 @@ hsa_status_t BlitKernel::BuildBlitCode(
 
   // Create executable.
   hsa_executable_t executable = {0};
-  status = hsa_executable_create(
-      HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &executable);
+  status =
+      HSA::hsa_executable_create(HSA_PROFILE_FULL, HSA_EXECUTABLE_STATE_UNFROZEN, "", &executable);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -151,13 +153,13 @@ hsa_status_t BlitKernel::BuildBlitCode(
   code_executable_map_[agent_isa.handle] = executable;
 
   // Load code object.
-  status = hsa_executable_load_code_object(executable, agent, code_object, "");
+  status = HSA::hsa_executable_load_code_object(executable, agent, code_object, "");
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
 
   // Freeze executable.
-  status = hsa_executable_freeze(executable, "");
+  status = HSA::hsa_executable_freeze(executable, "");
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -170,8 +172,7 @@ hsa_status_t BlitKernel::CopyBufferToImage(
     const void* src_memory, size_t src_row_pitch, size_t src_slice_pitch,
     const Image& dst_image, const hsa_ext_image_region_t& image_region) {
   if (dst_image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
-    ImageManager* manager =
-        ext_image::ImageRuntime::instance()->image_manager(dst_image.component);
+    ImageManager* manager = ImageRuntime::instance()->image_manager(dst_image.component);
 
     const uint32_t element_size =
         manager->GetImageProperty(dst_image.component, dst_image.desc.format,
@@ -181,7 +182,7 @@ hsa_status_t BlitKernel::CopyBufferToImage(
     char* dst_memory = reinterpret_cast<char*>(dst_image.data) + dst_origin;
     const size_t size = image_region.range.x * element_size;
 
-    return hsa_memory_copy(dst_memory, src_memory, size);
+    return HSA::hsa_memory_copy(dst_memory, src_memory, size);
   }
 
   const Image* dst_image_view = NULL;
@@ -230,8 +231,7 @@ hsa_status_t BlitKernel::CopyBufferToImage(
   args->pixelOrigin[1] = image_region.offset.y;
   args->pixelOrigin[2] = image_region.offset.z;
 
-  ImageManager* manager = ext_image::ImageRuntime::instance()->image_manager(
-      dst_image_view->component);
+  ImageManager* manager = ImageRuntime::instance()->image_manager(dst_image_view->component);
 
   const uint32_t element_size =
       manager->GetImageProperty(dst_image_view->component,
@@ -269,7 +269,7 @@ hsa_status_t BlitKernel::CopyBufferToImage(
   if (&dst_image != dst_image_view) {
     Image::Destroy(dst_image_view);
   }
-  hsa_amd_memory_pool_free(args);
+  AMD::hsa_amd_memory_pool_free(args);
 
   return status;
 }
@@ -279,8 +279,7 @@ hsa_status_t BlitKernel::CopyImageToBuffer(
     const Image& src_image, void* dst_memory, size_t dst_row_pitch,
     size_t dst_slice_pitch, const hsa_ext_image_region_t& image_region) {
   if (src_image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
-    ImageManager* manager =
-        ext_image::ImageRuntime::instance()->image_manager(src_image.component);
+    ImageManager* manager = ImageRuntime::instance()->image_manager(src_image.component);
 
     const uint32_t element_size =
         manager->GetImageProperty(src_image.component, src_image.desc.format,
@@ -291,7 +290,7 @@ hsa_status_t BlitKernel::CopyImageToBuffer(
         reinterpret_cast<const char*>(src_image.data) + src_origin;
     const size_t size = image_region.range.x * element_size;
 
-    return hsa_memory_copy(dst_memory, src_memory, size);
+    return HSA::hsa_memory_copy(dst_memory, src_memory, size);
   }
 
   const Image* src_image_view = NULL;
@@ -340,8 +339,7 @@ hsa_status_t BlitKernel::CopyImageToBuffer(
   args->pixelOrigin[1] = image_region.offset.y;
   args->pixelOrigin[2] = image_region.offset.z;
 
-  ImageManager* manager = ext_image::ImageRuntime::instance()->image_manager(
-      src_image_view->component);
+  ImageManager* manager = ImageRuntime::instance()->image_manager(src_image_view->component);
 
   const uint32_t element_size =
       manager->GetImageProperty(src_image_view->component,
@@ -379,7 +377,7 @@ hsa_status_t BlitKernel::CopyImageToBuffer(
   if (&src_image != src_image_view) {
     Image::Destroy(src_image_view);
   }
-  hsa_amd_memory_pool_free(args);
+  AMD::hsa_amd_memory_pool_free(args);
 
   return status;
 }
@@ -481,7 +479,7 @@ hsa_status_t BlitKernel::CopyImage(
     Image::Destroy(dst_image_view);
   }
 
-  hsa_amd_memory_pool_free(args);
+  AMD::hsa_amd_memory_pool_free(args);
 
   return status;
 }
@@ -531,7 +529,7 @@ hsa_status_t BlitKernel::FillImage(
 
   hsa_status_t status = LaunchKernel(blit_queue, packet);
 
-  hsa_amd_memory_pool_free(args);
+  AMD::hsa_amd_memory_pool_free(args);
 
   return status;
 }
@@ -569,7 +567,8 @@ hsa_status_t BlitKernel::PopulateKernelCode(
     // Get symbol handle.
     hsa_executable_symbol_t kernel_symbol = {0};
 
-    hsa_status_t status = hsa_executable_get_symbol_by_name(executable, ocl_kernel_name_[i], &agent, &kernel_symbol);
+    hsa_status_t status = HSA::hsa_executable_get_symbol_by_name(executable, ocl_kernel_name_[i],
+                                                                 &agent, &kernel_symbol);
     if (HSA_STATUS_SUCCESS != status) {
       blit_code_catalog.clear();
       return status;
@@ -577,15 +576,14 @@ hsa_status_t BlitKernel::PopulateKernelCode(
 
     // Get code handle.
     BlitCodeInfo blit_code = {0};
-    status = hsa_executable_symbol_get_info(
-        kernel_symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT,
-        &blit_code.code_handle_);
+    status = HSA::hsa_executable_symbol_get_info(
+        kernel_symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &blit_code.code_handle_);
     if (HSA_STATUS_SUCCESS != status) {
       blit_code_catalog.clear();
       return status;
     }
 
-    status = hsa_executable_symbol_get_info(
+    status = HSA::hsa_executable_symbol_get_info(
         kernel_symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE,
         &blit_code.group_segment_size_);
     if (HSA_STATUS_SUCCESS != status) {
@@ -593,7 +591,7 @@ hsa_status_t BlitKernel::PopulateKernelCode(
       return status;
     }
 
-    status = hsa_executable_symbol_get_info(
+    status = HSA::hsa_executable_symbol_get_info(
         kernel_symbol, HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE,
         &blit_code.private_segment_size_);
     if (HSA_STATUS_SUCCESS != status) {
@@ -830,11 +828,11 @@ hsa_status_t BlitKernel::ConvertImage(const Image& original_image,
       static_cast<hsa_ext_image_channel_type_t>(converted_type),
       static_cast<hsa_ext_image_channel_order_t>(converted_order)};
 
-  amd::Image* new_image_handle = amd::Image::Create(original_image.component);
+  Image* new_image_handle = Image::Create(original_image.component);
   *new_image_handle=original_image;
   new_image_handle->desc.geometry = converted_geometry;
 
-  hsa_status_t status = ext_image::ImageRuntime::instance()
+  hsa_status_t status = ImageRuntime::instance()
                             ->image_manager(new_image_handle->component)
                             ->ModifyImageSrd(*new_image_handle, new_format);
   if (status != HSA_STATUS_SUCCESS) {
@@ -864,7 +862,7 @@ hsa_status_t BlitKernel::LaunchKernel(BlitQueue& blit_queue,
 
   // Setup completion signal.
   hsa_signal_t kernel_signal = {0};
-  hsa_status_t status = hsa_signal_create(1, 0, NULL, &kernel_signal);
+  hsa_status_t status = HSA::hsa_signal_create(1, 0, NULL, &kernel_signal);
   if (HSA_STATUS_SUCCESS != status) {
     return status;
   }
@@ -875,11 +873,11 @@ hsa_status_t BlitKernel::LaunchKernel(BlitQueue& blit_queue,
   const uint32_t bitmask = queue->size - 1;
 
   // Reserve write index.
-  uint64_t write_index = hsa_queue_add_write_index_acq_rel(queue, 1);
+  uint64_t write_index = HSA::hsa_queue_add_write_index_scacq_screl(queue, 1);
 
   while (true) {
     // Wait until we have room in the queue;
-    const uint64_t read_index = hsa_queue_load_read_index_relaxed(queue);
+    const uint64_t read_index = HSA::hsa_queue_load_read_index_relaxed(queue);
     if ((write_index - read_index) < queue->size) {
       break;
     }
@@ -896,19 +894,19 @@ hsa_status_t BlitKernel::LaunchKernel(BlitQueue& blit_queue,
   queue_buffer[write_index & bitmask].header = kDispatchPacketHeader;
 
   // Update doorbel register.
-  hsa_signal_store_release(queue->doorbell_signal, write_index);
+  HSA::hsa_signal_store_screlease(queue->doorbell_signal, write_index);
 
   // Wait for the packet to finish.
-  if (hsa_signal_wait_acquire(kernel_signal, HSA_SIGNAL_CONDITION_LT, 1,
-                              uint64_t(-1), HSA_WAIT_STATE_ACTIVE) != 0) {
-    status = hsa_signal_destroy(kernel_signal);
+  if (HSA::hsa_signal_wait_scacquire(kernel_signal, HSA_SIGNAL_CONDITION_LT, 1, uint64_t(-1),
+                                     HSA_WAIT_STATE_ACTIVE) != 0) {
+    status = HSA::hsa_signal_destroy(kernel_signal);
     assert(status == HSA_STATUS_SUCCESS);
     // Signal wait returned unexpected value.
     return HSA_STATUS_ERROR;
   }
 
   // Cleanup
-  status = hsa_signal_destroy(kernel_signal);
+  status = HSA::hsa_signal_destroy(kernel_signal);
   assert(status == HSA_STATUS_SUCCESS);
 
   return HSA_STATUS_SUCCESS;
@@ -971,5 +969,7 @@ hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
 
   return HSA_STATUS_SUCCESS;
 }
-}  // namespace amd
+
+}  // namespace image
+}  // namespace rocr
 #undef HSA_ARGUMENT_ALIGN_BYTES

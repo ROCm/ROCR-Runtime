@@ -46,6 +46,13 @@ cmake_minimum_required ( VERSION 3.5.0 )
 set ( CORE_RUNTIME_NAME "hsa-runtime" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
 set ( CORE_RUNTIME_LIBRARY "lib${CORE_RUNTIME_TARGET}" )
+
+## Set image module name
+set ( IMAGE_NAME "hsa-ext-image" )
+set ( IMAGE_TARGET "${IMAGE_NAME}64" )
+set ( IMAGE_LIBRARY "lib${IMAGE_TARGET}" )
+
+## Set project name
 project( ${CORE_RUNTIME_TARGET} )
 
 if ( NOT DEFINED BUILD_SHARED_LIBS )
@@ -172,6 +179,14 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
 
 add_library( ${CORE_RUNTIME_TARGET} ${SRCS} )
 
+## Build Blit kernels
+set(IMAGE_SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/image)
+add_subdirectory(${IMAGE_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/image)
+
+## Link Core runtime with Thunk (ROCt) and Image libraries
+#target_link_libraries ( ${CORE_RUNTIME_TARGET} PUBLIC ${IMAGE_SOURCE_DIR} )
+target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_TARGET} )
+#target_link_libraries ( ${CORE_RUNTIME_TARGET} ${IMAGE_TARGET} )
 target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE hsakmt
   elf dl pthread rt
@@ -227,8 +242,21 @@ set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm" )
 
+# Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
+set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
+set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
+set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
+set ( CPACK_DEBIAN_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
+
 ## RPM package specific variables
 set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct" )
+
+# Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
+#set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" ) # equivalent command not found
+set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
+set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
+set ( CPACK_RPM_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
+
 set ( CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
 set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 

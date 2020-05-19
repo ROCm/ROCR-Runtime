@@ -7,7 +7,8 @@
 #error "BIGENDIAN_CPU or LITTLEENDIAN_CPU must be defined"
 #endif
 
-namespace amd {
+namespace rocr {
+namespace image {
 
         union SQ_BUF_RSRC_WORD0 {
         struct {
@@ -1116,5 +1117,6 @@ typedef struct metadata_amd_ai_s {
     uint32_t mip_offsets[0]; //Mip level offset bits [39:8] for each level (if any)
 } metadata_amd_ai_t;
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // HSA_RUNTIME_EXT_IMAGE_RESOURCE_AI_H
