@@ -22,18 +22,16 @@
 #include "stdint.h"
 #include "inc/hsa.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif  // __cplusplus
+namespace rocr {
+namespace image {
 
 uint32_t MajorVerFromDevID(uint32_t dev_id);
 uint32_t MinorVerFromDevID(uint32_t dev_id);
 uint32_t StepFromDevID(uint32_t dev_id);
 uint32_t DevIDToAddrLibFamily(uint32_t dev_id);
-
 hsa_status_t GetGPUAsicID(hsa_agent_t agent, uint32_t *chip_id);
-#ifdef __cplusplus
-}
-#endif  // __cplusplus
+
+}  // namespace image
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_DEVICE_INFO_H_

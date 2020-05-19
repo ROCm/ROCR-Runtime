@@ -1,7 +1,9 @@
 #include "image_lut_kv.h"
 #include "resource_kv.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 const uint32_t ImageLutKv::kGeometryLut_[GEOMETRY_COUNT] = {
     SQ_RSRC_IMG_1D,        // HSA_EXT_IMAGE_GEOMETRY_1D
     SQ_RSRC_IMG_2D,        // HSA_EXT_IMAGE_GEOMETRY_2D
@@ -393,4 +395,5 @@ uint32_t ImageLutKv::GetPixelSize(uint8_t data_format, uint8_t data_type) const 
   }
 }
 
-}  // namespace amd
+}  // namespace image
+}  // namespace rocr

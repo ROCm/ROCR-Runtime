@@ -7,8 +7,9 @@
 #include <climits>
 
 #include "hsakmt.h"
-#include "inc/hsa.h"
 #include "inc/hsa_ext_amd.h"
+#include "core/inc/hsa_internal.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 #include "addrlib/inc/addrinterface.h"
 #include "addrlib/src/core/addrlib.h"
 #include "image_runtime.h"
@@ -17,7 +18,9 @@
 #include "util.h"
 #include "device_info.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
+
 ImageManagerKv::ImageManagerKv() : ImageManager() {}
 
 ImageManagerKv::~ImageManagerKv() {}
@@ -39,7 +42,8 @@ hsa_status_t ImageManagerKv::Initialize(hsa_agent_t agent_handle) {
   tileConfig.MacroTileConfig = &mtc[0];
   tileConfig.NumMacroTileConfigs = 40;
   uint32_t node_id = 0;
-  status = hsa_agent_get_info(agent_, static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_DRIVER_NODE_ID), &node_id);
+  status = HSA::hsa_agent_get_info(
+      agent_, static_cast<hsa_agent_info_t>(HSA_AMD_AGENT_INFO_DRIVER_NODE_ID), &node_id);
   assert(status == HSA_STATUS_SUCCESS);
   HSAKMT_STATUS stat = hsaKmtGetTileConfig(node_id, &tileConfig);
   assert(stat == HSAKMT_STATUS_SUCCESS);
@@ -96,7 +100,7 @@ hsa_status_t ImageManagerKv::Initialize(hsa_agent_t agent_handle) {
   // the change to the coherency mode happens before a call to
   // hsa_ext_image_create.
   hsa_amd_coherency_type_t coherency_type;
-  status = hsa_amd_coherency_get_type(agent_, &coherency_type);
+  status = AMD::hsa_amd_coherency_get_type(agent_, &coherency_type);
   assert(status == HSA_STATUS_SUCCESS);
   mtype_ = (coherency_type == HSA_AMD_COHERENCY_TYPE_COHERENT) ? 3 : 1;
 
@@ -104,15 +108,14 @@ hsa_status_t ImageManagerKv::Initialize(hsa_agent_t agent_handle) {
   // hsa_ext_image_create.
 
   hsa_region_t local_region = {0};
-  status =
-      hsa_agent_iterate_regions(agent_, GetLocalMemoryRegion, &local_region);
+  status = HSA::hsa_agent_iterate_regions(agent_, GetLocalMemoryRegion, &local_region);
   assert(status == HSA_STATUS_SUCCESS);
 
   local_memory_base_address_ = 0;
   if (local_region.handle != 0) {
-    status = hsa_region_get_info(
-        local_region, static_cast<hsa_region_info_t>(HSA_AMD_REGION_INFO_BASE),
-        &local_memory_base_address_);
+    status = HSA::hsa_region_get_info(local_region,
+                                      static_cast<hsa_region_info_t>(HSA_AMD_REGION_INFO_BASE),
+                                      &local_memory_base_address_);
     assert(status == HSA_STATUS_SUCCESS);
   }
 
@@ -125,7 +128,7 @@ hsa_status_t ImageManagerKv::Initialize(hsa_agent_t agent_handle) {
 
 void ImageManagerKv::Cleanup() {
   if (blit_queue_.queue_ != NULL) {
-    hsa_queue_destroy(blit_queue_.queue_);
+    HSA::hsa_queue_destroy(blit_queue_.queue_);
   }
 
   if (addr_lib_ != NULL) {
@@ -158,7 +161,7 @@ hsa_status_t ImageManagerKv::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
-  hsa_status_t status = hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
+  hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&
@@ -240,8 +243,8 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image, const metadata_amd_t
   image.srd[6]=desc->word6.u32_all;
   image.srd[7]=desc->word7.u32_all;
 
-  ((SQ_IMG_RSRC_WORD0*)(&image.srd[0]))->bits.base_address = ext_image::PtrLow40Shift8(image_data_addr);
-  ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.base_address_hi = ext_image::PtrHigh64Shift40(image_data_addr);
+  ((SQ_IMG_RSRC_WORD0*)(&image.srd[0]))->bits.base_address = PtrLow40Shift8(image_data_addr);
+  ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.base_address_hi = PtrHigh64Shift40(image_data_addr);
   ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.data_format = image_prop.data_format;
   ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.num_format = image_prop.data_type;
   ((SQ_IMG_RSRC_WORD1*)(&image.srd[1]))->bits.mtype = mtype;
@@ -250,7 +253,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image, const metadata_amd_t
   ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.dst_sel_y = swizzle.y;
   ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.dst_sel_z = swizzle.z;
   ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.dst_sel_w = swizzle.w;
-  ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.meta_data_address += ext_image::PtrLow40Shift8(image_data_addr);
+  ((SQ_IMG_RSRC_WORD7*)(&image.srd[7]))->bits.meta_data_address += PtrLow40Shift8(image_data_addr);
 
   //Looks like this is only used for CPU copies.
   image.row_pitch = (desc->word4.bits.pitch+1)*image_prop.element_size;
@@ -288,10 +291,10 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     SQ_BUF_RSRC_WORD3 word3;
 
     word0.u32_all = 0;
-    word0.bits.base_address = ext_image::PtrLow32(image_data_addr);
+    word0.bits.base_address = PtrLow32(image_data_addr);
 
     word1.u32_all = 0;
-    word1.bits.base_address_hi = ext_image::PtrHigh32(image_data_addr);
+    word1.bits.base_address_hi = PtrHigh32(image_data_addr);
     word1.bits.stride = image_prop.element_size;
     word1.bits.swizzle_enable = false;
     word1.bits.cache_swizzle = false;
@@ -341,10 +344,10 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
 
     const size_t row_pitch_size = out.pitch * image_prop.element_size;
 
-    word0.bits.base_address = ext_image::PtrLow40Shift8(image_data_addr);
+    word0.bits.base_address = PtrLow40Shift8(image_data_addr);
 
     word1.u32_all = 0;
-    word1.bits.base_address_hi = ext_image::PtrHigh64Shift40(image_data_addr);
+    word1.bits.base_address_hi = PtrHigh64Shift40(image_data_addr);
     word1.bits.min_lod = 0;
     word1.bits.data_format = image_prop.data_format;
     word1.bits.num_format = image_prop.data_type;
@@ -364,10 +367,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     word3.bits.dst_sel_z = swizzle.z;
     word3.bits.dst_sel_w = swizzle.w;
     word3.bits.tiling_index = out.tileIndex;
-    word3.bits.pow2_pad = (ext_image::IsPowerOfTwo(row_pitch_size) &&
-                           ext_image::IsPowerOfTwo(image.desc.height))
-                              ? 1
-                              : 0;
+    word3.bits.pow2_pad = (IsPowerOfTwo(row_pitch_size) && IsPowerOfTwo(image.desc.height)) ? 1 : 0;
     word3.bits.type = image_lut_.MapGeometry(image.desc.geometry);
     word3.bits.atc = atc_access;
 
@@ -456,7 +456,7 @@ hsa_status_t ImageManagerKv::ModifyImageSrd(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t ImageManagerKv::PopulateSamplerSrd(amd::Sampler& sampler) const {
+hsa_status_t ImageManagerKv::PopulateSamplerSrd(Sampler& sampler) const {
   const hsa_ext_sampler_descriptor_t sampler_descriptor = sampler.desc;
 
   SQ_IMG_SAMP_WORD0 word0;
@@ -525,9 +525,9 @@ hsa_status_t ImageManagerKv::CopyBufferToImage(
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  return ext_image::ImageRuntime::instance()->blit_kernel().CopyBufferToImage(
-      blit_queue_, blit_code_catalog_, src_memory, src_row_pitch,
-      src_slice_pitch, dst_image, image_region);
+  return ImageRuntime::instance()->blit_kernel().CopyBufferToImage(
+      blit_queue_, blit_code_catalog_, src_memory, src_row_pitch, src_slice_pitch, dst_image,
+      image_region);
 }
 
 hsa_status_t ImageManagerKv::CopyImageToBuffer(
@@ -537,9 +537,9 @@ hsa_status_t ImageManagerKv::CopyImageToBuffer(
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  return ext_image::ImageRuntime::instance()->blit_kernel().CopyImageToBuffer(
-      blit_queue_, blit_code_catalog_, src_image, dst_memory, dst_row_pitch,
-      dst_slice_pitch, image_region);
+  return ImageRuntime::instance()->blit_kernel().CopyImageToBuffer(
+      blit_queue_, blit_code_catalog_, src_image, dst_memory, dst_row_pitch, dst_slice_pitch,
+      image_region);
 }
 
 hsa_status_t ImageManagerKv::CopyImage(const Image& dst_image,
@@ -562,9 +562,9 @@ hsa_status_t ImageManagerKv::CopyImage(const Image& dst_image,
   BlitKernel::KernelOp copy_type = BlitKernel::KERNEL_OP_COPY_IMAGE_DEFAULT;
 
   if ((src_order == dst_order) && (src_type == dst_type)) {
-    return ext_image::ImageRuntime::instance()->blit_kernel().CopyImage(
-        blit_queue_, blit_code_catalog_, dst_image, src_image, dst_origin,
-        src_origin, size, copy_type);
+    return ImageRuntime::instance()->blit_kernel().CopyImage(blit_queue_, blit_code_catalog_,
+                                                             dst_image, src_image, dst_origin,
+                                                             src_origin, size, copy_type);
   }
 
   // Source and destination format must be the same, except for
@@ -589,10 +589,9 @@ hsa_status_t ImageManagerKv::CopyImage(const Image& dst_image,
       uint32_t num_format_original = word1->bits.num_format;
       word1->bits.num_format = TYPE_UNORM;
 
-      hsa_status_t status =
-          ext_image::ImageRuntime::instance()->blit_kernel().CopyImage(
-              blit_queue_, blit_code_catalog_, dst_image, src_image, dst_origin,
-              src_origin, size, copy_type);
+      hsa_status_t status = ImageRuntime::instance()->blit_kernel().CopyImage(
+          blit_queue_, blit_code_catalog_, dst_image, src_image, dst_origin, src_origin, size,
+          copy_type);
 
       // Revert to the original format after the copy operation is finished.
       word1->bits.num_format = num_format_original;
@@ -655,9 +654,8 @@ hsa_status_t ImageManagerKv::FillImage(const Image& image, const void* pattern,
       break;
   }
 
-  hsa_status_t status =
-      ext_image::ImageRuntime::instance()->blit_kernel().FillImage(
-          blit_queue_, blit_code_catalog_, *image_view, new_pattern, region);
+  hsa_status_t status = ImageRuntime::instance()->blit_kernel().FillImage(
+      blit_queue_, blit_code_catalog_, *image_view, new_pattern, region);
 
   // Revert back original configuration.
   if (word3_buff != NULL) {
@@ -682,8 +680,7 @@ hsa_status_t ImageManagerKv::GetLocalMemoryRegion(hsa_region_t region,
   }
 
   hsa_region_segment_t segment;
-  hsa_status_t stat =
-      hsa_region_get_info(region, HSA_REGION_INFO_SEGMENT, &segment);
+  hsa_status_t stat = HSA::hsa_region_get_info(region, HSA_REGION_INFO_SEGMENT, &segment);
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
   }
@@ -693,7 +690,7 @@ hsa_status_t ImageManagerKv::GetLocalMemoryRegion(hsa_region_t region,
   }
 
   uint32_t base = 0;
-  stat = hsa_region_get_info(region, HSA_REGION_INFO_GLOBAL_FLAGS, &base);
+  stat = HSA::hsa_region_get_info(region, HSA_REGION_INFO_GLOBAL_FLAGS, &base);
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
   }
@@ -926,12 +923,11 @@ BlitQueue& ImageManagerKv::BlitQueueInit() {
       blit_queue_.cached_index_ = 0;
 
       uint32_t max_queue_size = 0;
-      hsa_status_t status = hsa_agent_get_info(
-          agent_, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &max_queue_size);
+      hsa_status_t status =
+          HSA::hsa_agent_get_info(agent_, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &max_queue_size);
 
-      status =
-          hsa_queue_create(agent_, max_queue_size, HSA_QUEUE_TYPE_MULTI, NULL,
-                           NULL, UINT_MAX, UINT_MAX, &blit_queue_.queue_);
+      status = HSA::hsa_queue_create(agent_, max_queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL,
+                                     UINT_MAX, UINT_MAX, &blit_queue_.queue_);
 
       if (HSA_STATUS_SUCCESS != status) {
         blit_queue_.queue_ = NULL;
@@ -939,12 +935,11 @@ BlitQueue& ImageManagerKv::BlitQueueInit() {
       }
 
       // Get the kernel handles.
-      status = ext_image::ImageRuntime::instance()->blit_kernel().BuildBlitCode(
-          agent_, blit_code_catalog_);
+      status = ImageRuntime::instance()->blit_kernel().BuildBlitCode(agent_, blit_code_catalog_);
 
       if (HSA_STATUS_SUCCESS != status) {
         blit_code_catalog_.clear();
-        hsa_queue_destroy(blit_queue_.queue_);
+        HSA::hsa_queue_destroy(blit_queue_.queue_);
         blit_queue_.queue_ = NULL;
         return blit_queue_;
       }
@@ -957,4 +952,5 @@ BlitQueue& ImageManagerKv::BlitQueueInit() {
   return blit_queue_;
 }
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr

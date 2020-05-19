@@ -31,7 +31,7 @@ cmake_minimum_required(VERSION 3.5.0)
 #
 
 ## Include the cmake_modules utils.cmake
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../../opensrc/hsa-runtime/cmake_modules" )
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake_modules" )
 include ( utils )
 
 # Flag to abort before executing after default initialization of cache variables
@@ -44,7 +44,6 @@ listsubdirs(${LLVM_SEARCH_ROOT} FOLDERS)
 foreach(ITEM IN LISTS FOLDERS)
     list (APPEND LLVM_SEARCH_PATHS "${LLVM_SEARCH_ROOT}/${ITEM}/include/")
 endforeach()
-
 
 if (NOT DEFINED OPENCL_VER)
   set (OPENCL_VER "2.0")

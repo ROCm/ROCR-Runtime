@@ -26,8 +26,8 @@
   (HSA_EXT_IMAGE_CAPABILITY_READ_ONLY | HSA_EXT_IMAGE_CAPABILITY_WRITE_ONLY | \
   HSA_EXT_IMAGE_CAPABILITY_READ_WRITE)
 
-
-namespace amd {
+namespace rocr {
+namespace image {
 
 typedef struct metadata_amd_s {
     uint32_t version; // Must be 1
@@ -151,5 +151,6 @@ public:
   hsa_ext_sampler_descriptor_t desc;
 } Sampler;
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr
 #endif  // HSA_RUNTIME_EXT_IMAGE_RESOURCE_H

@@ -19,12 +19,14 @@
 //  year of creation of the work.
 
 #include <assert.h>
-
 #include <string>
 
-#include "inc/hsa.h"
+#include "core/inc/hsa_internal.h"
 #include "device_info.h"
 #include "addrlib/src/amdgpu_asic_addr.h"
+
+namespace rocr {
+namespace image {
 
 uint32_t MajorVerFromDevID(uint32_t dev_id) {
   return dev_id/100;
@@ -42,9 +44,8 @@ hsa_status_t GetGPUAsicID(hsa_agent_t agent, uint32_t *chip_id) {
   char asic_name[64];
   assert(chip_id != nullptr);
 
-  hsa_status_t status = hsa_agent_get_info(
-      agent, static_cast<hsa_agent_info_t>(HSA_AGENT_INFO_NAME),
-      &asic_name);
+  hsa_status_t status = HSA::hsa_agent_get_info(
+      agent, static_cast<hsa_agent_info_t>(HSA_AGENT_INFO_NAME), &asic_name);
   assert(status == HSA_STATUS_SUCCESS);
 
   if (status != HSA_STATUS_SUCCESS) {
@@ -179,3 +180,6 @@ uint32_t DevIDToAddrLibFamily(uint32_t dev_id) {
 
   assert(0);  // We should have already returned
 }
+
+}  // namespace image
+}  // namespace rocr

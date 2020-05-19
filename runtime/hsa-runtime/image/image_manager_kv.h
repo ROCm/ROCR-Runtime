@@ -6,7 +6,8 @@
 #include "image_lut_kv.h"
 #include "image_manager.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
 
 class ImageManagerKv : public ImageManager {
  public:
@@ -121,5 +122,7 @@ class ImageManagerKv : public ImageManager {
  private:
   DISALLOW_COPY_AND_ASSIGN(ImageManagerKv);
 };
-}
+
+}  // namespace image
+}  // namespace rocr
 #endif  // HSA_RUNTIME_EXT_IMAGE_IMAGE_MANAGER_KV_H

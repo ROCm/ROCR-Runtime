@@ -113,6 +113,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_NO_SCRATCH_THREAD_LIMITER");
     no_scratch_thread_limit_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_DISABLE_IMAGE");
+    disable_image_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -153,6 +156,8 @@ class Flag {
 
   std::string tools_lib_names() const { return tools_lib_names_; }
 
+  bool disable_image() const { return disable_image_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -167,6 +172,7 @@ class Flag {
   bool fine_grain_pcie_;
   bool no_scratch_reclaim_;
   bool no_scratch_thread_limit_;
+  bool disable_image_;
 
   std::string enable_sdma_;
 

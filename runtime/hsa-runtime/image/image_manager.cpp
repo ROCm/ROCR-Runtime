@@ -1,5 +1,6 @@
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_image.h"
+#include "core/inc/hsa_ext_amd_impl.h"
 #include "image_manager.h"
 #include "image_runtime.h"
 
@@ -14,22 +15,23 @@
 __inline long int lrintf(float f) { return _mm_cvtss_si32(_mm_load_ss(&f)); }
 #endif
 
-namespace amd {
+namespace rocr {
+namespace image {
 
 Image* Image::Create(hsa_agent_t agent) {
-  hsa_amd_memory_pool_t pool = ext_image::ImageRuntime::instance()->kernarg_pool();
+  hsa_amd_memory_pool_t pool = ImageRuntime::instance()->kernarg_pool();
 
   Image* image = NULL;
 
   hsa_status_t status =
-      hsa_amd_memory_pool_allocate(pool, sizeof(Image), 0, reinterpret_cast<void**>(&image));
+      AMD::hsa_amd_memory_pool_allocate(pool, sizeof(Image), 0, reinterpret_cast<void**>(&image));
   assert(status == HSA_STATUS_SUCCESS);
 
   if (status != HSA_STATUS_SUCCESS) return NULL;
 
   new (image) Image();
 
-  status = hsa_amd_agents_allow_access(1, &agent, NULL, image);
+  status = AMD::hsa_amd_agents_allow_access(1, &agent, NULL, image);
 
   if (status != HSA_STATUS_SUCCESS) {
     Image::Destroy(image);
@@ -43,24 +45,24 @@ void Image::Destroy(const Image* image) {
   assert(image != NULL);
   image->~Image();
 
-  hsa_status_t status = hsa_amd_memory_pool_free(const_cast<Image*>(image));
+  hsa_status_t status = AMD::hsa_amd_memory_pool_free(const_cast<Image*>(image));
 
   assert(status == HSA_STATUS_SUCCESS);
 }
 
 Sampler* Sampler::Create(hsa_agent_t agent) {
-  hsa_amd_memory_pool_t pool = ext_image::ImageRuntime::instance()->kernarg_pool();
+  hsa_amd_memory_pool_t pool = ImageRuntime::instance()->kernarg_pool();
 
   Sampler* sampler = NULL;
 
-  hsa_status_t status =
-      hsa_amd_memory_pool_allocate(pool, sizeof(Sampler), 0, reinterpret_cast<void**>(&sampler));
+  hsa_status_t status = AMD::hsa_amd_memory_pool_allocate(pool, sizeof(Sampler), 0,
+                                                          reinterpret_cast<void**>(&sampler));
 
   if (status != HSA_STATUS_SUCCESS) return NULL;
 
   new (sampler) Sampler();
 
-  status = hsa_amd_agents_allow_access(1, &agent, NULL, sampler);
+  status = AMD::hsa_amd_agents_allow_access(1, &agent, NULL, sampler);
 
   if (status != HSA_STATUS_SUCCESS) {
     Sampler::Destroy(sampler);
@@ -74,7 +76,7 @@ void Sampler::Destroy(const Sampler* sampler) {
   assert(sampler != NULL);
   sampler->~Sampler();
 
-  hsa_status_t status = hsa_amd_memory_pool_free(const_cast<Sampler*>(sampler));
+  hsa_status_t status = AMD::hsa_amd_memory_pool_free(const_cast<Sampler*>(sampler));
 
   assert(status == HSA_STATUS_SUCCESS);
 }
@@ -111,7 +113,7 @@ hsa_status_t ImageManager::CopyImageToBuffer(
     const Image& src_image, void* dst_memory, size_t dst_row_pitch,
     size_t dst_slice_pitch, const hsa_ext_image_region_t& image_region) {
   // Treat buffer as image since we don't tile our image anyway.
-  amd::Image* dst_image = Image::Create(src_image.component);
+  Image* dst_image = Image::Create(src_image.component);
 
   dst_image->component = src_image.component;
   dst_image->desc = src_image.desc;  // the width, height, depth is ignored.
@@ -685,4 +687,5 @@ hsa_status_t ImageManager::FillImage(const Image& image, const void* pattern,
   return HSA_STATUS_SUCCESS;
 }
 
-}  // namespace
+}  // namespace image
+}  // namespace rocr

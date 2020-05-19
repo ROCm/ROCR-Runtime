@@ -18,7 +18,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Include the cmake_modules utils.cmake
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/cmake_modules" )
+list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
 include ( utils )
 
 ## Compiler preproc definitions.
@@ -46,25 +46,13 @@ endif ()
 set( SO_VERSION_STRING "${SO_MAJOR}.${SO_MINOR}.${SO_PATCH}" )
 set( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_COMMIT_COUNT}-${VERSION_JOB}-${VERSION_HASH}" )
 
-## Find the hsakmt library and include files
-get_include_path( HSAKMT_INC_PATH "libhsakmt include path" NAMES "hsakmt.h" "libhsakmt/hsakmt.h" HINTS "${CMAKE_BINARY_DIR}/../../include" "${CMAKE_CURRENT_SOURCE_DIR}/../../../../libhsakmt/include" PATHS "/opt/rocm/include")
-get_library_path( HSAKMT_LIB_PATH "libhsakmt library path" NAMES "libhsakmt.so" HINTS "${CMAKE_BINARY_DIR}/../../lib" "${CMAKE_BINARY_DIR}/../roct" PATHS "/opt/rocm/lib")
-include_directories( ${HSAKMT_INC_PATH} )
-link_directories( ${HSAKMT_LIB_PATH} )
-
-## Find the hsa-runtime and include files
-get_include_path( HSA_INC_PATH "ROCr include path" NAMES "inc/hsa.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime" "${CMAKE_BINARY_DIR}/../../include" PATHS "/opt/rocm/include")
-get_library_path( HSA_LIB_PATH "ROCr library path" NAMES "libhsa-runtime64.so" HINTS "${CMAKE_BINARY_DIR}/../../lib" "${CMAKE_BINARY_DIR}/../hsa-core" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/build" PATHS "/opt/rocm/lib")
-include_directories( ${HSA_INC_PATH} )
-link_directories( ${HSA_LIB_PATH} )
-
 ## Find self
-if( "${IMAGE_SOURCE_DIR}" STREQUAL "" )
-    get_include_path( IMG_SOURCE_FILE null NAMES "image_runtime.h" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../hsa-runtime/image/" )
-    get_filename_component( IMAGE_SOURCE_DIR "${IMG_SOURCE_FILE}" ABSOLUTE )
-    unset( IMG_SOURCE_FILE CACHE )
+if( "${EXT_SOURCE_DIR}" STREQUAL "" )
+    get_include_path( EXT_SOURCE_FILE null NAMES "image/hsa_ext_image.cpp" HINTS "${CMAKE_CURRENT_SOURCE_DIR}" "${CMAKE_CURRENT_SOURCE_DIR}/../../ext/" )
+    get_filename_component( EXT_SOURCE_DIR "${EXT_SOURCE_FILE}/.." ABSOLUTE )
+    unset( EXT_SOURCE_FILE CACHE )
 endif()
-set( IMAGE_SOURCE_DIR ${IMAGE_SOURCE_DIR} CACHE PATH "Image lib source dir" FORCE )
+set( EXT_SOURCE_DIR ${EXT_SOURCE_DIR} CACHE PATH "Image lib source dir" FORCE )
 
 get_filename_component( OPEN_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE CACHE )
 set( OPEN_SOURCE_DIR ${OPEN_SOURCE_DIR} CACHE PATH "Open source root dir" FORCE )
@@ -87,61 +75,20 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Debug )
     set( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb" )
 endif ()
 
-set ( DRVDEF "${IMAGE_SOURCE_DIR}/image.so.def" )
+set ( DRVDEF "${EXT_SOURCE_DIR}/image/image.so.def" )
 
 set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 ## Library path(s).
-include_directories(${IMAGE_SOURCE_DIR}/)
+include_directories(${REG_INCLUDE})
+include_directories(${EXT_SOURCE_DIR}/..)
+include_directories(${EXT_SOURCE_DIR}/inc)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/inc)
 include_directories(${OPEN_SOURCE_DIR}/hsa-runtime/core/inc)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/inc)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/core)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/r800)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/gfx9)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/gfx10)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/r800)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/gfx9)
-include_directories(${IMAGE_SOURCE_DIR}/addrlib/src/chip/gfx10)
-
-set ( IMAGE_SRCS ${IMAGE_SOURCE_DIR}/addrlib/src/addrinterface.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/coord.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib1.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrlib2.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrobject.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/core/addrelemlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/ciaddrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/egbaddrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/r800/siaddrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/gfx9/gfx9addrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/addrlib/src/gfx10/gfx10addrlib.cpp
-                 ${IMAGE_SOURCE_DIR}/amd_ext.cpp
-                 ${IMAGE_SOURCE_DIR}/device_info.cpp
-                 ${IMAGE_SOURCE_DIR}/hsa_ext_image.cpp
-                 ${IMAGE_SOURCE_DIR}/image_runtime.cpp
-                 ${IMAGE_SOURCE_DIR}/image_manager.cpp
-                 ${IMAGE_SOURCE_DIR}/image_manager_kv.cpp
-                 ${IMAGE_SOURCE_DIR}/image_manager_ai.cpp
-                 ${IMAGE_SOURCE_DIR}/image_manager_nv.cpp
-                 ${IMAGE_SOURCE_DIR}/image_lut_kv.cpp
-                 ${IMAGE_SOURCE_DIR}/blit_object_gfx7xx.cpp
-                 ${IMAGE_SOURCE_DIR}/blit_object_gfx8xx.cpp
-                 ${IMAGE_SOURCE_DIR}/blit_object_gfx9xx.cpp
-                 ${IMAGE_SOURCE_DIR}/opencl_blit_objects.cpp
-                 ${IMAGE_SOURCE_DIR}/blit_kernel.cpp
-                 ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/shared.cpp
-                 ${OPEN_SOURCE_DIR}/hsa-runtime/core/common/hsa_table_interface.cpp
-)
-
-add_subdirectory(${IMAGE_SOURCE_DIR}/blit_src ${CMAKE_CURRENT_BINARY_DIR}/image_blit)
-set_source_files_properties(${IMAGE_SOURCE_DIR}/opencl_blit_objects.cpp PROPERTIES GENERATED 1)
+set ( IMAGE_SRCS ${EXT_SOURCE_DIR}/image/hsa_ext_image.cpp)
 
 add_library ( ${IMAGE_TARGET} SHARED ${IMAGE_SRCS} )
-add_dependencies( ${IMAGE_TARGET} opencl_blit_objects.cpp )
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${IMAGE_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
@@ -150,8 +97,6 @@ set_property ( TARGET ${IMAGE_TARGET} PROPERTY SOVERSION "${SO_MAJOR}" )
 ## Add the core runtime in the link
 target_link_libraries (
     ${IMAGE_TARGET}
-    PRIVATE hsa-runtime64
-    PRIVATE hsakmt
     c dl pthread rt
 )
 

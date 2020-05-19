@@ -1,18 +1,18 @@
-#include "inc/hsa.h"
-#include "inc/hsa_ext_amd.h"
-#include "inc/hsa_ext_image.h"
 #include "image_runtime.h"
+#include "image/inc/hsa_ext_image_impl.h"
 
-#undef HSA_API
-#define HSA_API HSA_API_EXPORT
+namespace rocr {
+namespace image {
 
 //---------------------------------------------------------------------------//
 //  Utilty routines
 //---------------------------------------------------------------------------//
-static void enforceDefaultPitch(hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor, size_t& image_data_row_pitch, size_t& image_data_slice_pitch) {
+static void enforceDefaultPitch(hsa_agent_t agent,
+                                const hsa_ext_image_descriptor_t* image_descriptor,
+                                size_t& image_data_row_pitch, size_t& image_data_slice_pitch) {
   // Set default pitch
   if (image_data_row_pitch == 0) {
-    auto manager = ext_image::ImageRuntime::instance()->image_manager(agent);
+    auto manager = ImageRuntime::instance()->image_manager(agent);
     assert((manager != nullptr) && "Image manager should already exit.");
     image_data_row_pitch = image_descriptor->width *
       manager->GetImageProperty(agent, image_descriptor->format, image_descriptor->geometry)
@@ -41,13 +41,11 @@ static void enforceDefaultPitch(hsa_agent_t agent, const hsa_ext_image_descripto
 }
 
 //---------------------------------------------------------------------------//
-//  Image APIs
+//  APIs that implement Image functionality
 //---------------------------------------------------------------------------//
-extern "C" {
-	
-hsa_status_t HSA_API hsa_amd_image_get_info_max_dim_impl(hsa_agent_t agent,
-                                                    hsa_agent_info_t attribute,
-                                                    void* value) {
+
+hsa_status_t hsa_amd_image_get_info_max_dim(hsa_agent_t agent, hsa_agent_info_t attribute,
+                                            void* value) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -56,15 +54,13 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim_impl(hsa_agent_t agent,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->GetImageInfoMaxDimension(
-      agent, attribute, value);
+  return ImageRuntime::instance()->GetImageInfoMaxDimension(agent, attribute, value);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_get_capability_impl(hsa_agent_t agent,
-                                 hsa_ext_image_geometry_t image_geometry,
-                                 const hsa_ext_image_format_t* image_format,
-                                 uint32_t* capability_mask) {
+hsa_status_t hsa_ext_image_get_capability(hsa_agent_t agent,
+                                          hsa_ext_image_geometry_t image_geometry,
+                                          const hsa_ext_image_format_t* image_format,
+                                          uint32_t* capability_mask) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -75,14 +71,14 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->GetImageCapability(
-      agent, *image_format, image_geometry, *capability_mask);
+  return ImageRuntime::instance()->GetImageCapability(agent, *image_format, image_geometry,
+                                                      *capability_mask);
 }
 
-hsa_status_t HSA_API hsa_ext_image_data_get_info_impl(
-    hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
-    hsa_access_permission_t access_permission,
-    hsa_ext_image_data_info_t* image_data_info) {
+hsa_status_t hsa_ext_image_data_get_info(hsa_agent_t agent,
+                                         const hsa_ext_image_descriptor_t* image_descriptor,
+                                         hsa_access_permission_t access_permission,
+                                         hsa_ext_image_data_info_t* image_data_info) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -93,16 +89,14 @@ hsa_status_t HSA_API hsa_ext_image_data_get_info_impl(
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->GetImageSizeAndAlignment(
+  return ImageRuntime::instance()->GetImageSizeAndAlignment(
       agent, *image_descriptor, HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE, 0, 0, *image_data_info);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_create_impl(hsa_agent_t agent,
-                         const hsa_ext_image_descriptor_t* image_descriptor,
-                         const void* image_data,
-                         hsa_access_permission_t access_permission,
-                         hsa_ext_image_t* image) {
+hsa_status_t hsa_ext_image_create(hsa_agent_t agent,
+                                  const hsa_ext_image_descriptor_t* image_descriptor,
+                                  const void* image_data, hsa_access_permission_t access_permission,
+                                  hsa_ext_image_t* image) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -111,24 +105,22 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CreateImageHandle(
-      agent, *image_descriptor, image_data, access_permission,
-      HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE, 0, 0, *image);
+  return ImageRuntime::instance()->CreateImageHandle(
+      agent, *image_descriptor, image_data, access_permission, HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE, 0,
+      0, *image);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_destroy_impl(hsa_agent_t agent, hsa_ext_image_t image) {
+hsa_status_t hsa_ext_image_destroy(hsa_agent_t agent, hsa_ext_image_t image) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  return ext_image::ImageRuntime::instance()->DestroyImageHandle(image);
+  return ImageRuntime::instance()->DestroyImageHandle(image);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_copy_impl(hsa_agent_t agent, hsa_ext_image_t src_image,
-                       const hsa_dim3_t* src_offset, hsa_ext_image_t dst_image,
-                       const hsa_dim3_t* dst_offset, const hsa_dim3_t* range) {
+hsa_status_t hsa_ext_image_copy(hsa_agent_t agent, hsa_ext_image_t src_image,
+                                const hsa_dim3_t* src_offset, hsa_ext_image_t dst_image,
+                                const hsa_dim3_t* dst_offset, const hsa_dim3_t* range) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -138,15 +130,13 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CopyImage(
-      src_image, dst_image, *src_offset, *dst_offset, *range);
+  return ImageRuntime::instance()->CopyImage(src_image, dst_image, *src_offset, *dst_offset,
+                                             *range);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_import_impl(hsa_agent_t agent, const void* src_memory,
-                         size_t src_row_pitch, size_t src_slice_pitch,
-                         hsa_ext_image_t dst_image,
-                         const hsa_ext_image_region_t* image_region) {
+hsa_status_t hsa_ext_image_import(hsa_agent_t agent, const void* src_memory, size_t src_row_pitch,
+                                  size_t src_slice_pitch, hsa_ext_image_t dst_image,
+                                  const hsa_ext_image_region_t* image_region) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -155,15 +145,13 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CopyBufferToImage(
-      src_memory, src_row_pitch, src_slice_pitch, dst_image, *image_region);
+  return ImageRuntime::instance()->CopyBufferToImage(src_memory, src_row_pitch, src_slice_pitch,
+                                                     dst_image, *image_region);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_export_impl(hsa_agent_t agent, hsa_ext_image_t src_image,
-                         void* dst_memory, size_t dst_row_pitch,
-                         size_t dst_slice_pitch,
-                         const hsa_ext_image_region_t* image_region) {
+hsa_status_t hsa_ext_image_export(hsa_agent_t agent, hsa_ext_image_t src_image, void* dst_memory,
+                                  size_t dst_row_pitch, size_t dst_slice_pitch,
+                                  const hsa_ext_image_region_t* image_region) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -172,14 +160,12 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CopyImageToBuffer(
-      src_image, dst_memory, dst_row_pitch, dst_slice_pitch, *image_region);
+  return ImageRuntime::instance()->CopyImageToBuffer(src_image, dst_memory, dst_row_pitch,
+                                                     dst_slice_pitch, *image_region);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_clear_impl(hsa_agent_t agent, hsa_ext_image_t image,
-                        const void* data,
-                        const hsa_ext_image_region_t* image_region) {
+hsa_status_t hsa_ext_image_clear(hsa_agent_t agent, hsa_ext_image_t image, const void* data,
+                                 const hsa_ext_image_region_t* image_region) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -188,13 +174,12 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->FillImage(image, data,
-                                                        *image_region);
+  return ImageRuntime::instance()->FillImage(image, data, *image_region);
 };
 
-hsa_status_t HSA_API hsa_ext_sampler_create_impl(
-    hsa_agent_t agent, const hsa_ext_sampler_descriptor_t* sampler_descriptor,
-    hsa_ext_sampler_t* sampler) {
+hsa_status_t hsa_ext_sampler_create(hsa_agent_t agent,
+                                    const hsa_ext_sampler_descriptor_t* sampler_descriptor,
+                                    hsa_ext_sampler_t* sampler) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -203,25 +188,22 @@ hsa_status_t HSA_API hsa_ext_sampler_create_impl(
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CreateSamplerHandle(
-      agent, *sampler_descriptor, *sampler);
+  return ImageRuntime::instance()->CreateSamplerHandle(agent, *sampler_descriptor, *sampler);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_sampler_destroy_impl(hsa_agent_t agent, hsa_ext_sampler_t sampler) {
+hsa_status_t hsa_ext_sampler_destroy(hsa_agent_t agent, hsa_ext_sampler_t sampler) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  return ext_image::ImageRuntime::instance()->DestroySamplerHandle(sampler);
+  return ImageRuntime::instance()->DestroySamplerHandle(sampler);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_get_capability_with_layout_impl(hsa_agent_t agent,
-                                 hsa_ext_image_geometry_t image_geometry,
-                                 const hsa_ext_image_format_t* image_format,
-                                 hsa_ext_image_data_layout_t image_data_layout,
-                                 uint32_t* capability_mask) {
+hsa_status_t hsa_ext_image_get_capability_with_layout(hsa_agent_t agent,
+                                                      hsa_ext_image_geometry_t image_geometry,
+                                                      const hsa_ext_image_format_t* image_format,
+                                                      hsa_ext_image_data_layout_t image_data_layout,
+                                                      uint32_t* capability_mask) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -233,16 +215,14 @@ hsa_status_t HSA_API
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->GetImageCapability(
-      agent, *image_format, image_geometry, *capability_mask);
+  return ImageRuntime::instance()->GetImageCapability(agent, *image_format, image_geometry,
+                                                      *capability_mask);
 }
 
-hsa_status_t HSA_API hsa_ext_image_data_get_info_with_layout_impl(
+hsa_status_t hsa_ext_image_data_get_info_with_layout(
     hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
-    hsa_access_permission_t access_permission,
-    hsa_ext_image_data_layout_t image_data_layout,
-    size_t image_data_row_pitch,
-    size_t image_data_slice_pitch,
+    hsa_access_permission_t access_permission, hsa_ext_image_data_layout_t image_data_layout,
+    size_t image_data_row_pitch, size_t image_data_slice_pitch,
     hsa_ext_image_data_info_t* image_data_info) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
@@ -257,20 +237,15 @@ hsa_status_t HSA_API hsa_ext_image_data_get_info_with_layout_impl(
 
   enforceDefaultPitch(agent, image_descriptor, image_data_row_pitch, image_data_slice_pitch);
 
-  return ext_image::ImageRuntime::instance()->GetImageSizeAndAlignment(
-      agent, *image_descriptor, image_data_layout, image_data_row_pitch,
-      image_data_slice_pitch, *image_data_info);
+  return ImageRuntime::instance()->GetImageSizeAndAlignment(
+      agent, *image_descriptor, image_data_layout, image_data_row_pitch, image_data_slice_pitch,
+      *image_data_info);
 }
 
-hsa_status_t HSA_API
-    hsa_ext_image_create_with_layout_impl(hsa_agent_t agent,
-                         const hsa_ext_image_descriptor_t* image_descriptor,
-                         const void* image_data,
-                         hsa_access_permission_t access_permission,
-                         hsa_ext_image_data_layout_t image_data_layout,
-                         size_t image_data_row_pitch,
-                         size_t image_data_slice_pitch,
-                         hsa_ext_image_t* image) {
+hsa_status_t hsa_ext_image_create_with_layout(
+    hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor, const void* image_data,
+    hsa_access_permission_t access_permission, hsa_ext_image_data_layout_t image_data_layout,
+    size_t image_data_row_pitch, size_t image_data_slice_pitch, hsa_ext_image_t* image) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -282,19 +257,16 @@ hsa_status_t HSA_API
 
   enforceDefaultPitch(agent, image_descriptor, image_data_row_pitch, image_data_slice_pitch);
 
-  return ext_image::ImageRuntime::instance()->CreateImageHandle(
+  return ImageRuntime::instance()->CreateImageHandle(
       agent, *image_descriptor, image_data, access_permission, image_data_layout,
       image_data_row_pitch, image_data_slice_pitch, *image);
 }
 
-hsa_status_t HSA_API hsa_amd_image_create_impl(
-    hsa_agent_t agent,
-    const hsa_ext_image_descriptor_t *image_descriptor,
-	const hsa_amd_image_descriptor_t *image_layout,
-    const void *image_data,
-    hsa_access_permission_t access_permission,
-    hsa_ext_image_t *image)
-{
+hsa_status_t hsa_amd_image_create(hsa_agent_t agent,
+                                  const hsa_ext_image_descriptor_t* image_descriptor,
+                                  const hsa_amd_image_descriptor_t* image_layout,
+                                  const void* image_data, hsa_access_permission_t access_permission,
+                                  hsa_ext_image_t* image) {
   if (agent.handle == 0) {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
@@ -303,8 +275,44 @@ hsa_status_t HSA_API hsa_amd_image_create_impl(
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  return ext_image::ImageRuntime::instance()->CreateImageHandleWithLayout(
+  return ImageRuntime::instance()->CreateImageHandleWithLayout(
       agent, *image_descriptor, image_layout, image_data, access_permission, *image);
 }
 
+void LoadImage(core::ImageExtTableInternal* image_api,
+               decltype(::hsa_amd_image_create)** interface_api) {
+  image_api->hsa_ext_image_get_capability_fn = hsa_ext_image_get_capability;
+
+  image_api->hsa_ext_image_data_get_info_fn = hsa_ext_image_data_get_info;
+
+  image_api->hsa_ext_image_create_fn = hsa_ext_image_create;
+
+  image_api->hsa_ext_image_import_fn = hsa_ext_image_import;
+
+  image_api->hsa_ext_image_export_fn = hsa_ext_image_export;
+
+  image_api->hsa_ext_image_copy_fn = hsa_ext_image_copy;
+
+  image_api->hsa_ext_image_clear_fn = hsa_ext_image_clear;
+
+  image_api->hsa_ext_image_destroy_fn = hsa_ext_image_destroy;
+
+  image_api->hsa_ext_sampler_create_fn = hsa_ext_sampler_create;
+
+  image_api->hsa_ext_sampler_destroy_fn = hsa_ext_sampler_destroy;
+
+  image_api->hsa_ext_image_get_capability_with_layout_fn = hsa_ext_image_get_capability_with_layout;
+
+  image_api->hsa_ext_image_data_get_info_with_layout_fn = hsa_ext_image_data_get_info_with_layout;
+
+  image_api->hsa_ext_image_create_with_layout_fn = hsa_ext_image_create_with_layout;
+
+  image_api->hsa_amd_image_get_info_max_dim_fn = hsa_amd_image_get_info_max_dim;
+
+  *interface_api = hsa_amd_image_create;
 }
+
+void ReleaseImageRsrcs() { ImageRuntime::DestroySingleton(); }
+
+}  // namespace image
+}  // namespace rocr

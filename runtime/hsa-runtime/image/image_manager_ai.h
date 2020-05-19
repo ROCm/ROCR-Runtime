@@ -4,7 +4,8 @@
 #include "addrlib/inc/addrinterface.h"
 #include "image_manager_kv.h"
 
-namespace amd {
+namespace rocr {
+namespace image {
 
 class ImageManagerAi : public ImageManagerKv {
  public:
@@ -46,5 +47,7 @@ class ImageManagerAi : public ImageManagerKv {
  private:
   DISALLOW_COPY_AND_ASSIGN(ImageManagerAi);
 };
-}
+
+}  // namespace image
+}  // namespace rocr
 #endif  // HSA_RUNTIME_EXT_IMAGE_IMAGE_MANAGER_AI_H
