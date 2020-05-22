@@ -20,6 +20,7 @@ FILTER[core_sws]=\
 "KFDQMTest.AllSdmaQueues:"\
 "KFDQMTest.AllXgmiSdmaQueues:"\
 "KFDQMTest.AllQueues:"\
+"KFDLocalMemoryTest.AccessLocalMem:"\
 "KFDEventTest.SignalEvent"
 
 # HWS mode
