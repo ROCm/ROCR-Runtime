@@ -1,9 +1,13 @@
 @PACKAGE_INIT@
 
-set_and_check(HSAKMT_INCLUDE_DIR @PACKAGE_INCLUDE_INSTALL_DIR@)
-set_and_check(HSAKMT_LIB_DIR @PACKAGE_LIB_INSTALL_DIR@)
+include( CMakeFindDependencyMacro )
 
-set(HSAKMT_LIBRARY @PACKAGE_LIB_INSTALL_DIR@/@HSAKMT_LIBRARY_NAME@)
-set(HSAKMT_LIBRARIES @PACKAGE_LIB_INSTALL_DIR@/@HSAKMT_LIBRARY_NAME@)
+# Locate dependent packages here.  Finding them propagates usage requirements,
+# if any, to our clients and ensures that their target names are in scope for
+# the build.  hsakmt has no cmake project dependencies so there is nothing to
+# find.  If we switch to use find_package with external (to ROCm) library
+# dependencies (ie libnuma) then those packages should be located here using
+# find_dependencies as shown below.
+#find_dependency(Bar, 2.0)
 
-mark_as_advanced(HSAKMT_LIBRARY HSAKMT_INCLUDE_DIR)
+include( "${CMAKE_CURRENT_LIST_DIR}/@HSAKMT_TARGET@Targets.cmake" )
