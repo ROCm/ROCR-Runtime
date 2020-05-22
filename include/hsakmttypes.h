@@ -212,7 +212,8 @@ typedef union
         unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
         unsigned int Mem_EDCSupoort: 1;          // Indicates if GFX internal DRAM/HBM EDC/ECC functionality is active
         unsigned int RASEventNotify: 1;          // Indicates if GFX extended RASFeatures and RAS EventNotify status is available
-        unsigned int Reserved            : 10;
+        unsigned int ASICRevision: 4;            // Indicates the ASIC revision of the chip on this node.
+        unsigned int Reserved            : 6;
     } ui32;
 } HSA_CAPABILITY;
 
