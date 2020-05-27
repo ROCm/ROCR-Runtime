@@ -9,7 +9,6 @@ then
 fi
 
 # Create the file in a temporary location and then move it in atomically
-rm -rf "$opencl_blit_file.tmp"
 {
 cat <<EOF
 //==============================================================================
@@ -33,9 +32,4 @@ cat <<EOF
 
 EOF
 
-} > "$opencl_blit_file.tmp"
-
-# Move the file atomically into place, so make doesn't get half a file
-# but only if it has changed. cmp -s is happy for one file not to exist
-cmp -s "$opencl_blit_file.tmp" "$opencl_blit_file" ||
-    mv -f "$opencl_blit_file.tmp" "$opencl_blit_file"
+} > "$opencl_blit_file"

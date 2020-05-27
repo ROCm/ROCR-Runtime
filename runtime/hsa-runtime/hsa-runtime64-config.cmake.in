@@ -1,0 +1,7 @@
+@PACKAGE_INIT@
+
+include( CMakeFindDependencyMacro )
+
+find_dependency(hsakmt 1.0)
+
+include( "${CMAKE_CURRENT_LIST_DIR}/@CORE_RUNTIME_TARGET@Targets.cmake" )

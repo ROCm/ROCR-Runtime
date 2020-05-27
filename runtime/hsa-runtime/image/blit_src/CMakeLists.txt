@@ -1,91 +1,60 @@
-#
-# Minimum version of cmake required
-#
-cmake_minimum_required(VERSION 3.5.0)
+################################################################################
+##
+## The University of Illinois/NCSA
+## Open Source License (NCSA)
+##
+## Copyright (c) 2014-2017, Advanced Micro Devices, Inc. All rights reserved.
+##
+## Developed by:
+##
+##                 AMD Research and AMD HSA Software Development
+##
+##                 Advanced Micro Devices, Inc.
+##
+##                 www.amd.com
+##
+## Permission is hereby granted, free of charge, to any person obtaining a copy
+## of this software and associated documentation files (the "Software"), to
+## deal with the Software without restriction, including without limitation
+## the rights to use, copy, modify, merge, publish, distribute, sublicense,
+## and#or sell copies of the Software, and to permit persons to whom the
+## Software is furnished to do so, subject to the following conditions:
+##
+##  - Redistributions of source code must retain the above copyright notice,
+##    this list of conditions and the following disclaimers.
+##  - Redistributions in binary form must reproduce the above copyright
+##    notice, this list of conditions and the following disclaimers in
+##    the documentation and#or other materials provided with the distribution.
+##  - Neither the names of Advanced Micro Devices, Inc,
+##    nor the names of its contributors may be used to endorse or promote
+##    products derived from this Software without specific prior written
+##    permission.
+##
+## THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+## IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+## FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+## THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+## OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+## ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+## DEALINGS WITH THE SOFTWARE.
+##
+################################################################################
 
-#
-#   Required Defines on cmake command line
-#
-#   1) Set location of OpenCL header files
-#        OPENCL_DIR="Root for OpenCL install"
-#      If not set, the default value is "/opt/rocm/opencl"
-#
-#   2) Set location of CLANG/LLVM binary directory
-#        LLVM_DIR="Directory contains clang, llvm-link and llvm-dis
-#      If not set, the default value is "<PROJECT_BUILD_DIR>/lightning/bin"
-#
-#   3) Set BITCODE library directory
-#        BITCODE_DIR="Directory contains the bitcode library"
-#      If not set, the default value is "${OPENCL_DIR}/lib/x86_64/bitcode"
-#
-#   4) Set TARGET_DEVICES to indicate gpu types for kernel builds (e.g., "gfx803;gfx900; ...")
-#      If not set, the target devices are those have the Open Compute Library Controls (OCLC)
-#      bitcode file, "oclc_isa_version_*.amdgcn.bc", in the BITCODE directory
-#
-#   Building - Should be automatic but for manual builds:
-#
-#   1) *** Create build folder e.g. "blit_src/build" - any name will do
-#   2) Go to the build folder
-#   3) Run "cmake .."
-#   4) Run "make opencl_blit_objects.cpp"
-#
-
-## Include the cmake_modules utils.cmake
-list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../../cmake_modules" )
-include ( utils )
+cmake_minimum_required ( VERSION 3.5.0 )
 
 # Flag to abort before executing after default initialization of cache variables
 set (QUIT 0)
 
-# Collect possible LLVM version directories.
-set (LLVM_SEARCH_PATHS "")
-set (LLVM_SEARCH_ROOT "${CMAKE_INSTALL_PREFIX}/llvm/lib/clang")
-listsubdirs(${LLVM_SEARCH_ROOT} FOLDERS)
-foreach(ITEM IN LISTS FOLDERS)
-    list (APPEND LLVM_SEARCH_PATHS "${LLVM_SEARCH_ROOT}/${ITEM}/include/")
-endforeach()
+# Import target 'clang'
+find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm PATHS /opt/rocm/llvm )
 
-if (NOT DEFINED OPENCL_VER)
-  set (OPENCL_VER "2.0")
-endif()
-set( OPENCL_VER ${OPENCL_VER} CACHE STRING "OpenCL version" FORCE )
-
-get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.amdgcn.bc" HINTS "${CMAKE_INSTALL_PREFIX}/lib/bitcode" "${OPENCL_DIR}/lib/x86_64/bitcode")
+# Device libs doesn't support find_package yet.
+get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.amdgcn.bc"
+  HINTS "${CMAKE_INSTALL_PREFIX}/lib/bitcode" "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
+  PATHS "/opt/rocm/lib/bitcode" "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode")
 if (NOT ${FOUND})
   set (QUIT 1)
 endif()
-
-set (BITCODE_LIB "${BITCODE_DIR}/opencl.amdgcn.bc")
-if (NOT EXISTS ${BITCODE_LIB})
-  message("ERROR: path to opencl.amdgcn.bc (${BITCODE_LIB}) is not valid. Is BITCODE_DIR correctly defined?")
-  set (QUIT 1)
-endif()
-
-get_include_path(LLVM_DIR "LLVM directory" RESULT FOUND NAMES "clang" HINTS "${CMAKE_INSTALL_PREFIX}/llvm/bin")
-if (NOT ${FOUND})
-  set (QUIT 1)
-endif()
-
-set (CLANG "${LLVM_DIR}/clang")
-if (NOT EXISTS ${CLANG})
-  message("ERROR: path to clang (${CLANG}) is not valid. Is LLVM_DIR correctly defined?")
-  set (QUIT 1)
-endif()
-
-set (LLVM_LINK "${LLVM_DIR}/llvm-link")
-if (NOT EXISTS ${LLVM_LINK})
-  message("ERROR: path to llvm-link (${LLVM_LINK}) is not valid. Is LLVM_DIR correctly defined?")
-  set (QUIT 1)
-endif()
-
-set (LLVM_DIS "${LLVM_DIR}/llvm-dis")
-if (NOT EXISTS ${LLVM_DIS})
-  message("ERROR: path to llvm-dis (${LLVM_DIS}) is not valid. Is LLVM_DIR correctly defined?")
-  set (QUIT 1)
-endif()
-
-# Value of Images Src Dir is bound in parent environment
-set (KERNELS_DIR "${IMAGE_SOURCE_DIR}/blit_src")
 
 # Define the target devices with xnack enable
 if (NOT DEFINED XNACK_DEVS)
@@ -106,29 +75,25 @@ if (QUIT)
   return()
 endif()
 
-set(TARGET_TRIPLE "amdgcn-amd-amdhsa")
-
-message("")
-message("Build Setting:")
-message("   Target Devices: ${TARGET_DEVICES}")
-message("    Proj. Src Dir: ${PROJECT_SOURCE_DIR}")
-message("    Proj. Bld Dir: ${PROJECT_BINARY_DIR}")
-message(" Image Source Dir: ${IMAGE_SOURCE_DIR}")
-message("         LLVM Dir: ${LLVM_DIR}")
-message("       Clang path: ${CLANG}")
-message("       OpenCL Dir: ${OPENCL_DIR}")
-message("   OpenCL version: ${OPENCL_VER}")
-message("      Bitcode Dir: ${BITCODE_DIR}")
-message("    Target Triple: ${TARGET_TRIPLE}")
+if(${CMAKE_VERBOSE_MAKEFILE})
+  get_property(clang_path TARGET clang PROPERTY LOCATION)
+  message("Using clang from: ${clang_path}")
+  message("Build Setting:")
+  message("   Target Devices: ${TARGET_DEVICES}")
+  message("    XNACK Devices: ${XNACK_DEVS}")
+  message("       Clang path: ${clang_path}")
+  message("      Bitcode Dir: ${BITCODE_DIR}")
+endif()
 
 ##==========================================
-##  Generate Kernel Bitcode
+##  Add custom command to generate a kernel code object file
 ##==========================================
-function(gen_kernel_bc TARGET_DEV XNACK_OPT FPREFIX INPUT_FILE OUTPUT_FILE)
+function(gen_kernel_bc TARGET_DEV XNACK_OPT INPUT_FILE OUTPUT_FILE)
 
   string (REPLACE "gfx" "" GFXIP "${TARGET_DEV}")
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-    "-O2 -x cl -target ${TARGET_TRIPLE} -Xclang -finclude-default-header -mcpu=${TARGET_DEV} -m${XNACK_OPT}
+    "-O2 -x cl -cl-denorms-are-zero -cl-std=CL2.0 -target amdgcn-amd-amdhsa
+    -Xclang -finclude-default-header -mcpu=${TARGET_DEV} -m${XNACK_OPT}
     -nogpulib
     -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
     -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
@@ -137,19 +102,26 @@ function(gen_kernel_bc TARGET_DEV XNACK_OPT FPREFIX INPUT_FILE OUTPUT_FILE)
     -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP}.amdgcn.bc
     -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_unsafe_math_off.amdgcn.bc
     -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_finite_only_off.amdgcn.bc
-    -cl-std=CL${OPENCL_VER} -o ${OUTPUT_FILE} ${INPUT_FILE}")
+    -o ${OUTPUT_FILE} ${INPUT_FILE}")
 
-  add_custom_target("${FPREFIX}" ${CLANG} ${CLANG_ARG_LIST}
-    COMMENT "BUILDING bitcode for ${FPREFIX}..."
+  ## Add custom command to produce a code object file.
+  ## This depends on the kernel source file & compiler.
+  ## It does not pickup devicelib changes.  It is not clear
+  ## how to do that after conversion to --rocm-path is done.
+  add_custom_command(OUTPUT ${OUTPUT_FILE} COMMAND clang ${CLANG_ARG_LIST}
+    DEPENDS ${INPUT_FILE} clang
+    COMMENT "BUILDING bitcode for ${OUTPUT_FILE}..."
     VERBATIM)
 
+if(${CMAKE_VERBOSE_MAKEFILE})
   message("      Kernel Source: " ${INPUT_FILE})
   message("     Kernel Bitcode: " ${OUTPUT_FILE})
+endif()
 
 endfunction(gen_kernel_bc)
 
 ##==========================================
-## Build the kernel for a device
+## Find device code object name and forward to custom command
 ##==========================================
 function(build_kernel BLIT_NAME TARG_DEV)
   
@@ -160,30 +132,33 @@ function(build_kernel BLIT_NAME TARG_DEV)
     set (XNACK_OPT "no-xnack")
   endif()
 
-  set (FILE_PREFIX "${BLIT_NAME}_${TARG_DEV}")
-  set (HSACO_TARG_LIST ${HSACO_TARG_LIST} "${FILE_PREFIX}" CACHE INTERNAL HSACO_TARG_LIST)
-
   ##  generate kernel bitcodes
-  ##
-  set (CL_FILE  "${KERNELS_DIR}/imageblit_kernels.cl")
-  set (KERNEL_BC_FILE "${FILE_PREFIX}")
-  gen_kernel_bc(${TARG_DEV} ${XNACK_OPT} ${FILE_PREFIX} ${CL_FILE} ${KERNEL_BC_FILE})
+  set (CODE_OBJECT_FILE "${BLIT_NAME}_${TARG_DEV}")
+  set (CL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/imageblit_kernels.cl)
+  gen_kernel_bc(${TARG_DEV} ${XNACK_OPT} ${CL_FILE} ${CODE_OBJECT_FILE})
+  
+  ## Build a list of code object file names
+  ## These will be target dependencies.
+  set (HSACO_TARG_LIST ${HSACO_TARG_LIST} "${CODE_OBJECT_FILE}" PARENT_SCOPE)
 
 endfunction(build_kernel)
-
 
 ##==========================================
 ## Build the kernel for a list of devices
 ##==========================================
 function(build_kernel_for_devices BLIT_NAME)
 
-  set(HSACO_TARG_LIST PARENT_SCOPE)
+  set(HSACO_TARG_LIST "")
 
   foreach(dev ${TARGET_DEVICES})
-    message("\n  Working on: ${dev} ...")
+    if(${CMAKE_VERBOSE_MAKEFILE})
+      message("\n  Generating: ${dev} ...")
+    endif()
     build_kernel(${BLIT_NAME} ${dev})
   endforeach(dev)
 
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} PARENT_SCOPE)
+  
 endfunction(build_kernel_for_devices)
 
 ##==========================================
@@ -191,13 +166,14 @@ endfunction(build_kernel_for_devices)
 ##==========================================
 function(generate_blit_file BFILE)
 
-  file(REMOVE ${IMAGE_SOURCE_DIR}/${BFILE})
+  ## Add a custom command that generates opencl_blit_objects.cpp
+  ## This depends on all the generated code object files and the C++ generator script.
+  add_custom_command(OUTPUT ${BFILE}
+                     COMMAND ${CMAKE_CURRENT_SOURCE_DIR}/create_hsaco_ascii_file.sh ${CMAKE_CURRENT_BINARY_DIR}/${BFILE}
+                     DEPENDS ${HSACO_TARG_LIST} create_hsaco_ascii_file.sh )
 
-  add_custom_command(OUTPUT ${IMAGE_SOURCE_DIR}/${BFILE}
-                     COMMAND ${KERNELS_DIR}/create_hsaco_ascii_file.sh ${IMAGE_SOURCE_DIR}/${BFILE})
-
-  message("\n  Will create ASCII bitcodes in ${BFILE} for ${TARGET_DEVICES} ... \n")
-  add_custom_target(${BFILE} DEPENDS ${HSACO_TARG_LIST} ${IMAGE_SOURCE_DIR}/${BFILE})
+  ## Export a target that builds (and depends on) opencl_blit_objects.cpp
+  add_custom_target( ${BFILE} DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/${BFILE} )
 
 endfunction(generate_blit_file)
 

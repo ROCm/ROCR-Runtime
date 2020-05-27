@@ -1,4 +1,4 @@
-#/bin/bash
+#!/bin/bash
 
 set -e
 
@@ -9,8 +9,9 @@ do_ldconfig() {
 case "$1" in
    configure)
        do_ldconfig
-       mkdir -p @CPACK_PACKAGING_INSTALL_PREFIX@/include
-       ln -sf ../hsa/include/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/include/hsa
+       # Workaround for CPACK directory symlink handling error.
+       mkdir -p @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include
+       ln -sf ../../include/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
    ;;
    abort-upgrade|abort-remove|abort-deconfigure)
        echo "$1"
