@@ -53,7 +53,7 @@ endif()
 
 if(UNIX)
   set(PS ":")
-  set(CMAKE_CXX_FLAGS "-Wall -std=c++11 ${EXTRA_CFLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -std=c++11 ${EXTRA_CFLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fpic")
   if (CMAKE_COMPILER_IS_GNUCXX)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wl,--unresolved-symbols=ignore-in-shared-libs")

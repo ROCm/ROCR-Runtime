@@ -122,7 +122,9 @@ void ExtensionEntryPoints::UnloadImage() {
   InitAmdExtTable();
   InitImageExtTable();
   core::hsa_internal_api_table_.Reset();
+#ifdef HSA_IMAGE_SUPPORT
   rocr::image::ReleaseImageRsrcs();
+#endif
 }
 
 void ExtensionEntryPoints::Unload() {
@@ -151,6 +153,7 @@ void ExtensionEntryPoints::Unload() {
 }
 
 bool ExtensionEntryPoints::LoadImage() {
+#ifdef HSA_IMAGE_SUPPORT
   // Consult user input on linking to Image implementation
   bool disable_image = core::Runtime::runtime_singleton_->flag().disable_image();
   if (disable_image) {
@@ -172,6 +175,7 @@ bool ExtensionEntryPoints::LoadImage() {
 
   // Update Amd Ext Api table Api that deals with Images
   UpdateAmdExtTable(func);
+#endif
   return true;
 }
 
