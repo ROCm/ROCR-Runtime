@@ -174,7 +174,15 @@ typedef enum hsa_amd_agent_info_s {
    * Agents that do not support UUID will return the string "GPU-XX" or
    * "CPU-XX" or "DSP-XX" depending upon their device type ::hsa_device_type_t
    */
-  HSA_AMD_AGENT_INFO_UUID = 0xA011
+  HSA_AMD_AGENT_INFO_UUID = 0xA011,
+  /**
+   * Queries for the ASIC revision of an agent. The value is an integer that
+   * increments for each revision. This can be used by user-level software to
+   * change how it operates, depending on the hardware version. This allows
+   * selective workarounds for hardware errata.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
