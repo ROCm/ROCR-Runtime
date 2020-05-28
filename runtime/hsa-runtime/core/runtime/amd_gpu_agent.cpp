@@ -931,6 +931,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       snprintf((char*)value, (ss.str().length() + 1), "%s", (char*)ss.str().c_str());
       break;
     }
+    case HSA_AMD_AGENT_INFO_ASIC_REVISION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
