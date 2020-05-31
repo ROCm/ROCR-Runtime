@@ -1209,58 +1209,6 @@ hsaKmtSetMemoryUserData(
     void *          UserData    //IN
     );
 
-/**
-  Acquire request exclusive use of SPM
-*/
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSPMAcquire(
-    HSAuint32	PreferredNode	//IN
-    );
-
-
-/**
-  Disable SPM Streamimg
-*/
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSPMRelease(
-    HSAuint32	PreferredNode	//IN
-    );
-
-/**
-   Set up the destination user mode buffer for stream performance
-   counter data.
-
-   PreferredNode -- note Id
-
-   SizeInBytes -- number of byte of Destination buffer for performance
-   counter data
-
-   timeout -- wait to collect performance counter data
-
-   DestMemoryAddress -- point to user mode buffer for stream performance
-   counter data
-
-   SPMMemoryAddress -- user mode buffer that contains stream performance
-   counter data, it ponit to current or one of DestMemoryAddress that set
-   before.
-
-   SizeCopied -- number of bytes of data copied from Stream Ring buffer.
-*/
-
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtSPMSetDestBuffer(
-    HSAuint32	PreferredNode,		//IN
-    HSAuint64	SizeInBytes,		//IN
-    HSAuint32	timeout,		//IN
-    void*	DestMemoryAddress,	//IN
-    void **	SPMMemoryAddress,	//OUT
-    HSAuint32	*SizeCopied		//OUT
-    );
-
-
 #ifdef __cplusplus
 }   //extern "C"
 #endif
