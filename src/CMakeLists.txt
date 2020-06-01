@@ -48,6 +48,11 @@ set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
 set ( CORE_RUNTIME_LIBRARY "lib${CORE_RUNTIME_TARGET}" )
 project( ${CORE_RUNTIME_TARGET} )
 
+if ( NOT DEFINED BUILD_SHARED_LIBS )
+  set ( BUILD_SHARED_LIBS "on" )
+endif()
+set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
+
 # Optionally, build HSA Runtime with ccache.
 set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
 if (ROCM_CCACHE_BUILD)
@@ -137,6 +142,7 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "core/runtime/amd_loader_context.cpp"
             "core/runtime/hsa_ven_amd_loader.cpp"
             "core/runtime/amd_memory_region.cpp"
+            "core/runtime/amd_filter_device.cpp"
             "core/runtime/amd_topology.cpp"
             "core/runtime/default_signal.cpp"
             "core/runtime/host_queue.cpp"
@@ -163,7 +169,7 @@ set ( SRCS "core/util/lnx/os_linux.cpp"
             "libamdhsacode/amd_hsa_code.cpp"
 )
 
-add_library( ${CORE_RUNTIME_TARGET} SHARED ${SRCS} )
+add_library( ${CORE_RUNTIME_TARGET} ${SRCS} )
 
 target_link_libraries ( ${CORE_RUNTIME_TARGET}
   PRIVATE hsakmt
@@ -181,18 +187,28 @@ set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${SO_MAJOR}" )
 
 ## Create symlinks for legacy packaging and install
 add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/include/hsa hsa_include_link )
-add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
-add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${CORE_RUNTIME_LIBRARY}.so.${SO_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${SO_MAJOR} )
+if ( ${BUILD_SHARED_LIBS} )
+    add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
+    add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../hsa/lib/${CORE_RUNTIME_LIBRARY}.so.${SO_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${SO_MAJOR} )
+endif()
 
 ## Set install information
-install ( TARGETS ${CORE_RUNTIME_TARGET} LIBRARY DESTINATION hsa/lib )
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION hsa/include/hsa )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so )
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so.${SO_MAJOR} DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so.${SO_MAJOR} )
+install ( TARGETS ${CORE_RUNTIME_TARGET} DESTINATION hsa/lib COMPONENT binary)
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION hsa/include/hsa COMPONENT binary)
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa COMPONENT dirlink)
+
+if ( ${BUILD_SHARED_LIBS} )
+    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so COMPONENT binary)
+    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so.${SO_MAJOR} DESTINATION lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so.${SO_MAJOR} COMPONENT binary)
+endif ()
 
 ## Packaging directives
 set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
+
+## Only pack the "binary" components, post install script will add the directory link.
+set (CPACK_DEB_COMPONENT_INSTALL ON)
+set (CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE 1)
+set (CPACK_COMPONENTS_ALL binary)
 
 set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
 set ( CPACK_PACKAGE_VENDOR "AMD" )
@@ -200,6 +216,10 @@ set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+
+## Process the install scripts to update the CPACK variables
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/post_install ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst @ONLY)
+configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/pre_remove ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm @ONLY)
 
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )

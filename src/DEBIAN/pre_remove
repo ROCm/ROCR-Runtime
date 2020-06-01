@@ -9,6 +9,7 @@ rm_ldconfig() {
 case "$1" in
    remove)
        rm_ldconfig
+       rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/include/hsa
    ;;
    purge)
    ;;

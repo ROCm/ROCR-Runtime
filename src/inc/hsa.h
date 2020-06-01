@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -632,7 +632,7 @@ hsa_status_t HSA_API hsa_system_major_extension_supported(
     uint16_t version_major,
     uint16_t *version_minor,
     bool* result);
-    
+
 
 /**
  * @deprecated
@@ -711,7 +711,7 @@ hsa_status_t HSA_API hsa_system_get_major_extension_table(
     uint16_t extension,
     uint16_t version_major,
     size_t table_length,
-    void *table);    
+    void *table);
 
 /**
  * @brief Struct containing an opaque handle to an agent, a device that participates in
@@ -1283,7 +1283,7 @@ hsa_status_t HSA_API hsa_agent_major_extension_supported(
     uint16_t version_major,
     uint16_t *version_minor,
     bool* result);
-    
+
 
 /** @} */
 
@@ -2184,24 +2184,25 @@ typedef struct hsa_region_s {
  */
 typedef enum {
   /**
-   * Queue supports multiple producers.
+   * Queue supports multiple producers. Use of multiproducer queue mechanics is
+   * required.
    */
   HSA_QUEUE_TYPE_MULTI = 0,
   /**
    * Queue only supports a single producer. In some scenarios, the application
    * may want to limit the submission of AQL packets to a single agent. Queues
    * that support a single producer may be more efficient than queues supporting
-   * multiple producers.
+   * multiple producers. Use of multiproducer queue mechanics is not supported.
    */
   HSA_QUEUE_TYPE_SINGLE = 1,
   /**
-   * Queue supports cooperative dispatches able to use GWS synchronization.
-   * Queues of this type must also be of type HSA_QUEUE_TYPE_MULTI and
-   * may be limited in number.  The runtime may return the same queue to serve
-   * multiple hsa_queue_create calls when this type is given.  Callers must
-   * inspect the returned queue to discover queue size.  Queues of this type
-   * are reference counted and require a matching number of hsa_queue_destroy
-   * calls to release.  Use of multiproducer queue mechanics is required.  See
+   * Queue supports multiple producers and cooperative dispatches. Cooperative
+   * dispatches are able to use GWS synchronization. Queues of this type may be
+   * limited in number. The runtime may return the same queue to serve multiple
+   * ::hsa_queue_create calls when this type is given. Callers must inspect the
+   * returned queue to discover queue size. Queues of this type are reference
+   * counted and require a matching number of ::hsa_queue_destroy calls to
+   * release. Use of multiproducer queue mechanics is required. See
    * ::HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES to query agent support for this
    * type.
    */

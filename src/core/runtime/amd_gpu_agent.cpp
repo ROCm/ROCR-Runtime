@@ -51,6 +51,7 @@
 #include <vector>
 #include <memory>
 #include <utility>
+#include <iomanip>
 
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
@@ -136,7 +137,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
 GpuAgent::~GpuAgent() {
   for (auto& blit : blits_) {
-    if (blit.created()) {
+    if (!blit.empty()) {
       hsa_status_t status = blit->Destroy(*this);
       assert(status == HSA_STATUS_SUCCESS);
     }
@@ -597,7 +598,7 @@ void GpuAgent::InitGWS() {
     if (status != HSAKMT_STATUS_SUCCESS)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "GWS allocation failed.");
 
-    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE | HSA_QUEUE_TYPE_MULTI;
+    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
     gws_queue_.ref_ct_ = 0;
     return queue.release();
   });
@@ -679,7 +680,7 @@ hsa_status_t GpuAgent::DmaFill(void* ptr, uint32_t value, size_t count) {
 
 hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
   for (auto& blit : blits_) {
-    if (blit.created()) {
+    if (!blit.empty()) {
       const hsa_status_t stat = blit->EnableProfiling(enable);
       if (stat != HSA_STATUS_SUCCESS) {
         return stat;
@@ -900,6 +901,25 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_COOPERATIVE_QUEUES:
       *((bool*)value) = properties_.NumGws != 0;
       break;
+    case HSA_AMD_AGENT_INFO_UUID: {
+      uint64_t uuid_value = static_cast<uint64_t>(properties_.UniqueID);
+
+      // Either device does not support UUID e.g. a Gfx8 device,
+      // or runtime is using an older thunk library that does not
+      // support UUID's
+      if (uuid_value == 0) {
+        char uuid_tmp[] = "GPU-XX";
+        snprintf((char*)value, sizeof(uuid_tmp), "%s", uuid_tmp);
+        break;
+      }
+
+      // Device supports UUID, build UUID string to return
+      std::stringstream ss;
+      ss << "GPU-" << std::setfill('0') << std::setw(sizeof(uint64_t) * 2) << std::hex
+         << uuid_value;
+      snprintf((char*)value, (ss.str().length() + 1), "%s", (char*)ss.str().c_str());
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -913,7 +933,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    uint32_t group_segment_size,
                                    core::Queue** queue) {
   // Handle GWS queues.
-  if (queue_type & HSA_QUEUE_TYPE_COOPERATIVE) {
+  if (queue_type == HSA_QUEUE_TYPE_COOPERATIVE) {
     ScopedAcquire<KernelMutex> lock(&gws_queue_.lock_);
     auto ret = (*gws_queue_.queue_).get();
     if (ret != nullptr) {
