@@ -237,6 +237,12 @@ bool WaitForAllThreads(Thread* threads, uint threadCount) {
   return true;
 }
 
+bool IsEnvVarSet(std::string env_var_name) {
+  char* buff = NULL;
+  buff = getenv(env_var_name.c_str());
+  return (buff != NULL);
+}
+
 void SetEnvVar(std::string env_var_name, std::string env_var_value) {
   setenv(env_var_name.c_str(), env_var_value.c_str(), 1);
 }

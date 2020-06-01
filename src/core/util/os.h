@@ -152,6 +152,12 @@ bool WaitForThread(Thread thread);
 /// @return: bool.
 bool WaitForAllThreads(Thread* threads, uint thread_count);
 
+/// @brief: Determines if environment key is set.
+/// @param: env_var_name(Input), name of the environment value.
+/// @return: bool, true for binding any value to environment key,
+/// including an empty string. False otherwise
+bool IsEnvVarSet(std::string env_var_name);
+
 /// @brief: Sets the environment value.
 /// @param: env_var_name(Input), name of the environment value.
 /// @param: env_var_value(Input), value of the environment value.s
