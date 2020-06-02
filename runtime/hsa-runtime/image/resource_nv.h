@@ -1,3 +1,45 @@
+////////////////////////////////////////////////////////////////////////////////
+//
+// The University of Illinois/NCSA
+// Open Source License (NCSA)
+//
+// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+//
+// Developed by:
+//
+//                 AMD Research and AMD HSA Software Development
+//
+//                 Advanced Micro Devices, Inc.
+//
+//                 www.amd.com
+//
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal with the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+//
+//  - Redistributions of source code must retain the above copyright notice,
+//    this list of conditions and the following disclaimers.
+//  - Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimers in
+//    the documentation and/or other materials provided with the distribution.
+//  - Neither the names of Advanced Micro Devices, Inc,
+//    nor the names of its contributors may be used to endorse or promote
+//    products derived from this Software without specific prior written
+//    permission.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS WITH THE SOFTWARE.
+//
+////////////////////////////////////////////////////////////////////////////////
+
 #ifndef EXT_IMAGE_RESOURCE_NV_H_
 #define EXT_IMAGE_RESOURCE_NV_H_
 
@@ -88,7 +130,7 @@ union SQ_BUF_RSRC_WORD2 {
 #define SQ_BUF_RSC_WRD3_INDEX_STRIDE_SZ     2
 #define SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ   1
 #define SQ_BUF_RSC_WRD3_RESOURCE_LEVEL      1
-#define SQ_BUF_RSC_WRD3_LLC_NOALLOC         2
+#define SQ_BUF_RSC_WRD3_RESERVED_1          2
 #define SQ_BUF_RSC_WORD3_OOB_SELECT_SZ      2
 #define SQ_BUF_RSC_WRD3_TYPE_SZ             2
 struct sq_buf_rsrc_word3_t {
@@ -103,14 +145,14 @@ struct sq_buf_rsrc_word3_t {
   unsigned int ADD_TID_ENABLE : SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ;
   unsigned int RESOURCE_LEVEL : SQ_BUF_RSC_WRD3_RESOURCE_LEVEL;
   unsigned int                : 1;
-  unsigned int LLC_NOALLOC    : SQ_BUF_RSC_WRD3_LLC_NOALLOC;
+  unsigned int RESERVED_1     : SQ_BUF_RSC_WRD3_RESERVED_1;
   unsigned int OOB_SELECT     : SQ_BUF_RSC_WORD3_OOB_SELECT_SZ;
   unsigned int TYPE           : SQ_BUF_RSC_WRD3_TYPE_SZ;
 
 #elif defined(BIGENDIAN_CPU)
   unsigned int TYPE           : SQ_BUF_RSC_WRD3_TYPE_SZ;
   unsigned int OOB_SELECT     : SQ_BUF_RSC_WORD3_OOB_SELECT_SZ;
-  unsigned int LLC_NOALLOC    : SQ_BUF_RSC_WRD3_LLC_NOALLOC;
+  unsigned int RESERVED_1     : SQ_BUF_RSC_WRD3_RESERVED_1;
   unsigned int                : 1;
   unsigned int RESOURCE_LEVEL : SQ_BUF_RSC_WRD3_RESOURCE_LEVEL;
   unsigned int ADD_TID_ENABLE : SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ;
@@ -340,7 +382,7 @@ union SQ_IMG_RSRC_WORD5 {
 
 #define SQ_IMG_RSC_WRD6_REG_SZ 32
 #define SQ_IMG_RSC_WRD6_COUNTER_BANK_ID_SZ        8
-#define SQ_IMG_RSC_WRD6_LLC_NOALLOC_RES_SZ        2
+#define SQ_IMG_RSC_WRD6_RESERVED_2_SZ             2
 #define SQ_IMG_RSC_WRD6_ITERATE_256_SZ            1
 #define SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ      2
 #define SQ_IMG_RSC_WRD6_MAX_COMP_BLK_SZ_SZ        2
@@ -353,7 +395,7 @@ union SQ_IMG_RSRC_WORD5 {
 struct sq_img_rsrc_word6_t {
 #if defined(LITTLEENDIAN_CPU)
   unsigned int COUNTER_BANK_ID       : SQ_IMG_RSC_WRD6_COUNTER_BANK_ID_SZ;
-  unsigned int LLC_NOALLOC_RES       : SQ_IMG_RSC_WRD6_LLC_NOALLOC_RES_SZ; //gfx10.3 (NV21)
+  unsigned int RESERVED_2            : SQ_IMG_RSC_WRD6_RESERVED_2_SZ;
   unsigned int ITERATE_256           : SQ_IMG_RSC_WRD6_ITERATE_256_SZ;
   unsigned int                       : 4;
   unsigned int MAX_UNCOMP_BLK_SZ     : SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ;
@@ -375,7 +417,7 @@ struct sq_img_rsrc_word6_t {
   unsigned int MAX_UNCOMP_BLK_SZ     : SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ;
   unsigned int                       : 4;
   unsigned int ITERATE_256           : SQ_IMG_RSC_WRD6_ITERATE_256_SZ;
-  unsigned int LLC_NOALLOC_RES       : SQ_IMG_RSC_WRD6_LLC_NOALLOC_RES_SZ;
+  unsigned int RESERVED_2            : SQ_IMG_RSC_WRD6_RESERVED_2_SZ;
   unsigned int COUNTER_BANK_ID       : SQ_IMG_RSC_WRD6_COUNTER_BANK_ID_SZ;
 #endif
 };
