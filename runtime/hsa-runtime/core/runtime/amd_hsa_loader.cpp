@@ -141,7 +141,7 @@ std::string CodeObjectReaderWrapper::GetUriFromMemory(
     }
 
     uint64_t MyAddress = reinterpret_cast<uint64_t>(Mem);
-    if (!(MyAddress >= LowAddress && MyAddress <= HighAddress)) {
+    if (!(MyAddress >= LowAddress && (MyAddress + Size) <= HighAddress)) {
       continue;
     }
 
@@ -157,9 +157,11 @@ std::string CodeObjectReaderWrapper::GetUriFromMemory(
       return GetUriFromMemoryBasic(Mem, Size);
     }
 
+    uint64_t UriOffset = Offset + MyAddress - LowAddress;
+
     std::ostringstream UriStream;
     UriStream << EncodePathname(Pathname.c_str());
-    UriStream << "#offset=" << Offset;
+    UriStream << "#offset=" << UriOffset;
     if (Size) {
       UriStream << "&size=" << Size;
     }
