@@ -42,14 +42,18 @@
 
 #include "executable.hpp"
 
+#include <libelf.h>
+#include <limits.h>
+#include <link.h>
+#include <unistd.h>
+
 #include <algorithm>
 #include <cstddef>
 #include <cstring>
+#include <iomanip>
 #include <iostream>
 #include <atomic>
 #include <fstream>
-#include <libelf.h>
-#include <unistd.h>
 #include "inc/amd_hsa_elf.h"
 #include "inc/amd_hsa_kernel_code.h"
 #include "core/inc/amd_hsa_code.hpp"
@@ -68,7 +72,10 @@ __attribute__((noinline)) static void _loader_debug_state() {
   static volatile int function_needs_a_side_effect = 0;
   function_needs_a_side_effect ^= 1;
 }
-HSA_API r_debug _amdgpu_r_debug = {1,
+// r_version history:
+// 1: Initial debug protocol
+// 2: New trap handler ABI. The reason for halting a wave is recorded in ttmp11[8:7].
+HSA_API r_debug _amdgpu_r_debug = {2,
                            nullptr,
                            reinterpret_cast<uintptr_t>(&_loader_debug_state),
                            r_debug::RT_CONSISTENT,
@@ -1859,9 +1866,65 @@ hsa_status_t ExecutableImpl::Freeze(const char *options) {
     std::stringstream ss;
     uint64_t elf_begin = lco->getElfData();
     uint64_t elf_size = lco->getElfSize();
-    ss << "file:///proc/" << getpid() << "/mem#"
-       << "offset=" << std::hex << std::showbase << elf_begin << "&"
-       << "size=" << elf_size;
+
+    struct args {
+      ElfW(Addr) mem_addr;
+      size_t callback_num;
+      const char *file_name;
+      size_t file_offset;
+    } data{ elf_begin, 0 };
+
+    // Iterate the loaded shared objects program headers to see if the elf binary
+    // is allocated in a mapped file.
+    if (dl_iterate_phdr([](struct dl_phdr_info *info, size_t size, void *ptr) -> int {
+      struct args *data = (struct args *) ptr;
+      const ElfW(Addr) reladdr = data->mem_addr - info->dlpi_addr;
+
+      int n = info->dlpi_phnum;
+      while (--n >= 0) {
+        if (info->dlpi_phdr[n].p_type == PT_LOAD
+            && reladdr - info->dlpi_phdr[n].p_vaddr >= 0
+            && reladdr - info->dlpi_phdr[n].p_vaddr < info->dlpi_phdr[n].p_memsz) {
+          // The first callback is always the program executable.
+          if (!info->dlpi_name[0] && data->callback_num == 0) {
+            static char argv0[PATH_MAX] = {0};
+            if (!argv0[0] && readlink("/proc/self/exe", argv0, sizeof(argv0)) == -1)
+              return 0;
+            data->file_name = argv0;
+          } else {
+            data->file_name = info->dlpi_name;
+          }
+
+          data->file_offset = reladdr - info->dlpi_phdr[n].p_vaddr + info->dlpi_phdr[n].p_offset;
+          return 1;
+        }
+      }
+
+      ++data->callback_num;
+      return 0;
+    }, &data)) {
+      unsigned char c;
+
+      ss.fill('0');
+      ss << "file://";
+
+      while ((c = *data.file_name++) != '\0') {
+        // %-encode the file name
+        if (isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~') {
+          ss << c;
+        } else {
+          ss << std::uppercase;
+          ss << '%' << std::hex << std::setw(2) << static_cast<int>(c);
+          ss << std::nouppercase;
+        }
+      }
+      ss << "#offset=" << std::dec << data.file_offset
+         << "&size=" << std::dec << elf_size;
+    } else {
+      ss << "file:///proc/" << getpid() << "/mem#"
+         << "offset=" << std::hex << std::showbase << elf_begin << "&"
+         << "size=" << std::dec << elf_size;
+    }
     lco->r_debug_info.l_addr = lco->getDelta();
     lco->r_debug_info.l_name = strdup(ss.str().c_str());
     lco->r_debug_info.l_prev = nullptr;

@@ -72,6 +72,7 @@ class Flag {
     enable_sdma_ = os::GetEnvVar("HSA_ENABLE_SDMA");
 
     visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
+    filter_visible_gpus_ = os::IsEnvVarSet("ROCR_VISIBLE_DEVICES");
 
     var = os::GetEnvVar("HSA_RUNNING_UNDER_VALGRIND");
     running_valgrind_ = (var == "1") ? true : false;
@@ -144,6 +145,8 @@ class Flag {
 
   std::string visible_gpus() const { return visible_gpus_; }
 
+  bool filter_visible_gpus() const { return filter_visible_gpus_; }
+
   uint32_t max_queues() const { return max_queues_; }
 
   size_t scratch_mem_size() const { return scratch_mem_size_; }
@@ -167,6 +170,7 @@ class Flag {
 
   std::string enable_sdma_;
 
+  bool filter_visible_gpus_;
   std::string visible_gpus_;
 
   uint32_t max_queues_;

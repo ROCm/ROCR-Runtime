@@ -41,6 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/amd_topology.h"
+#include "core/inc/amd_filter_device.h"
 
 #include <algorithm>
 #include <cstring>
@@ -65,76 +66,6 @@ namespace amd {
 // Minimum acceptable KFD version numbers
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
-
-#ifndef NDEBUG
-static bool PrintUsrGpuMap(std::map<uint32_t, int32_t>& gpu_usr_map) {
-  (void)PrintUsrGpuMap;  // Suppress unused symbol warning.
-  std::map<uint32_t, int32_t>::iterator it;
-  for (it = gpu_usr_map.begin(); it != gpu_usr_map.end(); it++) {
-    int32_t usrIdx = it->second;
-    uint32_t kfdIdx = it->first;
-    std::cout << "KfdIdx: " << kfdIdx << " @ UsrIdx: " << usrIdx << std::endl;
-  }
-  return true;
-}
-#endif
-
-/**
- * Determines if user has defined the env that indicates which
- * subset of Gpu's are desired to be surfaced. If defined the
- * set of Gpu's are captured into a map of Gpu index and
- *
- * @return true if env is not blank, false otherwise. It is
- * possible to have zero devices surfaced even when env is
- * not blank.
- */
-static bool MapUsrGpuList(int32_t numNodes, std::map<uint32_t, int32_t>& gpu_usr_map) {
-  const std::string& env_value = core::Runtime::runtime_singleton_->flag().visible_gpus();
-  if (env_value.empty()) {
-    return false;
-  }
-
-  // Capture the env value string as a parsable stream
-  std::stringstream stream(env_value);
-
-  // Read stream until there are no more tokens
-  int32_t usrIdx = 0;
-  int32_t token = 0x11231926;
-  while (!stream.eof()) {
-    // Read the option value
-    stream >> token;
-    if (stream.fail()) {
-      return true;
-    }
-
-    // Stop processing input tokens if invalid index is seen
-    // A value that is less than zero or greater than the
-    // number of Numa nodes is considered invalid
-    if ((token < 0) || (token >= numNodes)) {
-      return true;
-    }
-
-    // Determine if current value has been seen before
-    // @note: Currently we are interpreting a repeat as
-    // an invalid index i.e. is equal to -1
-    bool exists = gpu_usr_map.find(token) != gpu_usr_map.end();
-    if (exists) {
-      return true;
-    }
-
-    // Update Gpu User map table
-    gpu_usr_map[token] = usrIdx++;
-
-    // Ignore the delimiter
-    if (stream.peek() == ',') {
-      stream.ignore();
-    } else {
-      return true;
-    }
-  }
-
-  return true;
-}
 
 CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumCPUCores == 0) {
@@ -281,15 +212,18 @@ void BuildTopology() {
 
   core::Runtime::runtime_singleton_->SetLinkCount(props.NumNodes);
 
-  // Determine and process user's request to surface
-  // a subset of Gpu devices
+  // Query if env ROCR_VISIBLE_DEVICES is defined. If defined
+  // determine number and order of GPU devices to be surfaced
+  RvdFilter rvdFilter;
   int32_t invalidIdx = -1;
+  uint32_t visibleCnt = 0;
   std::vector<int32_t> gpu_usr_list;
-  std::map<uint32_t, int32_t> gpu_usr_map;
-  bool filter = MapUsrGpuList(props.NumNodes, gpu_usr_map);
-  int32_t list_sz = gpu_usr_map.size();
+  bool filter = RvdFilter::FilterDevices();
   if (filter) {
-    for (int32_t idx = 0; idx < list_sz; idx++) {
+    rvdFilter.BuildRvdTokenList();
+    rvdFilter.BuildDeviceUuidList(props.NumNodes);
+    visibleCnt = rvdFilter.BuildUsrDeviceList();
+    for (int32_t idx = 0; idx < visibleCnt; idx++) {
       gpu_usr_list.push_back(invalidIdx);
     }
   }
@@ -302,7 +236,7 @@ void BuildTopology() {
       continue;
     }
 
-    // Instantiate a Cpu/Apu device
+    // Instantiate a Cpu device
     const CpuAgent* cpu = DiscoverCpu(node_id, node_prop);
     assert(((node_prop.NumCPUCores == 0) || (cpu != nullptr)) && "CPU device failed discovery.");
 
@@ -311,9 +245,9 @@ void BuildTopology() {
     // visible list, continue if not found
     if (node_prop.NumFComputeCores != 0) {
       if (filter) {
-        const auto& it = gpu_usr_map.find(kfdIdx);
-        if (it != gpu_usr_map.end()) {
-          gpu_usr_list[it->second] = node_id;
+        int32_t devRank = rvdFilter.GetUsrDeviceRank(kfdIdx);
+        if (devRank != (-1)) {
+          gpu_usr_list[devRank] = node_id;
         }
       } else {
         gpu_usr_list.push_back(node_id);
@@ -328,6 +262,7 @@ void BuildTopology() {
     RegisterLinkInfo(node_id, node_prop.NumIOLinks);
   }
 
+  // Instantiate ROCr objects to encapsulate Gpu devices
   SurfaceGpuList(gpu_usr_list);
 }
 

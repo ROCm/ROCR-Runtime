@@ -380,14 +380,23 @@ hsa_status_t Runtime::DeregisterReleaseNotifier(void* ptr,
   return ret;
 }
 
-namespace {
-  bool is_system_mem(const void* ptr, std::size_t size, Runtime& rt,
-                     core::Agent*& agent) {
-    hsa_amd_pointer_info_t info;
-    info.size = sizeof(info);
-    hsa_status_t err =
-      rt.PtrInfo(const_cast<void*>(ptr), &info, nullptr, nullptr, nullptr);
+hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
+  void* source = const_cast<void*>(src);
 
+  // Choose agents from pointer info
+  bool is_src_system = false;
+  bool is_dst_system = false;
+  core::Agent* src_agent;
+  core::Agent* dst_agent;
+
+  // Fetch ownership
+  const auto& is_system_mem = [&](void* ptr, core::Agent*& agent, bool& need_lock) {
+    hsa_amd_pointer_info_t info;
+    uint32_t count;
+    hsa_agent_t* accessible = nullptr;
+    MAKE_SCOPE_GUARD([&]() { free(accessible); });
+    info.size = sizeof(info);
+    hsa_status_t err = PtrInfo(ptr, &info, malloc, &count, &accessible);
     if (err != HSA_STATUS_SUCCESS)
       throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
 
@@ -395,69 +404,52 @@ namespace {
 
     if (info.agentBaseAddress <= ptr &&
         endPtr <= (ptrdiff_t)info.agentBaseAddress + info.sizeInBytes) {
+      if (info.agentOwner.handle == 0) info.agentOwner = accessible[0];
       agent = core::Agent::Convert(info.agentOwner);
+      need_lock = false;
       return agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice;
+    } else {
+      need_lock = true;
+      agent = cpu_agents_[0];
+      return true;
     }
 
-    agent = rt.cpu_agents().front();
-
-    return true;
-  }
-
-  hsa_status_t locked_copy(void* dst, const void* src, std::size_t size,
-                           const void* to_lock,
-                           const amd::MemoryRegion* system_region,
-                           Runtime& rt, core::Agent* locking_agent) {
-    void* mutable_p = const_cast<void*>(to_lock);
-
-    hsa_amd_pointer_info_t info;
-    info.size = sizeof(info);
-    hsa_status_t err = rt.PtrInfo(mutable_p, &info, nullptr, nullptr, nullptr);
-
-    if (err != HSA_STATUS_SUCCESS)
-      throw AMD::hsa_exception(err, "PtrInfo failed in locked_copy.");
-    if (info.type != hsa_amd_pointer_type_t::HSA_EXT_POINTER_TYPE_UNKNOWN)
-      return locking_agent->DmaCopy(dst, src, size);
-
-    void* gpuPtr;
-    hsa_agent_t agent = locking_agent->public_handle();
-    err = system_region->Lock(1, &agent, mutable_p, size, &gpuPtr);
-
-    if (err != HSA_STATUS_SUCCESS) return err;
-
-    MAKE_SCOPE_GUARD([=]() { system_region->Unlock(mutable_p); });
-
-    return (src == to_lock) ? locking_agent->DmaCopy(dst, gpuPtr, size)
-                            : locking_agent->DmaCopy(gpuPtr, src, size);
-  }
-} // Unnamed namespace.
-
-hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
-  // Choose agents from pointer info
-  core::Agent* src_agent;
-  core::Agent* dst_agent;
-
-  bool is_src_system = is_system_mem(src, size, *this, src_agent);
-  bool is_dst_system = is_system_mem(dst, size, *this, dst_agent);
+  bool src_lock, dst_lock;
+  is_src_system = is_system_mem(source, src_agent, src_lock);
+  is_dst_system = is_system_mem(dst, dst_agent, dst_lock);
 
   // CPU-CPU
   if (is_src_system && is_dst_system) {
-    memcpy(dst, src, size);
+    memcpy(dst, source, size);
     return HSA_STATUS_SUCCESS;
   }
 
   // Same GPU
-  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, src, size);
+  if (src_agent->node_id() == dst_agent->node_id()) return dst_agent->DmaCopy(dst, source, size);
 
   // GPU-CPU
   // Must ensure that system memory is visible to the GPU during the copy.
   const amd::MemoryRegion* system_region =
       static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
 
-  if (is_src_system)
-    return locked_copy(dst, src, size, src, system_region, *this, dst_agent);
-  if (is_dst_system)
-    return locked_copy(dst, src, size, dst, system_region, *this, src_agent);
+  void* gpuPtr = nullptr;
+  const auto& locked_copy = [&](void*& ptr, core::Agent* locking_agent) {
+    void* tmp;
+    hsa_agent_t agent = locking_agent->public_handle();
+    hsa_status_t err = system_region->Lock(1, &agent, ptr, size, &tmp);
+    if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "Lock failed in hsa_memory_copy.");
+    gpuPtr = ptr;
+    ptr = tmp;
+  };
+
+  MAKE_SCOPE_GUARD([&]() {
+    if (gpuPtr != nullptr) system_region->Unlock(gpuPtr);
+  });
+
+  if (src_lock) locked_copy(source, dst_agent);
+  if (dst_lock) locked_copy(dst, src_agent);
+  if (is_src_system) return dst_agent->DmaCopy(dst, source, size);
+  if (is_dst_system) return src_agent->DmaCopy(dst, source, size);
 
   /*
   GPU-GPU - functional support, not a performance path.
@@ -470,7 +462,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   void* temp = nullptr;
   system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
   MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
-  hsa_status_t err = src_agent->DmaCopy(temp, src, size);
+  hsa_status_t err = src_agent->DmaCopy(temp, source, size);
   if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
   return err;
 }
@@ -897,6 +889,8 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   hsa_amd_pointer_info_t info;
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if ((info.agentBaseAddress != ptr) || (info.sizeInBytes != len))
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   if ((block.base != ptr) || (block.length != len)) {
     if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
@@ -1357,12 +1351,14 @@ void Runtime::LoadExtensions() {
                                           "libhsa-ext-image.so.1"};
 #endif
 
-  // Update Hsa Api Table with handle of Image extension Apis
-  extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
+  // Update Hsa Api Table with handle of Finalizer extension Apis
+  // Skipping finalizer loading since finalizer is no longer distributed.
+  // LinkExts will expose the finalizer-not-present implementation.
+  // extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.finalizer_api,
                           core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
-  // Update Hsa Api Table with handle of Finalizer extension Apis
+  // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadImage(kImageLib[os_index(os::current_os)]);
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
