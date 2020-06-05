@@ -198,6 +198,20 @@ install(FILES
             ${CMAKE_INSTALL_LIBDIR}/cmake/${HSAKMT_TARGET}
         COMPONENT devel)
 
+# Optionally record the package's find module in the user's package cache.
+if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
+  set ( EXPORT_TO_USER_PACKAGE_REGISTRY "off" )
+endif()
+set ( EXPORT_TO_USER_PACKAGE_REGISTRY ${EXPORT_TO_USER_PACKAGE_REGISTRY} CACHE BOOL "Add cmake package config location to the user's cmake package registry.")
+if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
+  # Enable writing to the registry
+  set(CMAKE_EXPORT_PACKAGE_REGISTRY ON)
+  # Generate a target file for the build
+  export(TARGETS ${HSAKMT_TARGET} NAMESPACE ${HSAKMT_TARGET}:: FILE ${HSAKMT_TARGET}Targets.cmake)
+  # Record the package in the user's cache.
+  export(PACKAGE ${HSAKMT_TARGET})
+endif()
+
 # CPACK_PACKAGING_INSTALL_PREFIX is needed in libhsakmt.pc.in
 # TODO: Add support for relocatable packages.
 configure_file ( libhsakmt.pc.in libhsakmt.pc @ONLY )
