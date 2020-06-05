@@ -83,7 +83,7 @@ set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}
 
 ## Find external dependencies.
 find_package(LibElf REQUIRED)
-find_package(hsakmt 1.0 REQUIRED)
+find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
 
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
@@ -308,6 +308,20 @@ write_basic_package_version_file(${CORE_RUNTIME_TARGET}-config-version.cmake
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_TARGET}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_TARGET}-config-version.cmake
   DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
   COMPONENT dev)
+
+# Optionally record the package's find module in the user's package cache.
+if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
+  set ( EXPORT_TO_USER_PACKAGE_REGISTRY "off" )
+endif()
+set ( EXPORT_TO_USER_PACKAGE_REGISTRY ${EXPORT_TO_USER_PACKAGE_REGISTRY} CACHE BOOL "Add cmake package config location to the user's cmake package registry.")
+if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
+  # Enable writing to the registry
+  set(CMAKE_EXPORT_PACKAGE_REGISTRY ON)
+  # Generate a target file for the build
+  export(TARGETS ${CORE_RUNTIME_TARGET} NAMESPACE ${CORE_RUNTIME_TARGET}:: FILE ${CORE_RUNTIME_TARGET}Targets.cmake)
+  # Record the package in the user's cache.
+  export(PACKAGE ${CORE_RUNTIME_TARGET})
+endif()
 
 ## Packaging directives
 set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
