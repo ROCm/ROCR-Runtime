@@ -88,24 +88,13 @@ find_package(hsakmt 1.0 REQUIRED)
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
 
+## Compiler preproc definitions.
+target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE "${HSA_COMMON_DEFS}" __linux__ HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
+  ROCR_BUILD_ID=${PACKAGE_VERSION_STRING} )
+
 ## Check for memfd_create syscall
 include(CheckSymbolExists)
 CHECK_SYMBOL_EXISTS ( "__NR_memfd_create" "sys/syscall.h" HAVE_MEMFD_CREATE )
-
-## Compiler preproc definitions.
-target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE __linux__ HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
-  ROCR_BUILD_ID=${PACKAGE_VERSION_STRING} )
-
-## Image definitons - audit!
-  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE 
-  UNIX_OS
-  LINUX
-  __AMD64__
-  __x86_64__
-  AMD_INTERNAL_BUILD
-  LITTLEENDIAN_CPU=1
-  BRAHMA_BUILD=1 )
-  
 if ( HAVE_MEMFD_CREATE )
   target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HAVE_MEMFD_CREATE )
 endif()
@@ -123,19 +112,22 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
-set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function" )
+set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
 
 ## Extra image settings - audit!
-set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-deprecated-declarations -fPIC" )
+set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-deprecated-declarations )
 
 if ( CMAKE_COMPILER_IS_GNUCXX )
-    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-error=unused-but-set-variable")
+    set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=unused-but-set-variable)
 endif ()
 
 set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.def" )
 set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.link" )
-set ( CMAKE_SHARED_LINKER_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
+set ( HSA_SHARED_LINK_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
+target_compile_options(${CORE_RUNTIME_TARGET} PRIVATE ${HSA_CXX_FLAGS})
+#target_link_options not available prior to CMake 3.13
+set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY LINK_FLAGS ${HSA_SHARED_LINK_FLAGS})
 ##  -------------------------  End Compiler and Linker options ----------------------------
 
 ## Source files.
@@ -186,7 +178,15 @@ set ( IMAGE_SUPPORT ${IMAGE_SUPPORT} CACHE BOOL "Build with image support (defau
 
 ## Optional image module defintions.
 if(${IMAGE_SUPPORT})
-  target_compile_definitions( ${CORE_RUNTIME_TARGET} PRIVATE HSA_IMAGE_SUPPORT )
+  ## Image definitons - audit!
+  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE
+    HSA_IMAGE_SUPPORT
+    UNIX_OS
+    LINUX
+    __AMD64__
+    __x86_64__
+    AMD_INTERNAL_BUILD
+    BRAHMA_BUILD=1 )
 
   set ( IMAGE_SRCS image/addrlib/src/addrinterface.cpp
                    image/addrlib/src/core/coord.cpp
@@ -240,7 +240,7 @@ endif()
 
 ## Link dependencies.
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt )
-target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf dl pthread rt )
+target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
