@@ -51,6 +51,7 @@
 #include "core/util/os.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 struct ImageExtTableInternal : public ImageExtTable {
   decltype(::hsa_amd_image_get_info_max_dim)* hsa_amd_image_get_info_max_dim_fn;
@@ -95,7 +96,8 @@ class ExtensionEntryPoints {
   void UpdateAmdExtTable(decltype(::hsa_amd_image_create)* func_ptr);
 
   DISALLOW_COPY_AND_ASSIGN(ExtensionEntryPoints);
-};
-}
+};  
+}   //  namespace core
+}   //  namespace rocr
 
 #endif

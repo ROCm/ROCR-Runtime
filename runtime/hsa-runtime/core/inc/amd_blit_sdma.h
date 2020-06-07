@@ -55,7 +55,8 @@
 #include "core/inc/signal.h"
 #include "core/util/utils.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 class BlitSdmaBase : public core::Blit {
  public:
@@ -290,5 +291,6 @@ typedef BlitSdma<uint64_t, true, -1, false> BlitSdmaV4;
 typedef BlitSdma<uint64_t, true, -1, true> BlitSdmaV5;
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

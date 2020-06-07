@@ -53,6 +53,8 @@
 #include <string>
 #include <algorithm>
 
+namespace rocr {
+
 typedef unsigned int uint;
 typedef uint64_t uint64;
 
@@ -325,6 +327,8 @@ static __forceinline std::string& rtrim(std::string& s) {
 }
 
 static __forceinline std::string& trim(std::string& s) { return ltrim(rtrim(s)); }
+
+}  // namespace rocr
 
 template <uint32_t lowBit, uint32_t highBit, typename T>
 static __forceinline uint32_t BitSelect(T p) {

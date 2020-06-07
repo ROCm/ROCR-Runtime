@@ -67,6 +67,7 @@
 
 const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
+namespace rocr {
 namespace core {
 bool g_use_interrupt_wait = true;
 
@@ -420,8 +421,8 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   // GPU-CPU
   // Must ensure that system memory is visible to the GPU during the copy.
-  const amd::MemoryRegion* system_region =
-      static_cast<const amd::MemoryRegion*>(system_regions_fine_[0]);
+  const AMD::MemoryRegion* system_region =
+      static_cast<const AMD::MemoryRegion*>(system_regions_fine_[0]);
 
   void* gpuPtr = nullptr;
   const auto& locked_copy = [&](void*& ptr, core::Agent* locking_agent) {
@@ -548,7 +549,7 @@ hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
 
 hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
                                   const hsa_agent_t* agents, const void* ptr) {
-  const amd::MemoryRegion* amd_region = NULL;
+  const AMD::MemoryRegion* amd_region = NULL;
   size_t alloc_size = 0;
 
   {
@@ -560,7 +561,7 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
       return HSA_STATUS_ERROR;
     }
 
-    amd_region = reinterpret_cast<const amd::MemoryRegion*>(it->second.region);
+    amd_region = reinterpret_cast<const AMD::MemoryRegion*>(it->second.region);
     alloc_size = it->second.size;
   }
 
@@ -1229,7 +1230,7 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
     if (it == runtime_singleton_->allocation_map_.end()) break;
     std::string kind = "Non-HSA";
     if (it->second.region != nullptr) {
-      const amd::MemoryRegion* region = static_cast<const amd::MemoryRegion*>(it->second.region);
+      const AMD::MemoryRegion* region = static_cast<const AMD::MemoryRegion*>(it->second.region);
       if (region->IsSystem())
         kind = "System";
       else if (region->IsLocalMemory())
@@ -1279,7 +1280,7 @@ hsa_status_t Runtime::Load() {
 
   g_use_interrupt_wait = flag_.enable_interrupt();
 
-  if (!amd::Load()) {
+  if (!AMD::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -1301,7 +1302,7 @@ hsa_status_t Runtime::Load() {
   // Initialize per GPU scratch, blits, and trap handler
   for (core::Agent* agent : gpu_agents_) {
     hsa_status_t status =
-        reinterpret_cast<amd::GpuAgentInt*>(agent)->PostToolsInit();
+        reinterpret_cast<AMD::GpuAgentInt*>(agent)->PostToolsInit();
 
     if (status != HSA_STATUS_SUCCESS) {
       return status;
@@ -1341,7 +1342,7 @@ void Runtime::Unload() {
 
   CloseTools();
 
-  amd::Unload();
+  AMD::Unload();
 }
 
 void Runtime::LoadExtensions() {
@@ -1578,3 +1579,4 @@ void Runtime::InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t ag
 }
 
 }  // namespace core
+}  // namespace rocr

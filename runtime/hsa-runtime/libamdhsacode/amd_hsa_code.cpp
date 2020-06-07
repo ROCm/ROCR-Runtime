@@ -61,6 +61,7 @@
 #define _alloca alloca
 #endif
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace code {
@@ -1686,6 +1687,7 @@ namespace code {
 
     KernelSymbolV2::KernelSymbolV2(amd::elf::Symbol* elfsym_, const amd_kernel_code_t* akc) :
       KernelSymbol(elfsym_, akc) { }
-}
-}
-}
+}   // namespace code
+}   // namespace hsa
+}   // namespace amd
+}   // namespace rocr

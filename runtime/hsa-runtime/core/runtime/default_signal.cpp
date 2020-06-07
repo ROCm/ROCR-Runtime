@@ -43,6 +43,7 @@
 #include "core/inc/default_signal.h"
 #include "core/util/timer.h"
 
+namespace rocr {
 namespace core {
 
 int DefaultSignal::rtti_id_ = 0;
@@ -275,3 +276,4 @@ hsa_signal_value_t BusyWaitSignal::CasAcqRel(hsa_signal_value_t expected,
 }
 
 }  // namespace core
+}  // namespace rocr

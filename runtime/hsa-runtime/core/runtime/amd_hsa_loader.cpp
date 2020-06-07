@@ -76,6 +76,7 @@ std::string EncodePathname(const char *Pathname) {
 
 }  // namespace
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -175,3 +176,4 @@ std::string CodeObjectReaderWrapper::GetUriFromMemory(
 }  // namespace loader
 }  // namespace hsa
 }  // namespace amd
+}  // namespace rocr

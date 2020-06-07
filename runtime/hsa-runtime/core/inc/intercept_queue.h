@@ -54,6 +54,7 @@
 #include "core/inc/exceptions.h"
 #include "core/util/locks.h"
 
+namespace rocr {
 namespace core {
 
 // @brief Generic container to forward Queue interfaces into Queue* member.
@@ -264,5 +265,6 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
 };
 
 }  // namespace core
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_INTERCEPT_QUEUE_H_

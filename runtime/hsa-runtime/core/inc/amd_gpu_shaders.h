@@ -43,7 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_GPU_SHADERS_H_
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_SHADERS_H_
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 static const unsigned int kCodeCopyAligned7[] = {
     0xC0820100, 0xC0840104, 0xC0860108, 0xC088010C, 0xC08A0110, 0xC00C0114,
@@ -522,5 +523,6 @@ static const unsigned int kCodeTrapHandler10[] = {
 };
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

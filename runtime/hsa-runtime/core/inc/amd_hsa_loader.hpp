@@ -102,6 +102,7 @@ enum amd_loaded_segment_info_t {
   AMD_LOADED_SEGMENT_INFO_SIZE = 3
 };
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -511,5 +512,6 @@ private:
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr
 
 #endif // AMD_HSA_LOADER_HPP

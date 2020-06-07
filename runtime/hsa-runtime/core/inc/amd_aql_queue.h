@@ -49,7 +49,8 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/locks.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
@@ -282,5 +283,6 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 };
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

@@ -43,6 +43,7 @@
 #include "core/inc/intercept_queue.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 struct InterceptFrame {
@@ -239,3 +240,4 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 }
 
 }  // namespace core
+}  // namespace rocr

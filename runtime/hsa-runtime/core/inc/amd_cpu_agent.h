@@ -54,7 +54,8 @@
 #include "core/inc/queue.h"
 #include "core/inc/cache.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 // @brief Class to represent a CPU device.
 class CpuAgent : public core::Agent {
  public:
@@ -161,5 +162,6 @@ class CpuAgent : public core::Agent {
 };
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

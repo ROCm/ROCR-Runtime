@@ -87,8 +87,9 @@ mes of its
 #include <vector>
 #include <memory>
 
+namespace rocr {
 namespace amd {
-  namespace elf {
+namespace elf {
     class Symbol;
     class SymbolTable;
     class Section;
@@ -258,7 +259,8 @@ namespace amd {
 
     std::string GetNoteString(uint32_t s_size, const char* s);
 
-  }
-}
+}   //  namespace elf
+}   //  namespace amd
+}   //  namespace rocr
 
 #endif // AMD_ELF_IMAGE_HPP_

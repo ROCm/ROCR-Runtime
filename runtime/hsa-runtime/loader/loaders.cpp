@@ -44,6 +44,7 @@
 #include <cassert>
 #include "loaders.hpp"
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -253,6 +254,7 @@ namespace loader {
     return HSA_STATUS_SUCCESS;
   }
 
-}
-}
-}
+}   //  namespace loader
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr

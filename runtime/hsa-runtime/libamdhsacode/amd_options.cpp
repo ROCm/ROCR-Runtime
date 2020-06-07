@@ -54,6 +54,7 @@
 
 #include <cstddef>
 
+namespace rocr {
 namespace amd {
 namespace options {
 
@@ -379,3 +380,4 @@ void OptionParser::Reset() {
 
 } // namespace options
 } // namespace amd
+} // namespace rocr

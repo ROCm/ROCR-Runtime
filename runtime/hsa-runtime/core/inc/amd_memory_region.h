@@ -55,7 +55,8 @@
 
 #include "inc/hsa_ext_amd.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 class MemoryRegion : public core::MemoryRegion {
  public:
   /// @brief Convert this object into hsa_region_t.
@@ -71,7 +72,7 @@ class MemoryRegion : public core::MemoryRegion {
     return region_handle;
   }
 
-  /// @brief  Convert hsa_region_t into amd::MemoryRegion *.
+  /// @brief  Convert hsa_region_t into AMD::MemoryRegion *.
   static __forceinline MemoryRegion* Convert(hsa_region_t region) {
     return reinterpret_cast<MemoryRegion*>(region.handle);
   }
@@ -204,6 +205,7 @@ class MemoryRegion : public core::MemoryRegion {
   mutable SimpleHeap<BlockAllocator> fragment_allocator_;
 };
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

@@ -46,7 +46,8 @@
 #include <stddef.h>
 #include <stdint.h>
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 // SDMA packet for VI device.
 // Reference: http://people.freedesktop.org/~agd5f/dma_packets.txt
@@ -565,5 +566,6 @@ typedef struct SDMA_PKT_GCR_TAG {
 } SDMA_PKT_GCR;
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_SDMA_REGISTERS_H_

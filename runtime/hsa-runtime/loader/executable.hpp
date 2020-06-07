@@ -62,6 +62,7 @@
 #include "inc/amd_hsa_kernel_code.h"
 #include "amd_hsa_locks.hpp"
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -600,5 +601,6 @@ public:
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr
 
 #endif // HSA_RUNTIME_CORE_LOADER_EXECUTABLE_HPP_

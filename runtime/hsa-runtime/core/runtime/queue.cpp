@@ -43,6 +43,7 @@
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
 
+namespace rocr {
 namespace core {
 
 void Queue::DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data) {
@@ -53,4 +54,5 @@ void Queue::DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* 
   }
 }
 
-}
+}  // namespace core
+}  // namespace rocr

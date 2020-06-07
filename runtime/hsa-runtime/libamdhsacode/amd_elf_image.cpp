@@ -99,10 +99,11 @@
 
 #define NOTE_RECORD_ALIGNMENT 4
 
-using amd::hsa::alignUp;
+using rocr::amd::hsa::alignUp;
 
+namespace rocr {
 namespace amd {
-  namespace elf {
+namespace elf {
 
     class FileImage {
     public:
@@ -1711,5 +1712,6 @@ namespace amd {
       }
     }
 
-  }
-}
+}   //  namespace elf
+}   //  namespace amd
+}   //  namespace rocr

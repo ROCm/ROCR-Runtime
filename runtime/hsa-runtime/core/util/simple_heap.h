@@ -53,6 +53,8 @@
 
 #include "core/util/utils.h"
 
+namespace rocr {
+
 template <typename Allocator> class SimpleHeap {
  private:
   struct Fragment_T {
@@ -297,5 +299,7 @@ template <typename Allocator> class SimpleHeap {
     return true;
   }
 };
+
+}  // namespace rocr
 
 #endif  // HSA_RUNTME_CORE_UTIL_SIMPLE_HEAP_H_

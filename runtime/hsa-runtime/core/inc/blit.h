@@ -47,6 +47,7 @@
 
 #include "core/inc/agent.h"
 
+namespace rocr {
 namespace core {
 class Blit {
  public:
@@ -111,5 +112,6 @@ class Blit {
   virtual bool isSDMA() const { return false; }
 };
 }  // namespace core
+}  // namespace rocr
 
 #endif  // header guard

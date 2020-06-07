@@ -47,6 +47,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/exceptions.h"
 
+namespace rocr {
 namespace core {
 
 int IPCSignal::rtti_id_ = 0;
@@ -92,3 +93,4 @@ Signal* IPCSignal::Attach(const hsa_amd_ipc_signal_t* ipc_signal_handle) {
 }
 
 }  // namespace core
+}  // namespace rocr

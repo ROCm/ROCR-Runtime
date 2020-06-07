@@ -47,6 +47,7 @@
 #include <cstddef>
 #include <mutex>
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace common {
@@ -123,5 +124,6 @@ private:
 } // namespace common
 } // namespace hsa
 } // namespace amd
+} // namespace rocr
 
 #endif // AMD_HSA_LOCKS_HPP

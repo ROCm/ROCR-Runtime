@@ -51,7 +51,8 @@
 #include "core/util/utils.h"
 #include "core/inc/exceptions.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 // Tracks aggregate size of system memory available on platform
 size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
@@ -571,7 +572,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
     assert(cpu_in_list);
     // This is a system region and only CPU agents in the whitelist.
     // Remove old mappings.
-    amd::MemoryRegion::MakeKfdMemoryUnresident(ptr);
+    AMD::MemoryRegion::MakeKfdMemoryUnresident(ptr);
     return HSA_STATUS_SUCCESS;
   }
 
@@ -590,7 +591,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   {
     ScopedAcquire<KernelMutex> lock(&core::Runtime::runtime_singleton_->memory_lock_);
     uint64_t alternate_va = 0;
-    if (!amd::MemoryRegion::MakeKfdMemoryResident(
+    if (!AMD::MemoryRegion::MakeKfdMemoryResident(
       whitelist_nodes.size(), &whitelist_nodes[0], ptr,
       size, &alternate_va, map_flag)) {
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -670,7 +671,7 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       return HSA_STATUS_SUCCESS;
     }
-    amd::MemoryRegion::DeregisterMemory(host_ptr);
+    AMD::MemoryRegion::DeregisterMemory(host_ptr);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -706,11 +707,12 @@ void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated
   hsa_status_t err = region_.Allocate(
       bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
   if (err != HSA_STATUS_SUCCESS)
-    throw ::AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
+    throw AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
   assert(ret != nullptr && "Region returned nullptr on success.");
 
   allocated_size = block_size();
   return ret;
 }
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr
