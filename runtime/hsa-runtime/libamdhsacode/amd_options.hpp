@@ -55,6 +55,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
+namespace rocr {
 namespace amd {
 namespace options {
 
@@ -472,5 +473,6 @@ private:
 
 } // namespace options
 } // namespace amd
+} // namespace rocr
 
 #endif // AMD_OPTIONS_HPP

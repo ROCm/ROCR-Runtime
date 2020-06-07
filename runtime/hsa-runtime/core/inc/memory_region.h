@@ -50,6 +50,7 @@
 #include "core/inc/agent.h"
 #include "core/inc/checked.h"
 
+namespace rocr {
 namespace core {
 class Agent;
 
@@ -118,5 +119,6 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
   core::Agent* owner_;
 };
 }  // namespace core
+}  // namespace rocr
 
 #endif  // header guard

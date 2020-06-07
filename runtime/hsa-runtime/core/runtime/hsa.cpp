@@ -60,6 +60,8 @@
 #include "inc/hsa_ven_amd_aqlprofile.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 
+namespace rocr {
+
 using namespace amd::hsa;
 
 template <class T>
@@ -158,7 +160,7 @@ template <class T> static __forceinline T handleExceptionT() {
   abort();
   return T();
 }
-}
+}   // namespace amd
 
 #define TRY try {
 #define CATCH } catch(...) { return AMD::handleException(); }
@@ -1680,9 +1682,6 @@ hsa_status_t hsa_isa_compatible(
 
 //===--- Code Objects (deprecated) ----------------------------------------===//
 
-using code::AmdHsaCode;
-using code::AmdHsaCodeManager;
-
 namespace {
 
 hsa_status_t IsCodeObjectAllocRegion(
@@ -1734,7 +1733,7 @@ hsa_status_t FindCodeObjectAllocRegion(
   return HSA::hsa_iterate_agents(FindCodeObjectAllocRegionForAgent, data);
 }
 
-AmdHsaCodeManager *GetCodeManager() {
+amd::hsa::code::AmdHsaCodeManager *GetCodeManager() {
   return core::Runtime::runtime_singleton_->code_manager();
 }
 
@@ -1756,7 +1755,7 @@ hsa_status_t hsa_code_object_serialize(
   IS_BAD_PTR(serialized_code_object);
   IS_BAD_PTR(serialized_code_object_size);
 
-  AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
+  amd::hsa::code::AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
   if (!code) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1917,7 +1916,7 @@ hsa_status_t hsa_code_object_get_info(
   IS_OPEN();
   IS_BAD_PTR(value);
 
-  AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
+  amd::hsa::code::AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
   if (!code) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1974,7 +1973,7 @@ hsa_status_t hsa_code_object_get_symbol(
   IS_BAD_PTR(symbol_name);
   IS_BAD_PTR(symbol);
 
-  AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
+  amd::hsa::code::AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
   if (!code) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1994,7 +1993,7 @@ hsa_status_t hsa_code_object_get_symbol_from_name(
   IS_BAD_PTR(symbol_name);
   IS_BAD_PTR(symbol);
 
-  AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
+  amd::hsa::code::AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
   if (!code) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -2032,7 +2031,7 @@ hsa_status_t hsa_code_object_iterate_symbols(
   IS_OPEN();
   IS_BAD_PTR(callback);
 
-  AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
+  amd::hsa::code::AmdHsaCode *code = GetCodeManager()->FromHandle(code_object);
   if (!code) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -2043,10 +2042,10 @@ hsa_status_t hsa_code_object_iterate_symbols(
 
 //===--- Executable -------------------------------------------------------===//
 
-using common::Signed;
-using loader::CodeObjectReaderWrapper;
-using loader::Executable;
-using loader::Loader;
+using amd::hsa::common::Signed;
+using amd::hsa::loader::Loader;
+using amd::hsa::loader::Executable;
+using amd::hsa::loader::CodeObjectReaderWrapper;
 
 namespace {
 
@@ -2528,7 +2527,7 @@ hsa_status_t hsa_executable_iterate_program_symbols(
   IS_OPEN();
   IS_BAD_PTR(callback);
 
-  Executable *exec = Executable::Object(executable);
+  amd::hsa::loader::Executable *exec = amd::hsa::loader::Executable::Object(executable);
   if (!exec) {
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
@@ -2748,4 +2747,5 @@ hsa_status_t hsa_status_string(
   return HSA_STATUS_SUCCESS;
 }
 
-}  // end of namespace HSA
+}  // namespace HSA
+}  // namespace rocr

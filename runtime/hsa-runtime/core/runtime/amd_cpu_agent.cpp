@@ -50,7 +50,8 @@
 
 #include "inc/hsa_ext_image.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : core::Agent(node, kAmdCpuDevice), properties_(node_props) {
   InitRegionList();
@@ -383,3 +384,4 @@ hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 }
 
 }  // namespace amd
+}  // namespace rocr

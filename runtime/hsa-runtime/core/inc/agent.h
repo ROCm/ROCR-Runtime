@@ -54,6 +54,7 @@
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 class Signal;
 
@@ -298,5 +299,6 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   DISALLOW_COPY_AND_ASSIGN(Agent);
 };
 }  // namespace core
+}  // namespace rocr
 
 #endif  // header guard

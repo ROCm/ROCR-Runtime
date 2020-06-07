@@ -47,6 +47,7 @@
 #include <set>
 #include <iostream>
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -100,8 +101,9 @@ namespace loader {
     hsa_status_t SamplerDestroy(
       hsa_agent_t agent, hsa_ext_sampler_t sampler_handle) override;
   };
-}
-}
-}
+}   //  namespace loader
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr
 
 #endif // LOADERS_HPP_

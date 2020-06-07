@@ -46,6 +46,7 @@
 
 #include <string>
 
+namespace rocr {
 // Implementations for missing / unsupported extensions
 template <class R, class... ARGS> static R hsa_ext_null(ARGS...) {
   return HSA_STATUS_ERROR_NOT_INITIALIZED;
@@ -259,6 +260,7 @@ bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
 }
 
 }  // namespace core
+}  // namespace rocr
 
 //---------------------------------------------------------------------------//
 //   Exported extension stub functions
@@ -268,19 +270,19 @@ hsa_status_t hsa_ext_program_create(
     hsa_machine_model_t machine_model, hsa_profile_t profile,
     hsa_default_float_rounding_mode_t default_float_rounding_mode,
     const char* options, hsa_ext_program_t* program) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_create_fn(machine_model, profile,
                                  default_float_rounding_mode, options, program);
 }
 
 hsa_status_t hsa_ext_program_destroy(hsa_ext_program_t program) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_destroy_fn(program);
 }
 
 hsa_status_t hsa_ext_program_add_module(hsa_ext_program_t program,
                                         hsa_ext_module_t module) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_add_module_fn(program, module);
 }
 
@@ -289,14 +291,14 @@ hsa_status_t hsa_ext_program_iterate_modules(
     hsa_status_t (*callback)(hsa_ext_program_t program, hsa_ext_module_t module,
                              void* data),
     void* data) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_iterate_modules_fn(program, callback, data);
 }
 
 hsa_status_t hsa_ext_program_get_info(hsa_ext_program_t program,
                                       hsa_ext_program_info_t attribute,
                                       void* value) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_get_info_fn(program, attribute, value);
 }
 
@@ -304,7 +306,7 @@ hsa_status_t hsa_ext_program_finalize(
     hsa_ext_program_t program, hsa_isa_t isa, int32_t call_convention,
     hsa_ext_control_directives_t control_directives, const char* options,
     hsa_code_object_type_t code_object_type, hsa_code_object_t* code_object) {
-  return core::Runtime::runtime_singleton_->extensions_.finalizer_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.finalizer_api
       .hsa_ext_program_finalize_fn(program, isa, call_convention,
                                    control_directives, options,
                                    code_object_type, code_object);
@@ -313,7 +315,7 @@ hsa_status_t hsa_ext_program_finalize(
 hsa_status_t hsa_ext_image_get_capability(
     hsa_agent_t agent, hsa_ext_image_geometry_t geometry,
     const hsa_ext_image_format_t* image_format, uint32_t* capability_mask) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_get_capability_fn(agent, geometry, image_format,
                                        capability_mask);
 }
@@ -322,7 +324,7 @@ hsa_status_t hsa_ext_image_data_get_info(
     hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
     hsa_access_permission_t access_permission,
     hsa_ext_image_data_info_t* image_data_info) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_data_get_info_fn(agent, image_descriptor,
                                       access_permission, image_data_info);
 }
@@ -331,7 +333,7 @@ hsa_status_t hsa_ext_image_create(
     hsa_agent_t agent, const hsa_ext_image_descriptor_t* image_descriptor,
     const void* image_data, hsa_access_permission_t access_permission,
     hsa_ext_image_t* image) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_create_fn(agent, image_descriptor, image_data,
                                access_permission, image);
 }
@@ -340,7 +342,7 @@ hsa_status_t hsa_ext_image_import(hsa_agent_t agent, const void* src_memory,
                                   size_t src_row_pitch, size_t src_slice_pitch,
                                   hsa_ext_image_t dst_image,
                                   const hsa_ext_image_region_t* image_region) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_import_fn(agent, src_memory, src_row_pitch,
                                src_slice_pitch, dst_image, image_region);
 }
@@ -349,7 +351,7 @@ hsa_status_t hsa_ext_image_export(hsa_agent_t agent, hsa_ext_image_t src_image,
                                   void* dst_memory, size_t dst_row_pitch,
                                   size_t dst_slice_pitch,
                                   const hsa_ext_image_region_t* image_region) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_export_fn(agent, src_image, dst_memory, dst_row_pitch,
                                dst_slice_pitch, image_region);
 }
@@ -359,7 +361,7 @@ hsa_status_t hsa_ext_image_copy(hsa_agent_t agent, hsa_ext_image_t src_image,
                                 hsa_ext_image_t dst_image,
                                 const hsa_dim3_t* dst_offset,
                                 const hsa_dim3_t* range) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_copy_fn(agent, src_image, src_offset, dst_image,
                              dst_offset, range);
 }
@@ -367,25 +369,25 @@ hsa_status_t hsa_ext_image_copy(hsa_agent_t agent, hsa_ext_image_t src_image,
 hsa_status_t hsa_ext_image_clear(hsa_agent_t agent, hsa_ext_image_t image,
                                  const void* data,
                                  const hsa_ext_image_region_t* image_region) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_clear_fn(agent, image, data, image_region);
 }
 
 hsa_status_t hsa_ext_image_destroy(hsa_agent_t agent, hsa_ext_image_t image) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_destroy_fn(agent, image);
 }
 
 hsa_status_t hsa_ext_sampler_create(
     hsa_agent_t agent, const hsa_ext_sampler_descriptor_t* sampler_descriptor,
     hsa_ext_sampler_t* sampler) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_sampler_create_fn(agent, sampler_descriptor, sampler);
 }
 
 hsa_status_t hsa_ext_sampler_destroy(hsa_agent_t agent,
                                      hsa_ext_sampler_t sampler) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_sampler_destroy_fn(agent, sampler);
 }
 
@@ -394,7 +396,7 @@ hsa_status_t hsa_ext_image_get_capability_with_layout(
     const hsa_ext_image_format_t* image_format,
     hsa_ext_image_data_layout_t image_data_layout,
     uint32_t* capability_mask) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_get_capability_with_layout_fn(agent, geometry, image_format,
                                        image_data_layout, capability_mask);
 }
@@ -406,7 +408,7 @@ hsa_status_t hsa_ext_image_data_get_info_with_layout(
     size_t image_data_row_pitch,
     size_t image_data_slice_pitch,
     hsa_ext_image_data_info_t* image_data_info) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_data_get_info_with_layout_fn(agent, image_descriptor,
                                       access_permission, image_data_layout,
                                       image_data_row_pitch, image_data_slice_pitch,
@@ -420,7 +422,7 @@ hsa_status_t hsa_ext_image_create_with_layout(
     size_t image_data_row_pitch,
     size_t image_data_slice_pitch,
     hsa_ext_image_t* image) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_ext_image_create_with_layout_fn(agent, image_descriptor, image_data,
                                access_permission, image_data_layout,
                                image_data_row_pitch, image_data_slice_pitch,
@@ -435,6 +437,6 @@ hsa_status_t hsa_ext_image_create_with_layout(
 hsa_status_t hsa_amd_image_get_info_max_dim(hsa_agent_t component,
                                             hsa_agent_info_t attribute,
                                             void* value) {
-  return core::Runtime::runtime_singleton_->extensions_.image_api
+  return rocr::core::Runtime::runtime_singleton_->extensions_.image_api
       .hsa_amd_image_get_info_max_dim_fn(component, attribute, value);
 }

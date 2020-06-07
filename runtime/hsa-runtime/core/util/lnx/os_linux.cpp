@@ -60,6 +60,7 @@
 #include <string>
 #include <utility>
 
+namespace rocr {
 namespace os {
 
 struct ThreadArgs {
@@ -447,6 +448,7 @@ uint64_t AccurateClockFrequency() {
   if (invPeriod == 0.0) invPeriod = 1.0 / double(time.tv_nsec);
   return 1000000000ull / uint64_t(time.tv_nsec);
 }
-}
+}   //  namespace os
+}   //  namespace rocr
 
 #endif

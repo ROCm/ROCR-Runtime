@@ -60,7 +60,8 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 bool RvdFilter::FilterDevices() {
   return core::Runtime::runtime_singleton_->flag().filter_visible_gpus();
@@ -270,3 +271,4 @@ void RvdFilter::PrintRvdTokenList() {
 #endif
 
 }  // namespace amd
+}  // namespace rocr

@@ -45,11 +45,12 @@
 
 #include "core/inc/amd_hsa_loader.hpp"
 
+namespace rocr {
 namespace amd {
 
-class LoaderContext final: public hsa::loader::Context {
+class LoaderContext final: public amd::hsa::loader::Context {
 public:
-  LoaderContext(): hsa::loader::Context() {}
+  LoaderContext(): amd::hsa::loader::Context() {}
 
   ~LoaderContext() {}
 
@@ -89,5 +90,6 @@ private:
 };
 
 } // namespace amd
+} // namespace rocr
 
 #endif // HSA_RUNTIME_CORE_INC_AMD_LOADER_CONTEXT_HPP

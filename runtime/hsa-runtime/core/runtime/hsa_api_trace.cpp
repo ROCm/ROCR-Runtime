@@ -48,6 +48,7 @@
 #include <iostream>
 
 // Tools only APIs.
+namespace rocr {
 namespace AMD {
 hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
                                               hsa_amd_queue_intercept_handler callback,
@@ -59,7 +60,7 @@ hsa_status_t hsa_amd_queue_intercept_create(
 
 hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
                                                    void* user_data);
-}
+}   //  namespace amd
 
 namespace core {
 
@@ -396,4 +397,5 @@ class Init {
   Init() { hsa_table_interface_init(&hsa_api_table_.hsa_api); }
 };
 static Init LinkAtLoad;
-}
+}   //  namespace core
+}   //  namespace rocr

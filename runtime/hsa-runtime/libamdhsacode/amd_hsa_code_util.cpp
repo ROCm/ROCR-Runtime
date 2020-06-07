@@ -77,6 +77,7 @@ std::ostream& attr2(std::ostream& out)
 }
 } // namespace anonymous
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace common {
@@ -118,7 +119,7 @@ bool IsAccessibleMemoryAddress(uint64_t address)
 #endif // _WIN32 || _WIN64
 }
 
-}
+}   //  namespace common
 
 std::string HsaSymbolKindToString(hsa_symbol_kind_t kind)
 {
@@ -1045,5 +1046,6 @@ std::string DumpFileName(const std::string& dir, const char* prefix, const char*
 }
 
 
-}
-}
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr

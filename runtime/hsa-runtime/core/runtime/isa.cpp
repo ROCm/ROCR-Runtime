@@ -46,6 +46,7 @@
 #include <sstream>
 #include <utility>
 
+namespace rocr {
 namespace core {
 
 bool Wavefront::GetInfo(
@@ -240,3 +241,4 @@ const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
 }
 
 } // namespace core
+} // namespace rocr

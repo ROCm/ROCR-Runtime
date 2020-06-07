@@ -45,8 +45,8 @@
 
 #include "inc/hsa.h"
 
-namespace HSA
-{
+namespace rocr {
+namespace HSA {
 
   // Define core namespace interfaces - copy of function declarations in hsa.h
   hsa_status_t HSA_API hsa_init();
@@ -412,12 +412,14 @@ namespace HSA
   hsa_status_t HSA_API hsa_status_string(
       hsa_status_t status,
       const char **status_string);
-}
+
+}   //  namespace HSA
+}   //  namespace rocr
 
 #ifdef BUILDING_HSA_CORE_RUNTIME
 //This using declaration is deliberate!
 //We want unqualified name resolution to fail when building the runtime.  This is a guard against accidental use of the intercept layer in the runtime.
-//using namespace HSA;
+//using namespace rocr::HSA;
 #endif
 
 #endif

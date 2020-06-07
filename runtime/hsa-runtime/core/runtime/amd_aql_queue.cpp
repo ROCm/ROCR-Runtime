@@ -68,7 +68,8 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/amd_gpu_pm4.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 // Queue::amd_queue_ is cache-aligned for performance.
 const uint32_t kAmdQueueAlignBytes = 0x40;
 
@@ -182,7 +183,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   auto& regions = agent->regions();
 
   for (auto region : regions) {
-    const MemoryRegion* amdregion = static_cast<const amd::MemoryRegion*>(region);
+    const MemoryRegion* amdregion = static_cast<const AMD::MemoryRegion*>(region);
     uint64_t base = amdregion->GetBaseAddress();
 
     if (amdregion->IsLDS()) {
@@ -1119,3 +1120,4 @@ void AqlQueue::InitScratchSRD() {
   return;
 }
 }  // namespace amd
+}  // namespace rocr

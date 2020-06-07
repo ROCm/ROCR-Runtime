@@ -48,6 +48,8 @@
 #include "utils.h"
 #include "os.h"
 
+namespace rocr {
+
 /// @brief: A class behaves as a lock in a scope. When trying to enter into the
 /// critical section, creat a object of this class. After the control path goes
 /// out of the scope, it will release the lock automatically.
@@ -141,5 +143,7 @@ class KernelEvent {
   /// @brief: Disable copiable and assignable ability.
   DISALLOW_COPY_AND_ASSIGN(KernelEvent);
 };
+
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_SUTIL_LOCKS_H_

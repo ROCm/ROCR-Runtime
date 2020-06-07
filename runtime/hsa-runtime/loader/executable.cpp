@@ -63,8 +63,8 @@
 
 #include "AMDHSAKernelDescriptor.h"
 
-using namespace amd::hsa;
-using namespace amd::hsa::common;
+using namespace rocr::amd::hsa;
+using namespace rocr::amd::hsa::common;
 
 // Having a side effect prevents call site optimization that allows removal of a noinline function call
 // with no side effect.
@@ -82,6 +82,7 @@ HSA_API r_debug _amdgpu_r_debug = {2,
                            0};
 static link_map* r_debug_tail = nullptr;
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -1906,3 +1907,4 @@ bool ExecutableImpl::PrintToFile(const std::string& filename)
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr

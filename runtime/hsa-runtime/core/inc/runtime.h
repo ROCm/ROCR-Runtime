@@ -77,9 +77,10 @@
 #define HSA_PACKET_ALIGN_BYTES 64
 
 //Avoids include
-namespace amd {
+namespace rocr {
+namespace AMD {
   class MemoryRegion;
-}
+} // namespace amd
 
 namespace core {
 extern bool g_use_interrupt_wait;
@@ -95,7 +96,7 @@ extern bool g_use_interrupt_wait;
 /// - maintain loader state.
 /// - monitor asynchronous event from agent.
 class Runtime {
- friend class amd::MemoryRegion;
+ friend class AMD::MemoryRegion;
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
@@ -542,4 +543,5 @@ class Runtime {
 };
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

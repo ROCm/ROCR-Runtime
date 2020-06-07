@@ -50,6 +50,8 @@
 #include "core/util/os.h"
 #include "core/util/utils.h"
 
+namespace rocr {
+
 class Flag {
  public:
   explicit Flag() { Refresh(); }
@@ -187,5 +189,7 @@ class Flag {
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };
+
+}  // namespace rocr
 
 #endif  // header guard

@@ -48,6 +48,7 @@
 #include <string>
 #include "utils.h"
 
+namespace rocr {
 namespace os {
 typedef void* LibHandle;
 typedef void* Mutex;
@@ -222,6 +223,7 @@ uint64_t ReadAccurateClock();
 /// seconds.  This frequency does not change at runtime.
 /// @return returns the frequency
 uint64_t AccurateClockFrequency();
-}
+}   //  namespace os
+}   //  namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_UTIL_OS_H_

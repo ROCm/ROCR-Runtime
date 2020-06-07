@@ -46,6 +46,7 @@
 #include "inc/hsa_api_trace.h"
 #include "core/inc/hsa_internal.h"
 
+namespace rocr {
 namespace core {
   struct HsaApiTable {
 
@@ -70,6 +71,7 @@ namespace core {
 
   extern HsaApiTable hsa_api_table_;
   extern HsaApiTable hsa_internal_api_table_;
-}
+}   //  namespace core
+}   //  namespace rocr
 
 #endif

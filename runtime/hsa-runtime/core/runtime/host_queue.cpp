@@ -45,6 +45,7 @@
 #include "core/inc/runtime.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 int HostQueue::rtti_id_ = 0;
@@ -100,3 +101,4 @@ HostQueue::~HostQueue() {
 }
 
 }  // namespace core
+}  // namespace rocr

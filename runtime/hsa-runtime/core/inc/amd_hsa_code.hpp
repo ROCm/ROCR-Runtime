@@ -92,6 +92,7 @@ mes of its
 #include <cassert>
 #include <unordered_map>
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace common {
@@ -137,7 +138,7 @@ class_type* ObjectAt(uint64_t address)
   return (class_type*)address;
 }
 
-}
+}   //  namespace common
 
 namespace code {
 
@@ -423,8 +424,9 @@ namespace code {
       uint64_t SectionOffset() const override { return elfsym->value() - elfsym->section()->addr(); }
       uint64_t VAddr() const override { return elfsym->value(); }
     };
-}
-}
-}
+}   //  namespace code
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr
 
 #endif // AMD_HSA_CODE_HPP_

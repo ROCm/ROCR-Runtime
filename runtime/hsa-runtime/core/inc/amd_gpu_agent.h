@@ -59,7 +59,8 @@
 #include "core/util/locks.h"
 #include "core/util/lazy_ptr.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 class MemoryRegion;
 
 // @brief Contains scratch memory information.
@@ -80,7 +81,7 @@ class GpuAgentInt : public core::Agent {
  public:
   // @brief Constructor
   GpuAgentInt(uint32_t node_id)
-      : core::Agent(node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
+      : core::Agent(node_id,core::Agent::DeviceType::kAmdGpuDevice) {}
 
   // @brief Ensure blits are ready (performance hint).
   virtual void PreloadBlits() {}
@@ -261,25 +262,25 @@ class GpuAgent : public GpuAgentInt {
   // @brief Decrement GWS ref count.
   void GWSRelease();
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   void AcquireQueueScratch(ScratchInfo& scratch) override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   void ReleaseQueueScratch(ScratchInfo& scratch) override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   void TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   void TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   uint64_t TranslateTime(uint64_t tick) override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   void InvalidateCodeCaches() override;
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   bool current_coherency_type(hsa_amd_coherency_type_t type) override;
 
   hsa_amd_coherency_type_t current_coherency_type() const override {
@@ -314,18 +315,18 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from core::Agent.
   const core::Isa* isa() const override { return isa_; }
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   __forceinline bool is_kv_device() const override { return is_kv_device_; }
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   __forceinline hsa_profile_t profile() const override { return profile_; }
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   __forceinline uint32_t memory_bus_width() const override {
     return memory_bus_width_;
   }
 
-  // @brief Override from amd::GpuAgentInt.
+  // @brief Override from AMD::GpuAgentInt.
   __forceinline uint32_t memory_max_frequency() const override {
     return memory_max_frequency_;
   }
@@ -518,6 +519,7 @@ class GpuAgent : public GpuAgentInt {
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

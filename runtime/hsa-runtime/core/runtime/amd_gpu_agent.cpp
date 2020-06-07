@@ -71,9 +71,12 @@
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 #define MAX_NUM_DOORBELLS 0x400
 
-extern core::HsaApiTable hsa_internal_api_table_;
+namespace rocr {
+namespace core {
+extern HsaApiTable hsa_internal_api_table_;
+} // namespace core
 
-namespace amd {
+namespace AMD {
 GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
       properties_(node_props),
@@ -458,8 +461,8 @@ hsa_status_t GpuAgent::VisitRegion(
     void* data) const {
   AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
-    const amd::MemoryRegion* amd_region =
-        reinterpret_cast<const amd::MemoryRegion*>(region);
+    const AMD::MemoryRegion* amd_region =
+        reinterpret_cast<const AMD::MemoryRegion*>(region);
 
     // Only expose system, local, and LDS memory.
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
@@ -486,7 +489,7 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
 }
 
 core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
-  amd::BlitSdmaBase* sdma;
+  AMD::BlitSdmaBase* sdma;
 
   switch (isa_->GetMajorVersion()) {
     case 7:
@@ -514,7 +517,7 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
 }
 
 core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
-  BlitKernel* kernl = new BlitKernel(queue);
+  AMD::BlitKernel* kernl = new AMD::BlitKernel(queue);
 
   if (kernl->Initialize(*this) != HSA_STATUS_SUCCESS) {
     kernl->Destroy(*this);
@@ -1402,4 +1405,5 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
   return GetXgmiBlit(dst_agent);
 }
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr

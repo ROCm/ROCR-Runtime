@@ -42,6 +42,7 @@
 
 #include "amd_hsa_locks.hpp"
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace common {
@@ -92,3 +93,4 @@ void ReaderWriterLock::WriterUnlock()
 } // namespace common
 } // namespace hsa
 } // namespace amd
+} // namespace rocr

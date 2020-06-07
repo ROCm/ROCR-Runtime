@@ -51,7 +51,9 @@
 #include <set>
 
 #include "utils.h"
-  
+
+namespace rocr {
+
 class SmallHeap {
  private:
   struct Node;
@@ -123,5 +125,7 @@ class SmallHeap {
   size_t remaining() const { return total_free; }
   void* high_split() const { return *high.begin(); }
 };
+
+}  // namespace rocr
 
 #endif

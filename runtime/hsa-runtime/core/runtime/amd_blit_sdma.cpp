@@ -55,7 +55,8 @@
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 inline uint32_t ptrlow32(const void* p) {
   return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p));
@@ -138,7 +139,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     return HSA_STATUS_ERROR;
   }
 
-  agent_ = reinterpret_cast<amd::GpuAgent*>(&const_cast<core::Agent&>(agent));
+  agent_ = reinterpret_cast<AMD::GpuAgent*>(&const_cast<core::Agent&>(agent));
 
   if (HSA_PROFILE_FULL == agent_->profile()) {
     assert(false && "Only support SDMA for dgpu currently");
@@ -953,3 +954,4 @@ template class BlitSdma<uint64_t, true, -1, false>;
 template class BlitSdma<uint64_t, true, -1, true>;
 
 }  // namespace amd
+}  // namespace rocr

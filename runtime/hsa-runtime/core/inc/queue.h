@@ -56,6 +56,7 @@
 
 #include "hsakmt.h"
 
+namespace rocr {
 namespace core {
 struct AqlPacket {
 
@@ -332,6 +333,7 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
  private:
   DISALLOW_COPY_AND_ASSIGN(Queue);
 };
-}
+}   //  namespace core
+}   //  namespace rocr
 
 #endif  // header guard

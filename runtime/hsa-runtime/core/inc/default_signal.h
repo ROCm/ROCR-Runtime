@@ -49,6 +49,7 @@
 #include "core/inc/signal.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 /// @brief Operations for a simple pure memory based signal.
@@ -185,4 +186,5 @@ class DefaultSignal : private LocalSignal, public BusyWaitSignal {
 };
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

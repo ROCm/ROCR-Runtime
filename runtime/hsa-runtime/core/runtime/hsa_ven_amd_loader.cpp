@@ -45,8 +45,10 @@
 #include "core/inc/amd_hsa_loader.hpp"
 #include "core/inc/runtime.h"
 
-using namespace amd::hsa;
-using namespace core;
+//TODO SPK: These functions are not exports.  They must be wrapped under rocr.
+
+using namespace rocr::amd::hsa;
+using namespace rocr::core;
 
 using loader::CodeObjectReaderWrapper;
 using loader::Executable;
@@ -55,7 +57,7 @@ using loader::LoadedCodeObject;
 hsa_status_t hsa_ven_amd_loader_query_host_address(
   const void *device_address,
   const void **host_address) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if (nullptr == device_address) {
@@ -78,7 +80,7 @@ hsa_status_t hsa_ven_amd_loader_query_host_address(
 hsa_status_t hsa_ven_amd_loader_query_segment_descriptors(
   hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
   size_t *num_segment_descriptors) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
 
@@ -90,7 +92,7 @@ hsa_status_t hsa_ven_amd_loader_query_executable(
   const void *device_address,
   hsa_executable_t *executable) {
 
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if ((nullptr == device_address) || (nullptr == executable)) {
@@ -114,7 +116,7 @@ hsa_status_t hsa_ven_amd_loader_executable_iterate_loaded_code_objects(
     hsa_loaded_code_object_t loaded_code_object,
     void *data),
   void *data) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if (nullptr == callback) {
@@ -133,7 +135,7 @@ hsa_status_t hsa_ven_amd_loader_loaded_code_object_get_info(
   hsa_loaded_code_object_t loaded_code_object,
   hsa_ven_amd_loader_loaded_code_object_info_t attribute,
   void *value) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if (nullptr == value) {
@@ -228,7 +230,7 @@ hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
     size_t offset,
     size_t size,
     hsa_code_object_reader_t *code_object_reader) {
-  if (false == core::Runtime::runtime_singleton_->IsOpen()) {
+  if (false == Runtime::runtime_singleton_->IsOpen()) {
     return HSA_STATUS_ERROR_NOT_INITIALIZED;
   }
   if (nullptr == code_object_reader) {

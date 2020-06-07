@@ -58,6 +58,7 @@
 #undef Yield
 #undef CreateMutex
 
+namespace rocr {
 namespace os {
 
 static_assert(sizeof(LibHandle) == sizeof(HMODULE),
@@ -224,6 +225,7 @@ uint64_t AccurateClockFrequency() {
   QueryPerformanceFrequency((LARGE_INTEGER*)&ret);
   return ret;
 }
-}
+}   //  namespace os
+}   //  namespace rocr
 
 #endif

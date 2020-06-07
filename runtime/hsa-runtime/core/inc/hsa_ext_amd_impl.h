@@ -50,6 +50,7 @@
 #include "inc/hsa_ext_amd.h"
 
 // Wrap internal implementation inside AMD namespace
+namespace rocr {
 namespace AMD {
 
 // Mirrors Amd Extension Apis
@@ -241,6 +242,7 @@ hsa_status_t HSA_API hsa_amd_register_deallocation_callback(
 hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(
     void* ptr, hsa_amd_deallocation_callback_t callback);
 
-}  // end of AMD namespace
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

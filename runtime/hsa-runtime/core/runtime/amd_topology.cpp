@@ -62,7 +62,8 @@
 #include "core/inc/amd_memory_region.h"
 #include "core/util/utils.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 // Minimum acceptable KFD version numbers
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
@@ -287,3 +288,4 @@ bool Unload() {
   return true;
 }
 }  // namespace amd
+}  // namespace rocr

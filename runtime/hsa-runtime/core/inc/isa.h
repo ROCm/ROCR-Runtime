@@ -50,6 +50,7 @@
 #include <unordered_map>
 #include "core/inc/amd_hsa_code.hpp"
 
+namespace rocr {
 namespace core {
 
 /// @class Wavefront.
@@ -235,5 +236,6 @@ class IsaRegistry final {
 }; // class IsaRegistry
 
 } // namespace core
+} // namespace rocr
 
 #endif // HSA_RUNTIME_CORE_ISA_HPP_

@@ -45,6 +45,7 @@
 #include "core/util/timer.h"
 #include "core/util/locks.h"
 
+namespace rocr {
 namespace core {
 
 HsaEvent* InterruptSignal::EventPool::alloc() {
@@ -386,3 +387,4 @@ hsa_signal_value_t InterruptSignal::CasAcqRel(hsa_signal_value_t expected,
 }
 
 }  // namespace core
+}  // namespace rocr
