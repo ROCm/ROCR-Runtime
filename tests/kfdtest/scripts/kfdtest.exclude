@@ -204,3 +204,9 @@ FILTER[sienna_cichlid]=\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+
+FILTER[navy_flounder]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDDBGTest.*:"\
+"KFDPerfCountersTest.*:"\
