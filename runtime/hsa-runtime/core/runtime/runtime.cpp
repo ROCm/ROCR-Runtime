@@ -808,7 +808,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     }
   }  // end lock scope
 
-  retInfo.size = Min(info->size, sizeof(hsa_amd_pointer_info_t));
+  retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
 
   // IPC and Graphics memory may come from a node that does not have an agent in this process.
   // Ex. ROCR_VISIBLE_DEVICES or peer GPU is not supported by ROCm.
