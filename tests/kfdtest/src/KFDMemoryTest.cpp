@@ -108,6 +108,29 @@ wave_size(32)\n\
 end\n\
 ";
 
+const char* aldbrn_ScratchCopyDword =
+"\
+shader ScratchCopyDword\n\
+asic(ALDEBARAN)\n\
+type(CS)\n\
+/*copy the parameters from scalar registers to vector registers*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+/*set up the scratch parameters. This assumes a single 16-reg block.*/\n\
+    s_mov_b32 flat_scratch_lo, s4\n\
+    s_mov_b32 flat_scratch_hi, s5\n\
+/*copy a dword between the passed addresses*/\n\
+    flat_load_dword v4, v[0:1] slc\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    flat_store_dword v[2:3], v4 slc\n\
+    \n\
+    s_endpgm\n\
+    \n\
+end\n\
+";
+
 
 
 /* Continuously poll src buffer and check buffer value
@@ -650,8 +673,10 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     const char *pScratchCopyDword;
     if (m_FamilyId < FAMILY_AI)
         pScratchCopyDword = gfx8_ScratchCopyDword;
-    else if (m_FamilyId < FAMILY_NV)
+    else if (m_FamilyId < FAMILY_AL)
         pScratchCopyDword = gfx9_ScratchCopyDword;
+    else if (m_FamilyId == FAMILY_AL)
+        pScratchCopyDword = aldbrn_ScratchCopyDword;
     else
         pScratchCopyDword = gfx10_ScratchCopyDword;
     m_pIsaGen->CompileShader(pScratchCopyDword, "ScratchCopyDword", isaBuffer);
@@ -1508,8 +1533,10 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     const char *pScratchCopyDword;
     if (m_FamilyId < FAMILY_AI)
         pScratchCopyDword = gfx8_ScratchCopyDword;
-    else if (m_FamilyId < FAMILY_NV)
+    else if (m_FamilyId < FAMILY_AL)
         pScratchCopyDword = gfx9_ScratchCopyDword;
+    else if (m_FamilyId == FAMILY_AL)
+        pScratchCopyDword = aldbrn_ScratchCopyDword;
     else
         pScratchCopyDword = gfx10_ScratchCopyDword;
 
