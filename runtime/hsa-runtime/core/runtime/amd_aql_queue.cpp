@@ -791,7 +791,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 #ifndef NDEBUG
       scratch.wanted_slots = ((uint64_t(pkt.dispatch.grid_size_x) * pkt.dispatch.grid_size_y) *
                               pkt.dispatch.grid_size_z) / scratch.lanes_per_wave;
-      scratch.wanted_slots = Min(scratch.wanted_slots, MaxScratchSlots);
+      scratch.wanted_slots = Min(scratch.wanted_slots, uint64_t(MaxScratchSlots));
 #endif
 
       queue->agent_->AcquireQueueScratch(scratch);

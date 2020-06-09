@@ -719,11 +719,11 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
   };
 
   // Limits in terms of element count
-  const uint max_pitch = 1 << SDMA_PKT_COPY_LINEAR_RECT::pitch_bits;
-  const uint max_slice = 1 << SDMA_PKT_COPY_LINEAR_RECT::slice_bits;
-  const uint max_x = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
-  const uint max_y = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
-  const uint max_z = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_z_bits;
+  const uint32_t max_pitch = 1 << SDMA_PKT_COPY_LINEAR_RECT::pitch_bits;
+  const uint32_t max_slice = 1 << SDMA_PKT_COPY_LINEAR_RECT::slice_bits;
+  const uint32_t max_x = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
+  const uint32_t max_y = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
+  const uint32_t max_z = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_z_bits;
 
   // Find maximum element that describes the pitch and slice.
   // Pitch and slice must both be represented in units of elements.  No element larger than this
@@ -764,11 +764,11 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
   }
 
   // Break copy into tiles
-  for (uint64_t z = 0; z < range->z; z += max_z) {
-    for (uint64_t y = 0; y < range->y; y += max_y) {
-      uint64_t x = 0;
+  for (uint32_t z = 0; z < range->z; z += max_z) {
+    for (uint32_t y = 0; y < range->y; y += max_y) {
+      uint32_t x = 0;
       while (x < range->x) {
-        uint64_t width = range->x - x;
+        uint32_t width = range->x - x;
 
         // Get largest element which describes the start of this tile after its base address has
         // been aligned.  Base addresses must be DWORD (4 byte) aligned.
@@ -833,7 +833,7 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildFi
 
   for (uint32_t i = 0; i < num_fill_command; i++) {
     assert(count != 0 && "SDMA fill command count error.");
-    const uint32_t fill_count = Min(count, maxDwordCount);
+    const uint32_t fill_count = Min(count, size_t(maxDwordCount));
 
     memset(packet_addr, 0, sizeof(SDMA_PKT_CONSTANT_FILL));
 
