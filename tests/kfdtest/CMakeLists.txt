@@ -109,6 +109,7 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/GoogleTestExtension.cpp
   src/IndirectBuffer.cpp
   src/IsaGenerator.cpp
+  src/IsaGenerator_Aldebaran.cpp
   src/IsaGenerator_Gfx10.cpp
   src/IsaGenerator_Gfx72.cpp
   src/IsaGenerator_Gfx8.cpp

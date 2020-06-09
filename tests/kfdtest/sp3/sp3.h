@@ -108,9 +108,11 @@ struct sp3_shader {
     uint32_t nsgprs;            ///< Number of scalar GPRs used.
     uint32_t nvgprs;            ///< Number of vector GPRs used.
     uint32_t nsvgprs;           ///< Number of shared vector GPRs used.
+    uint32_t naccvgprs;         ///< Number of accumulator vector GPRs used (only available in certain projects).
     uint32_t nsgprs_manual_alloc;
     uint32_t nvgprs_manual_alloc;
     uint32_t nsvgprs_manual_alloc;
+    uint32_t naccvgprs_manual_alloc;
     uint32_t trap_present;
     uint32_t user_sgpr_count;
     uint32_t scratch_en;
