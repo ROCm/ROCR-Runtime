@@ -82,11 +82,7 @@ uint32_t hsa_ven_amd_aqlprofile_version_minor();
 // Supported profiling events
 typedef enum {
   HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC = 0,
-#ifdef NEW_TRACE_API
   HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_TRACE = 1,
-#else
-  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT = 1,
-#endif
 } hsa_ven_amd_aqlprofile_event_type_t;
 
 // Supported performance counters (PMC) blocks
@@ -121,12 +117,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GCEA = 23,
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_RPB = 24,
   // System blocks
-#ifdef EXPL_SDMA_INSTANCING
-  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA0 = 25,
-  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA1 = 26,
-#else
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA = 25,
-#endif
 
   HSA_VEN_AMD_AQLPROFILE_BLOCKS_NUMBER
 } hsa_ven_amd_aqlprofile_block_name_t;
@@ -159,6 +150,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SAMPLE_RATE = 6,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_K_CONCURRENT = 7,
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -252,11 +244,7 @@ typedef struct {
       hsa_ven_amd_aqlprofile_event_t event;  // PMC event
       uint64_t result;                       // PMC result
     } pmc_data;
-#ifdef NEW_TRACE_API
     hsa_ven_amd_aqlprofile_descriptor_t trace_data;  // Trace output data descriptor
-#else
-    hsa_ven_amd_aqlprofile_descriptor_t sqtt_data;  // SQTT output data descriptor
-#endif
   };
 } hsa_ven_amd_aqlprofile_info_data_t;
 
@@ -273,11 +261,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE = 1,        // get_info returns uint32_t value
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA = 2,             // get_info returns PMC uint64_t value
                                                         // in info_data object
-#ifdef NEW_TRACE_API
   HSA_VEN_AMD_AQLPROFILE_INFO_TRACE_DATA = 3,           // get_info returns trace buffer ptr/size
-#else
-  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3,            // get_info returns SQTT buffer ptr/size
-#endif
                                                         // in info_data object
                                                         //
   HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS = 4,       // get_info returns number of block counter
