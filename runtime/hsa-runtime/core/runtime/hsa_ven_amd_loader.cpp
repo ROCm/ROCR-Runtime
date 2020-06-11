@@ -40,15 +40,15 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "inc/hsa_ven_amd_loader.h"
+#include "core/inc/hsa_ven_amd_loader_impl.h"
 
 #include "core/inc/amd_hsa_loader.hpp"
 #include "core/inc/runtime.h"
 
-//TODO SPK: These functions are not exports.  They must be wrapped under rocr.
-
-using namespace rocr::amd::hsa;
-using namespace rocr::core;
+namespace rocr {
+  
+using namespace amd::hsa;
+using namespace core;
 
 using loader::CodeObjectReaderWrapper;
 using loader::Executable;
@@ -265,3 +265,5 @@ hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
   *code_object_reader = CodeObjectReaderWrapper::Handle(wrapper);
   return HSA_STATUS_SUCCESS;
 }
+
+} // namespace rocr

@@ -56,7 +56,7 @@
 #include "core/inc/signal.h"
 #include "core/inc/cache.h"
 #include "core/inc/amd_loader_context.hpp"
-#include "inc/hsa_ven_amd_loader.h"
+#include "core/inc/hsa_ven_amd_loader_impl.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 
