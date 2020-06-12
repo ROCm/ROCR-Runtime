@@ -45,5 +45,6 @@
 include( CMakeFindDependencyMacro )
 
 find_dependency(hsakmt 1.0)
+find_dependency(elf::elf)
 
 include( "${CMAKE_CURRENT_LIST_DIR}/@CORE_RUNTIME_TARGET@Targets.cmake" )
