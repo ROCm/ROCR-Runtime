@@ -133,11 +133,13 @@ struct CodeObjectReaderWrapper final {
   /// @brief Default constructor.
   CodeObjectReaderWrapper(
       const void *_code_object_memory, size_t _code_object_size,
-      size_t _code_object_offset, hsa_file_t _code_object_file_descriptor)
+      size_t _code_object_offset, hsa_file_t _code_object_file_descriptor,
+      bool _is_complete_file = false)
     : code_object_memory(_code_object_memory)
     , code_object_size(_code_object_size)
     , code_object_offset(_code_object_offset)
-    , code_object_file_descriptor(_code_object_file_descriptor) {}
+    , code_object_file_descriptor(_code_object_file_descriptor)
+    , is_complete_file(_is_complete_file) {}
 
   /// @brief Default destructor.
   ~CodeObjectReaderWrapper() {}
@@ -158,6 +160,7 @@ struct CodeObjectReaderWrapper final {
   size_t code_object_size;
   size_t code_object_offset;
   hsa_file_t code_object_file_descriptor;
+  bool is_complete_file;
 };
 
 //===----------------------------------------------------------------------===//

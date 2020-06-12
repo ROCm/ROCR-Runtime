@@ -2085,7 +2085,7 @@ hsa_status_t hsa_code_object_reader_create_from_file(
   }
 
   CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
-      code_object_memory, file_size, 0, file);
+      code_object_memory, file_size, 0, file, true);
   if (!wrapper) {
     delete [] code_object_memory;
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;

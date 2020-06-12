@@ -95,7 +95,7 @@ std::string CodeObjectReaderWrapper::GetUriFromFile(
 
   std::ostringstream UriStream;
   UriStream << EncodePathname(FdPath);
-  if (Size) {
+  if (!is_complete_file) {
     UriStream << "#offset=" << Offset;
     UriStream << "&size=" << Size;
   }
