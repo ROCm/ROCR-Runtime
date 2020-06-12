@@ -309,6 +309,11 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_TARGET}-config.cmake ${
   DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
   COMPONENT dev)
 
+# Install the libelf find module
+install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindLibElf.cmake ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/COPYING-CMAKE-SCRIPTS
+  DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
+  COMPONENT dev)
+
 # Optionally record the package's find module in the user's package cache.
 if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
   set ( EXPORT_TO_USER_PACKAGE_REGISTRY "off" )
