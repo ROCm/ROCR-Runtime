@@ -43,8 +43,8 @@
 cmake_minimum_required ( VERSION 3.5.0 )
 
 ## Set core runtime module name and project name.
-set ( CORE_RUNTIME_NAME "hsa-runtime" )
-set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}64" )
+set ( CORE_RUNTIME_NAME "hsa-runtime64" )
+set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}" )
 set ( CORE_RUNTIME_LIBRARY "lib${CORE_RUNTIME_TARGET}" )
 
 ## Set project name
@@ -61,6 +61,12 @@ if ( NOT DEFINED BUILD_SHARED_LIBS )
   set ( BUILD_SHARED_LIBS ON )
 endif()
 set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
+
+## Adjust target name for static builds
+## Original name will be an interface target that adds --whole-archive linker options around the target.
+if( NOT ${BUILD_SHARED_LIBS} )
+  set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_TARGET}_static" )
+endif()
 
 # Optionally, build HSA Runtime with ccache.
 set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
@@ -256,9 +262,16 @@ endif()
 ## Set install information
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
-install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_TARGET}Targets 
+install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets 
   ARCHIVE DESTINATION lib COMPONENT binary
   LIBRARY DESTINATION lib COMPONENT binary )
+
+## Add the wrapper interface export target if doing a static build.
+if( NOT ${BUILD_SHARED_LIBS} )
+  add_library(${CORE_RUNTIME_NAME} INTERFACE)
+  target_link_libraries(${CORE_RUNTIME_NAME} INTERFACE -Wl,--whole-archive ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET} -Wl,--no-whole-archive)
+  install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
+endif()
 
 # Install license
 #install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
@@ -279,10 +292,10 @@ endif ()
 ## Configure and install package config file
 # Record our usage data for clients find_package calls.
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
-install ( EXPORT ${CORE_RUNTIME_TARGET}Targets
-  FILE ${CORE_RUNTIME_TARGET}Targets.cmake
-  NAMESPACE ${CORE_RUNTIME_TARGET}::
-  DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
+install ( EXPORT ${CORE_RUNTIME_NAME}Targets
+  FILE ${CORE_RUNTIME_NAME}Targets.cmake
+  NAMESPACE ${CORE_RUNTIME_NAME}::
+  DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
   COMPONENT dev)
 
 # Adds the target alias hsa-runtime64::hsa-runtime64 to the local cmake cache.
@@ -291,28 +304,30 @@ install ( EXPORT ${CORE_RUNTIME_TARGET}Targets
 # in some other project's cmake file.  It allows uniform use of find_package
 # and target_link_library() without regard to whether a target is external or
 # a subdirectory of the current build.
-add_library( ${CORE_RUNTIME_TARGET}::${CORE_RUNTIME_TARGET} ALIAS ${CORE_RUNTIME_TARGET} )
+add_library( ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_NAME} ALIAS ${CORE_RUNTIME_NAME} )
 
 # Create cmake configuration files
 include(CMakePackageConfigHelpers)
 
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
-configure_package_config_file(${CORE_RUNTIME_TARGET}-config.cmake.in
-  ${CORE_RUNTIME_TARGET}-config.cmake
-  INSTALL_DESTINATION lib/cmake/${CORE_RUNTIME_TARGET} )
+configure_package_config_file(${CORE_RUNTIME_NAME}-config.cmake.in
+  ${CORE_RUNTIME_NAME}-config.cmake
+  INSTALL_DESTINATION lib/cmake/${CORE_RUNTIME_NAME} )
 
-write_basic_package_version_file(${CORE_RUNTIME_TARGET}-config-version.cmake
+write_basic_package_version_file(${CORE_RUNTIME_NAME}-config-version.cmake
   VERSION ${SO_VERSION_STRING} COMPATIBILITY AnyNewerVersion )
 
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
-install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_TARGET}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_TARGET}-config-version.cmake
-  DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_NAME}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_NAME}-config-version.cmake
+  DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
   COMPONENT dev)
 
-# Install the libelf find module
-install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindLibElf.cmake ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/COPYING-CMAKE-SCRIPTS
-  DESTINATION lib/cmake/${CORE_RUNTIME_TARGET}
-  COMPONENT dev)
+# Install the libelf find module if rocr is a static lib
+if( NOT ${BUILD_SHARED_LIBS} )
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindLibElf.cmake ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/COPYING-CMAKE-SCRIPTS
+    DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+    COMPONENT dev)
+endif()
 
 # Optionally record the package's find module in the user's package cache.
 if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
@@ -323,9 +338,9 @@ if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
   # Enable writing to the registry
   set(CMAKE_EXPORT_PACKAGE_REGISTRY ON)
   # Generate a target file for the build
-  export(TARGETS ${CORE_RUNTIME_TARGET} NAMESPACE ${CORE_RUNTIME_TARGET}:: FILE ${CORE_RUNTIME_TARGET}Targets.cmake)
+  export(TARGETS ${CORE_RUNTIME_NAME} NAMESPACE ${CORE_RUNTIME_NAME}:: FILE ${CORE_RUNTIME_NAME}Targets.cmake)
   # Record the package in the user's cache.
-  export(PACKAGE ${CORE_RUNTIME_TARGET})
+  export(PACKAGE ${CORE_RUNTIME_NAME})
 endif()
 
 ## Packaging directives
