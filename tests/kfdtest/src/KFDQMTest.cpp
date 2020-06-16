@@ -712,28 +712,28 @@ s_waitcnt     lgkmcnt(0)\n\
     v_add_f32     v24, s14, v17\n\
     v_add_f32     v17, s15, v17\n\
     v_log_f32     v25, v18\n\
-    v_mul_legacy_f32  v25, v22, v25\n\
+    v_mul_f32  v25, v22, v25\n\
     v_exp_f32     v25, v25\n\
     v_log_f32     v26, v19\n\
-    v_mul_legacy_f32  v26, v23, v26\n\
+    v_mul_f32  v26, v23, v26\n\
     v_exp_f32     v26, v26\n\
     v_log_f32     v27, v20\n\
-    v_mul_legacy_f32  v27, v24, v27\n\
+    v_mul_f32  v27, v24, v27\n\
     v_exp_f32     v27, v27\n\
     v_log_f32     v28, v21\n\
-    v_mul_legacy_f32  v28, v17, v28\n\
+    v_mul_f32  v28, v17, v28\n\
     v_exp_f32     v28, v28\n\
     v_add_f32     v5, v5, v25\n\
     v_add_f32     v6, v6, v26\n\
     v_add_f32     v7, v7, v27\n\
     v_add_f32     v8, v8, v28\n\
-    v_mul_legacy_f32  v18, 0x3fb8aa3b, v18\n\
+    v_mul_f32  v18, 0x3fb8aa3b, v18\n\
     v_exp_f32     v18, v18\n\
-    v_mul_legacy_f32  v19, 0x3fb8aa3b, v19\n\
+    v_mul_f32  v19, 0x3fb8aa3b, v19\n\
     v_exp_f32     v19, v19\n\
-    v_mul_legacy_f32  v20, 0x3fb8aa3b, v20\n\
+    v_mul_f32  v20, 0x3fb8aa3b, v20\n\
     v_exp_f32     v20, v20\n\
-    v_mul_legacy_f32  v21, 0x3fb8aa3b, v21\n\
+    v_mul_f32  v21, 0x3fb8aa3b, v21\n\
     v_exp_f32     v21, v21\n\
     v_add_f32     v9, v9, v18\n\
     v_add_f32     v10, v10, v19\n\
