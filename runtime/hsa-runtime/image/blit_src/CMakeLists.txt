@@ -46,12 +46,13 @@ cmake_minimum_required ( VERSION 3.5.0 )
 set (QUIT 0)
 
 # Import target 'clang'
-find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm PATHS /opt/rocm/llvm )
+find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
 # Device libs doesn't support find_package yet.
 get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.amdgcn.bc"
   HINTS "${CMAKE_INSTALL_PREFIX}/lib/bitcode" "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
-  PATHS "/opt/rocm/lib/bitcode" "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode")
+  "${CMAKE_PREFIX_PATH}/lib/bitcode" "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode"
+  PATHS "/opt/rocm/lib/bitcode" "/opt/rocm/lib/x86_64/bitcode")
 if (NOT ${FOUND})
   set (QUIT 1)
 endif()
