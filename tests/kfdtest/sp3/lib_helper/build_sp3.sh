@@ -44,7 +44,7 @@ popd
 
 rsync --progress -a build/libamdsp3.a $LIB_OUTPUT
 # Put the intermediate header files in the current folder for further processing
-rsync --progress -a $SP3_PROJECT/sp3/sp3.h .
+rsync --progress -a $SP3_PROJECT/sp3/public/lib/sp3.h .
 
 # Remove the build folder and CMakeLists.txt put into SP source folder
 rm -r build
