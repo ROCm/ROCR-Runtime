@@ -128,8 +128,8 @@ if ( CMAKE_COMPILER_IS_GNUCXX )
 endif ()
 
 set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.def" )
-set ( LNKSCR "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.link" )
-set ( HSA_SHARED_LINK_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${LNKSCR} -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
+set ( LNKSCR "hsacore.so.link" )
+set ( HSA_SHARED_LINK_FLAGS "-Wl,-Bdynamic -Wl,-z,noexecstack -Wl,${CMAKE_CURRENT_SOURCE_DIR}/${LNKSCR} -Wl,--version-script=${DRVDEF} -Wl,--enable-new-dtags" )
 
 target_compile_options(${CORE_RUNTIME_TARGET} PRIVATE ${HSA_CXX_FLAGS})
 #target_link_options not available prior to CMake 3.13
@@ -252,6 +252,13 @@ target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
 
+## Add the public interface export target if doing a static build.
+if( NOT ${BUILD_SHARED_LIBS} )
+  add_library(${CORE_RUNTIME_NAME} INTERFACE)
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE -Wl,$<INSTALL_PREFIX>/lib/cmake/${CORE_RUNTIME_NAME}/${LNKSCR} -Wl,--whole-archive ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET} -Wl,--no-whole-archive)
+  install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
+endif()
+
 ## Create symlinks for legacy packaging and install
 add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../include/hsa hsa_include_link )
 if ( ${BUILD_SHARED_LIBS} )
@@ -265,13 +272,6 @@ endif()
 install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets 
   ARCHIVE DESTINATION lib COMPONENT binary
   LIBRARY DESTINATION lib COMPONENT binary )
-
-## Add the wrapper interface export target if doing a static build.
-if( NOT ${BUILD_SHARED_LIBS} )
-  add_library(${CORE_RUNTIME_NAME} INTERFACE)
-  target_link_libraries(${CORE_RUNTIME_NAME} INTERFACE -Wl,--whole-archive ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET} -Wl,--no-whole-archive)
-  install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
-endif()
 
 # Install license
 #install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
@@ -322,9 +322,14 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_NAME}-config.cmake ${CM
   DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
   COMPONENT dev)
 
-# Install the libelf find module if rocr is a static lib
+# Install build files needed only when using a static build.
 if( NOT ${BUILD_SHARED_LIBS} )
+  # libelf find package module
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindLibElf.cmake ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/COPYING-CMAKE-SCRIPTS
+    DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+    COMPONENT dev)
+  # Linker script (defines function aliases)
+  install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${LNKSCR}
     DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
     COMPONENT dev)
 endif()
