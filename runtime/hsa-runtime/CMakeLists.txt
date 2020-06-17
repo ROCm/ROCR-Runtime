@@ -253,9 +253,22 @@ set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${SO_VERSION_STRI
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY SOVERSION "${VERSION_MAJOR}" )
 
 ## Add the public interface export target if doing a static build.
+## Bind ROCr dependencies to the interface target rather than to the source build
+## target so that -Wl,--whole-archive is tightly applied.  Requires binding
+## indirectly to the source build taret.
 if( NOT ${BUILD_SHARED_LIBS} )
   add_library(${CORE_RUNTIME_NAME} INTERFACE)
-  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE -Wl,$<INSTALL_PREFIX>/lib/cmake/${CORE_RUNTIME_NAME}/${LNKSCR} -Wl,--whole-archive ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET} -Wl,--no-whole-archive)
+
+  ## Bind to source build target interface but not its link requirements.
+  target_include_directories( ${CORE_RUNTIME_NAME} INTERFACE $<TARGET_PROPERTY:${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET},INTERFACE_INCLUDE_DIRECTORIES> )
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE -Wl,$<INSTALL_PREFIX>/lib/cmake/${CORE_RUNTIME_NAME}/${LNKSCR}
+    -Wl,--whole-archive $<TARGET_FILE:${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET}> -Wl,--no-whole-archive)
+  add_dependencies( ${CORE_RUNTIME_NAME} ${CORE_RUNTIME_TARGET} )
+
+  ## Add external link requirements.
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE hsakmt::hsakmt )
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE elf::elf dl pthread rt )
+
   install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
 endif()
 
