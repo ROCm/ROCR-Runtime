@@ -54,7 +54,9 @@ enum sp3_shtype {
     SP3_SHTYPE_HS   = 4,
     SP3_SHTYPE_LS   = 5,
     SP3_SHTYPE_CS   = 6,
+#ifdef NAVI10LITE_BUILD
     SP3_SHTYPE_ACV  = 7,
+#endif
 };
 
 /// Assorted constants used by sp3 API.
@@ -107,7 +109,7 @@ struct sp3_shader {
     uint32_t size;              ///< Size of the compiled shader, in 32-bit words.
     uint32_t nsgprs;            ///< Number of scalar GPRs used.
     uint32_t nvgprs;            ///< Number of vector GPRs used.
-    uint32_t nsvgprs;           ///< Number of shared vector GPRs used.
+    uint32_t nsvgprs;           ///< Number of shared vector GPRs used (only available in certain projects).
     uint32_t naccvgprs;         ///< Number of accumulator vector GPRs used (only available in certain projects).
     uint32_t nsgprs_manual_alloc;
     uint32_t nvgprs_manual_alloc;
@@ -211,6 +213,13 @@ SP3_EXPORT struct sp3_context *sp3_new(void);
 ///
 /// Currently supported options:
 ///
+/// stdlib (string) -- absolute path to standard library files.  May be a colon-separated list
+/// of paths that will be used to search for stdlib files.  Used by sp3_parse_library().
+///
+/// The following options are deprecated because they take integer arguments; you should use
+/// sp3_set_option_int() for these settings going forward.  They will continue to be accepted by
+/// this API to support legacy users.
+///
 /// Werror (boolean) -- indicates whether warnings should be treated as errors.
 ///
 /// wave_size (integer) -- sets the wave size being used by the draw calls that will be using
@@ -222,10 +231,52 @@ SP3_EXPORT struct sp3_context *sp3_new(void);
 ///
 /// omit_code_end (boolean) -- omit generation of the S_CODE_END footer.
 ///
+/// allow_raw_bits (boolean) -- allow use of the raw_bits() function in sp3 shaders.  This is a
+/// dangerous option to allow in general so you must explicitly enable this option, otherwise
+/// the raw_bits() function will always error out.
+///
 SP3_EXPORT void sp3_set_option(
     struct sp3_context *state,
     const char *option,
     const char *value);
+
+/// Set option for sp3.
+///
+/// @param state sp3 context.
+/// @param option Option name. Unknown options will raise an error.
+/// @param value Option value.
+///
+/// Currently supported options:
+///
+/// Werror (boolean) -- indicates whether warnings should be treated as errors.
+///
+/// wave_size (integer) -- sets the wave size being used by the draw calls that will be using
+/// this shader.  Ignored in certain ASICs.  You may set this to 32, 64 or the special value 0
+/// to indicate no preference on wave size.  The shader will be checked to ensure it is
+/// compatible with the size specified here.
+///
+/// omit_version (boolean) -- omit generation of the S_VERSION opcode.
+///
+/// omit_code_end (boolean) -- omit generation of the S_CODE_END footer.
+///
+/// allow_raw_bits (boolean) -- allow use of the raw_bits() function in sp3 shaders.  This is a
+/// dangerous option to allow in general so you must explicitly enable this option, otherwise
+/// the raw_bits() function will always error out.
+///
+/// secure_mode (boolean) -- run in secure mode. Disables macro language features in assembly
+/// path including calls to custom functions. Useful if sp3 is used as a backend to a web-based
+/// assembly tool.
+///
+/// debug_encoding (boolean) -- if true, debug encoding selection logic for assembly. Only
+/// supported in 10.4+ backends.
+///
+/// no_vs_export_check (boolean) -- if true, disable VS export sanity check.  Only supported in
+/// 10.4+ backends.
+///
+SP3_EXPORT void sp3_set_option_int(
+    struct sp3_context *state,
+    const char *option,
+    int32_t value);
 
 /// Parse a file into a context.
 ///
