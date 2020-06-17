@@ -135,7 +135,7 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
-set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
+set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
 
 ## Extra image settings - audit!
 set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-deprecated-declarations )
@@ -143,6 +143,9 @@ set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-deprecated-declarations )
 if ( CMAKE_COMPILER_IS_GNUCXX )
     set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=unused-but-set-variable)
 endif ()
+if ( CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+  set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=self-assign)
+endif()
 
 set ( DRVDEF "${CMAKE_CURRENT_SOURCE_DIR}/hsacore.so.def" )
 set ( LNKSCR "hsacore.so.link" )
