@@ -50,7 +50,44 @@
 // Otherwise, the boilerplate code can be either supplemented or replaced
 // by your own code in your example, as necessary.
 //
-// The comments provided are focused more on the use of the common rocrtst
+// The comments below capture the high-level flow of the two processes that
+// exercise ROCr Api for IPC. The test consists of two processes a result of
+// forking: One creates a buffer and signal which it shares with the second
+// process via shared data/ structure. The interaction between the two process
+// is given below.
+//
+//        Parent Process
+//  Allocate a block of gpu-local memory
+//  Print log message about allocation
+//  Acquire access to gpu-local memory
+//    This step may not be needed
+//  Obtain a IPC handle for gpu-local memory
+//  Print log message about getting IPC handle
+//  Initialize DWords of gpu-local memory with 0x01
+//  Print log message about updating gpu-local memory
+//  Create a Signal that is capable of IPC
+//  Obtain a IPC handle to signal
+//  Print log message about signalling Child process
+//  Signal Child process that it can proceed
+//  Print log message about waiting for signal from Child process
+//  Wait for Child processes signal
+//  Verify Child has updated DWords of gpu-local memory to 0x02
+//  Print log message about validation of gpu-local memory
+//  Print log message that IPC test passed
+//
+//        Child Process
+//  Print log message about waiting for signal from Parent process
+//  Wait/Yield for Parent process signal
+//  Validate Parent process signal is per expectation
+//  Attach to IPC memory handle shared by Parent process
+//  Print log message about successful acquisition of IPC memory handle
+//  Print log message about successful acquisition of IPC signal handle
+//  Verify Parent process has updated every DWord of Gpu buffer to 0x01
+//  Update every DWord of Gpu buffer with 0x02 value
+//  Print log message about validation of Gpu buffer state i.e every DWord has 0x01
+//
+//
+// The comments provided below are focused more on the use of common rocrtst
 // utilities and boilerplate code, rather than the example app. itself.
 //
 // The boilerplate code includes code for:
@@ -99,7 +136,6 @@
 #include <sys/mman.h>
 
 #include <algorithm>
-#include <iostream>
 #include <vector>
 #include <atomic>
 
@@ -123,20 +159,35 @@ struct callback_args {
 
 // Wrap printf to add first or second process indicator
 #define PROCESS_LOG(format, ...)  { \
-    if (verbosity() >= VERBOSE_STANDARD || !processOne_) { \
+    if (verbosity() >= VERBOSE_STANDARD || !parentProcess_) { \
       fprintf(stdout, "line:%d P%u: " format, \
-                   __LINE__, static_cast<int>(!processOne_), ##__VA_ARGS__); \
+                   __LINE__, static_cast<int>(!parentProcess_), ##__VA_ARGS__); \
     } \
 }
 
 // Fork safe ASSERT_EQ.
 #define MSG(y, msg, ...) msg
 #define Y(y, ...) y
-#define FORK_ASSERT_EQ(x, ...)                                                                     \
-  if ((x) != (Y(__VA_ARGS__))) {                                                                   \
-    EXPECT_EQ(x, Y(__VA_ARGS__)) << MSG(__VA_ARGS__, "");                                          \
-    if (!processOne_) exit(0);                                                                     \
-    return;                                                                                        \
+
+#define FORK_ASSERT_EQ(x, ...)                                                    \
+  if ((x) != (Y(__VA_ARGS__))) {                                                  \
+    if ((x) != (Y(__VA_ARGS__))) {                                                \
+      std::cout << MSG(__VA_ARGS__, "");                                          \
+      if (parentProcess_) {                                                       \
+        shared_->parent_status = -1;                                              \
+      } else {                                                                    \
+        shared_->child_status = -1;                                               \
+      }                                                                           \
+      ASSERT_EQ(x, Y(__VA_ARGS__));                                               \
+    }                                                                             \
+  }
+
+#define USR_TRIGGERED_FAILURE(x, y, z)                                            \
+  if (usr_fail_val_ == (z)) {                                                     \
+    std::cout << "Env value is: " << z << std::endl;                              \
+    std::cout << "Return value before: " << x << std::endl;                       \
+    std::cout << "Return value  after: " << y << std::endl << std::flush;         \
+    (x) = (y);                                                                    \
   }
 
 IPCTest::IPCTest(void) :
@@ -171,7 +222,12 @@ static int CheckAndSetToken(std::atomic<int> *token, int newVal) {
 void IPCTest::SetUp(void) {
   hsa_status_t err;
 
-  int ret;
+  // Allow user to trigger a failure
+  const char* env_val = getenv("ROCR_IPC_FAIL_KEY");
+  if (env_val != NULL) {
+    usr_fail_val_ = atoi(env_val);
+  }
+
   // We must fork process before doing HSA stuff, specifically, hsa_init, as
   // each process needs to do this.
   // Allocate linux shared_ memory.
@@ -180,16 +236,17 @@ void IPCTest::SetUp(void) {
                                           MAP_SHARED | MAP_ANONYMOUS, -1, 0));
   ASSERT_NE(shared_, MAP_FAILED) << "mmap failed to allocated shared_ memory";
 
-  // "token" is used to signal state changes between the 2 processes.
-  std::atomic<int> * token = &shared_->token;
-  *token = 0;
+  // Initialize shared control block to zeros. The field "token"
+  // is used to signal state changes between the 2 processes.
+  memset(shared_, 0, sizeof(Shared));
 
   // Spawn second process and verify communication
   child_ = 0;
   child_ = fork();
   ASSERT_NE(-1, child_) << "fork failed";
+  std::atomic<int> * token = &shared_->token;
   if (child_ != 0) {
-    processOne_ = true;
+    parentProcess_ = true;
 
     // Signal to other process we are waiting, and then wait...
     *token = 1;
@@ -204,7 +261,7 @@ void IPCTest::SetUp(void) {
     }
 
   } else {
-    processOne_ = false;
+    parentProcess_ = false;
     set_verbosity(0);
     PROCESS_LOG("Second process running.\n");
 
@@ -212,14 +269,15 @@ void IPCTest::SetUp(void) {
       sched_yield();
     }
 
+    int ret;
     ret = CheckAndSetToken(token, 0);
-    ASSERT_EQ(0, ret) << "Error detected in child process";
+    ASSERT_EQ(0, ret) << "Error detected in child process\n";
     // Wait for handshake
     while (*token == 0) {
       sched_yield();
     }
     ret = CheckAndSetToken(token, 0);
-    ASSERT_EQ(0, ret) << "Error detected in child process";
+    ASSERT_EQ(0, ret) << "Error detected in child process\n";
   }
   // TestBase::SetUp() will set HSA_ENABLE_INTERRUPT if enable_interrupt() is
   // true, and call hsa_init(). It also prints the SetUp header.
@@ -239,6 +297,14 @@ void IPCTest::SetUp(void) {
   err = rocrtst::SetPoolsTypical(this);
   FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
+// Update the size granularity for allocations
+#ifdef ROCRTST_EMULATOR_BUILD
+  gpu_mem_granule = 4;
+#else
+  err = hsa_amd_memory_pool_get_info(device_pool(), HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE,
+                                     &gpu_mem_granule);
+#endif
+
   return;
 }
 
@@ -248,238 +314,281 @@ uint32_t IPCTest::RealIterationNum(void) {
   return num_iteration() * 1.2 + 1;
 }
 
-void IPCTest::Run(void) {
-  hsa_status_t err;
-  std::atomic<int> *token = &shared_->token;
-  TestBase::Run();
+void IPCTest::ChildProcessImpl() {
 
-  // Print out name of the device.
+  // Yield until shared token value changes i.e. is updated by parent.
+  // Validate parent's update is per expectation
+  PROCESS_LOG("Child: Waiting for parent process to signal\n");
+  while (shared_->token == 0) {
+    sched_yield();
+  }
+  if (shared_->token != 1) {
+    shared_->token = -1;
+  }
+  FORK_ASSERT_EQ(1, shared_->token, "Child: Error detected in signaling token\n");
+  PROCESS_LOG("Child: Waking upon signal from parent process\n");
+
+  // List of devices involved in test. Gpu device is used
+  // to allocate buffer and signal that are part of an IPC
+  // transaction. Cpu is used in support of initialization
+  // of Gpu buffer
+  hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
+
+  // Attach to IPC memory handle shared by parent process
+  void* ipc_ptr;
+  hsa_status_t err;
+  err = hsa_amd_ipc_memory_attach(const_cast<hsa_amd_ipc_memory_t*>(&shared_->handle),
+                                  shared_->size, 1, ag_list, &ipc_ptr);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 200);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Child: Failure in attaching to IPC memory handle\n");
+  PROCESS_LOG("Child: Attached to IPC buffer shared by parent process\n");
+  PROCESS_LOG("Child: Address of buffer enabled for IPC: %p\n", ipc_ptr);
+  
+  // Attach to IPC signal handle shared by parent process
+  hsa_signal_t ipc_signal;
+  err = hsa_amd_ipc_signal_attach(const_cast<hsa_amd_ipc_signal_t*>(&shared_->signal_handle),
+                                  &ipc_signal);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 201);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Child: Failure in attaching to IPC signal handle\n");
+  PROCESS_LOG("Child: Attached to IPC signal shared by parent process\n");
+  
+  // Validate Gpu buffer is filled per expectation i.e. if so update
+  // per previously agreed upon value (first_val_ and second_val_)
+  CheckAndFillBuffer(reinterpret_cast<uint32_t*>(ipc_ptr), first_val_, second_val_);
+  PROCESS_LOG("Child: Confirmed DWord's of IPC buffer has: %d\n", first_val_);
+  PROCESS_LOG("Child: Updated DWord's of IPC buffer to: %d\n", second_val_);
+
+  // Detach IPC memory that was used to test
+  err = hsa_amd_ipc_memory_detach(ipc_ptr);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 202);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Child: Failure in detaching IPC memory handle\n");
+  PROCESS_LOG("Child: Detached IPC memory handle\n");
+
+  // Signal parent process to wake up and continue
+  hsa_signal_store_release(ipc_signal, 2);
+
+  // Wait for signal from parent to continue, expected value is zero
+  hsa_signal_value_t ret = 2;
+  while(true) {
+    ret = hsa_signal_wait_relaxed(ipc_signal, HSA_SIGNAL_CONDITION_NE, 2, timeout_, HSA_WAIT_STATE_BLOCKED);
+    if (shared_->parent_status == -1) {
+      exit(0);
+    }
+    if (ret == 0) {
+      break;
+    }
+  }
+  USR_TRIGGERED_FAILURE(ret, HSA_STATUS_ERROR, 203);
+  FORK_ASSERT_EQ(0, ret, "Child: Expected signal value of 0, but got " << ret << "\n");
+
+  // Reset the signal object and release acquired resources
+  err = hsa_signal_destroy(ipc_signal);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 204);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Child: Failure in destroying IPC signal handle\n");
+  PROCESS_LOG("Child: IPC test PASSED\n");
+}
+
+void IPCTest::ParentProcessImpl() {
+
+  // Ignoring the first allocation to exercise fragment allocation.
+  hsa_status_t err;
+  uint32_t* discard = NULL;
+  err = hsa_amd_memory_pool_allocate(device_pool(), gpu_mem_granule, 0,
+                                     reinterpret_cast<void**>(&discard));
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 100);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to allocate gpu memory\n");
+
+  // Allocate some VRAM that is used to test IPC
+  uint32_t* gpuBuf = NULL;
+  err = hsa_amd_memory_pool_allocate(device_pool(), gpu_mem_granule, 0,
+                                     reinterpret_cast<void**>(&gpuBuf));
+  PROCESS_LOG("Parent: Allocated framebuffer of size: %zu\n", gpu_mem_granule);
+  PROCESS_LOG("Parent: Address of allocated framebuffer: %p\n", gpuBuf);
+  
+  // Free the test allocation of memory block
+  err = hsa_amd_memory_pool_free(discard);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 101);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to free gpu memory\n");
+
+  // List of devices involved in test. Gpu device is used
+  // to allocate buffer and signal that are part of an IPC
+  // transaction. Cpu is used in support of initialization
+  // of Gpu buffer
+  hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
+
+  // Grant access to buffer to participating devices
+  err = hsa_amd_agents_allow_access(2, ag_list, NULL, gpuBuf);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 102);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to get access to gpu memory\n");
+
+  // Update shared data structure's buffer related parameters
+  shared_->size = gpu_mem_granule;
+  shared_->count = gpu_mem_granule / sizeof(uint32_t);
+
+  // Initialize every DWord of IPC buffer with a value per previous
+  // agreement i.e. first_val_
+  err = hsa_amd_memory_fill(gpuBuf, first_val_, shared_->count);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 103);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to initialize gpu memory\n");
+  PROCESS_LOG("Parent: Initialized Dword's of framebuffer with: %d\n", first_val_);
+
+  // Create an IPC memory handle. IPC handle value is shared with
+  // child process via a shared data structure
+  err = hsa_amd_ipc_memory_create(gpuBuf, gpu_mem_granule,
+                                  const_cast<hsa_amd_ipc_memory_t*>(&shared_->handle));
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 104);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to create IPC memory handle\n");
+  PROCESS_LOG("Parent: Created IPC handle for framebuffer: %p\n", gpuBuf);
+
+  // Create a signal that is capable of IPC. Also obtain a IPC handle
+  // which is shared with child process via a shared data structure
+  hsa_signal_t ipc_signal;
+  err = hsa_amd_signal_create(1, 0, NULL, HSA_AMD_SIGNAL_IPC, &ipc_signal);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 105);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to create IPC signal\n");
+  err = hsa_amd_ipc_signal_create(ipc_signal,
+                                  const_cast<hsa_amd_ipc_signal_t*>(&shared_->signal_handle));
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 106);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to create IPC signal handle\n");
+  PROCESS_LOG("Parent: Created IPC handle associated with ipc_signal\n");
+
+  // Signal child process that the gpu buffer is ready to read.
+  PROCESS_LOG("Parent: Signalling child proces process\n");
+  CheckAndSetToken(&shared_->token, 1);
+  PROCESS_LOG("Parent: Waiting for signal from child process\n");
+
+  // Wait for child processs to signal. Child will update signal object
+  // value to TWO (2). Check signal value is per expectation
+  hsa_signal_value_t ret = 1;
+  while(true) {
+    ret = hsa_signal_wait_acquire(ipc_signal, HSA_SIGNAL_CONDITION_NE, 1, timeout_, HSA_WAIT_STATE_BLOCKED);
+    if (shared_->child_status == -1) {
+      exit(0);
+    }
+    if (ret == 2) {
+      break;
+    }
+  }
+  USR_TRIGGERED_FAILURE(ret, HSA_STATUS_ERROR, 107);
+  FORK_ASSERT_EQ(2, ret, "Parent: Expected signal value of 2, but got " << ret << "\n");
+
+  // Verify child process has updated all DWords of buffer per
+  // previously agreed upon values (second_val_ and third_val_)
+  CheckAndFillBuffer(gpuBuf, second_val_, third_val_);
+  PROCESS_LOG("Parent: Confirmed DWord's of frambuffer has: %d\n", second_val_);
+  PROCESS_LOG("Parent: Updated DWord's of framebuffer to: %d\n", third_val_);
+
+  // Reset the signal object and release acquired resources
+  hsa_signal_store_relaxed(ipc_signal, 0);
+  err = hsa_signal_destroy(ipc_signal);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 108);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failure in destroying IPC signal\n");
+  err = hsa_amd_memory_pool_free(gpuBuf);
+  USR_TRIGGERED_FAILURE(err, HSA_STATUS_ERROR, 109);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Parent: Failed to free gpu memory\n");
+  PROCESS_LOG("Parent: IPC test PASSED\n");
+
+  // Wait for child process to terminate before exiting
+  int exit_status = 0;
+  waitpid(child_, &exit_status, 0);
+  munmap(shared_, sizeof(Shared));
+}
+
+void IPCTest::PrintVerboseMesg(void) {
+  // Collect names of GPU's
+  hsa_status_t err;
   char name1[64] = {0};
   char name2[64] = {0};
   err = hsa_agent_get_info(*cpu_device(), HSA_AGENT_INFO_NAME, name1);
-  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_agent_get_info() failed");
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_agent_get_info() failed\n");
   err = hsa_agent_get_info(*gpu_device1(), HSA_AGENT_INFO_NAME, name2);
-  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_agent_get_info() failed");
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_agent_get_info() failed\n");
 
+  // Collect BDF information of GPU's
   uint16_t loc1, loc2;
-  err = hsa_agent_get_info(*cpu_device(),
-                           (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc1);
+  err = hsa_agent_get_info(*cpu_device(), (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc1);
   FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-  err = hsa_agent_get_info(*gpu_device1(),
-                           (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc2);
+  err = hsa_agent_get_info(*gpu_device1(), (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc2);
   FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
-  size_t gpu_mem_granule;
-#ifdef ROCRTST_EMULATOR_BUILD
-  gpu_mem_granule = 4;
-#else
-  err = hsa_amd_memory_pool_get_info(device_pool(),
-    HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &gpu_mem_granule);
-#endif
+  // Print the name and BDF info about the devices
+  fprintf(stdout, "Using: %s (%d) and %s (%d)\n", name1, loc1, name2, loc2);
+}
 
-  if (verbosity() >= VERBOSE_STANDARD) {
-    fprintf(stdout, "Using: %s (%d) and %s (%d)\n", name1, loc1, name2, loc2);
+void IPCTest::CheckAndFillBuffer(void* gpu_src_ptr, uint32_t exp_cur_val, uint32_t new_val) {
+  uint32_t* sysBuf;
+  hsa_status_t err;
+  hsa_signal_value_t sig;
+  hsa_signal_t copy_signal;
+
+  // Bind the size granularity of allocation
+  size_t sz = gpu_mem_granule;
+
+  // Allocate a signal to track copy progress
+  err = hsa_signal_create(1, 0, NULL, &copy_signal);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+  // Allocate buffer in system memory to validate
+  err = hsa_amd_memory_pool_allocate(cpu_pool(), sz, 0, reinterpret_cast<void**>(&sysBuf));
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+  // Enable access to buffer in system memory
+  hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
+  err = hsa_amd_agents_allow_access(2, ag_list, NULL, sysBuf);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+  // Copy data to buffer in system memory
+  err = hsa_amd_memory_async_copy(sysBuf, *cpu_device(), gpu_src_ptr, *gpu_device1(), sz, 0, NULL,
+                                  copy_signal);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+  // Wait for copy to complete
+  sig = hsa_signal_wait_relaxed(copy_signal,
+                   HSA_SIGNAL_CONDITION_LT, 1, -1, HSA_WAIT_STATE_BLOCKED);
+  FORK_ASSERT_EQ(0, sig, "Expected signal 0, but got " << sig << "\n");
+
+  // Validate buffer has expected data
+  uint32_t count = sz / sizeof(uint32_t);
+  for (uint32_t idx = 0; idx < count; idx++) {
+    if (exp_cur_val != sysBuf[idx]) {
+      PROCESS_LOG("Validation failed: expected: %d observed: %d at index: %d\n",
+                  exp_cur_val, sysBuf[idx], idx);
+      FORK_ASSERT_EQ(exp_cur_val, sysBuf[idx]);
+    }
+    sysBuf[idx] = new_val;
   }
 
-  hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
+  // Reset copy signal and update buffer in Gpu with new value
+  hsa_signal_store_relaxed(copy_signal, 1);
+  err = hsa_amd_memory_async_copy(gpu_src_ptr, *gpu_device1(), sysBuf, *cpu_device(), sz, 0, NULL,
+                                  copy_signal);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
-  auto CheckAndFillBuffer = [&](void *gpu_src_ptr, uint32_t exp_cur_val,
-                                                   uint32_t new_val) -> void {
-    hsa_signal_t copy_signal;
-    size_t sz = gpu_mem_granule;
-    hsa_status_t err;
-    hsa_signal_value_t sig;
+  // Wait for copy to complete
+  sig = hsa_signal_wait_relaxed(copy_signal, HSA_SIGNAL_CONDITION_LT, 1, -1, HSA_WAIT_STATE_BLOCKED);
+  FORK_ASSERT_EQ(sig, 0, "Expected signal 0, but got " << sig << "\n");
 
-    err = hsa_signal_create(1, 0, NULL, &copy_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+  // Release resources allocated by this method
+  err = hsa_signal_destroy(copy_signal);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+  err = hsa_amd_memory_pool_free(sysBuf);
+  FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+}
 
-    uint32_t *sysBuf;
+void IPCTest::Run(void) {
+  TestBase::Run();
 
-    err = hsa_amd_memory_pool_allocate(cpu_pool(), sz, 0,
-                                          reinterpret_cast<void **>(&sysBuf));
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+  // Collect and print debug information
+  if (verbosity() >= VERBOSE_STANDARD) {
+    PrintVerboseMesg();
+  }
 
-    hsa_agent_t ag_list[2] = {*gpu_device1(), *cpu_device()};
-    err = hsa_amd_agents_allow_access(2, ag_list, NULL, sysBuf);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    err = hsa_amd_memory_async_copy(sysBuf, *cpu_device(), gpu_src_ptr,
-                                    *gpu_device1(), sz, 0, NULL, copy_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    sig = hsa_signal_wait_relaxed(copy_signal, HSA_SIGNAL_CONDITION_LT,
-                                               1, -1, HSA_WAIT_STATE_BLOCKED);
-    FORK_ASSERT_EQ(0, sig, "Expected signal 0, but got " << sig);
-
-    uint32_t count = sz/sizeof(uint32_t);
-
-    for (uint32_t i = 0; i < count; ++i) {
-      FORK_ASSERT_EQ(exp_cur_val, sysBuf[i]);
-      sysBuf[i] = new_val;
-    }
-
-    hsa_signal_store_relaxed(copy_signal, 1);
-
-    err = hsa_amd_memory_async_copy(gpu_src_ptr, *gpu_device1(), sysBuf,
-                                     *cpu_device(), sz, 0, NULL, copy_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    sig = hsa_signal_wait_relaxed(copy_signal, HSA_SIGNAL_CONDITION_LT,
-                                         1, -1, HSA_WAIT_STATE_BLOCKED);
-    FORK_ASSERT_EQ(sig, 0, "Expected signal 0, but got " << sig);
-
-    err = hsa_signal_destroy(copy_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    err = hsa_amd_memory_pool_free(sysBuf);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-  };
-  if (processOne_) {
-    // Ignoring the first allocation to exercise fragment allocation.
-    uint32_t* discard = NULL;
-    err = hsa_amd_memory_pool_allocate(device_pool(), gpu_mem_granule, 0,
-                                          reinterpret_cast<void**>(&discard));
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Failed to allocate memory from gpu pool");
-
-    // Allocate some VRAM and fill it with 1's
-    uint32_t* gpuBuf = NULL;
-    err = hsa_amd_memory_pool_allocate(device_pool(), gpu_mem_granule, 0,
-                                            reinterpret_cast<void**>(&gpuBuf));
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Failed to allocate memory from gpu pool");
-
-    err = hsa_amd_memory_pool_free(discard);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "Failed to free GPU memory");
-
-    PROCESS_LOG("Allocated local memory buffer at %p\n", gpuBuf);
-
-    err = hsa_amd_agents_allow_access(2, ag_list, NULL, gpuBuf);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    err = hsa_amd_ipc_memory_create(gpuBuf, gpu_mem_granule,
-                          const_cast<hsa_amd_ipc_memory_t*>(&shared_->handle));
-    PROCESS_LOG(
-    "Created IPC handle associated with gpu-local buffer at P0 address %p\n",
-                                                                      gpuBuf);
-
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    uint32_t count = gpu_mem_granule/sizeof(uint32_t);
-    shared_->size = gpu_mem_granule;
-    shared_->count = count;
-
-    err = hsa_amd_memory_fill(gpuBuf, 1, count);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    // Get IPC capable signal
-    hsa_signal_t ipc_signal;
-    err = hsa_amd_signal_create(1, 0, NULL, HSA_AMD_SIGNAL_IPC, &ipc_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    err = hsa_amd_ipc_signal_create(ipc_signal,
-                  const_cast<hsa_amd_ipc_signal_t*>(&shared_->signal_handle));
-    PROCESS_LOG("Created IPC handle associated with ipc_signal\n");
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    // Signal Process 2 that the gpu buffer is ready to read.
-    CheckAndSetToken(token, 1);
-    PROCESS_LOG("Allocated buffer and filled it with 1's. Wait for P1...\n");
-    hsa_signal_value_t ret =
-        hsa_signal_wait_acquire(ipc_signal, HSA_SIGNAL_CONDITION_NE, 1, -1,
-                                                     HSA_WAIT_STATE_BLOCKED);
-
-    FORK_ASSERT_EQ(2, ret, "Expected signal value of 2, but got " << ret);
-
-    CheckAndFillBuffer(gpuBuf, 2, 0);
-    PROCESS_LOG("Confirmed P1 filled buffer with 2\n")
-    PROCESS_LOG("PASSED on P0\n");
-
-    hsa_signal_store_relaxed(ipc_signal, 0);
-
-    err = hsa_signal_destroy(ipc_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    err = hsa_amd_memory_pool_free(gpuBuf);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    waitpid(child_, nullptr, 0);
-    munmap(shared_, sizeof(Shared));
-
-    // Note: Close() (and hsa_shut_down()) will be called from main() in
-    // RunCustomEpilog()
-  } else {  // "ProcessTwo"
-    PROCESS_LOG("Waiting for process 0 to write 1 to token...\n");
-    while (*token == 0) {
-      sched_yield();
-    }
-    if (*token != 1) {
-      *token = -1;
-    }
-    FORK_ASSERT_EQ(1, *token, "Error detected in signaling token");
-
-    PROCESS_LOG("Process 0 wrote 1 to token...\n");
-
-    // Attach shared_ VRAM
-    void* ptr;
-    err = hsa_amd_ipc_memory_attach(
-      const_cast<hsa_amd_ipc_memory_t*>(&shared_->handle), shared_->size, 1,
-                                                               ag_list, &ptr);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    PROCESS_LOG(
-     "Attached to IPC handle; P1 buffer address gpu-local memory is %p\n",
-                                                                         ptr);
-    // Attach shared_ signal
-    hsa_signal_t ipc_signal;
-    err = hsa_amd_ipc_signal_attach(
-     const_cast<hsa_amd_ipc_signal_t*>(&shared_->signal_handle), &ipc_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    PROCESS_LOG("Attached to signal IPC handle\n");
-
-    CheckAndFillBuffer(reinterpret_cast<uint32_t *>(ptr), 1, 2);
-
-    PROCESS_LOG(
-      "Confirmed P0 filled buffer with 1; P1 re-filled buffer with 2\n");
-    PROCESS_LOG("PASSED on P1\n");
-
-    hsa_signal_store_release(ipc_signal, 2);
-
-
-    // Test ptrinfo - allocation is a single granule so this tests imported
-    // fragment info.
-    err = hsa_amd_pointer_info_set_userdata(ptr,
-                                         reinterpret_cast<void*>(0xDEADBEEF));
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_amd_pointer_info_set_userdata() failed");
-
-    hsa_amd_pointer_info_t info;
-    info.size = sizeof(info);
-    err = hsa_amd_pointer_info(
-                reinterpret_cast<uint8_t*>(ptr) + shared_->size / 2, &info,
-                                                   nullptr, nullptr, nullptr);
-    if ((info.sizeInBytes != shared_->size) ||
-        (info.userData != reinterpret_cast<void*>(0xDEADBEEF)) ||
-                                             (info.agentBaseAddress != ptr)) {
-      PROCESS_LOG("Pointer Info check failed.\n");
-    } else {
-      PROCESS_LOG("Pointer Info check PASSED.\n");
-    }
-
-
-
-
-    err = hsa_amd_ipc_memory_detach(ptr);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-
-    hsa_signal_wait_relaxed(ipc_signal, HSA_SIGNAL_CONDITION_NE, 2, -1,
-                                                      HSA_WAIT_STATE_BLOCKED);
-
-    err = hsa_signal_destroy(ipc_signal);
-    FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
-    Close();
-    // exit(0);
-    // hwloc hack - OpenCL registers exit handlers that can't execute in this process.
-    // Skip them.
-    abort();
+  // Note: Close() (and hsa_shut_down()) will be called from main()
+  // processOne is true for parent process, false for child process
+  if (parentProcess_) {
+    ParentProcessImpl();
+  } else {
+    ChildProcessImpl();
   }
 
   return;
