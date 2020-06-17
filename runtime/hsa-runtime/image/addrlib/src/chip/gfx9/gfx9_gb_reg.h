@@ -34,7 +34,7 @@
 *
 */
 
-union GB_ADDR_CONFIG {
+union GB_ADDR_CONFIG_gfx9 {
     struct {
 #if        defined(LITTLEENDIAN_CPU)
         unsigned int                       NUM_PIPES : 3;
