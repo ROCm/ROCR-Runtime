@@ -42,6 +42,23 @@
 
 cmake_minimum_required ( VERSION 3.5.0 )
 
+## Cosmetic Cmake version warnings.
+if(NOT EXISTS VERSION_WARNED)
+  set (VERSION_WARNED FALSE CACHE BOOL "")
+endif()
+if(${CMAKE_VERSION} VERSION_LESS "3.6.0" AND NOT ${VERSION_WARNED})
+  message("Your CMake version is too old for full functionality.
+Generated package file names may be incorrect.
+Please update to CMake 3.6 or newer to generate correct package file names")
+  set( VERSION_WARNED TRUE CACHE BOOL "Suppress cosmetic build errors due to CMake version after first warning." FORCE )
+  mark_as_advanced( FORCE VERSION_WARNED )
+endif()
+
+## Clear target dependency data.
+## Needed to allow UI transitions between static and dynamic builds.
+## Need an update to CMake 3.12 to remove this hack. See CMake policy change CMP0073.
+unset ( hsa-runtime64_LIB_DEPENDS CACHE )
+
 ## Set core runtime module name and project name.
 set ( CORE_RUNTIME_NAME "hsa-runtime64" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}" )
