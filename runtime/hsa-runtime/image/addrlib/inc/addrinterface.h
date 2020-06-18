@@ -35,10 +35,7 @@
 
 #include "addrtypes.h"
 
-#if defined(__cplusplus)
-extern "C"
-{
-#endif
+namespace rocr {
 
 #define ADDRLIB_VERSION_MAJOR 6
 #define ADDRLIB_VERSION_MINOR 2
@@ -3720,8 +3717,6 @@ ADDR_E_RETURNCODE ADDR_API Addr2IsValidDisplaySwizzleMode(
     UINT_32         bpp,
     bool            *result);
 
-#if defined(__cplusplus)
-}
-#endif
+} // rocr
 
 #endif // __ADDR_INTERFACE_H__

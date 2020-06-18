@@ -34,6 +34,7 @@
 
 #include "util/macros.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -4151,3 +4152,5 @@ UINT_32 EgBasedLib::HwlStereoCheckRightOffsetPadding(
 
 } // V1
 } // Addr
+} // rocr
+

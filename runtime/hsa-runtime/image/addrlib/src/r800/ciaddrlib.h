@@ -37,6 +37,7 @@
 #include "addrlib1.h"
 #include "siaddrlib.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -201,5 +202,7 @@ private:
 
 } // V1
 } // Addr
+} // rocr
+
 
 #endif

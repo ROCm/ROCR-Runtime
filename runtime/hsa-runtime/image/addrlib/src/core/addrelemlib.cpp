@@ -34,6 +34,7 @@
 #include "addrelemlib.h"
 #include "addrlib.h"
 
+namespace rocr {
 namespace Addr
 {
 
@@ -1827,4 +1828,5 @@ BOOL_32 ElemLib::IsMacroPixelPacked(
     return isMacroPixelPacked;
 }
 
-}
+} // Addr
+} // rocr

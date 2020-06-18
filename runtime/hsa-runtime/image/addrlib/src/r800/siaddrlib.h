@@ -37,6 +37,7 @@
 #include "addrlib1.h"
 #include "egbaddrlib.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -341,6 +342,8 @@ private:
 
 } // V1
 } // Addr
+} // rocr
+
 
 #endif
 
