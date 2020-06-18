@@ -81,6 +81,7 @@ UINT_32 __umoddi3(UINT_64 n, UINT_32 base)
 
 #endif // __APPLE__
 
+namespace rocr {
 namespace Addr
 {
 
@@ -658,3 +659,5 @@ UINT_32 Lib::GetBpe(AddrFormat format) const
 }
 
 } // Addr
+} // rocr
+

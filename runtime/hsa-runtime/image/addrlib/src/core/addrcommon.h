@@ -162,6 +162,7 @@
 
 #define ADDR_C_ASSERT(__e) STATIC_ASSERT(__e)
 
+namespace rocr {
 namespace Addr
 {
 
@@ -943,6 +944,8 @@ static inline UINT_32 ShiftCeil(
 }
 
 } // Addr
+} // rocr
+
 
 #endif // __ADDR_COMMON_H__
 

@@ -38,6 +38,7 @@
 #include "addrobject.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 
@@ -273,7 +274,8 @@ private:
     Addr::Lib* const    m_pAddrLib;         ///< Pointer to parent addrlib instance
 };
 
-} //Addr
+} // Addr
+} // rocr
 
 #endif
 

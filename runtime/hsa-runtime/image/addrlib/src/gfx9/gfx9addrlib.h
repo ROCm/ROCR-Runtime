@@ -37,6 +37,7 @@
 #include "addrlib2.h"
 #include "coord.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V2
@@ -635,6 +636,8 @@ private:
 
 } // V2
 } // Addr
+} // rocr
+
 
 #endif
 

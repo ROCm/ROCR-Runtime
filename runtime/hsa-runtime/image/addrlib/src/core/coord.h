@@ -29,6 +29,7 @@
 #ifndef __COORD_H
 #define __COORD_H
 
+namespace rocr {
 namespace Addr
 {
 namespace V2
@@ -127,6 +128,8 @@ private:
 
 } // V2
 } // Addr
+} // rocr
+
 
 #endif
 

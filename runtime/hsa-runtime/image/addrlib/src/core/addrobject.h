@@ -37,6 +37,7 @@
 #include "addrtypes.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 
@@ -91,5 +92,7 @@ private:
 };
 
 } // Addr
+} // rocr
+
 #endif
 

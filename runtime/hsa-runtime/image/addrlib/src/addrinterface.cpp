@@ -38,6 +38,7 @@
 
 #include "util/macros.h"
 
+namespace rocr {
 using namespace Addr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1738,3 +1739,5 @@ ADDR_E_RETURNCODE ADDR_API Addr2IsValidDisplaySwizzleMode(
 
     return returnCode;
 }
+
+} // rocr
