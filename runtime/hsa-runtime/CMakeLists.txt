@@ -111,6 +111,9 @@ find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
 
+## Enforce uniform output file naming.
+set_property(TARGET  ${CORE_RUNTIME_TARGET} PROPERTY OUTPUT_NAME ${CORE_RUNTIME_NAME} )
+
 ## Compiler preproc definitions.
 target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE "${HSA_COMMON_DEFS}" __linux__ HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
   ROCR_BUILD_ID=${PACKAGE_VERSION_STRING} )
