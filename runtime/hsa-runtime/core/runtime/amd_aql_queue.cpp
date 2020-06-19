@@ -707,7 +707,7 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 
 void AqlQueue::Suspend() {
   suspended_ = true;
-  auto err = hsaKmtUpdateQueue(queue_id_, 0, priority_, NULL, 0, NULL);
+  auto err = hsaKmtUpdateQueue(queue_id_, 0, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
 }
 
