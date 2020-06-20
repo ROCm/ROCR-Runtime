@@ -25,6 +25,18 @@
 
 cmake_minimum_required ( VERSION 3.5.0 )
 
+## Cosmetic Cmake version warnings.
+if(NOT EXISTS VERSION_WARNED)
+  set (VERSION_WARNED FALSE CACHE BOOL "")
+endif()
+if(${CMAKE_VERSION} VERSION_LESS "3.6.0" AND NOT ${VERSION_WARNED})
+  message("Your CMake version is too old for full functionality.
+Generated package file names may be incorrect.
+Please update to CMake 3.6 or newer to generate correct package file names")
+  set( VERSION_WARNED TRUE CACHE BOOL "Suppress cosmetic build errors due to CMake version after first warning." FORCE )
+  mark_as_advanced( FORCE VERSION_WARNED )
+endif()
+
 set ( HSAKMT "hsakmt" )
 set ( HSAKMT_PACKAGE "hsakmt-roct" )
 set ( HSAKMT_COMPONENT "lib${HSAKMT}" )
