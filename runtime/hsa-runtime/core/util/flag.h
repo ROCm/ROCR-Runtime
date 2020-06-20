@@ -118,6 +118,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_DISABLE_IMAGE");
     disable_image_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
+    loader_enable_mmap_uri_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -160,6 +163,8 @@ class Flag {
 
   bool disable_image() const { return disable_image_; }
 
+  bool loader_enable_mmap_uri() const { return loader_enable_mmap_uri_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -175,6 +180,7 @@ class Flag {
   bool no_scratch_reclaim_;
   bool no_scratch_thread_limit_;
   bool disable_image_;
+  bool loader_enable_mmap_uri_;
 
   std::string enable_sdma_;
 
