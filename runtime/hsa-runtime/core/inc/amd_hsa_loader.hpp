@@ -107,61 +107,49 @@ namespace amd {
 namespace hsa {
 namespace loader {
 
-/// @class CodeObjectReaderWrapper.
+/// @class CodeObjectReaderImpl.
 /// @brief Code Object Reader Wrapper.
-struct CodeObjectReaderWrapper final {
- private:
-  std::string GetUriFromFile(int Fd, size_t Offset, size_t Size) const;
-  std::string GetUriFromMemoryBasic(const void *Mem, size_t Size) const;
-  std::string GetUriFromMemory(const void *Mem, size_t Size) const;
-
+struct CodeObjectReaderImpl final {
  public:
   /// @returns Handle equivalent of @p object.
   static hsa_code_object_reader_t Handle(
-      const CodeObjectReaderWrapper *object) {
+      const CodeObjectReaderImpl *object) {
     hsa_code_object_reader_t handle = {reinterpret_cast<uint64_t>(object)};
     return handle;
   }
 
   /// @returns Object equivalent of @p handle.
-  static CodeObjectReaderWrapper *Object(
+  static CodeObjectReaderImpl *Object(
       const hsa_code_object_reader_t &handle) {
-    CodeObjectReaderWrapper *object =
-      reinterpret_cast<CodeObjectReaderWrapper*>(handle.handle);
+    CodeObjectReaderImpl *object =
+      reinterpret_cast<CodeObjectReaderImpl*>(handle.handle);
     return object;
   }
 
   /// @brief Default constructor.
-  CodeObjectReaderWrapper(
-      const void *_code_object_memory, size_t _code_object_size,
-      size_t _code_object_offset, hsa_file_t _code_object_file_descriptor,
-      bool _is_complete_file = false)
-    : code_object_memory(_code_object_memory)
-    , code_object_size(_code_object_size)
-    , code_object_offset(_code_object_offset)
-    , code_object_file_descriptor(_code_object_file_descriptor)
-    , is_complete_file(_is_complete_file) {}
+  CodeObjectReaderImpl() {}
 
   /// @brief Default destructor.
-  ~CodeObjectReaderWrapper() {}
+  ~CodeObjectReaderImpl();
 
-  bool ComesFromFile() {
-    return code_object_file_descriptor != -1;
-  }
+  hsa_status_t SetFile(
+      hsa_file_t _code_object_file_descriptor,
+      size_t _code_object_offset = 0,
+      size_t _code_object_size = 0);
 
-  std::string GetUri() {
-    if (ComesFromFile()) {
-      return GetUriFromFile(code_object_file_descriptor, code_object_offset, code_object_size);
-    } else {
-      return GetUriFromMemory(code_object_memory, code_object_size);
-    }
-  }
+  hsa_status_t SetMemory(
+      const void *_code_object_memory,
+      size_t _code_object_size);
 
-  const void *code_object_memory;
-  size_t code_object_size;
-  size_t code_object_offset;
-  hsa_file_t code_object_file_descriptor;
-  bool is_complete_file;
+  const void *GetCodeObjectMemory() const { return code_object_memory; };
+
+  std::string GetUri() const { return uri; };
+
+ private:
+  const void *code_object_memory{nullptr};
+  size_t code_object_size{0};
+  std::string uri{};
+  bool is_mmap{false};
 };
 
 //===----------------------------------------------------------------------===//

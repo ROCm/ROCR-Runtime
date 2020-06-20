@@ -93,7 +93,7 @@ template <class T> struct ValidityError<const T*> {
 
 #define IS_BAD_PTR(ptr)                                                        \
   do {                                                                         \
-    if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT;               \
+    if ((ptr) == nullptr) return HSA_STATUS_ERROR_INVALID_ARGUMENT;            \
   } while (false)
 #define IS_BAD_PROFILE(profile)                                                \
   do {                                                                         \
@@ -137,9 +137,13 @@ template <class T> struct ValidityError<const T*> {
     if (((ptr) == NULL) || !((ptr)->IsValid()))                                \
       return hsa_status_t(ValidityError<decltype(ptr)>::kValue);               \
   } while (false)
+#define CHECK_STATUS(status)                                                   \
+  do {                                                                         \
+    if ((status) != HSA_STATUS_SUCCESS) return status;                         \
+  } while (false)
 #define CHECK_ALLOC(ptr)                                                       \
   do {                                                                         \
-    if ((ptr) == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;               \
+    if ((ptr) == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;            \
   } while (false)
 #define IS_OPEN()                                                              \
   do {                                                                         \
@@ -2045,7 +2049,7 @@ hsa_status_t hsa_code_object_iterate_symbols(
 using amd::hsa::common::Signed;
 using amd::hsa::loader::Loader;
 using amd::hsa::loader::Executable;
-using amd::hsa::loader::CodeObjectReaderWrapper;
+using amd::hsa::loader::CodeObjectReaderImpl;
 
 namespace {
 
@@ -2062,35 +2066,14 @@ hsa_status_t hsa_code_object_reader_create_from_file(
   IS_OPEN();
   IS_BAD_PTR(code_object_reader);
 
-  off_t file_size = __lseek__(file, 0, SEEK_END);
-  if (file_size == (off_t)-1) {
-    return HSA_STATUS_ERROR_INVALID_FILE;
-  }
+  std::unique_ptr<CodeObjectReaderImpl> reader(
+    new (std::nothrow) CodeObjectReaderImpl());
+  CHECK_ALLOC(reader);
 
-  if (file_size == 0) {
-    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
-  }
+  hsa_status_t status = reader->SetFile(file);
+  CHECK_STATUS(status);
 
-  if (__lseek__(file, 0, SEEK_SET) == (off_t)-1) {
-    return HSA_STATUS_ERROR_INVALID_FILE;
-  }
-
-  unsigned char *code_object_memory = new unsigned char[file_size];
-  CHECK_ALLOC(code_object_memory);
-
-  if (__read__(file, code_object_memory, file_size) != file_size) {
-    delete [] code_object_memory;
-    return HSA_STATUS_ERROR_INVALID_FILE;
-  }
-
-  CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
-      code_object_memory, file_size, 0, file, true);
-  if (!wrapper) {
-    delete [] code_object_memory;
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  *code_object_reader = CodeObjectReaderWrapper::Handle(wrapper);
+  *code_object_reader = CodeObjectReaderImpl::Handle(reader.release());
   return HSA_STATUS_SUCCESS;
   CATCH;
 }
@@ -2108,11 +2091,15 @@ hsa_status_t hsa_code_object_reader_create_from_memory(
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  CodeObjectReaderWrapper *wrapper = new (std::nothrow) CodeObjectReaderWrapper(
-      code_object, size, 0, -1);
-  CHECK_ALLOC(wrapper);
+  std::unique_ptr<CodeObjectReaderImpl> reader(
+    new (std::nothrow) CodeObjectReaderImpl());
+  CHECK_ALLOC(reader);
 
-  *code_object_reader = CodeObjectReaderWrapper::Handle(wrapper);
+  hsa_status_t status = reader->SetMemory(code_object, size);
+  CHECK_STATUS(status);
+
+  *code_object_reader =
+      CodeObjectReaderImpl::Handle(reader.release());
   return HSA_STATUS_SUCCESS;
   CATCH;
 }
@@ -2122,16 +2109,13 @@ hsa_status_t hsa_code_object_reader_destroy(
   TRY;
   IS_OPEN();
 
-  CodeObjectReaderWrapper *wrapper = CodeObjectReaderWrapper::Object(
-      code_object_reader);
-  if (!wrapper) {
+  CodeObjectReaderImpl *reader =
+      CodeObjectReaderImpl::Object(code_object_reader);
+  if (!reader) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER;
   }
 
-  if (wrapper->ComesFromFile()) {
-    delete [] (unsigned char*)wrapper->code_object_memory;
-  }
-  delete wrapper;
+  delete reader;
 
   return HSA_STATUS_SUCCESS;
   CATCH;
@@ -2238,16 +2222,16 @@ hsa_status_t hsa_executable_load_program_code_object(
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
 
-  CodeObjectReaderWrapper *wrapper = CodeObjectReaderWrapper::Object(
+  CodeObjectReaderImpl *reader = CodeObjectReaderImpl::Object(
       code_object_reader);
-  if (!wrapper) {
+  if (!reader) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER;
   }
 
   hsa_code_object_t code_object =
-      {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
+      {reinterpret_cast<uint64_t>(reader->GetCodeObjectMemory())};
   return exec->LoadCodeObject(
-      {0}, code_object, options, wrapper->GetUri(), loaded_code_object);
+      {0}, code_object, options, reader->GetUri(), loaded_code_object);
   CATCH;
 }
 
@@ -2265,16 +2249,16 @@ hsa_status_t hsa_executable_load_agent_code_object(
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
 
-  CodeObjectReaderWrapper *wrapper = CodeObjectReaderWrapper::Object(
+  CodeObjectReaderImpl *reader = CodeObjectReaderImpl::Object(
       code_object_reader);
-  if (!wrapper) {
+  if (!reader) {
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER;
   }
 
   hsa_code_object_t code_object =
-      {reinterpret_cast<uint64_t>(wrapper->code_object_memory)};
-  return exec->LoadCodeObject(
-      agent, code_object, options, wrapper->GetUri(), loaded_code_object);
+      {reinterpret_cast<uint64_t>(reader->GetCodeObjectMemory())};
+  return exec->LoadCodeObject( agent, code_object, options,
+                              reader->GetUri(), loaded_code_object);
   CATCH;
 }
 
