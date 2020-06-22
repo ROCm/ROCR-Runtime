@@ -144,7 +144,7 @@ set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvis
 set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-deprecated-declarations )
 
 if ( CMAKE_COMPILER_IS_GNUCXX )
-    set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=unused-but-set-variable)
+    set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=unused-but-set-variable -Wno-error=maybe-uninitialized)
 endif ()
 if ( CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=self-assign)
