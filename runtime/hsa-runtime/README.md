@@ -110,7 +110,7 @@ runtime may locate, include, and link the runtime with the following template:
 
     Add /opt/rocm to CMAKE_PREFIX_PATH.
 
-    find_package(hsa-runtime64::hsa-runtime64 1.0 REQUIRED)
+    find_package(hsa-runtime64 1.0 REQUIRED)
     ...
     add_library(Foo ...)
     ...
