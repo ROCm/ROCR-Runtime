@@ -263,7 +263,7 @@ if(${IMAGE_SUPPORT})
   
   ## Depend on blit kernel target.
   add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/image/blit_src )
-  add_dependencies( ${CORE_RUNTIME_TARGET} opencl_blit_objects.cpp )
+  add_dependencies( ${CORE_RUNTIME_TARGET} opencl_blit_objects )
 
 endif()
 
