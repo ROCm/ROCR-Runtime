@@ -46,6 +46,9 @@
 namespace rocr {
 namespace core {
 
+// HSA Queue ID - used to bind a unique ID
+std::atomic<uint64_t> Queue::hsa_queue_counter_(0);
+
 void Queue::DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data) {
   if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message()) {
     const char* msg = "UNKNOWN ERROR";
