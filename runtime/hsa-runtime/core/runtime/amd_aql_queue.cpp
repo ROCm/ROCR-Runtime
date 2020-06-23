@@ -225,9 +225,12 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   // Complete populating the doorbell signal structure.
   signal_.legacy_hardware_doorbell_ptr =
       (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
-  // Complete populating the amd_queue_ structure.
-  amd_queue_.hsa_queue.id = queue_id_ = queue_rsrc.QueueId;
 
+  // Bind Id of Queue such that is unique i.e. it is not re-used by another
+  // queue (AQL, HOST) in the same process during its lifetime.
+  amd_queue_.hsa_queue.id = this->GetQueueId();
+
+  queue_id_ = queue_rsrc.QueueId;
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {

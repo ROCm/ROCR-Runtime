@@ -251,11 +251,6 @@ class Runtime {
   /// set.
   hsa_status_t GetSystemInfo(hsa_system_info_t attribute, void* value);
 
-  /// @brief Query next available queue id.
-  ///
-  /// @retval Next available queue id.
-  uint32_t GetQueueId();
-
   /// @brief Register a callback function @p handler that is associated with
   /// @p signal to asynchronous event monitor thread.
   ///
