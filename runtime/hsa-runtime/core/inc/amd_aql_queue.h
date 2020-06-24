@@ -196,6 +196,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Update signal value using Release semantics
   void StoreRelease(hsa_signal_value_t value) override;
 
+  /// @brief Enable use of GWS from this queue.
+  hsa_status_t EnableGWS(int gws_slot_count);
+
  protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 

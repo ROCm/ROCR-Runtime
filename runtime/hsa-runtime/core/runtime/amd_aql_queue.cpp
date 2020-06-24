@@ -1119,5 +1119,14 @@ void AqlQueue::InitScratchSRD() {
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
   return;
 }
+
+hsa_status_t AqlQueue::EnableGWS(int gws_slot_count) {
+  uint32_t discard;
+  auto status = hsaKmtAllocQueueGWS(queue_id_, gws_slot_count, &discard);
+  if (status != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace amd
 }  // namespace rocr
