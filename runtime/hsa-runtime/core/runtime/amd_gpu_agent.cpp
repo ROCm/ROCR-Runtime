@@ -605,12 +605,9 @@ void GpuAgent::InitGWS() {
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");
 
-    uint32_t discard;
-    auto status = hsaKmtAllocQueueGWS(queue->amd_queue_.hsa_queue.id, 1, &discard);
-    if (status != HSAKMT_STATUS_SUCCESS)
-      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "GWS allocation failed.");
+    auto err = static_cast<AqlQueue*>(queue.get())->EnableGWS(1);
+    if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "GWS allocation failed.");
 
-    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
     gws_queue_.ref_ct_ = 0;
     return queue.release();
   });
