@@ -60,10 +60,7 @@ if (ROCM_CCACHE_BUILD)
   endif() # if (CCACHE_PROGRAM)
 endif() # if (ROCM_CCACHE_BUILD)
 
-## Set default module path if not already set
-if ( NOT DEFINED CMAKE_MODULE_PATH )
-    set ( CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/" )
-endif ()
+list( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
 
 ## Include common cmake modules
 include ( utils )
