@@ -269,7 +269,7 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   CATCH;
 }
 
-hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
+hsa_status_t hsa_amd_memory_async_copy_rect(
     const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
     const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
     hsa_amd_copy_direction_t dir, uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
@@ -931,7 +931,7 @@ hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback
   CATCH;
 }
 
-hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
+hsa_status_t hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority) {
   TRY;
   IS_OPEN();
