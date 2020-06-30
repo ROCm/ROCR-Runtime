@@ -131,15 +131,16 @@ static const unsigned int kCodeTrapHandler9[] = {
   .set TTMP11_TRAP_RAISED_BIT                  , 7
   .set TTMP11_EXCP_RAISED_BIT                  , 8
   .set TTMP11_EVENTS_MASK                      , (1 << TTMP11_TRAP_RAISED_BIT) | (1 << TTMP11_EXCP_RAISED_BIT)
-  .set DEBUG_INTERRUPT_CONTEXT_ID_BIT          , 23
   .set INSN_S_ENDPGM_OPCODE                    , 0xBF810000
   .set INSN_S_ENDPGM_MASK                      , 0xFFFF0000
 
   .if .amdgcn.gfx_generation_number == 9
+    .set DEBUG_INTERRUPT_CONTEXT_ID_BIT        , 23
     .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
     .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
     .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x1F8000
   .elseif .amdgcn.gfx_generation_number == 10
+    .set DEBUG_INTERRUPT_CONTEXT_ID_BIT        , 22
     .set TTMP11_SAVE_REPLAY_W64H_SHIFT         , 31
     .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 24
     .set SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT      , 25
@@ -501,7 +502,7 @@ static const unsigned int kCodeTrapHandler10[] = {
     0xbf850033, 0x876fff6e, 0x00007080, 0xbf840003, 0xbef71d88, 0xbf820001,
     0xbef71d87, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
     0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f, 0x877eff7e, 0x00000fff,
-    0xbeef037e, 0xbefe036e, 0xbeef1d97, 0xbeee037c, 0xbefc036f, 0xbf800000,
+    0xbeef037e, 0xbefe036e, 0xbeef1d96, 0xbeee037c, 0xbefc036f, 0xbf800000,
     0xbf900001, 0xbefc036e, 0x876dff6d, 0x0000ffff, 0xf4001bb6, 0xfa000000,
     0xbf8cc07f, 0x876eff6e, 0xffff0000, 0xbf06ff6e, 0xbf810000, 0xbf840051,
     0xbeee0380, 0xb9ee02c1, 0x8778ff78, 0xffffdfff, 0x906e8977, 0x876fff6e,
