@@ -55,6 +55,8 @@
 #include "core/inc/queue.h"
 #include "core/inc/signal.h"
 #include "core/inc/cache.h"
+#include "core/inc/amd_elf_image.hpp"
+#include "core/inc/amd_hsa_loader.hpp"
 #include "core/inc/amd_loader_context.hpp"
 #include "core/inc/hsa_ven_amd_loader_impl.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
@@ -2205,7 +2207,14 @@ hsa_status_t hsa_executable_load_code_object(
     return HSA_STATUS_ERROR_INVALID_EXECUTABLE;
   }
 
-  return exec->LoadCodeObject(agent, code_object, options, std::string());
+  void *code_object_p = reinterpret_cast<void*>(code_object.handle);
+  if (!code_object_p) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+  CodeObjectReaderImpl reader;
+  reader.SetMemory(code_object_p, amd::elf::ElfSize(code_object_p));
+
+  return exec->LoadCodeObject(agent, code_object, options, reader.GetUri());
   CATCH;
 }
 
