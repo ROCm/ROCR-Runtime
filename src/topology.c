@@ -226,6 +226,7 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x50, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	{ 0x51, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	{ 0x52, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
+	{ 0x54, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	{ 0x60, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	{ 0x62, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
 	{ 0x7400, 9, 0, 10, 1, "Aldebaran", CHIP_ALDEBARAN },
