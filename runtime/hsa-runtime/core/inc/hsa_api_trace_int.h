@@ -71,6 +71,8 @@ namespace core {
 
   extern HsaApiTable hsa_api_table_;
   extern HsaApiTable hsa_internal_api_table_;
+
+  void LoadInitialHsaApiTable();
 }   //  namespace core
 }   //  namespace rocr
 
