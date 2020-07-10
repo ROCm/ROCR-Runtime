@@ -57,6 +57,12 @@ const HsaApiTable* hsa_table_interface_get_table() {
   return hsaApiTable;
 }
 
+class Init {
+ public:
+  Init() { rocr::core::LoadInitialHsaApiTable(); }
+};
+static Init LinkAtLoadOrFirstTranslationUnitAccess;
+
 // Pass through stub functions
 hsa_status_t HSA_API hsa_init() { return coreApiTable->hsa_init_fn(); }
 

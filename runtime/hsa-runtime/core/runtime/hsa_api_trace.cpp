@@ -392,10 +392,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_deregister_deallocation_callback_fn = AMD::hsa_amd_deregister_deallocation_callback;
 }
 
-class Init {
- public:
-  Init() { hsa_table_interface_init(&hsa_api_table_.hsa_api); }
-};
-static Init LinkAtLoad;
+void LoadInitialHsaApiTable() {
+  hsa_table_interface_init(&hsa_api_table_.hsa_api);
+}
+
 }   //  namespace core
 }   //  namespace rocr
