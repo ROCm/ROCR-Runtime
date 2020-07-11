@@ -58,9 +58,11 @@ const unsigned int SDMA_OP_POLL_REGMEM = 8;
 const unsigned int SDMA_OP_ATOMIC = 10;
 const unsigned int SDMA_OP_CONST_FILL = 11;
 const unsigned int SDMA_OP_TIMESTAMP = 13;
+const unsigned int SDMA_OP_GCR = 17;
 const unsigned int SDMA_SUBOP_COPY_LINEAR = 0;
 const unsigned int SDMA_SUBOP_COPY_LINEAR_RECT = 4;
 const unsigned int SDMA_SUBOP_TIMESTAMP_GET_GLOBAL = 2;
+const unsigned int SDMA_SUBOP_USER_GCR = 1;
 const unsigned int SDMA_ATOMIC_ADD64 = 47;
 
 typedef struct SDMA_PKT_COPY_LINEAR_TAG {
@@ -502,6 +504,65 @@ typedef struct SDMA_PKT_HDP_FLUSH_TAG {
   static const uint16_t kMinVersion_ = 0x1A5;
 } SDMA_PKT_HDP_FLUSH;
 static const SDMA_PKT_HDP_FLUSH hdp_flush_cmd = {0x8, 0x0, 0x80000000, 0x0, 0x0, 0x0};
+
+typedef struct SDMA_PKT_GCR_TAG {
+  union {
+    struct {
+      unsigned int op : 8;
+      unsigned int sub_op : 8;
+      unsigned int : 16;
+    };
+    unsigned int DW_0_DATA;
+  } HEADER_UNION;
+
+  union {
+    struct {
+      unsigned int : 7;
+      unsigned int BaseVA_LO : 25;
+    };
+    unsigned int DW_1_DATA;
+  } WORD1_UNION;
+
+  union {
+    struct {
+      unsigned int BaseVA_HI : 16;
+      unsigned int GCR_CONTROL_GLI_INV : 2;
+      unsigned int GCR_CONTROL_GL1_RANGE : 2;
+      unsigned int GCR_CONTROL_GLM_WB : 1;
+      unsigned int GCR_CONTROL_GLM_INV : 1;
+      unsigned int GCR_CONTROL_GLK_WB : 1;
+      unsigned int GCR_CONTROL_GLK_INV : 1;
+      unsigned int GCR_CONTROL_GLV_INV : 1;
+      unsigned int GCR_CONTROL_GL1_INV : 1;
+      unsigned int GCR_CONTROL_GL2_US : 1;
+      unsigned int GCR_CONTROL_GL2_RANGE : 2;
+      unsigned int GCR_CONTROL_GL2_DISCARD : 1;
+      unsigned int GCR_CONTROL_GL2_INV : 1;
+      unsigned int GCR_CONTROL_GL2_WB : 1;
+    };
+    unsigned int DW_2_DATA;
+  } WORD2_UNION;
+
+  union {
+    struct {
+      unsigned int GCR_CONTROL_RANGE_IS_PA : 1;
+      unsigned int GCR_CONTROL_SEQ : 2;
+      unsigned int : 4;
+      unsigned int LimitVA_LO : 25;
+    };
+    unsigned int DW_3_DATA;
+  } WORD3_UNION;
+
+  union {
+    struct {
+      unsigned int LimitVA_HI : 16;
+      unsigned int : 8;
+      unsigned int VMID : 4;
+      unsigned int : 4;
+    };
+    unsigned int DW_4_DATA;
+  } WORD4_UNION;
+} SDMA_PKT_GCR;
 
 }  // namespace amd
 

@@ -488,16 +488,26 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
 core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
   amd::BlitSdmaBase* sdma;
 
-  if (isa_->GetMajorVersion() <= 8) {
-    sdma = new BlitSdmaV2V3();
-  } else {
-    sdma = new BlitSdmaV4();
+  switch (isa_->GetMajorVersion()) {
+    case 7:
+    case 8:
+      sdma = new BlitSdmaV2V3();
+      break;
+    case 9:
+      sdma = new BlitSdmaV4();
+      break;
+    case 10:
+      sdma = new BlitSdmaV5();
+      break;
+    default:
+      assert(false && "Unexpected device major version.");
+      return nullptr;
   }
 
   if (sdma->Initialize(*this, use_xgmi) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
     delete sdma;
-    sdma = NULL;
+    sdma = nullptr;
   }
 
   return sdma;
@@ -533,7 +543,8 @@ void GpuAgent::InitDma() {
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
-    bool use_sdma = ((isa_->GetMajorVersion() != 8) && (isa_->GetMajorVersion() != 10));
+    // User SDMA queues are unstable on gfx8.
+    bool use_sdma = ((isa_->GetMajorVersion() != 8));
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
@@ -920,6 +931,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       snprintf((char*)value, (ss.str().length() + 1), "%s", (char*)ss.str().c_str());
       break;
     }
+    case HSA_AMD_AGENT_INFO_ASIC_REVISION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

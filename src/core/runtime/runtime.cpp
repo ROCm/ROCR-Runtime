@@ -189,14 +189,6 @@ void Runtime::RegisterAgent(Agent* agent) {
 
       BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
     }
-
-    // Setup system clock frequency for the first time.
-    if (sys_clock_freq_ == 0) {
-      // Cache system clock frequency
-      HsaClockCounters clocks;
-      hsaKmtGetClockCounters(0, &clocks);
-      sys_clock_freq_ = clocks.SystemClockFrequencyHz;
-    }
   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
     gpu_agents_.push_back(agent);
 
@@ -790,19 +782,21 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     retInfo.sizeInBytes = thunkInfo.SizeInBytes;
     retInfo.userData = thunkInfo.UserData;
     if (block_info != nullptr) {
-      // The only time host and agent ptr may be different is when the memory is lock memory (malloc
-      // memory pinned for GPU access).  In this case there can not be any suballocation so
-      // block_info is redundant and unused.  Host address is returned since host address is used to
-      // manipulate lock memory.  This protects future use of block_info with lock memory.
-      block_info->base = retInfo.hostBaseAddress;
+      // Block_info reports the thunk allocation from which we may have suballocated.
+      // For locked memory we want to return the host address since hostBaseAddress is used to
+      // manipulate locked memory and it is possible that hostBaseAddress is different from
+      // agentBaseAddress.
+      // For device memory, hostBaseAddress is either equal to agentBaseAddress or is NULL when the
+      // CPU does not have access.
+      assert((retInfo.hostBaseAddress || retInfo.agentBaseAddress) && "Thunk pointer info returned no base address.");
+      block_info->base = (retInfo.hostBaseAddress ? retInfo.hostBaseAddress : retInfo.agentBaseAddress);
       block_info->length = retInfo.sizeInBytes;
     }
-    if (retInfo.type == HSA_EXT_POINTER_TYPE_HSA) {
-      auto fragment = allocation_map_.upper_bound(ptr);
-      if (fragment != allocation_map_.begin()) {
-        fragment--;
-        if ((fragment->first <= ptr) &&
-            (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
+    auto fragment = allocation_map_.upper_bound(ptr);
+    if (fragment != allocation_map_.begin()) {
+      fragment--;
+      if ((fragment->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
           // agent and host address must match here.  Only lock memory is allowed to have differing
           // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
           // suballocated.
@@ -810,7 +804,6 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
           retInfo.hostBaseAddress = retInfo.agentBaseAddress;
           retInfo.sizeInBytes = fragment->second.size;
           retInfo.userData = fragment->second.user_ptr;
-        }
       }
     }
   }  // end lock scope
@@ -903,6 +896,11 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
         (reinterpret_cast<uint8_t*>(ptr) - reinterpret_cast<uint8_t*>(block.base)) / 4096;
     // Holds size in (4K?) pages in thunk handle: Mark as a fragment and denote offset.
     handle->handle[6] |= 0x80000000 | offset;
+    // Mark block for IPC.  Prevents reallocation of exported memory.
+    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    hsa_status_t err = allocation_map_[ptr].region->IPCFragmentExport(ptr);
+    assert(err == HSA_STATUS_SUCCESS && "Region inconsistent with address map.");
+    return err;
   } else {
     if (hsaKmtShareMemory(ptr, len, reinterpret_cast<HsaSharedMemoryHandle*>(handle)) !=
         HSAKMT_STATUS_SUCCESS)
@@ -1209,63 +1207,64 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
           (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "", reason.c_str());
 
 #ifndef NDEBUG
-      runtime_singleton_->memory_lock_.Acquire();
-      auto it = runtime_singleton_->allocation_map_.upper_bound(
-          reinterpret_cast<void*>(fault.VirtualAddress));
-      for (int i = 0; i < 2; i++) {
-        if (it != runtime_singleton_->allocation_map_.begin()) it--;
-      }
-      fprintf(stderr, "Nearby memory map:\n");
-      auto start = it;
-      for (int i = 0; i < 3; i++) {
-        if (it == runtime_singleton_->allocation_map_.end()) break;
-        std::string kind = "Non-HSA";
-        if (it->second.region != nullptr) {
-          const amd::MemoryRegion* region =
-              static_cast<const amd::MemoryRegion*>(it->second.region);
-          if (region->IsSystem())
-            kind = "System";
-          else if (region->IsLocalMemory())
-            kind = "VRAM";
-          else if (region->IsScratch())
-            kind = "Scratch";
-          else if (region->IsLDS())
-            kind = "LDS";
-        }
-        fprintf(stderr, "%p, 0x%lx, %s\n", it->first, it->second.size, kind.c_str());
-        it++;
-      }
-      fprintf(stderr, "\n");
-      it = start;
-      runtime_singleton_->memory_lock_.Release();
-      hsa_amd_pointer_info_t info;
-      PtrInfoBlockData block;
-      uint32_t count;
-      hsa_agent_t* canAccess;
-      info.size = sizeof(info);
-      for (int i = 0; i < 3; i++) {
-        if (it == runtime_singleton_->allocation_map_.end()) break;
-        runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc, &count, &canAccess,
-                                    &block);
-        fprintf(stderr,
-                "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
-                info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
-                info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes,
-                info.sizeInBytes, info.type, reinterpret_cast<void*>(info.agentOwner.handle));
-        fprintf(stderr, "\tCanAccess: %u\n", count);
-        for (int t = 0; t < count; t++)
-          fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
-        fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
-        free(canAccess);
-        it++;
-      }
-#endif  //! NDEBUG
+      PrintMemoryMapNear(reinterpret_cast<void*>(fault.VirtualAddress));
+#endif
     }
     assert(false && "GPU memory access fault.");
     std::abort();
   }
   // No need to keep the signal because we are done.
   return false;
+}
+
+void Runtime::PrintMemoryMapNear(void* ptr) {
+  runtime_singleton_->memory_lock_.Acquire();
+  auto it = runtime_singleton_->allocation_map_.upper_bound(ptr);
+  for (int i = 0; i < 2; i++) {
+    if (it != runtime_singleton_->allocation_map_.begin()) it--;
+  }
+  fprintf(stderr, "Nearby memory map:\n");
+  auto start = it;
+  for (int i = 0; i < 3; i++) {
+    if (it == runtime_singleton_->allocation_map_.end()) break;
+    std::string kind = "Non-HSA";
+    if (it->second.region != nullptr) {
+      const amd::MemoryRegion* region = static_cast<const amd::MemoryRegion*>(it->second.region);
+      if (region->IsSystem())
+        kind = "System";
+      else if (region->IsLocalMemory())
+        kind = "VRAM";
+      else if (region->IsScratch())
+        kind = "Scratch";
+      else if (region->IsLDS())
+        kind = "LDS";
+    }
+    fprintf(stderr, "%p, 0x%lx, %s\n", it->first, it->second.size, kind.c_str());
+    it++;
+  }
+  fprintf(stderr, "\n");
+  it = start;
+  runtime_singleton_->memory_lock_.Release();
+  hsa_amd_pointer_info_t info;
+  PtrInfoBlockData block;
+  uint32_t count;
+  hsa_agent_t* canAccess;
+  info.size = sizeof(info);
+  for (int i = 0; i < 3; i++) {
+    if (it == runtime_singleton_->allocation_map_.end()) break;
+    runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc, &count, &canAccess,
+                                &block);
+    fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
+            info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
+            info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes, info.sizeInBytes,
+            info.type, reinterpret_cast<void*>(info.agentOwner.handle));
+    fprintf(stderr, "\tCanAccess: %u\n", count);
+    for (int t = 0; t < count; t++)
+      fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
+    fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
+    free(canAccess);
+    it++;
+  }
 }
 
 Runtime::Runtime()
@@ -1283,6 +1282,15 @@ hsa_status_t Runtime::Load() {
   if (!amd::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+
+  // Setup system clock frequency for the first time.
+  if (sys_clock_freq_ == 0) {
+    // Cache system clock frequency
+    HsaClockCounters clocks;
+    hsaKmtGetClockCounters(0, &clocks);
+    sys_clock_freq_ = clocks.SystemClockFrequencyHz;
+  }
+
   BindVmFaultHandler();
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
