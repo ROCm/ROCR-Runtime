@@ -38,6 +38,8 @@ extern bool hsakmt_forked;
 extern pthread_mutex_t hsakmt_mutex;
 extern bool is_dgpu;
 
+extern HsaVersionInfo kfd_version_info;
+
 extern int force_asic;
 extern char force_asic_name[HSA_PUBLIC_NAME_SIZE];
 extern struct hsa_gfxip_table force_asic_entry;
@@ -53,6 +55,10 @@ extern struct hsa_gfxip_table force_asic_entry;
 
 #define CHECK_KFD_OPEN() \
 	do { if (kfd_open_count == 0 || hsakmt_forked) return HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED; } while (0)
+
+#define CHECK_KFD_MINOR_VERSION(minor)					\
+	do { if ((minor) > kfd_version_info.KernelInterfaceMinorVersion)\
+		return HSAKMT_STATUS_NOT_SUPPORTED; } while (0)
 
 extern int PAGE_SIZE;
 extern int PAGE_SHIFT;
@@ -144,6 +150,8 @@ struct hsa_gfxip_table {
 	const char *amd_name;		// CALName of the device
 	enum asic_family_type asic_family;	// Device family id
 };
+
+HSAKMT_STATUS init_kfd_version(void);
 
 #define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
 
