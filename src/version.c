@@ -28,17 +28,29 @@
 #include <string.h>
 #include "linux/kfd_ioctl.h"
 
+HsaVersionInfo kfd_version_info;
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtGetVersion(HsaVersionInfo *VersionInfo)
 {
 	CHECK_KFD_OPEN();
 
+	*VersionInfo = kfd_version_info;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS init_kfd_version(void)
+{
 	struct kfd_ioctl_get_version_args args = {0};
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_VERSION, &args) == -1)
 		return HSAKMT_STATUS_ERROR;
 
-	VersionInfo->KernelInterfaceMajorVersion = args.major_version;
-	VersionInfo->KernelInterfaceMinorVersion = args.minor_version;
+	kfd_version_info.KernelInterfaceMajorVersion = args.major_version;
+	kfd_version_info.KernelInterfaceMinorVersion = args.minor_version;
+
+	if (args.major_version != 1)
+		return HSAKMT_STATUS_DRIVER_MISMATCH;
 
 	return HSAKMT_STATUS_SUCCESS;
 }

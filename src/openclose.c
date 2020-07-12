@@ -196,6 +196,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 
 		init_page_size();
 
+		result = init_kfd_version();
+		if (result != HSAKMT_STATUS_SUCCESS)
+			goto kfd_version_failed;
+
 		result = topology_sysfs_get_system_props(&sys_props);
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto topology_sysfs_failed;
@@ -238,6 +242,7 @@ init_doorbell_failed:
 	fmm_destroy_process_apertures();
 init_process_aperture_failed:
 topology_sysfs_failed:
+kfd_version_failed:
 	close(fd);
 open_failed:
 	pthread_mutex_unlock(&hsakmt_mutex);
