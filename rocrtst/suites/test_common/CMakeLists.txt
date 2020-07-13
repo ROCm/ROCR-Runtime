@@ -137,6 +137,19 @@ else()
   set(ISDEBUG 1)
 endif()
 
+find_path(BITCODE_DIR NAMES "opencl.bc" "opencl.amdgcn.bc"
+  PATHS
+    "${ROCM_DIR}/amdgcn/bitcode"
+    "${ROCM_DIR}/lib/bitcode"
+    "${ROCM_DIR}/lib"
+    "${ROCM_DIR}/lib/x86_64/bitcode"
+    "${OPENCL_DIR}/amdgcn/bitcode"
+    "${OPENCL_DIR}/lib/x86_64/bitcode"
+    "${LLVM_DIR}/../lib/bitcode"
+    "${CMAKE_PREFIX_PATH}/amdgcn/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode")
+
 #
 # Print out the build configuration being used:
 #
@@ -205,7 +218,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 #
 # Extend the compiler flags for 64-bit builds
 #
-if (IS64BIT) 
+if (IS64BIT)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2")
 else()
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
@@ -277,7 +290,7 @@ function(build_kernel S_NAME TARG_DEV)
   set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME}
                                                  CACHE INTERNAL HSA_TARG_LIST)
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-   "-x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+   "-x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
   add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
         "../${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"
@@ -305,13 +318,16 @@ endforeach(td)
 set (HSACO_TARG_LIST "" CACHE INTERNAL HSACO_TARG_LIST)
 
 set(KERN_SUFFIX "kernels.hsaco")
-set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
-set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_LIB_DIR}/bitcode")
 
-set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
-set(COMMON_BITCODE_LIBS
-                      "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
-
+# Check if device-libs bitcode is following old or new layout
+if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
+  set(BITCODE_ARGS "-nogpulib
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc")
+else()
+  set(BITCODE_ARGS "--hip-device-lib-path=${BITCODE_DIR}")
+endif()
 
 # Test Case Template example
 set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
