@@ -126,7 +126,7 @@ if (NOT DEFINED TARGET_DEVICES)
   message("  e.g., cmake -DTARGET_DEVICES=\"gfx803;gfx900;gfx...\" ..")
   message("  Using default target of $DEFAULT_TARGET")
   list(APPEND TARGET_DEVICES "gfx803")
-endif() 
+endif()
 
 string(TOLOWER "${ROCRTST_BLD_TYPE}" tmp)
 if("${tmp}" STREQUAL release)
@@ -140,6 +140,19 @@ endif()
 if(${EMULATOR_BUILD})
 add_definitions(-DROCRTST_EMULATOR_BUILD=1)
 endif()
+
+find_path(BITCODE_DIR NAMES "opencl.bc" "opencl.amdgcn.bc"
+  PATHS
+    "${ROCM_DIR}/amdgcn/bitcode"
+    "${ROCM_DIR}/lib/bitcode"
+    "${ROCM_DIR}/lib"
+    "${ROCM_DIR}/lib/x86_64/bitcode"
+    "${OPENCL_DIR}/amdgcn/bitcode"
+    "${OPENCL_DIR}/lib/x86_64/bitcode"
+    "${LLVM_DIR}/../lib/bitcode"
+    "${CMAKE_PREFIX_PATH}/amdgcn/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode")
 
 # Set Name for Samples Project
 #
@@ -240,15 +253,15 @@ include_directories(${ROCR_INC_DIR} "${OPENCL_DIR}/include")
 function(process_sample S_NAME TARG_DEV HAS_KERNEL)
   set(KERNEL_DIR ${PROJECT_BINARY_DIR}/${TARG_DEV})
   set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
-  
+
   set(TARG_NAME "${S_NAME}_hsaco.${TARG_DEV}")
   set (HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME}
                                                CACHE INTERNAL HSACO_TARG_LIST)
-  
+
   if (${HAS_KERNEL})
     # Build the kernel
     separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-     "-x cl -target amdgcn-amd-amdhsa -Xclang -finclude-default-header -nogpulib -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_LIBS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+     "-x cl -target amdgcn-amd-amdhsa -Xclang -finclude-default-header -mcpu=${TARG_DEV} -mno-code-object-v3 ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
     add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
       ${CMAKE_COMMAND} -E create_symlink
         "../${SNAME_EXE}" "${KERNEL_DIR}/${SNAME_EXE}"
@@ -291,22 +304,23 @@ foreach(td ${TARGET_DEVICES})
 endforeach(td)
 
 ###########################
-# SAMPLE SPECIFIC SECTION 
+# SAMPLE SPECIFIC SECTION
 ###########################
 
 set (HSACO_TARG_LIST "" CACHE INTERNAL HSACO_TARG_LIST)
 
 set(KERN_SUFFIX "kernels.hsaco")
-set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
-set(BITCODE_PREF "${BITCODE_PREF} ${OPENCL_LIB_DIR}/bitcode")
 
-set(COMMON_BITCODE_LIBS "${BITCODE_PREF}/opencl.amdgcn.bc")
-set(COMMON_BITCODE_LIBS
-                      "${COMMON_BITCODE_LIBS} ${BITCODE_PREF}/ockl.amdgcn.bc")
+# Check if device-libs bitcode is following old or new layout
+if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
+  set(BITCODE_ARGS "-nogpulib
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc")
+else()
+  set(BITCODE_ARGS "--hip-device-lib-path=${BITCODE_DIR}")
+endif()
 
-# Binary Search
-set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
-set(BITCODE_LIBS "${BITCODE_LIBS} ${BITCODE_PREF}/ocml.amdgcn.bc")
 set(CL_FILE_LIST
                "${PROJECT_SOURCE_DIR}/binary_search/binary_search_kernels.cl")
 build_sample_for_devices("binary_search" TRUE)

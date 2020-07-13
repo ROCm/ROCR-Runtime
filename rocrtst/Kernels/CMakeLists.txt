@@ -9,7 +9,7 @@ cmake_minimum_required(VERSION 2.8.0)
 #
 #     export LLVM_DIR="Path to Lightning build artifacts"
 #
-#     export OCL_BITCODE_DIR="Path containing Opencl Bitcode libraries"
+#     export OCL_BITCODE_DIR="Path containing AMDGCN Bitcode libraries"
 #
 #  2) Make an new folder called build under root folder
 #
@@ -79,10 +79,16 @@ set (ROCM_CODEOBJ_LIST "" CACHE INTERNAL ROCM_CODEOBJ_LIST)
 # Options that are passed along to Clang to enable code object generation
 #
 set(KERN_SUFFIX "kernels.hsaco")
-set(BITCODE_PREF "-Xclang -mlink-bitcode-file -Xclang")
-set(COMMON_BITCODE_LIB1 "${BITCODE_PREF} $ENV{OCL_BITCODE_DIR}/opencl.amdgcn.bc")
-set(COMMON_BITCODE_LIB2 "${BITCODE_PREF} $ENV{OCL_BITCODE_DIR}/ockl.amdgcn.bc")
-set(COMMON_BITCODE_LIB3 "${BITCODE_PREF} $ENV{OCL_BITCODE_DIR}/ocml.amdgcn.bc")
+# Check if device-libs bitcode is following old or new layout
+set(BITCODE_DIR "$ENV{OCL_BITCODE_DIR}")
+if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
+  set(BITCODE_ARGS "-nogpulib
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
+    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc")
+else()
+  set(BITCODE_ARGS "--hip-device-lib-path=${BITCODE_DIR}")
+endif()
 
 #
 # Compiles Opencl kernel into a AMDGcn code object
@@ -110,15 +116,13 @@ function(CompileKernel KRNL_NAME TARGET_DEV)
   # following strings are used to generate a code object and code
   # asm files
   #
-  string(CONCAT CODE_ARG_STR "-Xclang -finclude-default-header -nogpulib "
+  string(CONCAT CODE_ARG_STR "-Xclang -finclude-default-header "
                 "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} -mno-code-object-v3 "
-                "${COMMON_BITCODE_LIB1} ${COMMON_BITCODE_LIB2} "
-                "${COMMON_BITCODE_LIB3} -cl-std=CL${OPENCL_VER} "
+                "${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} "
                 "${PROJECT_SOURCE_DIR}/${CL_FILE} -o ${KERNEL_DIR}/${CODEOBJ_FILE}")
-  string(CONCAT ASM_ARG_STR "-S -Xclang -finclude-default-header -nogpulib "
+  string(CONCAT ASM_ARG_STR "-S -Xclang -finclude-default-header "
                 "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} -mno-code-object-v3 "
-                "${COMMON_BITCODE_LIB1} ${COMMON_BITCODE_LIB2} "
-                "${COMMON_BITCODE_LIB3} -cl-std=CL${OPENCL_VER} "
+                "${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} "
                 "${PROJECT_SOURCE_DIR}/${CL_FILE} -o ${KERNEL_DIR}/${CODEASM_FILE}")
   set(ASM_ARG_LIST ${ASM_ARG_STR})
   set(CODE_ARG_LIST ${CODE_ARG_STR})

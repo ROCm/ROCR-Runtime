@@ -49,10 +49,20 @@ set (QUIT 0)
 find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
 # Device libs doesn't support find_package yet.
-get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.amdgcn.bc"
-  HINTS "${CMAKE_INSTALL_PREFIX}/lib/bitcode" "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
-  "${CMAKE_PREFIX_PATH}/lib/bitcode" "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode"
-  PATHS "/opt/rocm/lib/bitcode" "/opt/rocm/lib/x86_64/bitcode")
+# FIXME: HINTS should not use CMAKE_INSTALL_PREFIX
+get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.bc" "opencl.amdgcn.bc"
+  HINTS
+    "${CMAKE_INSTALL_PREFIX}/amdgcn/bitcode"
+    "${CMAKE_INSTALL_PREFIX}/lib/bitcode"
+    "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
+    "${CMAKE_PREFIX_PATH}/amdgcn/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/bitcode"
+    "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode"
+  PATHS
+    "/opt/rocm/amdgcn/bitcode"
+    "/opt/rocm/lib/bitcode"
+    "/opt/rocm/lib"
+    "/opt/rocm/lib/x86_64/bitcode")
 if (NOT ${FOUND})
   set (QUIT 1)
 endif()
@@ -92,18 +102,24 @@ endif()
 function(gen_kernel_bc TARGET_DEV XNACK_OPT INPUT_FILE OUTPUT_FILE)
 
   string (REPLACE "gfx" "" GFXIP "${TARGET_DEV}")
+  # Determine if device-libs is following old or new layout
+  if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
+    set(BITCODE_ARGS "-nogpulib
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_daz_opt_on.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP}.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_unsafe_math_off.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_finite_only_off.amdgcn.bc")
+  else()
+    set(BITCODE_ARGS "--hip-device-lib-path=${BITCODE_DIR}")
+  endif()
+
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
     "-O2 -x cl -cl-denorms-are-zero -cl-std=CL2.0 -target amdgcn-amd-amdhsa
     -Xclang -finclude-default-header -mcpu=${TARGET_DEV} -m${XNACK_OPT}
-    -nogpulib
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_daz_opt_on.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP}.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_unsafe_math_off.amdgcn.bc
-    -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_finite_only_off.amdgcn.bc
-    -o ${OUTPUT_FILE} ${INPUT_FILE}")
+    ${BITCODE_ARGS} -o ${OUTPUT_FILE} ${INPUT_FILE}")
 
   ## Add custom command to produce a code object file.
   ## This depends on the kernel source file & compiler.
@@ -125,7 +141,7 @@ endfunction(gen_kernel_bc)
 ## Find device code object name and forward to custom command
 ##==========================================
 function(build_kernel BLIT_NAME TARG_DEV)
-  
+
   list (FIND XNACK_DEVS ${TARG_DEV} XNACK_IDX)
   if (${XNACK_IDX} GREATER -1)
     set (XNACK_OPT "xnack")
@@ -137,7 +153,7 @@ function(build_kernel BLIT_NAME TARG_DEV)
   set (CODE_OBJECT_FILE "${BLIT_NAME}_${TARG_DEV}")
   set (CL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/imageblit_kernels.cl)
   gen_kernel_bc(${TARG_DEV} ${XNACK_OPT} ${CL_FILE} ${CODE_OBJECT_FILE})
-  
+
   ## Build a list of code object file names
   ## These will be target dependencies.
   set (HSACO_TARG_LIST ${HSACO_TARG_LIST} "${CODE_OBJECT_FILE}" PARENT_SCOPE)
@@ -159,7 +175,7 @@ function(build_kernel_for_devices BLIT_NAME)
   endforeach(dev)
 
   set(HSACO_TARG_LIST ${HSACO_TARG_LIST} PARENT_SCOPE)
-  
+
 endfunction(build_kernel_for_devices)
 
 ##==========================================
