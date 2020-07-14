@@ -393,9 +393,9 @@ set (CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE 1)
 set (CPACK_COMPONENTS_ALL binary dev)
 
 set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
-set ( CPACK_PACKAGE_VENDOR "AMD" )
+set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
-set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
+set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
@@ -404,6 +404,7 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/post_install DEBIAN/postinst @
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/pre_remove DEBIAN/prerm @ONLY)
 
 # Debian package specific variables
+set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" )
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm" )
@@ -415,6 +416,7 @@ set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
 ## RPM package specific variables
+set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct" )
 
 # Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
