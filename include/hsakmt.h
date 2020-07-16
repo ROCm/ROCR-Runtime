@@ -845,6 +845,16 @@ hsaKmtGetQueueSnapshot(
     );
 
 /**
+  Send the host trap
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSendHostTrap(
+    HSAuint32	NodeId, //IN
+    HSAuint32	Pid //IN
+    );
+
+/**
   Set the trap override mask. When debug trap is enabled by
   hsaKmtEnableDebugTrap() each wave launched has its initial
   MODE.excp_en register overriden by TrapMask as specified by
