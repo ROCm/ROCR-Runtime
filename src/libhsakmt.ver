@@ -61,6 +61,7 @@ hsaKmtEnableDebugTrap;
 hsaKmtEnableDebugTrapWithPollFd;
 hsaKmtDisableDebugTrap;
 hsaKmtQueryDebugEvent;
+hsaKmtSendHostTrap;
 hsaKmtGetQueueSnapshot;
 hsaKmtSetWaveLaunchTrapOverride;
 hsaKmtSetWaveLaunchMode;

@@ -224,6 +224,7 @@ struct kfd_ioctl_dbg_wave_control_args {
 #define	KFD_DBG_EV_STATUS_VMFAULT	2
 #define	KFD_DBG_EV_STATUS_SUSPENDED	4
 #define KFD_DBG_EV_STATUS_NEW_QUEUE	8
+#define KFD_DBG_EV_STATUS_HOST_TRAP_TIMEDOUT	16
 #define	KFD_DBG_EV_FLAG_CLEAR_STATUS	1
 
 #define KFD_INVALID_QUEUEID	0xffffffff
@@ -308,6 +309,14 @@ struct kfd_ioctl_dbg_wave_control_args {
  * data3: watch address mask
  */
 #define KFD_IOC_DBG_TRAP_SET_ADDRESS_WATCH 9
+
+/* KFD_IOC_DBG_SEND_HOST_TRAP:
+ * ptr:   unused
+ * data1: unused
+ * data2: unused
+ * data3: unused
+ */
+#define KFD_IOC_DBG_TRAP_SEND_HOST_TRAP 10
 
 struct kfd_ioctl_dbg_trap_args {
 	__u64 ptr;     /* to KFD -- used for pointer arguments: queue arrays */
