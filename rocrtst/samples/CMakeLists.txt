@@ -35,6 +35,14 @@ cmake_minimum_required(VERSION 2.8.0)
 #   4) Run "make"
 #
 
+cmake_minimum_required(VERSION 3.5.0)
+
+# Set Name for Samples Project
+#
+
+set(PROJECT_NAME "sample64")
+project (${PROJECT_NAME})
+
 set(DEFAULT_TARGET "gfx803")
 
 #############################
@@ -53,38 +61,8 @@ endif()
 #
 
 # Required Defines first:
-
-set(ROCR_INC_DIR ${ROCM_DIR}/include)
-set(ROCR_LIB_DIR ${ROCM_DIR}/lib)
-#
-# Determine ROCR Header files are present
-#
-if(NOT EXISTS ${ROCR_INC_DIR}/hsa/hsa.h)
-  message("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check value of ROCM_DIR define")
-  return()
-endif()
-
-# Determine ROCR Library files are present
-#
-if("${ROCRTST_BLD_BITS}" STREQUAL 32)
-  set (ONLY64STR "")
-  set (IS64BIT 0)
-else()
-  set (ONLY64STR "64")
-  set (IS64BIT 1)
-endif()
-#
-if (${IS64BIT} EQUAL 0)
-  if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime.so)
-    message("ERROR: ${ROCR_LIB_DIR}/libhsa-runtime.so doesn't exist. Check value of ROCM_DIR define")
-    return()
-  endif()
-else()
-  if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime64.so)
-    message("ERROR: Define ROCR_LIB_DIR pointing to ROCR libraries is not set")
-    return()
-  endif()
-endif()
+find_package(hsa-runtime64 REQUIRED )
+message(STATUS "HSA Runtime found at ${hsa-runtime64_DIR} ")
 
 if (DEFINED LLVM_DIR)
   set(CLANG ${LLVM_DIR}/clang)
@@ -154,11 +132,6 @@ find_path(BITCODE_DIR NAMES "opencl.bc" "opencl.amdgcn.bc"
     "${CMAKE_PREFIX_PATH}/lib/bitcode"
     "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode")
 
-# Set Name for Samples Project
-#
-
-set(PROJECT_NAME "sample${ONLY64STR}")
-project (${PROJECT_NAME})
 
 #
 # Print out the build configuration being used:
@@ -216,15 +189,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmerge-all-constants")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
-
-#
-# Extend the compiler flags for 64-bit builds
-#
-if (IS64BIT)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2")
-else()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
-endif()
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64")
 
 #
 # Add compiler flags to include symbol information for debug builds
@@ -234,20 +199,7 @@ if(ISDEBUG)
 endif()
 message("ISDEBUG STEP:Done")
 
-#
-# Linux Linker options
-##
-# Specify the directory containing various libraries of ROCR
-# to be linked against for building ROC Perf applications
-#
-link_directories(${ROCR_LIB_DIR})
-
-#
-# Extend the list of libraries to be used for linking ROC Perf Apps
-#
-set(ROCR_LIBS ${ROCR_LIBS} hsa-runtime${ONLY64STR})
-
-include_directories(${ROCR_INC_DIR} "${OPENCL_DIR}/include")
+include_directories("${OPENCL_DIR}/include")
 
 # Use this function to build any samples that have kernels to be built
 function(process_sample S_NAME TARG_DEV HAS_KERNEL)
@@ -283,8 +235,7 @@ function(build_sample_for_devices S_NAME HAS_KERNEL)
 
   aux_source_directory(${CMAKE_CURRENT_SOURCE_DIR}/${S_NAME} S_NAME_SOURCES)
   add_executable(${SNAME_EXE} ${S_NAME_SOURCES})
-  target_link_libraries(${SNAME_EXE} ${ROCR_LIBS} c stdc++ dl pthread rt)
-
+  target_link_libraries(${SNAME_EXE} hsa-runtime64::hsa-runtime64 c stdc++ dl pthread rt)
   set(HSACO_TARG_LIST PARENT_SCOPE)
 
   foreach(t ${TARGET_DEVICES})
