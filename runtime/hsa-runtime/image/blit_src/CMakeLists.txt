@@ -75,7 +75,7 @@ set( XNACK_DEVS ${XNACK_DEVS} CACHE STRING "XNACK targets" FORCE )
 
 # Determine the target devices if not specified
 if (NOT DEFINED TARGET_DEVICES)
-  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030")
+  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031")
 endif()
 set( TARGET_DEVICES ${TARGET_DEVICES} CACHE STRING "Build targets" FORCE )
 
