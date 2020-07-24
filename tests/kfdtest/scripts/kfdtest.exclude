@@ -214,3 +214,9 @@ FILTER[navy_flounder]=\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+
+FILTER[dimgrey_cavefish]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDDBGTest.*:"\
+"KFDPerfCountersTest.*:"\
