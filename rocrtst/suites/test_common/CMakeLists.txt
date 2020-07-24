@@ -32,6 +32,15 @@ cmake_minimum_required(VERSION 2.8.0)
 #   4) Run "make"
 #
 
+cmake_minimum_required(VERSION 3.5.0)
+
+# Set Name for Samples Project
+#
+
+set(PROJECT_NAME "rocrtst64")
+project (${PROJECT_NAME})
+
+
 set(DEFAULT_TARGETS "gfx803;gfx701;gfx801;gfx802;gfx900;gfx902;gfx906;gfx908;gfx1010;gfx1011;gfx1012")
 
 #
@@ -51,40 +60,13 @@ endif()
 #
 
 # Required Defines first:
+find_package(hsa-runtime64 REQUIRED )
+message(STATUS "HSA Runtime found at ${hsa-runtime64_DIR} ")
 
-set(ROCR_INC_DIR ${ROCM_DIR}/include)
-set(ROCR_LIB_DIR ${ROCM_DIR}/hsa/lib)
-set(ROCM_SMI_INC_DIR ${ROCM_DIR}/include)
-set(ROCM_SMI_LIB_DIR ${ROCM_DIR}/lib)
-#
-# Determine ROCR Header files are present
-#
-if(NOT EXISTS ${ROCR_INC_DIR}/hsa/hsa.h)
-  message("ERROR: ${ROCR_INC_DIR}/hsa/hsa.h does not exist. Check value of ROCM_DIR define")
-  return()
-endif()
-
-# Determine ROCR Library files are present
-#
-if("${ROCRTST_BLD_BITS}" STREQUAL 32)
-  set (ONLY64STR "")
-  set (IS64BIT 0)
-else()
-  set (ONLY64STR "64")
-  set (IS64BIT 1)
-endif()
-#
-if (${IS64BIT} EQUAL 0)
-  if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime.so)
-    message("ERROR: ${ROCR_LIB_DIR}/libhsa-runtime.so doesn't exist. Check value of ROCM_DIR define")
-    return()
-  endif()
-else()
-  if(NOT EXISTS ${ROCR_LIB_DIR}/libhsa-runtime64.so)
-    message("ERROR: Define ROCR_LIB_DIR pointing to ROCR libraries is not set")
-    return()
-  endif()
-endif()
+set(ROCR_INC_DIR ${hsa-runtime64_DIR}/../../../include)
+set(ROCM_SMI_INC_DIR ${ROCM_DIR}/rocm_smi/include)
+set(ROCM_SMI_LIB_DIR ${ROCM_DIR}/rocm_smi/lib)
+set (ONLY64STR "64")
 
 if (DEFINED LLVM_DIR)
   set(CLANG ${LLVM_DIR}/clang)
@@ -214,16 +196,6 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
 
-
-#
-# Extend the compiler flags for 64-bit builds
-#
-if (IS64BIT)
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m64  -msse -msse2")
-else()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -m32")
-endif()
-
 #
 # Add compiler flags to include symbol information for debug builds
 #
@@ -257,7 +229,7 @@ LINK_DIRECTORIES(${ROCR_LIB_DIR} ${ROCM_SMI_LIB_DIR})
 #
 # Extend the list of libraries to be used for linking ROC Perf Apps
 #
-set(ROCRTST_LIBS ${ROCRTST_LIBS} hsa-runtime${ONLY64STR})
+set(ROCRTST_LIBS ${ROCRTST_LIBS} hsa-runtime64::hsa-runtime64)
 set(ROCRTST_LIBS ${ROCRTST_LIBS} rocm_smi${ONLY64STR})
 
 
