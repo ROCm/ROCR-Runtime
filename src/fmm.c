@@ -1349,8 +1349,7 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 	}
 
 	if (mem) {
-		int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-					gpu_mem[gpu_mem_id].drm_render_fd;
+		int map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 		int prot = flags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
 					PROT_NONE;
 		int flag = flags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
@@ -1588,7 +1587,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 					     &mmap_offset, ioc_flags, &vm_obj);
 
 		if (mem && flags.ui32.HostAccess) {
-			int map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd : gpu_drm_fd;
+			int map_fd = gpu_drm_fd;
 			void *ret = mmap(mem, MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
 					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
@@ -2629,8 +2628,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 		if (!obj)
 			return -1;
 		/* Create a CPU mapping for the debugger */
-		map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-					gpu_mem[gpu_mem_id].drm_render_fd;
+		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 		mmap_ret = mmap(address, size, PROT_NONE,
 				MAP_PRIVATE | MAP_FIXED, map_fd, mmap_offset);
 		if (mmap_ret == MAP_FAILED) {
@@ -2642,8 +2640,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 			gpu_id, address, size, aperture, &mmap_offset,
 			KFD_IOC_ALLOC_MEM_FLAGS_GTT |
 			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
-		map_fd = mmap_offset >= (1ULL<<40) ? kfd_fd :
-					gpu_mem[gpu_mem_id].drm_render_fd;
+		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 		mmap_ret = mmap(address, size,
 				PROT_READ | PROT_WRITE,
 				MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
@@ -3291,8 +3288,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 			goto err_free_obj;
 		}
 		obj->node_id = gpu_mem[gpu_mem_id].node_id;
-		map_fd = importArgs.mmap_offset >= (1ULL<<40) ? kfd_fd :
-					gpu_mem[gpu_mem_id].drm_render_fd;
+		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 		ret = mmap(reservedMem, (SizeInPages << PAGE_SHIFT),
 			   PROT_READ | PROT_WRITE,
 			   MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
