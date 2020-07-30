@@ -931,7 +931,7 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 	args.flags = flags |
 		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
 	args.va_addr = (uint64_t)mem;
-	if (!topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)) &&
+	if (!is_dgpu &&
 	    (flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM))
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 	if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
@@ -1150,7 +1150,7 @@ static void fmm_release_scratch(uint32_t gpu_id)
 
 	size = VOID_PTRS_SUB(aperture->limit, aperture->base) + 1;
 
-	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+	if (is_dgpu) {
 		/* unmap and remove all remaining objects */
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		while ((n = rbtree_node_any(&aperture->tree, MID))) {
@@ -1217,7 +1217,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 		return NULL;
 
 	/* Allocate address space for scratch backing, 64KB aligned */
-	if (topology_is_dgpu(gpu_mem[gpu_mem_id].device_id)) {
+	if (is_dgpu) {
 		pthread_mutex_lock(&svm.dgpu_aperture->fmm_mutex);
 		mem = aperture_allocate_area_aligned(
 			svm.dgpu_aperture, address,
@@ -2173,11 +2173,16 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 */
 
 	pacc = pci_ids_create();
+
+	is_dgpu = false;
+
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
 		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
+
+		topology_setup_is_dgpu_param(&props);
 
 		/* Skip non-GPU nodes */
 		if (gpu_id != 0) {
@@ -2209,6 +2214,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem_count++;
 		}
 	}
+
 	pci_ids_destroy(pacc);
 
 	/* The ioctl will also return Number of Nodes if
@@ -2617,7 +2623,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	if (gpu_mem_id < 0)
 		return -1;
 
-	if (!topology_is_dgpu(gpu_mem[gpu_mem_id].device_id))
+	if (!is_dgpu)
 		return 0; /* Nothing to do on APU */
 
 	/* sanity check the address */
@@ -2830,7 +2836,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	if (gpu_mem_id < 0)
 		return -1;
 
-	if (!topology_is_dgpu(gpu_mem[gpu_mem_id].device_id))
+	if (!is_dgpu)
 		return 0; /* Nothing to do on APU */
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
