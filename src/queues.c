@@ -272,7 +272,7 @@ static void get_doorbell_map_info(uint16_t dev_id,
 	 * GPUVM doorbell on Tonga requires a workaround for VM TLB ACTIVE bit
 	 * lookup bug. Remove ASIC check when this is implemented in amdgpu.
 	 */
-	doorbell->use_gpuvm = (topology_is_dgpu(dev_id) &&
+	doorbell->use_gpuvm = (is_dgpu &&
 			       dev_info->asic_family != CHIP_TONGA);
 	doorbell->size = DOORBELLS_PAGE_SIZE(dev_info->doorbell_size);
 }

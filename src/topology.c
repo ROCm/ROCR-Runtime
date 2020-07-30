@@ -753,24 +753,19 @@ HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-bool topology_is_dgpu(uint16_t device_id)
-{
-	const struct hsa_gfxip_table *hsa_gfxip =
-				find_hsa_gfxip_device(device_id);
 
-	if (hsa_gfxip && hsa_gfxip->is_dgpu) {
+void topology_setup_is_dgpu_param(HsaNodeProperties *props)
+{
+	/* if we found a dGPU node, then treat the whole system as dGPU */
+	if (!props->NumCPUCores && props->NumFComputeCores)
 		is_dgpu = true;
-		return true;
-	}
-	is_dgpu = false;
-	return false;
 }
 
 bool topology_is_svm_needed(uint16_t device_id)
 {
 	const struct hsa_gfxip_table *hsa_gfxip;
 
-	if (topology_is_dgpu(device_id))
+	if (is_dgpu)
 		return true;
 
 	hsa_gfxip = find_hsa_gfxip_device(device_id);
@@ -2004,7 +1999,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	/* For CPU only node don't add any additional GPU memory banks. */
 	if (gpu_id) {
 		uint64_t base, limit;
-		if (topology_is_dgpu(get_device_id_by_gpu_id(gpu_id)))
+		if (is_dgpu)
 			NodeProperties->NumMemoryBanks += NUM_OF_DGPU_HEAPS;
 		else
 			NodeProperties->NumMemoryBanks += NUM_OF_IGPU_HEAPS;
