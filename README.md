@@ -1,8 +1,9 @@
 ### ROCt Library
 
-This repository includes the user-mode API interfaces used to interact with the ROCk driver. Currently supported agents include only the AMD/ATI Fiji family of discrete GPUs.
+This repository includes the user-mode API interfaces used to interact with the ROCk driver.
 
 Starting at 1.7 release, ROCt uses drm render device. This requires the user to belong to video group. Add the user account to video group with "sudo usermod -a -G video _username_" command if the user if not part of video group yet.
+NOTE: Users of Ubuntu 20.04 will need to add the user to the new "render" group, as Ubuntu has changed the owner:group of /dev/kfd to render:render as of that release
 
 #### ROCk Driver
 
@@ -30,6 +31,11 @@ If the hsakmt-roct and hsakmt-roct-dev packages are desired:
     make package
     make package-dev
 ```
+If you choose not to build and install packages, manual installation of the binaries and header files can be done via:
+```bash
+    make install
+    make install-dev
+```
 
 #### Disclaimer
 
@@ -37,4 +43,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2017 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2020 Advanced Micro Devices, Inc. All rights reserved.
