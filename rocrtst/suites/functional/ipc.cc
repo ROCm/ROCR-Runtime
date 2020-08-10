@@ -589,6 +589,7 @@ void IPCTest::Run(void) {
     ParentProcessImpl();
   } else {
     ChildProcessImpl();
+    exit(0);
   }
 
   return;
