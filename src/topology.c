@@ -858,7 +858,7 @@ static HSAKMT_STATUS topology_parse_cpuinfo(struct proc_cpuinfo *cpuinfo,
 			p += 2; /* remove ": " */
 			proc = atoi(p);
 			if (proc >= num_procs) {
-				pr_warn("cpuinfo contains processor %d lager than %u\n",
+				pr_warn("cpuinfo contains processor %d larger than %u\n",
 					proc, num_procs);
 				ret = HSAKMT_STATUS_NO_MEMORY;
 				goto exit;
