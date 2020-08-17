@@ -180,8 +180,11 @@ FILTER[raven]=\
 
 FILTER[renoir]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST:"\
 "KFDQMTest.QueueLatency:"\
-"KFDQMTest.SdmaEventInterrupt"
+"KFDQMTest.SdmaEventInterrupt:"\
+"KFDMemoryTest.LargestSysBufferTest:"\
+"KFDQMTest.BasicCuMaskingEven"
 
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
