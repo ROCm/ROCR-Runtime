@@ -138,7 +138,6 @@ struct hsa_gfxip_table {
 	unsigned char major;		// GFXIP Major engine version
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
-	unsigned char is_dgpu;		// Predicate for dGPU devices
 	const char *amd_name;		// CALName of the device
 	enum asic_family_type asic_family;	// Device family id
 };
