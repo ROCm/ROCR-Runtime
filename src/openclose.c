@@ -141,12 +141,12 @@ static HSAKMT_STATUS init_vars_from_env(void)
 	 */
 	envvar = getenv("HSA_FORCE_ASIC_TYPE");
 	if (envvar) {
-		uint32_t major, minor, step, dgpu, asic_family;
+		uint32_t major, minor, step, asic_family;
 
-		if ((sscanf(envvar, "%u.%u.%u %u %63s %u", &major, &minor, &step,
-				&dgpu, force_asic_name, &asic_family) != 6)
+		if ((sscanf(envvar, "%u.%u.%u %63s %u", &major, &minor, &step,
+				force_asic_name, &asic_family) != 6)
 			|| (major > 63 || minor > 255 || step > 255)
-			|| dgpu > 1 || asic_family >= CHIP_LAST) {
+			|| asic_family >= CHIP_LAST) {
 			pr_err("HSA_FORCE_ASIC_TYPE %s is invalid\n", envvar);
 			return HSAKMT_STATUS_ERROR;
 		}
@@ -154,7 +154,6 @@ static HSAKMT_STATUS init_vars_from_env(void)
 		force_asic_entry.major = major;
 		force_asic_entry.minor = minor;
 		force_asic_entry.stepping = step;
-		force_asic_entry.is_dgpu = dgpu;
 
 		force_asic_entry.asic_family = asic_family;
 
