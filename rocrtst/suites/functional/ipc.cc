@@ -217,6 +217,16 @@ static int CheckAndSetToken(std::atomic<int> *token, int newVal) {
   return 0;
 }
 
+static void ClearShared(Shared *s) {
+  s->token = 0;
+  s->count = 0;
+  s->size = 0;
+  s->child_status = 0;
+  s->parent_status = 0;
+  memset(&s->handle.handle, 0, sizeof(hsa_amd_ipc_memory_t));
+  memset(&s->signal_handle, 0, sizeof(hsa_amd_ipc_signal_t));
+}
+
 // Any 1-time setup involving member variables used in the rest of the test
 // should be done here.
 void IPCTest::SetUp(void) {
@@ -238,7 +248,7 @@ void IPCTest::SetUp(void) {
 
   // Initialize shared control block to zeros. The field "token"
   // is used to signal state changes between the 2 processes.
-  memset(shared_, 0, sizeof(Shared));
+  ClearShared(shared_);
 
   // Spawn second process and verify communication
   child_ = 0;
