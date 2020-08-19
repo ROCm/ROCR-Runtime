@@ -1361,6 +1361,13 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 			__fmm_release(vm_obj, aperture);
 			return NULL;
 		}
+		/*
+		 * This madvise() call is needed to avoid additional references
+		 * to mapped BOs in child processes that can prevent freeing
+		 * memory in the parent process and lead to out-of-memory
+		 * conditions.
+		 */
+		madvise(mem, MemorySizeInBytes, MADV_DONTFORK);
 	}
 
 	return mem;
