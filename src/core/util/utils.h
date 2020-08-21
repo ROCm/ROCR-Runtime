@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -52,6 +52,8 @@
 #include <iostream>
 #include <string>
 #include <algorithm>
+
+namespace rocr {
 
 typedef unsigned int uint;
 typedef uint64_t uint64;
@@ -326,6 +328,52 @@ static __forceinline std::string& rtrim(std::string& s) {
 
 static __forceinline std::string& trim(std::string& s) { return ltrim(rtrim(s)); }
 
+}  // namespace rocr
+
+template <uint32_t lowBit, uint32_t highBit, typename T>
+static __forceinline uint32_t BitSelect(T p) {
+  static_assert(sizeof(T) <= sizeof(uintptr_t), "Type out of range.");
+  static_assert(highBit < sizeof(uintptr_t) * 8, "Bit index out of range.");
+
+  uintptr_t ptr = p;
+  if (highBit != (sizeof(uintptr_t) * 8 - 1))
+    return (uint32_t)((ptr & ((1ull << (highBit + 1)) - 1)) >> lowBit);
+  else
+    return (uint32_t)(ptr >> lowBit);
+}
+
+inline uint32_t PtrLow16Shift8(const void* p) {
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
+  return (uint32_t)((ptr & 0xFFFFULL) >> 8);
+}
+
+inline uint32_t PtrHigh64Shift16(const void* p) {
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
+  return (uint32_t)((ptr & 0xFFFFFFFFFFFF0000ULL) >> 16);
+}
+
+inline uint32_t PtrLow40Shift8(const void* p) {
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
+  return (uint32_t)((ptr & 0xFFFFFFFFFFULL) >> 8);
+}
+
+inline uint32_t PtrHigh64Shift40(const void* p) {
+  uintptr_t ptr = reinterpret_cast<uintptr_t>(p);
+  return (uint32_t)((ptr & 0xFFFFFF0000000000ULL) >> 40);
+}
+
+inline uint32_t PtrLow32(const void* p) {
+  return static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p));
+}
+
+inline uint32_t PtrHigh32(const void* p) {
+  uint32_t ptr = 0;
+#ifdef HSA_LARGE_MODEL
+  ptr = static_cast<uint32_t>(reinterpret_cast<uintptr_t>(p) >> 32);
+#endif
+  return ptr;
+}
+
 #include "atomic_helpers.h"
 
-#endif  // HSA_RUNTIME_CORE_UTIL_UTIIS_H_
+#endif  // HSA_RUNTIME_CORE_UTIL_UTILS_H_

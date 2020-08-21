@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -46,6 +46,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+namespace rocr {
 namespace core {
 
 /// @brief Compares type codes and pointers to check object validity.  Used for cast validation.
@@ -105,4 +106,6 @@ template <uint64_t code> class Checked {
 };
 
 }  // namespace core
+}  // namespace rocr
+
 #endif  // header guard

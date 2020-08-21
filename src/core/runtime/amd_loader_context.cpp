@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -62,11 +62,12 @@
 #include <sys/mman.h>
 #endif
 
+namespace rocr {
 namespace {
 
 bool IsLocalRegion(const core::MemoryRegion *region)
 {
-  const amd::MemoryRegion *amd_region = (amd::MemoryRegion*)region;
+  const AMD::MemoryRegion *amd_region = (AMD::MemoryRegion*)region;
   if (nullptr == amd_region || !amd_region->IsLocalMemory()) {
     return false;
   }
@@ -292,7 +293,7 @@ private:
 hsa_region_t RegionMemory::AgentLocal(hsa_agent_t agent)
 {
   hsa_region_t invalid_region; invalid_region.handle = 0;
-  amd::GpuAgent *amd_agent = (amd::GpuAgent*)core::Agent::Convert(agent);
+  AMD::GpuAgent *amd_agent = (AMD::GpuAgent*)core::Agent::Convert(agent);
   if (nullptr == amd_agent) {
     return invalid_region;
   }
@@ -357,7 +358,7 @@ void RegionMemory::Free()
 bool RegionMemory::Freeze() {
   assert(this->Allocated() && nullptr != host_ptr_);
 
-  core::Agent* agent = reinterpret_cast<amd::MemoryRegion*>(
+  core::Agent* agent = reinterpret_cast<AMD::MemoryRegion*>(
                            core::MemoryRegion::Convert(region_))->owner();
   if (agent != NULL && agent->device_type() == core::Agent::kAmdGpuDevice) {
     if (HSA_STATUS_SUCCESS != agent->DmaCopy(ptr_, host_ptr_, size_)) {
@@ -475,14 +476,14 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
                                             RegionMemory::AgentLocal(agent));
       break;
     case HSA_PROFILE_FULL:
-      mem = new (std::nothrow) MappedMemory(((GpuAgentInt*)core::Agent::Convert(agent))->is_kv_device());
+      mem = new (std::nothrow) MappedMemory(((AMD::GpuAgentInt*)core::Agent::Convert(agent))->is_kv_device());
       break;
     default:
       assert(false);
     }
 
     // Invalidate agent caches which may hold lines of the new allocation.
-    ((GpuAgentInt*)core::Agent::Convert(agent))->InvalidateCodeCaches();
+    ((AMD::GpuAgentInt*)core::Agent::Convert(agent))->InvalidateCodeCaches();
 
     break;
   }
@@ -613,3 +614,4 @@ hsa_status_t LoaderContext::SamplerDestroy(hsa_agent_t agent,
 }
 
 }  // namespace amd
+}  // namespace rocr

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -48,6 +48,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
 
+namespace rocr {
 namespace core {
 class HostQueue : public Queue {
  public:
@@ -177,4 +178,5 @@ class HostQueue : public Queue {
   DISALLOW_COPY_AND_ASSIGN(HostQueue);
 };
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

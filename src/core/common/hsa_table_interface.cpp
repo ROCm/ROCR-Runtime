@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -56,6 +56,12 @@ void hsa_table_interface_init(const HsaApiTable* apiTable) {
 const HsaApiTable* hsa_table_interface_get_table() {
   return hsaApiTable;
 }
+
+class Init {
+ public:
+  Init() { rocr::core::LoadInitialHsaApiTable(); }
+};
+static Init LinkAtLoadOrFirstTranslationUnitAccess;
 
 // Pass through stub functions
 hsa_status_t HSA_API hsa_init() { return coreApiTable->hsa_init_fn(); }
@@ -1121,22 +1127,6 @@ hsa_status_t HSA_API hsa_amd_register_system_event_handler(
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_queue_intercept_create(
-    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
-    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
-    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue) {
-  return amdExtTable->hsa_amd_queue_intercept_create_fn(
-      agent_handle, size, type, callback, data, private_segment_size, group_segment_size, queue);
-}
-
-// Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
-                                              hsa_amd_queue_intercept_handler callback,
-                                              void* user_data) {
-  return amdExtTable->hsa_amd_queue_intercept_register_fn(queue, callback, user_data);
-}
-
-// Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority) {
   return amdExtTable->hsa_amd_queue_set_priority_fn(queue, priority);
@@ -1154,3 +1144,24 @@ hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
                                                       hsa_amd_deallocation_callback_t callback) {
   return amdExtTable->hsa_amd_deregister_deallocation_callback_fn(ptr, callback);
 }
+
+// Tools only table interfaces.
+namespace rocr {
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_queue_intercept_create(
+    hsa_agent_t agent_handle, uint32_t size, hsa_queue_type32_t type,
+    void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data), void* data,
+    uint32_t private_segment_size, uint32_t group_segment_size, hsa_queue_t** queue) {
+  return amdExtTable->hsa_amd_queue_intercept_create_fn(
+      agent_handle, size, type, callback, data, private_segment_size, group_segment_size, queue);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
+                                              hsa_amd_queue_intercept_handler callback,
+                                              void* user_data) {
+  return amdExtTable->hsa_amd_queue_intercept_register_fn(queue, callback, user_data);
+}
+
+}  // namespace rocr

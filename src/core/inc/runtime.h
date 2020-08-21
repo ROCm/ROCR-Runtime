@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -77,9 +77,10 @@
 #define HSA_PACKET_ALIGN_BYTES 64
 
 //Avoids include
-namespace amd {
+namespace rocr {
+namespace AMD {
   class MemoryRegion;
-}
+} // namespace amd
 
 namespace core {
 extern bool g_use_interrupt_wait;
@@ -95,7 +96,7 @@ extern bool g_use_interrupt_wait;
 /// - maintain loader state.
 /// - monitor asynchronous event from agent.
 class Runtime {
- friend class amd::MemoryRegion;
+ friend class AMD::MemoryRegion;
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
@@ -117,6 +118,9 @@ class Runtime {
 
   // @brief Callback handler for VM fault access.
   static bool VMFaultHandler(hsa_signal_value_t val, void* arg);
+
+  // @brief Print known allocations near ptr.
+  static void PrintMemoryMapNear(void* ptr);
 
   /// @brief Singleton object of the runtime.
   static Runtime* runtime_singleton_;
@@ -246,11 +250,6 @@ class Runtime {
   /// @retval HSA_STATUS_SUCCESS The attribute is valid and the @p value is
   /// set.
   hsa_status_t GetSystemInfo(hsa_system_info_t attribute, void* value);
-
-  /// @brief Query next available queue id.
-  ///
-  /// @retval Next available queue id.
-  uint32_t GetQueueId();
 
   /// @brief Register a callback function @p handler that is associated with
   /// @p signal to asynchronous event monitor thread.
@@ -539,4 +538,5 @@ class Runtime {
 };
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

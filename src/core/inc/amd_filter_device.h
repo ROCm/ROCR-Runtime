@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -52,7 +52,8 @@
 
 #include "hsakmt.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 // ROCr allows users to filter and reorder various Gpu devices that are
 // present on ROCm system. This ability is made available via environment
@@ -209,5 +210,6 @@ class RvdFilter {
 };  // End of class RvdFilter
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard - HSA_RUNTIME_CORE_INC_AMD_FILTER_DEVICE_H_

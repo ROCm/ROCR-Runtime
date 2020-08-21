@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -50,6 +50,7 @@
 #include <unordered_map>
 #include "core/inc/amd_hsa_code.hpp"
 
+namespace rocr {
 namespace core {
 
 /// @class Wavefront.
@@ -235,5 +236,6 @@ class IsaRegistry final {
 }; // class IsaRegistry
 
 } // namespace core
+} // namespace rocr
 
 #endif // HSA_RUNTIME_CORE_ISA_HPP_

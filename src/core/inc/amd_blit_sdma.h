@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -55,7 +55,8 @@
 #include "core/inc/signal.h"
 #include "core/util/utils.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 class BlitSdmaBase : public core::Blit {
  public:
@@ -76,7 +77,7 @@ class BlitSdmaBase : public core::Blit {
 // RingIndexTy: 32/64-bit monotonic ring index, counting in bytes.
 // HwIndexMonotonic: true if SDMA HW index is monotonic, false if it wraps at end of ring.
 // SizeToCountOffset: value added to size (in bytes) to form SDMA command count field.
-template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset>
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 class BlitSdma : public BlitSdmaBase {
  public:
   BlitSdma();
@@ -209,6 +210,8 @@ class BlitSdma : public BlitSdmaBase {
 
   void BuildTrapCommand(char* cmd_addr);
 
+  void BuildGCRCommand(char* cmd_addr, bool invalidate);
+
   hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size,
                              const std::vector<core::Signal*>& dep_signals,
                              core::Signal& out_signal);
@@ -250,6 +253,8 @@ class BlitSdma : public BlitSdmaBase {
 
   static const uint32_t trap_command_size_;
 
+  static const uint32_t gcr_command_size_;
+
   // Max copy size of a single linear copy command packet.
   size_t max_single_linear_copy_size_;
 
@@ -272,13 +277,20 @@ class BlitSdma : public BlitSdmaBase {
 // Ring indices are 32-bit.
 // HW ring indices are not monotonic (wrap at end of ring).
 // Count fields of SDMA commands are 0-based.
-typedef BlitSdma<uint32_t, false, 0> BlitSdmaV2V3;
+typedef BlitSdma<uint32_t, false, 0, false> BlitSdmaV2V3;
 
 // Ring indices are 64-bit.
 // HW ring indices are monotonic (do not wrap at end of ring).
 // Count fields of SDMA commands are 1-based.
-typedef BlitSdma<uint64_t, true, -1>  BlitSdmaV4;
+typedef BlitSdma<uint64_t, true, -1, false> BlitSdmaV4;
+
+// Ring indices are 64-bit.
+// HW ring indices are monotonic (do not wrap at end of ring).
+// Count fields of SDMA commands are 1-based.
+// SDMA is connected to gL2.
+typedef BlitSdma<uint64_t, true, -1, true> BlitSdmaV5;
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

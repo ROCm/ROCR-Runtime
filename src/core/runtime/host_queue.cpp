@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -45,6 +45,7 @@
 #include "core/inc/runtime.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 int HostQueue::rtti_id_ = 0;
@@ -76,7 +77,7 @@ HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t
   amd_queue_.hsa_queue.base_address = ring_;
   amd_queue_.hsa_queue.size = size_;
   amd_queue_.hsa_queue.doorbell_signal = doorbell_signal;
-  amd_queue_.hsa_queue.id = queue_count_++;
+  amd_queue_.hsa_queue.id = this->GetQueueId();
   amd_queue_.hsa_queue.type = type;
   amd_queue_.hsa_queue.features = features;
 #ifdef HSA_LARGE_MODEL
@@ -100,3 +101,4 @@ HostQueue::~HostQueue() {
 }
 
 }  // namespace core
+}  // namespace rocr

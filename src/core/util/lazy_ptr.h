@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -49,6 +49,8 @@
 
 #include "core/util/locks.h"
 #include "core/util/utils.h"
+
+namespace rocr {
 
 /*
  * Wrapper for a std::unique_ptr that initializes its object at first use.
@@ -147,5 +149,7 @@ template <typename T> class lazy_ptr {
   }
 
 };
+
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_UTIL_LAZY_PTR_H_

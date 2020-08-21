@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -49,6 +49,7 @@
 #include <utility>
 #include <string>
 
+namespace rocr {
 namespace core {
 
 class Cache : public Checked<0x39A6C7AD3F135B06> {
@@ -77,6 +78,8 @@ class Cache : public Checked<0x39A6C7AD3F135B06> {
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(Cache);
 };
-}
+
+}   // namespace core
+}   // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_CACHE_H

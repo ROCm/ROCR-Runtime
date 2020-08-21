@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -41,6 +41,8 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "small_heap.h"
+
+namespace rocr {
 
 // Inserts node into freelist after place.
 // Assumes node will not be an end of the list (list has guard nodes).
@@ -179,3 +181,5 @@ void* SmallHeap::alloc_high(size_t bytes) {
   // Can't service the request due to fragmentation
   return nullptr;
 }
+
+}  // namespace rocr

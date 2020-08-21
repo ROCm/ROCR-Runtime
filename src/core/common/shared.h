@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -50,6 +50,7 @@
 
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 /// @brief Base class encapsulating the allocator and deallocator for
 /// shared shared object.  As used this will allocate GPU visible host
@@ -235,4 +236,5 @@ template <typename T, size_t Align> class SharedArray final : private BaseShared
 };
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

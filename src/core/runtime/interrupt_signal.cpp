@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -45,6 +45,7 @@
 #include "core/util/timer.h"
 #include "core/util/locks.h"
 
+namespace rocr {
 namespace core {
 
 HsaEvent* InterruptSignal::EventPool::alloc() {
@@ -386,3 +387,4 @@ hsa_signal_value_t InterruptSignal::CasAcqRel(hsa_signal_value_t expected,
 }
 
 }  // namespace core
+}  // namespace rocr

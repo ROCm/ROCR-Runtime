@@ -1,46 +1,42 @@
 ////////////////////////////////////////////////////////////////////////////////
 //
-// Copyright 2017 ADVANCED MICRO DEVICES, INC.
-//
-// AMD is granting you permission to use this software and documentation(if any)
-// (collectively, the "Materials") pursuant to the terms and conditions of the
-// Software License Agreement included with the Materials.If you do not have a
-// copy of the Software License Agreement, contact your AMD representative for a
-// copy.
-//
-// You agree that you will not reverse engineer or decompile the Materials, in
-// whole or in part, except as allowed by applicable law.
-//
-// WARRANTY DISCLAIMER : THE SOFTWARE IS PROVIDED "AS IS" WITHOUT WARRANTY OF
-// ANY KIND.AMD DISCLAIMS ALL WARRANTIES, EXPRESS, IMPLIED, OR STATUTORY,
-// INCLUDING BUT NOT LIMITED TO THE IMPLIED WARRANTIES OF MERCHANTABILITY,
-// FITNESS FOR A PARTICULAR PURPOSE, TITLE, NON - INFRINGEMENT, THAT THE
-// SOFTWARE WILL RUN UNINTERRUPTED OR ERROR - FREE OR WARRANTIES ARISING FROM
-// CUSTOM OF TRADE OR COURSE OF USAGE.THE ENTIRE RISK ASSOCIATED WITH THE USE OF
-// THE SOFTWARE IS ASSUMED BY YOU.Some jurisdictions do not allow the exclusion
-// of implied warranties, so the above exclusion may not apply to You.
-//
-// LIMITATION OF LIABILITY AND INDEMNIFICATION : AMD AND ITS LICENSORS WILL NOT,
-// UNDER ANY CIRCUMSTANCES BE LIABLE TO YOU FOR ANY PUNITIVE, DIRECT,
-// INCIDENTAL, INDIRECT, SPECIAL OR CONSEQUENTIAL DAMAGES ARISING FROM USE OF
-// THE SOFTWARE OR THIS AGREEMENT EVEN IF AMD AND ITS LICENSORS HAVE BEEN
-// ADVISED OF THE POSSIBILITY OF SUCH DAMAGES.In no event shall AMD's total
-// liability to You for all damages, losses, and causes of action (whether in
-// contract, tort (including negligence) or otherwise) exceed the amount of $100
-// USD.  You agree to defend, indemnify and hold harmless AMD and its licensors,
-// and any of their directors, officers, employees, affiliates or agents from
-// and against any and all loss, damage, liability and other expenses (including
-// reasonable attorneys' fees), resulting from Your use of the Software or
-// violation of the terms and conditions of this Agreement.
-//
-// U.S.GOVERNMENT RESTRICTED RIGHTS : The Materials are provided with
-// "RESTRICTED RIGHTS." Use, duplication, or disclosure by the Government is
-// subject to the restrictions as set forth in FAR 52.227 - 14 and DFAR252.227 -
-// 7013, et seq., or its successor.Use of the Materials by the Government
-// constitutes acknowledgement of AMD's proprietary rights in them.
-//
-// EXPORT RESTRICTIONS: The Materials may be subject to export restrictions as
-//                      stated in the Software License Agreement.
+// The University of Illinois/NCSA
+// Open Source License (NCSA)
+// 
+// Copyright (c) 2017-2020, Advanced Micro Devices, Inc. All rights reserved.
+// 
+// Developed by:
+// 
+//                 AMD Research and AMD HSA Software Development
+// 
+//                 Advanced Micro Devices, Inc.
+// 
+//                 www.amd.com
+// 
+// Permission is hereby granted, free of charge, to any person obtaining a copy
+// of this software and associated documentation files (the "Software"), to
+// deal with the Software without restriction, including without limitation
+// the rights to use, copy, modify, merge, publish, distribute, sublicense,
+// and/or sell copies of the Software, and to permit persons to whom the
+// Software is furnished to do so, subject to the following conditions:
+// 
+//  - Redistributions of source code must retain the above copyright notice,
+//    this list of conditions and the following disclaimers.
+//  - Redistributions in binary form must reproduce the above copyright
+//    notice, this list of conditions and the following disclaimers in
+//    the documentation and/or other materials provided with the distribution.
+//  - Neither the names of Advanced Micro Devices, Inc,
+//    nor the names of its contributors may be used to endorse or promote
+//    products derived from this Software without specific prior written
+//    permission.
+// 
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+// IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+// FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+// THE CONTRIBUTORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR
+// OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+// ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
+// DEALINGS WITH THE SOFTWARE.
 //
 ////////////////////////////////////////////////////////////////////////////////
 
@@ -82,11 +78,7 @@ uint32_t hsa_ven_amd_aqlprofile_version_minor();
 // Supported profiling events
 typedef enum {
   HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_PMC = 0,
-#ifdef NEW_TRACE_API
   HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_TRACE = 1,
-#else
-  HSA_VEN_AMD_AQLPROFILE_EVENT_TYPE_SQTT = 1,
-#endif
 } hsa_ven_amd_aqlprofile_event_type_t;
 
 // Supported performance counters (PMC) blocks
@@ -121,12 +113,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_GCEA = 23,
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_RPB = 24,
   // System blocks
-#ifdef EXPL_SDMA_INSTANCING
-  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA0 = 25,
-  HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA1 = 26,
-#else
   HSA_VEN_AMD_AQLPROFILE_BLOCK_NAME_SDMA = 25,
-#endif
 
   HSA_VEN_AMD_AQLPROFILE_BLOCKS_NUMBER
 } hsa_ven_amd_aqlprofile_block_name_t;
@@ -159,6 +146,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5,
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SAMPLE_RATE = 6,
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_K_CONCURRENT = 7,
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -252,11 +240,7 @@ typedef struct {
       hsa_ven_amd_aqlprofile_event_t event;  // PMC event
       uint64_t result;                       // PMC result
     } pmc_data;
-#ifdef NEW_TRACE_API
     hsa_ven_amd_aqlprofile_descriptor_t trace_data;  // Trace output data descriptor
-#else
-    hsa_ven_amd_aqlprofile_descriptor_t sqtt_data;  // SQTT output data descriptor
-#endif
   };
 } hsa_ven_amd_aqlprofile_info_data_t;
 
@@ -273,11 +257,7 @@ typedef enum {
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA_SIZE = 1,        // get_info returns uint32_t value
   HSA_VEN_AMD_AQLPROFILE_INFO_PMC_DATA = 2,             // get_info returns PMC uint64_t value
                                                         // in info_data object
-#ifdef NEW_TRACE_API
   HSA_VEN_AMD_AQLPROFILE_INFO_TRACE_DATA = 3,           // get_info returns trace buffer ptr/size
-#else
-  HSA_VEN_AMD_AQLPROFILE_INFO_SQTT_DATA = 3,            // get_info returns SQTT buffer ptr/size
-#endif
                                                         // in info_data object
                                                         //
   HSA_VEN_AMD_AQLPROFILE_INFO_BLOCK_COUNTERS = 4,       // get_info returns number of block counter

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -51,7 +51,9 @@
 #include <set>
 
 #include "utils.h"
-  
+
+namespace rocr {
+
 class SmallHeap {
  private:
   struct Node;
@@ -123,5 +125,7 @@ class SmallHeap {
   size_t remaining() const { return total_free; }
   void* high_split() const { return *high.begin(); }
 };
+
+}  // namespace rocr
 
 #endif

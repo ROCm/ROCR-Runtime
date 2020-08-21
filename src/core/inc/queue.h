@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -56,6 +56,7 @@
 
 #include "hsakmt.h"
 
+namespace rocr {
 namespace core {
 struct AqlPacket {
 
@@ -329,9 +330,17 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
 
   hsa_queue_t* public_handle_;
 
+  /// Next available queue id.
+  uint64_t GetQueueId() { return hsa_queue_counter_++; }
+
  private:
+
+  // HSA Queue ID - used to bind a unique ID
+  static std::atomic<uint64_t> hsa_queue_counter_;
+
   DISALLOW_COPY_AND_ASSIGN(Queue);
 };
-}
+}   //  namespace core
+}   //  namespace rocr
 
 #endif  // header guard

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,6 +53,16 @@
 #include <mutex>
 #include <vector>
 
+#if defined(_WIN32) || defined(_WIN64)
+#include <io.h>
+#define __read__  _read
+#define __lseek__ _lseek
+#else
+#include <unistd.h>
+#define __read__  read
+#define __lseek__ lseek
+#endif  // _WIN32 || _WIN64
+
 /// @brief Major version of the AMD HSA Loader. Major versions are not backwards
 /// compatible.
 #define AMD_HSA_LOADER_VERSION_MAJOR 0
@@ -92,9 +102,55 @@ enum amd_loaded_segment_info_t {
   AMD_LOADED_SEGMENT_INFO_SIZE = 3
 };
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
+
+/// @class CodeObjectReaderImpl.
+/// @brief Code Object Reader Wrapper.
+struct CodeObjectReaderImpl final {
+ public:
+  /// @returns Handle equivalent of @p object.
+  static hsa_code_object_reader_t Handle(
+      const CodeObjectReaderImpl *object) {
+    hsa_code_object_reader_t handle = {reinterpret_cast<uint64_t>(object)};
+    return handle;
+  }
+
+  /// @returns Object equivalent of @p handle.
+  static CodeObjectReaderImpl *Object(
+      const hsa_code_object_reader_t &handle) {
+    CodeObjectReaderImpl *object =
+      reinterpret_cast<CodeObjectReaderImpl*>(handle.handle);
+    return object;
+  }
+
+  /// @brief Default constructor.
+  CodeObjectReaderImpl() {}
+
+  /// @brief Default destructor.
+  ~CodeObjectReaderImpl();
+
+  hsa_status_t SetFile(
+      hsa_file_t _code_object_file_descriptor,
+      size_t _code_object_offset = 0,
+      size_t _code_object_size = 0);
+
+  hsa_status_t SetMemory(
+      const void *_code_object_memory,
+      size_t _code_object_size);
+
+  const void *GetCodeObjectMemory() const { return code_object_memory; };
+
+  std::string GetUri() const { return uri; };
+
+ private:
+  const void *code_object_memory{nullptr};
+  size_t code_object_size{0};
+  std::string uri{};
+  bool is_mmap{false};
+};
 
 //===----------------------------------------------------------------------===//
 // Context.                                                                   //
@@ -216,6 +272,7 @@ public:
   virtual uint64_t getLoadBase() const = 0;
   virtual uint64_t getLoadSize() const = 0;
   virtual int64_t getDelta() const = 0;
+  virtual std::string getUri() const = 0;
 
 protected:
   LoadedCodeObject() {}
@@ -291,6 +348,7 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t LoadCodeObject(
@@ -298,6 +356,7 @@ public:
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object = nullptr) = 0;
 
   virtual hsa_status_t Freeze(const char *options) = 0;
@@ -441,5 +500,6 @@ private:
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr
 
 #endif // AMD_HSA_LOADER_HPP

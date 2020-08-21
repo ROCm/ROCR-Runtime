@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -63,8 +63,8 @@
 
 #include "AMDHSAKernelDescriptor.h"
 
-using namespace amd::hsa;
-using namespace amd::hsa::common;
+using namespace rocr::amd::hsa;
+using namespace rocr::amd::hsa::common;
 
 // Having a side effect prevents call site optimization that allows removal of a noinline function call
 // with no side effect.
@@ -82,6 +82,7 @@ HSA_API r_debug _amdgpu_r_debug = {2,
                            0};
 static link_map* r_debug_tail = nullptr;
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -216,7 +217,7 @@ hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const ch
     return status;
   }
 
-  // Assumeing runtime atomic implements C++ std::memory_order
+  // Assuming runtime atomic implements C++ std::memory_order
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_ADD, std::memory_order_relaxed);
   atomic::Fence(std::memory_order_acq_rel);
@@ -232,7 +233,7 @@ hsa_status_t AmdHsaCodeLoader::FreezeExecutable(Executable *executable, const ch
 }
 
 void AmdHsaCodeLoader::DestroyExecutable(Executable *executable) {
-  // Assumeing runtime atomic implements C++ std::memory_order
+  // Assuming runtime atomic implements C++ std::memory_order
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
   atomic::Store(&_amdgpu_r_debug.r_state, r_debug::RT_DELETE, std::memory_order_relaxed);
   atomic::Fence(std::memory_order_acq_rel);
@@ -1018,6 +1019,10 @@ int64_t LoadedCodeObjectImpl::getDelta() const {
   return getLoadBase() - loaded_segments.front()->VAddr();
 }
 
+std::string LoadedCodeObjectImpl::getUri() const {
+  return std::string(r_debug_info.l_name);
+}
+
 hsa_executable_t AmdHsaCodeLoader::FindExecutable(uint64_t device_address)
 {
   hsa_executable_t execHandle = {0};
@@ -1110,9 +1115,10 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_agent_t agent,
   hsa_code_object_t code_object,
   const char *options,
+  const std::string &uri,
   hsa_loaded_code_object_t *loaded_code_object)
 {
-  return LoadCodeObject(agent, code_object, 0, options, loaded_code_object);
+  return LoadCodeObject(agent, code_object, 0, options, uri, loaded_code_object);
 }
 
 hsa_status_t ExecutableImpl::LoadCodeObject(
@@ -1120,6 +1126,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   hsa_code_object_t code_object,
   size_t code_object_size,
   const char *options,
+  const std::string &uri,
   hsa_loaded_code_object_t *loaded_code_object)
 {
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
@@ -1270,6 +1277,11 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
       // Ignore error.
     }
   }
+
+  loaded_code_objects.back()->r_debug_info.l_addr = loaded_code_objects.back()->getDelta();
+  loaded_code_objects.back()->r_debug_info.l_name = strdup(uri.c_str());
+  loaded_code_objects.back()->r_debug_info.l_prev = nullptr;
+  loaded_code_objects.back()->r_debug_info.l_next = nullptr;
 
   if (nullptr != loaded_code_object) { *loaded_code_object = LoadedCodeObject::Handle(loaded_code_objects.back()); }
   return HSA_STATUS_SUCCESS;
@@ -1862,73 +1874,6 @@ hsa_status_t ExecutableImpl::Freeze(const char *options) {
     for (auto &ls : lco->LoadedSegments()) {
       ls->Freeze();
     }
-    // Update code object debug info after it is frozen.
-    std::stringstream ss;
-    uint64_t elf_begin = lco->getElfData();
-    uint64_t elf_size = lco->getElfSize();
-
-    struct args {
-      ElfW(Addr) mem_addr;
-      size_t callback_num;
-      const char *file_name;
-      size_t file_offset;
-    } data{ elf_begin, 0 };
-
-    // Iterate the loaded shared objects program headers to see if the elf binary
-    // is allocated in a mapped file.
-    if (dl_iterate_phdr([](struct dl_phdr_info *info, size_t size, void *ptr) -> int {
-      struct args *data = (struct args *) ptr;
-      const ElfW(Addr) reladdr = data->mem_addr - info->dlpi_addr;
-
-      int n = info->dlpi_phnum;
-      while (--n >= 0) {
-        if (info->dlpi_phdr[n].p_type == PT_LOAD
-            && reladdr - info->dlpi_phdr[n].p_vaddr >= 0
-            && reladdr - info->dlpi_phdr[n].p_vaddr < info->dlpi_phdr[n].p_memsz) {
-          // The first callback is always the program executable.
-          if (!info->dlpi_name[0] && data->callback_num == 0) {
-            static char argv0[PATH_MAX] = {0};
-            if (!argv0[0] && readlink("/proc/self/exe", argv0, sizeof(argv0)) == -1)
-              return 0;
-            data->file_name = argv0;
-          } else {
-            data->file_name = info->dlpi_name;
-          }
-
-          data->file_offset = reladdr - info->dlpi_phdr[n].p_vaddr + info->dlpi_phdr[n].p_offset;
-          return 1;
-        }
-      }
-
-      ++data->callback_num;
-      return 0;
-    }, &data)) {
-      unsigned char c;
-
-      ss.fill('0');
-      ss << "file://";
-
-      while ((c = *data.file_name++) != '\0') {
-        // %-encode the file name
-        if (isalnum(c) || c == '/' || c == '-' || c == '_' || c == '.' || c == '~') {
-          ss << c;
-        } else {
-          ss << std::uppercase;
-          ss << '%' << std::hex << std::setw(2) << static_cast<int>(c);
-          ss << std::nouppercase;
-        }
-      }
-      ss << "#offset=" << std::dec << data.file_offset
-         << "&size=" << std::dec << elf_size;
-    } else {
-      ss << "file:///proc/" << getpid() << "/mem#"
-         << "offset=" << std::hex << std::showbase << elf_begin << "&"
-         << "size=" << std::dec << elf_size;
-    }
-    lco->r_debug_info.l_addr = lco->getDelta();
-    lco->r_debug_info.l_name = strdup(ss.str().c_str());
-    lco->r_debug_info.l_prev = nullptr;
-    lco->r_debug_info.l_next = nullptr;
   }
 
   state_ = HSA_EXECUTABLE_STATE_FROZEN;
@@ -1962,3 +1907,4 @@ bool ExecutableImpl::PrintToFile(const std::string& filename)
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr

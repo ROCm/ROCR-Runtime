@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -46,6 +46,7 @@
 #include "inc/hsa_api_trace.h"
 #include "core/inc/hsa_internal.h"
 
+namespace rocr {
 namespace core {
   struct HsaApiTable {
 
@@ -70,6 +71,9 @@ namespace core {
 
   extern HsaApiTable hsa_api_table_;
   extern HsaApiTable hsa_internal_api_table_;
-}
+
+  void LoadInitialHsaApiTable();
+}   //  namespace core
+}   //  namespace rocr
 
 #endif

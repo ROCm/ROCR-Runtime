@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,14 +53,21 @@
 
 #include "core/util/utils.h"
 
+namespace rocr {
+
 template <typename Allocator> class SimpleHeap {
  private:
   struct Fragment_T {
     typedef std::multimap<size_t, uintptr_t>::iterator ptr_t;
     ptr_t free_list_entry_;
-    size_t size;
+    struct {
+      size_t size : 62;
+      bool discard : 1;
+      bool free : 1;
+    };
 
-    Fragment_T(ptr_t Iterator, size_t Len) : free_list_entry_(Iterator), size(Len) {}
+    Fragment_T(ptr_t Iterator, size_t Len, bool Free)
+        : free_list_entry_(Iterator), size(Len), discard(false), free(Free) {}
     Fragment_T() = default;
   };
 
@@ -81,16 +88,30 @@ template <typename Allocator> class SimpleHeap {
   size_t in_use_size_;
   size_t cache_size_;
 
-  __forceinline bool isFree(const Fragment_T& node) {
-    return node.free_list_entry_ != free_list_.end();
+  __forceinline bool isFree(const Fragment_T& node) { return node.free; }
+  __forceinline void setUsed(Fragment_T& node) {
+    node.free = false;
+    node.free_list_entry_ = free_list_.end();
   }
-  __forceinline void setUsed(Fragment_T& node) { node.free_list_entry_ = free_list_.end(); }
   __forceinline void setFree(Fragment_T& node, typename Fragment_T::ptr_t Iterator) {
     node.free_list_entry_ = Iterator;
+    node.free = true;
   }
-  __forceinline Fragment_T makeFragment(size_t Len) { return Fragment_T(free_list_.end(), Len); }
+  __forceinline Fragment_T makeFragment(size_t Len) {
+    return Fragment_T(free_list_.end(), Len, false);
+  }
   __forceinline Fragment_T makeFragment(typename Fragment_T::ptr_t Iterator, size_t Len) {
-    return Fragment_T(Iterator, Len);
+    return Fragment_T(Iterator, Len, true);
+  }
+  __forceinline void removeFreeListEntry(Fragment_T& node) {
+    if (node.free_list_entry_ != free_list_.end()) {
+      free_list_.erase(node.free_list_entry_);
+      node.free_list_entry_ = free_list_.end();
+    }
+  }
+  __forceinline void discard(Fragment_T& node) {
+    removeFreeListEntry(node);
+    node.discard = true;
   }
 
  public:
@@ -185,12 +206,14 @@ template <typename Allocator> class SimpleHeap {
     auto fragment = frag_map.find(base);
     if (fragment == frag_map.end() || isFree(fragment->second)) return false;
 
+    bool discard = fragment->second.discard;
+
     // Merge lower
     if (fragment != frag_map.begin()) {
       auto lower = fragment;
       lower--;
       if (isFree(lower->second)) {
-        free_list_.erase(lower->second.free_list_entry_);
+        removeFreeListEntry(lower->second);
         lower->second.size += fragment->second.size;
         frag_map.erase(fragment);
         fragment = lower;
@@ -202,18 +225,25 @@ template <typename Allocator> class SimpleHeap {
       auto upper = fragment;
       upper++;
       if ((upper != frag_map.end()) && isFree(upper->second)) {
-        free_list_.erase(upper->second.free_list_entry_);
+        removeFreeListEntry(upper->second);
         fragment->second.size += upper->second.size;
         frag_map.erase(upper);
       }
     }
 
-    // Move whole free blocks to block cache
+    // Release whole free blocks.
     if (frag_map.size() == 1) {
-      in_use_size_ -= fragment->second.size;
-      cache_size_ += fragment->second.size;
-      block_cache_.push_back(Block(fragment->first, fragment->second.size));
+      Block block(fragment->first, fragment->second.size);
+      in_use_size_ -= block.length_;
       block_list_.erase(frag_map_it);
+
+      // Discard or add to the block cache.
+      if (discard) {
+        block_allocator_.free(reinterpret_cast<void*>(block.base_ptr_), block.length_);
+      } else {
+        block_cache_.push_back(block);
+        cache_size_ += block.length_;
+      }
 
       // Release old blocks when over cache limit.
       while ((block_cache_.size() > 1) && (cache_size_ > in_use_size_ * 2)) {
@@ -227,9 +257,12 @@ template <typename Allocator> class SimpleHeap {
       return true;
     }
 
+    // Don't report free memory if discarding the fragment.
+    if (discard) return true;
+
     // Report free fragment
     const auto& freeEntry =
-        free_list_.insert(std::make_pair(fragment->second.size, fragment->first));
+        free_list_.insert(std::make_pair(size_t(fragment->second.size), fragment->first));
     setFree(fragment->second, freeEntry);
 
     return true;
@@ -243,6 +276,30 @@ template <typename Allocator> class SimpleHeap {
   }
 
   size_t max_alloc() const { return block_allocator_.block_size(); }
+
+  // Prevent reuse of the block containing ptr.  No further fragments will be allocated from the
+  // block and the block will not be added to the block cache when it is free.
+  bool discardBlock(void* ptr) {
+    if (ptr == nullptr) return true;
+
+    uintptr_t base = reinterpret_cast<uintptr_t>(ptr);
+
+    // Find block validate.
+    auto frag_map_it = block_list_.upper_bound(base);
+    if (frag_map_it == block_list_.begin()) return false;
+    frag_map_it--;
+    auto& frag_map = frag_map_it->second;
+    if ((base < frag_map.begin()->first) ||
+        (frag_map.rbegin()->first + frag_map.rbegin()->second.size <= base))
+      return false;
+
+    // Mark all fragments for discard.  Removes freelist records for all fragments in the block.
+    for (auto& frag : frag_map) discard(frag.second);
+
+    return true;
+  }
 };
+
+}  // namespace rocr
 
 #endif  // HSA_RUNTME_CORE_UTIL_SIMPLE_HEAP_H_

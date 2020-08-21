@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -43,6 +43,7 @@
 #include "core/inc/intercept_queue.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 struct InterceptFrame {
@@ -239,3 +240,4 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 }
 
 }  // namespace core
+}  // namespace rocr

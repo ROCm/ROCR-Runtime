@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -42,6 +42,7 @@
 
 #include "core/util/timer.h"
 
+namespace rocr {
 namespace timer {
 
 accurate_clock::init::init() {
@@ -104,4 +105,5 @@ accurate_clock::init accurate_clock::accurate_clock_init;
 double fast_clock::period_ps;
 fast_clock::raw_frequency fast_clock::freq;
 fast_clock::init fast_clock::fast_clock_init;
-}
+}   //  namespace timer
+}   //  namespace rocr

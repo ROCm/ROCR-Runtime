@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -43,7 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_GPU_SHADERS_H_
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_SHADERS_H_
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 
 static const unsigned int kCodeCopyAligned7[] = {
     0xC0820100, 0xC0840104, 0xC0860108, 0xC088010C, 0xC08A0110, 0xC00C0114,
@@ -116,9 +117,11 @@ static const unsigned int kCodeTrapHandler9[] = {
   .set SQ_WAVE_PC_HI_TRAP_ID_BFE               , (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
   .set SQ_WAVE_PC_HI_HT_MASK                   , 0x1000000
   .set SQ_WAVE_STATUS_HALT_MASK                , 0x2000
+  .set SQ_WAVE_TRAPSTS_ADDRESS_WATCH_MASK      , 0x7080
   .set SQ_WAVE_TRAPSTS_MEM_VIOL_MASK           , 0x100
   .set SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK       , 0x800
   .set SQ_WAVE_TRAPSTS_XNACK_ERROR_MASK        , 0x10000000
+  .set SQ_WAVE_MODE_DEBUG_EN_SHIFT             , 11
   .set SIGNAL_CODE_MEM_VIOL                    , (1 << 29)
   .set SIGNAL_CODE_ILLEGAL_INST                , (1 << 30)
   .set SIGNAL_CODE_LLVM_TRAP                   , (1 << 31)
@@ -128,15 +131,16 @@ static const unsigned int kCodeTrapHandler9[] = {
   .set TTMP11_TRAP_RAISED_BIT                  , 7
   .set TTMP11_EXCP_RAISED_BIT                  , 8
   .set TTMP11_EVENTS_MASK                      , (1 << TTMP11_TRAP_RAISED_BIT) | (1 << TTMP11_EXCP_RAISED_BIT)
-  .set DEBUG_INTERRUPT_CONTEXT_ID_BIT          , 23
   .set INSN_S_ENDPGM_OPCODE                    , 0xBF810000
   .set INSN_S_ENDPGM_MASK                      , 0xFFFF0000
 
   .if .amdgcn.gfx_generation_number == 9
+    .set DEBUG_INTERRUPT_CONTEXT_ID_BIT        , 23
     .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
     .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
     .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x1F8000
   .elseif .amdgcn.gfx_generation_number == 10
+    .set DEBUG_INTERRUPT_CONTEXT_ID_BIT        , 22
     .set TTMP11_SAVE_REPLAY_W64H_SHIFT         , 31
     .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 24
     .set SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT      , 25
@@ -202,7 +206,11 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_and_b32            ttmp3, ttmp2, (SQ_WAVE_TRAPSTS_MEM_VIOL_MASK | SQ_WAVE_TRAPSTS_ILLEGAL_INST_MASK)
     s_cbranch_scc1       .excp_raised
 
-    // Otherwise trap entered due to single step exception.
+    // If not address watch exception, then the trap enterered due to single step exception.
+    s_and_b32            ttmp3, ttmp2, SQ_WAVE_TRAPSTS_ADDRESS_WATCH_MASK
+    s_cbranch_scc0       .signal_debugger
+
+    s_bitset1_b32        ttmp11, TTMP11_EXCP_RAISED_BIT
     s_branch             .signal_debugger
 
   .signal_trap_debugger:
@@ -239,10 +247,15 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_waitcnt            lgkmcnt(0)
     s_and_b32            ttmp2, ttmp2, INSN_S_ENDPGM_MASK
     s_cmp_eq_u32         ttmp2, INSN_S_ENDPGM_OPCODE
-    s_cbranch_scc1       .skip_halt
-    s_or_b32             ttmp12, ttmp12, SQ_WAVE_STATUS_HALT_MASK
+    s_cbranch_scc0       .halt_wave
 
-  .skip_halt:
+    // Since the 1st level trap handler calls the 2nd level handler when
+    // (mode.debug_en && !status.halt), we must clear mode.debug_en if we
+    // don't want to re-enter this handler indefinitely.
+    s_mov_b32            ttmp2, 0
+    s_setreg_b32         hwreg(HW_REG_MODE, SQ_WAVE_MODE_DEBUG_EN_SHIFT, 1), ttmp2
+
+    s_and_b32             ttmp12, ttmp12, ~SQ_WAVE_STATUS_HALT_MASK
     mExitTrap
 
   .excp_raised:
@@ -290,12 +303,18 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_mov_b32            ttmp4, ttmp3
 
     // Fetch doorbell index for our queue.
+    s_mov_b32            ttmp2, exec_lo
+    s_mov_b32            ttmp3, exec_hi
     mGetDoorbellId
+    s_mov_b32            exec_hi, ttmp3
+
+    // Restore exec_lo, move the doorbell index into ttmp3
+    s_and_b32            exec_lo, exec_lo, MAX_NUM_DOORBELLS_MASK
+    s_lshl_b32           ttmp3, exec_lo, 0x3
+    s_mov_b32            exec_lo, ttmp2
 
     // Map doorbell index to amd_queue_t* through TMA (doorbell_queue_map).
-    s_and_b32            ttmp2, exec_lo, MAX_NUM_DOORBELLS_MASK
-    s_lshl_b32           ttmp2, ttmp2, 0x3
-    s_load_dwordx2       [ttmp2, ttmp3], [ttmp14, ttmp15], ttmp2 glc
+    s_load_dwordx2       [ttmp2, ttmp3], [ttmp14, ttmp15], ttmp3 glc
     s_waitcnt            lgkmcnt(0)
 
     // Retrieve queue_inactive_signal from amd_queue_t*.
@@ -309,13 +328,13 @@ static const unsigned int kCodeTrapHandler9[] = {
 
     // Skip event trigger if the signal value was already non-zero.
     s_or_b32             ttmp4, ttmp4, ttmp5
-    s_cbranch_scc1       .halt_wave
+    s_cbranch_scc1       .skip_event_trigger
 
     // Check for a non-NULL signal event mailbox.
     s_load_dwordx2       [ttmp4, ttmp5], [ttmp2, ttmp3], 0x10 glc
     s_waitcnt            lgkmcnt(0)
     s_and_b64            [ttmp4, ttmp5], [ttmp4, ttmp5], [ttmp4, ttmp5]
-    s_cbranch_scc0       .halt_wave
+    s_cbranch_scc0       .skip_event_trigger
 
     // Load the signal event value.
     s_load_dword         ttmp2, [ttmp2, ttmp3], 0x18 glc
@@ -330,6 +349,11 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_nop                0
     s_sendmsg            sendmsg(MSG_INTERRUPT)
 
+  .skip_event_trigger:
+    // Since we trashed ttmp4/ttmp5, reset the wave_id to 0
+    s_mov_b32            ttmp4, 0x0
+    s_mov_b32            ttmp5, 0x0
+
   .halt_wave:
     // Halt the wavefront.
     s_or_b32             ttmp12, ttmp12, SQ_WAVE_STATUS_HALT_MASK
@@ -337,24 +361,26 @@ static const unsigned int kCodeTrapHandler9[] = {
   .exit_trap:
     mExitTrap
 */
-    0x92eeff6d, 0x00080010, 0xbf85003a, 0xb8eef803, 0x866fff6e, 0x00000900,
-    0xbf850029, 0xbf820001, 0xbef71a87, 0xbeee007e, 0xbeef007f, 0xbefe00ff,
-    0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff006f,
-    0x867eff7e, 0x00000fff, 0xbeef007e, 0xbefe006e, 0xbeef1a97, 0xbeee007c,
-    0xbefc006f, 0xbf800000, 0xbf900001, 0xbefc006e, 0x866dff6d, 0x0000ffff,
-    0xc0021bb6, 0x00000000, 0xbf8cc07f, 0x866eff6e, 0xffff0000, 0xbf06ff6e,
-    0xbf810000, 0xbf850002, 0x8778ff78, 0x00002000, 0x8f6e8b77, 0x866eff6e,
+    0x92eeff6d, 0x00080010, 0xbf850040, 0xb8eef803, 0x866fff6e, 0x00000900,
+    0xbf85002f, 0x866fff6e, 0x00007080, 0xbf840003, 0xbef71a88, 0xbf820001,
+    0xbef71a87, 0xbeee007e, 0xbeef007f, 0xbefe00ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff006f, 0x867eff7e, 0x00000fff,
+    0xbeef007e, 0xbefe006e, 0xbeef1a97, 0xbeee007c, 0xbefc006f, 0xbf800000,
+    0xbf900001, 0xbefc006e, 0x866dff6d, 0x0000ffff, 0xc0021bb6, 0x00000000,
+    0xbf8cc07f, 0x866eff6e, 0xffff0000, 0xbf06ff6e, 0xbf810000, 0xbf84004d,
+    0xbeee0080, 0xb96e02c1, 0x8678ff78, 0xffffdfff, 0x8f6e8b77, 0x866eff6e,
     0x001f8000, 0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c,
     0xbef71a88, 0x866fff6e, 0x10000100, 0xbf06ff6f, 0x00000100, 0xbeef00ff,
     0x20000000, 0xbf85000f, 0x866fff6e, 0x00000800, 0xbeef00f4, 0xbf85000b,
-    0xbf82002e, 0xbf09836e, 0xbf85ffc9, 0xbf06826e, 0xbeef00ff, 0x80000000,
-    0xbf850003, 0x806c846c, 0x826d806d, 0xbf820027, 0xbef71a87, 0xbef0006f,
-    0xbefe00ff, 0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd,
-    0x866eff7e, 0x000003ff, 0x8e6e836e, 0xc0051bbd, 0x0000006e, 0xbf8cc07f,
-    0xc0071bb7, 0x000000c0, 0xbf8cc07f, 0xbef10080, 0xc2831c37, 0x00000008,
-    0xbf8cc07f, 0x87707170, 0xbf85000e, 0xc0071c37, 0x00000010, 0xbf8cc07f,
-    0x86f07070, 0xbf840009, 0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8,
-    0x00000000, 0xbf8cc07f, 0xbefc0080, 0xbf800000, 0xbf900001, 0x8778ff78,
+    0xbf820034, 0xbf09836e, 0xbf85ffc7, 0xbf06826e, 0xbeef00ff, 0x80000000,
+    0xbf850003, 0x806c846c, 0x826d806d, 0xbf82002d, 0xbef71a87, 0xbef0006f,
+    0xbeee007e, 0xbeef007f, 0xbefe00ff, 0x80000000, 0xbf90000a, 0xbf800007,
+    0xbf0c9f7e, 0xbf84fffd, 0xbeff006f, 0x867eff7e, 0x000003ff, 0x8e6f837e,
+    0xbefe006e, 0xc0051bbd, 0x0000006f, 0xbf8cc07f, 0xc0071bb7, 0x000000c0,
+    0xbf8cc07f, 0xbef10080, 0xc2831c37, 0x00000008, 0xbf8cc07f, 0x87707170,
+    0xbf85000e, 0xc0071c37, 0x00000010, 0xbf8cc07f, 0x86f07070, 0xbf840009,
+    0xc0031bb7, 0x00000018, 0xbf8cc07f, 0xc0431bb8, 0x00000000, 0xbf8cc07f,
+    0xbefc0080, 0xbf800000, 0xbf900001, 0xbef00080, 0xbef10080, 0x8778ff78,
     0x00002000, 0x8f6e8b77, 0x866eff6e, 0x001f8000, 0xb96ef807, 0x86fe7e7e,
     0x86ea6a6a, 0xb978f802, 0xbe801f6c,
 };
@@ -472,29 +498,32 @@ static const unsigned int kCodeFill10[] = {
 };
 
 static const unsigned int kCodeTrapHandler10[] = {
-    0x93eeff6d, 0x00080010, 0xbf85003e, 0xb96ef803, 0x876fff6e, 0x00000900,
-    0xbf85002d, 0xbf820001, 0xbef71d87, 0xbeee037e, 0xbeef037f, 0xbefe03ff,
-    0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f,
-    0x877eff7e, 0x00000fff, 0xbeef037e, 0xbefe036e, 0xbeef1d97, 0xbeee037c,
-    0xbefc036f, 0xbf800000, 0xbf900001, 0xbefc036e, 0x876dff6d, 0x0000ffff,
-    0xf4001bb6, 0xfa000000, 0xbf8cc07f, 0x876eff6e, 0xffff0000, 0xbf06ff6e,
-    0xbf810000, 0xbf850002, 0x8878ff78, 0x00002000, 0x906e8977, 0x876fff6e,
+    0x93eeff6d, 0x00080010, 0xbf850044, 0xb96ef803, 0x876fff6e, 0x00000900,
+    0xbf850033, 0x876fff6e, 0x00007080, 0xbf840003, 0xbef71d88, 0xbf820001,
+    0xbef71d87, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f, 0x877eff7e, 0x00000fff,
+    0xbeef037e, 0xbefe036e, 0xbeef1d96, 0xbeee037c, 0xbefc036f, 0xbf800000,
+    0xbf900001, 0xbefc036e, 0x876dff6d, 0x0000ffff, 0xf4001bb6, 0xfa000000,
+    0xbf8cc07f, 0x876eff6e, 0xffff0000, 0xbf06ff6e, 0xbf810000, 0xbf840051,
+    0xbeee0380, 0xb9ee02c1, 0x8778ff78, 0xffffdfff, 0x906e8977, 0x876fff6e,
     0x003f8000, 0x906e8677, 0x876eff6e, 0x02000000, 0x886e6f6e, 0xb9eef807,
     0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c, 0xbef71d88, 0x876fff6e,
     0x10000100, 0xbf06ff6f, 0x00000100, 0xbeef03ff, 0x20000000, 0xbf85000f,
-    0x876fff6e, 0x00000800, 0xbeef03f4, 0xbf85000b, 0xbf82002e, 0xbf09836e,
-    0xbf85ffc5, 0xbf06826e, 0xbeef03ff, 0x80000000, 0xbf850003, 0x806c846c,
-    0x826d806d, 0xbf820027, 0xbef71d87, 0xbef0036f, 0xbefe03ff, 0x80000000,
-    0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0x876eff7e, 0x000003ff,
-    0x8f6e836e, 0xf4051bbd, 0xdc000000, 0xbf8cc07f, 0xf4051bb7, 0xfa0000c0,
-    0xbf8cc07f, 0xbef10380, 0xf6811c37, 0xfa000008, 0xbf8cc07f, 0x88707170,
-    0xbf85000e, 0xf4051c37, 0xfa000010, 0xbf8cc07f, 0x87f07070, 0xbf840009,
-    0xf4011bb7, 0xfa000018, 0xbf8cc07f, 0xf4411bb8, 0xfa000000, 0xbf8cc07f,
-    0xbefc0380, 0xbf800000, 0xbf900001, 0x8878ff78, 0x00002000, 0x906e8977,
+    0x876fff6e, 0x00000800, 0xbeef03f4, 0xbf85000b, 0xbf820034, 0xbf09836e,
+    0xbf85ffc3, 0xbf06826e, 0xbeef03ff, 0x80000000, 0xbf850003, 0x806c846c,
+    0x826d806d, 0xbf82002d, 0xbef71d87, 0xbef0036f, 0xbeee037e, 0xbeef037f,
+    0xbefe03ff, 0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd,
+    0xbeff036f, 0x877eff7e, 0x000003ff, 0x8f6f837e, 0xbefe036e, 0xf4051bbd,
+    0xde000000, 0xbf8cc07f, 0xf4051bb7, 0xfa0000c0, 0xbf8cc07f, 0xbef10380,
+    0xf6811c37, 0xfa000008, 0xbf8cc07f, 0x88707170, 0xbf85000e, 0xf4051c37,
+    0xfa000010, 0xbf8cc07f, 0x87f07070, 0xbf840009, 0xf4011bb7, 0xfa000018,
+    0xbf8cc07f, 0xf4411bb8, 0xfa000000, 0xbf8cc07f, 0xbefc0380, 0xbf800000,
+    0xbf900001, 0xbef00380, 0xbef10380, 0x8878ff78, 0x00002000, 0x906e8977,
     0x876fff6e, 0x003f8000, 0x906e8677, 0x876eff6e, 0x02000000, 0x886e6f6e,
     0xb9eef807, 0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c,
 };
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

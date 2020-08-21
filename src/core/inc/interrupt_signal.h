@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,6 +53,7 @@
 #include "core/inc/signal.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 
 /// @brief A Signal implementation using interrupts versus plain memory based.
@@ -213,4 +214,5 @@ class InterruptSignal : private LocalSignal, public Signal {
 };
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard

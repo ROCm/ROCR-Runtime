@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -49,7 +49,8 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/locks.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
@@ -195,6 +196,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Update signal value using Release semantics
   void StoreRelease(hsa_signal_value_t value) override;
 
+  /// @brief Enable use of GWS from this queue.
+  hsa_status_t EnableGWS(int gws_slot_count);
+
  protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
@@ -282,5 +286,6 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 };
 
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

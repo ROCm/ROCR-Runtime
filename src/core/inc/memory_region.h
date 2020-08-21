@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -50,6 +50,7 @@
 #include "core/inc/agent.h"
 #include "core/inc/checked.h"
 
+namespace rocr {
 namespace core {
 class Agent;
 
@@ -95,6 +96,9 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
 
   virtual hsa_status_t Free(void* address, size_t size) const = 0;
 
+  // Prepares suballocated memory for IPC export.
+  virtual hsa_status_t IPCFragmentExport(void* address) const = 0;
+
   // Translate memory properties into HSA region attribute.
   virtual hsa_status_t GetInfo(hsa_region_info_t attribute,
                                void* value) const = 0;
@@ -115,5 +119,6 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
   core::Agent* owner_;
 };
 }  // namespace core
+}  // namespace rocr
 
 #endif  // header guard

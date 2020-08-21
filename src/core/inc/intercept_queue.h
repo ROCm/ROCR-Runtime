@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -54,6 +54,7 @@
 #include "core/inc/exceptions.h"
 #include "core/util/locks.h"
 
+namespace rocr {
 namespace core {
 
 // @brief Generic container to forward Queue interfaces into Queue* member.
@@ -264,5 +265,6 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
 };
 
 }  // namespace core
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_INTERCEPT_QUEUE_H_

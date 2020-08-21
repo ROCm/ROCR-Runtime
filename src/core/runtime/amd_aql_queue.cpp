@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -68,7 +68,8 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/amd_gpu_pm4.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 // Queue::amd_queue_ is cache-aligned for performance.
 const uint32_t kAmdQueueAlignBytes = 0x40;
 
@@ -151,31 +152,20 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
   }
 
-  HSAKMT_STATUS kmt_status;
-  kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
-                                 ring_buf_alloc_bytes_, NULL, &queue_rsrc);
-  if (kmt_status != HSAKMT_STATUS_SUCCESS)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
-                             "Queue create failed at hsaKmtCreateQueue\n");
-  queue_id_ = queue_rsrc.QueueId;
-  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
-
-  // Populate doorbell signal structure.
-  memset(&signal_, 0, sizeof(signal_));
-  signal_.kind = (doorbell_type_ == 2) ? AMD_SIGNAL_KIND_DOORBELL : AMD_SIGNAL_KIND_LEGACY_DOORBELL;
-  signal_.legacy_hardware_doorbell_ptr =
-      (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
-  signal_.queue_ptr = &amd_queue_;
-
   // Populate amd_queue_ structure.
   amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_MULTI;
   amd_queue_.hsa_queue.features = HSA_QUEUE_FEATURE_KERNEL_DISPATCH;
   amd_queue_.hsa_queue.base_address = ring_buf_;
   amd_queue_.hsa_queue.doorbell_signal = Signal::Convert(this);
   amd_queue_.hsa_queue.size = queue_size_pkts;
-  amd_queue_.hsa_queue.id = queue_id_;
+  amd_queue_.hsa_queue.id = INVALID_QUEUEID;
   amd_queue_.read_dispatch_id_field_base_byte_offset = uint32_t(
       uintptr_t(&amd_queue_.read_dispatch_id) - uintptr_t(&amd_queue_));
+  // Initialize the doorbell signal structure.
+  memset(&signal_, 0, sizeof(signal_));
+  signal_.kind = (doorbell_type_ == 2) ? AMD_SIGNAL_KIND_DOORBELL : AMD_SIGNAL_KIND_LEGACY_DOORBELL;
+  signal_.legacy_hardware_doorbell_ptr = nullptr;
+  signal_.queue_ptr = &amd_queue_;
 
   const auto& props = agent->properties();
   amd_queue_.max_cu_id = (props.NumFComputeCores / props.NumSIMDPerCU) - 1;
@@ -193,7 +183,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   auto& regions = agent->regions();
 
   for (auto region : regions) {
-    const MemoryRegion* amdregion = static_cast<const amd::MemoryRegion*>(region);
+    const MemoryRegion* amdregion = static_cast<const AMD::MemoryRegion*>(region);
     uint64_t base = amdregion->GetBaseAddress();
 
     if (amdregion->IsLDS()) {
@@ -220,6 +210,28 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   if (core::Runtime::runtime_singleton_->flag().check_flat_scratch()) {
     assert(amd_queue_.private_segment_aperture_base_hi != 0 && "No private region found.");
   }
+
+  // Ensure the amd_queue_ is fully initialized before creating the KFD queue.
+  // This ensures that the debugger can access the fields once it detects there
+  // is a KFD queue. The debugger may access the aperture addresses, queue
+  // scratch base, and queue type.
+
+  HSAKMT_STATUS kmt_status;
+  kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
+                                 ring_buf_alloc_bytes_, NULL, &queue_rsrc);
+  if (kmt_status != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                             "Queue create failed at hsaKmtCreateQueue\n");
+  // Complete populating the doorbell signal structure.
+  signal_.legacy_hardware_doorbell_ptr =
+      (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
+
+  // Bind Id of Queue such that is unique i.e. it is not re-used by another
+  // queue (AQL, HOST) in the same process during its lifetime.
+  amd_queue_.hsa_queue.id = this->GetQueueId();
+
+  queue_id_ = queue_rsrc.QueueId;
+  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
     ScopedAcquire<KernelMutex> _lock(&queue_lock_);
@@ -698,7 +710,7 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 
 void AqlQueue::Suspend() {
   suspended_ = true;
-  auto err = hsaKmtUpdateQueue(queue_id_, 0, priority_, NULL, 0, NULL);
+  auto err = hsaKmtUpdateQueue(queue_id_, 0, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
 }
 
@@ -783,7 +795,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 #ifndef NDEBUG
       scratch.wanted_slots = ((uint64_t(pkt.dispatch.grid_size_x) * pkt.dispatch.grid_size_y) *
                               pkt.dispatch.grid_size_z) / scratch.lanes_per_wave;
-      scratch.wanted_slots = Min(scratch.wanted_slots, MaxScratchSlots);
+      scratch.wanted_slots = Min(scratch.wanted_slots, uint64_t(MaxScratchSlots));
 #endif
 
       queue->agent_->AcquireQueueScratch(scratch);
@@ -1110,4 +1122,14 @@ void AqlQueue::InitScratchSRD() {
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
   return;
 }
+
+hsa_status_t AqlQueue::EnableGWS(int gws_slot_count) {
+  uint32_t discard;
+  auto status = hsaKmtAllocQueueGWS(queue_id_, gws_slot_count, &discard);
+  if (status != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace amd
+}  // namespace rocr

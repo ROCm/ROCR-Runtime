@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -252,10 +252,11 @@ hsa_status_t hsa_ven_amd_loader_query_executable(
  *
  * @param[in] callback Callback to be invoked once per loaded code object. The
  * HSA runtime passes three arguments to the callback: the executable, a
- * loaded code object, and the application data.  If @p callback returns a
+ * loaded code object, and the application data. If @p callback returns a
  * status other than ::HSA_STATUS_SUCCESS for a particular iteration, the
- * traversal stops and ::hsa_executable_iterate_symbols returns that status
- * value.
+ * traversal stops and
+ * ::hsa_ven_amd_loader_executable_iterate_loaded_code_objects returns that
+ * status value.
  *
  * @param[in] data Application data that is passed to @p callback on every
  * iteration. May be NULL.
@@ -343,7 +344,7 @@ typedef enum hsa_ven_amd_loader_loaded_code_object_info_e {
    * attribute is ::int.
    */
   HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_CODE_OBJECT_STORAGE_FILE = 7,
-    /**
+  /**
    * The signed byte address difference of the memory address at which the code
    * object is loaded minus the virtual address specified in the code object
    * that is loaded. The value of this attribute is only defined if the
@@ -351,7 +352,7 @@ typedef enum hsa_ven_amd_loader_loaded_code_object_info_e {
    * attribute is ::int64_t.
    */
   HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_DELTA = 8,
-/**
+  /**
    * The base memory address at which the code object is loaded. This is the
    * base address of the allocation for the lowest addressed segment of the code
    * object that is loaded. Note that any non-loaded segments before the first
@@ -365,7 +366,53 @@ typedef enum hsa_ven_amd_loader_loaded_code_object_info_e {
    * value of this attribute is only defined if the executable in which the code
    * object is loaded is froozen. The type of this attribute is ::uint64_t.
    */
-  HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_SIZE = 10
+  HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_LOAD_SIZE = 10,
+  /**
+   * The length of the URI in bytes, not including the NUL terminator. The type
+   * of this attribute is uint32_t.
+   */
+  HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_URI_LENGTH = 11,
+  /**
+   * The URI name from which the code object was loaded. The type of this
+   * attribute is a NUL terminated \p char* with the length equal to the value
+   * of ::HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_URI_LENGTH attribute.
+   * The URI name syntax is defined by the following BNF syntax:
+   *
+   *     code_object_uri ::== file_uri | memory_uri
+   *     file_uri        ::== "file://" file_path [ range_specifier ]
+   *     memory_uri      ::== "memory://" process_id range_specifier
+   *     range_specifier ::== [ "#" | "?" ] "offset=" number "&" "size=" number
+   *     file_path       ::== URI_ENCODED_OS_FILE_PATH
+   *     process_id      ::== DECIMAL_NUMBER
+   *     number          ::== HEX_NUMBER | DECIMAL_NUMBER | OCTAL_NUMBER
+   *
+   * ``number`` is a C integral literal where hexadecimal values are prefixed by
+   * "0x" or "0X", and octal values by "0".
+   *
+   * ``file_path`` is the file's path specified as a URI encoded UTF-8 string.
+   * In URI encoding, every character that is not in the regular expression
+   * ``[a-zA-Z0-9/_.~-]`` is encoded as two uppercase hexidecimal digits
+   * proceeded by "%".  Directories in the path are separated by "/".
+   *
+   * ``offset`` is a 0-based byte offset to the start of the code object.  For a
+   * file URI, it is from the start of the file specified by the ``file_path``,
+   * and if omitted defaults to 0. For a memory URI, it is the memory address
+   * and is required.
+   *
+   * ``size`` is the number of bytes in the code object.  For a file URI, if
+   * omitted it defaults to the size of the file.  It is required for a memory
+   * URI.
+   *
+   * ``process_id`` is the identity of the process owning the memory.  For Linux
+   * it is the C unsigned integral decimal literal for the process ID (PID).
+   *
+   * For example:
+   *
+   *     file:///dir1/dir2/file1
+   *     file:///dir3/dir4/file2#offset=0x2000&size=3000
+   *     memory://1234#offset=0x20000&size=3000
+   */
+  HSA_VEN_AMD_LOADER_LOADED_CODE_OBJECT_INFO_URI = 12,
 } hsa_ven_amd_loader_loaded_code_object_info_t;
 
 /**
@@ -399,9 +446,57 @@ hsa_status_t hsa_ven_amd_loader_loaded_code_object_get_info(
 //===----------------------------------------------------------------------===//
 
 /**
+ * @brief Create a code object reader to operate on a file with size and offset.
+ *
+ * @param[in] file File descriptor. The file must have been opened by
+ * application with at least read permissions prior calling this function. The
+ * file must contain a vendor-specific code object.
+ *
+ * The file is owned and managed by the application; the lifetime of the file
+ * descriptor must exceed that of any associated code object reader.
+ *
+ * @param[in] size Size of the code object embedded in @p file.
+ *
+ * @param[in] offset 0-based offset relative to the beginning of the @p file
+ * that denotes the beginning of the code object embedded within the @p file.
+ *
+ * @param[out] code_object_reader Memory location to store the newly created
+ * code object reader handle. Must not be NULL.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_FILE @p file is not opened with at least
+ * read permissions. This condition may also be reported as
+ * ::HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER by the
+ * ::hsa_executable_load_agent_code_object function.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_CODE_OBJECT The bytes starting at offset
+ * do not form a valid code object. If file size is 0. Or offset > file size.
+ * This condition may also be reported as
+ * ::HSA_STATUS_ERROR_INVALID_CODE_OBJECT by the
+ * ::hsa_executable_load_agent_code_object function.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES The HSA runtime failed to
+ * allocate the required resources.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p code_object_reader is NULL.
+ */
+hsa_status_t
+hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
+    hsa_file_t file,
+    size_t offset,
+    size_t size,
+    hsa_code_object_reader_t *code_object_reader);
+
+//===----------------------------------------------------------------------===//
+
+/**
  * @brief Extension version.
  */
-#define hsa_ven_amd_loader 001000
+#define hsa_ven_amd_loader 001002
 
 /**
  * @brief Extension function table version 1.00.
@@ -449,6 +544,43 @@ typedef struct hsa_ven_amd_loader_1_01_pfn_s {
     hsa_ven_amd_loader_loaded_code_object_info_t attribute,
     void *value);
 } hsa_ven_amd_loader_1_01_pfn_t;
+
+/**
+ * @brief Extension function table version 1.02.
+ */
+typedef struct hsa_ven_amd_loader_1_02_pfn_s {
+  hsa_status_t (*hsa_ven_amd_loader_query_host_address)(
+    const void *device_address,
+    const void **host_address);
+
+  hsa_status_t (*hsa_ven_amd_loader_query_segment_descriptors)(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t *num_segment_descriptors);
+
+  hsa_status_t (*hsa_ven_amd_loader_query_executable)(
+    const void *device_address,
+    hsa_executable_t *executable);
+
+  hsa_status_t (*hsa_ven_amd_loader_executable_iterate_loaded_code_objects)(
+    hsa_executable_t executable,
+    hsa_status_t (*callback)(
+      hsa_executable_t executable,
+      hsa_loaded_code_object_t loaded_code_object,
+      void *data),
+    void *data);
+
+  hsa_status_t (*hsa_ven_amd_loader_loaded_code_object_get_info)(
+    hsa_loaded_code_object_t loaded_code_object,
+    hsa_ven_amd_loader_loaded_code_object_info_t attribute,
+    void *value);
+
+  hsa_status_t
+    (*hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size)(
+      hsa_file_t file,
+      size_t offset,
+      size_t size,
+      hsa_code_object_reader_t *code_object_reader);
+} hsa_ven_amd_loader_1_02_pfn_t;
 
 #ifdef __cplusplus
 }
