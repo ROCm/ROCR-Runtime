@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -72,6 +72,7 @@
   DST |= ((VAL << MSK ## _SHIFT) & MSK)
 #endif // AMDHSA_BITS_SET
 
+namespace rocr {
 namespace llvm {
 namespace amdhsa {
 
@@ -208,5 +209,6 @@ static_assert(
 
 } // end namespace amdhsa
 } // end namespace llvm
+} // end namespace rocr
 
 #endif // LLVM_SUPPORT_AMDHSAKERNELDESCRIPTOR_H

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -43,7 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_TOPOLOGY_H_
 #define HSA_RUNTIME_CORE_INC_AMD_TOPOLOGY_H_
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 /// @brief Initializes the runtime.
 /// Should not be called directly, must be called only from Runtime::Acquire()
 bool Load();
@@ -51,6 +52,7 @@ bool Load();
 /// @brief Shutdown/cleanup of runtime.
 /// Should not be called directly, must be called only from Runtime::Release()
 bool Unload();
-}  // namespace
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

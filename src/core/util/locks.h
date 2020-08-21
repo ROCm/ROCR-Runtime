@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -47,6 +47,8 @@
 
 #include "utils.h"
 #include "os.h"
+
+namespace rocr {
 
 /// @brief: A class behaves as a lock in a scope. When trying to enter into the
 /// critical section, creat a object of this class. After the control path goes
@@ -141,5 +143,7 @@ class KernelEvent {
   /// @brief: Disable copiable and assignable ability.
   DISALLOW_COPY_AND_ASSIGN(KernelEvent);
 };
+
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_SUTIL_LOCKS_H_

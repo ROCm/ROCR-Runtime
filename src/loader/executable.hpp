@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -62,6 +62,7 @@
 #include "inc/amd_hsa_kernel_code.h"
 #include "amd_hsa_locks.hpp"
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -324,6 +325,7 @@ public:
   uint64_t getLoadBase() const override;
   uint64_t getLoadSize() const override;
   int64_t getDelta() const override;
+  std::string getUri() const override;
 
   link_map r_debug_info;
 };
@@ -435,6 +437,7 @@ public:
     hsa_agent_t agent,
     hsa_code_object_t code_object,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t LoadCodeObject(
@@ -442,6 +445,7 @@ public:
     hsa_code_object_t code_object,
     size_t code_object_size,
     const char *options,
+    const std::string &uri,
     hsa_loaded_code_object_t *loaded_code_object) override;
 
   hsa_status_t Freeze(const char *options) override;
@@ -597,5 +601,6 @@ public:
 } // namespace loader
 } // namespace hsa
 } // namespace amd
+} // namespace rocr
 
 #endif // HSA_RUNTIME_CORE_LOADER_EXECUTABLE_HPP_

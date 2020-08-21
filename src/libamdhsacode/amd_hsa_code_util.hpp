@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -67,6 +67,7 @@
     std::abort();                                                              \
   }                                                                            \
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 
@@ -189,7 +190,8 @@ inline uint32_t alignUp(uint32_t num, uint32_t align)
 
 std::string DumpFileName(const std::string& dir, const char* prefix, const char* ext, unsigned n, unsigned i = 0);
 
-}
-}
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr
 
 #endif // AMD_HSA_CODE_UTIL_HPP_

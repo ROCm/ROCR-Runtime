@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -48,6 +48,7 @@
 
 #include "core/inc/hsa_internal.h"
 
+namespace rocr {
 namespace AMD {
 
 /// @brief Exception type which carries an error code to return to the user.
@@ -95,6 +96,7 @@ template <class R, class... Args> class callback_t<R (*)(Args...)> {
   func_t function;
 };
 
-}  // namespace AMD
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // HSA_RUNTIME_CORE_INC_EXCEPTIONS_H

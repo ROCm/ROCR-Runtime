@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -50,6 +50,7 @@
 #include "core/inc/default_signal.h"
 #include "core/util/locks.h"
 
+namespace rocr {
 namespace core {
 
 /// @brief Container for ipc shared memory.
@@ -108,5 +109,6 @@ class IPCSignal : private SharedMemorySignal, public BusyWaitSignal {
 };
 
 }  // namespace core
+}  // namespace rocr
 
 #endif  // HSA_RUNTME_CORE_INC_IPC_SIGNAL_H_

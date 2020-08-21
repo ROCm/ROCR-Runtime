@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -61,6 +61,7 @@
 #define _alloca alloca
 #endif
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace code {
@@ -1686,6 +1687,7 @@ namespace code {
 
     KernelSymbolV2::KernelSymbolV2(amd::elf::Symbol* elfsym_, const amd_kernel_code_t* akc) :
       KernelSymbol(elfsym_, akc) { }
-}
-}
-}
+}   // namespace code
+}   // namespace hsa
+}   // namespace amd
+}   // namespace rocr

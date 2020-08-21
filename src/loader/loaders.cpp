@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2016, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -44,6 +44,7 @@
 #include <cassert>
 #include "loaders.hpp"
 
+namespace rocr {
 namespace amd {
 namespace hsa {
 namespace loader {
@@ -253,6 +254,7 @@ namespace loader {
     return HSA_STATUS_SUCCESS;
   }
 
-}
-}
-}
+}   //  namespace loader
+}   //  namespace hsa
+}   //  namespace amd
+}   //  namespace rocr

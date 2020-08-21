@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -50,7 +50,8 @@
 
 #include "inc/hsa_ext_image.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : core::Agent(node, kAmdCpuDevice), properties_(node_props) {
   InitRegionList();
@@ -363,6 +364,9 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       snprintf((char*)value, sizeof(uuid_tmp), "%s", uuid_tmp);
       break;
     }
+    case HSA_AMD_AGENT_INFO_ASIC_REVISION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -380,3 +384,4 @@ hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 }
 
 }  // namespace amd
+}  // namespace rocr

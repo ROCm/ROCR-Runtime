@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -49,7 +49,8 @@
 
 #include "core/inc/blit.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 class BlitKernel : public core::Blit {
  public:
   explicit BlitKernel(core::Queue* queue);
@@ -190,5 +191,6 @@ class BlitKernel : public core::Blit {
   int num_cus_;
 };
 }  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

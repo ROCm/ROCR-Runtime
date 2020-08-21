@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -51,6 +51,7 @@
 #include "core/util/os.h"
 #include "core/util/utils.h"
 
+namespace rocr {
 namespace core {
 struct ImageExtTableInternal : public ImageExtTable {
   decltype(::hsa_amd_image_get_info_max_dim)* hsa_amd_image_get_info_max_dim_fn;
@@ -68,8 +69,13 @@ class ExtensionEntryPoints {
   ExtensionEntryPoints();
 
   bool LoadFinalizer(std::string library_name);
-  bool LoadImage(std::string library_name);
   void Unload();
+
+  // Update Image Api table with handles to implementation
+  bool LoadImage();
+
+  // Reset Api tables to point to null implementations
+  void UnloadImage();
 
  private:
   typedef void (*Load_t)(const ::HsaApiTable* table);
@@ -87,10 +93,11 @@ class ExtensionEntryPoints {
   void InitAmdExtTable();
 
   // Update Amd Ext table for Api related to Images
-  void UpdateAmdExtTable(void *func_ptr);
+  void UpdateAmdExtTable(decltype(::hsa_amd_image_create)* func_ptr);
 
   DISALLOW_COPY_AND_ASSIGN(ExtensionEntryPoints);
-};
-}
+};  
+}   //  namespace core
+}   //  namespace rocr
 
 #endif

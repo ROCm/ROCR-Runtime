@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -61,6 +61,8 @@
 #include "core/inc/intercept_queue.h"
 #include "core/inc/exceptions.h"
 
+namespace rocr {
+
 template <class T>
 struct ValidityError;
 template <>
@@ -79,7 +81,7 @@ struct ValidityError<core::MemoryRegion*> {
 };
 
 template <>
-struct ValidityError<amd::MemoryRegion*> {
+struct ValidityError<AMD::MemoryRegion*> {
   enum { value = HSA_STATUS_ERROR_INVALID_REGION };
 };
 
@@ -172,8 +174,8 @@ hsa_status_t hsa_amd_coherency_get_type(hsa_agent_t agent_handle, hsa_amd_cohere
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  const amd::GpuAgentInt* gpu_agent =
-      static_cast<const amd::GpuAgentInt*>(agent);
+  const AMD::GpuAgentInt* gpu_agent =
+      static_cast<const AMD::GpuAgentInt*>(agent);
 
   *type = gpu_agent->current_coherency_type();
 
@@ -199,7 +201,7 @@ hsa_status_t hsa_amd_coherency_set_type(hsa_agent_t agent_handle,
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  amd::GpuAgent* gpu_agent = static_cast<amd::GpuAgent*>(agent);
+  AMD::GpuAgent* gpu_agent = static_cast<AMD::GpuAgent*>(agent);
 
   if (!gpu_agent->current_coherency_type(type)) {
     return HSA_STATUS_ERROR;
@@ -267,7 +269,7 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   CATCH;
 }
 
-hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
+hsa_status_t hsa_amd_memory_async_copy_rect(
     const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
     const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
     hsa_amd_copy_direction_t dir, uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
@@ -289,7 +291,7 @@ hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
   IS_VALID(base_agent);
   if (base_agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice)
     return HSA_STATUS_ERROR_INVALID_AGENT;
-  amd::GpuAgent* agent = static_cast<amd::GpuAgent*>(base_agent);
+  AMD::GpuAgent* agent = static_cast<AMD::GpuAgent*>(base_agent);
 
   std::vector<core::Signal*> dep_signal_list(num_dep_signals);
   if (num_dep_signals > 0) {
@@ -360,7 +362,7 @@ hsa_status_t hsa_amd_profiling_get_dispatch_time(
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  amd::GpuAgentInt* gpu_agent = static_cast<amd::GpuAgentInt*>(agent);
+  AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(agent);
 
   // Translate timestamp from GPU to system domain.
   gpu_agent->TranslateTime(signal, *time);
@@ -388,7 +390,7 @@ hsa_status_t hsa_amd_profiling_get_async_copy_time(
 
   if (agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice) {
     // Translate timestamp from GPU to system domain.
-    static_cast<amd::GpuAgentInt*>(agent)->TranslateTime(signal, *time);
+    static_cast<AMD::GpuAgentInt*>(agent)->TranslateTime(signal, *time);
     return HSA_STATUS_SUCCESS;
   }
 
@@ -415,7 +417,7 @@ hsa_status_t hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent_h
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  amd::GpuAgentInt* gpu_agent = static_cast<amd::GpuAgentInt*>(agent);
+  AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(agent);
 
   *system_tick = gpu_agent->TranslateTime(agent_tick);
 
@@ -550,7 +552,7 @@ hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
     return HSA_STATUS_SUCCESS;
   }
 
-  const amd::MemoryRegion* system_region = static_cast<const amd::MemoryRegion*>(
+  const AMD::MemoryRegion* system_region = static_cast<const AMD::MemoryRegion*>(
       core::Runtime::runtime_singleton_->system_regions_coarse()[0]);
 
   return system_region->Lock(num_agent, agents, host_ptr, size, agent_ptr);
@@ -573,7 +575,7 @@ hsa_status_t hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_
   }
 
   hsa_region_t region = {pool.handle};
-  const amd::MemoryRegion* mem_region = amd::MemoryRegion::Convert(region);
+  const AMD::MemoryRegion* mem_region = AMD::MemoryRegion::Convert(region);
   if (mem_region == nullptr) {
     return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
@@ -588,8 +590,8 @@ hsa_status_t hsa_amd_memory_unlock(void* host_ptr) {
   TRY;
   IS_OPEN();
 
-  const amd::MemoryRegion* system_region =
-      reinterpret_cast<const amd::MemoryRegion*>(
+  const AMD::MemoryRegion* system_region =
+      reinterpret_cast<const AMD::MemoryRegion*>(
           core::Runtime::runtime_singleton_->system_regions_fine()[0]);
 
   return system_region->Unlock(host_ptr);
@@ -603,7 +605,7 @@ hsa_status_t hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
   IS_BAD_PTR(value);
 
   hsa_region_t region = {memory_pool.handle};
-  const amd::MemoryRegion* mem_region = amd::MemoryRegion::Convert(region);
+  const AMD::MemoryRegion* mem_region = AMD::MemoryRegion::Convert(region);
   if (mem_region == NULL) {
     return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
@@ -623,13 +625,13 @@ hsa_status_t hsa_amd_agent_iterate_memory_pools(
   IS_VALID(agent);
 
   if (agent->device_type() == core::Agent::kAmdCpuDevice) {
-    return reinterpret_cast<const amd::CpuAgent*>(agent)->VisitRegion(
+    return reinterpret_cast<const AMD::CpuAgent*>(agent)->VisitRegion(
         false, reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
                                                  void* data)>(callback),
         data);
   }
 
-  return reinterpret_cast<const amd::GpuAgentInt*>(agent)->VisitRegion(
+  return reinterpret_cast<const AMD::GpuAgentInt*>(agent)->VisitRegion(
       false,
       reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool, void* data)>(
           callback),
@@ -686,16 +688,16 @@ hsa_status_t hsa_amd_memory_pool_can_migrate(hsa_amd_memory_pool_t src_memory_po
   }
 
   hsa_region_t src_region_handle = {src_memory_pool.handle};
-  const amd::MemoryRegion* src_mem_region =
-      amd::MemoryRegion::Convert(src_region_handle);
+  const AMD::MemoryRegion* src_mem_region =
+      AMD::MemoryRegion::Convert(src_region_handle);
 
   if (src_mem_region == NULL || !src_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
   }
 
   hsa_region_t dst_region_handle = {dst_memory_pool.handle};
-  const amd::MemoryRegion* dst_mem_region =
-      amd::MemoryRegion::Convert(dst_region_handle);
+  const AMD::MemoryRegion* dst_mem_region =
+      AMD::MemoryRegion::Convert(dst_region_handle);
 
   if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
@@ -716,8 +718,8 @@ hsa_status_t hsa_amd_memory_migrate(const void* ptr,
   }
 
   hsa_region_t dst_region_handle = {memory_pool.handle};
-  const amd::MemoryRegion* dst_mem_region =
-      amd::MemoryRegion::Convert(dst_region_handle);
+  const AMD::MemoryRegion* dst_mem_region =
+      AMD::MemoryRegion::Convert(dst_region_handle);
 
   if (dst_mem_region == NULL || !dst_mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
@@ -741,8 +743,8 @@ hsa_status_t hsa_amd_agent_memory_pool_get_info(
   IS_VALID(agent);
 
   hsa_region_t region_handle = {memory_pool.handle};
-  const amd::MemoryRegion* mem_region =
-      amd::MemoryRegion::Convert(region_handle);
+  const AMD::MemoryRegion* mem_region =
+      AMD::MemoryRegion::Convert(region_handle);
 
   if (mem_region == NULL || !mem_region->IsValid()) {
     return static_cast<hsa_status_t>(HSA_STATUS_ERROR_INVALID_MEMORY_POOL);
@@ -929,7 +931,7 @@ hsa_status_t hsa_amd_register_system_event_handler(hsa_amd_system_event_callback
   CATCH;
 }
 
-hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
+hsa_status_t hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority) {
   TRY;
   IS_OPEN();
@@ -987,4 +989,5 @@ hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifie
   CATCH;
 }
 
-} // end of AMD namespace
+}   //  namespace amd
+}   //  namespace rocr

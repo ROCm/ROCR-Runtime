@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -50,7 +50,8 @@
 #include "core/inc/hsa_internal.h"
 #include "core/util/utils.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 static const uint16_t kInvalidPacketHeader = HSA_PACKET_TYPE_INVALID;
 
 static std::string kBlitKernelSource(R"(
@@ -543,7 +544,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
   kernarg_async_mask_ = queue_->public_handle()->size - 1;
 
   // Obtain the number of compute units in the underlying agent.
-  const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
+  const AMD::GpuAgent& gpuAgent = static_cast<const AMD::GpuAgent&>(agent);
   num_cus_ = gpuAgent.properties().NumFComputeCores / 4;
 
   // Assemble shaders to AQL code objects.
@@ -554,7 +555,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 
   for (auto kernel_name : kernel_names) {
     KernelCode& kernel = kernels_[kernel_name.first];
-    gpuAgent.AssembleShader(kernel_name.second, GpuAgent::AssembleTarget::AQL, kernel.code_buf_,
+    gpuAgent.AssembleShader(kernel_name.second, AMD::GpuAgent::AssembleTarget::AQL, kernel.code_buf_,
                             kernel.code_buf_size_);
   }
 
@@ -568,7 +569,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   std::lock_guard<std::mutex> guard(lock_);
 
-  const GpuAgent& gpuAgent = static_cast<const GpuAgent&>(agent);
+  const AMD::GpuAgent& gpuAgent = static_cast<const AMD::GpuAgent&>(agent);
 
   for (auto kernel_pair : kernels_) {
     gpuAgent.ReleaseShader(kernel_pair.second.code_buf_,
@@ -843,3 +844,4 @@ BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
 }
 
 }  // namespace amd
+}  // namespace rocr

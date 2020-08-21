@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -71,9 +71,12 @@
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 #define MAX_NUM_DOORBELLS 0x400
 
-extern core::HsaApiTable hsa_internal_api_table_;
+namespace rocr {
+namespace core {
+extern HsaApiTable hsa_internal_api_table_;
+} // namespace core
 
-namespace amd {
+namespace AMD {
 GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
       properties_(node_props),
@@ -101,9 +104,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
       core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
                          node_props.EngineId.ui32.Stepping),
-      profile_ == HSA_PROFILE_FULL, false);
-  //Disable SRAM_ECC reporting until HCC is fixed.
-  //profile_ == HSA_PROFILE_FULL, node_props.Capability.ui32.SRAM_EDCSupport == 1);
+      profile_ == HSA_PROFILE_FULL, node_props.Capability.ui32.SRAM_EDCSupport == 1);
 
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
@@ -458,8 +459,8 @@ hsa_status_t GpuAgent::VisitRegion(
     void* data) const {
   AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
-    const amd::MemoryRegion* amd_region =
-        reinterpret_cast<const amd::MemoryRegion*>(region);
+    const AMD::MemoryRegion* amd_region =
+        reinterpret_cast<const AMD::MemoryRegion*>(region);
 
     // Only expose system, local, and LDS memory.
     if (amd_region->IsSystem() || amd_region->IsLocalMemory() ||
@@ -486,25 +487,35 @@ core::Queue* GpuAgent::CreateInterceptibleQueue() {
 }
 
 core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
-  amd::BlitSdmaBase* sdma;
+  AMD::BlitSdmaBase* sdma;
 
-  if (isa_->GetMajorVersion() <= 8) {
-    sdma = new BlitSdmaV2V3();
-  } else {
-    sdma = new BlitSdmaV4();
+  switch (isa_->GetMajorVersion()) {
+    case 7:
+    case 8:
+      sdma = new BlitSdmaV2V3();
+      break;
+    case 9:
+      sdma = new BlitSdmaV4();
+      break;
+    case 10:
+      sdma = new BlitSdmaV5();
+      break;
+    default:
+      assert(false && "Unexpected device major version.");
+      return nullptr;
   }
 
   if (sdma->Initialize(*this, use_xgmi) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
     delete sdma;
-    sdma = NULL;
+    sdma = nullptr;
   }
 
   return sdma;
 }
 
 core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
-  BlitKernel* kernl = new BlitKernel(queue);
+  AMD::BlitKernel* kernl = new AMD::BlitKernel(queue);
 
   if (kernl->Initialize(*this) != HSA_STATUS_SUCCESS) {
     kernl->Destroy(*this);
@@ -533,7 +544,8 @@ void GpuAgent::InitDma() {
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
     const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
-    bool use_sdma = ((isa_->GetMajorVersion() != 8) && (isa_->GetMajorVersion() != 10));
+    // User SDMA queues are unstable on gfx8.
+    bool use_sdma = ((isa_->GetMajorVersion() != 8));
     if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
@@ -593,12 +605,9 @@ void GpuAgent::InitGWS() {
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");
 
-    uint32_t discard;
-    auto status = hsaKmtAllocQueueGWS(queue->amd_queue_.hsa_queue.id, 1, &discard);
-    if (status != HSAKMT_STATUS_SUCCESS)
-      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "GWS allocation failed.");
+    auto err = static_cast<AqlQueue*>(queue.get())->EnableGWS(1);
+    if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "GWS allocation failed.");
 
-    queue->amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
     gws_queue_.ref_ct_ = 0;
     return queue.release();
   });
@@ -920,6 +929,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       snprintf((char*)value, (ss.str().length() + 1), "%s", (char*)ss.str().c_str());
       break;
     }
+    case HSA_AMD_AGENT_INFO_ASIC_REVISION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -1388,4 +1400,5 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
   return GetXgmiBlit(dst_agent);
 }
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr

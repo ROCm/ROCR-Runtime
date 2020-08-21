@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -55,7 +55,8 @@
 
 #include "inc/hsa_ext_amd.h"
 
-namespace amd {
+namespace rocr {
+namespace AMD {
 class MemoryRegion : public core::MemoryRegion {
  public:
   /// @brief Convert this object into hsa_region_t.
@@ -71,7 +72,7 @@ class MemoryRegion : public core::MemoryRegion {
     return region_handle;
   }
 
-  /// @brief  Convert hsa_region_t into amd::MemoryRegion *.
+  /// @brief  Convert hsa_region_t into AMD::MemoryRegion *.
   static __forceinline MemoryRegion* Convert(hsa_region_t region) {
     return reinterpret_cast<MemoryRegion*>(region.handle);
   }
@@ -102,6 +103,8 @@ class MemoryRegion : public core::MemoryRegion {
   hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const;
 
   hsa_status_t Free(void* address, size_t size) const;
+
+  hsa_status_t IPCFragmentExport(void* address) const;
 
   hsa_status_t GetInfo(hsa_region_info_t attribute, void* value) const;
 
@@ -202,6 +205,7 @@ class MemoryRegion : public core::MemoryRegion {
   mutable SimpleHeap<BlockAllocator> fragment_allocator_;
 };
 
-}  // namespace
+}  // namespace amd
+}  // namespace rocr
 
 #endif  // header guard

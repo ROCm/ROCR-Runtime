@@ -41,19 +41,56 @@ can be obtained from the ROCT-Thunk-Interface repository, available here:
 
 https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface
  
-Specify the directory containing libhsakmt.so.1 and hsakmt.h using the cmake variables, HSAKMT_LIB_PATH and HSAKMT_INC_PATH.  These can be specified either on the command line
-or via standard cmake configuration tools such as ccmake or cmake-gui.
+As of ROCm release 3.7 libhsakmt development packages now include a cmake
+package config file.  The runtime will now locate libhsakmt via find_package if
+libhsakmt is installed to a standard location.  For installations that do not
+use ROCm standard paths set cmake variables CMAKE_PREFIX_PATH or hsakmt_DIR to
+override find_package search paths.
 
-For example, from the top level ROCR repository execute:
+As of ROCm release 3.7 the runtime includes an optional image support module
+(previously hsa-ext-rocr-dev).  By default this module is included in builds of
+the runtime.  The image module may be excluded the runtime by setting
+cmake variable IMAGE_SUPPORT to OFF.
+
+When building the optional image module additional build dependencies are
+required.  An amdgcn compatible clang and device library must be installed
+to build the image module.  The latest version of these requirements can be
+obtained from the ROCm package repository
+(see: https://rocmdocs.amd.com/en/latest/Installation_Guide/Installation-Guide.html)
+The latest source for these projects may be found here:
+
+https://github.com/RadeonOpenCompute/llvm-project
+
+https://github.com/RadeonOpenCompute/ROCm-Device-Libs
+
+Additionally xxd must be installed.
+
+The runtime optionally supports use of the cmake user package registry.  By
+default the registry is not modified.  Set cmake variable
+EXPORT_TO_USER_PACKAGE_REGISTRY to ON to enable updating the package registry.
+
+For example, to build, install, and produce packages on a system with standard
+ROCm packages installed, execute the following from src/:
 
     mkdir build
     cd build
-    cmake -DHSAKMT_INC_PATH:STRING=<path to directory holding hsakmt.h> \
-          -DHSAKMT_LIB_PATH:STRING=<path to directory holding libhsakmt.so.1> \
-          ..
+    cmake -DCMAKE_INSTALL_PATH=/opt/rocm ..
     make
-    
-alternately using ccmake:
+    make install
+    make package
+
+Example with a custom installation path, build dependency path, and options:
+
+    ...
+    cmake -DIMAGE_SUPPORT=OFF \
+          -DEXPORT_TO_USER_PACKAGE_REGISTRY=ON \
+          -DCMAKE_VERBOSE_MAKEFILE=1 \
+          -DCMAKE_PREFIX_PATH=<alternate path(s) to build dependencies> \
+          -DCMAKE_INSTALL_PATH=<custom install path for this build> \
+          ..
+    ...
+
+Alternately ccmake and cmake-gui are supported:
 
     mkdir build
     cd build
@@ -63,6 +100,21 @@ alternately using ccmake:
     press c again
     press g to generate and exit
     make
+
+#### Building against the runtime
+
+The runtime provides a cmake package config file, installed by default to
+/opt/rocm/lib/cmake/hsa-runtime64.  The runtime exports cmake target
+hsa-runtime64 in namespace hsa-runtime64.  A cmake project (Foo) using the
+runtime may locate, include, and link the runtime with the following template:
+
+    Add /opt/rocm to CMAKE_PREFIX_PATH.
+
+    find_package(hsa-runtime64 1.0 REQUIRED)
+    ...
+    add_library(Foo ...)
+    ...
+    target_link_library(Foo PRIVATE hsa-runtime64::hsa-runtime64)
 
 #### Specs
 
@@ -147,9 +199,7 @@ The device specific layer contains implementations of the C++ interface classes 
 
 #### Known Issues
 
-* Max total coarse grain region limit is 8GB.
 * hsa_agent_get_exception_policies is not implemented.
-* Image import/export/copy/fill only support image created with memory from host accessible region.
 * hsa_system_get_extension_table is not implemented for HSA_EXTENSION_AMD_PROFILER.
 
 #### Disclaimer
@@ -158,4 +208,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2017 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2020 Advanced Micro Devices, Inc. All rights reserved.

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -48,6 +48,7 @@
 #include <iostream>
 
 // Tools only APIs.
+namespace rocr {
 namespace AMD {
 hsa_status_t hsa_amd_queue_intercept_register(hsa_queue_t* queue,
                                               hsa_amd_queue_intercept_handler callback,
@@ -59,7 +60,7 @@ hsa_status_t hsa_amd_queue_intercept_create(
 
 hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifier callback,
                                                    void* user_data);
-}
+}   //  namespace amd
 
 namespace core {
 
@@ -391,9 +392,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_deregister_deallocation_callback_fn = AMD::hsa_amd_deregister_deallocation_callback;
 }
 
-class Init {
- public:
-  Init() { hsa_table_interface_init(&hsa_api_table_.hsa_api); }
-};
-static Init LinkAtLoad;
+void LoadInitialHsaApiTable() {
+  hsa_table_interface_init(&hsa_api_table_.hsa_api);
 }
+
+}   //  namespace core
+}   //  namespace rocr

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -49,6 +49,7 @@
 #include "core/util/timer.h"
 #include "core/inc/runtime.h"
 
+namespace rocr {
 namespace core {
 
 KernelMutex Signal::ipcLock_;
@@ -324,5 +325,6 @@ SignalGroup::SignalGroup(uint32_t num_signals, const hsa_signal_t* hsa_signals)
 }
 
 }  // namespace core
+}  // namespace rocr
 
 #endif  // header guard

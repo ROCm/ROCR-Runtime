@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -49,6 +49,8 @@
 
 #include "core/util/os.h"
 #include "core/util/utils.h"
+
+namespace rocr {
 
 class Flag {
  public:
@@ -113,6 +115,12 @@ class Flag {
 
     var = os::GetEnvVar("HSA_NO_SCRATCH_THREAD_LIMITER");
     no_scratch_thread_limit_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_DISABLE_IMAGE");
+    disable_image_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
+    loader_enable_mmap_uri_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -153,6 +161,10 @@ class Flag {
 
   std::string tools_lib_names() const { return tools_lib_names_; }
 
+  bool disable_image() const { return disable_image_; }
+
+  bool loader_enable_mmap_uri() const { return loader_enable_mmap_uri_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -167,6 +179,8 @@ class Flag {
   bool fine_grain_pcie_;
   bool no_scratch_reclaim_;
   bool no_scratch_thread_limit_;
+  bool disable_image_;
+  bool loader_enable_mmap_uri_;
 
   std::string enable_sdma_;
 
@@ -181,5 +195,7 @@ class Flag {
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };
+
+}  // namespace rocr
 
 #endif  // header guard

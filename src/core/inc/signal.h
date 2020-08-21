@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2015, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -75,6 +75,7 @@ template <> struct less<hsa_signal_t> {
 };
 }
 
+namespace rocr {
 namespace core {
 class Agent;
 class Signal;
@@ -627,7 +628,8 @@ class SignalDeleter {
  public:
   void operator()(Signal* ptr) { ptr->DestroySignal(); }
 };
-using unique_signal_ptr = ::std::unique_ptr<::core::Signal, SignalDeleter>;
+using unique_signal_ptr = ::std::unique_ptr<core::Signal, SignalDeleter>;
 
 }  // namespace core
+}  // namespace rocr
 #endif  // header guard
