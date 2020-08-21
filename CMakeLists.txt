@@ -237,11 +237,11 @@ set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_VERSION_MAJOR ${BUILD_VERSION_MAJOR} )
 set ( CPACK_PACKAGE_VERSION_MINOR ${BUILD_VERSION_MINOR} )
 set ( CPACK_PACKAGE_VERSION_PATCH ${BUILD_VERSION_PATCH} )
-set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices, Inc." )
+set ( CPACK_PACKAGE_CONTACT "AMD GFX mailing list <amd-gfx@lists.freedesktop.org>" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
 ## Component packaging, BINARY
-set ( CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support" )
+set ( CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support\n This repository includes the user-mode API interfaces\n used to interact with the ROCk driver." )
 set ( CPACK_DEBIAN_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE} )
 set ( CPACK_DEBIAN_BINARY_FILE_NAME "${CPACK_DEBIAN_BINARY_PACKAGE_NAME}_${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}_amd64.deb" )
 set ( CPACK_RPM_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE} )
@@ -282,7 +282,7 @@ set ( CPACK_RPM_BINARY_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/
 set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
 
 ## Component packaging, DEVEL
-set ( CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package." )
+set ( CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package" )
 
 # Debian package specific variables
 set ( CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev" )
