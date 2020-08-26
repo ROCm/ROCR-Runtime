@@ -207,7 +207,7 @@ static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
       map->l_next->l_prev = map->l_prev;
   }
 
-  delete map->l_name;
+  free(map->l_name);
   memset(map, 0, sizeof(link_map));
 }
 
