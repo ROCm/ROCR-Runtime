@@ -1188,7 +1188,7 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
   uint64_t system_tick = 0;
   double ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
       double(t1_.GPUClockCounter - t0_.GPUClockCounter);
-  system_tick = uint64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter))) + t1_.SystemClockCounter;
+  system_tick = uint64_t(int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)))) + t1_.SystemClockCounter;
 
   // tick predates HSA startup - extrapolate with fixed clock ratio
   if (tick < t0_.GPUClockCounter) {
