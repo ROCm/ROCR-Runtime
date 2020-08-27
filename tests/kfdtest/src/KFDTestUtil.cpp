@@ -663,3 +663,26 @@ int HsaNodeInfo::FindAccessiblePeers(std::vector<HSAuint32> *peers, HSAuint32 ds
 
     return peers->size();
 }
+
+const bool HsaNodeInfo::IsNodeXGMItoCPU(int node) const {
+    const HsaNodeProperties *pNodeProperties;
+    bool ret = false;
+
+    pNodeProperties = GetNodeProperties(node);
+    if (pNodeProperties && pNodeProperties->NumIOLinks) {
+        HsaIoLinkProperties  *IolinkProperties =  new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
+        EXPECT_SUCCESS(hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties));
+
+        for (int linkId = 0; linkId < pNodeProperties->NumIOLinks; linkId++) {
+            EXPECT_EQ(node, IolinkProperties[linkId].NodeFrom);
+            const HsaNodeProperties *pNodeProperties0 =
+                    GetNodeProperties(IolinkProperties[linkId].NodeTo);
+            if (pNodeProperties0->NumFComputeCores == 0 &&
+                    IolinkProperties[linkId].IoLinkType == HSA_IOLINK_TYPE_XGMI)
+                ret = true;
+        }
+        delete [] IolinkProperties;
+    }
+
+    return ret;
+}

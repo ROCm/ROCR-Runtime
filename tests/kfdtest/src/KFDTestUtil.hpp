@@ -196,6 +196,11 @@ class HsaNodeInfo {
     const bool AreGPUNodesXGMI(int node0, int node1) const;
     int FindAccessiblePeers(std::vector<HSAuint32> *peers, HSAuint32 dstNode,
             bool bidirectional) const;
+    /* @brief: to determine if the node is XGMI-linked to CPU
+     * @param: node index of the node we are looking at
+     * @return: bool true or false
+     */
+    const bool IsNodeXGMItoCPU(int node) const;
 };
 
 #endif  // __KFD__TEST__UTIL__H__
