@@ -475,7 +475,10 @@ uint32_t hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* hsa_signal
                                  uint64_t timeout_hint, hsa_wait_state_t wait_hint,
                                  hsa_signal_value_t* satisfying_value) {
   TRY;
-  IS_OPEN();
+  if (!core::Runtime::runtime_singleton_->IsOpen()) {
+    assert(false && "hsa_amd_signal_wait_any called while not initialized.");
+    return uint32_t(0);
+  }
   // Do not check for signal invalidation.  Invalidation may occur during async
   // signal handler loop and is not an error.
   for (uint i = 0; i < signal_count; i++)
