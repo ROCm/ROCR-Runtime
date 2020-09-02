@@ -48,7 +48,7 @@
 #define HWREG_SIZE_PER_CU	0x1000
 #define WG_CONTEXT_DATA_SIZE_PER_CU(asic_family)	(VGPR_SIZE_PER_CU(asic_family) + SGPR_SIZE_PER_CU + LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
 #define WAVES_PER_CU		32
-#define CNTL_STACK_BYTES_PER_WAVE	8
+#define CNTL_STACK_BYTES_PER_WAVE(asic_family)	(asic_family >= CHIP_NAVI10 ? 12 : 8)
 
 struct device_info {
 	enum asic_family_type asic_family;
@@ -425,7 +425,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		uint32_t ctl_stack_size, wg_data_size;
 		uint32_t cu_num = node.NumFComputeCores / node.NumSIMDPerCU;
 
-		ctl_stack_size = cu_num * WAVES_PER_CU * CNTL_STACK_BYTES_PER_WAVE + 8;
+		ctl_stack_size = cu_num * WAVES_PER_CU * CNTL_STACK_BYTES_PER_WAVE(q->dev_info->asic_family) + 8;
 		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->dev_info->asic_family);
 		q->ctl_stack_size = PAGE_ALIGN_UP(ctl_stack_size
 					+ sizeof(HsaUserContextSaveAreaHeader));
