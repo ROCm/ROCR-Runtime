@@ -121,6 +121,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
     loader_enable_mmap_uri_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_FORCE_SDMA_SIZE");
+    force_sdma_size_ = var.empty() ? 1024 * 1024 : atoi(var.c_str());
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -165,6 +168,8 @@ class Flag {
 
   bool loader_enable_mmap_uri() const { return loader_enable_mmap_uri_; }
 
+  size_t force_sdma_size() const { return force_sdma_size_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -192,6 +197,8 @@ class Flag {
   size_t scratch_mem_size_;
 
   std::string tools_lib_names_;
+
+  size_t force_sdma_size_;
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };

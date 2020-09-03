@@ -645,7 +645,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
   // Bind the Blit object that will drive this copy operation
-  lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent);
+  lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent, size);
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
@@ -1354,7 +1354,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
-                                              const core::Agent& src_agent) {
+                                              const core::Agent& src_agent, const size_t size) {
   // At this point it is guaranteed that one of
   // the two devices is a GPU, potentially both
   assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
@@ -1363,6 +1363,11 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
 
   // Determine if Src and Dst devices are same
   if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle)) {
+    // If the copy is very small then cache flush overheads can dominate.
+    // Choose a (potentially) SDMA enabled engine to avoid cache flushing.
+    if (size < core::Runtime::runtime_singleton_->flag().force_sdma_size()) {
+      return blits_[BlitDevToHost];
+    }
     return blits_[BlitDevToDev];
   }
 
