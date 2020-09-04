@@ -43,11 +43,25 @@
 
 opencl_blit_file="$1"
 
-if ! command -v xxd >/dev/null
+if command -v xxd >/dev/null
 then
-    echo "xxd not found!"
-    exit 1
+    if xxd -i </dev/null 2>/dev/null >/dev/null
+    then
+        XXD="xxd -i"
+    else
+        echo "xxd does not support -i"
+    fi
 fi
+if [ -z ${XXD+x} ]; then
+    if command -v xxdi.pl
+    then
+        XXD="xxdi.pl"
+    else
+        echo "xxd not found"
+        exit 1
+    fi
+fi
+                                                                                                                                           
 
 # Create the file in a temporary location and then move it in atomically
 {
@@ -63,7 +77,7 @@ EOF
 
 for file in ocl_blit_object*
 do
-    xxd -i $file
+    $XXD $file
     echo -e '\n'
 done
 
