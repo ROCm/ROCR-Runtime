@@ -188,9 +188,9 @@ ImageProperty ImageManagerKv::GetImageProperty(
 
 void ImageManagerKv::GetImageInfoMaxDimension(hsa_agent_t component,
                                               hsa_ext_image_geometry_t geometry,
-                                              uint32_t& width, uint32_t& height,
-                                              uint32_t& depth,
-                                              uint32_t& array_size) const {
+                                              size_t& width, size_t& height,
+                                              size_t& depth,
+                                              size_t& array_size) const {
   width = ImageLut().GetMaxWidth(geometry);
   height = ImageLut().GetMaxHeight(geometry);
   depth = ImageLut().GetMaxDepth(geometry);
