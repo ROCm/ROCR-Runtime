@@ -299,12 +299,12 @@ const Swizzle ImageLutKv::kSwizzleLut_[ORDER_COUNT] = {
 const uint32_t ImageLutKv::kMaxDimensionLut_[GEOMETRY_COUNT][4] = {
     {16384, 1, 1, 1},         // HSA_EXT_IMAGE_GEOMETRY_1D
     {16384, 16384, 1, 1},     // HSA_EXT_IMAGE_GEOMETRY_2D
-    {2048, 2048, 2048, 1},    // HSA_EXT_IMAGE_GEOMETRY_3D
-    {16384, 1, 1, 2048},      // HSA_EXT_IMAGE_GEOMETRY_1DA
-    {16384, 16384, 1, 2048},  // HSA_EXT_IMAGE_GEOMETRY_2DA
-    {65536, 1, 1, 1},         // HSA_EXT_IMAGE_GEOMETRY_1DB
+    {16384, 16384, 8192, 1},  // HSA_EXT_IMAGE_GEOMETRY_3D
+    {16384, 1, 1, 8192},      // HSA_EXT_IMAGE_GEOMETRY_1DA
+    {16384, 16384, 1, 8192},  // HSA_EXT_IMAGE_GEOMETRY_2DA
+    {4294967295, 1, 1, 1},    // HSA_EXT_IMAGE_GEOMETRY_1DB
     {16384, 16384, 1, 1},     // HSA_EXT_IMAGE_GEOMETRY_2DDEPTH
-    {16384, 16384, 1, 2048}   // HSA_EXT_IMAGE_GEOMETRY_2DADEPTH
+    {16384, 16384, 1, 8192}   // HSA_EXT_IMAGE_GEOMETRY_2DADEPTH
 };
 
 uint32_t ImageLutKv::MapGeometry(hsa_ext_image_geometry_t geometry) const {
