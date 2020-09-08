@@ -61,13 +61,13 @@ class ImageLutKv : public ImageLut {
 
   virtual Swizzle MapSwizzle(hsa_ext_image_channel_order32_t order) const;
 
-  virtual uint32_t GetMaxWidth(hsa_ext_image_geometry_t geometry) const;
+  virtual size_t GetMaxWidth(hsa_ext_image_geometry_t geometry) const;
 
-  virtual uint32_t GetMaxHeight(hsa_ext_image_geometry_t geometry) const;
+  virtual size_t GetMaxHeight(hsa_ext_image_geometry_t geometry) const;
 
-  virtual uint32_t GetMaxDepth(hsa_ext_image_geometry_t geometry) const;
+  virtual size_t GetMaxDepth(hsa_ext_image_geometry_t geometry) const;
 
-  virtual uint32_t GetMaxArraySize(hsa_ext_image_geometry_t geometry) const;
+  virtual size_t GetMaxArraySize(hsa_ext_image_geometry_t geometry) const;
 
   uint32_t GetPixelSize(uint8_t data_format, uint8_t data_type) const;
 
@@ -84,8 +84,8 @@ class ImageLutKv : public ImageLut {
   static const Swizzle kSwizzleLut_[ORDER_COUNT];
 
   // Lookup table of image geometry to max dimension.
-  // Each record contains four values: widht, height, depth, array_size.
-  static const uint32_t kMaxDimensionLut_[GEOMETRY_COUNT][4];
+  // Each record contains four values: width, height, depth, array_size.
+  static const size_t kMaxDimensionLut_[GEOMETRY_COUNT][4];
 
   DISALLOW_COPY_AND_ASSIGN(ImageLutKv);
 };
