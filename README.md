@@ -29,13 +29,13 @@ If the hsakmt-roct and hsakmt-roct-dev packages are desired:
     cd build
     cmake ..
     make package
-    make package-dev
 ```
 If you choose not to build and install packages, manual installation of the binaries and header files can be done via:
 ```bash
     make install
-    make install-dev
 ```
+
+NOTE: For older versions of the thunk where hsakmt-dev.txt is present, "make package-dev" and "make install-dev" are required to generate/install the developer packages. Currently, these are created via the "make package" and "make install" commands
 
 #### Disclaimer
 
