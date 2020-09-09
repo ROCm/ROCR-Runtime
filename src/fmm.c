@@ -714,10 +714,10 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 		return NULL;
 	}
 
-	/* Align big buffers to the next power-of-2 up to huge page
-	 * size for flexible fragment size TLB optimizations
+	/* Align big buffers to the next power-of-2 up to 1GB
+	 * size for memory allocation optimization
 	 */
-	while (align < GPU_HUGE_PAGE_SIZE && size >= (align << 1))
+	while (align < GPU_GIANT_PAGE_SIZE && size >= (align << 1))
 		align <<= 1;
 
 	/* Add padding to guarantee proper alignment and leave guard
