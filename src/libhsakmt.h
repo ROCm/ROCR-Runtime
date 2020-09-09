@@ -72,6 +72,7 @@ extern int PAGE_SHIFT;
 
 /* 2MB huge page size for 4-level page tables on Vega10 and later GPUs */
 #define GPU_HUGE_PAGE_SIZE (2 << 20)
+#define GPU_GIANT_PAGE_SIZE (1 << 30)
 
 #define CHECK_PAGE_MULTIPLE(x) \
 	do { if ((uint64_t)PORT_VPTR_TO_UINT64(x) % PAGE_SIZE) return HSAKMT_STATUS_INVALID_PARAMETER; } while(0)
