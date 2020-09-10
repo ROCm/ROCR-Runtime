@@ -189,7 +189,7 @@ void SDMAFencePacket::InitPacketNV(void * destAddr,unsigned int data) {
      * System = 1 because the memory is system memory
      * mtype = uncached, for the purpose of CPU coherent, L2 policy doesn't matter in this case
      */
-    packetData.HEADER_UNION.DW_0_DATA = (0 << 23) | (1 << 22) | (1 << 20) | (3 << 15) | SDMA_OP_FENCE;
+    packetData.HEADER_UNION.DW_0_DATA = (0 << 23) | (1 << 22) | (1 << 20) | (3 << 16) | SDMA_OP_FENCE;
 
     SplitU64(reinterpret_cast<unsigned long long>(destAddr),
              packetData.ADDR_LO_UNION.DW_1_DATA, /*dst_addr_31_0*/
