@@ -48,7 +48,9 @@
 #define HWREG_SIZE_PER_CU	0x1000
 #define WG_CONTEXT_DATA_SIZE_PER_CU(asic_family)	(VGPR_SIZE_PER_CU(asic_family) + SGPR_SIZE_PER_CU + LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
 #define WAVES_PER_CU		32
-#define CNTL_STACK_BYTES_PER_WAVE(asic_family)	(asic_family >= CHIP_NAVI10 ? 12 : 8)
+#define CNTL_STACK_BYTES_PER_CU(asic_family)	(WAVES_PER_CU * (asic_family >= CHIP_NAVI10 ? 12 : 8))
+#define DEBUGGER_BYTES_ALIGN	64
+#define DEBUGGER_BYTES_PER_CU(asic_family)	(WAVES_PER_CU * 32)
 
 struct device_info {
 	enum asic_family_type asic_family;
@@ -207,6 +209,7 @@ struct queue {
 	void *ctx_save_restore;
 	uint32_t ctx_save_restore_size;
 	uint32_t ctl_stack_size;
+	uint32_t debug_memory_size;
 	const struct device_info *dev_info;
 	bool use_ats;
 	/* This queue structure is allocated from GPU with page aligned size
@@ -425,11 +428,10 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		uint32_t ctl_stack_size, wg_data_size;
 		uint32_t cu_num = node.NumFComputeCores / node.NumSIMDPerCU;
 
-		ctl_stack_size = cu_num * WAVES_PER_CU * CNTL_STACK_BYTES_PER_WAVE(q->dev_info->asic_family) + 8;
+		ctl_stack_size = cu_num * CNTL_STACK_BYTES_PER_CU(q->dev_info->asic_family) + 8;
 		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->dev_info->asic_family);
-		q->ctl_stack_size = PAGE_ALIGN_UP(ctl_stack_size
-					+ sizeof(HsaUserContextSaveAreaHeader));
-
+		q->ctl_stack_size = PAGE_ALIGN_UP(sizeof(HsaUserContextSaveAreaHeader)
+					+ ctl_stack_size);
 		if (q->dev_info->asic_family >= CHIP_NAVI10 &&
 			q->dev_info->asic_family <= CHIP_NAVY_FLOUNDER) {
 			/* HW design limits control stack size to 0x7000.
@@ -439,8 +441,11 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 			q->ctl_stack_size = MIN(q->ctl_stack_size, 0x7000);
 		}
 
+		q->debug_memory_size =
+			ALIGN_UP(cu_num * DEBUGGER_BYTES_PER_CU(q->dev_info->asic_family), DEBUGGER_BYTES_ALIGN);
+
 		q->ctx_save_restore_size = q->ctl_stack_size
-					+ PAGE_ALIGN_UP(wg_data_size);
+					+ PAGE_ALIGN_UP(wg_data_size + q->debug_memory_size);
 		return true;
 	}
 	return false;
@@ -568,6 +573,8 @@ static int handle_concrete_asic(struct queue *q,
 	ret = update_ctx_save_restore_size(NodeId, q);
 
 	if (ret) {
+		HsaUserContextSaveAreaHeader *header;
+
 		args->ctx_save_restore_size = q->ctx_save_restore_size;
 		args->ctl_stack_size = q->ctl_stack_size;
 		q->ctx_save_restore =
@@ -578,6 +585,10 @@ static int handle_concrete_asic(struct queue *q,
 			return HSAKMT_STATUS_NO_MEMORY;
 
 		args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
+
+		header = (HsaUserContextSaveAreaHeader *)q->ctx_save_restore;
+		header->DebugOffset = q->ctx_save_restore_size - q->debug_memory_size;
+		header->DebugSize = q->debug_memory_size;
 	}
 
 	return HSAKMT_STATUS_SUCCESS;
