@@ -136,15 +136,15 @@ static HSAKMT_STATUS init_vars_from_env(void)
 		zfb_support = atoi(envvar);
 
 	/* Force all the GPUs to a certain type, use the below command:
-	 * export HSA_FORCE_ASIC_TYPE="10.1.0 1 Navi10 14"
-	 * meaning major.minor.step dgpu asic_name asic_id
+	 * export HSA_FORCE_ASIC_TYPE="10.1.0 Navi10 14"
+	 * meaning major.minor.step asic_name asic_id
 	 */
 	envvar = getenv("HSA_FORCE_ASIC_TYPE");
 	if (envvar) {
 		uint32_t major, minor, step, asic_family;
 
 		if ((sscanf(envvar, "%u.%u.%u %63s %u", &major, &minor, &step,
-				force_asic_name, &asic_family) != 6)
+				force_asic_name, &asic_family) != 5)
 			|| (major > 63 || minor > 255 || step > 255)
 			|| asic_family >= CHIP_LAST) {
 			pr_err("HSA_FORCE_ASIC_TYPE %s is invalid\n", envvar);
