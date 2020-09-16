@@ -183,9 +183,9 @@ FILTER[renoir]=\
 "KFDEvictTest.*:"\
 "KFDQMTest.SdmaEventInterrupt:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
-"KFDQMTest.BasicCuMaskingEven"\
+"KFDQMTest.BasicCuMaskingEven:"\
 "KFDMemoryTest.MMBench:"\
-"KFDMemoryTest.SignalHandling:"
+"KFDMemoryTest.SignalHandling"
 
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
