@@ -235,6 +235,13 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	/* Navi12 */
 	{ 0x7360, 10, 1, 1, "Navi12", CHIP_NAVI12 },
 	{ 0x7362, 10, 1, 1, "Navi12", CHIP_NAVI12 },
+	/* SIENNA_CICHLID */
+	{ 0x73A0, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	{ 0x73A2, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	{ 0x73A3, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	{ 0x73AB, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	{ 0x73AE, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
+	{ 0x73BF, 10, 3, 0, "SIENNA_CICHLID", CHIP_SIENNA_CICHLID },
 };
 
 /* information from /proc/cpuinfo */
