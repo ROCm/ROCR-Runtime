@@ -430,6 +430,15 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		q->ctl_stack_size = PAGE_ALIGN_UP(ctl_stack_size
 					+ sizeof(HsaUserContextSaveAreaHeader));
 
+		if (q->dev_info->asic_family >= CHIP_NAVI10 &&
+			q->dev_info->asic_family <= CHIP_NAVY_FLOUNDER) {
+			/* HW design limits control stack size to 0x7000.
+			 * This is insufficient for theoretical PM4 cases
+			 * but sufficient for AQL, limited by SPI events.
+			 */
+			q->ctl_stack_size = MIN(q->ctl_stack_size, 0x7000);
+		}
+
 		q->ctx_save_restore_size = q->ctl_stack_size
 					+ PAGE_ALIGN_UP(wg_data_size);
 		return true;
