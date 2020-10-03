@@ -565,11 +565,11 @@ void GpuAgent::InitDma() {
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
-    const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
+    Flag::SDMA_OVERRIDE sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
     // User SDMA queues are unstable on gfx8.
     bool use_sdma = ((isa_->GetMajorVersion() != 8));
-    if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
+    if (sdma_override != Flag::SDMA_DEFAULT) use_sdma = (sdma_override == Flag::SDMA_ENABLE);
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
       auto ret = CreateBlitSdma(use_xgmi);
