@@ -79,6 +79,12 @@ InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
   buffer_ = SharedArray<AqlPacket, 4096>(wrapped->amd_queue_.hsa_queue.size);
   amd_queue_.hsa_queue.base_address = reinterpret_cast<void*>(&buffer_[0]);
 
+  // Fill the ring buffer with invalid packet headers.
+  // Leave packet content uninitialized to help trigger application errors.
+  for (uint32_t pkt_id = 0; pkt_id < wrapped->amd_queue_.hsa_queue.size; ++pkt_id) {
+    buffer_[pkt_id].dispatch.header = HSA_PACKET_TYPE_INVALID;
+  }
+
   // Match the queue's signal ABI block to async_doorbell_'s
   // This allows us to use the queue's signal ABI block from devices to trigger async_doorbell while
   // host side use jumps directly to the queue's signal implementation.
