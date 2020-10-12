@@ -266,6 +266,8 @@ typedef enum {
                                                         //
   HSA_VEN_AMD_AQLPROFILE_INFO_ENABLE_CMD = 6,           // get_info returns size/pointer for
                                                         // counters enable command buffer
+  HSA_VEN_AMD_AQLPROFILE_INFO_DISABLE_CMD = 7,          // get_info returns size/pointer for
+                                                        // counters disable command buffer
 } hsa_ven_amd_aqlprofile_info_type_t;
 
 // Definition of output data iterator callback
