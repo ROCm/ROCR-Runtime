@@ -102,7 +102,7 @@ if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
 set ( SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
-set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}.${VERSION_COMMIT_COUNT}-${VERSION_JOB}-${VERSION_HASH}" )
+set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}" )
 
 ## Find external dependencies.
 find_package(LibElf REQUIRED)
@@ -116,7 +116,7 @@ set_property(TARGET  ${CORE_RUNTIME_TARGET} PROPERTY OUTPUT_NAME ${CORE_RUNTIME_
 
 ## Compiler preproc definitions.
 target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE "${HSA_COMMON_DEFS}" __linux__ HSA_EXPORT=1 HSA_EXPORT_FINALIZER=1 HSA_EXPORT_IMAGES=1 HSA_DEPRECATED=
-  ROCR_BUILD_ID=${PACKAGE_VERSION_STRING} )
+ROCR_BUILD_ID="${PACKAGE_VERSION_STRING}-${VERSION_JOB}-${VERSION_HASH}" )
 
 ## Check for memfd_create syscall
 include(CheckSymbolExists)
@@ -242,7 +242,7 @@ if(${IMAGE_SUPPORT})
                    image/blit_object_gfx9xx.cpp
                    image/blit_kernel.cpp
                    ${CMAKE_CURRENT_BINARY_DIR}/image/blit_src/opencl_blit_objects.cpp )
-  
+
   set_source_files_properties(${CMAKE_CURRENT_BINARY_DIR}/image/blit_src/opencl_blit_objects.cpp PROPERTIES GENERATED TRUE)
 
   target_include_directories( ${CORE_RUNTIME_TARGET}
@@ -260,7 +260,7 @@ if(${IMAGE_SUPPORT})
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10 )
 
   target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_SRCS} )
-  
+
   ## Depend on blit kernel target.
   add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/image/blit_src )
   add_dependencies( ${CORE_RUNTIME_TARGET} opencl_blit_objects )
@@ -305,7 +305,7 @@ endif()
 ## Set install information
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
-install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets 
+install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
   ARCHIVE DESTINATION lib COMPONENT binary
   LIBRARY DESTINATION lib COMPONENT binary )
 
@@ -395,7 +395,7 @@ set (CPACK_COMPONENTS_ALL binary dev)
 set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
 set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
-set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices, Inc." )
+set ( CPACK_PACKAGE_CONTACT "TODO Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
@@ -403,7 +403,18 @@ set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/post_install DEBIAN/postinst @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/pre_remove DEBIAN/prerm @ONLY)
 
+if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
+  set ( CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}.$ENV{ROCM_LIBPATCH_VERSION}" )
+  message ( "Using CPACK_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION}" )
+endif()
+
 # Debian package specific variables
+if ( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+  set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+else()
+  set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
+endif()
+message ( "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}" )
 set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" )
 set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
@@ -415,8 +426,25 @@ set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
-## RPM package specific variables
+# RPM package specific variables
+if ( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
+  set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
+else()
+  set ( CPACK_RPM_PACKAGE_RELEASE "local" )
+endif()
+
+# 'dist' breaks manual builds on debian systems due to empty Provides
+execute_process( COMMAND rpm --eval %{?dist}
+                 RESULT_VARIABLE PROC_RESULT
+                 OUTPUT_VARIABLE EVAL_RESULT
+                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+message("RESULT_VARIABLE ${PROC_RESULT} OUTPUT_VARIABLE: ${EVAL_RESULT}")
+
+if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
+  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
+endif()
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
+message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct" )
 
 # Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
