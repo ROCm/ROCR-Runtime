@@ -91,8 +91,11 @@ else ()
 endif ()
 
 ## Address Sanitize Flag
-if (DEFINED $ENV{ADDRESS_SANITIZER})
-    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -fsanitizer=address )
+if (DEFINED ADDRESS_SANITIZER)
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -fsanitize=address )
+    # for debugging
+    # toDo: remove this line when merging to mainline
+    message( STATUS "ADDRESS_SANITIZE: HSAKMT_C_FLAGS=: ${HSAKMT_C_FLAGS}" )
 endif ()
 
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
