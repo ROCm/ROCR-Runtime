@@ -227,6 +227,7 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x7312, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	{ 0x7318, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	{ 0x731A, 10, 1, 0, "Navi10", CHIP_NAVI10 },
+	{ 0x731E, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	{ 0x731F, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	/* Navi14 */
 	{ 0x7340, 10, 1, 2, "Navi14", CHIP_NAVI14 },
