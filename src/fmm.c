@@ -2583,6 +2583,11 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 	args.n_success = 0;
 
 	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args);
+	if (ret) {
+		pr_err("GPU mapping failed (%d) for obj at %p, userptr %p, size %lu",
+		       ret, object->start, object->userptr, object->size);
+		goto err_map_failed;
+	}
 
 	add_device_ids_to_mapped_array(object,
 				(uint32_t *)args.device_ids_array_ptr,
@@ -2601,6 +2606,7 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 
 exit_ok:
 err_object_not_found:
+err_map_failed:
 	if (!obj)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 
