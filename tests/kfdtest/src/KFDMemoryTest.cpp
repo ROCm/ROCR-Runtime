@@ -131,6 +131,26 @@ type(CS)\n\
     end\n\
 ";
 
+const char* gfx10_PollMemory =
+"\
+shader ReadMemory\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume src address in s0, s1 and dst address in s2, s3*/\n\
+    s_movk_i32 s18, 0x5678\n\
+    v_mov_b32 v0, s2\n\
+    v_mov_b32 v1, s3\n\
+    v_mov_b32 v2, 0x5678\n\
+    LOOP:\n\
+    s_load_dword s16, s[0:1], 0x0 glc\n\
+    s_cmp_eq_i32 s16, s18\n\
+    s_cbranch_scc0   LOOP\n\
+    flat_store_dword v[0,1], v2 slc\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
 /* Input: A buffer of at least 3 dwords.
  * DW0: used as a signal. 0xcafe means it is signaled
  * DW1: Input buffer for device to read.
@@ -159,6 +179,28 @@ POLLSIGNAL:\n\
     end\n\
 ";
 
+const char* gfx10_CopyOnSignal =
+"\
+shader CopyOnSignal\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume input buffer in s0, s1 */\n\
+    s_mov_b32 s18, 0xcafe\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+POLLSIGNAL:\n\
+    s_load_dword s16, s[0:1], 0x0 glc\n\
+    s_cmp_eq_i32 s16, s18\n\
+    s_cbranch_scc0   POLLSIGNAL\n\
+    s_load_dword s17, s[0:1], 0x4 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    v_mov_b32 v2, s17\n\
+    flat_store_dword v[0,1], v2 offset:0x8 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
 /* Input0: A buffer of at least 2 dwords.
  * DW0: used as a signal. Write 0xcafe to signal
  * DW1: Write to this buffer for other device to read.
@@ -176,6 +218,26 @@ type(CS)\n\
     s_store_dword s18, s[2:3], 0 glc\n\
     s_mov_b32 s18, 0xcafe\n\
     s_store_dword s18, s[0:1], 0x0 glc\n\
+    s_endpgm\n\
+    end\n\
+";
+
+const char* gfx10_WriteAndSignal =
+"\
+shader WriteAndSignal\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume input buffer in s0, s1 */\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+    v_mov_b32 v18, 0xbeef\n\
+    flat_store_dword v18, v[0:1] offset:0x4 glc\n\
+    v_mov_b32 v18, 0x1\n\
+    flat_store_dword v18, v[2:3] offset:0x0 glc\n\
+    v_mov_b32 v18, 0xcafe\n\
+    flat_store_dword v18, v[0:1] offset:0x0 glc\n\
     s_endpgm\n\
     end\n\
 ";
@@ -313,7 +375,13 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     HsaMemoryBuffer srcBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
 
-    m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
+    const char *pReadMemory;
+    if (m_FamilyId < FAMILY_NV)
+        pReadMemory = gfx9_PollMemory;
+    else
+        pReadMemory = gfx10_PollMemory;
+
+    m_pIsaGen->CompileShader(pReadMemory, "ReadMemory", isaBuffer);
 
     PM4Queue pm4Queue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
@@ -1872,7 +1940,12 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->CompileShader(gfx9_CopyOnSignal, "CopyOnSignal", isaBuffer);
+    const char *pCopyOnSignal;
+    if (m_FamilyId < FAMILY_NV)
+        pCopyOnSignal = gfx9_CopyOnSignal;
+    else
+        pCopyOnSignal = gfx10_CopyOnSignal;
+    m_pIsaGen->CompileShader(pCopyOnSignal, "CopyOnSignal", isaBuffer);
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(buffer, NULL);
     dispatch0.Submit(queue);
@@ -1989,7 +2062,12 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(nodes[0]));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, nodes[0], true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->CompileShader(gfx9_CopyOnSignal, "CopyOnSignal", isaBuffer);
+    const char *pCopyOnSignal;
+    if (m_FamilyId < FAMILY_NV)
+        pCopyOnSignal = gfx9_CopyOnSignal;
+    else
+        pCopyOnSignal = gfx10_CopyOnSignal;
+    m_pIsaGen->CompileShader(pCopyOnSignal, "CopyOnSignal", isaBuffer);
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer, NULL);
     dispatch.Submit(queue);
@@ -1997,7 +2075,12 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     PM4Queue queue0;
     ASSERT_SUCCESS(queue0.Create(nodes[1]));
     HsaMemoryBuffer isaBuffer0(PAGE_SIZE, nodes[1], true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->CompileShader(gfx9_WriteAndSignal, "WriteAndSignal", isaBuffer0);
+    const char *pWriteAndSignal;
+    if (m_FamilyId < FAMILY_NV)
+        pWriteAndSignal = gfx9_WriteAndSignal;
+    else
+        pWriteAndSignal = gfx10_WriteAndSignal;
+    m_pIsaGen->CompileShader(pWriteAndSignal, "WriteAndSignal", isaBuffer0);
     Dispatch dispatch0(isaBuffer0);
     dispatch0.SetArgs(buffer, mmioBase);
     dispatch0.Submit(queue0);
