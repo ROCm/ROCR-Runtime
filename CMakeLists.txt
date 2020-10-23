@@ -92,19 +92,17 @@ endif ()
 
 set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
+## Linker Flags
+## Add --enable-new-dtags to generate DT_RUNPATH
+set (HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS} -Wl,--enable-new-dtags -Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete -Wl,-no-undefined")
+
 ## Address Sanitize Flag
 if ( ${ADDRESS_SANITIZER} )
     set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -fsanitize=address )
+    set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -fsanitize=address )
     message( STATUS "ADDRESS_SANITIZE: HSAKMT_C_FLAGS=: ${HSAKMT_C_FLAGS}" )
-    set ( HSAKMT_LINK_FLAGS "-fsanitize=address" )
+    message( STATUS "ADDRESS_SANITIZE: HSAKMT_LINK_FLAGS=: ${HSAKMT_LINK_FLAGS}" )
 endif ()
-
-## Linker Flags
-## Add --enable-new-dtags to generate DT_RUNPATH
-set (HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS} -Wl,--enable-new-dtags -Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete -Wl,-no-undefined" )
-
-# for debug
-message( STATUS "ADDRESS_SANITIZE: HSAKMT_LINK_FLAGS=: ${HSAKMT_LINK_FLAGS}" )
 
 ## Source files
 set ( HSAKMT_SRC "src/debug.c"
