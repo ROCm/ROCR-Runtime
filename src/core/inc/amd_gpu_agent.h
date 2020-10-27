@@ -502,7 +502,8 @@ class GpuAgent : public GpuAgentInt {
   lazy_ptr<core::Blit>& GetPcieBlit(const core::Agent& dst_agent, const core::Agent& src_agent);
 
   // Bind the Blit object that will drive the copy operation
-  lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent);
+  lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
+                                      const size_t size);
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
