@@ -24,7 +24,7 @@
 # If environment variable DRM_DIR or LIBHSAKMT_PATH is set, the script
 # will pick up the corresponding libraries from those pathes.
 
-cmake_minimum_required(VERSION 2.8 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 
 project(KFDTest)
 
@@ -99,6 +99,15 @@ include_directories(${PROJECT_SOURCE_DIR}/../../include)
 include_directories(${SP3_DIR})
 
 include_directories(${DRM_INCLUDE_DIRS})
+
+## Address Sanitize Flag
+if ( ${ADDRESS_SANITIZER} )
+    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" -fsanitize=address )
+    set ( CMAKE_EXE_LINKER_FLAGS -fsanitize=address )
+    message( STATUS "ADDRESS_SANITIZE: CMAKE_CXX_FLAGS=: ${CMAKE_CXX_FLAGS}" )
+    message( STATUS "ADDRESS_SANITIZE: CMAKE_EXE_LINKER_FLAGS=: ${CMAKE_EXE_LINKER_FLAGS}" )
+endif ()
+
 
 set (SRC_FILES gtest-1.6.0/gtest-all.cpp
 
