@@ -186,6 +186,8 @@ BaseQueue* QueueArray::GetQueue(unsigned int Node) {
     case HSA_QUEUE_COMPUTE_AQL:
         pQueue = new AqlQueue();
         break;
+    default:
+        return NULL;
     }
 
     if (pQueue) {
