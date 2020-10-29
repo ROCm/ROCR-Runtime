@@ -58,8 +58,8 @@ void KFDRASTest::SetUp() {
                 AMDGPU_INFO_RAS_ENABLED_FEATURES,
                 sizeof(uint32_t), &rasFeatures);
     if (!(rasFeatures &
-            (AMDGPU_INFO_RAS_ENABLED_SDMA ||
-             AMDGPU_INFO_RAS_ENABLED_UMC ||
+            (AMDGPU_INFO_RAS_ENABLED_SDMA |
+             AMDGPU_INFO_RAS_ENABLED_UMC |
              AMDGPU_INFO_RAS_ENABLED_GFX))) {
         LOG() << "Skipping test: GPU doesn't support RAS features!" << std::endl;
         throw;
