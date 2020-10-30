@@ -100,8 +100,6 @@ set (HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS} -Wl,--enable-new-dtags -Wl,--versio
 if ( ${ADDRESS_SANITIZER} )
     set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -fsanitize=address )
     set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -fsanitize=address )
-    message( STATUS "ADDRESS_SANITIZE: HSAKMT_C_FLAGS=: ${HSAKMT_C_FLAGS}" )
-    message( STATUS "ADDRESS_SANITIZE: HSAKMT_LINK_FLAGS=: ${HSAKMT_LINK_FLAGS}" )
 else ()
     if ( CMAKE_COMPILER_IS_GNUCC )
         set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -Wl,-no-undefined )
