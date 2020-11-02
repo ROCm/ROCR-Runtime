@@ -100,13 +100,6 @@ include_directories(${SP3_DIR})
 
 include_directories(${DRM_INCLUDE_DIRS})
 
-## Address Sanitize Flag
-if ( ${ADDRESS_SANITIZER} )
-    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" -fsanitize=address )
-    set ( CMAKE_EXE_LINKER_FLAGS -fsanitize=address )
-endif ()
-
-
 set (SRC_FILES gtest-1.6.0/gtest-all.cpp
 
   src/AqlQueue.cpp
@@ -170,6 +163,12 @@ if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2" )
 else ()
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g" )
+endif ()
+
+## Address Sanitize Flag
+if ( ${ADDRESS_SANITIZER} )
+    set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}" -fsanitize=address )
+    set ( CMAKE_EXE_LINKER_FLAGS -fsanitize=address )
 endif ()
 
 # link_directories() has to be put before add_executable()
