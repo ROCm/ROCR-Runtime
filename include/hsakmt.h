@@ -1209,6 +1209,41 @@ hsaKmtSetMemoryUserData(
     void *          UserData    //IN
     );
 
+/**
+  Acquire request exclusive use of SPM
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSPMAcquire(
+    HSAuint32	PreferredNode	//IN
+    );
+
+
+/**
+  Release exclusive use of SPM
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSPMRelease(
+    HSAuint32	PreferredNode	//IN
+    );
+
+/**
+   Set up the destination user mode buffer for stream performance
+   counter data.
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSPMSetDestBuffer(
+	HSAuint32   PreferredNode,		//IN
+	HSAuint32   SizeInBytes,		//IN
+	HSAuint32   * timeout,			//IN/OUT
+	HSAuint32   * SizeCopied,		//OUT
+	void        *DestMemoryAddress,		//IN
+	bool        *isSPMDataLoss		//OUT
+    );
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif

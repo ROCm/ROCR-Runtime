@@ -111,6 +111,7 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/time.c"
                  "src/topology.c"
                  "src/rbtree.c"
+                 "src/spm.c"
                  "src/version.c")
 
 ## Declare the library target name
