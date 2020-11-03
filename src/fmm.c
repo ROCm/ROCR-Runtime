@@ -1566,8 +1566,8 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 
 		/* Map anonymous pages */
 		if (mmap(mem, MemorySizeInBytes, PROT_READ | PROT_WRITE,
-			 MAP_ANONYMOUS | MAP_POPULATE | MAP_PRIVATE | MAP_FIXED,
-			 -1, 0) == MAP_FAILED)
+			 MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED, -1, 0)
+		    == MAP_FAILED)
 			goto out_release_area;
 
 		/* Bind to NUMA node */
