@@ -648,7 +648,6 @@ HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
 	bool is_node_supported = true;
 	uint32_t num_supported_nodes = 0;
 
-
 	assert(props);
 	fd = fopen(KFD_SYSFS_PATH_SYSTEM_PROPERTIES, "r");
 	if (!fd)
@@ -912,7 +911,9 @@ exit:
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 					    HsaNodeProperties *props,
 					    uint32_t *gpu_id,
-					    struct pci_ids pacc)
+					    struct pci_ids pacc,
+					    bool *p2p_links,
+					    uint32_t *num_p2pLinks)
 {
 	FILE *fd;
 	char *read_buf, *p, *envvar, dummy;
@@ -974,7 +975,13 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->NumCaches = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "io_links_count") == 0)
 			props->NumIOLinks = (uint32_t)prop_val;
-		else if (strcmp(prop_name, "cpu_core_id_base") == 0)
+		else if (strcmp(prop_name, "p2p_links_count") == 0) {
+			props->NumIOLinks += (uint32_t)prop_val;
+			if (num_p2pLinks)
+				*num_p2pLinks = (uint32_t)prop_val;
+			if (p2p_links)
+				*p2p_links = true;
+		} else if (strcmp(prop_name, "cpu_core_id_base") == 0)
 			props->CComputeIdLo = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "simd_id_base") == 0)
 			props->FComputeIdLo = (uint32_t)prop_val;
@@ -1411,7 +1418,7 @@ static HSAKMT_STATUS topology_map_sysfs_to_user_node_id(uint32_t sys_node_id, ui
  */
 static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 						     uint32_t iolink_id,
-						     HsaIoLinkProperties *props)
+						     HsaIoLinkProperties *props, bool p2pLink)
 {
 	FILE *fd;
 	char *read_buf, *p;
@@ -1428,7 +1435,11 @@ static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, iolink_id);
+	if (p2pLink)
+		snprintf(path, 256, "%s/%d/p2p_links/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, iolink_id);
+	else
+		snprintf(path, 256, "%s/%d/io_links/%d/properties", KFD_SYSFS_PATH_NODES, sys_node_id, iolink_id);
+
 	fd = fopen(path, "r");
 	if (!fd)
 		return HSAKMT_STATUS_ERROR;
@@ -1736,6 +1747,9 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	struct pci_ids pacc;
 	struct proc_cpuinfo *cpuinfo;
 	const uint32_t num_procs = get_nprocs();
+	uint32_t num_ioLinks;
+	bool p2p_links = false;
+	uint32_t num_p2pLinks = 0;
 
 	cpuinfo = calloc(num_procs, sizeof(struct proc_cpuinfo));
 	if (!cpuinfo) {
@@ -1761,7 +1775,8 @@ retry:
 		for (i = 0; i < sys_props.NumNodes; i++) {
 			ret = topology_sysfs_get_node_props(i,
 					&temp_props[i].node,
-					&temp_props[i].gpu_id, pacc);
+					&temp_props[i].gpu_id,
+					pacc, &p2p_links, &num_p2pLinks);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
 				free_properties(temp_props, i);
 				goto err;
@@ -1819,17 +1834,19 @@ retry:
 				free_properties(temp_props, i + 1);
 				goto err;
 			}
+			num_ioLinks = temp_props[i].node.NumIOLinks - num_p2pLinks;
+			uint32_t link_id = 0;
 
-			if (temp_props[i].node.NumIOLinks) {
-				uint32_t sys_link_id = 0, link_id = 0;
+			if (num_ioLinks) {
+				uint32_t sys_link_id = 0;
 
 				/* Parse all the sysfs specified io links. Skip the ones where the
 				 * remote node (node_to) is not accessible
 				 */
-				while (sys_link_id < temp_props[i].node.NumIOLinks &&
+				while (sys_link_id < num_ioLinks &&
 					link_id < sys_props.NumNodes - 1) {
 					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
-									      &temp_props[i].link[link_id]);
+								&temp_props[i].link[link_id], false);
 					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
 						ret = HSAKMT_STATUS_SUCCESS;
 						continue;
@@ -1840,16 +1857,39 @@ retry:
 					link_id++;
 				}
 				/* sysfs specifies all the io links. Limit the number to valid ones */
+				num_ioLinks = link_id;
+			}
+
+			if (num_p2pLinks) {
+				uint32_t sys_link_id = 0;
+
+				/* Parse all the sysfs specified p2p links.
+				 */
+				while (sys_link_id < num_p2pLinks &&
+					link_id < sys_props.NumNodes - 1) {
+					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
+								&temp_props[i].link[link_id], true);
+					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+						ret = HSAKMT_STATUS_SUCCESS;
+						continue;
+					} else if (ret != HSAKMT_STATUS_SUCCESS) {
+						free_properties(temp_props, i + 1);
+						goto err;
+					}
+					link_id++;
+				}
 				temp_props[i].node.NumIOLinks = link_id;
 			}
 		}
 		pci_ids_destroy(pacc);
 	}
 
-	/* All direct IO links are created in the kernel. Here we need to
-	 * connect GPU<->GPU or GPU<->CPU indirect IO links.
-	 */
-	topology_create_indirect_gpu_links(&sys_props, temp_props);
+	if (!p2p_links) {
+		/* All direct IO links are created in the kernel. Here we need to
+		 * connect GPU<->GPU or GPU<->CPU indirect IO links.
+		 */
+		topology_create_indirect_gpu_links(&sys_props, temp_props);
+	}
 
 	ret = topology_sysfs_get_generation(&gen_end);
 	if (ret != HSAKMT_STATUS_SUCCESS) {

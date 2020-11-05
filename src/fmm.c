@@ -2178,7 +2178,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
-		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc);
+		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc, NULL, NULL);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
 
