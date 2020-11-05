@@ -1625,7 +1625,7 @@ TEST_F(KFDQMTest, P2PTest) {
         LOG() << "Skipping test: At least two GPUs are required." << std::endl;
         return;
     }
-    std::vector<HSAuint32> nodes;
+    std::vector<int> nodes;
 
     /* This test simulates RT team's P2P part in IPCtest:
      *
@@ -1647,8 +1647,7 @@ TEST_F(KFDQMTest, P2PTest) {
         nodes.push_back(g_TestNodeId);
         nodes.push_back(g_TestDstNodeId);
 
-        if (!m_NodeInfo.IsGPUNodeLargeBar(g_TestDstNodeId) &&
-            !m_NodeInfo.AreGPUNodesXGMI(g_TestNodeId, g_TestDstNodeId)) {
+        if (!m_NodeInfo.IsPeerAccessibleByNode(g_TestNodeId, g_TestDstNodeId)) {
             LOG() << "Skipping test: Dst GPU specified is not peer-accessible." << std::endl;
             return;
         }
@@ -1657,8 +1656,7 @@ TEST_F(KFDQMTest, P2PTest) {
             return;
         }
     } else {
-        HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
-        m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, true);
+        nodes = m_NodeInfo.GetNodesWithGPU();
         if (nodes.size() < 2) {
             LOG() << "Skipping test: Test requires at least one large bar GPU." << std::endl;
             LOG() << "               or two GPUs are XGMI connected." << std::endl;
@@ -1685,7 +1683,7 @@ TEST_F(KFDQMTest, P2PTest) {
     EXPECT_SUCCESS(hsaKmtAllocMemory(0, size, memFlags,
                                      reinterpret_cast<void **>(&sysBuf)));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sysBuf, size, NULL,
-                                             mapFlags, nodes.size(), &nodes[0]));
+                                             mapFlags, nodes.size(), (HSAuint32 *)&nodes[0]));
 #define MAGIC_NUM 0xdeadbeaf
 
     /* First GPU fills mem with MAGIC_NUM */
@@ -1707,6 +1705,11 @@ TEST_F(KFDQMTest, P2PTest) {
         } else {
             n = 2;
             next = nodes[i];
+
+            /* check if cur access next node */
+            if (!m_NodeInfo.IsPeerAccessibleByNode(next, cur))
+                continue;
+
             ASSERT_SUCCESS(hsaKmtAllocMemory(next, size, memFlags, reinterpret_cast<void**>(&dst)));
             ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(dst, size, NULL));
         }

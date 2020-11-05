@@ -616,6 +616,23 @@ const bool HsaNodeInfo::IsGPUNodeLargeBar(int node) const {
     return false;
 }
 
+const bool HsaNodeInfo::IsPeerAccessibleByNode(int peer, int node) const {
+    const HsaNodeProperties *pNodeProperties;
+
+    pNodeProperties = GetNodeProperties(node);
+    if (pNodeProperties) {
+        HsaIoLinkProperties p2pLinksProperties[pNodeProperties->NumIOLinks];
+        EXPECT_SUCCESS(hsaKmtGetNodeIoLinkProperties(node,
+					pNodeProperties->NumIOLinks, p2pLinksProperties));
+
+        for (unsigned link = 0; link < pNodeProperties->NumIOLinks; link++)
+            if (p2pLinksProperties[link].NodeTo == peer)
+                return true;
+    }
+
+    return false;
+}
+
 const int HsaNodeInfo::FindLargeBarGPUNode() const {
     const std::vector<int> gpuNodes = GetNodesWithGPU();
 
@@ -637,27 +654,16 @@ const bool HsaNodeInfo::AreGPUNodesXGMI(int node0, int node1) const {
     return false;
 }
 
-int HsaNodeInfo::FindAccessiblePeers(std::vector<HSAuint32> *peers, HSAuint32 dstNode,
-        bool bidirectional) const {
-    peers->push_back(dstNode);
-    if (IsGPUNodeLargeBar(dstNode)) {
-        for (unsigned i = 0; i < m_NodesWithGPU.size(); i++) {
-            if (m_NodesWithGPU.at(i) == dstNode)
-                continue;
+int HsaNodeInfo::FindAccessiblePeers(std::vector<int> *peers,
+		                             HSAuint32 node) const {
+    peers->push_back(node);
 
-            if (!bidirectional || IsGPUNodeLargeBar(m_NodesWithGPU.at(i)) ||
-                AreGPUNodesXGMI(dstNode, m_NodesWithGPU.at(i)))
-                peers->push_back(m_NodesWithGPU.at(i));
-        }
-    } else {
-        for (unsigned i = 0; i < m_NodesWithGPU.size(); i++) {
-            if (m_NodesWithGPU.at(i) == dstNode)
-                continue;
+    for (unsigned i = 0; i < m_NodesWithGPU.size(); i++) {
+        if (m_NodesWithGPU.at(i) == node)
+            continue;
 
-            if (AreGPUNodesXGMI(dstNode, m_NodesWithGPU.at(i)))
-                peers->push_back(m_NodesWithGPU.at(i));
-        }
+        if (IsPeerAccessibleByNode(m_NodesWithGPU.at(i), node))
+            peers->push_back(m_NodesWithGPU.at(i));
     }
-
     return peers->size();
 }
