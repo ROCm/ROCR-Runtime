@@ -145,7 +145,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
     }
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
-    std::vector<HSAuint32> nodes;
+    std::vector<int> nodes;
     const bool isSpecified = g_TestDstNodeId != -1 && g_TestNodeId != -1;
     int numPeers = 0;
 
@@ -153,14 +153,13 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
         if (g_TestNodeId != g_TestDstNodeId) {
             nodes.push_back(g_TestNodeId);
             nodes.push_back(g_TestDstNodeId);
-            if ((m_NodeInfo.IsGPUNodeLargeBar(g_TestNodeId) &&
-                 m_NodeInfo.IsGPUNodeLargeBar(g_TestDstNodeId)) ||
-                m_NodeInfo.AreGPUNodesXGMI(g_TestNodeId, g_TestDstNodeId))
+            if ((m_NodeInfo.IsPeerAccessibleByNode(g_TestNodeId, g_TestDstNodeId) &&
+                 m_NodeInfo.IsPeerAccessibleByNode(g_TestDstNodeId, g_TestNodeId)))
                 numPeers = 2;
         }
     } else {
-        HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
-        numPeers = m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, true);
+        nodes = m_NodeInfo.GetNodesWithGPU();
+        numPeers = nodes.size();
     }
 
     if (numPeers < 2) {
@@ -168,7 +167,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
         return;
     }
 
-    std::vector<HSAuint32> sysNodes(nodes); // include sysMem node 0...
+    std::vector<int> sysNodes(nodes); // include sysMem node 0...
     sysNodes.insert(sysNodes.begin(),0);
 
     const int total_tests = 7;
@@ -230,6 +229,9 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
                 if (n1 == n2)
                     continue;
 
+                if (!m_NodeInfo.IsPeerAccessibleByNode(n2, n1))
+                    continue;
+
                 snprintf(str, sizeof(str), "[%d -> %d] ", n1, n2);
                 msg << str << std::endl;
                 testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
@@ -251,6 +253,10 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
             for (unsigned j = i + 1; j < nodes.size(); j++) {
                 HSAuint32 n2 = nodes[j];
 
+                if (!m_NodeInfo.IsPeerAccessibleByNode(n2, n1) ||
+                    !m_NodeInfo.IsPeerAccessibleByNode(n1, n2))
+                    continue;
+
                 snprintf(str, sizeof(str), "[%d <-> %d] ", n1, n2);
                 msg << str << std::endl;
                 testNodeToNodes(n1, &n2, 1, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
@@ -265,8 +271,8 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
         LOG() << test_suits_string[s] << std::endl;
         msg << test_suits_string[s] << std::endl;
         /* Just use GPU nodes to do copy.*/
-        std::vector<HSAuint32> &src = test_suits[s][0] != NONE ? nodes : sysNodes;
-        std::vector<HSAuint32> &dst = test_suits[s][1] != NONE ? nodes : sysNodes;
+        std::vector<int> &src = test_suits[s][0] != NONE ? nodes : sysNodes;
+        std::vector<int> &dst = test_suits[s][1] != NONE ? nodes : sysNodes;
 
         for (unsigned i = 0; i < src.size(); i++) {
             HSAuint32 n1 = src[i];
@@ -275,9 +281,18 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
             int n = 0;
             char str[64];
 
-            for (unsigned j = 0; j < dst.size(); j++)
-                if (dst[j] != n1)
+            for (unsigned j = 0; j < dst.size(); j++) {
+                if (dst[j] != n1) {
+                    if (test_suits[s][0] != NONE &&
+                        !m_NodeInfo.IsPeerAccessibleByNode(dst[j], n1))
+                            continue;
+                    if (test_suits[s][1] != NONE &&
+                        !m_NodeInfo.IsPeerAccessibleByNode(n1, dst[j]))
+                            continue;
                     n2[n++] = dst[j];
+                }
+            }
+
             /* At least 2 dst GPUs.*/
             if (n < 2)
                 continue;
@@ -293,7 +308,6 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
                                         (float)speed2 / 1024 << " GB/s" << std::endl;
         }
     }
-
 exit:
     /* New line.*/
     LOG() << std::endl << msg.str() << std::endl;
@@ -309,17 +323,17 @@ TEST_F(KFDPerformanceTest, P2POverheadTest) {
     }
 
     const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
-    std::vector<HSAuint32> nodes;
+    std::vector<int> nodes;
 
-    HSAint32 defaultGPU = m_NodeInfo.HsaDefaultGPUNode();
-    int numPeers = m_NodeInfo.FindAccessiblePeers(&nodes, defaultGPU, true);
+    nodes = m_NodeInfo.GetNodesWithGPU();
+    int numPeers = nodes.size();
 
     if (numPeers < 2) {
         LOG() << "Skipping test: Need at least two large bar GPU or XGMI connected." << std::endl;
         return;
     }
 
-    std::vector<HSAuint32> sysNodes(nodes); // include sysMem node 0...
+    std::vector<int> sysNodes(nodes); // include sysMem node 0...
     sysNodes.insert(sysNodes.begin(),0);
 
     /* size should be small.*/
@@ -351,6 +365,9 @@ TEST_F(KFDPerformanceTest, P2POverheadTest) {
             for (unsigned j = 0; j < sysNodes.size(); j++) {
                 HSAuint32 n2 = sysNodes[j];
                 std::stringstream msg;
+
+                if (n1 != n2 && !m_NodeInfo.IsPeerAccessibleByNode(n2, n1))
+                    continue;
 
                 msg << test_suits_string[s] << "[" << n1 << " -> " << n2 << "]";
                 for (auto &size : sizeArray) {
