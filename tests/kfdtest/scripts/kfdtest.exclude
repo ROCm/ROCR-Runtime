@@ -250,3 +250,9 @@ FILTER[dimgrey_cavefish]=\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+
+FILTER[beige_goby]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDDBGTest.*:"\
+"KFDPerfCountersTest.*:"
