@@ -1167,8 +1167,7 @@ void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_ti
   time.end = TranslateTime(end);
   time.start = TranslateTime(start);
 
-  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
-      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
+  if ((start == 0) || (end == 0) || (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 }
 
@@ -1180,8 +1179,7 @@ void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_
   time.end = TranslateTime(end);
   time.start = TranslateTime(start);
 
-  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
-      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
+  if ((start == 0) || (end == 0) || (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 }
 
@@ -1194,9 +1192,15 @@ Intervals larger than t0_ will be frequency adjusted.  This admits a numerical e
 than twice the frequency stability (~10^-5).
 */
 uint64_t GpuAgent::TranslateTime(uint64_t tick) {
-  // Ensure interpolation for times during program execution.
+  // Only allow short (error bounded) extrapolation for times during program execution.
+  // Limit errors due to relative frequency drift to ~0.5us.  Sync clocks at 16Hz.
+  const int64_t max_extrapolation = core::Runtime::runtime_singleton_->sys_clock_freq() >> 4;
+
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
-  if ((t1_.GPUClockCounter < tick) || (t1_.GPUClockCounter == t0_.GPUClockCounter)) SyncClocks();
+  // Limit errors due to correlated pair certainty to ~0.5us.
+  // extrapolated time < (0.5us / half clock read certainty) * delay between clock measures
+  // clock read certainty is <4us.
+  if (((t1_.GPUClockCounter - t0_.GPUClockCounter) >> 2) + t1_.GPUClockCounter < tick) SyncClocks();
 
   // Good for ~300 yrs
   // uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
@@ -1209,9 +1213,21 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 
   // Good for ~3.5 months.
   uint64_t system_tick = 0;
-  double ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
-      double(t1_.GPUClockCounter - t0_.GPUClockCounter);
-  system_tick = uint64_t(int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)))) + t1_.SystemClockCounter;
+  int64_t elapsed = 0;
+  double ratio;
+
+  // Valid ticks only need at most one SyncClocks.
+  for (int i = 0; i < 2; i++) {
+    ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
+        double(t1_.GPUClockCounter - t0_.GPUClockCounter);
+    elapsed = int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)));
+
+    // Skip clock sync if under the extrapolation limit.
+    if (elapsed < max_extrapolation) break;
+    SyncClocks();
+  }
+
+  system_tick = uint64_t(elapsed) + t1_.SystemClockCounter;
 
   // tick predates HSA startup - extrapolate with fixed clock ratio
   if (tick < t0_.GPUClockCounter) {
