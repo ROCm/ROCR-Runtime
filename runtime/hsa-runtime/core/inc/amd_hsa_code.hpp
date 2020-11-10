@@ -230,6 +230,8 @@ namespace code {
       amd::elf::SymbolTable* Symtab() { assert(img); return img->symtab(); }
       uint16_t Machine() const { return img->Machine(); }
       uint32_t EFlags() const { return img->EFlags(); }
+      uint32_t EClass() const { return img->EClass(); }
+      uint32_t OsAbi() const { return img->OsAbi(); }
 
       AmdHsaCode(bool combineDataSegments = true);
       virtual ~AmdHsaCode();

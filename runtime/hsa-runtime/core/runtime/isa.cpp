@@ -67,17 +67,54 @@ bool Wavefront::GetInfo(
   }
 }
 
+/* static */
+bool Isa::IsCompatible(const Isa &code_object_isa,
+                       const Isa &agent_isa) {
+  if (code_object_isa.version() != agent_isa.version())
+    return false;
+
+  assert(code_object_isa.IsSrameccSupported() == agent_isa.IsSrameccSupported()  && agent_isa.sramecc() != IsaFeature::Any);
+  if ((code_object_isa.sramecc() == IsaFeature::Enabled ||
+        code_object_isa.sramecc() == IsaFeature::Disabled) &&
+      code_object_isa.sramecc() != agent_isa.sramecc())
+    return false;
+
+  assert(code_object_isa.IsXnackSupported() == agent_isa.IsXnackSupported() && agent_isa.xnack() != IsaFeature::Any);
+  if ((code_object_isa.xnack() == IsaFeature::Enabled ||
+        code_object_isa.xnack() == IsaFeature::Disabled) &&
+      code_object_isa.xnack() != agent_isa.xnack())
+    return false;
+
+  return true;
+}
+
 std::string Isa::GetFullName() const {
   std::stringstream full_name;
   full_name << GetArchitecture() << "-" << GetVendor() << "-" << GetOS() << "-"
             << GetEnvironment() << "-gfx" << GetMajorVersion()
             << GetMinorVersion() << GetStepping();
 
-  if (xnackEnabled_)
-    full_name << "+xnack";
+  switch (sramecc_) {
+  case IsaFeature::Disabled:
+    full_name << ":sramecc-";
+    break;
+  case IsaFeature::Enabled:
+    full_name << ":sramecc+";
+    break;
+  default:
+    break;
+  }
 
-  if (sramEcc_)
-    full_name << "+sram-ecc";
+  switch (xnack_) {
+  case IsaFeature::Disabled:
+    full_name << ":xnack-";
+    break;
+  case IsaFeature::Enabled:
+    full_name << ":xnack+";
+    break;
+  default:
+    break;
+  }
 
   return full_name.str();
 }
@@ -185,8 +222,8 @@ const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
-const Isa *IsaRegistry::GetIsa(const Isa::Version &version, bool xnack, bool ecc) {
-  auto isareg_iter = supported_isas_.find(Isa(version, xnack, ecc).GetFullName());
+const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
+  auto isareg_iter = supported_isas_.find(Isa(version, sramecc, xnack).GetFullName());
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
@@ -194,52 +231,72 @@ const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
   IsaRegistry::GetSupportedIsas();
 
 const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
-#define ISAREG_ENTRY_GEN(maj, min, stp, xnack, ecc)                                 \
-  Isa amd_amdgpu_##maj##min##stp##xnack##ecc;                                       \
-  amd_amdgpu_##maj##min##stp##xnack##ecc.version_ = Isa::Version(maj, min, stp);    \
-  amd_amdgpu_##maj##min##stp##xnack##ecc.xnackEnabled_ = xnack;                     \
-  amd_amdgpu_##maj##min##stp##xnack##ecc.sramEcc_ = ecc;                            \
-  supported_isas.insert(std::make_pair(                                             \
-      amd_amdgpu_##maj##min##stp##xnack##ecc.GetFullName(),                         \
-      amd_amdgpu_##maj##min##stp##xnack##ecc));                                     \
+#define ISAREG_ENTRY_GEN(maj, min, stp, sramecc, xnack)                                                  \
+  Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack;                                    \
+  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.version_ = Isa::Version(maj, min, stp); \
+  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.sramecc_ = sramecc;                     \
+  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.xnack_ = xnack;                         \
+  supported_isas.insert(std::make_pair(                                                                  \
+      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.GetFullName(),                      \
+      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack));                                  \
 
   IsaMap supported_isas;
+  IsaFeature unsupported = IsaFeature::Unsupported;
+  IsaFeature any = IsaFeature::Any;
+  IsaFeature disabled = IsaFeature::Disabled;
+  IsaFeature enabled = IsaFeature::Enabled;
 
-  ISAREG_ENTRY_GEN(7, 0, 0, false, false)
-  ISAREG_ENTRY_GEN(7, 0, 1, false, false)
-  ISAREG_ENTRY_GEN(7, 0, 2, false, false)
-  ISAREG_ENTRY_GEN(8, 0, 1, false, false)
-  ISAREG_ENTRY_GEN(8, 0, 1, true,  false)
-  ISAREG_ENTRY_GEN(8, 0, 2, false, false)
-  ISAREG_ENTRY_GEN(8, 0, 2, true,  false)
-  ISAREG_ENTRY_GEN(8, 0, 3, false, false)
-  ISAREG_ENTRY_GEN(8, 0, 3, true,  false)
-  ISAREG_ENTRY_GEN(8, 1, 0, false, false)
-  ISAREG_ENTRY_GEN(8, 1, 0, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 0, false, false)
-  ISAREG_ENTRY_GEN(9, 0, 0, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 2, false, false)
-  ISAREG_ENTRY_GEN(9, 0, 2, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 4, false, false)
-  ISAREG_ENTRY_GEN(9, 0, 4, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 6, false, false)
-  ISAREG_ENTRY_GEN(9, 0, 6, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 6, false, true )
-  ISAREG_ENTRY_GEN(9, 0, 6, true,  true )
-  ISAREG_ENTRY_GEN(9, 0, 8, false, false)
-  ISAREG_ENTRY_GEN(9, 0, 8, true,  false)
-  ISAREG_ENTRY_GEN(9, 0, 8, false, true )
-  ISAREG_ENTRY_GEN(9, 0, 8, true,  true )
-  ISAREG_ENTRY_GEN(10, 1, 0, false, false)
-  ISAREG_ENTRY_GEN(10, 1, 0, true,  false)
-  ISAREG_ENTRY_GEN(10, 1, 1, false, false)
-  ISAREG_ENTRY_GEN(10, 1, 1, true,  false)
-  ISAREG_ENTRY_GEN(10, 1, 2, false, false)
-  ISAREG_ENTRY_GEN(10, 1, 2, true,  false)
-  ISAREG_ENTRY_GEN(10, 3, 0, false, false)
-  ISAREG_ENTRY_GEN(10, 3, 0, true,  false)
-  ISAREG_ENTRY_GEN(10, 3, 1, false, false)
-  ISAREG_ENTRY_GEN(10, 3, 1, true,  false)
+  //               Version   SRAMECC      XNACK
+  ISAREG_ENTRY_GEN(7, 0, 0,  unsupported, unsupported)
+  ISAREG_ENTRY_GEN(7, 0, 1,  unsupported, unsupported)
+  ISAREG_ENTRY_GEN(7, 0, 2,  unsupported, unsupported)
+  ISAREG_ENTRY_GEN(8, 0, 1,  unsupported, any)
+  ISAREG_ENTRY_GEN(8, 0, 1,  unsupported, disabled)
+  ISAREG_ENTRY_GEN(8, 0, 1,  unsupported, enabled)
+  ISAREG_ENTRY_GEN(8, 0, 2,  unsupported, unsupported)
+  ISAREG_ENTRY_GEN(8, 0, 3,  unsupported, unsupported)
+  ISAREG_ENTRY_GEN(8, 1, 0,  unsupported, any)
+  ISAREG_ENTRY_GEN(8, 1, 0,  unsupported, disabled)
+  ISAREG_ENTRY_GEN(8, 1, 0,  unsupported, enabled)
+  ISAREG_ENTRY_GEN(9, 0, 0,  unsupported, any)
+  ISAREG_ENTRY_GEN(9, 0, 0,  unsupported, disabled)
+  ISAREG_ENTRY_GEN(9, 0, 0,  unsupported, enabled)
+  ISAREG_ENTRY_GEN(9, 0, 2,  unsupported, any)
+  ISAREG_ENTRY_GEN(9, 0, 2,  unsupported, disabled)
+  ISAREG_ENTRY_GEN(9, 0, 2,  unsupported, enabled)
+  ISAREG_ENTRY_GEN(9, 0, 4,  unsupported, any)
+  ISAREG_ENTRY_GEN(9, 0, 4,  unsupported, disabled)
+  ISAREG_ENTRY_GEN(9, 0, 4,  unsupported, enabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  any,         any)
+  ISAREG_ENTRY_GEN(9, 0, 6,  any,         disabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  any,         enabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  disabled,    any)
+  ISAREG_ENTRY_GEN(9, 0, 6,  enabled,     any)
+  ISAREG_ENTRY_GEN(9, 0, 6,  disabled,    disabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  disabled,    enabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  enabled,     disabled)
+  ISAREG_ENTRY_GEN(9, 0, 6,  enabled,     enabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  any,         any)
+  ISAREG_ENTRY_GEN(9, 0, 8,  any,         disabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  any,         enabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  disabled,    any)
+  ISAREG_ENTRY_GEN(9, 0, 8,  enabled,     any)
+  ISAREG_ENTRY_GEN(9, 0, 8,  disabled,    disabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  disabled,    enabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  enabled,     disabled)
+  ISAREG_ENTRY_GEN(9, 0, 8,  enabled,     enabled)
+  ISAREG_ENTRY_GEN(10, 1, 0, unsupported, any)
+  ISAREG_ENTRY_GEN(10, 1, 0, unsupported, disabled)
+  ISAREG_ENTRY_GEN(10, 1, 0, unsupported, enabled)
+  ISAREG_ENTRY_GEN(10, 1, 1, unsupported, any)
+  ISAREG_ENTRY_GEN(10, 1, 1, unsupported, disabled)
+  ISAREG_ENTRY_GEN(10, 1, 1, unsupported, enabled)
+  ISAREG_ENTRY_GEN(10, 1, 2, unsupported, any)
+  ISAREG_ENTRY_GEN(10, 1, 2, unsupported, disabled)
+  ISAREG_ENTRY_GEN(10, 1, 2, unsupported, enabled)
+  ISAREG_ENTRY_GEN(10, 3, 0, unsupported, unsupported)
+  ISAREG_ENTRY_GEN(10, 3, 1, unsupported, unsupported)
+#undef ISAREG_ENTRY_GEN
   return supported_isas;
 }
 

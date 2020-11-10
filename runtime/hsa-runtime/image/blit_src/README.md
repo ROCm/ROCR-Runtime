@@ -12,12 +12,17 @@ whenever a new device is introduced.
 To add a new supported device, the following steps are required:
 
   1. Declare an extern variable of the device XXX, by adding the line of
-     "extern uint32_t ocl_blit_object_gfxNNN[];" in "blit_kernel.cpp"
+     "extern uint32_t ocl_blit_object_gfxNNN[];" in "blit_kernel.cpp".
   2. Update the BlitKernel::GetPatchedBlitObject() function to support the
-     device by assigning "blit_code_object" to "ocl_blit_object_gfxNNN[]"
-  3. Add the gfxNNN to the TARGET_DEVICES list in CMakeLists.txt
-  4. If the new device requires XNACK, add it to the XNACK_DEVS list in CMakeLists.txt
-  5. Rebuild the image library
+     device by assigning "blit_code_object" to "ocl_blit_object_gfxNNN[]".
+  3. Add the target to the TARGET_DEVICES list in CMakeLists.txt. Specify using
+     the target ID syntax which is the target GFX IP name, optionally followed
+     by the settings for the target features such as XNACK and SRAMECC. If
+     omitted, a target feature defaults to producing code that will execute on
+     any setting. For example, "gfx908" for code that will run on any setting,
+     or "gfx908:sramecc+:xnack-" for code that will only run if SRAMECC is
+     enabled and XNACK is disabled.
+  4. Rebuild the image library.
 
 
 ## REQUIREMENT
