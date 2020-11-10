@@ -100,11 +100,34 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   historical_clock_ratio_ = 0.0;
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
+  const core::Isa *isa_base = core::IsaRegistry::GetIsa(
+      core::Isa::Version(node_props.EngineId.ui32.Major,
+                         node_props.EngineId.ui32.Minor,
+                         node_props.EngineId.ui32.Stepping));
+  if (!isa_base) {
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ISA, "Agent creation failed.\nThe GPU node has an unrecognized id.\n");
+  }
+
+  rocr::core::IsaFeature sramecc = rocr::core::IsaFeature::Unsupported;
+  if (isa_base->IsSrameccSupported()) {
+    sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1
+                   ? core::IsaFeature::Enabled
+                   : core::IsaFeature::Disabled;
+  }
+
+  rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
+  if (isa_base->IsXnackSupported()) {
+    // TODO: This needs to be obtained form KFD once HMM implemented.
+    xnack = profile_ == HSA_PROFILE_FULL ? core::IsaFeature::Enabled
+                                         : core::IsaFeature::Disabled;
+  }
+
   // Set instruction set architecture via node property, only on GPU device.
   isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
       core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
-                         node_props.EngineId.ui32.Stepping),
-      profile_ == HSA_PROFILE_FULL, false);//node_props.Capability.ui32.SRAM_EDCSupport == 1);
+                         node_props.EngineId.ui32.Stepping), sramecc, xnack);
+
+  assert(isa_ != nullptr && "ISA registry inconsistency.");
 
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&

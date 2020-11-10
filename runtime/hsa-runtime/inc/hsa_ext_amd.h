@@ -1815,11 +1815,11 @@ typedef enum {
   // GPU attempted access to a host only page.
   HSA_AMD_MEMORY_FAULT_HOST_ONLY = 1 << 3,
   // DRAM ECC failure.
-  HSA_AMD_MEMORY_FAULT_DRAM_ECC = 1 << 4,
+  HSA_AMD_MEMORY_FAULT_DRAMECC = 1 << 4,
   // Can't determine the exact fault address.
   HSA_AMD_MEMORY_FAULT_IMPRECISE = 1 << 5,
   // SRAM ECC failure (ie registers, no fault address).
-  HSA_AMD_MEMORY_FAULT_SRAM_ECC = 1 << 6,
+  HSA_AMD_MEMORY_FAULT_SRAMECC = 1 << 6,
   // GPU reset following unspecified hang.
   HSA_AMD_MEMORY_FAULT_HANG = 1 << 31
 } hsa_amd_memory_fault_reason_t;

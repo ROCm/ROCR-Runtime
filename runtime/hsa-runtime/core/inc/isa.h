@@ -82,6 +82,13 @@ private:
   friend class Isa;
 };
 
+enum class IsaFeature : uint8_t {
+  Unsupported,
+  Any,
+  Disabled,
+  Enabled,
+};
+
 /// @class Isa.
 /// @brief Instruction Set Architecture.
 class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
@@ -103,21 +110,34 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
     return isa_object;
   }
 
+  /// @returns True if @p code_object_isa and @p agent_isa are compatible,
+  /// false otherwise.
+  static bool IsCompatible(const Isa &code_object_isa, const Isa &agent_isa);
+
   /// @returns This Isa's version.
   const Version &version() const {
     return version_;
   }
-  /// @returns True if this Isa has xnack enabled, false otherwise.
-  const bool &xnackEnabled() const {
-    return xnackEnabled_;
+  /// @returns SRAM ECC feature status.
+  const IsaFeature &sramecc() const {
+    return sramecc_;
   }
-  /// @returns True if this Isa has sram ecc enabled, false otherwise.
-  const bool &sramEccEnabled() const {
-    return sramEcc_;
+  /// @returns XNACK feature status.
+  const IsaFeature &xnack() const {
+    return xnack_;
   }
   /// @returns This Isa's supported wavefront.
   const Wavefront &wavefront() const {
     return wavefront_;
+  }
+
+  /// @returns True if SRAMECC feature is supported, false otherwise.
+  bool IsSrameccSupported() const {
+    return sramecc_ != IsaFeature::Unsupported;
+  }
+  /// @returns True if XNACK feature is supported, false otherwise.
+  bool IsXnackSupported() const {
+    return xnack_ != IsaFeature::Unsupported;
   }
 
   /// @returns This Isa's architecture.
@@ -153,19 +173,6 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
     return &wavefront_;
   }
 
-  /// @returns True if this Isa is compatible with @p isa_object, false
-  /// otherwise.
-  bool IsCompatible(const Isa *isa_object) const {
-    assert(isa_object);
-    return version_ == isa_object->version_ &&
-           xnackEnabled_ == isa_object->xnackEnabled_;
-  }
-  /// @returns True if this Isa is compatible with @p isa_handle, false
-  /// otherwise.
-  bool IsCompatible(const hsa_isa_t &isa_handle) const {
-    assert(isa_handle.handle);
-    return IsCompatible(Object(isa_handle));
-  }
   /// @brief Isa is always in valid state.
   bool IsValid() const {
     return true;
@@ -186,22 +193,33 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
 
  private:
   /// @brief Default constructor.
-  Isa(): version_(Version(-1, -1, -1)), xnackEnabled_(false), sramEcc_(false) {}
+  Isa()
+      : version_(Version(-1, -1, -1)),
+        sramecc_(IsaFeature::Unsupported),
+        xnack_(IsaFeature::Unsupported) {}
 
   /// @brief Construct from @p version.
-  Isa(const Version &version): version_(version), xnackEnabled_(false), sramEcc_(false) {}
+  Isa(const Version &version)
+      : version_(version),
+        sramecc_(IsaFeature::Unsupported),
+        xnack_(IsaFeature::Unsupported) {}
 
   /// @brief Construct from @p version.
-  Isa(const Version &version, const bool xnack, const bool ecc): version_(version), xnackEnabled_(xnack), sramEcc_(ecc) {}
+  Isa(const Version &version,
+      IsaFeature sramecc,
+      IsaFeature xnack)
+      : version_(version),
+        sramecc_(sramecc),
+        xnack_(xnack) {}
 
   /// @brief Isa's version.
   Version version_;
 
-  /// @brief Isa's supported xnack flag.
-  bool xnackEnabled_;
+  /// @brief SRAMECC feature.
+  IsaFeature sramecc_;
 
-  /// @brief Isa's sram ecc flag.
-  bool sramEcc_;
+  /// @brief XNACK feature.
+  IsaFeature xnack_;
 
   /// @brief Isa's supported wavefront.
   Wavefront wavefront_;
@@ -217,7 +235,9 @@ class IsaRegistry final {
   /// @returns Isa for requested @p full_name, null pointer if not supported.
   static const Isa *GetIsa(const std::string &full_name);
   /// @returns Isa for requested @p version, null pointer if not supported.
-  static const Isa *GetIsa(const Isa::Version &version, bool xnack, bool ecc);
+  static const Isa *GetIsa(const Isa::Version &version,
+                           IsaFeature sramecc = IsaFeature::Any,
+                           IsaFeature xnack = IsaFeature::Any);
 
  private:
   /// @brief IsaRegistry's map type.

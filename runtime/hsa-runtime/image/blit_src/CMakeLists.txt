@@ -67,15 +67,9 @@ if (NOT ${FOUND})
   set (QUIT 1)
 endif()
 
-# Define the target devices with xnack enable
-if (NOT DEFINED XNACK_DEVS)
-  set (XNACK_DEVS "gfx801;gfx902")
-endif()
-set( XNACK_DEVS ${XNACK_DEVS} CACHE STRING "XNACK targets" FORCE )
-
 # Determine the target devices if not specified
 if (NOT DEFINED TARGET_DEVICES)
-  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031")
+  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031")
 endif()
 set( TARGET_DEVICES ${TARGET_DEVICES} CACHE STRING "Build targets" FORCE )
 
@@ -90,8 +84,8 @@ if(${CMAKE_VERBOSE_MAKEFILE})
   get_property(clang_path TARGET clang PROPERTY LOCATION)
   message("Using clang from: ${clang_path}")
   message("Build Setting:")
-  message("   Target Devices: ${TARGET_DEVICES}")
-  message("    XNACK Devices: ${XNACK_DEVS}")
+  message("  Target Devices*: ${TARGET_DEVICES}")
+  message("  (Specify \";\" separated list of target IDs.)")
   message("       Clang path: ${clang_path}")
   message("      Bitcode Dir: ${BITCODE_DIR}")
 endif()
@@ -99,9 +93,15 @@ endif()
 ##==========================================
 ##  Add custom command to generate a kernel code object file
 ##==========================================
-function(gen_kernel_bc TARGET_DEV XNACK_OPT INPUT_FILE OUTPUT_FILE)
+function(gen_kernel_bc TARGET_ID INPUT_FILE OUTPUT_FILE)
 
-  string (REPLACE "gfx" "" GFXIP "${TARGET_DEV}")
+  string (REGEX MATCH "^gfx([^:]+)" GFXIP "${TARGET_ID}")
+  set (GFXIP_NUMBER "${CMAKE_MATCH_1}")
+  # Report syntactically invalid target IDs and terminate.
+  if (NOT GFXIP)
+    message(FATAL_ERROR "Invalid target (${TARGET_ID}) specified for generating BLIT kerenel")
+    return()
+  endif()
   # Determine if device-libs is following old or new layout
   if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
     set(BITCODE_ARGS "-nogpulib
@@ -109,7 +109,7 @@ function(gen_kernel_bc TARGET_DEV XNACK_OPT INPUT_FILE OUTPUT_FILE)
       -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
       -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc
       -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_daz_opt_on.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP}.amdgcn.bc
+      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP_NUMBER}.amdgcn.bc
       -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_unsafe_math_off.amdgcn.bc
       -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_finite_only_off.amdgcn.bc")
   else()
@@ -118,7 +118,7 @@ function(gen_kernel_bc TARGET_DEV XNACK_OPT INPUT_FILE OUTPUT_FILE)
 
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
     "-O2 -x cl -cl-denorms-are-zero -cl-std=CL2.0 -target amdgcn-amd-amdhsa
-    -Xclang -finclude-default-header -mcpu=${TARGET_DEV} -m${XNACK_OPT}
+    -Xclang -finclude-default-header -mcpu=${TARGET_ID}
     ${BITCODE_ARGS} -o ${OUTPUT_FILE} ${INPUT_FILE}")
 
   ## Add custom command to produce a code object file.
@@ -140,19 +140,19 @@ endfunction(gen_kernel_bc)
 ##==========================================
 ## Find device code object name and forward to custom command
 ##==========================================
-function(build_kernel BLIT_NAME TARG_DEV)
+function(build_kernel BLIT_NAME TARGET_ID)
 
-  list (FIND XNACK_DEVS ${TARG_DEV} XNACK_IDX)
-  if (${XNACK_IDX} GREATER -1)
-    set (XNACK_OPT "xnack")
-  else()
-    set (XNACK_OPT "no-xnack")
+  string (REGEX MATCH "^gfx([^:]+)" GFXIP "${TARGET_ID}")
+  # Report syntactically invalid target IDs and terminate.
+  if (NOT GFXIP)
+    message(FATAL_ERROR "Invalid target (${TARGET_ID}) specified for generating BLIT kerenel (${BLIT_NAME})")
+    return()
   endif()
 
-  ##  generate kernel bitcodes
-  set (CODE_OBJECT_FILE "${BLIT_NAME}_${TARG_DEV}")
+  ## generate kernel bitcodes
+  set (CODE_OBJECT_FILE "${BLIT_NAME}_${GFXIP}")
   set (CL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/imageblit_kernels.cl)
-  gen_kernel_bc(${TARG_DEV} ${XNACK_OPT} ${CL_FILE} ${CODE_OBJECT_FILE})
+  gen_kernel_bc(${TARGET_ID} ${CL_FILE} ${CODE_OBJECT_FILE})
 
   ## Build a list of code object file names
   ## These will be target dependencies.

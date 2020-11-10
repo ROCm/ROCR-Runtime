@@ -80,13 +80,26 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
 }
 
 GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
+  GpuAgent* gpu = nullptr;
   if (node_prop.NumFComputeCores == 0) {
-    return nullptr;
+      // Ignore non GPUs.
+      return nullptr;
   }
-
-  GpuAgent* gpu = new GpuAgent(node_id, node_prop);
+  try {
+    gpu = new GpuAgent(node_id, node_prop);
+  } catch (const hsa_exception& e) {
+    if(e.error_code() == HSA_STATUS_ERROR_INVALID_ISA) {
+      ifdebug {
+        if (!strIsEmpty(e.what())) debug_print("Warning: %s\n", e.what());
+      }
+      // Ignore unrecognized GPUs.
+      return nullptr;
+    } else {
+      // Rethrow remaining exceptions.
+      throw;
+    }
+  }
   core::Runtime::runtime_singleton_->RegisterAgent(gpu);
-
   return gpu;
 }
 
@@ -180,8 +193,8 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list) {
 
     // Instantiate a Gpu device. The IO links
     // of this node have already been registered
-    const GpuAgent* gpu = DiscoverGpu(gpu_list[idx], node_prop);
-    assert((node_prop.NumFComputeCores != 0) && (gpu != nullptr) && "GPU device failed discovery.");
+    assert((node_prop.NumFComputeCores != 0) && "Improper node used for GPU device discovery.");
+    DiscoverGpu(gpu_list[idx], node_prop);
   }
 }
 

@@ -117,11 +117,11 @@ function(CompileKernel KRNL_NAME TARGET_DEV)
   # asm files
   #
   string(CONCAT CODE_ARG_STR "-Xclang -finclude-default-header "
-                "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} -mno-code-object-v3 "
+                "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} "
                 "${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} "
                 "${PROJECT_SOURCE_DIR}/${CL_FILE} -o ${KERNEL_DIR}/${CODEOBJ_FILE}")
   string(CONCAT ASM_ARG_STR "-S -Xclang -finclude-default-header "
-                "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} -mno-code-object-v3 "
+                "-target amdgcn-amdh-amdhsa -mcpu=${TARGET_DEV} "
                 "${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} "
                 "${PROJECT_SOURCE_DIR}/${CL_FILE} -o ${KERNEL_DIR}/${CODEASM_FILE}")
   set(ASM_ARG_LIST ${ASM_ARG_STR})

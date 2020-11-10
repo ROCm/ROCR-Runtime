@@ -314,7 +314,7 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   RET_IF_HSA_UTILS_ERR(err);
 
   hsa_executable_symbol_t kern_sym;
-  err = hsa_executable_get_symbol(executable, NULL, kern_name.c_str(), *agent,
+  err = hsa_executable_get_symbol(executable, NULL, (kern_name + ".kd").c_str(), *agent,
                                   0, &kern_sym);
   RET_IF_HSA_UTILS_ERR(err);
 

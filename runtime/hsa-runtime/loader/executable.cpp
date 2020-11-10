@@ -1216,7 +1216,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion != 1 && majorVersion != 2 && majorVersion != 3) {
+  if (majorVersion < 1 || majorVersion > 4) {
     logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1309,7 +1309,7 @@ hsa_status_t ExecutableImpl::LoadSegmentsV1(hsa_agent_t agent,
 
 hsa_status_t ExecutableImpl::LoadSegmentsV2(hsa_agent_t agent,
                                             const code::AmdHsaCode *c) {
-  assert(c->Machine() == EM_AMDGPU && "Program code objects are not supported");
+  assert(c->Machine() == ELF::EM_AMDGPU && "Program code objects are not supported");
 
   if (!c->DataSegmentCount()) return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
 
