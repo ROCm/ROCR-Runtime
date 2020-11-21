@@ -167,7 +167,8 @@ enum : int32_t {
 struct kernel_descriptor_t {
   uint32_t group_segment_fixed_size;
   uint32_t private_segment_fixed_size;
-  uint8_t reserved0[8];
+  uint32_t kernarg_size;
+  uint8_t reserved0[4];
   int64_t kernel_code_entry_byte_offset;
   uint8_t reserved1[24];
   uint32_t compute_pgm_rsrc1;
@@ -186,7 +187,10 @@ static_assert(
     offsetof(kernel_descriptor_t, private_segment_fixed_size) == 4,
     "invalid offset for private_segment_fixed_size");
 static_assert(
-    offsetof(kernel_descriptor_t, reserved0) == 8,
+      offsetof(kernel_descriptor_t, kernarg_size) == 8,
+      "invalid offset for kernarg_size");
+static_assert(
+    offsetof(kernel_descriptor_t, reserved0) == 12,
     "invalid offset for reserved0");
 static_assert(
     offsetof(kernel_descriptor_t, kernel_code_entry_byte_offset) == 16,
