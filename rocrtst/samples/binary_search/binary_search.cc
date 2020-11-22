@@ -419,6 +419,7 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
                                                      &bs->group_segment_size);
   RET_IF_HSA_ERR(err);
 
+  // Remaining queries not supported on code object v3.
   err = hsa_executable_symbol_get_info(kern_sym,
                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE,
                                                            &bs->kernarg_size);
@@ -428,6 +429,8 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
                  HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT,
                                                           &bs->kernarg_align);
   RET_IF_HSA_ERR(err);
+  assert(bs->kernarg_align >= 16 && "Reported kernarg size is too small.");
+  bs->kernarg_align = (bs->kernarg_align == 0) ? 16 : bs->kernarg_align;
 
   return err;
 }
@@ -465,6 +468,7 @@ hsa_status_t AgentMemcpy(void* dst, const void* src,
 // return a value that has the specified alignment.
 static intptr_t
 AlignDown(intptr_t value, size_t alignment) {
+  assert(alignment != 0 && "Zero alignment");
   return (intptr_t) (value & ~(alignment - 1));
 }
 static void*
