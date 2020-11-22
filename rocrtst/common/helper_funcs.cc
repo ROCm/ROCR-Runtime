@@ -48,6 +48,7 @@
 #ifndef _WIN32
 #include <unistd.h>
 #endif
+#include <assert.h>
 #include <cmath>
 #include <iostream>
 #include <string>
@@ -175,6 +176,7 @@ Compare(const double* refData, const double* data,
 
 intptr_t
 AlignDown(intptr_t value, size_t alignment) {
+    assert(alignment != 0 && "Zero alignment");
     return (intptr_t) (value & ~(alignment - 1));
 }
 

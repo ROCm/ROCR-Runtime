@@ -335,6 +335,7 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   RET_IF_HSA_UTILS_ERR(err);
   test->set_group_segment_size(val);
 
+  // Remaining queries only supported on code object v3.
   err = hsa_executable_symbol_get_info(kern_sym,
                 HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &val);
   RET_IF_HSA_UTILS_ERR(err);
@@ -343,6 +344,8 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   err = hsa_executable_symbol_get_info(kern_sym,
            HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT, &val);
   RET_IF_HSA_UTILS_ERR(err);
+  assert(val >= 16 && "Reported kernarg size is too small.");
+  val = (val == 0) ? 16 : val;
   test->set_kernarg_align(val);
 
   return HSA_STATUS_SUCCESS;
