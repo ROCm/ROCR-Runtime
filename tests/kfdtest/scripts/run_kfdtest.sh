@@ -244,16 +244,17 @@ while [ "$1" != "" ]; do
 done
 
 # If the SMI is missing, just report and continue
+SMI="$(find /opt/rocm* -type l -name rocm-smi | tail -1)"
 if [ "$FORCE_HIGH" == "true" ]; then
-    if [ -e "/opt/rocm/bin/rocm-smi" ]; then
-        OLDPERF=$(/opt/rocm/bin/rocm-smi -p | awk '/Performance Level/ {print $NF; exit}')
-	$(/opt/rocm/bin/rocm-smi --setperflevel high &> /dev/null)
+    if [ -e "$SMI" ]; then
+        OLDPERF=$($SMI -p | awk '/Performance Level:/ {print $NF; exit}')
+	$($SMI --setperflevel high &> /dev/null)
 	if [ $? != 0 ]; then
             echo "SMI failed to set perf level"
 	    OLDPERF=""
         fi
     else
-        echo "Unable to set clocks to high"
+        echo "Unable to set clocks to high, cannot find rocm-smi"
     fi
 fi
 
@@ -263,5 +264,5 @@ runKfdTest
 
 # OLDPERF is only set if FORCE_HIGH and SMI both exist
 if [ -n "$OLDPERF" ]; then
-    /opt/rocm/bin/rocm-smi --setperflevel $OLDPERF &> /dev/null
+    $SMI --setperflevel $OLDPERF &> /dev/null
 fi
