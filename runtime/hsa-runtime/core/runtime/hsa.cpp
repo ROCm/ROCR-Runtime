@@ -1847,7 +1847,13 @@ static std::string ConvertOldTargetNameToNew(
 
   // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
   // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
-  if (OldName == "AMD:AMDGPU:7:0:0")
+  if (OldName == "AMD:AMDGPU:6:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx600";
+  else if (OldName == "AMD:AMDGPU:6:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx601";
+  else if (OldName == "AMD:AMDGPU:6:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx602";
+  else if (OldName == "AMD:AMDGPU:7:0:0")
     NewName = "amdgcn-amd-amdhsa--gfx700";
   else if (OldName == "AMD:AMDGPU:7:0:1")
     NewName = "amdgcn-amd-amdhsa--gfx701";
@@ -1857,6 +1863,8 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx703";
   else if (OldName == "AMD:AMDGPU:7:0:4")
     NewName = "amdgcn-amd-amdhsa--gfx704";
+  else if (OldName == "AMD:AMDGPU:7:0:5")
+    NewName = "amdgcn-amd-amdhsa--gfx705";
   else if (OldName == "AMD:AMDGPU:8:0:0")
     NewName = "amdgcn-amd-amdhsa--gfx800";
   else if (OldName == "AMD:AMDGPU:8:0:1") {
@@ -1869,6 +1877,8 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx803";
   else if (OldName == "AMD:AMDGPU:8:0:4")
     NewName = "amdgcn-amd-amdhsa--gfx804";
+  else if (OldName == "AMD:AMDGPU:8:0:5")
+    NewName = "amdgcn-amd-amdhsa--gfx805";
   else if (OldName == "AMD:AMDGPU:8:1:0") {
     NewName = "amdgcn-amd-amdhsa--gfx810";
     xnack_supported = true;

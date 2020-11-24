@@ -41,7 +41,7 @@ set(PROJECT_NAME "rocrtst64")
 project (${PROJECT_NAME})
 
 
-set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031")
+set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031")
 
 #
 # Currently support for Windows platform is not present
