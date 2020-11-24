@@ -183,3 +183,42 @@ hsaKmtSVMGetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 
 	return HSAKMT_STATUS_SUCCESS;
 }
+
+static HSAKMT_STATUS
+hsaKmtSetGetXNACKMode(HSAint32 * enable)
+{
+	struct kfd_ioctl_set_xnack_mode_args args;
+
+	CHECK_KFD_OPEN();
+
+	args.xnack_enabled = *enable;
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SET_XNACK_MODE, &args)) {
+		if (errno == EPERM) {
+			pr_debug("set mode not supported %s\n",
+				 strerror(errno));
+			return HSAKMT_STATUS_NOT_SUPPORTED;
+		} else if (errno == EBUSY) {
+			pr_debug("kmtIoctl queues not empty %s\n",
+				 strerror(errno));
+		}
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	*enable = args.xnack_enabled;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI
+hsaKmtSetXNACKMode(HSAint32 enable)
+{
+	return hsaKmtSetGetXNACKMode(&enable);
+}
+
+HSAKMT_STATUS HSAKMTAPI
+hsaKmtGetXNACKMode(HSAint32 * enable)
+{
+	*enable = -1;
+	return hsaKmtSetGetXNACKMode(enable);
+}
