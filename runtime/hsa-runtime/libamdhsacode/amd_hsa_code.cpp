@@ -549,25 +549,33 @@ namespace code {
     // TODO: Move isa registry into the loader.
     static bool GetMachInfo(unsigned mach, std::string &name, bool &sramecc_supported, bool &xnack_supported) {
       switch (mach) {
-      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX700:  name = "gfx700";  xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX600:  name = "gfx600";  xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX601:  name = "gfx601";  xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX602:  name = "gfx602";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX701:  name = "gfx701";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX702:  name = "gfx702";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX703:  name = "gfx703";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX704:  name = "gfx704";  xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX705:  name = "gfx705";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX801:  name = "gfx801";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX802:  name = "gfx802";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX803:  name = "gfx803";  xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX805:  name = "gfx805";  xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX810:  name = "gfx810";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX900:  name = "gfx900";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX902:  name = "gfx902";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX904:  name = "gfx904";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX906:  name = "gfx906";  xnack_supported = true;  sramecc_supported = true;  break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX908:  name = "gfx908";  xnack_supported = true;  sramecc_supported = true;  break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX909:  name = "gfx909";  xnack_supported = true;  sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C:  name = "gfx90c";  xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1010: name = "gfx1010"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1011: name = "gfx1011"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1012: name = "gfx1012"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1030: name = "gfx1030"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1031: name = "gfx1031"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1032: name = "gfx1032"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1033: name = "gfx1033"; xnack_supported = false; sramecc_supported = false; break;
       default: return false;
       }
       return true;
@@ -578,7 +586,13 @@ namespace code {
       assert(!old_name.empty() && "Expecting non-empty old name");
 
       unsigned mach = 0;
-      if (old_name == "AMD:AMDGPU:7:0:0")
+      if (old_name == "AMD:AMDGPU:6:0:0")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX600;
+      else if (old_name == "AMD:AMDGPU:6:0:1")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX601;
+      else if (old_name == "AMD:AMDGPU:6:0:2")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX602;
+      else if (old_name == "AMD:AMDGPU:7:0:0")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX700;
       else if (old_name == "AMD:AMDGPU:7:0:1")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX701;
@@ -588,12 +602,16 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX703;
       else if (old_name == "AMD:AMDGPU:7:0:4")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX704;
+      else if (old_name == "AMD:AMDGPU:7:0:5")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX705;
       else if (old_name == "AMD:AMDGPU:8:0:1")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX801;
       else if (old_name == "AMD:AMDGPU:8:0:2")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX802;
       else if (old_name == "AMD:AMDGPU:8:0:3")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX803;
+      else if (old_name == "AMD:AMDGPU:8:0:5")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX805;
       else if (old_name == "AMD:AMDGPU:8:1:0")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX810;
       else if (old_name == "AMD:AMDGPU:9:0:0" || old_name == "AMD:AMDGPU:9:0:1")
