@@ -58,7 +58,15 @@ const HsaApiTable* hsa_table_interface_get_table() {
 }
 
 // Pass through stub functions
-hsa_status_t HSA_API hsa_init() { return coreApiTable->hsa_init_fn(); }
+hsa_status_t HSA_API hsa_init() {
+  // We initialize the api tables here once more since the code above is prone to a
+  // link-time ordering condition: This compilation unit here may get its global
+  // variables initialized earlier than the global objects in other compilation units.
+  // In particular Init::Init may get called earlier than that the underlying hsa_api_table_
+  // object in hsa_api_trace.cpp has been initialized.
+  rocr::core::LoadInitialHsaApiTable();
+  return coreApiTable->hsa_init_fn();
+}
 
 hsa_status_t HSA_API hsa_shut_down() { return coreApiTable->hsa_shut_down_fn(); }
 
