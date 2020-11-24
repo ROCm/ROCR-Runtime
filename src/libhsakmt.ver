@@ -74,7 +74,8 @@ hsaKmtSetAddressWatch;
 hsaKmtClearAddressWatch;
 hsaKmtSVMSetAttr;
 hsaKmtSVMGetAttr;
-
+hsaKmtSetXNACKMode;
+hsaKmtGetXNACKMode;
 local: *;
 };
 
