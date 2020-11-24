@@ -72,6 +72,8 @@ hsaKmtGetKernelDebugTrapVersionInfo;
 hsaKmtGetThunkDebugTrapVersionInfo;
 hsaKmtSetAddressWatch;
 hsaKmtClearAddressWatch;
+hsaKmtSVMSetAttr;
+hsaKmtSVMGetAttr;
 
 local: *;
 };
