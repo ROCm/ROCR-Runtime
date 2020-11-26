@@ -144,6 +144,13 @@ getHsaNodes() {
 getNodeName() {
     local nodeId=$1; shift;
     local gpuName=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/name)
+    if [ "$gpuName" == "raven" ]; then
+      local CpuCoresCount=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep cpu_cores_count | awk '{print $2}')
+      local SimdCount=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep simd_count | awk '{print $2}')
+      if [ "$CpuCoresCount" -eq 0 ] && [ "$SimdCount" -gt 0 ]; then
+	gpuName="raven_dgpuFallback"
+      fi
+    fi
     echo "$gpuName"
 }
 
