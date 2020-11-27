@@ -27,7 +27,7 @@
 #include "GoogleTestExtension.hpp"
 #include "OSWrapper.hpp"
 
-#define KFD_TEST_DEFAULT_TIMEOUT 2000
+#define KFD_TEST_DEFAULT_TIMEOUT 10000
 
 std::ostream& operator << (std::ostream& out, TESTPROFILE profile) {
     switch (profile) {
