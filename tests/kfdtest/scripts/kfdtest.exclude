@@ -196,7 +196,8 @@ FILTER[arcturus]=\
 FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
-"KFDEvictTest.BurstyTest"
+"KFDEvictTest.BurstyTest:"\
+"KFDMemoryTest.DeviceHdpFlush"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
