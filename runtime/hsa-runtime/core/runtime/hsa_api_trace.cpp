@@ -390,6 +390,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_memory_lock_to_pool_fn = AMD::hsa_amd_memory_lock_to_pool;
   amd_ext_api.hsa_amd_register_deallocation_callback_fn = AMD::hsa_amd_register_deallocation_callback;
   amd_ext_api.hsa_amd_deregister_deallocation_callback_fn = AMD::hsa_amd_deregister_deallocation_callback;
+  amd_ext_api.hsa_amd_signal_value_pointer_fn = AMD::hsa_amd_signal_value_pointer;
 }
 
 void LoadInitialHsaApiTable() {

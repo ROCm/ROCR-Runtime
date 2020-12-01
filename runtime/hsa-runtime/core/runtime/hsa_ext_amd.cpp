@@ -470,6 +470,23 @@ hsa_status_t hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t nu
   CATCH;
 }
 
+hsa_status_t hsa_amd_signal_value_pointer(hsa_signal_t hsa_signal,
+                                          volatile hsa_signal_value_t** value_ptr) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(value_ptr);
+  core::Signal* signal = core::Signal::Convert(hsa_signal);
+  IS_VALID(signal);
+
+  if(!core::BusyWaitSignal::IsType(signal))
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  *value_ptr = (volatile hsa_signal_value_t*)&signal->signal_.value;
+  return HSA_STATUS_SUCCESS;
+
+  CATCH;
+}
+
 uint32_t hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* hsa_signals,
                                  hsa_signal_condition_t* conds, hsa_signal_value_t* values,
                                  uint64_t timeout_hint, hsa_wait_state_t wait_hint,

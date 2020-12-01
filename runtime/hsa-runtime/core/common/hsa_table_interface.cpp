@@ -1145,6 +1145,12 @@ hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
   return amdExtTable->hsa_amd_deregister_deallocation_callback_fn(ptr, callback);
 }
 
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_signal_value_pointer(hsa_signal_t signal,
+                                                  volatile hsa_signal_value_t** value_ptr) {
+  return amdExtTable->hsa_amd_signal_value_pointer_fn(signal, value_ptr);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

@@ -55,6 +55,115 @@
 extern "C" {
 #endif
 
+/** \addtogroup aql Architected Queuing Language
+ *  @{
+ */
+
+/**
+ * @brief A fixed-size type used to represent ::hsa_signal_condition_t constants.
+ */
+typedef uint32_t hsa_signal_condition32_t;
+
+/**
+ * @brief AMD vendor specific packet type.
+ */
+typedef enum {
+  /**
+   * Packet used by agents to delay processing of subsequent packets until a
+   * configurable condition is satisfied by an HSA signal.  Only kernel dispatch
+   * queues created from AMD GPU Agents support this packet.
+   */
+  HSA_AMD_PACKET_TYPE_BARRIER_VALUE = 2,
+} hsa_amd_packet_type_t;
+
+/**
+ * @brief A fixed-size type used to represent ::hsa_amd_packet_type_t constants.
+ */
+typedef uint8_t hsa_amd_packet_type8_t;
+
+/**
+ * @brief AMD vendor specific AQL packet header
+ */
+typedef struct hsa_amd_packet_header_s {
+  /**
+   * Packet header. Used to configure multiple packet parameters such as the
+   * packet type. The parameters are described by ::hsa_packet_header_t.
+   */
+  uint16_t header;
+
+  /**
+   *Format of the vendor specific packet.
+   */
+  hsa_amd_packet_type8_t AmdFormat;
+
+  /**
+   * Reserved. Must be 0.
+   */
+  uint8_t reserved;
+} hsa_amd_vendor_packet_header_t;
+
+/**
+ * @brief AMD barrier value packet.  Halts packet processing and waits for
+ * (signal_value & ::mask) ::cond ::value to be satisfied, where signal_value
+ * is the value of the signal ::signal.
+ */
+typedef struct hsa_amd_barrier_value_packet_s {
+  /**
+   * AMD vendor specific packet header.
+   */
+  hsa_amd_vendor_packet_header_t header;
+
+  /**
+   * Reserved. Must be 0.
+   */
+  uint32_t reserved0;
+
+  /**
+   * Dependent signal object. A signal with a handle value of 0 is
+   * allowed and is interpreted by the packet processor a satisfied
+   * dependency.
+   */
+  hsa_signal_t signal;
+
+  /**
+   * Value to compare against.
+   */
+  hsa_signal_value_t value;
+
+  /**
+   * Bit mask to be combined by bitwise AND with ::signal's value.
+   */
+  hsa_signal_value_t mask;
+
+  /**
+   * Comparison operation.  See ::hsa_signal_condition_t.
+   */
+  hsa_signal_condition32_t cond;
+
+  /**
+   * Reserved. Must be 0.
+   */
+  uint32_t reserved1;
+
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved2;
+
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved3;
+
+  /**
+   * Signal used to indicate completion of the job. The application can use the
+   * special signal handle 0 to indicate that no signal is used.
+   */
+  hsa_signal_t completion_signal;
+} hsa_amd_barrier_value_packet_t;
+
+/** @} */
+
 /**
  * @brief Enumeration constants added to ::hsa_status_t.
  *
@@ -484,6 +593,37 @@ typedef enum {
 hsa_status_t HSA_API hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t num_consumers,
                                            const hsa_agent_t* consumers, uint64_t attributes,
                                            hsa_signal_t* signal);
+
+/**
+ * @brief Returns a pointer to the value of a signal.
+ *
+ * Use of this API does not modify the lifetime of ::signal and any
+ * hsa_signal_value_t retrieved by this API has lifetime equal to that of
+ * ::signal.
+ *
+ * This API is intended for partial interoperability with non-HSA compatible
+ * devices and should not be used where HSA interfaces are available.
+ *
+ * Use of the signal value must comply with use restritions of ::signal.
+ * Use may result in data races if the operations performed are not platform
+ * atomic.  Use with HSA_AMD_SIGNAL_AMD_GPU_ONLY or HSA_AMD_SIGNAL_IPC
+ * attributed signals is required.
+ *
+ * @param[in] Signal handle to extract the signal value pointer from.
+ *
+ * @param[out] Location where the extracted signal value pointer will be placed.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_SIGNAL signal is not a valid hsa_signal_t
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT value_ptr is NULL.
+ */
+hsa_status_t hsa_amd_signal_value_pointer(hsa_signal_t signal,
+                                          volatile hsa_signal_value_t** value_ptr);
 
 /**
  * @brief Asyncronous signal handler function type.
