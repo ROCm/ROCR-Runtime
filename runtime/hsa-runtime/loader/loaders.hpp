@@ -56,8 +56,8 @@ namespace loader {
   private:
     hsa_isa_t invalid;
     hsa_isa_t gfx700, gfx701, gfx702, gfx703, gfx704, gfx705;
-    hsa_isa_t gfx800, gfx801, gfx802, gfx803, gfx804, gfx805, gfx810;
-    hsa_isa_t gfx900, gfx901, gfx902, gfx904, gfx906, gfx908;
+    hsa_isa_t gfx801, gfx802, gfx803, gfx805, gfx810;
+    hsa_isa_t gfx900, gfx902, gfx904, gfx906, gfx908;
     hsa_isa_t gfx1010, gfx1011, gfx1012, gfx1030, gfx1031, gfx1032;
     std::ostream& out;
     typedef std::set<void*> PointerSet;
@@ -73,7 +73,7 @@ namespace loader {
     void* SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, size_t size, size_t align, bool zero) override;
 
     bool SegmentCopy(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* dst, size_t offset, const void* src, size_t size) override;
-    
+
     void SegmentFree(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t size = 0) override;
 
     void* SegmentAddress(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, void* seg, size_t offset) override;

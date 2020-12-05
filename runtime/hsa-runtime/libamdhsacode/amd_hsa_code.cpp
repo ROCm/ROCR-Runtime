@@ -606,9 +606,9 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX705;
       else if (old_name == "AMD:AMDGPU:8:0:1")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX801;
-      else if (old_name == "AMD:AMDGPU:8:0:2")
+      else if (old_name == "AMD:AMDGPU:8:0:0" || old_name == "AMD:AMDGPU:8:0:2")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX802;
-      else if (old_name == "AMD:AMDGPU:8:0:3")
+      else if (old_name == "AMD:AMDGPU:8:0:3" || old_name == "AMD:AMDGPU:8:0:4")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX803;
       else if (old_name == "AMD:AMDGPU:8:0:5")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX805;
@@ -670,25 +670,24 @@ namespace code {
       uint32_t code_object_major_version = 0;
       uint32_t code_object_minor_version = 0;
 
+      switch (img->EClass()) {
+      case ELFCLASS64:
+        // There is no e_machine and/or OS ABI for R600 so rely on checking
+        // the ELFCLASS to determine if AMDGCN versus R600. AMDHSA always uses
+        // ELFCLASS64 and R600 always uses ELFCLASS32.
+        isa_name += "amdgcn";
+        break;
+      default:
+        return false;
+      }
+      if (img->Machine() != ELF::EM_AMDGPU)
+        return false;
+      isa_name += "-amd-";
+
       if (!GetCodeObjectVersion(&code_object_major_version, &code_object_minor_version)) {
         return false;
       }
       if (code_object_major_version >= 3) {
-
-        switch (img->EClass()) {
-        case ELFCLASS64:
-          // There is no e_machine and/or OS ABI for R600 so rely on checking
-          // the ELFCLASS to determin if AMDGCN verses R600. AMDHSA always uses
-          // ELFCLASS64 and R600 always uses ELFCLASS32.
-          isa_name += "amdgcn";
-          break;
-        default:
-          return false;
-        }
-
-        if (img->Machine() != ELF::EM_AMDGPU)
-          return false;
-        isa_name += "-amd-";
 
         switch (img->OsAbi()) {
         case ELF::ELFOSABI_AMDGPU_HSA:
@@ -702,66 +701,69 @@ namespace code {
         isa_name += "--";
 
         unsigned mach = img->EFlags() & ELF::EF_AMDGPU_MACH;
-        std::string name = "";
+        std::string target_name;
         bool xnack_supported = false;
         bool sramecc_supported = false;
 
-        if (!GetMachInfo(mach, name, sramecc_supported, xnack_supported))
+        if (!GetMachInfo(mach, target_name, sramecc_supported, xnack_supported))
           return false;
-
-        isa_name += name;
 
         if (code_object_major_version == 3) {
           if (img->EFlags() & ELF::EF_AMDGPU_FEATURE_SRAMECC_V3)
-            isa_name += ":sramecc+";
+            target_name += ":sramecc+";
           else if (sramecc_supported)
-            isa_name += ":sramecc-";
+            target_name += ":sramecc-";
 
           if (img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V3)
-            isa_name += ":xnack+";
+            target_name += ":xnack+";
           else if (xnack_supported)
-            isa_name += ":xnack-";
+            target_name += ":xnack-";
         } else if (code_object_major_version == 4) {
           switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_SRAMECC_V4) {
           case ELF::EF_AMDGPU_FEATURE_SRAMECC_OFF_V4:
-            isa_name += ":sramecc-";
+            target_name += ":sramecc-";
             break;
           case ELF::EF_AMDGPU_FEATURE_SRAMECC_ON_V4:
-            isa_name += ":sramecc+";
+            target_name += ":sramecc+";
             break;
           }
 
           switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_XNACK_V4) {
           case ELF::EF_AMDGPU_FEATURE_XNACK_OFF_V4:
-            isa_name += ":xnack-";
+            target_name += ":xnack-";
             break;
           case ELF::EF_AMDGPU_FEATURE_XNACK_ON_V4:
-            isa_name += ":xnack+";
+            target_name += ":xnack+";
             break;
           }
         } else {
           return false;
         }
 
+        isa_name += target_name;
+
         return true;
       } else {
+
         std::string vendor_name, architecture_name;
         uint32_t major_version, minor_version, stepping;
-        if (!GetNoteIsa(vendor_name, architecture_name, &major_version, &minor_version, &stepping)) { return false; }
-        isa_name += vendor_name;
-        isa_name += ":";
-        isa_name += architecture_name;
-        isa_name += ":";
-        isa_name += std::to_string(major_version);
-        isa_name += ":";
-        isa_name += std::to_string(minor_version);
-        isa_name += ":";
-        isa_name += std::to_string(stepping);
+        if (!GetNoteIsa(vendor_name, architecture_name, &major_version, &minor_version, &stepping))
+          return false;
 
-        amdgpu_hsa_note_hsail_t *hsailNote;
-        bool IsFinalizer = GetAmdNote(NT_AMD_HSA_HSAIL, &hsailNote);
-        isa_name = ConvertOldTargetNameToNew(isa_name, IsFinalizer, img->EFlags());
-        return !isa_name.empty();
+        isa_name += "amdhsa--";
+
+        std::string target_name = vendor_name + ':' + architecture_name + ':' +
+            std::to_string(major_version) + ':' + std::to_string(minor_version) + ':' +
+            std::to_string(stepping);
+
+        amdgpu_hsa_note_hsail_t *hsail_note;
+        bool is_finalizer = GetAmdNote(NT_AMD_HSA_HSAIL, &hsail_note);
+        target_name = ConvertOldTargetNameToNew(target_name, is_finalizer, img->EFlags());
+        if (target_name.empty()) return false;
+
+        isa_name += target_name;
+
+        return true;
       }
     }
 
