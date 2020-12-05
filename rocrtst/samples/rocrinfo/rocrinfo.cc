@@ -58,17 +58,17 @@
 
 // This structure holds system information acquired through hsa info related
 // calls, and is later used for reference when displaying the information.
-typedef struct {
+struct system_info_t {
     uint16_t major, minor;
     uint64_t timestamp_frequency = 0;
     uint64_t max_wait = 0;
     hsa_endianness_t endianness;
     hsa_machine_model_t machine_model;
-} system_info_t;
+};
 
 // This structure holds agent information acquired through hsa info related
 // calls, and is later used for reference when displaying the information.
-typedef struct {
+struct agent_info_t {
   char name[64];
   char vendor_name[64];
   hsa_agent_feature_t agent_feature;
@@ -95,12 +95,12 @@ typedef struct {
   uint16_t workgroup_max_dim[3];
   uint16_t bdf_id;
   bool fast_f16;
-} agent_info_t;
+};
 
 // This structure holds memory pool information acquired through hsa info
 // related calls, and is later used for reference when displaying the
 // information.
-typedef struct {
+struct pool_info_t {
     uint32_t segment;
     size_t pool_size;
     bool alloc_allowed;
@@ -108,12 +108,12 @@ typedef struct {
     size_t pool_alloc_alignment;
     bool pl_access;
     uint32_t global_flag;
-} pool_info_t;
+};
 
 // This structure holds ISA information acquired through hsa info
 // related calls, and is later used for reference when displaying the
 // information.
-typedef struct {
+struct isa_info_t {
     char *name_str;
     uint32_t workgroup_max_size;
     hsa_dim3_t grid_max_dim;
@@ -125,16 +125,16 @@ typedef struct {
     bool mach_models[2];
     bool profiles[2];
     bool fast_f16;
-} isa_info_t;
+};
 
 // This structure holds cache information acquired through hsa info
 // related calls, and is later used for reference when displaying the
 // information.
-typedef struct {
+struct cache_info_t {
     char *name_str;
     uint8_t level;
     uint32_t size;
-} cache_info_t;
+};
 
 static const uint32_t kLabelFieldSize = 25;
 static const uint32_t kValueFieldSize = 35;

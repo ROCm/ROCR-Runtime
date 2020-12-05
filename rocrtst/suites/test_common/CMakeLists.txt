@@ -190,14 +190,15 @@ add_definitions(-DLITTLEENDIAN_CPU=1)
 #
 set(CMAKE_CXX_FLAGS "-std=c++11 ")
 
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-math-errno")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-threadsafe-statics")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fmerge-all-constants")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fms-extensions")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Werror")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-unused")
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pedantic")
 
 #
