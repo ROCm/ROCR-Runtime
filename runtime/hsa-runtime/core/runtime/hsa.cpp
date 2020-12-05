@@ -1865,53 +1865,33 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx704";
   else if (OldName == "AMD:AMDGPU:7:0:5")
     NewName = "amdgcn-amd-amdhsa--gfx705";
-  else if (OldName == "AMD:AMDGPU:8:0:0")
-    NewName = "amdgcn-amd-amdhsa--gfx800";
   else if (OldName == "AMD:AMDGPU:8:0:1") {
     NewName = "amdgcn-amd-amdhsa--gfx801";
     xnack_supported = true;
   }
-  else if (OldName == "AMD:AMDGPU:8:0:2")
+  else if (OldName == "AMD:AMDGPU:8:0:0" || OldName == "AMD:AMDGPU:8:0:2")
     NewName = "amdgcn-amd-amdhsa--gfx802";
-  else if (OldName == "AMD:AMDGPU:8:0:3")
+  else if (OldName == "AMD:AMDGPU:8:0:3" || OldName == "AMD:AMDGPU:8:0:4")
     NewName = "amdgcn-amd-amdhsa--gfx803";
-  else if (OldName == "AMD:AMDGPU:8:0:4")
-    NewName = "amdgcn-amd-amdhsa--gfx804";
   else if (OldName == "AMD:AMDGPU:8:0:5")
     NewName = "amdgcn-amd-amdhsa--gfx805";
   else if (OldName == "AMD:AMDGPU:8:1:0") {
     NewName = "amdgcn-amd-amdhsa--gfx810";
     xnack_supported = true;
   }
-  else if (OldName == "AMD:AMDGPU:9:0:0") {
+  else if (OldName == "AMD:AMDGPU:9:0:0" || OldName == "AMD:AMDGPU:9:0:1") {
     NewName = "amdgcn-amd-amdhsa--gfx900";
     xnack_supported = true;
   }
-  else if (OldName == "AMD:AMDGPU:9:0:1") {
-    NewName = "amdgcn-amd-amdhsa--gfx900";
-    xnack_supported = true;
-  }
-  else if (OldName == "AMD:AMDGPU:9:0:2") {
+  else if (OldName == "AMD:AMDGPU:9:0:2" || OldName == "AMD:AMDGPU:9:0:3") {
     NewName = "amdgcn-amd-amdhsa--gfx902";
     xnack_supported = true;
   }
-  else if (OldName == "AMD:AMDGPU:9:0:3") {
-    NewName = "amdgcn-amd-amdhsa--gfx902";
-    xnack_supported = true;
-  }
-  else if (OldName == "AMD:AMDGPU:9:0:4") {
+  else if (OldName == "AMD:AMDGPU:9:0:4" || OldName == "AMD:AMDGPU:9:0:5") {
     NewName = "amdgcn-amd-amdhsa--gfx904";
     xnack_supported = true;
   }
-  else if (OldName == "AMD:AMDGPU:9:0:5") {
-    NewName = "amdgcn-amd-amdhsa--gfx904";
-    xnack_supported = true;
-  }
-  else if (OldName == "AMD:AMDGPU:9:0:6") {
-    NewName = "amdgcn-amd-amdhsa--gfx906";
-    xnack_supported = true;
-  }
-  else if (OldName == "AMD:AMDGPU:9:0:7") {
+  else if (OldName == "AMD:AMDGPU:9:0:6" || OldName == "AMD:AMDGPU:9:0:7") {
     NewName = "amdgcn-amd-amdhsa--gfx906";
     xnack_supported = true;
   }

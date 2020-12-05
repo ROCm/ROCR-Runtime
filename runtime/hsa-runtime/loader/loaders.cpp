@@ -116,35 +116,23 @@ namespace loader {
       return gfx704;
     } else if (sname == "AMD:AMDGPU:7:0:5") {
       return gfx705;
-    } else if (sname == "AMD:AMDGPU:8:0:0") {
-      return gfx800;
     } else if (sname == "AMD:AMDGPU:8:0:1") {
       return gfx801;
-    } else if (sname == "AMD:AMDGPU:8:0:2") {
+    } else if (sname == "AMD:AMDGPU:8:0:0" || sname == "AMD:AMDGPU:8:0:2") {
       return gfx802;
-    } else if (sname == "AMD:AMDGPU:8:0:3") {
+    } else if (sname == "AMD:AMDGPU:8:0:3" || sname == "AMD:AMDGPU:8:0:4") {
       return gfx803;
-    } else if (sname == "AMD:AMDGPU:8:0:4") {
-      return gfx804;
     } else if (sname == "AMD:AMDGPU:8:0:5") {
       return gfx805;
     } else if (sname == "AMD:AMDGPU:8:1:0") {
       return gfx810;
-    } else if (sname == "AMD:AMDGPU:9:0:0") {
+    } else if (sname == "AMD:AMDGPU:9:0:0" || sname == "AMD:AMDGPU:9:0:1") {
       return gfx900;
-    } else if (sname == "AMD:AMDGPU:9:0:1") {
-      return gfx901;
-    } else if (sname == "AMD:AMDGPU:9:0:2") {
+    } else if (sname == "AMD:AMDGPU:9:0:2" || sname == "AMD:AMDGPU:9:0:3") {
       return gfx902;
-    } else if (sname == "AMD:AMDGPU:9:0:3") {
-      return gfx902;
-    } else if (sname == "AMD:AMDGPU:9:0:4") {
+    } else if (sname == "AMD:AMDGPU:9:0:4" || sname == "AMD:AMDGPU:9:0:5") {
       return gfx904;
-    } else if (sname == "AMD:AMDGPU:9:0:5") {
-      return gfx904;
-    } else if (sname == "AMD:AMDGPU:9:0:6") {
-      return gfx906;
-    } else if (sname == "AMD:AMDGPU:9:0:7") {
+    } else if (sname == "AMD:AMDGPU:9:0:6" || sname == "AMD:AMDGPU:9:0:7") {
       return gfx906;
     } else if (sname == "AMD:AMDGPU:9:0:8") {
       return gfx908;

@@ -734,7 +734,8 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       std::stringstream name;
       std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
       char* temp = reinterpret_cast<char*>(value);
-      name << "gfx" << isa_->GetMajorVersion() << isa_->GetMinorVersion() << isa_->GetStepping();
+      name << "gfx" << isa_->GetMajorVersion() << std::hex << isa_->GetMinorVersion()
+           << isa_->GetStepping();
       std::strcpy(temp, name.str().c_str());
       break;
     }
