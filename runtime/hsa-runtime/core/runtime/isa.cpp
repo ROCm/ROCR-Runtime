@@ -42,7 +42,9 @@
 
 #include "core/inc/isa.h"
 
+#include <algorithm>
 #include <cstring>
+#include <iostream>
 #include <sstream>
 #include <utility>
 
@@ -88,37 +90,14 @@ bool Isa::IsCompatible(const Isa &code_object_isa,
   return true;
 }
 
+std::string Isa::GetName() const {
+  std::string processor(targetid_);
+  return processor.substr(0, processor.find(':'));
+}
+
 std::string Isa::GetFullName() const {
-  std::stringstream full_name;
-  auto fmt = full_name.flags();
-  full_name << GetArchitecture() << "-" << GetVendor() << "-" << GetOS() << "-"
-            << GetEnvironment() << "-gfx" << GetMajorVersion()
-            << std::hex << GetMinorVersion() << GetStepping();
-  full_name.flags(fmt);
-
-  switch (sramecc_) {
-  case IsaFeature::Disabled:
-    full_name << ":sramecc-";
-    break;
-  case IsaFeature::Enabled:
-    full_name << ":sramecc+";
-    break;
-  default:
-    break;
-  }
-
-  switch (xnack_) {
-  case IsaFeature::Disabled:
-    full_name << ":xnack-";
-    break;
-  case IsaFeature::Enabled:
-    full_name << ":xnack+";
-    break;
-  default:
-    break;
-  }
-
-  return full_name.str();
+  return GetArchitecture() + '-' + GetVendor() + '-' + GetOS() + '-' + GetEnvironment() + '-' +
+      targetid_;
 }
 
 bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
@@ -225,7 +204,11 @@ const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
 }
 
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
-  auto isareg_iter = supported_isas_.find(Isa(version, sramecc, xnack).GetFullName());
+  auto isareg_iter = std::find_if(
+      supported_isas_.begin(), supported_isas_.end(), [&](const IsaMap::value_type& isareg) {
+        return isareg.second.version() == version && isareg.second.sramecc() == sramecc &&
+            isareg.second.xnack() == xnack;
+      });
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
@@ -233,8 +216,15 @@ const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
   IsaRegistry::GetSupportedIsas();
 
 const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
+
+// agent, and vendor name length limit excluding terminating nul character.
+constexpr size_t hsa_name_size = 63;
+
+// FIXME: Use static_assert when C++17 used.
 #define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack)                                            \
+  assert(std::char_traits<char>::length(name) <= hsa_name_size);                                         \
   Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack;                                    \
+  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.targetid_ = name;                       \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.version_ = Isa::Version(maj, min, stp); \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.sramecc_ = sramecc;                     \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.xnack_ = xnack;                         \
