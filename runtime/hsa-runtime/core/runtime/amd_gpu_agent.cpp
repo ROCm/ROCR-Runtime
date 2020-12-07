@@ -726,21 +726,20 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
+  // agent, and vendor name length limit excluding terminating nul character.
+  constexpr size_t hsa_name_size = 63;
 
   switch (attribute_u) {
-    // Build agent name by concatenating the Major, Minor and Stepping Ids
-    // of devices compute capability with a prefix of "gfx"
     case HSA_AGENT_INFO_NAME: {
-      std::stringstream name;
-      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      std::string name = isa_->GetName();
+      assert(name.size() <= hsa_name_size);
+      std::memset(value, 0, hsa_name_size);
       char* temp = reinterpret_cast<char*>(value);
-      name << "gfx" << isa_->GetMajorVersion() << std::hex << isa_->GetMinorVersion()
-           << isa_->GetStepping();
-      std::strcpy(temp, name.str().c_str());
+      std::strcpy(temp, name.c_str());
       break;
     }
     case HSA_AGENT_INFO_VENDOR_NAME:
-      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      std::memset(value, 0, hsa_name_size);
       std::memcpy(value, "AMD", sizeof("AMD"));
       break;
     case HSA_AGENT_INFO_FEATURE:
