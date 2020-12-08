@@ -193,11 +193,16 @@ FILTER[arcturus]=\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDEvictTest.BurstyTest"
 
+# KFDCWSRTest.BasicTest and KFDEvictTest.QueueTest (SWDEV-263604)
+# KFDPerformanceTest.P2PBandWidthTest (SWDEV-262388)
 FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
 "KFDEvictTest.BurstyTest:"\
-"KFDMemoryTest.DeviceHdpFlush"
+"KFDMemoryTest.DeviceHdpFlush:"\
+"KFDCWSRTest.BasicTest:"\
+"KFDEvictTest.QueueTest:"\
+"KFDPerformanceTest.P2PBandWidthTest"\
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
