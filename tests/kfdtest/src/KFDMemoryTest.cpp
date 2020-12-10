@@ -185,9 +185,13 @@ shader CopyOnSignal\n\
 wave_size(32)\n\
 type(CS)\n\
 /* Assume input buffer in s0, s1 */\n\
+    s_add_u32 s2, s0, 0x8\n\
+    s_addc_u32 s3, s1, 0x0\n\
     s_mov_b32 s18, 0xcafe\n\
     v_mov_b32 v0, s0\n\
     v_mov_b32 v1, s1\n\
+    v_mov_b32 v4, s2\n\
+    v_mov_b32 v5, s3\n\
 POLLSIGNAL:\n\
     s_load_dword s16, s[0:1], 0x0 glc\n\
     s_cmp_eq_i32 s16, s18\n\
@@ -195,7 +199,7 @@ POLLSIGNAL:\n\
     s_load_dword s17, s[0:1], 0x4 glc\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     v_mov_b32 v2, s17\n\
-    flat_store_dword v[0,1], v2 offset:0x8 glc\n\
+    flat_store_dword v[4,5], v2 glc\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     s_endpgm\n\
     end\n\
@@ -228,16 +232,20 @@ shader WriteAndSignal\n\
 wave_size(32)\n\
 type(CS)\n\
 /* Assume input buffer in s0, s1 */\n\
+    s_add_u32 s4, s0, 0x4\n\
+    s_addc_u32 s5, s1, 0x0\n\
     v_mov_b32 v0, s0\n\
     v_mov_b32 v1, s1\n\
     v_mov_b32 v2, s2\n\
     v_mov_b32 v3, s3\n\
+    v_mov_b32 v4, s4\n\
+    v_mov_b32 v5, s5\n\
     v_mov_b32 v18, 0xbeef\n\
-    flat_store_dword v18, v[0:1] offset:0x4 glc\n\
+    flat_store_dword v[4:5], v18 glc\n\
     v_mov_b32 v18, 0x1\n\
-    flat_store_dword v18, v[2:3] offset:0x0 glc\n\
+    flat_store_dword v[2:3], v18 glc\n\
     v_mov_b32 v18, 0xcafe\n\
-    flat_store_dword v18, v[0:1] offset:0x0 glc\n\
+    flat_store_dword v[0:1], v18 glc\n\
     s_endpgm\n\
     end\n\
 ";
