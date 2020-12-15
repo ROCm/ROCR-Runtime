@@ -1099,6 +1099,7 @@ TEST_F(KFDMemoryTest, MMBench) {
         unsigned nBufs = TEST_NBUFS(testIndex);
         unsigned memType = TEST_MEMTYPE(testIndex);
         bool interleaveSDMA = TEST_SDMA(testIndex);
+        unsigned bufLimit;
         HSAuint64 allocTime, map1Time, unmap1Time, mapAllTime, unmapAllTime, freeTime;
         HSAuint32 allocNode;
 
@@ -1119,6 +1120,13 @@ TEST_F(KFDMemoryTest, MMBench) {
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 0;
             memFlags.ui32.NonPaged = 1;
+            /* Upper limit of buffer number to fit 90% vram size */
+            bufLimit = ((vramSizeMB << 20) * 9 / 10) / bufSize ;
+            if (bufLimit == 0)
+                continue; // skip when bufSize > vram
+
+            /* When vram is too small to fit all the buffers, fill 90% vram size*/
+            nBufs = (nBufs < bufLimit) ? nBufs : bufLimit;
         }
 
         /* Allocation */
