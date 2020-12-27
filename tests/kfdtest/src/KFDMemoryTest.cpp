@@ -432,14 +432,18 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf,
                                 0xABCDEF09, 0x12345678));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf, 0xABCDEF09);
     WaitOnValue(destBuf + 1, 0x12345678);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     /* This sleep hides the dmesg PPR message storm on Raven, which happens
@@ -1455,6 +1459,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     mem1 = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem) + VRAM_OFFSET + sizeof(HSAuint64));
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem0,
                                                   data0[0], data0[1]));
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem1,
