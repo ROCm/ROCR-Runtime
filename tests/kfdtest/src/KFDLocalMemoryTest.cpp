@@ -58,6 +58,8 @@ TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
 
     //local memory
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false, true);
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
 
     PM4Queue queue;
 
@@ -65,9 +67,11 @@ TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0, 0));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
+
 
     TEST_END
 }
