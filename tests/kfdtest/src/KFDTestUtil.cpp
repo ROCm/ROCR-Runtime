@@ -203,7 +203,7 @@ HSAuint64 GetSystemTickCountInMicroSec() {
 const HsaMemoryBuffer HsaMemoryBuffer::Null;
 
 HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, bool isLocal, bool isExec,
-                                 bool isScratch, bool isReadOnly)
+                                 bool isScratch, bool isReadOnly, bool isUncached)
     :m_Size(size),
     m_pUser(NULL),
     m_pBuf(NULL),
@@ -224,11 +224,13 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
             m_Flags.ui32.HostAccess = 0;
             m_Flags.ui32.NonPaged = 1;
             m_Flags.ui32.CoarseGrain = 1;
+            EXPECT_EQ(isUncached, 0) << "Uncached flag is relevant only for system or host memory";
         } else {
             m_Flags.ui32.HostAccess = 1;
             m_Flags.ui32.NonPaged = 0;
             m_Flags.ui32.CoarseGrain = 0;
             m_Flags.ui32.NoNUMABind = 1;
+            m_Flags.ui32.Uncached = isUncached;
         }
 
         if (isExec)

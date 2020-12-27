@@ -66,7 +66,7 @@ class HsaMemoryBuffer {
 
  public:
     HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero = true, bool isLocal = false,
-                    bool isExec = false, bool isScratch = false, bool isReadOnly = false);
+                    bool isExec = false, bool isScratch = false, bool isReadOnly = false, bool isUncached = false);
     HsaMemoryBuffer(void *addr, HSAuint64 size);
     template<typename RetType>
     RetType As() {
