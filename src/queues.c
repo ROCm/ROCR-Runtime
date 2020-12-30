@@ -455,7 +455,8 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 
 void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 				       uint32_t NodeId, bool nonPaged,
-				       bool DeviceLocal)
+				       bool DeviceLocal,
+				       bool Uncached)
 {
 	void *mem;
 	HSAuint64 gpu_va;
@@ -469,6 +470,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 	flags.ui32.CoarseGrain = DeviceLocal;
+	flags.ui32.Uncached = Uncached;
 
 	/* Get the closest cpu_id to GPU NodeId for system memory allocation
 	 * nonPaged=1 system memory allocation uses GTT path
@@ -518,11 +520,13 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 static void *allocate_exec_aligned_memory(uint32_t size,
 					  bool use_ats,
 					  uint32_t NodeId,
-					  bool DeviceLocal)
+					  bool DeviceLocal,
+					  bool Uncached)
 {
 	if (!use_ats)
 		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
-							DeviceLocal, DeviceLocal);
+							DeviceLocal, DeviceLocal,
+							Uncached);
 	return allocate_exec_aligned_memory_cpu(size);
 }
 
@@ -564,7 +568,7 @@ static int handle_concrete_asic(struct queue *q,
 		q->eop_buffer =
 				allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
 				q->use_ats,
-				NodeId, true);
+				NodeId, true, /* Unused for VRAM */false);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -582,7 +586,7 @@ static int handle_concrete_asic(struct queue *q,
 		q->ctx_save_restore =
 			allocate_exec_aligned_memory(q->ctx_save_restore_size,
 							 q->use_ats,
-							 NodeId, false);
+							 NodeId, false, false);
 		if (!q->ctx_save_restore)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -639,7 +643,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
 			use_ats,
-			NodeId, false);
+			NodeId, false, true);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
