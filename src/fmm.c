@@ -1186,7 +1186,8 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 	uint32_t ioc_flags = 0;
 
 	if (flags.ui32.AQLQueueMemory)
-		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
+		ioc_flags |= (KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM |
+			      KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED);
 	if (!flags.ui32.ReadOnly)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
 	/* TODO: Since, ROCr interfaces doesn't allow caller to set page
