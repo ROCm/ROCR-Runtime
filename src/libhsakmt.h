@@ -169,7 +169,7 @@ HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
 void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 				       uint32_t NodeId, bool NonPaged,
-				       bool DeviceLocal);
+				       bool DeviceLocal, bool Uncached);
 void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align);
 HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes);
 void destroy_process_doorbells(void);
