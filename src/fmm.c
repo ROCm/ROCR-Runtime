@@ -1335,11 +1335,11 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 	}
 
-	if (!flags.ui32.CoarseGrain || svm.disable_cache) {
+	if (!flags.ui32.CoarseGrain)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
-		if (flags.ui32.Uncached)
-			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
-	}
+
+	if (flags.ui32.Uncached || svm.disable_cache)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
 
 	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
 				    ioc_flags, &vm_obj);
@@ -1544,11 +1544,12 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	else
 		aperture = svm.dgpu_alt_aperture; /* always coherent */
 
-	if (!flags.ui32.CoarseGrain || svm.disable_cache) {
+	if (!flags.ui32.CoarseGrain)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
-		if (flags.ui32.Uncached)
-			ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
-	}
+
+	if (flags.ui32.Uncached || svm.disable_cache)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
+
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
 
 	if (flags.ui32.AQLQueueMemory)
