@@ -94,7 +94,24 @@ set ( HSAKMT_LINKER_SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/src/libhsakmt.ver" )
 
 ## Linker Flags
 ## Add --enable-new-dtags to generate DT_RUNPATH
-set (HSAKMT_LINK_FLAGS "-Wl,--enable-new-dtags -Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete -Wl,-no-undefined" )
+set (HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS} -Wl,--enable-new-dtags -Wl,--version-script=${HSAKMT_LINKER_SCRIPT} -Wl,-soname=${HSAKMT_COMPONENT}.so.${LIB_VERSION_MAJOR} -Wl,-z,nodelete")
+
+## Address Sanitize Flag
+if ( ${ADDRESS_SANITIZER} )
+    set ( HSAKMT_C_FLAGS "${HSAKMT_C_FLAGS}" -fsanitize=address )
+    set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -fsanitize=address )
+    if ( BUILD_SHARED_LIBS} )
+        set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -shared-libasan )
+    else ()
+        set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -static-libasan )
+    endif ()
+else ()
+    if ( CMAKE_COMPILER_IS_GNUCC )
+        set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -Wl,-no-undefined )
+    else ()
+        set ( HSAKMT_LINK_FLAGS "${HSAKMT_LINK_FLAGS}" -Wl,-undefined,error )
+    endif ()
+endif ()
 
 ## Source files
 set ( HSAKMT_SRC "src/debug.c"
