@@ -37,7 +37,7 @@ type(CS)
     v_mov_b32 v0, s0
     v_mov_b32 v1, s1
     v_mov_b32 v2, 1
-    flat_atomic_add v3, v[0:1], v2 slc glc
+    flat_atomic_add v3, v[0:1], v2 slc glc scc
     s_waitcnt 0
     s_endpgm
 end
@@ -86,7 +86,7 @@ const uint32_t IsaGenerator_Aldbrn::INFINITE_LOOP_ISA[] = {
 
 const uint32_t IsaGenerator_Aldbrn::ATOMIC_ADD_ISA[] = {
     0x7e000200, 0x7e020201,
-    0x7e040281, 0xdd0b0000,
+    0x7e040281, 0xdf0b0000,
     0x037f0200, 0xbf8c0000,
     0xbf810000, 0x00000000
 };
