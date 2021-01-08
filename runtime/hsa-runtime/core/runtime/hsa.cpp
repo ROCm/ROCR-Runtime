@@ -1659,10 +1659,9 @@ hsa_status_t hsa_isa_iterate_wavefronts(
   const Isa *isa_object = Isa::Object(isa);
   IS_VALID(isa_object);
 
-  const Wavefront *wavefront_object = isa_object->GetWavefront();
-  assert(wavefront_object);
+  const Wavefront &wavefront_object = isa_object->GetWavefront();
 
-  return callback(Wavefront::Handle(wavefront_object), data);
+  return callback(Wavefront::Handle(&wavefront_object), data);
   CATCH;
 }
 
