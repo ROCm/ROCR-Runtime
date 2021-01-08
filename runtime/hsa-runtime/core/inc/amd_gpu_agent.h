@@ -55,7 +55,6 @@
 #include "core/inc/blit.h"
 #include "core/inc/signal.h"
 #include "core/inc/cache.h"
-#include "core/inc/scratch_cache.h"
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
 #include "core/util/lazy_ptr.h"
@@ -64,7 +63,18 @@ namespace rocr {
 namespace AMD {
 class MemoryRegion;
 
-typedef ScratchCache::ScratchInfo ScratchInfo;
+// @brief Contains scratch memory information.
+struct ScratchInfo {
+  void* queue_base;
+  size_t size;
+  size_t size_per_thread;
+  uint32_t lanes_per_wave;
+  ptrdiff_t queue_process_offset;
+  bool large;
+  bool retry;
+  hsa_signal_t queue_retry;
+  uint64_t wanted_slots;
+};
 
 // @brief Interface to represent a GPU agent.
 class GpuAgentInt : public core::Agent {
@@ -321,8 +331,6 @@ class GpuAgent : public GpuAgentInt {
     return memory_max_frequency_;
   }
 
-  void Trim() override;
-
  protected:
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
@@ -486,10 +494,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Deregister scratch notification signals.
   void ClearScratchNotifiers() { scratch_notifiers_.clear(); }
 
-  // @brief Releases scratch back to the driver.
-  // caller must hold scratch_lock_.
-  void ReleaseScratch(void* base, size_t size, bool large);
-
   // Bind index of peer device that is connected via xGMI links
   lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
 
@@ -512,8 +516,6 @@ class GpuAgent : public GpuAgentInt {
     int ref_ct_;
     KernelMutex lock_;
   } gws_queue_;
-
-  ScratchCache scratch_cache_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };
