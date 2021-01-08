@@ -93,6 +93,7 @@ class ScratchCache {
     size_t dispatch_size;
     size_t size_per_thread;
     uint32_t lanes_per_wave;
+    uint32_t waves_per_group;
     ptrdiff_t queue_process_offset;
     bool large;
     bool retry;

@@ -1185,7 +1185,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
         return;
       }
       scratch_pool_.free(base);
-      waves_per_cu--;
+      waves_per_cu = waves_per_cu - scratch.waves_per_group;
     }
 
     // Failed to allocate minimal scratch

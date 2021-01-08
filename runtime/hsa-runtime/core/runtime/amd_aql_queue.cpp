@@ -798,6 +798,8 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
           pkt.dispatch.workgroup_size_z;
       uint64_t waves_per_group =
           (lanes_per_group + scratch.lanes_per_wave - 1) / scratch.lanes_per_wave;
+      scratch.waves_per_group = waves_per_group;
+
       uint64_t groups = ((uint64_t(pkt.dispatch.grid_size_x) + pkt.dispatch.workgroup_size_x - 1) /
                          pkt.dispatch.workgroup_size_x) *
           ((uint64_t(pkt.dispatch.grid_size_y) + pkt.dispatch.workgroup_size_y - 1) /
@@ -805,10 +807,11 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
           ((uint64_t(pkt.dispatch.grid_size_z) + pkt.dispatch.workgroup_size_z - 1) /
            pkt.dispatch.workgroup_size_z);
 
+      // Assign an equal number of groups to each engine, clipping to capacity limits
+      const uint32_t engines = queue->agent_->properties().NumShaderBanks;
+      groups = ((groups + engines - 1) / engines) * engines;
       scratch.wanted_slots = groups * waves_per_group;
       scratch.wanted_slots = Min(scratch.wanted_slots, uint64_t(MaxScratchSlots));
-      scratch.wanted_slots =
-          Max(scratch.wanted_slots, uint64_t(queue->agent_->properties().NumShaderBanks));
       scratch.dispatch_size =
           scratch.size_per_thread * scratch.wanted_slots * scratch.lanes_per_wave;
 
