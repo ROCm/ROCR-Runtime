@@ -731,7 +731,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME: {
-      std::string name = isa_->GetName();
+      std::string name = isa_->GetProcessorName();
       assert(name.size() <= hsa_name_size);
       std::memset(value, 0, hsa_name_size);
       char* temp = reinterpret_cast<char*>(value);

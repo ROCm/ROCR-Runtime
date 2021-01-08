@@ -72,32 +72,32 @@ bool Wavefront::GetInfo(
 /* static */
 bool Isa::IsCompatible(const Isa &code_object_isa,
                        const Isa &agent_isa) {
-  if (code_object_isa.version() != agent_isa.version())
+  if (code_object_isa.GetVersion() != agent_isa.GetVersion())
     return false;
 
-  assert(code_object_isa.IsSrameccSupported() == agent_isa.IsSrameccSupported()  && agent_isa.sramecc() != IsaFeature::Any);
-  if ((code_object_isa.sramecc() == IsaFeature::Enabled ||
-        code_object_isa.sramecc() == IsaFeature::Disabled) &&
-      code_object_isa.sramecc() != agent_isa.sramecc())
+  assert(code_object_isa.IsSrameccSupported() == agent_isa.IsSrameccSupported()  && agent_isa.GetSramecc() != IsaFeature::Any);
+  if ((code_object_isa.GetSramecc() == IsaFeature::Enabled ||
+        code_object_isa.GetSramecc() == IsaFeature::Disabled) &&
+      code_object_isa.GetSramecc() != agent_isa.GetSramecc())
     return false;
 
-  assert(code_object_isa.IsXnackSupported() == agent_isa.IsXnackSupported() && agent_isa.xnack() != IsaFeature::Any);
-  if ((code_object_isa.xnack() == IsaFeature::Enabled ||
-        code_object_isa.xnack() == IsaFeature::Disabled) &&
-      code_object_isa.xnack() != agent_isa.xnack())
+  assert(code_object_isa.IsXnackSupported() == agent_isa.IsXnackSupported() && agent_isa.GetXnack() != IsaFeature::Any);
+  if ((code_object_isa.GetXnack() == IsaFeature::Enabled ||
+        code_object_isa.GetXnack() == IsaFeature::Disabled) &&
+      code_object_isa.GetXnack() != agent_isa.GetXnack())
     return false;
 
   return true;
 }
 
-std::string Isa::GetName() const {
+std::string Isa::GetProcessorName() const {
   std::string processor(targetid_);
   return processor.substr(0, processor.find(':'));
 }
 
-std::string Isa::GetFullName() const {
-  return GetArchitecture() + '-' + GetVendor() + '-' + GetOS() + '-' + GetEnvironment() + '-' +
-      targetid_;
+std::string Isa::GetIsaName() const {
+  constexpr char hsa_isa_name_prefix[] = "amdgcn-amd-amdhsa--";
+  return std::string(hsa_isa_name_prefix) + targetid_;
 }
 
 bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
@@ -107,14 +107,14 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
 
   switch (attribute) {
     case HSA_ISA_INFO_NAME_LENGTH: {
-      std::string full_name = GetFullName();
-      *((uint32_t*)value) = static_cast<uint32_t>(full_name.size() + 1);
+      std::string isa_name = GetIsaName();
+      *((uint32_t*)value) = static_cast<uint32_t>(isa_name.size() + 1);
       return true;
     }
     case HSA_ISA_INFO_NAME: {
-      std::string full_name = GetFullName();
-      memset(value, 0x0, full_name.size() + 1);
-      memcpy(value, full_name.c_str(), full_name.size());
+      std::string isa_name = GetIsaName();
+      memset(value, 0x0, isa_name.size() + 1);
+      memcpy(value, isa_name.c_str(), isa_name.size());
       return true;
     }
     // deprecated.
@@ -139,8 +139,8 @@ bool Isa::GetInfo(const hsa_isa_info_t &attribute, void *value) const {
     }
     case HSA_ISA_INFO_PROFILES: {
       bool profiles[2] = {true, false};
-      if (this->version() == Version(7, 0, 0) ||
-          this->version() == Version(8, 0, 1)) {
+      if (this->GetVersion() == Version(7, 0, 0) ||
+          this->GetVersion() == Version(8, 0, 1)) {
         profiles[1] = true;
       }
       memcpy(value, profiles, sizeof(profiles));
@@ -206,8 +206,8 @@ const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
   auto isareg_iter = std::find_if(
       supported_isas_.begin(), supported_isas_.end(), [&](const IsaMap::value_type& isareg) {
-        return isareg.second.version() == version && isareg.second.sramecc() == sramecc &&
-            isareg.second.xnack() == xnack;
+        return isareg.second.GetVersion() == version && isareg.second.GetSramecc() == sramecc &&
+            isareg.second.GetXnack() == xnack;
       });
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
@@ -229,7 +229,7 @@ constexpr size_t hsa_name_size = 63;
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.sramecc_ = sramecc;                     \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.xnack_ = xnack;                         \
   supported_isas.insert(std::make_pair(                                                                  \
-      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.GetFullName(),                      \
+      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack.GetIsaName(),                       \
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack));                                  \
 
   IsaMap supported_isas;
