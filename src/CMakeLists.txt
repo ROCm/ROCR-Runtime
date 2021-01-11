@@ -129,7 +129,7 @@ endif()
 target_include_directories( ${CORE_RUNTIME_TARGET}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-  $<INSTALL_INTERFACE:include/hsa>
+  $<INSTALL_INTERFACE:include>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
