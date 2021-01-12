@@ -47,8 +47,9 @@
 
 #include <vector>
 
-#include "core/inc/agent.h"
+#include "core/inc/hsa_internal.h"
 #include "core/inc/checked.h"
+#include "core/util/utils.h"
 
 namespace rocr {
 namespace core {
@@ -105,6 +106,9 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
 
   virtual hsa_status_t AssignAgent(void* ptr, size_t size, const Agent& agent,
                                    hsa_access_permission_t access) const = 0;
+
+  // Releases any cached memory that may be held within the allocator.
+  virtual void Trim() const {}
 
   __forceinline bool fine_grain() const { return fine_grain_; }
 

@@ -136,6 +136,8 @@ class MemoryRegion : public core::MemoryRegion {
   hsa_status_t AssignAgent(void* ptr, size_t size, const core::Agent& agent,
                            hsa_access_permission_t access) const;
 
+  void Trim() const;
+
   __forceinline bool IsLocalMemory() const {
     return ((mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE) ||
             (mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC));
