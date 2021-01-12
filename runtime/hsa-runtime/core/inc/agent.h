@@ -61,8 +61,6 @@ class Signal;
 typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
                                  void* data);
 
-class MemoryRegion;
-
 // Agent is intended to be an pure interface class and may be wrapped or
 // replaced by tools libraries. All funtions other than Convert, node_id,
 // device_type, and public_handle must be virtual.
@@ -258,6 +256,10 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
     }
 
     return stat;
+  }
+
+  virtual void Trim() {
+    for (auto region : regions()) region->Trim();
   }
 
  protected:
