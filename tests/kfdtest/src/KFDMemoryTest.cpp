@@ -154,6 +154,32 @@ type(CS)\n\
     end\n\
 ";
 
+/* Similar to gfx9_PollMemory except that the buffer
+ * polled can be Non-coherant memory. SCC system-level
+ * cache coherence is not supported in scalar (smem) path.
+ * Use vmem operations with scc
+ */
+const char* gfx9_PollNCMemory =
+"\
+shader ReadMemory\n\
+asic(ALDEBARAN)\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume src address in s0, s1 and dst address in s2, s3*/\n\
+    v_mov_b32 v6, 0x5678\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    LOOP:\n\
+    flat_load_dword v4, v[0:1] scc\n\
+    v_cmp_eq_u32 vcc, v4, v6\n\
+    s_cbranch_vccz   LOOP\n\
+    v_mov_b32 v0, s2\n\
+    v_mov_b32 v1, s3\n\
+    flat_store_dword v[0:1], v6 scc\n\
+    s_endpgm\n\
+    end\n\
+";
+
 /* Input: A buffer of at least 3 dwords.
  * DW0: used as a signal. 0xcafe means it is signaled
  * DW1: Input buffer for device to read.
@@ -336,7 +362,11 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     HsaMemoryBuffer srcBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
 
-    m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
+    if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode))
+        /* On A+A system memory is mapped as NC */
+        m_pIsaGen->CompileShader(gfx9_PollNCMemory, "ReadMemory", isaBuffer);
+    else
+        m_pIsaGen->CompileShader(gfx9_PollMemory, "ReadMemory", isaBuffer);
 
     PM4Queue pm4Queue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
