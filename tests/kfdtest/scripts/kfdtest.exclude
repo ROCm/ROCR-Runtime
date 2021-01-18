@@ -175,7 +175,6 @@ FILTER[vega20]=\
 
 FILTER[raven_dgpuFallback]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDMemoryTest.MMBench:"\
 "KFDMemoryTest.MemoryRegister:"\
 "KFDQMTest.SdmaConcurrentCopies"
 
@@ -187,10 +186,8 @@ FILTER[raven]=\
 FILTER[renoir]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDEvictTest.*:"\
-"KFDQMTest.SdmaEventInterrupt:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDMemoryTest.MMBench:"\
 "KFDMemoryTest.SignalHandling"
 
 # KFDExceptionTest.* (KFD-435)
