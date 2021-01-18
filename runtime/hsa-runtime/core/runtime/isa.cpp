@@ -204,11 +204,14 @@ const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
 }
 
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
-  auto isareg_iter = std::find_if(
-      supported_isas_.begin(), supported_isas_.end(), [&](const IsaMap::value_type& isareg) {
-        return isareg.second.GetVersion() == version && isareg.second.GetSramecc() == sramecc &&
-            isareg.second.GetXnack() == xnack;
-      });
+  auto isareg_iter = std::find_if(supported_isas_.begin(), supported_isas_.end(),
+                                  [&](const IsaMap::value_type& isareg) {
+                                    return isareg.second.GetVersion() == version &&
+                                        (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
+                                         isareg.second.GetSramecc() == sramecc) &&
+                                        (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
+                                         isareg.second.GetXnack() == xnack);
+                                  });
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
 }
 
