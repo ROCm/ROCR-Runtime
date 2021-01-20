@@ -1861,7 +1861,7 @@ retry:
 					link_id++;
 				}
 				/* sysfs specifies all the io links. Limit the number to valid ones */
-				num_ioLinks = link_id;
+				temp_props[i].node.NumIOLinks = link_id;
 			}
 
 			if (num_p2pLinks) {
