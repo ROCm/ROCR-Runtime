@@ -202,6 +202,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_7;
     ASICShader compute_8;
     ASICShader compute_9;
+    ASICShader compute_1010;
     ASICShader compute_10;
   };
 
@@ -211,6 +212,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {NULL, 0, 0, 0},
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
            {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
        }},
       {"CopyAligned",
@@ -219,6 +221,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
        }},
       {"CopyMisaligned",
        {
@@ -226,12 +229,14 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
        }},
       {"Fill",
        {
            {kCodeFill7, sizeof(kCodeFill7), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
        }}};
 
@@ -249,10 +254,13 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       asic_shader = &compiled_shader_it->second.compute_8;
       break;
     case 9:
-      asic_shader = &compiled_shader_it->second.compute_9;
+        asic_shader = &compiled_shader_it->second.compute_9;
       break;
     case 10:
-      asic_shader = &compiled_shader_it->second.compute_10;
+      if(isa_->GetMinorVersion() == 1)
+        asic_shader = &compiled_shader_it->second.compute_1010;
+      else
+        asic_shader = &compiled_shader_it->second.compute_10;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
