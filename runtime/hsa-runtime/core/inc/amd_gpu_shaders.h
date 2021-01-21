@@ -241,6 +241,9 @@ static const unsigned int kCodeTrapHandler9[] = {
     // Restore m0
     s_mov_b32            m0, ttmp2
 
+  .if ((.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor >= 3) || .amdgcn.gfx_generation_number > 10)
+    s_branch             .halt_wave
+  .else
     // If PC is at an s_endpgm instruction then don't halt the wavefront.
     s_and_b32            ttmp1, ttmp1, SQ_WAVE_PC_HI_ADDRESS_MASK
     s_load_dword         ttmp2, [ttmp0, ttmp1]
@@ -257,6 +260,7 @@ static const unsigned int kCodeTrapHandler9[] = {
 
     s_and_b32             ttmp12, ttmp12, ~SQ_WAVE_STATUS_HALT_MASK
     mExitTrap
+  .endif
 
   .excp_raised:
     s_bitset1_b32       ttmp11, TTMP11_EXCP_RAISED_BIT
@@ -299,6 +303,9 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_bitset1_b32       ttmp11, TTMP11_TRAP_RAISED_BIT
 
   .signal_error:
+  .if (.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor >= 3)
+    // This needs to be rewriten for gfx10.3 as scalar stores are not available.
+  .else
     // FIXME: don't trash ttmp4/ttmp5 when exception handling is unified.
     s_mov_b32            ttmp4, ttmp3
 
@@ -348,6 +355,7 @@ static const unsigned int kCodeTrapHandler9[] = {
     s_mov_b32            m0, 0x0
     s_nop                0
     s_sendmsg            sendmsg(MSG_INTERRUPT)
+  .endif
 
   .skip_event_trigger:
     // Since we trashed ttmp4/ttmp5, reset the wave_id to 0
@@ -497,7 +505,7 @@ static const unsigned int kCodeFill10[] = {
     0xD70F6A02, 0x0002040C, 0xD5286A03, 0x01A90103, 0xBF82FFF5, 0xBF810000,
 };
 
-static const unsigned int kCodeTrapHandler10[] = {
+static const unsigned int kCodeTrapHandler1010[] = {
     0x93eeff6d, 0x00080010, 0xbf850044, 0xb96ef803, 0x876fff6e, 0x00000900,
     0xbf850033, 0x876fff6e, 0x00007080, 0xbf840003, 0xbef71d88, 0xbf820001,
     0xbef71d87, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
@@ -521,6 +529,21 @@ static const unsigned int kCodeTrapHandler10[] = {
     0xbf900001, 0xbef00380, 0xbef10380, 0x8878ff78, 0x00002000, 0x906e8977,
     0x876fff6e, 0x003f8000, 0x906e8677, 0x876eff6e, 0x02000000, 0x886e6f6e,
     0xb9eef807, 0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c,
+};
+
+static const unsigned int kCodeTrapHandler10[] = {
+    0x93eeff6d, 0x00080010, 0xbf85002b, 0xb96ef803, 0x876fff6e, 0x00000900,
+    0xbf85001a, 0x876fff6e, 0x00007080, 0xbf840003, 0xbef71d88, 0xbf820001,
+    0xbef71d87, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f, 0x877eff7e, 0x00000fff,
+    0xbeef037e, 0xbefe036e, 0xbeef1d96, 0xbeee037c, 0xbefc036f, 0xbf800000,
+    0xbf900001, 0xbefc036e, 0xbf820019, 0xbef71d88, 0x876fff6e, 0x10000100,
+    0xbf06ff6f, 0x00000100, 0xbeef03ff, 0x20000000, 0xbf85000f, 0x876fff6e,
+    0x00000800, 0xbeef03f4, 0xbf85000b, 0xbf82000c, 0xbf09836e, 0xbf85ffdc,
+    0xbf06826e, 0xbeef03ff, 0x80000000, 0xbf850003, 0x806c846c, 0x826d806d,
+    0xbf820005, 0xbef71d87, 0xbef00380, 0xbef10380, 0x8878ff78, 0x00002000,
+    0x906e8977, 0x876fff6e, 0x003f8000, 0x906e8677, 0x876eff6e, 0x02000000,
+    0x886e6f6e, 0xb9eef807, 0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c,
 };
 
 }  // namespace amd
