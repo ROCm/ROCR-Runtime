@@ -75,7 +75,8 @@ __attribute__((noinline)) static void _loader_debug_state() {
 // r_version history:
 // 1: Initial debug protocol
 // 2: New trap handler ABI. The reason for halting a wave is recorded in ttmp11[8:7].
-HSA_API r_debug _amdgpu_r_debug = {2,
+// 3: New trap handler ABI. A wave halted at S_ENDPGM rewinds its PC by 8 bytes, and sets ttmp11[9]=1.
+HSA_API r_debug _amdgpu_r_debug = {3,
                            nullptr,
                            reinterpret_cast<uintptr_t>(&_loader_debug_state),
                            r_debug::RT_CONSISTENT,
