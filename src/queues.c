@@ -199,6 +199,12 @@ const struct device_info beige_goby_device_info = {
     .doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info yellow_carp_device_info = {
+    .asic_family = CHIP_YELLOW_CARP,
+    .eop_buffer_size = 4096,
+    .doorbell_size = DOORBELL_SIZE_GFX9,
+};
+
 static const struct device_info *dev_lookup_table[] = {
 	[CHIP_KAVERI] = &kaveri_device_info,
 	[CHIP_HAWAII] = &hawaii_device_info,
@@ -224,6 +230,7 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_DIMGREY_CAVEFISH] = &dimgrey_cavefish_device_info,
 	[CHIP_VANGOGH] = &vangogh_device_info,
 	[CHIP_BEIGE_GOBY] = &beige_goby_device_info,
+	[CHIP_YELLOW_CARP] = &yellow_carp_device_info,
 };
 
 struct queue {

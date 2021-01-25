@@ -142,6 +142,7 @@ enum asic_family_type {
 	CHIP_VANGOGH,	/* 21 */
 	CHIP_ALDEBARAN, /* 22 */
 	CHIP_BEIGE_GOBY,	/* 23 */
+	CHIP_YELLOW_CARP, 	/* 24 */
 	CHIP_LAST
 };
 
