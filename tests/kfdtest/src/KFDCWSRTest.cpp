@@ -91,6 +91,16 @@ LOOP: \n\
 end \n\
 ";
 
+static const char* infinite_isa = \
+"\
+shader infinite_isa \n\
+wave_size(32) \n\
+type(CS) \n\
+LOOP: \n\
+    s_branch LOOP \n\
+end \n\
+";
+
 void KFDCWSRTest::SetUp() {
     ROUTINE_START
 
@@ -204,6 +214,64 @@ TEST_F(KFDCWSRTest, BasicTest) {
         delete dispatch1;
         delete dispatch2;
 
+    } else {
+        LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
+    }
+
+    TEST_END
+}
+
+/**
+ * KFDCWSRTest.InterruptRestore
+ *
+ * This test verifies that CP can preempt an HQD while it is restoring a dispatch.
+ * Create queue 1.
+ * Start a dispatch on queue 1 which runs indefinitely and fills all CU wave slots.
+ * Create queue 2, triggering context save on queue 1.
+ * Start a dispatch on queue 2 which runs indefinitely and fills all CU wave slots.
+ * Create queue 3, triggering context save and restore on queues 1 and 2.
+ * Preempt runlist. One or both queues must interrupt context restore to preempt.
+ */
+
+TEST_F(KFDCWSRTest, InterruptRestore) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+    if (m_FamilyId >= FAMILY_VI) {
+        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+
+        m_pIsaGen->CompileShader(infinite_isa, "infinite_isa", isaBuffer);
+
+        PM4Queue queue1, queue2, queue3;
+
+        ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
+
+        Dispatch *dispatch1, *dispatch2;
+
+        dispatch1 = new Dispatch(isaBuffer);
+        dispatch2 = new Dispatch(isaBuffer);
+
+        dispatch1->SetDim(0x10000, 1, 1);
+        dispatch2->SetDim(0x10000, 1, 1);
+
+        dispatch1->Submit(queue1);
+
+        ASSERT_SUCCESS(queue2.Create(defaultGPUNode));
+
+        dispatch2->Submit(queue2);
+
+        // Give waves time to launch.
+        Delay(1);
+
+        ASSERT_SUCCESS(queue3.Create(defaultGPUNode));
+
+        EXPECT_SUCCESS(queue1.Destroy());
+        EXPECT_SUCCESS(queue2.Destroy());
+        EXPECT_SUCCESS(queue3.Destroy());
+
+        delete dispatch1;
+        delete dispatch2;
     } else {
         LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
