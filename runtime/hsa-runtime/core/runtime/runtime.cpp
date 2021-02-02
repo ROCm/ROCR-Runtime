@@ -173,20 +173,14 @@ void Runtime::RegisterAgent(Agent* agent) {
     if (cpu_agents_.size() == 1) {
       // Might need memory pooling to cover allocation that
       // requires less than 4096 bytes.
-      system_allocator_ =
-          [&](size_t size, size_t alignment,
-              MemoryRegion::AllocateFlags alloc_flags) -> void* {
-            assert(alignment <= 4096);
-            void* ptr = NULL;
-            return (HSA_STATUS_SUCCESS ==
-                    core::Runtime::runtime_singleton_->AllocateMemory(
-                        system_regions_fine_[0], size, alloc_flags, &ptr))
-                       ? ptr
-                       : NULL;
-          };
+      system_allocator_ = [this](size_t size, size_t align, MemoryRegion::AllocateFlags alloc_flags) -> void* {
+        assert(align <= 4096);
+        void* ptr = nullptr;
+        core::Runtime::runtime_singleton_->AllocateMemory(system_regions_fine_[0], size, alloc_flags, &ptr);
+        return ptr;
+      };
 
-      system_deallocator_ =
-          [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
+      system_deallocator_ = [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
 
       BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
     }
@@ -451,9 +445,8 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
   would remain mapped for the duration of the copy.
   */
-  void* temp = nullptr;
-  system_region->Allocate(size, core::MemoryRegion::AllocateNoFlags, &temp);
-  MAKE_SCOPE_GUARD([&]() { system_region->Free(temp, size); });
+  void* temp = system_allocator_(size, 0, core::MemoryRegion::AllocateNoFlags);
+  MAKE_SCOPE_GUARD([&]() { system_deallocator_(temp); });
   hsa_status_t err = src_agent->DmaCopy(temp, source, size);
   if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
   return err;

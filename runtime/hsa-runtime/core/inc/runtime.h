@@ -314,7 +314,7 @@ class Runtime {
 
   amd::hsa::code::AmdHsaCodeManager* code_manager() { return &code_manager_; }
 
-  std::function<void*(size_t, size_t, MemoryRegion::AllocateFlags)>&
+  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags)>&
   system_allocator() {
     return system_allocator_;
   }
@@ -482,8 +482,7 @@ class Runtime {
   std::map<const void*, AllocationRegion> allocation_map_;
 
   // Allocator using ::system_region_
-  std::function<void*(size_t, size_t, MemoryRegion::AllocateFlags)>
-      system_allocator_;
+  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags)> system_allocator_;
 
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;
