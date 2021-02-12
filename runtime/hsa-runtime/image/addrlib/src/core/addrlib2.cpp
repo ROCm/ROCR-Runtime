@@ -314,8 +314,6 @@ ADDR_E_RETURNCODE Lib::ComputeSurfaceInfo(
         }
     }
 
-    ADDR_ASSERT(pOut->surfSize != 0);
-
     ValidBaseAlignments(pOut->baseAlign);
 
     return returnCode;
