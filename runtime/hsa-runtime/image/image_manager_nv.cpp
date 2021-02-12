@@ -484,7 +484,11 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
     word4.f.DEPTH =
         (image_array) // Doesn't hurt but isn't array_size already >0?
             ? std::max(image.desc.array_size, static_cast<size_t>(1)) - 1
-            : (image_3d) ? image.desc.depth - 1 : out.pitch - 1;
+            : (image_3d) ? image.desc.depth - 1 : 0;
+    uint32_t minor_ver = MinorVerFromDevID(chip_id_);
+    // For 1d, 2d and 2d-msaa in gfx1030 and beyond this is pitch-1
+    if ((minor_ver >= 3) && !image_array && !image_3d)
+      word4.f.PITCH = out.pitch - 1;
 
     word5.val = 0;
     word6.val = 0;
@@ -630,6 +634,7 @@ uint32_t ImageManagerNv::GetAddrlibSurfaceInfoNv(
   const uint32_t num_slice = static_cast<uint32_t>(
       std::max(kMinNumSlice, std::max(desc.array_size, desc.depth)));
 
+  uint32_t minor_ver = MinorVerFromDevID(chip_id_);
   ADDR2_COMPUTE_SURFACE_INFO_INPUT in = {0};
   in.size = sizeof(ADDR2_COMPUTE_SURFACE_INFO_INPUT);
   in.format = addrlib_format;
@@ -637,6 +642,9 @@ uint32_t ImageManagerNv::GetAddrlibSurfaceInfoNv(
   in.width = width;
   in.height = height;
   in.numSlices = num_slice;
+  // Custom Pitch is supported in gfx1030 and beyond
+  if (minor_ver >= 3)
+    in.pitchInElement = image_data_row_pitch / image_prop.element_size;
   switch (desc.geometry) {
     case HSA_EXT_IMAGE_GEOMETRY_1D:
     case HSA_EXT_IMAGE_GEOMETRY_1DB:
