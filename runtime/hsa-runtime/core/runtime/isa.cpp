@@ -209,7 +209,7 @@ const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, 
                                     return isareg.second.GetVersion() == version &&
                                         (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
                                          isareg.second.GetSramecc() == sramecc) &&
-                                        (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
+                                        (isareg.second.GetXnack() == IsaFeature::Unsupported ||
                                          isareg.second.GetXnack() == xnack);
                                   });
   return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
