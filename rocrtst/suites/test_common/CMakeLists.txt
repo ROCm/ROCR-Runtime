@@ -40,6 +40,19 @@ cmake_minimum_required(VERSION 3.5.0)
 set(PROJECT_NAME "rocrtst64")
 project (${PROJECT_NAME})
 
+# For DEB/RPM generation
+set ( CPACK_PACKAGE_FILE_NAME "rocrtst" )
+set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
+set ( CPACK_PACKAGE_DESCRIPTION "This package includes rocrtst and a convenience script to run the test suite" )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCr" )
+set ( CPACK_PACKAGE_VERSION_MAJOR "1" )
+set ( CPACK_PACKAGE_VERSION_MINOR "0" )
+set ( CPACK_PACKAGE_VERSION_PATCH "0" )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
+set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
+set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
+
 
 set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1033")
 
@@ -216,7 +229,7 @@ set(ROCRTST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 # static library to be linked with user test programs
 #
 set(GOOGLE_TEST_FRWK_NAME "google-test-frwk${ONLY64STR}")
-add_subdirectory(${ROCRTST_ROOT}/gtest "${PROJECT_BINARY_DIR}/gtest")
+add_subdirectory(${ROCRTST_ROOT}/gtest "${PROJECT_BINARY_DIR}/gtest" EXCLUDE_FROM_ALL)
 set (ROCRTST_LIBS ${ROCRTST_LIBS} ${GOOGLE_TEST_FRWK_NAME})
 
 MESSAGE("ROCRTST_LIBS SET STEP:Done")
@@ -360,7 +373,7 @@ target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwl
 
 add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
 install(TARGETS ${ROCRTST}
-        ARCHIVE DESTINATION ${PROJECT_BINARY_DIR}/lib
-        LIBRARY DESTINATION ${PROJECT_BINARY_DIR}/lib
-        RUNTIME DESTINATION ${PROJECT_BINARY_DIR}/bin)
-
+        ARCHIVE DESTINATION lib
+        LIBRARY DESTINATION lib
+        RUNTIME DESTINATION bin)
+include ( CPack )
