@@ -463,10 +463,15 @@ void MemoryAccessTest::CPUAccessToGPUMemoryTest(void) {
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
   for (unsigned int i = 0 ; i< gpus.size(); ++i) {
     hsa_amd_memory_pool_t gpu_pool;
+    memset(&gpu_pool, 0, sizeof(gpu_pool));
     err = hsa_amd_agent_iterate_memory_pools(gpus[i],
                                               rocrtst::GetGlobalMemoryPool,
                                               &gpu_pool);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+    if (gpu_pool.handle == 0) {
+      std::cout << "no global mempool in gpu agent" << std::endl;
+      return;
+    }
     CPUAccessToGPUMemoryTest(cpus[0], gpus[i], gpu_pool);
   }
   if (verbosity() > 0) {
