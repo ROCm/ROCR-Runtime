@@ -174,18 +174,32 @@ static hsa_status_t ProcessIterateError(hsa_status_t err) {
 // yourself instead of using this function.
 hsa_status_t SetPoolsTypical(BaseRocR* test) {
   hsa_status_t err;
+  if (test->profile() == HSA_PROFILE_FULL) {
+    err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+          rocrtst::FindAPUStandardPool, &test->cpu_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
 
-  err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
-        rocrtst::FindStandardPool, &test->cpu_pool());
-  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+    err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+          rocrtst::FindAPUStandardPool, &test->device_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
 
-  err = hsa_amd_agent_iterate_memory_pools(*test->gpu_device1(),
-        rocrtst::FindStandardPool, &test->device_pool());
-  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+    err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+          rocrtst::FindAPUStandardPool, &test->kern_arg_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
 
-  err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
-        rocrtst::FindKernArgPool, &test->kern_arg_pool());
-  RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+  } else {
+    err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+          rocrtst::FindStandardPool, &test->cpu_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+
+    err = hsa_amd_agent_iterate_memory_pools(*test->gpu_device1(),
+          rocrtst::FindStandardPool, &test->device_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+
+    err = hsa_amd_agent_iterate_memory_pools(*test->cpu_device(),
+          rocrtst::FindKernArgPool, &test->kern_arg_pool());
+    RET_IF_HSA_UTILS_ERR(rocrtst::ProcessIterateError(err));
+  }
 
   return HSA_STATUS_SUCCESS;
 }

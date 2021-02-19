@@ -193,6 +193,7 @@ hsa_status_t GetKernArgMemoryPool(hsa_amd_memory_pool_t pool, void* data);
 ///      -HSA_STATUS_SUCCESS - we did not find a pool that meets the criteria
 ///      -else return an appropriate error code for any error encountered
 hsa_status_t FindStandardPool(hsa_amd_memory_pool_t pool, void* data);
+hsa_status_t FindAPUStandardPool(hsa_amd_memory_pool_t pool, void* data);
 
 /// Find a "kernel arg" pool.
 /// The pool found will have the following properties:
