@@ -197,6 +197,7 @@ FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
 "KFDEvictTest.BurstyTest:"\
+"KFDMemoryTest.PtraceAccess:"\
 "KFDMemoryTest.DeviceHdpFlush"
 
 FILTER[navi10]=\
