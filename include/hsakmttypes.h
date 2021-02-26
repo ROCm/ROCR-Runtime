@@ -209,11 +209,12 @@ typedef union
         unsigned int WaveLaunchTrapOverrideSupported: 1; // Indicates if Wave Launch Trap Override is supported on the node.
         unsigned int WaveLaunchModeSupported: 1; // Indicates if Wave Launch Mode is supported on the node.
         unsigned int PreciseMemoryOperationsSupported: 1; // Indicates if Precise Memory Operations are supported on the node.
-        unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
+        unsigned int DEPRECATED_SRAM_EDCSupport: 1; // Old buggy user mode depends on this being 0
         unsigned int Mem_EDCSupport: 1;          // Indicates if GFX internal DRAM/HBM EDC/ECC functionality is active
         unsigned int RASEventNotify: 1;          // Indicates if GFX extended RASFeatures and RAS EventNotify status is available
         unsigned int ASICRevision: 4;            // Indicates the ASIC revision of the chip on this node.
-        unsigned int Reserved            : 6;
+        unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
+        unsigned int Reserved            : 5;
     } ui32;
 } HSA_CAPABILITY;
 
