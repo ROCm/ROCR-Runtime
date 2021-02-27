@@ -1812,9 +1812,13 @@ TEST_F(KFDMemoryTest, SignalHandling) {
         ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(pDb, size, NULL));
         LOG() << "Mapping finished" << std::endl;
         int childStatus;
+        pid_t pid;
 
         // Parent process, just wait for the child to finish
-        EXPECT_EQ(childPid, waitpid(childPid, &childStatus, 0));
+        do {
+            pid = waitpid(childPid, &childStatus, 0);
+        } while(pid == -1 && errno == EINTR);
+        EXPECT_EQ(childPid, pid);
         EXPECT_NE(0, WIFEXITED(childStatus));
         EXPECT_EQ(0, WEXITSTATUS(childStatus));
     }
