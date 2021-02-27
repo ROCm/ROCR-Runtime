@@ -213,6 +213,7 @@ void KFDEvictTest::AmdgpuCommandSubmissionSdmaNop(int rn, amdgpu_bo_handle handl
     amdgpu_va_handle vaHandle;
     uint32_t *ptr;
     uint32_t expired;
+    unsigned failCount = 0;
 
     ASSERT_EQ(0, amdgpu_cs_ctx_create(m_RenderNodes[rn].device_handle, &contextHandle));
 
@@ -244,8 +245,14 @@ void KFDEvictTest::AmdgpuCommandSubmissionSdmaNop(int rn, amdgpu_bo_handle handl
 
     memset(&fenceStatus, 0, sizeof(struct amdgpu_cs_fence));
     for (int i = 0; i < 100; i++) {
-        ASSERT_EQ(0, amdgpu_cs_submit(contextHandle, 0, &ibsRequest, 1));
+        int r = amdgpu_cs_submit(contextHandle, 0, &ibsRequest, 1);
+
         Delay(50);
+        if (r) {
+            failCount++;
+            ASSERT_LE(failCount, 2);
+            continue;
+        }
 
         fenceStatus.context = contextHandle;
         fenceStatus.ip_type = AMDGPU_HW_IP_DMA;
