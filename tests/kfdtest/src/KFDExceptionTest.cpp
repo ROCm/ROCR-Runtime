@@ -47,6 +47,11 @@ void KFDExceptionTest::TearDown() {
 
     KFDBaseComponentTest::TearDown();
 
+    // WORKAROUND: This needs to be fixed in the kernel
+    // Wait 500ms for the kernel to process any fault storms before the
+    // next test to avoid reporting incorrect faults in the next test.
+    Delay(500);
+
     ROUTINE_END
 }
 
