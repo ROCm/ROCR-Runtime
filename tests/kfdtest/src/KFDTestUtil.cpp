@@ -149,8 +149,10 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         familyId = FAMILY_AI;
         if (props->EngineId.ui32.Stepping == 2)
             familyId = FAMILY_RV;
-        if (props->EngineId.ui32.Stepping == 8)
+        else if (props->EngineId.ui32.Stepping == 8)
             familyId = FAMILY_AR;
+        else if (props->EngineId.ui32.Stepping == 10)
+            familyId = FAMILY_AL;
         break;
     case 10:
         familyId = FAMILY_NV;
@@ -201,7 +203,7 @@ HSAuint64 GetSystemTickCountInMicroSec() {
 const HsaMemoryBuffer HsaMemoryBuffer::Null;
 
 HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, bool isLocal, bool isExec,
-                                 bool isScratch, bool isReadOnly)
+                                 bool isScratch, bool isReadOnly, bool isUncached)
     :m_Size(size),
     m_pUser(NULL),
     m_pBuf(NULL),
@@ -222,11 +224,13 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
             m_Flags.ui32.HostAccess = 0;
             m_Flags.ui32.NonPaged = 1;
             m_Flags.ui32.CoarseGrain = 1;
+            EXPECT_EQ(isUncached, 0) << "Uncached flag is relevant only for system or host memory";
         } else {
             m_Flags.ui32.HostAccess = 1;
             m_Flags.ui32.NonPaged = 0;
             m_Flags.ui32.CoarseGrain = 0;
             m_Flags.ui32.NoNUMABind = 1;
+            m_Flags.ui32.Uncached = isUncached;
         }
 
         if (isExec)
@@ -666,4 +670,27 @@ int HsaNodeInfo::FindAccessiblePeers(std::vector<int> *peers,
             peers->push_back(m_NodesWithGPU.at(i));
     }
     return peers->size();
+}
+
+const bool HsaNodeInfo::IsNodeXGMItoCPU(int node) const {
+    const HsaNodeProperties *pNodeProperties;
+    bool ret = false;
+
+    pNodeProperties = GetNodeProperties(node);
+    if (pNodeProperties && pNodeProperties->NumIOLinks) {
+        HsaIoLinkProperties  *IolinkProperties =  new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
+        EXPECT_SUCCESS(hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties));
+
+        for (int linkId = 0; linkId < pNodeProperties->NumIOLinks; linkId++) {
+            EXPECT_EQ(node, IolinkProperties[linkId].NodeFrom);
+            const HsaNodeProperties *pNodeProperties0 =
+                    GetNodeProperties(IolinkProperties[linkId].NodeTo);
+            if (pNodeProperties0->NumFComputeCores == 0 &&
+                    IolinkProperties[linkId].IoLinkType == HSA_IOLINK_TYPE_XGMI)
+                ret = true;
+        }
+        delete [] IolinkProperties;
+    }
+
+    return ret;
 }

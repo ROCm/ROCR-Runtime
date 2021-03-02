@@ -20,6 +20,7 @@ FILTER[core_sws]=\
 "KFDQMTest.AllSdmaQueues:"\
 "KFDQMTest.AllXgmiSdmaQueues:"\
 "KFDQMTest.AllQueues:"\
+"KFDLocalMemoryTest.AccessLocalMem:"\
 "KFDEventTest.SignalEvent"
 
 # HWS mode
@@ -198,6 +199,13 @@ FILTER[arcturus]=\
 "KFDExceptionTest.FaultStorm:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDEvictTest.BurstyTest"
+
+FILTER[aldebaran]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDExceptionTest.FaultStorm:"\
+"KFDEvictTest.BurstyTest:"\
+"KFDMemoryTest.PtraceAccess:"\
+"KFDMemoryTest.DeviceHdpFlush"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\

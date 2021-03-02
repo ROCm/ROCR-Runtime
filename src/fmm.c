@@ -1186,7 +1186,8 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 	uint32_t ioc_flags = 0;
 
 	if (flags.ui32.AQLQueueMemory)
-		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM;
+		ioc_flags |= (KFD_IOC_ALLOC_MEM_FLAGS_AQL_QUEUE_MEM |
+			      KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED);
 	if (!flags.ui32.ReadOnly)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
 	/* TODO: Since, ROCr interfaces doesn't allow caller to set page
@@ -1336,6 +1337,9 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 
 	if (!flags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
+
+	if (flags.ui32.Uncached || svm.disable_cache)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
 
 	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
 				    ioc_flags, &vm_obj);
@@ -1548,6 +1552,10 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 
 	if (!flags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
+
+	if (flags.ui32.Uncached || svm.disable_cache)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
+
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
 
 	if (flags.ui32.AQLQueueMemory)

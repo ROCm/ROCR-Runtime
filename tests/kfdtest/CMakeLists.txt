@@ -38,6 +38,16 @@ set ( CPACK_PACKAGE_VERSION_MINOR "0" )
 set ( CPACK_PACKAGE_VERSION_PATCH "0" )
 set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
 
+## Define default variable and variables for the optional build target hsakmt-dev
+set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
+set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
+set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
+set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
+
+# Debian package specific variables
+set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
+
+
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
 find_package(PkgConfig)
@@ -57,29 +67,19 @@ else()
     include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
 endif()
 
-## Define default variable and variables for the optional build target hsakmt-dev
-set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
-set ( CMAKE_INSTALL_PREFIX "/opt/rocm"  CACHE STRING "Default installation directory." )
-set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
-set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
-
-# Debian package specific variables
-set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
-
 if( DEFINED ENV{LIBHSAKMT_PATH} )
     set ( LIBHSAKMT_PATH $ENV{LIBHSAKMT_PATH} )
     message ( "LIBHSAKMT_PATH environment variable is set" )
 else()
     if ( ${ROCM_INSTALL_PATH} )
-       set ( ENV{PKG_CONFIG_PATH} ${ROCM_INSTALL_PATH} )
-       pkg_check_modules(HSAKMT libhsakmt)
+       set ( ENV{PKG_CONFIG_PATH} ${ROCM_INSTALL_PATH}/share/pkgconfig )
     else()
-       set ( ENV{PKG_CONFIG_PATH} /opt/rocm/libhsakmt/ )
-       pkg_check_modules(HSAKMT libhsakmt)
+       set ( ENV{PKG_CONFIG_PATH} /opt/rocm/share/pkgconfig )
     endif()
+
+    pkg_check_modules(HSAKMT libhsakmt)
+
     if( NOT HSAKMT_FOUND )
-       set ( ENV{PKG_CONFIG_PATH} /opt/rocm/libhsakmt/ )
-       pkg_check_modules(HSAKMT libhsakmt)
        set ( LIBHSAKMT_PATH $ENV{OUT_DIR} )
     endif()
 endif()
@@ -109,6 +109,7 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/GoogleTestExtension.cpp
   src/IndirectBuffer.cpp
   src/IsaGenerator.cpp
+  src/IsaGenerator_Aldebaran.cpp
   src/IsaGenerator_Gfx10.cpp
   src/IsaGenerator_Gfx72.cpp
   src/IsaGenerator_Gfx8.cpp

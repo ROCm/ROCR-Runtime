@@ -108,6 +108,29 @@ wave_size(32)\n\
 end\n\
 ";
 
+const char* aldbrn_ScratchCopyDword =
+"\
+shader ScratchCopyDword\n\
+asic(ALDEBARAN)\n\
+type(CS)\n\
+/*copy the parameters from scalar registers to vector registers*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v2, s2\n\
+    v_mov_b32 v3, s3\n\
+/*set up the scratch parameters. This assumes a single 16-reg block.*/\n\
+    s_mov_b32 flat_scratch_lo, s4\n\
+    s_mov_b32 flat_scratch_hi, s5\n\
+/*copy a dword between the passed addresses*/\n\
+    flat_load_dword v4, v[0:1] slc\n\
+    s_waitcnt vmcnt(0)&lgkmcnt(0)\n\
+    flat_store_dword v[2:3], v4 slc\n\
+    \n\
+    s_endpgm\n\
+    \n\
+end\n\
+";
+
 
 
 /* Continuously poll src buffer and check buffer value
@@ -127,6 +150,32 @@ type(CS)\n\
     s_cmp_eq_i32 s16, s18\n\
     s_cbranch_scc0   LOOP\n\
     s_store_dword s18, s[2:3], 0x0 glc\n\
+    s_endpgm\n\
+    end\n\
+";
+
+/* Similar to gfx9_PollMemory except that the buffer
+ * polled can be Non-coherant memory. SCC system-level
+ * cache coherence is not supported in scalar (smem) path.
+ * Use vmem operations with scc
+ */
+const char* gfx9_PollNCMemory =
+"\
+shader ReadMemory\n\
+asic(ALDEBARAN)\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume src address in s0, s1 and dst address in s2, s3*/\n\
+    v_mov_b32 v6, 0x5678\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    LOOP:\n\
+    flat_load_dword v4, v[0:1] scc\n\
+    v_cmp_eq_u32 vcc, v4, v6\n\
+    s_cbranch_vccz   LOOP\n\
+    v_mov_b32 v0, s2\n\
+    v_mov_b32 v1, s3\n\
+    flat_store_dword v[0:1], v6 scc\n\
     s_endpgm\n\
     end\n\
 ";
@@ -222,6 +271,81 @@ type(CS)\n\
     s_store_dword s18, s[2:3], 0 glc\n\
     s_mov_b32 s18, 0xcafe\n\
     s_store_dword s18, s[0:1], 0x0 glc\n\
+    s_endpgm\n\
+    end\n\
+";
+
+/* Continuously poll the flag at src buffer
+ * After the flag of s[0:1] is 1 filled,
+ * copy the value from s[0:1]+4 to dst buffer
+ */
+const char* gfx9_PollAndCopy =
+"\
+shader CopyMemory\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume src buffer in s[0:1] and dst buffer in s[2:3]*/\n\
+    s_movk_i32 s18, 0x1\n\
+    LOOP:\n\
+    s_load_dword s16, s[0:1], 0x0 glc\n\
+    s_cmp_eq_i32 s16, s18\n\
+    s_cbranch_scc0   LOOP\n\
+    s_load_dword s17, s[0:1], 0x4 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_store_dword s17, s[2:3], 0x0 glc:1\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
+const char* gfx9aldbrn_PollAndCopy =
+"\
+shader CopyMemory\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume src buffer in s[0:1] and dst buffer in s[2:3]*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    v_mov_b32 v18, 0x1\n\
+    LOOP:\n\
+    flat_load_dword v16, v[0:1] scc:1\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    v_cmp_eq_i32 vcc, v16, v18\n\
+    s_cbranch_vccz   LOOP\n\
+    buffer_invl2\n\
+    s_load_dword s17, s[0:1], 0x4 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_store_dword s17, s[2:3], 0x0 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    buffer_wbl2\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_endpgm\n\
+    end\n\
+";
+
+/* Input0: A buffer of at least 2 dwords.
+ * DW0: used as a signal. Write 0x1 to signal
+ * DW1: Write the value from 2nd input buffer
+ *      for other device to read.
+ * Input1: A buffer of at least 2 dwords.
+ * DW0: used as the value to be written.
+ */
+const char* gfx9aldbrn_WriteFlagAndValue =
+"\
+shader WriteMemory\n\
+wave_size(32)\n\
+type(CS)\n\
+/* Assume two inputs buffer in s[0:1] and s[2:3]*/\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    s_load_dword s18, s[2:3], 0x0 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    s_store_dword s18, s[0:1], 0x4 glc\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    buffer_wbl2\n\
+    s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
+    v_mov_b32 v16, 0x1\n\
+    flat_store_dword v[0:1], v16 scc:1\n\
     s_endpgm\n\
     end\n\
 ";
@@ -389,7 +513,11 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     else
         pReadMemory = gfx10_PollMemory;
 
-    m_pIsaGen->CompileShader(pReadMemory, "ReadMemory", isaBuffer);
+    if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode))
+        /* On A+A system memory is mapped as NC */
+        m_pIsaGen->CompileShader(gfx9_PollNCMemory, "ReadMemory", isaBuffer);
+    else
+        m_pIsaGen->CompileShader(pReadMemory, "ReadMemory", isaBuffer);
 
     PM4Queue pm4Queue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
@@ -485,14 +613,18 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf,
                                 0xABCDEF09, 0x12345678));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf, 0xABCDEF09);
     WaitOnValue(destBuf + 1, 0x12345678);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     /* This sleep hides the dmesg PPR message storm on Raven, which happens
@@ -726,8 +858,10 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     const char *pScratchCopyDword;
     if (m_FamilyId < FAMILY_AI)
         pScratchCopyDword = gfx8_ScratchCopyDword;
-    else if (m_FamilyId < FAMILY_NV)
+    else if (m_FamilyId < FAMILY_AL)
         pScratchCopyDword = gfx9_ScratchCopyDword;
+    else if (m_FamilyId == FAMILY_AL)
+        pScratchCopyDword = aldbrn_ScratchCopyDword;
     else
         pScratchCopyDword = gfx10_ScratchCopyDword;
     m_pIsaGen->CompileShader(pScratchCopyDword, "ScratchCopyDword", isaBuffer);
@@ -1514,6 +1648,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     mem1 = reinterpret_cast<void *>(reinterpret_cast<HSAuint8 *>(mem) + VRAM_OFFSET + sizeof(HSAuint64));
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem0,
                                                   data0[0], data0[1]));
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket((unsigned int *)mem1,
@@ -1592,8 +1727,10 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     const char *pScratchCopyDword;
     if (m_FamilyId < FAMILY_AI)
         pScratchCopyDword = gfx8_ScratchCopyDword;
-    else if (m_FamilyId < FAMILY_NV)
+    else if (m_FamilyId < FAMILY_AL)
         pScratchCopyDword = gfx9_ScratchCopyDword;
+    else if (m_FamilyId == FAMILY_AL)
+        pScratchCopyDword = aldbrn_ScratchCopyDword;
     else
         pScratchCopyDword = gfx10_ScratchCopyDword;
 
@@ -2291,6 +2428,214 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnRemoteWrite) {
     EXPECT_SUCCESS(queue.Destroy());
     EXPECT_SUCCESS(queue1.Destroy());
     EXPECT_SUCCESS(sdmaQueue.Destroy());
+
+    TEST_END
+}
+
+/* Test is for new cache coherence on Aldebaran. It is to verify
+ * two GPUs can coherently share a fine grain FB.
+ */
+TEST_F(KFDMemoryTest, VramCacheCoherenceWithRemoteGPU) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    HsaMemoryBuffer tmpBuffer(PAGE_SIZE, 0, true /* zero */);
+    volatile HSAuint32 *tmp = tmpBuffer.As<volatile HSAuint32 *>();
+    const int dwSource = 0x40 * sizeof(int); /* At 3rd cache line */
+    const int dwLocation = 0x80 * sizeof(int); /* At 5th cache line  */
+
+    if (m_FamilyId != FAMILY_AL) {
+        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+        return;
+    }
+
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    if (gpuNodes.size() < 2) {
+        LOG() << "Skipping test: At least two GPUs are required." << std::endl;
+        return;
+    }
+
+    HSAuint32 nondefaultNode;
+    for (unsigned i = 0; i < gpuNodes.size(); i++) {
+        if (gpuNodes.at(i) != defaultGPUNode) {
+            nondefaultNode = gpuNodes.at(i);
+            break;
+        }
+    }
+
+    unsigned int nodes[2] = {defaultGPUNode, nondefaultNode};
+
+    /* Allocate a local FB */
+    HsaMemoryBuffer buffer(PAGE_SIZE, defaultGPUNode, false/*zero*/, true/*local*/, false/*exec*/);
+    buffer.MapMemToNodes(&nodes[0], 2);
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    buffer.Fill(0, sdmaQueue, 0, PAGE_SIZE);
+    buffer.Fill(0x5678, sdmaQueue, dwSource, 4);
+
+    /* Read buffer[0] as flag from local shader to fill cache line (64 dws)
+     * which should has 0 at buffer[1]
+     */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9aldbrn_PollAndCopy, "CopyMemory", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer.As<char *>(), buffer.As<char *>()+dwLocation);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* Using remote shader to write the flag and copy value from dwSource
+     * to dwLocation in buffer.
+     * Local shader should get the flag and execute CopyMemory
+     */
+    PM4Queue queue1;
+    ASSERT_SUCCESS(queue1.Create(nondefaultNode));
+    HsaMemoryBuffer isaBuffer1(PAGE_SIZE, nondefaultNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9aldbrn_WriteFlagAndValue, "WriteMemory", isaBuffer1);
+    Dispatch dispatch1(isaBuffer1);
+    dispatch1.SetArgs(buffer.As<char *>(), buffer.As<char *>()+dwSource);
+    dispatch1.Submit(queue1);
+    dispatch1.Sync(g_TestTimeOut);
+
+    /* Check test result*/
+    dispatch.Sync(g_TestTimeOut);
+    EXPECT_EQ(buffer.IsPattern(dwLocation, 0x5678, sdmaQueue, tmp), true);
+
+    // Clean up
+    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS(queue1.Destroy());
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+
+    TEST_END
+}
+
+/* Test is for new cache coherence on A+A(Aldebaran). It is to verify
+ * new XGMI coherence HW link in caches between CPU and GPUs
+ * in local FB with fine grain mode.
+ */
+TEST_F(KFDMemoryTest, VramCacheCoherenceWithCPU) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (m_FamilyId != FAMILY_AL) {
+        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+        return;
+    }
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    const int dwLocation = 0x80;
+
+    if (!m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode)) {
+        LOG() << "Skipping test: XGMI link to CPU is required." << std::endl;
+        return;
+    }
+
+    unsigned int *buffer;
+    HsaMemFlags memFlags = {0};
+    /* Allocate a fine grain local FB accessed by CPU */
+    memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.NonPaged = 1;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, memFlags,
+            reinterpret_cast<void**>(&buffer)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(buffer, PAGE_SIZE, NULL));
+    buffer[0] = 0;
+    buffer[dwLocation] = 0;
+
+    /* Read buffer from shader to fill cache */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    m_pIsaGen->CompileShader(gfx9aldbrn_PollAndCopy, "CopyMemory", isaBuffer);
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(buffer, buffer+dwLocation);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* CPU writes to buffer. Shader should get 0x5678 CPU writes
+     * after cache invalidating(buffer_invl2) and quits
+     */
+    buffer[1] = 0x5678;
+    buffer[0] = 1;
+
+    /* Check test result*/
+    dispatch.Sync(g_TestTimeOut);
+    EXPECT_EQ(buffer[dwLocation], 0x5678);
+
+    // Clean up
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(buffer));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(buffer, PAGE_SIZE));
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END
+}
+
+/* Test is for new cache coherence on Aldebaran. It is to verify
+ * new XGMI coherence HW link in caches between CPU and GPUs
+ * in system RAM.
+ */
+TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (m_FamilyId != FAMILY_AL) {
+        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+        return;
+    }
+
+    unsigned int *fineBuffer = NULL;
+    unsigned int tmp;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    const int dwLocation = 0x80;
+
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode /* system */, PAGE_SIZE, m_MemoryFlags,
+                       reinterpret_cast<void**>(&fineBuffer)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(fineBuffer, PAGE_SIZE, NULL));
+    fineBuffer[0] = 0;
+    fineBuffer[1] = 0;
+    /* Read buffer from CPU to fill cache */
+    tmp = fineBuffer[dwLocation];
+
+    /* Read fine grain buffer from shader to fill cache */
+    PM4Queue queue;
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+
+    if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode))
+        m_pIsaGen->CompileShader(gfx9aldbrn_PollAndCopy, "CopyMemory", isaBuffer);
+    else
+        m_pIsaGen->CompileShader(gfx9_PollAndCopy, "CopyMemory", isaBuffer);
+
+    Dispatch dispatch(isaBuffer);
+    dispatch.SetArgs(fineBuffer, fineBuffer+dwLocation);
+    dispatch.Submit(queue);
+
+    /* Delay 100ms to make sure shader executed*/
+    Delay(100);
+
+    /* CPU writes to buffer. Shader should get what CPU writes and quits*/
+    fineBuffer[1] = 0x5678;
+    fineBuffer[0] = 1;
+
+    /* Check test result, based on KFDEventTest.SignalEvent passed.
+     * if Sync times out,
+     * it means coherence issue that GPU doesn't read what CPU wrote.
+     * if buffer value is not expected,
+     * it means coherence issue that CPU doesn't read what GPU wrote.
+     */
+    dispatch.Sync(g_TestTimeOut);
+    EXPECT_EQ(fineBuffer[dwLocation], 0x5678);
+
+    // Clean up
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(fineBuffer));
+    EXPECT_SUCCESS(hsaKmtFreeMemory(fineBuffer, PAGE_SIZE));
+    EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
 }

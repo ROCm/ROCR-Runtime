@@ -30,6 +30,7 @@
 #include "IsaGenerator_Gfx8.hpp"
 #include "IsaGenerator_Gfx9.hpp"
 #include "IsaGenerator_Gfx10.hpp"
+#include "IsaGenerator_Aldebaran.hpp"
 
 #include "GoogleTestExtension.hpp"
 
@@ -93,6 +94,8 @@ IsaGenerator* IsaGenerator::Create(unsigned int familyId) {
     case FAMILY_RV:
     case FAMILY_AR:
         return new IsaGenerator_Gfx9;
+    case FAMILY_AL:
+        return new IsaGenerator_Aldbrn;
     case FAMILY_NV:
         return new IsaGenerator_Gfx10;
 

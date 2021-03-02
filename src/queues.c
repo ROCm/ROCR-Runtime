@@ -42,7 +42,8 @@
 #define DOORBELL_SIZE_GFX9 8
 #define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
 
-#define VGPR_SIZE_PER_CU(asic_family)	(asic_family == CHIP_ARCTURUS ? 0x80000 : 0x40000)
+#define VGPR_SIZE_PER_CU(asic_family)	((asic_family == CHIP_ARCTURUS || \
+                        asic_family == CHIP_ALDEBARAN) ? 0x80000 : 0x40000)
 #define SGPR_SIZE_PER_CU	0x4000
 #define LDS_SIZE_PER_CU		0x10000
 #define HWREG_SIZE_PER_CU	0x1000
@@ -147,6 +148,12 @@ const struct device_info arcturus_device_info = {
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info aldebaran_device_info = {
+    .asic_family = CHIP_ALDEBARAN,
+    .eop_buffer_size = 4096,
+    .doorbell_size = DOORBELL_SIZE_GFX9,
+};
+
 const struct device_info navi10_device_info = {
 	.asic_family = CHIP_NAVI10,
 	.eop_buffer_size = 4096,
@@ -205,6 +212,7 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_RAVEN] = &raven_device_info,
 	[CHIP_RENOIR] = &renoir_device_info,
 	[CHIP_ARCTURUS] = &arcturus_device_info,
+	[CHIP_ALDEBARAN] = &aldebaran_device_info,
 	[CHIP_NAVI10] = &navi10_device_info,
 	[CHIP_NAVI12] = &navi12_device_info,
 	[CHIP_NAVI14] = &navi14_device_info,
@@ -469,7 +477,8 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 
 void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 				       uint32_t NodeId, bool nonPaged,
-				       bool DeviceLocal)
+				       bool DeviceLocal,
+				       bool Uncached)
 {
 	void *mem;
 	HSAuint64 gpu_va;
@@ -483,6 +492,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.ui32.NonPaged = nonPaged;
 	flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
 	flags.ui32.CoarseGrain = DeviceLocal;
+	flags.ui32.Uncached = Uncached;
 
 	/* Get the closest cpu_id to GPU NodeId for system memory allocation
 	 * nonPaged=1 system memory allocation uses GTT path
@@ -532,11 +542,13 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 static void *allocate_exec_aligned_memory(uint32_t size,
 					  bool use_ats,
 					  uint32_t NodeId,
-					  bool DeviceLocal)
+					  bool DeviceLocal,
+					  bool Uncached)
 {
 	if (!use_ats)
 		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
-							DeviceLocal, DeviceLocal);
+							DeviceLocal, DeviceLocal,
+							Uncached);
 	return allocate_exec_aligned_memory_cpu(size);
 }
 
@@ -578,7 +590,7 @@ static int handle_concrete_asic(struct queue *q,
 		q->eop_buffer =
 				allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
 				q->use_ats,
-				NodeId, true);
+				NodeId, true, /* Unused for VRAM */false);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -596,7 +608,7 @@ static int handle_concrete_asic(struct queue *q,
 		q->ctx_save_restore =
 			allocate_exec_aligned_memory(q->ctx_save_restore_size,
 							 q->use_ats,
-							 NodeId, false);
+							 NodeId, false, false);
 		if (!q->ctx_save_restore)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -653,7 +665,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
 			use_ats,
-			NodeId, false);
+			NodeId, false, true);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 

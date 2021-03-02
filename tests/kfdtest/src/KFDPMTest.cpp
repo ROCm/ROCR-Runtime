@@ -78,8 +78,11 @@ TEST_F(KFDPMTest, SuspendWithIdleQueueAfterWork) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuffer.As<unsigned int*>(), 0x1, 0x2));
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
     WaitOnValue(&(destBuffer.As<unsigned int*>()[0]), 0x1);
     WaitOnValue(&(destBuffer.As<unsigned int*>()[1]), 0x2);
 
@@ -88,7 +91,7 @@ TEST_F(KFDPMTest, SuspendWithIdleQueueAfterWork) {
     EXPECT_EQ(true, SuspendAndWakeUp());
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(&(destBuffer.As<unsigned int*>()[2]), 0x3, 0x4));
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     EXPECT_EQ(destBuffer.As<unsigned int*>()[0], 0);
     EXPECT_EQ(destBuffer.As<unsigned int*>()[1], 0);
@@ -96,6 +99,7 @@ TEST_F(KFDPMTest, SuspendWithIdleQueueAfterWork) {
     WaitOnValue(&(destBuffer.As<unsigned int*>()[2]), 0x3);
     WaitOnValue(&(destBuffer.As<unsigned int*>()[3]), 0x4);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END

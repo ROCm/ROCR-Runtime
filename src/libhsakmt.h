@@ -26,6 +26,7 @@
 #ifndef LIBHSAKMT_H_INCLUDED
 #define LIBHSAKMT_H_INCLUDED
 
+#include "linux/kfd_ioctl.h"
 #include "hsakmt.h"
 #include "pci_ids.h"
 #include <pthread.h>
@@ -132,6 +133,7 @@ enum asic_family_type {
 	CHIP_NAVY_FLOUNDER,	/* 19 */
 	CHIP_DIMGREY_CAVEFISH,	/* 20 */
 	CHIP_VANGOGH,	/* 21 */
+	CHIP_ALDEBARAN, /* 22 */
 	CHIP_LAST
 };
 
@@ -170,7 +172,7 @@ HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
 void* allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 				       uint32_t NodeId, bool NonPaged,
-				       bool DeviceLocal);
+				       bool DeviceLocal, bool Uncached);
 void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align);
 HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes);
 void destroy_process_doorbells(void);
