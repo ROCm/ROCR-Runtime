@@ -129,7 +129,8 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/topology.c"
                  "src/rbtree.c"
                  "src/spm.c"
-                 "src/version.c")
+                 "src/version.c"
+                 "src/svm.c")
 
 ## Declare the library target name
 add_library ( ${HSAKMT_TARGET} "")

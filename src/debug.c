@@ -731,3 +731,24 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtClearAddressWatch(
 			NULL);
 	return result;
 }
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSendHostTrap(
+		HSAuint32	NodeId, //IN
+		HSAuint32	Pid	//IN
+		)
+{
+	int result;
+
+	result = debug_trap(NodeId,
+			KFD_IOC_DBG_TRAP_SEND_HOST_TRAP,
+			0,
+			0,
+			0,
+			Pid,
+			0,
+			NULL);
+
+	return result;
+}

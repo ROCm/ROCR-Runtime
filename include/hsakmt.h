@@ -845,6 +845,16 @@ hsaKmtGetQueueSnapshot(
     );
 
 /**
+  Send the host trap
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSendHostTrap(
+    HSAuint32	NodeId, //IN
+    HSAuint32	Pid //IN
+    );
+
+/**
   Set the trap override mask. When debug trap is enabled by
   hsaKmtEnableDebugTrap() each wave launched has its initial
   MODE.excp_en register overriden by TrapMask as specified by
@@ -1243,6 +1253,37 @@ hsaKmtSPMSetDestBuffer(
 	void        *DestMemoryAddress,		//IN
 	bool        *isSPMDataLoss		//OUT
     );
+
+/* Helper functions for calling KFD SVM ioctl */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSVMSetAttr(
+    void *start_addr,   // IN: Start of the virtual address range (page-aligned)
+    HSAuint64 size,     // IN: size (page-aligned)
+    unsigned int nattr, // IN: number of attributes
+    HSA_SVM_ATTRIBUTE *attrs  // IN: array of attributes
+);
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSVMGetAttr(
+    void *start_addr,   // IN: Start of the virtual address range (page-aligned)
+    HSAuint64 size,     // IN: size (page aligned)
+    unsigned int nattr, // IN: number of attributes
+    HSA_SVM_ATTRIBUTE *attrs  // IN/OUT: array of attributes
+);
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtSetXNACKMode(
+    HSAint32 enable  // IN: enable/disable XNACK node.
+);
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetXNACKMode(
+    HSAint32 * enable  // OUT: returns XNACK value.
+);
 
 #ifdef __cplusplus
 }   //extern "C"

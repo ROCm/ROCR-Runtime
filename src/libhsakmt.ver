@@ -61,6 +61,7 @@ hsaKmtEnableDebugTrap;
 hsaKmtEnableDebugTrapWithPollFd;
 hsaKmtDisableDebugTrap;
 hsaKmtQueryDebugEvent;
+hsaKmtSendHostTrap;
 hsaKmtGetQueueSnapshot;
 hsaKmtSetWaveLaunchTrapOverride;
 hsaKmtSetWaveLaunchMode;
@@ -74,6 +75,10 @@ hsaKmtClearAddressWatch;
 hsaKmtSPMAcquire;
 hsaKmtSPMRelease;
 hsaKmtSPMSetDestBuffer;
+hsaKmtSVMSetAttr;
+hsaKmtSVMGetAttr;
+hsaKmtSetXNACKMode;
+hsaKmtGetXNACKMode;
 
 local: *;
 };

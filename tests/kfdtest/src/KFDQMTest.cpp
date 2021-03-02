@@ -78,13 +78,16 @@ TEST_F(KFDQMTest, SubmitNopCpQueue) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     PM4Queue queue;
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     queue.PlaceAndSubmitPacket(PM4NopPacket());
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
@@ -99,17 +102,19 @@ TEST_F(KFDQMTest, SubmitPacketCpQueue) {
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false);
 
     destBuf.Fill(0xFF);
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
 
     PM4Queue queue;
-
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0, 0));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0));
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
@@ -132,7 +137,7 @@ TEST_F(KFDQMTest, AllCpQueues) {
 
     for (unsigned int qidx = 0; qidx < m_numCpQueues; ++qidx) {
         queues[qidx].PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>()+qidx*2, qidx, qidx));
-
+        queues[qidx].PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, true, 0, 0));
         queues[qidx].Wait4PacketConsumption();
 
         EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>()+qidx*2, qidx));
@@ -330,6 +335,7 @@ TEST_F(KFDQMTest, AllQueues) {
 
     for (i = 0; i < numCpQueues; ++i) {
         cpQueues[i].PlaceAndSubmitPacket(PM4WriteDataPacket(destBufCp.As<unsigned int*>()+i*2, i, i));
+        cpQueues[i].PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, true, 0, 0));
 
         cpQueues[i].Wait4PacketConsumption();
 
@@ -460,9 +466,12 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithNullAddress) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0, 0));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0);
 
@@ -480,10 +489,11 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithNullAddress) {
 
     EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 1);
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
@@ -544,13 +554,16 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     PM4WriteDataPacket packet1, packet2;
     packet1.InitPacket(destBuf.As<unsigned int*>(), 0, 0);
     packet2.InitPacket(destBuf.As<unsigned int*>(), 1, 1);
 
     queue.PlaceAndSubmitPacket(packet1);
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0);
 
@@ -568,7 +581,7 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
 
     EXPECT_SUCCESS(queue.Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, BaseQueue::DEFAULT_PRIORITY, false));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 1);
 
@@ -1228,6 +1241,8 @@ TEST_F(KFDQMTest, CpuWriteCoherence) {
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode);
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
 
     /* The queue might be full and we fail to submit. There is always one word space unused in queue.
      * So let rptr one step ahead then we continually submit packet.
@@ -1249,10 +1264,11 @@ TEST_F(KFDQMTest, CpuWriteCoherence) {
      */
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0x42, 0x42));
 
-    queue.Wait4PacketConsumption();
+    queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 0x42);
 
+    hsaKmtDestroyEvent(event);
     TEST_END
 }
 
@@ -1420,18 +1436,22 @@ TEST_F(KFDQMTest, CpQueueWraparound) {
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
     for (unsigned int pktIdx = 0; pktIdx <= PAGE_SIZE/sizeof(PM4WRITE_DATA_CI); ++pktIdx) {
         queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), pktIdx, pktIdx));
-        queue.Wait4PacketConsumption();
+        queue.Wait4PacketConsumption(event);
         WaitOnValue(destBuf.As<unsigned int*>(), pktIdx);
     }
 
     for (unsigned int pktIdx = 0; pktIdx <= PAGE_SIZE/sizeof(PM4WRITE_DATA_CI); ++pktIdx) {
         queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), pktIdx, pktIdx));
-        queue.Wait4PacketConsumption();
+        queue.Wait4PacketConsumption(event);
         WaitOnValue(destBuf.As<unsigned int*>(), pktIdx);
     }
 
+    hsaKmtDestroyEvent(event);
     EXPECT_SUCCESS(queue.Destroy());
 
     TEST_END
@@ -1669,18 +1689,13 @@ TEST_F(KFDQMTest, P2PTest) {
     HsaMemFlags memFlags = {0};
     HsaMemMapFlags mapFlags = {0};
     memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    memFlags.ui32.HostAccess = 1;
+    memFlags.ui32.HostAccess = 0;
     memFlags.ui32.NonPaged = 1;
     memFlags.ui32.NoNUMABind = 1;
     unsigned int end = size / sizeof(HSAuint32) - 1;
 
-    if (!m_NodeInfo.IsGPUNodeLargeBar(g_TestDstNodeId) &&
-         m_NodeInfo.AreGPUNodesXGMI(g_TestNodeId, g_TestDstNodeId)) {
-        memFlags.ui32.HostAccess = 0;
-    }
-
     /* 1. Allocate a system buffer and allow the access to GPUs */
-    EXPECT_SUCCESS(hsaKmtAllocMemory(0, size, memFlags,
+    EXPECT_SUCCESS(hsaKmtAllocMemory(0, size, m_MemoryFlags,
                                      reinterpret_cast<void **>(&sysBuf)));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sysBuf, size, NULL,
                                              mapFlags, nodes.size(), (HSAuint32 *)&nodes[0]));

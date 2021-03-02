@@ -50,6 +50,32 @@ void KFDLocalMemoryTest::TearDown() {
     ROUTINE_END
 }
 
+TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    //local memory
+    HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false, true);
+    HsaEvent *event;
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+
+    PM4Queue queue;
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0, 0));
+
+    queue.Wait4PacketConsumption(event);
+
+    hsaKmtDestroyEvent(event);
+    EXPECT_SUCCESS(queue.Destroy());
+
+
+    TEST_END
+}
+
 TEST_F(KFDLocalMemoryTest, BasicTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);

@@ -66,7 +66,7 @@ class HsaMemoryBuffer {
 
  public:
     HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero = true, bool isLocal = false,
-                    bool isExec = false, bool isScratch = false, bool isReadOnly = false);
+                    bool isExec = false, bool isScratch = false, bool isReadOnly = false, bool isUncached = false);
     HsaMemoryBuffer(void *addr, HSAuint64 size);
     template<typename RetType>
     RetType As() {
@@ -197,6 +197,11 @@ class HsaNodeInfo {
     const bool AreGPUNodesXGMI(int node0, int node1) const;
     int FindAccessiblePeers(std::vector<int> *peers,
                                         HSAuint32 node) const;
+    /* @brief: to determine if the node is XGMI-linked to CPU
+     * @param: node index of the node we are looking at
+     * @return: bool true or false
+     */
+    const bool IsNodeXGMItoCPU(int node) const;
 };
 
 #endif  // __KFD__TEST__UTIL__H__
