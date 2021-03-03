@@ -44,20 +44,23 @@
 
 set -e
 
+# left-hand term originates from @ENABLE_LDCONFIG@ = ON/OFF at package build
 rm_ldconfig() {
-    rm -f /etc/ld.so.conf.d/hsa-rocr-dev.conf && ldconfig
+  if [ "@ENABLE_LDCONFIG@" == "ON" ]; then
+    rm -f /etc/ld.so.conf.d/hsa-rocr-dev.conf
+    ldconfig
+  fi
 }
 
 case "$1" in
-   remove)
+   ( remove )
        rm_ldconfig
        # Workaround for CPACK directory symlink handling error.
        rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa
    ;;
-   purge)
+   ( purge )
    ;;
-   *)
+   ( * )
        exit 0
    ;;
 esac
-
