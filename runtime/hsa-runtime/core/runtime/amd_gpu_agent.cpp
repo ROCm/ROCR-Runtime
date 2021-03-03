@@ -1136,15 +1136,13 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       assert(((!scratch.large) | use_reclaim) && "Large scratch used with reclaim disabled.");
 
       if (scratch.queue_base != nullptr) {
-        if (profile_ == HSA_PROFILE_FULL) return;
-        if (profile_ == HSA_PROFILE_BASE) {
-          HSAuint64 alternate_va;
-          if (hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va) ==
-              HSAKMT_STATUS_SUCCESS) {
-            if (scratch.large) scratch_used_large_ += scratch.size;
-            scratch_cache_.insert(scratch);
-            return;
-          }
+        HSAuint64 alternate_va;
+        if ((profile_ == HSA_PROFILE_FULL) ||
+            (hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va) ==
+             HSAKMT_STATUS_SUCCESS)) {
+          if (scratch.large) scratch_used_large_ += scratch.size;
+          scratch_cache_.insert(scratch);
+          return;
         }
       }
 
