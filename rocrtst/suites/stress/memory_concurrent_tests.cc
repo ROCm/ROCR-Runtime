@@ -268,10 +268,18 @@ void MemoryConcurrentTest::MemoryConcurrentAllocate(hsa_agent_t agent,
 
   if (alloc) {
     size_t alloc_size;
+    size_t total_vram_size;
+
     err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
-                                      &alloc_size);
-    // Adjust the size to the minimum of 1024 or max alloc size
-    alloc_size = (alloc_size < kMaxAllocSize) ? alloc_size: kMaxAllocSize;
+                                      &total_vram_size);
+    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+    // Make sure do not allocate more than 3/4 of the vram size
+    alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+
+    // Page align the alloc_size
+    alloc_size = alloc_size - (alloc_size & ((1 << 12) - 1));
+
     // Create a test group
     rocrtst::test_group* tg_concurrent = rocrtst::TestGroupCreate(kNumThreads);
 
@@ -350,12 +358,16 @@ void MemoryConcurrentTest::MemoryConcurrentFree(hsa_agent_t agent,
   if (alloc) {
     // Get the maximum allocation size
     size_t alloc_size;
+    size_t total_vram_size;
     err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
-                                      &alloc_size);
+                                      &total_vram_size);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
-    // Adjust the size to the minimum of 1024 or max alloc size
-    alloc_size = (alloc_size < kMaxAllocSize) ? alloc_size: kMaxAllocSize;
+    // Make sure do not allocate more than 3/4 of the vram size
+    alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+
+    // Page align the alloc_size
+    alloc_size = alloc_size - (alloc_size & ((1 << 12) - 1));
 
     // Create a test group
     rocrtst::test_group* tg_concurrent = rocrtst::TestGroupCreate(kNumThreads);
