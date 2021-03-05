@@ -207,26 +207,42 @@ FILTER[aldebaran]=\
 "KFDMemoryTest.PtraceAccess:"\
 "KFDMemoryTest.DeviceHdpFlush"
 
+# SP3 Compiler needs to be updated for GFX10. Temporarily disable all tests
+# that require shader compiler
+TEMP_GFX10_BLACKLIST=\
+"KFDMemoryTest.FlatScratchAccess:"\
+"KFDMemoryTest.PtraceAccessInvisibleVram:"\
+"KFDQMTest.QueuePriorityOnDifferentPipe:"\
+"KFDQMTest.QueuePriorityOnSamePipe:"\
+"KFDCWSRTest.BasicTest:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDEvictTest.QueueTest"
+
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
 "KFDMemoryTest.MMBench"
 
 FILTER[navi14]=\
-"$BLACKLIST_ALL_ASICS"
+"$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST"
 
 FILTER[sienna_cichlid]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 
 FILTER[navy_flounder]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 
 FILTER[dimgrey_cavefish]=\
+"$TEMP_GFX10_BLACKLIST:"\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
