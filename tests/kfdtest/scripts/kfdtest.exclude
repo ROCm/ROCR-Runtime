@@ -242,8 +242,8 @@ FILTER[navy_flounder]=\
 "KFDPerfCountersTest.*:"\
 
 FILTER[dimgrey_cavefish]=\
-"$TEMP_GFX10_BLACKLIST:"\
 "$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
