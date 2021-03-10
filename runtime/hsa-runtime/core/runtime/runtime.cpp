@@ -1266,7 +1266,8 @@ Runtime::Runtime()
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
-      ref_count_(0) {}
+      ref_count_(0),
+      kfd_version{0} {}
 
 hsa_status_t Runtime::Load() {
   flag_.Refresh();

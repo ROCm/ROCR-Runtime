@@ -127,6 +127,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_FORCE_SDMA_SIZE");
     force_sdma_size_ = var.empty() ? 1024 * 1024 : atoi(var.c_str());
+
+    var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
+    check_sramecc_validity_ = (var == "1") ? false : true;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -173,6 +176,8 @@ class Flag {
 
   size_t force_sdma_size() const { return force_sdma_size_; }
 
+  bool check_sramecc_validity() const { return check_sramecc_validity_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -189,6 +194,7 @@ class Flag {
   bool no_scratch_thread_limit_;
   bool disable_image_;
   bool loader_enable_mmap_uri_;
+  bool check_sramecc_validity_;
 
   SDMA_OVERRIDE enable_sdma_;
 
