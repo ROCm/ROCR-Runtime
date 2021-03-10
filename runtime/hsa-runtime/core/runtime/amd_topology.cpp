@@ -87,6 +87,33 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   }
   try {
     gpu = new GpuAgent(node_id, node_prop);
+
+    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion();
+
+    // Check for sramecc incompatibility due to sramecc not being reported correctly in kfd before
+    // 1.4.
+    if (gpu->isa()->IsSrameccSupported() && (kfd_version.KernelInterfaceMajorVersion <= 1 &&
+                                             kfd_version.KernelInterfaceMinorVersion < 4)) {
+      // gfx906 has both sramecc modes in use.  Suppress the device.
+      if ((gpu->isa()->GetProcessorName() == "gfx906") &&
+          core::Runtime::runtime_singleton_->flag().check_sramecc_validity()) {
+        char name[64];
+        gpu->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_PRODUCT_NAME, name);
+        name[63] = '\0';
+        fprintf(stderr,
+                "HSA Error:  Incompatible kernel and userspace, %s disabled. Upgrade amdgpu.\n",
+                name);
+        delete gpu;
+        return nullptr;
+      }
+
+      // gfx908 always has sramecc set to on in vbios.  Set mode bit to on and recreate the device.
+      if (gpu->isa()->GetProcessorName() == "gfx908") {
+        node_prop.Capability.ui32.SRAM_EDCSupport = 1;
+        delete gpu;
+        gpu = new GpuAgent(node_id, node_prop);
+      }
+    }
   } catch (const hsa_exception& e) {
     if(e.error_code() == HSA_STATUS_ERROR_INVALID_ISA) {
       ifdebug {
@@ -201,21 +228,23 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list) {
 /// @brief Calls Kfd thunk to get the snapshot of the topology of the system,
 /// which includes associations between, node, devices, memory and caches.
 void BuildTopology() {
-  HsaVersionInfo info;
-  if (hsaKmtGetVersion(&info) != HSAKMT_STATUS_SUCCESS) {
+  HsaVersionInfo kfd_version;
+  if (hsaKmtGetVersion(&kfd_version) != HSAKMT_STATUS_SUCCESS) {
     return;
   }
 
-  if (info.KernelInterfaceMajorVersion == kKfdVersionMajor &&
-      info.KernelInterfaceMinorVersion < kKfdVersionMinor) {
+  if (kfd_version.KernelInterfaceMajorVersion == kKfdVersionMajor &&
+      kfd_version.KernelInterfaceMinorVersion < kKfdVersionMinor) {
     return;
   }
 
   // Disable KFD event support when using open source KFD
-  if (info.KernelInterfaceMajorVersion == 1 &&
-      info.KernelInterfaceMinorVersion == 0) {
+  if (kfd_version.KernelInterfaceMajorVersion == 1 &&
+      kfd_version.KernelInterfaceMinorVersion == 0) {
     core::g_use_interrupt_wait = false;
   }
+
+  core::Runtime::runtime_singleton_->KfdVersion(kfd_version);
 
   HsaSystemProperties props;
   hsaKmtReleaseSystemProperties();

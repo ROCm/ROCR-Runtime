@@ -341,6 +341,10 @@ class Runtime {
 
   uint64_t sys_clock_freq() const { return sys_clock_freq_; }
 
+  void KfdVersion(const HsaVersionInfo& version) { kfd_version = version; }
+
+  HsaVersionInfo KfdVersion() const { return kfd_version; }
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -531,6 +535,9 @@ class Runtime {
 
   // Pools KFD Events for InterruptSignal
   InterruptSignal::EventPool EventPool;
+
+  // Kfd version
+  HsaVersionInfo kfd_version;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
