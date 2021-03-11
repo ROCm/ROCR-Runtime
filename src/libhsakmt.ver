@@ -77,8 +77,6 @@ hsaKmtSPMRelease;
 hsaKmtSPMSetDestBuffer;
 hsaKmtSVMSetAttr;
 hsaKmtSVMGetAttr;
-hsaKmtSetXNACKMode;
-hsaKmtGetXNACKMode;
 
 local: *;
 };
