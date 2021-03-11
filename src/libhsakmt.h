@@ -26,7 +26,6 @@
 #ifndef LIBHSAKMT_H_INCLUDED
 #define LIBHSAKMT_H_INCLUDED
 
-#include "linux/kfd_ioctl.h"
 #include "hsakmt.h"
 #include "pci_ids.h"
 #include <pthread.h>
