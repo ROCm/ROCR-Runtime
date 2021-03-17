@@ -1547,7 +1547,7 @@ hsa_status_t hsa_agent_iterate_isas(
 
   const Isa *isa_object = agent_object->isa();
   if (!isa_object) {
-    return HSA_STATUS_ERROR_INVALID_AGENT;
+    return HSA_STATUS_SUCCESS;
   }
 
   return callback(Isa::Handle(isa_object), data);
