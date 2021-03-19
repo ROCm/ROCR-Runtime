@@ -22,9 +22,9 @@
  */
 
 #include "KFDTestUtil.hpp"
-
 #include <stdlib.h>
 #include <sys/time.h>
+#include <sys/mman.h>
 #include <algorithm>
 #include <vector>
 #include "BaseQueue.hpp"
@@ -693,4 +693,182 @@ const bool HsaNodeInfo::IsNodeXGMItoCPU(int node) const {
     }
 
     return ret;
+}
+
+HSAKMT_STATUS RegisterSVMRange(HSAuint32 GPUNode, void *MemoryAddress,
+                               HSAuint64 SizeInBytes, HSAuint32 PrefetchNode,
+                               HSAuint32 SVMFlags) {
+    HSA_SVM_ATTRIBUTE *attrs;
+    HSAuint64 s_attr;
+    HSAuint32 nattr;
+    HSAKMT_STATUS r;
+
+    nattr = 4;
+    s_attr = sizeof(*attrs) * nattr;
+    attrs = (HSA_SVM_ATTRIBUTE *)alloca(s_attr);
+
+    attrs[0].type = HSA_SVM_ATTR_PREFETCH_LOC;
+    attrs[0].value = PrefetchNode;
+    attrs[1].type = HSA_SVM_ATTR_PREFERRED_LOC;
+    attrs[1].value = PrefetchNode;
+    attrs[2].type = HSA_SVM_ATTR_SET_FLAGS;
+    attrs[2].value = SVMFlags;
+    attrs[3].type = HSA_SVM_ATTR_ACCESS;
+    attrs[3].value = GPUNode;
+
+    r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, nattr, attrs);
+    if (r) {
+        LOG() << "set range attrs failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS SVMRangeGetPrefetchNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                      HSAuint32 *PrefetchNode) {
+    HSA_SVM_ATTRIBUTE attr;
+    int r;
+
+    attr.type = HSA_SVM_ATTR_PREFETCH_LOC;
+    attr.value = 0;
+
+    r = hsaKmtSVMGetAttr(MemoryAddress, SizeInBytes, 1, &attr);
+    if (r) {
+        LOG() << "get prefetch node failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    *PrefetchNode = attr.value;
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS SVMRangePrefetchToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                           HSAuint32 PrefetchNode) {
+    HSA_SVM_ATTRIBUTE attr;
+    int r;
+
+    attr.type = HSA_SVM_ATTR_PREFETCH_LOC;
+    attr.value = PrefetchNode;
+
+    r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
+    if (r) {
+        LOG() << "set prefetch node failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS SVMRangeMapToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                           HSAuint32 NodeID) {
+    HSA_SVM_ATTRIBUTE attr;
+    int r;
+
+    attr.type = HSA_SVM_ATTR_ACCESS;
+    attr.value = NodeID;
+
+    r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
+    if (r) {
+        LOG() << "set map to node failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS SVMRangeMapInPlaceToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                           HSAuint32 NodeID) {
+    HSA_SVM_ATTRIBUTE attr;
+    int r;
+
+    attr.type = HSA_SVM_ATTR_ACCESS_IN_PLACE;
+    attr.value = NodeID;
+
+    r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
+    if (r) {
+        LOG() << "set map in place to node failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS SVMRangSetGranularity(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                    HSAuint32 Granularity) {
+    HSA_SVM_ATTRIBUTE attr;
+    int r;
+
+    attr.type = HSA_SVM_ATTR_GRANULARITY;
+    attr.value = Granularity;
+
+    r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
+    if (r) {
+        LOG() << "set granularity failed" << std::endl;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
+}
+
+HsaSVMRange::HsaSVMRange(HSAuint64 size, HSAuint32 GPUNode) :
+    HsaSVMRange(NULL, size, GPUNode, 0) {}
+
+HsaSVMRange::HsaSVMRange(HSAuint64 size) :
+    HsaSVMRange(NULL, size, 0, 0, true) {}
+
+HsaSVMRange::HsaSVMRange(HSAuint64 size, HSAuint32 GPUNode, HSAuint32 PrefetchNode) :
+    HsaSVMRange(NULL, size, GPUNode, PrefetchNode) {}
+
+HsaSVMRange::HsaSVMRange(void *addr, HSAuint64 size, HSAuint32 GPUNode, HSAuint32 PrefetchNode,
+                         bool noRegister, bool isLocal, bool isExec, bool isReadOnly):
+    m_Size(size),
+    m_pUser(addr),
+    m_Local(isLocal),
+    m_Node(PrefetchNode),
+    m_SelfAllocated(false) {
+    if (!m_pUser) {
+        m_pUser = mmap(0, m_Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+        EXPECT_NOTNULL(m_pUser);
+        m_SelfAllocated = true;
+    }
+
+    if (m_Local)
+        m_Flags = HSA_SVM_FLAG_HOST_ACCESS;
+    else
+        m_Flags = HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_COHERENT;
+
+    if (isReadOnly)
+        m_Flags |= HSA_SVM_FLAG_GPU_RO;
+    if (isExec)
+        m_Flags |= HSA_SVM_FLAG_GPU_EXEC;
+
+    if (!noRegister)
+        EXPECT_SUCCESS(RegisterSVMRange(GPUNode, m_pUser, m_Size, PrefetchNode, m_Flags));
+}
+
+HsaSVMRange::~HsaSVMRange() {
+    if (m_pUser != NULL) {
+        if (m_SelfAllocated)
+            munmap(m_pUser, m_Size);
+        m_pUser = NULL;
+    }
+}
+
+void HsaSVMRange::Fill(HSAuint32 value, HSAuint64 offset, HSAuint64 size) {
+    HSAuint64 i;
+    HSAuint32 *ptr = NULL;
+
+    size = size ? size : m_Size;
+    EXPECT_EQ((size & (sizeof(HSAuint32) - 1)), 0) << "Not word aligned. Call Fill(unsigned char)";
+    ASSERT_TRUE(size + offset <= m_Size) << "Buffer Overflow" << std::endl;
+
+    if (m_pUser != NULL)
+        ptr = reinterpret_cast<HSAuint32 *>(reinterpret_cast<char *>(m_pUser) + offset);
+
+    ASSERT_NOTNULL(ptr);
+
+    for (i = 0; i < size / sizeof(HSAuint32); i++)
+        ptr[i] = value;
 }

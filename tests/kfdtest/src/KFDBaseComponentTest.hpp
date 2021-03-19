@@ -78,6 +78,14 @@ class KFDBaseComponentTest : public testing::Test {
     virtual void SetUp();
     // @brief Executed after every test that uses KFDBaseComponentTest class.
     virtual void TearDown();
+
+    bool SVMAPISupported() {
+        bool supported = m_NodeInfo.HsaDefaultGPUNodeProperties()
+                        ->Capability.ui32.SVMAPISupported;
+        if (!supported)
+            LOG() << "SVM API not supported" << std::endl;
+        return supported;
+    }
 };
 
 extern KFDBaseComponentTest* g_baseTest;

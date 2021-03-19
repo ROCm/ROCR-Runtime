@@ -121,8 +121,49 @@ class HsaMemoryBuffer {
     unsigned int m_Node;
     HSAuint64 m_MappedNodes;
 };
+HSAKMT_STATUS RegisterSVMRange(HSAuint32 GPUNode, void *MemoryAddress,
+                               HSAuint64 SizeInBytes, HSAuint32 PrefetchNode,
+                               HSAuint32 SVMFlags);
+HSAKMT_STATUS SVMRangeGetPrefetchNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                      HSAuint32 *PrefetchNode);
+HSAKMT_STATUS SVMRangePrefetchToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                     HSAuint32 PrefetchNode);
+HSAKMT_STATUS SVMRangeMapToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                     HSAuint32 NodeID);
+HSAKMT_STATUS SVMRangeMapInPlaceToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                     HSAuint32 NodeID);
+HSAKMT_STATUS SVMRangSetGranularity(void *MemoryAddress, HSAuint64 SizeInBytes,
+                                    HSAuint32 Granularity);
 
+class HsaSVMRange {
+ public:
+    HsaSVMRange(HSAuint64 size, HSAuint32 GPUNode);
+    HsaSVMRange(HSAuint64 size, HSAuint32 GPUNode, HSAuint32 PreferredNode);
+    HsaSVMRange(HSAuint64 size);
+    HsaSVMRange(void *addr, HSAuint64 size, HSAuint32 GPUNode, HSAuint32 PreferredNode = 0,
+                bool noRegister = false, bool isLocal = false, bool isExec = false,
+                bool isReadOnly = false);
+    template<typename RetType>
+    RetType As() {
+        return reinterpret_cast<RetType>(m_pUser);
+    }
 
+    template<typename RetType>
+    const RetType As() const {
+        return reinterpret_cast<const RetType>(m_pUser);
+    }
+    ~HsaSVMRange();
+
+    void Fill(HSAuint32 value, HSAuint64 offset = 0, HSAuint64 size = 0);
+
+ private:
+    HSAuint32 m_Flags;
+    HSAuint64 m_Size;
+    void* m_pUser;
+    bool m_SelfAllocated;
+    bool m_Local;
+    unsigned int m_Node;
+};
 
 class HsaInteropMemoryBuffer {
  public:
