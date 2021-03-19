@@ -1298,6 +1298,36 @@ typedef struct _HsaMemoryRange {
 	HSAuint64          SizeInBytes;      // Size of above memory
 } HsaMemoryRange;
 
+typedef enum _HSA_SVM_FLAGS {
+	HSA_SVM_FLAG_HOST_ACCESS = 0x00000001, // Guarantee host access to memory
+	HSA_SVM_FLAG_COHERENT    = 0x00000002, // Fine grained coherency between all devices with access
+	HSA_SVM_FLAG_HIVE_LOCAL  = 0x00000004, // Use any GPU in same hive as preferred device
+	HSA_SVM_FLAG_GPU_RO      = 0x00000008, // GPUs only read, allows replication
+	HSA_SVM_FLAG_GPU_EXEC    = 0x00000010, // Allow execution on GPU
+	HSA_SVM_FLAG_GPU_READ_MOSTLY = 0x00000020, // GPUs mostly read, may allow similar optimizations as RO, but writes fault
+} HSA_SVM_FLAGS;
+
+typedef enum _HSA_SVM_ATTR_TYPE {
+	HSA_SVM_ATTR_PREFERRED_LOC,  // gpuid of the preferred location, 0 for
+                                     // system memory, INVALID_NODEID for
+                                     // "don't care"
+	HSA_SVM_ATTR_PREFETCH_LOC,   // gpuid of the prefetch location, 0 for
+                                     // system memory. Setting this triggers an
+                                     // immediate prefetch (migration)
+	HSA_SVM_ATTR_ACCESS,
+	HSA_SVM_ATTR_ACCESS_IN_PLACE,
+	HSA_SVM_ATTR_NO_ACCESS,      // specify memory access for the gpuid given
+                                     // by the attribute value
+	HSA_SVM_ATTR_SET_FLAGS,      // bitmask of flags to set (see HSA_SVM_FLAGS)
+	HSA_SVM_ATTR_CLR_FLAGS,      // bitmask of flags to clear
+	HSA_SVM_ATTR_GRANULARITY     // migration granularity (log2 num pages)
+} HSA_SVM_ATTR_TYPE;
+
+typedef struct _HSA_SVM_ATTRIBUTE {
+	HSAuint32 type;  // attribute type (see enum HSA_SVM_ATTR_TYPE)
+	HSAuint32 value; // attribute value
+} HSA_SVM_ATTRIBUTE;
+
 #pragma pack(pop, hsakmttypes_h)
 
 
