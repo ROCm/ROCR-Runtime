@@ -32,8 +32,9 @@ set ( HSAKMT_TARGET "${HSAKMT}" )
 
 project ( ${HSAKMT_TARGET} VERSION 1.9.0)
 
+# Build thunk as static by default
 if ( NOT DEFINED BUILD_SHARED_LIBS )
-  set ( BUILD_SHARED_LIBS "on" )
+  set ( BUILD_SHARED_LIBS "off" )
 endif()
 set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
 
