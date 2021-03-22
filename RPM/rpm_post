@@ -1,1 +1,0 @@
-echo -e "/opt/rocm/lib\n/opt/rocm/lib64" > /etc/ld.so.conf.d/x86_64-libhsakmt.conf && ldconfig

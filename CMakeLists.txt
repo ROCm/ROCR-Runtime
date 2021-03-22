@@ -248,6 +248,7 @@ set(CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH})
 set(CPACK_PACKAGE_CONTACT "AMD GFX mailing list <amd-gfx@lists.freedesktop.org>")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
 set(CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support\n This repository includes the user-mode API interfaces\n used to interact with the ROCk driver.")
+set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
 
 ## Component packaging, DEVEL
 set(CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package")
@@ -261,7 +262,6 @@ endif()
 
 # Debian package specific variables
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface")
-set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst;${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm")
 set(CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1")
 set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev")
 if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
@@ -269,6 +269,10 @@ if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
 else()
    set(CPACK_DEBIAN_PACKAGE_RELEASE "local")
 endif()
+## Process the Debian install/remove scripts to update the CPACK variables
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst.in DEBIAN/postinst @ONLY )
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm.in DEBIAN/prerm @ONLY )
+set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
 
 # RPM package specific variables
 # get OS-info
@@ -280,8 +284,14 @@ elseif(DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6")
 else()
     set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc")
 endif()
-set(CPACK_RPM_BINARY_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post")
-set(CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun")
+
+## Process the Rpm install/remove scripts to update the CPACK variables
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/post.in" RPM/post @ONLY )
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/postun.in" RPM/postun @ONLY )
+## RPM package specific variables
+set ( CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/post" )
+set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/postun" )
+
 if(DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
   set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "${CPACK_PACKAGING_INSTALL_PREFIX} ${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 endif()

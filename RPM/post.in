@@ -1,0 +1,5 @@
+# left-hand term originates from ENABLE_LDCONFIG = ON/OFF at package build
+if [ "@ENABLE_LDCONFIG@" == "ON" ]; then
+  echo -e "@CPACK_PACKAGING_INSTALL_PREFIX@/lib\n@CPACK_PACKAGING_INSTALL_PREFIX@/lib64" > /etc/ld.so.conf.d/x86_64-libhsakmt.conf
+  ldconfig
+fi
