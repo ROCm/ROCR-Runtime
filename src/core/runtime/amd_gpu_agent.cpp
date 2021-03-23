@@ -91,7 +91,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
       memory_bus_width_(0),
       memory_max_frequency_(0),
       ape1_base_(0),
-      ape1_size_(0) {
+      ape1_size_(0),
+      scratch_cache_(
+          [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -100,11 +102,34 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   historical_clock_ratio_ = 0.0;
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
+  const core::Isa *isa_base = core::IsaRegistry::GetIsa(
+      core::Isa::Version(node_props.EngineId.ui32.Major,
+                         node_props.EngineId.ui32.Minor,
+                         node_props.EngineId.ui32.Stepping));
+  if (!isa_base) {
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ISA, "Agent creation failed.\nThe GPU node has an unrecognized id.\n");
+  }
+
+  rocr::core::IsaFeature sramecc = rocr::core::IsaFeature::Unsupported;
+  if (isa_base->IsSrameccSupported()) {
+    sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1
+                   ? core::IsaFeature::Enabled
+                   : core::IsaFeature::Disabled;
+  }
+
+  rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
+  if (isa_base->IsXnackSupported()) {
+    // TODO: This needs to be obtained form KFD once HMM implemented.
+    xnack = profile_ == HSA_PROFILE_FULL ? core::IsaFeature::Enabled
+                                         : core::IsaFeature::Disabled;
+  }
+
   // Set instruction set architecture via node property, only on GPU device.
   isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
       core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
-                         node_props.EngineId.ui32.Stepping),
-      profile_ == HSA_PROFILE_FULL, node_props.Capability.ui32.SRAM_EDCSupport == 1);
+                         node_props.EngineId.ui32.Stepping), sramecc, xnack);
+
+  assert(isa_ != nullptr && "ISA registry inconsistency.");
 
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
@@ -148,6 +173,7 @@ GpuAgent::~GpuAgent() {
     _aligned_free(reinterpret_cast<void*>(ape1_base_));
   }
 
+  scratch_cache_.trim(true);
   if (scratch_pool_.base() != NULL) {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
@@ -542,11 +568,11 @@ void GpuAgent::InitDma() {
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
-    const std::string& sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
+    Flag::SDMA_OVERRIDE sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
     // User SDMA queues are unstable on gfx8.
     bool use_sdma = ((isa_->GetMajorVersion() != 8));
-    if (sdma_override.size() != 0) use_sdma = (sdma_override == "1");
+    if (sdma_override != Flag::SDMA_DEFAULT) use_sdma = (sdma_override == Flag::SDMA_ENABLE);
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
       auto ret = CreateBlitSdma(use_xgmi);
@@ -703,20 +729,20 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
+  // agent, and vendor name length limit excluding terminating nul character.
+  constexpr size_t hsa_name_size = 63;
 
   switch (attribute_u) {
-    // Build agent name by concatenating the Major, Minor and Stepping Ids
-    // of devices compute capability with a prefix of "gfx"
     case HSA_AGENT_INFO_NAME: {
-      std::stringstream name;
-      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      std::string name = isa_->GetProcessorName();
+      assert(name.size() <= hsa_name_size);
+      std::memset(value, 0, hsa_name_size);
       char* temp = reinterpret_cast<char*>(value);
-      name << "gfx" << isa_->GetMajorVersion() << isa_->GetMinorVersion() << isa_->GetStepping();
-      std::strcpy(temp, name.str().c_str());
+      std::strcpy(temp, name.c_str());
       break;
     }
     case HSA_AGENT_INFO_VENDOR_NAME:
-      std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+      std::memset(value, 0, hsa_name_size);
       std::memcpy(value, "AMD", sizeof("AMD"));
       break;
     case HSA_AGENT_INFO_FEATURE:
@@ -984,7 +1010,8 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   scratch.size_per_thread = private_segment_size;
 
   const uint32_t num_cu = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  scratch.size = scratch.size_per_thread * 32 * scratch.lanes_per_wave * num_cu;
+  scratch.size =
+      scratch.size_per_thread * properties_.MaxSlotsScratchCU * scratch.lanes_per_wave * num_cu;
   scratch.queue_base = nullptr;
   scratch.queue_process_offset = 0;
 
@@ -1030,104 +1057,166 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   uint64_t size_per_wave = AlignUp(scratch.size_per_thread * properties_.WaveFrontSize, 1024);
   if (size_per_wave > MAX_WAVE_SCRATCH) return;
 
-  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-  // Limit to 1/8th of scratch pool for small scratch and 1/4 of that for a single queue.
+  /*
+  Determine size class needed.
+
+  Scratch allocations come in two flavors based on how it is retired.  Small allocations may be
+  kept bound to a queue and reused by firmware.  This memory can not be reclaimed by the runtime
+  on demand so must be kept small to avoid egregious OOM conditions.  Other allocations, aka large,
+  may be used by firmware only for one dispatch and are then surrendered to the runtime.  This has
+  significant latency so we don't want to make all scratch allocations large (ie single use).
+
+  Note that the designation "large" is for contrast with "small", which must really be small
+  amounts of memory, and does not always imply a large quantity of memory is needed.  Other
+  properties of the allocation may require single use and so qualify the allocation or use as
+  "large".
+
+  Here we decide on the boundaries for small scratch allocations.  Both the largest small single
+  allocation and the maximum amount of memory bound by small allocations are limited.  Additionally
+  some legacy devices do not support large scratch.
+
+  For small scratch we must allocate enough memory for every physical scratch slot.
+  For large scratch compute the minimum memory needed to run the dispatch without limiting
+  occupancy.
+  Limit total bound small scratch allocations to 1/8th of scratch pool and 1/4 of that for a single
+  allocation.
+  */
   size_t small_limit = scratch_pool_.size() >> 3;
   // Lift limit for 2.10 release RCCL workaround.
   size_t single_limit = 146800640; //small_limit >> 2;
+  bool use_reclaim = true;
   bool large = (scratch.size > single_limit) ||
       (scratch_pool_.size() - scratch_pool_.remaining() + scratch.size > small_limit);
-  large = (isa_->GetMajorVersion() < 8) ? false : large;
-  large = core::Runtime::runtime_singleton_->flag().no_scratch_reclaim() ? false : large;
-  if (large)
-    scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
-  else
-    scratch.queue_base = scratch_pool_.alloc(scratch.size);
-  large |= scratch.queue_base > scratch_pool_.high_split();
-  scratch.large = large;
+  if ((isa_->GetMajorVersion() < 8) ||
+      core::Runtime::runtime_singleton_->flag().no_scratch_reclaim()) {
+    large = false;
+    use_reclaim = false;
+  }
 
-  scratch.queue_process_offset =
-      (need_queue_scratch_base)
-          ? uintptr_t(scratch.queue_base)
-          : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
+  // If large is selected then the scratch will not be retained.
+  // In that case allocate the minimum necessary for the dispatch since we don't need all slots.
+  if (large) scratch.size = scratch.dispatch_size;
 
-  if (scratch.queue_base != nullptr) {
-    if (profile_ == HSA_PROFILE_FULL) return;
-    if (profile_ == HSA_PROFILE_BASE) {
-      HSAuint64 alternate_va;
-      if (hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va) ==
-          HSAKMT_STATUS_SUCCESS) {
-        if (large) scratch_used_large_ += scratch.size;
-        return;
+  // Ensure mapping will be in whole pages.
+  scratch.size = AlignUp(scratch.size, 4096);
+
+  /*
+  Sequence of attempts is:
+    check cache
+    attempt a new allocation
+    trim unused blocks from cache
+    attempt a new allocation
+    check cache for sufficient used block, steal and wait (not implemented)
+    trim used blocks from cache, evaluate retry
+    reduce occupancy
+  */
+
+  // Lambda called in place.
+  // Used to allow exit from nested loops.
+  [&]() {
+    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+    // Check scratch cache
+    if (scratch_cache_.alloc(scratch)) return;
+
+    // Attempt new allocation.
+    for (int i = 0; i < 2; i++) {
+      if (large)
+        scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
+      else
+        scratch.queue_base = scratch_pool_.alloc(scratch.size);
+      scratch.large = large | (scratch.queue_base > scratch_pool_.high_split());
+      assert(((!scratch.large) | use_reclaim) && "Large scratch used with reclaim disabled.");
+
+      if (scratch.queue_base != nullptr) {
+        if (profile_ == HSA_PROFILE_FULL) return;
+        if (profile_ == HSA_PROFILE_BASE) {
+          HSAuint64 alternate_va;
+          if (hsaKmtMapMemoryToGPU(scratch.queue_base, scratch.size, &alternate_va) ==
+              HSAKMT_STATUS_SUCCESS) {
+            if (scratch.large) scratch_used_large_ += scratch.size;
+            scratch_cache_.insert(scratch);
+            return;
+          }
+        }
       }
+
+      // Scratch request failed allocation or mapping.
+      scratch_pool_.free(scratch.queue_base);
+      scratch.queue_base = nullptr;
+
+      // Release cached scratch and retry.
+      // First iteration trims unused blocks, second trims all.
+      scratch_cache_.trim(i == 1);
     }
-  }
 
-  // Scratch request failed allocation or mapping.
-  scratch_pool_.free(scratch.queue_base);
-  scratch.queue_base = nullptr;
-
-  // Retry if large may yield needed space.
-  if (scratch_used_large_ != 0) {
-    if (AddScratchNotifier(scratch.queue_retry, 0x8000000000000000ull)) scratch.retry = true;
-    return;
-  }
-
-  // Fail scratch allocation if reducing occupancy is disabled.
-  if (core::Runtime::runtime_singleton_->flag().no_scratch_thread_limiter()) return;
-
-  // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
-  if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    debug_print("Failed to map requested scratch (%ld) - reducing queue occupancy.\n",
-                scratch.size);
-  const uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
-  const uint64_t total_waves = scratch.size / size_per_wave;
-  uint64_t waves_per_cu = total_waves / num_cus;
-  while (waves_per_cu != 0) {
-    size_t size = waves_per_cu * num_cus * size_per_wave;
-    void* base = scratch_pool_.alloc(size);
-    HSAuint64 alternate_va;
-    if ((base != nullptr) &&
-        ((profile_ == HSA_PROFILE_FULL) ||
-         (hsaKmtMapMemoryToGPU(base, size, &alternate_va) == HSAKMT_STATUS_SUCCESS))) {
-      // Scratch allocated and either full profile or map succeeded.
-      scratch.queue_base = base;
-      scratch.size = size;
-      scratch.queue_process_offset = (need_queue_scratch_base)
-          ? uintptr_t(scratch.queue_base)
-          : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
-      scratch.large = true;
-      scratch_used_large_ += scratch.size;
-      if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-        debug_print("  %ld scratch mapped, %.2f%% occupancy.\n", scratch.size,
-                    float(waves_per_cu * num_cus) / scratch.wanted_slots * 100.0f);
+    // Retry if large may yield needed space.
+    if (scratch_used_large_ != 0) {
+      if (AddScratchNotifier(scratch.queue_retry, 0x8000000000000000ull)) scratch.retry = true;
       return;
     }
-    scratch_pool_.free(base);
-    waves_per_cu--;
-  }
 
-  // Failed to allocate minimal scratch
-  assert(scratch.queue_base == nullptr && "bad scratch data");
-  if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
-    debug_print("  Could not allocate scratch for one wave per CU.\n");
+    // Fail scratch allocation if reducing occupancy is disabled.
+    if ((!use_reclaim) || core::Runtime::runtime_singleton_->flag().no_scratch_thread_limiter())
+      return;
+
+    // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
+    if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+      debug_print("Failed to map requested scratch (%ld) - reducing queue occupancy.\n",
+                  scratch.size);
+    const uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+    const uint64_t total_waves = scratch.size / size_per_wave;
+    uint64_t waves_per_cu = total_waves / num_cus;
+    while (waves_per_cu != 0) {
+      size_t size = waves_per_cu * num_cus * size_per_wave;
+      void* base = scratch_pool_.alloc_high(size);
+      HSAuint64 alternate_va;
+      if ((base != nullptr) &&
+          ((profile_ == HSA_PROFILE_FULL) ||
+           (hsaKmtMapMemoryToGPU(base, size, &alternate_va) == HSAKMT_STATUS_SUCCESS))) {
+        // Scratch allocated and either full profile or map succeeded.
+        scratch.queue_base = base;
+        scratch.size = size;
+        scratch.large = true;
+        scratch_used_large_ += scratch.size;
+        scratch_cache_.insert(scratch);
+        if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+          debug_print("  %ld scratch mapped, %.2f%% occupancy.\n", scratch.size,
+                      float(waves_per_cu * num_cus) / scratch.wanted_slots * 100.0f);
+        return;
+      }
+      scratch_pool_.free(base);
+      waves_per_cu = waves_per_cu - scratch.waves_per_group;
+    }
+
+    // Failed to allocate minimal scratch
+    assert(scratch.queue_base == nullptr && "bad scratch data");
+    if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+      debug_print("  Could not allocate scratch for one wave per CU.\n");
+    return;
+  }();
+
+  scratch.queue_process_offset = need_queue_scratch_base
+      ? uintptr_t(scratch.queue_base)
+      : uintptr_t(scratch.queue_base) - uintptr_t(scratch_pool_.base());
 }
 
 void GpuAgent::ReleaseQueueScratch(ScratchInfo& scratch) {
-  if (scratch.queue_base == nullptr) {
-    return;
-  }
+  if (scratch.queue_base == nullptr) return;
 
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  scratch_cache_.free(scratch);
+  scratch.queue_base = nullptr;
+}
+
+void GpuAgent::ReleaseScratch(void* base, size_t size, bool large) {
   if (profile_ == HSA_PROFILE_BASE) {
-    if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(scratch.queue_base)) {
+    if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
       assert(false && "Unmap scratch subrange failed!");
     }
   }
-  scratch_pool_.free(scratch.queue_base);
-  scratch.queue_base = nullptr;
+  scratch_pool_.free(base);
 
-  if (scratch.large) scratch_used_large_ -= scratch.size;
+  if (large) scratch_used_large_ -= size;
 
   // Notify waiters that additional scratch may be available.
   for (auto notifier : scratch_notifiers_) {
@@ -1144,8 +1233,7 @@ void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_ti
   time.end = TranslateTime(end);
   time.start = TranslateTime(start);
 
-  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
-      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
+  if ((start == 0) || (end == 0) || (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 }
 
@@ -1157,8 +1245,7 @@ void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_
   time.end = TranslateTime(end);
   time.start = TranslateTime(start);
 
-  if ((start == 0) || (end == 0) || (start > t1_.GPUClockCounter) || (end > t1_.GPUClockCounter) ||
-      (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
+  if ((start == 0) || (end == 0) || (start < t0_.GPUClockCounter) || (end < t0_.GPUClockCounter))
     debug_print("Signal %p time stamps may be invalid.", &signal->signal_);
 }
 
@@ -1171,9 +1258,15 @@ Intervals larger than t0_ will be frequency adjusted.  This admits a numerical e
 than twice the frequency stability (~10^-5).
 */
 uint64_t GpuAgent::TranslateTime(uint64_t tick) {
-  // Ensure interpolation for times during program execution.
+  // Only allow short (error bounded) extrapolation for times during program execution.
+  // Limit errors due to relative frequency drift to ~0.5us.  Sync clocks at 16Hz.
+  const int64_t max_extrapolation = core::Runtime::runtime_singleton_->sys_clock_freq() >> 4;
+
   ScopedAcquire<KernelMutex> lock(&t1_lock_);
-  if ((t1_.GPUClockCounter < tick) || (t1_.GPUClockCounter == t0_.GPUClockCounter)) SyncClocks();
+  // Limit errors due to correlated pair certainty to ~0.5us.
+  // extrapolated time < (0.5us / half clock read certainty) * delay between clock measures
+  // clock read certainty is <4us.
+  if (((t1_.GPUClockCounter - t0_.GPUClockCounter) >> 2) + t1_.GPUClockCounter < tick) SyncClocks();
 
   // Good for ~300 yrs
   // uint64_t sysdelta = t1_.SystemClockCounter - t0_.SystemClockCounter;
@@ -1186,9 +1279,21 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
 
   // Good for ~3.5 months.
   uint64_t system_tick = 0;
-  double ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
-      double(t1_.GPUClockCounter - t0_.GPUClockCounter);
-  system_tick = uint64_t(int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)))) + t1_.SystemClockCounter;
+  int64_t elapsed = 0;
+  double ratio;
+
+  // Valid ticks only need at most one SyncClocks.
+  for (int i = 0; i < 2; i++) {
+    ratio = double(t1_.SystemClockCounter - t0_.SystemClockCounter) /
+        double(t1_.GPUClockCounter - t0_.GPUClockCounter);
+    elapsed = int64_t(ratio * double(int64_t(tick - t1_.GPUClockCounter)));
+
+    // Skip clock sync if under the extrapolation limit.
+    if (elapsed < max_extrapolation) break;
+    SyncClocks();
+  }
+
+  system_tick = uint64_t(elapsed) + t1_.SystemClockCounter;
 
   // tick predates HSA startup - extrapolate with fixed clock ratio
   if (tick < t0_.GPUClockCounter) {
@@ -1403,6 +1508,12 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
   }
 
   return GetXgmiBlit(dst_agent);
+}
+
+void GpuAgent::Trim() {
+  Agent::Trim();
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  scratch_cache_.trim(false);
 }
 
 }  // namespace amd

@@ -792,11 +792,28 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       // Align whole waves to 1KB.
       scratch.size_per_thread = AlignUp(scratch.size_per_thread, 1024 / scratch.lanes_per_wave);
       scratch.size = scratch.size_per_thread * MaxScratchSlots * scratch.lanes_per_wave;
-#ifndef NDEBUG
-      scratch.wanted_slots = ((uint64_t(pkt.dispatch.grid_size_x) * pkt.dispatch.grid_size_y) *
-                              pkt.dispatch.grid_size_z) / scratch.lanes_per_wave;
+
+      uint64_t lanes_per_group =
+          (uint64_t(pkt.dispatch.workgroup_size_x) * pkt.dispatch.workgroup_size_y) *
+          pkt.dispatch.workgroup_size_z;
+      uint64_t waves_per_group =
+          (lanes_per_group + scratch.lanes_per_wave - 1) / scratch.lanes_per_wave;
+      scratch.waves_per_group = waves_per_group;
+
+      uint64_t groups = ((uint64_t(pkt.dispatch.grid_size_x) + pkt.dispatch.workgroup_size_x - 1) /
+                         pkt.dispatch.workgroup_size_x) *
+          ((uint64_t(pkt.dispatch.grid_size_y) + pkt.dispatch.workgroup_size_y - 1) /
+           pkt.dispatch.workgroup_size_y) *
+          ((uint64_t(pkt.dispatch.grid_size_z) + pkt.dispatch.workgroup_size_z - 1) /
+           pkt.dispatch.workgroup_size_z);
+
+      // Assign an equal number of groups to each engine, clipping to capacity limits
+      const uint32_t engines = queue->agent_->properties().NumShaderBanks;
+      groups = ((groups + engines - 1) / engines) * engines;
+      scratch.wanted_slots = groups * waves_per_group;
       scratch.wanted_slots = Min(scratch.wanted_slots, uint64_t(MaxScratchSlots));
-#endif
+      scratch.dispatch_size =
+          scratch.size_per_thread * scratch.wanted_slots * scratch.lanes_per_wave;
 
       queue->agent_->AcquireQueueScratch(scratch);
 
@@ -1117,7 +1134,7 @@ void AqlQueue::InitScratchSRD() {
                                queue_scratch_.size_per_thread) + 1023) / 1024);
   tmpring_size.bits.WAVESIZE = wave_scratch;
   assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
-  uint32_t num_waves = (queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024));
+  uint32_t num_waves = queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024);
   tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
   return;

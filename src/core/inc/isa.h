@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -65,6 +65,7 @@ public:
     hsa_wavefront_t handle = { reinterpret_cast<uint64_t>(object) };
     return handle;
   }
+
   /// @returns Object equivalent of @p handle.
   static Wavefront *Object(const hsa_wavefront_t &handle) {
     Wavefront *object = amd::hsa::common::ObjectAt<Wavefront>(handle.handle);
@@ -82,6 +83,13 @@ private:
   friend class Isa;
 };
 
+enum class IsaFeature : uint8_t {
+  Unsupported,
+  Any,
+  Disabled,
+  Enabled,
+};
+
 /// @class Isa.
 /// @brief Instruction Set Architecture.
 class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
@@ -97,82 +105,72 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
     hsa_isa_t isa_handle = { reinterpret_cast<uint64_t>(isa_object) };
     return isa_handle;
   }
+
   /// @returns Object equivalent of @p isa_handle.
   static Isa *Object(const hsa_isa_t &isa_handle) {
     Isa *isa_object = amd::hsa::common::ObjectAt<Isa>(isa_handle.handle);
     return isa_object;
   }
 
+  /// @returns True if @p code_object_isa and @p agent_isa are compatible,
+  /// false otherwise.
+  static bool IsCompatible(const Isa &code_object_isa, const Isa &agent_isa);
+
   /// @returns This Isa's version.
-  const Version &version() const {
+  const Version &GetVersion() const {
     return version_;
   }
-  /// @returns True if this Isa has xnack enabled, false otherwise.
-  const bool &xnackEnabled() const {
-    return xnackEnabled_;
+
+  /// @returns SRAM ECC feature status.
+  IsaFeature GetSramecc() const {
+    return sramecc_;
   }
-  /// @returns True if this Isa has sram ecc enabled, false otherwise.
-  const bool &sramEccEnabled() const {
-    return sramEcc_;
+
+  /// @returns XNACK feature status.
+  IsaFeature GetXnack() const {
+    return xnack_;
   }
+
   /// @returns This Isa's supported wavefront.
-  const Wavefront &wavefront() const {
+  const Wavefront &GetWavefront() const {
     return wavefront_;
   }
 
-  /// @returns This Isa's architecture.
-  std::string GetArchitecture() const {
-    return "amdgcn";
+  /// @returns True if SRAMECC feature is supported, false otherwise.
+  bool IsSrameccSupported() const {
+    return sramecc_ != IsaFeature::Unsupported;
   }
-  /// @returns This Isa's vendor.
-  std::string GetVendor() const {
-    return "amd";
+
+  /// @returns True if XNACK feature is supported, false otherwise.
+  bool IsXnackSupported() const {
+    return xnack_ != IsaFeature::Unsupported;
   }
-  /// @returns This Isa's OS.
-  std::string GetOS() const {
-    return "amdhsa";
-  }
-  /// @returns This Isa's environment.
-  std::string GetEnvironment() const {
-    return "";
-  }
+
   /// @returns This Isa's major version.
   int32_t GetMajorVersion() const {
     return std::get<0>(version_);
   }
+
   /// @returns This Isa's minor version.
   int32_t GetMinorVersion() const {
     return std::get<1>(version_);
   }
+
   /// @returns This Isa's stepping.
   int32_t GetStepping() const {
     return std::get<2>(version_);
   }
-  /// @returns Pointer to this Isa's supported wavefront.
-  const Wavefront *GetWavefront() const {
-    return &wavefront_;
-  }
 
-  /// @returns True if this Isa is compatible with @p isa_object, false
-  /// otherwise.
-  bool IsCompatible(const Isa *isa_object) const {
-    assert(isa_object);
-    return version_ == isa_object->version_ &&
-           xnackEnabled_ == isa_object->xnackEnabled_;
-  }
-  /// @returns True if this Isa is compatible with @p isa_handle, false
-  /// otherwise.
-  bool IsCompatible(const hsa_isa_t &isa_handle) const {
-    assert(isa_handle.handle);
-    return IsCompatible(Object(isa_handle));
-  }
   /// @brief Isa is always in valid state.
   bool IsValid() const {
     return true;
   }
 
-  /// @returns This Isa's full name.
-  std::string GetFullName() const;
+  /// @returns This Isa's processor name.
+  std::string GetProcessorName() const;
+
+  /// @returns This Isa's name consisting of the target triple and target ID.
+  std::string GetIsaName() const;
 
   /// @brief Query value of requested @p attribute and record it in @p value.
   bool GetInfo(const hsa_isa_info_t &attribute, void *value) const;
@@ -186,22 +184,23 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
 
  private:
   /// @brief Default constructor.
-  Isa(): version_(Version(-1, -1, -1)), xnackEnabled_(false), sramEcc_(false) {}
+  Isa()
+      : targetid_(nullptr),
+        version_(Version(-1, -1, -1)),
+        sramecc_(IsaFeature::Unsupported),
+        xnack_(IsaFeature::Unsupported) {}
 
-  /// @brief Construct from @p version.
-  Isa(const Version &version): version_(version), xnackEnabled_(false), sramEcc_(false) {}
-
-  /// @brief Construct from @p version.
-  Isa(const Version &version, const bool xnack, const bool ecc): version_(version), xnackEnabled_(xnack), sramEcc_(ecc) {}
+  // @brief Isa's target ID name.
+  const char* targetid_;
 
   /// @brief Isa's version.
   Version version_;
 
-  /// @brief Isa's supported xnack flag.
-  bool xnackEnabled_;
+  /// @brief SRAMECC feature.
+  IsaFeature sramecc_;
 
-  /// @brief Isa's sram ecc flag.
-  bool sramEcc_;
+  /// @brief XNACK feature.
+  IsaFeature xnack_;
 
   /// @brief Isa's supported wavefront.
   Wavefront wavefront_;
@@ -216,8 +215,11 @@ class IsaRegistry final {
  public:
   /// @returns Isa for requested @p full_name, null pointer if not supported.
   static const Isa *GetIsa(const std::string &full_name);
+
   /// @returns Isa for requested @p version, null pointer if not supported.
-  static const Isa *GetIsa(const Isa::Version &version, bool xnack, bool ecc);
+  static const Isa *GetIsa(const Isa::Version &version,
+                           IsaFeature sramecc = IsaFeature::Any,
+                           IsaFeature xnack = IsaFeature::Any);
 
  private:
   /// @brief IsaRegistry's map type.
@@ -228,6 +230,7 @@ class IsaRegistry final {
 
   /// @brief Default constructor - not available.
   IsaRegistry();
+
   /// @brief Default destructor - not available.
   ~IsaRegistry();
 

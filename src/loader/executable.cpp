@@ -1216,7 +1216,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion != 1 && majorVersion != 2 && majorVersion != 3) {
+  if (majorVersion < 1 || majorVersion > 4) {
     logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1309,7 +1309,7 @@ hsa_status_t ExecutableImpl::LoadSegmentsV1(hsa_agent_t agent,
 
 hsa_status_t ExecutableImpl::LoadSegmentsV2(hsa_agent_t agent,
                                             const code::AmdHsaCode *c) {
-  assert(c->Machine() == EM_AMDGPU && "Program code objects are not supported");
+  assert(c->Machine() == ELF::EM_AMDGPU && "Program code objects are not supported");
 
   if (!c->DataSegmentCount()) return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
 
@@ -1422,8 +1422,8 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
     llvm::amdhsa::kernel_descriptor_t kd;
     sym->GetSection()->getData(sym->SectionOffset(), &kd, sizeof(kd));
 
-    uint32_t kernarg_segment_size = 0;      // FIXME.
-    uint32_t kernarg_segment_alignment = 0; // FIXME.
+    uint32_t kernarg_segment_size = kd.kernarg_size; // FIXME: If 0 then the compiler is not specifying the size.
+    uint32_t kernarg_segment_alignment = 16;         // FIXME: Use the minumum HSA required alignment.
     uint32_t group_segment_size = kd.group_segment_fixed_size;
     uint32_t private_segment_size = kd.private_segment_fixed_size;
     bool is_dynamic_callstack = false;

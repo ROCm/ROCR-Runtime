@@ -54,6 +54,8 @@ namespace rocr {
 
 class Flag {
  public:
+  enum SDMA_OVERRIDE { SDMA_DISABLE, SDMA_ENABLE, SDMA_DEFAULT };
+
   explicit Flag() { Refresh(); }
 
   virtual ~Flag() {}
@@ -71,7 +73,8 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_INTERRUPT");
     enable_interrupt_ = (var == "0") ? false : true;
 
-    enable_sdma_ = os::GetEnvVar("HSA_ENABLE_SDMA");
+    var = os::GetEnvVar("HSA_ENABLE_SDMA");
+    enable_sdma_ = (var == "0") ? SDMA_DISABLE : ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
 
     visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
     filter_visible_gpus_ = os::IsEnvVarSet("ROCR_VISIBLE_DEVICES");
@@ -124,6 +127,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_FORCE_SDMA_SIZE");
     force_sdma_size_ = var.empty() ? 1024 * 1024 : atoi(var.c_str());
+
+    var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
+    check_sramecc_validity_ = (var == "1") ? false : true;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -152,7 +158,7 @@ class Flag {
 
   bool no_scratch_thread_limiter() const { return no_scratch_thread_limit_; }
 
-  std::string enable_sdma() const { return enable_sdma_; }
+  SDMA_OVERRIDE enable_sdma() const { return enable_sdma_; }
 
   std::string visible_gpus() const { return visible_gpus_; }
 
@@ -170,6 +176,8 @@ class Flag {
 
   size_t force_sdma_size() const { return force_sdma_size_; }
 
+  bool check_sramecc_validity() const { return check_sramecc_validity_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -186,8 +194,9 @@ class Flag {
   bool no_scratch_thread_limit_;
   bool disable_image_;
   bool loader_enable_mmap_uri_;
+  bool check_sramecc_validity_;
 
-  std::string enable_sdma_;
+  SDMA_OVERRIDE enable_sdma_;
 
   bool filter_visible_gpus_;
   std::string visible_gpus_;

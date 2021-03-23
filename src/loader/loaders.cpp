@@ -82,22 +82,23 @@ namespace loader {
     invalid.handle = 0;
     gfx700.handle = 700;
     gfx701.handle = 701;
-    gfx800.handle = 800;
+    gfx702.handle = 702;
     gfx801.handle = 801;
     gfx802.handle = 802;
     gfx803.handle = 803;
-    gfx804.handle = 804;
+    gfx805.handle = 805;
     gfx810.handle = 810;
     gfx900.handle = 900;
-    gfx901.handle = 901;
     gfx902.handle = 902;
-    gfx903.handle = 903;
+    gfx904.handle = 904;
+    gfx906.handle = 906;
     gfx908.handle = 908;
     gfx1010.handle = 1010;
     gfx1011.handle = 1011;
     gfx1012.handle = 1012;
     gfx1030.handle = 1030;
     gfx1031.handle = 1031;
+    gfx1032.handle = 1032;
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -107,26 +108,32 @@ namespace loader {
       return gfx700;
     } else if (sname == "AMD:AMDGPU:7:0:1") {
       return gfx701;
-    } else if (sname == "AMD:AMDGPU:8:0:0") {
-      return gfx800;
+    } else if (sname == "AMD:AMDGPU:7:0:2") {
+      return gfx702;
+    } else if (sname == "AMD:AMDGPU:7:0:3") {
+      return gfx703;
+    } else if (sname == "AMD:AMDGPU:7:0:4") {
+      return gfx704;
+    } else if (sname == "AMD:AMDGPU:7:0:5") {
+      return gfx705;
     } else if (sname == "AMD:AMDGPU:8:0:1") {
       return gfx801;
-    } else if (sname == "AMD:AMDGPU:8:0:2") {
+    } else if (sname == "AMD:AMDGPU:8:0:0" || sname == "AMD:AMDGPU:8:0:2") {
       return gfx802;
-    } else if (sname == "AMD:AMDGPU:8:0:3") {
+    } else if (sname == "AMD:AMDGPU:8:0:3" || sname == "AMD:AMDGPU:8:0:4") {
       return gfx803;
-    } else if (sname == "AMD:AMDGPU:8:0:4") {
-      return gfx804;
+    } else if (sname == "AMD:AMDGPU:8:0:5") {
+      return gfx805;
     } else if (sname == "AMD:AMDGPU:8:1:0") {
       return gfx810;
-    } else if (sname == "AMD:AMDGPU:9:0:0") {
+    } else if (sname == "AMD:AMDGPU:9:0:0" || sname == "AMD:AMDGPU:9:0:1") {
       return gfx900;
-    } else if (sname == "AMD:AMDGPU:9:0:1") {
-      return gfx901;
-    } else if (sname == "AMD:AMDGPU:9:0:2") {
+    } else if (sname == "AMD:AMDGPU:9:0:2" || sname == "AMD:AMDGPU:9:0:3") {
       return gfx902;
-    } else if (sname == "AMD:AMDGPU:9:0:3") {
-      return gfx903;
+    } else if (sname == "AMD:AMDGPU:9:0:4" || sname == "AMD:AMDGPU:9:0:5") {
+      return gfx904;
+    } else if (sname == "AMD:AMDGPU:9:0:6" || sname == "AMD:AMDGPU:9:0:7") {
+      return gfx906;
     } else if (sname == "AMD:AMDGPU:9:0:8") {
       return gfx908;
     } else if (sname == "AMD:AMDGPU:10:1:0") {
@@ -139,8 +146,13 @@ namespace loader {
       return gfx1030;
     } else if (sname == "AMD:AMDGPU:10:3:1") {
       return gfx1031;
+    } else if (sname == "AMD:AMDGPU:10:3:2") {
+      return gfx1032;
     }
 
+    // The offline loader only supports code object v2 which only supports
+    // asics up to gfx906. Do NOT add handling of new asics into this
+    // if-else-if* block.
     assert(0);
     return invalid;
   }

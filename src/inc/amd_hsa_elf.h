@@ -40,41 +40,136 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
+// Undefine the macro in case it is defined in the system elf.h.
+#undef EM_AMDGPU
+
 #ifndef AMD_HSA_ELF_H
 #define AMD_HSA_ELF_H
 
-#include "amd_hsa_common.h"
+// AMD GPU Specific ELF Header Enumeration Values.
+//
+// Values are copied from LLVM BinaryFormat/ELF.h . This file also contains
+// code object V1 defintions which are not part of the LLVM header. Code object
+// V1 was only supported by the Finalizer which is now deprecated and removed.
+//
+// TODO: Deprecate and remove V1 support and replace this header with using the
+// LLVM header.
+namespace ELF {
 
-// ELF Header Enumeration Values.
-#define EM_AMDGPU                224
-#define ELFOSABI_AMDGPU_HSA      64
-#define ELFABIVERSION_AMDGPU_HSA 0
-#define EF_AMDGPU_XNACK          0x00000001
-#define EF_AMDGPU_TRAP_HANDLER   0x00000002
+// Machine architectures
+// See current registered ELF machine architectures at:
+//    http://www.uxsglobal.com/developers/gabi/latest/ch4.eheader.html
+enum {
+  EM_AMDGPU = 224,        // AMD GPU architecture
+};
 
-// FIXME: We really need to start thinking about separating legacy code out,
-// it is getting messy.
-#define EF_AMDGPU_MACH_LC 0x0ff
-#define EF_AMDGPU_MACH_AMDGCN_GFX700_LC 0x022
-#define EF_AMDGPU_MACH_AMDGCN_GFX701_LC 0x023
-#define EF_AMDGPU_MACH_AMDGCN_GFX702_LC 0x024
-#define EF_AMDGPU_MACH_AMDGCN_GFX801_LC 0x028
-#define EF_AMDGPU_MACH_AMDGCN_GFX802_LC 0x029
-#define EF_AMDGPU_MACH_AMDGCN_GFX803_LC 0x02a
-#define EF_AMDGPU_MACH_AMDGCN_GFX810_LC 0x02b
-#define EF_AMDGPU_MACH_AMDGCN_GFX900_LC 0x02c
-#define EF_AMDGPU_MACH_AMDGCN_GFX902_LC 0x02d
-#define EF_AMDGPU_MACH_AMDGCN_GFX904_LC 0x02e
-#define EF_AMDGPU_MACH_AMDGCN_GFX906_LC 0x02f
-#define EF_AMDGPU_MACH_AMDGCN_GFX908_LC 0x030
-#define EF_AMDGPU_MACH_AMDGCN_GFX909_LC 0x031
-#define EF_AMDGPU_MACH_AMDGCN_GFX1010_LC 0x033
-#define EF_AMDGPU_MACH_AMDGCN_GFX1011_LC 0x034
-#define EF_AMDGPU_MACH_AMDGCN_GFX1012_LC 0x035
-#define EF_AMDGPU_MACH_AMDGCN_GFX1030_LC 0x036
-#define EF_AMDGPU_MACH_AMDGCN_GFX1031_LC 0x037
-#define EF_AMDGPU_XNACK_LC 0x100
-#define EF_AMDGPU_SRAM_ECC_LC 0x200
+// OS ABI identification.
+enum {
+  ELFOSABI_AMDGPU_HSA = 64,    // AMD HSA runtime
+};
+
+// AMDGPU OS ABI Version identification.
+enum {
+  // ELFABIVERSION_AMDGPU_HSA_V1 does not exist because OS ABI identification
+  // was never defined for V1.
+  ELFABIVERSION_AMDGPU_HSA_V2 = 0,
+  ELFABIVERSION_AMDGPU_HSA_V3 = 1,
+  ELFABIVERSION_AMDGPU_HSA_V4 = 2
+};
+
+// AMDGPU specific e_flags.
+enum : unsigned {
+  // Processor selection mask for EF_AMDGPU_MACH_* values.
+  EF_AMDGPU_MACH = 0x0ff,
+
+  // Not specified processor.
+  EF_AMDGPU_MACH_NONE = 0x000,
+
+  // AMDGCN-based processors.
+  EF_AMDGPU_MACH_AMDGCN_GFX600        = 0x020,
+  EF_AMDGPU_MACH_AMDGCN_GFX601        = 0x021,
+  EF_AMDGPU_MACH_AMDGCN_GFX700        = 0x022,
+  EF_AMDGPU_MACH_AMDGCN_GFX701        = 0x023,
+  EF_AMDGPU_MACH_AMDGCN_GFX702        = 0x024,
+  EF_AMDGPU_MACH_AMDGCN_GFX703        = 0x025,
+  EF_AMDGPU_MACH_AMDGCN_GFX704        = 0x026,
+  EF_AMDGPU_MACH_AMDGCN_RESERVED_0X27 = 0x027,
+  EF_AMDGPU_MACH_AMDGCN_GFX801        = 0x028,
+  EF_AMDGPU_MACH_AMDGCN_GFX802        = 0x029,
+  EF_AMDGPU_MACH_AMDGCN_GFX803        = 0x02a,
+  EF_AMDGPU_MACH_AMDGCN_GFX810        = 0x02b,
+  EF_AMDGPU_MACH_AMDGCN_GFX900        = 0x02c,
+  EF_AMDGPU_MACH_AMDGCN_GFX902        = 0x02d,
+  EF_AMDGPU_MACH_AMDGCN_GFX904        = 0x02e,
+  EF_AMDGPU_MACH_AMDGCN_GFX906        = 0x02f,
+  EF_AMDGPU_MACH_AMDGCN_GFX908        = 0x030,
+  EF_AMDGPU_MACH_AMDGCN_GFX909        = 0x031,
+  EF_AMDGPU_MACH_AMDGCN_GFX90C        = 0x032,
+  EF_AMDGPU_MACH_AMDGCN_GFX1010       = 0x033,
+  EF_AMDGPU_MACH_AMDGCN_GFX1011       = 0x034,
+  EF_AMDGPU_MACH_AMDGCN_GFX1012       = 0x035,
+  EF_AMDGPU_MACH_AMDGCN_GFX1030       = 0x036,
+  EF_AMDGPU_MACH_AMDGCN_GFX1031       = 0x037,
+  EF_AMDGPU_MACH_AMDGCN_GFX1032       = 0x038,
+  EF_AMDGPU_MACH_AMDGCN_GFX1033       = 0x039,
+  EF_AMDGPU_MACH_AMDGCN_GFX602        = 0x03a,
+  EF_AMDGPU_MACH_AMDGCN_GFX705        = 0x03b,
+  EF_AMDGPU_MACH_AMDGCN_GFX805        = 0x03c,
+
+  // First/last AMDGCN-based processors.
+  EF_AMDGPU_MACH_AMDGCN_FIRST = EF_AMDGPU_MACH_AMDGCN_GFX600,
+  EF_AMDGPU_MACH_AMDGCN_LAST = EF_AMDGPU_MACH_AMDGCN_GFX805,
+
+  // Indicates if the "xnack" target feature is enabled for all code contained
+  // in the object.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V2.
+  EF_AMDGPU_FEATURE_XNACK_V2 = 0x01,
+  // Indicates if the trap handler is enabled for all code contained
+  // in the object.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V2.
+  EF_AMDGPU_FEATURE_TRAP_HANDLER_V2 = 0x02,
+
+  // Indicates if the "xnack" target feature is enabled for all code contained
+  // in the object.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V3.
+  EF_AMDGPU_FEATURE_XNACK_V3 = 0x100,
+  // Indicates if the "sramecc" target feature is enabled for all code
+  // contained in the object.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V3.
+  EF_AMDGPU_FEATURE_SRAMECC_V3 = 0x200,
+
+  // XNACK selection mask for EF_AMDGPU_FEATURE_XNACK_* values.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V4.
+  EF_AMDGPU_FEATURE_XNACK_V4 = 0x300,
+  // XNACK is not supported.
+  EF_AMDGPU_FEATURE_XNACK_UNSUPPORTED_V4 = 0x000,
+  // XNACK is any/default/unspecified.
+  EF_AMDGPU_FEATURE_XNACK_ANY_V4 = 0x100,
+  // XNACK is off.
+  EF_AMDGPU_FEATURE_XNACK_OFF_V4 = 0x200,
+  // XNACK is on.
+  EF_AMDGPU_FEATURE_XNACK_ON_V4 = 0x300,
+
+  // SRAMECC selection mask for EF_AMDGPU_FEATURE_SRAMECC_* values.
+  //
+  // Only valid for ELFOSABI_AMDGPU_HSA and ELFABIVERSION_AMDGPU_HSA_V4.
+  EF_AMDGPU_FEATURE_SRAMECC_V4 = 0xc00,
+  // SRAMECC is not supported.
+  EF_AMDGPU_FEATURE_SRAMECC_UNSUPPORTED_V4 = 0x000,
+  // SRAMECC is any/default/unspecified.
+  EF_AMDGPU_FEATURE_SRAMECC_ANY_V4 = 0x400,
+  // SRAMECC is off.
+  EF_AMDGPU_FEATURE_SRAMECC_OFF_V4 = 0x800,
+  // SRAMECC is on.
+  EF_AMDGPU_FEATURE_SRAMECC_ON_V4 = 0xc00,
+};
+
+} // end namespace ELF
 
 // ELF Section Header Flag Enumeration Values.
 #define SHF_AMDGPU_HSA_GLOBAL   (0x00100000 & SHF_MASKOS)
@@ -143,14 +238,15 @@ typedef enum {
 #define R_AMDGPU_RELATIVE64   13
 
 // AMD GPU Note Type Enumeration Values.
-#define NT_AMDGPU_HSA_CODE_OBJECT_VERSION 1
-#define NT_AMDGPU_HSA_HSAIL               2
-#define NT_AMDGPU_HSA_ISA                 3
-#define NT_AMDGPU_HSA_PRODUCER            4
-#define NT_AMDGPU_HSA_PRODUCER_OPTIONS    5
-#define NT_AMDGPU_HSA_EXTENSION           6
-#define NT_AMDGPU_HSA_HLDEBUG_DEBUG       101
-#define NT_AMDGPU_HSA_HLDEBUG_TARGET      102
+#define NT_AMD_HSA_CODE_OBJECT_VERSION 1
+#define NT_AMD_HSA_HSAIL               2
+#define NT_AMD_HSA_ISA_VERSION         3
+#define NT_AMD_HSA_PRODUCER            4
+#define NT_AMD_HSA_PRODUCER_OPTIONS    5
+#define NT_AMD_HSA_EXTENSION           6
+#define NT_AMD_HSA_ISA_NAME            11
+#define NT_AMD_HSA_HLDEBUG_DEBUG       101
+#define NT_AMD_HSA_HLDEBUG_TARGET      102
 
 // AMD GPU Metadata Kind Enumeration Values.
 typedef uint16_t amdgpu_hsa_metadata_kind16_t;

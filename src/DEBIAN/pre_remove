@@ -52,7 +52,7 @@ case "$1" in
    remove)
        rm_ldconfig
        # Workaround for CPACK directory symlink handling error.
-       rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
+       rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa
    ;;
    purge)
    ;;

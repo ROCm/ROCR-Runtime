@@ -1659,10 +1659,9 @@ hsa_status_t hsa_isa_iterate_wavefronts(
   const Isa *isa_object = Isa::Object(isa);
   IS_VALID(isa_object);
 
-  const Wavefront *wavefront_object = isa_object->GetWavefront();
-  assert(wavefront_object);
+  const Wavefront &wavefront_object = isa_object->GetWavefront();
 
-  return callback(Wavefront::Handle(wavefront_object), data);
+  return callback(Wavefront::Handle(&wavefront_object), data);
   CATCH;
 }
 
@@ -1681,7 +1680,7 @@ hsa_status_t hsa_isa_compatible(
   const Isa *agent_isa_object = Isa::Object(agent_isa);
   IS_VALID(agent_isa_object);
 
-  *result = code_object_isa_object->IsCompatible(agent_isa_object);
+  *result = Isa::IsCompatible(*code_object_isa_object, *agent_isa_object);
   return HSA_STATUS_SUCCESS;
   CATCH;
 }
@@ -1843,10 +1842,17 @@ hsa_status_t hsa_code_object_destroy(
 static std::string ConvertOldTargetNameToNew(
     const std::string &OldName, bool IsFinalizer, uint32_t EFlags) {
   std::string NewName = "";
+  bool xnack_supported = false;
 
   // FIXME #1: Should 9:0:3 be completely (loader, sc, etc.) removed?
   // FIXME #2: What does PAL do with respect to boltzmann/usual fiji/tonga?
-  if (OldName == "AMD:AMDGPU:7:0:0")
+  if (OldName == "AMD:AMDGPU:6:0:0")
+    NewName = "amdgcn-amd-amdhsa--gfx600";
+  else if (OldName == "AMD:AMDGPU:6:0:1")
+    NewName = "amdgcn-amd-amdhsa--gfx601";
+  else if (OldName == "AMD:AMDGPU:6:0:2")
+    NewName = "amdgcn-amd-amdhsa--gfx602";
+  else if (OldName == "AMD:AMDGPU:7:0:0")
     NewName = "amdgcn-amd-amdhsa--gfx700";
   else if (OldName == "AMD:AMDGPU:7:0:1")
     NewName = "amdgcn-amd-amdhsa--gfx701";
@@ -1856,62 +1862,64 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx703";
   else if (OldName == "AMD:AMDGPU:7:0:4")
     NewName = "amdgcn-amd-amdhsa--gfx704";
-  else if (OldName == "AMD:AMDGPU:8:0:0")
-    NewName = "amdgcn-amd-amdhsa--gfx800";
-  else if (OldName == "AMD:AMDGPU:8:0:1")
+  else if (OldName == "AMD:AMDGPU:7:0:5")
+    NewName = "amdgcn-amd-amdhsa--gfx705";
+  else if (OldName == "AMD:AMDGPU:8:0:1") {
     NewName = "amdgcn-amd-amdhsa--gfx801";
-  else if (OldName == "AMD:AMDGPU:8:0:2")
+    xnack_supported = true;
+  }
+  else if (OldName == "AMD:AMDGPU:8:0:0" || OldName == "AMD:AMDGPU:8:0:2")
     NewName = "amdgcn-amd-amdhsa--gfx802";
-  else if (OldName == "AMD:AMDGPU:8:0:3")
+  else if (OldName == "AMD:AMDGPU:8:0:3" || OldName == "AMD:AMDGPU:8:0:4")
     NewName = "amdgcn-amd-amdhsa--gfx803";
-  else if (OldName == "AMD:AMDGPU:8:0:4")
-    NewName = "amdgcn-amd-amdhsa--gfx804";
-  else if (OldName == "AMD:AMDGPU:8:1:0")
+  else if (OldName == "AMD:AMDGPU:8:0:5")
+    NewName = "amdgcn-amd-amdhsa--gfx805";
+  else if (OldName == "AMD:AMDGPU:8:1:0") {
     NewName = "amdgcn-amd-amdhsa--gfx810";
-  else if (OldName == "AMD:AMDGPU:9:0:0")
+    xnack_supported = true;
+  }
+  else if (OldName == "AMD:AMDGPU:9:0:0" || OldName == "AMD:AMDGPU:9:0:1") {
     NewName = "amdgcn-amd-amdhsa--gfx900";
-  else if (OldName == "AMD:AMDGPU:9:0:1")
-    NewName = "amdgcn-amd-amdhsa--gfx900";
-  else if (OldName == "AMD:AMDGPU:9:0:2")
+    xnack_supported = true;
+  }
+  else if (OldName == "AMD:AMDGPU:9:0:2" || OldName == "AMD:AMDGPU:9:0:3") {
     NewName = "amdgcn-amd-amdhsa--gfx902";
-  else if (OldName == "AMD:AMDGPU:9:0:3")
-    NewName = "amdgcn-amd-amdhsa--gfx902";
-  else if (OldName == "AMD:AMDGPU:9:0:4")
+    xnack_supported = true;
+  }
+  else if (OldName == "AMD:AMDGPU:9:0:4" || OldName == "AMD:AMDGPU:9:0:5") {
     NewName = "amdgcn-amd-amdhsa--gfx904";
-  else if (OldName == "AMD:AMDGPU:9:0:6")
+    xnack_supported = true;
+  }
+  else if (OldName == "AMD:AMDGPU:9:0:6" || OldName == "AMD:AMDGPU:9:0:7") {
     NewName = "amdgcn-amd-amdhsa--gfx906";
-  else if (OldName == "AMD:AMDGPU:9:0:8")
-    NewName = "amdgcn-amd-amdhsa--gfx908";
-  else if (OldName == "AMD:AMDGPU:10:1:0")
-    NewName = "amdgcn-amd-amdhsa--gfx1010";
-  else if (OldName == "AMD:AMDGPU:10:1:1")
-    NewName = "amdgcn-amd-amdhsa--gfx1011";
-  else if (OldName == "AMD:AMDGPU:10:1:2")
-    NewName = "amdgcn-amd-amdhsa--gfx1012";
-  else if (OldName == "AMD:AMDGPU:10:3:0")
-    NewName = "amdgcn-amd-amdhsa--gfx1030";
-  else if (OldName == "AMD:AMDGPU:10:3:1")
-    NewName = "amdgcn-amd-amdhsa--gfx1031";
-  else
-    assert(false && "Unhandled target");
+    xnack_supported = true;
+  }
+  else {
+    // Code object v2 only supports asics up to gfx906. Do NOT add handling
+    // of new asics into this if-else-if* block.
+    return "";
+  }
 
-  if (IsFinalizer && (EFlags & EF_AMDGPU_XNACK)) {
-    NewName = NewName + "+xnack";
+  if (IsFinalizer) {
+    if (EFlags & ELF::EF_AMDGPU_FEATURE_XNACK_V2)
+      NewName = NewName + ":xnack+";
+    else if (xnack_supported)
+      NewName = NewName + ":xnack-";
   } else {
-    if (EFlags != 0 && (EFlags & EF_AMDGPU_XNACK_LC)) {
-      NewName = NewName + "+xnack";
-    } else {
-      if (OldName == "AMD:AMDGPU:8:0:1")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:8:1:0")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:1")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:2")
-        NewName = NewName + "+xnack";
-      else if (OldName == "AMD:AMDGPU:9:0:3")
-        NewName = NewName + "+xnack";
-    }
+    if (OldName == "AMD:AMDGPU:8:0:1")
+      NewName = NewName + ":xnack+";
+    else if (OldName == "AMD:AMDGPU:8:1:0")
+      NewName = NewName + ":xnack+";
+    else if (OldName == "AMD:AMDGPU:9:0:1")
+      NewName = NewName + ":xnack+";
+    else if (OldName == "AMD:AMDGPU:9:0:3")
+      NewName = NewName + ":xnack+";
+    else if (OldName == "AMD:AMDGPU:9:0:5")
+      NewName = NewName + ":xnack+";
+    else if (OldName == "AMD:AMDGPU:9:0:7")
+      NewName = NewName + ":xnack+";
+    else if (xnack_supported)
+      NewName = NewName + ":xnack-";
   }
 
   return NewName;

@@ -706,6 +706,8 @@ namespace elf {
       uint16_t Type() override { return ehdr.e_type; }
       uint32_t EFlags() override { return ehdr.e_flags; }
       uint32_t ABIVersion() override { return (uint32_t)(ehdr.e_ident[EI_ABIVERSION]); }
+      uint32_t EClass() override { return (uint32_t)(ehdr.e_ident[EI_CLASS]); }
+      uint32_t OsAbi() override { return (uint32_t)(ehdr.e_ident[EI_OSABI]); }
 
       GElfStringTable* shstrtab() override;
       GElfStringTable* strtab() override;
