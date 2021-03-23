@@ -75,6 +75,8 @@ extern uint8_t ocl_blit_object_gfx702[];
 extern uint8_t ocl_blit_object_gfx801[];
 extern uint8_t ocl_blit_object_gfx802[];
 extern uint8_t ocl_blit_object_gfx803[];
+extern uint8_t ocl_blit_object_gfx805[];
+extern uint8_t ocl_blit_object_gfx810[];
 extern uint8_t ocl_blit_object_gfx900[];
 extern uint8_t ocl_blit_object_gfx902[];
 extern uint8_t ocl_blit_object_gfx904[];
@@ -85,6 +87,7 @@ extern uint8_t ocl_blit_object_gfx1011[];
 extern uint8_t ocl_blit_object_gfx1012[];
 extern uint8_t ocl_blit_object_gfx1030[];
 extern uint8_t ocl_blit_object_gfx1031[];
+extern uint8_t ocl_blit_object_gfx1032[];
 
 // Arguments inserted by OCL compiler, all zero here.
 struct OCLHiddenArgs {
@@ -958,62 +961,47 @@ hsa_status_t BlitKernel::LaunchKernel(BlitQueue& blit_queue,
 
 hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
                                               uint8_t** blit_code_object) {
-  if (strncmp(agent_name, "gfx", 3) != 0) {
-    return HSA_STATUS_ERROR_INVALID_ISA_NAME;
-  }
+  std::string sname(agent_name);
 
-  uint64_t target_name = atoi(&agent_name[3]);
-
-  switch (target_name) {
-  case 700:
+  if (sname == "gfx700") {
     *blit_code_object = ocl_blit_object_gfx700;
-    break;
-  case 701:
+  } else if (sname == "gfx701") {
     *blit_code_object = ocl_blit_object_gfx701;
-    break;
-  case 702:
+  } else if (sname == "gfx702") {
     *blit_code_object = ocl_blit_object_gfx702;
-    break;
-  case 801:
+  } else if (sname == "gfx801") {
     *blit_code_object = ocl_blit_object_gfx801;
-    break;
-  case 802:
+  } else if (sname == "gfx802") {
     *blit_code_object = ocl_blit_object_gfx802;
-    break;
-  case 803:
+  } else if (sname == "gfx803") {
     *blit_code_object = ocl_blit_object_gfx803;
-    break;
-  case 900:
+  } else if (sname == "gfx805") {
+    *blit_code_object = ocl_blit_object_gfx805;
+  } else if (sname == "gfx810") {
+    *blit_code_object = ocl_blit_object_gfx810;
+  } else if (sname == "gfx900") {
     *blit_code_object = ocl_blit_object_gfx900;
-    break;
-  case 902:
+  } else if (sname == "gfx902") {
     *blit_code_object = ocl_blit_object_gfx902;
-    break;
-  case 904:
+  } else if (sname == "gfx904") {
     *blit_code_object = ocl_blit_object_gfx904;
-    break;
-  case 906:
+  } else if (sname == "gfx906") {
     *blit_code_object = ocl_blit_object_gfx906;
-    break;
-  case 908:
+  } else if (sname == "gfx908") {
     *blit_code_object = ocl_blit_object_gfx908;
-    break;
-  case 1010:
+  } else if (sname == "gfx1010") {
     *blit_code_object = ocl_blit_object_gfx1010;
-    break;
-  case 1011:
+  } else if (sname == "gfx1011") {
     *blit_code_object = ocl_blit_object_gfx1011;
-    break;
-  case 1012:
+  } else if (sname == "gfx1012") {
     *blit_code_object = ocl_blit_object_gfx1012;
-    break;
-  case 1030:
+  } else if (sname == "gfx1030") {
     *blit_code_object = ocl_blit_object_gfx1030;
-    break;
-  case 1031:
+  } else if (sname == "gfx1031") {
     *blit_code_object = ocl_blit_object_gfx1031;
-    break;
-  default:
+  } else if (sname == "gfx1032") {
+    *blit_code_object = ocl_blit_object_gfx1032;
+  } else {
     return HSA_STATUS_ERROR_INVALID_ISA_NAME;
   }
 

@@ -371,32 +371,6 @@ bool RegionMemory::Freeze() {
   return true;
 }
 
-hsa_status_t IsIsaEquivalent(hsa_isa_t isa, void *data) {
-  assert(data);
-
-  std::pair<hsa_isa_t, bool> *data_pair = (std::pair<hsa_isa_t, bool>*)data;
-  assert(data_pair);
-  assert(data_pair->first.handle != 0);
-  assert(data_pair->second != true);
-
-  const core::Isa *agent_isa = core::Isa::Object(isa);
-  assert(agent_isa);
-  const core::Isa *code_object_isa = core::Isa::Object(data_pair->first);
-  assert(code_object_isa);
-
-  // SRAM ECC enabled code may run on a system without ECC
-  // but a system which has ECC enabled requires ECC enabled code.
-  if (agent_isa->sramEccEnabled() && !code_object_isa->sramEccEnabled())
-    return HSA_STATUS_SUCCESS;
-
-  if (agent_isa->version() == code_object_isa->version()) {
-    data_pair->second = true;
-    return HSA_STATUS_INFO_BREAK;
-  }
-
-  return HSA_STATUS_SUCCESS;
-}
-
 }  // namespace anonymous
 
 namespace amd {
@@ -419,14 +393,29 @@ hsa_isa_t LoaderContext::IsaFromName(const char *name) {
 
 bool LoaderContext::IsaSupportedByAgent(hsa_agent_t agent,
                                         hsa_isa_t code_object_isa) {
-  assert(agent.handle != 0);
+  std::pair<hsa_isa_t, bool> comparison_data(code_object_isa, false);
+  auto IsIsaEquivalent = [](hsa_isa_t agent_isa_h, void *data) {
+    assert(data);
 
-  std::pair<hsa_isa_t, bool> data(code_object_isa, false);
-  hsa_status_t status = HSA::hsa_agent_iterate_isas(agent, IsIsaEquivalent, &data);
+    std::pair<hsa_isa_t, bool> *data_pair =
+        reinterpret_cast<decltype(&comparison_data)>(data);
+    assert(data_pair);
+    assert(data_pair->second != true);
+
+    const core::Isa *agent_isa = core::Isa::Object(agent_isa_h);
+    assert(agent_isa);
+    const core::Isa *code_object_isa = core::Isa::Object(data_pair->first);
+    assert(code_object_isa);
+
+    data_pair->second = core::Isa::IsCompatible(*code_object_isa, *agent_isa);
+    return data_pair->second ? HSA_STATUS_INFO_BREAK : HSA_STATUS_SUCCESS;
+  };
+
+  hsa_status_t status = HSA::hsa_agent_iterate_isas(agent, IsIsaEquivalent, &comparison_data);
   if (status != HSA_STATUS_SUCCESS && status != HSA_STATUS_INFO_BREAK) {
     return false;
   }
-  return data.second;
+  return comparison_data.second;
 }
 
 void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,

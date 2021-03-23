@@ -339,6 +339,8 @@ class Runtime {
 
   InterruptSignal::EventPool* GetEventPool() { return &EventPool; }
 
+  uint64_t sys_clock_freq() const { return sys_clock_freq_; }
+
  protected:
   static void AsyncEventsLoop(void*);
 

@@ -146,7 +146,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     return HSA_STATUS_ERROR;
   }
 
-  if (agent_->isa()->version() == core::Isa::Version(7, 0, 1)) {
+  if (agent_->isa()->GetVersion() == core::Isa::Version(7, 0, 1)) {
     platform_atomic_support_ = false;
   } else {
     const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(

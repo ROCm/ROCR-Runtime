@@ -171,6 +171,8 @@ namespace elf {
       virtual uint16_t Type() = 0;
       virtual uint32_t EFlags() = 0;
       virtual uint32_t ABIVersion() = 0;
+      virtual uint32_t EClass() = 0;
+      virtual uint32_t OsAbi() = 0;
 
       std::string output() { return out.str(); }
 

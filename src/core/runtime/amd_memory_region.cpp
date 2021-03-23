@@ -201,7 +201,7 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
   // If it fails attempt to release memory from the block allocator and retry.
   *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
   if (*address == nullptr) {
-    fragment_allocator_.trim();
+    owner()->Trim();
     *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
   }
 
@@ -698,6 +698,8 @@ hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
                                        hsa_access_permission_t access) const {
   return HSA_STATUS_SUCCESS;
 }
+
+void MemoryRegion::Trim() const { fragment_allocator_.trim(); }
 
 void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
   assert(request_size <= block_size() && "BlockAllocator alloc request exceeds block size.");

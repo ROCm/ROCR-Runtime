@@ -67,6 +67,7 @@ namespace AMD {
 // Minimum acceptable KFD version numbers
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
+static HsaVersionInfo kfd_version;
 
 CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumCPUCores == 0) {
@@ -80,13 +81,50 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
 }
 
 GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
+  GpuAgent* gpu = nullptr;
   if (node_prop.NumFComputeCores == 0) {
-    return nullptr;
+      // Ignore non GPUs.
+      return nullptr;
   }
+  try {
+    gpu = new GpuAgent(node_id, node_prop);
 
-  GpuAgent* gpu = new GpuAgent(node_id, node_prop);
+    // Check for sramecc incompatibility in gfx906 and gfx908.  sramecc bit fixed in kfd 1.4.
+    if (gpu->isa()->IsSrameccSupported() && (kfd_version.KernelInterfaceMajorVersion <= 1 &&
+                                             kfd_version.KernelInterfaceMinorVersion < 4)) {
+      // gfx906 has both sramecc modes in use.  Suppress the device.
+      if ((gpu->isa()->GetProcessorName() == "gfx906") &&
+          core::Runtime::runtime_singleton_->flag().check_sramecc_validity()) {
+        char name[64];
+        gpu->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_PRODUCT_NAME, name);
+        name[63] = '\0';
+        fprintf(stderr,
+                "HSA Error:  Incompatible kernel and userspace, %s disabled. Upgrade amdgpu.\n",
+                name);
+        delete gpu;
+        return nullptr;
+      }
+
+      // gfx908 always has sramecc set to on in vbios.  Set mode bit to on and recreate the device.
+      if (gpu->isa()->GetProcessorName() == "gfx908") {
+        node_prop.Capability.ui32.SRAM_EDCSupport = 1;
+        delete gpu;
+        gpu = new GpuAgent(node_id, node_prop);
+      }
+    }
+  } catch (const hsa_exception& e) {
+    if(e.error_code() == HSA_STATUS_ERROR_INVALID_ISA) {
+      ifdebug {
+        if (!strIsEmpty(e.what())) debug_print("Warning: %s\n", e.what());
+      }
+      // Ignore unrecognized GPUs.
+      return nullptr;
+    } else {
+      // Rethrow remaining exceptions.
+      throw;
+    }
+  }
   core::Runtime::runtime_singleton_->RegisterAgent(gpu);
-
   return gpu;
 }
 
@@ -180,27 +218,26 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list) {
 
     // Instantiate a Gpu device. The IO links
     // of this node have already been registered
-    const GpuAgent* gpu = DiscoverGpu(gpu_list[idx], node_prop);
-    assert((node_prop.NumFComputeCores != 0) && (gpu != nullptr) && "GPU device failed discovery.");
+    assert((node_prop.NumFComputeCores != 0) && "Improper node used for GPU device discovery.");
+    DiscoverGpu(gpu_list[idx], node_prop);
   }
 }
 
 /// @brief Calls Kfd thunk to get the snapshot of the topology of the system,
 /// which includes associations between, node, devices, memory and caches.
 void BuildTopology() {
-  HsaVersionInfo info;
-  if (hsaKmtGetVersion(&info) != HSAKMT_STATUS_SUCCESS) {
+  if (hsaKmtGetVersion(&kfd_version) != HSAKMT_STATUS_SUCCESS) {
     return;
   }
 
-  if (info.KernelInterfaceMajorVersion == kKfdVersionMajor &&
-      info.KernelInterfaceMinorVersion < kKfdVersionMinor) {
+  if (kfd_version.KernelInterfaceMajorVersion == kKfdVersionMajor &&
+      kfd_version.KernelInterfaceMinorVersion < kKfdVersionMinor) {
     return;
   }
 
   // Disable KFD event support when using open source KFD
-  if (info.KernelInterfaceMajorVersion == 1 &&
-      info.KernelInterfaceMinorVersion == 0) {
+  if (kfd_version.KernelInterfaceMajorVersion == 1 &&
+      kfd_version.KernelInterfaceMinorVersion == 0) {
     core::g_use_interrupt_wait = false;
   }
 

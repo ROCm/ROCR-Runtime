@@ -1157,13 +1157,13 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
       fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_IMPRECISE;
     }
     if (fault.Failure.ECC == 1 && fault.Failure.ErrorType == 0) {
-      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAM_ECC;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAMECC;
     }
     if (fault.Failure.ErrorType == 1) {
-      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_SRAM_ECC;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_SRAMECC;
     }
     if (fault.Failure.ErrorType == 2) {
-      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAM_ECC;
+      fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_DRAMECC;
     }
     if (fault.Failure.ErrorType == 3) {
       fault_info.fault_reason_mask |= HSA_AMD_MEMORY_FAULT_HANG;
