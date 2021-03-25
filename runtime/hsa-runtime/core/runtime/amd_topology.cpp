@@ -207,7 +207,9 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
         link_info.atomic_support_64bit = true;
         link_info.coherent_support = true;
         if (core::Runtime::runtime_singleton_->flag().patch_xgmi_link_weight()) {
-          io_link.Weight = 15;
+          if (io_link.Weight == 0) {
+            io_link.Weight = 15;
+          }
         }
         break;
       default:
