@@ -227,23 +227,41 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
   hsa_status_t err;
   void* ptr_src;
   void* ptr_dst;
+  size_t src_alloc_size;
+  size_t dst_alloc_size;
+  size_t max_alloc_size;
+  size_t size;
 
-  size_t size = t->max_size * 1024;
+
+  size_t max_trans_size = t->max_size * 1024;
 
   hsa_amd_memory_pool_t src_pool =  pool_info_[t->src]->pool_;
   hsa_agent_t dst_agent = pool_info_[t->dst]->owner_agent_info()->agent();
   hsa_amd_memory_pool_t dst_pool = pool_info_[t->dst]->pool_;
-
   hsa_agent_t src_agent = pool_info_[t->src]->owner_agent_info()->agent();
 
   PrintTransactionType(t);
 
-  err = hsa_amd_memory_pool_allocate(src_pool, size, 0, &ptr_src);
+  err = hsa_amd_memory_pool_get_info(src_pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
+                                      &src_alloc_size);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_amd_memory_pool_get_info(dst_pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
+                                      &dst_alloc_size);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  max_alloc_size = (src_alloc_size < dst_alloc_size) ? src_alloc_size: dst_alloc_size;
+
+  size = (max_alloc_size/2 <= max_trans_size) ? max_alloc_size/2: max_trans_size;
+
+  err = hsa_amd_memory_pool_allocate(src_pool, size, 0,
+				      &ptr_src);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
   err = hsa_amd_memory_pool_allocate(dst_pool, size, 0,
-                                     &ptr_dst);
+				      &ptr_dst);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
 
   // rocrtst::CommonCleanUp data
   void* host_ptr_src = NULL;
@@ -320,8 +338,10 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
 
   for (int i = 0; i < kNumGranularity; i++) {
     if (Size[i] > size) {
+      printf("Skip test with block size %s\n", Str[i]);
       break;
     }
+    printf("Start test with block size %s\n",Str[i]);
 
     std::vector<double> time;
 
@@ -426,7 +446,28 @@ void MemoryAsyncCopy::DisplayResults(void) const {
 }
 
 void MemoryAsyncCopy::DisplayBenchmark(Transaction *t) const {
-  size_t size = t->max_size * 1024;
+  hsa_status_t err;
+  size_t src_alloc_size;
+  size_t dst_alloc_size;
+  size_t max_alloc_size;
+  size_t size;
+
+  size_t max_trans_size = t->max_size * 1024;
+  hsa_amd_memory_pool_t src_pool =  pool_info_[t->src]->pool_;
+  hsa_amd_memory_pool_t dst_pool = pool_info_[t->dst]->pool_;
+
+  err = hsa_amd_memory_pool_get_info(src_pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
+                                    &src_alloc_size);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_amd_memory_pool_get_info(dst_pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
+                                    &dst_alloc_size);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  max_alloc_size = (src_alloc_size < dst_alloc_size) ? src_alloc_size: dst_alloc_size;
+
+  size = (max_alloc_size/2 <= max_trans_size) ? max_alloc_size/2: max_trans_size;
+
   printf("=========================== PATH: From Pool %d To Pool %d (",
                                                               t->src, t->dst);
 
@@ -478,7 +519,12 @@ void MemoryAsyncCopy::DisplayBenchmark(Transaction *t) const {
                            "          Min Time(us)          Peak BW(GB/s)\n");
 
   for (int i = 0; i < kNumGranularity; i++) {
+
     if (Size[i] > size) {
+      printf(
+         "Notice: Data Size >= %s is skipped due to hard limit of 1/2 vram size \n\n",
+         Str[i]
+      );
       break;
     }
 
