@@ -186,19 +186,19 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
 
   hsa_queue_t *queue[kMaxQueue];  // command queue
   uint32_t ii;
+  test_validation_data user_data[kMaxQueue];
   for (ii = 0; ii < kMaxQueue; ++ii) {
-    test_validation_data user_data;
     // set callback flag to false if callback called then it will change to true
-    user_data.cb_triggered = false;
+    user_data[ii].cb_triggered = false;
     // set the queue pointer
-    user_data.queue_pointer = &queue[ii];
+    user_data[ii].queue_pointer = &queue[ii];
     // set the expected status in queue error calback handling
-    user_data.expected_status = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+    user_data[ii].expected_status = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
 
     // create queue
     err = hsa_queue_create(gpuAgent,
-                           queue_max, HSA_QUEUE_TYPE_SINGLE,
-                           CallbackQueueErrorHandling, &user_data, 0, 0, &queue[ii]);
+                       queue_max, HSA_QUEUE_TYPE_SINGLE,
+                       CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -240,12 +240,12 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
     // completion signal should not be changed.
     ASSERT_EQ(completion, 1);
 
-    // queue error handling callback  should be triggered
-    ASSERT_EQ(user_data.cb_triggered, true);
-
     hsa_signal_store_relaxed(aql().completion_signal, 1);
   }
+  sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
+    // queue error handling callback  should be triggered
+    ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
 }
@@ -269,20 +269,21 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
   queue_max = (queue_max < kMaxQueueSizeForAgent) ? queue_max: kMaxQueueSizeForAgent;
 
   hsa_queue_t *queue[kMaxQueue];  // command queue
+  test_validation_data user_data[kMaxQueue];
+
   uint32_t ii;
   for (ii = 0; ii < kMaxQueue; ++ii) {
-    test_validation_data user_data;
     // set callback flag to false if callback called then it will change to true
-    user_data.cb_triggered = false;
+    user_data[ii].cb_triggered = false;
     // set the queue pointer
-    user_data.queue_pointer = &queue[ii];
+    user_data[ii].queue_pointer = &queue[ii];
     // set the expected status in queue error calback handling
-    user_data.expected_status = HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    user_data[ii].expected_status = HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
     // create queue
     err = hsa_queue_create(gpuAgent,
-                           queue_max, HSA_QUEUE_TYPE_SINGLE,
-                           CallbackQueueErrorHandling, &user_data, 0, 0, &queue[ii]);
+                       queue_max, HSA_QUEUE_TYPE_SINGLE,
+                       CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -325,12 +326,12 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
     // completion signal should not be changed.
     ASSERT_EQ(completion, 1);
 
-    // queue error handling callback  should be triggered
-    ASSERT_EQ(user_data.cb_triggered, true);
-
     hsa_signal_store_relaxed(aql().completion_signal, 1);
   }
+  sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
+    // queue error handling callback  should be triggered
+    ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
 }
@@ -353,20 +354,20 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
   queue_max = (queue_max < kMaxQueueSizeForAgent) ? queue_max: kMaxQueueSizeForAgent;
 
   hsa_queue_t *queue[kMaxQueue];  // command queue
+  test_validation_data user_data[kMaxQueue];
   uint32_t ii;
   for (ii = 0; ii < kMaxQueue; ++ii) {
-    test_validation_data user_data;
     // set callback flag to false if callback called then it will change to true
-    user_data.cb_triggered = false;
+    user_data[ii].cb_triggered = false;
     // set the queue pointer
-    user_data.queue_pointer = &queue[ii];
+    user_data[ii].queue_pointer = &queue[ii];
     // set the expected status in queue error calback handling
-    user_data.expected_status = HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+    user_data[ii].expected_status = HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
 
     // create queue
     err = hsa_queue_create(gpuAgent,
                            kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE,
-                           CallbackQueueErrorHandling, &user_data, 0, 0, &queue[ii]);
+                           CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -408,12 +409,12 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
     // completion signal should not be changed.
     ASSERT_EQ(completion, 1);
 
-    // queue error handling callback  should be triggered
-    ASSERT_EQ(user_data.cb_triggered, true);
-
     hsa_signal_store_relaxed(aql().completion_signal, 1);
   }
+  sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
+    // queue error handling callback  should be triggered
+    ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
 }
@@ -437,19 +438,19 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
 
   hsa_queue_t *queue[kMaxQueue];  // command queue
   uint32_t ii;
+  test_validation_data user_data[kMaxQueue];
   for (ii = 0; ii < kMaxQueue; ++ii) {
-    test_validation_data user_data;
     // set callback flag to false if callback called then it will change to true
-    user_data.cb_triggered = false;
+    user_data[ii].cb_triggered = false;
     // set the queue pointer
-    user_data.queue_pointer = &queue[ii];
+    user_data[ii].queue_pointer = &queue[ii];
     // set the expected status in queue error calback handling
-    user_data.expected_status = HSA_STATUS_ERROR_INVALID_PACKET_FORMAT;
+    user_data[ii].expected_status = HSA_STATUS_ERROR_INVALID_PACKET_FORMAT;
 
     // create queue
     err = hsa_queue_create(gpuAgent,
-                           queue_max, HSA_QUEUE_TYPE_SINGLE,
-                           CallbackQueueErrorHandling, &user_data, 0, 0, &queue[ii]);
+                       queue_max, HSA_QUEUE_TYPE_SINGLE,
+                       CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -486,12 +487,12 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
     // completion signal should not be changed.
     ASSERT_EQ(completion, 1);
 
-    // queue error handling callback  should be triggered
-    ASSERT_EQ(user_data.cb_triggered, true);
-
     hsa_signal_store_relaxed(aql().completion_signal, 1);
   }
+  sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
+    // queue error handling callback  should be triggered
+    ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
 }
@@ -514,22 +515,22 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
   queue_max = (queue_max < kMaxQueueSizeForAgent) ? queue_max: kMaxQueueSizeForAgent;
 
   hsa_queue_t *queue[kMaxQueue];  // command queue
+  test_validation_data user_data[kMaxQueue][3];
   uint32_t ii;
   for (ii = 0; ii < kMaxQueue; ++ii) {
     uint32_t jj;
     for (jj = 1; jj <= 3; ++jj) {
-      test_validation_data user_data;
       // set callback flag to false if callback called then it will change to true
-      user_data.cb_triggered = false;
+      user_data[ii][jj - 1].cb_triggered = false;
       // set the queue pointer
-      user_data.queue_pointer = &queue[ii];
+      user_data[ii][jj - 1].queue_pointer = &queue[ii];
       // set the expected status in queue error calback handling
-      user_data.expected_status = HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      user_data[ii][jj - 1].expected_status = HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
       // create queue
       err = hsa_queue_create(gpuAgent,
-                             kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE,
-                             CallbackQueueErrorHandling, &user_data, 0, 0, &queue[ii]);
+              kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE,
+              CallbackQueueErrorHandling, &user_data[ii][jj - 1], 0, 0, &queue[ii]);
       ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -574,11 +575,15 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
       // completion signal should not be changed.
       ASSERT_EQ(completion, 1);
 
-      // queue error handling callback  should be triggered
-      ASSERT_EQ(user_data.cb_triggered, true);
-
       hsa_signal_store_relaxed(aql().completion_signal, 1);
       if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
+    }
+  }
+  sleep(1);
+  for (uint32_t ii = 0; ii < kMaxQueue; ++ii) {
+    for (uint32_t jj = 0; jj < 3; ++jj) {
+      // queue error handling callback  should be triggered
+      ASSERT_EQ(user_data[ii][jj].cb_triggered, true);
     }
   }
 }

@@ -80,26 +80,27 @@ namespace loader {
     : out(std::cout)
   {
     invalid.handle = 0;
-    gfx700.handle = 700;
-    gfx701.handle = 701;
-    gfx702.handle = 702;
-    gfx801.handle = 801;
-    gfx802.handle = 802;
-    gfx803.handle = 803;
-    gfx805.handle = 805;
-    gfx810.handle = 810;
-    gfx900.handle = 900;
-    gfx902.handle = 902;
-    gfx904.handle = 904;
-    gfx906.handle = 906;
-    gfx908.handle = 908;
-    gfx1010.handle = 1010;
-    gfx1011.handle = 1011;
-    gfx1012.handle = 1012;
-    gfx1030.handle = 1030;
-    gfx1031.handle = 1031;
-    gfx1032.handle = 1032;
-    gfx1033.handle = 1033;
+    gfx700.handle = 0x700;
+    gfx701.handle = 0x701;
+    gfx702.handle = 0x702;
+    gfx801.handle = 0x801;
+    gfx802.handle = 0x802;
+    gfx803.handle = 0x803;
+    gfx805.handle = 0x805;
+    gfx810.handle = 0x810;
+    gfx900.handle = 0x900;
+    gfx902.handle = 0x902;
+    gfx904.handle = 0x904;
+    gfx906.handle = 0x906;
+    gfx908.handle = 0x908;
+    gfx90a.handle = 0x90a;
+    gfx1010.handle = 0x1010;
+    gfx1011.handle = 0x1011;
+    gfx1012.handle = 0x1012;
+    gfx1030.handle = 0x1030;
+    gfx1031.handle = 0x1031;
+    gfx1032.handle = 0x1032;
+    gfx1033.handle = 0x1033;
   }
 
   hsa_isa_t OfflineLoaderContext::IsaFromName(const char *name)
@@ -137,6 +138,8 @@ namespace loader {
       return gfx906;
     } else if (sname == "AMD:AMDGPU:9:0:8") {
       return gfx908;
+    } else if (sname == "AMD:AMDGPU:9:0:A") {
+      return gfx90a;
     } else if (sname == "AMD:AMDGPU:10:1:0") {
       return gfx1010;
     } else if (sname == "AMD:AMDGPU:10:1:1") {

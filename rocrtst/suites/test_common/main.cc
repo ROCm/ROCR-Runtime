@@ -128,11 +128,6 @@ TEST(rocrtst, Test_Example) {
   RunGenericTest(&tst);
 }
 
-TEST(rocrtstFunc, IPC) {
-  IPCTest ipc;
-  RunGenericTest(&ipc);
-}
-
 TEST(rocrtstFunc, MemoryAccessTests) {
   MemoryAccessTest mt;
   RunCustomTestProlog(&mt);
@@ -175,7 +170,6 @@ TEST(rocrtstFunc, Concurrent_Shutdown) {
   RunCustomTestEpilog(&cs);
 }
 
-
 TEST(rocrtstFunc, Reference_Count) {
   ReferenceCountTest rc(true, false);
   RunCustomTestProlog(&rc);
@@ -212,6 +206,11 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
 }
 
 #ifndef ROCRTST_EMULATOR_BUILD
+TEST(rocrtstFunc, IPC) {
+  IPCTest ipc;
+  RunGenericTest(&ipc);
+}
+
 TEST(rocrtstFunc, DISABLED_Signal_Kernel_Set) {
   SignalKernelTest sk(SET);
   RunCustomTestProlog(&sk);
