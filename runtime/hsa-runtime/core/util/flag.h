@@ -56,8 +56,6 @@ class Flag {
  public:
   enum SDMA_OVERRIDE { SDMA_DISABLE, SDMA_ENABLE, SDMA_DEFAULT };
 
-  enum FLAG_TRI_STATE { FLAG_DISABLE = 0, FLAG_ENABLE = 1, FLAG_DEFAULT = 2 };
-
   explicit Flag() { Refresh(); }
 
   virtual ~Flag() {}
@@ -138,11 +136,6 @@ class Flag {
 
     var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
     check_sramecc_validity_ = (var == "1") ? false : true;
-    
-    // Legal values are zero "0" or one "1". Any other value will
-    // be interpreted as not defining the env variable.
-    var = os::GetEnvVar("HSA_FORCE_SRAMECC");
-    sramecc_ = (var == "0") ? FLAG_DISABLE : ((var == "1") ? FLAG_ENABLE : FLAG_DEFAULT);
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -196,8 +189,6 @@ class Flag {
 
   bool check_sramecc_validity() const { return check_sramecc_validity_; }
 
-  FLAG_TRI_STATE sramecc() const { return sramecc_; }
-
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -230,9 +221,6 @@ class Flag {
   std::string tools_lib_names_;
 
   size_t force_sdma_size_;
-
-  // Indicates user preference for SramECC state.
-  FLAG_TRI_STATE sramecc_;
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };

@@ -114,12 +114,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
   if (isa_base->IsSrameccSupported()) {
     sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1 ? core::IsaFeature::Enabled
                                                               : core::IsaFeature::Disabled;
-    // sramecc control for emulator.
-    if (core::Runtime::runtime_singleton_->flag().sramecc() != Flag::FLAG_DEFAULT) {
-      sramecc = core::Runtime::runtime_singleton_->flag().sramecc() == Flag::FLAG_ENABLE
-          ? core::IsaFeature::Enabled
-          : core::IsaFeature::Disabled;
-    }
   }
 
   rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
