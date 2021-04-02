@@ -1151,27 +1151,6 @@ hsa_status_t HSA_API hsa_amd_signal_value_pointer(hsa_signal_t signal,
   return amdExtTable->hsa_amd_signal_value_pointer_fn(signal, value_ptr);
 }
 
-// Mirrors Amd Extension Apis
-hsa_status_t HSA_API hsa_amd_svm_attributes_set(void* ptr, size_t size,
-                                        hsa_amd_svm_attribute_pair_t* attribute_list,
-                                        size_t attribute_count) {
-  return amdExtTable->hsa_amd_svm_attributes_set_fn(ptr, size, attribute_list, attribute_count);
-}
-
-// Mirrors Amd Extension Apis
-hsa_status_t HSA_API hsa_amd_svm_attributes_get(void* ptr, size_t size,
-                                        hsa_amd_svm_attribute_pair_t* attribute_list,
-                                        size_t attribute_count) {
-  return amdExtTable->hsa_amd_svm_attributes_get_fn(ptr, size, attribute_list, attribute_count);
-}
-
-// Mirrors Amd Extension Apis
-hsa_status_t HSA_API hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agent,
-                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
-                                        hsa_signal_t completion_signal) {
-  return amdExtTable->hsa_amd_svm_prefetch_async_fn(ptr, size, agent, num_dep_signals, dep_signals, completion_signal);
-}
-
 // Tools only table interfaces.
 namespace rocr {
 
