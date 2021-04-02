@@ -77,7 +77,7 @@ extern HsaApiTable hsa_internal_api_table_;
 } // namespace core
 
 namespace AMD {
-GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
+GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode)
     : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
@@ -112,16 +112,21 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
 
   rocr::core::IsaFeature sramecc = rocr::core::IsaFeature::Unsupported;
   if (isa_base->IsSrameccSupported()) {
-    sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1
-                   ? core::IsaFeature::Enabled
-                   : core::IsaFeature::Disabled;
+    sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1 ? core::IsaFeature::Enabled
+                                                              : core::IsaFeature::Disabled;
+    // sramecc control for emulator.
+    if (core::Runtime::runtime_singleton_->flag().sramecc() != Flag::FLAG_DEFAULT) {
+      sramecc = core::Runtime::runtime_singleton_->flag().sramecc() == Flag::FLAG_ENABLE
+          ? core::IsaFeature::Enabled
+          : core::IsaFeature::Disabled;
+    }
   }
 
   rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
   if (isa_base->IsXnackSupported()) {
     // TODO: This needs to be obtained form KFD once HMM implemented.
-    xnack = profile_ == HSA_PROFILE_FULL ? core::IsaFeature::Enabled
-                                         : core::IsaFeature::Disabled;
+    xnack = xnack_mode ? core::IsaFeature::Enabled
+                      : core::IsaFeature::Disabled;
   }
 
   // Set instruction set architecture via node property, only on GPU device.
@@ -202,6 +207,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_7;
     ASICShader compute_8;
     ASICShader compute_9;
+    ASICShader compute_90a;
     ASICShader compute_1010;
     ASICShader compute_10;
   };
@@ -212,12 +218,14 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {NULL, 0, 0, 0},
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
            {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
            {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
        }},
       {"CopyAligned",
        {
            {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
@@ -228,12 +236,14 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
        }},
       {"Fill",
        {
            {kCodeFill7, sizeof(kCodeFill7), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
@@ -254,6 +264,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       asic_shader = &compiled_shader_it->second.compute_8;
       break;
     case 9:
+      if((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10))
+        asic_shader = &compiled_shader_it->second.compute_90a;
+      else
         asic_shader = &compiled_shader_it->second.compute_9;
       break;
     case 10:
@@ -302,6 +315,14 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
                      AMD_COMPUTE_PGM_RSRC_TWO_USER_SGPR_COUNT, 2);
     AMD_HSA_BITS_SET(header->compute_pgm_rsrc2,
                      AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_SGPR_WORKGROUP_ID_X, 1);
+
+    if ((isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
+        (isa_->GetStepping() == 10)) {
+      // Program COMPUTE_PGM_RSRC3.ACCUM_OFFSET for 0 ACC VGPRs on gfx90a.
+      // FIXME: Assemble code objects from source at build time
+      int gran_accvgprs = ((gran_vgprs + 1) * 8) / 4 - 1;
+      header->max_scratch_backing_memory_byte_size = uint64_t(gran_accvgprs) << 32;
+    }
   }
 
   // Copy shader code into the GPU-visible buffer.
@@ -338,8 +359,7 @@ void GpuAgent::InitRegionList() {
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
-          MemoryRegion* region =
-              new MemoryRegion(false, false, this, mem_props[mem_idx]);
+          MemoryRegion* region = new MemoryRegion(false, false, false, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
 
@@ -348,7 +368,7 @@ void GpuAgent::InitRegionList() {
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
             if ((properties_.HiveID != 0) ||
                 (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
-              regions_.push_back(new MemoryRegion(true, false, this, mem_props[mem_idx]));
+              regions_.push_back(new MemoryRegion(true, false, false, this, mem_props[mem_idx]));
             }
           }
           break;

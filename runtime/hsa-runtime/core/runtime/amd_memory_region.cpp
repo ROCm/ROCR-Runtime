@@ -100,9 +100,9 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
   hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
+MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, full_profile, owner),
+    : core::MemoryRegion(fine_grain, kernarg, full_profile, owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0),
@@ -127,6 +127,8 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owne
     mem_flag_.ui32.NoSubstitute = 0;
     mem_flag_.ui32.HostAccess = 1;
     mem_flag_.ui32.CachePolicy = HSA_CACHING_CACHED;
+
+    if (kernarg) mem_flag_.ui32.Uncached = 1;
 
     virtual_size_ =
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
@@ -290,16 +292,14 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_GLOBAL_FLAGS:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
-          *((uint32_t*)value) = fine_grain()
-                                    ? (HSA_REGION_GLOBAL_FLAG_KERNARG |
-                                       HSA_REGION_GLOBAL_FLAG_FINE_GRAINED)
-                                    : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
-          break;
-        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-          *((uint32_t*)value) = fine_grain() ? HSA_REGION_GLOBAL_FLAG_FINE_GRAINED
-                                             : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE: {
+          uint32_t ret = fine_grain() ? HSA_REGION_GLOBAL_FLAG_FINE_GRAINED
+                                      : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+          if (kernarg()) ret |= HSA_REGION_GLOBAL_FLAG_KERNARG;
+          *((uint32_t*)value) = ret;
           break;
+        }
         default:
           *((uint32_t*)value) = 0;
           break;

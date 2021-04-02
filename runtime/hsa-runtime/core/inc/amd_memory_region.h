@@ -95,7 +95,7 @@ class MemoryRegion : public core::MemoryRegion {
   /// @brief Unpin memory.
   static void MakeKfdMemoryUnresident(const void* ptr);
 
-  MemoryRegion(bool fine_grain, bool full_profile, core::Agent* owner,
+  MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
                const HsaMemoryProperties& mem_props);
 
   ~MemoryRegion();
