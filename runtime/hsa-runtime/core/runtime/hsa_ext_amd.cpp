@@ -1009,37 +1009,5 @@ hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifie
   CATCH;
 }
 
-hsa_status_t hsa_amd_svm_attributes_set(void* ptr, size_t size,
-                                        hsa_amd_svm_attribute_pair_t* attribute_list,
-                                        size_t attribute_count) {
-  TRY;
-  IS_OPEN();
-  return core::Runtime::runtime_singleton_->SetSvmAttrib(ptr, size, attribute_list,
-                                                         attribute_count);
-  CATCH;
-}
-
-hsa_status_t hsa_amd_svm_attributes_get(void* ptr, size_t size,
-                                        hsa_amd_svm_attribute_pair_t* attribute_list,
-                                        size_t attribute_count) {
-  TRY;
-  IS_OPEN();
-  return core::Runtime::runtime_singleton_->GetSvmAttrib(ptr, size, attribute_list,
-                                                         attribute_count);
-  CATCH;
-}
-
-hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agent,
-                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
-                                        hsa_signal_t completion_signal) {
-  TRY;
-  IS_OPEN();
-  // Validate inputs.
-  // if (core::g_use_interrupt_wait && (!core::InterruptSignal::IsType(signal)))
-  return core::Runtime::runtime_singleton_->SvmPrefetch(ptr, size, agent, num_dep_signals,
-                                                        dep_signals, completion_signal);
-  CATCH;
-}
-
 }   //  namespace amd
 }   //  namespace rocr

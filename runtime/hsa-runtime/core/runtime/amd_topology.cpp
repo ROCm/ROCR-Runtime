@@ -68,38 +68,6 @@ namespace AMD {
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
 
-// Query for user preference and use that to determine Xnack mode of ROCm system.
-// Return true if Xnack mode is ON or false if OFF. Xnack mode of a system is
-// orthogonal to devices that do not support Xnack mode. It is legal for a
-// system with Xnack ON to have devices that do not support Xnack functionality.
-bool BindXnackMode() {
-  // Get users' preference for Xnack mode of ROCm platform
-  HSAint32 mode;
-  mode = core::Runtime::runtime_singleton_->flag().xnack();
-  bool config_xnack =
-      (core::Runtime::runtime_singleton_->flag().xnack() != Flag::XNACK_REQUEST::XNACK_UNCHANGED);
-
-  // Indicate to driver users' preference for Xnack mode
-  // Call to driver can fail and is a supported feature
-  HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
-  if (config_xnack) {
-    status = hsaKmtSetXNACKMode(mode);
-    if (status == HSAKMT_STATUS_SUCCESS) {
-      return mode;
-    }
-  }
-
-  // Get Xnack mode of devices bound by driver. This could happen
-  // when a call to SET Xnack mode fails or user has no particular
-  // preference
-  status = hsaKmtGetXNACKMode((HSAint32*)&mode);
-  if(status != HSAKMT_STATUS_SUCCESS) {
-    debug_print("KFD does not support xnack mode query.\nROCr must assume xnack is disabled.\n");
-    return false;
-  }
-  return mode;
-}
-
 CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumCPUCores == 0) {
     return nullptr;
@@ -111,14 +79,14 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   return cpu;
 }
 
-GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnack_mode) {
+GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   GpuAgent* gpu = nullptr;
   if (node_prop.NumFComputeCores == 0) {
       // Ignore non GPUs.
       return nullptr;
   }
   try {
-    gpu = new GpuAgent(node_id, node_prop, xnack_mode);
+    gpu = new GpuAgent(node_id, node_prop);
 
     const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion();
 
@@ -244,7 +212,7 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
 /**
  * Process the list of Gpus that are surfaced to user
  */
-static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode) {
+static void SurfaceGpuList(std::vector<int32_t>& gpu_list) {
   // Process user visible Gpu devices
   int32_t invalidIdx = -1;
   int32_t list_sz = gpu_list.size();
@@ -261,7 +229,7 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode) {
     // Instantiate a Gpu device. The IO links
     // of this node have already been registered
     assert((node_prop.NumFComputeCores != 0) && "Improper node used for GPU device discovery.");
-    DiscoverGpu(gpu_list[idx], node_prop, xnack_mode);
+    DiscoverGpu(gpu_list[idx], node_prop);
   }
 }
 
@@ -345,11 +313,8 @@ void BuildTopology() {
     RegisterLinkInfo(node_id, node_prop.NumIOLinks);
   }
 
-  // Determine the Xnack mode to be bound for system
-  bool xnack_mode = BindXnackMode();
-
   // Instantiate ROCr objects to encapsulate Gpu devices
-  SurfaceGpuList(gpu_usr_list, xnack_mode);
+  SurfaceGpuList(gpu_usr_list);
 }
 
 bool Load() {

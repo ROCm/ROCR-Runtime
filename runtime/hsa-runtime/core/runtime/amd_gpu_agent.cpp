@@ -77,7 +77,7 @@ extern HsaApiTable hsa_internal_api_table_;
 } // namespace core
 
 namespace AMD {
-GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode)
+GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
     : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
@@ -125,8 +125,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
   if (isa_base->IsXnackSupported()) {
     // TODO: This needs to be obtained form KFD once HMM implemented.
-    xnack = xnack_mode ? core::IsaFeature::Enabled
-                      : core::IsaFeature::Disabled;
+    xnack = profile_ == HSA_PROFILE_FULL ? core::IsaFeature::Enabled
+                                         : core::IsaFeature::Disabled;
   }
 
   // Set instruction set architecture via node property, only on GPU device.

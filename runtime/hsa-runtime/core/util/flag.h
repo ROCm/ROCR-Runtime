@@ -56,11 +56,6 @@ class Flag {
  public:
   enum SDMA_OVERRIDE { SDMA_DISABLE, SDMA_ENABLE, SDMA_DEFAULT };
 
-  // The values are meaningful and chosen to satisfy the thunk API.
-  enum XNACK_REQUEST { XNACK_DISABLE = 0, XNACK_ENABLE = 1, XNACK_UNCHANGED = 2 };
-  static_assert(XNACK_DISABLE == 0, "XNACK_REQUEST enum values improperly changed.");
-  static_assert(XNACK_ENABLE == 1, "XNACK_REQUEST enum values improperly changed.");
-
   enum FLAG_TRI_STATE { FLAG_DISABLE = 0, FLAG_ENABLE = 1, FLAG_DEFAULT = 2 };
 
   explicit Flag() { Refresh(); }
@@ -145,11 +140,6 @@ class Flag {
     check_sramecc_validity_ = (var == "1") ? false : true;
     
     // Legal values are zero "0" or one "1". Any other value will
-    // be interpreted as not defining the env variable
-    var = os::GetEnvVar("HSA_XNACK");
-    xnack_ = (var == "0") ? XNACK_DISABLE : ((var == "1") ? XNACK_ENABLE : XNACK_UNCHANGED);
-
-    // Legal values are zero "0" or one "1". Any other value will
     // be interpreted as not defining the env variable.
     var = os::GetEnvVar("HSA_FORCE_SRAMECC");
     sramecc_ = (var == "0") ? FLAG_DISABLE : ((var == "1") ? FLAG_ENABLE : FLAG_DEFAULT);
@@ -206,8 +196,6 @@ class Flag {
 
   bool check_sramecc_validity() const { return check_sramecc_validity_; }
 
-  XNACK_REQUEST xnack() const { return xnack_; }
-
   FLAG_TRI_STATE sramecc() const { return sramecc_; }
 
  private:
@@ -242,9 +230,6 @@ class Flag {
   std::string tools_lib_names_;
 
   size_t force_sdma_size_;
-
-  // Indicates user preference for Xnack state.
-  XNACK_REQUEST xnack_;
 
   // Indicates user preference for SramECC state.
   FLAG_TRI_STATE sramecc_;
