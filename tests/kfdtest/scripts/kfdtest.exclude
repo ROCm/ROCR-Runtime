@@ -216,7 +216,10 @@ TEMP_GFX10_BLACKLIST=\
 "KFDQMTest.QueuePriorityOnSamePipe:"\
 "KFDCWSRTest.BasicTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDEvictTest.QueueTest"
+"KFDEvictTest.QueueTest:"\
+"KFDMemoryTest.MapUnmapToNodes:"\
+"KFDMemoryTest.HostHdpFlush:"\
+"KFDMemoryTest.DeviceHdpFlush"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
