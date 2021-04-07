@@ -308,7 +308,7 @@ type(CS)\n\
     v_mov_b32 v1, s1\n\
     v_mov_b32 v18, 0x1\n\
     LOOP:\n\
-    flat_load_dword v16, v[0:1] scc:1\n\
+    flat_load_dword v16, v[0:1] glc\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     v_cmp_eq_i32 vcc, v16, v18\n\
     s_cbranch_vccz   LOOP\n\
@@ -345,7 +345,7 @@ type(CS)\n\
     buffer_wbl2\n\
     s_waitcnt vmcnt(0) & lgkmcnt(0)\n\
     v_mov_b32 v16, 0x1\n\
-    flat_store_dword v[0:1], v16 scc:1\n\
+    flat_store_dword v[0:1], v16 glc\n\
     s_endpgm\n\
     end\n\
 ";
