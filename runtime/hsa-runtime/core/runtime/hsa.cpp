@@ -1894,9 +1894,13 @@ static std::string ConvertOldTargetNameToNew(
     NewName = "amdgcn-amd-amdhsa--gfx906";
     xnack_supported = true;
   }
+  else if (OldName == "AMD:AMDGPU:9:0:12") {
+    NewName = "amdgcn-amd-amdhsa--gfx90c";
+    xnack_supported = true;
+  }
   else {
-    // Code object v2 only supports asics up to gfx906. Do NOT add handling
-    // of new asics into this if-else-if* block.
+    // Code object v2 only supports asics up to gfx906 plus gfx90c. Do NOT add
+    // handling of new asics into this if-else-if* block.
     return "";
   }
 
