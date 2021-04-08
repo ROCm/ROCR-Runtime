@@ -93,7 +93,9 @@ namespace loader {
     gfx904.handle = 0x904;
     gfx906.handle = 0x906;
     gfx908.handle = 0x908;
+    gfx909.handle = 0x909;
     gfx90a.handle = 0x90a;
+    gfx90c.handle = 0x90c;
     gfx1010.handle = 0x1010;
     gfx1011.handle = 0x1011;
     gfx1012.handle = 0x1012;
@@ -138,8 +140,12 @@ namespace loader {
       return gfx906;
     } else if (sname == "AMD:AMDGPU:9:0:8") {
       return gfx908;
-    } else if (sname == "AMD:AMDGPU:9:0:A") {
+    } else if (sname == "AMD:AMDGPU:9:0:9") {
+      return gfx909;
+    } else if (sname == "AMD:AMDGPU:9:0:10") {
       return gfx90a;
+    } else if (sname == "AMD:AMDGPU:9:0:12") {
+      return gfx90c;
     } else if (sname == "AMD:AMDGPU:10:1:0") {
       return gfx1010;
     } else if (sname == "AMD:AMDGPU:10:1:1") {
