@@ -253,6 +253,7 @@ FILTER[dimgrey_cavefish]=\
 
 FILTER[beige_goby]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"
