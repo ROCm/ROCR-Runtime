@@ -830,12 +830,16 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AGENT_INFO_DEVICE:
       *((hsa_device_type_t*)value) = HSA_DEVICE_TYPE_GPU;
       break;
-    case HSA_AGENT_INFO_CACHE_SIZE:
+    case HSA_AGENT_INFO_CACHE_SIZE: {
       std::memset(value, 0, sizeof(uint32_t) * 4);
-      // TODO: no GPU cache info from KFD. Hardcode for now.
-      // GCN whitepaper: L1 data cache is 16KB.
-      ((uint32_t*)value)[0] = 16 * 1024;
-      break;
+      assert(cache_props_.size() > 0 && "GPU cache info missing.");
+      const size_t num_cache = cache_props_.size();
+      for (size_t i = 0; i < num_cache; ++i) {
+        const uint32_t line_level = cache_props_[i].CacheLevel;
+        if (reinterpret_cast<uint32_t*>(value)[line_level - 1] == 0)
+          reinterpret_cast<uint32_t*>(value)[line_level - 1] = cache_props_[i].CacheSize * 1024;
+      }
+    } break;
     case HSA_AGENT_INFO_ISA:
       *((hsa_isa_t*)value) = core::Isa::Handle(isa_);
       break;
