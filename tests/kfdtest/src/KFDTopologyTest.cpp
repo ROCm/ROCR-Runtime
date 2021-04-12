@@ -175,6 +175,27 @@ TEST_F(KFDTopologyTest, GetNodeCacheProperties) {
                     LOG() << "     ProcIdLow " << cacheProperties[n].ProcessorIdLow <<
                     " SiblingMap " << string << std::endl;
                 }
+            } else {  // this is a GPU node
+                LOG() << "GPU Node " << std::dec << node << ": " << pNodeProperties->NumCaches << " caches"
+                      << std::endl;
+                for (unsigned n = 0; n < pNodeProperties->NumCaches; n++) {
+                    LOG()<< n << " - Level " << cacheProperties[n].CacheLevel <<
+                    " Type " << cacheProperties[n].CacheType.Value <<
+                    " Size " << cacheProperties[n].CacheSize << "K " <<
+                    " Associativity " << cacheProperties[n].CacheAssociativity <<
+                    " LineSize " << cacheProperties[n].CacheLineSize <<
+                    " LinesPerTag " << cacheProperties[n].CacheLinesPerTag << std::endl;
+                    char string[1024] = "";
+                    char sibling[5] = "";
+                    for (unsigned i = 0; i < 256; i++) {
+                        if (cacheProperties[n].SiblingMap[i]) {
+                            snprintf(sibling, 5, "%d,", i);
+                            strcat(string, sibling);
+                        }
+                    }
+                    LOG() << "     ProcIdLow " << cacheProperties[n].ProcessorIdLow <<
+                    " SiblingMap " << string << std::endl;
+                }
             }
             delete [] cacheProperties;
         }
