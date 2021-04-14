@@ -27,11 +27,11 @@
 #include "Dispatch.hpp"
 
 /* Shader to initialize gws counter to 1*/
-const char* gfx9_GwsInit =
+const char* gfx9_10_GwsInit =
 "\
 shader GwsInit\n\
-asic(GFX9)\n\
 type(CS)\n\
+wave_size(32)\n\
     s_mov_b32 m0, 0\n\
     s_nop 0\n\
     s_load_dword s16, s[0:1], 0x0 glc\n\
@@ -65,6 +65,30 @@ type(CS)\n\
     s_add_u32 s16, s16, 1\n\
     s_store_dword s16, s[0:1], 0x0 glc\n\
     s_waitcnt lgkmcnt(0)\n\
+    ds_gws_sema_v gds:1 offset0:0\n\
+    s_waitcnt 0\n\
+    s_endpgm\n\
+    end\n\
+";
+
+const char* gfx10_AtomicIncrease =
+"\
+shader AtomicIncrease\n\
+asic(GFX10)\n\
+type(CS)\n\
+wave_size(32)\n\
+/* Assume src address in s0, s1 */\n\
+    s_mov_b32 m0, 0\n\
+    s_mov_b32 exec_lo, 0x1\n\
+    v_mov_b32 v0, s0\n\
+    v_mov_b32 v1, s1\n\
+    ds_gws_sema_p gds:1 offset0:0\n\
+    s_waitcnt 0\n\
+    flat_load_dword v2, v[0:1] glc:1 dlc:1\n\
+    s_waitcnt 0\n\
+    v_add_nc_u32 v2, v2, 1\n\
+    flat_store_dword v[0:1], v2\n\
+    s_waitcnt_vscnt null, 0\n\
     ds_gws_sema_v gds:1 offset0:0\n\
     s_waitcnt 0\n\
     s_endpgm\n\
@@ -138,14 +162,20 @@ TEST_F(KFDGWSTest, Semaphore) {
     EXPECT_EQ(0, firstGWS);
 
     m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-    m_pIsaGen->CompileShader(gfx9_GwsInit, "GwsInit", isaBuffer);
+    m_pIsaGen->CompileShader(gfx9_10_GwsInit, "GwsInit", isaBuffer);
     Dispatch dispatch0(isaBuffer);
     buffer.Fill(numResources, 0, 4);
     dispatch0.SetArgs(buffer.As<void*>(), NULL);
     dispatch0.Submit(queue);
     dispatch0.Sync();
 
-    m_pIsaGen->CompileShader(gfx9_AtomicIncrease, "AtomicIncrease", isaBuffer);
+    const char *pAtomicIncrease;
+    if (m_FamilyId <= FAMILY_AL)
+        pAtomicIncrease = gfx9_AtomicIncrease;
+    else
+        pAtomicIncrease = gfx10_AtomicIncrease;
+
+    m_pIsaGen->CompileShader(pAtomicIncrease, "AtomicIncrease", isaBuffer);
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<void*>(), NULL);
