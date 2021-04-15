@@ -341,6 +341,8 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       {"hsa_ext_finalizer_1_00_pfn_t", sizeof(hsa_ext_finalizer_1_00_pfn_t)},
       {"hsa_ven_amd_loader_1_00_pfn_t", sizeof(hsa_ven_amd_loader_1_00_pfn_t)},
       {"hsa_ven_amd_loader_1_01_pfn_t", sizeof(hsa_ven_amd_loader_1_01_pfn_t)},
+      {"hsa_ven_amd_loader_1_02_pfn_t", sizeof(hsa_ven_amd_loader_1_02_pfn_t)},
+      {"hsa_ven_amd_loader_1_03_pfn_t", sizeof(hsa_ven_amd_loader_1_03_pfn_t)},
       {"hsa_ven_amd_aqlprofile_1_00_pfn_t", sizeof(hsa_ven_amd_aqlprofile_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
@@ -448,15 +450,21 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
 
   if (extension == HSA_EXTENSION_AMD_LOADER) {
     if (version_major != 1) return HSA_STATUS_ERROR;
-    hsa_ven_amd_loader_1_01_pfn_t ext_table;
-    ext_table.hsa_ven_amd_loader_query_host_address = hsa_ven_amd_loader_query_host_address;
+    hsa_ven_amd_loader_1_03_pfn_t ext_table;
+    ext_table.hsa_ven_amd_loader_query_host_address =
+        hsa_ven_amd_loader_query_host_address;
     ext_table.hsa_ven_amd_loader_query_segment_descriptors =
         hsa_ven_amd_loader_query_segment_descriptors;
-    ext_table.hsa_ven_amd_loader_query_executable = hsa_ven_amd_loader_query_executable;
+    ext_table.hsa_ven_amd_loader_query_executable =
+        hsa_ven_amd_loader_query_executable;
     ext_table.hsa_ven_amd_loader_executable_iterate_loaded_code_objects =
         hsa_ven_amd_loader_executable_iterate_loaded_code_objects;
     ext_table.hsa_ven_amd_loader_loaded_code_object_get_info =
         hsa_ven_amd_loader_loaded_code_object_get_info;
+    ext_table.hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size =
+        hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size;
+    ext_table.hsa_ven_amd_loader_iterate_executables =
+        hsa_ven_amd_loader_iterate_executables;
 
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 

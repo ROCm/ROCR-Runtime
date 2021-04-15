@@ -53,6 +53,7 @@ using namespace core;
 using loader::CodeObjectReaderImpl;
 using loader::Executable;
 using loader::LoadedCodeObject;
+using loader::Loader;
 
 namespace AMD {
 
@@ -270,6 +271,32 @@ hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
 
     *code_object_reader = CodeObjectReaderImpl::Handle(reader.release());
     return HSA_STATUS_SUCCESS;
+  } catch(...) { return AMD::handleException(); }
+}
+
+namespace {
+
+Loader *GetLoader() {
+  return Runtime::runtime_singleton_->loader();
+}
+
+} // namespace anonymous
+
+hsa_status_t
+hsa_ven_amd_loader_iterate_executables(
+    hsa_status_t (*callback)(
+      hsa_executable_t executable,
+      void *data),
+    void *data) {
+  try {
+    if (!Runtime::runtime_singleton_->IsOpen()) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+    if (nullptr == callback) {
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    return GetLoader()->IterateExecutables(callback, data);
   } catch(...) { return AMD::handleException(); }
 }
 

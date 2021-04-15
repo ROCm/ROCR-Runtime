@@ -494,9 +494,38 @@ hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
 //===----------------------------------------------------------------------===//
 
 /**
+ * @brief Iterate over the available executables, and invoke an
+ * application-defined callback on every iteration.
+ *
+ * @param[in] callback Callback to be invoked once per executable. The HSA
+ * runtime passes two arguments to the callback: the executable and the
+ * application data. If @p callback returns a status other than
+ * ::HSA_STATUS_SUCCESS for a particular iteration, the traversal stops and
+ * ::hsa_ven_amd_loader_iterate_executables returns that status value.
+ *
+ * @param[in] data Application data that is passed to @p callback on every
+ * iteration. May be NULL.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p callback is NULL.
+*/
+hsa_status_t
+hsa_ven_amd_loader_iterate_executables(
+    hsa_status_t (*callback)(
+      hsa_executable_t executable,
+      void *data),
+    void *data);
+
+//===----------------------------------------------------------------------===//
+
+/**
  * @brief Extension version.
  */
-#define hsa_ven_amd_loader 001002
+#define hsa_ven_amd_loader 001003
 
 /**
  * @brief Extension function table version 1.00.
@@ -581,6 +610,50 @@ typedef struct hsa_ven_amd_loader_1_02_pfn_s {
       size_t size,
       hsa_code_object_reader_t *code_object_reader);
 } hsa_ven_amd_loader_1_02_pfn_t;
+
+/**
+ * @brief Extension function table version 1.03.
+ */
+typedef struct hsa_ven_amd_loader_1_03_pfn_s {
+  hsa_status_t (*hsa_ven_amd_loader_query_host_address)(
+    const void *device_address,
+    const void **host_address);
+
+  hsa_status_t (*hsa_ven_amd_loader_query_segment_descriptors)(
+    hsa_ven_amd_loader_segment_descriptor_t *segment_descriptors,
+    size_t *num_segment_descriptors);
+
+  hsa_status_t (*hsa_ven_amd_loader_query_executable)(
+    const void *device_address,
+    hsa_executable_t *executable);
+
+  hsa_status_t (*hsa_ven_amd_loader_executable_iterate_loaded_code_objects)(
+    hsa_executable_t executable,
+    hsa_status_t (*callback)(
+      hsa_executable_t executable,
+      hsa_loaded_code_object_t loaded_code_object,
+      void *data),
+    void *data);
+
+  hsa_status_t (*hsa_ven_amd_loader_loaded_code_object_get_info)(
+    hsa_loaded_code_object_t loaded_code_object,
+    hsa_ven_amd_loader_loaded_code_object_info_t attribute,
+    void *value);
+
+  hsa_status_t
+    (*hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size)(
+      hsa_file_t file,
+      size_t offset,
+      size_t size,
+      hsa_code_object_reader_t *code_object_reader);
+
+  hsa_status_t
+    (*hsa_ven_amd_loader_iterate_executables)(
+      hsa_status_t (*callback)(
+        hsa_executable_t executable,
+        void *data),
+      void *data);
+} hsa_ven_amd_loader_1_03_pfn_t;
 
 #ifdef __cplusplus
 }
