@@ -191,7 +191,6 @@ set ( SRCS core/util/lnx/os_linux.cpp
            core/common/shared.cpp
            core/common/hsa_table_interface.cpp
            loader/executable.cpp
-           loader/loaders.cpp
            libamdhsacode/amd_elf_image.cpp
            libamdhsacode/amd_hsa_code_util.cpp
            libamdhsacode/amd_hsa_locks.cpp
