@@ -495,13 +495,18 @@ hsa_ven_amd_loader_code_object_reader_create_from_file_with_offset_size(
 
 /**
  * @brief Iterate over the available executables, and invoke an
- * application-defined callback on every iteration.
+ * application-defined callback on every iteration. While
+ * ::hsa_ven_amd_loader_iterate_executables is executing any calls to
+ * ::hsa_executable_create, ::hsa_executable_create_alt, or
+ * ::hsa_executable_destroy will be blocked.
  *
  * @param[in] callback Callback to be invoked once per executable. The HSA
  * runtime passes two arguments to the callback: the executable and the
  * application data. If @p callback returns a status other than
  * ::HSA_STATUS_SUCCESS for a particular iteration, the traversal stops and
- * ::hsa_ven_amd_loader_iterate_executables returns that status value.
+ * ::hsa_ven_amd_loader_iterate_executables returns that status value. If
+ * @p callback invokes ::hsa_executable_create, ::hsa_executable_create_alt, or
+ * ::hsa_executable_destroy then the behavior is undefined.
  *
  * @param[in] data Application data that is passed to @p callback on every
  * iteration. May be NULL.
