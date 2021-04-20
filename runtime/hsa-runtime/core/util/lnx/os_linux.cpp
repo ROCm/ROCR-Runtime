@@ -74,7 +74,7 @@ void* __stdcall ThreadTrampoline(void* arg) {
   void* Data = ar->entry_args;
   delete ar;
   CallMe(Data);
-  return NULL;
+  return nullptr;
 }
 
 // Thread container allows multiple waits and separate close (destroy).
@@ -99,7 +99,16 @@ class os_thread {
       assert(err == 0 && "pthread_attr_setstacksize failed.");
     }
 
-    int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    int cores = get_nprocs_conf();
+    cpu_set_t* cpuset = CPU_ALLOC(cores);
+    for(int i=0; i<cores; i++){
+      CPU_SET(i, cpuset);
+    }
+    int err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
+    assert(err == 0 && "pthread_attr_setaffinity_np failed.");
+    CPU_FREE(cpuset);
+
+    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
     // Attempt to grow the stack within reason.
