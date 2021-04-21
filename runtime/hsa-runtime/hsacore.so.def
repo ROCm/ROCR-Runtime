@@ -222,6 +222,9 @@ global:
 	hsa_amd_deregister_deallocation_callback;
 	hsa_amd_signal_value_pointer;
 	_amdgpu_r_debug;
+	hsa_amd_svm_attributes_set;
+	hsa_amd_svm_attributes_get;
+	hsa_amd_svm_prefetch_async;
 
 local:
     *;

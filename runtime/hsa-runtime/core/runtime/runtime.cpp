@@ -644,6 +644,18 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *(const char**)value = STRING(ROCR_BUILD_ID);
       break;
     }
+    case HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED: {
+      // todo: Get HMM kernel support info.
+      *(bool*)value = true;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT: {
+      bool ret = true;
+      for(auto agent : gpu_agents_)
+        ret &= (agent->isa()->GetXnack() == IsaFeature::Enabled);
+      *(bool*)value = ret;
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -1584,6 +1596,500 @@ hsa_status_t Runtime::SetInternalQueueCreateNotifier(hsa_amd_runtime_queue_notif
 void Runtime::InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent) {
   if (internal_queue_create_notifier_)
     internal_queue_create_notifier_(queue, agent, internal_queue_create_notifier_user_data_);
+}
+
+hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
+                                   hsa_amd_svm_attribute_pair_t* attribute_list,
+                                   size_t attribute_count) {
+  uint32_t set_attribs = 0;
+  std::vector<bool> agent_seen(agents_by_node_.size(), false);
+
+  std::vector<HSA_SVM_ATTRIBUTE> attribs;
+  attribs.reserve(attribute_count);
+  uint32_t set_flags = 0;
+  uint32_t clear_flags = 0;
+
+  auto Convert = [&](uint64_t value) -> Agent* {
+    hsa_agent_t handle = {value};
+    Agent* agent = Agent::Convert(handle);
+    if ((agent == nullptr) || !agent->IsValid())
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_AGENT,
+                               "Invalid agent handle in Runtime::SetSvmAttrib.");
+    return agent;
+  };
+
+  auto ConvertAllowNull = [&](uint64_t value) -> Agent* {
+    hsa_agent_t handle = {value};
+    Agent* agent = Agent::Convert(handle);
+    if ((agent != nullptr) && (!agent->IsValid()))
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_AGENT,
+                               "Invalid agent handle in Runtime::SetSvmAttrib.");
+    return agent;
+  };
+
+  auto ConfirmNew = [&](Agent* agent) {
+    if (agent_seen[agent->node_id()])
+      throw AMD::hsa_exception(
+          HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS,
+          "Multiple attributes given for the same agent in Runtime::SetSvmAttrib.");
+    agent_seen[agent->node_id()] = true;
+  };
+
+  auto Check = [&](uint64_t attrib) {
+    if (set_attribs & (1 << attrib))
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS,
+                               "Attribute given multiple times in Runtime::SetSvmAttrib.");
+    set_attribs |= (1 << attrib);
+  };
+
+  auto kmtPair = [](uint32_t attrib, uint32_t value) {
+    HSA_SVM_ATTRIBUTE pair = {attrib, value};
+    return pair;
+  };
+
+  for (uint32_t i = 0; i < attribute_count; i++) {
+    auto attrib = attribute_list[i].attribute;
+    auto value = attribute_list[i].value;
+
+    switch (attrib) {
+      case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG: {
+        Check(attrib);
+        switch (value) {
+          case HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED:
+            set_flags |= HSA_SVM_FLAG_COHERENT;
+            break;
+          case HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED:
+            clear_flags |= HSA_SVM_FLAG_COHERENT;
+            break;
+          default:
+            throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                                     "Invalid HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG value.");
+        }
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_READ_ONLY: {
+        Check(attrib);
+        if (value)
+          set_flags |= HSA_SVM_FLAG_GPU_RO;
+        else
+          clear_flags |= HSA_SVM_FLAG_GPU_RO;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_HIVE_LOCAL: {
+        Check(attrib);
+        if (value)
+          set_flags |= HSA_SVM_FLAG_HIVE_LOCAL;
+        else
+          clear_flags |= HSA_SVM_FLAG_HIVE_LOCAL;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_MIGRATION_GRANULARITY: {
+        Check(attrib);
+        // Max migration size is 1GB.
+        if (value > 18) value = 18;
+        attribs.push_back(kmtPair(HSA_SVM_ATTR_GRANULARITY, value));
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION: {
+        Check(attrib);
+        Agent* agent = ConvertAllowNull(value);
+        if (agent == nullptr)
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_PREFERRED_LOC, INVALID_NODEID));
+        else
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_PREFERRED_LOC, agent->node_id()));
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE: {
+        Agent* agent = Convert(value);
+        ConfirmNew(agent);
+        if (agent->device_type() == Agent::kAmdCpuDevice) {
+          set_flags |= HSA_SVM_FLAG_HOST_ACCESS;
+        } else {
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_ACCESS, agent->node_id()));
+        }
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE: {
+        Agent* agent = Convert(value);
+        ConfirmNew(agent);
+        if (agent->device_type() == Agent::kAmdCpuDevice) {
+          set_flags |= HSA_SVM_FLAG_HOST_ACCESS;
+        } else {
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_ACCESS_IN_PLACE, agent->node_id()));
+        }
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_AGENT_NO_ACCESS: {
+        Agent* agent = Convert(value);
+        ConfirmNew(agent);
+        if (agent->device_type() == Agent::kAmdCpuDevice) {
+          clear_flags |= HSA_SVM_FLAG_HOST_ACCESS;
+        } else {
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_NO_ACCESS, agent->node_id()));
+        }
+        break;
+      }
+      default:
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                                 "Illegal or invalid attribute in Runtime::SetSvmAttrib");
+    }
+  }
+
+  // Merge CPU access properties - grant access if any CPU needs access.
+  // Probably wrong.
+  if (set_flags & HSA_SVM_FLAG_HOST_ACCESS) clear_flags &= ~HSA_SVM_FLAG_HOST_ACCESS;
+
+  // Add flag updates
+  if (clear_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_CLR_FLAGS, clear_flags));
+  if (set_flags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, set_flags));
+
+  uint8_t* base = AlignDown((uint8_t*)ptr, 4096);
+  uint8_t* end = AlignUp((uint8_t*)ptr + size, 4096);
+  size_t len = end - base;
+  HSAKMT_STATUS error = hsaKmtSVMSetAttr(base, len, attribs.size(), &attribs[0]);
+  if (error != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "hsaKmtSVMSetAttr failed.");
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
+                                   hsa_amd_svm_attribute_pair_t* attribute_list,
+                                   size_t attribute_count) {
+  std::vector<HSA_SVM_ATTRIBUTE> attribs;
+  attribs.reserve(attribute_count);
+
+  std::vector<int> kmtIndices(attribute_count);
+
+  bool getFlags = false;
+
+  auto Convert = [&](uint64_t value) -> Agent* {
+    hsa_agent_t handle = {value};
+    Agent* agent = Agent::Convert(handle);
+    if ((agent == nullptr) || !agent->IsValid())
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_AGENT,
+                               "Invalid agent handle in Runtime::GetSvmAttrib.");
+    return agent;
+  };
+
+  auto kmtPair = [](uint32_t attrib, uint32_t value) {
+    HSA_SVM_ATTRIBUTE pair = {attrib, value};
+    return pair;
+  };
+
+  for (uint32_t i = 0; i < attribute_count; i++) {
+    auto& attrib = attribute_list[i].attribute;
+    auto& value = attribute_list[i].value;
+
+    switch (attrib) {
+      case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG:
+      case HSA_AMD_SVM_ATTRIB_READ_ONLY:
+      case HSA_AMD_SVM_ATTRIB_HIVE_LOCAL: {
+        getFlags = true;
+        kmtIndices[i] = -1;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_MIGRATION_GRANULARITY: {
+        kmtIndices[i] = attribs.size();
+        attribs.push_back(kmtPair(HSA_SVM_ATTR_GRANULARITY, 0));
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION: {
+        kmtIndices[i] = attribs.size();
+        attribs.push_back(kmtPair(HSA_SVM_ATTR_PREFERRED_LOC, 0));
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION: {
+        value = Agent::Convert(GetSVMPrefetchAgent(ptr, size)).handle;
+        kmtIndices[i] = -1;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_ACCESS_QUERY: {
+        Agent* agent = Convert(value);
+        if (agent->device_type() == Agent::kAmdCpuDevice) {
+          getFlags = true;
+          kmtIndices[i] = -1;
+        } else {
+          kmtIndices[i] = attribs.size();
+          attribs.push_back(kmtPair(HSA_SVM_ATTR_ACCESS, agent->node_id()));
+        }
+        break;
+      }
+      default:
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                                 "Illegal or invalid attribute in Runtime::SetSvmAttrib");
+    }
+  }
+
+  if (getFlags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, 0));
+
+  uint8_t* base = AlignDown((uint8_t*)ptr, 4096);
+  uint8_t* end = AlignUp((uint8_t*)ptr + size, 4096);
+  size_t len = end - base;
+  if (attribs.size() != 0) {
+    HSAKMT_STATUS error = hsaKmtSVMGetAttr(base, len, attribs.size(), &attribs[0]);
+    if (error != HSAKMT_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR, "hsaKmtSVMGetAttr failed.");
+  }
+
+  for (uint32_t i = 0; i < attribute_count; i++) {
+    auto& attrib = attribute_list[i].attribute;
+    auto& value = attribute_list[i].value;
+
+    switch (attrib) {
+      case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG: {
+        if (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_COHERENT)
+          value = HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED;
+        else
+          value = HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_READ_ONLY: {
+        value = (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_GPU_RO);
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_HIVE_LOCAL: {
+        value = (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_HIVE_LOCAL);
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_MIGRATION_GRANULARITY: {
+        value = attribs[kmtIndices[i]].value;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION: {
+        uint64_t node = attribs[kmtIndices[i]].value;
+        Agent* agent = nullptr;
+        if (node != INVALID_NODEID) agent = agents_by_node_[node][0];
+        value = Agent::Convert(agent).handle;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION: {
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_ACCESS_QUERY: {
+        if (kmtIndices[i] == -1) {
+          if (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_HOST_ACCESS)
+            attrib = HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE;
+        } else {
+          switch (attribs[kmtIndices[i]].type) {
+            case HSA_SVM_ATTR_ACCESS:
+              attrib = HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE;
+              break;
+            case HSA_SVM_ATTR_ACCESS_IN_PLACE:
+              attrib = HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE;
+              break;
+            case HSA_SVM_ATTR_NO_ACCESS:
+              attrib = HSA_AMD_SVM_ATTRIB_AGENT_NO_ACCESS;
+              break;
+            default:
+              assert(false && "Bad agent accessibility from KFD.");
+          }
+        }
+        break;
+      }
+      default:
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                                 "Illegal or invalid attribute in Runtime::GetSvmAttrib");
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent,
+                                  uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                  hsa_signal_t completion_signal) {
+  uintptr_t base = reinterpret_cast<uintptr_t>(AlignDown(ptr, 4096));
+  uintptr_t end = AlignUp(reinterpret_cast<uintptr_t>(ptr) + size, 4096);
+  size_t len = end - base;
+
+  PrefetchOp* op = new PrefetchOp();
+  MAKE_NAMED_SCOPE_GUARD(OpGuard, [&]() { delete op; });
+
+  Agent* dest = Agent::Convert(agent);
+  if (dest->device_type() == Agent::kAmdCpuDevice)
+    op->node_id = 0;
+  else
+    op->node_id = dest->node_id();
+
+  op->base = reinterpret_cast<void*>(base);
+  op->size = len;
+  op->completion = completion_signal;
+  if (num_dep_signals > 1) {
+    op->remaining_deps = num_dep_signals - 1;
+    for (int i = 0; i < num_dep_signals - 1; i++) op->dep_signals.push_back(dep_signals[i]);
+  } else {
+    op->remaining_deps = 0;
+  }
+
+  {
+    ScopedAcquire<KernelMutex> lock(&prefetch_lock_);
+    // Remove all fully overlapped and trim partially overlapped ranges.
+    // Get iteration bounds
+    auto start = prefetch_map_.upper_bound(base);
+    if (start != prefetch_map_.begin()) start--;
+    auto stop = prefetch_map_.lower_bound(end);
+
+    auto isEndNode = [&](decltype(start) node) { return node->second.next == prefetch_map_.end(); };
+    auto isFirstNode = [&](decltype(start) node) {
+      return node->second.prev == prefetch_map_.end();
+    };
+
+    // Trim and remove old ranges.
+    while (start != stop) {
+      uintptr_t startBase = start->first;
+      uintptr_t startEnd = startBase + start->second.bytes;
+
+      auto ibase = Max(startBase, base);
+      auto iend = Min(startEnd, end);
+      // Check for overlap
+      if (ibase < iend) {
+        // Second range check
+        if (iend < startEnd) {
+          auto ret = prefetch_map_.insert(
+              std::make_pair(iend, PrefetchRange(startEnd - iend, start->second.op)));
+          assert(ret.second && "Prefetch map insert failed during range split.");
+
+          auto it = ret.first;
+          it->second.prev = start;
+          it->second.next = start->second.next;
+          start->second.next = it;
+          if (!isEndNode(it)) it->second.next->second.prev = it;
+        }
+
+        // Is the first interval of the old range valid
+        if (startBase < ibase) {
+          start->second.bytes = ibase - startBase;
+        } else {
+          if (isFirstNode(start)) {
+            start->second.op->prefetch_map_entry = start->second.next;
+            if (!isEndNode(start)) start->second.next->second.prev = prefetch_map_.end();
+          } else {
+            start->second.prev->second.next = start->second.next;
+            if (!isEndNode(start)) start->second.next->second.prev = start->second.prev;
+          }
+          prefetch_map_.erase(start);
+        }
+      }
+      start++;
+    }
+
+    // Insert new range.
+    auto ret = prefetch_map_.insert(std::make_pair(base, PrefetchRange(len, op)));
+    assert(ret.second && "Prefetch map insert failed.");
+
+    auto it = ret.first;
+    op->prefetch_map_entry = it;
+    it->second.next = it->second.prev = prefetch_map_.end();
+  }
+
+  // Remove the prefetch's ranges from the map.
+  static auto removePrefetchRanges = [](PrefetchOp* op) {
+    ScopedAcquire<KernelMutex> lock(&Runtime::runtime_singleton_->prefetch_lock_);
+    auto it = op->prefetch_map_entry;
+    while (it != Runtime::runtime_singleton_->prefetch_map_.end()) {
+      auto next = it->second.next;
+      Runtime::runtime_singleton_->prefetch_map_.erase(it);
+      it = next;
+    }
+  };
+
+  // Prefetch Signal handler for synchronization.
+  static hsa_amd_signal_handler signal_handler = [](hsa_signal_value_t value, void* arg) {
+    PrefetchOp* op = reinterpret_cast<PrefetchOp*>(arg);
+
+    if (op->remaining_deps > 0) {
+      op->remaining_deps--;
+      Runtime::runtime_singleton_->SetAsyncSignalHandler(
+          op->dep_signals[op->remaining_deps], HSA_SIGNAL_CONDITION_EQ, 0, signal_handler, arg);
+      return false;
+    }
+
+    HSA_SVM_ATTRIBUTE attrib;
+    attrib.type = HSA_SVM_ATTR_PREFETCH_LOC;
+    attrib.value = op->node_id;
+    HSAKMT_STATUS error = hsaKmtSVMSetAttr(op->base, op->size, 1, &attrib);
+    assert(error == HSAKMT_STATUS_SUCCESS && "KFD Prefetch failed.");
+
+    removePrefetchRanges(op);
+
+    if (op->completion.handle != 0) Signal::Convert(op->completion)->SubRelaxed(1);
+    delete op;
+
+    return false;
+  };
+
+  auto no_dependencies = [](void* arg) { signal_handler(0, arg); };
+
+  MAKE_NAMED_SCOPE_GUARD(RangeGuard, [&]() { removePrefetchRanges(op); });
+
+  hsa_status_t err;
+  if (num_dep_signals == 0)
+    err = AMD::hsa_amd_async_function(no_dependencies, op);
+  else
+    err = SetAsyncSignalHandler(dep_signals[num_dep_signals - 1], HSA_SIGNAL_CONDITION_EQ, 0,
+                                signal_handler, op);
+  if (err != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(err, "Signal handler unable to be set.");
+
+  RangeGuard.Dismiss();
+  OpGuard.Dismiss();
+  return HSA_STATUS_SUCCESS;
+}
+
+Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
+  uintptr_t base = reinterpret_cast<uintptr_t>(AlignDown(ptr, 4096));
+  uintptr_t end = AlignUp(reinterpret_cast<uintptr_t>(ptr) + size, 4096);
+  size_t len = end - base;
+
+  std::vector<std::pair<uintptr_t, uintptr_t>> holes;
+
+  ScopedAcquire<KernelMutex> lock(&Runtime::runtime_singleton_->prefetch_lock_);
+  auto start = prefetch_map_.upper_bound(base);
+  if (start != prefetch_map_.begin()) start--;
+  auto stop = prefetch_map_.lower_bound(end);
+
+  // KFD returns -1 for no or mixed destinations.
+  uint32_t prefetch_node = -2;
+  if (start != stop) {
+    prefetch_node = start->second.op->node_id;
+  }
+
+  while (start != stop) {
+    uintptr_t startBase = start->first;
+    uintptr_t startEnd = startBase + start->second.bytes;
+
+    auto ibase = Max(base, startBase);
+    auto iend = Min(end, startEnd);
+    // Check for intersection with the query
+    if (ibase < iend) {
+      // If prefetch locations are different then we report null agent.
+      if (prefetch_node != start->second.op->node_id) return nullptr;
+
+      // Push leading gap to an array for checking KFD.
+      if (base < ibase) holes.push_back(std::make_pair(base, ibase - base));
+
+      // Trim query range.
+      base = iend;
+    }
+    start++;
+  }
+  if (base < end) holes.push_back(std::make_pair(base, end - base));
+
+  HSA_SVM_ATTRIBUTE attrib;
+  attrib.type = HSA_SVM_ATTR_PREFETCH_LOC;
+  for (auto& range : holes) {
+    HSAKMT_STATUS error =
+        hsaKmtSVMGetAttr(reinterpret_cast<void*>(range.first), range.second, 1, &attrib);
+    assert(error == HSAKMT_STATUS_SUCCESS && "KFD prefetch query failed.");
+
+    if (attrib.value == -1) return nullptr;
+    if (prefetch_node == -2) prefetch_node = attrib.value;
+    if (prefetch_node != attrib.value) return nullptr;
+  }
+
+  assert(prefetch_node != -2 && "prefetch_node was not updated.");
+  assert(prefetch_node != -1 && "Should have already returned.");
+  return agents_by_node_[prefetch_node][0];
 }
 
 }  // namespace core
