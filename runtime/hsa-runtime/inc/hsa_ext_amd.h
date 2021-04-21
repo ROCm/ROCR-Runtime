@@ -2116,6 +2116,162 @@ hsa_status_t HSA_API hsa_amd_register_deallocation_callback(void* ptr,
 hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
                                                       hsa_amd_deallocation_callback_t callback);
 
+typedef enum hsa_amd_svm_model_s {
+  /**
+   * Updates to memory with this attribute conform to HSA memory consistency model.
+   */
+  HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED = 0,
+  /**
+   * Writes to memory with this attribute can be performed by a single agent at a time.
+   */
+  HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED = 1
+} hsa_amd_svm_model_t;
+
+typedef enum hsa_amd_svm_attribute_s {
+  // Memory model attribute.
+  // Type of this attribute is hsa_amd_svm_model_t.
+  HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG = 0,
+  // Marks the range read only.  This allows multiple physical copies to be
+  // placed local to each accessing device.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_READ_ONLY = 1,
+  // Automatic migrations should attempt to keep the memory within the xgmi hive
+  // containing accessible agents.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_HIVE_LOCAL = 2,
+  // Page granularity to migrate at once.  Page granularity is specified as
+  // log2(page_count).
+  // Type of this attribute is uint64_t.
+  HSA_AMD_SVM_ATTRIB_MIGRATION_GRANULARITY = 3,
+  // Physical location to prefer when automatic migration occurs.
+  // Set to the null agent handle (handle == 0) to indicate there
+  // is no preferred location.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION = 4,
+  // This attribute can not be used in ::hsa_amd_svm_attributes_set (see
+  // ::hsa_amd_svm_prefetch_async).
+  // Physical location of most recent prefetch command.
+  // If the prefetch location has not been set or is not uniform across the
+  // address range then returned hsa_agent_t::handle will be 0.
+  // Querying this attribute will return the destination agent of the most
+  // recent ::hsa_amd_svm_prefetch_async targeting the address range.  If
+  // multiple async prefetches have been issued targeting the region and the
+  // most recently issued prefetch has completed then the query will return
+  // the location of the most recently completed prefetch.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION = 5,
+  // This attribute can not be used in ::hsa_amd_svm_attributes_get.
+  // Enables an agent for access to the range.  Access may incur a page fault
+  // and associated memory migration.  Either this or
+  // HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE is required prior to SVM
+  // access if HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT is false.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE = 0x200,
+  // This attribute can not be used in ::hsa_amd_svm_attributes_get.
+  // Enables an agent for access to the range without page faults.  Access
+  // will not incur a page fault and will not cause access based migration.
+  // and associated memory migration.  Either this or
+  // HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE is required prior to SVM access if
+  // HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT is false.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE = 0x201,
+  // This attribute can not be used in ::hsa_amd_svm_attributes_get.
+  // Denies an agent access to the memory range.  Access will cause a terminal
+  // segfault.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_AGENT_NO_ACCESS = 0x202,
+  // This attribute can not be used in ::hsa_amd_svm_attributes_set.
+  // Returns the access attribute associated with the agent.
+  // The agent to query must be set in the attribute value field.
+  // The attribute enum will be replaced with the agent's current access
+  // attribute for the address range.
+  // TODO: Clarify KFD return value for non-uniform access attribute.
+  // Type of this attribute is hsa_agent_t.
+  HSA_AMD_SVM_ATTRIB_ACCESS_QUERY = 0x203,
+} hsa_amd_svm_attribute_t;
+
+// List type for hsa_amd_svm_attributes_set/get. 
+typedef struct hsa_amd_svm_attribute_pair_s {
+  // hsa_amd_svm_attribute_t value.
+  uint64_t attribute;
+  // Attribute value.  Bit values should be interpreted according to the type
+  // given in the associated attribute description.
+  uint64_t value;
+} hsa_amd_svm_attribute_pair_t;
+
+/**
+ * @brief Sets SVM memory attributes.
+ *
+ * If HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT returns false then enabling
+ * access to an Agent via this API (setting HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE
+ * or HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE) is required prior to SVM
+ * memory access by that Agent.
+ *
+ * Attributes HSA_AMD_SVM_ATTRIB_ACCESS_QUERY and HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION
+ * may not be used with this API.
+ *
+ * @param[in] ptr Will be aligned down to nearest page boundary.
+ *
+ * @param[in] size Will be aligned up to nearest page boundary.
+ *
+ * @param[in] attribute_list List of attributes to set for the address range.
+ *
+ * @param[in] attribute_count Length of @p attribute_list.
+ */
+hsa_status_t hsa_amd_svm_attributes_set(void* ptr, size_t size,
+                                        hsa_amd_svm_attribute_pair_t* attribute_list,
+                                        size_t attribute_count);
+
+/**
+ * @brief Gets SVM memory attributes.
+ *
+ * Attributes HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE,
+ * HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE_IN_PLACE and
+ * HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION may not be used with this API.
+ *
+ * Note that attribute HSA_AMD_SVM_ATTRIB_ACCESS_QUERY takes as input an
+ * hsa_agent_t and returns the current access type through its attribute field.
+ *
+ * @param[in] ptr Will be aligned down to nearest page boundary.
+ *
+ * @param[in] size Will be aligned up to nearest page boundary.
+ *
+ * @param[in] attribute_list List of attributes to set for the address range.
+ *
+ * @param[in] attribute_count Length of @p attribute_list.
+ */
+hsa_status_t hsa_amd_svm_attributes_get(void* ptr, size_t size,
+                                        hsa_amd_svm_attribute_pair_t* attribute_list,
+                                        size_t attribute_count);
+
+/**
+ * @brief Asynchronously migrates memory to an agent.
+ *
+ * Schedules memory migration to @p agent when @p dep_signals have been observed equal to zero.
+ * @p completion_signal will decrement when the migration is complete.
+ *
+ * @param[in] ptr Will be aligned down to nearest page boundary.
+ *
+ * @param[in] size Will be aligned up to nearest page boundary.
+ *
+ * @param[in] agent Agent to migrate to.
+ *
+ * @param[in] num_dep_signals Number of dependent signals. Can be 0.
+ *
+ * @param[in] dep_signals List of signals that must be waited on before the migration
+ * operation starts. The migration will start after every signal has been observed with
+ * the value 0. If @p num_dep_signals is 0, this argument is ignored.
+ *
+ * @param[in] completion_signal Signal used to indicate completion of the migration
+ * operation. When the migration operation is finished, the value of the signal is
+ * decremented. The runtime indicates that an error has occurred during the copy
+ * operation by setting the value of the completion signal to a negative
+ * number. If no completion signal is required this handle may be null.
+ */
+hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agent,
+                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                        hsa_signal_t completion_signal);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

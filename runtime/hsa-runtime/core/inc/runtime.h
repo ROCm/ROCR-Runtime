@@ -292,6 +292,15 @@ class Runtime {
 
   hsa_status_t IPCDetach(void* ptr);
 
+  hsa_status_t SetSvmAttrib(void* ptr, size_t size, hsa_amd_svm_attribute_pair_t* attribute_list,
+                            size_t attribute_count);
+
+  hsa_status_t GetSvmAttrib(void* ptr, size_t size, hsa_amd_svm_attribute_pair_t* attribute_list,
+                            size_t attribute_count);
+
+  hsa_status_t SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent, uint32_t num_dep_signals,
+                           const hsa_signal_t* dep_signals, hsa_signal_t completion_signal);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
@@ -395,6 +404,28 @@ class Runtime {
     std::vector<void*> arg_;
   };
 
+  struct PrefetchRange;
+  typedef std::map<uintptr_t, PrefetchRange> prefetch_map_t;
+
+  struct PrefetchOp {
+    void* base;
+    size_t size;
+    uint32_t node_id;
+    int remaining_deps;
+    hsa_signal_t completion;
+    std::vector<hsa_signal_t> dep_signals;
+    prefetch_map_t::iterator prefetch_map_entry;
+  };
+
+  struct PrefetchRange {
+    PrefetchRange() {}
+    PrefetchRange(size_t Bytes, PrefetchOp* Op) : bytes(Bytes), op(Op) {}
+    size_t bytes;
+    PrefetchOp* op;
+    prefetch_map_t::iterator prev;
+    prefetch_map_t::iterator next;
+  };
+
   // Will be created before any user could call hsa_init but also could be
   // destroyed before incorrectly written programs call hsa_shutdown.
   static KernelMutex bootstrap_lock_;
@@ -444,6 +475,9 @@ class Runtime {
   /// @retval Index in ::link_matrix_.
   uint32_t GetIndexLinkInfo(uint32_t node_id_from, uint32_t node_id_to);
 
+  /// @brief Get most recently issued SVM prefetch agent for the range in question.
+  Agent* GetSVMPrefetchAgent(void* ptr, size_t size);
+
   // Mutex object to protect multithreaded access to ::allocation_map_,
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
   // registered & mapped arrays.
@@ -484,6 +518,10 @@ class Runtime {
 
   // Contains the region, address, and size of previously allocated memory.
   std::map<const void*, AllocationRegion> allocation_map_;
+
+  // Pending prefetch containers.
+  KernelMutex prefetch_lock_;
+  prefetch_map_t prefetch_map_;
 
   // Allocator using ::system_region_
   std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags)> system_allocator_;

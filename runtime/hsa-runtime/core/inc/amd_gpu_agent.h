@@ -173,7 +173,8 @@ class GpuAgent : public GpuAgentInt {
   // @param [in] node Node id. Each CPU in different socket will get distinct
   // id.
   // @param [in] node_props Node property.
-  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props);
+  // @param [in] xnack_mode XNACK mode of device.
+  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode);
 
   // @brief GPU agent destructor.
   ~GpuAgent();

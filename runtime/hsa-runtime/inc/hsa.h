@@ -480,7 +480,21 @@ typedef enum {
   /**
   * String containing the ROCr build identifier.
   */
-  HSA_AMD_SYSTEM_INFO_BUILD_VERSION = 0x200
+  HSA_AMD_SYSTEM_INFO_BUILD_VERSION = 0x200,
+  /**
+  * Returns true if hsa_amd_svm_* APIs are supported by the driver.  The type of
+  * this attribute is bool.
+  */
+  HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED = 0x201,
+  // TODO: Should this be per Agent?
+  /**
+  * Returns true if all Agents have access to system allocated memory (such as
+  * that allocated by mmap, malloc, or new) by default.
+  * If false then system allocated memory may only be made SVM accessible to
+  * an Agent by declaration of accessibility with hsa_amd_svm_set_attributes.
+  * The type of this attribute is bool.
+  */
+  HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT = 0x202
 } hsa_system_info_t;
 
 /**
