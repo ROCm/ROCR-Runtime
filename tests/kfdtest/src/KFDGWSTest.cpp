@@ -53,7 +53,6 @@ wave_size(32)\n\
 const char* gfx9_AtomicIncrease =
 "\
 shader AtomicIncrease\n\
-asic(GFX9)\n\
 type(CS)\n\
 /* Assume src address in s0, s1 */\n\
     s_mov_b32 m0, 0\n\
