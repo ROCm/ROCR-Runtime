@@ -132,9 +132,7 @@ TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
                                          };
     HSAint32 enable = -1;
     EXPECT_SUCCESS(hsaKmtGetXNACKMode(&enable));
-    //expectedDefaultResults[4] = (enable)?HSA_SVM_ATTR_ACCESS:HSA_SVM_ATTR_NO_ACCESS;
-    // FIXME: Waiting for KFD to implement retry faults on unregistered addresses
-    expectedDefaultResults[4] = HSA_SVM_ATTR_NO_ACCESS;
+    expectedDefaultResults[4] = (enable)?HSA_SVM_ATTR_ACCESS:HSA_SVM_ATTR_NO_ACCESS;
     sysBuffer = new HsaSVMRange(BufSize);
     char *pBuf = sysBuffer->As<char *>();
 
