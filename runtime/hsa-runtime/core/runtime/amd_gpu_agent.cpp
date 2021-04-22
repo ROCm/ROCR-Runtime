@@ -1107,12 +1107,13 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   Limit total bound small scratch allocations to 1/8th of scratch pool and 1/4 of that for a single
   allocation.
   */
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   size_t small_limit = scratch_pool_.size() >> 3;
   // Lift limit for 2.10 release RCCL workaround.
   size_t single_limit = 146800640; //small_limit >> 2;
   bool use_reclaim = true;
   bool large = (scratch.size > single_limit) ||
-      (scratch_pool_.size() - scratch_pool_.remaining() + scratch.size > small_limit);
+    (scratch_pool_.size() - scratch_pool_.remaining() - scratch_cache_.free_bytes() + scratch.size > small_limit);
   if ((isa_->GetMajorVersion() < 8) ||
       core::Runtime::runtime_singleton_->flag().no_scratch_reclaim()) {
     large = false;
@@ -1140,8 +1141,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   // Lambda called in place.
   // Used to allow exit from nested loops.
   [&]() {
-    ScopedAcquire<KernelMutex> lock(&scratch_lock_);
     // Check scratch cache
+    scratch.large = large;
     if (scratch_cache_.alloc(scratch)) return;
 
     // Attempt new allocation.
