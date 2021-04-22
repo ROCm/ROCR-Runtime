@@ -645,8 +645,12 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       break;
     }
     case HSA_AMD_SYSTEM_INFO_SVM_SUPPORTED: {
-      // todo: Get HMM kernel support info.
-      *(bool*)value = true;
+      bool ret = true;
+      for (auto agent : gpu_agents_) {
+        AMD::GpuAgent* gpu = (AMD::GpuAgent*)agent;
+        ret &= (gpu->properties().Capability.ui32.SVMAPISupported == 1);
+      }
+      *(bool*)value = ret;
       break;
     }
     case HSA_AMD_SYSTEM_INFO_SVM_ACCESSIBLE_BY_DEFAULT: {

@@ -143,7 +143,7 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       if (gpu->isa()->GetProcessorName() == "gfx908") {
         node_prop.Capability.ui32.SRAM_EDCSupport = 1;
         delete gpu;
-        gpu = new GpuAgent(node_id, node_prop);
+        gpu = new GpuAgent(node_id, node_prop, xnack_mode);
       }
     }
   } catch (const hsa_exception& e) {
