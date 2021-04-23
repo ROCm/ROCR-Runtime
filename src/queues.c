@@ -42,9 +42,6 @@
 #define DOORBELL_SIZE_GFX9 8
 #define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
 
-#define VGPR_SIZE_PER_CU(asic_family)	((asic_family == CHIP_ARCTURUS || \
-                        asic_family == CHIP_ALDEBARAN) ? 0x80000 : 0x40000)
-#define SGPR_SIZE_PER_CU	0x4000
 #define LDS_SIZE_PER_CU		0x10000
 #define HWREG_SIZE_PER_CU	0x1000
 #define WG_CONTEXT_DATA_SIZE_PER_CU(asic_family)	(VGPR_SIZE_PER_CU(asic_family) + SGPR_SIZE_PER_CU + LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)

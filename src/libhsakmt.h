@@ -212,4 +212,9 @@ void clear_process_doorbells(void);
 uint32_t get_num_sysfs_nodes(void);
 
 bool is_forked_child(void);
+
+/* Calculate VGPR and SGPR register file size per CU */
+#define VGPR_SIZE_PER_CU(asic_family) ((asic_family == CHIP_ARCTURUS || \
+                        asic_family == CHIP_ALDEBARAN) ? 0x80000 : 0x40000)
+#define SGPR_SIZE_PER_CU 0x4000
 #endif
