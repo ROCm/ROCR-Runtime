@@ -1103,6 +1103,11 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 				props->MarketingName[i] = name[i];
 			props->MarketingName[i] = '\0';
 		}
+
+		/* Get VGPR/SGPR size in byte per CU */
+		props->VGPRSizePerCU = VGPR_SIZE_PER_CU(hsa_gfxip->asic_family);
+		props->SGPRSizePerCU = SGPR_SIZE_PER_CU;
+
 	} else if (props->DeviceId)
 		/* still return success */
 		pr_err("device ID 0x%x is not supported in libhsakmt\n",

@@ -312,7 +312,10 @@ typedef struct _HsaNodeProperties
 
     HSAuint32       Domain;            // PCI domain of the GPU
     HSAuint64       UniqueID;          // Globally unique immutable id
-    HSAuint8        Reserved[20];
+
+    HSAuint32       VGPRSizePerCU;     // VGPR size in bytes per CU
+    HSAuint32       SGPRSizePerCU;     // SGPR size in bytes per CU
+    HSAuint8        Reserved[12];
 } HsaNodeProperties;
 
 
