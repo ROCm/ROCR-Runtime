@@ -371,7 +371,7 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
     /* Skip test for chip it doesn't have CWSR, which the test depends on */
-    if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties)) {
+    if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties) || m_FamilyId >= FAMILY_NV) {
         LOG() << std::hex << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
         return;
     }
