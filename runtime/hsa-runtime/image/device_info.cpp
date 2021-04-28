@@ -185,6 +185,7 @@ uint32_t DevIDToAddrLibFamily(uint32_t dev_id) {
               case 1:
               case 2:
               case 3:
+              case 4:
                 return FAMILY_NV;
 
               default:
