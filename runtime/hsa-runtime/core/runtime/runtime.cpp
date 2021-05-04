@@ -1461,8 +1461,7 @@ void Runtime::LoadTools() {
       if (tool != NULL) {
         tool_libs_.push_back(tool);
 
-        tool_init_t ld;
-        ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
+        rocr::AMD::callback_t<tool_init_t> ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
         if (ld) {
           if (!ld(&hsa_api_table_.hsa_api,
                   hsa_api_table_.hsa_api.version.major_id,
@@ -1473,8 +1472,8 @@ void Runtime::LoadTools() {
           }
         }
 
-        tool_wrap_t wrap;
-        wrap = (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
+        rocr::AMD::callback_t<tool_wrap_t> wrap =
+            (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
         if (wrap) {
           std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
                                                        &gpu_agents_};
@@ -1491,8 +1490,7 @@ void Runtime::LoadTools() {
           }
         }
 
-        tool_add_t add;
-        add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
+        rocr::AMD::callback_t<tool_add_t> add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
         if (add) add(this);
       }
       else {
