@@ -92,7 +92,7 @@ void CpuAgent::InitRegionList() {
 
     if (!is_apu_node) {
       MemoryRegion* system_region_coarse =
-          new MemoryRegion(false, false, is_apu_node, this, *system_prop);
+          new MemoryRegion(false, false, is_apu_node, this, system_props);
       regions_.push_back(system_region_coarse);
     }
   }
