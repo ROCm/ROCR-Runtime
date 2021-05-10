@@ -220,6 +220,7 @@ global:
 	hsa_amd_queue_set_priority;
 	hsa_amd_register_deallocation_callback;
 	hsa_amd_deregister_deallocation_callback;
+	hsa_amd_signal_value_pointer;
 	_amdgpu_r_debug;
 
 local:

@@ -67,7 +67,6 @@ namespace AMD {
 // Minimum acceptable KFD version numbers
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
-static HsaVersionInfo kfd_version;
 
 CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   if (node_prop.NumCPUCores == 0) {
@@ -89,7 +88,10 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   try {
     gpu = new GpuAgent(node_id, node_prop);
 
-    // Check for sramecc incompatibility in gfx906 and gfx908.  sramecc bit fixed in kfd 1.4.
+    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion();
+
+    // Check for sramecc incompatibility due to sramecc not being reported correctly in kfd before
+    // 1.4.
     if (gpu->isa()->IsSrameccSupported() && (kfd_version.KernelInterfaceMajorVersion <= 1 &&
                                              kfd_version.KernelInterfaceMinorVersion < 4)) {
       // gfx906 has both sramecc modes in use.  Suppress the device.
@@ -226,6 +228,7 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list) {
 /// @brief Calls Kfd thunk to get the snapshot of the topology of the system,
 /// which includes associations between, node, devices, memory and caches.
 void BuildTopology() {
+  HsaVersionInfo kfd_version;
   if (hsaKmtGetVersion(&kfd_version) != HSAKMT_STATUS_SUCCESS) {
     return;
   }
@@ -240,6 +243,8 @@ void BuildTopology() {
       kfd_version.KernelInterfaceMinorVersion == 0) {
     core::g_use_interrupt_wait = false;
   }
+
+  core::Runtime::runtime_singleton_->KfdVersion(kfd_version);
 
   HsaSystemProperties props;
   hsaKmtReleaseSystemProperties();
