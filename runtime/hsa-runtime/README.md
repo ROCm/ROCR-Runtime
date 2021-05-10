@@ -150,10 +150,7 @@ extensions are also provided. The interface functions simply forward to a
 function pointer table defined here. The table is initialized to point to
 default definitions, which simply return an appropriate error code. If
 available the extension library is loaded as part of runtime initialization and
-the table is updated to point into the extension library.  In this release the
-standard extensions (image support and finalizer) are implemented in a separate
-libraries (not open sourced), and can be obtained from the HSA-Runtime-AMD git
-repository.
+the table is updated to point into the extension library.
 
 #### C++ Interfaces Classes & Common Functions
 
@@ -228,4 +225,4 @@ Micro Devices, Inc. Other product names used in this publication are for
 identification purposes only and may be trademarks of their respective
 companies.
 
-Copyright (c) 2014-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2021 Advanced Micro Devices, Inc. All rights reserved.
