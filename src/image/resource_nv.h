@@ -300,21 +300,34 @@ union SQ_IMG_RSRC_WORD3 {
 #define SQ_IMG_RSC_WRD4_REG_SZ 32
 #define SQ_IMG_RSC_WRD4_DEPTH_SZ    13
 #define SQ_IMG_RSC_WRD4_BASE_ARR_SZ 13
-struct sq_img_rsrc_word4_t {
+#define SQ_IMG_RSC_WRD4_PITCH_SZ 14
+union sq_img_rsrc_word4_t {
+  struct {
 #if defined(LITTLEENDIAN_CPU)
-  // For arrays this is last slice in view, for 3D this is depth-1, For remaining this is pitch-1
-  unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ;
-  unsigned int            : 1; //Pitch[13] in gfx1030
-  unsigned int            : 2;
-  unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
-  unsigned int            : 3;
+    // For arrays this is last slice in view, for 3D this is depth-1, For remaining this is pitch-1
+    unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ;
+    unsigned int            : 1; //Pitch[13] in gfx1030
+    unsigned int            : 2;
+    unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
+    unsigned int            : 3;
 #elif defined(BIGENDIAN_CPU)
-  unsigned int            : 3;
-  unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
-  unsigned int            : 2;
-  unsigned int            : 1; //Pitch[13] in gfx1030
-  unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ; //Pitch[0:12] in gfx1030
+    unsigned int            : 3;
+    unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
+    unsigned int            : 2;
+    unsigned int            : 1; //Pitch[13] in gfx1030
+    unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ; //Pitch[0:12] in gfx1030
 #endif
+  };
+  struct {
+#if defined(LITTLEENDIAN_CPU)
+    // For 1d, 2d and 2d-msaa in gfx1030 this is pitch-1
+    unsigned int PITCH      : SQ_IMG_RSC_WRD4_PITCH_SZ;
+    unsigned int            : SQ_IMG_RSC_WRD4_REG_SZ-SQ_IMG_RSC_WRD4_PITCH_SZ;
+#elif defined(BIGENDIAN_CPU)
+    unsigned int            : SQ_IMG_RSC_WRD4_REG_SZ-SQ_IMG_RSC_WRD4_PITCH_SZ;
+    unsigned int PITCH      : SQ_IMG_RSC_WRD4_PITCH_SZ;
+#endif
+  };
 };
 union SQ_IMG_RSRC_WORD4 {
   sq_img_rsrc_word4_t bitfields, bits, f;

@@ -242,6 +242,10 @@ hsa_status_t hsa_amd_register_deallocation_callback(
 hsa_status_t hsa_amd_deregister_deallocation_callback(
     void* ptr, hsa_amd_deallocation_callback_t callback);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_signal_value_pointer(hsa_signal_t signal,
+                                          volatile hsa_signal_value_t** value_ptr);
+
 }  // namespace amd
 }  // namespace rocr
 
