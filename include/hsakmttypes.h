@@ -689,6 +689,12 @@ typedef struct
                                  // debugger. Must be 64 byte aligned.
     HSAuint32 DebugSize;         // Byte size of the memory reserved for the
                                  // debugger. Must be 64 byte aligned.
+    volatile HSAint64 *ErrorReason;      // Address of the HSA signal payload for
+                                         // reporting the error reason bitmask.
+                                         // Must be 4 byte aligned.
+    HSAuint32 ErrorEventId;      // Event ID used for exception signalling.
+                                 // Must be 4 byte aligned.
+    HSAuint32 Reserved1;
 } HsaUserContextSaveAreaHeader;
 
 
@@ -738,6 +744,7 @@ typedef struct _HsaQueueResource
         HSAuint64   QueueRptrValue;
     };
 
+    volatile HSAint64* ErrorReason;  /** exception bits signal payload */
 } HsaQueueResource;
 
 
