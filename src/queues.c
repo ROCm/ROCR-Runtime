@@ -588,7 +588,9 @@ static void free_queue(struct queue *q)
 
 static int handle_concrete_asic(struct queue *q,
 				struct kfd_ioctl_create_queue_args *args,
-				uint32_t NodeId)
+				uint32_t NodeId,
+				HsaEvent *Event,
+				volatile HSAint64 *ErrPayload)
 {
 	const struct device_info *dev_info = q->dev_info;
 	bool ret;
@@ -626,6 +628,10 @@ static int handle_concrete_asic(struct queue *q,
 		args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
 
 		header = (HsaUserContextSaveAreaHeader *)q->ctx_save_restore;
+		header->ErrorEventId = 0;
+		if (Event)
+			header->ErrorEventId = Event->EventId;
+		header->ErrorReason = ErrPayload;
 		header->DebugOffset = q->ctx_save_restore_size - q->debug_memory_size;
 		header->DebugSize = q->debug_memory_size;
 	}
@@ -724,7 +730,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 		QueueResource->QueueWptrValue = (uintptr_t)&q->wptr;
 	}
 
-	err = handle_concrete_asic(q, &args, NodeId);
+	err = handle_concrete_asic(q, &args, NodeId, Event, QueueResource->ErrorReason);
 	if (err != HSAKMT_STATUS_SUCCESS) {
 		free_queue(q);
 		return err;
