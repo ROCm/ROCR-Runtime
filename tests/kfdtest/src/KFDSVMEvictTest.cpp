@@ -232,7 +232,6 @@ TEST_F(KFDSVMEvictTest, BasicTest) {
 static const char* gfx9_ReadMemory =
 "\
     shader ReadMemory\n\
-    asic(GFX9)\n\
     type(CS)\n\
     \n\
     // compute address of corresponding output buffer\n\
