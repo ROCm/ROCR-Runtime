@@ -291,17 +291,7 @@ typedef enum hsa_amd_agent_info_s {
    * selective workarounds for hardware errata.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012,
-  /**
-   * Size of VGPR register file in kilobytes per CU.
-   * The type of this attribute is uint32_t.
-   */
-  HSA_AMD_AGENT_INFO_VGPR_SIZE = 0xA013,
-  /**
-   * Size of SGPR register file in kilobytes per CU.
-   * The type of this attribute is uint32_t.
-   */
-  HSA_AMD_AGENT_INFO_SGPR_SIZE = 0xA014
+  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
