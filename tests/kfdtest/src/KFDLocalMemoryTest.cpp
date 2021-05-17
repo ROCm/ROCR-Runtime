@@ -56,6 +56,12 @@ TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
+    /* Skip test if not on dGPU path, which the test depends on */
+    if (!is_dgpu()) {
+        LOG() << "Not dGPU path, skipping the test" << std::endl;
+        return;
+    }
+
     //local memory
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false, true);
     HsaEvent *event;
