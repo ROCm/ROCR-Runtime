@@ -156,11 +156,31 @@ set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${LIB_VERSION_MAJOR}"
 
 find_package(PkgConfig)
 pkg_check_modules(LIBDRM REQUIRED libdrm)
+# get OS-info for OS-specific build dependencies
+get_os_info()
+
+find_package(PkgConfig)
+# Check for libraries required for building
+find_library(LIBC NAMES libc.so.6 REQUIRED)
+find_library(NUMA NAMES libnuma.so REQUIRED)
+message(STATUS "LIBC:" ${LIBC})
+message(STATUS "NUMA:" ${NUMA})
+
 target_link_libraries ( ${HSAKMT_TARGET}
-  PRIVATE pthread rt numa
+  PRIVATE pthread rt ${LIBC} ${NUMA}
 )
 
 target_compile_options(${HSAKMT_TARGET} PRIVATE ${LIBDRM_CFLAGS} ${HSAKMT_C_FLAGS})
+if(NOT DISTRO_ID MATCHES "ubuntu")
+  find_library(LIBGCC NAMES libgcc_s.so.1 REQUIRED)
+  message(STATUS "LIBGCC:" ${LIBGCC})
+  target_link_libraries( ${HSAKMT_TARGET} PRIVATE ${LIBGCC} )
+else()
+  find_library(UDEV NAMES libudev.so libudev.a REQUIRED)
+  message(STATUS "UDEV:" ${UDEV})
+  find_package(ZLIB REQUIRED)
+  target_link_libraries( ${HSAKMT_TARGET} PRIVATE ${ZLIB} ${UDEV} )
+endif()
 
 ## Define default paths and packages.
 if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
@@ -172,10 +192,10 @@ set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
 install ( TARGETS ${HSAKMT_TARGET} EXPORT ${HSAKMT_TARGET}Targets
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary )
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel )
 
-install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
+install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT devel )
 
 # Install public headers
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
@@ -243,19 +263,14 @@ install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INS
 set(CPACK_COMPONENTS_GROUPING IGNORE)
 set(CPACK_DEB_COMPONENT_INSTALL ON)
 set(CPACK_RPM_COMPONENT_INSTALL ON)
-set(CPACK_DEBIAN_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE})
-set(CPACK_RPM_BINARY_PACKAGE_NAME ${HSAKMT_PACKAGE})
 set(CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc.")
 set(CPACK_PACKAGE_VERSION_MAJOR ${VERSION_MAJOR})
 set(CPACK_PACKAGE_VERSION_MINOR ${VERSION_MINOR})
 set(CPACK_PACKAGE_VERSION_PATCH ${VERSION_PATCH})
 set(CPACK_PACKAGE_CONTACT "AMD GFX mailing list <amd-gfx@lists.freedesktop.org>")
 set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
-set(CPACK_COMPONENT_BINARY_DESCRIPTION "HSAKMT library for AMD KFD support\n This repository includes the user-mode API interfaces\n used to interact with the ROCk driver.")
+set(CPACK_COMPONENT_DESCRIPTION "HSAKMT development package.\n This package includes the user-mode API interfaces\nused to interact with the ROCk driver.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package.")
 set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
-
-## Component packaging, DEVEL
-set(CPACK_COMPONENT_DEVEL_DESCRIPTION "HSAKMT development package.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package")
 
 # Make proper version for appending
 # Default Value is 99999, setting it first
@@ -266,8 +281,7 @@ endif()
 
 # Debian package specific variables
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface")
-set(CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1, rocm-core")
-set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev")
+set(CPACK_DEBIAN_PACKAGE_NAME "hsakmt-roct-dev")
 if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
    set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
 else()
@@ -276,18 +290,10 @@ endif()
 ## Process the Debian install/remove scripts to update the CPACK variables
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst.in DEBIAN/postinst @ONLY )
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm.in DEBIAN/prerm @ONLY )
-set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
-
-# RPM package specific variables
-# get OS-info
-get_os_info()
-if(DISTRO_ID MATCHES "sles" )
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1, libdrm-devel, rocm-core")
-elseif(DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6")
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc, rocm-core")
-else()
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc, rocm-core")
-endif()
+set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
+# Needed since some packages still say they need hsakmt-roct
+set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct")
 
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/post.in" RPM/post @ONLY )
@@ -299,9 +305,10 @@ set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/post
 if(DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
   set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "${CPACK_PACKAGING_INSTALL_PREFIX} ${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 endif()
-set(CPACK_RPM_DEVEL_PACKAGE_NAME "hsakmt-roct-devel")
+set(CPACK_RPM_PACKAGE_NAME "hsakmt-roct-devel")
 # Since we changed the package name to match RPM specs, take care of older builds that had -dev installed
-set(CPACK_RPM_DEVEL_PACKAGE_OBSOLETES "hsakmt-roct-dev")
+# Also cover the fact that this now replaces the old binary package hsakmt-roct
+set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct-dev hsakmt-roct")
 if(DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE})
   set(CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE})
 else()
@@ -324,8 +331,10 @@ set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_
 set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
 
 # Setting devel package dependendent version
-set(CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${PACKAGE_VERSION_STR}-${CPACK_DEBIAN_PACKAGE_RELEASE}), rocm-core")
-set(CPACK_RPM_DEVEL_PACKAGE_REQUIRES "${HSAKMT_PACKAGE} = ${PACKAGE_VERSION_STR}-${CPACK_RPM_PACKAGE_RELEASE}, rocm-core")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
+
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 # Set the names now using CPACK utility
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
@@ -333,10 +342,8 @@ set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 
 # Remove dependency on rocm-core if -DROCM_DEP_ROCMCORE=ON not given to cmake
 if(NOT ROCM_DEP_ROCMCORE)
-    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_BINARY_PACKAGE_REQUIRES ${CPACK_RPM_BINARY_PACKAGE_REQUIRES})
-    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_DEVEL_PACKAGE_REQUIRES ${CPACK_RPM_DEVEL_PACKAGE_REQUIRES})
-    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ${CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS})
-    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS ${CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_PACKAGE_REQUIRES ${CPACK_RPM_PACKAGE_REQUIRES})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_PACKAGE_DEPENDS ${CPACK_DEBIAN_PACKAGE_DEPENDS})
 endif()
 
 include(CPack)
