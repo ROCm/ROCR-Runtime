@@ -1476,7 +1476,8 @@ static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 
 	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
 	if (read_size <= 0) {
-		ret = HSAKMT_STATUS_ERROR;
+		ret = (errno == EPERM) ? HSAKMT_STATUS_NOT_SUPPORTED :
+					 HSAKMT_STATUS_ERROR;
 		goto err2;
 	}
 
