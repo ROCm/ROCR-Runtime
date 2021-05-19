@@ -182,14 +182,34 @@ FILTER[raven_dgpuFallback]=\
 FILTER[raven]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.SdmaConcurrentCopies:"\
-"KFDQMTest.MultipleCpQueuesStressDispatch"
+"KFDQMTest.MultipleCpQueuesStressDispatch:"\
+"KFDSVMRangeTest.BasicSystemMemTest:"\
+"KFDSVMRangeTest.BasicVramTest:"\
+"KFDSVMRangeTest.EvictSystemRangeTest:"\
+"KFDSVMRangeTest.PartialUnmapSysMemTest:"\
+"KFDSVMRangeTest.MigrateTest:"\
+"KFDSVMRangeTest.MigratePolicyTest:"\
+"KFDSVMRangeTest.MigrateGranularityTest:"\
+"KFDSVMRangeTest.MigrateLargeBufTest:"\
+"KFDSVMRangeTest.MultiThreadMigrationTest:"\
+"KFDSVMEvictTest.QueueTest"
 
 FILTER[renoir]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDEvictTest.*:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDMemoryTest.SignalHandling"
+"KFDMemoryTest.SignalHandling:"\
+"KFDSVMRangeTest.BasicSystemMemTest:"\
+"KFDSVMRangeTest.BasicVramTest:"\
+"KFDSVMRangeTest.EvictSystemRangeTest:"\
+"KFDSVMRangeTest.PartialUnmapSysMemTest:"\
+"KFDSVMRangeTest.MigrateTest:"\
+"KFDSVMRangeTest.MigratePolicyTest:"\
+"KFDSVMRangeTest.MigrateGranularityTest:"\
+"KFDSVMRangeTest.MigrateLargeBufTest:"\
+"KFDSVMRangeTest.MultiThreadMigrationTest:"\
+"KFDSVMEvictTest.QueueTest"
 
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
