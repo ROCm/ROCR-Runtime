@@ -59,6 +59,8 @@ hsaKmtSetMemoryUserData;
 hsaKmtGetQueueInfo;
 hsaKmtAllocQueueGWS;
 hsaKmtGetKernelDebugTrapVersionInfo;
+hsaKmtRuntimeEnable;
+hsaKmtRuntimeDisable;
 hsaKmtSPMAcquire;
 hsaKmtSPMRelease;
 hsaKmtSPMSetDestBuffer;
