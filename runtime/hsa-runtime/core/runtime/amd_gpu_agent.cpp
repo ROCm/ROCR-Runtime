@@ -215,6 +215,15 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
        }},
+      {"TrapHandlerKfdExceptions",
+       {
+           {NULL, 0, 0, 0},
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
+           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
+           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
+           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
+           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
+       }},
       {"CopyAligned",
        {
            {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
@@ -1397,7 +1406,11 @@ void GpuAgent::BindTrapHandler() {
   }
 
   // Assemble the trap handler source code.
-  AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging)
+    AssembleShader("TrapHandlerKfdExceptions", AssembleTarget::ISA, trap_code_buf_,
+                   trap_code_buf_size_);
+  else
+    AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
 
   // Bind the trap handler to this node.
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_,

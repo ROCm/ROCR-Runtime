@@ -222,7 +222,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void Suspend();
 
   /// @brief Handler for hardware queue events.
+  template <bool HandleExceptions>
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
+
+  /// @brief Handler for KFD exceptions.
+  static bool ExceptionHandler(hsa_signal_value_t error_code, void* arg);
 
   // AQL packet ring buffer
   void* ring_buf_;
@@ -261,7 +265,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   KernelMutex pm4_ib_mutex_;
 
   // Error handler control variable.
-  std::atomic<uint32_t> dynamicScratchState;
+  std::atomic<uint32_t> dynamicScratchState, exceptionState;
   enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2, ERROR_HANDLER_SCRATCH_RETRY = 4 };
 
   // Queue currently suspended or scheduled
@@ -269,6 +273,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   // Thunk dispatch and wavefront scheduling priority
   HSA_QUEUE_PRIORITY priority_;
+
+  // Exception notification signal
+  Signal* exception_signal_;
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;
