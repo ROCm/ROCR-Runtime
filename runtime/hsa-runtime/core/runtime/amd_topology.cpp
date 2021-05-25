@@ -49,6 +49,7 @@
 #include <map>
 #include <string>
 #include <sstream>
+#include <link.h>
 
 #ifndef NDBEUG
 #include <iostream>
@@ -61,6 +62,8 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/util/utils.h"
+
+extern r_debug _amdgpu_r_debug;
 
 namespace rocr {
 namespace AMD {
@@ -120,7 +123,7 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
   try {
     gpu = new GpuAgent(node_id, node_prop, xnack_mode);
 
-    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion();
+    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
     // Check for sramecc incompatibility due to sramecc not being reported correctly in kfd before
     // 1.4.
@@ -358,6 +361,12 @@ bool Load() {
     return false;
   }
 
+  // Register runtime and optionally enable the debugger
+  HSAKMT_STATUS err =
+      hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
+  if (err != HSAKMT_STATUS_SUCCESS) return false;
+  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
+
   // Build topology table.
   BuildTopology();
 
@@ -365,6 +374,8 @@ bool Load() {
 }
 
 bool Unload() {
+  hsaKmtRuntimeDisable();
+
   hsaKmtReleaseSystemProperties();
 
   // Close connection to kernel driver.

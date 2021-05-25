@@ -96,7 +96,8 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
       pm4_ib_size_b_(0x1000),
       dynamicScratchState(0),
       suspended_(false),
-      priority_(HSA_QUEUE_PRIORITY_NORMAL) {
+      priority_(HSA_QUEUE_PRIORITY_NORMAL),
+      exception_signal_(nullptr) {
   // When queue_full_workaround_ is set to 1, the ring buffer is internally
   // doubled in size. Virtual addresses in the upper half of the ring allocation
   // are mapped to the same set of pages backing the lower half.
@@ -211,28 +212,6 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     assert(amd_queue_.private_segment_aperture_base_hi != 0 && "No private region found.");
   }
 
-  // Ensure the amd_queue_ is fully initialized before creating the KFD queue.
-  // This ensures that the debugger can access the fields once it detects there
-  // is a KFD queue. The debugger may access the aperture addresses, queue
-  // scratch base, and queue type.
-
-  HSAKMT_STATUS kmt_status;
-  kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
-                                 ring_buf_alloc_bytes_, NULL, &queue_rsrc);
-  if (kmt_status != HSAKMT_STATUS_SUCCESS)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
-                             "Queue create failed at hsaKmtCreateQueue\n");
-  // Complete populating the doorbell signal structure.
-  signal_.legacy_hardware_doorbell_ptr =
-      (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
-
-  // Bind Id of Queue such that is unique i.e. it is not re-used by another
-  // queue (AQL, HOST) in the same process during its lifetime.
-  amd_queue_.hsa_queue.id = this->GetQueueId();
-
-  queue_id_ = queue_rsrc.QueueId;
-  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
-
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
     ScopedAcquire<KernelMutex> _lock(&queue_lock_);
     queue_count_--;
@@ -243,7 +222,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   });
 
   MAKE_NAMED_SCOPE_GUARD(SignalGuard, [&]() {
-    HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
+    if (amd_queue_.queue_inactive_signal.handle != 0)
+      HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
+    if (exception_signal_ != nullptr) exception_signal_->DestroySignal();
   });
 
   if (core::g_use_interrupt_wait) {
@@ -260,21 +241,67 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     auto Signal = new core::InterruptSignal(0, queue_event_);
     assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(Signal);
+    exception_signal_ = new core::InterruptSignal(0, queue_event_);
+    assert(exception_signal_ != nullptr && "Should have thrown!\n");
   } else {
     EventGuard.Dismiss();
     auto Signal = new core::DefaultSignal(0);
     assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::DefaultSignal::Convert(Signal);
+    exception_signal_ = new core::DefaultSignal(0);
+    assert(exception_signal_ != nullptr && "Should have thrown!\n");
   }
+
+  // Ensure the amd_queue_ is fully initialized before creating the KFD queue.
+  // This ensures that the debugger can access the fields once it detects there
+  // is a KFD queue. The debugger may access the aperture addresses, queue
+  // scratch base, and queue type.
+
+  HSAKMT_STATUS kmt_status;
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
+    queue_rsrc.ErrorReason = &exception_signal_->signal_.value;
+    kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
+                                   ring_buf_alloc_bytes_, queue_event_, &queue_rsrc);
+  } else {
+    kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
+                                   ring_buf_alloc_bytes_, NULL, &queue_rsrc);
+  }
+  if (kmt_status != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                             "Queue create failed at hsaKmtCreateQueue\n");
+  // Complete populating the doorbell signal structure.
+  signal_.legacy_hardware_doorbell_ptr = (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
+
+  // Bind Id of Queue such that is unique i.e. it is not re-used by another
+  // queue (AQL, HOST) in the same process during its lifetime.
+  amd_queue_.hsa_queue.id = this->GetQueueId();
+
+  queue_id_ = queue_rsrc.QueueId;
+  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
   // Initialize scratch memory related entities
   queue_scratch_.queue_retry = amd_queue_.queue_inactive_signal;
   InitScratchSRD();
 
-  if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
-                                        0, DynamicScratchHandler, this) != HSA_STATUS_SUCCESS)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
-                             "Queue event handler failed registration.\n");
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
+    if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
+                                          0, DynamicScratchHandler<false>,
+                                          this) != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Queue event handler failed registration.\n");
+    if (AMD::hsa_amd_signal_async_handler(core::Signal::Convert(exception_signal_),
+                                          HSA_SIGNAL_CONDITION_NE, 0, ExceptionHandler,
+                                          this) != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Queue event handler failed registration.\n");
+  } else {
+    if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
+                                          0, DynamicScratchHandler<true>,
+                                          this) != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Queue event handler failed registration.\n");
+    exceptionState = ERROR_HANDLER_DONE;
+  }
 
   pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
       pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
@@ -305,9 +332,17 @@ AqlQueue::~AqlQueue() {
     HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
   }
 
+  // Remove kfd exception handler
+  exceptionState |= ERROR_HANDLER_TERMINATE;
+  while ((exceptionState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
+    exception_signal_->StoreRelease(-1ull);
+    exception_signal_->WaitRelaxed(HSA_SIGNAL_CONDITION_NE, -1ull, -1ull, HSA_WAIT_STATE_BLOCKED);
+  }
+
   Inactivate();
   agent_->ReleaseQueueScratch(queue_scratch_);
   FreeRegisteredRingBuffer();
+  exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   if (core::g_use_interrupt_wait) {
     ScopedAcquire<KernelMutex> lock(&queue_lock_);
@@ -734,6 +769,7 @@ hsa_status_t AqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
   return (err == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
 }
 
+template <bool HandleExceptions>
 bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_SUCCESS;
@@ -849,46 +885,48 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
         }
       }
 
-    } else if ((error_code & 2) == 2) {  // Invalid dim
-      errorCode = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+    } else if (HandleExceptions) {
+      if ((error_code & 2) == 2) {  // Invalid dim
+        errorCode = HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
 
-    } else if ((error_code & 4) == 4) {  // Invalid group memory
-      errorCode = HSA_STATUS_ERROR_INVALID_ALLOCATION;
+      } else if ((error_code & 4) == 4) {  // Invalid group memory
+        errorCode = HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
-    } else if ((error_code & 8) == 8) {  // Invalid (or NULL) code
-      errorCode = HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+      } else if ((error_code & 8) == 8) {  // Invalid (or NULL) code
+        errorCode = HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
 
-    } else if (((error_code & 32) == 32) ||    // Invalid format: 32 is generic,
-               ((error_code & 256) == 256)) {  // 256 is vendor specific packets
-      errorCode = HSA_STATUS_ERROR_INVALID_PACKET_FORMAT;
+      } else if (((error_code & 32) == 32) ||    // Invalid format: 32 is generic,
+                 ((error_code & 256) == 256)) {  // 256 is vendor specific packets
+        errorCode = HSA_STATUS_ERROR_INVALID_PACKET_FORMAT;
 
-    } else if ((error_code & 64) == 64) {  // Group is too large
-      errorCode = HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      } else if ((error_code & 64) == 64) {  // Group is too large
+        errorCode = HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-    } else if ((error_code & 128) == 128) {  // Out of VGPRs
-      errorCode = HSA_STATUS_ERROR_INVALID_ISA;
+      } else if ((error_code & 128) == 128) {  // Out of VGPRs
+        errorCode = HSA_STATUS_ERROR_INVALID_ISA;
 
-    } else if ((error_code & 0x20000000) == 0x20000000) {  // Memory violation (>48-bit)
-      errorCode = hsa_status_t(HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION);
+      } else if ((error_code & 0x20000000) == 0x20000000) {  // Memory violation (>48-bit)
+        errorCode = hsa_status_t(HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION);
 
-    } else if ((error_code & 0x40000000) == 0x40000000) {  // Illegal instruction
-      errorCode = hsa_status_t(HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION);
+      } else if ((error_code & 0x40000000) == 0x40000000) {  // Illegal instruction
+        errorCode = hsa_status_t(HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION);
 
-    } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
-      errorCode = HSA_STATUS_ERROR_EXCEPTION;
-      fatal = true;
+      } else if ((error_code & 0x80000000) == 0x80000000) {  // Debug trap
+        errorCode = HSA_STATUS_ERROR_EXCEPTION;
+        fatal = true;
 
-    } else {  // Undefined code
-      assert(false && "Undefined queue error code");
-      errorCode = HSA_STATUS_ERROR;
-      fatal = true;
+      } else {  // Undefined code
+        assert(false && "Undefined queue error code");
+        errorCode = HSA_STATUS_ERROR;
+        fatal = true;
+      }
     }
 
     if (errorCode == HSA_STATUS_SUCCESS) {
       if (changeWait) {
         core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
             queue->amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, waitVal,
-            DynamicScratchHandler, queue);
+            DynamicScratchHandler<HandleExceptions>, queue);
         return false;
       }
       return true;
@@ -910,6 +948,74 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   hsa_signal_t signal = queue->amd_queue_.queue_inactive_signal;
   queue->dynamicScratchState = ERROR_HANDLER_DONE;
   HSA::hsa_signal_store_screlease(signal, -1ull);
+  return false;
+}
+
+bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
+  struct queue_error_t {
+    uint32_t code;
+    hsa_status_t status;
+  };
+  static const queue_error_t QueueErrors[] = {
+      // EC_QUEUE_TRAP
+      2, HSA_STATUS_ERROR_EXCEPTION,
+      // EC_QUEUE_ILLEGAL_INSTRUCTION
+      3, (hsa_status_t)HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION,
+      // EC_QUEUE_MEMORY_VIOLATION
+      4, HSA_STATUS_ERROR,
+      // EC_QUEUE_APERTURE_VIOLATION
+      5, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION,
+      // EC_QUEUE_PACKET_DISPATCH_DIM_INVALID
+      16, HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS,
+      // EC_QUEUE_PACKET_DISPATCH_GROUP_SEGMENT_SIZE_INVALID
+      17, HSA_STATUS_ERROR_INVALID_ALLOCATION,
+      // EC_QUEUE_PACKET_DISPATCH_CODE_INVALID
+      18, HSA_STATUS_ERROR_INVALID_CODE_OBJECT,
+      // EC_QUEUE_PACKET_UNSUPPORTED
+      20, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
+      // EC_QUEUE_PACKET_DISPATCH_WORK_GROUP_SIZE_INVALID
+      21, HSA_STATUS_ERROR_INVALID_ARGUMENT,
+      // EC_QUEUE_PACKET_DISPATCH_REGISTER_SIZE_INVALID
+      22, HSA_STATUS_ERROR_INVALID_ISA,
+      // EC_QUEUE_PACKET_VENDOR_UNSUPPORTED
+      23, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
+      // EC_QUEUE_PREEMPTION_ERROR
+      31, HSA_STATUS_ERROR,
+      // EC_DEVICE_MEMORY_VIOLATION
+      33, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION,
+      // EC_DEVICE_RAS_ERROR
+      34, HSA_STATUS_ERROR,
+      // EC_DEVICE_FATAL_HALT
+      35, HSA_STATUS_ERROR,
+      // EC_DEVICE_NEW
+      36, HSA_STATUS_ERROR,
+      // EC_PROCESS_DEVICE_REMOVE
+      50, HSA_STATUS_ERROR};
+
+  AqlQueue* queue = (AqlQueue*)arg;
+  hsa_status_t errorCode = HSA_STATUS_ERROR;
+
+  if (queue->exceptionState == ERROR_HANDLER_TERMINATE) {
+    Signal* signal = queue->exception_signal_;
+    queue->exceptionState = ERROR_HANDLER_DONE;
+    signal->StoreRelease(0);
+    return false;
+  }
+
+  for (auto& error : QueueErrors) {
+    if (error_code & (1 << (error.code - 1))) {
+      errorCode = error.status;
+      break;
+    }
+  }
+
+  // Undefined or unexpected code
+  assert((errorCode != HSA_STATUS_ERROR) && "Undefined or unexpected queue error code");
+
+  queue->Suspend();
+  if (queue->errors_callback_ != nullptr) {
+    queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
+  }
   return false;
 }
 

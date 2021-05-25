@@ -146,6 +146,9 @@ class Flag {
     // be interpreted as not defining the env variable.
     var = os::GetEnvVar("HSA_XNACK");
     xnack_ = (var == "0") ? XNACK_DISABLE : ((var == "1") ? XNACK_ENABLE : XNACK_UNCHANGED);
+
+    var = os::GetEnvVar("HSA_ENABLE_DEBUG");
+    debug_ = (var == "1") ? true : false;
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -201,6 +204,8 @@ class Flag {
 
   XNACK_REQUEST xnack() const { return xnack_; }
 
+  bool debug() const { return debug_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -220,6 +225,7 @@ class Flag {
   bool check_sramecc_validity_;
   bool patch_xgmi_link_weight_;
   bool patch_link_override_;
+  bool debug_;
 
   SDMA_OVERRIDE enable_sdma_;
 
