@@ -633,6 +633,17 @@ hsaKmtDbgAddressWatch(
     HsaEvent*           WatchEvent[]    //IN, optional
     );
 
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRuntimeEnable(
+    void*     rDebug,    // IN
+    bool      setupTtmp
+    );
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtRuntimeDisable(void);
+
 /**
   Get the major and minor version of the kernel debugger support.
 */

@@ -25,6 +25,7 @@
 
 #include "libhsakmt.h"
 #include "linux/kfd_ioctl.h"
+#include <errno.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -292,5 +293,68 @@ hsaKmtGetKernelDebugTrapVersionInfo(
 
 	*Major = args.data1;
 	*Minor = args.data2;
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+#define HSA_RUNTIME_ENABLE_MIN_MAJOR	9
+#define HSA_RUNTIME_ENABLE_MIN_MINOR	0
+HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
+					    bool setupTtmp)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+	HSAuint32 kMajor, kMinor;
+	HSAKMT_STATUS result;
+
+	result = hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor);
+
+	if (result)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	if (kMajor != HSA_RUNTIME_ENABLE_MIN_MAJOR ||
+				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	memset(&args, 0x00, sizeof(args));
+	args.op = KFD_IOC_DBG_TRAP_RUNTIME_ENABLE;
+	args.pid = getpid();
+	args.data1 = 1;  //enable
+	args.data2 = setupTtmp;
+	args.ptr = (HSAuint64)rDebug;
+
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
+
+	if (err) {
+		if (err == EBUSY)
+			return HSAKMT_STATUS_UNAVAILABLE;
+		else
+			return HSAKMT_STATUS_ERROR;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeDisable(void)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+	HSAuint32 kMajor, kMinor;
+	HSAKMT_STATUS result;
+
+	result = hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor);
+
+	if (result)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	if (kMajor != HSA_RUNTIME_ENABLE_MIN_MAJOR ||
+				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR)
+		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	memset(&args, 0x00, sizeof(args));
+	args.op = KFD_IOC_DBG_TRAP_RUNTIME_ENABLE;
+	args.pid = getpid();
+	args.data1 = 0;  //disable
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args))
+		return HSAKMT_STATUS_ERROR;
+
 	return HSAKMT_STATUS_SUCCESS;
 }
