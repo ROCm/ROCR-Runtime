@@ -285,6 +285,8 @@ TEST_F(KFDDBGTest, BasicAddressWatch) {
 }
 #endif
 
+#if 0
+// Deprecated - Reference Use Only
 /**
  * checkDebugVersion:
  *   Inputs:
@@ -333,7 +335,10 @@ static bool checkDebugVersion(HSAuint32 requiredMajor, HSAuint32 requiredMinor)
 
     return true;
 }
+#endif
 
+#if 0
+// Deprecated - Reference Use Only
 TEST_F(KFDDBGTest, BasicDebuggerSuspendResume) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_AI) {
@@ -431,7 +436,10 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+#endif
 
+#if 0
+// Deprecated - Reference Use Only
 TEST_F(KFDDBGTest, BasicDebuggerQueryQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_AI) {
@@ -574,8 +582,11 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+#endif
 
+#if 0
 // clean up routine
+// Deprecated - Reference Use Only
 static void ExitVMFaultQueryChild(std::string errMsg,
                                   int exitStatus,
                                   HSAint32 pollFd,
@@ -613,7 +624,10 @@ static void ExitVMFaultQueryChild(std::string errMsg,
 
     exit(exitStatus);
 }
+#endif
 
+#if 0
+// Deprecated - Reference Use Only
 TEST_F(KFDDBGTest, BasicDebuggerQueryVMFaultQueueStatus) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_AI) {
@@ -811,3 +825,4 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+#endif
