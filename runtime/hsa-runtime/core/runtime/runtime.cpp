@@ -1051,14 +1051,42 @@ void Runtime::AsyncEventsLoop(void*) {
     if (index == 0) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
     } else if (index != -1) {
-      // No error or timout occured, process the handler
-      assert(async_events_.handler_[index] != NULL);
-      bool keep =
-          async_events_.handler_[index](value, async_events_.arg_[index]);
-      if (!keep) {
-        hsa_signal_handle(async_events_.signal_[index])->Release();
-        async_events_.CopyIndex(index, async_events_.Size() - 1);
-        async_events_.PopBack();
+      // No error or timout occured, process the handlers
+      for (size_t i = index; i < async_events_.Size(); i++) {
+        hsa_signal_handle sig(async_events_.signal_[i]);
+
+        value = atomic::Load(&sig->signal_.value, std::memory_order_relaxed);
+        bool condition_met = false;
+
+        switch (async_events_.cond_[i]) {
+          case HSA_SIGNAL_CONDITION_EQ: {
+            condition_met = (value == async_events_.value_[i]);
+            break;
+          }
+          case HSA_SIGNAL_CONDITION_NE: {
+            condition_met = (value != async_events_.value_[i]);
+            break;
+          }
+          case HSA_SIGNAL_CONDITION_GTE: {
+            condition_met = (value >= async_events_.value_[i]);
+            break;
+          }
+          case HSA_SIGNAL_CONDITION_LT: {
+            condition_met = (value < async_events_.value_[i]);
+            break;
+          }
+        }
+
+        if (condition_met) {
+          assert(async_events_.handler_[i] != NULL);
+          bool keep = async_events_.handler_[i](value, async_events_.arg_[i]);
+          if (!keep) {
+            hsa_signal_handle(async_events_.signal_[i])->Release();
+            async_events_.CopyIndex(i, async_events_.Size() - 1);
+            async_events_.PopBack();
+            i--;
+          }
+        }
       }
     }
 
