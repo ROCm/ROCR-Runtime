@@ -364,7 +364,7 @@ bool Load() {
   // Register runtime and optionally enable the debugger
   HSAKMT_STATUS err =
       hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
-  if (err != HSAKMT_STATUS_SUCCESS) return false;
+  if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
   core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
 
   // Build topology table.
