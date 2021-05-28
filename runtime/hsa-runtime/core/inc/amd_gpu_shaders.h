@@ -619,6 +619,242 @@ static const unsigned int kCodeTrapHandler10[] = {
     0x886e6f6e, 0xb9eef807, 0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c,
 };
 
+/*
+.set SQ_WAVE_PC_HI_ADDRESS_MASK              , 0xFFFF
+.set SQ_WAVE_PC_HI_TRAP_ID_SHIFT             , 16
+.set SQ_WAVE_PC_HI_TRAP_ID_SIZE              , 8
+.set SQ_WAVE_PC_HI_TRAP_ID_BFE               , (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
+.set SQ_WAVE_STATUS_HALT_SHIFT               , 13
+.set SQ_WAVE_STATUS_HALT_BFE                 , (SQ_WAVE_STATUS_HALT_SHIFT | (1 << 16))
+.set SQ_WAVE_TRAPSTS_MEM_VIOL_SHIFT          , 8
+.set SQ_WAVE_TRAPSTS_ILLEGAL_INST_SHIFT      , 11
+.set SQ_WAVE_TRAPSTS_XNACK_ERROR_SHIFT       , 28
+.set TRAP_ID_DEBUGTRAP                       , 3
+.set DOORBELL_ID_SIZE                        , 10
+.set DOORBELL_ID_MASK                        , ((1 << DOORBELL_ID_SIZE) - 1)
+.set EC_QUEUE_TRAP_M0                        , (2 << DOORBELL_ID_SIZE)
+.set EC_QUEUE_ILLEGAL_INSTRUCTION_M0         , (3 << DOORBELL_ID_SIZE)
+.set EC_QUEUE_MEMORY_VIOLATION_M0            , (4 << DOORBELL_ID_SIZE)
+.set EC_QUEUE_APERTURE_VIOLATION_M0          , (5 << DOORBELL_ID_SIZE)
+
+.set TTMP6_WAVE_STOPPED_SHIFT                , 30
+.set TTMP6_SAVED_STATUS_HALT_SHIFT           , 29
+.set TTMP6_SAVED_STATUS_HALT_MASK            , ((1 << TTMP6_SAVED_STATUS_HALT_SHIFT) - 1)
+.set TTMP6_SAVED_TRAP_ID_SHIFT               , 25
+.set TTMP6_SAVED_TRAP_ID_SIZE                , 4
+.set TTMP6_SAVED_TRAP_ID_MASK                , (((1 << TTMP6_SAVED_TRAP_ID_SIZE) - 1) << TTMP6_SAVED_TRAP_ID_SHIFT)
+.set TTMP11_PC_HI_SHIFT                      , 7
+.set TTMP11_DEBUG_ENABLED_SHIFT              , 23
+
+.if .amdgcn.gfx_generation_number == 9
+  .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
+  .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
+  .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x1F8000
+.elseif .amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3
+  .set TTMP11_SAVE_REPLAY_W64H_SHIFT         , 31
+  .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 24
+  .set SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT      , 25
+  .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
+  .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x3F8000
+  .set SQ_WAVE_IB_STS_REPLAY_W64H_MASK       , 0x2000000
+.endif
+
+// ABI between first and second level trap handler:
+//   ttmp0 = PC[31:0]
+//   ttmp12 = SQ_WAVE_STATUS
+//   ttmp14 = TMA[31:0]
+//   ttmp15 = TMA[63:32]
+// gfx9:
+//   ttmp1 = 0[2:0], PCRewind[3:0], HostTrap[0], TrapId[7:0], PC[47:32]
+//   ttmp11 = SQ_WAVE_IB_STS[20:15], 0[1:0], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
+// gfx10:
+//   ttmp1 = 0[0], PCRewind[5:0], HostTrap[0], TrapId[7:0], PC[47:32]
+// gfx1010:
+//   ttmp11 = SQ_WAVE_IB_STS[25], SQ_WAVE_IB_STS[21:15], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
+// gfx1030:
+//   ttmp11 = 0[7:0], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
+
+trap_entry:
+  // If caused by s_trap then advance PC.
+  s_bfe_u32            ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
+  s_cbranch_scc0       .no_skip_debugtrap
+  s_add_u32            ttmp0, ttmp0, 0x4
+  s_addc_u32           ttmp1, ttmp1, 0x0
+
+  // If llvm.debugtrap and debugger is not attached.
+  s_cmp_eq_u32         ttmp2, TRAP_ID_DEBUGTRAP
+  s_cbranch_scc0       .no_skip_debugtrap
+  s_bitcmp0_b32        ttmp11, TTMP11_DEBUG_ENABLED_SHIFT
+  s_cbranch_scc0       .no_skip_debugtrap
+
+  // Ignore llvm.debugtrap.
+  s_branch             .exit_trap
+
+.no_skip_debugtrap:
+  // Save trap id and halt status in ttmp6.
+  s_andn2_b32          ttmp6, ttmp6, (TTMP6_SAVED_TRAP_ID_MASK | TTMP6_SAVED_STATUS_HALT_MASK)
+  s_min_u32            ttmp2, ttmp2, 0xF
+  s_lshl_b32           ttmp2, ttmp2, TTMP6_SAVED_TRAP_ID_SHIFT
+  s_or_b32             ttmp6, ttmp6, ttmp2
+  s_bfe_u32            ttmp2, ttmp12, SQ_WAVE_STATUS_HALT_BFE
+  s_lshl_b32           ttmp2, ttmp2, TTMP6_SAVED_STATUS_HALT_SHIFT
+  s_or_b32             ttmp6, ttmp6, ttmp2
+
+  // Fetch doorbell id for our queue.
+  s_mov_b32            ttmp2, exec_lo
+  s_mov_b32            ttmp3, exec_hi
+  s_mov_b32            exec_lo, 0x80000000
+  s_sendmsg            sendmsg(MSG_GET_DOORBELL)
+.wait_sendmsg:
+  s_nop                0x7
+  s_bitcmp0_b32        exec_lo, 0x1F
+  s_cbranch_scc0       .wait_sendmsg
+  s_mov_b32            exec_hi, ttmp3
+
+  // Restore exec_lo, move the doorbell_id into ttmp3
+  s_and_b32            ttmp3, exec_lo, DOORBELL_ID_MASK
+  s_mov_b32            exec_lo, ttmp2
+
+  // Map trap reason to an exception code.
+  s_getreg_b32         ttmp2, hwreg(HW_REG_TRAPSTS)
+  s_bitcmp1_b32        ttmp2, SQ_WAVE_TRAPSTS_XNACK_ERROR_SHIFT
+  s_cbranch_scc0       .not_memory_violation
+  s_or_b32             ttmp3, ttmp3, EC_QUEUE_MEMORY_VIOLATION_M0
+  s_branch             .send_interrupt
+
+.not_memory_violation:
+  s_bitcmp1_b32        ttmp2, SQ_WAVE_TRAPSTS_MEM_VIOL_SHIFT
+  s_cbranch_scc0       .not_aperture_violation
+  s_or_b32             ttmp3, ttmp3, EC_QUEUE_APERTURE_VIOLATION_M0
+  s_branch             .send_interrupt
+
+.not_aperture_violation:
+  s_bitcmp1_b32        ttmp2, SQ_WAVE_TRAPSTS_ILLEGAL_INST_SHIFT
+  s_cbranch_scc0       .not_illegal_instruction
+  s_or_b32             ttmp3, ttmp3, EC_QUEUE_ILLEGAL_INSTRUCTION_M0
+  s_branch             .send_interrupt
+
+.not_illegal_instruction:
+  s_or_b32             ttmp3, ttmp3, EC_QUEUE_TRAP_M0
+
+.send_interrupt:
+  // m0 = interrupt data = (exception_code << DOORBELL_ID_SIZE) | doorbell_id
+  s_mov_b32            ttmp2, m0
+  s_mov_b32            m0, ttmp3
+  s_nop                0x0 // Manually inserted wait states
+  s_sendmsg            sendmsg(MSG_INTERRUPT)
+  s_mov_b32            m0, ttmp2
+
+  // Parking the wave requires saving the original pc in the preserved ttmps.
+  // Register layout before parking the wave:
+  //
+  // ttmp7: 0[31:0]
+  // ttmp11: 1st_level_ttmp11[31:23] 0[15:0] 1st_level_ttmp11[6:0]
+  //
+  // After parking the wave:
+  //
+  // ttmp7:  pc_lo[31:0]
+  // ttmp11: 1st_level_ttmp11[31:23] pc_hi[15:0] 1st_level_ttmp11[6:0]
+
+.if ((.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor >= 3) || .amdgcn.gfx_generation_number > 10)
+  s_branch             .halt_wave
+.else
+  // Save the PC
+  s_mov_b32            ttmp7, ttmp0
+  s_and_b32            ttmp1, ttmp1, SQ_WAVE_PC_HI_ADDRESS_MASK
+  s_lshl_b32           ttmp1, ttmp1, TTMP11_PC_HI_SHIFT
+  s_andn2_b32          ttmp11, ttmp11, (SQ_WAVE_PC_HI_ADDRESS_MASK << TTMP11_PC_HI_SHIFT)
+  s_or_b32             ttmp11, ttmp11, ttmp1
+
+  // Park the wave
+  s_getpc_b64          [ttmp0, ttmp1]
+  s_add_u32            ttmp0, ttmp0, .parked - .
+  s_addc_u32           ttmp1, ttmp1, 0x0
+  s_branch             .halt_wave
+
+.parked:
+  s_trap               0x2
+  s_branch             .parked
+.endif
+
+.halt_wave:
+  // Halt the wavefront upon restoring STATUS below.
+  s_bitset1_b32        ttmp6, TTMP6_WAVE_STOPPED_SHIFT
+  s_bitset1_b32        ttmp12, SQ_WAVE_STATUS_HALT_SHIFT
+
+.exit_trap:
+  // Restore SQ_WAVE_IB_STS.
+.if .amdgcn.gfx_generation_number == 9
+  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+  s_and_b32            ttmp2, ttmp2, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
+  s_setreg_b32         hwreg(HW_REG_IB_STS), ttmp2
+.endif
+.if .amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3
+  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+  s_and_b32            ttmp3, ttmp2, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
+  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_REPLAY_W64H_SHIFT - SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT)
+  s_and_b32            ttmp2, ttmp2, SQ_WAVE_IB_STS_REPLAY_W64H_MASK
+  s_or_b32             ttmp2, ttmp2, ttmp3
+  s_setreg_b32         hwreg(HW_REG_IB_STS), ttmp2
+.endif
+
+  // Restore SQ_WAVE_STATUS.
+  s_and_b64            exec, exec, exec // Restore STATUS.EXECZ, not writable by s_setreg_b32
+  s_and_b64            vcc, vcc, vcc    // Restore STATUS.VCCZ, not writable by s_setreg_b32
+  s_setreg_b32         hwreg(HW_REG_STATUS), ttmp12
+
+  // Return to original (possibly modified) PC.
+  s_rfe_b64            [ttmp0, ttmp1]
+*/
+
+static const unsigned int kCodeTrapHandlerV2_9[] = {
+    0x92eeff6d, 0x00080010, 0xbf840007, 0x806c846c, 0x826d806d, 0xbf06836e,
+    0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82003c, 0x8972ff72, 0x1fffffff,
+    0x83ee8f6e, 0x8e6e996e, 0x87726e72, 0x92eeff78, 0x0001000d, 0x8e6e9d6e,
+    0x87726e72, 0xbeee007e, 0xbeef007f, 0xbefe00ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff006f, 0x866fff7e, 0x000003ff,
+    0xbefe006e, 0xb8eef803, 0xbf0d9c6e, 0xbf840003, 0x876fff6f, 0x00001000,
+    0xbf82000c, 0xbf0d886e, 0xbf840003, 0x876fff6f, 0x00001400, 0xbf820007,
+    0xbf0d8b6e, 0xbf840003, 0x876fff6f, 0x00000c00, 0xbf820002, 0x876fff6f,
+    0x00000800, 0xbeee007c, 0xbefc006f, 0xbf800000, 0xbf900001, 0xbefc006e,
+    0xbef3006c, 0x866dff6d, 0x0000ffff, 0x8e6d876d, 0x8977ff77, 0x007fff80,
+    0x87776d77, 0xbeec1c00, 0x806cff6c, 0x00000010, 0x826d806d, 0xbf820002,
+    0xbf920002, 0xbf82fffe, 0xbef21a9e, 0xbef81a8d, 0x8f6e8b77, 0x866eff6e,
+    0x001f8000, 0xb96ef807, 0x86fe7e7e, 0x86ea6a6a, 0xb978f802, 0xbe801f6c,
+};
+
+static const unsigned int kCodeTrapHandlerV2_1010[] = {
+    0x93eeff6d, 0x00080010, 0xbf840007, 0x806c846c, 0x826d806d, 0xbf06836e,
+    0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82003c, 0x8a72ff72, 0x1fffffff,
+    0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78, 0x0001000d, 0x8f6e9d6e,
+    0x88726e72, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f, 0x876fff7e, 0x000003ff,
+    0xbefe036e, 0xb96ef803, 0xbf0d9c6e, 0xbf840003, 0x886fff6f, 0x00001000,
+    0xbf82000c, 0xbf0d886e, 0xbf840003, 0x886fff6f, 0x00001400, 0xbf820007,
+    0xbf0d8b6e, 0xbf840003, 0x886fff6f, 0x00000c00, 0xbf820002, 0x886fff6f,
+    0x00000800, 0xbeee037c, 0xbefc036f, 0xbf800000, 0xbf900001, 0xbefc036e,
+    0xbef3036c, 0x876dff6d, 0x0000ffff, 0x8f6d876d, 0x8a77ff77, 0x007fff80,
+    0x88776d77, 0xbeec1f00, 0x806cff6c, 0x00000010, 0x826d806d, 0xbf820002,
+    0xbf920002, 0xbf82fffe, 0xbef21d9e, 0xbef81d8d, 0x906e8977, 0x876fff6e,
+    0x003f8000, 0x906e8677, 0x876eff6e, 0x02000000, 0x886e6f6e, 0xb9eef807,
+    0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802, 0xbe80226c,
+};
+
+static const unsigned int kCodeTrapHandlerV2_10[] = {
+    0x93eeff6d, 0x00080010, 0xbf840007, 0x806c846c, 0x826d806d, 0xbf06836e,
+    0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82002f, 0x8a72ff72, 0x1fffffff,
+    0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78, 0x0001000d, 0x8f6e9d6e,
+    0x88726e72, 0xbeee037e, 0xbeef037f, 0xbefe03ff, 0x80000000, 0xbf90000a,
+    0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f, 0x876fff7e, 0x000003ff,
+    0xbefe036e, 0xb96ef803, 0xbf0d9c6e, 0xbf840003, 0x886fff6f, 0x00001000,
+    0xbf82000c, 0xbf0d886e, 0xbf840003, 0x886fff6f, 0x00001400, 0xbf820007,
+    0xbf0d8b6e, 0xbf840003, 0x886fff6f, 0x00000c00, 0xbf820002, 0x886fff6f,
+    0x00000800, 0xbeee037c, 0xbefc036f, 0xbf800000, 0xbf900001, 0xbefc036e,
+    0xbf820000, 0xbef21d9e, 0xbef81d8d, 0x87fe7e7e, 0x87ea6a6a, 0xb9f8f802,
+    0xbe80226c,
+};
+
+
 }  // namespace amd
 }  // namespace rocr
 

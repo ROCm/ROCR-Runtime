@@ -219,10 +219,10 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
        {
            {NULL, 0, 0, 0},
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
-           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
-           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
-           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
-           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
+           {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},
+           {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},
        }},
       {"CopyAligned",
        {
@@ -1070,10 +1070,12 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
       new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
   *queue = aql_queue;
 
-  // Calculate index of the queue doorbell within the doorbell aperture.
-  auto doorbell_addr = uintptr_t(aql_queue->signal_.hardware_doorbell_ptr);
-  auto doorbell_idx = (doorbell_addr >> 3) & (MAX_NUM_DOORBELLS - 1);
-  doorbell_queue_map_[doorbell_idx] = &aql_queue->amd_queue_;
+  if (doorbell_queue_map_) {
+    // Calculate index of the queue doorbell within the doorbell aperture.
+    auto doorbell_addr = uintptr_t(aql_queue->signal_.hardware_doorbell_ptr);
+    auto doorbell_idx = (doorbell_addr >> 3) & (MAX_NUM_DOORBELLS - 1);
+    doorbell_queue_map_[doorbell_idx] = &aql_queue->amd_queue_;
+  }
 
   scratchGuard.Dismiss();
   return HSA_STATUS_SUCCESS;
@@ -1390,31 +1392,38 @@ void GpuAgent::SyncClocks() {
 }
 
 void GpuAgent::BindTrapHandler() {
-  // Make an empty map from doorbell index to queue.
-  // The trap handler uses this to retrieve a wave's amd_queue_t*.
-  auto doorbell_queue_map_size = MAX_NUM_DOORBELLS * sizeof(amd_queue_t*);
-
-  doorbell_queue_map_ = (amd_queue_t**)core::Runtime::runtime_singleton_->system_allocator()(
-      doorbell_queue_map_size, 0x1000, 0);
-  assert(doorbell_queue_map_ != NULL && "Doorbell queue map allocation failed");
-
-  memset(doorbell_queue_map_, 0, doorbell_queue_map_size);
-
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
     return;
   }
 
   // Assemble the trap handler source code.
-  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging)
+  void* tma_addr = nullptr;
+  uint64_t tma_size = 0;
+
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
     AssembleShader("TrapHandlerKfdExceptions", AssembleTarget::ISA, trap_code_buf_,
                    trap_code_buf_size_);
-  else
+  } else {
     AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
+
+    // Make an empty map from doorbell index to queue.
+    // The trap handler uses this to retrieve a wave's amd_queue_t*.
+    auto doorbell_queue_map_size = MAX_NUM_DOORBELLS * sizeof(amd_queue_t*);
+
+    doorbell_queue_map_ = (amd_queue_t**)core::Runtime::runtime_singleton_->system_allocator()(
+        doorbell_queue_map_size, 0x1000, 0);
+    assert(doorbell_queue_map_ != NULL && "Doorbell queue map allocation failed");
+
+    memset(doorbell_queue_map_, 0, doorbell_queue_map_size);
+
+    tma_addr = doorbell_queue_map_;
+    tma_size = doorbell_queue_map_size;
+  }
 
   // Bind the trap handler to this node.
   HSAKMT_STATUS err = hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_,
-                                           doorbell_queue_map_, doorbell_queue_map_size);
+                                           tma_addr, tma_size);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
 }
 
