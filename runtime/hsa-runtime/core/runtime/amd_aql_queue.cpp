@@ -95,6 +95,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
       pm4_ib_buf_(nullptr),
       pm4_ib_size_b_(0x1000),
       dynamicScratchState(0),
+      exceptionState(0),
       suspended_(false),
       priority_(HSA_QUEUE_PRIORITY_NORMAL),
       exception_signal_(nullptr) {
