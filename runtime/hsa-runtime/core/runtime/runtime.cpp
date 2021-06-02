@@ -1701,6 +1701,14 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
           attribs.push_back(kmtPair(HSA_SVM_ATTR_PREFERRED_LOC, agent->node_id()));
         break;
       }
+      case HSA_AMD_SVM_ATTRIB_READ_MOSTLY: {
+        Check(attrib);
+        if (value)
+          set_flags |= HSA_SVM_FLAG_GPU_READ_MOSTLY;
+        else
+          clear_flags |= HSA_SVM_FLAG_GPU_READ_MOSTLY;
+        break;
+      }
       case HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE: {
         Agent* agent = Convert(value);
         ConfirmNew(agent);
@@ -1786,7 +1794,8 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
     switch (attrib) {
       case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG:
       case HSA_AMD_SVM_ATTRIB_READ_ONLY:
-      case HSA_AMD_SVM_ATTRIB_HIVE_LOCAL: {
+      case HSA_AMD_SVM_ATTRIB_HIVE_LOCAL:
+      case HSA_AMD_SVM_ATTRIB_READ_MOSTLY: {
         getFlags = true;
         kmtIndices[i] = -1;
         break;
@@ -1866,6 +1875,10 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
         break;
       }
       case HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION: {
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_READ_MOSTLY: {
+        value = (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_GPU_READ_MOSTLY);
         break;
       }
       case HSA_AMD_SVM_ATTRIB_ACCESS_QUERY: {
