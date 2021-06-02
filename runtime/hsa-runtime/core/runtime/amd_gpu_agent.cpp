@@ -982,6 +982,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_ASIC_REVISION:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
       break;
+    case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
+      assert(regions_.size() != 0 && "No device local memory found!");
+      *((bool*)value) = properties_.Capability.ui32.CoherentHostAccess == 1;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

@@ -291,7 +291,13 @@ typedef enum hsa_amd_agent_info_s {
    * selective workarounds for hardware errata.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012
+  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012,
+  /**
+   * Queries whether or not the host can directly access SVM memory that is
+   * physically resident in the agent's local memory.
+   * The type of this attribute is bool.
+   */
+  HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS = 0xA013
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
