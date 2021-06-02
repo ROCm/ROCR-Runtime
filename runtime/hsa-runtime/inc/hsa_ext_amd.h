@@ -2150,7 +2150,7 @@ typedef enum hsa_amd_svm_attribute_s {
   HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION = 4,
   // This attribute can not be used in ::hsa_amd_svm_attributes_set (see
   // ::hsa_amd_svm_prefetch_async).
-  // Physical location of most recent prefetch command.
+  // Queries the physical location of most recent prefetch command.
   // If the prefetch location has not been set or is not uniform across the
   // address range then returned hsa_agent_t::handle will be 0.
   // Querying this attribute will return the destination agent of the most
@@ -2160,6 +2160,10 @@ typedef enum hsa_amd_svm_attribute_s {
   // the location of the most recently completed prefetch.
   // Type of this attribute is hsa_agent_t.
   HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION = 5,
+  // Optimizes with the anticipation that the majority of operations to the
+  // range will be read operations.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_READ_MOSTLY = 6,
   // This attribute can not be used in ::hsa_amd_svm_attributes_get.
   // Enables an agent for access to the range.  Access may incur a page fault
   // and associated memory migration.  Either this or
