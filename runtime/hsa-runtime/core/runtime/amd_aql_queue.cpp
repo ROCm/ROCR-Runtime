@@ -921,6 +921,9 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
         errorCode = HSA_STATUS_ERROR;
         fatal = true;
       }
+    } else {
+      // Not handling exceptions, clear so that ExceptionHandler can run.
+      HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
     }
 
     if (errorCode == HSA_STATUS_SUCCESS) {
