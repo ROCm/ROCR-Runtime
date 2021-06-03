@@ -83,7 +83,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       scratch_used_large_(0),
       queues_(),
-      local_region_(NULL),
       is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
@@ -358,7 +357,6 @@ void GpuAgent::InitRegionList() {
           regions_.push_back(region);
 
           if (region->IsLocalMemory()) {
-            local_region_ = region;
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
             if ((properties_.HiveID != 0) ||
                 (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {

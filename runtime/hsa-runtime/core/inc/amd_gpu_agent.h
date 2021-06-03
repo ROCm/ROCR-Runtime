@@ -433,8 +433,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
 
-  MemoryRegion* local_region_;
-
   core::Isa* isa_;
 
   // @brief HSA profile.
