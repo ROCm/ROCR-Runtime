@@ -103,17 +103,21 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #define PASTE(x, y) PASTE2(x, y)
 
 #ifdef NDEBUG
-#define debug_warning(exp)                                                                         \
+#define debug_warning_n(exp, limit)                                                                \
   do {                                                                                             \
   } while (false)
 #else
-#define debug_warning(exp)                                                                         \
+#define debug_warning_n(exp, limit)                                                                \
   do {                                                                                             \
-    if (!(exp))                                                                                    \
+    static std::atomic<int> count(0);                                                              \
+    if (!(exp) && (limit == 0 || count < limit)) {                                                 \
       fprintf(stderr, "Warning: " STRING(exp) " in %s, " __FILE__ ":" STRING(__LINE__) "\n",       \
               __PRETTY_FUNCTION__);                                                                \
+      count++;                                                                                     \
+    }                                                                                              \
   } while (false)
 #endif
+#define debug_warning(exp) debug_warning_n((exp), 0)
 
 #ifdef NDEBUG
 #define debug_print(fmt, ...)                                                                      \
