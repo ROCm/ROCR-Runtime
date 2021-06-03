@@ -177,12 +177,7 @@ FILTER[vega20]=\
 FILTER[raven_dgpuFallback]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDMemoryTest.MemoryRegister:"\
-"KFDQMTest.SdmaConcurrentCopies"
-
-FILTER[raven]=\
-"$BLACKLIST_ALL_ASICS:"\
-"KFDQMTest.SdmaConcurrentCopies:"\
-"KFDQMTest.MultipleCpQueuesStressDispatch:"\
+"KFDQMTest.SdmaConcurrentCopies"\
 "KFDSVMRangeTest.BasicSystemMemTest:"\
 "KFDSVMRangeTest.BasicVramTest:"\
 "KFDSVMRangeTest.EvictSystemRangeTest:"\
@@ -193,6 +188,12 @@ FILTER[raven]=\
 "KFDSVMRangeTest.MigrateLargeBufTest:"\
 "KFDSVMRangeTest.MultiThreadMigrationTest:"\
 "KFDSVMEvictTest.QueueTest"
+
+
+FILTER[raven]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDQMTest.SdmaConcurrentCopies:"\
+"KFDQMTest.MultipleCpQueuesStressDispatch"
 
 FILTER[renoir]=\
 "$BLACKLIST_ALL_ASICS:"\
