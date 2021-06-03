@@ -782,6 +782,10 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       core::AqlPacket& pkt =
           ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
+      assert(pkt.IsValid() && "Invalid packet in dynamic scratch handler.");
+      assert(pkt.type() == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
+             "Invalid packet in dynamic scratch handler.");
+
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
 
       const uint32_t MaxScratchSlots =
