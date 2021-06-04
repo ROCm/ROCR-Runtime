@@ -1114,7 +1114,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 				props->DeviceId);
 
 	if (props->NumFComputeCores)
-		assert(props->EngineId.ui32.Major);
+		assert(props->EngineId.ui32.Major && "HSA_FORCE_ASIC_TYPE may be needed");
 
 err:
 	free(read_buf);
