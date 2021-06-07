@@ -177,7 +177,7 @@ FILTER[vega20]=\
 FILTER[raven_dgpuFallback]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDMemoryTest.MemoryRegister:"\
-"KFDQMTest.SdmaConcurrentCopies"\
+"KFDQMTest.SdmaConcurrentCopies:"\
 "KFDSVMRangeTest.BasicSystemMemTest:"\
 "KFDSVMRangeTest.BasicVramTest:"\
 "KFDSVMRangeTest.EvictSystemRangeTest:"\
