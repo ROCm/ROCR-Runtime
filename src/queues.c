@@ -157,6 +157,12 @@ const struct device_info navi10_device_info = {
 	.doorbell_size = DOORBELL_SIZE_GFX9,
 };
 
+const struct device_info cyan_skillfish_device_info = {
+	.asic_family = CHIP_CYAN_SKILLFISH,
+	.eop_buffer_size = 4096,
+	.doorbell_size = DOORBELL_SIZE_GFX9,
+};
+
 const struct device_info navi12_device_info = {
 	.asic_family = CHIP_NAVI12,
 	.eop_buffer_size = 4096,
@@ -223,6 +229,7 @@ static const struct device_info *dev_lookup_table[] = {
 	[CHIP_ARCTURUS] = &arcturus_device_info,
 	[CHIP_ALDEBARAN] = &aldebaran_device_info,
 	[CHIP_NAVI10] = &navi10_device_info,
+	[CHIP_CYAN_SKILLFISH] = &cyan_skillfish_device_info,
 	[CHIP_NAVI12] = &navi12_device_info,
 	[CHIP_NAVI14] = &navi14_device_info,
 	[CHIP_SIENNA_CICHLID] = &sienna_cichlid_device_info,

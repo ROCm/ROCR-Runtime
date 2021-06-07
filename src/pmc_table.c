@@ -2135,6 +2135,7 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 	case CHIP_NAVI14:
 	case CHIP_VANGOGH:
 	case CHIP_YELLOW_CARP:
+	case CHIP_CYAN_SKILLFISH:
 		*block = navi_blocks[block_id];
 		break;
 	default:
