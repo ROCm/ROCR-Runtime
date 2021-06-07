@@ -236,6 +236,12 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x731A, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	{ 0x731E, 10, 1, 0, "Navi10", CHIP_NAVI10 },
 	{ 0x731F, 10, 1, 0, "Navi10", CHIP_NAVI10 },
+	/* cyan_skillfish */
+	{ 0x13F9, 10, 1, 3, "cyan_skillfish", CHIP_CYAN_SKILLFISH },
+	{ 0x13FA, 10, 1, 3, "cyan_skillfish", CHIP_CYAN_SKILLFISH },
+	{ 0x13FB, 10, 1, 3, "cyan_skillfish", CHIP_CYAN_SKILLFISH },
+	{ 0x13FC, 10, 1, 3, "cyan_skillfish", CHIP_CYAN_SKILLFISH },
+	{ 0x13FE, 10, 1, 3, "cyan_skillfish", CHIP_CYAN_SKILLFISH },
 	/* Navi14 */
 	{ 0x7340, 10, 1, 2, "Navi14", CHIP_NAVI14 },
 	{ 0x7341, 10, 1, 2, "Navi14", CHIP_NAVI14 },
