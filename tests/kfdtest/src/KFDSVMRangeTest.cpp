@@ -658,6 +658,64 @@ TEST_F(KFDSVMRangeTest, MigrateTest) {
 }
 
 /*
+ * Test if GPU mapping to system memory is correct after range on VRAM split and migrate back
+ * to system memory.
+ *
+ * Steps, it is same for XNACK on or off
+ *   1. alloc 256MB range on system memory, set ACCESS_IN_PLACE by GPU
+ *   2. Prefetcg to migrate range to GPU VRAM
+ *   3. Use CPU to fill the range, range is migrated back to system memory, and split by granularity,
+ *      GPU mapping update to system memory
+ *   4. Use GPU sdma to fill the range in system memory
+ *   5. Check if data is correct in system memory
+ */
+TEST_F(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    if (!GetVramSize(defaultGPUNode)) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    unsigned int BufferSize = 256 << 20;
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+
+    HsaSVMRange DataBuffer(BufferSize, defaultGPUNode);
+    HSAuint32 *pData = DataBuffer.As<HSAuint32 *>();
+
+    EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pData, BufferSize, defaultGPUNode));
+    EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, defaultGPUNode));
+
+    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
+        pData[i] = i;
+
+    /* GPU/SDMA update content in buffer migrated back to system memory */
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
+                pData, 0x55AAAA55, BufferSize));
+    sdmaQueue.Wait4PacketConsumption();
+
+    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
+        ASSERT_EQ(0x55AAAA55, pData[i]);
+
+    ASSERT_SUCCESS(sdmaQueue.Destroy());
+
+    TEST_END
+}
+
+/*
  * The test changes migration granularity, then trigger CPU page fault to migrate
  * the svm range from vram to ram.
  * Check the dmesg driver output to confirm the number of CPU page fault is correct
