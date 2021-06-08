@@ -314,7 +314,8 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       asic_shader = &compiled_shader_it->second.compute_8;
       break;
     case 9:
-      if((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10))
+      if(((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) ||
+         ((isa_->GetMinorVersion() == 4) && (isa_->GetStepping() == 0)))
         asic_shader = &compiled_shader_it->second.compute_90a;
       else
         asic_shader = &compiled_shader_it->second.compute_9;
@@ -368,8 +369,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     AMD_HSA_BITS_SET(header->compute_pgm_rsrc2,
                      AMD_COMPUTE_PGM_RSRC_TWO_ENABLE_SGPR_WORKGROUP_ID_X, 1);
 
-    if ((isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
-        (isa_->GetStepping() == 10)) {
+    if ((isa_->GetMajorVersion() == 9) &&
+        (((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) ||
+        ((isa_->GetMinorVersion() == 4) && (isa_->GetStepping() == 0)))) {
       // Program COMPUTE_PGM_RSRC3.ACCUM_OFFSET for 0 ACC VGPRs on gfx90a.
       // FIXME: Assemble code objects from source at build time
       int gran_accvgprs = ((gran_vgprs + 1) * 8) / 4 - 1;
