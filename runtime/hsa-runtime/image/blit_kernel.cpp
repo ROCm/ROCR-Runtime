@@ -85,6 +85,7 @@ extern uint8_t ocl_blit_object_gfx908[];
 extern uint8_t ocl_blit_object_gfx909[];
 extern uint8_t ocl_blit_object_gfx90a[];
 extern uint8_t ocl_blit_object_gfx90c[];
+extern uint8_t ocl_blit_object_gfx940[];
 extern uint8_t ocl_blit_object_gfx1010[];
 extern uint8_t ocl_blit_object_gfx1011[];
 extern uint8_t ocl_blit_object_gfx1012[];
@@ -1007,6 +1008,8 @@ hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
     *blit_code_object = ocl_blit_object_gfx90a;
   } else if (sname == "gfx90c") {
     *blit_code_object = ocl_blit_object_gfx90c;
+  } else if (sname == "gfx940") {
+    *blit_code_object = ocl_blit_object_gfx940;
   } else if (sname == "gfx1010") {
     *blit_code_object = ocl_blit_object_gfx1010;
   } else if (sname == "gfx1011") {

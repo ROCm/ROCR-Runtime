@@ -643,6 +643,8 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX906;
       else if (old_name == "AMD:AMDGPU:9:0:12")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C;
+      else if (old_name == "AMD:AMDGPU:9:4:0")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX940;
       else if (old_name == "AMD:AMDGPU:11:0:0")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100;
       else if (old_name == "AMD:AMDGPU:11:0:1")
