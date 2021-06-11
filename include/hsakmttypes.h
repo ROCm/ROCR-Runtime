@@ -215,7 +215,8 @@ typedef union
         unsigned int ASICRevision: 4;            // Indicates the ASIC revision of the chip on this node.
         unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
         unsigned int SVMAPISupported     : 1;    // Whether or not the SVM API is supported
-        unsigned int Reserved            : 4;
+        unsigned int CoherentHostAccess: 1;      // Whether or not device memory can be coherently accessed by the host CPU
+        unsigned int Reserved            : 3;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -344,8 +345,7 @@ typedef union
         unsigned int HotPluggable      : 1; // the memory may be removed by some system action,
                                             // memory should be used for temporary data
         unsigned int NonVolatile       : 1; // memory content is preserved across a power-off cycle.
-        unsigned int CoherentHostAccess: 1; // Whether or not device memory can be coherently accessed by the host CPU
-        unsigned int Reserved          :29;
+        unsigned int Reserved          :30;
     } ui32;
 } HSA_MEMORYPROPERTY;
 
