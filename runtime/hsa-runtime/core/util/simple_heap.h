@@ -85,7 +85,9 @@ template <typename Allocator> class SimpleHeap {
   std::map<uintptr_t, std::map<uintptr_t, Fragment_T>> block_list_;
   std::deque<Block> block_cache_;
 
+  // Size of blocks that are at least partially in use.
   size_t in_use_size_;
+  // Total size of block cache
   size_t cache_size_;
 
   __forceinline bool isFree(const Fragment_T& node) { return node.free; }
@@ -129,12 +131,6 @@ template <typename Allocator> class SimpleHeap {
   SimpleHeap& operator=(SimpleHeap&& rhs) = delete;
 
   void* alloc(size_t bytes) {
-    if (bytes > max_alloc()) {
-      assert(false && "Requested allocation is larger than block size.");
-      throw std::bad_alloc();
-      return nullptr;
-    }
-
     // Find best fit.
     auto free_fragment = free_list_.lower_bound(bytes);
     uintptr_t base;
@@ -168,13 +164,13 @@ template <typename Allocator> class SimpleHeap {
     }
 
     // No usable fragment, check block cache
-    if (!block_cache_.empty()) {
+    if (bytes < default_block_size() && !block_cache_.empty()) {
       const auto& block = block_cache_.back();
       base = block.base_ptr_;
       size = block.length_;
       block_cache_.pop_back();
       cache_size_ -= size;
-    } else {  // Alloc new block
+    } else {  // Alloc new block - new block may be larger than default.
       void* ptr = block_allocator_.alloc(bytes, size);
       base = reinterpret_cast<uintptr_t>(ptr);
       assert(ptr != nullptr && "Block allocation failed, Allocator is expected to throw.");
@@ -189,6 +185,13 @@ template <typename Allocator> class SimpleHeap {
     }
     // Track used region
     block_list_[base][base] = makeFragment(bytes);
+
+    // Disallow multiple suballocation from large blocks.
+    // Prevents a small allocation from retaining a large block.
+    if (bytes > default_block_size()) {
+      bool err = discardBlock(reinterpret_cast<void*>(base));
+      assert(err && "Large block discard failed.");
+    }
 
     return reinterpret_cast<void*>(base);
   }
@@ -234,7 +237,6 @@ template <typename Allocator> class SimpleHeap {
     // Release whole free blocks.
     if (frag_map.size() == 1) {
       Block block(fragment->first, fragment->second.size);
-      in_use_size_ -= block.length_;
       block_list_.erase(frag_map_it);
 
       // Discard or add to the block cache.
@@ -243,15 +245,10 @@ template <typename Allocator> class SimpleHeap {
       } else {
         block_cache_.push_back(block);
         cache_size_ += block.length_;
+        in_use_size_ -= block.length_;
       }
 
-      // Release old blocks when over cache limit.
-      while ((block_cache_.size() > 1) && (cache_size_ > in_use_size_ * 2)) {
-        const auto& block = block_cache_.front();
-        block_allocator_.free(reinterpret_cast<void*>(block.base_ptr_), block.length_);
-        cache_size_ -= block.length_;
-        block_cache_.pop_front();
-      }
+      balance();
 
       // Don't publish free space since block was moved to the cache.
       return true;
@@ -268,6 +265,16 @@ template <typename Allocator> class SimpleHeap {
     return true;
   }
 
+  void balance() {
+    // Release old blocks when over cache limit.
+    while ((block_cache_.size() > 1) && (cache_size_ > in_use_size_ * 2)) {
+      const auto& block = block_cache_.front();
+      block_allocator_.free(reinterpret_cast<void*>(block.base_ptr_), block.length_);
+      cache_size_ -= block.length_;
+      block_cache_.pop_front();
+    }
+  }
+
   void trim() {
     for (const auto& block : block_cache_)
       block_allocator_.free(reinterpret_cast<void*>(block.base_ptr_), block.length_);
@@ -275,7 +282,7 @@ template <typename Allocator> class SimpleHeap {
     cache_size_ = 0;
   }
 
-  size_t max_alloc() const { return block_allocator_.block_size(); }
+  size_t default_block_size() const { return block_allocator_.block_size(); }
 
   // Prevent reuse of the block containing ptr.  No further fragments will be allocated from the
   // block and the block will not be added to the block cache when it is free.
@@ -293,8 +300,17 @@ template <typename Allocator> class SimpleHeap {
         (frag_map.rbegin()->first + frag_map.rbegin()->second.size <= base))
       return false;
 
-    // Mark all fragments for discard.  Removes freelist records for all fragments in the block.
-    for (auto& frag : frag_map) discard(frag.second);
+    // Mark all fragments for discard and compute block size.  Removes freelist records for all
+    // fragments in the block.
+    size_t size = 0;
+    for (auto& frag : frag_map) {
+      discard(frag.second);
+      size += frag.second.size;
+    }
+
+    // Remove discarded block from in-use tracking and rebalance the block cache.
+    in_use_size_ -= size;
+    balance();
 
     return true;
   }

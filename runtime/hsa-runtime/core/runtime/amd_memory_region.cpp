@@ -188,14 +188,9 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
     // Avoid modifying executable or queue allocations.
     bool useSubAlloc = subAllocEnabled;
     useSubAlloc &= ((alloc_flags & (~AllocateRestrict)) == 0);
-    useSubAlloc &= (size <= fragment_allocator_.max_alloc());
     if (useSubAlloc) {
       *address = fragment_allocator_.alloc(size);
       return HSA_STATUS_SUCCESS;
-    }
-    if (subAllocEnabled) {
-      // Pad up larger VRAM allocations.
-      size = AlignUp(size, fragment_allocator_.max_alloc());
     }
   }
 
@@ -702,17 +697,16 @@ hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
 void MemoryRegion::Trim() const { fragment_allocator_.trim(); }
 
 void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
-  assert(request_size <= block_size() && "BlockAllocator alloc request exceeds block size.");
-
   void* ret;
-  size_t bsize = block_size();
+  size_t bsize = AlignUp(request_size, block_size());
+
   hsa_status_t err = region_.Allocate(
       bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
   if (err != HSA_STATUS_SUCCESS)
     throw AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
   assert(ret != nullptr && "Region returned nullptr on success.");
 
-  allocated_size = block_size();
+  allocated_size = bsize;
   return ret;
 }
 
