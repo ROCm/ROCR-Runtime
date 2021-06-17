@@ -379,6 +379,14 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
   hsa_file_t file_handle = open(bs->kernel_file_name.c_str(), O_RDONLY);
 
   if (file_handle == -1) {
+    char agent_name[64];
+    err = hsa_agent_get_info(bs->gpu_dev, HSA_AGENT_INFO_NAME, agent_name);
+    RET_IF_HSA_ERR(err);
+    std::string fileName = std::string("./") + agent_name + "/" + bs->kernel_file_name;
+    hsa_file_t file_handle = open(fileName.c_str(), O_RDONLY);
+  }
+
+  if (file_handle == -1) {
     std::cout << "failed to open " << bs->kernel_file_name.c_str() <<
               " at line " << __LINE__ << ", errno: " << errno << std::endl;
     return HSA_STATUS_ERROR;
