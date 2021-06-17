@@ -2643,3 +2643,81 @@ TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
 
     TEST_END
 }
+
+/* Application register same userptr to multiple GPUs using multiple threads
+ * Test multiple threads register/deregister same userptr, to verify Thunk race handling
+ */
+struct ThreadParams {
+    void* pBuf;
+    HSAuint64 BufferSize;
+    HSAuint64 VAGPU;
+    pthread_barrier_t *barrier;
+};
+static unsigned int RegisterThread(void* p) {
+    struct ThreadParams* pArgs = reinterpret_cast<struct ThreadParams*>(p);
+
+    pthread_barrier_wait(pArgs->barrier);
+    EXPECT_SUCCESS(hsaKmtRegisterMemory(pArgs->pBuf, pArgs->BufferSize));
+    EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(pArgs->pBuf, pArgs->BufferSize, &pArgs->VAGPU));
+
+    return 0;
+}
+static unsigned int UnregisterThread(void* p) {
+    struct ThreadParams* pArgs = reinterpret_cast<struct ThreadParams*>(p);
+
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(pArgs->VAGPU)));
+    pthread_barrier_wait(pArgs->barrier);
+    EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(pArgs->VAGPU)));
+
+    return 0;
+}
+
+#define N_THREADS   32
+
+TEST_F(KFDMemoryTest, MultiThreadRegisterUserptrTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    HSAuint32 test_loops = 1;
+    HSAuint64 BufferSize = 1UL << 27;
+
+    void *pBuf = mmap(NULL, BufferSize, PROT_READ | PROT_WRITE,
+                      MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    ASSERT_NE(pBuf, MAP_FAILED);
+
+    struct ThreadParams params[N_THREADS];
+    HSAuint64 threadId[N_THREADS];
+
+    pthread_barrier_t barrier;
+    ASSERT_SUCCESS(pthread_barrier_init(&barrier, NULL, N_THREADS));
+
+    for (HSAuint32 loop = 0; loop < test_loops; loop++) {
+        for (HSAuint32 i = 0; i < N_THREADS; i++) {
+            params[i].pBuf = pBuf;
+            params[i].BufferSize = BufferSize;
+            params[i].VAGPU = 0;
+            params[i].barrier = &barrier;
+        }
+
+        for (HSAuint32 i = 0; i < N_THREADS; i++)
+            ASSERT_EQ(true, StartThread(&RegisterThread, &params[i], threadId[i]));
+        for (HSAuint32 i = 0; i < N_THREADS; i++)
+            WaitForThread(threadId[i]);
+
+        for (HSAuint32 i = 0; i < N_THREADS; i++)
+            ASSERT_EQ(params[0].VAGPU, params[i].VAGPU);
+
+        for (HSAuint32 i = 0; i < N_THREADS; i++)
+            ASSERT_EQ(true, StartThread(&UnregisterThread, &params[i], threadId[i]));
+        for (HSAuint32 i = 0; i < N_THREADS; i++)
+            WaitForThread(threadId[i]);
+    }
+
+    pthread_barrier_destroy(&barrier);
+    munmap(pBuf, BufferSize);
+
+    TEST_END
+}
