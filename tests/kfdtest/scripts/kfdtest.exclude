@@ -168,10 +168,12 @@ FILTER[vega12]=\
 "$SDMA_BLACKLIST"\
 
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
+# KFDEvictTest.BurstyTest (SWDEV-291256)
 FILTER[vega20]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
 "KFDEvictTest.BurstyTest:"\
+"KFDEvictTest.BasicTest:"\
 "KFDQMTest.GPUDoorbellWrite"
 
 FILTER[raven_dgpuFallback]=\
