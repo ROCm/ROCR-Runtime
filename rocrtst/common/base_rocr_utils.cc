@@ -307,6 +307,11 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   hsa_file_t file_handle = open(obj_file.c_str(), O_RDONLY);
 
   if (file_handle == -1) {
+      obj_file = "./" + test->get_agent_name() + "/" + test->kernel_file_name();
+      file_handle = open(obj_file.c_str(), O_RDONLY);
+  }
+
+  if (file_handle == -1) {
     std::cout << "failed to open " << obj_file.c_str() << " at line "
               << __LINE__ << ", file: " << __FILE__ << std::endl;
 
