@@ -1052,6 +1052,15 @@ void Runtime::AsyncEventsLoop(void*) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
     } else if (index != -1) {
       // No error or timout occured, process the handlers
+      // Call handler for the known satisfied signal.
+      assert(async_events_.handler_[index] != NULL);
+      bool keep = async_events_.handler_[index](value, async_events_.arg_[index]);
+      if (!keep) {
+        hsa_signal_handle(async_events_.signal_[index])->Release();
+        async_events_.CopyIndex(index, async_events_.Size() - 1);
+        async_events_.PopBack();
+      }
+      // Check remaining signals before sleeping.
       for (size_t i = index; i < async_events_.Size(); i++) {
         hsa_signal_handle sig(async_events_.signal_[i]);
 
