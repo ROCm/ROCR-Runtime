@@ -189,8 +189,8 @@ FILTER[raven_dgpuFallback]=\
 "KFDSVMRangeTest.MigrateGranularityTest:"\
 "KFDSVMRangeTest.MigrateLargeBufTest:"\
 "KFDSVMRangeTest.MultiThreadMigrationTest:"\
+"KFDSVMRangeTest.MigrateAccessInPlaceTest:"\
 "KFDSVMEvictTest.QueueTest"
-
 
 FILTER[raven]=\
 "$BLACKLIST_ALL_ASICS:"\
@@ -212,6 +212,7 @@ FILTER[renoir]=\
 "KFDSVMRangeTest.MigrateGranularityTest:"\
 "KFDSVMRangeTest.MigrateLargeBufTest:"\
 "KFDSVMRangeTest.MultiThreadMigrationTest:"\
+"KFDSVMRangeTest.MigrateAccessInPlaceTest:"\
 "KFDSVMEvictTest.QueueTest"
 
 # KFDExceptionTest.* (KFD-435)
