@@ -645,7 +645,7 @@ static const unsigned int kCodeTrapHandler10[] = {
 
 .set TTMP6_WAVE_STOPPED_SHIFT                , 30
 .set TTMP6_SAVED_STATUS_HALT_SHIFT           , 29
-.set TTMP6_SAVED_STATUS_HALT_MASK            , ((1 << TTMP6_SAVED_STATUS_HALT_SHIFT) - 1)
+.set TTMP6_SAVED_STATUS_HALT_MASK            , (1 << TTMP6_SAVED_STATUS_HALT_SHIFT)
 .set TTMP6_SAVED_TRAP_ID_SHIFT               , 25
 .set TTMP6_SAVED_TRAP_ID_SIZE                , 4
 .set TTMP6_SAVED_TRAP_ID_MASK                , (((1 << TTMP6_SAVED_TRAP_ID_SIZE) - 1) << TTMP6_SAVED_TRAP_ID_SHIFT)
@@ -841,7 +841,7 @@ trap_entry:
 static const unsigned int kCodeTrapHandlerV2_9[] = {
     0x92eeff6d, 0x00080010, 0xbf840009, 0xbf0d986d, 0xbf850002, 0x806c846c,
     0x826d806d, 0xbf06836e, 0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82004c,
-    0x8972ff72, 0x1fffffff, 0x83ee8f6e, 0x8e6e996e, 0x87726e72, 0x92eeff78,
+    0x8972ff72, 0x3e000000, 0x83ee8f6e, 0x8e6e996e, 0x87726e72, 0x92eeff78,
     0x0001000d, 0x8e6e9d6e, 0x87726e72, 0xbeee007e, 0xbeef007f, 0xbefe00ff,
     0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff006f,
     0x866fff7e, 0x000003ff, 0xbefe006e, 0xb8eef803, 0xbf0d9c6e, 0xbf840003,
@@ -860,7 +860,7 @@ static const unsigned int kCodeTrapHandlerV2_9[] = {
 static const unsigned int kCodeTrapHandlerV2_1010[] = {
     0x93eeff6d, 0x00080010, 0xbf840009, 0xbf0d986d, 0xbf850002, 0x806c846c,
     0x826d806d, 0xbf06836e, 0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82004c,
-    0x8a72ff72, 0x1fffffff, 0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78,
+    0x8a72ff72, 0x3e000000, 0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78,
     0x0001000d, 0x8f6e9d6e, 0x88726e72, 0xbeee037e, 0xbeef037f, 0xbefe03ff,
     0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f,
     0x876fff7e, 0x000003ff, 0xbefe036e, 0xb96ef803, 0xbf0d9c6e, 0xbf840003,
@@ -880,7 +880,7 @@ static const unsigned int kCodeTrapHandlerV2_1010[] = {
 static const unsigned int kCodeTrapHandlerV2_10[] = {
     0x93eeff6d, 0x00080010, 0xbf840009, 0xbf0d986d, 0xbf850002, 0x806c846c,
     0x826d806d, 0xbf06836e, 0xbf840003, 0xbf0c9777, 0xbf840001, 0xbf82003f,
-    0x8a72ff72, 0x1fffffff, 0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78,
+    0x8a72ff72, 0x3e000000, 0x83ee8f6e, 0x8f6e996e, 0x88726e72, 0x93eeff78,
     0x0001000d, 0x8f6e9d6e, 0x88726e72, 0xbeee037e, 0xbeef037f, 0xbefe03ff,
     0x80000000, 0xbf90000a, 0xbf800007, 0xbf0c9f7e, 0xbf84fffd, 0xbeff036f,
     0x876fff7e, 0x000003ff, 0xbefe036e, 0xb96ef803, 0xbf0d9c6e, 0xbf840003,
