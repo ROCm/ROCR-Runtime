@@ -121,7 +121,8 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       return nullptr;
   }
   try {
-    gpu = new GpuAgent(node_id, node_prop, xnack_mode);
+    gpu = new GpuAgent(node_id, node_prop, xnack_mode,
+                       core::Runtime::runtime_singleton_->gpu_agents().size());
 
     const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
@@ -146,7 +147,8 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       if (gpu->isa()->GetProcessorName() == "gfx908") {
         node_prop.Capability.ui32.SRAM_EDCSupport = 1;
         delete gpu;
-        gpu = new GpuAgent(node_id, node_prop, xnack_mode);
+        gpu = new GpuAgent(node_id, node_prop, xnack_mode,
+                           core::Runtime::runtime_singleton_->gpu_agents().size());
       }
     }
   } catch (const hsa_exception& e) {

@@ -191,6 +191,13 @@ enum {
    * HSA_AMD_GPU_MEMORY_FAULT_EVENT for more information on illegal accesses.
    */
   HSA_STATUS_ERROR_MEMORY_FAULT = 43,
+
+  /**
+   * The CU mask was successfully set but the mask attempted to enable a CU
+   * which was disabled for the process.  CUs disabled for the process remain
+   * disabled.
+   */
+  HSA_STATUS_CU_MASK_REDUCED = 44,
 };
 
 /**
@@ -780,14 +787,49 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
                                                     void* value);
 
 /**
- * @brief Set a CU affinity to specific queues within the process, this function
- * call is "atomic".
+ * @brief Set a queue's CU affinity mask.
+ *
+ * @details Enables the queue to run on only selected CUs.  The given mask is
+ * combined by bitwise AND with any device wide mask in HSA_CU_MASK before
+ * being applied.
  *
  * @param[in] queue A pointer to HSA queue.
  *
- * @param[in] num_cu_mask_count Size of CUMask bit array passed in.
+ * @param[in] num_cu_mask_count Size of CUMask bit array passed in, in bits.
  *
  * @param[in] cu_mask Bit-vector representing the CU mask.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_CU_MASK_REDUCED The function was successfully executed
+ * but the given mask attempted to enable a CU which was disabled by
+ * HSA_CU_MASK.  CUs disabled by HSA_CU_MASK remain disabled.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_QUEUE @p queue is NULL or invalid.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is 0, not
+ * a multiple of 32 or @p cu_mask is NULL.
+ *
+ */
+hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
+                                               uint32_t num_cu_mask_count,
+                                               const uint32_t* cu_mask);
+
+/**
+ * @brief Retrieve a queue's CU affinity mask.
+ *
+ * @details Returns the first num_cu_mask_count bits of a queue's CU mask.
+ * Ensure that num_cu_mask_count is at least as large as
+ * HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT to retrieve the entire mask.
+ *
+ * @param[in] queue A pointer to HSA queue.
+ *
+ * @param[in] num_cu_mask_count Size of CUMask bit array passed in, in bits.
+ *
+ * @param[out] cu_mask Bit-vector representing the CU mask.
  *
  * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
  *
@@ -796,15 +838,12 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_QUEUE @p queue is NULL or invalid.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
- * multiple of 32 or @p cu_mask is NULL.
- *
- * @retval ::HSA_STATUS_ERROR failed to call thunk api
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is 0, not
+ * a multiple of 32 or @p cu_mask is NULL.
  *
  */
-hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
-                                               uint32_t num_cu_mask_count,
-                                               const uint32_t* cu_mask);
+hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                               uint32_t* cu_mask);
 
 /**
  * @brief Memory segments associated with a memory pool.

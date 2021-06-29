@@ -77,7 +77,8 @@ extern HsaApiTable hsa_internal_api_table_;
 } // namespace core
 
 namespace AMD {
-GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode)
+GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode,
+                   uint32_t index)
     : GpuAgentInt(node),
       properties_(node_props),
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
@@ -89,6 +90,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       doorbell_queue_map_(NULL),
       memory_bus_width_(0),
       memory_max_frequency_(0),
+      enum_index_(index),
       ape1_base_(0),
       ape1_size_(0),
       scratch_cache_(

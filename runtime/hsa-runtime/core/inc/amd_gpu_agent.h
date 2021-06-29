@@ -174,7 +174,7 @@ class GpuAgent : public GpuAgentInt {
   // id.
   // @param [in] node_props Node property.
   // @param [in] xnack_mode XNACK mode of device.
-  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode);
+  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode, uint32_t index);
 
   // @brief GPU agent destructor.
   ~GpuAgent();
@@ -322,6 +322,10 @@ class GpuAgent : public GpuAgentInt {
     return memory_max_frequency_;
   }
 
+  // @brief Order the device is surfaced in hsa_iterate_agents counting only
+  // GPU devices.
+  __forceinline uint32_t enumeration_index() const { return enum_index_; }
+
   void Trim() override;
 
  protected:
@@ -453,6 +457,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief The GPU memory maximum frequency in MHz.
   uint32_t memory_max_frequency_;
+
+  // @brief Enumeration index
+  uint32_t enum_index_;
 
   // @brief HDP flush registers
   hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};

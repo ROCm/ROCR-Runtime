@@ -114,8 +114,11 @@ class QueueWrapper : public Queue {
   uint64_t AddWriteIndexRelease(uint64_t value) override {
     return wrapped->AddWriteIndexRelease(value);
   }
-  hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count, const uint32_t* cu_mask) override {
+  hsa_status_t SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) override {
     return wrapped->SetCUMasking(num_cu_mask_count, cu_mask);
+  }
+  hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override {
+    return wrapped->GetCUMasking(num_cu_mask_count, cu_mask);
   }
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override {
     wrapped->ExecutePM4(cmd_data, cmd_size_b);

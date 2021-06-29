@@ -927,6 +927,12 @@ hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
 }
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                               uint32_t* cu_mask) {
+  return amdExtTable->hsa_amd_queue_cu_get_mask_fn(queue, num_cu_mask_count, cu_mask);
+}
+
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API
     hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
                                  hsa_amd_memory_pool_info_t attribute,

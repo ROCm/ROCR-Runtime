@@ -295,8 +295,16 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   /// @param cu_mask pointer to cu mask
   ///
   /// @return hsa_status_t
-  virtual hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count,
-                                    const uint32_t* cu_mask) = 0;
+  virtual hsa_status_t SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) = 0;
+
+  /// @brief Get CU Masking
+  ///
+  /// @param num_cu_mask_count size of mask bit array
+  ///
+  /// @param cu_mask pointer to cu mask
+  ///
+  /// @return hsa_status_t
+  virtual hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) = 0;
 
   // @brief Submits a block of PM4 and waits until it has been executed.
   virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) = 0;
