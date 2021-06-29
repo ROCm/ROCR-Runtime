@@ -304,6 +304,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     exceptionState = ERROR_HANDLER_DONE;
   }
 
+  // Allocate IB for icache flushes.
   pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
       pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
   if (pm4_ib_buf_ == nullptr)
@@ -312,6 +313,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() {
     core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
   });
+
+  // Set initial CU mask
+  SetCUMasking(0, nullptr);
 
   active_ = true;
 
@@ -1027,12 +1031,72 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   return false;
 }
 
-hsa_status_t AqlQueue::SetCUMasking(const uint32_t num_cu_mask_count,
-                                    const uint32_t* cu_mask) {
-  HSAKMT_STATUS ret = hsaKmtSetQueueCUMask(
-      queue_id_, num_cu_mask_count,
-      reinterpret_cast<HSAuint32*>(const_cast<uint32_t*>(cu_mask)));
-  return (HSAKMT_STATUS_SUCCESS == ret) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+hsa_status_t AqlQueue::SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) {
+  uint32_t cu_count;
+  agent_->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &cu_count);
+  size_t mask_dwords = (cu_count + 31) / 32;
+  // Mask to trim the last uint32_t in cu_mask to the physical CU count
+  uint32_t tail_mask = (1 << (cu_count % 32)) - 1;
+
+  auto global_mask = core::Runtime::runtime_singleton_->flag().cu_mask(agent_->enumeration_index());
+  std::vector<uint32_t> mask;
+
+  bool clipped = false;
+
+  // num_cu_mask_count = 0 resets the CU mask.
+  if (num_cu_mask_count == 0) {
+    for (int i = 0; i < mask_dwords; i++) mask.push_back(-1);
+  } else {
+    for (int i = 0; i < num_cu_mask_count / 32; i++) mask.push_back(cu_mask[i]);
+  }
+
+  // Apply global mask to user mask
+  if (!global_mask.empty()) {
+    // Limit mask processing to smallest needed dword range
+    size_t limit = Min(global_mask.size(), mask.size(), mask_dwords);
+
+    // Check for disabling requested cus.
+    for (int i = limit; i < mask.size(); i++) {
+      if (mask[i] != 0) {
+        clipped = true;
+        break;
+      }
+    }
+
+    mask.resize(limit, 0);
+    for (size_t i = 0; i < limit; i++) {
+      clipped |= ((mask[i] & (~global_mask[i])) != 0);
+      mask[i] &= global_mask[i];
+    }
+  } else {
+    // Limit to physical CU range only
+    size_t limit = Min(mask.size(), mask_dwords);
+    mask.resize(limit, 0);
+  }
+
+  // Clip last dword to physical CU limit if necessary
+  if ((mask.size() == mask_dwords) && (tail_mask != 0)) mask[mask_dwords - 1] &= tail_mask;
+
+  // Apply mask and update current cu masking tracking.
+  ScopedAcquire<KernelMutex> lock(&mask_lock_);
+  HSAKMT_STATUS ret =
+      hsaKmtSetQueueCUMask(queue_id_, mask.size() * 32, reinterpret_cast<HSAuint32*>(&mask[0]));
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  cu_mask_ = std::move(mask);
+  return clipped ? (hsa_status_t)HSA_STATUS_CU_MASK_REDUCED : HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t AqlQueue::GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) {
+  ScopedAcquire<KernelMutex> lock(&mask_lock_);
+  assert(!cu_mask_.empty() && "No current cu_mask!");
+
+  uint32_t user_dword_count = num_cu_mask_count / 32;
+  if (user_dword_count > cu_mask_.size()) {
+    memset(&cu_mask[cu_mask_.size()], 0, sizeof(uint32_t) * (user_dword_count - cu_mask_.size()));
+    user_dword_count = cu_mask_.size();
+  }
+  memcpy(cu_mask, &cu_mask_[0], sizeof(uint32_t) * user_dword_count);
+  return HSA_STATUS_SUCCESS;
 }
 
 void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2021, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -45,6 +45,8 @@
 
 #include <stdint.h>
 
+#include <vector>
+#include <map>
 #include <string>
 
 #include "core/util/os.h"
@@ -149,6 +151,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_DEBUG");
     debug_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_CU_MASK");
+    parse_masks(var);
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -206,6 +211,13 @@ class Flag {
 
   bool debug() const { return debug_; }
 
+  const std::vector<uint32_t>& cu_mask(uint32_t gpu_index) const {
+    static const std::vector<uint32_t> empty;
+    auto it = cu_mask_.find(gpu_index);
+    if (it == cu_mask_.end()) return empty;
+    return it->second;
+  }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -242,6 +254,11 @@ class Flag {
 
   // Indicates user preference for Xnack state.
   XNACK_REQUEST xnack_;
+
+  // Map GPU index post RVD to its default cu mask.
+  std::map<uint32_t, std::vector<uint32_t>> cu_mask_;
+
+  void parse_masks(std::string& args);
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };
