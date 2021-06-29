@@ -1197,3 +1197,63 @@ TEST_F(KFDSVMRangeTest, MultiThreadMigrationTest) {
 
     TEST_END
 }
+
+/*
+ * Test SVM support file backed range
+ *
+ * Create temp file, mmap to alloc memory backed on file.
+ * Create file backed svm range, to map to GPU for xnack on or off
+ * Use sdma to write data to memory, should write to file
+ * Close file, and then check if file data is updated correctly
+ */
+TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    char tmpfname[] = "/tmp/kfdtest-XXXXXX";
+    int fd = mkostemp(tmpfname, 0600);
+    ASSERT_NE(-1, fd);
+
+    size_t size = PAGE_SIZE;
+    char buf[size] = {0x30};
+
+    ASSERT_EQ(size, write(fd, buf, size));
+
+    void *MmapedFile = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    ASSERT_NE(nullptr, MmapedFile);
+
+    HsaSVMRange filebackedRange(MmapedFile, size, defaultGPUNode, defaultGPUNode);
+
+    SDMAQueue sdmaQueue;
+    EXPECT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
+                    MmapedFile, 0x33333333, size));
+    sdmaQueue.Wait4PacketConsumption();
+
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+    munmap(MmapedFile, size);
+    EXPECT_SUCCESS(close(fd));
+
+    fd = open(tmpfname, O_RDONLY);
+    ASSERT_NE(-1, fd);
+
+    ASSERT_EQ(size, read(fd, buf, size));
+    EXPECT_EQ(0x33, buf[0]);
+
+    EXPECT_SUCCESS(close(fd));
+    EXPECT_SUCCESS(remove(tmpfname));
+
+    TEST_END
+}
