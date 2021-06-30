@@ -803,10 +803,14 @@ TEST_F(KFDSVMRangeTest, MigrateLargeBufTest) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    if (!GetVramSize(defaultGPUNode)) {
+    HSAuint64 vramSize;
+    vramSize = GetVramSize(defaultGPUNode);
+    if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
+
+    BufferSize = MIN(BufferSize, vramSize * 3 / 4);
 
     HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
     SysBuffer.Fill(0x1);
