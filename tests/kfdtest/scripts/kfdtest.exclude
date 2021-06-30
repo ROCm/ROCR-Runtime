@@ -291,4 +291,10 @@ FILTER[beige_goby]=\
 "$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
-"KFDPerfCountersTest.*:"
+"KFDPerfCountersTest.*:"\
+
+FILTER[yellow_carp]=\
+"$BLACKLIST_ALL_ASICS:"\
+"$TEMP_GFX10_BLACKLIST:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDIPCTest.CMABasicTest"
