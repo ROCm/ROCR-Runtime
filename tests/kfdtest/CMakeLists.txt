@@ -46,6 +46,10 @@ set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 
 # Debian package specific variables
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
+set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
+
+# RPM package specific variables
+set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 
 #set ( CMAKE_VERBOSE_MAKEFILE on )
@@ -192,4 +196,9 @@ install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest ${CMAKE_CURRENT_BINARY_DIR}/r
 install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest.exclude
 	PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ
 	DESTINATION share/kfdtest )
+# Remove dependency on rocm-core if -DROCM_DEP_ROCMCORE=ON not given to cmake
+if(NOT ROCM_DEP_ROCMCORE)
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_PACKAGE_REQUIRES ${CPACK_RPM_PACKAGE_REQUIRES})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_PACKAGE_DEPENDS ${CPACK_DEBIAN_PACKAGE_DEPENDS})
+endif()
 include ( CPack )
