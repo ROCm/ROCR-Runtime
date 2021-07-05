@@ -264,7 +264,7 @@ endif()
 
 # Debian package specific variables
 set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface")
-set(CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1")
+set(CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libc6, libnuma1, zlib1g, libudev1, rocm-core")
 set(CPACK_DEBIAN_DEVEL_PACKAGE_NAME "hsakmt-roct-dev")
 if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
    set(CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
@@ -280,11 +280,11 @@ set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
 # get OS-info
 get_os_info()
 if(DISTRO_ID MATCHES "sles" )
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1, libdrm-devel")
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1, libdrm-devel, rocm-core")
 elseif(DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6")
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc")
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc, rocm-core")
 else()
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc")
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl-libs, libgcc, rocm-core")
 endif()
 
 ## Process the Rpm install/remove scripts to update the CPACK variables
@@ -322,11 +322,19 @@ set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_
 set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
 
 # Setting devel package dependendent version
-set(CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${PACKAGE_VERSION_STR}-${CPACK_DEBIAN_PACKAGE_RELEASE})")
-set(CPACK_RPM_DEVEL_PACKAGE_REQUIRES "${HSAKMT_PACKAGE} = ${PACKAGE_VERSION_STR}-${CPACK_RPM_PACKAGE_RELEASE}")
+set(CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS "${HSAKMT_PACKAGE} (=${PACKAGE_VERSION_STR}-${CPACK_DEBIAN_PACKAGE_RELEASE}), rocm-core")
+set(CPACK_RPM_DEVEL_PACKAGE_REQUIRES "${HSAKMT_PACKAGE} = ${PACKAGE_VERSION_STR}-${CPACK_RPM_PACKAGE_RELEASE}, rocm-core")
 
 # Set the names now using CPACK utility
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set(CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+
+# Remove dependency on rocm-core if -DROCM_DEP_ROCMCORE=ON not given to cmake
+if(NOT ROCM_DEP_ROCMCORE)
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_BINARY_PACKAGE_REQUIRES ${CPACK_RPM_BINARY_PACKAGE_REQUIRES})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_RPM_DEVEL_PACKAGE_REQUIRES ${CPACK_RPM_DEVEL_PACKAGE_REQUIRES})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ${CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS})
+    string(REGEX REPLACE ",? ?rocm-core" "" CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS ${CPACK_DEBIAN_DEVEL_PACKAGE_DEPENDS})
+endif()
 
 include(CPack)
