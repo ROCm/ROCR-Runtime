@@ -264,6 +264,9 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x73FF, 10, 3, 2, "DIMGREY_CAVEFISH", CHIP_DIMGREY_CAVEFISH },
 	/* VanGogh */
 	{ 0x163F, 10, 3, 3, "VanGogh", CHIP_VANGOGH },
+	/* Yellow_Carp */
+	{ 0x164D, 10, 3, 5, "YELLOW_CARP", CHIP_YELLOW_CARP },
+	{ 0x1681, 10, 3, 5, "YELLOW_CARP", CHIP_YELLOW_CARP },
 };
 
 /* information from /proc/cpuinfo */
