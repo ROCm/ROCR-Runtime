@@ -250,6 +250,17 @@ FILTER[navi10]=\
 "$TEMP_GFX10_BLACKLIST:"\
 "KFDMemoryTest.MMBench"
 
+# Need to verify the following failed tests on another machine:
+# Exceptions not being received during exception tests
+# PerfCounters return HSAKMT_STATUS_INVALID_PARAMETER
+# P2PBandwidth failing (wait times out) on node-to-multiple-nodes by [push, NONE]
+FILTER[navi12]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDExceptionTest.*:"\
+"KFDPerfCountersTest.*:"\
+"KFDPerformanceTest.P2PBandWidthTest:"\
+"$TEMP_GFX10_BLACKLIST"
+
 FILTER[navi14]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$TEMP_GFX10_BLACKLIST"
