@@ -2077,8 +2077,10 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	mem = __fmm_allocate_device(gpu_id, NULL, PAGE_SIZE, aperture,
 			&mmap_offset, ioc_flags, &vm_obj);
 
-	if (!mem || !vm_obj)
+	if (!mem || !vm_obj) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return NULL;
+	}
 
 	flags.Value = 0;
 	flags.ui32.NonPaged = 1;
