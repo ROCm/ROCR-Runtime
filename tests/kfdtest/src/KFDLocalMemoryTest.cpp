@@ -516,6 +516,11 @@ TEST_F(KFDLocalMemoryTest, MapVramToGPUNodesTest) {
         }
     }
 
+    if (!m_NodeInfo.IsPeerAccessibleByNode(dst_node, src_node)) {
+        LOG() << "Skipping test: GPUs are not peer-accessible" << std::endl;
+        return;
+    }
+
     LOG() << "Testing from GPU " << src_node << " to GPU " << dst_node << std::endl;
 
     void *shared_addr;
