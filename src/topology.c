@@ -205,6 +205,7 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x15DD, 9, 0, 2, "Raven" },
 	{ 0x15D8, 9, 0, 2, "Raven" },
 	/* Renoir */
+	{ 0x15E7, 9, 0, 2, "Renoir" },
 	{ 0x1636, 9, 0, 2, "Renoir" },
 	{ 0x1638, 9, 0, 2, "Renoir" },
 	{ 0x164C, 9, 0, 2, "Renoir" },
