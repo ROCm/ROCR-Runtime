@@ -284,11 +284,11 @@ class Runtime {
     size_t length;
   };
 
-  hsa_status_t PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+  hsa_status_t PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                        uint32_t* num_agents_accessible, hsa_agent_t** accessible,
                        PtrInfoBlockData* block_info = nullptr);
 
-  hsa_status_t SetPtrInfoData(void* ptr, void* userptr);
+  hsa_status_t SetPtrInfoData(const void* ptr, void* userptr);
 
   hsa_status_t IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
 

@@ -761,7 +761,7 @@ hsa_status_t Runtime::InteropUnmap(void* ptr) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                               uint32_t* num_agents_accessible, hsa_agent_t** accessible,
                               PtrInfoBlockData* block_info) {
   static_assert(static_cast<int>(HSA_POINTER_UNKNOWN) == static_cast<int>(HSA_EXT_POINTER_TYPE_UNKNOWN),
@@ -884,7 +884,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t Runtime::SetPtrInfoData(void* ptr, void* userptr) {
+hsa_status_t Runtime::SetPtrInfoData(const void* ptr, void* userptr) {
   {  // Use allocation map if possible to handle fragments.
     ScopedAcquire<KernelMutex> lock(&memory_lock_);
     const auto& it = allocation_map_.find(ptr);
