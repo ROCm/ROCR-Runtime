@@ -970,7 +970,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
       // EC_QUEUE_WAVE_ILLEGAL_INSTRUCTION
       4, (hsa_status_t)HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION,
       // EC_QUEUE_WAVE_MEMORY_VIOLATION
-      5, HSA_STATUS_ERROR,
+      5, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_FAULT,
       // EC_QUEUE_WAVE_APERTURE_VIOLATION
       6, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION,
       // EC_QUEUE_PACKET_DISPATCH_DIM_INVALID

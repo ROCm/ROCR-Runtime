@@ -2758,6 +2758,10 @@ hsa_status_t hsa_status_string(
       *status_string =
           "HSA_EXT_STATUS_ERROR_DIRECTIVE_MISMATCH: Directive mismatch";
       break;
+    case HSA_STATUS_ERROR_MEMORY_FAULT:
+      *status_string =
+          "HSA_STATUS_ERROR_MEMORY_FAULT: Agent attempted to access an inaccessible address.";
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

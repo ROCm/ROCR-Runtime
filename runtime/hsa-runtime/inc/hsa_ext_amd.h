@@ -184,6 +184,13 @@ enum {
    * Agent executed an invalid shader instruction.
    */
   HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION = 42,
+
+  /**
+   * Agent attempted to access an inaccessible address.
+   * See hsa_amd_register_system_event_handler and
+   * HSA_AMD_GPU_MEMORY_FAULT_EVENT for more information on illegal accesses.
+   */
+  HSA_STATUS_ERROR_MEMORY_FAULT = 43,
 };
 
 /**
