@@ -2562,82 +2562,68 @@ hsa_status_t hsa_status_string(
   const size_t status_u = static_cast<size_t>(status);
   switch (status_u) {
     case HSA_STATUS_SUCCESS:
-      *status_string =
-          "HSA_STATUS_SUCCESS: The function has been executed successfully.";
+      *status_string = "HSA_STATUS_SUCCESS: The function has been executed successfully.";
       break;
     case HSA_STATUS_INFO_BREAK:
       *status_string =
-          "HSA_STATUS_INFO_BREAK: A traversal over a list of "
-          "elements has been interrupted by the application before "
-          "completing.";
+          "HSA_STATUS_INFO_BREAK: A traversal over a list of elements has been interrupted by the "
+          "application before completing.";
       break;
     case HSA_STATUS_ERROR:
       *status_string = "HSA_STATUS_ERROR: A generic error has occurred.";
       break;
     case HSA_STATUS_ERROR_INVALID_ARGUMENT:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_ARGUMENT: One of the actual "
-          "arguments does not meet a precondition stated in the "
-          "documentation of the corresponding formal argument.";
+          "HSA_STATUS_ERROR_INVALID_ARGUMENT: One of the actual arguments does not meet a "
+          "precondition stated in the documentation of the corresponding formal argument.";
       break;
     case HSA_STATUS_ERROR_INVALID_QUEUE_CREATION:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_QUEUE_CREATION: The requested "
-          "queue creation is not valid.";
+          "HSA_STATUS_ERROR_INVALID_QUEUE_CREATION: The requested queue creation is not valid.";
       break;
     case HSA_STATUS_ERROR_INVALID_ALLOCATION:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_ALLOCATION: The requested "
-          "allocation is not valid.";
+          "HSA_STATUS_ERROR_INVALID_ALLOCATION: The requested allocation is not valid.";
       break;
     case HSA_STATUS_ERROR_INVALID_AGENT:
-      *status_string =
-          "HSA_STATUS_ERROR_INVALID_AGENT: The agent is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_AGENT: The agent is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_REGION:
-      *status_string =
-          "HSA_STATUS_ERROR_INVALID_REGION: The memory region is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_REGION: The memory region is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_SIGNAL:
-      *status_string =
-          "HSA_STATUS_ERROR_INVALID_SIGNAL: The signal is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL: The signal is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_QUEUE:
-      *status_string =
-          "HSA_STATUS_ERROR_INVALID_QUEUE: The queue is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_QUEUE: The queue is invalid.";
       break;
     case HSA_STATUS_ERROR_OUT_OF_RESOURCES:
       *status_string =
-          "HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to "
-          "allocate the necessary resources. This error may also "
-          "occur when the core runtime library needs to spawn "
+          "HSA_STATUS_ERROR_OUT_OF_RESOURCES: The runtime failed to allocate the necessary "
+          "resources. This error may also occur when the core runtime library needs to spawn "
           "threads or create internal OS-specific events.";
       break;
     case HSA_STATUS_ERROR_INVALID_PACKET_FORMAT:
-      *status_string =
-          "HSA_STATUS_ERROR_INVALID_PACKET_FORMAT: The AQL packet "
-          "is malformed.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_PACKET_FORMAT: The AQL packet is malformed.";
       break;
     case HSA_STATUS_ERROR_RESOURCE_FREE:
       *status_string =
-          "HSA_STATUS_ERROR_RESOURCE_FREE: An error has been "
-          "detected while releasing a resource.";
+          "HSA_STATUS_ERROR_RESOURCE_FREE: An error has been detected while releasing a resource.";
       break;
     case HSA_STATUS_ERROR_NOT_INITIALIZED:
       *status_string =
-          "HSA_STATUS_ERROR_NOT_INITIALIZED: An API other than "
-          "hsa_init has been invoked while the reference count of "
-          "the HSA runtime is zero.";
+          "HSA_STATUS_ERROR_NOT_INITIALIZED: An API other than hsa_init has been invoked while the "
+          "reference count of the HSA runtime is zero.";
       break;
     case HSA_STATUS_ERROR_REFCOUNT_OVERFLOW:
       *status_string =
-          "HSA_STATUS_ERROR_REFCOUNT_OVERFLOW: The maximum "
-          "reference count for the object has been reached.";
+          "HSA_STATUS_ERROR_REFCOUNT_OVERFLOW: The maximum reference count for the object has been "
+          "reached.";
       break;
     case HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS:
       *status_string =
-          "HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS: The arguments passed to "
-          "a functions are not compatible.";
+          "HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS: The arguments passed to a functions are not "
+          "compatible.";
       break;
     case HSA_STATUS_ERROR_INVALID_INDEX:
       *status_string = "HSA_STATUS_ERROR_INVALID_INDEX: The index is invalid.";
@@ -2673,63 +2659,63 @@ hsa_status_t hsa_status_string(
           "HSA_STATUS_ERROR_EXCEPTION: An HSAIL operation resulted in a hardware exception.";
       break;
     case HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:
-      *status_string = "HSA_STATUS_ERROR_INVALID_CODE_SYMBOL:  The code object symbol is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_CODE_SYMBOL: The code object symbol is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL:  The executable symbol is invalid.";
+          "HSA_STATUS_ERROR_INVALID_EXECUTABLE_SYMBOL: The executable symbol is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_FILE:
-      *status_string = "HSA_STATUS_ERROR_INVALID_FILE:  The file descriptor is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_FILE: The file descriptor is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER:  The code object reader is invalid.";
+          "HSA_STATUS_ERROR_INVALID_CODE_OBJECT_READER: The code object reader is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_CACHE:
-      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE:  The cache is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_CACHE: The cache is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_WAVEFRONT:
-      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT:  The wavefront is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_WAVEFRONT: The wavefront is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:
-      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP:  The signal group is invalid.";
+      *status_string = "HSA_STATUS_ERROR_INVALID_SIGNAL_GROUP: The signal group is invalid.";
       break;
     case HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:
       *status_string =
-          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE:  The HSA runtime is not in the configuration "
+          "HSA_STATUS_ERROR_INVALID_RUNTIME_STATE: The HSA runtime is not in the configuration "
           "state.";
       break;
     case HSA_STATUS_ERROR_FATAL:
       *status_string =
-          "HSA_STATUS_ERROR_FATAL:  The queue received an error that may require process "
+          "HSA_STATUS_ERROR_FATAL: The queue received an error that may require process "
           "termination.";
       break;
     case HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION:
       *status_string =
-          "HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION:  The agent attempted to access "
-          "memory beyond the largest legal address.";
+          "HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION: The agent attempted to access memory beyond "
+          "the largest legal address.";
       break;
     case HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION:
       *status_string =
-          "HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION:  The agent attempted to execute an "
-          "illegal shader instruction.";
+          "HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION: The agent attempted to execute an illegal shader "
+          "instruction.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED:
       *status_string =
-          "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image "
-          "format is not supported.";
+          "HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED: Image format is not supported.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED: Image size "
-          "is not supported.";
+      *status_string = "HSA_EXT_STATUS_ERROR_IMAGE_SIZE_UNSUPPORTED: Image size is not supported.";
       break;
     case HSA_EXT_STATUS_ERROR_IMAGE_PITCH_UNSUPPORTED:
-      *status_string = "Image pitch is not supported or invalid.";
+      *status_string =
+          "HSA_EXT_STATUS_ERROR_IMAGE_PITCH_UNSUPPORTED: Image pitch is not supported or invalid.";
       break;
     case HSA_EXT_STATUS_ERROR_SAMPLER_DESCRIPTOR_UNSUPPORTED:
-      *status_string = "Sampler descriptor is not supported or invalid.";
+      *status_string =
+          "HSA_EXT_STATUS_ERROR_SAMPLER_DESCRIPTOR_UNSUPPORTED: Sampler descriptor is not "
+          "supported or invalid.";
       break;
     case HSA_EXT_STATUS_ERROR_INVALID_PROGRAM:
       *status_string = "HSA_EXT_STATUS_ERROR_INVALID_PROGRAM: Invalid program";
@@ -2738,25 +2724,19 @@ hsa_status_t hsa_status_string(
       *status_string = "HSA_EXT_STATUS_ERROR_INVALID_MODULE: Invalid module";
       break;
     case HSA_EXT_STATUS_ERROR_INCOMPATIBLE_MODULE:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_INCOMPATIBLE_MODULE: Incompatible module";
+      *status_string = "HSA_EXT_STATUS_ERROR_INCOMPATIBLE_MODULE: Incompatible module";
       break;
     case HSA_EXT_STATUS_ERROR_MODULE_ALREADY_INCLUDED:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_MODULE_ALREADY_INCLUDED: Module already "
-          "included";
+      *status_string = "HSA_EXT_STATUS_ERROR_MODULE_ALREADY_INCLUDED: Module already included";
       break;
     case HSA_EXT_STATUS_ERROR_SYMBOL_MISMATCH:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_SYMBOL_MISMATCH: Symbol mismatch";
+      *status_string = "HSA_EXT_STATUS_ERROR_SYMBOL_MISMATCH: Symbol mismatch";
       break;
     case HSA_EXT_STATUS_ERROR_FINALIZATION_FAILED:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_FINALIZATION_FAILED: Finalization failed";
+      *status_string = "HSA_EXT_STATUS_ERROR_FINALIZATION_FAILED: Finalization failed";
       break;
     case HSA_EXT_STATUS_ERROR_DIRECTIVE_MISMATCH:
-      *status_string =
-          "HSA_EXT_STATUS_ERROR_DIRECTIVE_MISMATCH: Directive mismatch";
+      *status_string = "HSA_EXT_STATUS_ERROR_DIRECTIVE_MISMATCH: Directive mismatch";
       break;
     case HSA_STATUS_ERROR_MEMORY_FAULT:
       *status_string =
