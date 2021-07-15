@@ -2762,6 +2762,9 @@ hsa_status_t hsa_status_string(
       *status_string =
           "HSA_STATUS_ERROR_MEMORY_FAULT: Agent attempted to access an inaccessible address.";
       break;
+    case HSA_STATUS_ERROR_INVALID_MEMORY_POOL:
+      *status_string = "HSA_STATUS_ERROR_INVALID_MEMORY_POOL: The memory pool is invalid.";
+      break;
     case HSA_STATUS_CU_MASK_REDUCED:
       *status_string =
           "HSA_STATUS_CU_MASK_REDUCED: The CU mask was successfully set but the mask attempted to "
