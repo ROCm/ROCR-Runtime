@@ -1079,13 +1079,13 @@ hsa_status_t HSA_API hsa_amd_image_create(
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                               uint32_t* num_agents_accessible, hsa_agent_t** accessible) {
   return amdExtTable->hsa_amd_pointer_info_fn(ptr, info, alloc, num_agents_accessible, accessible);
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userptr) {
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userptr) {
   return amdExtTable->hsa_amd_pointer_info_set_userdata_fn(ptr, userptr);
 }
 

@@ -1815,7 +1815,7 @@ typedef struct hsa_amd_pointer_info_s {
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT NULL in @p ptr or @p info.
  */
-hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
+hsa_status_t HSA_API hsa_amd_pointer_info(const void* ptr,
                                           hsa_amd_pointer_info_t* info,
                                           void* (*alloc)(size_t),
                                           uint32_t* num_agents_accessible,
@@ -1839,7 +1839,7 @@ hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is not known to ROCr.
  */
-hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr,
+hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(const void* ptr,
                                                        void* userdata);
 
 /**

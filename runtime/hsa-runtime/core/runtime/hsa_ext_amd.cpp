@@ -833,7 +833,7 @@ hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   CATCH;
 }
 
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                                   uint32_t* num_accessible, hsa_agent_t** accessible) {
   TRY;
   IS_OPEN();
@@ -843,7 +843,7 @@ hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void*
   CATCH;
 }
 
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata) {
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userdata) {
   TRY;
   IS_OPEN();
   IS_BAD_PTR(ptr);

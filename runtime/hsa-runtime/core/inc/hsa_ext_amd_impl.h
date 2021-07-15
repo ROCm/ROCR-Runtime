@@ -204,12 +204,12 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
 hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info,
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info,
                                           void* (*alloc)(size_t), uint32_t* num_agents_accessible,
                                           hsa_agent_t** accessible);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata);
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userdata);
 
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
