@@ -1091,8 +1091,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->EngineId.ui32.Stepping = step & 0xff;
 		} else {
 			props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
-			props->EngineId.ui32.Minor = hsa_gfxip->minor;
-			props->EngineId.ui32.Stepping = hsa_gfxip->stepping;
+			props->EngineId.ui32.Minor = hsa_gfxip->minor & 0xff;
+			props->EngineId.ui32.Stepping = hsa_gfxip->stepping & 0xff;
 		}
 
 		if (!hsa_gfxip->amd_name) {
@@ -2269,6 +2269,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);
 	return err;
+}
+
+uint32_t get_gfxv_by_node_id(HSAuint32 node_id)
+{
+	return HSA_GET_GFX_VERSION_FULL(g_props[node_id].node.EngineId.ui32);
 }
 
 uint16_t get_device_id_by_node_id(HSAuint32 node_id)
