@@ -41,10 +41,6 @@ extern bool is_dgpu;
 
 extern HsaVersionInfo kfd_version_info;
 
-extern int force_asic;
-extern char force_asic_name[HSA_PUBLIC_NAME_SIZE];
-extern struct hsa_gfxip_table force_asic_entry;
-
 #undef HSAKMTAPI
 #define HSAKMTAPI __attribute__((visibility ("default")))
 
@@ -155,43 +151,12 @@ enum full_gfx_versions {
 	GFX_VERSION_YELLOW_CARP	 	= 0x100305,
 };
 
-enum asic_family_type {
-	CHIP_KAVERI = 0,
-	CHIP_HAWAII,	/* 1 */
-	CHIP_CARRIZO,	/* 2 */
-	CHIP_TONGA,	/* 3 */
-	CHIP_FIJI,	/* 4 */
-	CHIP_POLARIS10,	/* 5 */
-	CHIP_POLARIS11,	/* 6 */
-	CHIP_POLARIS12,	/* 7 */
-	CHIP_VEGAM,	/* 8 */
-	CHIP_VEGA10,	/* 9 */
-	CHIP_VEGA12,	/* 10 */
-	CHIP_VEGA20,	/* 11 */
-	CHIP_RAVEN,	/* 12 */
-	CHIP_RENOIR,	/* 13 */
-	CHIP_ARCTURUS,	/* 14 */
-	CHIP_ALDEBARAN, /* 15 */
-	CHIP_NAVI10,	/* 16 */
-	CHIP_CYAN_SKILLFISH,	/* 17 */
-	CHIP_NAVI12,	/* 18 */
-	CHIP_NAVI14,	/* 19 */
-	CHIP_SIENNA_CICHLID,	/* 20 */
-	CHIP_NAVY_FLOUNDER,	/* 21 */
-	CHIP_DIMGREY_CAVEFISH,	/* 22 */
-	CHIP_VANGOGH,	/* 23 */
-	CHIP_BEIGE_GOBY,	/* 24 */
-	CHIP_YELLOW_CARP, 	/* 25 */
-	CHIP_LAST
-};
-
 struct hsa_gfxip_table {
 	uint16_t device_id;		// Device ID
 	unsigned char major;		// GFXIP Major engine version
 	unsigned char minor;		// GFXIP Minor engine version
 	unsigned char stepping;		// GFXIP Stepping info
 	const char *amd_name;		// CALName of the device
-	enum asic_family_type asic_family;	// Device family id
 };
 
 HSAKMT_STATUS init_kfd_version(void);
@@ -215,8 +180,6 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties 
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 void topology_setup_is_dgpu_param(HsaNodeProperties *props);
 bool topology_is_svm_needed(uint32_t node_id);
-HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
-					enum asic_family_type *asic);
 
 HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags);
 
