@@ -1318,7 +1318,8 @@ static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t Memo
 	return mem;
 }
 
-void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes, HsaMemFlags mflags)
+void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
+			  uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
@@ -1339,7 +1340,7 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(mflags);
 
-	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id))) {
+	if (topology_is_svm_needed(node_id)) {
 		aperture = svm.dgpu_aperture;
 		if (mflags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
@@ -2386,7 +2387,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	fmm_init_rbtree();
 
 	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
-		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id))
+		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].node_id))
 			continue;
 		gpu_mem[gpu_mem_id].mmio_aperture.base = map_mmio(
 				gpu_mem[gpu_mem_id].node_id,
@@ -3170,7 +3171,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	gpu_mem_id = gpu_mem_find_by_gpu_id(infoArgs.gpu_id);
 	if (gpu_mem_id < 0)
 		goto error_free_metadata;
-	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].device_id)) {
+	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].node_id)) {
 		aperture = svm.dgpu_aperture;
 		aperture_base = NULL;
 	} else {

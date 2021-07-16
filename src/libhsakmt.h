@@ -214,7 +214,7 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties 
 					bool *p2p_links, uint32_t *num_p2pLinks);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 void topology_setup_is_dgpu_param(HsaNodeProperties *props);
-bool topology_is_svm_needed(uint16_t device_id);
+bool topology_is_svm_needed(uint32_t node_id);
 HSAKMT_STATUS topology_get_asic_family(uint16_t device_id,
 					enum asic_family_type *asic);
 

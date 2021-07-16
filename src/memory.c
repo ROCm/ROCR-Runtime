@@ -171,7 +171,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated VRAM */
-	*MemoryAddress = fmm_allocate_device(gpu_id, *MemoryAddress, SizeInBytes, MemFlags);
+	*MemoryAddress = fmm_allocate_device(gpu_id, PreferredNode, *MemoryAddress,
+					     SizeInBytes, MemFlags);
 
 	if (!(*MemoryAddress)) {
 		pr_err("[%s] failed to allocate %lu bytes from device\n",

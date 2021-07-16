@@ -798,16 +798,12 @@ void topology_setup_is_dgpu_param(HsaNodeProperties *props)
 		is_dgpu = true;
 }
 
-bool topology_is_svm_needed(uint16_t device_id)
+bool topology_is_svm_needed(uint32_t node_id)
 {
-	const struct hsa_gfxip_table *hsa_gfxip;
-
 	if (is_dgpu)
 		return true;
 
-	hsa_gfxip = find_hsa_gfxip_device(device_id);
-
-	if (hsa_gfxip && hsa_gfxip->asic_family >= CHIP_VEGA10)
+	if (get_gfxv_by_node_id(node_id) >= GFX_VERSION_VEGA10)
 		return true;
 
 	return false;
