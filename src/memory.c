@@ -51,17 +51,17 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 	pr_debug("[%s] node %d; default %d; alternate %d\n",
 		__func__, Node, DefaultPolicy, AlternatePolicy);
 
-	if (!is_kaveri(Node))
+	result = validate_nodeid(Node, &gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS)
+		return result;
+
+	if (get_gfxv_by_node_id(Node) != GFX_VERSION_KAVERI)
 		/* This is a legacy API useful on Kaveri only. On dGPU
 		 * the alternate aperture is setup and used
 		 * automatically for coherent allocations. Don't let
 		 * app override it.
 		 */
 		return HSAKMT_STATUS_NOT_IMPLEMENTED;
-
-	result = validate_nodeid(Node, &gpu_id);
-	if (result != HSAKMT_STATUS_SUCCESS)
-		return result;
 
 	/*
 	 * We accept any legal policy and alternate address location.
