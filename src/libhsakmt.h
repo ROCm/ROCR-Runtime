@@ -203,7 +203,6 @@ HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
 uint32_t get_gfxv_by_node_id(HSAuint32 node_id);
 bool prefer_ats(HSAuint32 node_id);
 uint16_t get_device_id_by_node_id(HSAuint32 node_id);
-bool is_kaveri(HSAuint32 node_id);
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id);
 uint32_t get_direct_link_cpu(uint32_t gpu_node);
 int get_drm_render_fd_by_gpu_id(HSAuint32 gpu_id);

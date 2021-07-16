@@ -2154,7 +2154,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	 * For dGPU the topology node contains Local Memory and it is added by
 	 * the for loop above
 	 */
-	if (is_kaveri(NodeId) && i < NumBanks && g_props[NodeId].node.LocalMemSize > 0 &&
+	if (get_gfxv_by_node_id(NodeId) == GFX_VERSION_KAVERI && i < NumBanks &&
+		g_props[NodeId].node.LocalMemSize > 0 &&
 		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
@@ -2289,12 +2290,6 @@ bool prefer_ats(HSAuint32 node_id)
 	return g_props[node_id].node.Capability.ui32.HSAMMUPresent
 			&& g_props[node_id].node.NumCPUCores
 			&& g_props[node_id].node.NumFComputeCores;
-}
-
-bool is_kaveri(HSAuint32 node_id)
-{
-	return g_props[node_id].node.EngineId.ui32.Major == 7
-			&& g_props[node_id].node.EngineId.ui32.Minor == 0;
 }
 
 uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
