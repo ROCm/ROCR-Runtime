@@ -117,6 +117,44 @@ extern int hsakmt_debug_level;
         }                                       \
 })
 
+/* Expects gfxv (full) in decimal */
+#define HSA_GET_GFX_VERSION_MAJOR(gfxv)   (((gfxv) / 10000) % 100)
+#define HSA_GET_GFX_VERSION_MINOR(gfxv)   (((gfxv) / 100) % 100)
+#define HSA_GET_GFX_VERSION_STEP(gfxv)    ((gfxv) % 100)
+
+/* Expects HSA_ENGINE_ID.ui32, returns gfxv (full) in hex */
+#define HSA_GET_GFX_VERSION_FULL(ui32) \
+	(((ui32.Major) << 16) | ((ui32.Minor) << 8) | (ui32.Stepping))
+
+enum full_gfx_versions {
+	GFX_VERSION_KAVERI		= 0x070000,
+	GFX_VERSION_HAWAII		= 0x070001,
+	GFX_VERSION_CARRIZO		= 0x080001,
+	GFX_VERSION_TONGA		= 0x080002,
+	GFX_VERSION_FIJI		= 0x080003,
+	GFX_VERSION_POLARIS10		= 0x080003,
+	GFX_VERSION_POLARIS11		= 0x080003,
+	GFX_VERSION_POLARIS12		= 0x080003,
+	GFX_VERSION_VEGAM		= 0x080003,
+	GFX_VERSION_VEGA10		= 0x090000,
+	GFX_VERSION_RAVEN		= 0x090002,
+	GFX_VERSION_RENOIR		= 0x090002,
+	GFX_VERSION_VEGA12		= 0x090004,
+	GFX_VERSION_VEGA20		= 0x090006,
+	GFX_VERSION_ARCTURUS		= 0x090008,
+	GFX_VERSION_ALDEBARAN		= 0x090010,
+	GFX_VERSION_NAVI10		= 0x100100,
+	GFX_VERSION_NAVI12		= 0x100101,
+	GFX_VERSION_NAVI14		= 0x100102,
+	GFX_VERSION_CYAN_SKILLFISH	= 0x100103,
+	GFX_VERSION_SIENNA_CICHLID	= 0x100300,
+	GFX_VERSION_NAVY_FLOUNDER	= 0x100301,
+	GFX_VERSION_DIMGREY_CAVEFISH	= 0x100302,
+	GFX_VERSION_VANGOGH	 	= 0x100303,
+	GFX_VERSION_BEIGE_GOBY	 	= 0x100304,
+	GFX_VERSION_YELLOW_CARP	 	= 0x100305,
+};
+
 enum asic_family_type {
 	CHIP_KAVERI = 0,
 	CHIP_HAWAII,	/* 1 */
@@ -162,6 +200,7 @@ HSAKMT_STATUS init_kfd_version(void);
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
+uint32_t get_gfxv_by_node_id(HSAuint32 node_id);
 bool prefer_ats(HSAuint32 node_id);
 uint16_t get_device_id_by_node_id(HSAuint32 node_id);
 bool is_kaveri(HSAuint32 node_id);
