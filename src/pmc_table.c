@@ -2088,8 +2088,8 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 				   enum perf_block_id block_id,
 				   struct perf_counter_block *block)
 {
+	uint32_t gfxv = get_gfxv_by_node_id(node_id);
 	uint16_t dev_id = get_device_id_by_node_id(node_id);
-	enum asic_family_type asic;
 
 	if (block_id > PERFCOUNTER_BLOCKID__MAX ||
 			block_id < PERFCOUNTER_BLOCKID__FIRST)
@@ -2100,42 +2100,34 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (topology_get_asic_family(dev_id, &asic) != HSAKMT_STATUS_SUCCESS)
-		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	switch (asic) {
-	case CHIP_KAVERI:
-		*block = kaveri_blocks[block_id];
+	/* Major GFX Version */
+	switch (gfxv >> 16) {
+	case 7:
+		if (gfxv == GFX_VERSION_KAVERI)
+			*block = kaveri_blocks[block_id];
+		else
+			*block = hawaii_blocks[block_id];
 		break;
-	case CHIP_HAWAII:
-		*block = hawaii_blocks[block_id];
+	case 8:
+		if (gfxv == GFX_VERSION_TONGA)
+			return HSAKMT_STATUS_INVALID_PARAMETER;
+		else if (gfxv == GFX_VERSION_CARRIZO)
+			*block = carrizo_blocks[block_id];
+		else {
+			/*
+			 * Fiji/Polaris/VegaM cards are of the same GFXIP Engine Version (8.0.3).
+			 * Only way to differentiate b/t Fiji and Polaris/VegaM is via DID.
+			 */
+			if (dev_id == 0x7300 || dev_id == 0x730F)
+				*block = fiji_blocks[block_id];
+			else
+				*block = polaris_blocks[block_id];
+		}
 		break;
-	case CHIP_CARRIZO:
-		*block = carrizo_blocks[block_id];
-		break;
-	case CHIP_FIJI:
-		*block = fiji_blocks[block_id];
-		break;
-	case CHIP_POLARIS10:
-	case CHIP_POLARIS11:
-	case CHIP_POLARIS12:
-	case CHIP_VEGAM:
-		*block = polaris_blocks[block_id];
-		break;
-	case CHIP_VEGA10:
-	case CHIP_VEGA12:
-	case CHIP_VEGA20:
-	case CHIP_RAVEN:
-	case CHIP_RENOIR:
-	case CHIP_ARCTURUS:
-	case CHIP_ALDEBARAN:
+	case 9:
 		*block = vega_blocks[block_id];
 		break;
-	case CHIP_NAVI10:
-	case CHIP_NAVI14:
-	case CHIP_VANGOGH:
-	case CHIP_YELLOW_CARP:
-	case CHIP_CYAN_SKILLFISH:
+	case 10:
 		*block = navi_blocks[block_id];
 		break;
 	default:
