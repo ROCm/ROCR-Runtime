@@ -280,7 +280,7 @@ set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
 # get OS-info
 get_os_info()
 if(DISTRO_ID MATCHES "sles" )
-    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1")
+    set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, libnuma-devel, libgcc_s1, libdrm-devel")
 elseif(DISTRO_ID MATCHES "centos" AND DISTRO_RELEASE MATCHES "6")
     set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "glibc, numactl, libgcc")
 else()
