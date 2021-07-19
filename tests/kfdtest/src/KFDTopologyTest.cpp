@@ -90,7 +90,7 @@ TEST_F(KFDTopologyTest, GetNodePropertiesInvalidNodeNum) {
 
     HsaNodeProperties nodeProperties;
     memset(&nodeProperties, 0, sizeof(nodeProperties));
-    EXPECT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtGetNodeProperties(m_SystemProperties.NumNodes, &nodeProperties));
+    EXPECT_EQ(HSAKMT_STATUS_INVALID_NODE_UNIT, hsaKmtGetNodeProperties(m_SystemProperties.NumNodes, &nodeProperties));
 
     TEST_END
 }
