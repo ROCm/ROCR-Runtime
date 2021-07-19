@@ -2036,21 +2036,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	CHECK_KFD_OPEN();
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	/* KFD ADD page 18, snapshot protocol violation */
-	if (!g_system) {
-		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(g_system);
-		goto out;
-	}
-
-	if (NodeId >= g_system->NumNodes) {
-		err = HSAKMT_STATUS_INVALID_PARAMETER;
-		goto out;
-	}
-
 	err = validate_nodeid(NodeId, &gpu_id);
 	if (err != HSAKMT_STATUS_SUCCESS)
-		return err;
+		goto out;
 
 	*NodeProperties = g_props[NodeId].node;
 	/* For CPU only node don't add any additional GPU memory banks. */
@@ -2084,19 +2072,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 
 	CHECK_KFD_OPEN();
 	pthread_mutex_lock(&hsakmt_mutex);
-
-	/* KFD ADD page 18, snapshot protocol violation */
-	if (!g_system) {
-		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(g_system);
-		goto out;
-	}
-
-	/* Check still necessary */
-	if (NodeId >= g_system->NumNodes) {
-		err = HSAKMT_STATUS_INVALID_PARAMETER;
-		goto out;
-	}
 
 	err = validate_nodeid(NodeId, &gpu_id);
 	if (err != HSAKMT_STATUS_SUCCESS)
@@ -2183,13 +2158,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeCacheProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!g_system) {
+	if (!g_system || NodeId >= g_system->NumNodes) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(g_system);
 		goto out;
 	}
 
-	if (NodeId >= g_system->NumNodes || NumCaches > g_props[NodeId].node.NumCaches) {
+	if (NumCaches > g_props[NodeId].node.NumCaches) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
@@ -2221,13 +2195,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* KFD ADD page 18, snapshot protocol violation */
-	if (!g_system) {
+	if (!g_system || NodeId >= g_system->NumNodes ) {
 		err = HSAKMT_STATUS_INVALID_NODE_UNIT;
-		assert(g_system);
 		goto out;
 	}
 
-	if (NodeId >= g_system->NumNodes || NumIoLinks > g_props[NodeId].node.NumIOLinks) {
+	if (NumIoLinks > g_props[NodeId].node.NumIOLinks) {
 		err = HSAKMT_STATUS_INVALID_PARAMETER;
 		goto out;
 	}
