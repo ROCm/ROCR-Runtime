@@ -928,6 +928,8 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	char namebuf[HSA_PUBLIC_NAME_SIZE];
 	const char *name;
 	uint32_t sys_node_id;
+	uint32_t gfxv = 0;
+	uint8_t gfxv_major, gfxv_minor, gfxv_stepping;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -1043,10 +1045,16 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->NumSdmaQueuesPerEngine = prop_val;
 		else if (strcmp(prop_name, "num_cp_queues") == 0)
 			props->NumCpQueues = prop_val;
+		else if (strcmp(prop_name, "gfx_target_version") == 0)
+			gfxv = (uint32_t)prop_val;
 	}
 
+	gfxv_major = HSA_GET_GFX_VERSION_MAJOR(gfxv);
+	gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv);
+	gfxv_stepping = HSA_GET_GFX_VERSION_STEP(gfxv);
+
 	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
-	if (hsa_gfxip) {
+	if (hsa_gfxip || gfxv) {
 		envvar = getenv("HSA_OVERRIDE_GFX_VERSION");
 		if (envvar) {
 			/* HSA_OVERRIDE_GFX_VERSION=major.minor.stepping */
@@ -1061,19 +1069,26 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->EngineId.ui32.Major = major & 0x3f;
 			props->EngineId.ui32.Minor = minor & 0xff;
 			props->EngineId.ui32.Stepping = step & 0xff;
-		} else {
+		} else if (hsa_gfxip) {
 			props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
 			props->EngineId.ui32.Minor = hsa_gfxip->minor & 0xff;
 			props->EngineId.ui32.Stepping = hsa_gfxip->stepping & 0xff;
+		} else {
+			props->EngineId.ui32.Major = gfxv_major & 0x3f;
+			props->EngineId.ui32.Minor = gfxv_minor & 0xff;
+			props->EngineId.ui32.Stepping = gfxv_stepping & 0xff;
 		}
 
-		if (!hsa_gfxip->amd_name) {
-			ret = HSAKMT_STATUS_ERROR;
-			goto err;
-		}
+		/* Set the CAL name of the node. If DID-based hsa_gfxip lookup was
+		 * successful, use that name. Otherwise, set to GFX<GFX_VERSION>.
+		 */
+		if (hsa_gfxip && hsa_gfxip->amd_name)
+			strncpy((char *)props->AMDName, hsa_gfxip->amd_name,
+					sizeof(props->AMDName)-1);
+		else
+			snprintf((char *)props->AMDName, sizeof(props->AMDName)-1, "GFX%06x",
+					HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
 
-		/* Retrieve the CAL name of the node */
-		strncpy((char *)props->AMDName, hsa_gfxip->amd_name, sizeof(props->AMDName)-1);
 		if (!props->NumCPUCores) {
 			/* Is dGPU Node, not APU
 			 * Retrieve the marketing name of the node using pcilib,
