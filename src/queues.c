@@ -37,208 +37,24 @@
 #include <errno.h>
 
 /* 1024 doorbells, 4 or 8 bytes each doorbell depending on ASIC generation */
-#define DOORBELL_SIZE_GFX7 4
-#define DOORBELL_SIZE_GFX8 4
-#define DOORBELL_SIZE_GFX9 8
-#define DOORBELLS_PAGE_SIZE(ds) (1024 * (ds))
+#define DOORBELL_SIZE(gfxv)	(((gfxv) >= 0x90000) ? 8 : 4)
+#define DOORBELLS_PAGE_SIZE(ds)	(1024 * (ds))
+
+#define EOP_BUFFER_SIZE(gfxv)					\
+	(((gfxv) == GFX_VERSION_TONGA) ? TONGA_PAGE_SIZE :	\
+	(((gfxv) >= 0x80000) ? 4096 : 0))
+
+#define WG_CONTEXT_DATA_SIZE_PER_CU(gfxv) 		\
+	(VGPR_SIZE_PER_CU(gfxv) + SGPR_SIZE_PER_CU +	\
+	 LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
+
+#define CNTL_STACK_BYTES_PER_WAVE(gfxv)	\
+	((gfxv) >= GFX_VERSION_NAVI10 ? 12 : 8)
 
 #define LDS_SIZE_PER_CU		0x10000
 #define HWREG_SIZE_PER_CU	0x1000
-#define WG_CONTEXT_DATA_SIZE_PER_CU(asic_family)	(VGPR_SIZE_PER_CU(asic_family) + SGPR_SIZE_PER_CU + LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
-#define CNTL_STACK_BYTES_PER_WAVE(asic_family)	(asic_family >= CHIP_NAVI10 ? 12 : 8)
 #define DEBUGGER_BYTES_ALIGN	64
-#define DEBUGGER_BYTES_PER_WAVE(asic_family)	32
-
-struct device_info {
-	enum asic_family_type asic_family;
-	uint32_t eop_buffer_size;
-	uint32_t doorbell_size;
-};
-
-const struct device_info kaveri_device_info = {
-	.asic_family = CHIP_KAVERI,
-	.eop_buffer_size = 0,
-	.doorbell_size = DOORBELL_SIZE_GFX7,
-};
-
-const struct device_info hawaii_device_info = {
-	.asic_family = CHIP_HAWAII,
-	.eop_buffer_size = 0,
-	.doorbell_size = DOORBELL_SIZE_GFX7,
-};
-
-const struct device_info carrizo_device_info = {
-	.asic_family = CHIP_CARRIZO,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info tonga_device_info = {
-	.asic_family = CHIP_TONGA,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info fiji_device_info = {
-	.asic_family = CHIP_FIJI,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info polaris10_device_info = {
-	.asic_family = CHIP_POLARIS10,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info polaris11_device_info = {
-	.asic_family = CHIP_POLARIS11,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info polaris12_device_info = {
-	.asic_family = CHIP_POLARIS12,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info vegam_device_info = {
-	.asic_family = CHIP_VEGAM,
-	.eop_buffer_size = TONGA_PAGE_SIZE,
-	.doorbell_size = DOORBELL_SIZE_GFX8,
-};
-
-const struct device_info vega10_device_info = {
-	.asic_family = CHIP_VEGA10,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info vega12_device_info = {
-	.asic_family = CHIP_VEGA12,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info raven_device_info = {
-	.asic_family = CHIP_RAVEN,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info renoir_device_info = {
-	.asic_family = CHIP_RENOIR,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info vega20_device_info = {
-	.asic_family = CHIP_VEGA20,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info arcturus_device_info = {
-	.asic_family = CHIP_ARCTURUS,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info aldebaran_device_info = {
-    .asic_family = CHIP_ALDEBARAN,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info navi10_device_info = {
-	.asic_family = CHIP_NAVI10,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info cyan_skillfish_device_info = {
-	.asic_family = CHIP_CYAN_SKILLFISH,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info navi12_device_info = {
-	.asic_family = CHIP_NAVI12,
-	.eop_buffer_size = 4096,
-	.doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info navi14_device_info = {
-    .asic_family = CHIP_NAVI14,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info sienna_cichlid_device_info = {
-    .asic_family = CHIP_SIENNA_CICHLID,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info navy_flounder_device_info = {
-    .asic_family = CHIP_NAVY_FLOUNDER,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info dimgrey_cavefish_device_info = {
-    .asic_family = CHIP_DIMGREY_CAVEFISH,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info vangogh_device_info = {
-    .asic_family = CHIP_VANGOGH,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info beige_goby_device_info = {
-    .asic_family = CHIP_BEIGE_GOBY,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-const struct device_info yellow_carp_device_info = {
-    .asic_family = CHIP_YELLOW_CARP,
-    .eop_buffer_size = 4096,
-    .doorbell_size = DOORBELL_SIZE_GFX9,
-};
-
-static const struct device_info *dev_lookup_table[] = {
-	[CHIP_KAVERI] = &kaveri_device_info,
-	[CHIP_HAWAII] = &hawaii_device_info,
-	[CHIP_CARRIZO] = &carrizo_device_info,
-	[CHIP_TONGA] = &tonga_device_info,
-	[CHIP_FIJI] = &fiji_device_info,
-	[CHIP_POLARIS10] = &polaris10_device_info,
-	[CHIP_POLARIS11] = &polaris11_device_info,
-	[CHIP_POLARIS12] = &polaris12_device_info,
-	[CHIP_VEGAM] = &vegam_device_info,
-	[CHIP_VEGA10] = &vega10_device_info,
-	[CHIP_VEGA12] = &vega12_device_info,
-	[CHIP_VEGA20] = &vega20_device_info,
-	[CHIP_RAVEN] = &raven_device_info,
-	[CHIP_RENOIR] = &renoir_device_info,
-	[CHIP_ARCTURUS] = &arcturus_device_info,
-	[CHIP_ALDEBARAN] = &aldebaran_device_info,
-	[CHIP_NAVI10] = &navi10_device_info,
-	[CHIP_CYAN_SKILLFISH] = &cyan_skillfish_device_info,
-	[CHIP_NAVI12] = &navi12_device_info,
-	[CHIP_NAVI14] = &navi14_device_info,
-	[CHIP_SIENNA_CICHLID] = &sienna_cichlid_device_info,
-	[CHIP_NAVY_FLOUNDER] = &navy_flounder_device_info,
-	[CHIP_DIMGREY_CAVEFISH] = &dimgrey_cavefish_device_info,
-	[CHIP_VANGOGH] = &vangogh_device_info,
-	[CHIP_BEIGE_GOBY] = &beige_goby_device_info,
-	[CHIP_YELLOW_CARP] = &yellow_carp_device_info,
-};
+#define DEBUGGER_BYTES_PER_WAVE	32
 
 struct queue {
 	uint32_t queue_id;
@@ -249,7 +65,8 @@ struct queue {
 	uint32_t ctx_save_restore_size;
 	uint32_t ctl_stack_size;
 	uint32_t debug_memory_size;
-	const struct device_info *dev_info;
+	uint32_t eop_buffer_size;
+	uint32_t gfxv;
 	bool use_ats;
 	/* This queue structure is allocated from GPU with page aligned size
 	 * but only small bytes are used. We use the extra space in the end for
@@ -293,30 +110,18 @@ HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 	return ret;
 }
 
-static const struct device_info *get_device_info_by_dev_id(uint16_t dev_id)
-{
-	enum asic_family_type asic;
-
-	if (topology_get_asic_family(dev_id, &asic) != HSAKMT_STATUS_SUCCESS)
-		return NULL;
-
-	return dev_lookup_table[asic];
-}
-
-static void get_doorbell_map_info(uint16_t dev_id,
+static void get_doorbell_map_info(uint32_t node_id,
 				  struct process_doorbells *doorbell)
 {
-	const struct device_info *dev_info;
-
-	dev_info = get_device_info_by_dev_id(dev_id);
-
 	/*
 	 * GPUVM doorbell on Tonga requires a workaround for VM TLB ACTIVE bit
 	 * lookup bug. Remove ASIC check when this is implemented in amdgpu.
 	 */
-	doorbell->use_gpuvm = (is_dgpu &&
-			       dev_info->asic_family != CHIP_TONGA);
-	doorbell->size = DOORBELLS_PAGE_SIZE(dev_info->doorbell_size);
+	uint32_t gfxv = get_gfxv_by_node_id(node_id);
+	doorbell->use_gpuvm = (is_dgpu && gfxv != GFX_VERSION_TONGA);
+	doorbell->size = DOORBELLS_PAGE_SIZE(DOORBELL_SIZE(gfxv));
+
+	return;
 }
 
 void destroy_process_doorbells(void)
@@ -414,8 +219,7 @@ static HSAKMT_STATUS map_doorbell(HSAuint32 NodeId, HSAuint32 gpu_id,
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	get_doorbell_map_info(get_device_id_by_node_id(NodeId),
-			      &doorbells[NodeId]);
+	get_doorbell_map_info(NodeId, &doorbells[NodeId]);
 
 	if (doorbells[NodeId].use_gpuvm) {
 		status = map_doorbell_dgpu(NodeId, gpu_id, doorbell_mmap_offset);
@@ -459,23 +263,23 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 {
 	HsaNodeProperties node;
 
-	if (q->dev_info->asic_family < CHIP_CARRIZO)
+	if (q->gfxv < GFX_VERSION_CARRIZO)
 		return false;
 	if (hsaKmtGetNodeProperties(nodeid, &node))
 		return false;
 	if (node.NumFComputeCores && node.NumSIMDPerCU) {
 		uint32_t ctl_stack_size, wg_data_size;
 		uint32_t cu_num = node.NumFComputeCores / node.NumSIMDPerCU;
-		uint32_t wave_num = (q->dev_info->asic_family < CHIP_NAVI10)
+		uint32_t wave_num = (q->gfxv < GFX_VERSION_NAVI10)
 			? MIN(cu_num * 40, node.NumShaderBanks / node.NumArrays * 512)
 			: cu_num * 32;
 
-		ctl_stack_size = wave_num * CNTL_STACK_BYTES_PER_WAVE(q->dev_info->asic_family) + 8;
-		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->dev_info->asic_family);
+		ctl_stack_size = wave_num * CNTL_STACK_BYTES_PER_WAVE(q->gfxv) + 8;
+		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->gfxv);
 		q->ctl_stack_size = PAGE_ALIGN_UP(sizeof(HsaUserContextSaveAreaHeader)
 					+ ctl_stack_size);
-		if (q->dev_info->asic_family >= CHIP_NAVI10 &&
-			q->dev_info->asic_family <= CHIP_YELLOW_CARP) {
+		if (q->gfxv >= GFX_VERSION_NAVI10 &&
+		    q->gfxv <= GFX_VERSION_YELLOW_CARP) {
 			/* HW design limits control stack size to 0x7000.
 			 * This is insufficient for theoretical PM4 cases
 			 * but sufficient for AQL, limited by SPI events.
@@ -484,7 +288,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		}
 
 		q->debug_memory_size =
-			ALIGN_UP(wave_num * DEBUGGER_BYTES_PER_WAVE(q->dev_info->asic_family), DEBUGGER_BYTES_ALIGN);
+			ALIGN_UP(wave_num * DEBUGGER_BYTES_PER_WAVE, DEBUGGER_BYTES_ALIGN);
 
 		q->ctx_save_restore_size = q->ctl_stack_size
 					+ PAGE_ALIGN_UP(wg_data_size + q->debug_memory_size);
@@ -583,7 +387,7 @@ static void free_queue(struct queue *q)
 {
 	if (q->eop_buffer)
 		free_exec_aligned_memory(q->eop_buffer,
-					 q->dev_info->eop_buffer_size,
+					 q->eop_buffer_size,
 					 PAGE_SIZE, q->use_ats);
 	if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
@@ -599,23 +403,21 @@ static int handle_concrete_asic(struct queue *q,
 				HsaEvent *Event,
 				volatile HSAint64 *ErrPayload)
 {
-	const struct device_info *dev_info = q->dev_info;
 	bool ret;
 
-	if (!dev_info || args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA ||
-			args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA_XGMI)
+	if (args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA ||
+	    args->queue_type == KFD_IOC_QUEUE_TYPE_SDMA_XGMI)
 		return HSAKMT_STATUS_SUCCESS;
 
-	if (dev_info->eop_buffer_size > 0) {
-		q->eop_buffer =
-				allocate_exec_aligned_memory(q->dev_info->eop_buffer_size,
+	if (q->eop_buffer_size > 0) {
+		q->eop_buffer = allocate_exec_aligned_memory(q->eop_buffer_size,
 				q->use_ats,
 				NodeId, true, /* Unused for VRAM */false);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
 
 		args->eop_buffer_address = (uintptr_t)q->eop_buffer;
-		args->eop_buffer_size = dev_info->eop_buffer_size;
+		args->eop_buffer_size = q->eop_buffer_size;
 	}
 
 	ret = update_ctx_save_restore_size(NodeId, q);
@@ -663,10 +465,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 {
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
-	uint16_t dev_id;
 	uint64_t doorbell_mmap_offset;
 	unsigned int doorbell_offset;
-	const struct device_info *dev_info;
 	int err;
 	HsaNodeProperties props;
 	uint32_t cu_num, i;
@@ -684,9 +484,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	use_ats = prefer_ats(NodeId);
 
-	dev_id = get_device_id_by_node_id(NodeId);
-	dev_info = get_device_info_by_dev_id(dev_id);
-
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
 			use_ats,
 			NodeId, false, true);
@@ -695,8 +492,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	memset(q, 0, sizeof(*q));
 
+	q->gfxv = get_gfxv_by_node_id(NodeId);
 	q->use_ats = use_ats;
-	q->dev_info = dev_info;
+	q->eop_buffer_size = EOP_BUFFER_SIZE(q->gfxv);
 
 	/* By default, CUs are all turned on. Initialize cu_mask to '1
 	 * for all CU bits.
@@ -759,7 +557,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	q->queue_id = args.queue_id;
 
-	if (IS_SOC15(dev_info->asic_family)) {
+	if (IS_SOC15(q->gfxv)) {
 		/* On SOC15 chips, the doorbell offset within the
 		 * doorbell page is included in the doorbell offset
 		 * returned by KFD. This allows CP queue doorbells to be
@@ -775,7 +573,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 		 * doorbell page is based on the queue ID.
 		 */
 		doorbell_mmap_offset = args.doorbell_offset;
-		doorbell_offset = q->queue_id * dev_info->doorbell_size;
+		doorbell_offset = q->queue_id * DOORBELL_SIZE(q->gfxv);
 	}
 
 	err = map_doorbell(NodeId, gpu_id, doorbell_mmap_offset);
