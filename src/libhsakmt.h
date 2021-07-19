@@ -196,7 +196,7 @@ struct hsa_gfxip_table {
 
 HSAKMT_STATUS init_kfd_version(void);
 
-#define IS_SOC15(chip) ((chip) >= CHIP_VEGA10)
+#define IS_SOC15(gfxv) ((gfxv) >= GFX_VERSION_VEGA10)
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id);
 HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t* node_id);
@@ -256,7 +256,8 @@ uint32_t get_num_sysfs_nodes(void);
 bool is_forked_child(void);
 
 /* Calculate VGPR and SGPR register file size per CU */
-#define VGPR_SIZE_PER_CU(asic_family) ((asic_family == CHIP_ARCTURUS || \
-                        asic_family == CHIP_ALDEBARAN) ? 0x80000 : 0x40000)
+#define VGPR_SIZE_PER_CU(gfxv)			\
+	(((gfxv) == GFX_VERSION_ARCTURUS ||	\
+	  (gfxv) == GFX_VERSION_ALDEBARAN) ? 0x80000 : 0x40000)
 #define SGPR_SIZE_PER_CU 0x4000
 #endif
