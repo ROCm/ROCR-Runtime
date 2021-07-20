@@ -478,7 +478,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
+    HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
@@ -576,7 +576,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
+    HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
@@ -675,7 +675,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
-    HSAuint64 size = sysMemSize / 3 < testSize ? sysMemSize / 3 : testSize;
+    HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
     AllocAmdgpuBo(rn, size, handle);
 
