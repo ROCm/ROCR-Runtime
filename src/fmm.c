@@ -3196,6 +3196,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	mflags = fmm_translate_ioc_to_hsa_flags(infoArgs.flags);
+	mflags.ui32.CoarseGrain = 1;
 	obj = aperture_allocate_object(aperture, mem, importArgs.handle,
 				       infoArgs.size, mflags);
 	if (obj) {
@@ -3267,7 +3268,7 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	}
 	exportArgs.handle = obj->handle;
 	exportArgs.gpu_id = gpu_id;
-
+	exportArgs.flags = obj->mflags.Value;
 
 	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IPC_EXPORT_HANDLE, (void *)&exportArgs);
 	if (r)
@@ -3298,7 +3299,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	const HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_const_hsa_shared_memory_struct(SharedMemoryHandle);
 	HSAuint64 SizeInPages = SharedMemoryStruct->SizeInPages;
-	HsaMemFlags mflags = {0};
+	HsaMemFlags mflags;
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -3326,6 +3327,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	}
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
+	mflags.Value = importArgs.flags;
 	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
 				       (SizeInPages << PAGE_SHIFT), mflags);
 	if (!obj) {
@@ -3607,12 +3609,13 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 	info->MappedNodes = vm_obj->mapped_node_id_array;
 	info->UserData = vm_obj->user_data;
 
+	info->MemFlags = vm_obj->mflags;
+
 	if (info->Type == HSA_POINTER_REGISTERED_USER) {
 		info->CPUAddress = vm_obj->userptr;
 		info->SizeInBytes = vm_obj->userptr_size;
 		info->GPUAddress += ((HSAuint64)info->CPUAddress & (PAGE_SIZE - 1));
 	} else if (info->Type == HSA_POINTER_ALLOCATED) {
-		info->MemFlags = vm_obj->mflags;
 		info->CPUAddress = vm_obj->start;
 	}
 
