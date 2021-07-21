@@ -88,7 +88,7 @@ struct vm_object {
 	rbtree_node_t node;
 	rbtree_node_t user_node;
 
-	uint32_t flags; /* memory allocation flags */
+	HsaMemFlags mflags; /* memory allocation flags */
 	/* Registered nodes to map on SVM mGPU */
 	uint32_t *registered_device_id_array;
 	uint32_t registered_device_id_array_size;
@@ -309,7 +309,7 @@ static vm_area_t *vm_create_and_init_area(void *start, void *end)
 }
 
 static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
-					      uint64_t handle, uint32_t flags)
+					      uint64_t handle, HsaMemFlags mflags)
 {
 	vm_object_t *object = (vm_object_t *) malloc(sizeof(vm_object_t));
 
@@ -327,7 +327,7 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->mapped_node_id_array = NULL;
 		object->registration_count = 0;
 		object->mapping_count = 0;
-		object->flags = flags;
+		object->mflags = mflags;
 		object->metadata = NULL;
 		object->user_data = NULL;
 		object->is_imported_kfd_bo = false;
@@ -799,14 +799,14 @@ static vm_object_t *aperture_allocate_object(manageable_aperture_t *app,
 					     void *new_address,
 					     uint64_t handle,
 					     uint64_t MemorySizeInBytes,
-					     uint32_t flags)
+					     HsaMemFlags mflags)
 {
 	vm_object_t *new_object;
 
 	/* Allocate new object */
 	new_object = vm_create_and_init_object(new_address,
 					       MemorySizeInBytes,
-					       handle, flags);
+					       handle, mflags);
 	if (!new_object)
 		return NULL;
 
@@ -911,6 +911,19 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 	return aperture;
 }
 
+static HsaMemFlags fmm_translate_ioc_to_hsa_flags(uint32_t ioc_flags)
+{
+	HsaMemFlags mflags = {0};
+
+	if (!(ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE))
+		mflags.ui32.ReadOnly = 1;
+	if (!(ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_COHERENT))
+		mflags.ui32.CoarseGrain = 1;
+	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC)
+		mflags.ui32.HostAccess = 1;
+	return mflags;
+}
+
 /* After allocating the memory, return the vm_object created for this memory.
  * Return NULL if any failure.
  */
@@ -918,11 +931,12 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 						uint64_t MemorySizeInBytes,
 						manageable_aperture_t *aperture,
 						uint64_t *mmap_offset,
-						uint32_t flags)
+						uint32_t ioc_flags)
 {
 	struct kfd_ioctl_alloc_memory_of_gpu_args args = {0};
 	struct kfd_ioctl_free_memory_of_gpu_args free_args = {0};
 	vm_object_t *vm_obj = NULL;
+	HsaMemFlags mflags;
 
 	if (!mem)
 		return NULL;
@@ -931,21 +945,23 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 	args.gpu_id = gpu_id;
 	args.size = MemorySizeInBytes;
 
-	args.flags = flags |
+	args.flags = ioc_flags |
 		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
 	args.va_addr = (uint64_t)mem;
 	if (!is_dgpu &&
-	    (flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM))
+	    (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM))
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
-	if (flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
+	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
 		args.mmap_offset = *mmap_offset;
 
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
 		return NULL;
 
+	mflags = fmm_translate_ioc_to_hsa_flags(ioc_flags);
+
 	/* Allocate object */
 	vm_obj = aperture_allocate_object(aperture, mem, args.handle,
-				      MemorySizeInBytes, flags);
+				      MemorySizeInBytes, mflags);
 	if (!vm_obj)
 		goto err_object_allocation_failed;
 
@@ -1268,7 +1284,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 
 static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes,
 		manageable_aperture_t *aperture, uint64_t *mmap_offset,
-		uint32_t flags, vm_object_t **vm_obj)
+		uint32_t ioc_flags, vm_object_t **vm_obj)
 {
 	void *mem = NULL;
 	vm_object_t *obj;
@@ -1285,7 +1301,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t Memo
 	 * itself
 	 */
 	obj = fmm_allocate_memory_object(gpu_id, mem,
-			MemorySizeInBytes, aperture, mmap_offset, flags);
+			MemorySizeInBytes, aperture, mmap_offset, ioc_flags);
 	if (!obj) {
 		/*
 		 * allocation of memory in device failed.
@@ -1302,7 +1318,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t Memo
 	return mem;
 }
 
-void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes, HsaMemFlags flags)
+void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
@@ -1318,23 +1334,23 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 
 	size = MemorySizeInBytes;
 
-	if (flags.ui32.HostAccess)
+	if (mflags.ui32.HostAccess)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC;
 
-	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
+	ioc_flags |= fmm_translate_hsa_to_ioc_flags(mflags);
 
 	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id))) {
 		aperture = svm.dgpu_aperture;
-		if (flags.ui32.AQLQueueMemory)
+		if (mflags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 	}
 
-	if (!flags.ui32.CoarseGrain || svm.disable_cache)
+	if (!mflags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	if (flags.ui32.Uncached || svm.disable_cache)
+	if (mflags.ui32.Uncached || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1344,15 +1360,15 @@ void *fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInB
 
 	if (mem && vm_obj) {
 		/* Store memory allocation flags, not ioc flags */
-		vm_obj->flags = flags.Value;
+		vm_obj->mflags = mflags;
 		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 	}
 
 	if (mem) {
 		int map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
-		int prot = flags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
+		int prot = mflags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
 					PROT_NONE;
-		int flag = flags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
+		int flag = mflags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
 					MAP_PRIVATE|MAP_FIXED;
 		void *ret = mmap(mem, MemorySizeInBytes, prot, flag,
 					map_fd, mmap_offset);
@@ -1403,15 +1419,15 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 				    ioc_flags, &vm_obj);
 
 	if (mem && vm_obj) {
-		HsaMemFlags flags;
+		HsaMemFlags mflags;
 
 		/* Cook up some flags for storing in the VM object */
-		flags.Value = 0;
-		flags.ui32.NonPaged = 1;
-		flags.ui32.HostAccess = 1;
-		flags.ui32.Reserved = 0xBe1;
+		mflags.Value = 0;
+		mflags.ui32.NonPaged = 1;
+		mflags.ui32.HostAccess = 1;
+		mflags.ui32.Reserved = 0xBe1;
 
-		vm_obj->flags = flags.Value;
+		vm_obj->mflags = mflags;
 		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 	}
 
@@ -1432,7 +1448,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 }
 
 static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
-				HsaMemFlags flags)
+				HsaMemFlags mflags)
 {
 	void *mem = NULL;
 	vm_object_t *vm_obj;
@@ -1441,10 +1457,10 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 	if (address)
 		return NULL;
 
-	if (flags.ui32.ExecuteAccess)
+	if (mflags.ui32.ExecuteAccess)
 		mmap_prot |= PROT_EXEC;
 
-	if (!flags.ui32.ReadOnly)
+	if (!mflags.ui32.ReadOnly)
 		mmap_prot |= PROT_WRITE;
 
 	/* mmap will return a pointer with alignment equal to
@@ -1458,7 +1474,7 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 
 	pthread_mutex_lock(&cpuvm_aperture.fmm_mutex);
 	vm_obj = aperture_allocate_object(&cpuvm_aperture, mem, 0,
-				      MemorySizeInBytes, flags.Value);
+				      MemorySizeInBytes, mflags);
 	if (vm_obj)
 		vm_obj->node_id = 0; /* APU systems only have one CPU node */
 	pthread_mutex_unlock(&cpuvm_aperture.fmm_mutex);
@@ -1467,7 +1483,7 @@ static void *fmm_allocate_host_cpu(void *address, uint64_t MemorySizeInBytes,
 }
 
 static int bind_mem_to_numa(uint32_t node_id, void *mem,
-			    uint64_t SizeInBytes, HsaMemFlags flags)
+			    uint64_t SizeInBytes, HsaMemFlags mflags)
 {
 	int mode = MPOL_F_STATIC_NODES;
 	struct bitmask *node_mask;
@@ -1475,9 +1491,9 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	long r;
 
 	pr_debug("%s mem %p flags 0x%x size 0x%lx node_id %d\n", __func__,
-		mem, flags.Value, SizeInBytes, node_id);
+		mem, mflags.Value, SizeInBytes, node_id);
 
-	if (flags.ui32.NoNUMABind)
+	if (mflags.ui32.NoNUMABind)
 		return 0;
 
 	if (numa_available() == -1)
@@ -1499,7 +1515,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 		return -ENOMEM;
 
 	numa_bitmask_setbit(node_mask, node_id);
-	mode |= flags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
+	mode |= mflags.ui32.NoSubstitute ? MPOL_BIND : MPOL_PREFERRED;
 	r = mbind(mem, SizeInBytes, mode, node_mask->maskp, num_node + 1, 0);
 	numa_bitmask_free(node_mask);
 
@@ -1515,7 +1531,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 		}
 
 		/* Ignore mbind failure if no memory available on node */
-		if (!flags.ui32.NoSubstitute)
+		if (!mflags.ui32.NoSubstitute)
 			return 0;
 
 		pr_warn_once("Failed to set NUMA policy for %p: %s\n", mem,
@@ -1528,7 +1544,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 }
 
 static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
-				   uint64_t MemorySizeInBytes, HsaMemFlags flags)
+				   uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	void *mem;
 	manageable_aperture_t *aperture;
@@ -1547,20 +1563,20 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 
 	size = MemorySizeInBytes;
 	ioc_flags = 0;
-	if (flags.ui32.CoarseGrain)
+	if (mflags.ui32.CoarseGrain)
 		aperture = svm.dgpu_aperture;
 	else
 		aperture = svm.dgpu_alt_aperture; /* always coherent */
 
-	if (!flags.ui32.CoarseGrain || svm.disable_cache)
+	if (!mflags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
-	if (flags.ui32.Uncached || svm.disable_cache)
+	if (mflags.ui32.Uncached || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
 
-	ioc_flags |= fmm_translate_hsa_to_ioc_flags(flags);
+	ioc_flags |= fmm_translate_hsa_to_ioc_flags(mflags);
 
-	if (flags.ui32.AQLQueueMemory)
+	if (mflags.ui32.AQLQueueMemory)
 		size = MemorySizeInBytes * 2;
 
 	/* Paged memory is allocated as a userptr mapping, non-paged
@@ -1568,7 +1584,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	 */
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
-	if (!flags.ui32.NonPaged && svm.userptr_for_paged_mem) {
+	if (!mflags.ui32.NonPaged && svm.userptr_for_paged_mem) {
 		/* Allocate address space */
 		mem = aperture_allocate_area(aperture, address, size);
 		if (!mem)
@@ -1581,7 +1597,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 			goto out_release_area;
 
 		/* Bind to NUMA node */
-		if (bind_mem_to_numa(node_id, mem, MemorySizeInBytes, flags))
+		if (bind_mem_to_numa(node_id, mem, MemorySizeInBytes, mflags))
 			goto out_release_area;
 
 		/* Mappings in the DGPU aperture don't need to be copied on
@@ -1603,7 +1619,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 		mem =  __fmm_allocate_device(gpu_id, address, size, aperture,
 					     &mmap_offset, ioc_flags, &vm_obj);
 
-		if (mem && flags.ui32.HostAccess) {
+		if (mem && mflags.ui32.HostAccess) {
 			int map_fd = gpu_drm_fd;
 			void *ret = mmap(mem, MemorySizeInBytes,
 					 PROT_READ | PROT_WRITE,
@@ -1613,7 +1629,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				goto out_unlock;
 			}
 
-			if (flags.ui32.AQLQueueMemory) {
+			if (mflags.ui32.AQLQueueMemory) {
 				uint64_t my_buf_size = size / 2;
 
 				memset(ret, 0, MemorySizeInBytes);
@@ -1626,7 +1642,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 
 	if (mem && vm_obj) {
 		/* Store memory allocation flags, not ioc flags */
-		vm_obj->flags = flags.Value;
+		vm_obj->mflags = mflags;
 		vm_obj->node_id = node_id;
 	}
 
@@ -1643,11 +1659,11 @@ out_unlock:
 }
 
 void *fmm_allocate_host(uint32_t node_id, void *address,
-			uint64_t MemorySizeInBytes, HsaMemFlags flags)
+			uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	if (is_dgpu)
-		return fmm_allocate_host_gpu(node_id, address, MemorySizeInBytes, flags);
-	return fmm_allocate_host_cpu(address, MemorySizeInBytes, flags);
+		return fmm_allocate_host_gpu(node_id, address, MemorySizeInBytes, mflags);
+	return fmm_allocate_host_cpu(address, MemorySizeInBytes, mflags);
 }
 
 static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
@@ -2064,7 +2080,7 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	manageable_aperture_t *aperture = svm.dgpu_alt_aperture;
 	uint32_t ioc_flags;
 	vm_object_t *vm_obj = NULL;
-	HsaMemFlags flags;
+	HsaMemFlags mflags;
 	void *ret;
 	uint64_t mmap_offset;
 
@@ -2083,11 +2099,11 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 		return NULL;
 	}
 
-	flags.Value = 0;
-	flags.ui32.NonPaged = 1;
-	flags.ui32.HostAccess = 1;
-	flags.ui32.Reserved = 0;
-	vm_obj->flags = flags.Value;
+	mflags.Value = 0;
+	mflags.ui32.NonPaged = 1;
+	mflags.ui32.HostAccess = 1;
+	mflags.ui32.Reserved = 0;
+	vm_obj->mflags = mflags;
 	vm_obj->node_id = node_id;
 
 	/* Map for CPU access*/
@@ -3118,6 +3134,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	struct kfd_ioctl_import_dmabuf_args importArgs = {0};
 	struct kfd_ioctl_free_memory_of_gpu_args freeArgs = {0};
 	manageable_aperture_t *aperture;
+	HsaMemFlags mflags;
 	vm_object_t *obj;
 	void *metadata;
 	void *mem, *aperture_base;
@@ -3178,8 +3195,9 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		goto error_release_aperture;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
+	mflags = fmm_translate_ioc_to_hsa_flags(infoArgs.flags);
 	obj = aperture_allocate_object(aperture, mem, importArgs.handle,
-				       infoArgs.size, infoArgs.flags);
+				       infoArgs.size, mflags);
 	if (obj) {
 		obj->metadata = metadata;
 		obj->registered_device_id_array = gpu_id_array;
@@ -3280,6 +3298,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	const HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_const_hsa_shared_memory_struct(SharedMemoryHandle);
 	HSAuint64 SizeInPages = SharedMemoryStruct->SizeInPages;
+	HsaMemFlags mflags = {0};
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -3308,8 +3327,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
-				       (SizeInPages << PAGE_SHIFT),
-				       0);
+				       (SizeInPages << PAGE_SHIFT), mflags);
 	if (!obj) {
 		err = HSAKMT_STATUS_NO_MEMORY;
 		goto err_free_mem;
@@ -3594,7 +3612,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		info->SizeInBytes = vm_obj->userptr_size;
 		info->GPUAddress += ((HSAuint64)info->CPUAddress & (PAGE_SIZE - 1));
 	} else if (info->Type == HSA_POINTER_ALLOCATED) {
-		info->MemFlags.Value = vm_obj->flags;
+		info->MemFlags = vm_obj->mflags;
 		info->CPUAddress = vm_obj->start;
 	}
 
