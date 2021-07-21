@@ -124,6 +124,7 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     EXPECT_EQ(ptrInfo.Node, (HSAuint32)defaultGPUNode);
     EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)info.MemoryAddress);
     EXPECT_EQ(ptrInfo.SizeInBytes, alloc.alloc_size);
+    EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 1);
 
     // Cleanup
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(info.MemoryAddress));
