@@ -1389,6 +1389,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
     EXPECT_EQ(ptrInfo.CPUAddress, hostBuffer.As<void*>());
     EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)hostBuffer.As<void*>());
     EXPECT_EQ(ptrInfo.SizeInBytes, (HSAuint64)hostBuffer.Size());
+    EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 0);
     if (is_dgpu()) {
         EXPECT_EQ((HSAuint64)ptrInfo.NMappedNodes, nGPU);
         // Check NMappedNodes again after unmapping the memory
@@ -1407,6 +1408,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
         EXPECT_EQ(ptrInfo.CPUAddress, localBuffer.As<void*>());
         EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)localBuffer.As<void*>());
         EXPECT_EQ(ptrInfo.SizeInBytes, (HSAuint64)localBuffer.Size());
+        EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 1);
 
         HSAuint32 *addr = localBuffer.As<HSAuint32 *>() + 4;
         EXPECT_SUCCESS(hsaKmtQueryPointerInfo(reinterpret_cast<void *>(addr), &ptrInfo));
@@ -1425,6 +1427,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
         EXPECT_EQ(ptrInfo.SizeInBytes, sizeof(HSAuint32)*2);
         EXPECT_EQ(ptrInfo.NRegisteredNodes, 0);
         EXPECT_EQ(ptrInfo.NMappedNodes, nGPU);
+        EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 1);
         // Register to nodes
         HSAuint32 nodes[nGPU];
         for (unsigned int i = 0; i < nGPU; i++)
