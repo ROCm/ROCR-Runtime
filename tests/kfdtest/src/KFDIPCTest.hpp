@@ -120,8 +120,8 @@ class KFDIPCTest :  public KFDBaseComponentTest {
     virtual void TearDown();
 
     /* For IPC testing */
-    void BasicTestChildProcess(int defaultGPUNode, int *pipefd);
-    void BasicTestParentProcess(int defaultGPUNode, pid_t childPid, int *pipefd);
+    void BasicTestChildProcess(int defaultGPUNode, int *pipefd, HsaMemFlags mflags);
+    void BasicTestParentProcess(int defaultGPUNode, pid_t childPid, int *pipefd, HsaMemFlags mflags);
 
     /* For CMA testing */
     CMA_TEST_STATUS CrossMemoryAttachChildProcess(int defaultGPUNode, int writePipe,
