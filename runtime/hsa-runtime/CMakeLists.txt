@@ -416,6 +416,10 @@ set ( CPACK_DEBIAN_DEV_PACKAGE_CONTROL_EXTRA "DEBIAN/Dev/postinst;DEBIAN/Dev/pre
 # Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr" )
+if ( ROCM_DEP_ROCMCORE )
+  string ( APPEND PACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
+  string ( APPEND CPACK_DEBIAN_DEV_PACKAGE_DEPENDS ", rocm-core" )
+endif()
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 
@@ -445,9 +449,12 @@ set ( CPACK_RPM_DEV_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/
 
 # Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "hsakmt-roct" )
-set ( CPACK_RPM_BINARY_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
 set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr" )
-set ( CPACK_RPM_DEV_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
+if ( ROCM_DEP_ROCMCORE )
+  string ( APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocm-core" )
+  string ( APPEND CPACK_RPM_DEV_PACKAGE_REQUIRES " rocm-core" )
+endif()
+set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 
 ## Include packaging
