@@ -428,13 +428,7 @@ else()
   set ( CPACK_RPM_PACKAGE_RELEASE "local" )
 endif()
 
-execute_process( COMMAND rpm --eval %{?dist}
-                 RESULT_VARIABLE PROC_RESULT
-                 OUTPUT_VARIABLE EVAL_RESULT
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
-if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
-  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
-endif()
+string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 
