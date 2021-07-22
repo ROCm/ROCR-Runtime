@@ -57,13 +57,16 @@ KFDIPCTest::~KFDIPCTest(void) {
      * starts the next test while the parent is still active.
      */
     if (m_ChildPid == 0)
-        exit(0);
+        exit(::testing::UnitTest::GetInstance()->failed_test_count());
 }
 
 /* Import shared Local Memory from parent process. Check for the pattern
  * filled in by the parent process. Then fill a new pattern.
+ *
+ * Check import handle has same HsaMemFlags as export handle to verify thunk and KFD
+ * import export handle ioctl pass HsaMemFlags correctly.
  */
-void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
+void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd, HsaMemFlags mflags) {
     /* Open KFD device for child process. This needs to called before
      * any memory definitions
      */
@@ -83,7 +86,7 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     ASSERT_SUCCESS(hsaKmtRegisterSharedHandle(&sharedHandleLM,
                   reinterpret_cast<void**>(&sharedLocalBuffer), &sharedSize));
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(sharedLocalBuffer, sharedSize, NULL,
-			mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+                  mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
     /* Check for pattern in the shared Local Memory */
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
@@ -97,6 +100,14 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
     sdmaQueue.PlaceAndSubmitPacket(SDMAWriteDataPacket(sdmaQueue.GetFamilyId(), sharedLocalBuffer, 0xBBBBBBBB));
     sdmaQueue.Wait4PacketConsumption();
 
+    HsaPointerInfo ptrInfo;
+    EXPECT_SUCCESS(hsaKmtQueryPointerInfo(sharedLocalBuffer, &ptrInfo));
+    EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_SHARED);
+    EXPECT_EQ(ptrInfo.Node, (HSAuint32)defaultGPUNode);
+    EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)sharedLocalBuffer);
+    EXPECT_EQ(ptrInfo.SizeInBytes, sharedSize);
+    EXPECT_EQ(ptrInfo.MemFlags.Value, mflags.Value);
+
     /* Clean up */
     EXPECT_SUCCESS(sdmaQueue.Destroy());
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(sharedLocalBuffer));
@@ -108,29 +119,30 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd) {
  * filled in by the child process.
  */
 
-void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pipefd) {
+void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pipefd, HsaMemFlags mflags) {
     HSAuint64 size = PAGE_SIZE, sharedSize;
     int status;
     HSAuint64 AlternateVAGPU;
-    HsaMemoryBuffer toShareLocalBuffer(size, defaultGPUNode, false, true);
+    void *toShareLocalBuffer;
     HsaMemoryBuffer tempSysBuffer(PAGE_SIZE, defaultGPUNode, false);
     SDMAQueue sdmaQueue;
     HsaSharedMemoryHandle sharedHandleLM;
     HsaMemMapFlags mapFlags = {0};
 
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, size, mflags, &toShareLocalBuffer));
     /* Fill a Local Buffer with a pattern */
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(toShareLocalBuffer.As<void*>(), toShareLocalBuffer.Size(), &AlternateVAGPU,
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(toShareLocalBuffer, size, &AlternateVAGPU,
                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
     tempSysBuffer.Fill(0xAAAAAAAA);
 
     /* Copy pattern in Local Memory before sharing it */
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
-    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), toShareLocalBuffer.As<HSAuint32*>(),
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), toShareLocalBuffer,
         tempSysBuffer.As<HSAuint32*>(), size));
     sdmaQueue.Wait4PacketConsumption();
 
     /* Share it with the child process */
-    ASSERT_SUCCESS(hsaKmtShareMemory(toShareLocalBuffer.As<void*>(), size, &sharedHandleLM));
+    ASSERT_SUCCESS(hsaKmtShareMemory(toShareLocalBuffer, size, &sharedHandleLM));
 
     ASSERT_GE(write(pipefd[1], reinterpret_cast<void*>(&sharedHandleLM), sizeof(sharedHandleLM)), 0);
 
@@ -142,12 +154,12 @@ void KFDIPCTest::BasicTestParentProcess(int defaultGPUNode, pid_t cpid, int *pip
 
     /* Check for the new pattern filled in by child process */
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(), tempSysBuffer.As<HSAuint32*>(),
-        toShareLocalBuffer.As<HSAuint32*>(), size));
+        toShareLocalBuffer, size));
     sdmaQueue.Wait4PacketConsumption();
     EXPECT_TRUE(WaitOnValue(tempSysBuffer.As<HSAuint32*>(), 0xBBBBBBBB));
 
     /* Clean up */
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(toShareLocalBuffer.As<void*>()));
+    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(toShareLocalBuffer));
     EXPECT_SUCCESS(sdmaQueue.Destroy());
 }
 
@@ -167,6 +179,7 @@ TEST_F(KFDIPCTest, BasicTest) {
     const std::vector<int>& GpuNodes = m_NodeInfo.GetNodesWithGPU();
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     int pipefd[2];
+    HsaMemFlags mflags = {0};
 
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
@@ -188,12 +201,15 @@ TEST_F(KFDIPCTest, BasicTest) {
     ASSERT_EQ(pipe(pipefd), 0);
 
     /* Create a child process and share the above Local Memory with it */
+    mflags.ui32.NonPaged = 1;
+    mflags.ui32.CoarseGrain = 1;
+    mflags.ui32.HostAccess = 1;
 
     m_ChildPid = fork();
     if (m_ChildPid == 0)
-        BasicTestChildProcess(defaultGPUNode, pipefd); /* Child Process */
+        BasicTestChildProcess(defaultGPUNode, pipefd, mflags); /* Child Process */
     else
-        BasicTestParentProcess(defaultGPUNode, m_ChildPid, pipefd); /* Parent proces */
+        BasicTestParentProcess(defaultGPUNode, m_ChildPid, pipefd, mflags); /* Parent proces */
 
     /* Code path executed by both parent and child with respective fds */
     close(pipefd[1]);
