@@ -50,9 +50,6 @@ case "$1" in
        mkdir -p @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include
        ln -sf ../../include/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
    ;;
-   abort-upgrade|abort-remove|abort-deconfigure)
-       echo "$1"
-   ;;
    ( * )
        exit 0
    ;;
