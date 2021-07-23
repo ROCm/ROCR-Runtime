@@ -422,7 +422,7 @@ set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm" )
 
 # Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
-set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
+set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev, hsa-rocr, hsa-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
@@ -448,7 +448,7 @@ message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
 set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct" )
 
 # Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
-set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
+set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr hsa-rocr-devel" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
