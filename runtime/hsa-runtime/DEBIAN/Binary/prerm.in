@@ -56,8 +56,6 @@ case "$1" in
    ( remove )
        rm_ldconfig
    ;;
-   ( purge )
-   ;;
    ( * )
        exit 0
    ;;

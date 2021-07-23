@@ -56,9 +56,6 @@ case "$1" in
    ( configure )
        do_ldconfig
    ;;
-   abort-upgrade|abort-remove|abort-deconfigure)
-       echo "$1"
-   ;;
    ( * )
        exit 0
    ;;
