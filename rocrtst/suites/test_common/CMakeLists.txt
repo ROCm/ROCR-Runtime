@@ -1,9 +1,4 @@
 #
-# Minimum version of cmake required
-#
-cmake_minimum_required(VERSION 2.8.0)
-
-#
 #   Required Defines on cmake command line
 #
 #   1) Set location of ROCR header files
@@ -84,12 +79,8 @@ set (ONLY64STR "64")
 if (DEFINED LLVM_DIR)
   set(CLANG ${LLVM_DIR}/clang)
   if (NOT EXISTS ${CLANG})
-    # SPK temp until Jenkins script input is corrected.
-    set (CLANG ${OPENCL_DIR}/bin/clang)
-    if (NOT EXISTS ${CLANG})
     message("ERROR: path to clang (${CLANG}) is not valid. Is define LLVM_DIR correct?")
     return()
-    endif()
   endif()
 else()
     message("WARNING: LLVM_DIR define is not set. Kernels will not be built.")
@@ -220,7 +211,6 @@ if(ISDEBUG)
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb -O0")
 endif()
 MESSAGE("ISDEBUG STEP:Done")
-
 
 set(ROCRTST_ROOT ${CMAKE_CURRENT_SOURCE_DIR}/../..)
 
@@ -364,15 +354,25 @@ set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/groupMemoryDynamic_kernels.cl")
 build_sample_for_devices("groupMemoryDynamic")
 
+set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
+
 # Build rules
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources} ${stressSources}
                                            ${common_srcs} ${testCommonSources})
 
-target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa hwloc)
+target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/libhwloc.so.5)
 
 add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
+
+## Set RUNPATH to pickup local copy of hwloc
+set_property(TARGET ${ROCRTST} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/thirdparty;$ORIGIN/../lib/rocrtst/thirdparty" )
+set_property(TARGET ${ROCRTST} PROPERTY LINK_FLAGS "-Wl,--enable-new-dtags")
+
 install(TARGETS ${ROCRTST}
         ARCHIVE DESTINATION lib
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)
+
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty DESTINATION lib/rocrtst )
+
 include ( CPack )
