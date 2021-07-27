@@ -3,7 +3,7 @@
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2021, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -17,14 +17,14 @@
 ## of this software and associated documentation files (the "Software"), to
 ## deal with the Software without restriction, including without limitation
 ## the rights to use, copy, modify, merge, publish, distribute, sublicense,
-## and/or sell copies of the Software, and to permit persons to whom the
+## and#or sell copies of the Software, and to permit persons to whom the
 ## Software is furnished to do so, subject to the following conditions:
 ##
 ##  - Redistributions of source code must retain the above copyright notice,
 ##    this list of conditions and the following disclaimers.
 ##  - Redistributions in binary form must reproduce the above copyright
 ##    notice, this list of conditions and the following disclaimers in
-##    the documentation and/or other materials provided with the distribution.
+##    the documentation and#or other materials provided with the distribution.
 ##  - Neither the names of Advanced Micro Devices, Inc,
 ##    nor the names of its contributors may be used to endorse or promote
 ##    products derived from this Software without specific prior written
@@ -40,7 +40,19 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.6.3 )
+cmake_minimum_required ( VERSION 3.5.0 )
+
+## Cosmetic Cmake version warnings.
+if(NOT EXISTS VERSION_WARNED)
+  set (VERSION_WARNED FALSE CACHE BOOL "")
+endif()
+if(${CMAKE_VERSION} VERSION_LESS "3.6.0" AND NOT ${VERSION_WARNED})
+  message("Your CMake version is too old for full functionality.
+Generated package file names may be incorrect.
+Please update to CMake 3.6 or newer to generate correct package file names")
+  set( VERSION_WARNED TRUE CACHE BOOL "Suppress cosmetic build errors due to CMake version after first warning." FORCE )
+  mark_as_advanced( FORCE VERSION_WARNED )
+endif()
 
 ## Clear target dependency data.
 ## Needed to allow UI transitions between static and dynamic builds.
@@ -303,8 +315,8 @@ install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_INCLUDEDIR}
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION include/hsa COMPONENT dev )
 
-# Legacy symlink - not packaged (CPack is bugged until ~3.18, see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4637)
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION hsa/include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
+# Legacy symlink.
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION hsa/include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa COMPONENT dirlink)
 
 # Legacy symlinks.
 if ( ${BUILD_SHARED_LIBS} )
@@ -376,15 +388,20 @@ set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
 set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
 
 ## Only pack the "binary" and "dev" components, post install script will add the directory link.
-set ( CPACK_COMPONENTS_ALL binary dev )
-set ( CPACK_DEB_COMPONENT_INSTALL ON)
-set ( CPACK_RPM_COMPONENT_INSTALL ON)
+set (CPACK_DEB_COMPONENT_INSTALL ON)
+set (CPACK_COMPONENTS_ALL_IN_ONE_PACKAGE 1)
+set (CPACK_COMPONENTS_ALL binary dev)
+
+set ( CPACK_PACKAGE_NAME "hsa-rocr-dev" )
 set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
 set ( CPACK_PACKAGE_CONTACT "TODO Advanced Micro Devices, Inc." )
-set ( CPACK_COMPONENT_BINARY_DESCRIPTION "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
-set ( CPACK_COMPONENT_DEV_DESCRIPTION "AMD Heterogeneous System Architecture HSA development package.\n This package contains the headers and cmake files for the hsa-rocr package." )
+set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
+
+## Process the Debian install/remove scripts to update the CPACK variables
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst.in DEBIAN/postinst @ONLY )
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm.in DEBIAN/prerm @ONLY )
 
 if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
   set ( CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}.$ENV{ROCM_LIBPATCH_VERSION}" )
@@ -392,8 +409,6 @@ if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
 endif()
 
 # Debian package specific variables
-set ( CPACK_DEBIAN_BINARY_PACKAGE_NAME "hsa-rocr")
-set ( CPACK_DEBIAN_DEV_PACKAGE_NAME "hsa-rocr-dev")
 if ( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
   set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
 else()
@@ -401,63 +416,48 @@ else()
 endif()
 message ( "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}" )
 set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" )
+set ( CPACK_DEBIAN_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
+set ( CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm" )
 
-## Process the Debian install/remove scripts to update the CPACK variables
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Binary/postinst @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/postinst.in DEBIAN/Dev/postinst @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/prerm.in DEBIAN/Dev/prerm @ONLY )
-
-set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_CONTROL_EXTRA "DEBIAN/Dev/postinst;DEBIAN/Dev/prerm" )
-
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr" )
+# Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
-set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
+set ( CPACK_DEBIAN_PACKAGE_PROVIDES "hsa-ext-rocr-dev, hsa-rocr, hsa-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
-
 # RPM package specific variables
-set ( CPACK_RPM_BINARY_PACKAGE_NAME "hsa-rocr" )
-set ( CPACK_RPM_DEV_PACKAGE_NAME "hsa-rocr-devel" )
 if ( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
   set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
 else()
   set ( CPACK_RPM_PACKAGE_RELEASE "local" )
 endif()
 
+# 'dist' breaks manual builds on debian systems due to empty Provides
 execute_process( COMMAND rpm --eval %{?dist}
                  RESULT_VARIABLE PROC_RESULT
                  OUTPUT_VARIABLE EVAL_RESULT
                  OUTPUT_STRIP_TRAILING_WHITESPACE )
+message("RESULT_VARIABLE ${PROC_RESULT} OUTPUT_VARIABLE: ${EVAL_RESULT}")
+
 if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
   string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 endif()
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
+set ( CPACK_RPM_PACKAGE_DEPENDS "hsakmt-roct" )
 
-## Process the Rpm install/remove scripts to update the CPACK variables
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/postun @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/post.in" RPM/Dev/post @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/postun.in" RPM/Dev/postun @ONLY )
-
-set ( CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post" )
-set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun" )
-set ( CPACK_RPM_DEV_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/post" )
-set ( CPACK_RPM_DEV_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/postun" )
-
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "hsakmt-roct" )
-set ( CPACK_RPM_BINARY_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
-set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr" )
-set ( CPACK_RPM_DEV_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
+# Declare that this package will replace functionality provided by hsa-ext-rocr-dev package
+set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr hsa-rocr-devel" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
+
+## Process the Rpm install/remove scripts to update the CPACK variables
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/post.in" RPM/post @ONLY )
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/postun.in" RPM/postun @ONLY )
+
+set ( CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/post" )
+set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/postun" )
 
 ## Include packaging
 include ( CPack )
