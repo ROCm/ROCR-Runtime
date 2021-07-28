@@ -202,18 +202,7 @@ FILTER[renoir]=\
 "KFDEvictTest.*:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDMemoryTest.SignalHandling:"\
-"KFDSVMRangeTest.BasicSystemMemTest:"\
-"KFDSVMRangeTest.BasicVramTest:"\
-"KFDSVMRangeTest.EvictSystemRangeTest:"\
-"KFDSVMRangeTest.PartialUnmapSysMemTest:"\
-"KFDSVMRangeTest.MigrateTest:"\
-"KFDSVMRangeTest.MigratePolicyTest:"\
-"KFDSVMRangeTest.MigrateGranularityTest:"\
-"KFDSVMRangeTest.MigrateLargeBufTest:"\
-"KFDSVMRangeTest.MultiThreadMigrationTest:"\
-"KFDSVMRangeTest.MigrateAccessInPlaceTest:"\
-"KFDSVMEvictTest.QueueTest"
+"KFDMemoryTest.SignalHandling"
 
 # KFDExceptionTest.* (KFD-435)
 # KFDEvictTest.BurstyTest (KFD-425)
