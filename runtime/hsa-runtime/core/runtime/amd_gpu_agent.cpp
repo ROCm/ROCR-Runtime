@@ -1483,6 +1483,8 @@ lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
   uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
   assert((xgmi_engine_cnt > 0) && ("Illegal condition, should not happen"));
 
+  ScopedAcquire<KernelMutex> lock(&xgmi_peer_list_lock_);
+
   for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
     uint64_t dst_handle = dst_agent.public_handle().handle;
     uint64_t peer_handle = xgmi_peer_list_[idx]->public_handle().handle;

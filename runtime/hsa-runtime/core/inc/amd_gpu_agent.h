@@ -400,6 +400,9 @@ class GpuAgent : public GpuAgentInt {
   // List of agents connected via xGMI
   std::vector<const core::Agent*> xgmi_peer_list_;
 
+  // Protects xgmi_peer_list_
+  KernelMutex xgmi_peer_list_lock_;
+
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
     QueueUtility,   // Cache management and device to {host,device} blit compute
