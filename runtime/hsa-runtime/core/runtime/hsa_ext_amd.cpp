@@ -539,12 +539,11 @@ hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue, uint32_t num_cu
                                        const uint32_t* cu_mask) {
   TRY;
   IS_OPEN();
-  IS_BAD_PTR(cu_mask);
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
-  if ((num_cu_mask_count == 0) || (num_cu_mask_count % 32 != 0))
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (num_cu_mask_count != 0) IS_BAD_PTR(cu_mask);
+  if (num_cu_mask_count % 32 != 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   return cmd_queue->SetCUMasking(num_cu_mask_count, cu_mask);
   CATCH;
 }
