@@ -776,7 +776,7 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
   HsaPointerInfo thunkInfo;
   uint32_t* mappedNodes;
 
-  hsa_amd_pointer_info_t retInfo;
+  hsa_amd_pointer_info_t retInfo = {0};
 
   // check output struct has an initialized size.
   if (info->size == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -805,6 +805,11 @@ hsa_status_t Runtime::PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*a
     retInfo.hostBaseAddress = thunkInfo.CPUAddress;
     retInfo.sizeInBytes = thunkInfo.SizeInBytes;
     retInfo.userData = thunkInfo.UserData;
+    retInfo.global_flags = thunkInfo.MemFlags.ui32.CoarseGrain
+        ? HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED
+        : HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED;
+    retInfo.global_flags |=
+        thunkInfo.MemFlags.ui32.Uncached ? HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_KERNARG_INIT : 0;
     if (block_info != nullptr) {
       // Block_info reports the thunk allocation from which we may have suballocated.
       // For locked memory we want to return the host address since hostBaseAddress is used to
