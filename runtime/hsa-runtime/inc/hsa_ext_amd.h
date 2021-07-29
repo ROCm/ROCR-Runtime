@@ -1774,6 +1774,12 @@ typedef struct hsa_amd_pointer_info_s {
   GPU boards) any such agent may be returned.
   */
   hsa_agent_t agentOwner;
+  /*
+  Contains a bitfield of hsa_amd_memory_pool_global_flag_t values.
+  Reports the effective global flags bitmask for the allocation.  This field is not meaningful if
+  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
+  */
+  uint32_t global_flags;
 } hsa_amd_pointer_info_t;
 
 /**
