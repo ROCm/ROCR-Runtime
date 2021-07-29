@@ -1292,7 +1292,7 @@ typedef enum _HSA_POINTER_TYPE {
 typedef struct _HsaPointerInfo {
     HSA_POINTER_TYPE   Type;             // Pointer type
     HSAuint32          Node;             // Node where the memory is located
-    HsaMemFlags        MemFlags;         // Only valid for HSA_POINTER_ALLOCATED
+    HsaMemFlags        MemFlags;         // HsaMemFlags used to alloc memory
     void               *CPUAddress;      // Start address for CPU access
     HSAuint64          GPUAddress;       // Start address for GPU access
     HSAuint64          SizeInBytes;      // Size in bytes
