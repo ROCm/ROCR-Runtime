@@ -1869,7 +1869,11 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
     }
   }
 
-  if (getFlags) attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, 0));
+  if (getFlags) {
+    // Order is important to later code.
+    attribs.push_back(kmtPair(HSA_SVM_ATTR_CLR_FLAGS, 0));
+    attribs.push_back(kmtPair(HSA_SVM_ATTR_SET_FLAGS, 0));
+  }
 
   uint8_t* base = AlignDown((uint8_t*)ptr, 4096);
   uint8_t* end = AlignUp((uint8_t*)ptr + size, 4096);
@@ -1888,8 +1892,10 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
       case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG: {
         if (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_COHERENT)
           value = HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED;
-        else
+        if (attribs[attribs.size() - 2].value & HSA_SVM_FLAG_COHERENT)
           value = HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED;
+        else
+          value = HSA_AMD_SVM_GLOBAL_FLAG_INDETERMINATE;
         break;
       }
       case HSA_AMD_SVM_ATTRIB_READ_ONLY: {
