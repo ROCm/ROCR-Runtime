@@ -2170,13 +2170,25 @@ hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
 
 typedef enum hsa_amd_svm_model_s {
   /**
-   * Updates to memory with this attribute conform to HSA memory consistency model.
+   * Updates to memory with this attribute conform to HSA memory consistency
+   * model.
    */
   HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED = 0,
   /**
-   * Writes to memory with this attribute can be performed by a single agent at a time.
+   * Writes to memory with this attribute can be performed by a single agent
+   * at a time.
    */
-  HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED = 1
+  HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED = 1,
+  /**
+   * Memory region queried contains subregions with both
+   * HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED and
+   * HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED attributes.
+   *
+   * This attribute can not be used in hsa_amd_svm_attributes_set.  It is a
+   * possible return from hsa_amd_svm_attributes_get indicating that the query
+   * region contains both coarse and fine grained memory.
+   */
+  HSA_AMD_SVM_GLOBAL_FLAG_INDETERMINATE = 2
 } hsa_amd_svm_model_t;
 
 typedef enum hsa_amd_svm_attribute_s {
