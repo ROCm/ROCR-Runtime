@@ -792,6 +792,8 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  * @details Enables the queue to run on only selected CUs.  The given mask is
  * combined by bitwise AND with any device wide mask in HSA_CU_MASK before
  * being applied.
+ * If num_cu_mask_count is 0 then the request is interpreted as a request to
+ * enable all CUs and no cu_mask array need be given.
  *
  * @param[in] queue A pointer to HSA queue.
  *
@@ -810,8 +812,8 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_QUEUE @p queue is NULL or invalid.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is 0, not
- * a multiple of 32 or @p cu_mask is NULL.
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
+ * a multiple of 32 or @p num_cu_mask_count is not 0 and cu_mask is NULL.
  *
  */
 hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
