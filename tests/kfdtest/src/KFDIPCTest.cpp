@@ -57,7 +57,7 @@ KFDIPCTest::~KFDIPCTest(void) {
      * starts the next test while the parent is still active.
      */
     if (m_ChildPid == 0)
-        exit(::testing::UnitTest::GetInstance()->failed_test_count());
+        exit(::testing::UnitTest::GetInstance()->current_test_info()->result()->Failed());
 }
 
 /* Import shared Local Memory from parent process. Check for the pattern
@@ -203,7 +203,6 @@ TEST_F(KFDIPCTest, BasicTest) {
     /* Create a child process and share the above Local Memory with it */
     mflags.ui32.NonPaged = 1;
     mflags.ui32.CoarseGrain = 1;
-    mflags.ui32.HostAccess = 1;
 
     m_ChildPid = fork();
     if (m_ChildPid == 0)
