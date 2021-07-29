@@ -67,7 +67,7 @@ static std::vector<std::string> split(std::string& str, char sep) {
 };
 
 // Parse id,id-id,... strings into id lists
-static std::vector<uint32_t> get_elements(std::string& str) {
+static std::vector<uint32_t> get_elements(std::string& str, uint32_t maxElement) {
   std::vector<uint32_t> ret;
   MAKE_NAMED_SCOPE_GUARD(error, [&]() { ret.clear(); });
 
@@ -81,12 +81,13 @@ static std::vector<uint32_t> get_elements(std::string& str) {
     uint32_t index = strtoul(range[0].c_str(), &end, 10);
     // Invalid syntax - id's must be base 10 digits only.
     if (*end != '\0') return ret;
-    ret.push_back(index);
+    if (index <= maxElement) ret.push_back(index);
 
     if (range.size() == 2) {
       uint32_t secondindex = strtoul(range[1].c_str(), &end, 10);
       if (*end != '\0') return ret;         // bad syntax
       if (secondindex < index) return ret;  // inverted range
+      secondindex = Min(secondindex, maxElement);
       for (uint32_t i = index + 1; i < secondindex + 1; i++) ret.push_back(i);
     }
   }
@@ -122,7 +123,7 @@ Specifying a mask with no usable CUs (CU_list is 0x0) is a syntax error.
 Users should use ROCM_VISIBLE_DEVICES if they want to exclude use of a
 particular GPU.
 */
-void Flag::parse_masks(std::string& var) {
+void Flag::parse_masks(std::string& var, uint32_t maxGpu, uint32_t maxCU) {
   if (var.empty()) return;
 
   // Remove whitespace
@@ -165,6 +166,10 @@ void Flag::parse_masks(std::string& var) {
         mask.push_back(chunk);
       }
 
+      // Trim dwords beyond maxCUs
+      uint32_t maxDwords = maxCU / 32 + 1;
+      if (maxDwords < mask.size()) mask.resize(maxDwords);
+
       // Trim leading zeros
       while (!mask.empty() && mask.back() == 0) mask.pop_back();
 
@@ -173,7 +178,7 @@ void Flag::parse_masks(std::string& var) {
 
     } else {
       // parse cu lists
-      auto cu_indices = get_elements(parts[1]);
+      auto cu_indices = get_elements(parts[1], maxCU);
       if (cu_indices.empty()) return;
       uint32_t maxdword = cu_indices.back() / 32 + 1;
       mask.resize(maxdword, 0);
@@ -186,7 +191,7 @@ void Flag::parse_masks(std::string& var) {
     }
 
     // parse device list
-    gpu_index = get_elements(parts[0]);
+    gpu_index = get_elements(parts[0], maxGpu);
     if (gpu_index.empty()) return;
 
     // Ensure that no GPU was repeated across cu_sets

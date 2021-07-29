@@ -355,6 +355,16 @@ void BuildTopology() {
 
   // Instantiate ROCr objects to encapsulate Gpu devices
   SurfaceGpuList(gpu_usr_list, xnack_mode);
+
+  // Parse HSA_CU_MASK with GPU and CU count limits.
+  uint32_t maxGpu = core::Runtime::runtime_singleton_->gpu_agents().size();
+  uint32_t maxCu = 0;
+  uint32_t cus;
+  for (auto& gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+    gpu->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &cus);
+    maxCu = Max(maxCu, cus);
+  }
+  const_cast<Flag&>(core::Runtime::runtime_singleton_->flag()).parse_masks(maxGpu, maxCu);
 }
 
 bool Load() {
