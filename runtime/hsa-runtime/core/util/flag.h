@@ -151,9 +151,11 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_DEBUG");
     debug_ = (var == "1") ? true : false;
+  }
 
-    var = os::GetEnvVar("HSA_CU_MASK");
-    parse_masks(var);
+  void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
+    std::string var = os::GetEnvVar("HSA_CU_MASK");
+    parse_masks(var, maxGpu, maxCU);
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -258,7 +260,7 @@ class Flag {
   // Map GPU index post RVD to its default cu mask.
   std::map<uint32_t, std::vector<uint32_t>> cu_mask_;
 
-  void parse_masks(std::string& args);
+  void parse_masks(std::string& args, uint32_t maxGpu, uint32_t maxCU);
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };
