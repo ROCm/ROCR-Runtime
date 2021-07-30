@@ -148,17 +148,19 @@ target_include_directories( ${HSAKMT_TARGET}
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src )
 
-target_compile_options(${HSAKMT_TARGET} PRIVATE ${HSAKMT_C_FLAGS})
 set_property(TARGET ${HSAKMT_TARGET} PROPERTY LINK_FLAGS ${HSAKMT_LINK_FLAGS})
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" )
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
 
-#find_package(PkgConfig)
+find_package(PkgConfig)
+pkg_check_modules(LIBDRM REQUIRED libdrm)
 target_link_libraries ( ${HSAKMT_TARGET}
   PRIVATE pthread rt numa
 )
+
+target_compile_options(${HSAKMT_TARGET} PRIVATE ${LIBDRM_CFLAGS} ${HSAKMT_C_FLAGS})
 
 ## Define default paths and packages.
 if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
