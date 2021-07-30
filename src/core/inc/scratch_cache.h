@@ -107,7 +107,7 @@ class ScratchCache {
   ScratchCache& operator=(const ScratchCache& rhs) = delete;
   ScratchCache& operator=(ScratchCache&& rhs) = delete;
 
-  ScratchCache(deallocator_t deallocator) : dealloc(deallocator) {}
+  ScratchCache(deallocator_t deallocator) : dealloc(deallocator), available_bytes(0) {}
 
   ~ScratchCache() { assert(map.empty() && "ScratchCache not empty at shutdown."); }
 
@@ -122,6 +122,7 @@ class ScratchCache {
           it->second.alloc();
           info.queue_base = it->second.base;
           info.scratch_node = it;
+          available_bytes -= it->first;
           return true;
         }
         it++;
@@ -136,6 +137,7 @@ class ScratchCache {
         info.queue_base = it->second.base;
         info.size = it->first;
         info.scratch_node = it;
+        available_bytes -= it->first;
         return true;
       }
       it++;
@@ -152,6 +154,8 @@ class ScratchCache {
       return;
     }
     it->second.free();
+    available_bytes += it->first;
+    assert(it->first == info.size && "Scratch cache size mismatch.");
   }
 
   bool trim(bool trim_nodes_in_use) {
@@ -159,6 +163,7 @@ class ScratchCache {
     auto it = map.begin();
     while (it != map.end()) {
       if (it->second.isFree()) {
+        available_bytes -= it->first;
         dealloc(it->second.base, it->first, it->second.large);
         auto temp = it;
         it++;
@@ -181,9 +186,14 @@ class ScratchCache {
     info.scratch_node = it;
   }
 
+  size_t free_bytes() const {
+    return available_bytes;
+  }
+
  private:
   map_t map;
   deallocator_t dealloc;
+  size_t available_bytes;
 };
 
 }  // namespace AMD

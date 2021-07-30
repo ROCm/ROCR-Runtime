@@ -391,6 +391,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_register_deallocation_callback_fn = AMD::hsa_amd_register_deallocation_callback;
   amd_ext_api.hsa_amd_deregister_deallocation_callback_fn = AMD::hsa_amd_deregister_deallocation_callback;
   amd_ext_api.hsa_amd_signal_value_pointer_fn = AMD::hsa_amd_signal_value_pointer;
+  amd_ext_api.hsa_amd_svm_attributes_set_fn = AMD::hsa_amd_svm_attributes_set;
+  amd_ext_api.hsa_amd_svm_attributes_get_fn = AMD::hsa_amd_svm_attributes_get;
+  amd_ext_api.hsa_amd_svm_prefetch_async_fn = AMD::hsa_amd_svm_prefetch_async;
 }
 
 void LoadInitialHsaApiTable() {

@@ -69,40 +69,31 @@ void CpuAgent::InitRegionList() {
 
   std::vector<HsaMemoryProperties> mem_props(properties_.NumMemoryBanks);
   if (HSAKMT_STATUS_SUCCESS ==
-      hsaKmtGetNodeMemoryProperties(node_id(), properties_.NumMemoryBanks,
-                                    &mem_props[0])) {
+      hsaKmtGetNodeMemoryProperties(node_id(), properties_.NumMemoryBanks, &mem_props[0])) {
     std::vector<HsaMemoryProperties>::iterator system_prop =
         std::find_if(mem_props.begin(), mem_props.end(), [](HsaMemoryProperties prop) -> bool {
           return (prop.SizeInBytes > 0 && prop.HeapType == HSA_HEAPTYPE_SYSTEM);
         });
 
-    if (system_prop != mem_props.end()) {
-      MemoryRegion* system_region_fine = new MemoryRegion(true, is_apu_node, this, *system_prop);
+    HsaMemoryProperties system_props;
+    std::memset(&system_props, 0, sizeof(HsaMemoryProperties));
+    system_props.HeapType = HSA_HEAPTYPE_SYSTEM;
+    system_props.SizeInBytes = 0;
+    system_props.VirtualBaseAddress = 0;
 
-      regions_.push_back(system_region_fine);
+    if (system_prop != mem_props.end()) system_props = *system_prop;
 
-      if (!is_apu_node) {
-        MemoryRegion* system_region_coarse =
-            new MemoryRegion(false, is_apu_node, this, *system_prop);
+    MemoryRegion* system_region_fine =
+        new MemoryRegion(true, false, is_apu_node, this, system_props);
+    regions_.push_back(system_region_fine);
+    MemoryRegion* system_region_kernarg =
+        new MemoryRegion(true, true, is_apu_node, this, system_props);
+    regions_.push_back(system_region_kernarg);
 
-        regions_.push_back(system_region_coarse);
-      }
-    } else {
-      HsaMemoryProperties system_props;
-      std::memset(&system_props, 0, sizeof(HsaMemoryProperties));
-
-      system_props.HeapType = HSA_HEAPTYPE_SYSTEM;
-      system_props.SizeInBytes = 0;
-      system_props.VirtualBaseAddress = 0;
-
-      MemoryRegion* system_region_fine = new MemoryRegion(true, is_apu_node, this, system_props);
-      regions_.push_back(system_region_fine);
-
-      if (!is_apu_node) {
-        MemoryRegion* system_region_coarse =
-            new MemoryRegion(false, is_apu_node, this, system_props);
-        regions_.push_back(system_region_coarse);
-      }
+    if (!is_apu_node) {
+      MemoryRegion* system_region_coarse =
+          new MemoryRegion(false, false, is_apu_node, this, system_props);
+      regions_.push_back(system_region_coarse);
     }
   }
 }

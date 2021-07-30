@@ -40,4 +40,8 @@
 ##
 ################################################################################
 
-echo /opt/rocm/hsa/lib > /etc/ld.so.conf.d/hsa-rocr-dev.conf && ldconfig
+# left-hand term originates from @ENABLE_LDCONFIG@ = ON/OFF at package build
+if [ $1 -eq 0 ] && [ "@ENABLE_LDCONFIG@" == "ON" ]; then
+    rm -f /etc/ld.so.conf.d/hsa-rocr-dev.conf
+    ldconfig
+fi
