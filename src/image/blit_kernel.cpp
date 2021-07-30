@@ -82,6 +82,9 @@ extern uint8_t ocl_blit_object_gfx902[];
 extern uint8_t ocl_blit_object_gfx904[];
 extern uint8_t ocl_blit_object_gfx906[];
 extern uint8_t ocl_blit_object_gfx908[];
+extern uint8_t ocl_blit_object_gfx909[];
+extern uint8_t ocl_blit_object_gfx90a[];
+extern uint8_t ocl_blit_object_gfx90c[];
 extern uint8_t ocl_blit_object_gfx1010[];
 extern uint8_t ocl_blit_object_gfx1011[];
 extern uint8_t ocl_blit_object_gfx1012[];
@@ -861,7 +864,7 @@ hsa_status_t BlitKernel::ConvertImage(const Image& original_image,
      (current_type == HSA_EXT_IMAGE_CHANNEL_TYPE_UNORM_SHORT_101010)) {
     converted_order = HSA_EXT_IMAGE_CHANNEL_ORDER_R;
   }
-  
+
   // For internal book keeping, depth isn't a HW type.
   const hsa_ext_image_geometry_t current_geometry =
       original_image.desc.geometry;
@@ -990,6 +993,12 @@ hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
     *blit_code_object = ocl_blit_object_gfx906;
   } else if (sname == "gfx908") {
     *blit_code_object = ocl_blit_object_gfx908;
+  } else if (sname == "gfx909") {
+    *blit_code_object = ocl_blit_object_gfx909;
+  } else if (sname == "gfx90a") {
+    *blit_code_object = ocl_blit_object_gfx90a;
+  } else if (sname == "gfx90c") {
+    *blit_code_object = ocl_blit_object_gfx90c;
   } else if (sname == "gfx1010") {
     *blit_code_object = ocl_blit_object_gfx1010;
   } else if (sname == "gfx1011") {

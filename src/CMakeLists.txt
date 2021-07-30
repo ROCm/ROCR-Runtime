@@ -191,7 +191,6 @@ set ( SRCS core/util/lnx/os_linux.cpp
            core/common/shared.cpp
            core/common/hsa_table_interface.cpp
            loader/executable.cpp
-           loader/loaders.cpp
            libamdhsacode/amd_elf_image.cpp
            libamdhsacode/amd_hsa_code_util.cpp
            libamdhsacode/amd_hsa_locks.cpp
@@ -386,6 +385,7 @@ endif()
 
 ## Packaging directives
 set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
+set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
 
 ## Only pack the "binary" and "dev" components, post install script will add the directory link.
 set (CPACK_DEB_COMPONENT_INSTALL ON)
@@ -399,9 +399,9 @@ set ( CPACK_PACKAGE_CONTACT "TODO Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
 
-## Process the install scripts to update the CPACK variables
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/post_install DEBIAN/postinst @ONLY)
-configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/pre_remove DEBIAN/prerm @ONLY)
+## Process the Debian install/remove scripts to update the CPACK variables
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst.in DEBIAN/postinst @ONLY )
+configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm.in DEBIAN/prerm @ONLY )
 
 if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
   set ( CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}.$ENV{ROCM_LIBPATCH_VERSION}" )
@@ -452,8 +452,12 @@ set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_CONFLICTS "hsa-ext-rocr-dev" )
 
-set ( CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_post" )
-set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/rpm_postun" )
+## Process the Rpm install/remove scripts to update the CPACK variables
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/post.in" RPM/post @ONLY )
+configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/postun.in" RPM/postun @ONLY )
+
+set ( CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/post" )
+set ( CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/postun" )
 
 ## Include packaging
 include ( CPack )

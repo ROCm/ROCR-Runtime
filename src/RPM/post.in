@@ -1,11 +1,9 @@
-#!/bin/bash
-
 ################################################################################
 ##
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2020-2020, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2016-2020, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -42,23 +40,8 @@
 ##
 ################################################################################
 
-set -e
-
-do_ldconfig() {
-    echo @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/lib > /etc/ld.so.conf.d/hsa-rocr-dev.conf && ldconfig
-}
-
-case "$1" in
-   configure)
-       do_ldconfig
-       # Workaround for CPACK directory symlink handling error.
-       mkdir -p @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include
-       ln -sf ../../include/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
-   ;;
-   abort-upgrade|abort-remove|abort-deconfigure)
-       echo "$1"
-   ;;
-   *)
-       exit 0
-   ;;
-esac
+# left-hand term originates from @ENABLE_LDCONFIG@ = ON/OFF at package build
+if [ "@ENABLE_LDCONFIG@" == "ON" ]; then
+  echo @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/lib > /etc/ld.so.conf.d/hsa-rocr-dev.conf
+  ldconfig
+fi

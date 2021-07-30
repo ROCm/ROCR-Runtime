@@ -56,6 +56,11 @@ class Flag {
  public:
   enum SDMA_OVERRIDE { SDMA_DISABLE, SDMA_ENABLE, SDMA_DEFAULT };
 
+  // The values are meaningful and chosen to satisfy the thunk API.
+  enum XNACK_REQUEST { XNACK_DISABLE = 0, XNACK_ENABLE = 1, XNACK_UNCHANGED = 2 };
+  static_assert(XNACK_DISABLE == 0, "XNACK_REQUEST enum values improperly changed.");
+  static_assert(XNACK_ENABLE == 1, "XNACK_REQUEST enum values improperly changed.");
+
   explicit Flag() { Refresh(); }
 
   virtual ~Flag() {}
@@ -104,6 +109,12 @@ class Flag {
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
 
+    var = os::GetEnvVar("HSA_UNPATCH_XGMI_LINK_WEIGHT");
+    patch_xgmi_link_weight_ = (var == "1") ? false : true;
+
+    var = os::GetEnvVar("HSA_UNPATCH_LINK_OVERRIDE");
+    patch_link_override_ = (var == "1") ? false : true;
+
     var = os::GetEnvVar("HSA_ENABLE_SDMA_HDP_FLUSH");
     enable_sdma_hdp_flush_ = (var == "0") ? false : true;
 
@@ -130,6 +141,11 @@ class Flag {
 
     var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
     check_sramecc_validity_ = (var == "1") ? false : true;
+    
+    // Legal values are zero "0" or one "1". Any other value will
+    // be interpreted as not defining the env variable.
+    var = os::GetEnvVar("HSA_XNACK");
+    xnack_ = (var == "0") ? XNACK_DISABLE : ((var == "1") ? XNACK_ENABLE : XNACK_UNCHANGED);
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -149,6 +165,11 @@ class Flag {
   bool report_tool_load_failures() const { return report_tool_load_failures_; }
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
+
+  // Temporary way to control ROCr interpretation of inter-device link weight
+  bool patch_xgmi_link_weight() const { return patch_xgmi_link_weight_; }
+
+  bool patch_link_override() const { return patch_link_override_; }
 
   bool rev_copy_dir() const { return rev_copy_dir_; }
 
@@ -178,6 +199,8 @@ class Flag {
 
   bool check_sramecc_validity() const { return check_sramecc_validity_; }
 
+  XNACK_REQUEST xnack() const { return xnack_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -195,6 +218,8 @@ class Flag {
   bool disable_image_;
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
+  bool patch_xgmi_link_weight_;
+  bool patch_link_override_;
 
   SDMA_OVERRIDE enable_sdma_;
 
@@ -208,6 +233,9 @@ class Flag {
   std::string tools_lib_names_;
 
   size_t force_sdma_size_;
+
+  // Indicates user preference for Xnack state.
+  XNACK_REQUEST xnack_;
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };
