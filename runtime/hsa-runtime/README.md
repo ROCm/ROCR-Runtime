@@ -20,7 +20,7 @@ utils - Utilities required to build the core runtime.
 #### Build Environment
 
 CMake build framework is used to build the ROC runtime. The minimum version is
-3.5.0.
+3.6.3.
 
 Obtain cmake infrastructure: http://www.cmake.org/download/
 
