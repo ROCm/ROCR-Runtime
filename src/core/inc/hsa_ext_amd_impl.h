@@ -246,6 +246,21 @@ hsa_status_t hsa_amd_deregister_deallocation_callback(
 hsa_status_t hsa_amd_signal_value_pointer(hsa_signal_t signal,
                                           volatile hsa_signal_value_t** value_ptr);
 
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_svm_attributes_set(void* ptr, size_t size,
+                                        hsa_amd_svm_attribute_pair_t* attribute_list,
+                                        size_t attribute_count);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_svm_attributes_get(void* ptr, size_t size,
+                                        hsa_amd_svm_attribute_pair_t* attribute_list,
+                                        size_t attribute_count);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agent,
+                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                        hsa_signal_t completion_signal);
+
 }  // namespace amd
 }  // namespace rocr
 
