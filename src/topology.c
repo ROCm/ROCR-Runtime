@@ -263,6 +263,12 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x73FF, 10, 3, 2, "DIMGREY_CAVEFISH" },
 	/* VanGogh */
 	{ 0x163F, 10, 3, 3, "VanGogh" },
+	/* BEIGE_GOBY */
+	{ 0x7420, 10, 3, 4, "BEIGE_GOBY" },
+	{ 0x7421, 10, 3, 4, "BEIGE_GOBY" },
+	{ 0x7422, 10, 3, 4, "BEIGE_GOBY" },
+	{ 0x7423, 10, 3, 4, "BEIGE_GOBY" },
+	{ 0x743F, 10, 3, 4, "BEIGE_GOBY" },
 	/* Yellow_Carp */
 	{ 0x164D, 10, 3, 5, "YELLOW_CARP" },
 	{ 0x1681, 10, 3, 5, "YELLOW_CARP" },
