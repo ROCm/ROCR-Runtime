@@ -332,8 +332,16 @@ class GpuAgent : public GpuAgentInt {
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
-  // @brief Create a queue through HSA API to allow tools to intercept.
-  core::Queue* CreateInterceptibleQueue();
+  // @brief Create an internal queue allowing tools to be notified.
+  core::Queue* CreateInterceptibleQueue() {
+    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr);
+  }
+
+  // @brief // @brief Create an internal queue, with a custom error handler, allowing tools to be
+  // notified.
+  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source,
+                                                         void* data),
+                                        void* data);
 
   // @brief Create SDMA blit object.
   //

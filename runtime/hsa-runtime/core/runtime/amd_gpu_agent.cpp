@@ -533,10 +533,12 @@ hsa_status_t GpuAgent::VisitRegion(
   return HSA_STATUS_SUCCESS;
 }
 
-core::Queue* GpuAgent::CreateInterceptibleQueue() {
+core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t status,
+                                                                 hsa_queue_t* source, void* data),
+                                                void* data) {
   // Disabled intercept of internal queues pending tools updates.
   core::Queue* queue = nullptr;
-  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue);
+  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, callback, data, 0, 0, &queue);
   if (queue != nullptr)
     core::Runtime::runtime_singleton_->InternalQueueCreateNotify(core::Queue::Convert(queue),
                                                                  this->public_handle());
