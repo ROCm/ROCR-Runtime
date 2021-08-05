@@ -54,6 +54,7 @@ void Queue::DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* 
     const char* msg = "UNKNOWN ERROR";
     HSA::hsa_status_string(status, &msg);
     fprintf(stderr, "Queue at %p inactivated due to async error:\n\t%s\n", source, msg);
+    abort();
   }
 }
 
