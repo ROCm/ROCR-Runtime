@@ -132,6 +132,14 @@ bool isOnEmulator() {
     return isEmuMode;
 }
 
+static inline uint32_t checkCWSREnabled() {
+    uint32_t cwsr_enable = 0;
+
+    fscanf_dec("/sys/module/amdgpu/parameters/cwsr_enable", &cwsr_enable);
+
+    return cwsr_enable;
+}
+
 /**
  * KFDCWSRTest.BasicTest
  *
@@ -139,83 +147,68 @@ bool isOnEmulator() {
  * It then triggers CWSR and ensures the shader stops running.
  * It then resumes the shader, ensures that it's running again and terminates it.
  */
-
 TEST_F(KFDCWSRTest, BasicTest) {
     TEST_START(TESTPROFILE_RUNALL);
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
-    if (m_FamilyId >= FAMILY_VI) {
+    if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
+        const char *pIterateIsa;
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
         HsaMemoryBuffer resultBuf1(PAGE_SIZE, defaultGPUNode, true, false, false);
-        HsaMemoryBuffer resultBuf2(PAGE_SIZE, defaultGPUNode, true, false, false);
-
-        int count1 = 40000000;
-        int count2 = 20000000;
-
-        if (isOnEmulator()) {
-            // Divide the iterator times by 1000 so that the test can
-            // finish in a reasonable time.
-            count1 /= 1000;
-            count2 /= 1000;
-            LOG() << "On Emulators" << std::endl;
-        }
-
-        unsigned int* result1 = resultBuf1.As<unsigned int*>();
-        unsigned int* result2 = resultBuf2.As<unsigned int*>();
-        const char *pIterateIsa;
+        uint64_t count1 = 400000000;
 
         if (m_FamilyId < FAMILY_AI)
             pIterateIsa = iterate_isa_gfx8;
         else
             pIterateIsa = iterate_isa_gfx9;
 
+        if (isOnEmulator()) {
+            // Divide the iterator times by 10000 so that the test can
+            // finish in a reasonable time.
+            count1 /= 10000;
+            LOG() << "On Emulators" << std::endl;
+        }
+
+        unsigned int* result1 = resultBuf1.As<unsigned int*>();
+
         m_pIsaGen->CompileShader(pIterateIsa, "iterate_isa", isaBuffer);
 
-        PM4Queue queue1, queue2;
+        PM4Queue queue1;
 
         ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
 
-        Dispatch *dispatch1, *dispatch2;
+        Dispatch *dispatch1;
 
         dispatch1 = new Dispatch(isaBuffer);
-        dispatch2 = new Dispatch(isaBuffer);
 
         dispatch1->SetArgs(reinterpret_cast<void *>(count1), result1);
         dispatch1->SetDim(wave_number, 1, 1);
-        dispatch2->SetArgs(reinterpret_cast<void *>(count2), result2);
-        dispatch2->SetDim(wave_number, 1, 1);
 
         // Submit the shader, queue1
         dispatch1->Submit(queue1);
-        // Create queue2 during queue1 still running will trigger the CWSR
-        ASSERT_SUCCESS(queue2.Create(defaultGPUNode));
-        // Submit the shader
-        dispatch2->Submit(queue2);
+
+        //Give time for waves to launch before disabling queue.
+        Delay(1);
+        EXPECT_SUCCESS(queue1.Update(0/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
+        Delay(5);
+        EXPECT_SUCCESS(queue1.Update(100/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
+
         dispatch1->Sync();
-        dispatch2->Sync();
         // Ensure all the waves complete as expected
         int i;
         for (i = 0 ; i < wave_number; ++i) {
-             if (result1[i] != count1) {
-                 LOG() << "Dispatch 1, work item [" << std::dec << i << "] "
-                         << result1[i] << " != " << count1 << std::endl;
-                 break;
-             }
-             if (result2[i] != count2) {
-                 LOG() << "Dispatch 2, work item [" << std::dec << i << "] "
-                         << result2[i] << " != " << count2 << std::endl;
-                 break;
-             }
+            if (result1[i] != count1) {
+                LOG() << "Dispatch 1, work item [" << std::dec << i << "] "
+                      << result1[i] << " != " << count1 << std::endl;
+                break;
+            }
         }
         EXPECT_EQ(i, wave_number);
 
         EXPECT_SUCCESS(queue1.Destroy());
-        EXPECT_SUCCESS(queue2.Destroy());
 
         delete dispatch1;
-        delete dispatch2;
-
     } else {
         LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
@@ -240,7 +233,7 @@ TEST_F(KFDCWSRTest, InterruptRestore) {
 
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
-    if (m_FamilyId >= FAMILY_VI) {
+    if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
         m_pIsaGen->CompileShader(infinite_isa, "infinite_isa", isaBuffer);
