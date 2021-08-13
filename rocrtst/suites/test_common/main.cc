@@ -490,6 +490,10 @@ TEST(rocrtstPerf, AQL_Dispatch_Time_Multi_Interrupt) {
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
 
+  #ifdef ROCRTST_EMULATOR_BUILD
+  std::cout << "--- Emulation build ---" << std::endl;
+  #endif
+
   RocrTstGlobals settings;
 
   // Set some default values
