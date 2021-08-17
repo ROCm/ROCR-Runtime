@@ -61,12 +61,16 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 # KFDQMTest.GPUDoorbellWrite fails intermittently (KFD-318)
 # KFDQMTest.mGPUShareBO (KFD-334)
 # KFDHWSTest.* (SWDEV-193035)
+# KFDEvictTest.BurstyTest (ROCMOPS-464)
+# KFDEvictTest.BurstyTest (SWDEV-291256)
+# KFDEvictTest.BurstyTest (KFD-425)
 TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.mGPUShareBO:"\
 "KFDQMTest.SdmaEventInterrupt:"\
 "KFDMemoryTest.CacheInvalidateOnRemoteWrite:"\
 "KFDDBGTest.BasicDebuggerSuspendResume:"\
+"KFDEvictTest.BurstyTest:"\
 "KFDHWSTest.*"
 
 BLACKLIST_ALL_ASICS=\
@@ -153,12 +157,10 @@ FILTER[polaris12]=\
 "$SDMA_BLACKLIST"
 
 # KFDIPCTest.BasicTest (ROCMOPS-459) .CMABasicTest (ROCMOPS-460) .CrossMemoryAttachTest (ROCMOPS-461)
-# KFDEvictTest.BurstyTest (ROCMOPS-464)
 # KFDQMTest.AllSdmaQueues (ROCMOPS-463)
 FILTER[vega10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDIPCTest.BasicTest:"\
-"KFDEvictTest.BurstyTest:"\
 "KFDIPCTest.CMABasicTest:"\
 "KFDIPCTest.CrossMemoryAttachTest:"\
 "KFDQMTest.AllSdmaQueues"
@@ -167,12 +169,9 @@ FILTER[vega12]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST"\
 
-# KFDEvictTest.BurstyTest (ROCMOPS-464)
-# KFDEvictTest.BurstyTest (SWDEV-291256)
 FILTER[vega20]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
-"KFDEvictTest.BurstyTest:"\
 "KFDEvictTest.BasicTest:"\
 "KFDQMTest.GPUDoorbellWrite"
 
@@ -209,18 +208,15 @@ FILTER[renoir]=\
 "KFDMemoryTest.SignalHandling"
 
 # KFDExceptionTest.* (KFD-435)
-# KFDEvictTest.BurstyTest (KFD-425)
 # KFQMTest.BasicCuMaskingEven (Issues with baseline measurement)
 FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
-"KFDQMTest.BasicCuMaskingEven:"\
-"KFDEvictTest.BurstyTest"
+"KFDQMTest.BasicCuMaskingEven"\
 
 FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDExceptionTest.FaultStorm:"\
-"KFDEvictTest.BurstyTest:"\
 "KFDMemoryTest.PtraceAccess:"\
 "KFDMemoryTest.DeviceHdpFlush"
 
