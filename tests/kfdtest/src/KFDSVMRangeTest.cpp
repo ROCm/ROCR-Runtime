@@ -1257,3 +1257,127 @@ TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
 
     TEST_END
 }
+
+/*
+ * Test SVM support read only range
+ *
+ * Map read only range to GPU, test sdma can read the range
+ * write to range should trigger GPU vm fault for both xnack on and off
+ */
+TEST_F(KFDSVMRangeTest, ReadOnlyRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (!GetVramSize(defaultGPUNode)) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    /*
+     * Use child process to run test because the test trigger GPU vm fault, KFD evict all user queues
+     * of the process and no more test can run after vm fault on the process.
+     */
+    int pid = fork();
+    if (pid == 0) {
+        if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
+            WARN() << "KFD open failed in child process" << std::endl;
+            exit(1);
+        }
+    } else {
+        int childStatus;
+
+        waitpid(pid, &childStatus, 0);
+        if (is_dgpu()) {
+            EXPECT_EQ(true, WIFEXITED(childStatus));
+            EXPECT_EQ(0, WEXITSTATUS(childStatus));
+        } else {
+            EXPECT_EQ(true, WIFSIGNALED(childStatus));
+            EXPECT_EQ(SIGSEGV, WTERMSIG(childStatus));
+        }
+
+        return;
+    }
+
+    /* Use child process to run test */
+    int ret = 0;
+    HsaSVMRange inBuffer(PAGE_SIZE * 2, defaultGPUNode);
+    HSAuint8 *pinBuf = inBuffer.As<HSAuint8 *>();
+
+    memset(pinBuf, 0x55, PAGE_SIZE);
+
+    /* Map readonly pinBuf to GPU, sDMA should be able to read it */
+    mprotect(pinBuf, PAGE_SIZE, PROT_READ);
+
+    HsaSVMRange outputBuffer(PAGE_SIZE, defaultGPUNode);
+    HSAuint8 *pBuf = outputBuffer.As<HSAuint8 *>();
+
+    HsaEvent *vmFaultEvent;
+    HSAuint64 faultAddress;
+    HsaEventDescriptor eventDesc;
+    eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
+    eventDesc.NodeId = defaultGPUNode;
+    eventDesc.SyncVar.SyncVar.UserData = NULL;
+    eventDesc.SyncVar.SyncVarSize = 0;
+
+    ret = hsaKmtCreateEvent(&eventDesc, true, false, &vmFaultEvent);
+    if (ret != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Event create failed" << std::endl;
+        exit(ret);
+    }
+
+    SDMAQueue sdmaQueue;
+
+    ret = sdmaQueue.Create(defaultGPUNode);
+    if (ret != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Queue create failed" << std::endl;
+        goto queue_fail;
+    }
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
+                    pBuf, reinterpret_cast<void *>(pinBuf), PAGE_SIZE));
+    sdmaQueue.Wait4PacketConsumption();
+    EXPECT_EQ(0x55, pBuf[0]);
+    if (pBuf[0] != 0x55)
+        goto event_fail;
+
+    /* sDMA write to readonly pinBuf should fail with GPU vm fault, check if pinBuf content is
+     * not changed, and KFD send HSA_EVENTTYPE_MEMORY event back with fault address pinBuf.
+     *
+     * This must be the last step of test because all queues are evicted after vm fault.
+     */
+
+    memset(pBuf, 0xAA, PAGE_SIZE);
+    sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
+                    pinBuf, reinterpret_cast<void *>(pBuf), PAGE_SIZE));
+
+    ret = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);
+    if (ret != HSAKMT_STATUS_SUCCESS) {
+        WARN() << "Wait failed. No Exception triggered" << std::endl;
+        goto event_fail;
+    }
+    if (vmFaultEvent->EventData.EventType != HSA_EVENTTYPE_MEMORY) {
+        WARN() << "Unexpected Event Received " << vmFaultEvent->EventData.EventType << std::endl;
+        ret = HSAKMT_STATUS_ERROR;
+
+        goto event_fail;
+    }
+    faultAddress = vmFaultEvent->EventData.EventData.MemoryAccessFault.VirtualAddress;
+    if (faultAddress != (HSAuint64)pinBuf) {
+        WARN() << "Unexpected Fault Address " << faultAddress << std::endl;
+        ret = HSAKMT_STATUS_ERROR;
+    }
+
+event_fail:
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+queue_fail:
+    hsaKmtDestroyEvent(vmFaultEvent);
+    /* Child process exit, otherwise it will continue to run remaining tests */
+    exit(ret);
+
+    TEST_END
+}
