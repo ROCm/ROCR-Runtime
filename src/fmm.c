@@ -174,6 +174,7 @@ typedef struct {
 	uint32_t device_id;
 	uint32_t node_id;
 	uint64_t local_mem_size;
+	HSA_ENGINE_ID EngineId;
 	aperture_t lds_aperture;
 	aperture_t scratch_aperture;
 	aperture_t mmio_aperture;
@@ -1340,7 +1341,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(mflags);
 
-	if (topology_is_svm_needed(node_id)) {
+	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
 		if (mflags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
@@ -2217,6 +2218,10 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				goto sysfs_parse_failed;
 			}
 
+			gpu_mem[gpu_mem_count].EngineId.ui32.Major = props.EngineId.ui32.Major;
+			gpu_mem[gpu_mem_count].EngineId.ui32.Minor = props.EngineId.ui32.Minor;
+			gpu_mem[gpu_mem_count].EngineId.ui32.Stepping = props.EngineId.ui32.Stepping;
+
 			gpu_mem[gpu_mem_count].drm_render_fd = fd;
 			gpu_mem[gpu_mem_count].gpu_id = gpu_id;
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
@@ -2387,7 +2392,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	fmm_init_rbtree();
 
 	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
-		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].node_id))
+		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId))
 			continue;
 		gpu_mem[gpu_mem_id].mmio_aperture.base = map_mmio(
 				gpu_mem[gpu_mem_id].node_id,
@@ -3171,7 +3176,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	gpu_mem_id = gpu_mem_find_by_gpu_id(infoArgs.gpu_id);
 	if (gpu_mem_id < 0)
 		goto error_free_metadata;
-	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].node_id)) {
+	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
 		aperture_base = NULL;
 	} else {
