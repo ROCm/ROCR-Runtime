@@ -798,12 +798,12 @@ void topology_setup_is_dgpu_param(HsaNodeProperties *props)
 		is_dgpu = true;
 }
 
-bool topology_is_svm_needed(uint32_t node_id)
+bool topology_is_svm_needed(HSA_ENGINE_ID EngineId)
 {
 	if (is_dgpu)
 		return true;
 
-	if (get_gfxv_by_node_id(node_id) >= GFX_VERSION_VEGA10)
+	if (HSA_GET_GFX_VERSION_FULL(EngineId.ui32) >= GFX_VERSION_VEGA10)
 		return true;
 
 	return false;
@@ -2159,7 +2159,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	}
 
 	/* Add SVM aperture */
-	if (topology_is_svm_needed(get_device_id_by_gpu_id(gpu_id)) && i < NumBanks &&
+	if (topology_is_svm_needed(g_props[NodeId].node.EngineId) && i < NumBanks &&
 	    fmm_get_aperture_base_and_limit(
 		    FMM_SVM, gpu_id, &MemoryProperties[i].VirtualBaseAddress,
 		    &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
