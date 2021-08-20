@@ -599,7 +599,7 @@ void GpuAgent::InitDma() {
   queues_[QueueUtility].reset(queue_lambda);
 
   // Decide which engine to use for blits.
-  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
+  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev) {
     Flag::SDMA_OVERRIDE sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
     // User SDMA queues are unstable on gfx8 and unsupported on gfx1013.
@@ -608,6 +608,12 @@ void GpuAgent::InitDma() {
     if (sdma_override != Flag::SDMA_DEFAULT) use_sdma = (sdma_override == Flag::SDMA_ENABLE);
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
+      // On gfx90a ensure that HostToDevice queue is created first and so is placed on SDMA0.
+      if ((!use_xgmi) && (!isHostToDev) && (isa_->GetMajorVersion() == 9) &&
+          (isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) {
+        *blits_[BlitHostToDev];
+      }
+
       auto ret = CreateBlitSdma(use_xgmi);
       if (ret != nullptr) return ret;
     }
@@ -643,13 +649,14 @@ void GpuAgent::InitDma() {
     return ret;
   });
   blits_[BlitHostToDev].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly]); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly], true); });
   blits_[BlitDevToHost].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility]); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility], false); });
 
   // XGMI engines.
   for (uint32_t idx = DefaultBlitCount; idx < blit_cnt_; idx++) {
-    blits_[idx].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility]); });
+    blits_[idx].reset(
+        [blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility], false); });
   }
 
   // GWS queues.
