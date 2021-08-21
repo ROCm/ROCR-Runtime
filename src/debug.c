@@ -296,7 +296,7 @@ hsaKmtGetKernelDebugTrapVersionInfo(
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-#define HSA_RUNTIME_ENABLE_MIN_MAJOR	9
+#define HSA_RUNTIME_ENABLE_MIN_MAJOR	10
 #define HSA_RUNTIME_ENABLE_MIN_MINOR	0
 HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 					    bool setupTtmp)
