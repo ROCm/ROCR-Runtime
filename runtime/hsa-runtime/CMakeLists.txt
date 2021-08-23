@@ -327,7 +327,7 @@ install ( EXPORT ${CORE_RUNTIME_NAME}Targets
 
 # Adds the target alias hsa-runtime64::hsa-runtime64 to the local cmake cache.
 # This isn't necessary today.  It's harmless preparation for some
-# hypothetical future in which the we might be inluded by add_subdirectory()
+# hypothetical future in which the we might be included by add_subdirectory()
 # in some other project's cmake file.  It allows uniform use of find_package
 # and target_link_library() without regard to whether a target is external or
 # a subdirectory of the current build.
