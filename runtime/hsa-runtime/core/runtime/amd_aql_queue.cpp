@@ -330,11 +330,10 @@ AqlQueue::~AqlQueue() {
   // Remove error handler synchronously.
   // Sequences error handler callbacks with queue destroy.
   dynamicScratchState |= ERROR_HANDLER_TERMINATE;
-  HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
   while ((dynamicScratchState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
+    HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
     HSA::hsa_signal_wait_relaxed(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
                                  0x8000000000000000ull, -1ull, HSA_WAIT_STATE_BLOCKED);
-    HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0x8000000000000000ull);
   }
 
   // Remove kfd exception handler
@@ -1028,6 +1027,9 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   if (queue->errors_callback_ != nullptr) {
     queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
   }
+  Signal* signal = queue->exception_signal_;
+  queue->exceptionState = ERROR_HANDLER_DONE;
+  signal->StoreRelease(0);
   return false;
 }
 
