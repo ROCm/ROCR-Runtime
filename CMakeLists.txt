@@ -310,6 +310,8 @@ set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA "DEBIAN/postinst;DEBIAN/prerm")
 # Needed since some packages still say they need hsakmt-roct
 set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
 set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct")
+set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct")
+set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct")
 
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/post.in" RPM/post @ONLY )
