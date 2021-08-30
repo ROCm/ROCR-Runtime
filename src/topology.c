@@ -34,9 +34,6 @@
 
 #include <errno.h>
 #include <sys/sysinfo.h>
-#include <xf86drm.h>
-#include <amdgpu.h>
-#include <amdgpu_drm.h>
 
 #include "libhsakmt.h"
 #include "fmm.h"
@@ -937,39 +934,10 @@ exit:
 	return ret;
 }
 
-static int topology_get_marketing_name(int minor, uint16_t *marketing_name)
-{
-	int drm_fd;
-	uint32_t major_version;
-	uint32_t minor_version;
-	amdgpu_device_handle device_handle;
-	const char *name;
-	int i;
-
-	if (marketing_name == NULL)
-		return -1;
-	drm_fd = drmOpenRender(minor);
-	if (drm_fd < 0)
-		return -1;
-	if (amdgpu_device_initialize(drm_fd,
-		&major_version, &minor_version, &device_handle) < 0) {
-		drmClose(drm_fd);
-		return -1;
-	}
-	name = amdgpu_get_marketing_name(device_handle);
-	if (name != NULL) {
-		for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
-			marketing_name[i] = name[i];
-		marketing_name[i] = '\0';
-	}
-	amdgpu_device_deinitialize(device_handle);
-	drmClose(drm_fd);
-	return 0;
-}
-
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 					    HsaNodeProperties *props,
 					    uint32_t *gpu_id,
+					    struct pci_ids pacc,
 					    bool *p2p_links,
 					    uint32_t *num_p2pLinks)
 {
@@ -978,9 +946,11 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	char prop_name[256];
 	char path[256];
 	unsigned long long prop_val;
-	uint32_t prog, major, minor, step;
+	uint32_t i, prog, major, minor, step;
 	int read_size;
 	const struct hsa_gfxip_table *hsa_gfxip;
+	char namebuf[HSA_PUBLIC_NAME_SIZE];
+	const char *name;
 	uint32_t sys_node_id;
 	uint32_t gfxv = 0;
 	uint8_t gfxv_major, gfxv_minor, gfxv_stepping;
@@ -1145,12 +1115,14 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 		if (!props->NumCPUCores) {
 			/* Is dGPU Node, not APU
-			 * Retrieve the marketing name of the node.
+			 * Retrieve the marketing name of the node using pcilib,
+			 * convert UTF8 to UTF16
 			 */
-			if (topology_get_marketing_name(props->DrmRenderMinor,
-					props->MarketingName) != 0)
-				pr_info("failed to get marketing name for device ID 0x%x\n",
-						props->DeviceId);
+			name = pci_ids_lookup(pacc, namebuf, sizeof(namebuf),
+								   props->VendorId, props->DeviceId);
+			for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
+				props->MarketingName[i] = name[i];
+			props->MarketingName[i] = '\0';
 		}
 
 		/* Get VGPR/SGPR size in byte per CU */
@@ -1819,6 +1791,7 @@ HSAKMT_STATUS topology_take_snapshot(void)
 	HsaSystemProperties sys_props;
 	node_props_t *temp_props = 0;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	struct pci_ids pacc;
 	struct proc_cpuinfo *cpuinfo;
 	const uint32_t num_procs = get_nprocs();
 	uint32_t num_ioLinks;
@@ -1845,11 +1818,12 @@ retry:
 			ret = HSAKMT_STATUS_NO_MEMORY;
 			goto err;
 		}
+		pacc = pci_ids_create();
 		for (i = 0; i < sys_props.NumNodes; i++) {
 			ret = topology_sysfs_get_node_props(i,
 					&temp_props[i].node,
 					&temp_props[i].gpu_id,
-					&p2p_links, &num_p2pLinks);
+					pacc, &p2p_links, &num_p2pLinks);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
 				free_properties(temp_props, i);
 				goto err;
@@ -1954,6 +1928,7 @@ retry:
 				temp_props[i].node.NumIOLinks = link_id;
 			}
 		}
+		pci_ids_destroy(pacc);
 	}
 
 	if (!p2p_links) {

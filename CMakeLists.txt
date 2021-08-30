@@ -122,6 +122,7 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/libhsakmt.c"
                  "src/memory.c"
                  "src/openclose.c"
+                 "src/pci_ids.c"
                  "src/perfctr.c"
                  "src/pmc_table.c"
                  "src/queues.c"
@@ -154,6 +155,7 @@ set_property ( TARGET ${HSAKMT_TARGET} PROPERTY VERSION "${LIB_VERSION_STRING}" 
 set_property ( TARGET ${HSAKMT_TARGET} PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
 
 find_package(PkgConfig)
+pkg_check_modules(LIBDRM REQUIRED libdrm)
 # get OS-info for OS-specific build dependencies
 get_os_info()
 
@@ -164,29 +166,11 @@ find_library(NUMA NAMES libnuma.so REQUIRED)
 message(STATUS "LIBC:" ${LIBC})
 message(STATUS "NUMA:" ${NUMA})
 
-## If environment variable DRM_DIR is set, the script
-## will pick up the corresponding libraries from that path.
-if( DEFINED ENV{DRM_DIR} )
-#assume header files and libraries are under the same path
-    set ( DRM_DIR $ENV{DRM_DIR} )
-    set ( DRM_INCLUDE_DIRS ${DRM_DIR}/include )
-    link_directories(${DRM_DIR}/lib64)
-    set ( DRM_LIBRARIES drm )
-    set ( DRM_AMDGPU_LIBRARIES drm_amdgpu )
-else()
-# The module name passed to pkg_check_modules() is determined by the
-# name of file *.pc
-    pkg_check_modules(DRM REQUIRED libdrm)
-    pkg_check_modules(DRM_AMDGPU REQUIRED libdrm_amdgpu)
-    include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
-endif()
-include_directories(${DRM_INCLUDE_DIRS})
-
 target_link_libraries ( ${HSAKMT_TARGET}
-  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt ${LIBC} ${NUMA}
+  PRIVATE pthread rt ${LIBC} ${NUMA}
 )
 
-target_compile_options(${HSAKMT_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
+target_compile_options(${HSAKMT_TARGET} PRIVATE ${LIBDRM_CFLAGS} ${HSAKMT_C_FLAGS})
 if(NOT DISTRO_ID MATCHES "ubuntu")
   find_library(LIBGCC NAMES libgcc_s.so.1 REQUIRED)
   message(STATUS "LIBGCC:" ${LIBGCC})
@@ -349,10 +333,10 @@ set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_
 set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
 
 # Setting devel package dependendent version
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-dev, rocm-core")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
 
-set(CPACK_RPM_PACKAGE_REQUIRES "libdrm-devel, rocm-core")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 # Set the names now using CPACK utility
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
