@@ -2150,6 +2150,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
 	unsigned int guardPages = 1;
+	struct pci_ids pacc;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0;
 
@@ -2196,11 +2197,13 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * gets called before hsaKmtAcquireSystemProperties() is called.
 	 */
 
+	pacc = pci_ids_create();
+
 	is_dgpu = false;
 
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
-		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, NULL, NULL);
+		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, pacc, NULL, NULL);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
 
@@ -2236,6 +2239,8 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem_count++;
 		}
 	}
+
+	pci_ids_destroy(pacc);
 
 	/* The ioctl will also return Number of Nodes if
 	 * args.kfd_process_device_apertures_ptr is set to NULL. This is not
