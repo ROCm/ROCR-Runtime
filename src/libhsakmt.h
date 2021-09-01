@@ -28,7 +28,6 @@
 
 #include "linux/kfd_ioctl.h"
 #include "hsakmt.h"
-#include "pci_ids.h"
 #include <pthread.h>
 #include <stdint.h>
 #include <limits.h>
@@ -175,7 +174,7 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray);
 
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props,
-					uint32_t *gpu_id, struct pci_ids pacc,
+					uint32_t *gpu_id,
 					bool *p2p_links, uint32_t *num_p2pLinks);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 void topology_setup_is_dgpu_param(HsaNodeProperties *props);
