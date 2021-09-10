@@ -3008,7 +3008,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
 	HSAuint64 aligned_size = PAGE_ALIGN_UP(page_offset + size);
 	void *svm_addr;
 	HSAuint32 gpu_id;
-	vm_object_t *obj;
+	vm_object_t *obj, *exist_obj;
 
 	/* Find first GPU for creating the userptr BO */
 	if (!g_first_gpu_mem)
@@ -3029,20 +3029,32 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
 
-	if (obj) {
-		pthread_mutex_lock(&aperture->fmm_mutex);
+	if (!obj)
+		return HSAKMT_STATUS_ERROR;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+
+	/* catch the race condition where some other thread added the userptr
+	 * object already after the vm_find_object.
+	 */
+	exist_obj = vm_find_object_by_userptr(aperture, addr, size);
+	if (exist_obj) {
+		++exist_obj->registration_count;
+	} else {
 		obj->userptr = addr;
 		gpuid_to_nodeid(gpu_id, &obj->node_id);
 		obj->userptr_size = size;
 		obj->registration_count = 1;
 		obj->user_node.key = rbtree_key((unsigned long)addr, size);
 		rbtree_insert(&aperture->user_tree, &obj->user_node);
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-	} else
-		return HSAKMT_STATUS_ERROR;
+	}
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (exist_obj)
+		__fmm_release(obj, aperture);
 
 	if (obj_ret)
-		*obj_ret = obj;
+		*obj_ret = exist_obj ? exist_obj : obj;
 	return HSAKMT_STATUS_SUCCESS;
 }
 
