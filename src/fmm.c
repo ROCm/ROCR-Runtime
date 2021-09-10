@@ -288,9 +288,6 @@ static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 
 extern int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
 static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture);
-static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
-			void *address, uint64_t size, vm_object_t *obj,
-			uint32_t *nodes_to_map, uint32_t nodes_array_size);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
 				       void *address);
@@ -1366,6 +1363,8 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 	}
 
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
 	if (mem) {
 		int map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 		int prot = mflags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
@@ -1377,8 +1376,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 
 		if (ret == MAP_FAILED) {
 			__fmm_release(vm_obj, aperture);
-			mem = NULL;
-			goto out_unlock;
+			return NULL;
 		}
 		/*
 		 * This madvise() call is needed to avoid additional references
@@ -1388,9 +1386,6 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		 */
 		madvise(mem, MemorySizeInBytes, MADV_DONTFORK);
 	}
-
-out_unlock:
-	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	return mem;
 }
@@ -1433,6 +1428,8 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 	}
 
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
 	if (mem) {
 		void *ret = mmap(mem, MemorySizeInBytes,
 				 PROT_READ | PROT_WRITE,
@@ -1440,11 +1437,9 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 				 doorbell_mmap_offset);
 		if (ret == MAP_FAILED) {
 			__fmm_release(vm_obj, aperture);
-			mem = NULL;
+			return NULL;
 		}
 	}
-
-	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	return mem;
 }
@@ -1675,18 +1670,23 @@ static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	if (!object)
 		return -EINVAL;
 
+	pthread_mutex_lock(&aperture->fmm_mutex);
+
 	/* If memory is user memory and it's still GPU mapped, munmap
 	 * would cause an eviction. If the restore happens quickly
 	 * enough, restore would also fail with an error message. So
 	 * free the BO before unmapping the pages.
 	 */
 	args.handle = object->handle;
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args))
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return -errno;
+	}
 
 	aperture_release_area(aperture, object->start, object->size);
 	vm_remove_object(aperture, object);
 
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return 0;
 }
 
@@ -1719,10 +1719,9 @@ HSAKMT_STATUS fmm_release(void *address)
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		munmap(address, size);
 	} else {
-		int r = __fmm_release(object, aperture);
-
 		pthread_mutex_unlock(&aperture->fmm_mutex);
-		if (r)
+
+		if (__fmm_release(object, aperture))
 			return HSAKMT_STATUS_ERROR;
 
 		if (!aperture->is_cpu_accessible)
@@ -2107,6 +2106,7 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	mflags.ui32.Reserved = 0;
 	vm_obj->mflags = mflags;
 	vm_obj->node_id = node_id;
+	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/* Map for CPU access*/
 	ret = mmap(mem, PAGE_SIZE,
@@ -2115,14 +2115,14 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 			 mmap_offset);
 	if (ret == MAP_FAILED) {
 		__fmm_release(vm_obj, aperture);
-		mem = NULL;
-	/* Map for GPU access*/
-	} else if (_fmm_map_to_gpu(aperture, mem, PAGE_SIZE, vm_obj, NULL, 0)) {
-		__fmm_release(vm_obj, aperture);
-		mem = NULL;
+		return NULL;
 	}
 
-	pthread_mutex_unlock(&aperture->fmm_mutex);
+	/* Map for GPU access*/
+	if (fmm_map_to_gpu(mem, PAGE_SIZE, NULL)) {
+		__fmm_release(vm_obj, aperture);
+		return NULL;
+	}
 
 	return mem;
 }
@@ -2905,8 +2905,13 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 		free(object->mapped_node_id_array);
 	object->mapped_node_id_array = NULL;
 
-	if (!ret)
-		ret = __fmm_release(object, aperture);
+	if (ret)
+		goto err;
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	/* free object in scratch backing aperture */
+	return __fmm_release(object, aperture);
 
 err:
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -3414,8 +3419,8 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		 * buffer. Deregistering imported graphics buffers or
 		 * userptrs means releasing the BO.
 		 */
-		__fmm_release(object, aperture);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
+		__fmm_release(object, aperture);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
