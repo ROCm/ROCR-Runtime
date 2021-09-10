@@ -1676,6 +1676,14 @@ static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 
+	if (object->userptr) {
+		object->registration_count--;
+		if (object->registration_count > 0) {
+			pthread_mutex_unlock(&aperture->fmm_mutex);
+			return 0;
+		}
+	}
+
 	/* If memory is user memory and it's still GPU mapped, munmap
 	 * would cause an eviction. If the restore happens quickly
 	 * enough, restore would also fail with an error message. So
@@ -3400,12 +3408,6 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		/* API-allocated system memory on APUs, deregistration
 		 * is a no-op
 		 */
-		pthread_mutex_unlock(&aperture->fmm_mutex);
-		return HSAKMT_STATUS_SUCCESS;
-	}
-
-	if (object->registration_count > 1) {
-		--object->registration_count;
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return HSAKMT_STATUS_SUCCESS;
 	}
