@@ -536,15 +536,14 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
     return status;
   }
 
+  const AMD::GpuAgent& gpuAgent = static_cast<const AMD::GpuAgent&>(agent);
   kernarg_async_ = reinterpret_cast<KernelArgs*>(
-      core::Runtime::runtime_singleton_->system_allocator()(
-          queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16), 16,
-          core::MemoryRegion::AllocateNoFlags));
+      gpuAgent.system_allocator()(queue_->public_handle()->size * AlignUp(sizeof(KernelArgs), 16),
+                                  16, core::MemoryRegion::AllocateNoFlags));
 
   kernarg_async_mask_ = queue_->public_handle()->size - 1;
 
   // Obtain the number of compute units in the underlying agent.
-  const AMD::GpuAgent& gpuAgent = static_cast<const AMD::GpuAgent&>(agent);
   num_cus_ = gpuAgent.properties().NumFComputeCores / 4;
 
   // Assemble shaders to AQL code objects.
@@ -577,7 +576,7 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
   }
 
   if (kernarg_async_ != NULL) {
-    core::Runtime::runtime_singleton_->system_deallocator()(kernarg_async_);
+    gpuAgent.system_deallocator()(kernarg_async_);
   }
 
   if (completion_signal_.handle != 0) {

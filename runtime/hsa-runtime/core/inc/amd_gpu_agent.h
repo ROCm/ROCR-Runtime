@@ -328,6 +328,13 @@ class GpuAgent : public GpuAgentInt {
 
   void Trim() override;
 
+  const std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>&
+  system_allocator() const {
+    return system_allocator_;
+  }
+
+  const std::function<void(void*)>& system_deallocator() const { return system_deallocator_; }
+
  protected:
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
@@ -492,6 +499,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Setup GWS accessing queue.
   void InitGWS();
 
+  // @brief Setup NUMA aware system memory allocator.
+  void InitNumaAllocator();
+
   // @brief Register signal for notification when scratch may become available.
   // @p signal is notified by OR'ing with @p value.
   bool AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
@@ -531,6 +541,12 @@ class GpuAgent : public GpuAgentInt {
   } gws_queue_;
 
   ScratchCache scratch_cache_;
+
+  // System memory allocator in the nearest NUMA node.
+  std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>
+      system_allocator_;
+
+  std::function<void(void*)> system_deallocator_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

@@ -178,7 +178,7 @@ GpuAgent::~GpuAgent() {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
 
-  core::Runtime::runtime_singleton_->system_deallocator()(doorbell_queue_map_);
+  system_deallocator()(doorbell_queue_map_);
 
   if (trap_code_buf_ != NULL) {
     ReleaseShader(trap_code_buf_, trap_code_buf_size_);
@@ -288,8 +288,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       (assemble_target == AssembleTarget::AQL ? sizeof(amd_kernel_code_t) : 0);
   code_buf_size = AlignUp(header_size + asic_shader->size, 0x1000);
 
-  code_buf = core::Runtime::runtime_singleton_->system_allocator()(
-      code_buf_size, 0x1000, core::MemoryRegion::AllocateExecutable);
+  code_buf = system_allocator()(code_buf_size, 0x1000, core::MemoryRegion::AllocateExecutable);
   assert(code_buf != NULL && "Code buffer allocation failed");
 
   memset(code_buf, 0, code_buf_size);
@@ -335,7 +334,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
 }
 
 void GpuAgent::ReleaseShader(void* code_buf, size_t code_buf_size) const {
-  core::Runtime::runtime_singleton_->system_deallocator()(code_buf);
+  system_deallocator()(code_buf);
 }
 
 void GpuAgent::InitRegionList() {
@@ -687,6 +686,7 @@ void GpuAgent::PreloadBlits() {
 
 hsa_status_t GpuAgent::PostToolsInit() {
   // Defer memory allocation until agents have been discovered.
+  InitNumaAllocator();
   InitScratchPool();
   BindTrapHandler();
   InitDma();
@@ -1415,8 +1415,7 @@ void GpuAgent::BindTrapHandler() {
     // The trap handler uses this to retrieve a wave's amd_queue_t*.
     auto doorbell_queue_map_size = MAX_NUM_DOORBELLS * sizeof(amd_queue_t*);
 
-    doorbell_queue_map_ = (amd_queue_t**)core::Runtime::runtime_singleton_->system_allocator()(
-        doorbell_queue_map_size, 0x1000, 0);
+    doorbell_queue_map_ = (amd_queue_t**)system_allocator()(doorbell_queue_map_size, 0x1000, 0);
     assert(doorbell_queue_map_ != NULL && "Doorbell queue map allocation failed");
 
     memset(doorbell_queue_map_, 0, doorbell_queue_map_size);
@@ -1568,6 +1567,38 @@ void GpuAgent::Trim() {
   Agent::Trim();
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   scratch_cache_.trim(false);
+}
+
+void GpuAgent::InitNumaAllocator() {
+  Agent* nearCpu = nullptr;
+  uint32_t dist = -1u;
+  for (auto cpu : core::Runtime::runtime_singleton_->cpu_agents()) {
+    const core::Runtime::LinkInfo link_info =
+        core::Runtime::runtime_singleton_->GetLinkInfo(node_id(), cpu->node_id());
+    if (link_info.info.numa_distance < dist) {
+      dist = link_info.info.numa_distance;
+      nearCpu = cpu;
+    }
+  }
+
+  for (auto pool : nearCpu->regions()) {
+    if (pool->kernarg()) {
+      system_allocator_ = [pool](size_t size, size_t alignment,
+                                 MemoryRegion::AllocateFlags alloc_flags) -> void* {
+        assert(alignment <= 4096);
+        void* ptr = nullptr;
+        return (HSA_STATUS_SUCCESS ==
+                core::Runtime::runtime_singleton_->AllocateMemory(pool, size, alloc_flags, &ptr))
+            ? ptr
+            : nullptr;
+      };
+
+      system_deallocator_ = [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
+
+      return;
+    }
+  }
+  assert(false && "Nearest NUMA node did not have a kernarg pool.");
 }
 
 }  // namespace amd
