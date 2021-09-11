@@ -305,14 +305,12 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   }
 
   // Allocate IB for icache flushes.
-  pm4_ib_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
-      pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
+  pm4_ib_buf_ =
+      agent_->system_allocator()(pm4_ib_size_b_, 0x1000, core::MemoryRegion::AllocateExecutable);
   if (pm4_ib_buf_ == nullptr)
     throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "PM4 IB allocation failed.\n");
 
-  MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() {
-    core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
-  });
+  MAKE_NAMED_SCOPE_GUARD(PM4IBGuard, [&]() { agent_->system_deallocator()(pm4_ib_buf_); });
 
   // Set initial CU mask
   SetCUMasking(0, nullptr);
@@ -356,7 +354,7 @@ AqlQueue::~AqlQueue() {
       queue_event_ = nullptr;
     }
   }
-  core::Runtime::runtime_singleton_->system_deallocator()(pm4_ib_buf_);
+  agent_->system_deallocator()(pm4_ib_buf_);
 }
 
 void AqlQueue::Destroy() {
@@ -676,8 +674,9 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
     ring_buf_alloc_bytes_ = AlignUp(
         queue_size_pkts * sizeof(core::AqlPacket), 4096);
 
-    ring_buf_ = core::Runtime::runtime_singleton_->system_allocator()(
-        ring_buf_alloc_bytes_, 0x1000, core::MemoryRegion::AllocateExecutable |
+    ring_buf_ = agent_->system_allocator()(
+        ring_buf_alloc_bytes_, 0x1000,
+        core::MemoryRegion::AllocateExecutable |
             (queue_full_workaround_ ? core::MemoryRegion::AllocateDoubleMap : 0));
 
     assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
@@ -699,7 +698,7 @@ void AqlQueue::FreeRegisteredRingBuffer() {
         (void*)(uintptr_t(ring_buf_) + (ring_buf_alloc_bytes_ / 2)));
 #endif
   } else {
-    core::Runtime::runtime_singleton_->system_deallocator()(ring_buf_);
+    agent_->system_deallocator()(ring_buf_);
   }
 
   ring_buf_ = NULL;
