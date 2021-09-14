@@ -637,8 +637,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyQueue(HSA_QUEUEID QueueId)
 
 	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_QUEUE, &args);
 
-	if (err == -1)
+	if (err == -1) {
+		pr_err("Failed to destroy queue: %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
+	}
 
 	free_queue(q);
 	return HSAKMT_STATUS_SUCCESS;
