@@ -222,6 +222,7 @@ FILTER[aldebaran]=\
 
 # SP3 Compiler needs to be updated for GFX10. Temporarily disable all tests
 # that require shader compiler
+# Adding KFDSVMEvictTest as SVM/HMM was never validated on GFX10
 TEMP_GFX10_BLACKLIST=\
 "KFDMemoryTest.FlatScratchAccess:"\
 "KFDMemoryTest.PtraceAccessInvisibleVram:"\
@@ -232,7 +233,8 @@ TEMP_GFX10_BLACKLIST=\
 "KFDEvictTest.QueueTest:"\
 "KFDMemoryTest.MapUnmapToNodes:"\
 "KFDMemoryTest.HostHdpFlush:"\
-"KFDMemoryTest.DeviceHdpFlush"
+"KFDMemoryTest.DeviceHdpFlush:"\
+"KFDSVMEvictTest.*"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
