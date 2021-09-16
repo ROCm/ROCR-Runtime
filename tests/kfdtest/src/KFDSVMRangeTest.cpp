@@ -1226,7 +1226,8 @@ TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
     ASSERT_NE(-1, fd);
 
     size_t size = PAGE_SIZE;
-    char buf[size] = {0x30};
+    char *buf = reinterpret_cast<char *>(alloca(size));
+    memset(buf, 0x30, size);
 
     ASSERT_EQ(size, write(fd, buf, size));
 
