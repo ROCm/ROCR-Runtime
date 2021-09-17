@@ -151,6 +151,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_DEBUG");
     debug_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_CU_MASK_SKIP_INIT");
+    cu_mask_skip_init_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -220,6 +223,8 @@ class Flag {
     return it->second;
   }
 
+  bool cu_mask_skip_init() const { return cu_mask_skip_init_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -240,6 +245,7 @@ class Flag {
   bool patch_xgmi_link_weight_;
   bool patch_link_override_;
   bool debug_;
+  bool cu_mask_skip_init_;
 
   SDMA_OVERRIDE enable_sdma_;
 
