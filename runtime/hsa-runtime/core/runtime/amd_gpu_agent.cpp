@@ -795,7 +795,11 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
           HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR;
       break;
     case HSA_AGENT_INFO_FAST_F16_OPERATION:
-      *((bool*)value) = false;
+      if (isa_->GetMajorVersion() >= 8) {
+        *((bool*)value) = true;
+      } else {
+        *((bool*)value) = false;
+      }
       break;
     case HSA_AGENT_INFO_PROFILE:
       *((hsa_profile_t*)value) = profile_;
