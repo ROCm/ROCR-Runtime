@@ -350,9 +350,15 @@ set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
 
 # Setting devel package dependendent version
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-dev, rocm-core")
+set(CPACK_DEBIAN_PACKAGE_SUGGESTS "libdrm-amdgpu-amdgpu1")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
 
 set(CPACK_RPM_PACKAGE_REQUIRES "libdrm-devel, rocm-core")
+# NOTE: CentOS/RHEL 7 have no concept of "Suggests" so this will just
+# fail to install libdrm-amdgpu on those OSes.
+# If this package is required, either manually install the package
+# or change the field below to REQUIRES
+set(CPACK_RPM_PACKAGE_SUGGESTS "libdrm-amdgpu")
 
 # Set the names now using CPACK utility
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
