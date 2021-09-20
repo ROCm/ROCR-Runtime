@@ -216,7 +216,8 @@ typedef union
         unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
         unsigned int SVMAPISupported     : 1;    // Whether or not the SVM API is supported
         unsigned int CoherentHostAccess: 1;      // Whether or not device memory can be coherently accessed by the host CPU
-        unsigned int Reserved            : 3;
+        unsigned int DebugSupportedFirmware : 1;
+        unsigned int Reserved            : 2;
     } ui32;
 } HSA_CAPABILITY;
 
@@ -232,9 +233,20 @@ typedef union
                                         // of the
         HSAuint64 WatchAddrMaskHiBit: 6; // watch address mask are used.
                                          // 0 is the least significant bit.
-        HSAuint64 TrapDataCount: 4;      // Number of 32 bit TrapData
-                                         // registers supported.
-        HSAuint64 Reserved: 50;              //
+        HSAuint64 DispatchInfoAlwaysValid: 1; // 0 if control of TTMP setup is
+                                              // controlled on a per process
+                                              // basis and is not always enabled
+                                              // 1 if TTMP setup is always
+                                              // enabled
+        HSAuint64 AddressWatchpointShareKind: 1; // whether the address watchpoint
+                                                 //     is per process or shared with
+                                                 //     all proccesses
+                                                 // 0 if shared or unsuppoted
+                                                 //    (unsupported indicated by
+                                                 //    address_watchpoint_count == 0)
+                                                 //    All current devices have shared watchpoints
+                                                 // 1 if unshared
+        HSAuint64 Reserved: 52;              //
     };
 } HSA_DEBUG_PROPERTIES;
 
