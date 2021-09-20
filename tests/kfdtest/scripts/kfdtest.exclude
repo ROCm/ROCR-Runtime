@@ -173,7 +173,6 @@ FILTER[vega12]=\
 FILTER[vega20]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$SDMA_BLACKLIST:"\
-"KFDEvictTest.BasicTest:"\
 "KFDQMTest.GPUDoorbellWrite"
 
 FILTER[raven_dgpuFallback]=\
@@ -234,7 +233,6 @@ TEMP_GFX10_BLACKLIST=\
 "KFDQMTest.QueuePriorityOnSamePipe:"\
 "KFDCWSRTest.BasicTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDEvictTest.QueueTest:"\
 "KFDMemoryTest.MapUnmapToNodes:"\
 "KFDMemoryTest.HostHdpFlush:"\
 "KFDMemoryTest.DeviceHdpFlush:"\
