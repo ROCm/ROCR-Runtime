@@ -243,6 +243,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_8;
     ASICShader compute_9;
     ASICShader compute_90a;
+    ASICShader compute_940;
     ASICShader compute_1010;
     ASICShader compute_10;
     ASICShader compute_11;
@@ -255,6 +256,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
            {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},
            {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
+           {NULL, 0, 0, 0},
            {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
            {NULL, 0, 0, 0},
@@ -265,6 +267,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},
            {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
            {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
+           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},
            {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},
            {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},
            {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},
@@ -272,6 +275,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       {"CopyAligned",
        {
            {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
@@ -285,6 +289,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
            {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},
@@ -292,6 +297,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       {"Fill",
        {
            {kCodeFill7, sizeof(kCodeFill7), 19, 8},
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
@@ -314,9 +320,10 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       asic_shader = &compiled_shader_it->second.compute_8;
       break;
     case 9:
-      if(((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) ||
-         ((isa_->GetMinorVersion() == 4) && (isa_->GetStepping() == 0)))
+      if((isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10))
         asic_shader = &compiled_shader_it->second.compute_90a;
+      else if((isa_->GetMinorVersion() == 4) && (isa_->GetStepping() == 0))
+        asic_shader = &compiled_shader_it->second.compute_940;
       else
         asic_shader = &compiled_shader_it->second.compute_9;
       break;
