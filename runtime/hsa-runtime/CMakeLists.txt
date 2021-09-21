@@ -40,7 +40,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.6.3 )
+cmake_minimum_required ( VERSION 3.7 )
 
 ## Clear target dependency data.
 ## Needed to allow UI transitions between static and dynamic builds.
@@ -136,7 +136,7 @@ if ( CMAKE_COMPILER_IS_GNUCXX )
 endif ()
 if ( CMAKE_CXX_COMPILER_ID MATCHES "Clang")
   set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=self-assign)
-  if( CLANG_VERSION_MAJOR -ge 13)
+  if( ${CMAKE_CXX_COMPILER_VERSION} VERSION_GREATER_EQUAL 13)
     set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-error=unused-but-set-variable)
   endif()
 endif()

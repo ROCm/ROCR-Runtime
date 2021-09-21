@@ -40,7 +40,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.5.0 )
+cmake_minimum_required ( VERSION 3.7 )
 
 # Flag to abort before executing after default initialization of cache variables
 set (QUIT 0)
@@ -49,15 +49,20 @@ set (QUIT 0)
 find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
 # Device libs doesn't support find_package yet.
-# FIXME: HINTS should not use CMAKE_INSTALL_PREFIX
+set(PREFIX_HINTS "")
+foreach(hint "/amdgcn/bitcode" "/lib/bitcode" "/lib/x86_64/bitcode")
+  foreach(path ${CMAKE_PREFIX_PATH})
+    string(APPEND path ${hint})
+    list(APPEND PREFIX_HINTS ${path})
+  endforeach(path)
+endforeach(hint)
+
 get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.bc" "opencl.amdgcn.bc"
   HINTS
     "${CMAKE_INSTALL_PREFIX}/amdgcn/bitcode"
     "${CMAKE_INSTALL_PREFIX}/lib/bitcode"
     "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
-    "${CMAKE_PREFIX_PATH}/amdgcn/bitcode"
-    "${CMAKE_PREFIX_PATH}/lib/bitcode"
-    "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode"
+    "${PREFIX_HINTS}"
   PATHS
     "/opt/rocm/amdgcn/bitcode"
     "/opt/rocm/lib/bitcode"
