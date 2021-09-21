@@ -20,7 +20,7 @@ utils - Utilities required to build the core runtime.
 #### Build Environment
 
 CMake build framework is used to build the ROC runtime. The minimum version is
-3.6.3.
+3.7.
 
 Obtain cmake infrastructure: http://www.cmake.org/download/
 
@@ -32,7 +32,6 @@ The following support packages are required to successfully build the runtime:
 
 * libelf-dev
 * g++
-* libc6-dev-i386 (for libhsakmt 32bit)
 
 #### Building the Runtime
 
