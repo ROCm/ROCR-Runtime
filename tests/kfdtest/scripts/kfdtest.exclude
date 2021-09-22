@@ -85,6 +85,7 @@ SDMA_BLACKLIST=\
 "KFDMemoryTest.MemoryRegister:"\
 "KFDMemoryTest.MMBench:"\
 "KFDMemoryTest.SignalHandling:"\
+"KFDQMTest.AllQueues:"\
 "KFDQMTest.*Sdma*:"\
 "KFDQMTest.CreateQueueStressSingleThreaded:"\
 "KFDQMTest.GPUDoorbellWrite:"\
@@ -177,8 +178,9 @@ FILTER[vega20]=\
 
 FILTER[raven_dgpuFallback]=\
 "$BLACKLIST_ALL_ASICS:"\
+"$SDMA_BLACKLIST:"\
+"KFDEvictTest.*:"\
 "KFDMemoryTest.MemoryRegister:"\
-"KFDQMTest.SdmaConcurrentCopies:"\
 "KFDSVMRangeTest.BasicSystemMemTest:"\
 "KFDSVMRangeTest.BasicVramTest:"\
 "KFDSVMRangeTest.EvictSystemRangeTest:"\
@@ -193,11 +195,13 @@ FILTER[raven_dgpuFallback]=\
 
 FILTER[raven]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDQMTest.SdmaConcurrentCopies:"\
+"$SDMA_BLACKLIST:"\
+"KFDEvictTest.*:"\
 "KFDSVMRangeTest.EvictSystemRangeTest:"\
 "KFDSVMRangeTest.PartialUnmapSysMemTest:"\
 "KFDSVMRangeTest.PrefetchTest:"\
 "KFDSVMRangeTest.MultiThreadMigrationTest:"\
+"KFDSVMEvictTest.QueueTest:"\
 "KFDQMTest.MultipleCpQueuesStressDispatch"
 
 FILTER[renoir]=\
