@@ -26,23 +26,19 @@
 #include "PM4Packet.hpp"
 #include "Dispatch.hpp"
 
-/* Shader to initialize gws counter to 1*/
-const char* gfx9_10_GwsInit =
-"\
-shader GwsInit\n\
-type(CS)\n\
-wave_size(32)\n\
-    s_mov_b32 m0, 0\n\
-    s_nop 0\n\
-    s_load_dword s16, s[0:1], 0x0 glc\n\
-    s_waitcnt 0\n\
-    v_mov_b32 v0, s16\n\
-    s_waitcnt 0\n\
-    ds_gws_init v0 gds:1 offset0:0\n\
-    s_waitcnt 0\n\
-    s_endpgm\n\
-    end\n\
-";
+/* Shader to initialize gws counter to 1 */
+static const char* GwsInitIsa_gfx9_10 = R"(
+        .text
+        s_mov_b32 m0, 0
+        s_nop 0
+        s_load_dword s16, s[0:1], 0x0 glc
+        s_waitcnt 0
+        v_mov_b32 v0, s16
+        s_waitcnt 0
+        ds_gws_init v0 offset:0 gds
+        s_waitcnt 0
+        s_endpgm
+)";
 
 /* Atomically increase a value in memory
  * This is expected to be executed from
@@ -50,66 +46,52 @@ wave_size(32)\n\
  * GWS semaphore is used to guarantee
  * the operation is atomic.
  */
-const char* gfx9_AtomicIncrease =
-"\
-shader AtomicIncrease\n\
-type(CS)\n\
-/* Assume src address in s0, s1 */\n\
-    s_mov_b32 m0, 0\n\
-    s_nop 0\n\
-    ds_gws_sema_p gds:1 offset0:0\n\
-    s_waitcnt 0\n\
-    s_load_dword s16, s[0:1], 0x0 glc\n\
-    s_waitcnt 0\n\
-    s_add_u32 s16, s16, 1\n\
-    s_store_dword s16, s[0:1], 0x0 glc\n\
-    s_waitcnt lgkmcnt(0)\n\
-    ds_gws_sema_v gds:1 offset0:0\n\
-    s_waitcnt 0\n\
-    s_endpgm\n\
-    end\n\
-";
+static const char* AtomicIncreaseIsa_gfx9 = R"(
+        .text
+        // Assume src address in s0, s1
+        s_mov_b32 m0, 0
+        s_nop 0
+        ds_gws_sema_p offset:0 gds
+        s_waitcnt 0
+        s_load_dword s16, s[0:1], 0x0 glc
+        s_waitcnt 0
+        s_add_u32 s16, s16, 1
+        s_store_dword s16, s[0:1], 0x0 glc
+        s_waitcnt lgkmcnt(0)
+        ds_gws_sema_v offset:0 gds
+        s_waitcnt 0
+        s_endpgm
+)";
 
-const char* gfx10_AtomicIncrease =
-"\
-shader AtomicIncrease\n\
-asic(GFX10)\n\
-type(CS)\n\
-wave_size(32)\n\
-/* Assume src address in s0, s1 */\n\
-    s_mov_b32 m0, 0\n\
-    s_mov_b32 exec_lo, 0x1\n\
-    v_mov_b32 v0, s0\n\
-    v_mov_b32 v1, s1\n\
-    ds_gws_sema_p gds:1 offset0:0\n\
-    s_waitcnt 0\n\
-    flat_load_dword v2, v[0:1] glc:1 dlc:1\n\
-    s_waitcnt 0\n\
-    v_add_nc_u32 v2, v2, 1\n\
-    flat_store_dword v[0:1], v2\n\
-    s_waitcnt_vscnt null, 0\n\
-    ds_gws_sema_v gds:1 offset0:0\n\
-    s_waitcnt 0\n\
-    s_endpgm\n\
-    end\n\
-";
+static const char* AtomicIncreaseIsa_gfx10 = R"(
+        .text
+        // Assume src address in s0, s1
+        s_mov_b32 m0, 0
+        s_mov_b32 exec_lo, 0x1
+        v_mov_b32 v0, s0
+        v_mov_b32 v1, s1
+        ds_gws_sema_p offset:0 gds
+        s_waitcnt 0
+        flat_load_dword v2, v[0:1] glc dlc
+        s_waitcnt 0
+        v_add_nc_u32 v2, v2, 1
+        flat_store_dword v[0:1], v2
+        s_waitcnt_vscnt null, 0
+        ds_gws_sema_v offset:0 gds
+        s_waitcnt 0
+        s_endpgm
+)";
 
 void KFDGWSTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void KFDGWSTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -160,21 +142,21 @@ TEST_F(KFDGWSTest, Semaphore) {
 			    pNodeProperties->NumGws,&firstGWS));
     EXPECT_EQ(0, firstGWS);
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-    m_pIsaGen->CompileShader(gfx9_10_GwsInit, "GwsInit", isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(GwsInitIsa_gfx9_10, isaBuffer.As<char*>()));
+
     Dispatch dispatch0(isaBuffer);
     buffer.Fill(numResources, 0, 4);
     dispatch0.SetArgs(buffer.As<void*>(), NULL);
     dispatch0.Submit(queue);
     dispatch0.Sync();
 
-    const char *pAtomicIncrease;
+    const char *pAtomicIncreaseIsa;
     if (m_FamilyId <= FAMILY_AL)
-        pAtomicIncrease = gfx9_AtomicIncrease;
+        pAtomicIncreaseIsa = AtomicIncreaseIsa_gfx9;
     else
-        pAtomicIncrease = gfx10_AtomicIncrease;
+        pAtomicIncreaseIsa = AtomicIncreaseIsa_gfx10;
 
-    m_pIsaGen->CompileShader(pAtomicIncrease, "AtomicIncrease", isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pAtomicIncreaseIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<void*>(), NULL);
