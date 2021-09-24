@@ -28,7 +28,6 @@
 #include <vector>
 #include "KFDLocalMemoryTest.hpp"
 #include "KFDBaseComponentTest.hpp"
-#include "IsaGenerator.hpp"
 
 // @class KFDEvictTest
 // Test eviction and restore procedure using two processes
