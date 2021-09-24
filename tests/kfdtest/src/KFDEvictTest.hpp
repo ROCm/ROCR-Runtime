@@ -27,15 +27,13 @@
 #include <string>
 #include <vector>
 #include "KFDMultiProcessTest.hpp"
-#include "IsaGenerator.hpp"
 #include "PM4Queue.hpp"
 
 // @class KFDEvictTest
 // Test eviction and restore procedure using two processes
 class KFDEvictTest :  public KFDMultiProcessTest {
  public:
-    KFDEvictTest(void): m_pIsaGen(NULL) {}
-
+    KFDEvictTest(void) {}
     ~KFDEvictTest(void) {}
 
  protected:
@@ -52,7 +50,6 @@ class KFDEvictTest :  public KFDMultiProcessTest {
                                            PM4Queue *computeQueue);
 
  protected:  // Members
-    IsaGenerator*   m_pIsaGen;
     HsaMemFlags     m_Flags;
     void*           m_pBuf;
 };
