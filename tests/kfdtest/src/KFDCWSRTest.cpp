@@ -38,75 +38,62 @@
  *   v6 - counter
  */
 
-static const char* iterate_isa_gfx8 = \
-"\
-shader iterate_isa\n\
-wave_size(32)\n\
-type(CS)\n\
-    // copy the parameters from scalar registers to vector registers\n\
-    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v0, s4   // use workgroup id as index \n\
-    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
-    v_add_u32       v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_add_u32       v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v6, 0 \n\
-LOOP: \n\
-    v_add_u32       v6, vcc, 1, v6 \n\
-    // compare the result value (v6) to iteration value (v2), and \n\
-    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
-    v_cmp_lt_u32 vcc, v6, v2 \n\
-    s_cbranch_vccnz LOOP \n\
-    flat_store_dword v[4:5], v6 \n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
-    s_endpgm \n\
-end \n\
-";
+static const char* IterateIsa_gfx8 = R"(
+        .text
+        // Copy the parameters from scalar registers to vector registers
+        v_mov_b32       v2, s0              // v[2:3] = s[0:1]
+        v_mov_b32       v3, s1              // v[2:3] = s[0:1]
+        v_mov_b32       v0, s4              // use workgroup id as index
+        v_lshlrev_b32   v0, 2, v0           // v0 *= 4
+        v_add_u32       v4, vcc, s2, v0     // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32       v5, s3              // v[4:5] = s[2:3] + v0 * 4
+        v_add_u32       v5, vcc, v5, vcc_lo // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32       v6, 0
+        LOOP:
+        v_add_u32       v6, vcc, 1, v6
+        // Compare the result value (v6) to iteration value (v2), and
+        // jump if equal (i.e. if VCC is not zero after the comparison)
+        v_cmp_lt_u32 vcc, v6, v2
+        s_cbranch_vccnz LOOP
+        flat_store_dword v[4:5], v6
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_endpgm
+)";
 
-//This shader can be used by gfx9 and gfx10
-static const char* iterate_isa_gfx9 = \
-"\
-shader iterate_isa\n\
-wave_size(32)\n\
-type(CS)\n\
-    // copy the parameters from scalar registers to vector registers\n\
-    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v0, s4   // use workgroup id as index \n\
-    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
-    v_add_co_u32    v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_add_co_u32    v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v6, 0 \n\
-LOOP: \n\
-    v_add_co_u32    v6, vcc, 1, v6 \n\
-    // compare the result value (v6) to iteration value (v2), and \n\
-    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
-    v_cmp_lt_u32 vcc, v6, v2 \n\
-    s_cbranch_vccnz LOOP \n\
-    flat_store_dword v[4:5], v6 \n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
-    s_endpgm \n\
-end \n\
-";
+// This shader can be used by gfx9 and gfx10
+static const char* IterateIsa_gfx9 = R"(
+        .text
+        // Copy the parameters from scalar registers to vector registers
+        v_mov_b32       v2, s0              // v[2:3] = s[0:1]
+        v_mov_b32       v3, s1              // v[2:3] = s[0:1]
+        v_mov_b32       v0, s4              // use workgroup id as index
+        v_lshlrev_b32   v0, 2, v0           // v0 *= 4
+        v_add_co_u32    v4, vcc, s2, v0     // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32       v5, s3              // v[4:5] = s[2:3] + v0 * 4
+        v_add_co_u32    v5, vcc, v5, vcc_lo // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32       v6, 0
+        LOOP:
+        v_add_co_u32    v6, vcc, 1, v6
+        // Compare the result value (v6) to iteration value (v2), and
+        // jump if equal (i.e. if VCC is not zero after the comparison)
+        v_cmp_lt_u32 vcc, v6, v2
+        s_cbranch_vccnz LOOP
+        flat_store_dword v[4:5], v6
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_endpgm
+)";
 
-static const char* infinite_isa = \
-"\
-shader infinite_isa \n\
-wave_size(32) \n\
-type(CS) \n\
-LOOP: \n\
-    s_branch LOOP \n\
-end \n\
-";
+static const char* InfiniteIsa = R"(
+        .text
+        LOOP:
+        s_branch LOOP
+        s_endpgm
+)";
 
 void KFDCWSRTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
-
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
     wave_number = 1;
 
@@ -115,9 +102,6 @@ void KFDCWSRTest::SetUp() {
 
 void KFDCWSRTest::TearDown() {
     ROUTINE_START
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -159,9 +143,9 @@ TEST_F(KFDCWSRTest, BasicTest) {
         uint64_t count1 = 400000000;
 
         if (m_FamilyId < FAMILY_AI)
-            pIterateIsa = iterate_isa_gfx8;
+            pIterateIsa = IterateIsa_gfx8;
         else
-            pIterateIsa = iterate_isa_gfx9;
+            pIterateIsa = IterateIsa_gfx9;
 
         if (isOnEmulator()) {
             // Divide the iterator times by 10000 so that the test can
@@ -172,7 +156,7 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
         unsigned int* result1 = resultBuf1.As<unsigned int*>();
 
-        m_pIsaGen->CompileShader(pIterateIsa, "iterate_isa", isaBuffer);
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pIterateIsa, isaBuffer.As<char*>()));
 
         PM4Queue queue1;
 
@@ -236,7 +220,7 @@ TEST_F(KFDCWSRTest, InterruptRestore) {
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-        m_pIsaGen->CompileShader(infinite_isa, "infinite_isa", isaBuffer);
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(InfiniteIsa, isaBuffer.As<char*>()));
 
         PM4Queue queue1, queue2, queue3;
 

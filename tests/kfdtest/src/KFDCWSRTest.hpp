@@ -27,12 +27,11 @@
 #include <gtest/gtest.h>
 
 #include "PM4Queue.hpp"
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class KFDCWSRTest : public KFDBaseComponentTest {
  public:
-    KFDCWSRTest() :m_pIsaGen(NULL) {}
+    KFDCWSRTest() {}
     ~KFDCWSRTest() {}
 
  protected:
@@ -41,7 +40,6 @@ class KFDCWSRTest : public KFDBaseComponentTest {
 
  protected:  // Members
     unsigned wave_number;
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_CWSR_TEST__H__
