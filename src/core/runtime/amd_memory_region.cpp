@@ -50,12 +50,14 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/utils.h"
 #include "core/inc/exceptions.h"
+#include <unistd.h>
 
 namespace rocr {
 namespace AMD {
 
 // Tracks aggregate size of system memory available on platform
 size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
+size_t MemoryRegion::kPageSize_ = sysconf(_SC_PAGESIZE);
 
 void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
                                       HSAuint32 node_id, size_t size) {
@@ -123,7 +125,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, cor
 
     virtual_size_ = kGpuVmSize;
   } else if (IsSystem()) {
-    mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
+    mem_flag_.ui32.PageSize = MemoryRegion::kPageSize_;
     mem_flag_.ui32.NoSubstitute = 0;
     mem_flag_.ui32.HostAccess = 1;
     mem_flag_.ui32.CachePolicy = HSA_CACHING_CACHED;
