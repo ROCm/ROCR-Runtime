@@ -176,16 +176,11 @@ void KFDDBGTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void KFDDBGTest::TearDown() {
     ROUTINE_START
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     /* Reset the user trap handler */
     hsaKmtSetTrapHandler(m_NodeInfo.HsaDefaultGPUNode(), 0, 0, 0, 0);
