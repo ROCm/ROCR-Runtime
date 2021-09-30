@@ -164,6 +164,8 @@ void EnqueueLatency::Run() {
       num_of_pkts_ = num_of_pkts_ > size ? size : num_of_pkts_;
       EnqueueMultiPackets();
     }
+    hsa_queue_destroy(q);
+    set_main_queue(nullptr);
   }
 }
 
