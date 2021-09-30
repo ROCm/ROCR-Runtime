@@ -26,20 +26,16 @@
 
 #include <gtest/gtest.h>
 
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class KFDLocalMemoryTest : public KFDBaseComponentTest {
  public:
-    KFDLocalMemoryTest() :m_pIsaGen(NULL) {}
+    KFDLocalMemoryTest() {}
     ~KFDLocalMemoryTest() {}
 
  protected:
     virtual void SetUp();
     virtual void TearDown();
-
- protected:  // Members
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_LOCALMEMORY_TEST__H__
