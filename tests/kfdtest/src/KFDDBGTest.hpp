@@ -26,20 +26,16 @@
 
 #include <gtest/gtest.h>
 
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class KFDDBGTest : public KFDBaseComponentTest {
  public:
-    KFDDBGTest() :m_pIsaGen(NULL) {}
+    KFDDBGTest() {}
     ~KFDDBGTest() {}
 
  protected:
     virtual void SetUp();
     virtual void TearDown();
-
- protected:  // Members
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_DBG_TEST__H__
