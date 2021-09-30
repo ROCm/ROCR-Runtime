@@ -26,20 +26,16 @@
 
 #include <gtest/gtest.h>
 
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class RDMATest : public KFDBaseComponentTest {
  public:
-    RDMATest():m_pIsaGen(NULL) {}
+    RDMATest() {}
     ~RDMATest() {}
 
  protected:
     virtual void SetUp();
     virtual void TearDown();
-
- protected:  // Members
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __RDMA_TEST__H__
