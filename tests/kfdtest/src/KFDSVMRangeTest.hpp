@@ -26,21 +26,17 @@
 
 #include <gtest/gtest.h>
 
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class KFDSVMRangeTest : public KFDBaseComponentTest {
  public:
-    KFDSVMRangeTest() :m_pIsaGen(NULL) {}
+    KFDSVMRangeTest() {}
     ~KFDSVMRangeTest() {}
     void SplitRangeTest(int defaultGPUNode, int prefetch_location);
 
  protected:
     virtual void SetUp();
     virtual void TearDown();
-
- protected:  // Members
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_LOCALMEMORY_TEST__H__
