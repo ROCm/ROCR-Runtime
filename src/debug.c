@@ -324,7 +324,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
 
 	if (err) {
-		if (err == EBUSY)
+		if (errno == EBUSY)
 			return HSAKMT_STATUS_UNAVAILABLE;
 		else
 			return HSAKMT_STATUS_ERROR;
