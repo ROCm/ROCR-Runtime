@@ -372,6 +372,7 @@ bool Load() {
   if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
     return false;
   }
+  MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
 
   // Register runtime and optionally enable the debugger
   HSAKMT_STATUS err =
@@ -382,6 +383,7 @@ bool Load() {
   // Build topology table.
   BuildTopology();
 
+  kfd.Dismiss();
   return true;
 }
 
