@@ -33,17 +33,11 @@ void KFDExceptionTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void KFDExceptionTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -75,7 +69,8 @@ void KFDExceptionTest::TestMemoryException(int defaultGPUNode, HSAuint64 pSrc,
     eventDesc.SyncVar.SyncVar.UserData = NULL;
     eventDesc.SyncVar.SyncVarSize = 0;
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+
     m_ChildStatus = queue.Create(defaultGPUNode);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
         WARN() << "Queue create failed" << std::endl;
