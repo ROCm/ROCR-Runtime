@@ -28,17 +28,11 @@ void KFDHWSTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void KFDHWSTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -70,7 +64,9 @@ void KFDHWSTest::RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops)
 
     // Run work on all queues
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->GetNoopIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(NoopIsa, isaBuffer.As<char*>()));
+
     for (l = 0; l < nLoops; l++) {
         for (q = 0; q < nQueues; q++) {
             if (dispatch[q])
