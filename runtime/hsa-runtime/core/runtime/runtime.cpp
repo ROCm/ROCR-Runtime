@@ -1895,8 +1895,10 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
 
     switch (attrib) {
       case HSA_AMD_SVM_ATTRIB_GLOBAL_FLAG: {
-        if (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_COHERENT)
+        if (attribs[attribs.size() - 1].value & HSA_SVM_FLAG_COHERENT) {
           value = HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED;
+          break;
+        }
         if (attribs[attribs.size() - 2].value & HSA_SVM_FLAG_COHERENT)
           value = HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED;
         else
