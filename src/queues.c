@@ -776,11 +776,11 @@ hsaKmtAllocQueueGWS(
 
 	if (!err)
 		return HSAKMT_STATUS_SUCCESS;
-	else if (err == -EINVAL)
+	else if (errno == EINVAL)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-	else if (err == -EBUSY)
+	else if (errno == EBUSY)
 		return HSAKMT_STATUS_OUT_OF_RESOURCES;
-	else if (err == -ENODEV)
+	else if (errno == ENODEV)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 	else
 		return HSAKMT_STATUS_ERROR;
