@@ -936,6 +936,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   // agent, and vendor name length limit excluding terminating nul character.
   constexpr size_t hsa_name_size = 63;
 
+  const bool isa_has_image_support =
+      (isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() == 4) ? false : true;
+
   switch (attribute_u) {
     case HSA_AGENT_INFO_NAME: {
       std::string name = isa_->GetProcessorName();
@@ -1071,18 +1074,21 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_EXT_AGENT_INFO_IMAGE_2DADEPTH_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_3D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_LAYERS:
-      return hsa_amd_image_get_info_max_dim(public_handle(), attribute, value);
+      if (isa_has_image_support)
+        *((uint32_t*)value) = 0;
+      else
+        return hsa_amd_image_get_info_max_dim(public_handle(), attribute, value);
+      break;
     case HSA_EXT_AGENT_INFO_MAX_IMAGE_RD_HANDLES:
       // TODO: hardcode based on OCL constants.
-      *((uint32_t*)value) = 128;
+      *((uint32_t*)value) = isa_has_image_support ? 128 : 0;
       break;
     case HSA_EXT_AGENT_INFO_MAX_IMAGE_RORW_HANDLES:
-      // TODO: hardcode based on OCL constants.
-      *((uint32_t*)value) = 64;
+      *((uint32_t*)value) = isa_has_image_support ? 64 : 0;
       break;
     case HSA_EXT_AGENT_INFO_MAX_SAMPLER_HANDLERS:
-      // TODO: hardcode based on OCL constants.
-      *((uint32_t*)value) = 16;
+      *((uint32_t*)value) = isa_has_image_support ? 16 : 0;
+      break;
     case HSA_AMD_AGENT_INFO_CHIP_ID:
       *((uint32_t*)value) = properties_.DeviceId;
       break;
