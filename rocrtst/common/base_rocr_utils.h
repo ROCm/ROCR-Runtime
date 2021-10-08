@@ -54,6 +54,9 @@
 
 namespace rocrtst {
 
+/// Locate kernel code object file and return path suitable for use with open().
+std::string LocateKernelFile(std::string filename, hsa_agent_t agent);
+
 /// Open binary kernel object file and set all member data related to the
 /// kernel. Assumes that input test already has the kernel file name,
 /// agent name and kernel function specifed

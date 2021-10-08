@@ -254,8 +254,9 @@ function(build_kernel S_NAME TARG_DEV)
 
   set(TARG_NAME "${S_NAME}_hsaco.${TARG_DEV}")
   set(HSACO_TARG_LIST ${HSACO_TARG_LIST} "${KERNEL_DIR}/${SNAME_KERNEL}" PARENT_SCOPE)
+  string(SUBSTRING ${TARG_DEV} 3 -1 gfxNum)
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-   "-x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
+   "-D ROCRTST_GPU=0x${gfxNum} -x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
   add_custom_command(OUTPUT "${KERNEL_DIR}/${SNAME_KERNEL}" COMMAND ${CLANG} ${CLANG_ARG_LIST} DEPENDS ${CL_FILE_LIST} ${CLANG} COMMENT "BUILDING ${KERNEL_DIR}/${SNAME_KERNEL}" VERBATIM)
 endfunction(build_kernel)
 
@@ -336,6 +337,11 @@ build_sample_for_devices("signal_operations")
 set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
 set(CL_FILE_LIST "${KERNELS_DIR}/groupMemoryDynamic_kernels.cl")
 build_sample_for_devices("groupMemoryDynamic")
+
+# groupMemoryDynamic
+set(BITCODE_LIBS "${COMMON_BITCODE_LIBS}")
+set(CL_FILE_LIST "${KERNELS_DIR}/cu_mask_kernels.cl")
+build_sample_for_devices("cu_mask")
 
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 

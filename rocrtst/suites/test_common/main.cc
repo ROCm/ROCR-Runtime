@@ -75,6 +75,7 @@
 #include "suites/functional/signal_concurrent.h"
 #include "suites/functional/aql_barrier_bit.h"
 #include "suites/functional/signal_kernel.h"
+#include "suites/functional/cu_masking.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -203,6 +204,11 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
   RunCustomTestProlog(&sd);
   sd.TestSignalCreateConcurrent();
   RunCustomTestEpilog(&sd);
+}
+
+TEST(rocrtstFunc, CU_Masking) {
+  CU_Masking sd;
+  RunGenericTest(&sd);
 }
 
 #ifndef ROCRTST_EMULATOR_BUILD

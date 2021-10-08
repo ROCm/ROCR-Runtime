@@ -51,6 +51,17 @@
 
 #include <string>
 #include <vector>
+
+#if defined(__GNUC__)
+#define __forceinline __inline__ __attribute__((always_inline))
+#endif
+
+#define STRING2(x) #x
+#define STRING(x) STRING2(x)
+
+#define PASTE2(x, y) x##y
+#define PASTE(x, y) PASTE2(x, y)
+
 namespace rocrtst {
 
 bool Compare(const float* refData, const float* data,
@@ -100,10 +111,10 @@ uint64_t RoundToPowerOf2(uint64_t val);
 ///  Checks if a value is a power of 2
 bool IsPowerOf2(uint64_t val);
 
-#define PASTE2(x, y) x##y
-#define PASTE(x, y) PASTE2(x, y)
-
-#define __forceinline __inline__ __attribute__((always_inline))
+// Count set bits.
+static __forceinline uint32_t popcount(uint32_t value) {
+  return __builtin_popcount(value);
+}
 
 template <typename lambda>
 class ScopeGuard {
