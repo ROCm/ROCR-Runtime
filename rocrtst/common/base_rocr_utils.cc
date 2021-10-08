@@ -72,6 +72,16 @@ namespace rocrtst {
     }                                                                                              \
   }
 
+#define RET_IF_HSA_UTILS_ERR_RET(err, ret)                                                             \
+  {                                                                                                \
+    if ((err) != HSA_STATUS_SUCCESS) {                                                             \
+      const char* msg = 0;                                                                         \
+      hsa_status_string(err, &msg);                                                                \
+      EXPECT_EQ(HSA_STATUS_SUCCESS, err) << msg;                                                   \
+      return (ret);                                                                                \
+    }                                                                                              \
+  }
+
 // Clean up some of the common handles and memory used by BaseRocR code, then
 // shut down hsa. Restore HSA_ENABLE_INTERRUPT to original value, if necessary
 hsa_status_t CommonCleanUp(BaseRocR* test) {
@@ -271,6 +281,28 @@ bool CheckProfile(BaseRocR const* test) {
     return (test->requires_profile() == test->profile());
   }
 }
+
+/// Locate file using local and device named file paths.
+std::string LocateKernelFile(std::string filename, hsa_agent_t agent) {
+  char agent_name[64];
+  std::string obj_file;
+  hsa_status_t err = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, agent_name);
+  RET_IF_HSA_UTILS_ERR_RET(err, obj_file);
+  
+  obj_file = "./" + filename;
+  int file_handle = open(obj_file.c_str(), O_RDONLY);
+  if (file_handle == -1) {
+    obj_file = "./" + std::string(agent_name) + "/" + filename;
+    file_handle = open(obj_file.c_str(), O_RDONLY);
+  }
+
+  if(file_handle == -1)
+    obj_file.clear();
+  else
+    close(file_handle);
+  return obj_file;
+}
+
 // Load the specified kernel code from the specified file, inspect and fill
 // in BaseRocR member variables related to the kernel and executable.
 // Required Input BaseRocR member variables:
@@ -294,25 +326,11 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
     agent = test->gpu_device1();  // Assume GPU agent for now
   }
 
-  // if agent name is not set, then set the agent name
-  if (!test->get_agent_name().size()) {
-    char agent_name[64];
-    err = hsa_agent_get_info(*agent, HSA_AGENT_INFO_NAME, agent_name);
-    RET_IF_HSA_UTILS_ERR(err);
-    test->set_agent_name(agent_name);
-  }
-  std::string obj_file = "./" + test->kernel_file_name();
-  std::string kern_name = test->kernel_name();
+  std::string filename = LocateKernelFile(test->kernel_file_name(), *agent);
 
-  hsa_file_t file_handle = open(obj_file.c_str(), O_RDONLY);
-
+  hsa_file_t file_handle = open(filename.c_str(), O_RDONLY);
   if (file_handle == -1) {
-      obj_file = "./" + test->get_agent_name() + "/" + test->kernel_file_name();
-      file_handle = open(obj_file.c_str(), O_RDONLY);
-  }
-
-  if (file_handle == -1) {
-    std::cout << "failed to open " << obj_file.c_str() << " at line "
+    std::cout << "failed to open " << filename.c_str() << " at line "
               << __LINE__ << ", file: " << __FILE__ << std::endl;
 
     return (hsa_status_t) errno;
@@ -332,6 +350,7 @@ hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   err = hsa_executable_freeze(executable, NULL);
   RET_IF_HSA_UTILS_ERR(err);
 
+  std::string kern_name = test->kernel_name();
   hsa_executable_symbol_t kern_sym;
   err = hsa_executable_get_symbol(executable, NULL, (kern_name + ".kd").c_str(), *agent,
                                   0, &kern_sym);

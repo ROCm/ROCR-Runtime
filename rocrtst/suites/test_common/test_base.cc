@@ -77,12 +77,15 @@ static void MakeHeaderStr(const char *inStr, std::string *outStr) {
   *outStr += kLabelDelimiter;
 }
 
-void TestBase::SetUp(void) {
-  hsa_status_t err;
+void TestBase::SetupPrint() {
   std::string label;
   MakeHeaderStr(kSetupLabel, &label);
   printf("\n\t%s\n", label.c_str());
+}
 
+void TestBase::SetUp(void) {
+  hsa_status_t err;
+  SetupPrint();
   err = rocrtst::InitAndSetupHSA(this);
   ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
@@ -95,13 +98,15 @@ void TestBase::Run(void) {
   printf("\n\t%s\n", label.c_str());
 }
 
-void TestBase::Close(void) {
-  hsa_status_t err;
+void TestBase::ClosePrint() {
   std::string label;
   MakeHeaderStr(kCloseLabel, &label);
   printf("\n\t%s\n", label.c_str());
+}
 
-
+void TestBase::Close(void) {
+  hsa_status_t err;
+  ClosePrint();
   if (monitor_verbosity() > 0) {
     DumpMonitorInfo();
   }

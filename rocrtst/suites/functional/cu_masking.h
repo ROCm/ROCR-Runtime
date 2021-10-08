@@ -5,7 +5,7 @@
  * The University of Illinois/NCSA
  * Open Source License (NCSA)
  *
- * Copyright (c) 2017, Advanced Micro Devices, Inc.
+ * Copyright (c) 2021-2021, Advanced Micro Devices, Inc.
  * All rights reserved.
  *
  * Developed by:
@@ -42,51 +42,39 @@
  * DEALINGS WITH THE SOFTWARE.
  *
  */
-#ifndef ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
-#define ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
 
-#include <string>
-#include <memory>
+#ifndef ROCRTST_SUITES_FUNCTIONAL_CU_MASKING_H_
+#define ROCRTST_SUITES_FUNCTIONAL_CU_MASKING_H_
 #include <vector>
 
+#include "suites/test_common/test_base.h"
 #include "common/base_rocr.h"
+#include "common/common.h"
+#include "common/rocr.h"
 
-class TestBase : public rocrtst::BaseRocR {
+// @Brief: This class is defined to measure the mean latency of enqueuing
+//  the packets to an empty kernel
+
+class CU_Masking : public TestBase {
  public:
-  TestBase(void);
+  // @Brief: Constructor
+  explicit CU_Masking();
 
-  virtual ~TestBase(void);
+  // @Brief: Destructor
+  virtual ~CU_Masking() {}
 
-  enum VerboseLevel {VERBOSE_MIN = 0, VERBOSE_STANDARD, VERBOSE_PROGRESS};
+  // @Brief: Set up the environment for the test
+  virtual void SetUp() { TestBase::SetupPrint(); }
 
-  // @Brief: Before run the core measure codes, do something to set up
-  // i.e. init runtime, prepare packet...
-  virtual void SetUp(void);
+  // @Brief: Run the test case
+  virtual void Run();
 
-  // @Brief: Core measurement codes executing here
-  virtual void Run(void);
-
-  // @Brief: Do something clean up
-  virtual void Close(void);
-
-  // @Brief: Display the results
-  virtual void DisplayResults(void) const;
-
-  // @Brief: Display information about the test
-  virtual void DisplayTestInfo(void);
-
-  const std::string & description(void) const {return description_;}
-
-  void set_description(std::string d);
-
-  // @Brief: Emit setup output string only.  For tests with custom setup.
-  void SetupPrint(void);
-
-  // @Brief: Emit close output string only.  For tests with custom close.
-  void ClosePrint(void);
+  // @Brief: Clean up and close the runtime
+  virtual void Close() { TestBase::ClosePrint(); }
 
  private:
-  std::string description_;
+  // @Brief: Get actual iteration number
+  virtual size_t RealIterationNum() { return num_iteration(); }
 };
 
-#endif  // ROCRTST_SUITES_TEST_COMMON_TEST_BASE_H_
+#endif  // ROCRTST_SUITES_FUNCTIONAL_CU_MASKING_H_
