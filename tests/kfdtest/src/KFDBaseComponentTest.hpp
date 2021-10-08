@@ -34,6 +34,7 @@
 #include "hsakmt.h"
 #include "OSWrapper.hpp"
 #include "KFDTestUtil.hpp"
+#include "Assemble.hpp"
 
 //  @class KFDBaseComponentTest
 class KFDBaseComponentTest : public testing::Test {
@@ -74,6 +75,7 @@ class KFDBaseComponentTest : public testing::Test {
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;
     HSAint32 m_xnack;
+    Assembler* m_pAsm;
 
     // @brief Executed before every test that uses KFDBaseComponentTest class and sets all common settings for the tests.
     virtual void SetUp();
