@@ -23,7 +23,6 @@
 
 #include "KFDBaseComponentTest.hpp"
 #include "BaseQueue.hpp"
-#include "IsaGenerator.hpp"
 
 #ifndef __KFD_MEMORY_TEST__H__
 #define __KFD_MEMORY_TEST__H__
