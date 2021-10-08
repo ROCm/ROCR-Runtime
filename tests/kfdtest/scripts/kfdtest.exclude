@@ -262,6 +262,7 @@ FILTER[navi14]=\
 FILTER[sienna_cichlid]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$TEMP_GFX10_BLACKLIST:"\
+"KFDEvictTest.QueueTest:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
