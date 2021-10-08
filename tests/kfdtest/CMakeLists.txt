@@ -128,12 +128,9 @@ add_definitions(${LLVM_DEFINITIONS_LIST})
 
 llvm_map_components_to_libnames(llvm_libs AMDGPUAsmParser Core Support)
 
-set ( SP3_DIR ${PROJECT_SOURCE_DIR}/sp3 )
-
 include_directories(${PROJECT_SOURCE_DIR}/gtest-1.6.0)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/../../include)
-include_directories(${SP3_DIR})
 
 include_directories(${DRM_INCLUDE_DIRS})
 
@@ -147,12 +144,6 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/IndirectBuffer.cpp
   src/Assemble.cpp
   src/ShaderStore.cpp
-  src/IsaGenerator.cpp
-  src/IsaGenerator_Aldebaran.cpp
-  src/IsaGenerator_Gfx10.cpp
-  src/IsaGenerator_Gfx72.cpp
-  src/IsaGenerator_Gfx8.cpp
-  src/IsaGenerator_Gfx9.cpp
   src/LinuxOSWrapper.cpp
   src/PM4Packet.cpp
   src/PM4Queue.cpp
@@ -216,11 +207,10 @@ endif ()
 # The modules found by pkg_check_modules() in the default pkg config
 # path do not need to use link_directories() here.
 link_directories(${HSAKMT_LIBRARY_DIRS})
-link_directories(${SP3_DIR})
 
 add_executable(kfdtest ${SRC_FILES})
 
-target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} ${llvm_libs} pthread m stdc++ rt amdsp3 numa)
+target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} ${llvm_libs} pthread m stdc++ rt numa)
 
 configure_file ( scripts/kfdtest.exclude kfdtest.exclude COPYONLY )
 configure_file ( scripts/run_kfdtest.sh run_kfdtest.sh COPYONLY )
