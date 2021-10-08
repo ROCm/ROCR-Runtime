@@ -68,6 +68,8 @@ void KFDBaseComponentTest::SetUp() {
 
     g_baseTest = this;
 
+    m_pAsm = new Assembler(GetGfxVersion(nodeProperties));
+
     ROUTINE_END
 }
 
@@ -85,6 +87,10 @@ void KFDBaseComponentTest::TearDown() {
     EXPECT_SUCCESS(hsaKmtReleaseSystemProperties());
     EXPECT_SUCCESS(hsaKmtCloseKFD());
     g_baseTest = NULL;
+
+    if (m_pAsm)
+        delete m_pAsm;
+    m_pAsm = nullptr;
 
     ROUTINE_END
 }
