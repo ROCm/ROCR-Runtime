@@ -211,11 +211,6 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
         link_info.atomic_support_32bit = true;
         link_info.atomic_support_64bit = true;
         link_info.coherent_support = true;
-        if (core::Runtime::runtime_singleton_->flag().patch_xgmi_link_weight()) {
-          if (io_link.Weight == 0) {
-            io_link.Weight = 15;
-          }
-        }
         break;
       default:
         debug_print("Unrecognized IOLINK type.\n");
@@ -223,16 +218,14 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
     }
 
     // KFD is reporting wrong override status for XGMI.  Disallow override for bringup.
-    if (!core::Runtime::runtime_singleton_->flag().patch_link_override()) {
-      if (io_link.Flags.ui32.Override == 1) {
-        if (io_link.Flags.ui32.NoPeerToPeerDMA == 1) {
-          // Ignore this link since peer to peer is not allowed.
-          continue;
-        }
-        link_info.atomic_support_32bit = (io_link.Flags.ui32.NoAtomics32bit == 0);
-        link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
-        link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
+    if (io_link.Flags.ui32.Override == 1) {
+      if (io_link.Flags.ui32.NoPeerToPeerDMA == 1) {
+        // Ignore this link since peer to peer is not allowed.
+        continue;
       }
+      link_info.atomic_support_32bit = (io_link.Flags.ui32.NoAtomics32bit == 0);
+      link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
+      link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
     }
 
     link_info.max_bandwidth = io_link.MaximumBandwidth;
