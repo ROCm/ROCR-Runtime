@@ -111,12 +111,6 @@ class Flag {
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
 
-    var = os::GetEnvVar("HSA_UNPATCH_XGMI_LINK_WEIGHT");
-    patch_xgmi_link_weight_ = (var == "1") ? false : true;
-
-    var = os::GetEnvVar("HSA_UNPATCH_LINK_OVERRIDE");
-    patch_link_override_ = (var == "1") ? false : true;
-
     var = os::GetEnvVar("HSA_ENABLE_SDMA_HDP_FLUSH");
     enable_sdma_hdp_flush_ = (var == "0") ? false : true;
 
@@ -179,11 +173,6 @@ class Flag {
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
 
-  // Temporary way to control ROCr interpretation of inter-device link weight
-  bool patch_xgmi_link_weight() const { return patch_xgmi_link_weight_; }
-
-  bool patch_link_override() const { return patch_link_override_; }
-
   bool rev_copy_dir() const { return rev_copy_dir_; }
 
   bool fine_grain_pcie() const { return fine_grain_pcie_; }
@@ -242,8 +231,6 @@ class Flag {
   bool disable_image_;
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
-  bool patch_xgmi_link_weight_;
-  bool patch_link_override_;
   bool debug_;
   bool cu_mask_skip_init_;
 
