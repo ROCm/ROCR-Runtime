@@ -40,7 +40,9 @@
 ##
 ################################################################################
 
-if [ $1 -eq 0 ]; then
+if [ $1 -le 1 ]; then
   # Workaround for CPACK directory symlink handling error.
+  # Needed for uninstall and upgrade scenarios since
+  # upgrade install to new folder and old folders need to be cleaned
   rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa
 fi

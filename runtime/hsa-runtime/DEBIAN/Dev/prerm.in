@@ -45,8 +45,10 @@
 set -e
 
 case "$1" in
-   ( remove )
+   ( remove | upgrade )
        # Workaround for CPACK directory symlink handling error.
+       # Needed for remove and upgrade scenarios since
+       # upgrade installs to new folder and old folders need to be cleaned
        rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa
    ;;
    ( * )
