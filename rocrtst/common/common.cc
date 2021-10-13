@@ -120,15 +120,18 @@ hsa_status_t IterateGPUAgents(hsa_agent_t agent, void *data) {
   return status;
 }
 
-// Find coarse grained system memory.
+// Find coarse grained device memory if this exists.  Fine grain otherwise.
 hsa_status_t GetGlobalMemoryPool(hsa_amd_memory_pool_t pool, void* data) {
   hsa_amd_segment_t segment;
   hsa_status_t err;
+  hsa_amd_memory_pool_t* ret = reinterpret_cast<hsa_amd_memory_pool_t*>(data);
+
   err = hsa_amd_memory_pool_get_info(pool,
                                          HSA_AMD_MEMORY_POOL_INFO_SEGMENT,
                                          &segment);
+  RET_IF_HSA_COMMON_ERR(err);
   if (HSA_AMD_SEGMENT_GLOBAL != segment)
-    return err;
+    return HSA_STATUS_SUCCESS;
 
   hsa_amd_memory_pool_global_flag_t flags;
   err = hsa_amd_memory_pool_get_info(pool,
@@ -138,17 +141,13 @@ hsa_status_t GetGlobalMemoryPool(hsa_amd_memory_pool_t pool, void* data) {
 
   // this is valid for dGPUs. But on APUs, it has to be FINE_GRAINED
   if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED) {
-    hsa_amd_memory_pool_t* ret =
-                                reinterpret_cast<hsa_amd_memory_pool_t*>(data);
     *ret = pool;
   } else {  // this is for APUs
-    if (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED) {
-      hsa_amd_memory_pool_t* ret =
-                                reinterpret_cast<hsa_amd_memory_pool_t*>(data);
+    if ((ret == nullptr) && (flags & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_FINE_GRAINED)) {
       *ret = pool;
     }
   }
-  return err;
+  return HSA_STATUS_SUCCESS;
 }
 
 // Find  a memory pool that can be used for kernarg locations.
