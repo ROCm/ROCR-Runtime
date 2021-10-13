@@ -1078,11 +1078,15 @@ hsa_status_t AqlQueue::SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* 
   // Clip last dword to physical CU limit if necessary
   if ((mask.size() == mask_dwords) && (tail_mask != 0)) mask[mask_dwords - 1] &= tail_mask;
 
-  // Apply mask and update current cu masking tracking.
+  // Apply mask if non-default or not queue initialization.
   ScopedAcquire<KernelMutex> lock(&mask_lock_);
-  HSAKMT_STATUS ret =
-      hsaKmtSetQueueCUMask(queue_id_, mask.size() * 32, reinterpret_cast<HSAuint32*>(&mask[0]));
-  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  if ((!cu_mask_.empty()) || (num_cu_mask_count != 0) || (!global_mask.empty())) {
+    HSAKMT_STATUS ret =
+        hsaKmtSetQueueCUMask(queue_id_, mask.size() * 32, reinterpret_cast<HSAuint32*>(&mask[0]));
+    if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  }
+
+  // update current cu masking tracking.
   cu_mask_ = std::move(mask);
   return clipped ? (hsa_status_t)HSA_STATUS_CU_MASK_REDUCED : HSA_STATUS_SUCCESS;
 }
