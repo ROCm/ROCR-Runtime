@@ -73,7 +73,7 @@ struct AqlPacket {
   }
 
   bool IsValid() const {
-    return (type() <= HSA_PACKET_TYPE_BARRIER_OR) & (type() != HSA_PACKET_TYPE_INVALID);
+    return int(type() <= HSA_PACKET_TYPE_BARRIER_OR) & (type() != HSA_PACKET_TYPE_INVALID);
   }
 
   std::string string() const {
