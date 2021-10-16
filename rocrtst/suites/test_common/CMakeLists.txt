@@ -170,10 +170,6 @@ set(KERNELS_DIR ${PROJECT_SOURCE_DIR}/kernels)
 #
 set(CMAKE_BUILD_TYPE ${BUILD_TYPE})
 #
-# Flag to enable / disable verbose output.
-#
-set(CMAKE_VERBOSE_MAKEFILE on)
-#
 # Compiler pre-processor definitions.
 #
 # Define MACRO "DEBUG" if build type is "Debug"
@@ -260,42 +256,41 @@ include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
 include_directories(${ROCM_SMI_INC_DIR})
 
+# Custom command set for code objects.
+set (HSACO_TARG_LIST "")
+
 # Use this function to build any samples that have kernels to be built
 function(build_kernel S_NAME TARG_DEV)
   set(KERNEL_DIR ${PROJECT_BINARY_DIR}/${TARG_DEV})
   set(SNAME_KERNEL "${S_NAME}_kernels.hsaco")
 
   set(TARG_NAME "${S_NAME}_hsaco.${TARG_DEV}")
-  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} ${TARG_NAME}
-                                                 CACHE INTERNAL HSA_TARG_LIST)
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} "${KERNEL_DIR}/${SNAME_KERNEL}" PARENT_SCOPE)
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
    "-x cl -target amdgcn-amd-amdhsa -include ${OPENCL_INC_DIR}opencl-c.h -mcpu=${TARG_DEV} ${BITCODE_ARGS} -cl-std=CL${OPENCL_VER} ${CL_FILE_LIST} -o ${KERNEL_DIR}/${SNAME_KERNEL}")
-  add_custom_target("${TARG_NAME}" ${CLANG} ${CLANG_ARG_LIST} COMMAND
-      ${CMAKE_COMMAND} -E create_symlink
-        "../${ROCRTST}" "${KERNEL_DIR}/${ROCRTST}"
-     COMMENT "BUILDING KERNEL..."
-     VERBATIM)
+  add_custom_command(OUTPUT "${KERNEL_DIR}/${SNAME_KERNEL}" COMMAND ${CLANG} ${CLANG_ARG_LIST} DEPENDS ${CL_FILE_LIST} ${CLANG} COMMENT "BUILDING ${KERNEL_DIR}/${SNAME_KERNEL}" VERBATIM)
 endfunction(build_kernel)
 
 function(build_sample_for_devices S_NAME)
-  set(HSACO_TARG_LIST PARENT_SCOPE)
-
   foreach(t ${TARGET_DEVICES})
     build_kernel(${S_NAME} ${t})
   endforeach(t)
+  set(HSACO_TARG_LIST ${HSACO_TARG_LIST} PARENT_SCOPE)
 endfunction(build_sample_for_devices)
 
-
 # Make directories for each possible target device
+# List of symlinks per directory
+set(ROCRTST_LINKS_LIST "")
 foreach(td ${TARGET_DEVICES})
   file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/${td})
+  add_custom_command(OUTPUT "${PROJECT_BINARY_DIR}/${td}/${ROCRTST}" COMMAND ${CMAKE_COMMAND} -E create_symlink "../${ROCRTST}" "${td}/${ROCRTST}" COMMENT "BUILDING ${td}/${ROCRTST}" VERBATIM)
+  set(ROCRTST_LINKS_LIST ${ROCRTST_LINKS_LIST} "${PROJECT_BINARY_DIR}/${td}/${ROCRTST}")
+  install ( DIRECTORY ${PROJECT_BINARY_DIR}/${td} DESTINATION bin )
 endforeach(td)
 
 ######################
 # Kernel Build Section
 ######################
-set (HSACO_TARG_LIST "" CACHE INTERNAL HSACO_TARG_LIST)
-
 set(KERN_SUFFIX "kernels.hsaco")
 
 # Check if device-libs bitcode is following old or new layout
@@ -362,7 +357,11 @@ add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeS
 
 target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/libhwloc.so.5)
 
-add_custom_target(rocrtst_kernels DEPENDS ${HSACO_TARG_LIST})
+#Build kernels
+add_custom_target(rocrtst_kernels ALL DEPENDS ${HSACO_TARG_LIST})
+
+#Build symlinks
+add_custom_target(rocrtst_links ALL DEPENDS ${ROCRTST_LINKS_LIST} )
 
 ## Set RUNPATH to pickup local copy of hwloc
 set_property(TARGET ${ROCRTST} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/thirdparty;$ORIGIN/../lib/rocrtst/thirdparty" )
