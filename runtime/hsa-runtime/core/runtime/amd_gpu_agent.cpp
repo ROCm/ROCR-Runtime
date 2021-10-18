@@ -605,6 +605,9 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
     case 10:
       sdma = new BlitSdmaV5();
       break;
+    case 11:
+      sdma = new BlitSdmaV5();
+      break;
     default:
       assert(false && "Unexpected device major version.");
       return nullptr;
@@ -1543,7 +1546,7 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() > 10) {
+  } else if (isa_->GetMajorVersion() > 11) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 
