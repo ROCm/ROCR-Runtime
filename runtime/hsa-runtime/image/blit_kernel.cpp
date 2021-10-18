@@ -96,6 +96,7 @@ extern uint8_t ocl_blit_object_gfx1033[];
 extern uint8_t ocl_blit_object_gfx1034[];
 extern uint8_t ocl_blit_object_gfx1035[];
 extern uint8_t ocl_blit_object_gfx1036[];
+extern uint8_t ocl_blit_object_gfx1100[];
 
 // Arguments inserted by OCL compiler, all zero here.
 struct OCLHiddenArgs {
@@ -1025,6 +1026,8 @@ hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
     *blit_code_object = ocl_blit_object_gfx1035;
   } else if (sname == "gfx1036") {
     *blit_code_object = ocl_blit_object_gfx1036;
+  } else if (sname == "gfx1100") {
+    *blit_code_object = ocl_blit_object_gfx1100;
   } else {
     return HSA_STATUS_ERROR_INVALID_ISA_NAME;
   }
