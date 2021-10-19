@@ -46,8 +46,8 @@ cmake_minimum_required ( VERSION 3.7 )
 find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 find_package(LLVM REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
-set (TARGET_DEVS "gfx900;gfx1010;gfx1030")
-set (POSTFIX "9;1010;10")
+set (TARGET_DEVS "gfx900;gfx1010;gfx1030;gfx1100")
+set (POSTFIX "9;1010;10;11")
 
 if(${CMAKE_VERBOSE_MAKEFILE})
   get_property(clang_path TARGET clang PROPERTY LOCATION)

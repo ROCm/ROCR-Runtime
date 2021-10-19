@@ -113,6 +113,8 @@ static const unsigned int kCodeTrapHandler9[] = {
   //   ttmp11 = SQ_WAVE_IB_STS[20:15], 0[18:0], NoScratch[0], WaveIdInWG[5:0]
   // gfx10:
   //   ttmp11 = SQ_WAVE_IB_STS[25], SQ_WAVE_IB_STS[21:15], 0[16:0], NoScratch[0], WaveIdInWG[5:0]
+  // gfx1030/gfx1100:
+  //   ttmp11 = 0[7:0], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
 
   .macro mGetDoorbellId
     s_mov_b32            exec_lo, 0x80000000
