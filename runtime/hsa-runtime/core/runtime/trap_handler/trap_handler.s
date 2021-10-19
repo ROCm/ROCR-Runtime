@@ -99,7 +99,7 @@
 //   ttmp1 = 0[0], PCRewind[5:0], HostTrap[0], TrapId[7:0], PC[47:32]
 // gfx1010:
 //   ttmp11 = SQ_WAVE_IB_STS[25], SQ_WAVE_IB_STS[21:15], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
-// gfx1030:
+// gfx1030/gfx1100:
 //   ttmp11 = 0[7:0], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
 
 trap_entry:
@@ -136,12 +136,17 @@ trap_entry:
   // Fetch doorbell id for our queue.
   s_mov_b32            ttmp2, exec_lo
   s_mov_b32            ttmp3, exec_hi
+.if .amdgcn.gfx_generation_number < 11
   s_mov_b32            exec_lo, 0x80000000
   s_sendmsg            sendmsg(MSG_GET_DOORBELL)
 .wait_sendmsg:
   s_nop                0x7
   s_bitcmp0_b32        exec_lo, 0x1F
   s_cbranch_scc0       .wait_sendmsg
+.else
+  s_sendmsg_rtn_b32    exec_lo, sendmsg(MSG_RTN_GET_DOORBELL)
+  s_waitcnt            lgkmcnt(0)
+.endif
   s_mov_b32            exec_hi, ttmp3
 
   // Restore exec_lo, move the doorbell_id into ttmp3

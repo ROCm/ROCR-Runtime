@@ -243,6 +243,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_90a;
     ASICShader compute_1010;
     ASICShader compute_10;
+    ASICShader compute_11;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
@@ -254,6 +255,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
            {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
+           {NULL, 0, 0, 0},
        }},
       {"TrapHandlerKfdExceptions",
        {
@@ -263,6 +265,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
            {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},
            {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},
+           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},
        }},
       {"CopyAligned",
        {
@@ -272,6 +275,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
+           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},
        }},
       {"CopyMisaligned",
        {
@@ -281,6 +285,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
+           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},
        }},
       {"Fill",
        {
@@ -290,6 +295,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
+           {kCodeFill11, sizeof(kCodeFill11), 19, 8},
        }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
@@ -316,6 +322,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
         asic_shader = &compiled_shader_it->second.compute_1010;
       else
         asic_shader = &compiled_shader_it->second.compute_10;
+      break;
+    case 11:
+        asic_shader = &compiled_shader_it->second.compute_11;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
