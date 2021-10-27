@@ -1,9 +1,11 @@
+#!/bin/bash
+
 ################################################################################
 ##
 ## The University of Illinois/NCSA
 ## Open Source License (NCSA)
 ##
-## Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2020-2021, Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## Developed by:
 ##
@@ -40,32 +42,16 @@
 ##
 ################################################################################
 
-#
-# HSA Build compiler definitions common between components.
-#
+set -e
 
-set(IS64BIT 0)
-set(ONLY64STR "32")
-if(CMAKE_SIZEOF_VOID_P EQUAL 8)
-  set(IS64BIT 1)
-  set(ONLY64STR "64")
-endif()
-
-set(HSA_COMMON_CXX_FLAGS "-Wall" "-std=c++11")
-set(HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-fPIC")
-if (CMAKE_COMPILER_IS_GNUCXX)
-  set(HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-Wl,--unresolved-symbols=ignore-in-shared-libs")
-endif ()
-set(HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-fno-strict-aliasing")
-if ( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
-  set( HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-m64"  "-msse" "-msse2")
-elseif ( CMAKE_SYSTEM_PROCESSOR STREQUAL "x86" )
-  set ( HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-m32")
-endif ()
-if ( "${CMAKE_BUILD_TYPE}" STREQUAL Debug )
-  set ( HSA_COMMON_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} "-O0" "-ggdb")
-endif ()
-set( HSA_COMMON_DEFS "__STDC_LIMIT_MACROS")
-set( HSA_COMMON_DEFS ${HSA_COMMON_DEFS} "__STDC_CONSTANT_MACROS")
-set( HSA_COMMON_DEFS ${HSA_COMMON_DEFS} "__STDC_FORMAT_MACROS")
-set( HSA_COMMON_DEFS ${HSA_COMMON_DEFS} "LITTLEENDIAN_CPU=1")
+case "$1" in
+   ( remove | upgrade )
+       # Workaround for CPACK directory symlink handling error.
+       # Needed for remove and upgrade scenarios since
+       # upgrade installs to new folder and old folders need to be cleaned
+       rm -rf @CPACK_PACKAGING_INSTALL_PREFIX@/hsa
+   ;;
+   ( * )
+       exit 0
+   ;;
+esac

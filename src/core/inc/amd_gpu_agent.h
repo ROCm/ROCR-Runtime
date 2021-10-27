@@ -174,7 +174,7 @@ class GpuAgent : public GpuAgentInt {
   // id.
   // @param [in] node_props Node property.
   // @param [in] xnack_mode XNACK mode of device.
-  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode);
+  GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode, uint32_t index);
 
   // @brief GPU agent destructor.
   ~GpuAgent();
@@ -322,14 +322,33 @@ class GpuAgent : public GpuAgentInt {
     return memory_max_frequency_;
   }
 
+  // @brief Order the device is surfaced in hsa_iterate_agents counting only
+  // GPU devices.
+  __forceinline uint32_t enumeration_index() const { return enum_index_; }
+
   void Trim() override;
+
+  const std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>&
+  system_allocator() const {
+    return system_allocator_;
+  }
+
+  const std::function<void(void*)>& system_deallocator() const { return system_deallocator_; }
 
  protected:
   static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
-  // @brief Create a queue through HSA API to allow tools to intercept.
-  core::Queue* CreateInterceptibleQueue();
+  // @brief Create an internal queue allowing tools to be notified.
+  core::Queue* CreateInterceptibleQueue() {
+    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr);
+  }
+
+  // @brief // @brief Create an internal queue, with a custom error handler, allowing tools to be
+  // notified.
+  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source,
+                                                         void* data),
+                                        void* data);
 
   // @brief Create SDMA blit object.
   //
@@ -396,6 +415,9 @@ class GpuAgent : public GpuAgentInt {
   // List of agents connected via xGMI
   std::vector<const core::Agent*> xgmi_peer_list_;
 
+  // Protects xgmi_peer_list_
+  KernelMutex xgmi_peer_list_lock_;
+
   // @brief AQL queues for cache management and blit compute usage.
   enum QueueEnum {
     QueueUtility,   // Cache management and device to {host,device} blit compute
@@ -433,8 +455,6 @@ class GpuAgent : public GpuAgentInt {
   // @brief Array of regions owned by this agent.
   std::vector<const core::MemoryRegion*> regions_;
 
-  MemoryRegion* local_region_;
-
   core::Isa* isa_;
 
   // @brief HSA profile.
@@ -456,6 +476,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief The GPU memory maximum frequency in MHz.
   uint32_t memory_max_frequency_;
 
+  // @brief Enumeration index
+  uint32_t enum_index_;
+
   // @brief HDP flush registers
   hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};
 
@@ -475,6 +498,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Setup GWS accessing queue.
   void InitGWS();
+
+  // @brief Setup NUMA aware system memory allocator.
+  void InitNumaAllocator();
 
   // @brief Register signal for notification when scratch may become available.
   // @p signal is notified by OR'ing with @p value.
@@ -515,6 +541,12 @@ class GpuAgent : public GpuAgentInt {
   } gws_queue_;
 
   ScratchCache scratch_cache_;
+
+  // System memory allocator in the nearest NUMA node.
+  std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>
+      system_allocator_;
+
+  std::function<void(void*)> system_deallocator_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 };

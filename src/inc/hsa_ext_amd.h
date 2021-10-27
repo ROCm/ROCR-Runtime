@@ -184,6 +184,20 @@ enum {
    * Agent executed an invalid shader instruction.
    */
   HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION = 42,
+
+  /**
+   * Agent attempted to access an inaccessible address.
+   * See hsa_amd_register_system_event_handler and
+   * HSA_AMD_GPU_MEMORY_FAULT_EVENT for more information on illegal accesses.
+   */
+  HSA_STATUS_ERROR_MEMORY_FAULT = 43,
+
+  /**
+   * The CU mask was successfully set but the mask attempted to enable a CU
+   * which was disabled for the process.  CUs disabled for the process remain
+   * disabled.
+   */
+  HSA_STATUS_CU_MASK_REDUCED = 44,
 };
 
 /**
@@ -291,7 +305,13 @@ typedef enum hsa_amd_agent_info_s {
    * selective workarounds for hardware errata.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012
+  HSA_AMD_AGENT_INFO_ASIC_REVISION = 0xA012,
+  /**
+   * Queries whether or not the host can directly access SVM memory that is
+   * physically resident in the agent's local memory.
+   * The type of this attribute is bool.
+   */
+  HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS = 0xA013
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -767,14 +787,51 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
                                                     void* value);
 
 /**
- * @brief Set a CU affinity to specific queues within the process, this function
- * call is "atomic".
+ * @brief Set a queue's CU affinity mask.
+ *
+ * @details Enables the queue to run on only selected CUs.  The given mask is
+ * combined by bitwise AND with any device wide mask in HSA_CU_MASK before
+ * being applied.
+ * If num_cu_mask_count is 0 then the request is interpreted as a request to
+ * enable all CUs and no cu_mask array need be given.
  *
  * @param[in] queue A pointer to HSA queue.
  *
- * @param[in] num_cu_mask_count Size of CUMask bit array passed in.
+ * @param[in] num_cu_mask_count Size of CUMask bit array passed in, in bits.
  *
  * @param[in] cu_mask Bit-vector representing the CU mask.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_CU_MASK_REDUCED The function was successfully executed
+ * but the given mask attempted to enable a CU which was disabled by
+ * HSA_CU_MASK.  CUs disabled by HSA_CU_MASK remain disabled.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_QUEUE @p queue is NULL or invalid.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
+ * a multiple of 32 or @p num_cu_mask_count is not 0 and cu_mask is NULL.
+ *
+ */
+hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
+                                               uint32_t num_cu_mask_count,
+                                               const uint32_t* cu_mask);
+
+/**
+ * @brief Retrieve a queue's CU affinity mask.
+ *
+ * @details Returns the first num_cu_mask_count bits of a queue's CU mask.
+ * Ensure that num_cu_mask_count is at least as large as
+ * HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT to retrieve the entire mask.
+ *
+ * @param[in] queue A pointer to HSA queue.
+ *
+ * @param[in] num_cu_mask_count Size of CUMask bit array passed in, in bits.
+ *
+ * @param[out] cu_mask Bit-vector representing the CU mask.
  *
  * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
  *
@@ -783,15 +840,12 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_QUEUE @p queue is NULL or invalid.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
- * multiple of 32 or @p cu_mask is NULL.
- *
- * @retval ::HSA_STATUS_ERROR failed to call thunk api
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is 0, not
+ * a multiple of 32 or @p cu_mask is NULL.
  *
  */
-hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
-                                               uint32_t num_cu_mask_count,
-                                               const uint32_t* cu_mask);
+hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                               uint32_t* cu_mask);
 
 /**
  * @brief Memory segments associated with a memory pool.
@@ -1722,6 +1776,12 @@ typedef struct hsa_amd_pointer_info_s {
   GPU boards) any such agent may be returned.
   */
   hsa_agent_t agentOwner;
+  /*
+  Contains a bitfield of hsa_amd_memory_pool_global_flag_t values.
+  Reports the effective global flags bitmask for the allocation.  This field is not meaningful if
+  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
+  */
+  uint32_t global_flags;
 } hsa_amd_pointer_info_t;
 
 /**
@@ -1757,7 +1817,7 @@ typedef struct hsa_amd_pointer_info_s {
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT NULL in @p ptr or @p info.
  */
-hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
+hsa_status_t HSA_API hsa_amd_pointer_info(const void* ptr,
                                           hsa_amd_pointer_info_t* info,
                                           void* (*alloc)(size_t),
                                           uint32_t* num_agents_accessible,
@@ -1781,7 +1841,7 @@ hsa_status_t HSA_API hsa_amd_pointer_info(void* ptr,
  *
  * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT @p ptr is not known to ROCr.
  */
-hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(void* ptr,
+hsa_status_t HSA_API hsa_amd_pointer_info_set_userdata(const void* ptr,
                                                        void* userdata);
 
 /**
@@ -2118,13 +2178,25 @@ hsa_status_t HSA_API hsa_amd_deregister_deallocation_callback(void* ptr,
 
 typedef enum hsa_amd_svm_model_s {
   /**
-   * Updates to memory with this attribute conform to HSA memory consistency model.
+   * Updates to memory with this attribute conform to HSA memory consistency
+   * model.
    */
   HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED = 0,
   /**
-   * Writes to memory with this attribute can be performed by a single agent at a time.
+   * Writes to memory with this attribute can be performed by a single agent
+   * at a time.
    */
-  HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED = 1
+  HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED = 1,
+  /**
+   * Memory region queried contains subregions with both
+   * HSA_AMD_SVM_GLOBAL_FLAG_COARSE_GRAINED and
+   * HSA_AMD_SVM_GLOBAL_FLAG_FINE_GRAINED attributes.
+   *
+   * This attribute can not be used in hsa_amd_svm_attributes_set.  It is a
+   * possible return from hsa_amd_svm_attributes_get indicating that the query
+   * region contains both coarse and fine grained memory.
+   */
+  HSA_AMD_SVM_GLOBAL_FLAG_INDETERMINATE = 2
 } hsa_amd_svm_model_t;
 
 typedef enum hsa_amd_svm_attribute_s {
@@ -2150,7 +2222,7 @@ typedef enum hsa_amd_svm_attribute_s {
   HSA_AMD_SVM_ATTRIB_PREFERRED_LOCATION = 4,
   // This attribute can not be used in ::hsa_amd_svm_attributes_set (see
   // ::hsa_amd_svm_prefetch_async).
-  // Physical location of most recent prefetch command.
+  // Queries the physical location of most recent prefetch command.
   // If the prefetch location has not been set or is not uniform across the
   // address range then returned hsa_agent_t::handle will be 0.
   // Querying this attribute will return the destination agent of the most
@@ -2160,6 +2232,10 @@ typedef enum hsa_amd_svm_attribute_s {
   // the location of the most recently completed prefetch.
   // Type of this attribute is hsa_agent_t.
   HSA_AMD_SVM_ATTRIB_PREFETCH_LOCATION = 5,
+  // Optimizes with the anticipation that the majority of operations to the
+  // range will be read operations.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_READ_MOSTLY = 6,
   // This attribute can not be used in ::hsa_amd_svm_attributes_get.
   // Enables an agent for access to the range.  Access may incur a page fault
   // and associated memory migration.  Either this or

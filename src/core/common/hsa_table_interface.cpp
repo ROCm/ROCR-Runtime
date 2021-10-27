@@ -927,6 +927,12 @@ hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
 }
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                               uint32_t* cu_mask) {
+  return amdExtTable->hsa_amd_queue_cu_get_mask_fn(queue, num_cu_mask_count, cu_mask);
+}
+
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API
     hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
                                  hsa_amd_memory_pool_info_t attribute,
@@ -1073,13 +1079,13 @@ hsa_status_t HSA_API hsa_amd_image_create(
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                               uint32_t* num_agents_accessible, hsa_agent_t** accessible) {
   return amdExtTable->hsa_amd_pointer_info_fn(ptr, info, alloc, num_agents_accessible, accessible);
 }
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userptr) {
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userptr) {
   return amdExtTable->hsa_amd_pointer_info_set_userdata_fn(ptr, userptr);
 }
 

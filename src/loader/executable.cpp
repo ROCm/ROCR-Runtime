@@ -78,7 +78,9 @@ __attribute__((noinline)) static void _loader_debug_state() {
 // 3: New trap handler ABI. A wave halted at S_ENDPGM rewinds its PC by 8 bytes, and sets ttmp11[9]=1.
 // 4: New trap handler ABI. Save the trap id in ttmp11[16:9]
 // 5: New trap handler ABI. Save the PC in ttmp11[22:7] ttmp6[31:0], and park the wave if stopped
-HSA_API r_debug _amdgpu_r_debug = {5,
+// 6: New trap handler ABI. ttmp6[25:0] contains dispatch index modulo queue size
+// 7: New trap handler ABI. Send interrupts as a bitmask, coalescing concurrent exceptions.
+HSA_API r_debug _amdgpu_r_debug = {7,
                            nullptr,
                            reinterpret_cast<uintptr_t>(&_loader_debug_state),
                            r_debug::RT_CONSISTENT,

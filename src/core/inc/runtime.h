@@ -106,6 +106,11 @@ class Runtime {
     hsa_amd_memory_pool_link_info_t info;
   };
 
+  struct KfdVersion_t {
+    HsaVersionInfo version;
+    bool supports_exception_debugging;
+  };
+
   /// @brief Open connection to kernel driver and increment reference count.
   static hsa_status_t Acquire();
 
@@ -279,11 +284,11 @@ class Runtime {
     size_t length;
   };
 
-  hsa_status_t PtrInfo(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+  hsa_status_t PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                        uint32_t* num_agents_accessible, hsa_agent_t** accessible,
                        PtrInfoBlockData* block_info = nullptr);
 
-  hsa_status_t SetPtrInfoData(void* ptr, void* userptr);
+  hsa_status_t SetPtrInfoData(const void* ptr, void* userptr);
 
   hsa_status_t IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);
 
@@ -350,9 +355,13 @@ class Runtime {
 
   uint64_t sys_clock_freq() const { return sys_clock_freq_; }
 
-  void KfdVersion(const HsaVersionInfo& version) { kfd_version = version; }
+  void KfdVersion(const HsaVersionInfo& version) { kfd_version.version = version; }
 
-  HsaVersionInfo KfdVersion() const { return kfd_version; }
+  void KfdVersion(bool exception_debugging) {
+    kfd_version.supports_exception_debugging = exception_debugging;
+  }
+
+  KfdVersion_t KfdVersion() const { return kfd_version; }
 
  protected:
   static void AsyncEventsLoop(void*);
@@ -575,7 +584,7 @@ class Runtime {
   InterruptSignal::EventPool EventPool;
 
   // Kfd version
-  HsaVersionInfo kfd_version;
+  KfdVersion_t kfd_version;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
