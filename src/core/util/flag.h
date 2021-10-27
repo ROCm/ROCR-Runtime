@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2021, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -45,6 +45,8 @@
 
 #include <stdint.h>
 
+#include <vector>
+#include <map>
 #include <string>
 
 #include "core/util/os.h"
@@ -109,12 +111,6 @@ class Flag {
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
 
-    var = os::GetEnvVar("HSA_UNPATCH_XGMI_LINK_WEIGHT");
-    patch_xgmi_link_weight_ = (var == "1") ? false : true;
-
-    var = os::GetEnvVar("HSA_UNPATCH_LINK_OVERRIDE");
-    patch_link_override_ = (var == "1") ? false : true;
-
     var = os::GetEnvVar("HSA_ENABLE_SDMA_HDP_FLUSH");
     enable_sdma_hdp_flush_ = (var == "0") ? false : true;
 
@@ -146,6 +142,14 @@ class Flag {
     // be interpreted as not defining the env variable.
     var = os::GetEnvVar("HSA_XNACK");
     xnack_ = (var == "0") ? XNACK_DISABLE : ((var == "1") ? XNACK_ENABLE : XNACK_UNCHANGED);
+
+    var = os::GetEnvVar("HSA_ENABLE_DEBUG");
+    debug_ = (var == "1") ? true : false;
+  }
+
+  void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
+    std::string var = os::GetEnvVar("HSA_CU_MASK");
+    parse_masks(var, maxGpu, maxCU);
   }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
@@ -165,11 +169,6 @@ class Flag {
   bool report_tool_load_failures() const { return report_tool_load_failures_; }
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
-
-  // Temporary way to control ROCr interpretation of inter-device link weight
-  bool patch_xgmi_link_weight() const { return patch_xgmi_link_weight_; }
-
-  bool patch_link_override() const { return patch_link_override_; }
 
   bool rev_copy_dir() const { return rev_copy_dir_; }
 
@@ -201,6 +200,15 @@ class Flag {
 
   XNACK_REQUEST xnack() const { return xnack_; }
 
+  bool debug() const { return debug_; }
+
+  const std::vector<uint32_t>& cu_mask(uint32_t gpu_index) const {
+    static const std::vector<uint32_t> empty;
+    auto it = cu_mask_.find(gpu_index);
+    if (it == cu_mask_.end()) return empty;
+    return it->second;
+  }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -218,8 +226,7 @@ class Flag {
   bool disable_image_;
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
-  bool patch_xgmi_link_weight_;
-  bool patch_link_override_;
+  bool debug_;
 
   SDMA_OVERRIDE enable_sdma_;
 
@@ -236,6 +243,11 @@ class Flag {
 
   // Indicates user preference for Xnack state.
   XNACK_REQUEST xnack_;
+
+  // Map GPU index post RVD to its default cu mask.
+  std::map<uint32_t, std::vector<uint32_t>> cu_mask_;
+
+  void parse_masks(std::string& args, uint32_t maxGpu, uint32_t maxCU);
 
   DISALLOW_COPY_AND_ASSIGN(Flag);
 };

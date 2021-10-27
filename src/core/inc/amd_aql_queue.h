@@ -185,7 +185,16 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @param cu_mask pointer to cu mask
   ///
   /// @return hsa_status_t
-  hsa_status_t SetCUMasking(const uint32_t num_cu_mask_count, const uint32_t* cu_mask) override;
+  hsa_status_t SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) override;
+
+  /// @brief Get CU Masking
+  ///
+  /// @param num_cu_mask_count size of mask bit array
+  ///
+  /// @param cu_mask pointer to cu mask
+  ///
+  /// @return hsa_status_t
+  hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override;
 
   // @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
@@ -222,7 +231,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void Suspend();
 
   /// @brief Handler for hardware queue events.
+  template <bool HandleExceptions>
   static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
+
+  /// @brief Handler for KFD exceptions.
+  static bool ExceptionHandler(hsa_signal_value_t error_code, void* arg);
 
   // AQL packet ring buffer
   void* ring_buf_;
@@ -261,7 +274,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   KernelMutex pm4_ib_mutex_;
 
   // Error handler control variable.
-  std::atomic<uint32_t> dynamicScratchState;
+  std::atomic<uint32_t> dynamicScratchState, exceptionState;
   enum { ERROR_HANDLER_DONE = 1, ERROR_HANDLER_TERMINATE = 2, ERROR_HANDLER_SCRATCH_RETRY = 4 };
 
   // Queue currently suspended or scheduled
@@ -269,6 +282,15 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   // Thunk dispatch and wavefront scheduling priority
   HSA_QUEUE_PRIORITY priority_;
+
+  // Exception notification signal
+  Signal* exception_signal_;
+
+  // CU mask lock
+  KernelMutex mask_lock_;
+
+  // Current CU mask
+  std::vector<uint32_t> cu_mask_;
 
   // Shared event used for queue errors
   static HsaEvent* queue_event_;

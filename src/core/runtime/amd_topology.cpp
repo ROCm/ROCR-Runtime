@@ -49,6 +49,7 @@
 #include <map>
 #include <string>
 #include <sstream>
+#include <link.h>
 
 #ifndef NDBEUG
 #include <iostream>
@@ -61,6 +62,8 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/util/utils.h"
+
+extern r_debug _amdgpu_r_debug;
 
 namespace rocr {
 namespace AMD {
@@ -118,9 +121,10 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       return nullptr;
   }
   try {
-    gpu = new GpuAgent(node_id, node_prop, xnack_mode);
+    gpu = new GpuAgent(node_id, node_prop, xnack_mode,
+                       core::Runtime::runtime_singleton_->gpu_agents().size());
 
-    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion();
+    const HsaVersionInfo& kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
     // Check for sramecc incompatibility due to sramecc not being reported correctly in kfd before
     // 1.4.
@@ -143,7 +147,8 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       if (gpu->isa()->GetProcessorName() == "gfx908") {
         node_prop.Capability.ui32.SRAM_EDCSupport = 1;
         delete gpu;
-        gpu = new GpuAgent(node_id, node_prop, xnack_mode);
+        gpu = new GpuAgent(node_id, node_prop, xnack_mode,
+                           core::Runtime::runtime_singleton_->gpu_agents().size());
       }
     }
   } catch (const hsa_exception& e) {
@@ -206,11 +211,6 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
         link_info.atomic_support_32bit = true;
         link_info.atomic_support_64bit = true;
         link_info.coherent_support = true;
-        if (core::Runtime::runtime_singleton_->flag().patch_xgmi_link_weight()) {
-          if (io_link.Weight == 0) {
-            io_link.Weight = 15;
-          }
-        }
         break;
       default:
         debug_print("Unrecognized IOLINK type.\n");
@@ -218,16 +218,14 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
     }
 
     // KFD is reporting wrong override status for XGMI.  Disallow override for bringup.
-    if (!core::Runtime::runtime_singleton_->flag().patch_link_override()) {
-      if (io_link.Flags.ui32.Override == 1) {
-        if (io_link.Flags.ui32.NoPeerToPeerDMA == 1) {
-          // Ignore this link since peer to peer is not allowed.
-          continue;
-        }
-        link_info.atomic_support_32bit = (io_link.Flags.ui32.NoAtomics32bit == 0);
-        link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
-        link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
+    if (io_link.Flags.ui32.Override == 1) {
+      if (io_link.Flags.ui32.NoPeerToPeerDMA == 1) {
+        // Ignore this link since peer to peer is not allowed.
+        continue;
       }
+      link_info.atomic_support_32bit = (io_link.Flags.ui32.NoAtomics32bit == 0);
+      link_info.atomic_support_64bit = (io_link.Flags.ui32.NoAtomics64bit == 0);
+      link_info.coherent_support = (io_link.Flags.ui32.NonCoherent == 0);
     }
 
     link_info.max_bandwidth = io_link.MaximumBandwidth;
@@ -350,6 +348,16 @@ void BuildTopology() {
 
   // Instantiate ROCr objects to encapsulate Gpu devices
   SurfaceGpuList(gpu_usr_list, xnack_mode);
+
+  // Parse HSA_CU_MASK with GPU and CU count limits.
+  uint32_t maxGpu = core::Runtime::runtime_singleton_->gpu_agents().size();
+  uint32_t maxCu = 0;
+  uint32_t cus;
+  for (auto& gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+    gpu->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &cus);
+    maxCu = Max(maxCu, cus);
+  }
+  const_cast<Flag&>(core::Runtime::runtime_singleton_->flag()).parse_masks(maxGpu, maxCu);
 }
 
 bool Load() {
@@ -357,14 +365,24 @@ bool Load() {
   if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
     return false;
   }
+  MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
+
+  // Register runtime and optionally enable the debugger
+  HSAKMT_STATUS err =
+      hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
+  if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
+  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
 
   // Build topology table.
   BuildTopology();
 
+  kfd.Dismiss();
   return true;
 }
 
 bool Unload() {
+  hsaKmtRuntimeDisable();
+
   hsaKmtReleaseSystemProperties();
 
   // Close connection to kernel driver.

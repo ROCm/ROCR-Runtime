@@ -161,8 +161,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   }
 
   // Allocate queue buffer.
-  queue_start_addr_ = (char*)core::Runtime::runtime_singleton_->system_allocator()(
-      kQueueSize, 0x1000, core::MemoryRegion::AllocateExecutable);
+  queue_start_addr_ =
+      (char*)agent_->system_allocator()(kQueueSize, 0x1000, core::MemoryRegion::AllocateExecutable);
 
   if (queue_start_addr_ == NULL) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -206,7 +206,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
 
   if (queue_start_addr_ != NULL) {
     // Release queue buffer.
-    core::Runtime::runtime_singleton_->system_deallocator()(queue_start_addr_);
+    agent_->system_deallocator()(queue_start_addr_);
   }
 
   queue_start_addr_ = NULL;

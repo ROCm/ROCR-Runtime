@@ -17,14 +17,14 @@
 ## of this software and associated documentation files (the "Software"), to
 ## deal with the Software without restriction, including without limitation
 ## the rights to use, copy, modify, merge, publish, distribute, sublicense,
-## and#or sell copies of the Software, and to permit persons to whom the
+## and/or sell copies of the Software, and to permit persons to whom the
 ## Software is furnished to do so, subject to the following conditions:
 ##
 ##  - Redistributions of source code must retain the above copyright notice,
 ##    this list of conditions and the following disclaimers.
 ##  - Redistributions in binary form must reproduce the above copyright
 ##    notice, this list of conditions and the following disclaimers in
-##    the documentation and#or other materials provided with the distribution.
+##    the documentation and/or other materials provided with the distribution.
 ##  - Neither the names of Advanced Micro Devices, Inc,
 ##    nor the names of its contributors may be used to endorse or promote
 ##    products derived from this Software without specific prior written
@@ -40,7 +40,7 @@
 ##
 ################################################################################
 
-cmake_minimum_required ( VERSION 3.5.0 )
+cmake_minimum_required ( VERSION 3.7 )
 
 # Flag to abort before executing after default initialization of cache variables
 set (QUIT 0)
@@ -49,15 +49,20 @@ set (QUIT 0)
 find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
 # Device libs doesn't support find_package yet.
-# FIXME: HINTS should not use CMAKE_INSTALL_PREFIX
+set(PREFIX_HINTS "")
+foreach(hint "/amdgcn/bitcode" "/lib/bitcode" "/lib/x86_64/bitcode")
+  foreach(path ${CMAKE_PREFIX_PATH})
+    string(APPEND path ${hint})
+    list(APPEND PREFIX_HINTS ${path})
+  endforeach(path)
+endforeach(hint)
+
 get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.bc" "opencl.amdgcn.bc"
   HINTS
     "${CMAKE_INSTALL_PREFIX}/amdgcn/bitcode"
     "${CMAKE_INSTALL_PREFIX}/lib/bitcode"
     "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
-    "${CMAKE_PREFIX_PATH}/amdgcn/bitcode"
-    "${CMAKE_PREFIX_PATH}/lib/bitcode"
-    "${CMAKE_PREFIX_PATH}/lib/x86_64/bitcode"
+    "${PREFIX_HINTS}"
   PATHS
     "/opt/rocm/amdgcn/bitcode"
     "/opt/rocm/lib/bitcode"
@@ -69,7 +74,7 @@ endif()
 
 # Determine the target devices if not specified
 if (NOT DEFINED TARGET_DEVICES)
-  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1033")
+  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx1010;gfx1011;gfx1012;gfx1030;gfx1031;gfx1032;gfx1033;gfx1034;gfx1035")
 endif()
 set( TARGET_DEVICES ${TARGET_DEVICES} CACHE STRING "Build targets" FORCE )
 

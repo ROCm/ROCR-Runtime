@@ -114,6 +114,10 @@ hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
                                                const uint32_t* cu_mask);
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                               uint32_t* cu_mask);
+
+// Mirrors Amd Extension Apis
 hsa_status_t
     hsa_amd_memory_pool_get_info(hsa_amd_memory_pool_t memory_pool,
                                  hsa_amd_memory_pool_info_t attribute,
@@ -200,12 +204,12 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
 hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info,
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info,
                                           void* (*alloc)(size_t), uint32_t* num_agents_accessible,
                                           hsa_agent_t** accessible);
 
 // Mirrors Amd Extension Apis
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata);
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userdata);
 
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_ipc_memory_create(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle);

@@ -535,16 +535,30 @@ hsa_status_t hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
   CATCH;
 }
 
-hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
-                                               uint32_t num_cu_mask_count,
-                                               const uint32_t* cu_mask) {
+hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                       const uint32_t* cu_mask) {
+  TRY;
+  IS_OPEN();
+
+  core::Queue* cmd_queue = core::Queue::Convert(queue);
+  IS_VALID(cmd_queue);
+  if (num_cu_mask_count != 0) IS_BAD_PTR(cu_mask);
+  if (num_cu_mask_count % 32 != 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  return cmd_queue->SetCUMasking(num_cu_mask_count, cu_mask);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
+                                       uint32_t* cu_mask) {
   TRY;
   IS_OPEN();
   IS_BAD_PTR(cu_mask);
 
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
-  return cmd_queue->SetCUMasking(num_cu_mask_count, cu_mask);
+  if ((num_cu_mask_count == 0) || (num_cu_mask_count % 32 != 0))
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  return cmd_queue->GetCUMasking(num_cu_mask_count, cu_mask);
   CATCH;
 }
 
@@ -818,7 +832,7 @@ hsa_status_t hsa_amd_interop_unmap_buffer(void* ptr) {
   CATCH;
 }
 
-hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
+hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                                   uint32_t* num_accessible, hsa_agent_t** accessible) {
   TRY;
   IS_OPEN();
@@ -828,7 +842,7 @@ hsa_status_t hsa_amd_pointer_info(void* ptr, hsa_amd_pointer_info_t* info, void*
   CATCH;
 }
 
-hsa_status_t hsa_amd_pointer_info_set_userdata(void* ptr, void* userdata) {
+hsa_status_t hsa_amd_pointer_info_set_userdata(const void* ptr, void* userdata) {
   TRY;
   IS_OPEN();
   IS_BAD_PTR(ptr);
