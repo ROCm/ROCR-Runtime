@@ -355,17 +355,16 @@ set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
 
 set(CPACK_RPM_PACKAGE_REQUIRES "libdrm-devel, rocm-core")
 
-# TODO: Implement this effectively
 # NOTE: CentOS/RHEL <8 and SUSE <10  have no concept of "Suggests"
 # so a "suggests" field will just cause rpm installation to fail
 # If the HSAKMT_REQUIRES_LIBDRM variable is true in the build
 # environment, we use REQUIRES. Otherwise we use SUGGESTS
 # For the distros above, this variable should be set to true
-#if(DEFINED HSAKMT_REQUIRES_LIBDRM)
-#  string ( APPEND CPACK_RPM_PACKAGE_REQUIRES ", libdrm-amdgpu" )
-#else()
-#  set(CPACK_RPM_PACKAGE_SUGGESTS "libdrm-amdgpu" )
-#endif()
+if(DEFINED HSAKMT_REQUIRES_LIBDRM)
+  string ( APPEND CPACK_RPM_PACKAGE_REQUIRES ", libdrm-amdgpu" )
+else()
+  set(CPACK_RPM_PACKAGE_SUGGESTS "libdrm-amdgpu" )
+endif()
 
 # Set the names now using CPACK utility
 set(CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
