@@ -204,11 +204,6 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	/* Raven */
 	{ 0x15DD, 9, 0, 2, "Raven" },
 	{ 0x15D8, 9, 0, 2, "Raven" },
-	/* Renoir */
-	{ 0x15E7, 9, 0, 2, "Renoir" },
-	{ 0x1636, 9, 0, 2, "Renoir" },
-	{ 0x1638, 9, 0, 2, "Renoir" },
-	{ 0x164C, 9, 0, 2, "Renoir" },
 	/* Vega20 */
 	{ 0x66A0, 9, 0, 6, "Vega20" },
 	{ 0x66A1, 9, 0, 6, "Vega20" },
@@ -227,6 +222,11 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x740C, 9, 0, 10, "Aldebaran" },
 	{ 0x740F, 9, 0, 10, "Aldebaran" },
 	{ 0x7410, 9, 0, 10, "Aldebaran" },
+	/* Renoir */
+	{ 0x15E7, 9, 0, 12, "Renoir" },
+	{ 0x1636, 9, 0, 12, "Renoir" },
+	{ 0x1638, 9, 0, 12, "Renoir" },
+	{ 0x164C, 9, 0, 12, "Renoir" },
 	/* Navi10 */
 	{ 0x7310, 10, 1, 0, "Navi10" },
 	{ 0x7312, 10, 1, 0, "Navi10" },
