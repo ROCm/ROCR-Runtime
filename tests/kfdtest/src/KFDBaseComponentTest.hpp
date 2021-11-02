@@ -35,6 +35,7 @@
 #include "OSWrapper.hpp"
 #include "KFDTestUtil.hpp"
 #include "Assemble.hpp"
+#include "ShaderStore.hpp"
 
 //  @class KFDBaseComponentTest
 class KFDBaseComponentTest : public testing::Test {
