@@ -26,62 +26,6 @@
 #include "PM4Packet.hpp"
 #include "Dispatch.hpp"
 
-/* Shader to initialize gws counter to 1 */
-static const char* GwsInitIsa_gfx9_10 = R"(
-        .text
-        s_mov_b32 m0, 0
-        s_nop 0
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_waitcnt 0
-        v_mov_b32 v0, s16
-        s_waitcnt 0
-        ds_gws_init v0 offset:0 gds
-        s_waitcnt 0
-        s_endpgm
-)";
-
-/* Atomically increase a value in memory
- * This is expected to be executed from
- * multiple work groups simultaneously.
- * GWS semaphore is used to guarantee
- * the operation is atomic.
- */
-static const char* AtomicIncreaseIsa_gfx9 = R"(
-        .text
-        // Assume src address in s0, s1
-        s_mov_b32 m0, 0
-        s_nop 0
-        ds_gws_sema_p offset:0 gds
-        s_waitcnt 0
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_waitcnt 0
-        s_add_u32 s16, s16, 1
-        s_store_dword s16, s[0:1], 0x0 glc
-        s_waitcnt lgkmcnt(0)
-        ds_gws_sema_v offset:0 gds
-        s_waitcnt 0
-        s_endpgm
-)";
-
-static const char* AtomicIncreaseIsa_gfx10 = R"(
-        .text
-        // Assume src address in s0, s1
-        s_mov_b32 m0, 0
-        s_mov_b32 exec_lo, 0x1
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        ds_gws_sema_p offset:0 gds
-        s_waitcnt 0
-        flat_load_dword v2, v[0:1] glc dlc
-        s_waitcnt 0
-        v_add_nc_u32 v2, v2, 1
-        flat_store_dword v[0:1], v2
-        s_waitcnt_vscnt null, 0
-        ds_gws_sema_v offset:0 gds
-        s_waitcnt 0
-        s_endpgm
-)";
-
 void KFDGWSTest::SetUp() {
     ROUTINE_START
 
@@ -142,7 +86,7 @@ TEST_F(KFDGWSTest, Semaphore) {
 			    pNodeProperties->NumGws,&firstGWS));
     EXPECT_EQ(0, firstGWS);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(GwsInitIsa_gfx9_10, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(GwsInitIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch0(isaBuffer);
     buffer.Fill(numResources, 0, 4);
@@ -150,13 +94,7 @@ TEST_F(KFDGWSTest, Semaphore) {
     dispatch0.Submit(queue);
     dispatch0.Sync();
 
-    const char *pAtomicIncreaseIsa;
-    if (m_FamilyId <= FAMILY_AL)
-        pAtomicIncreaseIsa = AtomicIncreaseIsa_gfx9;
-    else
-        pAtomicIncreaseIsa = AtomicIncreaseIsa_gfx10;
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pAtomicIncreaseIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(GwsAtomicIncreaseIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<void*>(), NULL);

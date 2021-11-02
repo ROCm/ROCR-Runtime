@@ -542,3 +542,59 @@ const char *ReadMemoryIsa = R"(
         s_waitcnt       vmcnt(0) & lgkmcnt(0)       // wait for memory writes to finish
         s_endpgm
 )";
+
+/**
+ * KFDGWSTest
+ */
+
+/* Shader to initialize gws counter to 1 */
+const char *GwsInitIsa = R"(
+        .text
+        s_mov_b32 m0, 0
+        s_nop 0
+        s_load_dword s16, s[0:1], 0x0 glc
+        s_waitcnt 0
+        v_mov_b32 v0, s16
+        s_waitcnt 0
+        ds_gws_init v0 offset:0 gds
+        s_waitcnt 0
+        s_endpgm
+)";
+
+/* Atomically increase a value in memory
+ * This is expected to be executed from
+ * multiple work groups simultaneously.
+ * GWS semaphore is used to guarantee
+ * the operation is atomic.
+ */
+const char *GwsAtomicIncreaseIsa = R"(
+        .text
+        // Assume src address in s0, s1
+        .if (.amdgcn.gfx_generation_number >= 10)
+            s_mov_b32 m0, 0
+            s_mov_b32 exec_lo, 0x1
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            ds_gws_sema_p offset:0 gds
+            s_waitcnt 0
+            flat_load_dword v2, v[0:1] glc dlc
+            s_waitcnt 0
+            v_add_nc_u32 v2, v2, 1
+            flat_store_dword v[0:1], v2
+            s_waitcnt_vscnt null, 0
+            ds_gws_sema_v offset:0 gds
+        .else
+            s_mov_b32 m0, 0
+            s_nop 0
+            ds_gws_sema_p offset:0 gds
+            s_waitcnt 0
+            s_load_dword s16, s[0:1], 0x0 glc
+            s_waitcnt 0
+            s_add_u32 s16, s16, 1
+            s_store_dword s16, s[0:1], 0x0 glc
+            s_waitcnt lgkmcnt(0)
+            ds_gws_sema_v offset:0 gds
+        .endif
+        s_waitcnt 0
+        s_endpgm
+)";
