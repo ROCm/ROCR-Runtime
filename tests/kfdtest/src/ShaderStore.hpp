@@ -30,4 +30,13 @@ extern const char *CopyDwordIsa;
 extern const char *InfiniteLoopIsa;
 extern const char *AtomicIncIsa;
 
+/* KFDMemoryTest */
+extern const char *ScratchCopyDwordIsa;
+extern const char *PollMemoryIsa;
+extern const char *PollNCMemoryIsa;
+extern const char *CopyOnSignalIsa;
+extern const char *PollAndCopyIsa;
+extern const char *WriteFlagAndValueIsa;
+extern const char *WriteAndSignalIsa;
+
 #endif  // _SHADERSTORE_H_

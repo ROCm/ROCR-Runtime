@@ -39,291 +39,16 @@
 #include "SDMAPacket.hpp"
 #include "linux/kfd_ioctl.h"
 
-static const char* ScratchCopyDwordIsa_gfx8 = R"(
-        .text
-        // Copy the parameters from scalar registers to vector registers
-        v_mov_b32_e32 v0, s0
-        v_mov_b32_e32 v1, s1
-        v_mov_b32_e32 v2, s2
-        v_mov_b32_e32 v3, s3
-        // Setup the scratch parameters. This assumes a single 16-reg block
-        s_mov_b32 flat_scratch_lo, 8
-        s_mov_b32 flat_scratch_hi, 0
-        // Copy a dword between the passed addresses
-        flat_load_dword v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        flat_store_dword v[2:3], v4 slc
-        s_endpgm
-)";
-static const char* ScratchCopyDwordIsa_gfx9 = R"(
-        .text
-        // Copy the parameters from scalar registers to vector registers
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v2, s2
-        v_mov_b32 v3, s3
-        // Setup the scratch parameters. This assumes a single 16-reg block
-        s_mov_b32 flat_scratch_lo, s4
-        s_mov_b32 flat_scratch_hi, s5
-        // Copy a dword between the passed addresses
-        flat_load_dword v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        flat_store_dword v[2:3], v4 slc
-        s_endpgm
-)";
-static const char* ScratchCopyDwordIsa_gfx10 = R"(
-        .text
-        // Copy the parameters from scalar registers to vector registers
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v2, s2
-        v_mov_b32 v3, s3
-        // Setup the scratch parameters. This assumes a single 16-reg block
-        s_setreg_b32 hwreg(HW_REG_FLAT_SCR_LO), s4
-        s_setreg_b32 hwreg(HW_REG_FLAT_SCR_HI), s5
-        // Copy a dword between the passed addresses
-        flat_load_dword v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        flat_store_dword v[2:3], v4 slc
-        s_endpgm
-)";
-static const char* ScratchCopyDwordIsa_gfx9aldbrn = R"(
-        .text
-        // Copy the parameters from scalar registers to vector registers
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v2, s2
-        v_mov_b32 v3, s3
-        // Setup the scratch parameters. This assumes a single 16-reg block
-        s_mov_b32 flat_scratch_lo, s4
-        s_mov_b32 flat_scratch_hi, s5
-        // Copy a dword between the passed addresses
-        flat_load_dword v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        flat_store_dword v[2:3], v4 slc
-        s_endpgm
-)";
-
-/* Continuously poll src buffer and check buffer value
- * After src buffer is filled with specific value (0x5678,
- * by host program), fill dst buffer with specific
- * value(0x5678) and quit
- */
-static const char* PollMemoryIsa_gfx9 = R"(
-        .text
-        // Assume src address in s0, s1, and dst address in s2, s3
-        s_movk_i32 s18, 0x5678
-        LOOP:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   LOOP
-        s_store_dword s18, s[2:3], 0x0 glc
-        s_endpgm
-)";
-
-/* Similar to PollMemoryIsa_gfx9 except that the buffer
- * polled can be Non-coherant memory. SCC system-level
- * cache coherence is not supported in scalar (smem) path.
- * Use vmem operations with scc
- */
-static const char* PollNCMemoryIsa_gfx9 = R"(
-        .text
-        // Assume src address in s0, s1, and dst address in s2, s3
-        v_mov_b32 v6, 0x5678
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        LOOP:
-        flat_load_dword v4, v[0:1] scc
-        v_cmp_eq_u32 vcc, v4, v6
-        s_cbranch_vccz   LOOP
-        v_mov_b32 v0, s2
-        v_mov_b32 v1, s3
-        flat_store_dword v[0:1], v6 scc
-        s_endpgm
-)";
-
-static const char* PollMemoryIsa_gfx10 = R"(
-        .text
-        // Assume src address in s0, s1, and dst address in s2, s3
-        s_movk_i32 s18, 0x5678
-        v_mov_b32 v0, s2
-        v_mov_b32 v1, s3
-        v_mov_b32 v2, 0x5678
-        LOOP:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   LOOP
-        flat_store_dword v[0:1], v2 slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_endpgm
-)";
-
-/* Input: A buffer of at least 3 dwords.
- * DW0: used as a signal. 0xcafe means it is signaled
- * DW1: Input buffer for device to read.
- * DW2: Output buffer for device to write.
- * Once receive signal, device will copy DW1 to DW2
- * This shader continously poll the signal buffer,
- * Once signal buffer is signaled, it copies input buffer
- * to output buffer
- */
-static const char* CopyOnSignalIsa_gfx9 = R"(
-        .text
-        // Assume input buffer in s0, s1
-        s_mov_b32 s18, 0xcafe
-        POLLSIGNAL:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   POLLSIGNAL
-        s_load_dword s17, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_store_dword s17, s[0:1], 0x8 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_endpgm
-)";
-
-static const char* CopyOnSignalIsa_gfx10 = R"(
-        .text
-        // Assume input buffer in s0, s1
-        s_add_u32 s2, s0, 0x8
-        s_addc_u32 s3, s1, 0x0
-        s_mov_b32 s18, 0xcafe
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v4, s2
-        v_mov_b32 v5, s3
-        POLLSIGNAL:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   POLLSIGNAL
-        s_load_dword s17, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        v_mov_b32 v2, s17
-        flat_store_dword v[4:5], v2 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_endpgm
-)";
-
-/* Input0: A buffer of at least 2 dwords.
- * DW0: used as a signal. Write 0xcafe to signal
- * DW1: Write to this buffer for other device to read.
- * Input1: mmio base address
- */
-static const char* WriteAndSignalIsa_gfx9 = R"(
-        .text
-        // Assume input buffer in s0, s1
-        s_mov_b32 s18, 0xbeef
-        s_store_dword s18, s[0:1], 0x4 glc
-        s_mov_b32 s18, 0x1
-        s_store_dword s18, s[2:3], 0 glc
-        s_mov_b32 s18, 0xcafe
-        s_store_dword s18, s[0:1], 0x0 glc
-        s_endpgm
-)";
-
-/* Continuously poll the flag at src buffer
- * After the flag of s[0:1] is 1 filled,
- * copy the value from s[0:1]+4 to dst buffer
- */
-static const char* PollAndCopyIsa_gfx9 = R"(
-        .text
-        // Assume src buffer in s[0:1] and dst buffer in s[2:3]
-        s_movk_i32 s18, 0x1
-        LOOP:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   LOOP
-        s_load_dword s17, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_store_dword s17, s[2:3], 0x0 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_endpgm
-)";
-
-static const char* PollAndCopyIsa_gfx9aldbrn = R"(
-        .text
-        // Assume src buffer in s[0:1] and dst buffer in s[2:3]
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v18, 0x1
-        LOOP:
-        flat_load_dword v16, v[0:1] glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        v_cmp_eq_i32 vcc, v16, v18
-        s_cbranch_vccz   LOOP
-        buffer_invl2
-        s_load_dword s17, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_store_dword s17, s[2:3], 0x0 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        buffer_wbl2
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_endpgm
-)";
-
-/* Input0: A buffer of at least 2 dwords.
- * DW0: used as a signal. Write 0x1 to signal
- * DW1: Write the value from 2nd input buffer
- *      for other device to read.
- * Input1: A buffer of at least 2 dwords.
- * DW0: used as the value to be written.
- */
-static const char* WriteFlagAndValueIsa_gfx9aldbrn = R"(
-        .text
-        // Assume two inputs buffer in s[0:1] and s[2:3]
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        s_load_dword s18, s[2:3], 0x0 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_store_dword s18, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        buffer_wbl2
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        v_mov_b32 v16, 0x1
-        flat_store_dword v[0:1], v16 glc
-        s_endpgm
-)";
-
-static const char* WriteAndSignalIsa_gfx10 = R"(
-        .text
-        // Assume input buffer in s0, s1
-        s_add_u32 s4, s0, 0x4
-        s_addc_u32 s5, s1, 0x0
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        v_mov_b32 v2, s2
-        v_mov_b32 v3, s3
-        v_mov_b32 v4, s4
-        v_mov_b32 v5, s5
-        v_mov_b32 v18, 0xbeef
-        flat_store_dword v[4:5], v18 glc
-        v_mov_b32 v18, 0x1
-        flat_store_dword v[2:3], v18 glc
-        v_mov_b32 v18, 0xcafe
-        flat_store_dword v[0:1], v18 glc
-        s_endpgm
-)";
-
-/* These PollMemoryIsa_gfx9, CopyOnSignalIsa_gfx9,
- * WriteAndSignalIsa_gfx9 shaders can be used by both gfx9 and gfx10
- */
-
 void KFDMemoryTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
-
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
     ROUTINE_END
 }
 
 void KFDMemoryTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -442,11 +167,9 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     const char *pReadMemory;
     if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode))
         /* On A+A system memory is mapped as NC */
-        pReadMemory = PollNCMemoryIsa_gfx9;
-    else if (m_FamilyId < FAMILY_NV)
-        pReadMemory = PollMemoryIsa_gfx9;
+        pReadMemory = PollNCMemoryIsa;
     else
-        pReadMemory = PollMemoryIsa_gfx10;
+        pReadMemory = PollMemoryIsa;
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pReadMemory, isaBuffer.As<char*>()));
 
@@ -605,7 +328,8 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
 
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     /* First submit just so the queues are not empty, and to get the
      * TLB populated (in case we need to flush TLBs somewhere after
@@ -786,17 +510,7 @@ TEST_F(KFDMemoryTest, FlatScratchAccess) {
     // Initialize the srcBuffer to some fixed value
     srcMemBuffer.Fill(0x01010101);
 
-    const char *pScratchCopyDwordIsa;
-    if (m_FamilyId < FAMILY_AI)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx8;
-    else if (m_FamilyId < FAMILY_AL)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx9;
-    else if (m_FamilyId == FAMILY_AL)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx9aldbrn;
-    else
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx10;
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pScratchCopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ScratchCopyDwordIsa, isaBuffer.As<char*>()));
 
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.GetNodeProperties(defaultGPUNode);
 
@@ -1660,17 +1374,7 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     // dstBuffer is cpu accessible gtt memory
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
 
-    const char *pScratchCopyDwordIsa;
-    if (m_FamilyId < FAMILY_AI)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx8;
-    else if (m_FamilyId < FAMILY_AL)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx9;
-    else if (m_FamilyId == FAMILY_AL)
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx9aldbrn;
-    else
-        pScratchCopyDwordIsa = ScratchCopyDwordIsa_gfx10;
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pScratchCopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ScratchCopyDwordIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(mem0, dstBuffer.As<void*>());
@@ -2042,13 +1746,8 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    const char *pCopyOnSignalIsa;
-    if (m_FamilyId < FAMILY_NV)
-        pCopyOnSignalIsa = CopyOnSignalIsa_gfx9;
-    else
-        pCopyOnSignalIsa = CopyOnSignalIsa_gfx10;
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pCopyOnSignalIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyOnSignalIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(buffer, NULL);
@@ -2169,13 +1868,8 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(nodes[0]));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, nodes[0], true/*zero*/, false/*local*/, true/*exec*/);
-    const char *pCopyOnSignalIsa;
-    if (m_FamilyId < FAMILY_NV)
-        pCopyOnSignalIsa = CopyOnSignalIsa_gfx9;
-    else
-        pCopyOnSignalIsa = CopyOnSignalIsa_gfx10;
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pCopyOnSignalIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyOnSignalIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer, NULL);
@@ -2184,13 +1878,8 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     PM4Queue queue0;
     ASSERT_SUCCESS(queue0.Create(nodes[1]));
     HsaMemoryBuffer isaBuffer0(PAGE_SIZE, nodes[1], true/*zero*/, false/*local*/, true/*exec*/);
-    const char *pWriteAndSignalIsa;
-    if (m_FamilyId < FAMILY_NV)
-        pWriteAndSignalIsa = WriteAndSignalIsa_gfx9;
-    else
-        pWriteAndSignalIsa = WriteAndSignalIsa_gfx10;
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pWriteAndSignalIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteAndSignalIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch0(isaBuffer0);
     dispatch0.SetArgs(buffer, mmioBase);
@@ -2244,7 +1933,7 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnSdmaWrite) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa_gfx9, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<int*>(), buffer.As<int*>()+dwLocation);
@@ -2299,7 +1988,7 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnCPUWrite) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa_gfx9, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer, buffer+100);
@@ -2363,7 +2052,7 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnRemoteWrite) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa_gfx9, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<int*>(), buffer.As<int*>()+dwLocation);
@@ -2379,7 +2068,9 @@ TEST_F(KFDMemoryTest, CacheInvalidateOnRemoteWrite) {
     ASSERT_SUCCESS(queue1.Create(nondefaultNode));
     buffer.Fill(0x5678, sdmaQueue, dwLocation1*sizeof(int), 4);
     HsaMemoryBuffer isaBuffer1(PAGE_SIZE, nondefaultNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer1);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+
     Dispatch dispatch1(isaBuffer1);
     dispatch1.SetArgs(buffer.As<int*>()+dwLocation1, buffer.As<int*>());
     dispatch1.Submit(queue1);
@@ -2446,7 +2137,7 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithRemoteGPU) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollAndCopyIsa_gfx9aldbrn, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollAndCopyIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer.As<char *>(), buffer.As<char *>()+dwLocation);
@@ -2463,7 +2154,7 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithRemoteGPU) {
     ASSERT_SUCCESS(queue1.Create(nondefaultNode));
     HsaMemoryBuffer isaBuffer1(PAGE_SIZE, nondefaultNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteFlagAndValueIsa_gfx9aldbrn, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteFlagAndValueIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch1(isaBuffer1);
     dispatch1.SetArgs(buffer.As<char *>(), buffer.As<char *>()+dwSource);
@@ -2519,7 +2210,7 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithCPU) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollAndCopyIsa_gfx9aldbrn, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollAndCopyIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(buffer, buffer+dwLocation);
@@ -2559,11 +2250,16 @@ TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
         return;
     }
 
-    unsigned int *fineBuffer = NULL;
-    unsigned int tmp;
-
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     const int dwLocation = 0x80;
+
+    if (!m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode)) {
+        LOG() << "Skipping test: XGMI link to CPU is required." << std::endl;
+        return;
+    }
+
+    unsigned int *fineBuffer = NULL;
+    unsigned int tmp;
 
     ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode /* system */, PAGE_SIZE, m_MemoryFlags,
                        reinterpret_cast<void**>(&fineBuffer)));
@@ -2578,13 +2274,7 @@ TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    const char* pPollAndCopyIsa;
-    if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode))
-        pPollAndCopyIsa = PollAndCopyIsa_gfx9aldbrn;
-    else
-        pPollAndCopyIsa = PollAndCopyIsa_gfx9;
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pPollAndCopyIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollAndCopyIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch(isaBuffer);
     dispatch.SetArgs(fineBuffer, fineBuffer+dwLocation);
