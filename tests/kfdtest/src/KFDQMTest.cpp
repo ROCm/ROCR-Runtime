@@ -34,116 +34,16 @@
 
 #include "Dispatch.hpp"
 
-/* A simple isa loop program with dense mathematic operations
- * s1 controls the number iterations of the loop
- * This shader can be used by GFX8, GFX9 and GFX10
- */
-static const char* LoopIsa = R"(
-        .text
-        s_movk_i32    s0, 0x0008
-        s_movk_i32    s1, 0x00ff
-        v_mov_b32     v0, 0
-        v_mov_b32     v1, 0
-        v_mov_b32     v2, 0
-        v_mov_b32     v3, 0
-        v_mov_b32     v4, 0
-        v_mov_b32     v5, 0
-        v_mov_b32     v6, 0
-        v_mov_b32     v7, 0
-        v_mov_b32     v8, 0
-        v_mov_b32     v9, 0
-        v_mov_b32     v10, 0
-        v_mov_b32     v11, 0
-        v_mov_b32     v12, 0
-        v_mov_b32     v13, 0
-        v_mov_b32     v14, 0
-        v_mov_b32     v15, 0
-        v_mov_b32     v16, 0
-        LOOP:
-        s_mov_b32     s8, s4
-        s_mov_b32     s9, s1
-        s_mov_b32     s10, s6
-        s_mov_b32     s11, s7
-        s_cmp_le_i32  s1, s0
-        s_cbranch_scc1  END_OF_PGM
-        s_buffer_load_dwordx8  s[8:15], s[8:11], 0x10
-        v_add_f32     v0, 2.0, v0
-        v_cvt_f32_i32 v17, s1
-        s_waitcnt     lgkmcnt(0)
-        v_add_f32     v18, s8, v17
-        v_add_f32     v19, s9, v17
-        v_add_f32     v20, s10, v17
-        v_add_f32     v21, s11, v17
-        v_add_f32     v22, s12, v17
-        v_add_f32     v23, s13, v17
-        v_add_f32     v24, s14, v17
-        v_add_f32     v17, s15, v17
-        v_log_f32     v25, v18
-        v_mul_f32     v25, v22, v25
-        v_exp_f32     v25, v25
-        v_log_f32     v26, v19
-        v_mul_f32     v26, v23, v26
-        v_exp_f32     v26, v26
-        v_log_f32     v27, v20
-        v_mul_f32     v27, v24, v27
-        v_exp_f32     v27, v27
-        v_log_f32     v28, v21
-        v_mul_f32     v28, v17, v28
-        v_exp_f32     v28, v28
-        v_add_f32     v5, v5, v25
-        v_add_f32     v6, v6, v26
-        v_add_f32     v7, v7, v27
-        v_add_f32     v8, v8, v28
-        v_mul_f32     v18, 0x3fb8aa3b, v18
-        v_exp_f32     v18, v18
-        v_mul_f32     v19, 0x3fb8aa3b, v19
-        v_exp_f32     v19, v19
-        v_mul_f32     v20, 0x3fb8aa3b, v20
-        v_exp_f32     v20, v20
-        v_mul_f32     v21, 0x3fb8aa3b, v21
-        v_exp_f32     v21, v21
-        v_add_f32     v9, v9, v18
-        v_add_f32     v10, v10, v19
-        v_add_f32     v11, v11, v20
-        v_add_f32     v12, v12, v21
-        v_sqrt_f32    v18, v22
-        v_sqrt_f32    v19, v23
-        v_sqrt_f32    v20, v24
-        v_sqrt_f32    v21, v17
-        v_add_f32     v13, v13, v18
-        v_add_f32     v14, v14, v19
-        v_add_f32     v15, v15, v20
-        v_add_f32     v16, v16, v21
-        v_rsq_f32     v18, v22
-        v_rsq_f32     v19, v23
-        v_rsq_f32     v20, v24
-        v_rsq_f32     v17, v17
-        v_add_f32     v1, v1, v18
-        v_add_f32     v2, v2, v19
-        v_add_f32     v3, v3, v20
-        v_add_f32     v4, v4, v17
-        s_add_u32     s0, s0, 1
-        s_branch      LOOP
-        END_OF_PGM:
-        s_endpgm
-)";
-
 void KFDQMTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
-
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
     ROUTINE_END
 }
 
 void KFDQMTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -1134,7 +1034,7 @@ TEST_F(KFDQMTest, EmptyDispatch) {
 
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    m_pIsaGen->GetNoopIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(LoopIsa, isaBuffer.As<char*>()));
 
     SyncDispatch(isaBuffer, NULL, NULL);
 
@@ -1153,7 +1053,7 @@ TEST_F(KFDQMTest, SimpleWriteDispatch) {
 
     srcBuffer.Fill(0x01010101);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     SyncDispatch(isaBuffer, srcBuffer.As<void*>(), destBuffer.As<void*>());
 
@@ -1188,7 +1088,7 @@ TEST_F(KFDQMTest, MultipleCpQueuesStressDispatch) {
 
     destBuffer.Fill(0xFF);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     for (i = 0; i < MAX_CP_QUEUES; ++i)
         ASSERT_SUCCESS(queues[i].Create(defaultGPUNode)) << " QueueId=" << i;
@@ -1527,7 +1427,7 @@ TEST_F(KFDQMTest, Atomics) {
 
     PM4Queue queue;
 
-    m_pIsaGen->GetAtomicIncIsa(isaBuf);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(AtomicIncIsa, isaBuf.As<char*>()));
 
     Dispatch dispatch(isaBuf);
     dispatch.SetArgs(destBuf.As<void*>(), NULL);
@@ -1592,10 +1492,12 @@ TEST_F(KFDQMTest, mGPUShareBO) {
 
     srcNodeMem.Fill(0x05050505);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBufferSrc);
+    ASSERT_SUCCESS(m_pAsm->RunAssemble(CopyDwordIsa));
+
+    m_pAsm->CopyInstrStream(isaBufferSrc.As<char*>());
     SyncDispatch(isaBufferSrc, srcNodeMem.As<void*>(), shared_addr.As<void *>(), src_node);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBufferDst);
+    m_pAsm->CopyInstrStream(isaBufferDst.As<char*>());
     SyncDispatch(isaBufferDst, shared_addr.As<void *>(), dstNodeMem.As<void*>(), dst_node);
 
     EXPECT_EQ(dstNodeMem.As<unsigned int*>()[0], 0x05050505);
