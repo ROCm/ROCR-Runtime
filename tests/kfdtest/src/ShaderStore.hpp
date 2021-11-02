@@ -45,4 +45,7 @@ extern const char *LoopIsa;
 /* KFDCWSRTest */
 extern const char *IterateIsa;
 
+/* KFDEvictTest */
+extern const char *ReadMemoryIsa;
+
 #endif  // _SHADERSTORE_H_
