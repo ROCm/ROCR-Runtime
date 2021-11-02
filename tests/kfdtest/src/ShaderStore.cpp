@@ -63,3 +63,228 @@ const char *AtomicIncIsa = R"(
         s_waitcnt 0
         s_endpgm
 )";
+
+/**
+ * KFDMemoryTest
+ */
+
+const char *ScratchCopyDwordIsa = R"(
+        .text
+        // Copy the parameters from scalar registers to vector registers
+        .if (.amdgcn.gfx_generation_number >= 9)
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            v_mov_b32 v2, s2
+            v_mov_b32 v3, s3
+        .else
+            v_mov_b32_e32 v0, s0
+            v_mov_b32_e32 v1, s1
+            v_mov_b32_e32 v2, s2
+            v_mov_b32_e32 v3, s3
+        .endif
+        // Setup the scratch parameters. This assumes a single 16-reg block
+        .if (.amdgcn.gfx_generation_number >= 10)
+            s_setreg_b32 hwreg(HW_REG_FLAT_SCR_LO), s4
+            s_setreg_b32 hwreg(HW_REG_FLAT_SCR_HI), s5
+        .elseif (.amdgcn.gfx_generation_number == 9)
+            s_mov_b32 flat_scratch_lo, s4
+            s_mov_b32 flat_scratch_hi, s5
+        .else
+            s_mov_b32 flat_scratch_lo, 8
+            s_mov_b32 flat_scratch_hi, 0
+        .endif
+        // Copy a dword between the passed addresses
+        flat_load_dword v4, v[0:1] slc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        flat_store_dword v[2:3], v4 slc
+        s_endpgm
+)";
+
+/* Continuously poll src buffer and check buffer value
+ * After src buffer is filled with specific value (0x5678,
+ * by host program), fill dst buffer with specific
+ * value(0x5678) and quit
+ */
+const char *PollMemoryIsa = R"(
+        .text
+        // Assume src address in s0, s1, and dst address in s2, s3
+        s_movk_i32 s18, 0x5678
+        .if (.amdgcn.gfx_generation_number >= 10)
+            v_mov_b32 v0, s2
+            v_mov_b32 v1, s3
+            v_mov_b32 v2, 0x5678
+        .endif
+        LOOP:
+        s_load_dword s16, s[0:1], 0x0 glc
+        s_cmp_eq_i32 s16, s18
+        s_cbranch_scc0   LOOP
+        .if (.amdgcn.gfx_generation_number >= 10)
+            flat_store_dword v[0:1], v2 slc
+        .else
+            s_store_dword s18, s[2:3], 0x0 glc
+        .endif
+        s_endpgm
+)";
+
+/* Similar to PollMemoryIsa except that the buffer
+ * polled can be Non-coherant memory. SCC system-level
+ * cache coherence is not supported in scalar (smem) path.
+ * Use vmem operations with scc
+ *
+ * Note: Only works on Aldebaran, and even then the scc modifier
+ *       has been defeatured. This shader is more or less
+ *       deprecated.
+ */
+const char *PollNCMemoryIsa = R"(
+        .text
+        // Assume src address in s0, s1, and dst address in s2, s3
+        v_mov_b32 v6, 0x5678
+        v_mov_b32 v0, s0
+        v_mov_b32 v1, s1
+        LOOP:
+        flat_load_dword v4, v[0:1] scc
+        v_cmp_eq_u32 vcc, v4, v6
+        s_cbranch_vccz   LOOP
+        v_mov_b32 v0, s2
+        v_mov_b32 v1, s3
+        flat_store_dword v[0:1], v6 scc
+        s_endpgm
+)";
+
+/* Input: A buffer of at least 3 dwords.
+ * DW0: used as a signal. 0xcafe means it is signaled
+ * DW1: Input buffer for device to read.
+ * DW2: Output buffer for device to write.
+ * Once receive signal, device will copy DW1 to DW2
+ * This shader continously poll the signal buffer,
+ * Once signal buffer is signaled, it copies input buffer
+ * to output buffer
+ */
+const char *CopyOnSignalIsa = R"(
+        .text
+        // Assume input buffer in s0, s1
+        .if (.amdgcn.gfx_generation_number >= 10)
+            s_add_u32 s2, s0, 0x8
+            s_addc_u32 s3, s1, 0x0
+            s_mov_b32 s18, 0xcafe
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            v_mov_b32 v4, s2
+            v_mov_b32 v5, s3
+        .else
+            s_mov_b32 s18, 0xcafe
+        .endif
+        POLLSIGNAL:
+        s_load_dword s16, s[0:1], 0x0 glc
+        s_cmp_eq_i32 s16, s18
+        s_cbranch_scc0   POLLSIGNAL
+        s_load_dword s17, s[0:1], 0x4 glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        .if (.amdgcn.gfx_generation_number >= 10)
+            v_mov_b32 v2, s17
+            flat_store_dword v[4:5], v2 glc
+        .else
+            s_store_dword s17, s[0:1], 0x8 glc
+        .endif
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_endpgm
+)";
+
+/* Continuously poll the flag at src buffer
+ * After the flag of s[0:1] is 1 filled,
+ * copy the value from s[0:1]+4 to dst buffer
+ *
+ * Note: Only works on GFX9 (only used in
+ *       aldebaran tests)
+ */
+const char *PollAndCopyIsa = R"(
+        .text
+        // Assume src buffer in s[0:1] and dst buffer in s[2:3]
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_stepping == 10)
+            // Path for Aldebaran
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            v_mov_b32 v18, 0x1
+            LOOP_ALDBRN:
+            flat_load_dword v16, v[0:1] glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            v_cmp_eq_i32 vcc, v16, v18
+            s_cbranch_vccz   LOOP_ALDBRN
+            buffer_invl2
+            s_load_dword s17, s[0:1], 0x4 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            s_store_dword s17, s[2:3], 0x0 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            buffer_wbl2
+        .else
+            s_movk_i32 s18, 0x1
+            LOOP:
+            s_load_dword s16, s[0:1], 0x0 glc
+            s_cmp_eq_i32 s16, s18
+            s_cbranch_scc0   LOOP
+            s_load_dword s17, s[0:1], 0x4 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            s_store_dword s17, s[2:3], 0x0 glc
+        .endif
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_endpgm
+)";
+
+/* Input0: A buffer of at least 2 dwords.
+ * DW0: used as a signal. Write 0x1 to signal
+ * DW1: Write the value from 2nd input buffer
+ *      for other device to read.
+ * Input1: A buffer of at least 2 dwords.
+ * DW0: used as the value to be written.
+ *
+ * Note: Only works on Aldebaran
+ */
+const char *WriteFlagAndValueIsa = R"(
+        .text
+        // Assume two inputs buffer in s[0:1] and s[2:3]
+        v_mov_b32 v0, s0
+        v_mov_b32 v1, s1
+        s_load_dword s18, s[2:3], 0x0 glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_store_dword s18, s[0:1], 0x4 glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        buffer_wbl2
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        v_mov_b32 v16, 0x1
+        flat_store_dword v[0:1], v16 glc
+        s_endpgm
+)";
+
+/* Input0: A buffer of at least 2 dwords.
+ * DW0: used as a signal. Write 0xcafe to signal
+ * DW1: Write to this buffer for other device to read.
+ * Input1: mmio base address
+ */
+const char *WriteAndSignalIsa = R"(
+        .text
+        // Assume input buffer in s0, s1
+        .if (.amdgcn.gfx_generation_number >= 10)
+            s_add_u32 s4, s0, 0x4
+            s_addc_u32 s5, s1, 0x0
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            v_mov_b32 v2, s2
+            v_mov_b32 v3, s3
+            v_mov_b32 v4, s4
+            v_mov_b32 v5, s5
+            v_mov_b32 v18, 0xbeef
+            flat_store_dword v[4:5], v18 glc
+            v_mov_b32 v18, 0x1
+            flat_store_dword v[2:3], v18 glc
+            v_mov_b32 v18, 0xcafe
+            flat_store_dword v[0:1], v18 glc
+        .else
+            s_mov_b32 s18, 0xbeef
+            s_store_dword s18, s[0:1], 0x4 glc
+            s_mov_b32 s18, 0x1
+            s_store_dword s18, s[2:3], 0 glc
+            s_mov_b32 s18, 0xcafe
+            s_store_dword s18, s[0:1], 0x0 glc
+        .endif
+        s_endpgm
+)";

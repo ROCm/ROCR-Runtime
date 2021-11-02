@@ -101,7 +101,8 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
 
     // Copy contents to a system memory buffer for comparison
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/);
 

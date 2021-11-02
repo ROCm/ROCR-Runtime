@@ -22,7 +22,6 @@
  */
 
 #include "KFDBaseComponentTest.hpp"
-#include "IsaGenerator.hpp"
 
 #ifndef __KFD_MEMORY_TEST__H__
 #define __KFD_MEMORY_TEST__H__
@@ -33,15 +32,13 @@
  */
 class KFDMemoryTest :  public KFDBaseComponentTest {
  public:
-    KFDMemoryTest(void) :m_pIsaGen(NULL) {}
+    KFDMemoryTest(void) {}
     ~KFDMemoryTest(void) {}
  protected:
     virtual void SetUp();
     virtual void TearDown();
 
  protected:
-    IsaGenerator* m_pIsaGen;
-
     void BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
                                             HSAuint64 highMB, int nodeToMap,
                                             HSAuint64 *lastSizeMB);
