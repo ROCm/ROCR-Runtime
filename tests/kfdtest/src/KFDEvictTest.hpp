@@ -40,7 +40,6 @@ class KFDEvictTest :  public KFDMultiProcessTest {
     virtual void SetUp();
     virtual void TearDown();
 
-    std::string CreateShader();
     void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                       std::vector<void *> &pBuffers);
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);

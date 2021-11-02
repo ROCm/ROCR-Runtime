@@ -36,121 +36,6 @@
 
 #define SDMA_NOP  0x0
 
-/* Shader to read local buffers using multiple wavefronts in parallel
- * until address buffer is filled with specific value 0x5678 by host program,
- * then each wavefront fills value 0x5678 at corresponding result buffer and quit
- *
- * Initial state:
- *   s[0:1] - address buffer base address
- *   s[2:3] - result buffer base address
- *   s4 - workgroup id
- *   v0 - workitem id, always 0 because NUM_THREADS_X(number of threads) in workgroup set to 1
- * Registers:
- *   v0 - calculated workitem id, v0 = v0 + s4 * NUM_THREADS_X
- *   v[2:3] - address of corresponding local buf address offset: s[0:1] + v0 * 8
- *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
- *   v[6:7] - local buf address used for read test
- *
- *    This shader can be used by gfx9 and gfx10
- *
- */
-
-static const char* ReadMemoryIsa_gfx9 = R"(
-        .text
-        // Compute address of corresponding output buffer
-        v_mov_b32       v0, s4                  // use workgroup id as index
-        v_lshlrev_b32   v0, 2, v0               // v0 *= 4
-        v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-        v_mov_b32       v5, s3
-        v_add_co_u32    v5, vcc, v5, vcc_lo
-        // Compute input buffer offset used to store corresponding local buffer address
-        v_lshlrev_b32   v0, 1, v0               // v0 *= 8
-        v_add_co_u32    v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8
-        v_mov_b32       v3, s1
-        v_add_co_u32    v3, vcc, v3, vcc_lo
-        // load 64bit local buffer address stored at v[2:3] to v[6:7]
-        flat_load_dwordx2   v[6:7], v[2:3] slc
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-        v_mov_b32       v8, 0x5678
-        s_movk_i32      s8, 0x5678
-        L_REPEAT:
-        s_load_dword    s16, s[0:1], 0x0 glc
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-        s_cmp_eq_i32    s16, s8
-        s_cbranch_scc1  L_QUIT                  // if notified to quit by host
-        // Loop read 64M local buffer starting at v[6:7]
-        // every 4k page only read once
-        v_mov_b32       v9, 0
-        v_mov_b32       v10, 0x1000             // 4k page
-        v_mov_b32       v11, 0x4000000          // 64M size
-        v_mov_b32       v12, v6
-        v_mov_b32       v13, v7
-        L_LOOP_READ:
-        flat_load_dwordx2   v[14:15], v[12:13] slc
-        v_add_co_u32    v9, vcc, v9, v10
-        v_add_co_u32    v12, vcc, v12, v10
-        v_add_co_u32    v13, vcc, v13, vcc_lo
-        v_cmp_lt_u32    vcc, v9, v11
-        s_cbranch_vccnz L_LOOP_READ
-        s_branch        L_REPEAT
-        L_QUIT:
-        flat_store_dword v[4:5], v8
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory writes to finish
-        s_endpgm
-)";
-
-static const char* ReadMemoryIsa_gfx8 = R"(
-        .text
-        // Compute address of corresponding output buffer
-        v_mov_b32       v0, s4                  // use workgroup id as index
-        v_lshlrev_b32   v0, 2, v0               // v0 *= 4
-        v_add_u32       v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-        v_mov_b32       v5, s3
-        v_addc_u32      v5, vcc, v5, 0, vcc
-        // Compute input buffer offset used to store corresponding local buffer address
-        v_lshlrev_b32   v0, 1, v0               // v0 *= 8
-        v_add_u32       v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8
-        v_mov_b32       v3, s1
-        v_addc_u32      v3, vcc, v3, 0, vcc
-        // Load 64bit local buffer address stored at v[2:3] to v[6:7]
-        flat_load_dwordx2   v[6:7], v[2:3] slc
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-        v_mov_b32       v8, 0x5678
-        s_movk_i32      s8, 0x5678
-        L_REPEAT:
-        s_load_dword    s16, s[0:1], 0x0 glc
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-        s_cmp_eq_i32    s16, s8
-        s_cbranch_scc1  L_QUIT // if notified to quit by host
-        // Loop read 64M local buffer starting at v[6:7]
-        // every 4k page only read once
-        v_mov_b32       v9, 0
-        v_mov_b32       v10, 0x1000             // 4k page
-        v_mov_b32       v11, 0x4000000          // 64M size
-        v_mov_b32       v12, v6
-        v_mov_b32       v13, v7
-        L_LOOP_READ:
-        flat_load_dwordx2   v[14:15], v[12:13] slc
-        v_add_u32       v9, vcc, v9, v10
-        v_add_u32       v12, vcc, v12, v10
-        v_addc_u32      v13, vcc, v13, 0, vcc
-        v_cmp_lt_u32    vcc, v9, v11
-        s_cbranch_vccnz L_LOOP_READ
-        s_branch        L_REPEAT
-        L_QUIT:
-        flat_store_dword v[4:5], v8
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory writes to finish
-        s_endpgm
-)";
-
-std::string KFDEvictTest::CreateShader() {
-    if (m_FamilyId < FAMILY_AI)
-        return ReadMemoryIsa_gfx8;
-    else
-        return ReadMemoryIsa_gfx9;
-}
-
-
 void KFDEvictTest::SetUp() {
     ROUTINE_START
 
@@ -546,7 +431,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     HsaMemoryBuffer addrBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer resultBuffer(PAGE_SIZE, defaultGPUNode);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CreateShader().c_str(), isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadMemoryIsa, isaBuffer.As<char*>()));
 
     PM4Queue pm4Queue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
