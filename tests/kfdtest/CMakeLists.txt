@@ -146,6 +146,7 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/GoogleTestExtension.cpp
   src/IndirectBuffer.cpp
   src/Assemble.cpp
+  src/ShaderStore.cpp
   src/IsaGenerator.cpp
   src/IsaGenerator_Aldebaran.cpp
   src/IsaGenerator_Gfx10.cpp
