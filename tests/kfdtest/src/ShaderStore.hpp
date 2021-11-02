@@ -39,4 +39,7 @@ extern const char *PollAndCopyIsa;
 extern const char *WriteFlagAndValueIsa;
 extern const char *WriteAndSignalIsa;
 
+/* KFDQMTest */
+extern const char *LoopIsa;
+
 #endif  // _SHADERSTORE_H_

@@ -27,13 +27,12 @@
 #include <gtest/gtest.h>
 
 #include "PM4Queue.hpp"
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 #include "Dispatch.hpp"
 
 class KFDQMTest : public KFDBaseComponentTest {
  public:
-    KFDQMTest():m_pIsaGen(NULL) {}
+    KFDQMTest() {}
 
     ~KFDQMTest() {}
 
@@ -49,7 +48,6 @@ class KFDQMTest : public KFDBaseComponentTest {
     const double CuVariance = 0.15;
     const double CuNegVariance = 1.0 - CuVariance;
     const double CuPosVariance = 1.0 + CuVariance;
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_QCM_TEST__H__
