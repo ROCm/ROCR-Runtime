@@ -48,4 +48,8 @@ extern const char *IterateIsa;
 /* KFDEvictTest */
 extern const char *ReadMemoryIsa;
 
+/* KFDGWSTest */
+extern const char *GwsInitIsa;
+extern const char *GwsAtomicIncreaseIsa;
+
 #endif  // _SHADERSTORE_H_
