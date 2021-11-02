@@ -42,4 +42,7 @@ extern const char *WriteAndSignalIsa;
 /* KFDQMTest */
 extern const char *LoopIsa;
 
+/* KFDCWSRTest */
+extern const char *IterateIsa;
+
 #endif  // _SHADERSTORE_H_

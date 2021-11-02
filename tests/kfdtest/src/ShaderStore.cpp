@@ -386,3 +386,55 @@ const char *LoopIsa = R"(
         END_OF_PGM:
         s_endpgm
 )";
+
+
+/**
+ * KFDCWSRTest
+ */
+
+/* Initial state:
+ *   s[0:1] - 64 bits iteration number; only the lower 32 bits are useful.
+ *   s[2:3] - result buffer base address
+ *   s4 - workgroup id
+ *   v0 - workitem id, always 0 because
+ *        NUM_THREADS_X(number of threads) in workgroup set to 1
+ * Registers:
+ *   v0 - calculated workitem = v0 + s4 * NUM_THREADS_X, which is s4
+ *   v2 - = s0, 32 bits iteration number
+ *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
+ *   v6 - counter
+ */
+const char *IterateIsa = R"(
+        .text
+        // Copy the parameters from scalar registers to vector registers
+        v_mov_b32       v2, s0              // v[2:3] = s[0:1]
+        v_mov_b32       v3, s1              // v[2:3] = s[0:1]
+        v_mov_b32       v0, s4              // use workgroup id as index
+        v_lshlrev_b32   v0, 2, v0           // v0 *= 4
+        .if (.amdgcn.gfx_generation_number >= 9)
+            v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
+            v_mov_b32       v5, s3                  // v[4:5] = s[2:3] + v0 * 4
+            v_add_co_u32    v5, vcc, v5, vcc_lo     // v[4:5] = s[2:3] + v0 * 4
+            v_mov_b32       v6, 0
+            LOOP:
+            v_add_co_u32    v6, vcc, 1, v6
+            // Compare the result value (v6) to iteration value (v2), and
+            // jump if equal (i.e. if VCC is not zero after the comparison)
+            v_cmp_lt_u32 vcc, v6, v2
+            s_cbranch_vccnz LOOP
+        .else
+            v_add_u32       v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
+            v_mov_b32       v5, s3                  // v[4:5] = s[2:3] + v0 * 4
+            v_add_u32       v5, vcc, v5, vcc_lo     // v[4:5] = s[2:3] + v0 * 4
+            v_mov_b32       v6, 0
+            LOOP_GFX8:
+            v_add_u32       v6, vcc, 1, v6
+            // Compare the result value (v6) to iteration value (v2), and
+            // jump if equal (i.e. if VCC is not zero after the comparison)
+            v_cmp_lt_u32 vcc, v6, v2
+            s_cbranch_vccnz LOOP_GFX8
+        .endif
+        flat_store_dword v[4:5], v6
+        s_waitcnt vmcnt(0) & lgkmcnt(0)
+        s_endpgm
+)";
