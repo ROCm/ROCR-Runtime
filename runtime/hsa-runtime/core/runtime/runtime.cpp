@@ -276,11 +276,10 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
-  ScopedAcquire<KernelMutex> lock(&memory_lock_);
   hsa_status_t status = region->Allocate(size, alloc_flags, address);
-
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     allocation_map_[*address] = AllocationRegion(region, size);
   }
 
@@ -297,7 +296,7 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   std::unique_ptr<std::vector<AllocationRegion::notifier_t>> notifiers;
 
   {
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
     std::map<const void*, AllocationRegion>::iterator it = allocation_map_.find(ptr);
 
@@ -317,26 +316,23 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
     notifiers = std::move(it->second.notifiers);
 
     allocation_map_.erase(it);
-
-    // Fast path to avoid doubling lock ops in the common case (no notifiers).
-    if (!notifiers) return region->Free(ptr, size);
   }
 
   // Notifiers can't run while holding the lock or the callback won't be able to manage memory.
   // The memory triggering the notification has already been removed from the memory map so can't
   // be double released during the callback.
-  for (auto& notifier : *notifiers) {
-    notifier.callback(notifier.ptr, notifier.user_data);
+  if (notifiers) {
+    for (auto& notifier : *notifiers) {
+      notifier.callback(notifier.ptr, notifier.user_data);
+    }
   }
 
-  // Fragment allocator requires protection.
-  ScopedAcquire<KernelMutex> lock(&memory_lock_);
   return region->Free(ptr, size);
 }
 
 hsa_status_t Runtime::RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback,
                                               void* user_data) {
-  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
   auto mem = allocation_map_.upper_bound(ptr);
   if (mem != allocation_map_.begin()) {
     mem--;
@@ -360,7 +356,7 @@ hsa_status_t Runtime::RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_ca
 hsa_status_t Runtime::DeregisterReleaseNotifier(void* ptr,
                                                 hsa_amd_deallocation_callback_t callback) {
   hsa_status_t ret = HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  ScopedAcquire<KernelMutex> lock(&memory_lock_);
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
   auto mem = allocation_map_.upper_bound(ptr);
   if (mem != allocation_map_.begin()) {
     mem--;
@@ -560,7 +556,7 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
   size_t alloc_size = 0;
 
   {
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
     std::map<const void*, AllocationRegion>::const_iterator it = allocation_map_.find(ptr);
 
@@ -786,7 +782,7 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
 
   {  // memory_lock protects access to the NMappedNodes array and fragment user data since these may
      // change with calls to memory APIs.
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
     // We don't care if this returns an error code.
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
@@ -886,7 +882,7 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
 
 hsa_status_t Runtime::SetPtrInfoData(const void* ptr, void* userptr) {
   {  // Use allocation map if possible to handle fragments.
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     const auto& it = allocation_map_.find(ptr);
     if (it != allocation_map_.end()) {
       it->second.user_ptr = userptr;
@@ -926,7 +922,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
     // Holds size in (4K?) pages in thunk handle: Mark as a fragment and denote offset.
     handle->handle[6] |= 0x80000000 | offset;
     // Mark block for IPC.  Prevents reallocation of exported memory.
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
     hsa_status_t err = allocation_map_[ptr].region->IPCFragmentExport(ptr);
     assert(err == HSA_STATUS_SUCCESS && "Region inconsistent with address map.");
     return err;
@@ -951,11 +947,12 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   // Extract fragment info
   bool isFragment = false;
   uint32_t fragOffset = 0;
+
   auto fixFragment = [&]() {
     if (!isFragment) return;
     importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
     len = Min(len, importSize - fragOffset);
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     allocation_map_[importAddress] = AllocationRegion(nullptr, len);
   };
 
@@ -1017,7 +1014,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
 
 hsa_status_t Runtime::IPCDetach(void* ptr) {
   {  // Handle imported fragments.
-    ScopedAcquire<KernelMutex> lock(&memory_lock_);
+    ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     const auto& it = allocation_map_.find(ptr);
     if (it != allocation_map_.end()) {
       if (it->second.region != nullptr) return HSA_STATUS_ERROR_INVALID_ARGUMENT;

@@ -157,6 +157,12 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, cor
 MemoryRegion::~MemoryRegion() {}
 
 hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
+  return AllocateImpl(size, alloc_flags, address);
+}
+
+hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
+                                        void** address) const {
   if (address == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -251,6 +257,11 @@ hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, voi
 }
 
 hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
+  return FreeImpl(address, size);
+}
+
+hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
   if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
 
   MakeKfdMemoryUnresident(address);
@@ -262,6 +273,7 @@ hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
 
 // TODO:  Look into a better name and/or making this process transparent to exporting.
 hsa_status_t MemoryRegion::IPCFragmentExport(void* address) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
   if (!fragment_allocator_.discardBlock(address)) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
   return HSA_STATUS_SUCCESS;
 }
@@ -583,8 +595,10 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   HsaMemMapFlags map_flag = map_flag_;
   map_flag.ui32.HostAccess |= (cpu_in_list) ? 1 : 0;
 
-  {
-    ScopedAcquire<KernelMutex> lock(&core::Runtime::runtime_singleton_->memory_lock_);
+  {  // Sequence with pointer info since queries to other fragments of the block may be adjusted by
+     // this call.
+    ScopedAcquire<KernelSharedMutex::Shared> lock(
+        core::Runtime::runtime_singleton_->memory_lock_.shared());
     uint64_t alternate_va = 0;
     if (!AMD::MemoryRegion::MakeKfdMemoryResident(
       whitelist_nodes.size(), &whitelist_nodes[0], ptr,
@@ -592,8 +606,6 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
-
-  lock.Release();
 
   return HSA_STATUS_SUCCESS;
 }
@@ -700,7 +712,7 @@ void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated
   void* ret;
   size_t bsize = AlignUp(request_size, block_size());
 
-  hsa_status_t err = region_.Allocate(
+  hsa_status_t err = region_.AllocateImpl(
       bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
   if (err != HSA_STATUS_SUCCESS)
     throw AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
