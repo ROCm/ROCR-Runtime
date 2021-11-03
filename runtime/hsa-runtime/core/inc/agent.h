@@ -53,8 +53,15 @@
 #include "core/inc/queue.h"
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
+#include "core/util/locks.h"
 
 namespace rocr {
+
+// Forward declare AMD::MemoryRegion
+namespace AMD {
+class MemoryRegion;
+}
+
 namespace core {
 class Signal;
 
@@ -65,6 +72,8 @@ typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
 // replaced by tools libraries. All funtions other than Convert, node_id,
 // device_type, and public_handle must be virtual.
 class Agent : public Checked<0xF6BC25EB17E6F917> {
+  friend class rocr::AMD::MemoryRegion;
+
  public:
   // @brief Convert agent object into hsa_agent_t.
   //
@@ -296,6 +305,12 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   const uint32_t device_type_;
 
   bool profiling_enabled_;
+
+  // Used by an Agent's MemoryRegions to ensure serial memory operation on the device.
+  // Serial memory operations are needed to ensure, among other things, that allocation failures are
+  // due to true OOM conditions and per region caching (Trim and Allocate must be serial and
+  // exclusive to ensure this).
+  KernelMutex agent_memory_lock_;
 
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(Agent);

@@ -490,10 +490,11 @@ class Runtime {
   /// @brief Get the highest used node id.
   uint32_t max_node_id() const { return agents_by_node_.rbegin()->first; }
 
-  // Mutex object to protect multithreaded access to ::allocation_map_,
+  // Mutex object to protect multithreaded access to ::allocation_map_.
+  // Also ensures atomicity of pointer info queries by interlocking
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
   // registered & mapped arrays.
-  KernelMutex memory_lock_;
+  KernelSharedMutex memory_lock_;
 
   // Array containing tools library handles.
   std::vector<os::LibHandle> tool_libs_;

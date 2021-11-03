@@ -185,6 +185,8 @@ class MemoryRegion : public core::MemoryRegion {
 
   HSAuint64 virtual_size_;
 
+  // Protects against concurrent allow_access calls to fragments of the same block by virtue of all
+  // fragments of the block routing to the same MemoryRegion.
   mutable KernelMutex access_lock_;
 
   static const size_t kPageSize_ = 4096;
@@ -193,6 +195,12 @@ class MemoryRegion : public core::MemoryRegion {
   hsa_amd_memory_pool_access_t GetAccessInfo(const core::Agent& agent,
                                              const core::Runtime::LinkInfo& link_info) const;
 
+  // Operational body for Allocate.  Recursive.
+  hsa_status_t AllocateImpl(size_t& size, AllocateFlags alloc_flags, void** address) const;
+
+  // Operational body for Free.  Recursive.
+  hsa_status_t FreeImpl(void* address, size_t size) const;
+
   class BlockAllocator {
    private:
     MemoryRegion& region_;
@@ -200,7 +208,7 @@ class MemoryRegion : public core::MemoryRegion {
    public:
     explicit BlockAllocator(MemoryRegion& region) : region_(region) {}
     void* alloc(size_t request_size, size_t& allocated_size) const;
-    void free(void* ptr, size_t length) const { region_.Free(ptr, length); }
+    void free(void* ptr, size_t length) const { region_.FreeImpl(ptr, length); }
     size_t block_size() const { return block_size_; }
   };
 
