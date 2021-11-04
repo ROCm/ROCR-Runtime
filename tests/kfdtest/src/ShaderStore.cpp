@@ -22,6 +22,41 @@
  */
 
 /**
+ * Macros
+ */
+
+/* Create macro for portable v_add_co_u32, v_add_co_ci_u32,
+ * and v_cmp_lt_u32
+ */
+#define SHADER_MACROS \
+    "   .text\n"\
+    "   .macro V_ADD_CO_U32 vdst, src0, vsrc1\n"\
+    "       .if (.amdgcn.gfx_generation_number >= 10)\n"\
+    "           v_add_co_u32        \\vdst, vcc_lo, \\src0, \\vsrc1\n"\
+    "       .elseif (.amdgcn.gfx_generation_number >= 9)\n"\
+    "           v_add_co_u32        \\vdst, vcc, \\src0, \\vsrc1\n"\
+    "       .else\n"\
+    "           v_add_u32           \\vdst, vcc, \\src0, \\vsrc1\n"\
+    "       .endif\n"\
+    "   .endm\n"\
+    "   .macro V_ADD_CO_CI_U32 vdst, src0, vsrc1\n"\
+    "       .if (.amdgcn.gfx_generation_number >= 10)\n"\
+    "           v_add_co_ci_u32     \\vdst, vcc_lo, \\src0, \\vsrc1, vcc_lo\n"\
+    "       .elseif (.amdgcn.gfx_generation_number >= 9)\n"\
+    "           v_addc_co_u32       \\vdst, vcc, \\src0, \\vsrc1, vcc\n"\
+    "       .else\n"\
+    "           v_addc_u32          \\vdst, vcc, \\src0, \\vsrc1, vcc\n"\
+    "       .endif\n"\
+    "   .endm\n"\
+    "   .macro V_CMP_LT_U32 src0, vsrc1\n"\
+    "       .if (.amdgcn.gfx_generation_number >= 10)\n"\
+    "           v_cmp_lt_u32        vcc_lo, \\src0, \\vsrc1\n"\
+    "       .else\n"\
+    "           v_cmp_lt_u32        vcc, \\src0, \\vsrc1\n"\
+    "       .endif\n"\
+    "   .endm\n"
+
+/**
  * Common
  */
 
@@ -404,37 +439,24 @@ const char *LoopIsa = R"(
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
  *   v6 - counter
  */
-const char *IterateIsa = R"(
-        .text
+const char *IterateIsa = SHADER_MACROS R"(
         // Copy the parameters from scalar registers to vector registers
-        v_mov_b32       v2, s0              // v[2:3] = s[0:1]
-        v_mov_b32       v3, s1              // v[2:3] = s[0:1]
-        v_mov_b32       v0, s4              // use workgroup id as index
-        v_lshlrev_b32   v0, 2, v0           // v0 *= 4
-        .if (.amdgcn.gfx_generation_number >= 9)
-            v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v5, s3                  // v[4:5] = s[2:3] + v0 * 4
-            v_add_co_u32    v5, vcc, v5, vcc_lo     // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v6, 0
-            LOOP:
-            v_add_co_u32    v6, vcc, 1, v6
-            // Compare the result value (v6) to iteration value (v2), and
-            // jump if equal (i.e. if VCC is not zero after the comparison)
-            v_cmp_lt_u32 vcc, v6, v2
-            s_cbranch_vccnz LOOP
-        .else
-            v_add_u32       v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v5, s3                  // v[4:5] = s[2:3] + v0 * 4
-            v_add_u32       v5, vcc, v5, vcc_lo     // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v6, 0
-            LOOP_GFX8:
-            v_add_u32       v6, vcc, 1, v6
-            // Compare the result value (v6) to iteration value (v2), and
-            // jump if equal (i.e. if VCC is not zero after the comparison)
-            v_cmp_lt_u32 vcc, v6, v2
-            s_cbranch_vccnz LOOP_GFX8
-        .endif
-        flat_store_dword v[4:5], v6
+        v_mov_b32               v2, s0          // v[2:3] = s[0:1]
+        v_mov_b32               v3, s1          // v[2:3] = s[0:1]
+        v_mov_b32               v0, s4          // use workgroup id as index
+        v_lshlrev_b32           v0, 2, v0       // v0 *= 4
+        V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
+        V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32               v6, 0
+        LOOP:
+        V_ADD_CO_U32            v6, 1, v6
+
+        // Compare the result value (v6) to iteration value (v2), and
+        // jump if equal (i.e. if VCC is not zero after the comparison)
+        V_CMP_LT_U32            v6, v2
+        s_cbranch_vccnz LOOP
+        flat_store_dword        v[4:5], v6
         s_waitcnt vmcnt(0) & lgkmcnt(0)
         s_endpgm
 )";
@@ -458,88 +480,49 @@ const char *IterateIsa = R"(
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
  *   v[6:7] - local buf address used for read test
  */
-const char *ReadMemoryIsa = R"(
-        .text
-        .if (.amdgcn.gfx_generation_number >= 9)
-            // Compute address of corresponding output buffer
-            v_mov_b32       v0, s4                  // use workgroup id as index
-            v_lshlrev_b32   v0, 2, v0               // v0 *= 4
-            v_add_co_u32    v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v5, s3
-            v_add_co_u32    v5, vcc, v5, vcc_lo
-            // Compute input buffer offset used to store corresponding local buffer address
-            v_lshlrev_b32   v0, 1, v0               // v0 *= 8
-            v_add_co_u32    v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8
-            v_mov_b32       v3, s1
-            v_add_co_u32    v3, vcc, v3, vcc_lo
-            // Load 64bit local buffer address stored at v[2:3] to v[6:7]
-            flat_load_dwordx2   v[6:7], v[2:3] slc
-            s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-            v_mov_b32       v8, 0x5678
-            s_movk_i32      s8, 0x5678
-            L_REPEAT:
-            s_load_dword    s16, s[0:1], 0x0 glc
-            s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-            s_cmp_eq_i32    s16, s8
-            s_cbranch_scc1  L_QUIT                  // if notified to quit by host
-            // Loop read 64M local buffer starting at v[6:7]
-            // every 4k page only read once
-            v_mov_b32       v9, 0
-            v_mov_b32       v10, 0x1000             // 4k page
-            v_mov_b32       v11, 0x4000000          // 64M size
-            v_mov_b32       v12, v6
-            v_mov_b32       v13, v7
-            L_LOOP_READ:
-            flat_load_dwordx2   v[14:15], v[12:13] slc
-            v_add_co_u32    v9, vcc, v9, v10
-            v_add_co_u32    v12, vcc, v12, v10
-            v_add_co_u32    v13, vcc, v13, vcc_lo
-            v_cmp_lt_u32    vcc, v9, v11
-            s_cbranch_vccnz L_LOOP_READ
-            s_branch        L_REPEAT
-            L_QUIT:
-            flat_store_dword v[4:5], v8
-        .else
-            // Compute address of corresponding output buffer
-            v_mov_b32       v0, s4                  // use workgroup id as index
-            v_lshlrev_b32   v0, 2, v0               // v0 *= 4
-            v_add_u32       v4, vcc, s2, v0         // v[4:5] = s[2:3] + v0 * 4
-            v_mov_b32       v5, s3
-            v_addc_u32      v5, vcc, v5, 0, vcc
-            // Compute input buffer offset used to store corresponding local buffer address
-            v_lshlrev_b32   v0, 1, v0               // v0 *= 8
-            v_add_u32       v2, vcc, s0, v0         // v[2:3] = s[0:1] + v0 * 8
-            v_mov_b32       v3, s1
-            v_addc_u32      v3, vcc, v3, 0, vcc
-            // Load 64bit local buffer address stored at v[2:3] to v[6:7]
-            flat_load_dwordx2   v[6:7], v[2:3] slc
-            s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-            v_mov_b32       v8, 0x5678
-            s_movk_i32      s8, 0x5678
-            L_REPEAT_GFX8:
-            s_load_dword    s16, s[0:1], 0x0 glc
-            s_waitcnt       vmcnt(0) & lgkmcnt(0)   // wait for memory reads to finish
-            s_cmp_eq_i32    s16, s8
-            s_cbranch_scc1  L_QUIT_8                // if notified to quit by host
-            // Loop read 64M local buffer starting at v[6:7]
-            // every 4k page only read once
-            v_mov_b32       v9, 0
-            v_mov_b32       v10, 0x1000             // 4k page
-            v_mov_b32       v11, 0x4000000          // 64M size
-            v_mov_b32       v12, v6
-            v_mov_b32       v13, v7
-            L_LOOP_READ_GFX8:
-            flat_load_dwordx2   v[14:15], v[12:13] slc
-            v_add_u32       v9, vcc, v9, v10
-            v_add_u32       v12, vcc, v12, v10
-            v_addc_u32      v13, vcc, v13, 0, vcc
-            v_cmp_lt_u32    vcc, v9, v11
-            s_cbranch_vccnz L_LOOP_READ_GFX8
-            s_branch        L_REPEAT_GFX8
-            L_QUIT_8:
-            flat_store_dword v[4:5], v8
-        .endif
-        s_waitcnt       vmcnt(0) & lgkmcnt(0)       // wait for memory writes to finish
+const char *ReadMemoryIsa = SHADER_MACROS R"(
+        // Compute address of corresponding output buffer
+        v_mov_b32               v0, s4          // use workgroup id as index
+        v_lshlrev_b32           v0, 2, v0       // v0 *= 4
+        V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
+        v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
+        V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
+
+        // Compute input buffer offset used to store corresponding local buffer address
+        v_lshlrev_b32           v0, 1, v0       // v0 *= 8
+        V_ADD_CO_U32            v2, s0, v0      // v[2:3] = s[0:1] + v0 * 8
+        v_mov_b32               v3, s1          // v[2:3] = s[0:1] + v0 * 8
+        V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
+
+        // Load 64bit local buffer address stored at v[2:3] to v[6:7]
+        flat_load_dwordx2       v[6:7], v[2:3] slc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        v_mov_b32               v8, 0x5678
+        s_movk_i32              s8, 0x5678
+        L_REPEAT:
+        s_load_dword            s16, s[0:1], 0x0 glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        s_cmp_eq_i32            s16, s8
+        s_cbranch_scc1          L_QUIT          // if notified to quit by host
+
+        // Loop read 64M local buffer starting at v[6:7]
+        // every 4k page only read once
+        v_mov_b32               v9, 0
+        v_mov_b32               v10, 0x1000     // 4k page
+        v_mov_b32               v11, 0x4000000  // 64M size
+        v_mov_b32               v12, v6
+        v_mov_b32               v13, v7
+        L_LOOP_READ:
+        flat_load_dwordx2       v[14:15], v[12:13] slc
+        V_ADD_CO_U32            v9, v9, v10
+        V_ADD_CO_U32            v12, v12, v10
+        V_ADD_CO_CI_U32         v13, v13, 0
+        V_CMP_LT_U32            v9, v11
+        s_cbranch_vccnz         L_LOOP_READ
+        s_branch                L_REPEAT
+        L_QUIT:
+        flat_store_dword        v[4:5], v8
+        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory writes to finish
         s_endpgm
 )";
 
