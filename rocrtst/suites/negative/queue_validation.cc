@@ -467,7 +467,7 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
     rocrtst::WriteAQLToQueueLoc(queue[ii], index, &aql());
     // setting the invalid packet type
     aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
-    aql().header |=  0xFFFFFFFF << HSA_PACKET_HEADER_TYPE;
+    aql().header |=  0xFFFF << HSA_PACKET_HEADER_TYPE;
     aql().kernel_object = kernel_object();
 
     void* q_base = queue[ii]->base_address;
