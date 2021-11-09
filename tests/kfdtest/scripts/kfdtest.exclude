@@ -224,26 +224,10 @@ FILTER[aldebaran]=\
 "KFDMemoryTest.PtraceAccess:"\
 "KFDMemoryTest.DeviceHdpFlush"
 
-# SP3 Compiler needs to be updated for GFX10. Temporarily disable all tests
-# that require shader compiler
-# Adding KFDSVMEvictTest as SVM/HMM was never validated on GFX10
-TEMP_GFX10_BLACKLIST=\
-"KFDMemoryTest.FlatScratchAccess:"\
-"KFDMemoryTest.PtraceAccessInvisibleVram:"\
-"KFDQMTest.QueuePriorityOnDifferentPipe:"\
-"KFDQMTest.QueuePriorityOnSamePipe:"\
-"KFDCWSRTest.BasicTest:"\
-"KFDQMTest.BasicCuMaskingEven:"\
-"KFDEvictTest.QueueTest:"\
-"KFDMemoryTest.MapUnmapToNodes:"\
-"KFDMemoryTest.HostHdpFlush:"\
-"KFDMemoryTest.DeviceHdpFlush:"\
-"KFDSVMEvictTest.*"
-
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
-"KFDMemoryTest.MMBench"
+"KFDMemoryTest.MMBench:"\
+"KFDSVMEvictTest.*"
 
 # Need to verify the following failed tests on another machine:
 # Exceptions not being received during exception tests
@@ -254,42 +238,42 @@ FILTER[navi12]=\
 "KFDExceptionTest.*:"\
 "KFDPerfCountersTest.*:"\
 "KFDPerformanceTest.P2PBandWidthTest:"\
-"$TEMP_GFX10_BLACKLIST"
+"KFDSVMEvictTest.*"
 
 FILTER[navi14]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST"
+"KFDSVMEvictTest.*"
 
 FILTER[sienna_cichlid]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+"KFDSVMEvictTest.*"
 
 FILTER[navy_flounder]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+"KFDSVMEvictTest.*"
 
 FILTER[dimgrey_cavefish]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+"KFDSVMEvictTest.*"
 
 FILTER[beige_goby]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
+"KFDSVMEvictTest.*"
 
 FILTER[yellow_carp]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$TEMP_GFX10_BLACKLIST:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDIPCTest.CMABasicTest"
+"KFDIPCTest.CMABasicTest:"\
+"KFDSVMEvictTest.*"
