@@ -324,6 +324,7 @@ if(DEFINED CPACK_PACKAGING_INSTALL_PREFIX)
   set(CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION "${CPACK_PACKAGING_INSTALL_PREFIX} ${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}")
 endif()
 set(CPACK_RPM_PACKAGE_NAME "hsakmt-roct-devel")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT")
 # Since we changed the package name to match RPM specs, take care of older builds that had -dev installed
 # Also cover the fact that this now replaces the old binary package hsakmt-roct
 set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct-dev hsakmt-roct")
