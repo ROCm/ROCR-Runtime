@@ -208,7 +208,7 @@ class BlitSdma : public BlitSdmaBase {
 
   void BuildGetGlobalTimestampCommand(char* cmd_addr, void* write_address);
 
-  void BuildTrapCommand(char* cmd_addr);
+  void BuildTrapCommand(char* cmd_addr, uint32_t event_id);
 
   void BuildGCRCommand(char* cmd_addr, bool invalidate);
 

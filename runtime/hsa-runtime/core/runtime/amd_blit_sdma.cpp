@@ -384,7 +384,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
                       static_cast<uint32_t>(out_signal.signal_.event_id));
     command_addr += fence_command_size_;
 
-    BuildTrapCommand(command_addr);
+    BuildTrapCommand(command_addr, out_signal.signal_.event_id);
   }
 
   ReleaseWriteAddress(curr_index, total_command_size);
@@ -911,13 +911,14 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildTrapCommand(
-    char* cmd_addr) {
+    char* cmd_addr, uint32_t event_id) {
   SDMA_PKT_TRAP* packet_addr =
       reinterpret_cast<SDMA_PKT_TRAP*>(cmd_addr);
 
   memset(packet_addr, 0, sizeof(SDMA_PKT_TRAP));
 
   packet_addr->HEADER_UNION.op = SDMA_OP_TRAP;
+  packet_addr->INT_CONTEXT_UNION.int_ctx = event_id;
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
