@@ -438,6 +438,7 @@ endif()
 string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
+set( CPACK_RPM_PACKAGE_LICENSE "NCSA" )
 
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )
