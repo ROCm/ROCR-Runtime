@@ -1646,7 +1646,7 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
                                    hsa_amd_svm_attribute_pair_t* attribute_list,
                                    size_t attribute_count) {
   uint32_t set_attribs = 0;
-  std::vector<bool> agent_seen(agents_by_node_.size(), false);
+  std::vector<bool> agent_seen(max_node_id() + 1, false);
 
   std::vector<HSA_SVM_ATTRIBUTE> attribs;
   attribs.reserve(attribute_count);
