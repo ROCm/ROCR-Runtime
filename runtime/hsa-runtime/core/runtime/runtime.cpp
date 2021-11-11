@@ -861,7 +861,7 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
   if (returnListData) {
     uint32_t count = 0;
     for (HSAuint32 i = 0; i < thunkInfo.NMappedNodes; i++) {
-      assert(mappedNodes[i] < agents_by_node_.size() &&
+      assert(mappedNodes[i] <= max_node_id() &&
              "PointerInfo: Invalid node ID returned from thunk.");
       count += agents_by_node_[mappedNodes[i]].size();
     }
