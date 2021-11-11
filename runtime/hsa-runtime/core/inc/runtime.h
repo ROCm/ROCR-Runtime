@@ -487,6 +487,9 @@ class Runtime {
   /// @brief Get most recently issued SVM prefetch agent for the range in question.
   Agent* GetSVMPrefetchAgent(void* ptr, size_t size);
 
+  /// @brief Get the highest used node id.
+  uint32_t max_node_id() const { return agents_by_node_.rbegin()->first; }
+
   // Mutex object to protect multithreaded access to ::allocation_map_,
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
   // registered & mapped arrays.
