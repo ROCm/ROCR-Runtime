@@ -567,14 +567,14 @@ hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
                                  void** agent_ptr) {
   TRY;
   IS_OPEN();
-  *agent_ptr = NULL;
 
-  if (size == 0 || host_ptr == NULL || agent_ptr == NULL) {
+  if (size == 0 || host_ptr == nullptr || agent_ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((agents != NULL && num_agent == 0) ||
-      (agents == NULL && num_agent != 0)) {
+  *agent_ptr = nullptr;
+
+  if ((agents != nullptr && num_agent == 0) || (agents == nullptr && num_agent != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -598,13 +598,14 @@ hsa_status_t hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_
                                          void** agent_ptr) {
   TRY;
   IS_OPEN();
-  *agent_ptr = NULL;
 
-  if (size == 0 || host_ptr == NULL || agent_ptr == NULL || flags != 0) {
+  if (size == 0 || host_ptr == nullptr || agent_ptr == nullptr || flags != 0) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((agents != NULL && num_agent == 0) || (agents == NULL && num_agent != 0)) {
+  *agent_ptr = nullptr;
+
+  if ((agents != nullptr && num_agent == 0) || (agents == nullptr && num_agent != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
