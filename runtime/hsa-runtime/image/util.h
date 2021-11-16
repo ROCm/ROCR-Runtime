@@ -130,6 +130,7 @@ template <typename lambda> class ScopeGuard {
     dismiss_ = rhs.dismiss_;
     release_ = rhs.release_;
     rhs.dismiss_ = true;
+    return *this;
   }
   __forceinline void Dismiss() { dismiss_ = true; }
 
