@@ -807,8 +807,12 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
   core::Agent** core_agents = short_agents;
   if (num_agents > tinyArraySize) {
     core_agents = new core::Agent* [num_agents];
-    if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    if (core_agents == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+
+  MAKE_SCOPE_GUARD([&]() {
+    if (num_agents > tinyArraySize) delete[] core_agents;
+  });
 
   for (uint32_t i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(agents[i]);
@@ -820,7 +824,6 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
       num_agents, core_agents, interop_handle, flags, size, ptr, metadata_size,
       metadata);
 
-  if (num_agents > tinyArraySize) delete[] core_agents;
   return ret;
   CATCH;
 }
