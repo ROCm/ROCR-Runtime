@@ -1516,10 +1516,11 @@ lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
   lazy_ptr<core::Blit>& blit =
     (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
      dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-       ? blits_[BlitHostToDev]
+       ? blits_[BlitHostToDev]  // CPU->GPU transfer.
        : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
           dst_agent.device_type() == core::Agent::kAmdCpuDevice)
-            ? blits_[BlitDevToHost] : blits_[BlitDevToHost];
+            ? blits_[BlitDevToHost]   // GPU->CPU transfer.
+            : blits_[BlitDevToHost];  // GPU->GPU transfer.
   return blit;
 }
 
