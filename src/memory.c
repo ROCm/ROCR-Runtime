@@ -318,6 +318,20 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 	return ret;
 }
 
+HSAKMT_STATUS HSAKMTAPI hsaKmtExportDMABufHandle(void *MemoryAddress,
+						 HSAuint64 MemorySizeInBytes,
+						 int *DMABufFd,
+						 HSAuint64 *Offset)
+{
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(12);
+
+	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+
+	return fmm_export_dma_buf_fd(MemoryAddress, MemorySizeInBytes,
+				     DMABufFd, Offset);
+}
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtShareMemory(void *MemoryAddress,
 					  HSAuint64 SizeInBytes,
 					  HsaSharedMemoryHandle *SharedMemoryHandle)

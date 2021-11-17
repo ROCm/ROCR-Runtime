@@ -3309,6 +3309,48 @@ error_free_metadata:
 	return status;
 }
 
+HSAKMT_STATUS fmm_export_dma_buf_fd(void *MemoryAddress,
+				    HSAuint64 MemorySizeInBytes,
+				    int *DMABufFd,
+				    HSAuint64 *Offset)
+{
+	struct kfd_ioctl_export_dmabuf_args exportArgs = {0};
+	manageable_aperture_t *aperture;
+	HsaApertureInfo ApeInfo;
+	vm_object_t *obj;
+	HSAuint64 offset;
+	int r;
+
+	aperture = fmm_find_aperture(MemoryAddress, &ApeInfo);
+	if (!aperture)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	obj = vm_find_object_by_address_range(aperture, MemoryAddress);
+	if (obj) {
+		offset = VOID_PTRS_SUB(MemoryAddress, obj->start);
+		if (offset + MemorySizeInBytes <= obj->size) {
+			exportArgs.handle = obj->handle;
+			exportArgs.flags = O_CLOEXEC;
+			exportArgs.dmabuf_fd = 0;
+		} else {
+			obj = NULL;
+		}
+	}
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	if (!obj)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_EXPORT_DMABUF, (void *)&exportArgs);
+	if (r)
+		return HSAKMT_STATUS_ERROR;
+
+	*DMABufFd = exportArgs.dmabuf_fd;
+	*Offset = offset;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 				HSAuint64 SizeInBytes,
 				HsaSharedMemoryHandle *SharedMemoryHandle)

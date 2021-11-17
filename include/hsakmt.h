@@ -437,6 +437,26 @@ hsaKmtRegisterGraphicsHandleToNodes(
     );
 
 /**
+ * Export a dmabuf handle and offset for a given memory address
+ *
+ * Validates that @MemoryAddress belongs to a valid allocation and that the
+ * @MemorySizeInBytes doesn't exceed the end of that allocation. Returns a
+ * dmabuf fd of the allocation and the offset of MemoryAddress within that
+ * allocation. The memory will remain allocated even after the allocation is
+ * freed by hsaKmtFreeMemory for as long as a dmabuf fd remains open or any
+ * importer of that fd maintains an active reference to the memory.
+ */
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtExportDMABufHandle(
+    void *MemoryAddress,		//IN
+    HSAuint64 MemorySizeInBytes,	//IN
+    int *DMABufFd,			//OUT
+    HSAuint64 *Offset			//OUT
+    );
+
+/**
  Export a memory buffer for sharing with other processes
 
  NOTE: for the current revision of the thunk spec, SizeInBytes
