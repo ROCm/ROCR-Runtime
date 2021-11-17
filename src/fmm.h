@@ -78,6 +78,10 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   uint32_t *gpu_id_array,
 					   uint32_t gpu_id_array_size);
 HSAKMT_STATUS fmm_deregister_memory(void *address);
+HSAKMT_STATUS fmm_export_dma_buf_fd(void *MemoryAddress,
+				    HSAuint64 MemorySizeInBytes,
+				    int *DMABufFd,
+				    HSAuint64 *Offset);
 HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 			       HSAuint64 SizeInBytes,
 			       HsaSharedMemoryHandle *SharedMemoryHandle);
