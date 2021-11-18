@@ -2466,3 +2466,83 @@ TEST_F(KFDMemoryTest, MultiThreadRegisterUserptrTest) {
 
     TEST_END
 }
+
+TEST_F(KFDMemoryTest, ExportDMABufTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (m_VersionInfo.KernelInterfaceMinorVersion < 12) {
+        LOG() << "Skipping test, requires KFD ioctl version 1.12 or newer" << std::endl;
+        return;
+    }
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    // Use a GTT BO for export because it's conveniently CPU accessible.
+    // On multi-GPU systems this also checks for interactions with driver-
+    // internal DMA buf use for DMA attachment to multiple GPUs
+    HsaMemFlags memFlags = m_MemoryFlags;
+    memFlags.ui32.NonPaged = 1;
+
+    HSAuint32 *buf;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(0, PAGE_SIZE, memFlags,
+                                          reinterpret_cast<void**>(&buf)));
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
+
+    for (int i = 0; i < PAGE_SIZE/4; i++)
+        buf[i] = i;
+    const HSAuint64 INDEX = 25;
+    const HSAuint64 SIZE = 25;
+    HSAuint64 offset;
+    int fd;
+
+    // Expected error: address out of range (not a BO)
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER,
+            hsaKmtExportDMABufHandle(buf + PAGE_SIZE/4, SIZE*4, &fd, &offset));
+    // Expected error: size out of range
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER,
+            hsaKmtExportDMABufHandle(buf + INDEX, PAGE_SIZE, &fd, &offset));
+
+    // For real this time. Check that the offset matches
+    ASSERT_SUCCESS(hsaKmtExportDMABufHandle(buf + INDEX, SIZE*4, &fd, &offset));
+    ASSERT_EQ(INDEX*4, offset);
+
+    // Free the original BO. The memory should persist as long as the DMA buf
+    // handle exists.
+    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(buf));
+    ASSERT_SUCCESS(hsaKmtFreeMemory(buf, PAGE_SIZE));
+
+    // Import the BO using the Interop API and check the contents. It doesn't
+    // map the import for CPU access, which gives us an excuse to test GPU
+    // mapping of the imported BO as well.
+    HsaGraphicsResourceInfo info;
+    ASSERT_SUCCESS(hsaKmtRegisterGraphicsHandleToNodes(fd, &info, 1, &defaultGPUNode));
+    buf = reinterpret_cast<HSAuint32 *>(info.MemoryAddress);
+    ASSERT_EQ(info.SizeInBytes, PAGE_SIZE);
+
+    HsaMemMapFlags mapFlags = {0};
+    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(buf, PAGE_SIZE, NULL, mapFlags, 1,
+                                             &defaultGPUNode));
+
+    PM4Queue pm4Queue;
+    ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
+    HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    for (int i = 0; i < PAGE_SIZE/4; i++) {
+        Dispatch dispatch(isaBuffer);
+        dispatch.SetArgs(&buf[i], dstBuffer.As<void*>());
+        dispatch.Submit(pm4Queue);
+        dispatch.Sync(g_TestTimeOut);
+        ASSERT_EQ(i, *dstBuffer.As<HSAuint32 *>());
+    }
+    ASSERT_SUCCESS(pm4Queue.Destroy());
+
+    ASSERT_SUCCESS(hsaKmtUnmapMemoryToGPU(buf));
+    ASSERT_SUCCESS(hsaKmtDeregisterMemory(buf));
+
+    ASSERT_EQ(0, close(fd));
+
+    TEST_END
+}
