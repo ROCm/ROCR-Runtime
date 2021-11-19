@@ -111,7 +111,7 @@ TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
 
     int i;
     unsigned int BufSize = PAGE_SIZE;
-    HsaSVMRange *sysBuffer;
+    HsaSVMRange *sysBuffer = new HsaSVMRange(BufSize);
     HSAuint32 nAttributes = 5;
     HSA_SVM_ATTRIBUTE outputAttributes[nAttributes];
     HSA_SVM_ATTRIBUTE inputAttributes[] = {
@@ -132,8 +132,8 @@ TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
                                          };
     HSAint32 enable = -1;
     EXPECT_SUCCESS(hsaKmtGetXNACKMode(&enable));
-    expectedDefaultResults[4] = (enable)?HSA_SVM_ATTR_ACCESS:HSA_SVM_ATTR_NO_ACCESS;
-    sysBuffer = new HsaSVMRange(BufSize);
+    expectedDefaultResults[4] = (enable) ?
+                                 HSA_SVM_ATTR_ACCESS : HSA_SVM_ATTR_NO_ACCESS;
     char *pBuf = sysBuffer->As<char *>();
 
     LOG() << "Get default atrributes" << std::endl;
@@ -155,14 +155,15 @@ TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
                                     nAttributes, inputAttributes));
     EXPECT_SUCCESS(hsaKmtSVMGetAttr(pBuf, BufSize,
                                     nAttributes, outputAttributes));
-   for (i = 0; i < nAttributes; i++) {
+    for (i = 0; i < nAttributes; i++) {
         if (outputAttributes[i].type == HSA_SVM_ATTR_ACCESS ||
             outputAttributes[i].type == HSA_SVM_ATTR_ACCESS_IN_PLACE ||
             outputAttributes[i].type == HSA_SVM_ATTR_NO_ACCESS)
             EXPECT_EQ(inputAttributes[i].type, outputAttributes[i].type);
         else
             EXPECT_EQ(inputAttributes[i].value, outputAttributes[i].value);
-   }
+    }
+    delete sysBuffer;
 
     TEST_END
 }
