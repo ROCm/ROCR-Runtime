@@ -1629,6 +1629,8 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				return NULL;
 			}
 
+			madvise(ret, MemorySizeInBytes, MADV_DONTFORK);
+
 			if (mflags.ui32.AQLQueueMemory) {
 				uint64_t my_buf_size = size / 2;
 
@@ -1636,6 +1638,10 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
 				     PROT_READ | PROT_WRITE,
 				     MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
+
+				madvise(VOID_PTR_ADD(mem, my_buf_size),
+					MemorySizeInBytes,
+					MADV_DONTFORK);
 			}
 		}
 	}
@@ -2701,7 +2707,7 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 			return -1;
 		}
 	}
-
+	madvise(mmap_ret, size, MADV_DONTFORK);
 
 	/* map to GPU */
 	ret = _fmm_map_to_gpu(aperture, address, size, NULL, &gpu_id, sizeof(uint32_t));
@@ -3364,6 +3370,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 			err = HSAKMT_STATUS_ERROR;
 			goto err_free_obj;
 		}
+		madvise(ret, (SizeInPages << PAGE_SHIFT), MADV_DONTFORK);
 	}
 
 	*MemoryAddress = reservedMem;
