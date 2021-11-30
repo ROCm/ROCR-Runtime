@@ -55,9 +55,6 @@ Recommends: @CPACK_RPM_PACKAGE_RECOMMENDS@
 %prep
 mv $RPM_BUILD_ROOT %_topdir/tmpBBroot
 
-# The license macro expects the license to be copied into the working directory
-cp -a @CPACK_RESOURCE_FILE_LICENSE@ ./LICENSE.md
-
 %install
 if [ -e $RPM_BUILD_ROOT ];
 then
@@ -93,10 +90,6 @@ mv %_topdir/tmpBBroot $RPM_BUILD_ROOT
 @CPACK_RPM_INSTALL_FILES@
 @CPACK_RPM_ABSOLUTE_INSTALL_FILES@
 @CPACK_RPM_USER_INSTALL_FILES@
-
-# RPM has a different way of packaging the license, ignore the debian one:
-%license LICENSE.md
-%exclude /usr/share/doc/@CPACK_DEBIAN_PACKAGE_NAME@
 
 %changelog
 @CPACK_RPM_SPEC_CHANGELOG@
