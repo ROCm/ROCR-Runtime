@@ -8,3 +8,4 @@
 patches-*
 build/
 outgoing/
+Makefile
