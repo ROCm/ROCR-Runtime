@@ -288,6 +288,9 @@ set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md")
 set(CPACK_COMPONENT_DESCRIPTION "HSAKMT development package.\n This package includes the user-mode API interfaces\nused to interact with the ROCk driver.\n This package contains the headers, pkgonfig and\n cmake files for the ROCT package.")
 set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
 
+# Install License file
+install ( FILES ${CPACK_RESOURCE_FILE_LICENSE} DESTINATION ${CMAKE_INSTALL_DOCDIR}/${CPACK_PACKAGE_NAME} COMPONENT devel)
+
 # Make proper version for appending
 # Default Value is 99999, setting it first
 set(ROCM_VERSION_FOR_PACKAGE "99999")
@@ -307,11 +310,6 @@ if (DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE})
 else()
    set(CPACK_DEBIAN_PACKAGE_RELEASE "local")
 endif()
-# Logic to install debian copyright file (i.e. the license file)
-set(CPACK_INSTALL_COMMANDS "install -m 644 -D ${CPACK_RESOURCE_FILE_LICENSE} \
-  ${PROJECT_BINARY_DIR}/doc/${CPACK_DEBIAN_PACKAGE_NAME}/copyright")
-set(CPACK_INSTALLED_DIRECTORIES "${PROJECT_BINARY_DIR}/doc/${CPACK_DEBIAN_PACKAGE_NAME}"
-  "/usr/share/doc/${CPACK_DEBIAN_PACKAGE_NAME}${CPACK_PACKAGE_VERSION}")
 ## Process the Debian install/remove scripts to update the CPACK variables
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/postinst.in DEBIAN/postinst @ONLY )
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/prerm.in DEBIAN/prerm @ONLY )
