@@ -167,6 +167,8 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
         return;
     }
 
+    g_TestTimeOut *= numPeers;
+
     std::vector<int> sysNodes(nodes); // include sysMem node 0...
     sysNodes.insert(sysNodes.begin(),0);
 
@@ -308,6 +310,8 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
                                         (float)speed2 / 1024 << " GB/s" << std::endl;
         }
     }
+
+    g_TestTimeOut /= numPeers;
 exit:
     /* New line.*/
     LOG() << std::endl << msg.str() << std::endl;
