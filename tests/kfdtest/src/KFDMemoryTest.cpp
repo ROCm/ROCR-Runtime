@@ -2084,7 +2084,11 @@ TEST_F(KFDMemoryTest, HostHdpFlush) {
             break;
         }
     }
-    ASSERT_NE(mmioBase, nullPtr) << "mmio base is NULL";
+
+    if (mmioBase == nullPtr) {
+            LOG() << "Skipping test: bsecause mmioBase is nullPtr, the mmio remap feature is not supported." << std::endl;
+            return;
+    }
 
     memoryFlags.ui32.NonPaged = 1;
     memoryFlags.ui32.CoarseGrain = 0;
@@ -2205,7 +2209,11 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
             break;
         }
     }
-    ASSERT_NE(mmioBase, nullPtr) << "mmio base is NULL";
+
+    if (mmioBase == nullPtr) {
+            LOG() << "Skipping test: bsecause mmioBase is nullPtr, the mmio remap feature is not supported." << std::endl;
+            return;
+    }
 
     memoryFlags.ui32.NonPaged = 1;
     memoryFlags.ui32.CoarseGrain = 0;
