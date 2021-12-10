@@ -111,7 +111,7 @@ CU_list = 0x[0-F]* | ID_list             ex. 0x337F OR 0,2-4,7
 CU_Set = GPU_list : CU_list              ex. 0,2-4,7:0-15,32-47 OR 0,2-4,7:0x337F
 HSA_CU_MASK =  CU_Set [; CU_Set]*        ex. 0,2-4,7:0-15,32-47; 3-9:0x337F
 
-GPU indexes are taken post ROCM_VISIBLE_DEVICES reordering.
+GPU indexes are taken post ROCR_VISIBLE_DEVICES reordering.
 Listed or bit set CUs will be enabled at queue creation on the associated GPU.
 All other CUs on the associated GPUs will be disabled.
 CU masks of unlisted GPUs are not restricted.
@@ -120,7 +120,7 @@ Repeating a GPU or CU ID is a syntax error.
 Parsing stops at the first CU_Set that has a syntax error, that set and all
 following sets are ignored.
 Specifying a mask with no usable CUs (CU_list is 0x0) is a syntax error.
-Users should use ROCM_VISIBLE_DEVICES if they want to exclude use of a
+Users should use ROCR_VISIBLE_DEVICES if they want to exclude use of a
 particular GPU.
 */
 void Flag::parse_masks(std::string& var, uint32_t maxGpu, uint32_t maxCU) {
