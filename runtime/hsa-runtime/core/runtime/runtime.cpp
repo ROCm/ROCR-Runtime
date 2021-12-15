@@ -2030,7 +2030,8 @@ hsa_status_t Runtime::SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent,
             start->second.prev->second.next = start->second.next;
             if (!isEndNode(start)) start->second.next->second.prev = start->second.prev;
           }
-          prefetch_map_.erase(start);
+          start = prefetch_map_.erase(start);
+          continue;
         }
       }
       start++;
