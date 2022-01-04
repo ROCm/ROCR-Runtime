@@ -1255,7 +1255,8 @@ TEST_F(KFDMemoryTest, MMBench) {
             memFlags.ui32.HostAccess = 0;
             memFlags.ui32.NonPaged = 1;
             /* Upper limit of buffer number to fit 90% vram size */
-            bufLimit = ((vramSizeMB << 20) * 9 / 10) / bufSize ;
+            bufLimit = ((vramSizeMB << 20) * 8 / 10) / bufSize ;
+
             if (bufLimit == 0)
                 continue; // skip when bufSize > vram
 
