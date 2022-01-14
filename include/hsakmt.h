@@ -877,6 +877,22 @@ hsaKmtGetXNACKMode(
     HSAint32 * enable  // OUT: returns XNACK value.
 );
 
+/**
+   Open anonymous file handle to enable events and read SMI events.
+
+   To enable events, write 64bit events mask to fd, event enums as bit index.
+   for example, event mask (HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_INDEX_MAX) - 1) to enable all events
+
+   Read event from fd is not blocking, use poll with timeout value to check if event is available.
+   Event is dropped if kernel event fifo is full.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtOpenSMI(
+    HSAuint32 NodeId,   // IN: GPU node_id to receive the SMI event from
+    int *fd             // OUT: anonymous file handle
+);
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif
