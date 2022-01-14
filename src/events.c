@@ -339,3 +339,30 @@ out:
 
 	return result;
 }
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtOpenSMI(HSAuint32 NodeId, int *fd)
+{
+	struct kfd_ioctl_smi_events_args args;
+	HSAKMT_STATUS result;
+	uint32_t gpuid;
+
+	CHECK_KFD_OPEN();
+
+	pr_debug("[%s] node %d\n", __func__, NodeId);
+
+	result = validate_nodeid(NodeId, &gpuid);
+	if (result != HSAKMT_STATUS_SUCCESS) {
+		pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
+		return result;
+	}
+
+	args.gpuid = gpuid;
+	result = kmtIoctl(kfd_fd, AMDKFD_IOC_SMI_EVENTS, &args);
+	if (result) {
+		pr_debug("open SMI event fd failed %s\n", strerror(errno));
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	*fd = args.anon_fd;
+	return HSAKMT_STATUS_SUCCESS;
+}
