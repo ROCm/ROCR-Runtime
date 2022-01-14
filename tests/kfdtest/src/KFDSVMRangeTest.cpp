@@ -21,6 +21,7 @@
  *
  */
 #include "KFDSVMRangeTest.hpp"
+#include <poll.h>
 #include <sys/mman.h>
 #include <vector>
 #include "PM4Queue.hpp"
@@ -1398,6 +1399,88 @@ queue_fail:
     hsaKmtDestroyEvent(vmFaultEvent);
     /* Child process exit, otherwise it will continue to run remaining tests */
     exit(ret);
+
+    TEST_END
+}
+
+/*
+ * Test SMI HMM SVM profiling event
+ * Use separate thread to read event the same way as ROCr and ROCProfiler
+ */
+struct ReadEventThreadParams {
+    int nodeid;
+    HSAuint64 *pBuf;
+    int BufSize;
+    pthread_barrier_t *barrier;
+};
+
+unsigned int ReadSMIEventThread(void* p) {
+    struct ReadEventThreadParams *pArgs = (struct ReadEventThreadParams *)p;
+    char msg[HSA_SMI_EVENT_MSG_SIZE];
+    struct pollfd fds = {0};
+    HSAuint64 events;
+    int fd;
+
+    EXPECT_SUCCESS(hsaKmtOpenSMI(pArgs->nodeid, &fd));
+    events = HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_INDEX_MAX) - 1;
+    EXPECT_EQ(write(fd, &events, sizeof(events)), sizeof(events));
+
+    pthread_barrier_wait(pArgs->barrier);
+
+    fds.fd = fd;
+    fds.events = POLLIN;
+    EXPECT_GE(poll(&fds, 1, 1000), 0);
+
+    memset(msg, 0, sizeof(msg));
+    EXPECT_GE(read(fd, msg, HSA_SMI_EVENT_MSG_SIZE), 0);
+
+    int event_id, pid, size, trigger, unused;
+    HSAuint64 timestamp;
+    HSAuint64 addr;
+    EXPECT_EQ(sscanf(msg, "%x %ld -%d @%lx(%d) %d->%x %x:%d %d\n", &event_id, &timestamp, &pid,
+                     &addr, &size, &unused, &unused, &unused, &unused, &trigger), 10);
+    EXPECT_EQ(event_id, HSA_SMI_EVENT_MIGRATE_START);
+    EXPECT_EQ((HSAuint64 *)(addr << PAGE_SHIFT), pArgs->pBuf);
+    EXPECT_EQ(size << PAGE_SHIFT, pArgs->BufSize);
+    EXPECT_EQ(pid, getpid());
+    EXPECT_EQ(trigger, HSA_MIGRATE_TRIGGER_PREFETCH);
+    close(fd);
+}
+
+TEST_F(KFDSVMRangeTest, HMMProfilingEvent) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    if (m_VersionInfo.KernelInterfaceMinorVersion < 10)
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (!GetVramSize(defaultGPUNode)) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    pthread_barrier_t barrier;
+    ASSERT_SUCCESS(pthread_barrier_init(&barrier, NULL, 2));
+
+    int BufSize = 16 << 10;
+    HsaSVMRange SysBuffer(BufSize, defaultGPUNode);
+    HSAuint64 *pBuf = SysBuffer.As<HSAuint64 *>();
+
+    struct ReadEventThreadParams pArgs = {defaultGPUNode, pBuf, BufSize, &barrier};
+    uint64_t threadId;
+    ASSERT_EQ(true, StartThread(&ReadSMIEventThread, &pArgs, threadId));
+
+    pthread_barrier_wait(&barrier);
+
+    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufSize, defaultGPUNode));
+
+    WaitForThread(threadId);
 
     TEST_END
 }
