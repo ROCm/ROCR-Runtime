@@ -824,8 +824,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       assert(pkt.IsValid() && "Invalid packet in dynamic scratch handler.");
       assert(pkt.type() == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
              "Invalid packet in dynamic scratch handler.");
+      assert((pkt.dispatch.workgroup_size_x != 0) && (pkt.dispatch.workgroup_size_y != 0) &&
+             (pkt.dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
 
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
+      assert((scratch_request != 0) &&
+             "Scratch memory request from packet with no scratch demand.  Possible bad kernel code object.");
 
       const uint32_t MaxScratchSlots =
           (queue->amd_queue_.max_cu_id + 1) * queue->agent_->properties().MaxSlotsScratchCU;
