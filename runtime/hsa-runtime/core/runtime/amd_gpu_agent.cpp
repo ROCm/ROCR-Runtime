@@ -1010,6 +1010,17 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
       assert(regions_.size() != 0 && "No device local memory found!");
       *((bool*)value) = properties_.Capability.ui32.CoherentHostAccess == 1;
+    case HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT:
+      if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
+          (isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
+          (isa_->GetStepping() == 10)) {
+        uint32_t count = 0;
+        hsa_status_t err = GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &count);
+        assert(err == HSA_STATUS_SUCCESS && "CU count query failed.");
+        *((uint32_t*)value) = (count & 0xFFFFFFF8) - 8;  // value = floor(count/8)*8-8
+        break;
+      }
+      return GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, value);
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
