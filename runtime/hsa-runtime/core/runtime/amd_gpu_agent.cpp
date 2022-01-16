@@ -1055,6 +1055,11 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  // Enforce min size
+  if (size < minAqlSize_) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
   // Allocate scratch memory
   ScratchInfo scratch = {0};
   if (private_segment_size == UINT_MAX) {

@@ -336,7 +336,8 @@ class GpuAgent : public GpuAgentInt {
   const std::function<void(void*)>& system_deallocator() const { return system_deallocator_; }
 
  protected:
-  static const uint32_t minAqlSize_ = 0x1000;   // 4KB min
+  // Sizes are in packets.
+  static const uint32_t minAqlSize_ = 0x40;     // 4KB min
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
   // @brief Create an internal queue allowing tools to be notified.
@@ -344,7 +345,7 @@ class GpuAgent : public GpuAgentInt {
     return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr);
   }
 
-  // @brief // @brief Create an internal queue, with a custom error handler, allowing tools to be
+  // @brief Create an internal queue, with a custom error handler, allowing tools to be
   // notified.
   core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source,
                                                          void* data),
