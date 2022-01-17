@@ -100,6 +100,11 @@ struct ValidityError<const T*> {
     if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
   } while (false)
 
+#define IS_ZERO(arg)                                                                               \
+  do {                                                                                             \
+    if ((arg) == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                      \
+  } while (false)
+
 #define IS_VALID(ptr)                                           \
   do {                                                          \
     if ((ptr) == NULL || !(ptr)->IsValid())                     \
@@ -1167,7 +1172,24 @@ hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t siz
     return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
+  CATCH;
+}
 
+hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                            uint64_t* offset) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(dmabuf);
+  IS_BAD_PTR(offset);
+  IS_ZERO(size);
+  return core::Runtime::runtime_singleton_->DmaBufExport(ptr, size, dmabuf, offset);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf) {
+  TRY;
+  return core::Runtime::runtime_singleton_->DmaBufClose(dmabuf);
   CATCH;
 }
 

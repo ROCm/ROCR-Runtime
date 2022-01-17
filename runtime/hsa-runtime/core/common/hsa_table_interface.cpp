@@ -1212,6 +1212,17 @@ hsa_status_t HSA_API hsa_amd_spm_set_dest_buffer(hsa_agent_t agent, size_t size,
                                                      is_data_loss);
 }
 
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                                    uint64_t* offset) {
+  return amdExtTable->hsa_amd_portable_export_dmabuf_fn(ptr, size, dmabuf, offset);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf) {
+  return amdExtTable->hsa_amd_portable_close_dmabuf_fn(dmabuf);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

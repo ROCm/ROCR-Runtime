@@ -685,6 +685,18 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((bool*)value) = g_use_mwaitx;
       break;
     }
+    case HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED: {
+      auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+
+      // Implemented in KFD in 1.12
+      if (kfd_version.KernelInterfaceMajorVersion > 1 ||
+          kfd_version.KernelInterfaceMajorVersion == 1 &&
+              kfd_version.KernelInterfaceMinorVersion >= 12)
+        *(reinterpret_cast<bool*>(value)) = true;
+      else
+        *(reinterpret_cast<bool*>(value)) = false;
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -2298,6 +2310,53 @@ Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   assert(prefetch_node != -2 && "prefetch_node was not updated.");
   assert(prefetch_node != -1 && "Should have already returned.");
   return agents_by_node_[prefetch_node][0];
+}
+
+hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset) {
+#ifdef __linux__
+  ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
+  // Lookup containing allocation.
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      // Check size is in bounds.
+      if (uintptr_t(ptr) - uintptr_t(mem->first) + size <= mem->second.size) {
+        // Check allocation is on GPU
+        if (mem->second.region->owner()->device_type() != Agent::kAmdGpuDevice)
+          return HSA_STATUS_ERROR_INVALID_AGENT;
+
+        int fd;
+        uint64_t off;
+        HSAKMT_STATUS err = hsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off);
+        if (err == HSAKMT_STATUS_SUCCESS) {
+          *dmabuf = fd;
+          *offset = off;
+          return HSA_STATUS_SUCCESS;
+        }
+
+        assert((err != HSAKMT_STATUS_INVALID_PARAMETER) &&
+               "Thunk does not recognize an expected allocation.");
+        if (err == HSAKMT_STATUS_ERROR) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+        return HSA_STATUS_ERROR;
+      }
+    }
+  }
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+#else
+  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+#endif
+}
+
+hsa_status_t Runtime::DmaBufClose(int dmabuf) {
+#ifdef __linux__
+  int err = close(dmabuf);
+  if (err == 0) return HSA_STATUS_SUCCESS;
+  return HSA_STATUS_ERROR_RESOURCE_FREE;
+#else
+  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+#endif
 }
 
 }  // namespace core
