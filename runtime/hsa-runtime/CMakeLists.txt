@@ -59,6 +59,8 @@ project( ${CORE_RUNTIME_TARGET} )
 list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules" )
 include ( utils )
 include ( hsa_common )
+# Set default libdir to be "lib" for ROCm, distros will override this anyway:
+set(CMAKE_INSTALL_LIBDIR "lib" CACHE STRING "Library install directory")
 include ( GNUInstallDirs )
 
 ## Expose static library option
@@ -117,7 +119,7 @@ endif()
 target_include_directories( ${CORE_RUNTIME_TARGET}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-  $<INSTALL_INTERFACE:include/hsa>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/hsa>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
@@ -275,7 +277,7 @@ if( NOT ${BUILD_SHARED_LIBS} )
 
   ## Bind to source build target interface but not its link requirements.
   target_include_directories( ${CORE_RUNTIME_NAME} INTERFACE $<TARGET_PROPERTY:${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET},INTERFACE_INCLUDE_DIRECTORIES> )
-  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE -Wl,$<INSTALL_PREFIX>/lib/cmake/${CORE_RUNTIME_NAME}/${LNKSCR}
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE -Wl,$<INSTALL_PREFIX>/${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}/${LNKSCR}
     -Wl,--whole-archive $<TARGET_FILE:${CORE_RUNTIME_NAME}::${CORE_RUNTIME_TARGET}> -Wl,--no-whole-archive)
   add_dependencies( ${CORE_RUNTIME_NAME} ${CORE_RUNTIME_TARGET} )
 
@@ -287,25 +289,23 @@ if( NOT ${BUILD_SHARED_LIBS} )
 endif()
 
 ## Create symlinks for legacy packaging and install
-add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../include/hsa hsa_include_link )
+add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_INCLUDEDIR}/hsa hsa_include_link )
 if ( ${BUILD_SHARED_LIBS} )
-    add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../lib/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
-    add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../lib/${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} )
+    add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
+    add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} )
 endif()
 
 ## Set install information
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
-# TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
 install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
-  ARCHIVE DESTINATION lib COMPONENT binary
-  LIBRARY DESTINATION lib COMPONENT binary )
+  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary
+  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary )
 
 # Install license
 install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
 
 # Install public headers
-# TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_INCLUDEDIR}
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION include/hsa COMPONENT dev )
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hsa COMPONENT dev )
 
 # Legacy symlink - not packaged (CPack is bugged until ~3.18, see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4637)
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION hsa/include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
@@ -318,11 +318,10 @@ endif ()
 
 ## Configure and install package config file
 # Record our usage data for clients find_package calls.
-# TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
 install ( EXPORT ${CORE_RUNTIME_NAME}Targets
   FILE ${CORE_RUNTIME_NAME}Targets.cmake
   NAMESPACE ${CORE_RUNTIME_NAME}::
-  DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}
   COMPONENT dev)
 
 # Adds the target alias hsa-runtime64::hsa-runtime64 to the local cmake cache.
@@ -336,28 +335,26 @@ add_library( ${CORE_RUNTIME_NAME}::${CORE_RUNTIME_NAME} ALIAS ${CORE_RUNTIME_NAM
 # Create cmake configuration files
 include(CMakePackageConfigHelpers)
 
-# TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
 configure_package_config_file(${CORE_RUNTIME_NAME}-config.cmake.in
   ${CORE_RUNTIME_NAME}-config.cmake
-  INSTALL_DESTINATION lib/cmake/${CORE_RUNTIME_NAME} )
+  INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME} )
 
 write_basic_package_version_file(${CORE_RUNTIME_NAME}-config-version.cmake
   VERSION ${SO_VERSION_STRING} COMPATIBILITY AnyNewerVersion )
 
-# TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_LIBDIR}
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_NAME}-config.cmake ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_NAME}-config-version.cmake
-  DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}
   COMPONENT dev)
 
 # Install build files needed only when using a static build.
 if( NOT ${BUILD_SHARED_LIBS} )
   # libelf find package module
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/FindLibElf.cmake ${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/COPYING-CMAKE-SCRIPTS
-    DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}
     COMPONENT dev)
   # Linker script (defines function aliases)
   install(FILES ${CMAKE_CURRENT_SOURCE_DIR}/${LNKSCR}
-    DESTINATION lib/cmake/${CORE_RUNTIME_NAME}
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}
     COMPONENT dev)
 endif()
 
