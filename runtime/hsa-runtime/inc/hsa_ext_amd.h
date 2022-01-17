@@ -48,8 +48,12 @@
 #include "hsa.h"
 #include "hsa_ext_image.h"
 
+/*
+ * - 1.0 - initial version
+ * - 1.1 - dmabuf export
+ */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 0
+#define HSA_AMD_INTERFACE_VERSION_MINOR 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -2581,6 +2585,76 @@ hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
 hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
                                          uint32_t* timeout, uint32_t* size_copied, void* dest,
                                          bool* is_data_loss);
+/**
+ * @brief Obtains an OS specific, vendor neutral, handle to a memory allocation.
+ *
+ * Obtains an OS specific handle to GPU agent memory.  The memory must be part
+ * of a single allocation from an hsa_amd_memory_pool_t exposed by a GPU Agent.
+ * The handle may be used with other APIs (e.g. Vulkan) to obtain shared access
+ * to the allocation.
+ *
+ * Shared access to the memory is not guaranteed to be fine grain coherent even
+ * if the allocation exported is from a fine grain pool.  The shared memory
+ * consistency model will be no stronger than the model exported from, consult
+ * the importing API to determine the final consistency model.
+ *
+ * The allocation's memory remains valid as long as the handle and any mapping
+ * of the handle remains valid.  When the handle and all mappings are closed
+ * the backing memory will be released for reuse.
+ *
+ * @param[in] ptr Pointer to the allocation being exported.
+ *
+ * @param[in] size Size in bytes to export following @p ptr.  The entire range
+ * being exported must be contained within a single allocation.
+ *
+ * @param[out] dmabuf Pointer to a dma-buf file descriptor holding a reference to the
+ * allocation.  Contents will not be altered in the event of failure.
+ *
+ * @param[out] offset Offset in bytes into the memory referenced by the dma-buf
+ * object at which @p ptr resides.  Contents will not be altered in the event
+ * of failure.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Export completed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT One or more arguments is NULL.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION The address range described by
+ * @p ptr and @p size are not contained within a single allocation.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The allocation described by @p ptr
+ * and @p size was allocated on a device which can not export memory.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES The return file descriptor,
+ * @p dmabuf, could not be created.
+ */
+hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                            uint64_t* offset);
+
+/**
+ * @brief Closes an OS specific, vendor neutral, handle to a memory allocation.
+ *
+ * Closes an OS specific handle to GPU agent memory.
+ *
+ * Applications should close a handle after imports are complete.  The handle
+ * is not required to remain open for the lifetime of imported mappings.  The
+ * referenced allocation will remain valid until all handles and mappings
+ * are closed.
+ *
+ * @param[in] dmabuf Handle to be closed.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Handle closed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_RESOURCE_FREE A generic error was encountered
+ * when closing the handle.  The handle may have been closed already or an
+ * async IO error may have occured.
+ */
+hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
 #ifdef __cplusplus
 }  // end extern "C" block

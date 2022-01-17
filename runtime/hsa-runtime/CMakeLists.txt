@@ -85,7 +85,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.8.0" )
+get_version ( "1.9.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()

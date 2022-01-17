@@ -499,7 +499,12 @@ typedef enum {
    * Returns true if mwaitx is enabled on this system
    * The type of this attribute is bool.
    */
-  HSA_AMD_SYSTEM_INFO_MWAITX_ENABLED = 0x203
+  HSA_AMD_SYSTEM_INFO_MWAITX_ENABLED = 0x203,
+  /**
+   * Returns true if DMABUF APIs are supported by the driver.  The type of
+   * this attribute is bool.
+   */
+  HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED = 0x204
 } hsa_system_info_t;
 
 /**
