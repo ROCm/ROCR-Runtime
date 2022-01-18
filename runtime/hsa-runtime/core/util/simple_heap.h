@@ -300,6 +300,9 @@ template <typename Allocator> class SimpleHeap {
         (frag_map.rbegin()->first + frag_map.rbegin()->second.size <= base))
       return false;
 
+    // Is block already discarded?
+    if (frag_map.begin()->second.discard) return true;
+
     // Mark all fragments for discard and compute block size.  Removes freelist records for all
     // fragments in the block.
     size_t size = 0;
