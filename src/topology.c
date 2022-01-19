@@ -240,6 +240,7 @@ static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	{ 0x13FB, 10, 1, 3, "cyan_skillfish" },
 	{ 0x13FC, 10, 1, 3, "cyan_skillfish" },
 	{ 0x13FE, 10, 1, 3, "cyan_skillfish" },
+	{ 0x143F, 10, 1, 3, "cyan_skillfish" },
 	/* Navi14 */
 	{ 0x7340, 10, 1, 2, "Navi14" },
 	{ 0x7341, 10, 1, 2, "Navi14" },
