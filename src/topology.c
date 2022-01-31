@@ -694,7 +694,7 @@ static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id,
 	}
 
 	/* Open DRM Render device */
-	ret_value = open_drm_render_device(drm_render_minor);
+	ret_value = open_drm_render_device(drm_render_minor, gpu_id);
 	if (ret_value > 0)
 		*is_node_supported = true;
 	else if (ret_value != -ENOENT && ret_value != -EPERM)

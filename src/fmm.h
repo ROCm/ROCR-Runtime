@@ -93,7 +93,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint32_t *nodes_to_map, uint64_t num_of_nodes, uint64_t *gpuvm_address);
 
-int open_drm_render_device(int minor);
+int open_drm_render_device(int minor, uint32_t gpu_id);
 void *mmap_allocate_aligned(int prot, int flags, uint64_t size, uint64_t align,
 			    uint64_t guard_size, void *aper_base, void *aper_limit);
 
