@@ -1906,23 +1906,32 @@ static HSAKMT_STATUS get_process_apertures(
  */
 #define DRM_FIRST_RENDER_NODE 128
 #define DRM_LAST_RENDER_NODE 255
-static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
+#define DRM_MAX_PARTITIONS 8
+static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE][DRM_MAX_PARTITIONS];
+static uint32_t gpu_id_fd_map[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE][DRM_MAX_PARTITIONS];
 
-int open_drm_render_device(int minor)
+int open_drm_render_device(int minor, uint32_t gpu_id)
 {
 	char path[128];
-	int index, fd;
+	int fd, render_idx, gpu_id_idx;
 
 	if (minor < DRM_FIRST_RENDER_NODE || minor > DRM_LAST_RENDER_NODE) {
 		pr_err("DRM render minor %d out of range [%d, %d]\n", minor,
 		       DRM_FIRST_RENDER_NODE, DRM_LAST_RENDER_NODE);
 		return -EINVAL;
 	}
-	index = minor - DRM_FIRST_RENDER_NODE;
+	render_idx = minor - DRM_FIRST_RENDER_NODE;
 
 	/* If the render node was already opened, keep using the same FD */
-	if (drm_render_fds[index])
-		return drm_render_fds[index];
+	for (gpu_id_idx = 0; gpu_id_idx < DRM_MAX_PARTITIONS &&
+			gpu_id_fd_map[render_idx][gpu_id_idx] != 0; gpu_id_idx++)
+		if (gpu_id_fd_map[render_idx][gpu_id_idx] == gpu_id)
+			return drm_render_fds[render_idx][gpu_id_idx];
+
+	if (gpu_id_idx >= DRM_MAX_PARTITIONS) {
+		pr_err("Requesting more FDs for same render node than max supported partitions!\n");
+		return -EINVAL;
+	}
 
 	sprintf(path, "/dev/dri/renderD%d", minor);
 	fd = open(path, O_RDWR | O_CLOEXEC);
@@ -1934,7 +1943,8 @@ int open_drm_render_device(int minor)
 		}
 		return -errno;
 	}
-	drm_render_fds[index] = fd;
+	gpu_id_fd_map[render_idx][gpu_id_idx] = gpu_id;
+	drm_render_fds[render_idx][gpu_id_idx] = fd;
 
 	return fd;
 }
@@ -2325,7 +2335,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 		/* Skip non-GPU nodes */
 		if (props.KFDGpuID) {
-			int fd = open_drm_render_device(props.DrmRenderMinor);
+			int fd = open_drm_render_device(props.DrmRenderMinor, props.KFDGpuID);
 			if (fd <= 0) {
 				ret = HSAKMT_STATUS_ERROR;
 				goto gpu_mem_init_failed;
@@ -3867,15 +3877,17 @@ static void fmm_clear_aperture(manageable_aperture_t *app)
  */
 void fmm_clear_all_mem(void)
 {
-	uint32_t i;
+	uint32_t i, j;
 	void *map_addr;
 
 	/* Close render node FDs. The child process needs to open new ones */
-	for (i = 0; i <= DRM_LAST_RENDER_NODE - DRM_FIRST_RENDER_NODE; i++)
-		if (drm_render_fds[i]) {
-			close(drm_render_fds[i]);
-			drm_render_fds[i] = 0;
+	for (i = 0; i <= DRM_LAST_RENDER_NODE - DRM_FIRST_RENDER_NODE; i++) {
+		for (j = 0; j < DRM_MAX_PARTITIONS && drm_render_fds[i][j] != 0; j++) {
+			close(drm_render_fds[i][j]);
+			drm_render_fds[i][j] = 0;
+			gpu_id_fd_map[i][j] = 0;
 		}
+	}
 
 	fmm_clear_aperture(&cpuvm_aperture);
 	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
