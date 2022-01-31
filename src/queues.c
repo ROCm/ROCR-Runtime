@@ -293,7 +293,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		return false;
 	if (node.NumFComputeCores && node.NumSIMDPerCU) {
 		uint32_t ctl_stack_size, wg_data_size;
-		uint32_t cu_num = node.NumFComputeCores / node.NumSIMDPerCU;
+		uint32_t cu_num = node.NumFComputeCores / node.NumSIMDPerCU / node.NumXcc;
 		uint32_t wave_num = (q->gfxv < GFX_VERSION_NAVI10)
 			? MIN(cu_num * 40, node.NumShaderBanks / node.NumArrays * 512)
 			: cu_num * 32;
@@ -459,17 +459,21 @@ static void free_queue(struct queue *q)
 }
 
 static inline void fill_cwsr_header(struct queue *q, void *addr,
-		HsaEvent *Event, volatile HSAint64 *ErrPayload)
+		HsaEvent *Event, volatile HSAint64 *ErrPayload, HSAuint32 NumXcc)
 {
-	HsaUserContextSaveAreaHeader *header =
-			(HsaUserContextSaveAreaHeader *)addr;
+	uint32_t i;
+	HsaUserContextSaveAreaHeader *header;
 
-	header->ErrorEventId = 0;
-	if (Event)
-		header->ErrorEventId = Event->EventId;
-	header->ErrorReason = ErrPayload;
-	header->DebugOffset = q->ctx_save_restore_size;
-	header->DebugSize = q->debug_memory_size;
+	for (i = 0; i < NumXcc; i++) {
+		header = (HsaUserContextSaveAreaHeader *)
+			((uintptr_t)addr + (i * q->ctx_save_restore_size));
+		header->ErrorEventId = 0;
+		if (Event)
+			header->ErrorEventId = Event->EventId;
+		header->ErrorReason = ErrPayload;
+		header->DebugOffset = (NumXcc - i) * q->ctx_save_restore_size;
+		header->DebugSize = q->debug_memory_size * NumXcc;
+	}
 }
 
 static int handle_concrete_asic(struct queue *q,
@@ -502,19 +506,20 @@ static int handle_concrete_asic(struct queue *q,
 		HsaNodeProperties node;
 		bool svm_api;
 
+		if (hsaKmtGetNodeProperties(NodeId, &node))
+			return HSAKMT_STATUS_ERROR;
+
 		args->ctx_save_restore_size = q->ctx_save_restore_size;
 		args->ctl_stack_size = q->ctl_stack_size;
 
 		/* Total memory to be allocated is =
-		 * (Control Stack size + WG size) + Debug memory area size
+		 * (Control Stack size + WG size) per XCC * num_xcc +
+		 * Debug memory area size
 		 */
-		total_mem_alloc_size = q->ctx_save_restore_size +
-				       q->debug_memory_size;
+		total_mem_alloc_size = (q->ctx_save_restore_size +
+					q->debug_memory_size) * node.NumXcc;
 
-		if (hsaKmtGetNodeProperties(NodeId, &node))
-			svm_api = false;
-		else
-			svm_api = node.Capability.ui32.SVMAPISupported;
+		svm_api = node.Capability.ui32.SVMAPISupported;
 
 		/* Allocate unified memory for context save restore
 		 * area on dGPU.
@@ -539,7 +544,7 @@ static int handle_concrete_asic(struct queue *q,
 				if (madvise(addr, size, MADV_DONTFORK))
 					pr_err("madvise failed -%d\n", errno);
 
-				fill_cwsr_header(q, addr, Event, ErrPayload);
+				fill_cwsr_header(q, addr, Event, ErrPayload, node.NumXcc);
 
 				r = register_svm_range(addr, size,
 						NodeId, NodeId, 0, true);
@@ -562,7 +567,7 @@ static int handle_concrete_asic(struct queue *q,
 			if (!q->ctx_save_restore)
 				return HSAKMT_STATUS_NO_MEMORY;
 
-			fill_cwsr_header(q, q->ctx_save_restore, Event, ErrPayload);
+			fill_cwsr_header(q, q->ctx_save_restore, Event, ErrPayload, node.NumXcc);
 		}
 
 		args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;

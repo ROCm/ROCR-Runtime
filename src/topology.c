@@ -1186,6 +1186,8 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			props->NumSdmaQueuesPerEngine = prop_val;
 		else if (strcmp(prop_name, "num_cp_queues") == 0)
 			props->NumCpQueues = prop_val;
+		else if (strcmp(prop_name, "num_xcc") == 0)
+			props->NumXcc = prop_val;
 		else if (strcmp(prop_name, "gfx_target_version") == 0)
 			gfxv = (uint32_t)prop_val;
 	}
@@ -1254,6 +1256,12 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 	if (props->NumFComputeCores)
 		assert(props->EngineId.ui32.Major && "HSA_OVERRIDE_GFX_VERSION may be needed");
+
+	/* On Older kernels, num_xcc may not be present in system properties.
+	 * Set it to 1 if system properties do not report num_xcc.
+	 */
+	if (!props->NumXcc)
+		props->NumXcc = 1;
 
 err:
 	free(read_buf);
