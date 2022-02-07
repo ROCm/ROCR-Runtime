@@ -119,7 +119,7 @@ endif()
 target_include_directories( ${CORE_RUNTIME_TARGET}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/hsa>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
@@ -291,13 +291,6 @@ if( NOT ${BUILD_SHARED_LIBS} )
   install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
 endif()
 
-## Create symlinks for legacy packaging and install
-add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_INCLUDEDIR}/hsa hsa_include_link )
-if ( ${BUILD_SHARED_LIBS} )
-    add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
-    add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} )
-endif()
-
 ## Set install information
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
 install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
@@ -310,14 +303,14 @@ install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTA
 # Install public headers
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hsa COMPONENT dev )
 
-# Legacy symlink - not packaged (CPack is bugged until ~3.18, see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4637)
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION hsa/include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
-
-# Legacy symlinks.
-if ( ${BUILD_SHARED_LIBS} )
-    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so DESTINATION hsa/lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so COMPONENT binary)
-    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} DESTINATION hsa/lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} COMPONENT binary)
-endif ()
+# Option to build header path migration helpers.
+option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
+if(INCLUDE_PATH_COMPATIBILITY)
+  include(hsa-backward-compat.cmake)
+  target_include_directories( ${CORE_RUNTIME_TARGET}
+    PUBLIC
+    $<INSTALL_INTERFACE:hsa/include/hsa> )
+endif()
 
 ## Configure and install package config file
 # Record our usage data for clients find_package calls.
@@ -410,11 +403,7 @@ set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-R
 ## Process the Debian install/remove scripts to update the CPACK variables
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Binary/postinst @ONLY )
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/postinst.in DEBIAN/Dev/postinst @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/prerm.in DEBIAN/Dev/prerm @ONLY )
-
 set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_CONTROL_EXTRA "DEBIAN/Dev/postinst;DEBIAN/Dev/prerm" )
 
 # Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
@@ -443,13 +432,8 @@ set( CPACK_RPM_PACKAGE_LICENSE "NCSA" )
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/postun @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/post.in" RPM/Dev/post @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/postun.in" RPM/Dev/postun @ONLY )
-
 set ( CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post" )
 set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun" )
-set ( CPACK_RPM_DEV_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/post" )
-set ( CPACK_RPM_DEV_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/postun" )
 
 # Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "hsakmt-roct" )
