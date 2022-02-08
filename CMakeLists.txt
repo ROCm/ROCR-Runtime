@@ -191,11 +191,6 @@ if(NOT DISTRO_ID MATCHES "ubuntu")
   find_library(LIBGCC NAMES libgcc_s.so.1 REQUIRED)
   message(STATUS "LIBGCC:" ${LIBGCC})
   target_link_libraries( ${HSAKMT_TARGET} PRIVATE ${LIBGCC} )
-else()
-  find_library(UDEV NAMES libudev.so libudev.a REQUIRED)
-  message(STATUS "UDEV:" ${UDEV})
-  find_package(ZLIB REQUIRED)
-  target_link_libraries( ${HSAKMT_TARGET} PRIVATE ${ZLIB} ${UDEV} )
 endif()
 
 ## Define default paths and packages.
