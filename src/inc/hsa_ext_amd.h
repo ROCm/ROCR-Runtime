@@ -311,7 +311,13 @@ typedef enum hsa_amd_agent_info_s {
    * physically resident in the agent's local memory.
    * The type of this attribute is bool.
    */
-  HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS = 0xA013
+  HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS = 0xA013,
+  /**
+   * Some processors support more CUs than can reliably be used in a cooperative
+   * dispatch.  This queries the count of CUs which are fully enabled for
+   * cooperative dispatch.
+   */
+  HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {

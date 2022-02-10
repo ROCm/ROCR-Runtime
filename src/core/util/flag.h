@@ -145,6 +145,14 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_DEBUG");
     debug_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_CU_MASK_SKIP_INIT");
+    cu_mask_skip_init_ = (var == "1") ? true : false;
+
+    // Temporary opt-in for corrected HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT behavior.
+    // Will become opt-out and possibly removed in future releases.
+    var = os::GetEnvVar("HSA_COOP_CU_COUNT");
+    coop_cu_count_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -209,6 +217,10 @@ class Flag {
     return it->second;
   }
 
+  bool cu_mask_skip_init() const { return cu_mask_skip_init_; }
+
+  bool coop_cu_count() const { return coop_cu_count_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -227,6 +239,8 @@ class Flag {
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
   bool debug_;
+  bool cu_mask_skip_init_;
+  bool coop_cu_count_;
 
   SDMA_OVERRIDE enable_sdma_;
 

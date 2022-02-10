@@ -599,14 +599,21 @@ void GpuAgent::InitDma() {
   queues_[QueueUtility].reset(queue_lambda);
 
   // Decide which engine to use for blits.
-  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue) {
+  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev) {
     Flag::SDMA_OVERRIDE sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
-    // User SDMA queues are unstable on gfx8.
-    bool use_sdma = ((isa_->GetMajorVersion() != 8));
+    // User SDMA queues are unstable on gfx8 and unsupported on gfx1013.
+    bool use_sdma =
+        ((isa_->GetMajorVersion() != 8) && (isa_->GetVersion() != std::make_tuple(10, 1, 3)));
     if (sdma_override != Flag::SDMA_DEFAULT) use_sdma = (sdma_override == Flag::SDMA_ENABLE);
 
     if (use_sdma && (HSA_PROFILE_BASE == profile_)) {
+      // On gfx90a ensure that HostToDevice queue is created first and so is placed on SDMA0.
+      if ((!use_xgmi) && (!isHostToDev) && (isa_->GetMajorVersion() == 9) &&
+          (isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) {
+        *blits_[BlitHostToDev];
+      }
+
       auto ret = CreateBlitSdma(use_xgmi);
       if (ret != nullptr) return ret;
     }
@@ -642,13 +649,14 @@ void GpuAgent::InitDma() {
     return ret;
   });
   blits_[BlitHostToDev].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly]); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly], true); });
   blits_[BlitDevToHost].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility]); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility], false); });
 
   // XGMI engines.
   for (uint32_t idx = DefaultBlitCount; idx < blit_cnt_; idx++) {
-    blits_[idx].reset([blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility]); });
+    blits_[idx].reset(
+        [blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility], false); });
   }
 
   // GWS queues.
@@ -794,7 +802,11 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
           HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR;
       break;
     case HSA_AGENT_INFO_FAST_F16_OPERATION:
-      *((bool*)value) = false;
+      if (isa_->GetMajorVersion() >= 8) {
+        *((bool*)value) = true;
+      } else {
+        *((bool*)value) = false;
+      }
       break;
     case HSA_AGENT_INFO_PROFILE:
       *((hsa_profile_t*)value) = profile_;
@@ -998,6 +1010,17 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
       assert(regions_.size() != 0 && "No device local memory found!");
       *((bool*)value) = properties_.Capability.ui32.CoherentHostAccess == 1;
+    case HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT:
+      if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
+          (isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
+          (isa_->GetStepping() == 10)) {
+        uint32_t count = 0;
+        hsa_status_t err = GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &count);
+        assert(err == HSA_STATUS_SUCCESS && "CU count query failed.");
+        *((uint32_t*)value) = (count & 0xFFFFFFF8) - 8;  // value = floor(count/8)*8-8
+        break;
+      }
+      return GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, value);
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -1504,10 +1527,11 @@ lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
   lazy_ptr<core::Blit>& blit =
     (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
      dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-       ? blits_[BlitHostToDev]
+       ? blits_[BlitHostToDev]  // CPU->GPU transfer.
        : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
           dst_agent.device_type() == core::Agent::kAmdCpuDevice)
-            ? blits_[BlitDevToHost] : blits_[BlitDevToHost];
+            ? blits_[BlitDevToHost]   // GPU->CPU transfer.
+            : blits_[BlitDevToHost];  // GPU->GPU transfer.
   return blit;
 }
 
