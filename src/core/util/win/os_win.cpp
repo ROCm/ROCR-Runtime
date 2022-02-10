@@ -224,6 +224,52 @@ uint64_t AccurateClockFrequency() {
   QueryPerformanceFrequency((LARGE_INTEGER*)&ret);
   return ret;
 }
+
+SharedMutex CreateSharedMutex() {
+  assert(false && "Not implemented.");
+  abort();
+  return nullptr;
+}
+
+bool TryAcquireSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+  return false;
+}
+
+bool AcquireSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+  return false;
+}
+
+void ReleaseSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+}
+
+bool TrySharedAcquireSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+  return false;
+}
+
+bool SharedAcquireSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+  return false;
+}
+
+void SharedReleaseSharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+}
+
+void DestroySharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+}
+
 }   //  namespace os
 }   //  namespace rocr
 

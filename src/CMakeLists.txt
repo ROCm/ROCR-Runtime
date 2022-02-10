@@ -85,7 +85,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.4.0" )
+get_version ( "1.5.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
@@ -126,7 +126,7 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
-set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -Werror -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
+set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
 
 ## Extra image settings - audit!
 set ( HSA_CXX_FLAGS ${HSA_CXX_FLAGS} -Wno-deprecated-declarations )
@@ -301,7 +301,7 @@ install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
   LIBRARY DESTINATION lib COMPONENT binary )
 
 # Install license
-#install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
+install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT binary )
 
 # Install public headers
 # TODO: Fix me for flat directory layout.  Should be ${CMAKE_INSTALL_INCLUDEDIR}
@@ -420,7 +420,7 @@ set ( CPACK_DEBIAN_DEV_PACKAGE_CONTROL_EXTRA "DEBIAN/Dev/postinst;DEBIAN/Dev/pre
 set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
 set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr" )
 if ( ROCM_DEP_ROCMCORE )
-  string ( APPEND PACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
+  string ( APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
   string ( APPEND CPACK_DEBIAN_DEV_PACKAGE_DEPENDS ", rocm-core" )
 endif()
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
@@ -438,6 +438,7 @@ endif()
 string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
 message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
+set( CPACK_RPM_PACKAGE_LICENSE "NCSA" )
 
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )

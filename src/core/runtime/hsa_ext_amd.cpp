@@ -567,14 +567,14 @@ hsa_status_t hsa_amd_memory_lock(void* host_ptr, size_t size,
                                  void** agent_ptr) {
   TRY;
   IS_OPEN();
-  *agent_ptr = NULL;
 
-  if (size == 0 || host_ptr == NULL || agent_ptr == NULL) {
+  if (size == 0 || host_ptr == nullptr || agent_ptr == nullptr) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((agents != NULL && num_agent == 0) ||
-      (agents == NULL && num_agent != 0)) {
+  *agent_ptr = nullptr;
+
+  if ((agents != nullptr && num_agent == 0) || (agents == nullptr && num_agent != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -598,13 +598,14 @@ hsa_status_t hsa_amd_memory_lock_to_pool(void* host_ptr, size_t size, hsa_agent_
                                          void** agent_ptr) {
   TRY;
   IS_OPEN();
-  *agent_ptr = NULL;
 
-  if (size == 0 || host_ptr == NULL || agent_ptr == NULL || flags != 0) {
+  if (size == 0 || host_ptr == nullptr || agent_ptr == nullptr || flags != 0) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if ((agents != NULL && num_agent == 0) || (agents == NULL && num_agent != 0)) {
+  *agent_ptr = nullptr;
+
+  if ((agents != nullptr && num_agent == 0) || (agents == nullptr && num_agent != 0)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -806,8 +807,12 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
   core::Agent** core_agents = short_agents;
   if (num_agents > tinyArraySize) {
     core_agents = new core::Agent* [num_agents];
-    if (core_agents == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    if (core_agents == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+
+  MAKE_SCOPE_GUARD([&]() {
+    if (num_agents > tinyArraySize) delete[] core_agents;
+  });
 
   for (uint32_t i = 0; i < num_agents; i++) {
     core::Agent* device = core::Agent::Convert(agents[i]);
@@ -819,7 +824,6 @@ hsa_status_t hsa_amd_interop_map_buffer(uint32_t num_agents,
       num_agents, core_agents, interop_handle, flags, size, ptr, metadata_size,
       metadata);
 
-  if (num_agents > tinyArraySize) delete[] core_agents;
   return ret;
   CATCH;
 }

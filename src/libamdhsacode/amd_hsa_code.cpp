@@ -573,6 +573,7 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1010: name = "gfx1010"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1011: name = "gfx1011"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1012: name = "gfx1012"; xnack_supported = true;  sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1013: name = "gfx1013"; xnack_supported = true;  sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1030: name = "gfx1030"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1031: name = "gfx1031"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1032: name = "gfx1032"; xnack_supported = false; sramecc_supported = false; break;
