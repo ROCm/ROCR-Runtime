@@ -925,11 +925,13 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_CACHELINE_SIZE:
       for (auto& cache : cache_props_) {
-        if (cache.CacheLineSize != 0) {
+        if ((cache.CacheLevel == 2) && (cache.CacheLineSize != 0)) {
           *((uint32_t*)value) = cache.CacheLineSize;
           break;
         }
       }
+      // Fallback for when KFD is returning zero.
+      *((uint32_t*)value) = 64;
       break;
     case HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT:
       *((uint32_t*)value) =
