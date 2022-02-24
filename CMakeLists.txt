@@ -143,7 +143,7 @@ target_sources ( ${HSAKMT_TARGET} PRIVATE ${HSAKMT_SRC} )
 target_include_directories( ${HSAKMT_TARGET}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}/src )
 
@@ -214,8 +214,14 @@ install ( TARGETS ${HSAKMT_TARGET} EXPORT ${HSAKMT_TARGET}Targets
 #install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT devel )
 
 # Install public headers
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/${HSAKMT_TARGET}
   COMPONENT devel PATTERN "linux" EXCLUDE )
+
+# Option to build header path migration helpers.
+option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
+if(INCLUDE_PATH_COMPATIBILITY)
+  include(hsakmt-backward-compat.cmake)
+endif()
 
 # Record our usage data for clients find_package calls.
 install ( EXPORT ${HSAKMT_TARGET}Targets
