@@ -135,7 +135,6 @@ class ScratchCache {
       if (it->second.isFree()) {
         it->second.alloc();
         info.queue_base = it->second.base;
-        info.size = it->first;
         info.scratch_node = it;
         available_bytes -= it->first;
         return true;
@@ -155,7 +154,6 @@ class ScratchCache {
     }
     it->second.free();
     available_bytes += it->first;
-    assert(it->first == info.size && "Scratch cache size mismatch.");
   }
 
   bool trim(bool trim_nodes_in_use) {

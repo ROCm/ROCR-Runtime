@@ -1328,6 +1328,8 @@ void AqlQueue::InitScratchSRD() {
   uint32_t num_waves = queue_scratch_.size / (tmpring_size.bits.WAVESIZE * 1024);
   tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+  assert((tmpring_size.bits.WAVES % agent_props.NumShaderBanks == 0) &&
+         "Invalid scratch wave count.  Must be divisible by #SEs.");
   return;
 }
 
