@@ -291,7 +291,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 			ALIGN_UP(wave_num * DEBUGGER_BYTES_PER_WAVE, DEBUGGER_BYTES_ALIGN);
 
 		q->ctx_save_restore_size = q->ctl_stack_size
-					+ PAGE_ALIGN_UP(wg_data_size + q->debug_memory_size);
+					+ PAGE_ALIGN_UP(wg_data_size);
 		return true;
 	}
 	return false;
@@ -423,14 +423,21 @@ static int handle_concrete_asic(struct queue *q,
 	ret = update_ctx_save_restore_size(NodeId, q);
 
 	if (ret) {
+		uint32_t total_mem_alloc_size = 0;
 		HsaUserContextSaveAreaHeader *header;
 
 		args->ctx_save_restore_size = q->ctx_save_restore_size;
 		args->ctl_stack_size = q->ctl_stack_size;
+
+		/* Total memory to be allocated is =
+		 * (Control Stack size + WG size) + Debug memory area size
+		 */
+		total_mem_alloc_size = q->ctx_save_restore_size +
+				       q->debug_memory_size;
 		q->ctx_save_restore =
-			allocate_exec_aligned_memory(q->ctx_save_restore_size,
-							 q->use_ats,
-							 NodeId, false, false);
+			allocate_exec_aligned_memory(total_mem_alloc_size,
+					 q->use_ats, NodeId, false, false);
+
 		if (!q->ctx_save_restore)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -441,7 +448,7 @@ static int handle_concrete_asic(struct queue *q,
 		if (Event)
 			header->ErrorEventId = Event->EventId;
 		header->ErrorReason = ErrPayload;
-		header->DebugOffset = q->ctx_save_restore_size - q->debug_memory_size;
+		header->DebugOffset = q->ctx_save_restore_size;
 		header->DebugSize = q->debug_memory_size;
 	}
 
