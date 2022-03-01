@@ -237,8 +237,7 @@ static __forceinline bool IsPowerOfTwo(T val) {
 /// @return: T.
 template <typename T>
 static __forceinline T AlignDown(T value, size_t alignment) {
-  assert(IsPowerOfTwo(alignment));
-  return (T)(value & ~(alignment - 1));
+  return (T)((value / alignment) * alignment);
 }
 
 /// @brief: Same as previous one, but first parameter becomes pointer, for more
