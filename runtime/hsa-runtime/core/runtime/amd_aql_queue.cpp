@@ -876,6 +876,8 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       scratch.dispatch_size =
           scratch.size_per_thread * scratch.wanted_slots * scratch.lanes_per_wave;
 
+      scratch.cooperative = (queue->amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
+
       queue->agent_->AcquireQueueScratch(scratch);
 
       if (scratch.retry) {
