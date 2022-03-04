@@ -717,10 +717,8 @@ HSAKMT_STATUS RegisterSVMRange(HSAuint32 GPUNode, void *MemoryAddress,
     attrs[3].value = GPUNode;
 
     r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, nattr, attrs);
-    if (r) {
-        LOG() << "set range attrs failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -734,10 +732,8 @@ HSAKMT_STATUS SVMRangeGetPrefetchNode(void *MemoryAddress, HSAuint64 SizeInBytes
     attr.value = 0;
 
     r = hsaKmtSVMGetAttr(MemoryAddress, SizeInBytes, 1, &attr);
-    if (r) {
-        LOG() << "get prefetch node failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     *PrefetchNode = attr.value;
 
@@ -753,10 +749,8 @@ HSAKMT_STATUS SVMRangePrefetchToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
     attr.value = PrefetchNode;
 
     r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
-    if (r) {
-        LOG() << "set prefetch node failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -770,10 +764,8 @@ HSAKMT_STATUS SVMRangeMapToNode(void *MemoryAddress, HSAuint64 SizeInBytes,
     attr.value = NodeID;
 
     r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
-    if (r) {
-        LOG() << "set map to node failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -787,10 +779,8 @@ HSAKMT_STATUS SVMRangeMapInPlaceToNode(void *MemoryAddress, HSAuint64 SizeInByte
     attr.value = NodeID;
 
     r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
-    if (r) {
-        LOG() << "set map in place to node failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -804,10 +794,8 @@ HSAKMT_STATUS SVMRangSetGranularity(void *MemoryAddress, HSAuint64 SizeInBytes,
     attr.value = Granularity;
 
     r = hsaKmtSVMSetAttr(MemoryAddress, SizeInBytes, 1, &attr);
-    if (r) {
-        LOG() << "set granularity failed" << std::endl;
+    if (r)
         return HSAKMT_STATUS_ERROR;
-    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
