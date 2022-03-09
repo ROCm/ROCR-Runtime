@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,40 +21,19 @@
  *
  */
 
-#ifndef _SHADERSTORE_H_
-#define _SHADERSTORE_H_
+#ifndef __KFD_ASM_TEST__H__
+#define __KFD_ASM_TEST__H__
 
-#include <vector>
+#include <gtest/gtest.h>
 
-/* KFDASMTest List */
-extern const std::vector<const char*> ShaderList;
+class KFDASMTest : public testing::Test {
+ public:
+    KFDASMTest() {}
+    ~KFDASMTest() {}
 
-/* Common */
-extern const char *NoopIsa;
-extern const char *CopyDwordIsa;
-extern const char *InfiniteLoopIsa;
-extern const char *AtomicIncIsa;
+ protected:
+    virtual void SetUp();
+    virtual void TearDown();
+};
 
-/* KFDMemoryTest */
-extern const char *ScratchCopyDwordIsa;
-extern const char *PollMemoryIsa;
-extern const char *PollNCMemoryIsa;
-extern const char *CopyOnSignalIsa;
-extern const char *PollAndCopyIsa;
-extern const char *WriteFlagAndValueIsa;
-extern const char *WriteAndSignalIsa;
-
-/* KFDQMTest */
-extern const char *LoopIsa;
-
-/* KFDCWSRTest */
-extern const char *IterateIsa;
-
-/* KFDEvictTest */
-extern const char *ReadMemoryIsa;
-
-/* KFDGWSTest */
-extern const char *GwsInitIsa;
-extern const char *GwsAtomicIncreaseIsa;
-
-#endif  // _SHADERSTORE_H_
+#endif  // __KFD_ASM_TEST__H__

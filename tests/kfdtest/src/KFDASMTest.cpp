@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2021 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,40 +21,53 @@
  *
  */
 
-#ifndef _SHADERSTORE_H_
-#define _SHADERSTORE_H_
+#include "GoogleTestExtension.hpp"
+#include "KFDASMTest.hpp"
+#include "ShaderStore.hpp"
+#include "Assemble.hpp"
 
-#include <vector>
+void KFDASMTest::SetUp() {}
+void KFDASMTest::TearDown() {}
 
-/* KFDASMTest List */
-extern const std::vector<const char*> ShaderList;
+static const std::vector<uint32_t> TargetList = {
+    0x080001,
+    0x080002,
+    0x080003,
+    0x080005,
+    0x080100,
+    0x090000,
+    0x090002,
+    0x090004,
+    0x090006,
+    0x090008,
+    0x090009,
+    0x09000a,
+    0x09000c,
+    0x0a0100,
+    0x0a0101,
+    0x0a0102,
+    0x0a0103,
+    0x0a0300,
+    0x0a0301,
+    0x0a0302,
+    0x0a0303,
+    0x0a0304,
+    0x0a0305,
+    0x0a0306,
+};
 
-/* Common */
-extern const char *NoopIsa;
-extern const char *CopyDwordIsa;
-extern const char *InfiniteLoopIsa;
-extern const char *AtomicIncIsa;
+TEST_F(KFDASMTest, AssembleShaders) {
+    TEST_START(TESTPROFILE_RUNALL)
 
-/* KFDMemoryTest */
-extern const char *ScratchCopyDwordIsa;
-extern const char *PollMemoryIsa;
-extern const char *PollNCMemoryIsa;
-extern const char *CopyOnSignalIsa;
-extern const char *PollAndCopyIsa;
-extern const char *WriteFlagAndValueIsa;
-extern const char *WriteAndSignalIsa;
+    for (auto &t : TargetList) {
+        Assembler asmblr(t);
 
-/* KFDQMTest */
-extern const char *LoopIsa;
+        LOG() << "Running ASM test for target " << asmblr.GetTargetAsic() << std::endl;
 
-/* KFDCWSRTest */
-extern const char *IterateIsa;
+        for (auto &s : ShaderList) {
+            EXPECT_SUCCESS(asmblr.RunAssemble(s));
+        }
+    }
 
-/* KFDEvictTest */
-extern const char *ReadMemoryIsa;
-
-/* KFDGWSTest */
-extern const char *GwsInitIsa;
-extern const char *GwsAtomicIncreaseIsa;
-
-#endif  // _SHADERSTORE_H_
+    TEST_END
+}

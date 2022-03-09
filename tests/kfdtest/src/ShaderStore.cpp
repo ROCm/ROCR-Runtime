@@ -21,6 +21,30 @@
  *
  */
 
+#include "ShaderStore.hpp"
+
+/**
+ * KFDASMTest List
+ */
+
+const std::vector<const char*> ShaderList = {
+    NoopIsa,
+    CopyDwordIsa,
+    InfiniteLoopIsa,
+    AtomicIncIsa,
+    ScratchCopyDwordIsa,
+    PollMemoryIsa,
+    CopyOnSignalIsa,
+    PollAndCopyIsa,
+    WriteFlagAndValueIsa,
+    WriteAndSignalIsa,
+    LoopIsa,
+    IterateIsa,
+    ReadMemoryIsa,
+    GwsInitIsa,
+    GwsAtomicIncreaseIsa,
+};
+
 /**
  * Macros
  */
@@ -251,7 +275,7 @@ const char *PollAndCopyIsa = R"(
             s_store_dword s17, s[2:3], 0x0 glc
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             buffer_wbl2
-        .else
+        .elseif (.amdgcn.gfx_generation_number == 9)
             s_movk_i32 s18, 0x1
             LOOP:
             s_load_dword s16, s[0:1], 0x0 glc
@@ -277,16 +301,18 @@ const char *PollAndCopyIsa = R"(
 const char *WriteFlagAndValueIsa = R"(
         .text
         // Assume two inputs buffer in s[0:1] and s[2:3]
-        v_mov_b32 v0, s0
-        v_mov_b32 v1, s1
-        s_load_dword s18, s[2:3], 0x0 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        s_store_dword s18, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        buffer_wbl2
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        v_mov_b32 v16, 0x1
-        flat_store_dword v[0:1], v16 glc
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_stepping == 10)
+            v_mov_b32 v0, s0
+            v_mov_b32 v1, s1
+            s_load_dword s18, s[2:3], 0x0 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            s_store_dword s18, s[0:1], 0x4 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            buffer_wbl2
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            v_mov_b32 v16, 0x1
+            flat_store_dword v[0:1], v16 glc
+        .endif
         s_endpgm
 )";
 

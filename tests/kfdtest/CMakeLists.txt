@@ -169,6 +169,7 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/KFDDBGTest.cpp
   src/KFDGWSTest.cpp
   src/KFDIPCTest.cpp
+  src/KFDASMTest.cpp
 
   src/KFDEvictTest.cpp
   src/KFDHWSTest.cpp

@@ -43,6 +43,8 @@
 #ifndef _ASSEMBLE_H_
 #define _ASSEMBLE_H_
 
+#include "OSWrapper.hpp"
+
 #define ASM_MCPU_LEN 16
 
 class Assembler {
