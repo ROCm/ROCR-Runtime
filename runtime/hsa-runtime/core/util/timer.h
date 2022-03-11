@@ -145,7 +145,7 @@ class fast_clock {
   typedef uint64_t raw_rep;
   typedef double raw_frequency;
 
-#ifdef __x86_64__
+#if defined(__x86_64__) || defined(_M_X64)
   static __forceinline raw_rep raw_now() { return __rdtsc(); }
   static __forceinline raw_frequency raw_freq() { return freq; }
 #else
