@@ -205,8 +205,6 @@ if(${IMAGE_SUPPORT})
     HSA_IMAGE_SUPPORT
     UNIX_OS
     LINUX
-    __AMD64__
-    __x86_64__
     AMD_INTERNAL_BUILD
     BRAHMA_BUILD=1 )
 
