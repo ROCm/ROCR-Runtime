@@ -75,7 +75,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgRegister(HSAuint32 NodeId)
 
 	args.gpu_id = gpu_id;
 
-	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER, &args);
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_REGISTER_DEPRECATED, &args);
 
 	if (err == 0)
 		result = HSAKMT_STATUS_SUCCESS;
@@ -102,7 +102,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgUnregister(HSAuint32 NodeId)
 	struct kfd_ioctl_dbg_unregister_args args = {0};
 
 	args.gpu_id = gpu_id;
-	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER, &args);
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_UNREGISTER_DEPRECATED, &args);
 
 	if (err)
 		return HSAKMT_STATUS_ERROR;
@@ -165,7 +165,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgWavefrontControl(HSAuint32 NodeId,
 	run_ptr += sizeof(DbgWaveMsgRing->MemoryVA);
 
 	/* send to kernel */
-	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_WAVE_CONTROL, args);
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_WAVE_CONTROL_DEPRECATED, args);
 
 	free(args);
 
@@ -253,7 +253,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgAddressWatch(HSAuint32 NodeId,
 	}
 
 	/* send to kernel */
-	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_ADDRESS_WATCH, args);
+	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_ADDRESS_WATCH_DEPRECATED, args);
 
 	free(args);
 
