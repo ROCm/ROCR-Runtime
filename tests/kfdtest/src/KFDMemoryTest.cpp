@@ -2031,6 +2031,10 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
         RECORD(mcpWTime) << MMBANDWIDTH_KEY_PREFIX << "mcpWTime";
         RECORD(accessRTime) << MMBANDWIDTH_KEY_PREFIX << "accessRTime";
         RECORD(accessWTime) << MMBANDWIDTH_KEY_PREFIX << "accessWTime";
+
+        // skip slow tests
+        if (mcpRTime + mcpWTime + accessRTime + accessWTime > 5000000)
+            break;
     }
 
     munmap(tmp, tmpBufferSize);
