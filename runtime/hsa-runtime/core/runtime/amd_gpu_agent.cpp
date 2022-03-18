@@ -1564,9 +1564,13 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
     return blits_[BlitDevToDev];
   }
 
-  // Acquire Hive Id of Src and Dst devices
-  uint64_t src_hive_id = src_agent.HiveId();
-  uint64_t dst_hive_id = dst_agent.HiveId();
+  // Acquire Hive Id of Src and Dst devices - ignore hive id for CPU devices.
+  // CPU-GPU connections should always use the host (aka pcie) facing SDMA engines, even if the
+  // connection is XGMI.
+  uint64_t src_hive_id =
+      (src_agent.device_type() == core::Agent::kAmdGpuDevice) ? src_agent.HiveId() : 0;
+  uint64_t dst_hive_id =
+      (dst_agent.device_type() == core::Agent::kAmdGpuDevice) ? dst_agent.HiveId() : 0;
 
   // Bind to a PCIe facing Blit object if the two
   // devices have different Hive Ids. This can occur
