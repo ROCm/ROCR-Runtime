@@ -774,6 +774,15 @@ hsaKmtDbgGetQueueData(
     bool suspend_queues //In
     );
 
+/**   
+  Check whether gpu firmware and kernel support debugging
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtCheckRuntimeDebugSupport(
+    void
+    );
+
 /**
   Debug ops call primarily used for KFD testing
  */

@@ -268,7 +268,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgAddressWatch(HSAuint32 NodeId,
 #define HSA_RUNTIME_ENABLE_MAX_MAJOR   1
 #define HSA_RUNTIME_ENABLE_MIN_MINOR   13
 
-static HSAKMT_STATUS checkRuntimeDebugSupport(void) {
+HSAKMT_STATUS hsaKmtCheckRuntimeDebugSupport(void) {
 	HsaNodeProperties node = {0};
 	HsaSystemProperties props = {0};
 	HsaVersionInfo versionInfo = {0};
@@ -306,7 +306,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 					    bool setupTtmp)
 {
 	struct kfd_ioctl_runtime_enable_args args = {0};
-	HSAKMT_STATUS result = checkRuntimeDebugSupport();
+	HSAKMT_STATUS result = hsaKmtCheckRuntimeDebugSupport();
 
 	if (result)
 		return result;
@@ -332,7 +332,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeDisable(void)
 {
 	struct kfd_ioctl_runtime_enable_args args = {0};
-	HSAKMT_STATUS result = checkRuntimeDebugSupport();
+	HSAKMT_STATUS result = hsaKmtCheckRuntimeDebugSupport();
 
 	if (result)
 		return result;
