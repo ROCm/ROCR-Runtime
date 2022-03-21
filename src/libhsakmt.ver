@@ -65,6 +65,7 @@ hsaKmtGetQueueInfo;
 hsaKmtAllocQueueGWS;
 hsaKmtRuntimeEnable;
 hsaKmtRuntimeDisable;
+hsaKmtCheckRuntimeDebugSupport;
 hsaKmtGetRuntimeCapabilities;
 hsaKmtDebugTrapIoctl;
 hsaKmtSPMAcquire;
