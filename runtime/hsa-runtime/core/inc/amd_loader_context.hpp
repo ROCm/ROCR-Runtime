@@ -48,9 +48,9 @@
 namespace rocr {
 namespace amd {
 
-class LoaderContext final: public amd::hsa::loader::Context {
-public:
-  LoaderContext(): amd::hsa::loader::Context() {}
+class LoaderContext final : public rocr::amd::hsa::loader::Context {
+ public:
+  LoaderContext() : rocr::amd::hsa::loader::Context() {}
 
   ~LoaderContext() {}
 
