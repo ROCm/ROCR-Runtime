@@ -965,7 +965,7 @@ void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &
     int ret;
 
     HsaMemMapFlags mapFlags = {0};
-    HSAuint64 granularityMB = 128;
+    HSAuint64 granularityMB = highMB > 512 ? 128 : 16;
 
     /* Testing big buffers in VRAM */
     unsigned int * pDb = NULL;
