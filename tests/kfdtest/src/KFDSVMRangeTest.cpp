@@ -690,7 +690,7 @@ TEST_F(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
         return;
     }
 
-    unsigned int BufferSize = 256 << 20;
+    unsigned int BufferSize = MIN(256ULL << 20, GetVramSize(defaultGPUNode) / 2);
     SDMAQueue sdmaQueue;
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
 
