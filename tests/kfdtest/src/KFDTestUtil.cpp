@@ -128,6 +128,43 @@ bool is_dgpu() {
     return is_dgpu_dev;
 }
 
+bool hasPciAtomicsSupport(int node) {
+    /* If we can't get Node Properties, assume a lack of Atomics support */
+    HsaNodeProperties *pNodeProperties = new HsaNodeProperties();
+    if (hsaKmtGetNodeProperties(node, pNodeProperties)) {
+        LOG() << "Unable to get Node Properties for node " << node << std::endl;
+        return false;
+    }
+
+    /* APUs don't have IO Links, but support Atomic Ops by default */
+    if (pNodeProperties->NumCPUCores && pNodeProperties->NumFComputeCores)
+        return true;
+
+    HsaIoLinkProperties *IolinkProperties = new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
+    if (hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties)) {
+        LOG() << "Unable to get Node IO Link Information for node " << node << std::endl;
+        return false;
+    }
+
+    /* Make sure we're checking GPU-to-CPU connection here */
+    for (int linkId = 0; linkId < pNodeProperties->NumIOLinks; linkId++) {
+        /* Make sure it's a CPU */
+        HsaNodeProperties *linkProps = new HsaNodeProperties();
+        if (hsaKmtGetNodeProperties(IolinkProperties[linkId].NodeTo, linkProps)) {
+            LOG() << "Unable to get connected device's IO Link information" << std::endl;
+            return false;
+        }
+        if (linkProps->NumCPUCores) {
+            /* IOLink flags are only valid if Override flag is set */
+            return (IolinkProperties[linkId].Flags.ui32.Override &&
+                   !IolinkProperties[linkId].Flags.ui32.NoAtomics32bit &&
+                   !IolinkProperties[linkId].Flags.ui32.NoAtomics64bit);
+        }
+    }
+
+    return false;
+}
+
 unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
     unsigned int familyId = FAMILY_UNKNOWN;
 
