@@ -1518,13 +1518,15 @@ unsigned int AtomicIncThread(void* pCtx) {
 
 TEST_F(KFDQMTest, Atomics) {
     TEST_START(TESTPROFILE_RUNALL);
-    /* CI doesn't support Atomics. KV does, but gets its own FAMILY_KV def */
-    if (m_FamilyId == FAMILY_CI) {
-        LOG() << "Skipping test: CI doesn't support Atomics." << std::endl;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (!hasPciAtomicsSupport(defaultGPUNode)) {
+        LOG() << "Skipping test: Node doesn't support Atomics." << std::endl;
         return;
     }
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode);
