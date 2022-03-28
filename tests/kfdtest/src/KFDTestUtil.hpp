@@ -50,6 +50,7 @@ HSAKMT_STATUS CreateQueueTypeEvent(bool ManualReset, bool IsSignaled, unsigned i
 
 bool is_dgpu();
 bool isTonga(const HsaNodeProperties *props);
+bool hasPciAtomicsSupport(int node);
 unsigned int FamilyIdFromNode(const HsaNodeProperties *props);
 
 void GetHwQueueInfo(const HsaNodeProperties *props,
