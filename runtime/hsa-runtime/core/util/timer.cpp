@@ -57,9 +57,11 @@ fast_clock::init::init() {
 
   // calibrate clock
   fast_clock::raw_rep min = 0;
-  clock::duration elapsed = clock::duration::max();
+  clock::duration elapsed;
 
   do {
+    elapsed = clock::duration::max();
+
     for (int t = 0; t < 10; t++) {
       fast_clock::raw_rep r1, r2;
       clock::time_point t0, t1, t2, t3;
