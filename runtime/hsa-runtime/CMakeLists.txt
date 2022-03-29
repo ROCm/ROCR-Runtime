@@ -183,6 +183,7 @@ set ( SRCS core/util/lnx/os_linux.cpp
            core/runtime/signal.cpp
            core/runtime/queue.cpp
            core/runtime/cache.cpp
+           core/runtime/svm_profiler.cpp
            core/common/shared.cpp
            core/common/hsa_table_interface.cpp
            loader/executable.cpp

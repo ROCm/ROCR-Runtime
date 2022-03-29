@@ -156,6 +156,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_DISCOVER_COPY_AGENTS");
     discover_copy_agents_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_SVM_PROFILE");
+    svm_profile_ = var;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -226,6 +229,8 @@ class Flag {
 
   bool discover_copy_agents() const { return discover_copy_agents_; }
 
+  const std::string& svm_profile() const { return svm_profile_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -258,6 +263,7 @@ class Flag {
   size_t scratch_mem_size_;
 
   std::string tools_lib_names_;
+  std::string svm_profile_;
 
   size_t force_sdma_size_;
 

@@ -158,6 +158,8 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
   if (agent->device_type() == Agent::DeviceType::kAmdCpuDevice) {
     cpu_agents_.push_back(agent);
 
+    agents_by_gpuid_[0] = agent;
+
     // Add cpu regions to the system region list.
     for (const core::MemoryRegion* region : agent->regions()) {
       if (region->fine_grain()) {
@@ -202,6 +204,8 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
     if (Enabled) {
       gpu_agents_.push_back(agent);
       gpu_ids_.push_back(agent->node_id());
+    agents_by_gpuid_[((AMD::GpuAgent*)agent)->KfdGpuID()] = agent;
+
       // Assign the first discovered gpu agent as region gpu.
       if (region_gpu_ == NULL) region_gpu_ = agent;
     } else
@@ -1380,10 +1384,15 @@ hsa_status_t Runtime::Load() {
   // Load tools libraries
   LoadTools();
 
+  // Load svm profiler
+  svm_profile_.reset(new AMD::SvmProfileControl);
+
   return HSA_STATUS_SUCCESS;
 }
 
 void Runtime::Unload() {
+  svm_profile_.reset(nullptr);
+
   UnloadTools();
   UnloadExtensions();
 
