@@ -50,6 +50,7 @@
 #include <memory>
 #include <tuple>
 #include <utility>
+#include <thread>
 
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/hsa_internal.h"
@@ -60,6 +61,7 @@
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/svm_profiler.h"
 #include "core/util/flag.h"
 #include "core/util/locks.h"
 #include "core/util/os.h"
@@ -314,6 +316,8 @@ class Runtime {
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
+  Agent* agent_by_gpuid(uint32_t gpuid) { return agents_by_gpuid_[gpuid]; }
+
   Agent* region_gpu() { return region_gpu_; }
 
   const std::vector<const MemoryRegion*>& system_regions_fine() const {
@@ -513,6 +517,9 @@ class Runtime {
   // Agent map containing all agents indexed by their KFD node IDs.
   std::map<uint32_t, std::vector<Agent*> > agents_by_node_;
 
+  // Agent map containing all agents indexed by their KFD gpuid.
+  std::map<uint32_t, Agent*> agents_by_gpuid_;
+
   // Agent list containing all compatible gpu agent ids in the platform.
   std::vector<uint32_t> gpu_ids_;
 
@@ -594,6 +601,8 @@ class Runtime {
 
   // Kfd version
   KfdVersion_t kfd_version;
+
+  std::unique_ptr<AMD::SvmProfileControl> svm_profile_;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
