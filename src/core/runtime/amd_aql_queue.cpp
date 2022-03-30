@@ -671,8 +671,8 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
 #endif
   } else {
     // Allocate storage for the ring buffer.
-    ring_buf_alloc_bytes_ = AlignUp(
-        queue_size_pkts * sizeof(core::AqlPacket), 4096);
+    ring_buf_alloc_bytes_ = queue_size_pkts * sizeof(core::AqlPacket);
+    assert(IsMultipleOf(ring_buf_alloc_bytes_, 4096) && "Ring buffer sizes must be 4KiB aligned.");
 
     ring_buf_ = agent_->system_allocator()(
         ring_buf_alloc_bytes_, 0x1000,
@@ -824,8 +824,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       assert(pkt.IsValid() && "Invalid packet in dynamic scratch handler.");
       assert(pkt.type() == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
              "Invalid packet in dynamic scratch handler.");
+      assert((pkt.dispatch.workgroup_size_x != 0) && (pkt.dispatch.workgroup_size_y != 0) &&
+             (pkt.dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
 
       uint32_t scratch_request = pkt.dispatch.private_segment_size;
+      assert((scratch_request != 0) &&
+             "Scratch memory request from packet with no scratch demand.  Possible bad kernel code object.");
 
       const uint32_t MaxScratchSlots =
           (queue->amd_queue_.max_cu_id + 1) * queue->agent_->properties().MaxSlotsScratchCU;
