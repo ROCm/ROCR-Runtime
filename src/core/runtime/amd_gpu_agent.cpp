@@ -924,8 +924,13 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = properties_.DeviceId;
       break;
     case HSA_AMD_AGENT_INFO_CACHELINE_SIZE:
-      // TODO: hardcode for now.
-      // GCN whitepaper: cache line size is 64 byte long.
+      for (auto& cache : cache_props_) {
+        if ((cache.CacheLevel == 2) && (cache.CacheLineSize != 0)) {
+          *((uint32_t*)value) = cache.CacheLineSize;
+          break;
+        }
+      }
+      // Fallback for when KFD is returning zero.
       *((uint32_t*)value) = 64;
       break;
     case HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT:
@@ -1053,6 +1058,11 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   // Enforce max size
   if (size > maxAqlSize_) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  // Enforce min size
+  if (size < minAqlSize_) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   // Allocate scratch memory
@@ -1553,9 +1563,13 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
     return blits_[BlitDevToDev];
   }
 
-  // Acquire Hive Id of Src and Dst devices
-  uint64_t src_hive_id = src_agent.HiveId();
-  uint64_t dst_hive_id = dst_agent.HiveId();
+  // Acquire Hive Id of Src and Dst devices - ignore hive id for CPU devices.
+  // CPU-GPU connections should always use the host (aka pcie) facing SDMA engines, even if the
+  // connection is XGMI.
+  uint64_t src_hive_id =
+      (src_agent.device_type() == core::Agent::kAmdGpuDevice) ? src_agent.HiveId() : 0;
+  uint64_t dst_hive_id =
+      (dst_agent.device_type() == core::Agent::kAmdGpuDevice) ? dst_agent.HiveId() : 0;
 
   // Bind to a PCIe facing Blit object if the two
   // devices have different Hive Ids. This can occur
