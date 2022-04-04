@@ -1221,7 +1221,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion < 1 || majorVersion > 4) {
+  if (majorVersion < 1 || majorVersion > 5) {
     logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
