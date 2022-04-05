@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2022, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -57,7 +57,6 @@
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
 #include "core/inc/amd_gpu_pm4.h"
-#include "core/inc/amd_gpu_shaders.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
@@ -65,6 +64,12 @@
 #include "core/util/os.h"
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
+
+#include "core/inc/amd_trap_handler_v1.h"
+#include "core/inc/amd_blit_shaders.h"
+
+// Generated header
+#include "amd_trap_handler_v2.h"
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
