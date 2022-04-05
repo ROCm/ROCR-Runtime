@@ -122,7 +122,8 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
   $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/hsa>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
+  ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler)
 
 ## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
@@ -192,6 +193,10 @@ set ( SRCS core/util/lnx/os_linux.cpp
            libamdhsacode/amd_hsa_code.cpp )
 
 target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
+
+## Depend on trap handler target.
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
+add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
