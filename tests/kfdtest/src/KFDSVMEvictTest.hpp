@@ -50,6 +50,10 @@ class KFDSVMEvictTest :  public KFDLocalMemoryTest {
     }
 
  protected:
+    virtual void SetUp();
+    virtual void TearDown();
+
+ protected:
     std::string CreateShader();
     void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                     std::vector<void *> &pBuffers);

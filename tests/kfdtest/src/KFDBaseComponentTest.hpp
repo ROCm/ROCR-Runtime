@@ -73,6 +73,7 @@ class KFDBaseComponentTest : public testing::Test {
     unsigned int m_numSdmaQueuesPerEngine;
     HsaMemFlags m_MemoryFlags;
     HsaNodeInfo m_NodeInfo;
+    HSAint32 m_xnack;
 
     // @brief Executed before every test that uses KFDBaseComponentTest class and sets all common settings for the tests.
     virtual void SetUp();
@@ -85,6 +86,39 @@ class KFDBaseComponentTest : public testing::Test {
         if (!supported)
             LOG() << "SVM API not supported" << std::endl;
         return supported;
+    }
+
+    void SVMSetXNACKMode() {
+        if (!SVMAPISupported())
+            return;
+
+        m_xnack = -1;
+
+        char *hsa_xnack = getenv("HSA_XNACK");
+        if (!hsa_xnack)
+            return;
+
+        HSAKMT_STATUS ret = hsaKmtGetXNACKMode(&m_xnack);
+        if (ret != HSAKMT_STATUS_SUCCESS) {
+            LOG() << "Failed " << ret << " to get XNACK mode" << std::endl;
+            return;
+        }
+
+        // XNACK OFF if defined HSA_XNACK=0
+        HSAint32 xnack_on = strncmp(hsa_xnack, "0", 1);
+        ret = hsaKmtSetXNACKMode(xnack_on);
+        if (ret != HSAKMT_STATUS_SUCCESS)
+            LOG() << "Failed " << ret << " to set XNACK mode " << xnack_on << std::endl;
+    }
+
+    void SVMRestoreXNACKMode() {
+        if (!SVMAPISupported())
+             return;
+
+        if (m_xnack == -1)
+            return;
+
+        hsaKmtSetXNACKMode(m_xnack);
     }
 };
 

@@ -35,6 +35,26 @@
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 
+void KFDSVMEvictTest::SetUp() {
+    ROUTINE_START
+
+    KFDLocalMemoryTest::SetUp();
+
+    SVMSetXNACKMode();
+
+    ROUTINE_END
+}
+
+void KFDSVMEvictTest::TearDown() {
+    ROUTINE_START
+
+    SVMRestoreXNACKMode();
+
+    KFDLocalMemoryTest::TearDown();
+
+    ROUTINE_END
+}
+
 HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBufSize) {
     HSAuint64 vramBufSizeInPages = vramBufSize >> PAGE_SHIFT;
     HSAuint64 sysMemSize = GetSysMemSize();
