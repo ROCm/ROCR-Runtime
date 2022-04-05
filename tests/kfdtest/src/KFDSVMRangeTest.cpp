@@ -36,6 +36,8 @@ void KFDSVMRangeTest::SetUp() {
 
     m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
+    SVMSetXNACKMode();
+
     ROUTINE_END
 }
 
@@ -45,6 +47,8 @@ void KFDSVMRangeTest::TearDown() {
     if (m_pIsaGen)
         delete m_pIsaGen;
     m_pIsaGen = NULL;
+
+    SVMRestoreXNACKMode();
 
     KFDBaseComponentTest::TearDown();
 
@@ -1287,10 +1291,8 @@ TEST_F(KFDSVMRangeTest, ReadOnlyRangeTest) {
      */
     int pid = fork();
     if (pid == 0) {
-        if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
-            WARN() << "KFD open failed in child process" << std::endl;
-            exit(1);
-        }
+        TearDown();
+        SetUp();
     } else {
         int childStatus;
 
