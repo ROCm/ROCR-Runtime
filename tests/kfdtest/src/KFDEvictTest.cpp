@@ -84,21 +84,23 @@ void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAui
                 if (hsaKmtMapMemoryToGPUNodes(m_pBuf, vramBufSize, NULL,
                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)) == HSAKMT_STATUS_ERROR) {
                     EXPECT_SUCCESS(hsaKmtFreeMemory(m_pBuf, vramBufSize));
-                    break;
+                    LOG() << "Map failed for " << i << "/" << count << " buffer. Retrying allocation" << std::endl;
+                    goto retry;
                 }
             }
             pBuffers.push_back(m_pBuf);
 
             i++;
             retry = 0;
-        } else {
-            if (retry++ > ALLOCATE_RETRY_TIMES) {
-                break;
-            }
-
-            /* Wait for 1 second to try allocate again */
-            sleep(1);
+            continue;
         }
+retry:
+        if (retry++ > ALLOCATE_RETRY_TIMES) {
+            break;
+        }
+
+        /* Wait for 1 second to try allocate again */
+        sleep(1);
     }
 }
 
