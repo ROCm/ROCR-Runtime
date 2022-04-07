@@ -191,10 +191,10 @@ set ( SRCS core/util/lnx/os_linux.cpp
 
 target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
 
-if ( NOT DEFINED IMAGE_SUPPORT )
+if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
 endif()
-set ( IMAGE_SUPPORT ${IMAGE_SUPPORT} CACHE BOOL "Build with image support (default: ON)." )
+set ( IMAGE_SUPPORT ${IMAGE_SUPPORT} CACHE BOOL "Build with image support (default: ON for x86, OFF elsewise)." )
 
 ## Optional image module defintions.
 if(${IMAGE_SUPPORT})
