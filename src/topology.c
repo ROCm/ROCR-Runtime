@@ -56,7 +56,6 @@
 #define KFD_SYSFS_PATH_NODES "/sys/devices/virtual/kfd/kfd/topology/nodes"
 
 typedef struct {
-	uint32_t gpu_id;
 	HsaNodeProperties node;
 	HsaMemoryProperties *mem;     /* node->NumBanks elements */
 	HsaCacheProperties *cache;
@@ -1037,7 +1036,6 @@ static int topology_get_marketing_name(int minor, uint16_t *marketing_name)
 
 HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 					    HsaNodeProperties *props,
-					    uint32_t *gpu_id,
 					    bool *p2p_links,
 					    uint32_t *num_p2pLinks)
 {
@@ -1056,13 +1054,14 @@ HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	assert(props);
-	assert(gpu_id);
 	ret = topology_sysfs_map_node_id(node_id, &sys_node_id);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
 	/* Retrieve the GPU ID */
-	ret = topology_sysfs_get_gpu_id(sys_node_id, gpu_id);
+	ret = topology_sysfs_get_gpu_id(sys_node_id, &props->KFDGpuID);
+	if (ret != HSAKMT_STATUS_SUCCESS)
+		return ret;
 
 	read_buf = malloc(PAGE_SIZE);
 	if (!read_buf)
@@ -1723,7 +1722,7 @@ static int32_t gpu_get_direct_link_cpu(uint32_t gpu_node, node_props_t *node_pro
 	HsaIoLinkProperties *props = node_props[gpu_node].link;
 	uint32_t i;
 
-	if (!node_props[gpu_node].gpu_id || !props ||
+	if (!node_props[gpu_node].node.KFDGpuID || !props ||
 			node_props[gpu_node].node.NumIOLinks == 0)
 		return -1;
 
@@ -1776,7 +1775,7 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	/* CPU->CPU is not an indirect link */
-	if (!node_props[node1].gpu_id && !node_props[node2].gpu_id)
+	if (!node_props[node1].node.KFDGpuID && !node_props[node2].node.KFDGpuID)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	if (node_props[node1].node.HiveID &&
@@ -1784,16 +1783,16 @@ static HSAKMT_STATUS get_indirect_iolink_info(uint32_t node1, uint32_t node2,
 	    node_props[node1].node.HiveID == node_props[node2].node.HiveID)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (node_props[node1].gpu_id)
+	if (node_props[node1].node.KFDGpuID)
 		dir_cpu1 = gpu_get_direct_link_cpu(node1, node_props);
-	if (node_props[node2].gpu_id)
+	if (node_props[node2].node.KFDGpuID)
 		dir_cpu2 = gpu_get_direct_link_cpu(node2, node_props);
 
 	if (dir_cpu1 < 0 && dir_cpu2 < 0)
 		return HSAKMT_STATUS_ERROR;
 
 	/* if the node2(dst) is GPU , it need to be large bar for host access*/
-	if (node_props[node2].gpu_id) {
+	if (node_props[node2].node.KFDGpuID) {
 		for (i = 0; i < node_props[node2].node.NumMemoryBanks; ++i)
 			if (node_props[node2].mem[i].HeapType ==
 				HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC)
@@ -1922,7 +1921,6 @@ retry:
 		for (i = 0; i < sys_props.NumNodes; i++) {
 			ret = topology_sysfs_get_node_props(i,
 					&temp_props[i].node,
-					&temp_props[i].gpu_id,
 					&p2p_links, &num_p2pLinks);
 			if (ret != HSAKMT_STATUS_SUCCESS) {
 				free_properties(temp_props, i);
@@ -1963,7 +1961,7 @@ retry:
 						goto err;
 					}
 				}
-			} else if (!temp_props[i].gpu_id) { /* a CPU node */
+			} else if (!temp_props[i].node.KFDGpuID) { /* a CPU node */
 				ret = topology_get_cpu_cache_props(
 						i, cpuinfo, &temp_props[i]);
 				if (ret != HSAKMT_STATUS_SUCCESS) {
@@ -2104,7 +2102,7 @@ HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 	if (!g_props || !g_system || g_system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 	if (gpu_id)
-		*gpu_id = g_props[nodeid].gpu_id;
+		*gpu_id = g_props[nodeid].node.KFDGpuID;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -2114,7 +2112,7 @@ HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
 	uint64_t node_idx;
 
 	for (node_idx = 0; node_idx < g_system->NumNodes; node_idx++) {
-		if (g_props[node_idx].gpu_id == gpu_id) {
+		if (g_props[node_idx].node.KFDGpuID == gpu_id) {
 			*node_id = node_idx;
 			return HSAKMT_STATUS_SUCCESS;
 		}
@@ -2383,7 +2381,7 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 		return 0;
 
 	for (i = 0; i < g_system->NumNodes; i++) {
-		if (g_props[i].gpu_id == gpu_id)
+		if (g_props[i].node.KFDGpuID == gpu_id)
 			return g_props[i].node.DeviceId;
 	}
 

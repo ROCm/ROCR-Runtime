@@ -2170,7 +2170,6 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i;
 	int32_t gpu_mem_id = 0;
-	uint32_t gpu_id;
 	HsaNodeProperties props;
 	struct kfd_process_device_apertures *process_apertures;
 	uint32_t num_of_sysfs_nodes;
@@ -2235,14 +2234,14 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
-		ret = topology_sysfs_get_node_props(i, &props, &gpu_id, NULL, NULL);
+		ret = topology_sysfs_get_node_props(i, &props, NULL, NULL);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
 
 		topology_setup_is_dgpu_param(&props);
 
 		/* Skip non-GPU nodes */
-		if (gpu_id != 0) {
+		if (props.KFDGpuID) {
 			int fd = open_drm_render_device(props.DrmRenderMinor);
 			if (fd <= 0) {
 				ret = HSAKMT_STATUS_ERROR;
@@ -2254,7 +2253,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_count].EngineId.ui32.Stepping = props.EngineId.ui32.Stepping;
 
 			gpu_mem[gpu_mem_count].drm_render_fd = fd;
-			gpu_mem[gpu_mem_count].gpu_id = gpu_id;
+			gpu_mem[gpu_mem_count].gpu_id = props.KFDGpuID;
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
 			gpu_mem[gpu_mem_count].node_id = i;
