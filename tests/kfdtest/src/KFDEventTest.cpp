@@ -228,7 +228,7 @@ exit:
 TEST_F(KFDEventTest, MeasureInterruptConsumption) {
     TEST_START(TESTPROFILE_RUNALL);
     QueueAndSignalBenchmark latencyBench(128);
-    QueueAndSignalBenchmark sustainedBench(4096);
+    QueueAndSignalBenchmark sustainedBench(4095);
 
     printf("\033[2J");
     while (true) {
@@ -246,7 +246,7 @@ TEST_F(KFDEventTest, MeasureInterruptConsumption) {
 TEST_F(KFDEventTest, SignalMaxEvents) {
     TEST_START(TESTPROFILE_RUNALL);
 
-    static const unsigned int MAX_EVENT_NUMBER = 4096;
+    static const unsigned int MAX_EVENT_NUMBER = 4095;
     uint64_t time, latency;
 
     QueueAndSignalBenchmark maxEventTest(MAX_EVENT_NUMBER);
