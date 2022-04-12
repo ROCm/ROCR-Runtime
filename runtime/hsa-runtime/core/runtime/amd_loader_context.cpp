@@ -358,10 +358,6 @@ bool RegionMemory::Freeze() {
     memcpy(ptr_, host_ptr_, size_);
   }
 
-  // Free host buffer
-  HSA::hsa_memory_free(host_ptr_);
-  host_ptr_ = nullptr;
-
   // Invalidate agent caches which may hold lines of the new allocation.
   if (is_code_ && (region_->owner()->device_type() == core::Agent::kAmdGpuDevice))
     ((AMD::GpuAgent*)region_->owner())->InvalidateCodeCaches();
