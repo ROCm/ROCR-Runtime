@@ -40,10 +40,6 @@
 #define DOORBELL_SIZE(gfxv)	(((gfxv) >= 0x90000) ? 8 : 4)
 #define DOORBELLS_PAGE_SIZE(ds)	(1024 * (ds))
 
-#define EOP_BUFFER_SIZE(gfxv)					\
-	(((gfxv) == GFX_VERSION_TONGA) ? TONGA_PAGE_SIZE :	\
-	(((gfxv) >= 0x80000) ? 4096 : 0))
-
 #define WG_CONTEXT_DATA_SIZE_PER_CU(gfxv) 		\
 	(get_vgpr_size_per_cu(gfxv) + SGPR_SIZE_PER_CU +	\
 	 LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
@@ -618,7 +614,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	q->gfxv = get_gfxv_by_node_id(NodeId);
 	q->use_ats = false;
-	q->eop_buffer_size = EOP_BUFFER_SIZE(q->gfxv);
+
+	if (q->gfxv == GFX_VERSION_TONGA)
+		q->eop_buffer_size = TONGA_PAGE_SIZE;
+	else if (q->gfxv == GFX_VERSION_AQUA_VANJARAM)
+		q->eop_buffer_size = ((Type == HSA_QUEUE_COMPUTE) ? 4096 : 0);
+	else if (q->gfxv >= 0x80000)
+		q->eop_buffer_size = 4096;
 
 	/* By default, CUs are all turned on. Initialize cu_mask to '1
 	 * for all CU bits.
