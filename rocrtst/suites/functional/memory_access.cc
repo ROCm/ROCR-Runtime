@@ -403,8 +403,8 @@ void MemoryAccessTest::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent,
       unsigned int *gpu_data;
       unsigned int *sys_data;
       sys_data = (unsigned int*)malloc(max_alloc_size);
-      memset(sys_data, 0, max_alloc_size);
-      for (unsigned int i = 1; i <= max_element; ++i) {
+
+      for (unsigned int i = 0; i < max_element; ++i) {
         sys_data[i] = i;
       }
       // err = hsa_amd_agents_allow_access(1, &gpuAgent, NULL, sys_data);
@@ -420,15 +420,14 @@ void MemoryAccessTest::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent,
       err = hsa_amd_agents_allow_access(1, &cpuAgent, NULL, gpu_data);
       ASSERT_EQ(err, HSA_STATUS_SUCCESS);
       // EXPECT_EQ(HSA_STATUS_SUCCESS, err);
-      memset(gpu_data, 0, max_alloc_size);
 
       // Verify CPU can read & write to GPU memory
       std::cout<< "Verify CPU can read & write to GPU memory"<< std::endl;
-      for (unsigned int i = 1; i <= max_element; ++i) {
+      for (unsigned int i = 0; i < max_element; ++i) {
         gpu_data[i] = i;  // Write to gpu memory directly
       }
 
-     for (unsigned int  i = 1; i <= max_element; ++i) {
+     for (unsigned int  i = 0; i < max_element; ++i) {
        if (sys_data[i] != gpu_data[i]) {  // Reading GPU memory
             fprintf(stdout, "Values not mathing !! sys_data[%d]:%d ,"
                 "gpu_data[%d]\n", sys_data[i], i, gpu_data[i]);
