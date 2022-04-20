@@ -778,6 +778,8 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
 
+  bool allocation_map_entry_found = false;
+
   {  // memory_lock protects access to the NMappedNodes array and fragment user data since these may
      // change with calls to memory APIs.
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -827,9 +829,16 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
           retInfo.hostBaseAddress = retInfo.agentBaseAddress;
           retInfo.sizeInBytes = fragment->second.size;
           retInfo.userData = fragment->second.user_ptr;
+          allocation_map_entry_found = true;
       }
     }
   }  // end lock scope
+
+  // Return type UNKNOWN for released fragments.  Do not report the underlying block info to users!
+  if ((!allocation_map_entry_found) &&
+      ((retInfo.type == HSA_EXT_POINTER_TYPE_HSA) || (retInfo.type == HSA_EXT_POINTER_TYPE_IPC))) {
+    retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+  }
 
   retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
 
