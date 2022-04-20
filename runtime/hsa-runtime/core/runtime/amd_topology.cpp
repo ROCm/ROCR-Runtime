@@ -109,12 +109,14 @@ CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   }
 
   CpuAgent* cpu = new CpuAgent(node_id, node_prop);
-  core::Runtime::runtime_singleton_->RegisterAgent(cpu);
+  cpu->Enable();
+  core::Runtime::runtime_singleton_->RegisterAgent(cpu, true);
 
   return cpu;
 }
 
-GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnack_mode) {
+GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnack_mode,
+                      bool enabled) {
   GpuAgent* gpu = nullptr;
   if (node_prop.NumFComputeCores == 0) {
       // Ignore non GPUs.
@@ -163,7 +165,8 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
       throw;
     }
   }
-  core::Runtime::runtime_singleton_->RegisterAgent(gpu);
+  if (enabled) gpu->Enable();
+  core::Runtime::runtime_singleton_->RegisterAgent(gpu, enabled);
   return gpu;
 }
 
@@ -242,7 +245,7 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
 /**
  * Process the list of Gpus that are surfaced to user
  */
-static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode) {
+static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode, bool enabled) {
   // Process user visible Gpu devices
   int32_t invalidIdx = -1;
   int32_t list_sz = gpu_list.size();
@@ -259,7 +262,7 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode) {
     // Instantiate a Gpu device. The IO links
     // of this node have already been registered
     assert((node_prop.NumFComputeCores != 0) && "Improper node used for GPU device discovery.");
-    DiscoverGpu(gpu_list[idx], node_prop, xnack_mode);
+    DiscoverGpu(gpu_list[idx], node_prop, xnack_mode, enabled);
   }
 }
 
@@ -299,6 +302,7 @@ void BuildTopology() {
   int32_t invalidIdx = -1;
   uint32_t visibleCnt = 0;
   std::vector<int32_t> gpu_usr_list;
+  std::vector<int32_t> gpu_disabled;
   bool filter = RvdFilter::FilterDevices();
   if (filter) {
     rvdFilter.BuildRvdTokenList();
@@ -329,6 +333,8 @@ void BuildTopology() {
         int32_t devRank = rvdFilter.GetUsrDeviceRank(kfdIdx);
         if (devRank != (-1)) {
           gpu_usr_list[devRank] = node_id;
+        } else {
+          gpu_disabled.push_back(node_id);
         }
       } else {
         gpu_usr_list.push_back(node_id);
@@ -347,7 +353,8 @@ void BuildTopology() {
   bool xnack_mode = BindXnackMode();
 
   // Instantiate ROCr objects to encapsulate Gpu devices
-  SurfaceGpuList(gpu_usr_list, xnack_mode);
+  SurfaceGpuList(gpu_usr_list, xnack_mode, true);
+  SurfaceGpuList(gpu_disabled, xnack_mode, false);
 
   // Parse HSA_CU_MASK with GPU and CU count limits.
   uint32_t maxGpu = core::Runtime::runtime_singleton_->gpu_agents().size();

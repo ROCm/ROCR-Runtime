@@ -132,7 +132,7 @@ class Runtime {
 
   /// @brief Insert agent into agent list ::agents_.
   /// @param [in] agent Pointer to the agent object.
-  void RegisterAgent(Agent* agent);
+  void RegisterAgent(Agent* agent, bool Enabled);
 
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
@@ -221,10 +221,9 @@ class Runtime {
   ///
   /// @retval ::HSA_STATUS_SUCCESS if copy command has been submitted
   /// successfully to the agent DMA queue.
-  hsa_status_t CopyMemory(void* dst, core::Agent& dst_agent, const void* src,
-                          core::Agent& src_agent, size_t size,
-                          std::vector<core::Signal*>& dep_signals,
-                          core::Signal& completion_signal);
+  hsa_status_t CopyMemory(void* dst, core::Agent* dst_agent, const void* src,
+                          core::Agent* src_agent, size_t size,
+                          std::vector<core::Signal*>& dep_signals, core::Signal& completion_signal);
 
   /// @brief Fill the first @p count of uint32_t in ptr with value.
   ///
@@ -309,6 +308,8 @@ class Runtime {
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
+
+  const std::vector<Agent*>& disabled_gpu_agents() { return disabled_gpu_agents_; }
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
 
@@ -504,6 +505,9 @@ class Runtime {
 
   // Agent list containing all compatible GPU agents in the platform.
   std::vector<Agent*> gpu_agents_;
+
+  // Agent list containing incompletely initialized GPU agents not to be used by the process.
+  std::vector<Agent*> disabled_gpu_agents_;
 
   // Agent map containing all agents indexed by their KFD node IDs.
   std::map<uint32_t, std::vector<Agent*> > agents_by_node_;

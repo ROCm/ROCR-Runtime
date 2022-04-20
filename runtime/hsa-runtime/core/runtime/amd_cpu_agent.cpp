@@ -44,6 +44,7 @@
 
 #include <algorithm>
 #include <cstring>
+#include <thread>
 
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/host_queue.h"
@@ -372,6 +373,38 @@ hsa_status_t CpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
                                    core::Queue** queue) {
   // No HW AQL packet processor on CPU device.
   return HSA_STATUS_ERROR;
+}
+
+hsa_status_t CpuAgent::DmaCopy(void* dst, core::Agent& dst_agent, const void* src,
+                               core::Agent& src_agent, size_t size,
+                               std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
+  // For cpu to cpu, fire and forget a copy thread.
+  const bool profiling_enabled = (dst_agent.profiling_enabled() || src_agent.profiling_enabled());
+  if (profiling_enabled) out_signal.async_copy_agent(this);
+  std::thread(
+      [](void* dst, const void* src, size_t size, std::vector<core::Signal*> dep_signals,
+         core::Signal* completion_signal, bool profiling_enabled) {
+        for (core::Signal* dep : dep_signals) {
+          dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX, HSA_WAIT_STATE_BLOCKED);
+        }
+
+        if (profiling_enabled) {
+          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
+                                                           &completion_signal->signal_.start_ts);
+        }
+
+        memcpy(dst, src, size);
+
+        if (profiling_enabled) {
+          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
+                                                           &completion_signal->signal_.end_ts);
+        }
+
+        completion_signal->SubRelease(1);
+      },
+      dst, src, size, dep_signals, &out_signal, profiling_enabled)
+      .detach();
+  return HSA_STATUS_SUCCESS;
 }
 
 }  // namespace amd

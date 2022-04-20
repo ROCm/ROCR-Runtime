@@ -106,6 +106,12 @@ struct ValidityError<const T*> {
       return hsa_status_t(ValidityError<decltype(ptr)>::value); \
   } while (false)
 
+#define IS_NULL_OR_VALID(ptr)                                                                      \
+  do {                                                                                             \
+    if ((ptr) != NULL && !(ptr)->IsValid())                                                        \
+      return hsa_status_t(ValidityError<decltype(ptr)>::value);                                    \
+  } while (false)
+
 #define CHECK_ALLOC(ptr)                                         \
   do {                                                           \
     if ((ptr) == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES; \
@@ -240,10 +246,10 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   }
 
   core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
-  IS_VALID(dst_agent);
+  IS_NULL_OR_VALID(dst_agent);
 
   core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
-  IS_VALID(src_agent);
+  IS_NULL_OR_VALID(src_agent);
 
   std::vector<core::Signal*> dep_signal_list(num_dep_signals);
   if (num_dep_signals > 0) {
@@ -260,8 +266,8 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   bool rev_copy_dir = core::Runtime::runtime_singleton_->flag().rev_copy_dir();
   if (size > 0) {
     return core::Runtime::runtime_singleton_->CopyMemory(
-        dst, (rev_copy_dir ? *src_agent  : *dst_agent),
-        src, (rev_copy_dir ? *dst_agent  : *src_agent),
+        dst, (rev_copy_dir ? src_agent : dst_agent),
+        src, (rev_copy_dir ? dst_agent : src_agent),
         size, dep_signal_list, *out_signal_obj);
   }
 

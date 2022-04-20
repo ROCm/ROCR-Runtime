@@ -46,7 +46,6 @@
 #include <atomic>
 #include <cstring>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "core/common/shared.h"
@@ -150,7 +149,7 @@ bool Runtime::IsOpen() {
 
 // Register agent information only.  Must not call anything that may use the registered information
 // since those tables are incomplete.
-void Runtime::RegisterAgent(Agent* agent) {
+void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
   // Record the agent in the node-to-agent reverse lookup table.
   agents_by_node_[agent->node_id()].push_back(agent);
 
@@ -199,12 +198,13 @@ void Runtime::RegisterAgent(Agent* agent) {
       }
     }
   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
-    gpu_agents_.push_back(agent);
-
-    gpu_ids_.push_back(agent->node_id());
-
-    // Assign the first discovered gpu agent as region gpu.
-    if (region_gpu_ == NULL) region_gpu_ = agent;
+    if (Enabled) {
+      gpu_agents_.push_back(agent);
+      gpu_ids_.push_back(agent->node_id());
+      // Assign the first discovered gpu agent as region gpu.
+      if (region_gpu_ == NULL) region_gpu_ = agent;
+    } else
+      disabled_gpu_agents_.push_back(agent);
   }
 }
 
@@ -212,6 +212,9 @@ void Runtime::DestroyAgents() {
   agents_by_node_.clear();
 
   std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
+  gpu_agents_.clear();
+
+  std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
   gpu_agents_.clear();
 
   gpu_ids_.clear();
@@ -462,53 +465,37 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   return err;
 }
 
-hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
-                                 const void* src, core::Agent& src_agent,
-                                 size_t size,
+hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* src,
+                                 core::Agent* src_agent, size_t size,
                                  std::vector<core::Signal*>& dep_signals,
                                  core::Signal& completion_signal) {
-  const bool dst_gpu =
-      (dst_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  const bool src_gpu =
-      (src_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  if (dst_gpu || src_gpu) {
-    core::Agent* copy_agent = (src_gpu) ? &src_agent : &dst_agent;
-    return copy_agent->DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
-                               completion_signal);
-  }
+  auto lookupAgent = [this](core::Agent* agent, const void* ptr) {
+    if (agent == nullptr) {
+      hsa_amd_pointer_info_t info;
+      PtrInfoBlockData block;
+      info.size = sizeof(info);
+      PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+      // Limit to IPC and GFX types for now.  These are the only types for which the application may
+      // not posess a proper agent handle.
+      if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS))
+        return;
+      agent = Agent::Convert(info.agentOwner);
+    }
+  };
 
-  // For cpu to cpu, fire and forget a copy thread.
-  const bool profiling_enabled =
-      (dst_agent.profiling_enabled() || src_agent.profiling_enabled());
-  if (profiling_enabled) completion_signal.async_copy_agent(&dst_agent);
-  std::thread(
-      [](void* dst, const void* src, size_t size,
-         std::vector<core::Signal*> dep_signals,
-         core::Signal* completion_signal, bool profiling_enabled) {
+  lookupAgent(dst_agent, dst);
+  lookupAgent(src_agent, src);
+  if (dst_agent == nullptr || src_agent == nullptr) return HSA_STATUS_ERROR_INVALID_AGENT;
 
-        for (core::Signal* dep : dep_signals) {
-          dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX,
-                           HSA_WAIT_STATE_BLOCKED);
-        }
+  // At least one agent must be available for operation in the current process.
+  if (!dst_agent->Enabled() && !src_agent->Enabled()) return HSA_STATUS_ERROR_INVALID_AGENT;
 
-        if (profiling_enabled) {
-          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
-                                                           &completion_signal->signal_.start_ts);
-        }
-
-        memcpy(dst, src, size);
-
-        if (profiling_enabled) {
-          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
-                                                           &completion_signal->signal_.end_ts);
-        }
-
-        completion_signal->SubRelease(1);
-      },
-      dst, src, size, dep_signals, &completion_signal,
-      profiling_enabled).detach();
-
-  return HSA_STATUS_SUCCESS;
+  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+  if (!copy_agent->Enabled()) copy_agent = (copy_agent == src_agent) ? dst_agent : src_agent;
+  return copy_agent->DmaCopy(dst, *dst_agent, src, *src_agent, size, dep_signals,
+                             completion_signal);
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
