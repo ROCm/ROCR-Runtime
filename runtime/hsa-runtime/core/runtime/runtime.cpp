@@ -947,9 +947,10 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   uint32_t fragOffset = 0;
 
   auto fixFragment = [&]() {
-    if (!isFragment) return;
-    importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
-    len = Min(len, importSize - fragOffset);
+    if (isFragment) {
+      importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
+      len = Min(len, importSize - fragOffset);
+    }
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     allocation_map_[importAddress] = AllocationRegion(nullptr, len);
   };
