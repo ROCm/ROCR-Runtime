@@ -1110,6 +1110,8 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] dst_agent Agent associated with the @p dst. The agent must be able to directly
  * access both the source and destination buffers in their current locations.
+ * May be zero in which case the runtime will attempt to discover the destination agent.
+ * Discovery may have variable and/or high latency.
  *
  * @param[in] src A valid pointer to the source of data to be copied. The source
  * buffer must not overlap with the destination buffer, otherwise the copy will succeed
@@ -1117,6 +1119,8 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] src_agent Agent associated with the @p src. The agent must be able to directly
  * access both the source and destination buffers in their current locations.
+ * May be zero in which case the runtime will attempt to discover the destination agent.
+ * Discovery may have variable and/or high latency.
  *
  * @param[in] size Number of bytes to copy. If @p size is 0, no copy is
  * performed and the function returns success. Copying a number of bytes larger
@@ -1127,9 +1131,9 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] dep_signals List of signals that must be waited on before the copy
  * operation starts. The copy will start after every signal has been observed with
- * the value 0. The dependent signal should not include completion signal from hsa_amd_memory_async_copy
- * operation to be issued in future as that can result in a deadlock. If @p num_dep_signals is 0, this
- * argument is ignored.
+ * the value 0. The dependent signal should not include completion signal from
+ * hsa_amd_memory_async_copy operation to be issued in future as that can result
+ * in a deadlock. If @p num_dep_signals is 0, this argument is ignored.
  *
  * @param[in] completion_signal Signal used to indicate completion of the copy
  * operation. When the copy operation is finished, the value of the signal is
@@ -1144,7 +1148,7 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
  * initialized.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The agent is invalid.
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT An agent is invalid or no discovered agent has access.
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_SIGNAL @p completion_signal is invalid.
  *

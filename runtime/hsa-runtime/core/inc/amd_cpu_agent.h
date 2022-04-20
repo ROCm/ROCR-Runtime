@@ -104,6 +104,11 @@ class CpuAgent : public core::Agent {
                            uint32_t group_segment_size,
                            core::Queue** queue) override;
 
+  // @brief Override from core::Agent.
+  hsa_status_t DmaCopy(void* dst, core::Agent& dst_agent, const void* src, core::Agent& src_agent,
+                       size_t size, std::vector<core::Signal*>& dep_signals,
+                       core::Signal& out_signal) override;
+
   // @brief Returns number of data caches.
   __forceinline size_t num_cache() const { return cache_props_.size(); }
 
