@@ -295,3 +295,85 @@ TEST_F(KFDEventTest, SignalMultipleEventsWaitForAll) {
 
     TEST_END;
 }
+
+/* Send an event interrupt with 0 context ID. Test that KFD handles it
+ * gracefully and with good performance. On current GPUs and firmware it
+ * should be handled on a fast path.
+ */
+TEST_F(KFDEventTest, SignalInvalidEvent) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    PM4Queue queue;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    // Create some dummy events, to make the slow path a bit slower
+    static const unsigned int EVENT_NUMBER = 4094;
+    HsaEvent* pHsaEvent[EVENT_NUMBER];
+    for (int i = 0; i < EVENT_NUMBER; i++) {
+        pHsaEvent[i] = NULL;
+        ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &pHsaEvent[i]));
+    }
+
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &m_pHsaEvent));
+    ASSERT_NE(0, m_pHsaEvent->EventData.HWData2);
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    static const unsigned int REPS = 2000;
+    HSAuint64 duration[REPS];
+    HSAuint64 total = 0, min = 1000000, max = 0;
+    for (int i = 0; i < REPS; i++) {
+        // Invalid signal packet
+        queue.PlacePacket(PM4ReleaseMemoryPacket(m_FamilyId, false, 0, 0));
+        // Submit valid signal packet
+        queue.PlacePacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
+                        m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+
+        HSAuint64 startTime = GetSystemTickCountInMicroSec();
+        queue.SubmitPacket();
+
+        EXPECT_SUCCESS(hsaKmtWaitOnEvent(m_pHsaEvent, g_TestTimeOut));
+
+        duration[i] = GetSystemTickCountInMicroSec() - startTime;
+        total += duration[i];
+        if (duration[i] < min)
+            min = duration[i];
+        if (duration[i] > max)
+            max = duration[i];
+    }
+
+    double mean = (double)(total - min - max) / (REPS - 2);
+    double variance = 0;
+    bool skippedMin = false, skippedMax = false;
+    HSAuint64 newMin = max, newMax = min;
+    for (int i = 0; i < REPS; i++) {
+        if (!skippedMin && duration[i] == min) {
+            skippedMin = true;
+            continue;
+        }
+        if (!skippedMax && duration[i] == max) {
+            skippedMax = true;
+            continue;
+        }
+        if (duration[i] < newMin)
+            newMin = duration[i];
+        if (duration[i] > newMax)
+            newMax = duration[i];
+        double diff = mean - duration[i];
+        variance += diff*diff;
+    }
+    variance /= REPS - 2;
+    double stdDev = sqrt(variance);
+
+    LOG() << "Time for event handling (min/avg/max [std.dev] in us) " << std::dec
+          << newMin << "/" << mean << "/" << newMax << " [" << stdDev << "]\n";
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    for (int i = 0; i < EVENT_NUMBER; i++)
+        EXPECT_SUCCESS(hsaKmtDestroyEvent(pHsaEvent[i]));
+
+    TEST_END;
+}
