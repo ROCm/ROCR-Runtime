@@ -316,6 +316,7 @@ typedef enum hsa_amd_agent_info_s {
    * Some processors support more CUs than can reliably be used in a cooperative
    * dispatch.  This queries the count of CUs which are fully enabled for
    * cooperative dispatch.
+   * The type of this attribute is uint32_t.
    */
   HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014
 } hsa_amd_agent_info_t;
