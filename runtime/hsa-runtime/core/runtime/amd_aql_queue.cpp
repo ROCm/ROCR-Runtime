@@ -866,8 +866,16 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       const uint64_t rounds = groups / cu_count;
       const uint64_t asymmetricGroups = rounds * asymmetryPerRound;
       const uint64_t symmetricGroups = groups - asymmetricGroups;
-      const uint64_t maxGroupsPerEngine =
+      uint64_t maxGroupsPerEngine =
           ((symmetricGroups + engines - 1) / engines) + (asymmetryPerRound ? rounds : 0);
+
+      // For gfx10+ devices we must attempt to assign the smaller of 256 lanes or 16 groups to each
+      // engine.
+      if (queue->agent_->isa()->GetMajorVersion() >= 10 && maxGroupsPerEngine < 16 &&
+          lanes_per_group * maxGroupsPerEngine < 256) {
+        uint64_t groups_per_interleave = (256 + lanes_per_group - 1) / lanes_per_group;
+        maxGroupsPerEngine = Min(groups_per_interleave, 16ul);
+      }
 
       // Populate all engines at max group occupancy, then clip down to device limits.
       groups = maxGroupsPerEngine * engines;
