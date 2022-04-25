@@ -237,3 +237,78 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+
+TEST_F(KFDDBGTest, HitTrapEvent) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        if (hsaKmtCheckRuntimeDebugSupport()) {
+            LOG() << "Skip test as debug API not supported";
+            goto exit;
+        }
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        // create shader and trap bufs then enable 2nd level trap
+        HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer trapStatusBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+
+        HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false, false);
+
+        ASSERT_SUCCESS(hsaKmtSetTrapHandler(defaultGPUNode,
+                                            trap.As<void *>(),
+                                            0x1000,
+                                            tmaBuf.As<void*>(),
+                                            0x1000));
+
+        // compile and dispatch shader
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(jump_to_trap_gfx, isaBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+
+        uint32_t rDebug;
+        ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
+
+        BaseDebug *debug = new BaseDebug();
+        struct kfd_runtime_info r_info = {0};
+        ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
+        ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
+
+        PM4Queue queue;
+        HsaQueueResource *qResources;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+        unsigned int* trapStatus = trapStatusBuf.As<unsigned int*>();
+        trapStatus[0] = 0;
+        Dispatch *dispatch;
+        dispatch = new Dispatch(isaBuf);
+        dispatch->SetArgs(&trapStatus[0], NULL);
+        dispatch->SetDim(1, 1, 1);
+
+        /* Subscribe to trap events and submit the queue */
+        uint64_t trapMask = KFD_EC_MASK(EC_QUEUE_WAVE_TRAP);
+        debug->SetExceptionsEnabled(trapMask);
+        dispatch->Submit(queue);
+
+        /* Wait for trap event */
+        uint32_t QueueId = -1;
+        ASSERT_SUCCESS(debug->QueryDebugEvent(&trapMask, NULL, &QueueId, 5000));
+        ASSERT_NE(QueueId, -1);
+        ASSERT_EQ(trapMask, KFD_EC_MASK(EC_QUEUE_WAVE_TRAP) | KFD_EC_MASK(EC_QUEUE_NEW));
+
+        dispatch->Sync();
+        EXPECT_SUCCESS(queue.Destroy());
+
+        ASSERT_NE(trapStatus[0], 0);
+
+        debug->Detach();
+        hsaKmtRuntimeDisable();
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+exit:
+    LOG() << std::endl;
+    TEST_END
+}
