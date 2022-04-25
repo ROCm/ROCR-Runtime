@@ -62,4 +62,8 @@ extern const char *ReadMemoryIsa;
 extern const char *GwsInitIsa;
 extern const char *GwsAtomicIncreaseIsa;
 
+/* HitTrapEvent */
+extern const char *jump_to_trap_gfx;
+extern const char *trap_handler_gfx;
+
 #endif  // _SHADERSTORE_H_

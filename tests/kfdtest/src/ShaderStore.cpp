@@ -80,6 +80,13 @@ const std::vector<const char*> ShaderList = {
     "       .else\n"\
     "           v_cmp_lt_u32        vcc, \\src0, \\vsrc1\n"\
     "       .endif\n"\
+    "   .endm\n"\
+    "   .macro V_CMP_EQ_U32 src0, vsrc1\n"\
+    "       .if (.amdgcn.gfx_generation_number >= 10)\n"\
+    "           v_cmp_eq_u32        vcc_lo, \\src0, \\vsrc1\n"\
+    "       .else\n"\
+    "           v_cmp_eq_u32        vcc, \\src0, \\vsrc1\n"\
+    "       .endif\n"\
     "   .endm\n"
 
 /* Macros for portable flat load/store/atomic instructions.
@@ -892,4 +899,75 @@ const char *GwsAtomicIncreaseIsa =
         .endif
         s_waitcnt 0
         s_endpgm
+)";
+
+const char *jump_to_trap_gfx =
+    SHADER_START
+    SHADER_MACROS_U32
+    R"(
+        /*copy the parameters from scalar registers to vector registers*/
+        v_mov_b32 v4, 0
+        v_mov_b32 v0, s0
+        v_mov_b32 v1, s1
+        s_trap 1
+        EXIT_LOOP:
+        V_CMP_EQ_U32 v4, 0
+        s_cbranch_vccnz EXIT_LOOP
+        flat_store_dword v[0:1], v4
+        s_waitcnt vmcnt(0)&lgkmcnt(0)
+        s_endpgm
+)";
+
+const char *trap_handler_gfx =
+    SHADER_START
+    R"(
+        CHECK_VMFAULT:
+        /*if trap jumped to by vmfault, restore skip m0 signalling*/
+        s_getreg_b32 ttmp14, hwreg(HW_REG_TRAPSTS)
+        s_and_b32 ttmp2, ttmp14, 0x800
+        s_cbranch_scc1 RESTORE_AND_EXIT
+        GET_DOORBELL:
+        .if .amdgcn.gfx_generation_number < 11
+            s_mov_b32 ttmp2, exec_lo
+            s_mov_b32 ttmp3, exec_hi
+            s_mov_b32 exec_lo, 0x80000000
+            s_sendmsg 10
+            WAIT_SENDMSG:
+            /*wait until msb is cleared (i.e. doorbell fetched)*/
+            s_nop 7
+            s_bitcmp0_b32 exec_lo, 0x1F
+            s_cbranch_scc0 WAIT_SENDMSG
+            /* restore exec */
+            s_mov_b32 exec_hi, ttmp3
+            s_and_b32 exec_lo, exec_lo, 0xfff
+            s_mov_b32 ttmp3, exec_lo
+            s_mov_b32 exec_lo, ttmp2
+        .else
+            s_sendmsg_rtn_b32 ttmp3, sendmsg(MSG_RTN_GET_DOORBELL)
+            s_waitcnt lgkmcnt(0)
+            s_and_b32 ttmp3, ttmp3, 0x3ff
+        .endif
+        s_mov_b32 ttmp2, m0
+        s_or_b32 ttmp3, ttmp3, 0x800
+        /* set m0, send interrupt and restore m0 and exit trap*/
+        s_mov_b32 m0, ttmp3
+        s_nop 0x0
+        s_sendmsg sendmsg(MSG_INTERRUPT)
+        s_waitcnt lgkmcnt(0)
+        s_mov_b32 m0, ttmp2
+        v_mov_b32 v4, ttmp1
+        /* restore and increment program counter to skip shader trap jump*/
+        s_add_u32 ttmp0, ttmp0, 4
+        s_addc_u32 ttmp1, ttmp1, 0
+        s_and_b32 ttmp1, ttmp1, 0xffff
+        RESTORE_AND_EXIT:
+        /* restore SQ_WAVE_IB_STS */
+        s_lshr_b32 ttmp2, ttmp11, (26 - 15)
+        s_and_b32 ttmp2, ttmp2, (0x8000 | 0x1F0000)
+        s_setreg_b32 hwreg(HW_REG_IB_STS), ttmp2
+        /* restore SQ_WAVE_STATUS */
+        s_and_b64 exec, exec, exec
+        s_and_b64 vcc, vcc, vcc
+        s_setreg_b32 hwreg(HW_REG_STATUS), ttmp12
+        s_rfe_b64 [ttmp0, ttmp1]
 )";
