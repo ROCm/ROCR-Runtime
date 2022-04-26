@@ -27,22 +27,19 @@
 #include <string>
 #include <vector>
 #include "KFDMultiProcessTest.hpp"
-#include "IsaGenerator.hpp"
 #include "PM4Queue.hpp"
 
 // @class KFDEvictTest
 // Test eviction and restore procedure using two processes
 class KFDEvictTest :  public KFDMultiProcessTest {
  public:
-    KFDEvictTest(void): m_pIsaGen(NULL) {}
-
+    KFDEvictTest(void) {}
     ~KFDEvictTest(void) {}
 
  protected:
     virtual void SetUp();
     virtual void TearDown();
 
-    std::string CreateShader();
     void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                       std::vector<void *> &pBuffers);
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
@@ -52,7 +49,6 @@ class KFDEvictTest :  public KFDMultiProcessTest {
                                            PM4Queue *computeQueue);
 
  protected:  // Members
-    IsaGenerator*   m_pIsaGen;
     HsaMemFlags     m_Flags;
     void*           m_pBuf;
 };

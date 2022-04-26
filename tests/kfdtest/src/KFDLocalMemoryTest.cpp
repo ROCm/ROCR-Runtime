@@ -33,17 +33,11 @@ void KFDLocalMemoryTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void KFDLocalMemoryTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -107,7 +101,7 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
 
     srcSysBuffer.Fill(0x01010101);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(srcLocalBuffer.As<void*>(), srcLocalBuffer.Size(), &AlternateVAGPU,
                         mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
@@ -164,7 +158,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
 
     SysBufferA.Fill(0x01010101);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.SetSkipWaitConsump(0);
@@ -303,7 +297,8 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     /* Allocate and test memory using the strategy explained at the top */
     HSAKMT_STATUS status;

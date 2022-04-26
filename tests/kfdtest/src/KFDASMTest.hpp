@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2018 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,32 +21,19 @@
  *
  */
 
-#ifndef _ISAGENERATOR_H_
-#define _ISAGENERATOR_H_
+#ifndef __KFD_ASM_TEST__H__
+#define __KFD_ASM_TEST__H__
 
-#include "KFDTestUtil.hpp"
+#include <gtest/gtest.h>
 
-/* isa generation class - interface */
-class IsaGenerator {
+class KFDASMTest : public testing::Test {
  public:
-    static IsaGenerator* Create(unsigned int familyId);
-
-    virtual ~IsaGenerator() {}
-
-    virtual void GetNoopIsa(HsaMemoryBuffer& rBuf) = 0;
-    virtual void GetCopyDwordIsa(HsaMemoryBuffer& rBuf) = 0;
-    virtual void GetInfiniteLoopIsa(HsaMemoryBuffer& rBuf) = 0;
-    virtual void GetAtomicIncIsa(HsaMemoryBuffer& rBuf) = 0;
-    virtual void GetCwsrTrapHandler(HsaMemoryBuffer& rBuf) {}
-    virtual void GetAwTrapHandler(HsaMemoryBuffer& rBuf);
-
-    void CompileShader(const char* shaderCode, const char* shaderName, HsaMemoryBuffer& rBuf);
+    KFDASMTest() {}
+    ~KFDASMTest() {}
 
  protected:
-    virtual const std::string& GetAsicName() = 0;
-
- private:
-    static const std::string ADDRESS_WATCH_SP3;
+    virtual void SetUp();
+    virtual void TearDown();
 };
 
-#endif  // _ISAGENERATOR_H_
+#endif  // __KFD_ASM_TEST__H__

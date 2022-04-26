@@ -95,12 +95,42 @@ endif()
 
 message ( "Find libhsakmt at ${HSAKMT_LIBRARY_DIRS}" )
 
-set ( SP3_DIR ${PROJECT_SOURCE_DIR}/sp3 )
+if ( POLICY CMP0074 )
+    cmake_policy( SET CMP0074 NEW )
+endif()
+
+find_path( LIGHTNING_CMAKE_DIR NAMES LLVMConfig.cmake
+    PATHS $ENV{OUT_DIR}/llvm/lib/cmake/llvm NO_CACHE NO_DEFAULT_PATH)
+
+if ( DEFINED LIGHTNING_CMAKE_DIR AND EXISTS ${LIGHTNING_CMAKE_DIR} )
+    set ( LLVM_DIR ${LIGHTNING_CMAKE_DIR} )
+else()
+    message( WARNING "Couldn't find Lightning build. "
+        "Attempting to use system LLVM install..." )
+endif()
+
+find_package( LLVM REQUIRED CONFIG )
+
+if( ${LLVM_PACKAGE_VERSION} VERSION_LESS "7.0" )
+    message( FATAL_ERROR "Requires LLVM 7.0 or greater "
+        "(found ${LLVM_PACKAGE_VERSION})" )
+elseif( ${LLVM_PACKAGE_VERSION} VERSION_LESS "14.0" )
+    message( WARNING "Not using latest LLVM version. "
+        "Some ASIC targets may not work!" )
+endif()
+
+message( STATUS "Found LLVM ${LLVM_PACKAGE_VERSION}" )
+message( STATUS "Using LLVMConfig.cmake in: ${LLVM_DIR}" )
+
+include_directories(${LLVM_INCLUDE_DIRS})
+separate_arguments(LLVM_DEFINITIONS_LIST NATIVE_COMMAND ${LLVM_DEFINITIONS})
+add_definitions(${LLVM_DEFINITIONS_LIST})
+
+llvm_map_components_to_libnames(llvm_libs AMDGPUAsmParser Core Support)
 
 include_directories(${PROJECT_SOURCE_DIR}/gtest-1.6.0)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/../../include)
-include_directories(${SP3_DIR})
 
 include_directories(${DRM_INCLUDE_DIRS})
 
@@ -112,12 +142,8 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/Dispatch.cpp
   src/GoogleTestExtension.cpp
   src/IndirectBuffer.cpp
-  src/IsaGenerator.cpp
-  src/IsaGenerator_Aldebaran.cpp
-  src/IsaGenerator_Gfx10.cpp
-  src/IsaGenerator_Gfx72.cpp
-  src/IsaGenerator_Gfx8.cpp
-  src/IsaGenerator_Gfx9.cpp
+  src/Assemble.cpp
+  src/ShaderStore.cpp
   src/LinuxOSWrapper.cpp
   src/PM4Packet.cpp
   src/PM4Queue.cpp
@@ -143,6 +169,7 @@ set (SRC_FILES gtest-1.6.0/gtest-all.cpp
   src/KFDDBGTest.cpp
   src/KFDGWSTest.cpp
   src/KFDIPCTest.cpp
+  src/KFDASMTest.cpp
 
   src/KFDEvictTest.cpp
   src/KFDHWSTest.cpp
@@ -163,7 +190,7 @@ message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 
 if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
 ## Add --enable-new-dtags to generate DT_RUNPATH
-set ( CMAKE_CXX_FLAGS "-std=gnu++11 -Wl,--enable-new-dtags" )
+set ( CMAKE_CXX_FLAGS "-std=gnu++14 -Wl,--enable-new-dtags" )
 endif()
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2" )
@@ -181,11 +208,10 @@ endif ()
 # The modules found by pkg_check_modules() in the default pkg config
 # path do not need to use link_directories() here.
 link_directories(${HSAKMT_LIBRARY_DIRS})
-link_directories(${SP3_DIR})
 
 add_executable(kfdtest ${SRC_FILES})
 
-target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread m stdc++ rt amdsp3 numa)
+target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} ${llvm_libs} pthread m stdc++ rt numa)
 
 configure_file ( scripts/kfdtest.exclude kfdtest.exclude COPYONLY )
 configure_file ( scripts/run_kfdtest.sh run_kfdtest.sh COPYONLY )

@@ -52,6 +52,7 @@ bool is_dgpu();
 bool isTonga(const HsaNodeProperties *props);
 bool hasPciAtomicsSupport(int node);
 unsigned int FamilyIdFromNode(const HsaNodeProperties *props);
+const uint32_t GetGfxVersion(const HsaNodeProperties *props);
 
 void GetHwQueueInfo(const HsaNodeProperties *props,
                  unsigned int *p_num_cp_queues,

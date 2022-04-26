@@ -34,8 +34,6 @@ void KFDSVMRangeTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     SVMSetXNACKMode();
 
     ROUTINE_END
@@ -43,10 +41,6 @@ void KFDSVMRangeTest::SetUp() {
 
 void KFDSVMRangeTest::TearDown() {
     ROUTINE_START
-
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     SVMRestoreXNACKMode();
 
@@ -80,7 +74,7 @@ TEST_F(KFDSVMRangeTest, BasicSystemMemTest) {
 
     srcSysBuffer.Fill(0x01010101);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.SetSkipWaitConsump(0);
@@ -364,7 +358,8 @@ TEST_F(KFDSVMRangeTest, EvictSystemRangeTest) {
     ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
 
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(srcBuffer.As<void*>(), dstBuffer.As<void*>());
@@ -458,7 +453,8 @@ TEST_F(KFDSVMRangeTest, PartialUnmapSysMemTest) {
 
     munmap(pBuf2, Buf2Size);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     Dispatch dispatch(isaBuffer);
@@ -507,7 +503,7 @@ TEST_F(KFDSVMRangeTest, BasicVramTest) {
 
     srcSysBuffer.Fill(0x01010101);
 
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.SetSkipWaitConsump(0);
@@ -943,7 +939,9 @@ TEST_F(KFDSVMRangeTest, MigratePolicyTest) {
 #ifdef USE_PM4_QUEUE_TRIGGER_VM_FAULT
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
     PM4Queue queue;
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
     for (HSAuint64 i = 0; i < BufferSize / 8; i += 512) {

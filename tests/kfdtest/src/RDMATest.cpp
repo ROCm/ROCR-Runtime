@@ -34,16 +34,11 @@ void RDMATest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
-
     ROUTINE_END
 }
 
 void RDMATest::TearDown() {
     ROUTINE_START
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -77,7 +72,8 @@ TEST_F(RDMATest, GPUDirect) {
     srcSysBuffer.Fill(0xfe);
 
     /* Put 'copy dword' command to ISA buffer */
-    m_pIsaGen->GetCopyDwordIsa(isaBuffer);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     Dispatch dispatch(isaBuffer);
