@@ -24,89 +24,10 @@
 #include "KFDCWSRTest.hpp"
 #include "Dispatch.hpp"
 
-
-/* Initial state:
- *   s[0:1] - 64 bits iteration number; only the lower 32 bits are useful.
- *   s[2:3] - result buffer base address
- *   s4 - workgroup id
- *   v0 - workitem id, always 0 because
- *        NUM_THREADS_X(number of threads) in workgroup set to 1
- * Registers:
- *   v0 - calculated workitem = v0 + s4 * NUM_THREADS_X, which is s4
- *   v2 - = s0, 32 bits iteration number
- *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
- *   v6 - counter
- */
-
-static const char* iterate_isa_gfx8 = \
-"\
-shader iterate_isa\n\
-wave_size(32)\n\
-type(CS)\n\
-    // copy the parameters from scalar registers to vector registers\n\
-    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v0, s4   // use workgroup id as index \n\
-    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
-    v_add_u32       v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_add_u32       v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v6, 0 \n\
-LOOP: \n\
-    v_add_u32       v6, vcc, 1, v6 \n\
-    // compare the result value (v6) to iteration value (v2), and \n\
-    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
-    v_cmp_lt_u32 vcc, v6, v2 \n\
-    s_cbranch_vccnz LOOP \n\
-    flat_store_dword v[4:5], v6 \n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
-    s_endpgm \n\
-end \n\
-";
-
-//This shader can be used by gfx9 and gfx10
-static const char* iterate_isa_gfx9 = \
-"\
-shader iterate_isa\n\
-wave_size(32)\n\
-type(CS)\n\
-    // copy the parameters from scalar registers to vector registers\n\
-    v_mov_b32       v2, s0   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v3, s1   // v[2:3] = s[0:1] \n\
-    v_mov_b32       v0, s4   // use workgroup id as index \n\
-    v_lshlrev_b32   v0, 2, v0   // v0 *= 4 \n\
-    v_add_co_u32    v4, vcc, s2, v0   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v5, s3   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_add_co_u32    v5, vcc, v5, vcc_lo   // v[4:5] = s[2:3] + v0 * 4 \n\
-    v_mov_b32       v6, 0 \n\
-LOOP: \n\
-    v_add_co_u32    v6, vcc, 1, v6 \n\
-    // compare the result value (v6) to iteration value (v2), and \n\
-    // jump if equal (i.e. if VCC is not zero after the comparison) \n\
-    v_cmp_lt_u32 vcc, v6, v2 \n\
-    s_cbranch_vccnz LOOP \n\
-    flat_store_dword v[4:5], v6 \n\
-    s_waitcnt vmcnt(0)&lgkmcnt(0) \n\
-    s_endpgm \n\
-end \n\
-";
-
-static const char* infinite_isa = \
-"\
-shader infinite_isa \n\
-wave_size(32) \n\
-type(CS) \n\
-LOOP: \n\
-    s_branch LOOP \n\
-end \n\
-";
-
 void KFDCWSRTest::SetUp() {
     ROUTINE_START
 
     KFDBaseComponentTest::SetUp();
-
-    m_pIsaGen = IsaGenerator::Create(m_FamilyId);
 
     wave_number = 1;
 
@@ -115,9 +36,6 @@ void KFDCWSRTest::SetUp() {
 
 void KFDCWSRTest::TearDown() {
     ROUTINE_START
-    if (m_pIsaGen)
-        delete m_pIsaGen;
-    m_pIsaGen = NULL;
 
     KFDBaseComponentTest::TearDown();
 
@@ -153,15 +71,9 @@ TEST_F(KFDCWSRTest, BasicTest) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
-        const char *pIterateIsa;
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
         HsaMemoryBuffer resultBuf1(PAGE_SIZE, defaultGPUNode, true, false, false);
         uint64_t count1 = 400000000;
-
-        if (m_FamilyId < FAMILY_AI)
-            pIterateIsa = iterate_isa_gfx8;
-        else
-            pIterateIsa = iterate_isa_gfx9;
 
         if (isOnEmulator()) {
             // Divide the iterator times by 10000 so that the test can
@@ -172,7 +84,7 @@ TEST_F(KFDCWSRTest, BasicTest) {
 
         unsigned int* result1 = resultBuf1.As<unsigned int*>();
 
-        m_pIsaGen->CompileShader(pIterateIsa, "iterate_isa", isaBuffer);
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(IterateIsa, isaBuffer.As<char*>()));
 
         PM4Queue queue1;
 
@@ -236,7 +148,7 @@ TEST_F(KFDCWSRTest, InterruptRestore) {
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-        m_pIsaGen->CompileShader(infinite_isa, "infinite_isa", isaBuffer);
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(InfiniteLoopIsa, isaBuffer.As<char*>()));
 
         PM4Queue queue1, queue2, queue3;
 

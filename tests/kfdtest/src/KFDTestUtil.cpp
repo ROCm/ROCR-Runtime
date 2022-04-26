@@ -231,6 +231,12 @@ bool isTonga(const HsaNodeProperties *props) {
     return false;
 }
 
+const uint32_t GetGfxVersion(const HsaNodeProperties *props) {
+    return ((props->EngineId.ui32.Major << 16) |
+            (props->EngineId.ui32.Minor <<  8) |
+            (props->EngineId.ui32.Stepping));
+}
+
 HSAuint64 GetSystemTickCountInMicroSec() {
     struct timeval t;
     gettimeofday(&t, 0);

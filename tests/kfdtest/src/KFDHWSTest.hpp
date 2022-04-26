@@ -27,14 +27,12 @@
 #include <gtest/gtest.h>
 
 #include "PM4Queue.hpp"
-#include "IsaGenerator.hpp"
 #include "KFDMultiProcessTest.hpp"
 #include "Dispatch.hpp"
 
 class KFDHWSTest : public KFDMultiProcessTest {
  public:
-    KFDHWSTest():m_pIsaGen(NULL) {}
-
+    KFDHWSTest() {}
     ~KFDHWSTest() {}
 
  protected:
@@ -42,9 +40,6 @@ class KFDHWSTest : public KFDMultiProcessTest {
     virtual void TearDown();
 
     void RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops);
-
- protected:  // Members
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_QCM_TEST__H__

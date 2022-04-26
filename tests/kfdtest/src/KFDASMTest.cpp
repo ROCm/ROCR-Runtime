@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014-2018 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2022 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,29 +21,53 @@
  *
  */
 
-#ifndef _ISAGENERATOR_GFX9_H_
-#define _ISAGENERATOR_GFX9_H_
+#include "GoogleTestExtension.hpp"
+#include "KFDASMTest.hpp"
+#include "ShaderStore.hpp"
+#include "Assemble.hpp"
 
-#include <string>
-#include "IsaGenerator.hpp"
+void KFDASMTest::SetUp() {}
+void KFDASMTest::TearDown() {}
 
-class IsaGenerator_Gfx9 : public IsaGenerator {
- public:
-    virtual void GetNoopIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetCopyDwordIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetInfiniteLoopIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetAtomicIncIsa(HsaMemoryBuffer& rBuf);
-
- protected:
-    virtual const std::string& GetAsicName();
-
- private:
-    static const std::string ASIC_NAME;
-
-    static const uint32_t NOOP_ISA[];
-    static const uint32_t COPY_DWORD_ISA[];
-    static const uint32_t INFINITE_LOOP_ISA[];
-    static const uint32_t ATOMIC_ADD_ISA[];
+static const std::vector<uint32_t> TargetList = {
+    0x080001,
+    0x080002,
+    0x080003,
+    0x080005,
+    0x080100,
+    0x090000,
+    0x090002,
+    0x090004,
+    0x090006,
+    0x090008,
+    0x090009,
+    0x09000a,
+    0x09000c,
+    0x0a0100,
+    0x0a0101,
+    0x0a0102,
+    0x0a0103,
+    0x0a0300,
+    0x0a0301,
+    0x0a0302,
+    0x0a0303,
+    0x0a0304,
+    0x0a0305,
+    0x0a0306,
 };
 
-#endif  // _ISAGENERATOR_GFX9_H_
+TEST_F(KFDASMTest, AssembleShaders) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    for (auto &t : TargetList) {
+        Assembler asmblr(t);
+
+        LOG() << "Running ASM test for target " << asmblr.GetTargetAsic() << std::endl;
+
+        for (auto &s : ShaderList) {
+            EXPECT_SUCCESS(asmblr.RunAssemble(s));
+        }
+    }
+
+    TEST_END
+}

@@ -26,12 +26,11 @@
 
 #include <gtest/gtest.h>
 
-#include "IsaGenerator.hpp"
 #include "KFDBaseComponentTest.hpp"
 
 class KFDExceptionTest : public KFDBaseComponentTest {
  public:
-    KFDExceptionTest() :m_pIsaGen(NULL), m_ChildPid(-1) {
+    KFDExceptionTest() : m_ChildPid(-1) {
         /* Because there could be early return before m_ChildPid is set
          * by fork(), we should initialize m_ChildPid to a non-zero value
          * to avoid possible exit of the main process.
@@ -59,8 +58,6 @@ class KFDExceptionTest : public KFDBaseComponentTest {
  protected:  // Members
     pid_t m_ChildPid;
     HSAKMT_STATUS m_ChildStatus;
-
-    IsaGenerator* m_pIsaGen;
 };
 
 #endif  // __KFD_EXCEPTION_TEST__H__

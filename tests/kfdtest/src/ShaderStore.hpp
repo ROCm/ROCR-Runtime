@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2020 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2021 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,29 +21,40 @@
  *
  */
 
-#ifndef _ISAGENERATOR_ALDEBARAN_H_
-#define _ISAGENERATOR_ALDEBARAN_H_
+#ifndef _SHADERSTORE_H_
+#define _SHADERSTORE_H_
 
-#include <string>
-#include "IsaGenerator.hpp"
+#include <vector>
 
-class IsaGenerator_Aldbrn : public IsaGenerator {
- public:
-    virtual void GetNoopIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetCopyDwordIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetInfiniteLoopIsa(HsaMemoryBuffer& rBuf);
-    virtual void GetAtomicIncIsa(HsaMemoryBuffer& rBuf);
+/* KFDASMTest List */
+extern const std::vector<const char*> ShaderList;
 
- protected:
-    virtual const std::string& GetAsicName();
+/* Common */
+extern const char *NoopIsa;
+extern const char *CopyDwordIsa;
+extern const char *InfiniteLoopIsa;
+extern const char *AtomicIncIsa;
 
- private:
-    static const std::string ASIC_NAME;
+/* KFDMemoryTest */
+extern const char *ScratchCopyDwordIsa;
+extern const char *PollMemoryIsa;
+extern const char *PollNCMemoryIsa;
+extern const char *CopyOnSignalIsa;
+extern const char *PollAndCopyIsa;
+extern const char *WriteFlagAndValueIsa;
+extern const char *WriteAndSignalIsa;
 
-    static const uint32_t NOOP_ISA[];
-    static const uint32_t COPY_DWORD_ISA[];
-    static const uint32_t INFINITE_LOOP_ISA[];
-    static const uint32_t ATOMIC_ADD_ISA[];
-};
+/* KFDQMTest */
+extern const char *LoopIsa;
 
-#endif  // _ISAGENERATOR_ALDEBARAN_H_
+/* KFDCWSRTest */
+extern const char *IterateIsa;
+
+/* KFDEvictTest */
+extern const char *ReadMemoryIsa;
+
+/* KFDGWSTest */
+extern const char *GwsInitIsa;
+extern const char *GwsAtomicIncreaseIsa;
+
+#endif  // _SHADERSTORE_H_
