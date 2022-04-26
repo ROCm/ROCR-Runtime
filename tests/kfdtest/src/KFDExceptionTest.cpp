@@ -33,6 +33,9 @@ void KFDExceptionTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
+    LOG() << "This Exception test might cause expected page fault "
+             "error logs at kernel level." << std::endl;
+
     ROUTINE_END
 }
 
