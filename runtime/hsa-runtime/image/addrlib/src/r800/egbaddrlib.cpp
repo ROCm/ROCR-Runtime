@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 /**
 ****************************************************************************************************
 * @file  egbaddrlib.cpp
@@ -32,13 +31,9 @@
 
 #include "egbaddrlib.h"
 
-#include "util/macros.h"
-
 namespace rocr {
-namespace Addr
-{
-namespace V1
-{
+namespace Addr {
+namespace V1 {
 
 /**
 ****************************************************************************************************
@@ -436,6 +431,7 @@ BOOL_32 EgBasedLib::ComputeSurfaceInfoMicroTiled(
                                                               &expPitch,
                                                               &expHeight);
 
+
     pOut->pitch = expPitch;
     pOut->height = expHeight;
     pOut->depth = expNumSlices;
@@ -446,6 +442,7 @@ BOOL_32 EgBasedLib::ComputeSurfaceInfoMicroTiled(
 
     return valid;
 }
+
 
 /**
 ****************************************************************************************************
@@ -751,6 +748,7 @@ BOOL_32 EgBasedLib::ComputeSurfaceAlignmentsMicroTiled(
     return valid;
 }
 
+
 /**
 ****************************************************************************************************
 *   EgBasedLib::HwlReduceBankWidthHeight
@@ -976,7 +974,7 @@ BOOL_32 EgBasedLib::SanityCheckMacroTiled(
     ) const
 {
     BOOL_32 valid       = TRUE;
-    ASSERTED UINT_32 numPipes = HwlGetPipes(pTileInfo);
+    UINT_32 numPipes    = HwlGetPipes(pTileInfo);
 
     switch (pTileInfo->banks)
     {
@@ -1090,7 +1088,6 @@ AddrTileMode EgBasedLib::ComputeSurfaceMipLevelTileMode(
     ) const
 {
     UINT_64 bytesPerSlice;
-    (void)bytesPerSlice;
     UINT_32 bytesPerTile;
 
     AddrTileMode expTileMode = baseTileMode;
@@ -1812,6 +1809,7 @@ UINT_64 EgBasedLib::ComputeSurfaceAddrFromCoordMacroTiled(
                                 tileSplitSlice,
                                 pTileInfo);
 
+
     //
     // Split the offset to put some bits below the pipe+bank bits and some above.
     //
@@ -2155,6 +2153,7 @@ VOID EgBasedLib::HwlComputePixelCoordFromOffset(
     *pSlice += z;
 }
 
+
 /**
 ****************************************************************************************************
 *   EgBasedLib::DispatchComputeSurfaceCoordFromAddrDispatch
@@ -2299,6 +2298,7 @@ VOID EgBasedLib::DispatchComputeSurfaceCoordFromAddr(
     }
 }
 
+
 /**
 ****************************************************************************************************
 *   EgBasedLib::ComputeSurfaceCoordFromAddrMacroTiled
@@ -2342,6 +2342,7 @@ VOID EgBasedLib::ComputeSurfaceCoordFromAddrMacroTiled(
     UINT_64 macroTileIndex;
     UINT_32 tileIndex;
     UINT_64 totalOffset;
+
 
     UINT_32 bank;
     UINT_32 pipe;
@@ -2664,6 +2665,7 @@ ADDR_E_RETURNCODE EgBasedLib::HwlExtractBankPipeSwizzle(
     return ADDR_OK;
 }
 
+
 /**
 ****************************************************************************************************
 *   EgBasedLib::HwlCombineBankPipeSwizzle
@@ -2725,7 +2727,6 @@ ADDR_E_RETURNCODE EgBasedLib::HwlComputeBaseSwizzle(
     };
 
     UINT_32 pipes = HwlGetPipes(pTileInfo);
-    (void)pipes;
     UINT_32 banks = pTileInfo ? pTileInfo->banks : 2;
     UINT_32 hwNumBanks;
 
@@ -3033,6 +3034,7 @@ UINT_32 EgBasedLib::ComputeBankFromCoord(
             break;
     }
 
+
     //
     // Compute bank rotation for the tile split slice.
     //
@@ -3130,6 +3132,7 @@ UINT_32 EgBasedLib::ComputePipeRotation(
     return rotation;
 }
 
+
 /**
 ****************************************************************************************************
 *   EgBasedLib::ComputeBankRotation
@@ -3171,6 +3174,7 @@ UINT_32 EgBasedLib::ComputeBankRotation(
 
     return rotation;
 }
+
 
 /**
 ****************************************************************************************************
@@ -4096,7 +4100,7 @@ UINT_64 EgBasedLib::HwlGetSizeAdjustmentMicroTiled(
     ) const
 {
     UINT_64 logicalSliceSize;
-    ASSERTED UINT_64 physicalSliceSize;
+    UINT_64 physicalSliceSize;
 
     UINT_32 pitch   = *pPitch;
     UINT_32 height  = *pHeight;
@@ -4153,4 +4157,3 @@ UINT_32 EgBasedLib::HwlStereoCheckRightOffsetPadding(
 } // V1
 } // Addr
 } // rocr
-

@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ****************************************************************************************************
@@ -49,6 +48,10 @@ typedef void           VOID;
 typedef float          FLOAT;
 #endif
 
+#if !defined(DOUBLE)
+typedef double         DOUBLE;
+#endif
+
 #if !defined(CHAR)
 typedef char           CHAR;
 #endif
@@ -68,7 +71,11 @@ typedef int            INT;
 */
 #ifndef ADDR_CDECL
     #if defined(__GNUC__)
-        #define ADDR_CDECL __attribute__((cdecl))
+        #if defined(__i386__)
+            #define ADDR_CDECL __attribute__((cdecl))
+        #else
+            #define ADDR_CDECL
+        #endif
     #else
         #define ADDR_CDECL __cdecl
     #endif
@@ -76,10 +83,10 @@ typedef int            INT;
 
 #ifndef ADDR_STDCALL
     #if defined(__GNUC__)
-        #if defined(__amd64__) || defined(__x86_64__)
-            #define ADDR_STDCALL
-        #else
+        #if defined(__i386__)
             #define ADDR_STDCALL __attribute__((stdcall))
+        #else
+            #define ADDR_STDCALL
         #endif
     #else
         #define ADDR_STDCALL __stdcall
@@ -88,7 +95,11 @@ typedef int            INT;
 
 #ifndef ADDR_FASTCALL
     #if defined(__GNUC__)
-        #define ADDR_FASTCALL __attribute__((regparm(0)))
+        #if defined(__i386__) || defined(__amd64__) || defined(__x86_64__)
+            #define ADDR_FASTCALL __attribute__((regparm(0)))
+        #else
+            #define ADDR_FASTCALL
+        #endif
     #else
         #define ADDR_FASTCALL __fastcall
     #endif
@@ -106,6 +117,7 @@ typedef int            INT;
     #define GC_FASTCALL  ADDR_FASTCALL
 #endif
 
+
 #if defined(__GNUC__)
     #define ADDR_INLINE static inline   // inline needs to be static to link
 #else
@@ -113,11 +125,7 @@ typedef int            INT;
     #define ADDR_INLINE   __inline
 #endif // #if defined(__GNUC__)
 
-#if defined(__amd64__) || defined(__x86_64__) || defined(__i386__)
-    #define ADDR_API ADDR_FASTCALL // default call convention is fast call
-#else
-    #define ADDR_API
-#endif
+#define ADDR_API ADDR_FASTCALL //default call convention is fast call
 
 /**
 ****************************************************************************************************
@@ -205,9 +213,10 @@ typedef enum _AddrTileMode
 * @note
 *
 *   ADDR_SW_LINEAR linear aligned addressing mode, for 1D/2D/3D resource
-*   ADDR_SW_256B_* addressing block aligned size is 256B, for 2D/3D resource
+*   ADDR_SW_256B_* addressing block aligned size is 256B, for 2D resource
 *   ADDR_SW_4KB_*  addressing block aligned size is 4KB, for 2D/3D resource
-*   ADDR_SW_64KB_* addressing block aligned size is 64KB, for 2D/3D resource
+*   ADDR_SW_64KB_* addressing block aligned size is 64KB, for 1D/2D/3D resource
+*   ADDR_SW_VAR_*  addressing block aligned size is ASIC specific
 *
 *   ADDR_SW_*_Z    For GFX9:
                    - for 2D resource, represents Z-order swizzle mode for depth/stencil/FMask
@@ -244,10 +253,10 @@ typedef enum _AddrSwizzleMode
     ADDR_SW_64KB_S          = 9,
     ADDR_SW_64KB_D          = 10,
     ADDR_SW_64KB_R          = 11,
-    ADDR_SW_RESERVED0       = 12,
-    ADDR_SW_RESERVED1       = 13,
-    ADDR_SW_RESERVED2       = 14,
-    ADDR_SW_RESERVED3       = 15,
+    ADDR_SW_MISCDEF12       = 12,
+    ADDR_SW_MISCDEF13       = 13,
+    ADDR_SW_MISCDEF14       = 14,
+    ADDR_SW_MISCDEF15       = 15,
     ADDR_SW_64KB_Z_T        = 16,
     ADDR_SW_64KB_S_T        = 17,
     ADDR_SW_64KB_D_T        = 18,
@@ -260,12 +269,27 @@ typedef enum _AddrSwizzleMode
     ADDR_SW_64KB_S_X        = 25,
     ADDR_SW_64KB_D_X        = 26,
     ADDR_SW_64KB_R_X        = 27,
-    ADDR_SW_VAR_Z_X         = 28,
-    ADDR_SW_RESERVED4       = 29,
-    ADDR_SW_RESERVED5       = 30,
-    ADDR_SW_VAR_R_X         = 31,
+    ADDR_SW_MISCDEF28       = 28,
+    ADDR_SW_MISCDEF29       = 29,
+    ADDR_SW_MISCDEF30       = 30,
+    ADDR_SW_MISCDEF31       = 31,
     ADDR_SW_LINEAR_GENERAL  = 32,
     ADDR_SW_MAX_TYPE        = 33,
+
+    ADDR_SW_RESERVED0       = ADDR_SW_MISCDEF12,
+    ADDR_SW_RESERVED1       = ADDR_SW_MISCDEF13,
+    ADDR_SW_RESERVED2       = ADDR_SW_MISCDEF14,
+    ADDR_SW_RESERVED3       = ADDR_SW_MISCDEF15,
+    ADDR_SW_RESERVED4       = ADDR_SW_MISCDEF29,
+    ADDR_SW_RESERVED5       = ADDR_SW_MISCDEF30,
+
+    ADDR_SW_VAR_Z_X         = ADDR_SW_MISCDEF28,
+    ADDR_SW_VAR_R_X         = ADDR_SW_MISCDEF31,
+
+    ADDR_SW_256KB_Z_X       = ADDR_SW_MISCDEF28,
+    ADDR_SW_256KB_S_X       = ADDR_SW_MISCDEF29,
+    ADDR_SW_256KB_D_X       = ADDR_SW_MISCDEF30,
+    ADDR_SW_256KB_R_X       = ADDR_SW_MISCDEF31,
 } AddrSwizzleMode;
 
 /**
@@ -553,6 +577,7 @@ typedef enum _AddrHtileBlockSize
     ADDR_HTILE_BLOCKSIZE_8 = 8,
 } AddrHtileBlockSize;
 
+
 /**
 ****************************************************************************************************
 *   AddrPipeCfg
@@ -638,7 +663,7 @@ typedef enum _AddrTileType
 #endif
 
 #ifndef INT_8
-#define INT_8   char
+#define INT_8   signed char // signed must be used because of aarch64
 #endif
 
 #ifndef UINT_8
@@ -715,6 +740,7 @@ typedef enum _AddrTileType
 #define ADDR64D "lld" OR "I64d"
 #endif
 
+
 /// @brief Union for storing a 32-bit float or 32-bit integer
 /// @ingroup type
 ///
@@ -729,6 +755,7 @@ typedef union {
     UINT_32  u;
     float    f;
 } ADDR_FLT_32;
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //

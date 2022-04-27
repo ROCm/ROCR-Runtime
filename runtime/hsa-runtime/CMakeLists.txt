@@ -228,6 +228,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/r800/siaddrlib.cpp
                    image/addrlib/src/gfx9/gfx9addrlib.cpp
                    image/addrlib/src/gfx10/gfx10addrlib.cpp
+                   image/addrlib/src/gfx11/gfx11addrlib.cpp
                    image/device_info.cpp
                    image/hsa_ext_image.cpp
                    image/image_runtime.cpp
@@ -255,9 +256,11 @@ if(${IMAGE_SUPPORT})
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx10
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx11
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx9
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10 )
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11 )
 
   target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_SRCS} )
 
