@@ -2102,7 +2102,6 @@ hsa_status_t Runtime::SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent,
 Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   uintptr_t base = reinterpret_cast<uintptr_t>(AlignDown(ptr, 4096));
   uintptr_t end = AlignUp(reinterpret_cast<uintptr_t>(ptr) + size, 4096);
-  size_t len = end - base;
 
   std::vector<std::pair<uintptr_t, uintptr_t>> holes;
 
