@@ -997,9 +997,18 @@ TEST_F(KFDSVMRangeTest, MultiGPUMigrationTest) {
         return;
     }
 
-    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    const std::vector<int> gpuNodesAll = m_NodeInfo.GetNodesWithGPU();
+    std::vector<int> gpuNodes;
+
+    for (int i : gpuNodesAll) {
+        const HsaNodeProperties *pNodeProperties;
+
+        pNodeProperties = m_NodeInfo.GetNodeProperties(gpuNodesAll.at(i));
+        if (pNodeProperties->Capability.ui32.SVMAPISupported)
+            gpuNodes.push_back(gpuNodesAll.at(i));
+    }
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: at least two GPUs needed." << std::endl;
+        LOG() << "Skipping test: at least two SVM supported GPUs needed." << std::endl;
         return;
     }
 
@@ -1072,9 +1081,18 @@ TEST_F(KFDSVMRangeTest, MultiGPUAccessInPlaceTest) {
         return;
     }
 
-    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    const std::vector<int> gpuNodesAll = m_NodeInfo.GetNodesWithGPU();
+    std::vector<int> gpuNodes;
+
+    for (int i : gpuNodesAll) {
+        const HsaNodeProperties *pNodeProperties;
+
+        pNodeProperties = m_NodeInfo.GetNodeProperties(gpuNodesAll.at(i));
+        if (pNodeProperties->Capability.ui32.SVMAPISupported)
+            gpuNodes.push_back(gpuNodesAll.at(i));
+    }
     if (gpuNodes.size() < 2) {
-        LOG() << "Skipping test: at least two GPUs needed." << std::endl;
+        LOG() << "Skipping test: at least two SVM supported GPUs needed." << std::endl;
         return;
     }
 
