@@ -43,7 +43,7 @@
 #ifndef EXT_IMAGE_IMAGE_MANAGER_GFX11_H_
 #define EXT_IMAGE_IMAGE_MANAGER_GFX11_H_
 
-#include "addrlib/inc/addrinterface.h" //DYSDEBUG TODO: replace with new addrLib
+#include "addrlib/inc/addrinterface.h"
 #include "image_manager_kv.h"
 
 namespace rocr {

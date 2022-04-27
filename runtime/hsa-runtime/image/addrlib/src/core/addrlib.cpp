@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ****************************************************************************************************
@@ -82,8 +81,7 @@ UINT_32 __umoddi3(UINT_64 n, UINT_32 base)
 #endif // __APPLE__
 
 namespace rocr {
-namespace Addr
-{
+namespace Addr {
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                               Constructor/Destructor
@@ -99,7 +97,6 @@ namespace Addr
 ****************************************************************************************************
 */
 Lib::Lib() :
-    m_class(BASE_ADDRLIB),
     m_chipFamily(ADDR_CHIP_FAMILY_IVLD),
     m_chipRevision(0),
     m_version(ADDRLIB_VERSION),
@@ -109,6 +106,8 @@ Lib::Lib() :
     m_rowSize(0),
     m_minPitchAlignPixels(1),
     m_maxSamples(8),
+    m_maxBaseAlign(0),
+    m_maxMetaBaseAlign(0),
     m_pElemLib(NULL)
 {
     m_configFlags.value = 0;
@@ -125,7 +124,6 @@ Lib::Lib() :
 */
 Lib::Lib(const Client* pClient) :
     Object(pClient),
-    m_class(BASE_ADDRLIB),
     m_chipFamily(ADDR_CHIP_FAMILY_IVLD),
     m_chipRevision(0),
     m_version(ADDRLIB_VERSION),
@@ -135,6 +133,8 @@ Lib::Lib(const Client* pClient) :
     m_rowSize(0),
     m_minPitchAlignPixels(1),
     m_maxSamples(8),
+    m_maxBaseAlign(0),
+    m_maxMetaBaseAlign(0),
     m_pElemLib(NULL)
 {
     m_configFlags.value = 0;
@@ -157,6 +157,7 @@ Lib::~Lib()
         m_pElemLib = NULL;
     }
 }
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                               Initialization/Helper
@@ -207,7 +208,7 @@ ADDR_E_RETURNCODE Lib::Create(
                         pLib = SiHwlInit(&client);
                         break;
                     case FAMILY_VI:
-                    case FAMILY_CZ:
+                    case FAMILY_CZ: // VI based fusion
                     case FAMILY_CI:
                     case FAMILY_KV: // CI based fusion
                         pLib = CiHwlInit(&client);
@@ -225,7 +226,15 @@ ADDR_E_RETURNCODE Lib::Create(
                         pLib = Gfx9HwlInit(&client);
                         break;
                     case FAMILY_NV:
+                    case FAMILY_VGH:
+                    case FAMILY_RMB:
+                    case FAMILY_GC_10_3_6:
+                    case FAMILY_GC_10_3_7:
                         pLib = Gfx10HwlInit(&client);
+                        break;
+                    case FAMILY_GFX1100:
+                    case FAMILY_GFX1103:
+                        pLib = Gfx11HwlInit(&client);
                         break;
                     default:
                         ADDR_ASSERT_ALWAYS();
@@ -252,6 +261,7 @@ ADDR_E_RETURNCODE Lib::Create(
         pLib->m_configFlags.allowLargeThickTile = pCreateIn->createFlags.allowLargeThickTile;
         pLib->m_configFlags.forceDccAndTcCompat = pCreateIn->createFlags.forceDccAndTcCompat;
         pLib->m_configFlags.nonPower2MemConfig  = pCreateIn->createFlags.nonPower2MemConfig;
+        pLib->m_configFlags.enableAltTiling     = pCreateIn->createFlags.enableAltTiling;
         pLib->m_configFlags.disableLinearOpt    = FALSE;
 
         pLib->SetChipFamily(pCreateIn->chipFamily, pCreateIn->chipRevision);
@@ -491,9 +501,11 @@ UINT_32 Lib::Bits2Number(
     return number;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                               Element lib
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+
 
 /**
 ****************************************************************************************************
@@ -610,6 +622,7 @@ ADDR_E_RETURNCODE Lib::Flt32ToColorPixel(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Lib::GetExportNorm
@@ -660,4 +673,3 @@ UINT_32 Lib::GetBpe(AddrFormat format) const
 
 } // Addr
 } // rocr
-

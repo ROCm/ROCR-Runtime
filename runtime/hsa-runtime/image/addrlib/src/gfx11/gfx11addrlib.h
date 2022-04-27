@@ -25,17 +25,17 @@
 
 /**
 ************************************************************************************************************************
-* @file  gfx10addrlib.h
-* @brief Contains the Gfx10Lib class definition.
+* @file  gfx11addrlib.h
+* @brief Contains the Gfx11Lib class definition.
 ************************************************************************************************************************
 */
 
-#ifndef __GFX10_ADDR_LIB_H__
-#define __GFX10_ADDR_LIB_H__
+#ifndef __GFX11_ADDR_LIB_H__
+#define __GFX11_ADDR_LIB_H__
 
 #include "addrlib2.h"
 #include "coord.h"
-#include "gfx10SwizzlePattern.h"
+#include "gfx11SwizzlePattern.h"
 
 namespace rocr {
 namespace Addr {
@@ -43,48 +43,41 @@ namespace V2 {
 
 /**
 ************************************************************************************************************************
-* @brief GFX10 specific settings structure.
+* @brief GFX11 specific settings structure.
 ************************************************************************************************************************
 */
-struct Gfx10ChipSettings
+struct Gfx11ChipSettings
 {
     struct
     {
         UINT_32 reserved1           : 32;
 
         // Misc configuration bits
-        UINT_32 isDcn20             : 1; // If using DCN2.0
-        UINT_32 supportRbPlus       : 1;
-        UINT_32 dsMipmapHtileFix    : 1;
-        UINT_32 dccUnsup3DSwDis     : 1;
-        UINT_32                     : 2;
-        UINT_32 reserved2           : 26;
+        UINT_32 reserved2           : 32;
     };
 };
 
 /**
 ************************************************************************************************************************
-* @brief GFX10 data surface type.
+* @brief GFX11 data surface type.
 ************************************************************************************************************************
 */
-enum Gfx10DataType
+enum Gfx11DataType
 {
-    Gfx10DataColor,
-    Gfx10DataDepthStencil,
-    Gfx10DataFmask
+    Gfx11DataColor,
+    Gfx11DataDepthStencil,
 };
 
-const UINT_32 Gfx10LinearSwModeMask = (1u << ADDR_SW_LINEAR);
+const UINT_32 Gfx11LinearSwModeMask = (1u << ADDR_SW_LINEAR);
 
-const UINT_32 Gfx10Blk256BSwModeMask = (1u << ADDR_SW_256B_S) |
-                                       (1u << ADDR_SW_256B_D);
+const UINT_32 Gfx11Blk256BSwModeMask = (1u << ADDR_SW_256B_D);
 
-const UINT_32 Gfx10Blk4KBSwModeMask = (1u << ADDR_SW_4KB_S)   |
+const UINT_32 Gfx11Blk4KBSwModeMask = (1u << ADDR_SW_4KB_S)   |
                                       (1u << ADDR_SW_4KB_D)   |
                                       (1u << ADDR_SW_4KB_S_X) |
                                       (1u << ADDR_SW_4KB_D_X);
 
-const UINT_32 Gfx10Blk64KBSwModeMask = (1u << ADDR_SW_64KB_S)   |
+const UINT_32 Gfx11Blk64KBSwModeMask = (1u << ADDR_SW_64KB_S)   |
                                        (1u << ADDR_SW_64KB_D)   |
                                        (1u << ADDR_SW_64KB_S_T) |
                                        (1u << ADDR_SW_64KB_D_T) |
@@ -93,127 +86,117 @@ const UINT_32 Gfx10Blk64KBSwModeMask = (1u << ADDR_SW_64KB_S)   |
                                        (1u << ADDR_SW_64KB_D_X) |
                                        (1u << ADDR_SW_64KB_R_X);
 
-const UINT_32 Gfx10BlkVarSwModeMask = (1u << ADDR_SW_VAR_Z_X) |
-                                      (1u << ADDR_SW_VAR_R_X);
+const UINT_32 Gfx11Blk256KBSwModeMask = (1u << ADDR_SW_256KB_Z_X) |
+                                        (1u << ADDR_SW_256KB_S_X) |
+                                        (1u << ADDR_SW_256KB_D_X) |
+                                        (1u << ADDR_SW_256KB_R_X);
 
-const UINT_32 Gfx10ZSwModeMask = (1u << ADDR_SW_64KB_Z_X) |
-                                 (1u << ADDR_SW_VAR_Z_X);
+const UINT_32 Gfx11ZSwModeMask = (1u << ADDR_SW_64KB_Z_X) |
+                                 (1u << ADDR_SW_256KB_Z_X);
 
-const UINT_32 Gfx10StandardSwModeMask = (1u << ADDR_SW_256B_S)   |
-                                        (1u << ADDR_SW_4KB_S)    |
+const UINT_32 Gfx11StandardSwModeMask = (1u << ADDR_SW_4KB_S)    |
                                         (1u << ADDR_SW_64KB_S)   |
                                         (1u << ADDR_SW_64KB_S_T) |
                                         (1u << ADDR_SW_4KB_S_X)  |
-                                        (1u << ADDR_SW_64KB_S_X);
+                                        (1u << ADDR_SW_64KB_S_X) |
+                                        (1u << ADDR_SW_256KB_S_X);
 
-const UINT_32 Gfx10DisplaySwModeMask = (1u << ADDR_SW_256B_D)   |
+const UINT_32 Gfx11DisplaySwModeMask = (1u << ADDR_SW_256B_D)   |
                                        (1u << ADDR_SW_4KB_D)    |
                                        (1u << ADDR_SW_64KB_D)   |
                                        (1u << ADDR_SW_64KB_D_T) |
                                        (1u << ADDR_SW_4KB_D_X)  |
-                                       (1u << ADDR_SW_64KB_D_X);
+                                       (1u << ADDR_SW_64KB_D_X) |
+                                       (1u << ADDR_SW_256KB_D_X);
 
-const UINT_32 Gfx10RenderSwModeMask = (1u << ADDR_SW_64KB_R_X) |
-                                      (1u << ADDR_SW_VAR_R_X);
+const UINT_32 Gfx11RenderSwModeMask = (1u << ADDR_SW_64KB_R_X) |
+                                      (1u << ADDR_SW_256KB_R_X);
 
-const UINT_32 Gfx10XSwModeMask = (1u << ADDR_SW_4KB_S_X)  |
+const UINT_32 Gfx11XSwModeMask = (1u << ADDR_SW_4KB_S_X)  |
                                  (1u << ADDR_SW_4KB_D_X)  |
                                  (1u << ADDR_SW_64KB_Z_X) |
                                  (1u << ADDR_SW_64KB_S_X) |
                                  (1u << ADDR_SW_64KB_D_X) |
                                  (1u << ADDR_SW_64KB_R_X) |
-                                 Gfx10BlkVarSwModeMask;
+                                 Gfx11Blk256KBSwModeMask;
 
-const UINT_32 Gfx10TSwModeMask = (1u << ADDR_SW_64KB_S_T) |
+const UINT_32 Gfx11TSwModeMask = (1u << ADDR_SW_64KB_S_T) |
                                  (1u << ADDR_SW_64KB_D_T);
 
-const UINT_32 Gfx10XorSwModeMask = Gfx10XSwModeMask |
-                                   Gfx10TSwModeMask;
+const UINT_32 Gfx11XorSwModeMask = Gfx11XSwModeMask |
+                                   Gfx11TSwModeMask;
 
-const UINT_32 Gfx10Rsrc1dSwModeMask = Gfx10LinearSwModeMask |
-                                      Gfx10RenderSwModeMask |
-                                      Gfx10ZSwModeMask;
-
-const UINT_32 Gfx10Rsrc2dSwModeMask = Gfx10LinearSwModeMask  |
-                                      Gfx10Blk256BSwModeMask |
-                                      Gfx10Blk4KBSwModeMask  |
-                                      Gfx10Blk64KBSwModeMask |
-                                      Gfx10BlkVarSwModeMask;
-
-const UINT_32 Gfx10Rsrc3dSwModeMask = (1u << ADDR_SW_LINEAR)   |
-                                      (1u << ADDR_SW_4KB_S)    |
-                                      (1u << ADDR_SW_64KB_S)   |
-                                      (1u << ADDR_SW_64KB_S_T) |
-                                      (1u << ADDR_SW_4KB_S_X)  |
-                                      (1u << ADDR_SW_64KB_Z_X) |
-                                      (1u << ADDR_SW_64KB_S_X) |
-                                      (1u << ADDR_SW_64KB_D_X) |
+const UINT_32 Gfx11Rsrc1dSwModeMask = (1u << ADDR_SW_LINEAR)   |
                                       (1u << ADDR_SW_64KB_R_X) |
-                                      Gfx10BlkVarSwModeMask;
+                                      (1u << ADDR_SW_64KB_Z_X) ;
 
-const UINT_32 Gfx10Rsrc2dPrtSwModeMask = (Gfx10Blk4KBSwModeMask | Gfx10Blk64KBSwModeMask) & ~Gfx10XSwModeMask;
+const UINT_32 Gfx11Rsrc2dSwModeMask = Gfx11LinearSwModeMask  |
+                                      Gfx11DisplaySwModeMask |
+                                      Gfx11ZSwModeMask       |
+                                      Gfx11RenderSwModeMask;
 
-const UINT_32 Gfx10Rsrc3dPrtSwModeMask = Gfx10Rsrc2dPrtSwModeMask & ~Gfx10DisplaySwModeMask;
+const UINT_32 Gfx11Rsrc3dSwModeMask = Gfx11LinearSwModeMask    |
+                                      Gfx11StandardSwModeMask  |
+                                      Gfx11ZSwModeMask         |
+                                      Gfx11RenderSwModeMask    |
+                                      (1u << ADDR_SW_64KB_D_X) |
+                                      (1u << ADDR_SW_256KB_D_X);
 
-const UINT_32 Gfx10Rsrc3dThin64KBSwModeMask = (1u << ADDR_SW_64KB_Z_X) |
+const UINT_32 Gfx11Rsrc2dPrtSwModeMask =
+    (Gfx11Blk4KBSwModeMask | Gfx11Blk64KBSwModeMask) & ~Gfx11XSwModeMask & Gfx11Rsrc2dSwModeMask;
+
+const UINT_32 Gfx11Rsrc3dPrtSwModeMask =
+    (Gfx11Blk4KBSwModeMask | Gfx11Blk64KBSwModeMask) & ~Gfx11XSwModeMask & Gfx11Rsrc3dSwModeMask;
+
+const UINT_32 Gfx11Rsrc3dThin64KBSwModeMask = (1u << ADDR_SW_64KB_Z_X) |
                                               (1u << ADDR_SW_64KB_R_X);
 
-const UINT_32 Gfx10Rsrc3dThinSwModeMask = Gfx10Rsrc3dThin64KBSwModeMask | Gfx10BlkVarSwModeMask;
+const UINT_32 Gfx11Rsrc3dThin256KBSwModeMask = (1u << ADDR_SW_256KB_Z_X) |
+                                               (1u << ADDR_SW_256KB_R_X);
 
-const UINT_32 Gfx10Rsrc3dThickSwModeMask = Gfx10Rsrc3dSwModeMask & ~(Gfx10Rsrc3dThinSwModeMask | Gfx10LinearSwModeMask);
+const UINT_32 Gfx11Rsrc3dThinSwModeMask = Gfx11Rsrc3dThin64KBSwModeMask | Gfx11Rsrc3dThin256KBSwModeMask;
 
-const UINT_32 Gfx10Rsrc3dThick4KBSwModeMask = Gfx10Rsrc3dThickSwModeMask & Gfx10Blk4KBSwModeMask;
+const UINT_32 Gfx11Rsrc3dThickSwModeMask = Gfx11Rsrc3dSwModeMask & ~(Gfx11Rsrc3dThinSwModeMask | Gfx11LinearSwModeMask);
 
-const UINT_32 Gfx10Rsrc3dThick64KBSwModeMask = Gfx10Rsrc3dThickSwModeMask & Gfx10Blk64KBSwModeMask;
+const UINT_32 Gfx11Rsrc3dThick4KBSwModeMask = Gfx11Rsrc3dThickSwModeMask & Gfx11Blk4KBSwModeMask;
 
-const UINT_32 Gfx10MsaaSwModeMask = Gfx10ZSwModeMask |
-                                    Gfx10RenderSwModeMask;
+const UINT_32 Gfx11Rsrc3dThick64KBSwModeMask = Gfx11Rsrc3dThickSwModeMask & Gfx11Blk64KBSwModeMask;
 
-const UINT_32 Dcn20NonBpp64SwModeMask = (1u << ADDR_SW_LINEAR)   |
-                                        (1u << ADDR_SW_4KB_S)    |
-                                        (1u << ADDR_SW_64KB_S)   |
-                                        (1u << ADDR_SW_64KB_S_T) |
-                                        (1u << ADDR_SW_4KB_S_X)  |
-                                        (1u << ADDR_SW_64KB_S_X) |
-                                        (1u << ADDR_SW_64KB_R_X);
+const UINT_32 Gfx11Rsrc3dThick256KBSwModeMask = Gfx11Rsrc3dThickSwModeMask & Gfx11Blk256KBSwModeMask;
 
-const UINT_32 Dcn20Bpp64SwModeMask = (1u << ADDR_SW_4KB_D)    |
-                                     (1u << ADDR_SW_64KB_D)   |
-                                     (1u << ADDR_SW_64KB_D_T) |
-                                     (1u << ADDR_SW_4KB_D_X)  |
-                                     (1u << ADDR_SW_64KB_D_X) |
-                                     Dcn20NonBpp64SwModeMask;
+const UINT_32 Gfx11MsaaSwModeMask = Gfx11ZSwModeMask |
+                                    Gfx11RenderSwModeMask;
 
-const UINT_32 Dcn21NonBpp64SwModeMask = (1u << ADDR_SW_LINEAR)   |
-                                        (1u << ADDR_SW_64KB_S)   |
-                                        (1u << ADDR_SW_64KB_S_T) |
-                                        (1u << ADDR_SW_64KB_S_X) |
-                                        (1u << ADDR_SW_64KB_R_X);
+const UINT_32 Dcn32SwModeMask = (1u << ADDR_SW_LINEAR)    |
+                                (1u << ADDR_SW_64KB_D)    |
+                                (1u << ADDR_SW_64KB_D_T)  |
+                                (1u << ADDR_SW_64KB_D_X)  |
+                                (1u << ADDR_SW_64KB_R_X)  |
+                                (1u << ADDR_SW_256KB_D_X) |
+                                (1u << ADDR_SW_256KB_R_X);
 
-const UINT_32 Dcn21Bpp64SwModeMask = (1u << ADDR_SW_64KB_D)   |
-                                     (1u << ADDR_SW_64KB_D_T) |
-                                     (1u << ADDR_SW_64KB_D_X) |
-                                     Dcn21NonBpp64SwModeMask;
+const UINT_32 Size256K     = 262144u;
+const UINT_32 Log2Size256K = 18u;
 
 /**
 ************************************************************************************************************************
-* @brief This class is the GFX10 specific address library
+* @brief This class is the GFX11 specific address library
 *        function set.
 ************************************************************************************************************************
 */
-class Gfx10Lib : public Lib
+class Gfx11Lib : public Lib
 {
 public:
-    /// Creates Gfx10Lib object
+    /// Creates Gfx11Lib object
     static Addr::Lib* CreateObj(const Client* pClient)
     {
-        VOID* pMem = Object::ClientAlloc(sizeof(Gfx10Lib), pClient);
-        return (pMem != NULL) ? new (pMem) Gfx10Lib(pClient) : NULL;
+        VOID* pMem = Object::ClientAlloc(sizeof(Gfx11Lib), pClient);
+        return (pMem != NULL) ? new (pMem) Gfx11Lib(pClient) : NULL;
     }
 
 protected:
-    Gfx10Lib(const Client* pClient);
-    virtual ~Gfx10Lib();
+    Gfx11Lib(const Client* pClient);
+    virtual ~Gfx11Lib();
 
     virtual BOOL_32 HwlIsStandardSwizzle(
         AddrResourceType resourceType,
@@ -252,17 +235,9 @@ protected:
         const ADDR2_COMPUTE_HTILE_INFO_INPUT* pIn,
         ADDR2_COMPUTE_HTILE_INFO_OUTPUT*      pOut) const;
 
-    virtual ADDR_E_RETURNCODE HwlComputeCmaskInfo(
-        const ADDR2_COMPUTE_CMASK_INFO_INPUT* pIn,
-        ADDR2_COMPUTE_CMASK_INFO_OUTPUT*      pOut) const;
-
     virtual ADDR_E_RETURNCODE HwlComputeDccInfo(
         const ADDR2_COMPUTE_DCCINFO_INPUT* pIn,
         ADDR2_COMPUTE_DCCINFO_OUTPUT*      pOut) const;
-
-    virtual ADDR_E_RETURNCODE HwlComputeCmaskAddrFromCoord(
-        const ADDR2_COMPUTE_CMASK_ADDRFROMCOORD_INPUT* pIn,
-        ADDR2_COMPUTE_CMASK_ADDRFROMCOORD_OUTPUT*      pOut);
 
     virtual ADDR_E_RETURNCODE HwlComputeHtileAddrFromCoord(
         const ADDR2_COMPUTE_HTILE_ADDRFROMCOORD_INPUT* pIn,
@@ -401,20 +376,20 @@ private:
         ADDR_BIT_SETTING       (&pSwizzle)[20]) const
     {
         memcpy(pSwizzle,
-               GFX10_SW_PATTERN_NIBBLE01[pPatInfo->nibble01Idx],
-               sizeof(GFX10_SW_PATTERN_NIBBLE01[pPatInfo->nibble01Idx]));
+               GFX11_SW_PATTERN_NIBBLE01[pPatInfo->nibble01Idx],
+               sizeof(GFX11_SW_PATTERN_NIBBLE01[pPatInfo->nibble01Idx]));
 
         memcpy(&pSwizzle[8],
-               GFX10_SW_PATTERN_NIBBLE2[pPatInfo->nibble2Idx],
-               sizeof(GFX10_SW_PATTERN_NIBBLE2[pPatInfo->nibble2Idx]));
+               GFX11_SW_PATTERN_NIBBLE2[pPatInfo->nibble2Idx],
+               sizeof(GFX11_SW_PATTERN_NIBBLE2[pPatInfo->nibble2Idx]));
 
         memcpy(&pSwizzle[12],
-               GFX10_SW_PATTERN_NIBBLE3[pPatInfo->nibble3Idx],
-               sizeof(GFX10_SW_PATTERN_NIBBLE3[pPatInfo->nibble3Idx]));
+               GFX11_SW_PATTERN_NIBBLE3[pPatInfo->nibble3Idx],
+               sizeof(GFX11_SW_PATTERN_NIBBLE3[pPatInfo->nibble3Idx]));
 
         memcpy(&pSwizzle[16],
-               GFX10_SW_PATTERN_NIBBLE4[pPatInfo->nibble4Idx],
-               sizeof(GFX10_SW_PATTERN_NIBBLE4[pPatInfo->nibble4Idx]));
+               GFX11_SW_PATTERN_NIBBLE4[pPatInfo->nibble4Idx],
+               sizeof(GFX11_SW_PATTERN_NIBBLE4[pPatInfo->nibble4Idx]));
     }
 
     VOID ConvertSwizzlePatternToEquation(
@@ -424,9 +399,9 @@ private:
         const ADDR_SW_PATINFO* pPatInfo,
         ADDR_EQUATION*         pEquation) const;
 
-    static INT_32 GetMetaElementSizeLog2(Gfx10DataType dataType);
+    static INT_32 GetMetaElementSizeLog2(Gfx11DataType dataType);
 
-    static INT_32 GetMetaCacheSizeLog2(Gfx10DataType dataType);
+    static INT_32 GetMetaCacheSizeLog2(Gfx11DataType dataType);
 
     void GetBlk256SizeLog2(
         AddrResourceType resourceType,
@@ -436,7 +411,7 @@ private:
         Dim3d*           pBlock) const;
 
     void GetCompressedBlockSizeLog2(
-        Gfx10DataType    dataType,
+        Gfx11DataType    dataType,
         AddrResourceType resourceType,
         AddrSwizzleMode  swizzleMode,
         UINT_32          elemLog2,
@@ -444,7 +419,7 @@ private:
         Dim3d*           pBlock) const;
 
     INT_32 GetMetaOverlapLog2(
-        Gfx10DataType    dataType,
+        Gfx11DataType    dataType,
         AddrResourceType resourceType,
         AddrSwizzleMode  swizzleMode,
         UINT_32          elemLog2,
@@ -456,7 +431,7 @@ private:
         UINT_32          elemLog2) const;
 
     UINT_32 GetMetaBlkSize(
-        Gfx10DataType    dataType,
+        Gfx11DataType    dataType,
         AddrResourceType resourceType,
         AddrSwizzleMode  swizzleMode,
         UINT_32          elemLog2,
@@ -470,8 +445,7 @@ private:
 
     INT_32 GetEffectiveNumPipes() const
     {
-        return ((m_settings.supportRbPlus == FALSE) ||
-                ((m_numSaLog2 + 1) >= m_pipesLog2)) ? m_pipesLog2 : m_numSaLog2 + 1;
+        return ((m_numSaLog2 + 1) >= m_pipesLog2) ? m_pipesLog2 : m_numSaLog2 + 1;
     }
 
     BOOL_32 IsRbAligned(
@@ -497,20 +471,22 @@ private:
     {
         ADDR2_BLOCK_SET allowedBlockSet = {};
 
-        allowedBlockSet.micro  = (allowedSwModeSet.value & Gfx10Blk256BSwModeMask) ? TRUE : FALSE;
-        allowedBlockSet.linear = (allowedSwModeSet.value & Gfx10LinearSwModeMask)  ? TRUE : FALSE;
-        allowedBlockSet.var    = (allowedSwModeSet.value & Gfx10BlkVarSwModeMask)  ? TRUE : FALSE;
+        allowedBlockSet.micro  = (allowedSwModeSet.value & Gfx11Blk256BSwModeMask) ? TRUE : FALSE;
+        allowedBlockSet.linear = (allowedSwModeSet.value & Gfx11LinearSwModeMask)  ? TRUE : FALSE;
 
         if (rsrcType == ADDR_RSRC_TEX_3D)
         {
-            allowedBlockSet.macroThick4KB  = (allowedSwModeSet.value & Gfx10Rsrc3dThick4KBSwModeMask)  ? TRUE : FALSE;
-            allowedBlockSet.macroThin64KB  = (allowedSwModeSet.value & Gfx10Rsrc3dThin64KBSwModeMask)  ? TRUE : FALSE;
-            allowedBlockSet.macroThick64KB = (allowedSwModeSet.value & Gfx10Rsrc3dThick64KBSwModeMask) ? TRUE : FALSE;
+            allowedBlockSet.macroThick4KB    = (allowedSwModeSet.value & Gfx11Rsrc3dThick4KBSwModeMask)   ? TRUE : FALSE;
+            allowedBlockSet.macroThin64KB    = (allowedSwModeSet.value & Gfx11Rsrc3dThin64KBSwModeMask)   ? TRUE : FALSE;
+            allowedBlockSet.macroThick64KB   = (allowedSwModeSet.value & Gfx11Rsrc3dThick64KBSwModeMask)  ? TRUE : FALSE;
+            allowedBlockSet.gfx11.thin256KB  = (allowedSwModeSet.value & Gfx11Rsrc3dThin256KBSwModeMask)  ? TRUE : FALSE;
+            allowedBlockSet.gfx11.thick256KB = (allowedSwModeSet.value & Gfx11Rsrc3dThick256KBSwModeMask) ? TRUE : FALSE;
         }
         else
         {
-            allowedBlockSet.macroThin4KB  = (allowedSwModeSet.value & Gfx10Blk4KBSwModeMask)  ? TRUE : FALSE;
-            allowedBlockSet.macroThin64KB = (allowedSwModeSet.value & Gfx10Blk64KBSwModeMask) ? TRUE : FALSE;
+            allowedBlockSet.macroThin4KB    = (allowedSwModeSet.value & Gfx11Blk4KBSwModeMask)   ? TRUE : FALSE;
+            allowedBlockSet.macroThin64KB   = (allowedSwModeSet.value & Gfx11Blk64KBSwModeMask)  ? TRUE : FALSE;
+            allowedBlockSet.gfx11.thin256KB = (allowedSwModeSet.value & Gfx11Blk256KBSwModeMask) ? TRUE : FALSE;
         }
 
         return allowedBlockSet;
@@ -520,10 +496,10 @@ private:
     {
         ADDR2_SWTYPE_SET allowedSwSet = {};
 
-        allowedSwSet.sw_Z = (allowedSwModeSet.value & Gfx10ZSwModeMask)        ? TRUE : FALSE;
-        allowedSwSet.sw_S = (allowedSwModeSet.value & Gfx10StandardSwModeMask) ? TRUE : FALSE;
-        allowedSwSet.sw_D = (allowedSwModeSet.value & Gfx10DisplaySwModeMask)  ? TRUE : FALSE;
-        allowedSwSet.sw_R = (allowedSwModeSet.value & Gfx10RenderSwModeMask)   ? TRUE : FALSE;
+        allowedSwSet.sw_Z = (allowedSwModeSet.value & Gfx11ZSwModeMask)        ? TRUE : FALSE;
+        allowedSwSet.sw_S = (allowedSwModeSet.value & Gfx11StandardSwModeMask) ? TRUE : FALSE;
+        allowedSwSet.sw_D = (allowedSwModeSet.value & Gfx11DisplaySwModeMask)  ? TRUE : FALSE;
+        allowedSwSet.sw_R = (allowedSwModeSet.value & Gfx11RenderSwModeMask)   ? TRUE : FALSE;
 
         return allowedSwSet;
     }
@@ -551,11 +527,15 @@ private:
     BOOL_32 ValidateNonSwModeParams(const ADDR2_COMPUTE_SURFACE_INFO_INPUT* pIn) const;
     BOOL_32 ValidateSwModeParams(const ADDR2_COMPUTE_SURFACE_INFO_INPUT* pIn) const;
 
+    BOOL_32 IsBlock256kb(AddrSwizzleMode swizzleMode) const { return IsBlockVariable(swizzleMode); }
+
+    // TODO: figure out if there is any Column bits on GFX11...
     static const UINT_32 ColumnBits       = 2;
     static const UINT_32 BankBits         = 4;
     static const UINT_32 UnalignedDccType = 3;
 
     static const Dim3d Block256_3d[MaxNumOfBpp];
+    static const Dim3d Block256K_Log2_3d[MaxNumOfBpp];
     static const Dim3d Block64K_Log2_3d[MaxNumOfBpp];
     static const Dim3d Block4K_Log2_3d[MaxNumOfBpp];
 
@@ -566,16 +546,14 @@ private:
     // Number of shader array log2
     UINT_32 m_numSaLog2;
 
-    Gfx10ChipSettings m_settings;
+    Gfx11ChipSettings m_settings;
 
     UINT_32 m_colorBaseIndex;
-    UINT_32 m_xmaskBaseIndex;
+    UINT_32 m_htileBaseIndex;
     UINT_32 m_dccBaseIndex;
 };
 
 } // V2
 } // Addr
 } // rocr
-
 #endif
-

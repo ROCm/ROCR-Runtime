@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ****************************************************************************************************
@@ -39,10 +38,8 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////
-
 namespace rocr {
-namespace Addr
-{
+namespace Addr {
 
 /**
 ****************************************************************************************************
@@ -180,7 +177,6 @@ CiLib::CiLib(const Client* pClient)
     m_noOfMacroEntries(0),
     m_allowNonDispThickModes(FALSE)
 {
-    m_class = CI_ADDRLIB;
 }
 
 /**
@@ -411,7 +407,7 @@ ChipFamily CiLib::HwlConvertChipFamily(
             family = ADDR_CHIP_FAMILY_VI;
             break;
         default:
-            ADDR_ASSERT(!"This should be a unexpected Fusion");
+            ADDR_ASSERT(!"No Chip found");
             break;
     }
 
@@ -1589,7 +1585,14 @@ VOID CiLib::ReadGbTileMode(
     gbTileMode.val = regValue;
 
     pCfg->type = static_cast<AddrTileType>(gbTileMode.f.micro_tile_mode_new);
-    pCfg->info.pipeConfig = static_cast<AddrPipeCfg>(gbTileMode.f.pipe_config + 1);
+    if (AltTilingEnabled() == TRUE)
+    {
+        pCfg->info.pipeConfig = static_cast<AddrPipeCfg>(gbTileMode.f.alt_pipe_config + 1);
+    }
+    else
+    {
+        pCfg->info.pipeConfig = static_cast<AddrPipeCfg>(gbTileMode.f.pipe_config + 1);
+    }
 
     if (pCfg->type == ADDR_DEPTH_SAMPLE_ORDER)
     {
@@ -1731,10 +1734,19 @@ VOID CiLib::ReadGbMacroTileCfg(
     GB_MACROTILE_MODE gbTileMode;
     gbTileMode.val = regValue;
 
-    pCfg->bankHeight = 1 << gbTileMode.f.bank_height;
+    if (AltTilingEnabled() == TRUE)
+    {
+        pCfg->bankHeight       = 1 << gbTileMode.f.alt_bank_height;
+        pCfg->banks            = 1 << (gbTileMode.f.alt_num_banks + 1);
+        pCfg->macroAspectRatio = 1 << gbTileMode.f.alt_macro_tile_aspect;
+    }
+    else
+    {
+        pCfg->bankHeight       = 1 << gbTileMode.f.bank_height;
+        pCfg->banks            = 1 << (gbTileMode.f.num_banks + 1);
+        pCfg->macroAspectRatio = 1 << gbTileMode.f.macro_tile_aspect;
+    }
     pCfg->bankWidth = 1 << gbTileMode.f.bank_width;
-    pCfg->banks = 1 << (gbTileMode.f.num_banks + 1);
-    pCfg->macroAspectRatio = 1 << gbTileMode.f.macro_tile_aspect;
 }
 
 /**
@@ -2032,6 +2044,7 @@ UINT_64 CiLib::HwlComputeMetadataNibbleAddress(
 
     /// NOTE *2 because we are converting to Nibble address in this step
     UINT_64 metaAddressInPipe = blockInBankpipeWithBankBits * 2 * metadataBitSize / 8;
+
 
     ///--------------------------------------------------------------------------------------------
     /// Reinsert pipe bits back into the final address
@@ -2339,4 +2352,3 @@ BOOL_32 CiLib::CheckTcCompatibility(
 } // V1
 } // Addr
 } // rocr
-
