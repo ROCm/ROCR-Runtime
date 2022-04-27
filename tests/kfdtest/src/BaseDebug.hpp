@@ -44,6 +44,7 @@ class BaseDebug {
     HSAKMT_STATUS QueryDebugEvent(uint64_t *exceptions,
                                   uint32_t *gpuId, uint32_t *queueId,
                                   int timeoutMsec);
+    void SetExceptionsEnabled(uint64_t exceptions);
 
  private:
     unsigned int m_Pid;
