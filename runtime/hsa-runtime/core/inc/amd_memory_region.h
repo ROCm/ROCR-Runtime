@@ -138,6 +138,8 @@ class MemoryRegion : public core::MemoryRegion {
 
   void Trim() const;
 
+  HSAuint64 GetCacheSize() const { return fragment_allocator_.cache_size(); }
+
   __forceinline bool IsLocalMemory() const {
     return ((mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE) ||
             (mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC));
