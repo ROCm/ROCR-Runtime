@@ -318,7 +318,13 @@ typedef enum hsa_amd_agent_info_s {
    * cooperative dispatch.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014
+  HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014,
+  /**
+   * Queries the amount of memory available in bytes accross all global pools
+   * owned by the agent.
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_AVAIL = 0xA015
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {

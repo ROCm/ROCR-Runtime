@@ -282,6 +282,8 @@ template <typename Allocator> class SimpleHeap {
     cache_size_ = 0;
   }
 
+  size_t cache_size() const { return cache_size_; }
+
   size_t default_block_size() const { return block_allocator_.block_size(); }
 
   // Prevent reuse of the block containing ptr.  No further fragments will be allocated from the
