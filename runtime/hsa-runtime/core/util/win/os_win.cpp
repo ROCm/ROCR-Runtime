@@ -270,6 +270,16 @@ void DestroySharedMutex(SharedMutex lock) {
   abort();
 }
 
+uint64_t ReadSystemClock() {
+  assert(false && "Not implemented.");
+  abort();
+}
+
+uint64_t SystemClockFrequency() {
+  assert(false && "Not implemented.");
+  abort();
+}
+
 }   //  namespace os
 }   //  namespace rocr
 
