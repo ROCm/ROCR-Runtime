@@ -580,9 +580,7 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((uint16_t*)value) = HSA_VERSION_MINOR;
       break;
     case HSA_SYSTEM_INFO_TIMESTAMP: {
-      HsaClockCounters clocks;
-      hsaKmtGetClockCounters(0, &clocks);
-      *((uint64_t*)value) = clocks.SystemClockCounter;
+      *((uint64_t*)value) = os::ReadSystemClock();
       break;
     }
     case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
@@ -1349,10 +1347,8 @@ hsa_status_t Runtime::Load() {
 
   // Setup system clock frequency for the first time.
   if (sys_clock_freq_ == 0) {
-    // Cache system clock frequency
-    HsaClockCounters clocks;
-    hsaKmtGetClockCounters(0, &clocks);
-    sys_clock_freq_ = clocks.SystemClockFrequencyHz;
+    sys_clock_freq_ = os::SystemClockFrequency();
+    if (sys_clock_freq_ < 100000) debug_warning("System clock resolution is low.");
   }
 
   BindVmFaultHandler();

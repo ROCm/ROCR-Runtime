@@ -266,6 +266,14 @@ uint64_t ReadAccurateClock();
 /// seconds.  This frequency does not change at runtime.
 /// @return returns the frequency
 uint64_t AccurateClockFrequency();
+
+/// @brief read the system clock which serves as the HSA system clock
+/// counter in KFD.
+uint64_t ReadSystemClock();
+
+/// @brief read the system clock frequency
+uint64_t SystemClockFrequency();
+
 }   //  namespace os
 }   //  namespace rocr
 

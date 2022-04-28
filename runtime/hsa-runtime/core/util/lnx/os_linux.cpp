@@ -515,6 +515,25 @@ void DestroySharedMutex(SharedMutex lock) {
   delete *(pthread_rwlock_t**)&lock;
 }
 
+static uint64_t sys_clock_period_ = 0;
+
+uint64_t ReadSystemClock() {
+  struct timespec ts;
+  clock_gettime(CLOCK_BOOTTIME, &ts);
+  uint64_t time = (uint64_t(ts.tv_sec) * 1000000000 + uint64_t(ts.tv_nsec));
+  if (sys_clock_period_ != 1)
+    return time / sys_clock_period_;
+  else
+    return time;
+}
+
+uint64_t SystemClockFrequency() {
+  struct timespec ts;
+  clock_getres(CLOCK_BOOTTIME, &ts);
+  sys_clock_period_ = (uint64_t(ts.tv_sec) * 1000000000 + uint64_t(ts.tv_nsec));
+  return 1000000000 / sys_clock_period_;
+}
+
 }   //  namespace os
 }   //  namespace rocr
 
