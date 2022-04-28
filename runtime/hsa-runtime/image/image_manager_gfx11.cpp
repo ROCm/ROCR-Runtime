@@ -73,90 +73,104 @@ struct formatconverstion_t {
 // Format/Type to combined format code table.
 // Sorted and indexed to allow fast searches.
 static const formatconverstion_t FormatLUT[] = {
-  {FMT_1_5_5_5, TYPE_UNORM, CFMT_1_5_5_5_UNORM},
-  {FMT_10_10_10_2, TYPE_UNORM, CFMT_10_10_10_2_UNORM},
-  {FMT_10_10_10_2, TYPE_SNORM, CFMT_10_10_10_2_SNORM},
-  {FMT_10_10_10_2, TYPE_UINT, CFMT_10_10_10_2_UINT},
-  {FMT_10_10_10_2, TYPE_SINT, CFMT_10_10_10_2_SINT},
-  {FMT_16, TYPE_UNORM, CFMT_16_UNORM},
-  {FMT_16, TYPE_SNORM, CFMT_16_SNORM},
-  {FMT_16, TYPE_UINT, CFMT_16_UINT},
-  {FMT_16, TYPE_SINT, CFMT_16_SINT},
-  {FMT_16, TYPE_FLOAT, CFMT_16_FLOAT},
-  {FMT_16_16, TYPE_UNORM, CFMT_16_16_UNORM},
-  {FMT_16_16, TYPE_SNORM, CFMT_16_16_SNORM},
-  {FMT_16_16, TYPE_UINT, CFMT_16_16_UINT},
-  {FMT_16_16, TYPE_SINT, CFMT_16_16_SINT},
-  {FMT_16_16, TYPE_FLOAT, CFMT_16_16_FLOAT},
-  {FMT_16_16_16_16, TYPE_UNORM, CFMT_16_16_16_16_UNORM},
-  {FMT_16_16_16_16, TYPE_SNORM, CFMT_16_16_16_16_SNORM},
-  {FMT_16_16_16_16, TYPE_UINT, CFMT_16_16_16_16_UINT},
-  {FMT_16_16_16_16, TYPE_SINT, CFMT_16_16_16_16_SINT},
-  {FMT_16_16_16_16, TYPE_FLOAT, CFMT_16_16_16_16_FLOAT},
-  {FMT_2_10_10_10, TYPE_UNORM, CFMT_2_10_10_10_UNORM},
-  {FMT_2_10_10_10, TYPE_SNORM, CFMT_2_10_10_10_SNORM},
-  {FMT_2_10_10_10, TYPE_UINT, CFMT_2_10_10_10_UINT},
-  {FMT_2_10_10_10, TYPE_SINT, CFMT_2_10_10_10_SINT},
-  {FMT_24_8, TYPE_UNORM, CFMT_24_8_UNORM},
-  {FMT_24_8, TYPE_UINT, CFMT_24_8_UINT},
-  {FMT_32, TYPE_UINT, CFMT_32_UINT},
-  {FMT_32, TYPE_SINT, CFMT_32_SINT},
-  {FMT_32, TYPE_FLOAT, CFMT_32_FLOAT},
-  {FMT_32_32, TYPE_UINT, CFMT_32_32_UINT},
-  {FMT_32_32, TYPE_SINT, CFMT_32_32_SINT},
-  {FMT_32_32, TYPE_FLOAT, CFMT_32_32_FLOAT},
-  {FMT_32_32_32, TYPE_UINT, CFMT_32_32_32_UINT},
-  {FMT_32_32_32, TYPE_SINT, CFMT_32_32_32_SINT},
-  {FMT_32_32_32, TYPE_FLOAT, CFMT_32_32_32_FLOAT},
-  {FMT_32_32_32_32, TYPE_UINT, CFMT_32_32_32_32_UINT},
-  {FMT_32_32_32_32, TYPE_SINT, CFMT_32_32_32_32_SINT},
-  {FMT_32_32_32_32, TYPE_FLOAT, CFMT_32_32_32_32_FLOAT},
-  {FMT_5_5_5_1, TYPE_UNORM, CFMT_5_5_5_1_UNORM},
-  {FMT_5_6_5, TYPE_UNORM, CFMT_5_6_5_UNORM},
-  {FMT_8, TYPE_UNORM, CFMT_8_UNORM},
-  {FMT_8, TYPE_SNORM, CFMT_8_SNORM},
-  {FMT_8, TYPE_UINT, CFMT_8_UINT},
-  {FMT_8, TYPE_SINT, CFMT_8_SINT},
-  {FMT_8, TYPE_SRGB, CFMT_8_SRGB},
-  {FMT_8_24, TYPE_UNORM, CFMT_8_24_UNORM},
-  {FMT_8_24, TYPE_UINT, CFMT_8_24_UINT},
-  {FMT_8_8, TYPE_UNORM, CFMT_8_8_UNORM},
-  {FMT_8_8, TYPE_SNORM, CFMT_8_8_SNORM},
-  {FMT_8_8, TYPE_UINT, CFMT_8_8_UINT},
-  {FMT_8_8, TYPE_SINT, CFMT_8_8_SINT},
-  {FMT_8_8, TYPE_SRGB, CFMT_8_8_SRGB},
-  {FMT_8_8_8_8, TYPE_UNORM, CFMT_8_8_8_8_UNORM},
-  {FMT_8_8_8_8, TYPE_SNORM, CFMT_8_8_8_8_SNORM},
-  {FMT_8_8_8_8, TYPE_UINT, CFMT_8_8_8_8_UINT},
-  {FMT_8_8_8_8, TYPE_SINT, CFMT_8_8_8_8_SINT},
-  {FMT_8_8_8_8, TYPE_SRGB, CFMT_8_8_8_8_SRGB}
+    {FMT_1_5_5_5, TYPE_UNORM, CFMT_1_5_5_5_UNORM},              // 0
+    {FMT_10_10_10_2, TYPE_UNORM, CFMT_10_10_10_2_UNORM},        // 1
+    {FMT_10_10_10_2, TYPE_SNORM, CFMT_10_10_10_2_SNORM},        // 2
+    {FMT_10_10_10_2, TYPE_UINT, CFMT_10_10_10_2_UINT},          // 3
+    {FMT_10_10_10_2, TYPE_SINT, CFMT_10_10_10_2_SINT},          // 4
+    {FMT_16, TYPE_UNORM, CFMT_16_UNORM},                        // 5
+    {FMT_16, TYPE_SNORM, CFMT_16_SNORM},                        // 6
+    {FMT_16, TYPE_UINT, CFMT_16_UINT},                          // 7
+    {FMT_16, TYPE_SINT, CFMT_16_SINT},                          // 8
+    {FMT_16, TYPE_FLOAT, CFMT_16_FLOAT},                        // 9
+    {FMT_16, TYPE_USCALED, CFMT_16_USCALED},                    // 10
+    {FMT_16, TYPE_SSCALED, CFMT_16_SSCALED},                    // 11
+    {FMT_16_16, TYPE_UNORM, CFMT_16_16_UNORM},                  // 12
+    {FMT_16_16, TYPE_SNORM, CFMT_16_16_SNORM},                  // 13
+    {FMT_16_16, TYPE_UINT, CFMT_16_16_UINT},                    // 14
+    {FMT_16_16, TYPE_SINT, CFMT_16_16_SINT},                    // 15
+    {FMT_16_16, TYPE_FLOAT, CFMT_16_16_FLOAT},                  // 16
+    {FMT_16_16, TYPE_USCALED, CFMT_16_16_USCALED},              // 17
+    {FMT_16_16, TYPE_SSCALED, CFMT_16_16_SSCALED},              // 18
+    {FMT_16_16_16_16, TYPE_UNORM, CFMT_16_16_16_16_UNORM},      // 19
+    {FMT_16_16_16_16, TYPE_SNORM, CFMT_16_16_16_16_SNORM},      // 20
+    {FMT_16_16_16_16, TYPE_UINT, CFMT_16_16_16_16_UINT},        // 21
+    {FMT_16_16_16_16, TYPE_SINT, CFMT_16_16_16_16_SINT},        // 22
+    {FMT_16_16_16_16, TYPE_FLOAT, CFMT_16_16_16_16_FLOAT},      // 23
+    {FMT_16_16_16_16, TYPE_USCALED, CFMT_16_16_16_16_USCALED},  // 24
+    {FMT_16_16_16_16, TYPE_SSCALED, CFMT_16_16_16_16_SSCALED},  // 25
+    {FMT_2_10_10_10, TYPE_UNORM, CFMT_2_10_10_10_UNORM},        // 26
+    {FMT_2_10_10_10, TYPE_SNORM, CFMT_2_10_10_10_SNORM},        // 27
+    {FMT_2_10_10_10, TYPE_UINT, CFMT_2_10_10_10_UINT},          // 28
+    {FMT_2_10_10_10, TYPE_SINT, CFMT_2_10_10_10_SINT},          // 29
+    {FMT_2_10_10_10, TYPE_USCALED, CFMT_2_10_10_10_USCALED},    // 30
+    {FMT_2_10_10_10, TYPE_SSCALED, CFMT_2_10_10_10_SSCALED},    // 31
+    {FMT_24_8, TYPE_UNORM, CFMT_24_8_UNORM},                    // 32
+    {FMT_24_8, TYPE_UINT, CFMT_24_8_UINT},                      // 33
+    {FMT_32, TYPE_UINT, CFMT_32_UINT},                          // 34
+    {FMT_32, TYPE_SINT, CFMT_32_SINT},                          // 35
+    {FMT_32, TYPE_FLOAT, CFMT_32_FLOAT},                        // 36
+    {FMT_32_32, TYPE_UINT, CFMT_32_32_UINT},                    // 37
+    {FMT_32_32, TYPE_SINT, CFMT_32_32_SINT},                    // 38
+    {FMT_32_32, TYPE_FLOAT, CFMT_32_32_FLOAT},                  // 39
+    {FMT_32_32_32, TYPE_UINT, CFMT_32_32_32_UINT},              // 40
+    {FMT_32_32_32, TYPE_SINT, CFMT_32_32_32_SINT},              // 41
+    {FMT_32_32_32, TYPE_FLOAT, CFMT_32_32_32_FLOAT},            // 42
+    {FMT_32_32_32_32, TYPE_UINT, CFMT_32_32_32_32_UINT},        // 43
+    {FMT_32_32_32_32, TYPE_SINT, CFMT_32_32_32_32_SINT},        // 44
+    {FMT_32_32_32_32, TYPE_FLOAT, CFMT_32_32_32_32_FLOAT},      // 45
+    {FMT_5_5_5_1, TYPE_UNORM, CFMT_5_5_5_1_UNORM},              // 46
+    {FMT_5_6_5, TYPE_UNORM, CFMT_5_6_5_UNORM},                  // 47
+    {FMT_8, TYPE_UNORM, CFMT_8_UNORM},                          // 48
+    {FMT_8, TYPE_SNORM, CFMT_8_SNORM},                          // 49
+    {FMT_8, TYPE_UINT, CFMT_8_UINT},                            // 50
+    {FMT_8, TYPE_SINT, CFMT_8_SINT},                            // 51
+    {FMT_8, TYPE_SRGB, CFMT_8_SRGB},                            // 52
+    {FMT_8, TYPE_USCALED, CFMT_8_USCALED},                      // 53
+    {FMT_8, TYPE_SSCALED, CFMT_8_SSCALED},                      // 54
+    {FMT_8_24, TYPE_UNORM, CFMT_8_24_UNORM},                    // 55
+    {FMT_8_24, TYPE_UINT, CFMT_8_24_UINT},                      // 56
+    {FMT_8_8, TYPE_UNORM, CFMT_8_8_UNORM},                      // 57
+    {FMT_8_8, TYPE_SNORM, CFMT_8_8_SNORM},                      // 58
+    {FMT_8_8, TYPE_UINT, CFMT_8_8_UINT},                        // 59
+    {FMT_8_8, TYPE_SINT, CFMT_8_8_SINT},                        // 60
+    {FMT_8_8, TYPE_SRGB, CFMT_8_8_SRGB},                        // 61
+    {FMT_8_8, TYPE_USCALED, CFMT_8_8_USCALED},                  // 62
+    {FMT_8_8, TYPE_SSCALED, CFMT_8_8_SSCALED},                  // 63
+    {FMT_8_8_8_8, TYPE_UNORM, CFMT_8_8_8_8_UNORM},              // 64
+    {FMT_8_8_8_8, TYPE_SNORM, CFMT_8_8_8_8_SNORM},              // 65
+    {FMT_8_8_8_8, TYPE_UINT, CFMT_8_8_8_8_UINT},                // 66
+    {FMT_8_8_8_8, TYPE_SINT, CFMT_8_8_8_8_SINT},                // 67
+    {FMT_8_8_8_8, TYPE_SRGB, CFMT_8_8_8_8_SRGB},                // 68
+    {FMT_8_8_8_8, TYPE_USCALED, CFMT_8_8_8_8_USCALED},          // 69
+    {FMT_8_8_8_8, TYPE_SSCALED, CFMT_8_8_8_8_SSCALED}           // 70
 };
 static const int FormatLUTSize = sizeof(FormatLUT)/sizeof(formatconverstion_t);
 
 //Index in FormatLUT to start search, indexed by FMT enum.
 static const int FormatEntryPoint[] = {
-  57,
-  40,
-  5,
-  47,
-  26,
-  10,
-  57,
-  57,
-  1,
-  20,
-  52,
-  29,
-  15,
-  32,
-  35,
-  57,
-  39,
-  0,
-  38,
-  57,
-  45,
-  24
+  71, // FMT_INVALID
+  48, // FMT_8
+  5,  // FMT_16
+  57, // FMT_8_8
+  34, // FMT_32
+  12, // FMT_16_16
+  71, // FMT_10_11_11
+  71, // FMT_11_11_10
+  1,  // FMT_10_10_10_2
+  26, // FMT_2_10_10_10
+  64, // FMT_8_8_8_8
+  37, // FMT_32_32
+  19, // FMT_16_16_16_16
+  40, // FMT_32_32_32
+  43, // FMT_32_32_32_32
+  71, // RESERVED
+  47, // FMT_5_6_5
+  0,  // FMT_1_5_5_5
+  46, // FMT_5_5_5_1
+  71, // FMT_4_4_4_4
+  55, // FMT_8_24
+  32  // FMT_24_8
 };
 
 static FORMAT GetCombinedFormat(uint8_t fmt, uint8_t type) {
