@@ -153,6 +153,9 @@ class Flag {
     // Will become opt-out and possibly removed in future releases.
     var = os::GetEnvVar("HSA_COOP_CU_COUNT");
     coop_cu_count_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_DISCOVER_COPY_AGENTS");
+    discover_copy_agents_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -221,6 +224,8 @@ class Flag {
 
   bool coop_cu_count() const { return coop_cu_count_; }
 
+  bool discover_copy_agents() const { return discover_copy_agents_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -241,6 +246,7 @@ class Flag {
   bool debug_;
   bool cu_mask_skip_init_;
   bool coop_cu_count_;
+  bool discover_copy_agents_;
 
   SDMA_OVERRIDE enable_sdma_;
 

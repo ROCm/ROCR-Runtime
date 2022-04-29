@@ -469,8 +469,9 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
                                  core::Agent* src_agent, size_t size,
                                  std::vector<core::Signal*>& dep_signals,
                                  core::Signal& completion_signal) {
+
   auto lookupAgent = [this](core::Agent* agent, const void* ptr) {
-    if (agent == nullptr) {
+    if (agent == nullptr || flag().discover_copy_agents()) {
       hsa_amd_pointer_info_t info;
       PtrInfoBlockData block;
       info.size = sizeof(info);
