@@ -477,14 +477,16 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
       PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
       // Limit to IPC and GFX types for now.  These are the only types for which the application may
       // not posess a proper agent handle.
-      if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS))
-        return;
-      agent = Agent::Convert(info.agentOwner);
+      if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS)) {
+        return agent;
+      }
+      return block.agentOwner;
     }
+    return agent;
   };
 
-  lookupAgent(dst_agent, dst);
-  lookupAgent(src_agent, src);
+  dst_agent = lookupAgent(dst_agent, dst);
+  src_agent = lookupAgent(src_agent, src);
   if (dst_agent == nullptr || src_agent == nullptr) return HSA_STATUS_ERROR_INVALID_AGENT;
 
   // At least one agent must be available for operation in the current process.
