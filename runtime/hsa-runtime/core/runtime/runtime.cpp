@@ -803,6 +803,11 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
       assert((retInfo.hostBaseAddress || retInfo.agentBaseAddress) && "Thunk pointer info returned no base address.");
       block_info->base = (retInfo.hostBaseAddress ? retInfo.hostBaseAddress : retInfo.agentBaseAddress);
       block_info->length = retInfo.sizeInBytes;
+
+      // Report the owning agent, even if such an agent is not usable in the process.
+      auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
+      assert(nodeAgents != agents_by_node_.end() && "Node id not found!");
+      block_info->agentOwner = nodeAgents->second[0];
     }
     auto fragment = allocation_map_.upper_bound(ptr);
     if (fragment != allocation_map_.begin()) {
@@ -831,11 +836,15 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
 
   // IPC and Graphics memory may come from a node that does not have an agent in this process.
   // Ex. ROCR_VISIBLE_DEVICES or peer GPU is not supported by ROCm.
+  retInfo.agentOwner.handle = 0;
   auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
-  if (nodeAgents != agents_by_node_.end())
-    retInfo.agentOwner = nodeAgents->second[0]->public_handle();
-  else
-    retInfo.agentOwner.handle = 0;
+  assert(nodeAgents != agents_by_node_.end() && "Node id not found!");
+  for (auto agent : nodeAgents->second) {
+    if (agent->Enabled()) {
+      retInfo.agentOwner = agent->public_handle();
+      break;
+    }
+  }
 
   // Correct agentOwner for locked memory.  Thunk reports the GPU that owns the
   // alias but users are expecting to see a CPU when the memory is system.
