@@ -281,6 +281,7 @@ class Runtime {
   struct PtrInfoBlockData {
     void* base;
     size_t length;
+    core::Agent* agentOwner;
   };
 
   hsa_status_t PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
