@@ -2154,7 +2154,7 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithRemoteGPU) {
     ASSERT_SUCCESS(queue1.Create(nondefaultNode));
     HsaMemoryBuffer isaBuffer1(PAGE_SIZE, nondefaultNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteFlagAndValueIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteFlagAndValueIsa, isaBuffer1.As<char*>()));
 
     Dispatch dispatch1(isaBuffer1);
     dispatch1.SetArgs(buffer.As<char *>(), buffer.As<char *>()+dwSource);
