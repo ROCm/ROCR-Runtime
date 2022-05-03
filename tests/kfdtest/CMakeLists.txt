@@ -33,10 +33,24 @@ set ( CPACK_PACKAGE_FILE_NAME "kfdtest" )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION "This package includes kfdtest, the list of excluded tests for each ASIC, and a convenience script to run the test suite" )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCK/KFD" )
+
+# Make proper version for appending
+# Default Value is 99999, setting it first
+set(ROCM_VERSION_FOR_PACKAGE "99999")
+if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
+  set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
+endif()
+
 set ( CPACK_PACKAGE_VERSION_MAJOR "1" )
 set ( CPACK_PACKAGE_VERSION_MINOR "0" )
 set ( CPACK_PACKAGE_VERSION_PATCH "0" )
 set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCT-Thunk-Interface" )
+set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
+set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT")
+
+set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
+set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
+
 
 ## Define default variable and variables for the optional build target hsakmt-dev
 set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
