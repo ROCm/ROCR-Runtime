@@ -247,6 +247,7 @@ FILTER[navi14]=\
 FILTER[sienna_cichlid]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.DeviceHdpFlush:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 "KFDSVMEvictTest.*"
@@ -254,6 +255,7 @@ FILTER[sienna_cichlid]=\
 FILTER[navy_flounder]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.DeviceHdpFlush:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 "KFDSVMEvictTest.*"
@@ -261,6 +263,7 @@ FILTER[navy_flounder]=\
 FILTER[dimgrey_cavefish]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.DeviceHdpFlush:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 "KFDSVMEvictTest.*"
@@ -268,6 +271,7 @@ FILTER[dimgrey_cavefish]=\
 FILTER[beige_goby]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.DeviceHdpFlush:"\
 "KFDDBGTest.*:"\
 "KFDPerfCountersTest.*:"\
 "KFDSVMEvictTest.*"
@@ -275,5 +279,6 @@ FILTER[beige_goby]=\
 FILTER[yellow_carp]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.DeviceHdpFlush:"\
 "KFDIPCTest.CMABasicTest:"\
 "KFDSVMEvictTest.*"
