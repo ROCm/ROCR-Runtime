@@ -1879,7 +1879,7 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     ASSERT_SUCCESS(queue0.Create(nodes[1]));
     HsaMemoryBuffer isaBuffer0(PAGE_SIZE, nodes[1], true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteAndSignalIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteAndSignalIsa, isaBuffer0.As<char*>()));
 
     Dispatch dispatch0(isaBuffer0);
     dispatch0.SetArgs(buffer, mmioBase);
