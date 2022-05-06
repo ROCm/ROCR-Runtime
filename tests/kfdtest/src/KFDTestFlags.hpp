@@ -60,6 +60,7 @@ enum KfdFamilyId {
     FAMILY_RV,    // Raven
     FAMILY_AR,    // Arcturus
     FAMILY_AL,    // Aldebaran
+    FAMILY_AV,    // Aqua Vanjaram
     FAMILY_NV,    // Navi10
     FAMILY_GFX11, // GFX11
 };
