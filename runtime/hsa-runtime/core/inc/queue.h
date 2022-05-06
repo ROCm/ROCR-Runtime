@@ -54,7 +54,7 @@
 
 #include "inc/amd_hsa_queue.h"
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 namespace rocr {
 namespace core {

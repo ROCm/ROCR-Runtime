@@ -45,7 +45,7 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_MEMORY_REGION_H_
 #define HSA_RUNTIME_CORE_INC_AMD_MEMORY_REGION_H_
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/agent.h"
 #include "core/inc/runtime.h"

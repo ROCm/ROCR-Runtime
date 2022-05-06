@@ -55,7 +55,7 @@
 #include <iostream>
 #endif
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/runtime.h"
 #include "core/inc/amd_cpu_agent.h"

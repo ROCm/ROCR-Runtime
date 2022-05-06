@@ -69,11 +69,8 @@ endif()
 
 # Required Defines first:
 find_package(hsa-runtime64 REQUIRED )
-message(STATUS "HSA Runtime found at ${hsa-runtime64_DIR} ")
+find_package(rocm_smi REQUIRED)
 
-set(ROCR_INC_DIR ${hsa-runtime64_DIR}/../../../include)
-set(ROCM_SMI_INC_DIR ${ROCM_DIR}/rocm_smi/include)
-set(ROCM_SMI_LIB_DIR ${ROCM_DIR}/rocm_smi/lib)
 set (ONLY64STR "64")
 
 if (DEFINED LLVM_DIR)
@@ -223,12 +220,6 @@ MESSAGE("ROCRTST_LIBS SET STEP:Done")
 aux_source_directory(${ROCRTST_ROOT}/common common_srcs)
 
 #
-# Specify the directory containing various libraries of ROCR
-# to be linked against for building ROC Perf applications
-#
-LINK_DIRECTORIES(${ROCR_LIB_DIR} ${ROCM_SMI_LIB_DIR})
-
-#
 # Extend the list of libraries to be used for linking ROC Perf Apps
 #
 set(ROCRTST_LIBS ${ROCRTST_LIBS} hsa-runtime64::hsa-runtime64)
@@ -250,10 +241,8 @@ aux_source_directory(${ROCRTST_ROOT}/suites/test_common testCommonSources)
 
 # Header file include path
 
-include_directories(${ROCR_INC_DIR})
 include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
-include_directories(${ROCM_SMI_INC_DIR})
 
 # Custom command set for code objects.
 set (HSACO_TARG_LIST "")

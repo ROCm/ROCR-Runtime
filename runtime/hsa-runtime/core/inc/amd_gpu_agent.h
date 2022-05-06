@@ -48,7 +48,7 @@
 #include <vector>
 #include <map>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"

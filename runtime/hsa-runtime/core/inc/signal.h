@@ -51,7 +51,7 @@
 #include <vector>
 #include <utility>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/common/shared.h"
 
