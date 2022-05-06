@@ -50,7 +50,7 @@
 #include <string>
 #include <sstream>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 namespace rocr {
 namespace AMD {

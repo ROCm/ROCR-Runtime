@@ -48,7 +48,7 @@
 #include <memory>
 #include <vector>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/signal.h"
 #include "core/util/utils.h"

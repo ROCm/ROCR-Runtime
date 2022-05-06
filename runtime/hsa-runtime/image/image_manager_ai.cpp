@@ -48,7 +48,7 @@
 #include <algorithm>
 #include <climits>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include "inc/hsa_ext_amd.h"
 #include "core/inc/hsa_internal.h"
 #include "addrlib/src/core/addrlib.h"
