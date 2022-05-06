@@ -95,6 +95,7 @@ uint32_t get_vgpr_size_per_cu(uint32_t gfxv)
 	{
 		case GFX_VERSION_ARCTURUS:
 		case GFX_VERSION_ALDEBARAN:
+		case GFX_VERSION_AQUA_VANJARAM:
 			vgpr_size = 0x80000;
 			break;
 		case GFX_VERSION_PLUM_BONITO:

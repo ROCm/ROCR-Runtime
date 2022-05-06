@@ -244,6 +244,13 @@ FILTER[aldebaran]=\
 "KFDMemoryTest.PtraceAccess:"\
 "KFDMemoryTest.DeviceHdpFlush"
 
+FILTER[aqua_vanjaram]=\
+"$BLACKLIST_ALL_ASICS:"\
+"KFDExceptionTest.FaultStorm:"\
+"KFDEvictTest.BurstyTest:"\
+"KFDMemoryTest.PtraceAccess:"\
+"KFDMemoryTest.DeviceHdpFlush"
+
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$BLACKLIST_GFX10:"\
