@@ -107,11 +107,11 @@ KV_QUEUE_BLACKLIST=\
 
 BLACKLIST_GFX10=\
 "KFDMemoryTest.DeviceHdpFlush:"\
+"KFDQMTest.BasicCuMaskingEven:"\
 "KFDSVMEvictTest.*"
 
 BLACKLIST_GFX10_NV2X=\
 "$BLACKLIST_GFX10:"\
-"KFDQMTest.BasicCuMaskingEven:"\
 "KFDPerfCountersTest.*"
 
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
