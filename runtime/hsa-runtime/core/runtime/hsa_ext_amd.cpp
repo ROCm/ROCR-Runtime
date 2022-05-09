@@ -238,18 +238,19 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                        hsa_signal_t completion_signal) {
   TRY;
-  if (dst == NULL || src == NULL) { return HSA_STATUS_ERROR_INVALID_ARGUMENT; }
+  IS_BAD_PTR(dst);
+  IS_BAD_PTR(src);
 
-  if ((num_dep_signals == 0 && dep_signals != NULL) ||
-      (num_dep_signals > 0 && dep_signals == NULL)) {
+  if ((num_dep_signals == 0 && dep_signals != nullptr) ||
+      (num_dep_signals > 0 && dep_signals == nullptr)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
-  IS_NULL_OR_VALID(dst_agent);
+  IS_VALID(dst_agent);
 
   core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
-  IS_NULL_OR_VALID(src_agent);
+  IS_VALID(src_agent);
 
   std::vector<core::Signal*> dep_signal_list(num_dep_signals);
   if (num_dep_signals > 0) {
