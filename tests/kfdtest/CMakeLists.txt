@@ -105,8 +105,8 @@ find_path( LIGHTNING_CMAKE_DIR NAMES LLVMConfig.cmake
 if ( DEFINED LIGHTNING_CMAKE_DIR AND EXISTS ${LIGHTNING_CMAKE_DIR} )
     set ( LLVM_DIR ${LIGHTNING_CMAKE_DIR} )
 else()
-    message( WARNING "Couldn't find Lightning build. "
-        "Attempting to use system LLVM install..." )
+    message( STATUS "Couldn't find Lightning build in compute directory. "
+        "Searching LLVM_DIR then defaulting to system LLVM install if still not found..." )
 endif()
 
 find_package( LLVM REQUIRED CONFIG )
