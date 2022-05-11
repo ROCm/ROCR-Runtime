@@ -312,3 +312,81 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+
+TEST_F(KFDDBGTest, SuspendQueues) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        if (hsaKmtCheckRuntimeDebugSupport()) {
+            LOG() << "Skip test as debug API not supported";
+            goto exit;
+        }
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        // create shader and trap bufs then enable 2nd level trap
+        HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+
+        // compile and dispatch shader
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(jump_to_trap_gfx, isaBuf.As<char*>()));
+
+        uint32_t rDebug;
+        ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
+
+        BaseDebug *debug = new BaseDebug();
+        struct kfd_runtime_info r_info = {0};
+        ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
+        ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
+
+        PM4Queue queue;
+        HsaQueueResource *qResources;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+        qResources = queue.GetResource();
+        HSA_QUEUEID Queues[] = { qResources->QueueId };
+
+        Dispatch *dispatch;
+        dispatch = new Dispatch(isaBuf);
+        dispatch->SetDim(1, 1, 1);
+        dispatch->Submit(queue);
+
+        uint32_t NumQueues = 1;
+        uint32_t QueueIds[NumQueues];
+        struct kfd_queue_snapshot_entry Snapshots[NumQueues] = {0};
+        ASSERT_SUCCESS(debug->SuspendQueues(&NumQueues, Queues, &QueueIds[0], 0));
+
+        // Suspend should fail as new queues cannot be suspended
+        ASSERT_EQ(NumQueues, 0);
+        ASSERT_NE(QueueIds[0] & KFD_DBG_QUEUE_INVALID_MASK, 0);
+
+        // Snapshot queue, clear new queue status and suspend successfully.
+        ASSERT_SUCCESS(debug->QueueSnapshot(0, (uint64_t)(&(Snapshots[0])), &NumQueues));
+        ASSERT_EQ(NumQueues, 1);
+        ASSERT_EQ(Snapshots[0].ctx_save_restore_area_size, 0);
+
+        ASSERT_SUCCESS(debug->QueueSnapshot(KFD_EC_MASK(EC_QUEUE_NEW), (uint64_t)(&(Snapshots[0])),
+                                            &NumQueues));
+        ASSERT_EQ(NumQueues, 1);
+        ASSERT_GT(Snapshots[0].ctx_save_restore_area_size, 0);
+
+        ASSERT_SUCCESS(debug->SuspendQueues(&NumQueues, Queues, &QueueIds[0], 0));
+        ASSERT_EQ(NumQueues, 1);
+        ASSERT_EQ(QueueIds[0] & KFD_DBG_QUEUE_INVALID_MASK, 0);
+
+        // Resume and destroy queue then clean up.
+        ASSERT_SUCCESS(debug->ResumeQueues(&NumQueues, Queues, &QueueIds[0]));
+        ASSERT_EQ(NumQueues, 1);
+        ASSERT_EQ(QueueIds[0] & KFD_DBG_QUEUE_INVALID_MASK, 0);
+
+        EXPECT_SUCCESS(queue.Destroy());
+
+        debug->Detach();
+        hsaKmtRuntimeDisable();
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+exit:
+    LOG() << std::endl;
+    TEST_END
+}
