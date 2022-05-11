@@ -514,7 +514,8 @@ free_data:
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDebugTrapIoctl(struct kfd_ioctl_dbg_trap_args *args,
-					HSA_QUEUEID *Queues)
+					HSA_QUEUEID *Queues,
+					HSAuint64 *DebugReturn)
 {
 	HSAKMT_STATUS result;
 
@@ -533,6 +534,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDebugTrapIoctl(struct kfd_ioctl_dbg_trap_args *arg
 	}
 
 	long err = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, args);
+	if (DebugReturn)
+		*DebugReturn = err;
 
 	if (args->op == KFD_IOC_DBG_TRAP_SUSPEND_QUEUES &&
 				err >= 0 && err <= args->suspend_queues.num_queues)

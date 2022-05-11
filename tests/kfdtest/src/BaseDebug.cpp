@@ -67,7 +67,7 @@ HSAKMT_STATUS BaseDebug::Attach(struct kfd_runtime_info *rInfo,
     args.enable.dbg_fd = m_Fd.fd;
     args.enable.exception_mask = exceptionEnable;
 
-    if (hsaKmtDebugTrapIoctl(&args, NULL)) {
+    if (hsaKmtDebugTrapIoctl(&args, NULL, NULL)) {
         close(m_Fd.fd);
         unlink(m_Fd_Name);
         return HSAKMT_STATUS_ERROR;
@@ -87,7 +87,7 @@ void BaseDebug::Detach(void) {
     args.pid = m_Pid;
     args.op = KFD_IOC_DBG_TRAP_DISABLE;
 
-    hsaKmtDebugTrapIoctl(&args, NULL);
+    hsaKmtDebugTrapIoctl(&args, NULL, NULL);
 
     close(m_Fd.fd);
     unlink(m_Fd_Name);
@@ -109,7 +109,7 @@ HSAKMT_STATUS BaseDebug::SendRuntimeEvent(uint64_t exceptions, int gpuId, int qu
     args.send_runtime_event.gpu_id = gpuId;
     args.send_runtime_event.queue_id = queueId;
 
-    return hsaKmtDebugTrapIoctl(&args, NULL);
+    return hsaKmtDebugTrapIoctl(&args, NULL, NULL);
 }
 
 HSAKMT_STATUS BaseDebug::QueryDebugEvent(uint64_t *exceptions,
@@ -134,7 +134,7 @@ HSAKMT_STATUS BaseDebug::QueryDebugEvent(uint64_t *exceptions,
     args.op = KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT;
     args.query_debug_event.exception_mask = *exceptions;
 
-    result = hsaKmtDebugTrapIoctl(&args, NULL);
+    result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
 
     *exceptions = args.query_debug_event.exception_mask;
 
@@ -157,5 +157,39 @@ void BaseDebug::SetExceptionsEnabled(uint64_t exceptions)
     args.op = KFD_IOC_DBG_TRAP_SET_EXCEPTIONS_ENABLED;
     args.set_exceptions_enabled.exception_mask = exceptions;
 
-    hsaKmtDebugTrapIoctl(&args, NULL);
+    hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+}
+
+HSAKMT_STATUS BaseDebug::SuspendQueues(unsigned int *numQueues,
+                                       HSA_QUEUEID *queues,
+                                       uint32_t *queueIds,
+                                       uint64_t exceptionsToClear)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_SUSPEND_QUEUES;
+    args.suspend_queues.num_queues = *numQueues;
+    args.suspend_queues.queue_array_ptr = (uint64_t)queueIds;
+    args.suspend_queues.exception_mask = exceptionsToClear;
+
+    return hsaKmtDebugTrapIoctl(&args, queues, (HSAuint64 *)numQueues);
+}
+
+HSAKMT_STATUS BaseDebug::ResumeQueues(unsigned int *numQueues,
+                                       HSA_QUEUEID *queues,
+                                       uint32_t *queueIds)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_RESUME_QUEUES;
+    args.resume_queues.num_queues = *numQueues;
+    args.resume_queues.queue_array_ptr = (uint64_t)queueIds;
+
+    return hsaKmtDebugTrapIoctl(&args, queues, (HSAuint64 *)numQueues);
 }
