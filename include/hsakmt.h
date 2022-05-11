@@ -788,7 +788,8 @@ hsaKmtCheckRuntimeDebugSupport(
  */
 HSAKMT_STATUS HSAKMTAPI hsaKmtDebugTrapIoctl(
     struct kfd_ioctl_dbg_trap_args *arg,
-    HSA_QUEUEID *Queues
+    HSA_QUEUEID *Queues,
+    HSAuint64 *DebugReturn
     );
 
 /**
