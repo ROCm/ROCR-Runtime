@@ -41,6 +41,9 @@ class BaseDebug {
 
     void Detach(void);
     HSAKMT_STATUS SendRuntimeEvent(uint64_t exceptions, int gpuId, int queueId);
+    HSAKMT_STATUS QueryDebugEvent(uint64_t *exceptions,
+                                  uint32_t *gpuId, uint32_t *queueId,
+                                  int timeoutMsec);
 
  private:
     unsigned int m_Pid;
