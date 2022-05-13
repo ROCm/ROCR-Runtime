@@ -193,3 +193,49 @@ HSAKMT_STATUS BaseDebug::ResumeQueues(unsigned int *numQueues,
 
     return hsaKmtDebugTrapIoctl(&args, queues, (HSAuint64 *)numQueues);
 }
+
+HSAKMT_STATUS BaseDebug::QueueSnapshot(uint64_t exceptionsToClear,
+                                  uint64_t snapshotBufAddr,
+                                  uint32_t *numSnapshots)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+    HSAKMT_STATUS result;
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT;
+    args.queue_snapshot.exception_mask = exceptionsToClear;
+    args.queue_snapshot.snapshot_buf_ptr = snapshotBufAddr;
+    args.queue_snapshot.num_queues = *numSnapshots;
+    args.queue_snapshot.entry_size = sizeof(struct kfd_queue_snapshot_entry);
+
+    result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+
+    *numSnapshots = args.queue_snapshot.num_queues;
+
+    return result;
+}
+
+HSAKMT_STATUS BaseDebug::DeviceSnapshot(uint64_t exceptionsToClear,
+                                  uint64_t snapshotBufAddr,
+                                  uint32_t *numSnapshots)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+    HSAKMT_STATUS result;
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_GET_DEVICE_SNAPSHOT;
+    args.device_snapshot.exception_mask = exceptionsToClear;
+    args.device_snapshot.snapshot_buf_ptr = snapshotBufAddr;
+    args.device_snapshot.num_devices = *numSnapshots;
+    args.device_snapshot.entry_size = sizeof(struct kfd_dbg_device_info_entry);
+
+    result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+
+    *numSnapshots = args.device_snapshot.num_devices;
+
+    return result;
+}
