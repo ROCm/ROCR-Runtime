@@ -48,6 +48,10 @@ class BaseDebug {
     HSAKMT_STATUS SuspendQueues(unsigned int *numQueues, HSA_QUEUEID *queues, uint32_t *queueIds,
                                 uint64_t exceptionsToClear);
     HSAKMT_STATUS ResumeQueues(unsigned int *numQueues, HSA_QUEUEID *queues, uint32_t *queueIds);
+    HSAKMT_STATUS QueueSnapshot(uint64_t exceptionsToClear, uint64_t snapshotBufAddr,
+                                uint32_t *numSnapshots);
+    HSAKMT_STATUS DeviceSnapshot(uint64_t exceptionsToClear, uint64_t snapshotBuffAddr,
+                                 uint32_t *numSnapshots);
 
  private:
     unsigned int m_Pid;
