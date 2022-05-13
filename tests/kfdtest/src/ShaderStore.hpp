@@ -43,6 +43,11 @@ extern const char *CopyOnSignalIsa;
 extern const char *PollAndCopyIsa;
 extern const char *WriteFlagAndValueIsa;
 extern const char *WriteAndSignalIsa;
+extern const char *WriteReleaseVectorIsa;
+extern const char *WriteReleaseScalarIsa;
+extern const char *ReadAcquireVectorIsa;
+extern const char *ReadAcquireScalarIsa;
+extern const char *FlushBufferForAcquireReleaseIsa;
 
 /* KFDQMTest */
 extern const char *LoopIsa;
