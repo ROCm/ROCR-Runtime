@@ -111,3 +111,38 @@ HSAKMT_STATUS BaseDebug::SendRuntimeEvent(uint64_t exceptions, int gpuId, int qu
 
     return hsaKmtDebugTrapIoctl(&args, NULL);
 }
+
+HSAKMT_STATUS BaseDebug::QueryDebugEvent(uint64_t *exceptions,
+                                         uint32_t *gpuId, uint32_t *queueId,
+                                         int timeoutMsec)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+    HSAKMT_STATUS result;
+    int r = poll(&m_Fd, 1, timeoutMsec);
+
+    if (r > 0) {
+        char tmp[r];
+
+        read(m_Fd.fd, tmp, sizeof(tmp));
+    } else {
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_QUERY_DEBUG_EVENT;
+    args.query_debug_event.exception_mask = *exceptions;
+
+    result = hsaKmtDebugTrapIoctl(&args, NULL);
+
+    *exceptions = args.query_debug_event.exception_mask;
+
+    if (gpuId)
+        *gpuId = args.query_debug_event.gpu_id;
+
+    if (queueId)
+        *queueId = args.query_debug_event.queue_id;
+
+    return result;
+}
