@@ -400,6 +400,215 @@ const char *WriteAndSignalIsa =
         s_endpgm
 )";
 
+/* Input:
+ * s[0:1], A buffer of at least 64 * 6 bytes
+ *
+ * Store the value 0x77 at the 5 addresses 0x40,
+ * 0x80, ..., 0x140 in the buffer
+ *
+ * Aqua Vanjaram only
+ */
+const char *FlushBufferForAcquireReleaseIsa =
+    SHADER_START
+    R"(
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+            s_mov_b32 s11, 0x77
+            s_mov_b32 s12, 0x0
+            // Store some data on 5 different cache lines
+            s_store_dword s12, s[0:1], 0x0 glc
+            s_store_dword s11, s[0:1], 0x40 glc
+            s_store_dword s11, s[0:1], 0x80 glc
+            s_store_dword s11, s[0:1], 0xc0 glc
+            s_store_dword s11, s[0:1], 0x100 glc
+            s_store_dword s11, s[0:1], 0x140 glc
+            s_waitcnt lgkmcnt(0)
+        .endif
+        s_endpgm
+)";
+
+/* Input:
+ * s[0:1], A buffer of at least 64 * 6 bytes,
+ * shared with the acquiring shader
+ *
+ * Store the values 1 - 5 at the 5 addresses 0x40,
+ * 0x80, ..., 0x140 in the buffer, then signal
+ * the flag at address 0x0 in the buffer.
+ *
+ * Uses vector stores
+ *
+ * Aqua Vanjaram only
+ */
+const char *WriteReleaseVectorIsa =
+    SHADER_START
+    R"(
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+            v_mov_b32 v11, 0x1
+            v_mov_b32 v12, 0x2
+            v_mov_b32 v13, 0x3
+            v_mov_b32 v14, 0x4
+            v_mov_b32 v15, 0x5
+            v_mov_b32 v21, 0x40
+            v_mov_b32 v22, 0x80
+            v_mov_b32 v23, 0xc0
+            v_mov_b32 v24, 0x100
+            v_mov_b32 v25, 0x140
+            // Store some data on 5 different cache lines
+            global_store_dword v21, v11, s[0:1]
+            global_store_dword v22, v12, s[0:1]
+            global_store_dword v23, v13, s[0:1]
+            global_store_dword v24, v14, s[0:1]
+            global_store_dword v25, v15, s[0:1] nt sc1 sc0
+            s_waitcnt vmcnt(0)
+            // Write-Release
+            s_mov_b32 s16, 0x1
+            buffer_wbl2 sc1 sc0
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            s_store_dword s16, s[0:1], 0x0 glc
+        .endif
+        s_endpgm
+)";
+
+/* Input:
+ * s[0:1], A buffer of at least 64 * 6 bytes,
+ * shared with the acquiring shader
+ *
+ * Store the values 6 - 10 at the 5 addresses 0x40,
+ * 0x80, ..., 0x140 in the buffer, then signal
+ * the flag at address 0x0 in the buffer.
+ *
+ * Uses scalar stores
+ *
+ * Aqua Vanjaram only
+ */
+const char *WriteReleaseScalarIsa =
+    SHADER_START
+    R"(
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+            s_mov_b32 s11, 0x6
+            s_mov_b32 s12, 0x7
+            s_mov_b32 s13, 0x8
+            s_mov_b32 s14, 0x9
+            s_mov_b32 s15, 0xa
+            // Store some data on 5 different cache lines
+            s_store_dword s11, s[0:1], 0x40
+            s_store_dword s12, s[0:1], 0x80
+            s_store_dword s13, s[0:1], 0xc0
+            s_store_dword s14, s[0:1], 0x100
+            s_store_dword s15, s[0:1], 0x140 glc
+            s_waitcnt lgkmcnt(0)
+            // Write-Release
+            s_dcache_wb // WB Scalar L1 cache
+            s_mov_b32 s16, 0x1
+            buffer_wbl2 sc1 sc0
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            s_store_dword s16, s[0:1], 0x0 glc
+            s_waitcnt lgkmcnt(0)
+        .endif
+        s_endpgm
+)";
+
+/* Input:
+ * s[0:1], A buffer of at least 64 * 6 bytes,
+ * shared with the releasing shader
+ * s[2:3], A buffer of at least 64 * 6 bytes,
+ * accessible by the CPU, used for output
+ *
+ * Polls the flag at address 0x0 in the shared buffer.
+ * When the signal is received, read the values
+ * at the 5 addresses 0x40, 0x80, ... 0x140,
+ * and store them at the same locations in
+ * the output buffer
+ *
+ * Uses vector loads
+ *
+ * Aqua Vanjaram only
+ */
+const char *ReadAcquireVectorIsa =
+    SHADER_START
+    R"(
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+            // Read-Acquire
+            s_mov_b32 s18, 0x1
+            LOOP:
+            s_load_dword s17, s[0:1], 0x0 glc
+            s_waitcnt lgkmcnt(0)
+            s_cmp_eq_i32 s17, s18
+            s_cbranch_scc0 LOOP
+            buffer_inv sc1 sc0
+            // Load data
+            v_mov_b32 v21, 0x40
+            v_mov_b32 v22, 0x80
+            v_mov_b32 v23, 0xc0
+            v_mov_b32 v24, 0x100
+            v_mov_b32 v25, 0x140
+            global_load_dword v11, v21, s[0:1]
+            global_load_dword v12, v22, s[0:1]
+            global_load_dword v13, v23, s[0:1]
+            global_load_dword v14, v24, s[0:1]
+            global_load_dword v15, v25, s[0:1]
+            s_waitcnt vmcnt(0)
+            // Store data for output
+            v_mov_b32 v21, 0x40
+            v_mov_b32 v22, 0x80
+            v_mov_b32 v23, 0xc0
+            v_mov_b32 v24, 0x100
+            v_mov_b32 v25, 0x140
+            global_store_dword v21, v11, s[2:3] nt sc1 sc0
+            global_store_dword v22, v12, s[2:3] nt sc1 sc0
+            global_store_dword v23, v13, s[2:3] nt sc1 sc0
+            global_store_dword v24, v14, s[2:3] nt sc1 sc0
+            global_store_dword v25, v15, s[2:3] nt sc1 sc0
+            s_waitcnt vmcnt(0)
+        .endif
+        s_endpgm
+)";
+
+/* Input:
+ * s[0:1], A buffer of at least 64 * 6 bytes,
+ * shared with the releasing shader
+ * s[2:3], A buffer of at least 64 * 6 bytes,
+ * accessible by the CPU, used for output
+ *
+ * Polls the flag at address 0x0 in the shared buffer.
+ * When the signal is received, read the values
+ * at the 5 addresses 0x40, 0x80, ... 0x140,
+ * and store them at the same locations in
+ * the output buffer
+ *
+ * Uses scalar loads
+ *
+ * Aqua Vanjaram only
+ */
+const char *ReadAcquireScalarIsa =
+    SHADER_START
+    R"(
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+            // Read-Acquire
+            s_mov_b32 s18, 0x1
+            LOOP:
+            s_load_dword s17, s[0:1], 0x0 glc
+            s_waitcnt lgkmcnt(0)
+            s_cmp_eq_i32 s17, s18
+            s_cbranch_scc0 LOOP
+            buffer_inv sc1 sc0
+            // Load data
+            s_load_dword s21, s[0:1], 0x40
+            s_load_dword s22, s[0:1], 0x80
+            s_load_dword s23, s[0:1], 0xc0
+            s_load_dword s24, s[0:1], 0x100
+            s_load_dword s25, s[0:1], 0x140
+            s_waitcnt lgkmcnt(0)
+            // Store data for output
+            s_store_dword s21, s[2:3], 0x40 glc
+            s_store_dword s22, s[2:3], 0x80 glc
+            s_store_dword s23, s[2:3], 0xc0 glc
+            s_store_dword s24, s[2:3], 0x100 glc
+            s_store_dword s25, s[2:3], 0x140 glc
+            s_waitcnt lgkmcnt(0)
+        .endif
+        s_endpgm
+)";
+
 /**
  * KFDQMTest
  */

@@ -2394,6 +2394,336 @@ TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
     TEST_END
 }
 
+void KFDMemoryTest::AcquireReleaseTestRunCPU(HSAuint32 acquireNode, bool scalar) {
+
+    LOG() << "Testing coherency from CPU to node " << std::dec << acquireNode << std::endl;
+
+    /* Allocate shared buffer - must be at least 64 * 6 bytes */
+    HsaMemoryBuffer buffer(PAGE_SIZE, acquireNode, false/*zero*/, false/*local*/, false/*exec*/);
+    buffer.MapMemToNodes(&acquireNode, 1);
+
+    /* Allocate output buffer and insert magic numbers */
+    HsaMemoryBuffer outputBuffer(PAGE_SIZE, acquireNode, true, false, false);
+    outputBuffer.As<char *>()[0x40] = 99;
+    outputBuffer.As<char *>()[0x80] = 99;
+    outputBuffer.As<char *>()[0xc0] = 99;
+    outputBuffer.As<char *>()[0x100] = 99;
+    outputBuffer.As<char *>()[0x140] = 99;
+
+    /* Flush results of previous tests from the buffer */
+    /* This would be done with SDMA, but SDMA doesn't work on some Aqua Vanjaram emulators */
+    PM4Queue flushQueue;
+    ASSERT_SUCCESS(flushQueue.Create(acquireNode));
+    HsaMemoryBuffer flushBuffer(PAGE_SIZE, acquireNode, true/*zero*/, false/*local*/, true/*exec*/);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(FlushBufferForAcquireReleaseIsa, flushBuffer.As<char*>()));
+    Dispatch flushDispatch(flushBuffer);
+    flushDispatch.SetArgs(buffer.As<char *>(), NULL);
+    flushDispatch.SetDim(1, 1, 1);
+    flushDispatch.Submit(flushQueue);
+    flushDispatch.Sync(g_TestTimeOut);
+
+    /* Start acquiring thread */
+    PM4Queue acquireQueue;
+    ASSERT_SUCCESS(acquireQueue.Create(acquireNode));
+    HsaMemoryBuffer acquireBuffer(PAGE_SIZE, acquireNode, true/*zero*/, false/*local*/, true/*exec*/);
+    if (!scalar)
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadAcquireVectorIsa, acquireBuffer.As<char*>()));
+    else
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadAcquireScalarIsa, acquireBuffer.As<char*>()));
+    Dispatch acquireDispatch(acquireBuffer);
+    acquireDispatch.SetArgs(buffer.As<char *>(), outputBuffer.As<char *>());
+    acquireDispatch.SetDim(1, 1, 1);
+    acquireDispatch.Submit(acquireQueue);
+
+    /* Delay 100ms to ensure acquirer is waiting */
+    Delay(100);
+
+    if (!scalar) {
+        buffer.As<char *>()[0x40] = 0x1;
+        buffer.As<char *>()[0x80] = 0x2;
+        buffer.As<char *>()[0xc0] = 0x3;
+        buffer.As<char *>()[0x100] = 0x4;
+        buffer.As<char *>()[0x140] = 0x5;
+    } else {
+        buffer.As<char *>()[0x40] = 0x6;
+        buffer.As<char *>()[0x80] = 0x7;
+        buffer.As<char *>()[0xc0] = 0x8;
+        buffer.As<char *>()[0x100] = 0x9;
+        buffer.As<char *>()[0x140] = 0xa;
+    }
+    buffer.As<char *>()[0x0] = 0x1;
+
+    acquireDispatch.Sync(g_TestTimeOut);
+
+    /* Check test result*/
+    if (!scalar) {
+        EXPECT_EQ(0x1, outputBuffer.As<char *>()[0x40]);
+        EXPECT_EQ(0x2, outputBuffer.As<char *>()[0x80]);
+        EXPECT_EQ(0x3, outputBuffer.As<char *>()[0xc0]);
+        EXPECT_EQ(0x4, outputBuffer.As<char *>()[0x100]);
+        EXPECT_EQ(0x5, outputBuffer.As<char *>()[0x140]);
+    } else {
+        EXPECT_EQ(0x6, outputBuffer.As<char *>()[0x40]);
+        EXPECT_EQ(0x7, outputBuffer.As<char *>()[0x80]);
+        EXPECT_EQ(0x8, outputBuffer.As<char *>()[0xc0]);
+        EXPECT_EQ(0x9, outputBuffer.As<char *>()[0x100]);
+        EXPECT_EQ(0xa, outputBuffer.As<char *>()[0x140]);
+    }
+
+    /*
+     * Guide to results:
+     * 0x99: acquiring shader did not write to output buffer at all
+     * 0x77: coherency error. Either releasing shader did not write or acquiring shader read stale value
+     * All five EXPECT_EQ fail: error occurs even when releasing shader bypasses cache
+     * Only first four EXPECT_EQ fail: error occurs only when releasing shader uses cache
+     */
+
+    /* Clean up */
+    EXPECT_SUCCESS(acquireQueue.Destroy());
+    EXPECT_SUCCESS(flushQueue.Destroy());
+}
+
+void KFDMemoryTest::AcquireReleaseTestRun(HSAuint32 acquireNode, HSAuint32 releaseNode,
+                                          bool localToRemote, bool scalar) {
+
+    LOG() << "Testing coherency from node " << std::dec << releaseNode << " to node " << std::dec << acquireNode << std::endl;
+
+    /* Allocate shared buffer - must be at least 64 * 6 bytes */
+    HSAuint32 localNode;
+    if (!localToRemote)
+        localNode = acquireNode;
+    else
+        localNode = releaseNode;
+    HsaMemoryBuffer buffer(PAGE_SIZE, localNode, false/*zero*/, true/*local*/, false/*exec*/);
+    unsigned int nodes[2] = {acquireNode, releaseNode};
+    buffer.MapMemToNodes(&nodes[0], 2);
+
+    /* Allocate output buffer and insert magic numbers */
+    HsaMemoryBuffer outputBuffer(PAGE_SIZE, acquireNode, true, false, false);
+    outputBuffer.As<char *>()[0x40] = 99;
+    outputBuffer.As<char *>()[0x80] = 99;
+    outputBuffer.As<char *>()[0xc0] = 99;
+    outputBuffer.As<char *>()[0x100] = 99;
+    outputBuffer.As<char *>()[0x140] = 99;
+
+    /* Flush results of previous tests from the buffer */
+    /* This would be done with SDMA, but SDMA doesn't work on some Aqua Vanjaram emulators */
+    PM4Queue flushQueue;
+    ASSERT_SUCCESS(flushQueue.Create(acquireNode));
+    HsaMemoryBuffer flushBuffer(PAGE_SIZE, acquireNode, true/*zero*/, false/*local*/, true/*exec*/);
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(FlushBufferForAcquireReleaseIsa, flushBuffer.As<char*>()));
+    Dispatch flushDispatch(flushBuffer);
+    flushDispatch.SetArgs(buffer.As<char *>(), NULL);
+    flushDispatch.SetDim(1, 1, 1);
+    flushDispatch.Submit(flushQueue);
+    flushDispatch.Sync(g_TestTimeOut);
+
+    /* Start acquiring thread */
+    PM4Queue acquireQueue;
+    ASSERT_SUCCESS(acquireQueue.Create(acquireNode));
+    HsaMemoryBuffer acquireBuffer(PAGE_SIZE, acquireNode, true/*zero*/, false/*local*/, true/*exec*/);
+    if (!scalar)
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadAcquireVectorIsa, acquireBuffer.As<char*>()));
+    else
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadAcquireScalarIsa, acquireBuffer.As<char*>()));
+    Dispatch acquireDispatch(acquireBuffer);
+    acquireDispatch.SetArgs(buffer.As<char *>(), outputBuffer.As<char *>());
+    acquireDispatch.SetDim(1, 1, 1);
+    acquireDispatch.Submit(acquireQueue);
+
+    /* Delay 100ms to ensure acquirer is waiting */
+    Delay(100);
+
+    /* Start releasing thread */
+    PM4Queue releaseQueue;
+    ASSERT_SUCCESS(releaseQueue.Create(releaseNode));
+    HsaMemoryBuffer releaseBuffer(PAGE_SIZE, releaseNode, true/*zero*/, false/*local*/, true/*exec*/);
+    if (!scalar)
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteReleaseVectorIsa, releaseBuffer.As<char*>()));
+    else
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteReleaseScalarIsa, releaseBuffer.As<char*>()));
+    Dispatch releaseDispatch(releaseBuffer);
+    releaseDispatch.SetArgs(buffer.As<char *>(), NULL);
+    releaseDispatch.SetDim(1, 1, 1);
+    releaseDispatch.Submit(releaseQueue);
+
+    /* Wait for threads to finish */
+    releaseDispatch.Sync(g_TestTimeOut);
+    acquireDispatch.Sync(g_TestTimeOut);
+
+    /* Check test result*/
+    if (!scalar) {
+        EXPECT_EQ(0x1, outputBuffer.As<char *>()[0x40]);
+        EXPECT_EQ(0x2, outputBuffer.As<char *>()[0x80]);
+        EXPECT_EQ(0x3, outputBuffer.As<char *>()[0xc0]);
+        EXPECT_EQ(0x4, outputBuffer.As<char *>()[0x100]);
+        EXPECT_EQ(0x5, outputBuffer.As<char *>()[0x140]);
+    } else {
+        EXPECT_EQ(0x6, outputBuffer.As<char *>()[0x40]);
+        EXPECT_EQ(0x7, outputBuffer.As<char *>()[0x80]);
+        EXPECT_EQ(0x8, outputBuffer.As<char *>()[0xc0]);
+        EXPECT_EQ(0x9, outputBuffer.As<char *>()[0x100]);
+        EXPECT_EQ(0xa, outputBuffer.As<char *>()[0x140]);
+    }
+
+    /*
+     * Guide to results:
+     * 0x99: acquiring shader did not write to output buffer at all
+     * 0x77: coherency error. Either releasing shader did not write or acquiring shader read stale value
+     * All five EXPECT_EQ fail: error occurs even when releasing shader bypasses cache
+     * Only first four EXPECT_EQ fail: error occurs only when releasing shader uses cache
+     */
+
+    /* Clean up */
+    EXPECT_SUCCESS(acquireQueue.Destroy());
+    EXPECT_SUCCESS(releaseQueue.Destroy());
+    EXPECT_SUCCESS(flushQueue.Destroy());
+}
+
+/* A test of the memory coherence features on Aqua_Vanjaram.
+ * One shader stores values at 5 positions in memory, then performs
+ * a write-release. The other shader performs a read-acquire, then loads
+ * those 5 values, then stores them in a CPU-visible buffer
+ *
+ * withinGPU: When true, the two shaders will be loaded onto two nodes within
+ *            the same GPU. When false, the two shaders will be loaded onto different
+ *            GPUs.
+ *
+ * localToRemote: When true, the shared memory will be local to the releasing node.
+ *                When false, the shared memory will be local to the acquiring node.
+ *
+ * scalar: When true, the shared data will be stored and loaded with scalar instructions.
+ *         When false, the shared data will be stored and loaded with vector instructions.
+ */
+void KFDMemoryTest::AcquireReleaseTest(bool withinGPU, bool localToRemote, bool scalar) {
+
+    if (m_FamilyId != FAMILY_AV) {
+        LOG() << "Skipping test: Test requires aqua vanjaram series asics." << std::endl;
+        return;
+    }
+
+    /* Find second node - nodes with the same DrmRenderMinor are on the same GPU */
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    HSAuint32 acquireNode;
+    HSAint32 acquireDRM;
+    bool foundSecondNode = false;
+    for (unsigned i = 0; i < gpuNodes.size(); i++) {
+        acquireNode = gpuNodes.at(i);
+        acquireDRM = m_NodeInfo.GetNodeProperties(acquireNode)->DrmRenderMinor;
+        for (unsigned j = 0; j < gpuNodes.size(); j++) {
+            if (!withinGPU) {
+                if (m_NodeInfo.GetNodeProperties(gpuNodes.at(j))->DrmRenderMinor != acquireDRM) {
+                    foundSecondNode = true;
+                    AcquireReleaseTestRun(acquireNode, gpuNodes.at(j), localToRemote, scalar);
+                }
+            } else {
+                if (m_NodeInfo.GetNodeProperties(gpuNodes.at(j))->DrmRenderMinor == acquireDRM && gpuNodes.at(j) != acquireNode) {
+                    foundSecondNode = true;
+                    AcquireReleaseTestRun(acquireNode, gpuNodes.at(j), localToRemote, scalar);
+                }
+            }
+        }
+    }
+    if (!foundSecondNode) {
+        if (!withinGPU) {
+            LOG() << "Skipping test: At least two GPUs are required." << std::endl;
+        } else {
+            LOG() << "Skipping test: At least two nodes on the same GPU are required." << std::endl;
+        }
+
+    }
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseCPU) {
+    if (m_FamilyId != FAMILY_AV) {
+        LOG() << "Skipping test: Test requires aqua vanjaram series asics." << std::endl;
+        return;
+    }
+
+    /* Find second node - nodes with the same DrmRenderMinor are on the same GPU */
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    HSAuint32 acquireNode;
+    for (unsigned i = 0; i < gpuNodes.size(); i++) {
+        acquireNode = gpuNodes.at(i);
+        AcquireReleaseTestRunCPU(acquireNode, true);
+        AcquireReleaseTestRunCPU(acquireNode, false);
+    }
+}
+
+
+TEST_F(KFDMemoryTest, AcquireReleaseFarLocalVector) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(false /* multi-GPU */, false /* acquirer is local */, false /* vector */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseFarLocalScalar) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(false /* multi-GPU */, false /* acquirer is local */, true /* scalar */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseFarRemoteVector) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(false /* multi-GPU */, true /* releaser is local */, false /* vector */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseFarRemoteScalar) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(false /* multi-GPU */, true /* releaser is local */, true /* scalar */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseCloseLocalVector) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(true /* within-GPU */, false /* acquirer is local */, false /* vector */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseCloseLocalScalar) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(true /* within-GPU */, false /* acquirer is local */, true /* scalar */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseCloseRemoteVector) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(true /* within-GPU */, true /* releaser is local */, false /* vector */);
+
+    TEST_END
+}
+
+TEST_F(KFDMemoryTest, AcquireReleaseCloseRemoteScalar) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    AcquireReleaseTest(true /* within-GPU */, true /* releaser is local */, true /* scalar */);
+
+    TEST_END
+}
+
+
 /* Application register same userptr to multiple GPUs using multiple threads
  * Test multiple threads register/deregister same userptr, to verify Thunk race handling
  */
