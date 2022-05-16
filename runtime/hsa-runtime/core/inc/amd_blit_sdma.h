@@ -143,6 +143,8 @@ class BlitSdma : public BlitSdmaBase {
 
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
+  virtual uint64_t PendingBytes() override;
+
  private:
   /// @brief Acquires the address into queue buffer where a new command
   /// packet of specified size could be written. The address that is
@@ -212,17 +214,43 @@ class BlitSdma : public BlitSdmaBase {
 
   void BuildGCRCommand(char* cmd_addr, bool invalidate);
 
-  hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size,
+  hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size, uint64_t size,
                              const std::vector<core::Signal*>& dep_signals,
                              core::Signal& out_signal);
 
-  hsa_status_t SubmitBlockingCommand(const void* cmds, size_t cmd_size);
+  hsa_status_t SubmitBlockingCommand(const void* cmds, size_t cmd_size, uint64_t size);
 
   // Agent object owning the SDMA engine.
   GpuAgent* agent_;
 
   /// Base address of the Queue buffer at construction time.
   char* queue_start_addr_;
+
+  // Pending bytes tracking
+  // bytes_written_ is indexed with wrapped command queue indices (which are in bytes).
+  // The data_ index corresponding to a command queue index is the first uint64_t index which begins
+  // in the packet area.  All packets have a header & at least one address so must be larger than 12
+  // bytes, thus this index always exists.
+  std::mutex reservation_lock_;
+  uint64_t bytes_queued_;
+  class {
+   public:
+    // Indexed by wrapped command queue indices (offsets).
+    uint64_t& operator[](uint32_t index) { return data_[convert(index)]; }
+
+    void resize(size_t size) { data_.resize(convert(size)); }
+
+    void fill(uint32_t start, uint32_t stop, uint64_t value) {
+      for (uint32_t i = convert(start); i < convert(stop); i++) {
+        data_[i] = value;
+      }
+    }
+
+   private:
+    uint32_t convert(uint32_t index) { return (index + sizeof(uint64_t) - 1) / sizeof(uint64_t); }
+
+    std::vector<uint64_t> data_;
+  } bytes_written_;
 
   // Internal signals for blocking APIs
   core::unique_signal_ptr signals_[2];

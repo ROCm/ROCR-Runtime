@@ -45,6 +45,8 @@
 
 #include <map>
 #include <mutex>
+#include <vector>
+#include <atomic>
 #include <stdint.h>
 
 #include "core/inc/blit.h"
@@ -109,6 +111,8 @@ class BlitKernel : public core::Blit {
 
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
+  virtual uint64_t PendingBytes() override;
+
  private:
   union KernelArgs {
     struct __ALIGNED__(16) {
@@ -144,6 +148,12 @@ class BlitKernel : public core::Blit {
     } fill;
   };
 
+  // Index after which bytes will have been written.
+  struct BytesWritten {
+    uint64_t index;
+    uint64_t bytes;
+  };
+
   /// Reserve a slot in the queue buffer. The call will wait until the queue
   /// buffer has a room.
   uint64_t AcquireWriteIndex(uint32_t num_packet);
@@ -157,6 +167,8 @@ class BlitKernel : public core::Blit {
                      uint32_t grid_size_x, hsa_signal_t completion_signal);
 
   KernelArgs* ObtainAsyncKernelCopyArg();
+
+  void RecordBlitHistory(uint64_t size, uint64_t index);
 
   /// AQL code object and size for each kernel.
   enum class KernelType {
@@ -183,6 +195,22 @@ class BlitKernel : public core::Blit {
 
   /// Completion signal for every kernel dispatched.
   hsa_signal_t completion_signal_;
+
+  /// Bytes moved by commands < index.
+  /// Any record's byte value may be inexact by the size of concurrently issued operations.
+  std::vector<BytesWritten> bytes_written_;
+
+  /// Total bytes written by all commands issued.
+  uint64_t bytes_queued_;
+
+  /// Index where most recent blit operation queued.
+  uint64_t last_queued_;
+
+  /// Orders command indices and bytes_queued_ updates
+  std::mutex reservation_lock_;
+
+  /// Search resume index
+  std::atomic<uint64_t> pending_search_index_;
 
   /// Lock to synchronize access to kernarg_ and completion_signal_
   std::mutex lock_;
