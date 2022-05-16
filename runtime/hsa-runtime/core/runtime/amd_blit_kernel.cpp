@@ -522,6 +522,9 @@ BlitKernel::BlitKernel(core::Queue* queue)
       kernarg_async_(NULL),
       kernarg_async_mask_(0),
       kernarg_async_counter_(0),
+      bytes_queued_(0),
+      last_queued_(0),
+      pending_search_index_(0),
       num_cus_(0) {
   completion_signal_.handle = 0;
 }
@@ -530,6 +533,9 @@ BlitKernel::~BlitKernel() {}
 
 hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
   queue_bitmask_ = queue_->public_handle()->size - 1;
+
+  bytes_written_.resize(queue_->public_handle()->size);
+  memset(&bytes_written_[0], -1, bytes_written_.size() * sizeof(BytesWritten));
 
   hsa_status_t status = HSA::hsa_signal_create(1, 0, NULL, &completion_signal_);
   if (HSA_STATUS_SUCCESS != status) {
@@ -619,7 +625,13 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
   const uint32_t num_barrier_packet = uint32_t((dep_signals.size() + 4) / 5);
   const uint32_t total_num_packet = num_barrier_packet + 1;
 
-  uint64_t write_index = AcquireWriteIndex(total_num_packet);
+  uint64_t write_index;
+  {
+    std::lock_guard<std::mutex> lock(reservation_lock_);
+    write_index = AcquireWriteIndex(total_num_packet);
+    RecordBlitHistory(size, write_index + total_num_packet - 1);
+  }
+
   uint64_t write_index_temp = write_index;
 
   // Insert barrier packets to handle dependent signals.
@@ -758,9 +770,16 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   // Submit dispatch packet.
   HSA::hsa_signal_store_relaxed(completion_signal_, 1);
 
-  uint64_t write_index = AcquireWriteIndex(1);
+  uint64_t write_index;
+  {
+    std::lock_guard<std::mutex> lock(reservation_lock_);
+    write_index = AcquireWriteIndex(1);
+    RecordBlitHistory(fill_size, write_index);
+  }
+
   PopulateQueue(write_index, uintptr_t(kernels_[KernelType::Fill].code_buf_),
                 args, num_workitems, completion_signal_);
+
   ReleaseWriteIndex(write_index, 1);
 
   // Wait for the packet to finish.
@@ -840,6 +859,43 @@ BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
   KernelArgs* arg = &kernarg_async_[index];
   assert(IsMultipleOf(arg, 16));
   return arg;
+}
+
+void BlitKernel::RecordBlitHistory(uint64_t size, uint64_t index) {
+  uint64_t queued = bytes_queued_;
+  bytes_queued_ += size;
+  bytes_written_[index & queue_bitmask_].bytes = queued;
+  bytes_written_[index & queue_bitmask_].index = index;
+  last_queued_ = index;
+}
+
+uint64_t BlitKernel::PendingBytes() {
+  uint64_t read = queue_->LoadReadIndexRelaxed();
+  uint64_t index = pending_search_index_.load();
+  uint64_t last = last_queued_;
+  // If the last blit command has been run then the blit is empty.
+  if (read > last) return 0;
+
+  index = Max(index, read);
+  while (index <= last) {
+    // Ensure any record we use was not wrapped.
+    if (index == bytes_written_[index & queue_bitmask_].index) {
+      uint64_t ret = bytes_queued_ - bytes_written_[index & queue_bitmask_].bytes;
+
+      // Store max search index.
+      uint64_t old = pending_search_index_.load();
+      while (old < index) {
+        if (pending_search_index_.compare_exchange_strong(old, index)) break;
+      }
+
+      return ret;
+    }
+    index++;
+  }
+  debug_warning(false && "Race between PendingBytes and blit submission detected.");
+  // Zero is a valid return in this case since the command which was last when the search started is
+  // now complete.
+  return 0;
 }
 
 }  // namespace amd

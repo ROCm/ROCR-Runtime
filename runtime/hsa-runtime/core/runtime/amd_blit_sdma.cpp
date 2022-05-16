@@ -116,6 +116,7 @@ template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bo
 BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BlitSdma()
     : agent_(NULL),
       queue_start_addr_(NULL),
+      bytes_queued_(0),
       parity_(false),
       cached_reserve_index_(0),
       cached_commit_index_(0),
@@ -172,6 +173,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   MAKE_NAMED_SCOPE_GUARD(cleanupOnException, [&]() { Destroy(agent); };);
   std::memset(queue_start_addr_, 0, kQueueSize);
 
+  bytes_written_.resize(kQueueSize);
+
   // Access kernel driver to initialize the queue control block
   // This call binds user mode queue object to underlying compute
   // device. ROCr creates queues that are of two kinds: PCIe optimized
@@ -223,7 +226,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
-                      useGCR>::SubmitBlockingCommand(const void* cmd, size_t cmd_size) {
+                      useGCR>::SubmitBlockingCommand(const void* cmd, size_t cmd_size,
+                                                     uint64_t size) {
   ScopedAcquire<KernelMutex> lock(&lock_);
 
   // Alternate between completion signals
@@ -244,14 +248,15 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   lock.Release();
 
   // Submit command and wait for completion
-  hsa_status_t ret = SubmitCommand(cmd, cmd_size, std::vector<core::Signal*>(), *completionSignal);
+  hsa_status_t ret =
+      SubmitCommand(cmd, cmd_size, size, std::vector<core::Signal*>(), *completionSignal);
   completionSignal->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 1, -1, HSA_WAIT_STATE_BLOCKED);
   return ret;
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCommand(
-    const void* cmd, size_t cmd_size, const std::vector<core::Signal*>& dep_signals,
+    const void* cmd, size_t cmd_size, uint64_t size, const std::vector<core::Signal*>& dep_signals,
     core::Signal& out_signal) {
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
@@ -307,11 +312,19 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
       total_timestamp_command_size + interrupt_command_size + flush_cmd_size;
 
   RingIndexTy curr_index;
-  char* command_addr = AcquireWriteAddress(total_command_size, curr_index);
-
-  if (command_addr == NULL) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  char* command_addr;
+  uint64_t prior_bytes, post_bytes;
+  {
+    std::lock_guard<std::mutex> lock(reservation_lock_);
+    command_addr = AcquireWriteAddress(total_command_size, curr_index);
+    if (command_addr == nullptr) {
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+    prior_bytes = bytes_queued_;
+    bytes_queued_ += size;
+    post_bytes = bytes_queued_;
   }
+  uint32_t wrapped_index = WrapIntoRing(curr_index);
 
   for (size_t i = 0; i < dep_signals.size(); ++i) {
     uint32_t* signal_addr =
@@ -319,14 +332,20 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     // Wait for the higher 64 bit to 0.
     BuildPollCommand(command_addr, &signal_addr[1], 0);
     command_addr += poll_command_size_;
+    bytes_written_[wrapped_index] = prior_bytes;
+    wrapped_index += poll_command_size_;
     // Then wait for the lower 64 bit to 0.
     BuildPollCommand(command_addr, &signal_addr[0], 0);
     command_addr += poll_command_size_;
+    bytes_written_[wrapped_index] = prior_bytes;
+    wrapped_index += poll_command_size_;
   }
 
   if (profiling_enabled) {
     BuildGetGlobalTimestampCommand(command_addr, reinterpret_cast<void*>(start_ts_addr));
     command_addr += timestamp_command_size_;
+    bytes_written_[wrapped_index] = prior_bytes;
+    wrapped_index += timestamp_command_size_;
   }
 
   // Issue a Hdp flush cmd
@@ -334,6 +353,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     if ((HwIndexMonotonic) && (hdp_flush_support_)) {
       BuildHdpFlushCommand(command_addr);
       command_addr += flush_command_size_;
+      bytes_written_[wrapped_index] = prior_bytes;
+      wrapped_index += flush_command_size_;
     }
   }
 
@@ -341,16 +362,22 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (useGCR) {
     BuildGCRCommand(command_addr, true);
     command_addr += gcr_command_size_;
+    bytes_written_[wrapped_index] = prior_bytes;
+    wrapped_index += gcr_command_size_;
   }
 
   // Do the command after all polls are satisfied.
   memcpy(command_addr, cmd, cmd_size);
   command_addr += cmd_size;
+  bytes_written_.fill(wrapped_index, wrapped_index + cmd_size, prior_bytes);
+  wrapped_index += cmd_size;
 
   // Issue cache writeback
   if (useGCR) {
     BuildGCRCommand(command_addr, false);
     command_addr += gcr_command_size_;
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += gcr_command_size_;
   }
 
   if (profiling_enabled) {
@@ -358,25 +385,31 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     BuildGetGlobalTimestampCommand(command_addr,
                                    reinterpret_cast<void*>(end_ts_addr));
     command_addr += timestamp_command_size_;
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += timestamp_command_size_;
   }
 
   // After transfer is completed, decrement the signal value.
   if (platform_atomic_support_) {
     BuildAtomicDecrementCommand(command_addr, out_signal.ValueLocation());
     command_addr += atomic_command_size_;
-
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += atomic_command_size_;
   } else {
     uint32_t* signal_value_location = reinterpret_cast<uint32_t*>(out_signal.ValueLocation());
     if (completion_signal_value > UINT32_MAX) {
       BuildFenceCommand(command_addr, signal_value_location + 1,
                         static_cast<uint32_t>(completion_signal_value >> 32));
       command_addr += fence_command_size_;
+      bytes_written_[wrapped_index] = post_bytes;
+      wrapped_index += fence_command_size_;
     }
 
     BuildFenceCommand(command_addr, signal_value_location,
                       static_cast<uint32_t>(completion_signal_value));
-
     command_addr += fence_command_size_;
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += fence_command_size_;
   }
 
   // Update mailbox event and send interrupt to IH.
@@ -385,8 +418,12 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
                       reinterpret_cast<uint32_t*>(out_signal.signal_.event_mailbox_ptr),
                       static_cast<uint32_t>(out_signal.signal_.event_id));
     command_addr += fence_command_size_;
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += fence_command_size_;
 
     BuildTrapCommand(command_addr, out_signal.signal_.event_id);
+    bytes_written_[wrapped_index] = post_bytes;
+    wrapped_index += trap_command_size_;
   }
 
   ReleaseWriteAddress(curr_index, total_command_size);
@@ -404,7 +441,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   std::vector<SDMA_PKT_COPY_LINEAR> buff(num_copy_command);
   BuildCopyCommand(reinterpret_cast<char*>(&buff[0]), num_copy_command, dst, src, size);
 
-  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR));
+  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR), size);
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
@@ -420,7 +457,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   std::vector<SDMA_PKT_COPY_LINEAR> buff(num_copy_command);
   BuildCopyCommand(reinterpret_cast<char*>(&buff[0]), num_copy_command, dst, src, size);
 
-  return SubmitCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR), dep_signals,
+  return SubmitCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR), size, dep_signals,
                        out_signal);
 }
 
@@ -452,6 +489,7 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCopyRe
   const uint max_pitch = 1 << SDMA_PKT_COPY_LINEAR_RECT::pitch_bits;
 
   std::vector<SDMA_PKT_COPY_LINEAR_RECT> pkts;
+  std::vector<uint64_t> bytes_moved;
   auto append = [&](size_t size) {
     assert(size == sizeof(SDMA_PKT_COPY_LINEAR_RECT) && "SDMA packet size missmatch");
     pkts.emplace_back(SDMA_PKT_COPY_LINEAR_RECT());
@@ -484,7 +522,9 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCopyRe
     BuildCopyRectCommand(append, dst, dst_offset, src, src_offset, range);
   }
 
-  return SubmitCommand(&pkts[0], pkts.size() * sizeof(SDMA_PKT_COPY_LINEAR_RECT), dep_signals,
+  uint64_t size = range->x * range->y * range->z;
+
+  return SubmitCommand(&pkts[0], pkts.size() * sizeof(SDMA_PKT_COPY_LINEAR_RECT), size, dep_signals,
                        out_signal);
 }
 
@@ -498,7 +538,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   std::vector<SDMA_PKT_CONSTANT_FILL> buff(num_fill_command);
   BuildFillCommand(reinterpret_cast<char*>(&buff[0]), num_fill_command, ptr, value, count);
 
-  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_CONSTANT_FILL));
+  return SubmitBlockingCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_CONSTANT_FILL), size);
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
@@ -512,7 +552,7 @@ char* BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Acquir
     uint32_t cmd_size, RingIndexTy& curr_index) {
   // Ring is full when all but one byte is written.
   if (cmd_size >= kQueueSize) {
-    return NULL;
+    return nullptr;
   }
 
   while (true) {
@@ -545,7 +585,7 @@ char* BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Acquir
     os::YieldThread();
   }
 
-  return NULL;
+  return nullptr;
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
@@ -566,7 +606,7 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
         }
       }
 
-      // Update write pointer and doorbel register.
+      // Update write pointer and doorbell register.
       *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_write_ptr) =
           (HwIndexMonotonic ? new_index : WrapIntoRing(new_index));
 
@@ -613,6 +653,9 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::PadRing
     // Write and submit NOP commands in reserved region.
     char* nop_address = queue_start_addr_ + WrapIntoRing(curr_index);
     memset(nop_address, 0, new_index - curr_index);
+
+    // Pad pending bytes tracking
+    bytes_written_.fill(WrapIntoRing(curr_index), WrapIntoRing(new_index), bytes_queued_);
 
     UpdateWriteAndDoorbellRegister(curr_index, new_index);
   }
@@ -950,6 +993,22 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildGC
   }
   // Discarding all lines for now.
   addr->WORD2_UNION.GCR_CONTROL_GL2_RANGE = 0;
+}
+
+template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
+uint64_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::PendingBytes() {
+  RingIndexTy commit = atomic::Load(&cached_commit_index_, std::memory_order_acquire);
+  RingIndexTy hw_read_index = *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_read_ptr);
+  RingIndexTy read;
+  if (HwIndexMonotonic) {
+    read = hw_read_index;
+  } else {
+    RingIndexTy dist_to_read_index = WrapIntoRing(commit - hw_read_index);
+    read = commit - dist_to_read_index;
+  }
+
+  if (commit == read) return 0;
+  return bytes_queued_ - bytes_written_[WrapIntoRing(read)];
 }
 
 template class BlitSdma<uint32_t, false, 0, false>;

@@ -110,6 +110,10 @@ class Blit {
 
   /// @brief Blit operations use SDMA.
   virtual bool isSDMA() const { return false; }
+
+  /// @Brief Reports the approximate number of remaining bytes to copy or fill.  Any return of zero
+  /// must be exact.
+  virtual uint64_t PendingBytes() = 0;
 };
 }  // namespace core
 }  // namespace rocr
