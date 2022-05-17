@@ -390,3 +390,131 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+
+TEST_F(KFDDBGTest, HitMemoryViolation) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        if (hsaKmtCheckRuntimeDebugSupport()) {
+            LOG() << "Skip test as debug API not supported";
+            goto exit;
+        }
+
+        pid_t childPid = fork();
+
+        if (childPid == 0) { // Debugged process
+            uint32_t rDebug;
+            int r;
+
+            // Refresh setup for HSA device and mem buffer use in child
+            KFDBaseComponentTest::TearDown();
+            KFDBaseComponentTest::SetUp();
+
+            // Let parent become the debugger and wait for attach.
+            ptrace(PTRACE_TRACEME);
+            raise(SIGSTOP);
+
+            r = hsaKmtRuntimeEnable(&rDebug, true);
+
+            if (r != HSAKMT_STATUS_SUCCESS) {
+                WARN() << "Runtime enabled failed" << std::endl;
+                exit(1);
+            }
+
+            HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+            ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PersistentIterateIsa, isaBuf.As<char*>()));
+            PM4Queue queue;
+            HsaQueueResource *qResources;
+            ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+            // Create memory violation event on dispatch
+            HsaEvent *vmFaultEvent;
+            HsaEventDescriptor eventDesc;
+            eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
+            eventDesc.NodeId = defaultGPUNode;
+            eventDesc.SyncVar.SyncVar.UserData = NULL;
+            eventDesc.SyncVar.SyncVarSize = 0;
+            r = hsaKmtCreateEvent(&eventDesc, true, false, &vmFaultEvent);
+
+            if (r != HSAKMT_STATUS_SUCCESS) {
+                WARN() << "Creating VM fault event failed" << std::endl;
+                exit(1);
+            }
+
+            Dispatch *dispatch;
+            dispatch = new Dispatch(isaBuf);
+            dispatch->SetDim(1, 1, 1);
+            dispatch->SetPriv(false); //Override GFX11 CWSR WA
+            dispatch->Submit(queue);
+
+            // Queue immediately dies so halt process for tracer device inspection.
+            raise(SIGSTOP);
+
+            exit(0);
+        } else {
+            BaseDebug *debug = new BaseDebug();
+            struct kfd_runtime_info r_info = {0};
+            uint64_t runtimeMask = KFD_EC_MASK(EC_PROCESS_RUNTIME);
+            uint64_t memViolMask = KFD_EC_MASK(EC_DEVICE_MEMORY_VIOLATION);
+            uint64_t subscribeMask = runtimeMask | memViolMask;
+            uint64_t queryMask = 0;
+            int childStatus;
+
+            waitpid(childPid, &childStatus, 0);
+            while (!WIFSTOPPED(childStatus));
+
+            ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), childPid, subscribeMask));
+            ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_DISABLED);
+            ASSERT_EQ(r_info.ttmp_setup, false);
+
+            ptrace(PTRACE_CONT, childPid, NULL, NULL);
+
+            // Wait and unblock runtime enable
+            ASSERT_SUCCESS(debug->QueryDebugEvent(&runtimeMask, NULL, NULL, 5000));
+            ASSERT_EQ(runtimeMask, KFD_EC_MASK(EC_PROCESS_RUNTIME));
+            ASSERT_SUCCESS(debug->SendRuntimeEvent(runtimeMask, 0, 0));
+
+            // Wait for memory violation
+            uint32_t deviceId = -1;
+            ASSERT_SUCCESS(debug->QueryDebugEvent(&queryMask, &deviceId, NULL, 5000));
+            ASSERT_NE(deviceId, -1);
+            ASSERT_EQ(queryMask, memViolMask);
+
+            // Assume tracee queue has died and halted process
+            ptrace(PTRACE_CONT, childPid, NULL, NULL);
+
+            const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+            uint32_t snapshotSize = gpuNodes.size();
+            struct kfd_dbg_device_info_entry deviceInfo[snapshotSize] = {0};
+
+            // Check device snapshot aligns with memory violation on target device.
+            ASSERT_SUCCESS(debug->DeviceSnapshot(memViolMask, (uint64_t)(&deviceInfo[0]),
+                                                 &snapshotSize));
+            ASSERT_EQ(snapshotSize, gpuNodes.size());
+            for (int i = 0; i < snapshotSize; i++) {
+                if (deviceInfo[i].exception_status & memViolMask) {
+                    ASSERT_EQ(deviceInfo[i].gpu_id, deviceId);
+                    break;
+                }
+            }
+
+            debug->Detach();
+
+            ptrace(PTRACE_DETACH, childPid, NULL, NULL);
+
+            waitpid(childPid, &childStatus, 0);
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+        }
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+exit:
+    LOG() << std::endl;
+    TEST_END
+}
