@@ -80,6 +80,7 @@ GDB=""
 NODE=""
 FORCE_HIGH=""
 RUN_IN_DOCKER=""
+ADDITIONAL_EXCLUDE=""
 
 printUsage() {
     echo
@@ -95,6 +96,7 @@ printUsage() {
     echo "  -l            , --list                   List available nodes"
     echo "  --high                                   Force clocks to high for test execution"
     echo "  -d            , --docker                 Run in docker container"
+    echo "  -e            , --exclude                Additional tests to exclude, in addition to kfdtest.exclude (colon-separated, single quoted string as an argument)"
     echo "  -h            , --help                   Prints this help"
     echo
     echo "Gtest arguments will be forwarded to the app"
@@ -122,6 +124,9 @@ getFilter() {
             gtestFilter="--gtest_filter=${FILTER[$platform]}"
             ;;
     esac
+    if [ -n "$ADDITIONAL_EXCLUDE" ]; then
+	    gtestFilter="$gtestFilter:$ADDITIONAL_EXCLUDE"
+    fi
 }
 
 TOPOLOGY_SYSFS_DIR=/sys/devices/virtual/kfd/kfd/topology/nodes
@@ -166,6 +171,11 @@ runKfdTest() {
             exit 0
         fi
         PKG_ROOT="$(getPackageRoot)"
+    fi
+
+    if [ -n "$GTEST_ARGS" ] && [ -n "$ADDITIONAL_EXCLUDE" ]; then
+	    echo "Cannot use -e and --gtest_filter flags together"
+	    exit 0
     fi
 
     if [ "$NODE" == "" ]; then
@@ -242,6 +252,8 @@ while [ "$1" != "" ]; do
             FORCE_HIGH="true" ;;
         -d  | --docker )
             RUN_IN_DOCKER="true" ;;
+        -e  | --exclude )
+            ADDITIONAL_EXCLUDE="$2" ; shift ;;
         -h  | --help )
             printUsage; exit 0 ;;
         *)
