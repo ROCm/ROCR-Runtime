@@ -94,11 +94,12 @@ class ScratchCache {
     size_t size_per_thread;
     uint32_t lanes_per_wave;
     uint32_t waves_per_group;
+    uint64_t wanted_slots;
+    bool cooperative;
     ptrdiff_t queue_process_offset;
     bool large;
     bool retry;
     hsa_signal_t queue_retry;
-    uint64_t wanted_slots;
     ScratchCache::ref_t scratch_node;
   };
 
@@ -135,7 +136,6 @@ class ScratchCache {
       if (it->second.isFree()) {
         it->second.alloc();
         info.queue_base = it->second.base;
-        info.size = it->first;
         info.scratch_node = it;
         available_bytes -= it->first;
         return true;
@@ -155,7 +155,6 @@ class ScratchCache {
     }
     it->second.free();
     available_bytes += it->first;
-    assert(it->first == info.size && "Scratch cache size mismatch.");
   }
 
   bool trim(bool trim_nodes_in_use) {
