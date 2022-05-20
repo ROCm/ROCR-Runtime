@@ -1230,7 +1230,8 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     }
 
     // Fail scratch allocation if reducing occupancy is disabled.
-    if ((!use_reclaim) || core::Runtime::runtime_singleton_->flag().no_scratch_thread_limiter())
+    if (scratch.cooperative || (!use_reclaim) ||
+        core::Runtime::runtime_singleton_->flag().no_scratch_thread_limiter())
       return;
 
     // Attempt to trim the maximum number of concurrent waves to allow scratch to fit.
