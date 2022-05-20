@@ -364,12 +364,13 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 static void *allocate_exec_aligned_memory(uint32_t size,
 					  bool use_ats,
 					  uint32_t NodeId,
+					  bool nonPaged,
 					  bool DeviceLocal,
 					  bool Uncached)
 {
 	if (!use_ats)
 		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
-							DeviceLocal, DeviceLocal,
+							nonPaged, DeviceLocal,
 							Uncached);
 	return allocate_exec_aligned_memory_cpu(size);
 }
@@ -412,7 +413,7 @@ static int handle_concrete_asic(struct queue *q,
 	if (q->eop_buffer_size > 0) {
 		q->eop_buffer = allocate_exec_aligned_memory(q->eop_buffer_size,
 				q->use_ats,
-				NodeId, true, /* Unused for VRAM */false);
+				NodeId, true, true, /* Unused for VRAM */false);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
 
@@ -436,7 +437,7 @@ static int handle_concrete_asic(struct queue *q,
 				       q->debug_memory_size;
 		q->ctx_save_restore =
 			allocate_exec_aligned_memory(total_mem_alloc_size,
-					 q->use_ats, NodeId, false, false);
+					 q->use_ats, NodeId, false, false, false);
 
 		if (!q->ctx_save_restore)
 			return HSAKMT_STATUS_NO_MEMORY;
@@ -477,7 +478,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	int err;
 	HsaNodeProperties props;
 	uint32_t cu_num, i;
-	bool use_ats;
 
 	CHECK_KFD_OPEN();
 
@@ -489,18 +489,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	use_ats = prefer_ats(NodeId);
-
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
-			use_ats,
-			NodeId, false, true);
+			false, NodeId, true, false, true);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
 	memset(q, 0, sizeof(*q));
 
 	q->gfxv = get_gfxv_by_node_id(NodeId);
-	q->use_ats = use_ats;
+	q->use_ats = false;
 	q->eop_buffer_size = EOP_BUFFER_SIZE(q->gfxv);
 
 	/* By default, CUs are all turned on. Initialize cu_mask to '1
