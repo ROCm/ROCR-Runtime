@@ -268,6 +268,15 @@ TEST(rocrtstFunc, Memory_Max_Mem) {
   RunCustomTestEpilog(&mt);
 }
 
+TEST(rocrtstFunc, Memory_Available) {
+  MemoryTest mt;
+
+  RunCustomTestProlog(&mt);
+  mt.MemAvailableTest();
+  RunCustomTestEpilog(&mt);
+}
+
+
 TEST(rocrtstFunc, Memory_Atomic_Add_Test) {
   MemoryAtomic ma(ADD);
   RunCustomTestProlog(&ma);

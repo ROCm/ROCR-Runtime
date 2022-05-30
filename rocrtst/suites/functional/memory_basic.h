@@ -74,10 +74,14 @@ class MemoryTest : public TestBase {
 
   void MaxSingleAllocationTest(void);
 
+  void MemAvailableTest(void);
+
   hsa_status_t TestAllocate(hsa_amd_memory_pool_t pool, size_t sz);
 
  private:
   void MaxSingleAllocationTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool);
+
+  void MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool);
 };
 
 #endif  // ROCRTST_SUITES_FUNCTIONAL_MEMORY_BASIC_H_
