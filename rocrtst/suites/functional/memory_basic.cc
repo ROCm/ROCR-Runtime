@@ -258,4 +258,123 @@ void MemoryTest::MaxSingleAllocationTest(void) {
   }
 }
 
+void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
+  hsa_status_t err;
+  void *memPtr1, *memPtr2;
+  rocrtst::pool_info_t pool_i;
+  char ag_name[64];
+  hsa_device_type_t ag_type;
+  uint64_t ag_avail_memory_before, ag_avail_memory_after;
+
+  err = hsa_agent_get_info(ag, HSA_AGENT_INFO_NAME, ag_name);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_agent_get_info(ag, HSA_AGENT_INFO_DEVICE, &ag_type);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  if (verbosity() > 0) {
+    std::cout << "  Agent: " << ag_name << " (";
+    switch (ag_type) {
+      case HSA_DEVICE_TYPE_CPU:
+        std::cout << "CPU)";
+        break;
+      case HSA_DEVICE_TYPE_GPU:
+        std::cout << "GPU)";
+        break;
+      case HSA_DEVICE_TYPE_DSP:
+        std::cout << "DSP)";
+        break;
+    }
+    std::cout << std::endl;
+  }
+
+  err = rocrtst::AcquirePoolInfo(pool, &pool_i);
+  ASSERT_EQ(HSA_STATUS_SUCCESS, err);
+
+  if (ag_type != HSA_DEVICE_TYPE_GPU ||
+      !pool_i.alloc_allowed || !pool_i.alloc_granule || !pool_i.alloc_alignment) {
+    if (verbosity() > 0) {
+      std::cout << "  Test not applicable. Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
+  // Do everything in "granule" units
+  auto gran_sz = pool_i.alloc_granule;
+  auto pool_sz = pool_i.aggregate_alloc_max / gran_sz;
+
+  err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                            &ag_avail_memory_before);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  // Try to allocate half
+  uint64_t allocate_sz1 = (pool_sz / 2) * gran_sz;
+
+  err = hsa_amd_memory_pool_allocate(pool, allocate_sz1, 0, &memPtr1);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                            &ag_avail_memory_after);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  // Memory available after could be smaller because of fragmentation
+  ASSERT_GE(ag_avail_memory_before - allocate_sz1, ag_avail_memory_after);
+
+  // Try to allocate 80% of remaining
+  uint64_t allocate_sz2 = (0.8 * ag_avail_memory_after * gran_sz) / gran_sz;
+
+  err = hsa_amd_memory_pool_allocate(pool, allocate_sz2, 0, &memPtr2);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                            &ag_avail_memory_after);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  ASSERT_GE(ag_avail_memory_before - (allocate_sz1 + allocate_sz2),
+                            ag_avail_memory_after);
+
+  if (verbosity() > 0) {
+    std::cout << "  Available memory before: " << ag_avail_memory_before << std::endl;
+    std::cout << "         Memory allocated: " << allocate_sz1 
+                  << " + " << allocate_sz2 << std::endl;
+    std::cout << "   Available memory after: " << ag_avail_memory_after << std::endl;
+  }
+
+  err = hsa_memory_free(memPtr1);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_memory_free(memPtr2);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                            &ag_avail_memory_after);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  ASSERT_EQ(ag_avail_memory_before, ag_avail_memory_after);
+
+  if (verbosity() > 0) {
+    std::cout << "     Available memory end: " << ag_avail_memory_after << std::endl;
+    std::cout << kSubTestSeparator << std::endl;
+  }
+}
+
+void MemoryTest::MemAvailableTest(void) {
+  hsa_status_t err;
+  std::vector<std::shared_ptr<rocrtst::agent_pools_t>> agent_pools;
+
+  PrintMemorySubtestHeader("Memory Available Allocation in Memory Pools");
+
+  err = rocrtst::GetAgentPools(&agent_pools);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  auto pool_idx = 0;
+  for (auto a : agent_pools) {
+    for (auto p : a->pools) {
+      std::cout << "  Pool " << pool_idx++ << ":" << std::endl;
+      MemAvailableTest(a->agent, p);
+    }
+  }
+}
+
 #undef RET_IF_HSA_ERR
