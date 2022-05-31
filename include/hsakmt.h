@@ -375,6 +375,17 @@ hsaKmtFreeMemory(
     );
 
 /**
+  Inquires memory available for allocation as a memory buffer
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtAvailableMemory(
+    HSAuint32 Node,
+    HSAuint64 *AvailableBytes
+    );
+
+/**
   Registers with KFD a memory buffer that may be accessed by the GPU
 */
 
