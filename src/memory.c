@@ -199,6 +199,30 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
 	return fmm_release(MemoryAddress);
 }
 
+HSAKMT_STATUS HSAKMTAPI hsaKmtAvailableMemory(HSAuint32 Node,
+					      HSAuint64 *AvailableBytes)
+{
+	struct kfd_ioctl_get_available_memory_args args = {};
+	HSAKMT_STATUS result;
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(9);
+
+	pr_debug("[%s] node %d\n", __func__, Node);
+
+	result = validate_nodeid(Node, &args.gpu_id);
+	if (result != HSAKMT_STATUS_SUCCESS) {
+		pr_err("[%s] invalid node ID: %d\n", __func__, Node);
+		return result;
+	}
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_AVAILABLE_MEMORY, &args))
+		return HSAKMT_STATUS_ERROR;
+
+	*AvailableBytes = args.available;
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
 					     HSAuint64 MemorySizeInBytes)
 {

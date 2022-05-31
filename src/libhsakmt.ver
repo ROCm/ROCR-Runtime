@@ -24,6 +24,7 @@ hsaKmtSetQueueCUMask;
 hsaKmtSetMemoryPolicy;
 hsaKmtAllocMemory;
 hsaKmtFreeMemory;
+hsaKmtAvailableMemory;
 hsaKmtRegisterMemory;
 hsaKmtRegisterMemoryToNodes;
 hsaKmtRegisterMemoryWithFlags;
