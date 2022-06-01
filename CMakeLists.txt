@@ -290,7 +290,7 @@ set(CPACK_COMPONENT_DESCRIPTION "HSAKMT development package.\n This package incl
 set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
 
 # Install License file
-install ( FILES ${CPACK_RESOURCE_FILE_LICENSE} DESTINATION ${CMAKE_INSTALL_DOCDIR}/${CPACK_PACKAGE_NAME} COMPONENT devel)
+install ( FILES ${CPACK_RESOURCE_FILE_LICENSE} DESTINATION ${CMAKE_INSTALL_DOCDIR} COMPONENT devel)
 
 # Make proper version for appending
 # Default Value is 99999, setting it first
