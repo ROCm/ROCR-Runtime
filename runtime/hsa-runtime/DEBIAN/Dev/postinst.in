@@ -48,7 +48,7 @@ case "$1" in
    ( configure )
        # Workaround for CPACK directory symlink handling error.
        mkdir -p @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include
-       ln -sf ../../include/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
+       ln -sf ../../@CMAKE_INSTALL_INCLUDEDIR@/hsa @CPACK_PACKAGING_INSTALL_PREFIX@/hsa/include/hsa
    ;;
    ( * )
        exit 0
