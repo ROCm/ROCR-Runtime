@@ -586,6 +586,7 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1035: name = "gfx1035"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1036: name = "gfx1036"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100: name = "gfx1100"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1101: name = "gfx1101"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1102: name = "gfx1102"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1103: name = "gfx1103"; xnack_supported = false; sramecc_supported = false; break;
       default: return false;
@@ -638,6 +639,8 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C;
       else if (old_name == "AMD:AMDGPU:11:0:0")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100;
+      else if (old_name == "AMD:AMDGPU:11:0:1")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1101;
       else if (old_name == "AMD:AMDGPU:11:0:2")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1102;
       else if (old_name == "AMD:AMDGPU:11:0:3")

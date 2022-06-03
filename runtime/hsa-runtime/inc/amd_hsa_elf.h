@@ -124,6 +124,7 @@ enum : unsigned {
   EF_AMDGPU_MACH_AMDGCN_GFX1013       = 0x042,
   EF_AMDGPU_MACH_AMDGCN_GFX1103       = 0x044,
   EF_AMDGPU_MACH_AMDGCN_GFX1036       = 0x045,
+  EF_AMDGPU_MACH_AMDGCN_GFX1101       = 0x046,
   EF_AMDGPU_MACH_AMDGCN_GFX1102       = 0x047,
 
   // First/last AMDGCN-based processors.
