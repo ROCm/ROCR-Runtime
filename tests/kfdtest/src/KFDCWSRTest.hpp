@@ -29,7 +29,8 @@
 #include "PM4Queue.hpp"
 #include "KFDBaseComponentTest.hpp"
 
-class KFDCWSRTest : public KFDBaseComponentTest {
+class KFDCWSRTest : public KFDBaseComponentTest,
+                    public ::testing::WithParamInterface<std::tuple<int, int>> {
  public:
     KFDCWSRTest() {}
     ~KFDCWSRTest() {}
@@ -37,9 +38,6 @@ class KFDCWSRTest : public KFDBaseComponentTest {
  protected:
     virtual void SetUp();
     virtual void TearDown();
-
- protected:  // Members
-    unsigned wave_number;
 };
 
 #endif  // __KFD_CWSR_TEST__H__
