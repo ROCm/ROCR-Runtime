@@ -453,35 +453,50 @@ const char *LoopIsa = R"(
  */
 
 /* Initial state:
- *   s[0:1] - 64 bits iteration number; only the lower 32 bits are useful.
- *   s[2:3] - result buffer base address
+ *   s[0:1] - input buffer base address
+ *   s[2:3] - output buffer base address
  *   s4 - workgroup id
- *   v0 - workitem id, always 0 because
- *        NUM_THREADS_X(number of threads) in workgroup set to 1
+ *   v0 - workitem id
  * Registers:
  *   v0 - calculated workitem = v0 + s4 * NUM_THREADS_X, which is s4
- *   v2 - = s0, 32 bits iteration number
+ *   v[2:3] - corresponding input buf address: s[0:1] + v0 * 8
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
- *   v6 - counter
+ *   v6 - register storing known-value output for mangle testing
+ *   v7 - counter
  */
 const char *IterateIsa = SHADER_MACROS R"(
-        // Copy the parameters from scalar registers to vector registers
-        v_mov_b32               v2, s0          // v[2:3] = s[0:1]
-        v_mov_b32               v3, s1          // v[2:3] = s[0:1]
+        // Compute address of output buffer
         v_mov_b32               v0, s4          // use workgroup id as index
         v_lshlrev_b32           v0, 2, v0       // v0 *= 4
         V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
         v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
         V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
-        v_mov_b32               v6, 0
-        LOOP:
-        V_ADD_CO_U32            v6, 1, v6
 
-        // Compare the result value (v6) to iteration value (v2), and
-        // jump if equal (i.e. if VCC is not zero after the comparison)
-        V_CMP_LT_U32            v6, v2
-        s_cbranch_vccnz LOOP
-        flat_store_dword        v[4:5], v6
+        // Compute address of input buffer
+        v_lshlrev_b32           v0, 1, v0       // v0 *= 8
+        V_ADD_CO_U32            v2, s0, v0      // v[2:3] = s[0:1] + v0 * 8
+        v_mov_b32               v3, s1          // v[2:3] = s[0:1] + v0 * 8
+        V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
+
+        // Store known-value output in register
+        flat_load_dword         v6, v[4:5] glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+
+        // Initialize counter
+        v_mov_b32               v7, 0
+
+        LOOP:
+        flat_store_dword        v[4:5], v6      // store known-val in output
+        V_ADD_CO_U32            v7, 1, v7       // increment counter
+
+        s_load_dword            s6, s[0:1], 0 glc
+        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        s_cmp_eq_i32            s6, 0x12345678  // compare input buf to stopval
+        s_cbranch_scc1          L_QUIT          // branch if notified to quit by host
+
+        s_branch LOOP
+
+        L_QUIT:
         s_waitcnt vmcnt(0) & lgkmcnt(0)
         s_endpgm
 )";

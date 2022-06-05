@@ -29,8 +29,6 @@ void KFDCWSRTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    wave_number = 1;
-
     ROUTINE_END
 }
 
@@ -40,14 +38,6 @@ void KFDCWSRTest::TearDown() {
     KFDBaseComponentTest::TearDown();
 
     ROUTINE_END
-}
-
-bool isOnEmulator() {
-    uint32_t isEmuMode = 0;
-
-    fscanf_dec("/sys/module/amdgpu/parameters/emu_mode", &isEmuMode);
-
-    return isEmuMode;
 }
 
 static inline uint32_t checkCWSREnabled() {
@@ -61,72 +51,116 @@ static inline uint32_t checkCWSREnabled() {
 /**
  * KFDCWSRTest.BasicTest
  *
- * This test dispatches the loop_inc_isa shader and lets it run, ensuring its destination pointer gets incremented.
- * It then triggers CWSR and ensures the shader stops running.
- * It then resumes the shader, ensures that it's running again and terminates it.
+ * This test dispatches the IterateIsa shader, which continuously increments a vgpr for
+ * (num_witems / WAVE_SIZE) waves. While this shader is running, dequeue/requeue requests
+ * are sent in a loop to trigger CWSRs.
+ *
+ * This is a paremeterized test. See the INSTANTIATE_TEST_CASE_P below for an explanation
+ * on the parameters.
+ *
+ * This test defines a CWSR threshold. The shader will continuously loop until inputBuf is
+ * filled with the known stop value, which occurs once cwsr_thresh CWSRs have been
+ * successfully triggered.
+ *
+ * 4 parameterized tests are defined:
+ *
+ * KFDCWSRTest.BasicTest/0
+ * KFDCWSRTest.BasicTest/1
+ * KFDCWSRTest.BasicTest/2
+ * KFDCWSRTest.BasicTest/3
+ *
+ * 0: 1 work-item, CWSR threshold of 10
+ * 1: 256 work-items (multi-wave), CWSR threshold of 50
+ * 2: 512 work-items (multi-wave), CWSR threshold of 100
+ * 3: 1024 work-items (multi-wave), CWSR threshold of 1000
  */
-TEST_F(KFDCWSRTest, BasicTest) {
+TEST_P(KFDCWSRTest, BasicTest) {
     TEST_START(TESTPROFILE_RUNALL);
 
+    int num_witems = std::get<0>(GetParam());
+    int cwsr_thresh = std::get<1>(GetParam());
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
 
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
-        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-        HsaMemoryBuffer resultBuf1(PAGE_SIZE, defaultGPUNode, true, false, false);
-        uint64_t count1 = 400000000;
-
-        if (isOnEmulator()) {
-            // Divide the iterator times by 10000 so that the test can
-            // finish in a reasonable time.
-            count1 /= 10000;
-            LOG() << "On Emulators" << std::endl;
-        }
-
-        unsigned int* result1 = resultBuf1.As<unsigned int*>();
-
+        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true, false, true);
         ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(IterateIsa, isaBuffer.As<char*>()));
 
-        PM4Queue queue1;
+        unsigned stopval = 0x1234'5678;
+        unsigned outval  = 0x8765'4321;
 
-        ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
+        HsaMemoryBuffer inputBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer outputBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        unsigned int* input = inputBuf.As<unsigned int*>();
+        unsigned int* output = outputBuf.As<unsigned int*>();
+        inputBuf.Fill(0);
+        outputBuf.Fill(outval);
 
-        Dispatch *dispatch1;
+        PM4Queue queue;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
 
-        dispatch1 = new Dispatch(isaBuffer);
+        Dispatch dispatch(isaBuffer);
+        dispatch.SetArgs(input, output);
+        dispatch.SetDim(num_witems, 1, 1);
+        dispatch.Submit(queue);
 
-        dispatch1->SetArgs(reinterpret_cast<void *>(count1), result1);
-        dispatch1->SetDim(wave_number, 1, 1);
-
-        // Submit the shader, queue1
-        dispatch1->Submit(queue1);
-
-        //Give time for waves to launch before disabling queue.
-        Delay(1);
-        EXPECT_SUCCESS(queue1.Update(0/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
         Delay(5);
-        EXPECT_SUCCESS(queue1.Update(100/*percentage*/, BaseQueue::DEFAULT_PRIORITY, false));
 
-        dispatch1->Sync();
-        // Ensure all the waves complete as expected
-        int i;
-        for (i = 0 ; i < wave_number; ++i) {
-            if (result1[i] != count1) {
-                LOG() << "Dispatch 1, work item [" << std::dec << i << "] "
-                      << result1[i] << " != " << count1 << std::endl;
-                break;
+        LOG() << "Starting iteration for " << std::dec << num_witems
+              << " work items(s) (targeting " << std::dec << cwsr_thresh
+              << " CWSRs)" << std::endl;
+
+        for (int num_cwsrs = 0; num_cwsrs < cwsr_thresh; num_cwsrs++) {
+
+            // Send dequeue request
+            EXPECT_SUCCESS(queue.Update(0, BaseQueue::DEFAULT_PRIORITY, false));
+
+            Delay(5);
+
+            // Send requeue request
+            EXPECT_SUCCESS(queue.Update(100, BaseQueue::DEFAULT_PRIORITY, false));
+
+            Delay(50);
+
+            // Check for reg mangling
+            for (int i = 0; i < num_witems; i++) {
+                EXPECT_EQ(outval, output[i]);
             }
         }
-        EXPECT_EQ(i, wave_number);
 
-        EXPECT_SUCCESS(queue1.Destroy());
+        LOG() << "Successful completion for " << std::dec << num_witems
+              << " work item(s) (CWSRs triggered: " << std::dec << cwsr_thresh
+              << ")" << std::endl;
+        LOG() << "Signalling shader stop..." << std::endl;
 
-        delete dispatch1;
+        inputBuf.Fill(stopval);
+
+        // Wait for shader to finish or timeout if shader has vm page fault
+        EXPECT_EQ(0, dispatch.SyncWithStatus(180000));
+
+        EXPECT_SUCCESS(queue.Destroy());
     } else {
         LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
 
     TEST_END
 }
+
+/**
+ * Instantiates various KFDCWSRTest.BasicTest parameterizations
+ * Tuple Format: (num_witems, cwsr_thresh)
+ *
+ * num_witems:    Defines the number of work-items.
+ * cwsr_thresh:   Defines the number of CWSRs to trigger.
+ */
+INSTANTIATE_TEST_CASE_P(
+    , KFDCWSRTest,
+    ::testing::Values(
+            std::make_tuple(1, 10),     /* Single Wave Test,  10 CWSR Triggers */
+            std::make_tuple(256, 50),   /* Multi Wave Test,   50 CWSR Triggers */
+            std::make_tuple(512, 100),  /* Multi Wave Test,  100 CWSR Triggers */
+            std::make_tuple(1024, 1000) /* Multi Wave Test, 1000 CWSR Triggers */
+    )
+);
 
 /**
  * KFDCWSRTest.InterruptRestore
