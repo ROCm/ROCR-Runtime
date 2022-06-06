@@ -1331,6 +1331,7 @@ typedef enum _HSA_SVM_FLAGS {
 	HSA_SVM_FLAG_GPU_RO      = 0x00000008, // GPUs only read, allows replication
 	HSA_SVM_FLAG_GPU_EXEC    = 0x00000010, // Allow execution on GPU
 	HSA_SVM_FLAG_GPU_READ_MOSTLY = 0x00000020, // GPUs mostly read, may allow similar optimizations as RO, but writes fault
+	HSA_SVM_FLAG_GPU_ALWAYS_MAPPED = 0x00000040, // Keep GPU memory mapping always valid as if XNACK is disable
 } HSA_SVM_FLAGS;
 
 typedef enum _HSA_SVM_ATTR_TYPE {

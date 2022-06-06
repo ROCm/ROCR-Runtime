@@ -68,6 +68,7 @@ struct queue {
 	uint32_t eop_buffer_size;
 	uint32_t gfxv;
 	bool use_ats;
+	bool unified_ctx_save_restore;
 	/* This queue structure is allocated from GPU with page aligned size
 	 * but only small bytes are used. We use the extra space in the end for
 	 * cu_mask bits array.
@@ -384,18 +385,68 @@ static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
 		munmap(addr, size);
 }
 
+static HSAKMT_STATUS register_svm_range(void *mem, uint32_t size,
+				uint32_t gpuNode, uint32_t prefetchNode,
+				uint32_t preferredNode, bool alwaysMapped)
+{
+	HSA_SVM_ATTRIBUTE *attrs;
+	HSAuint64 s_attr;
+	HSAuint32 nattr;
+	HSAuint32 flags;
+
+	flags = HSA_SVM_FLAG_HOST_ACCESS;
+
+	if (alwaysMapped) {
+		CHECK_KFD_MINOR_VERSION(11);
+		flags |= HSA_SVM_FLAG_GPU_ALWAYS_MAPPED;
+	}
+
+	nattr = 5;
+	s_attr = sizeof(*attrs) * nattr;
+	attrs = (HSA_SVM_ATTRIBUTE *)alloca(s_attr);
+
+	attrs[0].type = HSA_SVM_ATTR_PREFETCH_LOC;
+	attrs[0].value = prefetchNode;
+	attrs[1].type = HSA_SVM_ATTR_PREFERRED_LOC;
+	attrs[1].value = preferredNode;
+	attrs[2].type = HSA_SVM_ATTR_CLR_FLAGS;
+	attrs[2].value = ~flags;
+	attrs[3].type = HSA_SVM_ATTR_SET_FLAGS;
+	attrs[3].value = flags;
+	attrs[4].type = HSA_SVM_ATTR_ACCESS;
+	attrs[4].value = gpuNode;
+
+	return hsaKmtSVMSetAttr(mem, size, nattr, attrs);
+}
+
 static void free_queue(struct queue *q)
 {
 	if (q->eop_buffer)
 		free_exec_aligned_memory(q->eop_buffer,
 					 q->eop_buffer_size,
 					 PAGE_SIZE, q->use_ats);
-	if (q->ctx_save_restore)
+	if (q->unified_ctx_save_restore)
+		free(q->ctx_save_restore);
+	else if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
 					 q->ctx_save_restore_size,
 					 PAGE_SIZE, q->use_ats);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->use_ats);
+}
+
+static inline void fill_cwsr_header(struct queue *q, void *addr,
+		HsaEvent *Event, volatile HSAint64 *ErrPayload)
+{
+	HsaUserContextSaveAreaHeader *header =
+			(HsaUserContextSaveAreaHeader *)addr;
+
+	header->ErrorEventId = 0;
+	if (Event)
+		header->ErrorEventId = Event->EventId;
+	header->ErrorReason = ErrPayload;
+	header->DebugOffset = q->ctx_save_restore_size;
+	header->DebugSize = q->debug_memory_size;
 }
 
 static int handle_concrete_asic(struct queue *q,
@@ -425,7 +476,8 @@ static int handle_concrete_asic(struct queue *q,
 
 	if (ret) {
 		uint32_t total_mem_alloc_size = 0;
-		HsaUserContextSaveAreaHeader *header;
+		HsaNodeProperties node;
+		bool svm_api;
 
 		args->ctx_save_restore_size = q->ctx_save_restore_size;
 		args->ctl_stack_size = q->ctl_stack_size;
@@ -435,22 +487,49 @@ static int handle_concrete_asic(struct queue *q,
 		 */
 		total_mem_alloc_size = q->ctx_save_restore_size +
 				       q->debug_memory_size;
-		q->ctx_save_restore =
-			allocate_exec_aligned_memory(total_mem_alloc_size,
-					 q->use_ats, NodeId, false, false, false);
 
-		if (!q->ctx_save_restore)
-			return HSAKMT_STATUS_NO_MEMORY;
+		if (hsaKmtGetNodeProperties(NodeId, &node))
+			svm_api = false;
+		else
+			svm_api = node.Capability.ui32.SVMAPISupported;
+
+		/* Allocate unified memory for context save restore
+		 * area on dGPU.
+		 */
+		if (!q->use_ats && svm_api) {
+			uint32_t size = PAGE_ALIGN_UP(total_mem_alloc_size);
+			void *addr;
+			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
+
+			if (posix_memalign(&addr, GPU_HUGE_PAGE_SIZE, size))
+				pr_err("[%s] posix_memalign failed:\n", __func__);
+			else {
+				fill_cwsr_header(q, addr, Event, ErrPayload);
+
+				r = register_svm_range(addr, size,
+						NodeId, NodeId, 0, true);
+
+				if (r == HSAKMT_STATUS_SUCCESS) {
+					q->ctx_save_restore = addr;
+					q->unified_ctx_save_restore = true;
+				} else
+					free(addr);
+			}
+		}
+
+		if (!q->unified_ctx_save_restore) {
+			q->ctx_save_restore = allocate_exec_aligned_memory(
+							total_mem_alloc_size,
+							q->use_ats, NodeId,
+							false, false, false);
+
+			if (!q->ctx_save_restore)
+				return HSAKMT_STATUS_NO_MEMORY;
+
+			fill_cwsr_header(q, q->ctx_save_restore, Event, ErrPayload);
+		}
 
 		args->ctx_save_restore_address = (uintptr_t)q->ctx_save_restore;
-
-		header = (HsaUserContextSaveAreaHeader *)q->ctx_save_restore;
-		header->ErrorEventId = 0;
-		if (Event)
-			header->ErrorEventId = Event->EventId;
-		header->ErrorReason = ErrPayload;
-		header->DebugOffset = q->ctx_save_restore_size;
-		header->DebugSize = q->debug_memory_size;
 	}
 
 	return HSAKMT_STATUS_SUCCESS;
