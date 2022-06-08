@@ -46,6 +46,7 @@
 #define HSA_RUNTIME_CORE_UTIL_OS_H_
 
 #include <string>
+#include <vector>
 #include "utils.h"
 
 namespace rocr {
@@ -84,6 +85,15 @@ void* GetExportAddress(LibHandle lib, std::string export_name);
 /// @brief: Unloads the dynamic library.
 /// @param: lib(Input), library handle which will be unloaded.
 void CloseLib(LibHandle lib);
+
+/// @brief: Lists libraries in the process
+/// @return: List of library handles
+std::vector<LibHandle> GetLoadedLibs();
+
+/// @brief: Returns the library's path name.
+/// @param: lib(Input), libray handle
+/// @return: Path name of library
+std::string GetLibraryName(LibHandle lib);
 
 /// @brief: Creates a mutex, will return NULL if failed.
 /// @param: void.
