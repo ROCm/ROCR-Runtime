@@ -686,7 +686,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   TRY;
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL || flags != 0) {
+  if (size == 0 || ptr == NULL || (flags > HSA_AMD_MEMORY_POOL_PCIE_FLAG)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -697,8 +697,11 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
     return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(
-      mem_region, size, core::MemoryRegion::AllocateRestrict, ptr);
+  MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateRestrict;
+
+  if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+
+  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr);
   CATCH;
 }
 
