@@ -47,6 +47,7 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include <list>
 
 #include "core/common/shared.h"
 #include "core/inc/hsa_ext_interface.h"
@@ -1493,53 +1494,118 @@ void Runtime::LoadTools() {
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
 
-  // Load tool libs
+  std::vector<const char*> failed;
+
+  //Get loaded libs and filter to tool libraries.
+  struct lib_t {
+    lib_t(os::LibHandle lib, uint32_t order, std::string name) : lib_(lib), order_(order), name_(name) {}
+    os::LibHandle lib_;
+    uint32_t order_;
+    std::string name_;
+  };
+
+  std::list<lib_t> sorted;
+  uint32_t env_count=0;
+
+  // Load env var tool lib names and determine ordering offset.
   std::string tool_names = flag_.tools_lib_names();
+  std::vector<std::string> names;
   if (tool_names != "") {
-    std::vector<std::string> names = parse_tool_names(tool_names);
-    std::vector<const char*> failed;
-    for (auto& name : names) {
-      os::LibHandle tool = os::LoadLib(name);
+    names = parse_tool_names(tool_names);
+    env_count = names.size();
+  }
 
-      if (tool != NULL) {
-        tool_libs_.push_back(tool);
+  // Discover loaded tools.
+  std::vector<os::LibHandle> loaded = os::GetLoadedLibs();
+  for(auto& handle : loaded) {
+    const uint32_t* order = (const uint32_t*)os::GetExportAddress(handle, "HSA_AMD_TOOL_PRIORITY");
+    if(order) {
+      sorted.push_back(lib_t(handle, *order+env_count, os::GetLibraryName(handle)));
+    } else {
+      os::CloseLib(handle);
+    }
+  }
+  
+  // Load env var tools.
+  env_count=0;
+  for (auto& name : names) {
+    os::LibHandle tool = os::LoadLib(name);
 
-        rocr::AMD::callback_t<tool_init_t> ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
-        if (ld) {
-          if (!ld(&hsa_api_table_.hsa_api,
-                  hsa_api_table_.hsa_api.version.major_id,
-                  failed.size(), &failed[0])) {
-            failed.push_back(name.c_str());
-            os::CloseLib(tool);
-            continue;
-          }
-        }
+    if (tool != nullptr) {
+      sorted.push_back(lib_t(tool, env_count, name));
+      env_count++;
+    } else {
+      failed.push_back(name.c_str());
+      if (flag().report_tool_load_failures())
+        fprintf(stderr, "Tool lib \"%s\" failed to load.\n", name.c_str());
+    }
+  }
 
-        rocr::AMD::callback_t<tool_wrap_t> wrap =
-            (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
-        if (wrap) {
-          std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
-                                                       &gpu_agents_};
-          for (std::vector<core::Agent*>* agent_list : agent_lists) {
-            for (size_t agent_idx = 0; agent_idx < agent_list->size();
-                 ++agent_idx) {
+  if(!sorted.empty()) {
+    // Close duplicate handles
+    sorted.sort([](const lib_t& lhs, const lib_t& rhs) {
+      if(lhs.lib_ == rhs.lib_)
+        return lhs.order_ < rhs.order_;
+      return lhs.lib_ < rhs.lib_;
+    });
+
+    os::LibHandle current = sorted.front().lib_;
+    auto it = sorted.begin();
+    it++;
+    while(it != sorted.end()) {
+      if(it->lib_==current) {
+        os::CloseLib(current);
+        auto rem = it;
+        it = sorted.erase(rem);
+      } else {
+        current = it->lib_;
+        it++;
+      }
+    }
+
+    // Sort to load order
+    sorted.sort([](const lib_t& lhs, const lib_t& rhs) {
+      return lhs.order_ < rhs.order_;
+    });
+    
+    for(auto& lib : sorted) {
+      auto& tool = lib.lib_;
+
+      rocr::AMD::callback_t<tool_init_t> ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
+      if (!ld) {
+        failed.push_back(lib.name_.c_str());
+        os::CloseLib(tool);
+        continue;
+      }
+      if (!ld(&hsa_api_table_.hsa_api,
+        hsa_api_table_.hsa_api.version.major_id,
+        failed.size(), &failed[0])) {
+          failed.push_back(lib.name_.c_str());
+          os::CloseLib(tool);
+          continue;
+      }
+      tool_libs_.push_back(tool);
+
+      rocr::AMD::callback_t<tool_wrap_t> wrap =
+        (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
+      if (wrap) {
+        std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
+          &gpu_agents_};
+        for (std::vector<core::Agent*>* agent_list : agent_lists) {
+          for (size_t agent_idx = 0; agent_idx < agent_list->size();
+            ++agent_idx) {
               Agent* agent = wrap(agent_list->at(agent_idx));
               if (agent != NULL) {
                 assert(agent->IsValid() &&
-                       "Agent returned from WrapAgent is not valid");
+                  "Agent returned from WrapAgent is not valid");
                 agent_list->at(agent_idx) = agent;
               }
-            }
           }
         }
+      }
 
-        rocr::AMD::callback_t<tool_add_t> add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
-        if (add) add(this);
-      }
-      else {
-        if (flag().report_tool_load_failures())
-          fprintf(stderr, "Tool lib \"%s\" failed to load.\n", name.c_str());
-      }
+      rocr::AMD::callback_t<tool_add_t> add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
+      if (add) add(this);
     }
   }
 }

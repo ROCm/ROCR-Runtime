@@ -200,6 +200,35 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
 void CloseLib(LibHandle lib) { dlclose(*(void**)&lib); }
 
+std::vector<LibHandle> GetLoadedLibs() {
+
+  std::vector<LibHandle> ret;
+  std::vector<std::string> names;
+  auto callback = [&](dl_phdr_info* info) {
+    if(info->dlpi_name[0] != '\0')
+      names.push_back(info->dlpi_name);
+  };
+  typedef decltype(callback) call_t;
+
+  dl_iterate_phdr([](dl_phdr_info* info, size_t size, void* data){
+    auto& call = *(call_t*)data;
+    call(info);
+    return 0;
+  }, &callback);
+
+  for(auto& name : names)
+    ret.push_back(LoadLib(name));
+
+  return ret;
+}
+
+std::string GetLibraryName(LibHandle lib) {
+  link_map *map;
+  if(dlinfo(lib, RTLD_DI_LINKMAP, &map)!=0)
+    return "";
+  return map->l_name;
+}
+
 Mutex CreateMutex() {
   pthread_mutex_t* mutex = new pthread_mutex_t;
   pthread_mutex_init(mutex, NULL);
