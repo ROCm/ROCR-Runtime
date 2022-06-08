@@ -185,7 +185,7 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
       (alloc_flags & AllocateExecutable ? 1 : 0);
   kmt_alloc_flags.ui32.AQLQueueMemory =
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
-  if (IsSystem() && (alloc_flags & AllocateIPC))
+  if (IsSystem() && (alloc_flags & AllocateNonPaged))
       kmt_alloc_flags.ui32.NonPaged = 1;
 
   // Allocate pseudo fine grain memory
