@@ -1001,6 +1001,24 @@ typedef enum {
 } hsa_amd_memory_pool_info_t;
 
 /**
+ * @brief Memory pool flag used to specify allocation directives
+ *
+ */
+typedef enum hsa_amd_memory_pool_flag_s {
+  /**
+   * Allocates memory that conforms to standard HSA memory consistency model
+   */
+  HSA_AMD_MEMORY_POOL_STANDARD_FLAG = 0,
+  /**
+   * Allocates fine grain memory type where memory ordering is per point to point
+   * connection. Atomic memory operations on these memory buffers are not
+   * guaranteed to be visible at system scope.
+   */
+  HSA_AMD_MEMORY_POOL_PCIE_FLAG = 1,
+
+} hsa_amd_memory_pool_flag_t;
+
+/**
  * @brief Get the current value of an attribute of a memory pool.
  *
  * @param[in] memory_pool A valid memory pool.
@@ -1068,7 +1086,7 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
  * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE in @p memory_pool.
  *
  * @param[in] flags A bit-field that is used to specify allocation
- * directives. Reserved parameter, must be 0.
+ * directives.
  *
  * @param[out] ptr Pointer to the location where to store the base virtual
  * address of
