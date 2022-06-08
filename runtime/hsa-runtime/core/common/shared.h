@@ -141,10 +141,10 @@ class Shared final : private BaseShared {
 
 template <typename T> class Shared<T, PageAllocator<T>> final : private BaseShared {
  public:
-  Shared() {
+  Shared(int flags = 0) {
     assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
 
-    shared_object_ = PageAllocator<T>::alloc();
+    shared_object_ = PageAllocator<T>::alloc(flags);
   }
 
   ~Shared() {
