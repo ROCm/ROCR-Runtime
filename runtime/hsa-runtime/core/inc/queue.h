@@ -44,14 +44,12 @@
 
 #ifndef HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
 #define HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
+
 #include <sstream>
 
 #include "core/common/shared.h"
-
 #include "core/inc/checked.h"
-
 #include "core/util/utils.h"
-
 #include "inc/amd_hsa_queue.h"
 
 #include "hsakmt/hsakmt.h"
