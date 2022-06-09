@@ -657,7 +657,10 @@ static hsa_status_t GetGPUAgents(hsa_agent_t agent, void* data) {
 
   uint8_t bus = (agent_bdf_id & (0xFF << 8)) >> 8;
   uint8_t device = (agent_bdf_id & (0x1F << 3)) >> 3;
-  uint8_t function = (agent_bdf_id & 0x07);
+
+  // The function part of the location_id hasn't been used yet
+  // and may not contain a valid function number.
+  uint8_t function = 0; //(agent_bdf_id & 0x07);
 
   if (ptr->verbosity() >  MemoryAsyncCopy::VERBOSE_STANDARD) {
     char name[64];
