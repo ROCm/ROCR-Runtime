@@ -249,6 +249,31 @@ TEST_F(KFDMemoryTest, MemoryAlloc) {
     TEST_END
 }
 
+// Basic test for hsaKmtAllocMemory
+TEST_F(KFDMemoryTest, MemoryAllocAll) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    HsaMemFlags memFlags = {0};
+    memFlags.ui32.NonPaged = 1; // sys mem vs vram
+    HSAuint64 available;
+    void *object = NULL;
+    int shrink = 21, success = HSAKMT_STATUS_NO_MEMORY;
+
+    EXPECT_SUCCESS(hsaKmtAvailableMemory(defaultGPUNode, &available));
+    LOG() << "Available: " << available << " bytes" << std::endl;
+    for (int i = 0; i < available >> shrink; i++) {
+        HSAuint64 size = available - ((HSAuint64)i << shrink);
+        if (hsaKmtAllocMemory(defaultGPUNode, size, memFlags, &object) == HSAKMT_STATUS_SUCCESS) {
+            LOG() << "Allocated: " << size << " bytes" << std::endl;
+            success = hsaKmtFreeMemory(object, available);
+            break;
+        }
+    }
+    EXPECT_SUCCESS(success);
+    TEST_END
+}
+
 TEST_F(KFDMemoryTest, AccessPPRMem) {
     TEST_START(TESTPROFILE_RUNALL)
 
