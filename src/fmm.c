@@ -214,6 +214,9 @@ typedef struct {
 
 	/* whether all memory is coherent (GPU cache disabled) */
 	bool disable_cache;
+
+	/* specifies the alignment size as PAGE_SIZE * 2^alignment_order */
+	uint32_t alignment_order;
 } svm_t;
 
 /* The other apertures are specific to each GPU. gpu_mem_t manages GPU
@@ -705,6 +708,7 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 					    uint64_t size, uint64_t align)
 {
 	uint64_t aligned_padded_size, guard_size;
+	uint64_t alignment_size = PAGE_SIZE << svm.alignment_order;
 	void *addr, *aligned_addr, *aligned_end, *mapping_end;
 
 	if (address)
@@ -715,10 +719,14 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 		return NULL;
 	}
 
-	/* Align big buffers to the next power-of-2 up to 1GB
-	 * size for memory allocation optimization
+	/* Align big buffers to the next power-of-2. By default, the max alignment
+	 * size is set to 2MB. This can be modified by the env variable
+	 * HSA_MAX_VA_ALIGN. This variable sets the order of the alignment size as
+	 * PAGE_SIZE * 2^HSA_MAX_VA_ALIGN. Setting HSA_MAX_VA_ALIGN = 18 (1GB),
+	 * improves the time for memory allocation and mapping. But it might lose
+	 * performance when GFX access it, specially for big allocations (>3GB).
 	 */
-	while (align < GPU_GIANT_PAGE_SIZE && size >= (align << 1))
+	while (align < alignment_size && size >= (align << 1))
 		align <<= 1;
 
 	/* Add padding to guarantee proper alignment and leave guard
@@ -2168,6 +2176,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
+	char *maxVaAlignStr;
 	unsigned int guardPages = 1;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0;
@@ -2198,6 +2207,13 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	guardPagesStr = getenv("HSA_SVM_GUARD_PAGES");
 	if (!guardPagesStr || sscanf(guardPagesStr, "%u", &guardPages) != 1)
 		guardPages = 1;
+
+	/* Sets the max VA alignment order size during mapping. By default the order
+	 * size is set to 9(2MB)
+	 */
+	maxVaAlignStr = getenv("HSA_MAX_VA_ALIGN");
+	if (!maxVaAlignStr || sscanf(maxVaAlignStr, "%u", &svm.alignment_order) != 1)
+		svm.alignment_order = 9;
 
 	gpu_mem_count = 0;
 	g_first_gpu_mem = NULL;
