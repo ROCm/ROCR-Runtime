@@ -297,6 +297,7 @@ hsaKmtGetKernelDebugTrapVersionInfo(
 }
 
 #define HSA_RUNTIME_ENABLE_MIN_MAJOR	10
+#define HSA_RUNTIME_ENABLE_MAX_MAJOR	11
 #define HSA_RUNTIME_ENABLE_MIN_MINOR	0
 HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 					    bool setupTtmp)
@@ -310,8 +311,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 	if (result)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	if (kMajor != HSA_RUNTIME_ENABLE_MIN_MAJOR ||
-				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR)
+	if (kMajor < HSA_RUNTIME_ENABLE_MIN_MAJOR || kMajor > HSA_RUNTIME_ENABLE_MAX_MAJOR ||
+			(kMajor == HSA_RUNTIME_ENABLE_MIN_MAJOR &&
+				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
 	memset(&args, 0x00, sizeof(args));
