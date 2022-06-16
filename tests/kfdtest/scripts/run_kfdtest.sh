@@ -144,7 +144,8 @@ getHsaNodes() {
 }
 
 
-# Prints GPU Name for the given Node ID
+# Prints GPU Name for the given Node ID. If transitioned to IP discovery,
+# use target gfx version
 #   param - Node ID
 getNodeName() {
     local nodeId=$1; shift;
@@ -153,7 +154,14 @@ getNodeName() {
       local CpuCoresCount=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep cpu_cores_count | awk '{print $2}')
       local SimdCount=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep simd_count | awk '{print $2}')
       if [ "$CpuCoresCount" -eq 0 ] && [ "$SimdCount" -gt 0 ]; then
-	gpuName="raven_dgpuFallback"
+        gpuName="raven_dgpuFallback"
+      fi
+    elif [ "$gpuName" == "ip discovery" ]; then
+      if [ -n "$HSA_OVERRIDE_GFX_VERSION" ]; then
+          gpuName="gfx$(echo "$HSA_OVERRIDE_GFX_VERSION" | awk 'BEGIN {FS="."; RS=""} {printf "%d%x%x", $1, $2, $3 }')"
+      else
+          local GfxVersionDec=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep gfx_target_version | awk '{print $2}')
+          gpuName="gfx$(printf "$GfxVersionDec" | fold -w2 | awk 'BEGIN {FS="\n"; RS=""} {printf "%d%x%x", $1, $2, $3}')"
       fi
     fi
     echo "$gpuName"
