@@ -1038,11 +1038,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       status = hsaKmtAvailableMemory(node_id(), &availableBytes);
 
-      if (status != HSAKMT_STATUS_SUCCESS)
-        return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      if (status != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-      for (auto r: regions())
-        availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
+      for (auto r : regions()) availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
 
       availableBytes += scratch_cache_.free_bytes();
 
