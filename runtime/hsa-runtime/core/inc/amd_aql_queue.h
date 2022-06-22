@@ -226,6 +226,15 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Define the Scratch Buffer Descriptor and related parameters
   /// that enable kernel access scratch memory
   void InitScratchSRD();
+  void FillBufRsrcWord0();
+  void FillBufRsrcWord1();
+  void FillBufRsrcWord1_Gfx11();
+  void FillBufRsrcWord2();
+  void FillBufRsrcWord3();
+  void FillBufRsrcWord3_Gfx10();
+  void FillBufRsrcWord3_Gfx11();
+  void FillComputeTmpRingSize();
+  void FillComputeTmpRingSize_Gfx11();
 
   /// @brief Halt the queue without destroying it or fencing memory.
   void Suspend();
