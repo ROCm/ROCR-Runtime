@@ -75,6 +75,9 @@ union SQ_BUF_RSRC_WORD0 {
 
 /***********/
 
+/* Note: These registers are also defined/used in registers.h
+ * in SQ_BUF_RSRC_WORD1_GFX11
+ */
 #define SQ_BUF_RSC_WRD1_REG_SZ 32
 #define SQ_BUF_RSC_WRD1_BASE_ADDRESS_HI_SZ  16
 #define SQ_BUF_RSC_WRD1_STRIDE_SZ           14

@@ -117,8 +117,25 @@ SQ_SEL_W                                 = 0x00000007,
 	float	f32All;
 	};
 
+        union COMPUTE_TMPRING_SIZE_GFX11 {
+          struct {
+#if defined(LITTLEENDIAN_CPU)
+            unsigned int WAVES : 12;
+            unsigned int WAVESIZE : 15;
+            unsigned int : 5;
+#elif defined(BIGENDIAN_CPU)
+            unsigned int : 5;
+            unsigned int WAVESIZE : 15;
+            unsigned int WAVES : 12;
+#endif
+          } bitfields, bits;
+          unsigned int u32All;
+          signed int i32All;
+          float f32All;
+        };
 
-	union SQ_BUF_RSRC_WORD0 {
+
+        union SQ_BUF_RSRC_WORD0 {
 	struct {
 #if		defined(LITTLEENDIAN_CPU)
 		unsigned int                    BASE_ADDRESS : 32;
@@ -151,8 +168,25 @@ SQ_SEL_W                                 = 0x00000007,
 	float	f32All;
 	};
 
+        union SQ_BUF_RSRC_WORD1_GFX11 {
+          struct {
+#if defined(LITTLEENDIAN_CPU)
+            unsigned int BASE_ADDRESS_HI : 16;
+            unsigned int STRIDE : 14;
+            unsigned int SWIZZLE_ENABLE : 2;
+#elif defined(BIGENDIAN_CPU)
+            unsigned int SWIZZLE_ENABLE : 2;
+            unsigned int STRIDE : 14;
+            unsigned int BASE_ADDRESS_HI : 16;
+#endif
+          } bitfields, bits;
+          unsigned int u32All;
+          signed int i32All;
+          float f32All;
+        };
 
-	union SQ_BUF_RSRC_WORD2 {
+
+        union SQ_BUF_RSRC_WORD2 {
 	struct {
 #if		defined(LITTLEENDIAN_CPU)
 		unsigned int                     NUM_RECORDS : 32;
@@ -234,9 +268,43 @@ SQ_SEL_W                                 = 0x00000007,
                 unsigned int                       DST_SEL_Y : 3;
                 unsigned int                       DST_SEL_X : 3;
 #endif
-	} bitfields, bits;
-	unsigned int	u32All;
+        } bitfields, bits;
+        unsigned int u32All;
+        signed int i32All;
+        float f32All;
+        };
+
+        // From V# Table
+        union SQ_BUF_RSRC_WORD3_GFX11 {
+          struct {
+#if defined(LITTLEENDIAN_CPU)
+            unsigned int DST_SEL_X : 3;
+            unsigned int DST_SEL_Y : 3;
+            unsigned int DST_SEL_Z : 3;
+            unsigned int DST_SEL_W : 3;
+            unsigned int FORMAT : 6;
+            unsigned int RESERVED1 : 3;
+            unsigned int INDEX_STRIDE : 2;
+            unsigned int ADD_TID_ENABLE : 1;
+            unsigned int RESERVED2 : 4;
+            unsigned int OOB_SELECT : 2;
+            unsigned int TYPE : 2;
+#elif defined(BIGENDIAN_CPU)
+            unsigned int TYPE : 2;
+            unsigned int OOB_SELECT : 2;
+            unsigned int RESERVED2 : 4;
+            unsigned int ADD_TID_ENABLE : 1;
+            unsigned int INDEX_STRIDE : 2;
+            unsigned int RESERVED1 : 3;
+            unsigned int FORMAT : 6;
+            unsigned int DST_SEL_W : 3;
+            unsigned int DST_SEL_Z : 3;
+            unsigned int DST_SEL_Y : 3;
+            unsigned int DST_SEL_X : 3;
+#endif
+          } bitfields, bits;
+        unsigned int	u32All;
 	signed int	i32All;
 	float	f32All;
-	};
+        };
 #endif  // header guard
