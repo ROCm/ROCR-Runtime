@@ -324,7 +324,13 @@ typedef enum hsa_amd_agent_info_s {
    * owned by the agent.
    * The type of this attribute is uint64_t.
    */
-  HSA_AMD_AGENT_INFO_MEMORY_AVAIL = 0xA015
+  HSA_AMD_AGENT_INFO_MEMORY_AVAIL = 0xA015,
+  /**
+   * Timestamp value increase rate, in Hz. The timestamp (clock) frequency is
+   * in the range 1-400MHz.
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY = 0xA016
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {

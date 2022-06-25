@@ -87,7 +87,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.5.0" )
+get_version ( "1.6.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
@@ -95,8 +95,10 @@ set ( SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
 set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}" )
 
 ## Find external dependencies.
+find_package(PkgConfig)
 find_package(LibElf REQUIRED)
 find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
+pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
 
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
@@ -265,7 +267,7 @@ if(${IMAGE_SUPPORT})
 endif()
 
 ## Link dependencies.
-target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt )
+target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
 
 ## Set the VERSION and SOVERSION values
