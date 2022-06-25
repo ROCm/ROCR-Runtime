@@ -359,6 +359,10 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_ASIC_REVISION:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.Capability.ui32.ASICRevision);
       break;
+    case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
+      assert(regions_.size() != 0 && "No device local memory found!");
+      *((bool*)value) = true;
+      break;
     case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
       return core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY,
                                                               value);
