@@ -243,6 +243,7 @@ aux_source_directory(${ROCRTST_ROOT}/suites/test_common testCommonSources)
 
 include_directories(${ROCRTST_ROOT})
 include_directories(${ROCRTST_ROOT}/gtest/include)
+include_directories(${ROCRTST_ROOT}/thirdparty/include/)
 
 # Custom command set for code objects.
 set (HSACO_TARG_LIST "")
@@ -349,7 +350,7 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 add_executable(${ROCRTST} ${performanceSources} ${functionalSources} ${negativeSources} ${stressSources}
                                            ${common_srcs} ${testCommonSources})
 
-target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/libhwloc.so.5)
+target_link_libraries(${ROCRTST} ${ROCRTST_LIBS} c stdc++ dl pthread rt numa ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/lib/libhwloc.so.5)
 
 #Build kernels
 add_custom_target(rocrtst_kernels ALL DEPENDS ${HSACO_TARG_LIST})
@@ -358,7 +359,7 @@ add_custom_target(rocrtst_kernels ALL DEPENDS ${HSACO_TARG_LIST})
 add_custom_target(rocrtst_links ALL DEPENDS ${ROCRTST_LINKS_LIST} )
 
 ## Set RUNPATH to pickup local copy of hwloc
-set_property(TARGET ${ROCRTST} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/thirdparty;$ORIGIN/../lib/rocrtst/thirdparty" )
+set_property(TARGET ${ROCRTST} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/thirdparty/lib;$ORIGIN/../lib/rocrtst/thirdparty/lib" )
 set_property(TARGET ${ROCRTST} PROPERTY LINK_FLAGS "-Wl,--enable-new-dtags")
 
 install(TARGETS ${ROCRTST}
@@ -366,6 +367,6 @@ install(TARGETS ${ROCRTST}
         LIBRARY DESTINATION lib
         RUNTIME DESTINATION bin)
 
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty DESTINATION lib/rocrtst )
+install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../../thirdparty/lib DESTINATION lib/rocrtst )
 
 include ( CPack )
