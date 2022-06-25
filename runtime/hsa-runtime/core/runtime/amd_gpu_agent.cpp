@@ -67,9 +67,15 @@
 
 #include "core/inc/amd_trap_handler_v1.h"
 #include "core/inc/amd_blit_shaders.h"
-
 // Generated header
 #include "amd_trap_handler_v2.h"
+
+#if defined(__linux__)
+// libdrm headers
+#include <xf86drm.h>
+#include <amdgpu.h>
+#endif
+
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -157,6 +163,31 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
     max_queues_ = 128;
   }
   max_queues_ = std::min(128U, max_queues_);
+#endif
+
+#if !defined(__linux__)
+  wallclock_frequency_ = 0;
+#else
+  // Get wallclock freq from libdrm.
+  int drm_fd = drmOpenRender(node_props.DrmRenderMinor);
+  if (drm_fd < 0)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm open failed.\n");
+  MAKE_SCOPE_GUARD([&]() { drmClose(drm_fd); });
+
+  amdgpu_device_handle device_handle;
+  uint32_t major_version;
+  uint32_t minor_version;
+  if (amdgpu_device_initialize(drm_fd, &major_version, &minor_version, &device_handle) < 0) {
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm error.\n");
+  }
+  MAKE_SCOPE_GUARD([&]() { amdgpu_device_deinitialize(device_handle); });
+
+  amdgpu_gpu_info info;
+  if (amdgpu_query_gpu_info(device_handle, &info) < 0)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
+
+  // Reported by libdrm in KHz.
+  wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
 #endif
 
   // Populate region list.
@@ -1047,6 +1078,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint64_t*)value) = availableBytes;
       break;
     }
+    case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
+      *((uint64_t*)value) = wallclock_frequency_;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

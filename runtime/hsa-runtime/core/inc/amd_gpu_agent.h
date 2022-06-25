@@ -450,6 +450,9 @@ class GpuAgent : public GpuAgentInt {
 
   double historical_clock_ratio_;
 
+  // @brief s_memrealtime nominal clock frequency
+  uint64_t wallclock_frequency_;
+
   // @brief Array of GPU cache property.
   std::vector<HsaCacheProperties> cache_props_;
 
