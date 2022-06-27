@@ -408,17 +408,20 @@ configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Bi
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY )
 set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
 
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr" )
+# package dependencies
+set( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1")
+set( CPACK_DEBIAN_BINARY_PACKAGE_RECOMMENDS "libdrm-amdgpu-amdgpu1")
+set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr, hsakmt-roct-dev" )
 if ( ROCM_DEP_ROCMCORE )
   string ( APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
-  string ( APPEND CPACK_DEBIAN_DEV_PACKAGE_DEPENDS ", rocm-core" )
 endif()
+# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 
 # RPM package specific variables
+set ( EL7_DISTRO "FALSE" )
+checksetel7(EL7_DISTRO)
 set ( CPACK_RPM_BINARY_PACKAGE_NAME "hsa-rocr" )
 set ( CPACK_RPM_DEV_PACKAGE_NAME "hsa-rocr-devel" )
 if ( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
@@ -438,13 +441,18 @@ configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/p
 set ( CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post" )
 set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun" )
 
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "hsakmt-roct" )
-set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr" )
+# package dependencies
+if (${EL7_DISTRO} STREQUAL "TRUE")
+  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "libdrm-amdgpu, numactl-libs" )
+else()
+  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs)" )
+  set ( CPACK_RPM_BINARY_PACKAGE_SUGGESTS "libdrm-amdgpu" )
+endif()
+set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr , hsakmt-roct-devel" )
 if ( ROCM_DEP_ROCMCORE )
   string ( APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocm-core" )
-  string ( APPEND CPACK_RPM_DEV_PACKAGE_REQUIRES " rocm-core" )
 endif()
+# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 
