@@ -479,6 +479,10 @@ namespace code {
         *major = 4;
         *minor = 0;
         return true;
+      case ELF::ELFABIVERSION_AMDGPU_HSA_V5:
+        *major = 5;
+        *minor = 0;
+        return true;
       }
 
       return false;
@@ -724,7 +728,7 @@ namespace code {
             target_name += ":xnack+";
           else if (xnack_supported)
             target_name += ":xnack-";
-        } else if (code_object_major_version == 4) {
+        } else if (code_object_major_version == 4 || code_object_major_version == 5) {
           switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_SRAMECC_V4) {
           case ELF::EF_AMDGPU_FEATURE_SRAMECC_OFF_V4:
             target_name += ":sramecc-";

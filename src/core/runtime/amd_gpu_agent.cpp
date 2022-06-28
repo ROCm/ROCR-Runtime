@@ -1015,6 +1015,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
       assert(regions_.size() != 0 && "No device local memory found!");
       *((bool*)value) = properties_.Capability.ui32.CoherentHostAccess == 1;
+      break;
     case HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT:
       if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
           (isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
