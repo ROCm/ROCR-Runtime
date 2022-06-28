@@ -160,7 +160,7 @@ get_os_info()
 find_package(PkgConfig)
 # Check for libraries required for building
 find_library(LIBC NAMES libc.so.6 REQUIRED)
-find_library(NUMA NAMES libnuma.so REQUIRED)
+find_library(NUMA NAMES numa REQUIRED)
 message(STATUS "LIBC:" ${LIBC})
 message(STATUS "NUMA:" ${NUMA})
 
@@ -183,7 +183,7 @@ endif()
 include_directories(${DRM_INCLUDE_DIRS})
 
 target_link_libraries ( ${HSAKMT_TARGET}
-  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt ${LIBC} ${NUMA}
+  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt ${LIBC} numa
 )
 
 target_compile_options(${HSAKMT_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
