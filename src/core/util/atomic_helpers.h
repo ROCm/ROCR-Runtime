@@ -56,7 +56,7 @@
 #define ALWAYS_CONSERVATIVE 0
 
 #if !ALWAYS_CONSERVATIVE
-#ifdef __x86_64
+#if defined(__x86_64__) || defined(_M_X64)
 #define X64_ORDER_WC 1
 #endif
 #if X64_ORDER_WC
