@@ -833,6 +833,9 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
  * a multiple of 32 or @p num_cu_mask_count is not 0 and cu_mask is NULL.
+ * Devices with work group processors must even-index contiguous pairwise
+ * CU enable e.g. 0x33(b'110011) is valid while 0x5(0x101) and 0x6(b'0110)
+ * are invalid.
  *
  */
 hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
