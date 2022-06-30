@@ -1116,6 +1116,15 @@ hsa_status_t AqlQueue::SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* 
   // Apply mask if non-default or not queue initialization.
   ScopedAcquire<KernelMutex> lock(&mask_lock_);
   if ((!cu_mask_.empty()) || (num_cu_mask_count != 0) || (!global_mask.empty())) {
+
+    // Devices with WGPs must conform to even-indexed contiguous pairwise CU enablement.
+    if (agent_->isa()->GetMajorVersion() >= 10) {
+      for (int i = 0; i < mask.size() * 32; i += 2) {
+        uint32_t cu_pair = (mask[i / 32] >> (i % 32)) & 0x3;
+        if (cu_pair && cu_pair != 0x3) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      }
+    }
+
     HSAKMT_STATUS ret =
         hsaKmtSetQueueCUMask(queue_id_, mask.size() * 32, reinterpret_cast<HSAuint32*>(&mask[0]));
     if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
