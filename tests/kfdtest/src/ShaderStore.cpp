@@ -386,7 +386,6 @@ const char *LoopIsa = R"(
         s_mov_b32     s11, s7
         s_cmp_le_i32  s1, s0
         s_cbranch_scc1  END_OF_PGM
-        s_buffer_load_dwordx8  s[8:15], s[8:11], 0x10
         v_add_f32     v0, 2.0, v0
         v_cvt_f32_i32 v17, s1
         s_waitcnt     lgkmcnt(0)
