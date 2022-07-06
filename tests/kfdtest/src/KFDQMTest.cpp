@@ -1034,7 +1034,7 @@ TEST_F(KFDQMTest, EmptyDispatch) {
 
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(LoopIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(NoopIsa, isaBuffer.As<char*>()));
 
     SyncDispatch(isaBuffer, NULL, NULL);
 
