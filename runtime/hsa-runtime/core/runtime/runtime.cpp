@@ -487,20 +487,15 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
     return block.agentOwner;
   };
 
+  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
   // Lookup owning agent if blit kernel is selected or if flag override is set.
   if ((dst_agent == src_agent) || flag().discover_copy_agents()) {
     dst_agent = lookupAgent(dst_agent, dst);
     src_agent = lookupAgent(src_agent, src);
   }
-  if (dst_agent == nullptr || src_agent == nullptr) return HSA_STATUS_ERROR_INVALID_AGENT;
-
-  // At least one agent must be available for operation in the current process.
-  if (!dst_agent->Enabled() && !src_agent->Enabled()) return HSA_STATUS_ERROR_INVALID_AGENT;
-
-  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
-  if (!copy_agent->Enabled()) copy_agent = (copy_agent == src_agent) ? dst_agent : src_agent;
   return copy_agent->DmaCopy(dst, *dst_agent, src, *src_agent, size, dep_signals,
                              completion_signal);
 }

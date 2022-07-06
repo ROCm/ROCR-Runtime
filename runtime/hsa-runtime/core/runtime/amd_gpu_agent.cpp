@@ -1609,8 +1609,10 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
           (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
          ("Both devices are CPU agents which is not expected"));
 
-  // Determine if Src and Dst devices are same
-  if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle)) {
+  // Determine if Src and Dst devices are same and are the copying device
+  // Such a copy is in the device local memory, which can only be saturated by a blit kernel.
+  if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle) &&
+      (dst_agent.public_handle().handle == public_handle_.handle)) {
     // If the copy is very small then cache flush overheads can dominate.
     // Choose a (potentially) SDMA enabled engine to avoid cache flushing.
     if (size < core::Runtime::runtime_singleton_->flag().force_sdma_size()) {
