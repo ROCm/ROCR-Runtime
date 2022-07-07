@@ -1826,6 +1826,14 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
           clear_flags |= HSA_SVM_FLAG_GPU_READ_MOSTLY;
         break;
       }
+      case HSA_AMD_SVM_ATTRIB_GPU_EXEC: {
+        Check(attrib);
+        if (value)
+          set_flags |= HSA_SVM_FLAG_GPU_EXEC;
+        else
+          clear_flags |= HSA_SVM_FLAG_GPU_EXEC;
+        break;
+      }
       case HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE: {
         Agent* agent = Convert(value);
         ConfirmNew(agent);
