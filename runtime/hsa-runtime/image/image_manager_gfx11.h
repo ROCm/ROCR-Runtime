@@ -44,6 +44,7 @@
 #define EXT_IMAGE_IMAGE_MANAGER_GFX11_H_
 
 #include "addrlib/inc/addrinterface.h"
+#include "image_lut_gfx11.h"
 #include "image_manager_kv.h"
 
 namespace rocr {
@@ -88,8 +89,10 @@ class ImageManagerGfx11 : public ImageManagerKv {
                              ADDR2_COMPUTE_SURFACE_INFO_OUTPUT& out) const;
 
   bool IsLocalMemory(const void* address) const;
+  virtual const ImageLutGfx11& ImageLut() const { return image_lut_gfx11; };
 
  private:
+  ImageLutGfx11 image_lut_gfx11;
   DISALLOW_COPY_AND_ASSIGN(ImageManagerGfx11);
 };
 

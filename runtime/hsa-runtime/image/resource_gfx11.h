@@ -809,20 +809,21 @@ TEX_BC_Swizzle_ZYXW = 0x00000004,
 TEX_BC_Swizzle_YXWZ = 0x00000005,
 } TEX_BC_SWIZZLE;
 
-typedef struct metadata_amd_nv_s {
-    uint32_t version;  // Must be 1
-    uint32_t vendorID;  // AMD
-    SQ_IMG_RSRC_WORD0 word0;
-    SQ_IMG_RSRC_WORD1 word1;
-    SQ_IMG_RSRC_WORD2 word2;
-    SQ_IMG_RSRC_WORD3 word3;
-    SQ_IMG_RSRC_WORD4 word4;
-    SQ_IMG_RSRC_WORD5 word5;
-    SQ_IMG_RSRC_WORD6 word6;
-    SQ_IMG_RSRC_WORD7 word7;
-    uint32_t mip_offsets[0];
-} metadata_amd_nv_t;
+typedef struct metadata_amd_gfx11_s {
+  uint32_t version;   // Must be 1
+  uint32_t vendorID;  // AMD
+  SQ_IMG_RSRC_WORD0 word0;
+  SQ_IMG_RSRC_WORD1 word1;
+  SQ_IMG_RSRC_WORD2 word2;
+  SQ_IMG_RSRC_WORD3 word3;
+  SQ_IMG_RSRC_WORD4 word4;
+  SQ_IMG_RSRC_WORD5 word5;
+  SQ_IMG_RSRC_WORD6 word6;
+  SQ_IMG_RSRC_WORD7 word7;
+  uint32_t mip_offsets[0];
+} metadata_amd_gfx11_t;
 
 }  // namespace image
 }  // namespace rocr
 #endif  // EXT_IMAGE_RESOURCE_GFX11_H_
+
