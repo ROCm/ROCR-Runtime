@@ -2280,6 +2280,9 @@ typedef enum hsa_amd_svm_attribute_s {
   // range will be read operations.
   // Type of this attribute is bool.
   HSA_AMD_SVM_ATTRIB_READ_MOSTLY = 6,
+  // Allows the execution on GPU.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_GPU_EXEC = 7,
   // This attribute can not be used in ::hsa_amd_svm_attributes_get.
   // Enables an agent for access to the range.  Access may incur a page fault
   // and associated memory migration.  Either this or
