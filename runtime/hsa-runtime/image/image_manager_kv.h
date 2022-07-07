@@ -141,7 +141,7 @@ class ImageManagerKv : public ImageManager {
 
   BlitQueue& BlitQueueInit();
 
-  ImageLutKv image_lut_;
+  virtual const ImageLutKv& ImageLut() const { return image_lut_; };
 
   ADDR_HANDLE addr_lib_;
 
@@ -162,6 +162,7 @@ class ImageManagerKv : public ImageManager {
   std::mutex lock_;
 
  private:
+  ImageLutKv image_lut_;
   DISALLOW_COPY_AND_ASSIGN(ImageManagerKv);
 };
 

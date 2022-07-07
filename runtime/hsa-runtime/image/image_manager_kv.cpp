@@ -181,7 +181,7 @@ void ImageManagerKv::Cleanup() {
 ImageProperty ImageManagerKv::GetImageProperty(
     hsa_agent_t component, const hsa_ext_image_format_t& format,
     hsa_ext_image_geometry_t geometry) const {
-  return image_lut_.MapFormat(format, geometry);
+  return ImageLut().MapFormat(format, geometry);
 }
 
 void ImageManagerKv::GetImageInfoMaxDimension(hsa_agent_t component,
@@ -189,10 +189,10 @@ void ImageManagerKv::GetImageInfoMaxDimension(hsa_agent_t component,
                                               uint32_t& width, uint32_t& height,
                                               uint32_t& depth,
                                               uint32_t& array_size) const {
-  width = image_lut_.GetMaxWidth(geometry);
-  height = image_lut_.GetMaxHeight(geometry);
-  depth = image_lut_.GetMaxDepth(geometry);
-  array_size = image_lut_.GetMaxArraySize(geometry);
+  width = ImageLut().GetMaxWidth(geometry);
+  height = ImageLut().GetMaxHeight(geometry);
+  depth = ImageLut().GetMaxDepth(geometry);
+  array_size = ImageLut().GetMaxArraySize(geometry);
 }
 
 hsa_status_t ImageManagerKv::CalculateImageSizeAndAlignment(
@@ -258,16 +258,17 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image, const metadata_amd_t
   uint32_t mtype = mtype_;
   const void* image_data_addr = image.data;
 
-  ImageProperty image_prop = image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   if((image_prop.cap == HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED) ||
      (image_prop.element_size == 0))
     return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
-  uint32_t hwPixelSize = image_lut_.GetPixelSize(desc->word1.bitfields.data_format, desc->word1.bitfields.num_format);
+  uint32_t hwPixelSize =
+      ImageLut().GetPixelSize(desc->word1.bitfields.data_format, desc->word1.bitfields.num_format);
   if(image_prop.element_size!=hwPixelSize)
     return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
-  const Swizzle swizzle = image_lut_.MapSwizzle(image.desc.format.channel_order);
+  const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
 
   if (IsLocalMemory(image.data)) {
     atc_access = false;
@@ -310,8 +311,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image, const metadata_amd_t
 }
 
 hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
@@ -345,8 +345,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     word2.bits.num_records = (major_ver < 8) ?
                 image.desc.width : image.desc.width * image_prop.element_size;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.u32_all = 0;
     word3.bits.dst_sel_x = swizzle.x;
     word3.bits.dst_sel_y = swizzle.y;
@@ -356,7 +355,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     word3.bits.data_format = image_prop.data_format;
     word3.bits.atc = atc_access;
     word3.bits.element_size = image_prop.element_size;
-    word3.bits.type = image_lut_.MapGeometry(image.desc.geometry);
+    word3.bits.type = ImageLut().MapGeometry(image.desc.geometry);
     word3.bits.mtype = mtype;
 
     image.srd[0] = word0.u32_all;
@@ -401,8 +400,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     word2.bits.perf_mod = 0;
     word2.bits.interlaced = 0;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.u32_all = 0;
     word3.bits.dst_sel_x = swizzle.x;
     word3.bits.dst_sel_y = swizzle.y;
@@ -410,7 +408,7 @@ hsa_status_t ImageManagerKv::PopulateImageSrd(Image& image) const {
     word3.bits.dst_sel_w = swizzle.w;
     word3.bits.tiling_index = out.tileIndex;
     word3.bits.pow2_pad = (IsPowerOfTwo(row_pitch_size) && IsPowerOfTwo(image.desc.height)) ? 1 : 0;
-    word3.bits.type = image_lut_.MapGeometry(image.desc.geometry);
+    word3.bits.type = ImageLut().MapGeometry(image.desc.geometry);
     word3.bits.atc = atc_access;
 
     const bool image_array =
@@ -459,14 +457,12 @@ hsa_status_t ImageManagerKv::ModifyImageSrd(
     Image& image, hsa_ext_image_format_t& new_format) const {
   image.desc.format = new_format;
 
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_BUF_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_BUF_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.dst_sel_x = swizzle.x;
@@ -481,8 +477,7 @@ hsa_status_t ImageManagerKv::ModifyImageSrd(
     word1->bits.data_format = image_prop.data_format;
     word1->bits.num_format = image_prop.data_type;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_IMG_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_IMG_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.dst_sel_x = swizzle.x;

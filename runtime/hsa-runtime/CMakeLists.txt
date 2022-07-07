@@ -238,6 +238,7 @@ if(${IMAGE_SUPPORT})
                    image/image_manager_nv.cpp
                    image/image_manager_gfx11.cpp
                    image/image_lut_kv.cpp
+                   image/image_lut_gfx11.cpp
                    image/blit_object_gfx7xx.cpp
                    image/blit_object_gfx8xx.cpp
                    image/blit_object_gfx9xx.cpp
