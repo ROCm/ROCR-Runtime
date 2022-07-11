@@ -138,10 +138,11 @@ void Dispatch::BuildIb() {
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__EXCP_EN_MSB__SHIFT)
             & COMPUTE_PGM_RSRC2__EXCP_EN_MSB_MASK;
 
+    const bool priv = (m_FamilyId == FAMILY_GFX11);
     const unsigned int COMPUTE_PGM_RSRC[] = {
-        // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0 PRIV: 0
-        // DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
-        0x000c0084 | ((m_SpiPriority & 3) << 10),
+        // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0
+        // PRIV: 0 (1 for GFX11) DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
+        0x000c0084 | ((m_SpiPriority & 3) << 10) | (priv << 20),
         pgmRsrc2
     };
 
