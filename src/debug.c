@@ -346,8 +346,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeDisable(void)
 	if (result)
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	if (kMajor != HSA_RUNTIME_ENABLE_MIN_MAJOR ||
-				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR)
+	if (kMajor < HSA_RUNTIME_ENABLE_MIN_MAJOR || kMajor > HSA_RUNTIME_ENABLE_MAX_MAJOR ||
+			(kMajor == HSA_RUNTIME_ENABLE_MIN_MAJOR &&
+				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
 	memset(&args, 0x00, sizeof(args));
