@@ -117,14 +117,11 @@ BLACKLIST_GFX10_NV2X=\
 # GFX11 still undergoing debug. Ticket links:
 # KFDMemoryTest.FlatScratchAccess           - SWDEV-329877
 # KFDEvictTest.QueueTest                    - SWDEV-325064
-# KFDQMTest.QueuePriorityOn*/EmptyDispatch  - SWDEV-340963
 # KFDQMTest.MultipleCpQueuesStressDispatch  - SWDEV-340965
 # KFDExceptionTest.*                        - SWDEV-340972
 TEMPORARY_BLACKLIST_GFX11=\
 "KFDQMTest.CreateAqlCpQueue:"\
-"KFDQMTest.QueuePriorityOn*:"\
 "KFDQMTest.MultipleCpQueuesStressDispatch:"\
-"KFDQMTest.EmptyDispatch:"\
 "KFDCWSRTest.InterruptRestore:"\
 "KFDExceptionTest.*:"\
 "KFDEvictTest.QueueTest:"\
