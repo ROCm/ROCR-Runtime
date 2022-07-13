@@ -1445,6 +1445,7 @@ unsigned int ReadSMIEventThread(void* p) {
     EXPECT_EQ(pid, getpid());
     EXPECT_EQ(trigger, HSA_MIGRATE_TRIGGER_PREFETCH);
     close(fd);
+    return 0;
 }
 
 TEST_F(KFDSVMRangeTest, HMMProfilingEvent) {
