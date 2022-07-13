@@ -2234,7 +2234,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 	for (i = 0; i < NumNodes; i++) {
 		memset(&props, 0, sizeof(props));
-		ret = topology_sysfs_get_node_props(i, &props, NULL, NULL);
+		ret = topology_get_node_props(i, &props);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto sysfs_parse_failed;
 

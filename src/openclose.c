@@ -179,14 +179,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto topology_sysfs_failed;
 
-		result = fmm_init_process_apertures(sys_props.NumNodes);
-		if (result != HSAKMT_STATUS_SUCCESS)
-			goto init_process_aperture_failed;
-
-		result = init_process_doorbells(sys_props.NumNodes);
-		if (result != HSAKMT_STATUS_SUCCESS)
-			goto init_doorbell_failed;
-
 		kfd_open_count = 1;
 
 		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
@@ -212,10 +204,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 
 	pthread_mutex_unlock(&hsakmt_mutex);
 	return result;
-
-init_doorbell_failed:
-	fmm_destroy_process_apertures();
-init_process_aperture_failed:
 topology_sysfs_failed:
 kfd_version_failed:
 	close(fd);
@@ -235,8 +223,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCloseKFD(void)
 		if (--kfd_open_count == 0) {
 			destroy_counter_props();
 			destroy_device_debugging_memory();
-			destroy_process_doorbells();
-			fmm_destroy_process_apertures();
 			if (kfd_fd) {
 				close(kfd_fd);
 				kfd_fd = 0;
