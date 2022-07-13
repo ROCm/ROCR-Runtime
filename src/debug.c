@@ -297,24 +297,31 @@ hsaKmtGetKernelDebugTrapVersionInfo(
 }
 
 #define HSA_RUNTIME_ENABLE_MIN_MAJOR	10
-#define HSA_RUNTIME_ENABLE_MAX_MAJOR	11
+#define HSA_RUNTIME_ENABLE_MAX_MAJOR	13
 #define HSA_RUNTIME_ENABLE_MIN_MINOR	0
-HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
-					    bool setupTtmp)
-{
-	struct kfd_ioctl_dbg_trap_args args = {0};
+
+static HSAKMT_STATUS checkRuntimeDebugSupport(void) {
 	HSAuint32 kMajor, kMinor;
-	HSAKMT_STATUS result;
 
-	result = hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor);
-
-	if (result)
+	if (hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
 	if (kMajor < HSA_RUNTIME_ENABLE_MIN_MAJOR || kMajor > HSA_RUNTIME_ENABLE_MAX_MAJOR ||
 			(kMajor == HSA_RUNTIME_ENABLE_MIN_MAJOR &&
 				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
+					    bool setupTtmp)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+	HSAKMT_STATUS result = checkRuntimeDebugSupport();
+
+	if (result)
+		return result;
 
 	memset(&args, 0x00, sizeof(args));
 	args.op = KFD_IOC_DBG_TRAP_RUNTIME_ENABLE;
@@ -338,18 +345,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeDisable(void)
 {
 	struct kfd_ioctl_dbg_trap_args args = {0};
-	HSAuint32 kMajor, kMinor;
-	HSAKMT_STATUS result;
-
-	result = hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor);
+	HSAKMT_STATUS result = checkRuntimeDebugSupport();
 
 	if (result)
-		return HSAKMT_STATUS_NOT_SUPPORTED;
-
-	if (kMajor < HSA_RUNTIME_ENABLE_MIN_MAJOR || kMajor > HSA_RUNTIME_ENABLE_MAX_MAJOR ||
-			(kMajor == HSA_RUNTIME_ENABLE_MIN_MAJOR &&
-				(int)kMinor < HSA_RUNTIME_ENABLE_MIN_MINOR))
-		return HSAKMT_STATUS_NOT_SUPPORTED;
+		return result;
 
 	memset(&args, 0x00, sizeof(args));
 	args.op = KFD_IOC_DBG_TRAP_RUNTIME_ENABLE;
