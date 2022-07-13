@@ -87,7 +87,7 @@ static const char *supported_processor_vendor_name[] = {
 };
 
 static HSAKMT_STATUS topology_take_snapshot(void);
-static HSAKMT_STATUS topology_drop_snapshot(void);
+static void topology_drop_snapshot(void);
 
 static const struct hsa_gfxip_table gfxip_lookup_table[] = {
 	/* Kaveri Family */
@@ -1034,10 +1034,10 @@ static int topology_get_marketing_name(int minor, uint16_t *marketing_name)
 	return 0;
 }
 
-HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
-					    HsaNodeProperties *props,
-					    bool *p2p_links,
-					    uint32_t *num_p2pLinks)
+static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
+						   HsaNodeProperties *props,
+						   bool *p2p_links,
+						   uint32_t *num_p2pLinks)
 {
 	FILE *fd;
 	char *read_buf, *p, *envvar, dummy;
@@ -2066,15 +2066,10 @@ err:
 }
 
 /* Drop the Snashot of the HSA topology information. Assume lock is held. */
-HSAKMT_STATUS topology_drop_snapshot(void)
+void topology_drop_snapshot(void)
 {
-	HSAKMT_STATUS err;
-
-	if (!!g_system != !!g_props) {
+	if (!!g_system != !!g_props)
 		pr_warn("Probably inconsistency?\n");
-		err = HSAKMT_STATUS_SUCCESS;
-		goto out;
-	}
 
 	if (g_props) {
 		/* Remove state */
@@ -2090,11 +2085,6 @@ HSAKMT_STATUS topology_drop_snapshot(void)
 		map_user_to_sysfs_node_id = NULL;
 		map_user_to_sysfs_node_id_size = 0;
 	}
-
-	err = HSAKMT_STATUS_SUCCESS;
-
-out:
-	return err;
 }
 
 HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
@@ -2124,7 +2114,7 @@ HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *SystemProperties)
 {
-	HSAKMT_STATUS err;
+	HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
 
 	CHECK_KFD_OPEN();
 
@@ -2133,14 +2123,36 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *Syste
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
+	/* We already have a valid snapshot. Avoid double initialization that
+	 * would leak memory.
+	 */
+	if (g_system) {
+		*SystemProperties = *g_system;
+		goto out;
+	}
+
 	err = topology_take_snapshot();
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
 	assert(g_system);
 
+	err = fmm_init_process_apertures(g_system->NumNodes);
+	if (err != HSAKMT_STATUS_SUCCESS)
+		goto init_process_apertures_failed;
+
+	err = init_process_doorbells(g_system->NumNodes);
+	if (err != HSAKMT_STATUS_SUCCESS)
+		goto init_doorbells_failed;
+
 	*SystemProperties = *g_system;
-	err = HSAKMT_STATUS_SUCCESS;
+
+	goto out;
+
+init_doorbells_failed:
+	fmm_destroy_process_apertures();
+init_process_apertures_failed:
+	topology_drop_snapshot();
 
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);
@@ -2149,15 +2161,25 @@ out:
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtReleaseSystemProperties(void)
 {
-	HSAKMT_STATUS err;
-
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	err = topology_drop_snapshot();
+	destroy_process_doorbells();
+	fmm_destroy_process_apertures();
+	topology_drop_snapshot();
 
 	pthread_mutex_unlock(&hsakmt_mutex);
 
-	return err;
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS topology_get_node_props(HSAuint32 NodeId,
+				      HsaNodeProperties *NodeProperties)
+{
+	if (!g_system || !g_props || NodeId >= g_system->NumNodes)
+		return HSAKMT_STATUS_ERROR;
+
+	*NodeProperties = g_props[NodeId].node;
+	return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
@@ -2176,7 +2198,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
-	*NodeProperties = g_props[NodeId].node;
+	err = topology_get_node_props(NodeId, NodeProperties);
+	if (err != HSAKMT_STATUS_SUCCESS)
+		goto out;
 	/* For CPU only node don't add any additional GPU memory banks. */
 	if (gpu_id) {
 		uint64_t base, limit;
@@ -2188,7 +2212,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 				&limit) == HSAKMT_STATUS_SUCCESS)
 			NodeProperties->NumMemoryBanks += 1;
 	}
-	err = HSAKMT_STATUS_SUCCESS;
 
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);

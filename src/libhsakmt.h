@@ -172,9 +172,9 @@ int get_drm_render_fd_by_gpu_id(HSAuint32 gpu_id);
 HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray);
 
-HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id, HsaNodeProperties *props,
-					bool *p2p_links, uint32_t *num_p2pLinks);
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
+HSAKMT_STATUS topology_get_node_props(HSAuint32 NodeId,
+				      HsaNodeProperties *NodeProperties);
 void topology_setup_is_dgpu_param(HsaNodeProperties *props);
 bool topology_is_svm_needed(HSA_ENGINE_ID EngineId);
 
