@@ -184,11 +184,8 @@ TEST_F(KFDExceptionTest, AddressFault) {
 
     m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        m_ChildStatus = hsaKmtOpenKFD();
-        if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-            WARN() << "KFD open failed in child process" << std::endl;
-            return;
-        }
+        KFDBaseComponentTest::TearDown();
+        KFDBaseComponentTest::SetUp();
 
         HsaMemoryBuffer srcBuffer(PAGE_SIZE, defaultGPUNode, false);
 
@@ -228,11 +225,8 @@ TEST_F(KFDExceptionTest, PermissionFault) {
 
     m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        m_ChildStatus = hsaKmtOpenKFD();
-        if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-            WARN() << "KFD open failed in child process" << std::endl;
-            return;
-        }
+        KFDBaseComponentTest::TearDown();
+        KFDBaseComponentTest::SetUp();
 
         HsaMemoryBuffer readOnlyBuffer(PAGE_SIZE, defaultGPUNode, false /*zero*/,
                                        false /*isLocal*/, true /*isExec*/,
@@ -278,11 +272,8 @@ TEST_F(KFDExceptionTest, FaultStorm) {
 
     m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        m_ChildStatus = hsaKmtOpenKFD();
-        if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-            WARN() << "KFD open failed in child process" << std::endl;
-            return;
-        }
+        KFDBaseComponentTest::TearDown();
+        KFDBaseComponentTest::SetUp();
 
         TestMemoryException(defaultGPUNode, 0x12345678, 0x76543210, 1024, 1024, 1);
     } else {
@@ -321,11 +312,10 @@ TEST_F(KFDExceptionTest, SdmaQueueException) {
     if (m_ChildPid == 0) {
 	unsigned int* pDb = NULL;
 	unsigned int *nullPtr = NULL;
-        m_ChildStatus = hsaKmtOpenKFD();
-        if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-            WARN() << "KFD open failed in child process" << std::endl;
-            return;
-        }
+
+        KFDBaseComponentTest::TearDown();
+        KFDBaseComponentTest::SetUp();
+
 	m_MemoryFlags.ui32.NonPaged = 1;
 	ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, m_MemoryFlags,
 				reinterpret_cast<void**>(&pDb)));

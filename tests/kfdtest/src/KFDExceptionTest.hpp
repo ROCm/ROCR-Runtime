@@ -42,8 +42,11 @@ class KFDExceptionTest : public KFDBaseComponentTest {
          * child process finishes, gtest assumes the test has finished and
          * starts the next test while the parent is still active.
          */
-        if (m_ChildPid == 0)
+        if (m_ChildPid == 0) {
+            if (!m_ChildStatus && HasFatalFailure())
+                m_ChildStatus = HSAKMT_STATUS_ERROR;
             exit(m_ChildStatus);
+        }
     }
 
  protected:

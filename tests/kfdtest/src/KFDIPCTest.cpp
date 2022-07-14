@@ -70,8 +70,8 @@ void KFDIPCTest::BasicTestChildProcess(int defaultGPUNode, int *pipefd, HsaMemFl
     /* Open KFD device for child process. This needs to called before
      * any memory definitions
      */
-    if (HSAKMT_STATUS_SUCCESS != hsaKmtOpenKFD())
-        exit(1);
+    TearDown();
+    SetUp();
 
     SDMAQueue sdmaQueue;
     HsaSharedMemoryHandle sharedHandleLM;
@@ -635,7 +635,10 @@ TEST_F(KFDIPCTest, CrossMemoryAttachTest) {
 
     /* Create a child process and share the above Local Memory with it */
     m_ChildPid = fork();
-    if (m_ChildPid == 0 && hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS) {
+    if (m_ChildPid == 0) {
+        TearDown();
+        SetUp();
+
         /* Child Process */
         status = CrossMemoryAttachChildProcess(defaultGPUNode, pipeCtoP[1],
             pipePtoC[0], CMA_READ_TEST);
