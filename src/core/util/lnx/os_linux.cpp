@@ -104,25 +104,38 @@ class os_thread {
     for(int i=0; i<cores; i++){
       CPU_SET(i, cpuset);
     }
-    int err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
+    int err;
+#ifdef __GLIBC__
+    err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
     assert(err == 0 && "pthread_attr_setaffinity_np failed.");
     CPU_FREE(cpuset);
+#endif
 
-    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    int create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+#ifndef __GLIBC__
+    err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
+    assert(err == 0 && "pthread_setaffinity_np failed.");
+    CPU_FREE(cpuset);
+#endif
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
     // Attempt to grow the stack within reason.
-    if ((err == EINVAL) && stackSize != 0) {
+    if ((create_err == EINVAL) && stackSize != 0) {
       while (stackSize < 20 * 1024 * 1024) {
         stackSize *= 2;
         pthread_attr_setstacksize(&attrib, stackSize);
-        err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
-        if (err != EINVAL) break;
+        create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+#ifndef __GLIBC__
+        err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
+        assert(err == 0 && "pthread_setaffinity_np failed.");
+        CPU_FREE(cpuset);
+#endif
+        if (create_err != EINVAL) break;
       }
     }
 
     pthread_attr_destroy(&attrib);
-    if (err == 0)
+    if (create_err == 0)
       args.release();
     else
       thread = 0;
