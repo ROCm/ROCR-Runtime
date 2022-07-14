@@ -2339,12 +2339,24 @@ out:
 	return err;
 }
 
+HSAKMT_STATUS topology_get_iolink_props(HSAuint32 NodeId,
+					HSAuint32 NumIoLinks,
+					HsaIoLinkProperties *IoLinkProperties)
+{
+	if (!g_system || !g_props || NodeId >= g_system->NumNodes)
+		return HSAKMT_STATUS_ERROR;
+
+	memcpy(IoLinkProperties, g_props[NodeId].link,
+	       NumIoLinks * sizeof(*IoLinkProperties));
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 						      HSAuint32 NumIoLinks,
 						      HsaIoLinkProperties *IoLinkProperties)
 {
 	HSAKMT_STATUS err;
-	uint32_t i;
 
 	if (!IoLinkProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -2364,12 +2376,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 		goto out;
 	}
 
-	for (i = 0; i < MIN(g_props[NodeId].node.NumIOLinks, NumIoLinks); i++) {
-		assert(g_props[NodeId].link);
-		IoLinkProperties[i] = g_props[NodeId].link[i];
-	}
-
-	err = HSAKMT_STATUS_SUCCESS;
+	assert(g_props[NodeId].link);
+	err = topology_get_iolink_props(NodeId, NumIoLinks, IoLinkProperties);
 
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);

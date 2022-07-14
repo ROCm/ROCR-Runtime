@@ -175,6 +175,9 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props);
 HSAKMT_STATUS topology_get_node_props(HSAuint32 NodeId,
 				      HsaNodeProperties *NodeProperties);
+HSAKMT_STATUS topology_get_iolink_props(HSAuint32 NodeId,
+					HSAuint32 NumIoLinks,
+					HsaIoLinkProperties *IoLinkProperties);
 void topology_setup_is_dgpu_param(HsaNodeProperties *props);
 bool topology_is_svm_needed(HSA_ENGINE_ID EngineId);
 

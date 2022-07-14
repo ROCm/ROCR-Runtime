@@ -36,6 +36,7 @@
 #include <sys/mman.h>
 #include <sys/time.h>
 #include <errno.h>
+#include <assert.h>
 
 #include <numa.h>
 #include <numaif.h>
@@ -184,6 +185,8 @@ typedef struct {
 						 */
 	manageable_aperture_t gpuvm_aperture;   /* used for GPUVM on APU, outsidethe canonical address range */
 	int drm_render_fd;
+	uint32_t usable_peer_id_num;
+	uint32_t *usable_peer_id_array;
 } gpu_mem_t;
 
 enum svm_aperture_type {
@@ -827,6 +830,17 @@ static int32_t gpu_mem_find_by_gpu_id(uint32_t gpu_id)
 
 	for (i = 0 ; i < gpu_mem_count ; i++)
 		if (gpu_mem[i].gpu_id == gpu_id)
+			return i;
+
+	return -1;
+}
+
+static int32_t gpu_mem_find_by_node_id(uint32_t node_id)
+{
+	uint32_t i;
+
+	for (i = 0 ; i < gpu_mem_count ; i++)
+		if (gpu_mem[i].node_id == node_id)
 			return i;
 
 	return -1;
@@ -2170,7 +2184,6 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i;
 	int32_t gpu_mem_id = 0;
-	HsaNodeProperties props;
 	struct kfd_process_device_apertures *process_apertures;
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -2233,10 +2246,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	is_dgpu = false;
 
 	for (i = 0; i < NumNodes; i++) {
-		memset(&props, 0, sizeof(props));
+		HsaNodeProperties props;
+
 		ret = topology_get_node_props(i, &props);
 		if (ret != HSAKMT_STATUS_SUCCESS)
-			goto sysfs_parse_failed;
+			goto gpu_mem_init_failed;
 
 		topology_setup_is_dgpu_param(&props);
 
@@ -2245,8 +2259,17 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			int fd = open_drm_render_device(props.DrmRenderMinor);
 			if (fd <= 0) {
 				ret = HSAKMT_STATUS_ERROR;
-				goto sysfs_parse_failed;
+				goto gpu_mem_init_failed;
 			}
+
+			gpu_mem[gpu_mem_count].usable_peer_id_array =
+				calloc(NumNodes, sizeof(uint32_t));
+			if (!gpu_mem[gpu_mem_count].usable_peer_id_array) {
+				ret = HSAKMT_STATUS_NO_MEMORY;
+				goto gpu_mem_init_failed;
+			}
+			gpu_mem[gpu_mem_count].usable_peer_id_array[0] = props.KFDGpuID;
+			gpu_mem[gpu_mem_count].usable_peer_id_num = 1;
 
 			gpu_mem[gpu_mem_count].EngineId.ui32.Major = props.EngineId.ui32.Major;
 			gpu_mem[gpu_mem_count].EngineId.ui32.Minor = props.EngineId.ui32.Minor;
@@ -2311,6 +2334,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	}
 
 	for (i = 0 ; i < num_of_sysfs_nodes ; i++) {
+		HsaNodeProperties nodeProps;
+		HsaIoLinkProperties linkProps[NumNodes];
+		uint32_t nodeId;
+		uint32_t j;
+
 		/* Map Kernel process device data node i <--> gpu_mem_id which
 		 * indexes into gpu_mem[] based on gpu_id
 		 */
@@ -2320,9 +2348,36 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 
 		if (all_gpu_id_array_size == gpu_mem_count) {
 			ret = HSAKMT_STATUS_ERROR;
-			goto invalid_gpu_id;
+			goto aperture_init_failed;
 		}
 		all_gpu_id_array[all_gpu_id_array_size++] = process_apertures[i].gpu_id;
+
+		/* Add this GPU to the usable_peer_id_arrays of all GPUs that
+		 * this GPU has an IO link to. This GPU can map memory
+		 * allocated on those GPUs.
+		 */
+		nodeId = gpu_mem[gpu_mem_id].node_id;
+		ret = topology_get_node_props(nodeId, &nodeProps);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto aperture_init_failed;
+		assert(nodeProps.NumIOLinks <= NumNodes);
+		ret = topology_get_iolink_props(nodeId, nodeProps.NumIOLinks,
+						linkProps);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			goto aperture_init_failed;
+		for (j = 0; j < nodeProps.NumIOLinks; j++) {
+			int32_t to_gpu_mem_id =
+				gpu_mem_find_by_node_id(linkProps[j].NodeTo);
+			uint32_t peer;
+
+			if (to_gpu_mem_id < 0)
+				continue;
+
+			assert(gpu_mem[to_gpu_mem_id].usable_peer_id_num < NumNodes);
+			peer = gpu_mem[to_gpu_mem_id].usable_peer_id_num++;
+			gpu_mem[to_gpu_mem_id].usable_peer_id_array[peer] =
+				gpu_mem[gpu_mem_id].gpu_id;
+		}
 
 		gpu_mem[gpu_mem_id].lds_aperture.base =
 			PORT_UINT64_TO_VPTR(process_apertures[i].lds_base);
@@ -2374,7 +2429,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		ret = acquire_vm(gpu_mem[gpu_mem_id].gpu_id,
 				 gpu_mem[gpu_mem_id].drm_render_fd);
 		if (ret != HSAKMT_STATUS_SUCCESS)
-			goto acquire_vm_failed;
+			goto aperture_init_failed;
 	}
 	all_gpu_id_array_size *= sizeof(uint32_t);
 
@@ -2438,15 +2493,15 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	free(process_apertures);
 	return ret;
 
-invalid_gpu_id:
+aperture_init_failed:
 init_svm_failed:
-acquire_vm_failed:
 set_memory_policy_failed:
 	free(all_gpu_id_array);
 	all_gpu_id_array = NULL;
 get_aperture_ioctl_failed:
 	free(process_apertures);
 sysfs_parse_failed:
+gpu_mem_init_failed:
 	fmm_destroy_process_apertures();
 	return ret;
 }
@@ -2455,6 +2510,8 @@ void fmm_destroy_process_apertures(void)
 {
 	release_mmio();
 	if (gpu_mem) {
+		while (gpu_mem_count-- > 0)
+			free(gpu_mem[gpu_mem_count].usable_peer_id_array);
 		free(gpu_mem);
 		gpu_mem = NULL;
 	}
@@ -2635,8 +2692,18 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 			sizeof(uint32_t);
 	} else {
 	/* not specified, not registered: map all GPUs */
-		args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
-		args.n_devices = all_gpu_id_array_size / sizeof(uint32_t);
+		int32_t gpu_mem_id = gpu_mem_find_by_node_id(obj->node_id);
+
+		if (!obj->userptr && get_device_id_by_node_id(obj->node_id) &&
+		    gpu_mem_id >= 0) {
+			args.device_ids_array_ptr = (uint64_t)
+				gpu_mem[gpu_mem_id].usable_peer_id_array;
+			args.n_devices =
+				gpu_mem[gpu_mem_id].usable_peer_id_num;
+		} else {
+			args.device_ids_array_ptr = (uint64_t)all_gpu_id_array;
+			args.n_devices = all_gpu_id_array_size / sizeof(uint32_t);
+		}
 	}
 	args.n_success = 0;
 
@@ -3736,7 +3803,5 @@ void fmm_clear_all_mem(void)
 		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
 	}
 
-	gpu_mem_count = 0;
-	free(gpu_mem);
-	gpu_mem = NULL;
+	fmm_destroy_process_apertures();
 }
