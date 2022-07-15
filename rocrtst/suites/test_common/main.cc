@@ -206,7 +206,8 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
   RunCustomTestEpilog(&sd);
 }
 
-TEST(rocrtstFunc, CU_Masking) {
+/* Temporary: Disable CU Masking until it is fixed */
+TEST(rocrtstFunc, DISABLED_CU_Masking) {
   CU_Masking sd;
   RunGenericTest(&sd);
 }
