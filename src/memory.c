@@ -386,16 +386,6 @@ error:
 	return ret;
 }
 
-static uint64_t convertHsaToKfdRange(HsaMemoryRange *HsaRange)
-{
-	if (sizeof(struct kfd_memory_range) !=
-		sizeof(HsaMemoryRange)) {
-		pr_err("Struct size mismatch in thunk. Cannot cast Hsa Range to KFD IOCTL range\n");
-		return 0;
-	}
-	return (uint64_t) HsaRange;
-}
-
 HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMRead(HSAuint32 Pid,
 					    HsaMemoryRange *LocalMemoryArray,
 					    HSAuint64 LocalMemoryArrayCount,
@@ -403,31 +393,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMRead(HSAuint32 Pid,
 					    HSAuint64 RemoteMemoryArrayCount,
 					    HSAuint64 *SizeCopied)
 {
-	int ret = HSAKMT_STATUS_SUCCESS;
-	struct kfd_ioctl_cross_memory_copy_args args = {0};
+	pr_err("[%s] Deprecated\n", __func__);
 
-	pr_debug("[%s]\n", __func__);
-
-	if (!LocalMemoryArray || !RemoteMemoryArray ||
-		LocalMemoryArrayCount == 0 || RemoteMemoryArrayCount == 0)
-		return HSAKMT_STATUS_ERROR;
-
-	args.flags = 0;
-	KFD_SET_CROSS_MEMORY_READ(args.flags);
-	args.pid = Pid;
-	args.src_mem_range_array = convertHsaToKfdRange(RemoteMemoryArray);
-	args.src_mem_array_size = RemoteMemoryArrayCount;
-	args.dst_mem_range_array = convertHsaToKfdRange(LocalMemoryArray);
-	args.dst_mem_array_size = LocalMemoryArrayCount;
-	args.bytes_copied = 0;
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args))
-		ret = HSAKMT_STATUS_ERROR;
-
-	if (SizeCopied)
-		*SizeCopied = args.bytes_copied;
-
-	return ret;
+	return HSAKMT_STATUS_NOT_IMPLEMENTED;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
@@ -437,34 +405,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtProcessVMWrite(HSAuint32 Pid,
 					     HSAuint64 RemoteMemoryArrayCount,
 					     HSAuint64 *SizeCopied)
 {
-	int ret = HSAKMT_STATUS_SUCCESS;
-	struct kfd_ioctl_cross_memory_copy_args args = {0};
+	pr_err("[%s] Deprecated\n", __func__);
 
-	pr_debug("[%s]\n", __func__);
-
-	if (SizeCopied)
-		*SizeCopied = 0;
-
-	if (!LocalMemoryArray || !RemoteMemoryArray ||
-		LocalMemoryArrayCount == 0 || RemoteMemoryArrayCount == 0)
-		return HSAKMT_STATUS_ERROR;
-
-	args.flags = 0;
-	KFD_SET_CROSS_MEMORY_WRITE(args.flags);
-	args.pid = Pid;
-	args.src_mem_range_array = convertHsaToKfdRange(LocalMemoryArray);
-	args.src_mem_array_size = LocalMemoryArrayCount;
-	args.dst_mem_range_array = convertHsaToKfdRange(RemoteMemoryArray);
-	args.dst_mem_array_size = RemoteMemoryArrayCount;
-	args.bytes_copied = 0;
-
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CROSS_MEMORY_COPY, &args))
-		ret = HSAKMT_STATUS_ERROR;
-
-	if (SizeCopied)
-		*SizeCopied = args.bytes_copied;
-
-	return ret;
+	return HSAKMT_STATUS_NOT_IMPLEMENTED;
 }
 
 
