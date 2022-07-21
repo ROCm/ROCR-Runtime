@@ -317,6 +317,7 @@ TEST_F(KFDExceptionTest, SdmaQueueException) {
         KFDBaseComponentTest::SetUp();
 
 	m_MemoryFlags.ui32.NonPaged = 1;
+	m_MemoryFlags.ui32.HostAccess = 0;
 	ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, m_MemoryFlags,
 				reinterpret_cast<void**>(&pDb)));
 	// verify that pDb is not null before it's being used
