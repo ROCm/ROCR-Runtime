@@ -81,7 +81,6 @@ namespace rocrtst {
       return (ret);                                                                                \
     }                                                                                              \
   }
-
 // Clean up some of the common handles and memory used by BaseRocR code, then
 // shut down hsa. Restore HSA_ENABLE_INTERRUPT to original value, if necessary
 hsa_status_t CommonCleanUp(BaseRocR* test) {
@@ -106,6 +105,7 @@ hsa_status_t CommonCleanUp(BaseRocR* test) {
     RET_IF_HSA_UTILS_ERR(err);
   }
 
+  test->clear_code_object();
   err = hsa_shut_down();
   RET_IF_HSA_UTILS_ERR(err);
 
@@ -318,74 +318,35 @@ std::string LocateKernelFile(std::string filename, hsa_agent_t agent) {
 //  -kernarg_align()
 hsa_status_t LoadKernelFromObjFile(BaseRocR* test, hsa_agent_t* agent) {
   hsa_status_t err;
-  hsa_code_object_reader_t code_obj_rdr = {0};
-  hsa_executable_t executable = {0};
+  Kernel kern;
+  std::string kern_name;
+  char agent_name[64];
+  std::string obj_file;
+  CodeObject* obj;
 
   assert(test != nullptr);
   if (agent == nullptr) {
     agent = test->gpu_device1();  // Assume GPU agent for now
   }
 
-  std::string filename = LocateKernelFile(test->kernel_file_name(), *agent);
+  obj_file = LocateKernelFile(test->kernel_file_name(), *agent);
+  Device *gpu = (Device*)(agent - offsetof(Device, agent));
+  obj = new CodeObject(obj_file, *gpu);
+  test->set_code_object(obj);
+  kern_name = test->kernel_name() + ".kd";
 
-  hsa_file_t file_handle = open(filename.c_str(), O_RDONLY);
-  if (file_handle == -1) {
-    std::cout << "failed to open " << filename.c_str() << " at line "
-              << __LINE__ << ", file: " << __FILE__ << std::endl;
-
-    return (hsa_status_t) errno;
+  if(!obj->GetKernel(kern_name, kern)) {
+      ADD_FAILURE();
+      return HSA_STATUS_ERROR;
   }
 
-  err = hsa_code_object_reader_create_from_file(file_handle, &code_obj_rdr);
-  RET_IF_HSA_UTILS_ERR(err);
-  close(file_handle);
-
-  err = hsa_executable_create_alt(HSA_PROFILE_FULL,
-                                  HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT,
-                                                          NULL, &executable);
-  RET_IF_HSA_UTILS_ERR(err);
-  err = hsa_executable_load_agent_code_object(executable, *agent, code_obj_rdr,
-        NULL, NULL);
-  RET_IF_HSA_UTILS_ERR(err);
-  err = hsa_executable_freeze(executable, NULL);
-  RET_IF_HSA_UTILS_ERR(err);
-
-  std::string kern_name = test->kernel_name();
-  hsa_executable_symbol_t kern_sym;
-  err = hsa_executable_get_symbol(executable, NULL, (kern_name + ".kd").c_str(), *agent,
-                                  0, &kern_sym);
-  RET_IF_HSA_UTILS_ERR(err);
-
-  uint64_t codeHandle;
-  err = hsa_executable_symbol_get_info(kern_sym,
-                       HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT, &codeHandle);
-  RET_IF_HSA_UTILS_ERR(err);
-  test->set_kernel_object(codeHandle);
-
-  uint32_t val;
-  err = hsa_executable_symbol_get_info(kern_sym,
-                HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_PRIVATE_SEGMENT_SIZE, &val);
-  RET_IF_HSA_UTILS_ERR(err);
-  test->set_private_segment_size(val);
-
-  err = hsa_executable_symbol_get_info(kern_sym,
-                  HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_GROUP_SEGMENT_SIZE, &val);
-  RET_IF_HSA_UTILS_ERR(err);
-  test->set_group_segment_size(val);
-
-  // Remaining queries only supported on code object v3.
-  err = hsa_executable_symbol_get_info(kern_sym,
-                HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_SIZE, &val);
-  RET_IF_HSA_UTILS_ERR(err);
-  test->set_kernarg_size(val);
-
-  err = hsa_executable_symbol_get_info(kern_sym,
-           HSA_EXECUTABLE_SYMBOL_INFO_KERNEL_KERNARG_SEGMENT_ALIGNMENT, &val);
-  RET_IF_HSA_UTILS_ERR(err);
-  assert(val >= 16 && "Reported kernarg size is too small.");
-  val = (val == 0) ? 16 : val;
-  test->set_kernarg_align(val);
-
+  test->set_kernel_object(kern.handle);
+  test->set_private_segment_size(kern.scratch);
+  test->set_group_segment_size(kern.group);
+  test->set_kernarg_size(kern.kernarg_size);
+  assert(kern.kernarg_align >= 16 && "Reported kernarg size is too small.");
+  kern.kernarg_size = (kern.kernarg_size == 0) ? 16 : kern.kernarg_size;
+  test->set_kernarg_align(kern.kernarg_size);
   return HSA_STATUS_SUCCESS;
 }
 

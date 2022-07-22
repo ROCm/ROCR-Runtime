@@ -50,7 +50,6 @@
 #include "suites/test_common/test_base.h"
 #include "common/base_rocr.h"
 #include "common/common.h"
-#include "common/rocr.h"
 
 // @Brief: This class is defined to measure the mean latency of enqueuing
 //  the packets to an empty kernel
