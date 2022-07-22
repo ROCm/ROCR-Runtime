@@ -56,6 +56,7 @@
 #include "common/hsatimer.h"
 #include "hsa/hsa.h"
 #include "hsa/hsa_ext_amd.h"
+#include "common/rocr.h"
 
 namespace rocrtst {
 
@@ -145,6 +146,16 @@ class BaseRocR {
   }
   hsa_queue_t* main_queue(void) const {
     return main_queue_;
+  }
+
+  void clear_code_object() {
+    for(std::vector<CodeObject *>::iterator  it = objs_.begin(); it != objs_.end(); ++it) {
+      delete *it;
+    }
+    objs_.clear();
+  }
+  void set_code_object(CodeObject* obj) {
+    objs_.push_back(obj);
   }
 
   hsa_kernel_dispatch_packet_t& aql(void) {
@@ -241,6 +252,8 @@ class BaseRocR {
   uint64_t num_iteration_;   ///< Number of times to execute test
 
   hsa_queue_t* main_queue_;   ///< AQL queue used for packets
+
+  std::vector<CodeObject*> objs_; ///< CodeObject vector
 
   hsa_agent_t gpu_device1_;   ///< Handle to first GPU found
 
