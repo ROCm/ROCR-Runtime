@@ -1545,3 +1545,53 @@ TEST_F(KFDSVMRangeTest, VramOvercommitTest) {
 
     TEST_END
 }
+
+/*
+ * Test SVM support VRAM overcommitment
+ *
+ * Prefetch giant overcommit SVM range to VRAM, KFD should support VRAM overcommitment
+ * by spliting giant range into smaller ranges, evicting SVM ranges to system memory to
+ * alloc VRAM for overcommitment ranges.
+ */
+TEST_F(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    if (!vramSize) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    unsigned long overCommitSize = 1UL << 30;
+
+    /* With XNACK off, KFD checks that all SVM memory will fit into system memory */
+    if (vramSize + overCommitSize > GetSysMemSize() / 2) {
+        LOG() << "Skipping test: no enough system memory." << std::endl;
+        return;
+    }
+
+    unsigned long BufSize = vramSize + overCommitSize;
+    HSAKMT_STATUS ret;
+    void *pBuf;
+
+    pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    ASSERT_NOTNULL(pBuf);
+
+    ret = RegisterSVMRange(defaultGPUNode, pBuf, BufSize, defaultGPUNode, 0);
+    EXPECT_EQ (HSAKMT_STATUS_SUCCESS, ret);
+
+    munmap(pBuf, BufSize);
+    TEST_END
+}
