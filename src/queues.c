@@ -394,7 +394,7 @@ static HSAKMT_STATUS register_svm_range(void *mem, uint32_t size,
 	HSAuint32 nattr;
 	HSAuint32 flags;
 
-	flags = HSA_SVM_FLAG_HOST_ACCESS;
+	flags = HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_GPU_EXEC;
 
 	if (alwaysMapped) {
 		CHECK_KFD_MINOR_VERSION(11);
