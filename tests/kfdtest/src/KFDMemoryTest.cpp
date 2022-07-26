@@ -790,6 +790,7 @@ TEST_F(KFDMemoryTest, BigSysBufferStressTest) {
     TEST_END
 }
 
+#define VRAM_ALLOCATION_ALIGN (1 << 21)  //Align VRAM allocations to 2MB
 TEST_F(KFDMemoryTest, MMBench) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
@@ -900,8 +901,11 @@ TEST_F(KFDMemoryTest, MMBench) {
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 0;
             memFlags.ui32.NonPaged = 1;
-            /* Upper limit of buffer number to fit 90% vram size */
-            bufLimit = ((vramSizeMB << 20) * 8 / 10) / bufSize ;
+
+            /* Buffer sizes are 2MB aligned to match new allocation policy.
+             * Upper limit of buffer number to fit 80% vram size.
+             */
+            bufLimit = ((vramSizeMB << 20) * 8 / 10) / ALIGN_UP(bufSize, VRAM_ALLOCATION_ALIGN);
 
             if (bufLimit == 0)
                 continue; // skip when bufSize > vram
@@ -1558,7 +1562,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    const unsigned nBufs = 1000; /* measure us, report ns */
+    unsigned nBufs = 1000; /* measure us, report ns */
     unsigned testIndex, sizeIndex, memType;
     const unsigned nMemTypes = 2;
     const char *memTypeStrings[nMemTypes] = {"SysMem", "VRAM"};
@@ -1603,6 +1607,7 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
         unsigned memType = _TEST_MEMTYPE(testIndex);
         HSAuint64 mcpRTime, mcpWTime, accessRTime, accessWTime;
         HSAuint32 allocNode;
+        unsigned bufLimit;
 
         if ((testIndex & (nSizes-1)) == 0)
             LOG() << "----------------------------------------------------------------------" << std::endl;
@@ -1619,6 +1624,16 @@ TEST_F(KFDMemoryTest, MMBandWidth) {
             memFlags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
             memFlags.ui32.HostAccess = 1;
             memFlags.ui32.NonPaged = 1;
+
+	    /* Buffer sizes are 2MB aligned to match new allocation policy.
+	     * Upper limit of buffer number to fit 80% vram size.
+	     */
+            bufLimit = ((vramSizeMB << 20) * 8 / 10) / ALIGN_UP(bufSize, VRAM_ALLOCATION_ALIGN);
+            if (bufLimit == 0)
+                continue; // skip when bufSize > vram
+
+            /* When vram is too small to fit all the buffers, fill 80% vram size*/
+            nBufs = std::min(nBufs , bufLimit);
         }
 
         for (i = 0; i < nBufs; i++)
