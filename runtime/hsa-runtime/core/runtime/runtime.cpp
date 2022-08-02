@@ -204,12 +204,13 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
     if (Enabled) {
       gpu_agents_.push_back(agent);
       gpu_ids_.push_back(agent->node_id());
-    agents_by_gpuid_[((AMD::GpuAgent*)agent)->KfdGpuID()] = agent;
+      agents_by_gpuid_[((AMD::GpuAgent*)agent)->KfdGpuID()] = agent;
 
       // Assign the first discovered gpu agent as region gpu.
       if (region_gpu_ == NULL) region_gpu_ = agent;
-    } else
+    } else {
       disabled_gpu_agents_.push_back(agent);
+    }
   }
 }
 
@@ -220,7 +221,7 @@ void Runtime::DestroyAgents() {
   gpu_agents_.clear();
 
   std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
-  gpu_agents_.clear();
+  disabled_gpu_agents_.clear();
 
   gpu_ids_.clear();
 
@@ -1396,6 +1397,9 @@ void Runtime::Unload() {
 
   std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
   gpu_agents_.clear();
+
+  std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
+  disabled_gpu_agents_.clear();
 
   async_events_control_.Shutdown();
 
