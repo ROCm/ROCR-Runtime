@@ -198,6 +198,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 }
 
 GpuAgent::~GpuAgent() {
+  if (!(this)->Enabled()) return;
+
   for (auto& blit : blits_) {
     if (!blit.empty()) {
       hsa_status_t status = blit->Destroy(*this);
