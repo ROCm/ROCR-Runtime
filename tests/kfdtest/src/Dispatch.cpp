@@ -221,7 +221,7 @@ void Dispatch::BuildIb() {
     m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC1, COMPUTE_PGM_RSRC,
                                                   ARRAY_SIZE(COMPUTE_PGM_RSRC)));
 
-    if (m_FamilyId == FAMILY_AL) {
+    if (m_FamilyId == FAMILY_AL || m_FamilyId == FAMILY_AV) {
         const unsigned int COMPUTE_PGM_RSRC3[] = {9};
         m_IndirectBuf.AddPacket(PM4SetShaderRegPacket(mmCOMPUTE_PGM_RSRC3, COMPUTE_PGM_RSRC3,
                                                       ARRAY_SIZE(COMPUTE_PGM_RSRC3)));
