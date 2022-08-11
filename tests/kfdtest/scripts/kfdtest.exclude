@@ -294,8 +294,7 @@ FILTER[gfx1100]=\
 "$BLACKLIST_GFX10_NV2X:"\
 "$TEMPORARY_BLACKLIST_GFX11"
 
-# TODO: Update to gfx version when kernel moves to staging-drm-next
-FILTER[wheat_nas]=\
+FILTER[gfx1101]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$BLACKLIST_GFX10_NV2X:"\
 "$TEMPORARY_BLACKLIST_GFX11"
