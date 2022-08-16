@@ -1595,3 +1595,56 @@ TEST_F(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
     munmap(pBuf, BufSize);
     TEST_END
 }
+
+/*
+ * Test partial range prefault
+ *
+ * mmap alloc 4 pages range, memset middle 2 pages, prefetch entire range to VRAM,
+ * use sdma to memset the rest 2 pages, each page has different value 0x1, 0x2, 0x3, 0x4
+ * then check if all page have the specific value after migrating 4 pages to system memory.
+ */
+TEST_F(KFDSVMRangeTest, PrefaultPartialRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    if (!SVMAPISupported())
+        return;
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    unsigned long BufSize = 4 * PAGE_SIZE;
+    HSAKMT_STATUS ret;
+    char *pBuf;
+
+    pBuf = (char *)mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+    ASSERT_NOTNULL(pBuf);
+
+    memset(pBuf + PAGE_SIZE, 0x2, PAGE_SIZE);
+    memset(pBuf + 2 * PAGE_SIZE, 0x3, PAGE_SIZE);
+
+    EXPECT_SUCCESS(RegisterSVMRange(defaultGPUNode, pBuf, BufSize, 0, 0));
+    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufSize, defaultGPUNode));
+
+    SDMAQueue sdmaQueue;
+    EXPECT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
+                    pBuf, 0x01010101, PAGE_SIZE));
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
+                    pBuf + 3 * PAGE_SIZE, 0x04040404, PAGE_SIZE));
+    sdmaQueue.Wait4PacketConsumption();
+
+    EXPECT_SUCCESS(sdmaQueue.Destroy());
+
+    for (int i = 0; i < 4; i++)
+        EXPECT_EQ(pBuf[i * PAGE_SIZE], i + 1);
+
+    munmap(pBuf, BufSize);
+    TEST_END
+}
