@@ -425,7 +425,8 @@ static void free_queue(struct queue *q)
 					 q->eop_buffer_size,
 					 PAGE_SIZE, q->use_ats);
 	if (q->unified_ctx_save_restore)
-		free(q->ctx_save_restore);
+		munmap(q->ctx_save_restore,
+		       PAGE_ALIGN_UP(q->ctx_save_restore_size + q->debug_memory_size));
 	else if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
 					 q->ctx_save_restore_size + q->debug_memory_size,
@@ -500,9 +501,21 @@ static int handle_concrete_asic(struct queue *q,
 			void *addr;
 			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
 
-			if (posix_memalign(&addr, GPU_HUGE_PAGE_SIZE, size))
-				pr_err("[%s] posix_memalign failed:\n", __func__);
-			else {
+			addr = mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+						     MAP_ANONYMOUS | MAP_PRIVATE,
+						     size, GPU_HUGE_PAGE_SIZE, 0,
+						     0, (void *)LONG_MAX);
+			if (!addr) {
+				pr_err("mmap failed to alloc ctx area size 0x%x: %s\n",
+					size, strerror(errno));
+			} else {
+				/*
+				 * To avoid fork child process COW MMU notifier
+				 * callback evict parent process queues.
+				 */
+				if (madvise(addr, size, MADV_DONTFORK))
+					pr_err("madvise failed -%d\n", errno);
+
 				fill_cwsr_header(q, addr, Event, ErrPayload);
 
 				r = register_svm_range(addr, size,
@@ -511,8 +524,9 @@ static int handle_concrete_asic(struct queue *q,
 				if (r == HSAKMT_STATUS_SUCCESS) {
 					q->ctx_save_restore = addr;
 					q->unified_ctx_save_restore = true;
-				} else
-					free(addr);
+				} else {
+					munmap(addr, size);
+				}
 			}
 		}
 
