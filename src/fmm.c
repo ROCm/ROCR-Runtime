@@ -706,9 +706,8 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	return start;
 }
 
-static void *mmap_allocate_aligned(int prot, int flags, uint64_t size,
-				   uint64_t align,  uint64_t guard_size,
-				   void *aper_base, void *aper_limit)
+void *mmap_allocate_aligned(int prot, int flags, uint64_t size, uint64_t align,
+			    uint64_t guard_size, void *aper_base, void *aper_limit)
 {
 	void *addr, *aligned_addr, *aligned_end, *mapping_end;
 	uint64_t aligned_padded_size;
