@@ -429,7 +429,7 @@ static void free_queue(struct queue *q)
 		free(q->ctx_save_restore);
 	else if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
-					 q->ctx_save_restore_size,
+					 q->ctx_save_restore_size + q->debug_memory_size,
 					 PAGE_SIZE, q->use_ats);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->use_ats);
