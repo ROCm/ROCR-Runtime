@@ -159,6 +159,11 @@ class Flag {
 
     var = os::GetEnvVar("HSA_SVM_PROFILE");
     svm_profile_ = var;
+
+    // Temporary environment variable to disable CPU affinity override
+    // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
+    var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
+    override_cpu_affinity_ = (var == "0") ? false : true;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -212,6 +217,8 @@ class Flag {
 
   bool check_sramecc_validity() const { return check_sramecc_validity_; }
 
+  bool override_cpu_affinity() const { return override_cpu_affinity_; }
+
   XNACK_REQUEST xnack() const { return xnack_; }
 
   bool debug() const { return debug_; }
@@ -252,6 +259,7 @@ class Flag {
   bool cu_mask_skip_init_;
   bool coop_cu_count_;
   bool discover_copy_agents_;
+  bool override_cpu_affinity_;
 
   SDMA_OVERRIDE enable_sdma_;
 
