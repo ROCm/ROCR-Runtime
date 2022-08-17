@@ -706,13 +706,60 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	return start;
 }
 
+static void *mmap_allocate_aligned(int prot, int flags, uint64_t size,
+				   uint64_t align,  uint64_t guard_size,
+				   void *aper_base, void *aper_limit)
+{
+	void *addr, *aligned_addr, *aligned_end, *mapping_end;
+	uint64_t aligned_padded_size;
+
+	aligned_padded_size = size + guard_size * 2 + (align - PAGE_SIZE);
+
+	/* Map memory PROT_NONE to alloc address space only */
+	addr = mmap(0, aligned_padded_size, PROT_NONE, flags, -1, 0);
+	if (addr == MAP_FAILED) {
+		pr_err("mmap failed: %s\n", strerror(errno));
+		return NULL;
+	}
+
+	/* Adjust for alignment and guard pages */
+	aligned_addr = (void *)ALIGN_UP((uint64_t)addr + guard_size, align);
+	if (aligned_addr < aper_base ||
+	    VOID_PTR_ADD(aligned_addr, size - 1) > aper_limit) {
+		pr_err("mmap returned %p, out of range %p-%p\n", aligned_addr,
+		       aper_base, aper_limit);
+		munmap(addr, aligned_padded_size);
+		return NULL;
+	}
+
+	/* Unmap padding and guard pages */
+	if (aligned_addr > addr)
+		munmap(addr, VOID_PTRS_SUB(aligned_addr, addr));
+
+	aligned_end = VOID_PTR_ADD(aligned_addr, size);
+	mapping_end = VOID_PTR_ADD(addr, aligned_padded_size);
+	if (mapping_end > aligned_end)
+		munmap(aligned_end, VOID_PTRS_SUB(mapping_end, aligned_end));
+
+	if (prot == PROT_NONE)
+		return aligned_addr;
+
+	/*  MAP_FIXED to the aligned address with required prot */
+	addr = mmap(aligned_addr, size, prot, flags | MAP_FIXED, -1, 0);
+	if (addr == MAP_FAILED) {
+		pr_err("mmap failed: %s\n", strerror(errno));
+		return NULL;
+	}
+
+	return addr;
+}
+
 static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 					    void *address,
 					    uint64_t size, uint64_t align)
 {
-	uint64_t aligned_padded_size, guard_size;
 	uint64_t alignment_size = PAGE_SIZE << svm.alignment_order;
-	void *addr, *aligned_addr, *aligned_end, *mapping_end;
+	uint64_t guard_size;
 
 	if (address)
 		return NULL;
@@ -736,37 +783,9 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 	 * pages on both sides
 	 */
 	guard_size = (uint64_t)aper->guard_pages * PAGE_SIZE;
-	aligned_padded_size = size + align +
-		2*guard_size - PAGE_SIZE;
 
-	/* Map memory */
-	addr = mmap(0, aligned_padded_size, PROT_NONE,
-		    MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
-	if (addr == MAP_FAILED) {
-		pr_err("mmap failed: %s\n", strerror(errno));
-		return NULL;
-	}
-
-	/* Adjust for alignment and guard pages, range-check the reslt */
-	aligned_addr = (void *)ALIGN_UP((uint64_t)addr + guard_size, align);
-	if (aligned_addr < aper->base ||
-	    VOID_PTR_ADD(aligned_addr, size - 1) > aper->limit) {
-		pr_err("mmap returned %p, out of range %p-%p\n", aligned_addr,
-		       aper->base, aper->limit);
-		munmap(addr, aligned_padded_size);
-		return NULL;
-	}
-
-	/* Unmap padding and guard pages */
-	if (aligned_addr > addr)
-		munmap(addr, VOID_PTRS_SUB(aligned_addr, addr));
-
-	aligned_end = VOID_PTR_ADD(aligned_addr, size);
-	mapping_end = VOID_PTR_ADD(addr, aligned_padded_size);
-	if (mapping_end > aligned_end)
-		munmap(aligned_end, VOID_PTRS_SUB(mapping_end, aligned_end));
-
-	return aligned_addr;
+	return mmap_allocate_aligned(PROT_NONE, MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE,
+				     size, align, guard_size, aper->base, aper->limit);
 }
 
 static void mmap_aperture_release(manageable_aperture_t *aper,
