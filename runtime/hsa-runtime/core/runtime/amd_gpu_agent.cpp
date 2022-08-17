@@ -1102,6 +1102,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
       *((uint64_t*)value) = wallclock_frequency_;
       break;
+    case HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.FamilyID);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
