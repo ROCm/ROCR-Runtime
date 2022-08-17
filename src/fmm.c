@@ -1283,28 +1283,13 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 			aligned_size, SCRATCH_ALIGN);
 		pthread_mutex_unlock(&svm.dgpu_aperture->fmm_mutex);
 	} else {
-		uint64_t aligned_padded_size = aligned_size +
-			SCRATCH_ALIGN - PAGE_SIZE;
-		void *padded_end, *aligned_start, *aligned_end;
-
 		if (address)
 			return NULL;
 
-		mem = mmap(0, aligned_padded_size,
-			   PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS,
-			   -1, 0);
-		if (!mem)
-			return NULL;
-		/* align start and unmap padding */
-		padded_end = VOID_PTR_ADD(mem, aligned_padded_size);
-		aligned_start = (void *)ALIGN_UP((uint64_t)mem, SCRATCH_ALIGN);
-		aligned_end = VOID_PTR_ADD(aligned_start, aligned_size);
-		if (aligned_start > mem)
-			munmap(mem, VOID_PTRS_SUB(aligned_start, mem));
-		if (aligned_end < padded_end)
-			munmap(aligned_end,
-			       VOID_PTRS_SUB(padded_end, aligned_end));
-		mem = aligned_start;
+		mem = mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+					    MAP_PRIVATE | MAP_ANONYMOUS,
+					    aligned_size, SCRATCH_ALIGN, 0,
+					    0, (void *)LONG_MAX);
 	}
 
 	/* Remember scratch backing aperture for later */
