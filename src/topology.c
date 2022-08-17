@@ -1004,34 +1004,48 @@ exit:
 	return ret;
 }
 
-static int topology_get_marketing_name(int minor, uint16_t *marketing_name)
+static int topology_get_node_props_from_drm(HsaNodeProperties *props)
 {
 	int drm_fd;
 	uint32_t major_version;
 	uint32_t minor_version;
 	amdgpu_device_handle device_handle;
+	struct amdgpu_gpu_info gpu_info;
 	const char *name;
-	int i;
+	int i, ret = 0;
 
-	if (marketing_name == NULL)
+	if (props->MarketingName == NULL)
 		return -1;
-	drm_fd = drmOpenRender(minor);
+
+	drm_fd = drmOpenRender(props->DrmRenderMinor);
 	if (drm_fd < 0)
 		return -1;
+
 	if (amdgpu_device_initialize(drm_fd,
 		&major_version, &minor_version, &device_handle) < 0) {
-		drmClose(drm_fd);
-		return -1;
+		ret = -1;
+		goto err_device_initialize;
 	}
+
 	name = amdgpu_get_marketing_name(device_handle);
 	if (name != NULL) {
 		for (i = 0; name[i] != 0 && i < HSA_PUBLIC_NAME_SIZE - 1; i++)
-			marketing_name[i] = name[i];
-		marketing_name[i] = '\0';
+			props->MarketingName[i] = name[i];
+		props->MarketingName[i] = '\0';
 	}
+
+	if (amdgpu_query_gpu_info(device_handle, &gpu_info)) {
+		ret = -1;
+		goto err_query_gpu_info;
+	}
+
+	props->FamilyID = gpu_info.family_id;
+
+err_query_gpu_info:
 	amdgpu_device_deinitialize(device_handle);
+err_device_initialize:
 	drmClose(drm_fd);
-	return 0;
+	return ret;
 }
 
 static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
@@ -1170,6 +1184,10 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			gfxv = (uint32_t)prop_val;
 	}
 
+	/* Bail out early, if a CPU node */
+	if (props->NumCPUCores)
+		goto err;
+
 	gfxv_major = HSA_GET_GFX_VERSION_MAJOR(gfxv);
 	gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv);
 	gfxv_stepping = HSA_GET_GFX_VERSION_STEP(gfxv);
@@ -1210,15 +1228,11 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			snprintf((char *)props->AMDName, sizeof(props->AMDName)-1, "GFX%06x",
 					HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
 
-		if (!props->NumCPUCores) {
-			/* Is dGPU Node, not APU
-			 * Retrieve the marketing name of the node.
-			 */
-			if (topology_get_marketing_name(props->DrmRenderMinor,
-					props->MarketingName) != 0)
-				pr_info("failed to get marketing name for device ID 0x%x\n",
-						props->DeviceId);
-		}
+		/* Is dGPU Node, not APU
+		 * Retrieve the marketing name of the node.
+		 */
+		if (topology_get_node_props_from_drm(props))
+			pr_info("failed to get marketing name for device ID 0x%x\n", props->DeviceId);
 
 		/* Get VGPR/SGPR size in byte per CU */
 		props->SGPRSizePerCU = SGPR_SIZE_PER_CU;
