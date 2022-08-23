@@ -105,10 +105,12 @@ KV_QUEUE_BLACKLIST=\
 "KFDQMTest.Atomics:"\
 "KFDQMTest.GPUDoorbellWrite"
 
+# KFDCWSRTest.BasicTest*: SWDEV-353206
 BLACKLIST_GFX10=\
 "KFDMemoryTest.DeviceHdpFlush:"\
 "KFDQMTest.BasicCuMaskingEven:"\
-"KFDSVMEvictTest.*"
+"KFDSVMEvictTest.*:"\
+"KFDCWSRTest.BasicTest*"
 
 BLACKLIST_GFX10_NV2X=\
 "$BLACKLIST_GFX10:"\
