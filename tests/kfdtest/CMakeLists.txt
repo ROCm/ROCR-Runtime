@@ -203,7 +203,7 @@ message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 
 if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
 ## Add --enable-new-dtags to generate DT_RUNPATH
-set ( CMAKE_CXX_FLAGS "-std=gnu++14 -Wl,--enable-new-dtags" )
+set ( CMAKE_CXX_FLAGS "-std=gnu++17 -Wl,--enable-new-dtags" )
 endif()
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2" )
