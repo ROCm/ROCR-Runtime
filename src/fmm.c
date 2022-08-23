@@ -3411,6 +3411,8 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	importArgs.gpu_id = SharedMemoryStruct->ExportGpuId;
 
 	aperture = fmm_get_aperture(SharedMemoryStruct->ApeInfo);
+	if (!aperture)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	reservedMem = aperture_allocate_area(aperture, NULL,
