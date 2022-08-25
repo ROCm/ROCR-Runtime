@@ -279,8 +279,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 		wg_data_size = cu_num * WG_CONTEXT_DATA_SIZE_PER_CU(q->gfxv);
 		q->ctl_stack_size = PAGE_ALIGN_UP(sizeof(HsaUserContextSaveAreaHeader)
 					+ ctl_stack_size);
-		if (q->gfxv >= GFX_VERSION_NAVI10 &&
-		    q->gfxv <= GFX_VERSION_YELLOW_CARP) {
+		if ((q->gfxv & 0x3f0000) == 0xA0000) {
 			/* HW design limits control stack size to 0x7000.
 			 * This is insufficient for theoretical PM4 cases
 			 * but sufficient for AQL, limited by SPI events.
