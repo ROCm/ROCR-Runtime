@@ -36,19 +36,41 @@ set(PROJECT_NAME "rocrtst64")
 project (${PROJECT_NAME})
 
 # For DEB/RPM generation
-set ( CPACK_PACKAGE_FILE_NAME "rocrtst" )
+set ( CPACK_PACKAGE_NAME "rocrtst" )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION "This package includes rocrtst and a convenience script to run the test suite" )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCr" )
 set ( CPACK_PACKAGE_VERSION_MAJOR "1" )
 set ( CPACK_PACKAGE_VERSION_MINOR "0" )
 set ( CPACK_PACKAGE_VERSION_PATCH "0" )
+
+# Make proper version for appending
+# Default Value is 99999, setting it first
+set(ROCM_VERSION_FOR_PACKAGE "99999")
+if(DEFINED ENV{ROCM_LIBPATCH_VERSION})
+  set(ROCM_VERSION_FOR_PACKAGE $ENV{ROCM_LIBPATCH_VERSION})
+endif()
+set (PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
+set ( CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
+
 set ( CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}"  CACHE STRING "Default packaging prefix." )
 set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_RPM_PACKAGE_AUTOREQ 0 )
+## Debian package values
+set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
+if( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+  set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+endif()
+set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
 
+## RPM package variables
+set ( CPACK_RPM_PACKAGE_RELEASE "local" )
+if( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
+  set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
+endif()
+set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx1010;gfx1011;gfx1012;gfx1013;gfx1030;gfx1031;gfx1032;gfx1033;gfx1034;gfx1035;gfx1036;gfx1100;gfx1101;gfx1102;gfx1103")
 
