@@ -29,7 +29,7 @@ cmake_minimum_required(VERSION 3.5 FATAL_ERROR)
 project(KFDTest)
 
 # For DEB/RPM generation
-set ( CPACK_PACKAGE_FILE_NAME "kfdtest" )
+set ( CPACK_PACKAGE_NAME "kfdtest" )
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION "This package includes kfdtest, the list of excluded tests for each ASIC, and a convenience script to run the test suite" )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCK/KFD" )
@@ -48,9 +48,19 @@ set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCT-Thun
 set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT")
 set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT")
 
+## Debian package values
+set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
+if( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+  set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
+endif()
+## RPM package variables
+set ( CPACK_RPM_PACKAGE_RELEASE "local" )
+if( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
+  set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
+endif()
+
 set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
 set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
-
 
 ## Define default variable and variables for the optional build target hsakmt-dev
 set ( SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} CACHE STRING "Location of hsakmt source code." )
@@ -64,7 +74,6 @@ set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
 
 # RPM package specific variables
 set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
-
 
 #set ( CMAKE_VERBOSE_MAKEFILE on )
 
