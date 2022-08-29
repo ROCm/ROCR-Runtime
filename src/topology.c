@@ -1014,7 +1014,7 @@ static int topology_get_node_props_from_drm(HsaNodeProperties *props)
 	const char *name;
 	int i, ret = 0;
 
-	if (props->MarketingName == NULL)
+	if (props == NULL)
 		return -1;
 
 	drm_fd = drmOpenRender(props->DrmRenderMinor);
