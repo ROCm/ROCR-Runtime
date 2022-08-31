@@ -468,7 +468,6 @@ TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
     EXPECT_SUCCESS(hsaKmtRegisterMemory((void *)&mem[0], sizeof(HSAuint32)));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPU((void *)&mem[0], sizeof(HSAuint32),
                                         &gpuva2));
-    EXPECT_TRUE(gpuva1 != gpuva2);
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva1)));
     EXPECT_SUCCESS(hsaKmtDeregisterMemory(reinterpret_cast<void *>(gpuva1)));
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(reinterpret_cast<void *>(gpuva2)));
@@ -1138,7 +1137,12 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
     static volatile HSAuint32 mem[4];  // 8 bytes for register only and
                                        // 8 bytes for register to nodes
     HsaMemoryBuffer hsaBuffer((void *)(&mem[0]), sizeof(HSAuint32)*2);
-    if (is_dgpu()) {  // APU doesn't use userptr
+    /*
+     * APU doesn't use userptr.
+     * User pointers registered with SVM API, does not create vm_object_t.
+     * Therefore, pointer info can not be queried.
+     */
+    if (is_dgpu() && mem != hsaBuffer.As<void*>()) {
         EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[0]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
@@ -1165,7 +1169,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(reinterpret_cast<void *>(address), &ptrInfo));
     EXPECT_EQ(ptrInfo.Type, HSA_POINTER_ALLOCATED);
     EXPECT_EQ(ptrInfo.CPUAddress, hostBuffer.As<void*>());
-    if (is_dgpu()) {
+    if (is_dgpu() && &mem[1] != hsaBuffer.As<HSAuint32 *>() + 1) {
         EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[1]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
