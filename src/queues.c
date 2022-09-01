@@ -662,7 +662,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	err = map_doorbell(NodeId, gpu_id, doorbell_mmap_offset);
 	if (err != HSAKMT_STATUS_SUCCESS) {
 		hsaKmtDestroyQueue(q->queue_id);
-		free_queue(q);
 		return HSAKMT_STATUS_ERROR;
 	}
 
