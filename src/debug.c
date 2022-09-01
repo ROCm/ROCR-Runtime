@@ -302,6 +302,25 @@ hsaKmtGetKernelDebugTrapVersionInfo(
 
 static HSAKMT_STATUS checkRuntimeDebugSupport(void) {
 	HSAuint32 kMajor, kMinor;
+	HsaNodeProperties node = {0};
+	HsaSystemProperties props = {0};
+
+	memset(&node, 0x00, sizeof(node));
+	memset(&props, 0x00, sizeof(props));
+	if (hsaKmtAcquireSystemProperties(&props))
+		return HSAKMT_STATUS_ERROR;
+
+	//the firmware of gpu node doesn't support the debugger, disable it.
+	for (uint32_t i = 0; i < props.NumNodes; i++) {
+		if (hsaKmtGetNodeProperties(i, &node))
+			return HSAKMT_STATUS_ERROR;
+
+		//ignore cpu node
+		if (node.NumCPUCores)
+			continue;
+		if (!node.Capability.ui32.DebugSupportedFirmware)
+			return HSAKMT_STATUS_NOT_SUPPORTED;
+	}
 
 	if (hsaKmtGetKernelDebugTrapVersionInfo(&kMajor, &kMinor))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
