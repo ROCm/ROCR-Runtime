@@ -62,6 +62,7 @@ struct queue {
 	uint32_t ctl_stack_size;
 	uint32_t debug_memory_size;
 	uint32_t eop_buffer_size;
+	uint32_t total_mem_alloc_size;
 	uint32_t gfxv;
 	bool use_ats;
 	bool unified_ctx_save_restore;
@@ -448,7 +449,7 @@ static void free_queue(struct queue *q)
 		       PAGE_ALIGN_UP(q->ctx_save_restore_size + q->debug_memory_size));
 	else if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
-					 q->ctx_save_restore_size + q->debug_memory_size,
+					 q->total_mem_alloc_size,
 					 PAGE_SIZE, q->use_ats);
 
 	free_exec_aligned_memory((void *)q, sizeof(*q), PAGE_SIZE, q->use_ats);
@@ -498,7 +499,6 @@ static int handle_concrete_asic(struct queue *q,
 	ret = update_ctx_save_restore_size(NodeId, q);
 
 	if (ret) {
-		uint32_t total_mem_alloc_size = 0;
 		HsaNodeProperties node;
 		bool svm_api;
 
@@ -509,10 +509,10 @@ static int handle_concrete_asic(struct queue *q,
 		args->ctl_stack_size = q->ctl_stack_size;
 
 		/* Total memory to be allocated is =
-		 * (Control Stack size + WG size) per XCC * num_xcc +
-		 * Debug memory area size
+		 * (Control Stack size + WG size +
+		 *  Debug memory area size) * num_xcc
 		 */
-		total_mem_alloc_size = (q->ctx_save_restore_size +
+		q->total_mem_alloc_size = (q->ctx_save_restore_size +
 					q->debug_memory_size) * node.NumXcc;
 
 		svm_api = node.Capability.ui32.SVMAPISupported;
@@ -521,7 +521,7 @@ static int handle_concrete_asic(struct queue *q,
 		 * area on dGPU.
 		 */
 		if (!q->use_ats && svm_api) {
-			uint32_t size = PAGE_ALIGN_UP(total_mem_alloc_size);
+			uint32_t size = PAGE_ALIGN_UP(q->total_mem_alloc_size);
 			void *addr;
 			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
 
@@ -556,7 +556,7 @@ static int handle_concrete_asic(struct queue *q,
 
 		if (!q->unified_ctx_save_restore) {
 			q->ctx_save_restore = allocate_exec_aligned_memory(
-							total_mem_alloc_size,
+							q->total_mem_alloc_size,
 							q->use_ats, NodeId,
 							false, false, false);
 
