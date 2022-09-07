@@ -103,6 +103,7 @@ class os_thread {
     if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
       int cores = get_nprocs_conf();
       cpu_set_t* cpuset = CPU_ALLOC(cores);
+      CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
       for (int i = 0; i < cores; i++) {
         CPU_SET(i, cpuset);
       }
