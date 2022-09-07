@@ -1417,6 +1417,23 @@ static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t Memo
 	return mem;
 }
 
+static void *fmm_map_to_cpu(void *mem, uint64_t size, bool host_access,
+			    int fd, uint64_t mmap_offset) {
+	int flag = MAP_SHARED | MAP_FIXED;
+	int prot = host_access ? PROT_READ | PROT_WRITE : PROT_NONE;
+	void *ret = mmap(mem, size, prot, flag, fd, mmap_offset);
+
+	if (ret != MAP_FAILED)
+		/* This madvise() call is needed to avoid additional references
+		 * to mapped BOs in child processes that can prevent freeing
+		 * memory in the parent process and lead to out-of-memory
+		 * conditions.
+		 */
+		madvise(mem, size, MADV_DONTFORK);
+
+	return ret;
+}
+
 void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 			  uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
@@ -1465,25 +1482,15 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 	}
 
 	if (mem) {
-		int map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
-		int prot = mflags.ui32.HostAccess ? PROT_READ | PROT_WRITE :
-					PROT_NONE;
-		int flag = mflags.ui32.HostAccess ? MAP_SHARED | MAP_FIXED :
-					MAP_PRIVATE|MAP_FIXED;
-		void *ret = mmap(mem, MemorySizeInBytes, prot, flag,
-					map_fd, mmap_offset);
+		void *ret = fmm_map_to_cpu(mem, MemorySizeInBytes,
+					   mflags.ui32.HostAccess,
+					   gpu_mem[gpu_mem_id].drm_render_fd,
+					   mmap_offset);
 
 		if (ret == MAP_FAILED) {
 			__fmm_release(vm_obj, aperture);
 			return NULL;
 		}
-		/*
-		 * This madvise() call is needed to avoid additional references
-		 * to mapped BOs in child processes that can prevent freeing
-		 * memory in the parent process and lead to out-of-memory
-		 * conditions.
-		 */
-		madvise(mem, MemorySizeInBytes, MADV_DONTFORK);
 	}
 
 	return mem;
@@ -1718,28 +1725,13 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 					     &mmap_offset, ioc_flags, &vm_obj);
 
 		if (mem && mflags.ui32.HostAccess) {
-			int map_fd = gpu_drm_fd;
-			void *ret = mmap(mem, MemorySizeInBytes,
-					 PROT_READ | PROT_WRITE,
-					 MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
+			void *ret = fmm_map_to_cpu(mem, MemorySizeInBytes,
+						   mflags.ui32.HostAccess,
+						   gpu_drm_fd, mmap_offset);
+
 			if (ret == MAP_FAILED) {
 				__fmm_release(vm_obj, aperture);
 				return NULL;
-			}
-
-			madvise(ret, MemorySizeInBytes, MADV_DONTFORK);
-
-			if (mflags.ui32.AQLQueueMemory) {
-				uint64_t my_buf_size = size / 2;
-
-				memset(ret, 0, MemorySizeInBytes);
-				mmap(VOID_PTR_ADD(mem, my_buf_size), MemorySizeInBytes,
-				     PROT_READ | PROT_WRITE,
-				     MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
-
-				madvise(VOID_PTR_ADD(mem, my_buf_size),
-					MemorySizeInBytes,
-					MADV_DONTFORK);
 			}
 		}
 	}
@@ -2822,9 +2814,9 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	int32_t gpu_mem_id;
 	int ret;
 	bool is_debugger = 0;
+	uint32_t flags;
 	void *mmap_ret = NULL;
 	uint64_t mmap_offset = 0;
-	int map_fd;
 	vm_object_t *obj;
 
 	/* Retrieve gpu_mem id according to gpu_id */
@@ -2841,37 +2833,22 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 		return -1;
 
 	is_debugger = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id);
+	flags = is_debugger ? KFD_IOC_ALLOC_MEM_FLAGS_GTT :
+			      KFD_IOC_ALLOC_MEM_FLAGS_VRAM;
+	flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
 	/* allocate object within the scratch backing aperture */
-	if (!is_debugger) {
-		obj = fmm_allocate_memory_object(
-			gpu_id, address, size, aperture, &mmap_offset,
-			KFD_IOC_ALLOC_MEM_FLAGS_VRAM |
-			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
-		if (!obj)
-			return -1;
-		/* Create a CPU mapping for the debugger */
-		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
-		mmap_ret = mmap(address, size, PROT_NONE,
-				MAP_PRIVATE | MAP_FIXED, map_fd, mmap_offset);
-		if (mmap_ret == MAP_FAILED) {
-			__fmm_release(obj, aperture);
-			return -1;
-		}
-	} else {
-		obj = fmm_allocate_memory_object(
-			gpu_id, address, size, aperture, &mmap_offset,
-			KFD_IOC_ALLOC_MEM_FLAGS_GTT |
-			KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE);
-		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
-		mmap_ret = mmap(address, size,
-				PROT_READ | PROT_WRITE,
-				MAP_SHARED | MAP_FIXED, map_fd, mmap_offset);
-		if (mmap_ret == MAP_FAILED) {
-			__fmm_release(obj, aperture);
-			return -1;
-		}
+	obj = fmm_allocate_memory_object(gpu_id, address, size,
+					 aperture, &mmap_offset, flags);
+	if (!obj)
+		return -1;
+	/* Create a CPU mapping for the debugger */
+	mmap_ret = fmm_map_to_cpu(address, size, is_debugger,
+				  gpu_mem[gpu_mem_id].drm_render_fd,
+				  mmap_offset);
+	if (mmap_ret == MAP_FAILED) {
+		__fmm_release(obj, aperture);
+		return -1;
 	}
-	madvise(mmap_ret, size, MADV_DONTFORK);
 
 	/* map to GPU */
 	ret = _fmm_map_to_gpu(aperture, address, size, NULL, &gpu_id, sizeof(uint32_t));
@@ -3537,7 +3514,6 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	if (importArgs.mmap_offset) {
 		int32_t gpu_mem_id = gpu_mem_find_by_gpu_id(importArgs.gpu_id);
-		int map_fd;
 		void *ret;
 
 		if (gpu_mem_id < 0) {
@@ -3545,15 +3521,14 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 			goto err_free_obj;
 		}
 		obj->node_id = gpu_mem[gpu_mem_id].node_id;
-		map_fd = gpu_mem[gpu_mem_id].drm_render_fd;
-		ret = mmap(reservedMem, (SizeInPages << PAGE_SHIFT),
-			   PROT_READ | PROT_WRITE,
-			   MAP_SHARED | MAP_FIXED, map_fd, importArgs.mmap_offset);
+		ret = fmm_map_to_cpu(reservedMem, (SizeInPages << PAGE_SHIFT),
+				     true, gpu_mem[gpu_mem_id].drm_render_fd,
+				     importArgs.mmap_offset);
+
 		if (ret == MAP_FAILED) {
 			err = HSAKMT_STATUS_ERROR;
 			goto err_free_obj;
 		}
-		madvise(ret, (SizeInPages << PAGE_SHIFT), MADV_DONTFORK);
 	}
 
 	*MemoryAddress = reservedMem;
