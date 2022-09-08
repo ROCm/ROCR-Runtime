@@ -459,7 +459,6 @@ const char *LoopIsa = R"(
  *   v0 - workitem id
  * Registers:
  *   v0 - calculated workitem = v0 + s4 * NUM_THREADS_X, which is s4
- *   v[2:3] - corresponding input buf address: s[0:1] + v0 * 8
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
  *   v6 - register storing known-value output for mangle testing
  *   v7 - counter
@@ -471,12 +470,6 @@ const char *IterateIsa = SHADER_MACROS R"(
         V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
         v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
         V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
-
-        // Compute address of input buffer
-        v_lshlrev_b32           v0, 1, v0       // v0 *= 8
-        V_ADD_CO_U32            v2, s0, v0      // v[2:3] = s[0:1] + v0 * 8
-        v_mov_b32               v3, s1          // v[2:3] = s[0:1] + v0 * 8
-        V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
 
         // Store known-value output in register
         flat_load_dword         v6, v[4:5] glc
