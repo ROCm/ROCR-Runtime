@@ -88,8 +88,11 @@ TEST_P(KFDCWSRTest, BasicTest) {
         unsigned stopval = 0x1234'5678;
         unsigned outval  = 0x8765'4321;
 
-        HsaMemoryBuffer inputBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
-        HsaMemoryBuffer outputBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        // 4B per work-item ==> 1 page per 1024 work-items (take ceiling)
+        unsigned bufSize = PAGE_SIZE * ((num_witems / 1024) + (num_witems % 1024 != 0));
+
+        HsaMemoryBuffer inputBuf(bufSize, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer outputBuf(bufSize, defaultGPUNode, true, false, false);
         unsigned int* input = inputBuf.As<unsigned int*>();
         unsigned int* output = outputBuf.As<unsigned int*>();
         inputBuf.Fill(0);
