@@ -109,6 +109,7 @@ void ComandLineArgumentsUsage() {
     printf("\t--child arg\t - Child Process\n");
     printf("\t--timeout arg\t - Time Out\n");
     printf("\t--dst_node\t - For testing multiple nodes");
+    printf("\t--sleep_time\t - For testing CRIU, etc");
 }
 
 bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs) {
@@ -123,6 +124,7 @@ bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs)
         { "timeout", required_argument, 0, 0},
         { "node", required_argument, 0, 0 },
         { "dst_node", required_argument, 0, 0 },
+        { "sleep_time", required_argument, 0, 0 },
         { 0, 0, 0, 0 }
     };
 
@@ -132,6 +134,7 @@ bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs)
     rArgs.TimeOut = 0;
     rArgs.NodeId = -1;
     rArgs.DstNodeId = -1;
+    rArgs.SleepTime = 0;
 
     while (true) {
         int c = getopt_long(argc, argv, "", long_options, &option_index);
@@ -198,6 +201,14 @@ bool GetCommandLineArguments(int argc, char **argv, CommandLineArguments& rArgs)
                 int dstNodeId = atoi(optarg);
                 if (dstNodeId >= 0)
                     rArgs.DstNodeId = dstNodeId;
+            }
+            break;
+        /* Sleep time - used in testing CRIU */
+        case 6:
+            {
+                int sleepTime = atoi(optarg);
+                if (sleepTime >= 0)
+                    rArgs.SleepTime = sleepTime;
             }
             break;
         }
