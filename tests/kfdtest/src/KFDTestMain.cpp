@@ -53,6 +53,7 @@ unsigned int g_TestTimeOut;
 int g_TestNodeId;
 int g_TestDstNodeId;
 bool g_IsChildProcess;
+unsigned int g_SleepTime;
 unsigned int g_TestGPUFamilyId;
 class KFDBaseComponentTest *g_baseTest;
 
@@ -80,12 +81,20 @@ GTEST_API_ int main(int argc, char **argv) {
         if ( args.TimeOut > 0 )
             g_TestTimeOut = args.TimeOut;
 
+        g_SleepTime = 0x00;
+        if (args.SleepTime > 0) {
+            g_SleepTime = args.SleepTime;
+        }
+
         // If --node is not specified, then args.NodeId == -1
         g_TestNodeId = args.NodeId;
         g_TestDstNodeId = args.DstNodeId;
 
         LOG() << "Profile: " << (TESTPROFILE)g_TestRunProfile << std::endl;
         LOG() << "HW capabilities: 0x" << std::hex << g_TestENVCaps << std::endl;
+        if (g_SleepTime > 0) {
+            LOG() << "Sleep time in seconds as specified by user: " << std::dec << g_SleepTime << std::endl;
+        }
 
         return RUN_ALL_TESTS();
     }

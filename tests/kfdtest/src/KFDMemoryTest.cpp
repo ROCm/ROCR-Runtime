@@ -39,6 +39,9 @@
 #include "SDMAPacket.hpp"
 #include "linux/kfd_ioctl.h"
 
+/* Captures user specified time (seconds) to sleep */
+extern unsigned int g_SleepTime;
+
 void KFDMemoryTest::SetUp() {
     ROUTINE_START
 
@@ -93,6 +96,15 @@ TEST_F(KFDMemoryTest, MMapLarge) {
     int i = 0;
     /* Allocate 1024GB, aka 1TB*/
     for (; i < nObjects; i++) {
+
+        /* Code snippet to allow CRIU checkpointing */
+        if (i == (1 << 6)) {
+            if (g_SleepTime > 0) {
+                LOG() << "Pause for: " << g_SleepTime << " seconds" <<  std::endl;
+                sleep(g_SleepTime);
+            }
+        }
+
         if (hsaKmtRegisterMemory(addr + i, s - i))
             break;
         if (hsaKmtMapMemoryToGPUNodes(addr + i, s - i,
@@ -633,6 +645,7 @@ void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &
                                         HSAuint64 highMB, int nodeToMap,
                                         HSAuint64 *lastSizeMB) {
     int ret;
+    int iter = 0;
 
     HsaMemMapFlags mapFlags = {0};
     HSAuint64 granularityMB = highMB > 512 ? 128 : 16;
@@ -654,6 +667,15 @@ void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &
         if (ret) {
             highMB = sizeMB;
             continue;
+        }
+
+        /* Code snippet to allow CRIU checkpointing */
+        iter++;
+        if (iter == 3) {
+            if (g_SleepTime > 0) {
+                LOG() << "Pause for: " << g_SleepTime << " seconds" <<  std::endl;
+                sleep(g_SleepTime);
+            }
         }
 
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, NULL,
@@ -907,6 +929,14 @@ TEST_F(KFDMemoryTest, MMBench) {
         unsigned bufLimit;
         HSAuint64 allocTime, map1Time, unmap1Time, mapAllTime, unmapAllTime, freeTime;
         HSAuint32 allocNode;
+
+        /* Code snippet to allow CRIU checkpointing */
+        if (testIndex == 3) {
+            if (g_SleepTime > 0) {
+                LOG() << "Pause for: " << g_SleepTime << " seconds" <<  std::endl;
+                sleep(g_SleepTime);
+            }
+        }
 
         if ((testIndex % nSizes) == 0)
             LOG() << "--------------------------------------------------------------------------" << std::endl;
