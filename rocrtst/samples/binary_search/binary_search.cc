@@ -115,7 +115,7 @@ typedef struct BinarySearch {
 
 void InitializeBinarySearch(BinarySearch* bs) {
   bs->kernel_file_name = "./binary_search_kernels.hsaco";
-  bs->kernel_name = "binarySearch";
+  bs->kernel_name = "binarySearch.kd";
   bs->length = kBinarySearchLength;
   bs->find_me = kBinarySearchFindMe;
   bs->work_group_size = kWorkGroupSize;
