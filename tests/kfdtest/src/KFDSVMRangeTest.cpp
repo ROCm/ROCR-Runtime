@@ -1254,7 +1254,7 @@ TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
     ASSERT_EQ(size, write(fd, buf, size));
 
     void *MmapedFile = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    ASSERT_NE(nullptr, MmapedFile);
+    ASSERT_NE(MAP_FAILED, MmapedFile);
 
     HsaSVMRange filebackedRange(MmapedFile, size, defaultGPUNode, defaultGPUNode);
 
@@ -1531,7 +1531,7 @@ TEST_F(KFDSVMRangeTest, VramOvercommitTest) {
 
     for (i = 0; i < numBufs; i++) {
         pBuf[i] = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        ASSERT_NOTNULL(pBuf[i]);
+        ASSERT_NE(MAP_FAILED, pBuf[i]);
 
         ret = RegisterSVMRange(defaultGPUNode, pBuf[i], BufSize, defaultGPUNode, 0);
         if (ret != HSAKMT_STATUS_SUCCESS)
@@ -1587,7 +1587,7 @@ TEST_F(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
     void *pBuf;
 
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    ASSERT_NOTNULL(pBuf);
+    ASSERT_NE(MAP_FAILED, pBuf);
 
     ret = RegisterSVMRange(defaultGPUNode, pBuf, BufSize, defaultGPUNode, 0);
     EXPECT_EQ (HSAKMT_STATUS_SUCCESS, ret);
@@ -1623,7 +1623,7 @@ TEST_F(KFDSVMRangeTest, PrefaultPartialRangeTest) {
     char *pBuf;
 
     pBuf = (char *)mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    ASSERT_NOTNULL(pBuf);
+    ASSERT_NE(MAP_FAILED, pBuf);
 
     memset(pBuf + PAGE_SIZE, 0x2, PAGE_SIZE);
     memset(pBuf + 2 * PAGE_SIZE, 0x3, PAGE_SIZE);
