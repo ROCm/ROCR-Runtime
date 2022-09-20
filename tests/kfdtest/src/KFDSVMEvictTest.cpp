@@ -88,7 +88,7 @@ void KFDSVMEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HS
 
     for (HSAuint32 i = 0; i < count; i++) {
         m_pBuf = mmap(0, vramBufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        EXPECT_NOTNULL(m_pBuf);
+        ASSERT_NE(MAP_FAILED, m_pBuf);
 
         m_Flags = (HSA_SVM_FLAGS)0;
 retry:

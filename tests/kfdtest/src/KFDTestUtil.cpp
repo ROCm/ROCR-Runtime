@@ -862,7 +862,7 @@ HsaSVMRange::HsaSVMRange(void *addr, HSAuint64 size, HSAuint32 GPUNode, HSAuint3
     m_SelfAllocated(false) {
     if (!m_pUser) {
         m_pUser = mmap(0, m_Size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-        EXPECT_NOTNULL(m_pUser);
+        EXPECT_NE(MAP_FAILED, m_pUser);
         m_SelfAllocated = true;
     }
 
