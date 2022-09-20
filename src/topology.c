@@ -800,8 +800,11 @@ err1:
 	return ret;
 }
 
-static const struct hsa_gfxip_table *find_hsa_gfxip_device(uint16_t device_id)
+static const struct hsa_gfxip_table *find_hsa_gfxip_device(uint16_t device_id, uint8_t gfxv_major)
 {
+	if (gfxv_major > 10)
+		return NULL;
+
 	uint32_t i, table_size;
 
 	table_size = sizeof(gfxip_lookup_table)/sizeof(struct hsa_gfxip_table);
@@ -1192,7 +1195,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv);
 	gfxv_stepping = HSA_GET_GFX_VERSION_STEP(gfxv);
 
-	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId);
+	hsa_gfxip = find_hsa_gfxip_device(props->DeviceId, gfxv_major);
 	if (hsa_gfxip || gfxv) {
 		envvar = getenv("HSA_OVERRIDE_GFX_VERSION");
 		if (envvar) {
