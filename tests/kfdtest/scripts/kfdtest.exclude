@@ -246,10 +246,15 @@ FILTER[aldebaran]=\
 
 FILTER[aqua_vanjaram]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDExceptionTest.FaultStorm:"\
+"KFDQMTest.BasicCuMaskingEven:"\
+"KFDMemoryTest.LargestSysBufferTest:"\
+"KFDMemoryTest.BigSysBufferStressTest:"\
+"KFDMemoryTest.FlatScratchAccess:"\
+"KFDIPCTest.BasicTest:"\
+"KFDEvictTest.BasicTest:"\
+"KFDEvictTest.QueueTest:"\
 "KFDEvictTest.BurstyTest:"\
-"KFDMemoryTest.PtraceAccess:"\
-"KFDMemoryTest.DeviceHdpFlush"
+"KFDSVMEvictTest.*"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
