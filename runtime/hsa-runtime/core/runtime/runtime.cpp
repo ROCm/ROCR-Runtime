@@ -285,11 +285,12 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
+  size_t size_requested = size;  // region->Allocate(...) may align-up size to granularity
   hsa_status_t status = region->Allocate(size, alloc_flags, address);
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[*address] = AllocationRegion(region, size);
+    allocation_map_[*address] = AllocationRegion(region, size, size_requested);
   }
 
   return status;
@@ -815,15 +816,15 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     if (fragment != allocation_map_.begin()) {
       fragment--;
       if ((fragment->first <= ptr) &&
-        (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
-          // agent and host address must match here.  Only lock memory is allowed to have differing
-          // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
-          // suballocated.
-          retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
-          retInfo.hostBaseAddress = retInfo.agentBaseAddress;
-          retInfo.sizeInBytes = fragment->second.size;
-          retInfo.userData = fragment->second.user_ptr;
-          allocation_map_entry_found = true;
+          (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size_requested)) {
+        // agent and host address must match here. Only lock memory is allowed to have differing
+        // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
+        // suballocated.
+        retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
+        retInfo.hostBaseAddress = retInfo.agentBaseAddress;
+        retInfo.sizeInBytes = fragment->second.size_requested;
+        retInfo.userData = fragment->second.user_ptr;
+        allocation_map_entry_found = true;
       }
     }
   }  // end lock scope
@@ -959,7 +960,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       len = Min(len, importSize - fragOffset);
     }
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[importAddress] = AllocationRegion(nullptr, len);
+    allocation_map_[importAddress] = AllocationRegion(nullptr, len, len);
   };
 
   if ((importHandle.handle[6] & 0x80000000) != 0) {
