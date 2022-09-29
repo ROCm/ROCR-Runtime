@@ -27,6 +27,7 @@
 #include "SDMAPacket.hpp"
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
+#include <sys/mman.h>
 
 void KFDExceptionTest::SetUp() {
     ROUTINE_START
@@ -237,6 +238,53 @@ TEST_F(KFDExceptionTest, PermissionFault) {
 
         TestMemoryException(defaultGPUNode, srcSysBuffer.As<HSAuint64>(),
                             readOnlyBuffer.As<HSAuint64>());
+    } else {
+        int childStatus;
+
+        waitpid(m_ChildPid, &childStatus, 0);
+        if (is_dgpu()) {
+            EXPECT_EQ(WIFEXITED(childStatus), true);
+            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+        } else {
+            EXPECT_EQ(WIFSIGNALED(childStatus), true);
+            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
+        }
+    }
+
+    TEST_END
+}
+
+/* Allocate Read Only user pointer buffer. Test Memory Exception failure by
+ * attempting to write to that buffer in the child process.
+ */
+TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    if (m_FamilyId == FAMILY_RV) {
+        LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
+        return;
+    }
+
+    m_ChildPid = fork();
+    if (m_ChildPid == 0) {
+        KFDBaseComponentTest::TearDown();
+        KFDBaseComponentTest::SetUp();
+
+	void *pBuf = mmap(NULL, PAGE_SIZE, PROT_READ,
+			  MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+	ASSERT_NE(pBuf, MAP_FAILED);
+	EXPECT_SUCCESS(hsaKmtRegisterMemory(pBuf, PAGE_SIZE));
+	EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(pBuf, PAGE_SIZE, NULL));
+        HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, defaultGPUNode, false);
+
+        srcSysBuffer.Fill(0xAA55AA55);
+
+        TestMemoryException(defaultGPUNode, srcSysBuffer.As<HSAuint64>(),
+                            (HSAuint64)pBuf);
     } else {
         int childStatus;
 
