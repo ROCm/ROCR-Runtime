@@ -220,6 +220,80 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent(HsaEvent *Event,
 	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
 }
 
+static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
+{
+	struct kfd_ioctl_svm_args *args;
+	uint32_t node_id;
+	HSAuint32 s_attr;
+	HSAuint32 i;
+	HSA_SVM_ATTRIBUTE attrs[] = {
+					{HSA_SVM_ATTR_PREFERRED_LOC, 0},
+					{HSA_SVM_ATTR_PREFETCH_LOC, 0},
+					{HSA_SVM_ATTR_ACCESS, gpu_id},
+					{HSA_SVM_ATTR_SET_FLAGS, 0},
+				    };
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(5);
+
+	s_attr = sizeof(attrs);
+	args = alloca(sizeof(*args) + s_attr);
+	args->start_addr = address;
+	args->size = PAGE_SIZE;
+	args->op = KFD_IOCTL_SVM_OP_GET_ATTR;
+	args->nattr = s_attr / sizeof(*attrs);
+	memcpy(args->attrs, attrs, s_attr);
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
+		pr_debug("op get range attrs failed %s\n", strerror(errno));
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	pr_err("GPU address 0x%lx, is Unified memory\n", address);
+	for (i = 0; i < args->nattr; i++) {
+		if (args->attrs[i].value == KFD_IOCTL_SVM_LOCATION_SYSMEM ||
+		    args->attrs[i].value == KFD_IOCTL_SVM_LOCATION_UNDEFINED)
+			node_id = args->attrs[i].value;
+		else
+			gpuid_to_nodeid(args->attrs[i].value, &node_id);
+		switch (args->attrs[i].type) {
+		case KFD_IOCTL_SVM_ATTR_PREFERRED_LOC:
+			pr_err("Preferred location for address 0x%lx is Node id %d\n",
+				address, node_id);
+			break;
+		case KFD_IOCTL_SVM_ATTR_PREFETCH_LOC:
+			pr_err("Prefetch location for address 0x%lx is Node id %d\n",
+				address, node_id);
+			break;
+		case KFD_IOCTL_SVM_ATTR_ACCESS:
+			pr_err("Node id %d has access to address 0x%lx\n",
+				node_id, address);
+			break;
+		case KFD_IOCTL_SVM_ATTR_ACCESS_IN_PLACE:
+			pr_err("Node id %d has access in place to address 0x%lx\n",
+				node_id, address);
+			break;
+		case KFD_IOCTL_SVM_ATTR_NO_ACCESS:
+			pr_err("Node id %d has no access to address 0x%lx\n",
+				node_id, address);
+			break;
+		case KFD_IOCTL_SVM_ATTR_SET_FLAGS:
+			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_COHERENT)
+				pr_err("Fine grained coherency between devices\n");
+			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_GPU_RO)
+				pr_err("Read only\n");
+			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_GPU_EXEC)
+				pr_err("GPU exec allowed\n");
+			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_GPU_ALWAYS_MAPPED)
+				 pr_err("GPU always mapped\n");
+			break;
+		default:
+			pr_debug("get invalid attr type 0x%x\n", args->attrs[i].type);
+			return HSAKMT_STATUS_ERROR;
+		}
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
 //Analysis memory exception data, print debug messages
 static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 						memory_exception_data)
@@ -241,9 +315,10 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 		pr_err("Execute to none-executable page\n");
 
 	ret = fmm_get_mem_info((const void *)addr, &info);
-
 	if (ret != HSAKMT_STATUS_SUCCESS) {
-		pr_err("Address does not belong to a known buffer\n");
+		ret = get_mem_info_svm_api(addr, memory_exception_data->gpu_id);
+		if (ret != HSAKMT_STATUS_SUCCESS)
+			pr_err("Address does not belong to a known buffer\n");
 		return;
 	}
 
