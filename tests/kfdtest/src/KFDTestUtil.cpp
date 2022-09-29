@@ -193,6 +193,7 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         break;
     case 10:
         familyId = FAMILY_NV;
+        break;
     case 11:
         familyId = FAMILY_GFX11;
         break;
