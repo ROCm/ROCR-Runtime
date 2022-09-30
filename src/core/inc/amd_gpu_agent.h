@@ -48,7 +48,7 @@
 #include <vector>
 #include <map>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
@@ -283,6 +283,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Returns Hive ID
   __forceinline uint64_t HiveId() const override { return  properties_.HiveID; }
 
+  // @brief Returns KFD's GPU id which is a hash used internally.
+  __forceinline uint64_t KfdGpuID() const { return properties_.KFDGpuID; }
+
   // @brief Returns node property.
   __forceinline const HsaNodeProperties& properties() const {
     return properties_;
@@ -446,6 +449,9 @@ class GpuAgent : public GpuAgentInt {
   HsaClockCounters t1_;
 
   double historical_clock_ratio_;
+
+  // @brief s_memrealtime nominal clock frequency
+  uint64_t wallclock_frequency_;
 
   // @brief Array of GPU cache property.
   std::vector<HsaCacheProperties> cache_props_;

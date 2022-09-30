@@ -82,6 +82,15 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
 void CloseLib(LibHandle lib) { FreeLibrary(*(::HMODULE*)&lib); }
 
+std::vector<LibHandle> GetLoadedLibs() {
+  // Use EnumProcessModulesEx
+  static_assert(false, "Not implemented.");
+}
+
+std::string GetLibraryName(LibHandle lib) {
+  static_assert(false, "Not implemented.");
+}
+
 Mutex CreateMutex() { return CreateEvent(NULL, false, true, NULL); }
 
 bool TryAcquireMutex(Mutex lock) {
@@ -266,6 +275,16 @@ void SharedReleaseSharedMutex(SharedMutex lock) {
 }
 
 void DestroySharedMutex(SharedMutex lock) {
+  assert(false && "Not implemented.");
+  abort();
+}
+
+uint64_t ReadSystemClock() {
+  assert(false && "Not implemented.");
+  abort();
+}
+
+uint64_t SystemClockFrequency() {
   assert(false && "Not implemented.");
   abort();
 }

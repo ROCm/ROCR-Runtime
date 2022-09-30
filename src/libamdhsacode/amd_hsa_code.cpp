@@ -584,6 +584,10 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1033: name = "gfx1033"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1034: name = "gfx1034"; xnack_supported = false; sramecc_supported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1035: name = "gfx1035"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1036: name = "gfx1036"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100: name = "gfx1100"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1102: name = "gfx1102"; xnack_supported = false; sramecc_supported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1103: name = "gfx1103"; xnack_supported = false; sramecc_supported = false; break;
       default: return false;
       }
       return true;
@@ -632,6 +636,12 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX906;
       else if (old_name == "AMD:AMDGPU:9:0:12")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C;
+      else if (old_name == "AMD:AMDGPU:11:0:0")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100;
+      else if (old_name == "AMD:AMDGPU:11:0:2")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1102;
+      else if (old_name == "AMD:AMDGPU:11:0:3")
+        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1103;
       else {
         // Code object v2 only supports asics up to gfx906 plus gfx90c. Do NOT
         // add handling of new asics into this if-else-if* block.

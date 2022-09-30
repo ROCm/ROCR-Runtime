@@ -185,8 +185,11 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
       (alloc_flags & AllocateExecutable ? 1 : 0);
   kmt_alloc_flags.ui32.AQLQueueMemory =
       (alloc_flags & AllocateDoubleMap ? 1 : 0);
-  if (IsSystem() && (alloc_flags & AllocateIPC))
+  if (IsSystem() && (alloc_flags & AllocateNonPaged))
       kmt_alloc_flags.ui32.NonPaged = 1;
+
+  // Allocate pseudo fine grain memory
+  kmt_alloc_flags.ui32.CoarseGrain = (alloc_flags & AllocatePCIeRW ? 0 : kmt_alloc_flags.ui32.CoarseGrain);
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory()) {
@@ -451,19 +454,12 @@ hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
   // without regard to type of requesting device (CPU / GPU)
   // Return disallowed by default if framebuffer is fine grained
   // and requesting device is connected via xGMI link
-  // Return never allowed if framebuffer is fine grained and
-  // requesting device is connected via PCIe link
+
   if (IsLocalMemory()) {
 
     // Return disallowed by default if memory is coarse
     // grained without regard to link type
     if  (fine_grain() == false) {
-      return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
-    }
-
-    // Determine if pool is pseudo fine-grained due to env flag
-    // Return disallowed by default
-    if (core::Runtime::runtime_singleton_->flag().fine_grain_pcie()) {
       return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
     }
 

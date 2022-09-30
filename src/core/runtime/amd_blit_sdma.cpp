@@ -146,18 +146,20 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     return HSA_STATUS_ERROR;
   }
 
+  const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
+      agent_->node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
   if (agent_->isa()->GetVersion() == core::Isa::Version(7, 0, 1)) {
     platform_atomic_support_ = false;
   } else {
-    const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
-        agent_->node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
     platform_atomic_support_ = link.info.atomic_support_64bit;
   }
 
   // HDP flush supported on gfx900 and forward.
   // FIXME: Not working on gfx10, raises SRBM write protection interrupt.
+  // gfx90a can support xGMI host to device connections so bypass HDP flush
+  // in this case.
   if (agent_->isa()->GetMajorVersion() == 9) {
-    hdp_flush_support_ = true;
+    hdp_flush_support_ = link.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI;
   }
 
   // Allocate queue buffer.

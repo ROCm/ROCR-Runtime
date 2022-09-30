@@ -47,7 +47,7 @@
 #include <stdint.h>
 #include <vector>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/blit.h"

@@ -44,17 +44,16 @@
 
 #ifndef HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
 #define HSA_RUNTME_CORE_INC_COMMAND_QUEUE_H_
+
 #include <sstream>
 
 #include "core/common/shared.h"
-
 #include "core/inc/checked.h"
-
+#include "core/inc/memory_region.h"
 #include "core/util/utils.h"
-
 #include "inc/amd_hsa_queue.h"
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 namespace rocr {
 namespace core {
@@ -128,6 +127,7 @@ struct SharedQueue {
 
 class LocalQueue {
  public:
+  LocalQueue() : local_queue_(MemoryRegion::AllocateNonPaged) {}
   SharedQueue* queue() const { return local_queue_.shared_object(); }
 
  private:

@@ -73,63 +73,63 @@ struct formatconverstion_t {
 // Format/Type to combined format code table.
 // Sorted and indexed to allow fast searches.
 static const formatconverstion_t FormatLUT[] = {
-  {FMT_1_5_5_5, TYPE_UNORM, CFMT_1_5_5_5_UNORM},
-  {FMT_10_10_10_2, TYPE_UNORM, CFMT_10_10_10_2_UNORM},
-  {FMT_10_10_10_2, TYPE_SNORM, CFMT_10_10_10_2_SNORM},
-  {FMT_10_10_10_2, TYPE_UINT, CFMT_10_10_10_2_UINT},
-  {FMT_10_10_10_2, TYPE_SINT, CFMT_10_10_10_2_SINT},
-  {FMT_16, TYPE_UNORM, CFMT_16_UNORM},
-  {FMT_16, TYPE_SNORM, CFMT_16_SNORM},
-  {FMT_16, TYPE_UINT, CFMT_16_UINT},
-  {FMT_16, TYPE_SINT, CFMT_16_SINT},
-  {FMT_16, TYPE_FLOAT, CFMT_16_FLOAT},
-  {FMT_16_16, TYPE_UNORM, CFMT_16_16_UNORM},
-  {FMT_16_16, TYPE_SNORM, CFMT_16_16_SNORM},
-  {FMT_16_16, TYPE_UINT, CFMT_16_16_UINT},
-  {FMT_16_16, TYPE_SINT, CFMT_16_16_SINT},
-  {FMT_16_16, TYPE_FLOAT, CFMT_16_16_FLOAT},
-  {FMT_16_16_16_16, TYPE_UNORM, CFMT_16_16_16_16_UNORM},
-  {FMT_16_16_16_16, TYPE_SNORM, CFMT_16_16_16_16_SNORM},
-  {FMT_16_16_16_16, TYPE_UINT, CFMT_16_16_16_16_UINT},
-  {FMT_16_16_16_16, TYPE_SINT, CFMT_16_16_16_16_SINT},
-  {FMT_16_16_16_16, TYPE_FLOAT, CFMT_16_16_16_16_FLOAT},
-  {FMT_2_10_10_10, TYPE_UNORM, CFMT_2_10_10_10_UNORM},
-  {FMT_2_10_10_10, TYPE_SNORM, CFMT_2_10_10_10_SNORM},
-  {FMT_2_10_10_10, TYPE_UINT, CFMT_2_10_10_10_UINT},
-  {FMT_2_10_10_10, TYPE_SINT, CFMT_2_10_10_10_SINT},
-  {FMT_24_8, TYPE_UNORM, CFMT_24_8_UNORM},
-  {FMT_24_8, TYPE_UINT, CFMT_24_8_UINT},
-  {FMT_32, TYPE_UINT, CFMT_32_UINT},
-  {FMT_32, TYPE_SINT, CFMT_32_SINT},
-  {FMT_32, TYPE_FLOAT, CFMT_32_FLOAT},
-  {FMT_32_32, TYPE_UINT, CFMT_32_32_UINT},
-  {FMT_32_32, TYPE_SINT, CFMT_32_32_SINT},
-  {FMT_32_32, TYPE_FLOAT, CFMT_32_32_FLOAT},
-  {FMT_32_32_32, TYPE_UINT, CFMT_32_32_32_UINT},
-  {FMT_32_32_32, TYPE_SINT, CFMT_32_32_32_SINT},
-  {FMT_32_32_32, TYPE_FLOAT, CFMT_32_32_32_FLOAT},
-  {FMT_32_32_32_32, TYPE_UINT, CFMT_32_32_32_32_UINT},
-  {FMT_32_32_32_32, TYPE_SINT, CFMT_32_32_32_32_SINT},
-  {FMT_32_32_32_32, TYPE_FLOAT, CFMT_32_32_32_32_FLOAT},
-  {FMT_5_5_5_1, TYPE_UNORM, CFMT_5_5_5_1_UNORM},
-  {FMT_5_6_5, TYPE_UNORM, CFMT_5_6_5_UNORM},
-  {FMT_8, TYPE_UNORM, CFMT_8_UNORM},
-  {FMT_8, TYPE_SNORM, CFMT_8_SNORM},
-  {FMT_8, TYPE_UINT, CFMT_8_UINT},
-  {FMT_8, TYPE_SINT, CFMT_8_SINT},
-  {FMT_8, TYPE_SRGB, CFMT_8_SRGB},
-  {FMT_8_24, TYPE_UNORM, CFMT_8_24_UNORM},
-  {FMT_8_24, TYPE_UINT, CFMT_8_24_UINT},
-  {FMT_8_8, TYPE_UNORM, CFMT_8_8_UNORM},
-  {FMT_8_8, TYPE_SNORM, CFMT_8_8_SNORM},
-  {FMT_8_8, TYPE_UINT, CFMT_8_8_UINT},
-  {FMT_8_8, TYPE_SINT, CFMT_8_8_SINT},
-  {FMT_8_8, TYPE_SRGB, CFMT_8_8_SRGB},
-  {FMT_8_8_8_8, TYPE_UNORM, CFMT_8_8_8_8_UNORM},
-  {FMT_8_8_8_8, TYPE_SNORM, CFMT_8_8_8_8_SNORM},
-  {FMT_8_8_8_8, TYPE_UINT, CFMT_8_8_8_8_UINT},
-  {FMT_8_8_8_8, TYPE_SINT, CFMT_8_8_8_8_SINT},
-  {FMT_8_8_8_8, TYPE_SRGB, CFMT_8_8_8_8_SRGB}
+    {FMT_1_5_5_5, TYPE_UNORM, CFMT_1_5_5_5_UNORM},          // 0
+    {FMT_10_10_10_2, TYPE_UNORM, CFMT_10_10_10_2_UNORM},    // 1
+    {FMT_10_10_10_2, TYPE_SNORM, CFMT_10_10_10_2_SNORM},    // 2
+    {FMT_10_10_10_2, TYPE_UINT, CFMT_10_10_10_2_UINT},      // 3
+    {FMT_10_10_10_2, TYPE_SINT, CFMT_10_10_10_2_SINT},      // 4
+    {FMT_16, TYPE_UNORM, CFMT_16_UNORM},                    // 5
+    {FMT_16, TYPE_SNORM, CFMT_16_SNORM},                    // 6
+    {FMT_16, TYPE_UINT, CFMT_16_UINT},                      // 7
+    {FMT_16, TYPE_SINT, CFMT_16_SINT},                      // 8
+    {FMT_16, TYPE_FLOAT, CFMT_16_FLOAT},                    // 9
+    {FMT_16_16, TYPE_UNORM, CFMT_16_16_UNORM},              // 10
+    {FMT_16_16, TYPE_SNORM, CFMT_16_16_SNORM},              // 11
+    {FMT_16_16, TYPE_UINT, CFMT_16_16_UINT},                // 12
+    {FMT_16_16, TYPE_SINT, CFMT_16_16_SINT},                // 13
+    {FMT_16_16, TYPE_FLOAT, CFMT_16_16_FLOAT},              // 14
+    {FMT_16_16_16_16, TYPE_UNORM, CFMT_16_16_16_16_UNORM},  // 15
+    {FMT_16_16_16_16, TYPE_SNORM, CFMT_16_16_16_16_SNORM},  // 16
+    {FMT_16_16_16_16, TYPE_UINT, CFMT_16_16_16_16_UINT},    // 17
+    {FMT_16_16_16_16, TYPE_SINT, CFMT_16_16_16_16_SINT},    // 18
+    {FMT_16_16_16_16, TYPE_FLOAT, CFMT_16_16_16_16_FLOAT},  // 19
+    {FMT_2_10_10_10, TYPE_UNORM, CFMT_2_10_10_10_UNORM},    // 20
+    {FMT_2_10_10_10, TYPE_SNORM, CFMT_2_10_10_10_SNORM},    // 21
+    {FMT_2_10_10_10, TYPE_UINT, CFMT_2_10_10_10_UINT},      // 22
+    {FMT_2_10_10_10, TYPE_SINT, CFMT_2_10_10_10_SINT},      // 23
+    {FMT_24_8, TYPE_UNORM, CFMT_24_8_UNORM},                // 24
+    {FMT_24_8, TYPE_UINT, CFMT_24_8_UINT},                  // 25
+    {FMT_32, TYPE_UINT, CFMT_32_UINT},                      // 26
+    {FMT_32, TYPE_SINT, CFMT_32_SINT},                      // 27
+    {FMT_32, TYPE_FLOAT, CFMT_32_FLOAT},                    // 28
+    {FMT_32_32, TYPE_UINT, CFMT_32_32_UINT},                // 29
+    {FMT_32_32, TYPE_SINT, CFMT_32_32_SINT},                // 30
+    {FMT_32_32, TYPE_FLOAT, CFMT_32_32_FLOAT},              // 31
+    {FMT_32_32_32, TYPE_UINT, CFMT_32_32_32_UINT},          // 32
+    {FMT_32_32_32, TYPE_SINT, CFMT_32_32_32_SINT},          // 33
+    {FMT_32_32_32, TYPE_FLOAT, CFMT_32_32_32_FLOAT},        // 34
+    {FMT_32_32_32_32, TYPE_UINT, CFMT_32_32_32_32_UINT},    // 35
+    {FMT_32_32_32_32, TYPE_SINT, CFMT_32_32_32_32_SINT},    // 36
+    {FMT_32_32_32_32, TYPE_FLOAT, CFMT_32_32_32_32_FLOAT},  // 37
+    {FMT_5_5_5_1, TYPE_UNORM, CFMT_5_5_5_1_UNORM},          // 38
+    {FMT_5_6_5, TYPE_UNORM, CFMT_5_6_5_UNORM},              // 39
+    {FMT_8, TYPE_UNORM, CFMT_8_UNORM},                      // 40
+    {FMT_8, TYPE_SNORM, CFMT_8_SNORM},                      // 41
+    {FMT_8, TYPE_UINT, CFMT_8_UINT},                        // 42
+    {FMT_8, TYPE_SINT, CFMT_8_SINT},                        // 43
+    {FMT_8, TYPE_SRGB, CFMT_8_SRGB},                        // 44
+    {FMT_8_24, TYPE_UNORM, CFMT_8_24_UNORM},                // 45
+    {FMT_8_24, TYPE_UINT, CFMT_8_24_UINT},                  // 46
+    {FMT_8_8, TYPE_UNORM, CFMT_8_8_UNORM},                  // 47
+    {FMT_8_8, TYPE_SNORM, CFMT_8_8_SNORM},                  // 48
+    {FMT_8_8, TYPE_UINT, CFMT_8_8_UINT},                    // 49
+    {FMT_8_8, TYPE_SINT, CFMT_8_8_SINT},                    // 50
+    {FMT_8_8, TYPE_SRGB, CFMT_8_8_SRGB},                    // 51
+    {FMT_8_8_8_8, TYPE_UNORM, CFMT_8_8_8_8_UNORM},          // 52
+    {FMT_8_8_8_8, TYPE_SNORM, CFMT_8_8_8_8_SNORM},          // 53
+    {FMT_8_8_8_8, TYPE_UINT, CFMT_8_8_8_8_UINT},            // 54
+    {FMT_8_8_8_8, TYPE_SINT, CFMT_8_8_8_8_SINT},            // 55
+    {FMT_8_8_8_8, TYPE_SRGB, CFMT_8_8_8_8_SRGB}             // 56
 };
 static const int FormatLUTSize = sizeof(FormatLUT)/sizeof(formatconverstion_t);
 
@@ -229,14 +229,12 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
   bool atc_access = true;
   const void* image_data_addr = image.data;
 
-  ImageProperty image_prop =
-                 image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   if ((image_prop.cap == HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED) ||
      (image_prop.element_size == 0))
     return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
-  const Swizzle swizzle =
-                       image_lut_.MapSwizzle(image.desc.format.channel_order);
+  const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
 
   if (IsLocalMemory(image.data)) {
     atc_access = false;
@@ -279,7 +277,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
     image.srd[1] = word1.val;
     image.srd[3] = word3.val;
   } else {
-    uint32_t hwPixelSize = image_lut_.GetPixelSize(image_prop.data_format, image_prop.data_type);
+    uint32_t hwPixelSize = ImageLut().GetPixelSize(image_prop.data_format, image_prop.data_type);
 
     if (image_prop.element_size != hwPixelSize) {
       return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
@@ -300,7 +298,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image,
     if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DA ||
         image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1D) {
       reinterpret_cast<SQ_IMG_RSRC_WORD3*>(&image.srd[3])->bits.TYPE =
-                                  image_lut_.MapGeometry(image.desc.geometry);
+          ImageLut().MapGeometry(image.desc.geometry);
     }
     
     // Imported metadata holds the offset to metadata, add the image base address.
@@ -375,8 +373,7 @@ static TEX_BC_SWIZZLE GetBcSwizzle(const Swizzle& swizzle) {
 
 
 hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
@@ -406,8 +403,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
 
     word2.f.NUM_RECORDS = image.desc.width * image_prop.element_size;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
     word3.f.RESOURCE_LEVEL = 1;
     word3.f.DST_SEL_X = swizzle.x;
@@ -416,7 +412,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
     word3.f.DST_SEL_W = swizzle.w;
     word3.f.FORMAT = GetCombinedFormat(image_prop.data_format, image_prop.data_type);
     word3.f.INDEX_STRIDE = image_prop.element_size;
-    word3.f.TYPE = image_lut_.MapGeometry(image.desc.geometry);
+    word3.f.TYPE = ImageLut().MapGeometry(image.desc.geometry);
 
     image.srd[0] = word0.val;
     image.srd[1] = word1.val;
@@ -463,8 +459,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
     word2.f.HEIGHT = image.desc.height ? image.desc.height - 1 : 0;
     word2.f.RESOURCE_LEVEL = 1;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
     word3.f.DST_SEL_X = swizzle.x;
     word3.f.DST_SEL_Y = swizzle.y;
@@ -472,7 +467,7 @@ hsa_status_t ImageManagerNv::PopulateImageSrd(Image& image) const {
     word3.f.DST_SEL_W = swizzle.w;
     word3.f.SW_MODE = swizzleMode;
     word3.f.BC_SWIZZLE = GetBcSwizzle(swizzle);
-    word3.f.TYPE = image_lut_.MapGeometry(image.desc.geometry);
+    word3.f.TYPE = ImageLut().MapGeometry(image.desc.geometry);
 
     const bool image_array =
         (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DA ||
@@ -518,14 +513,12 @@ hsa_status_t ImageManagerNv::ModifyImageSrd(
     Image& image, hsa_ext_image_format_t& new_format) const {
   image.desc.format = new_format;
 
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_BUF_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_BUF_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.DST_SEL_X = swizzle.x;
@@ -538,8 +531,7 @@ hsa_status_t ImageManagerNv::ModifyImageSrd(
         reinterpret_cast<SQ_IMG_RSRC_WORD1*>(&image.srd[1]);
     word1->bits.FORMAT = GetCombinedFormat(image_prop.data_format, image_prop.data_type);
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_IMG_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_IMG_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.DST_SEL_X = swizzle.x;
@@ -762,7 +754,7 @@ hsa_status_t ImageManagerNv::FillImage(const Image& image, const void* pattern,
       fill_value[3] = pattern_f[3];
       new_pattern = fill_value;
 
-      ImageProperty image_prop = image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+      ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
 
       word1 = reinterpret_cast<SQ_IMG_RSRC_WORD1*>(&image_view->srd[1]);
       num_format_original = word1->bits.FORMAT;

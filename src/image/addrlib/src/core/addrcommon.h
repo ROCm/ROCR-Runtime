@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ****************************************************************************************************
@@ -36,39 +35,38 @@
 
 #include "addrinterface.h"
 
-#if !defined(DEBUG)
-#ifdef NDEBUG
-#define DEBUG 0
-#else
-#define DEBUG 1
-#endif
-#endif
 
-// ADDR_LNX_KERNEL_BUILD is for internal build
-// Moved from addrinterface.h so __KERNEL__ is not needed any more
-#if ADDR_LNX_KERNEL_BUILD // || (defined(__GNUC__) && defined(__KERNEL__))
-    #include <string.h>
-#elif !defined(__APPLE__) || defined(HAVE_TSERVER)
+#if !defined(__APPLE__) || defined(HAVE_TSERVER)
     #include <stdlib.h>
     #include <string.h>
 #endif
 
-#include <assert.h>
-#include "util/macros.h"
+#if defined(__GNUC__)
+    #include <assert.h>
+#endif
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Platform specific debug break defines
 ////////////////////////////////////////////////////////////////////////////////////////////////////
+#if !defined(DEBUG)
+    #ifdef NDEBUG
+        #define DEBUG 0
+    #else
+        #define DEBUG 1
+    #endif
+#endif
+
 #if DEBUG
     #if defined(__GNUC__)
-        #define ADDR_DBG_BREAK()    assert(false)
+        #define ADDR_DBG_BREAK()    { assert(false); }
     #elif defined(__APPLE__)
         #define ADDR_DBG_BREAK()    { IOPanic("");}
     #else
         #define ADDR_DBG_BREAK()    { __debugbreak(); }
     #endif
 #else
-    #define ADDR_DBG_BREAK() do {} while(0)
+    #define ADDR_DBG_BREAK()
 #endif
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -81,10 +79,29 @@
     #define ADDR_ANALYSIS_ASSUME(expr) do { (void)(expr); } while (0)
 #endif
 
-#define ADDR_ASSERT(__e) assert(__e)
-#define ADDR_ASSERT_ALWAYS() ADDR_DBG_BREAK()
-#define ADDR_UNHANDLED_CASE() ADDR_ASSERT(!"Unhandled case")
-#define ADDR_NOT_IMPLEMENTED() ADDR_ASSERT(!"Not implemented");
+#if DEBUG
+    #if defined( _WIN32 )
+        #define ADDR_ASSERT(__e)                                \
+        {                                                       \
+            ADDR_ANALYSIS_ASSUME(__e);                          \
+            if ( !((__e) ? TRUE : FALSE)) { ADDR_DBG_BREAK(); } \
+        }
+    #else
+        #define ADDR_ASSERT(__e) if ( !((__e) ? TRUE : FALSE)) { ADDR_DBG_BREAK(); }
+    #endif
+    #define ADDR_ASSERT_ALWAYS() ADDR_DBG_BREAK()
+    #define ADDR_UNHANDLED_CASE() ADDR_ASSERT(!"Unhandled case")
+    #define ADDR_NOT_IMPLEMENTED() ADDR_ASSERT(!"Not implemented");
+#else //DEBUG
+    #if defined( _WIN32 )
+        #define ADDR_ASSERT(__e) { ADDR_ANALYSIS_ASSUME(__e); }
+    #else
+        #define ADDR_ASSERT(__e)
+    #endif
+    #define ADDR_ASSERT_ALWAYS()
+    #define ADDR_UNHANDLED_CASE()
+    #define ADDR_NOT_IMPLEMENTED()
+#endif //DEBUG
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -107,6 +124,7 @@
 #define ADDR_INFO(cond, a)         \
 { if (!(cond)) { ADDR_PRNT(a); } }
 
+
 /// @brief Macro for reporting error warning messages
 /// @ingroup util
 ///
@@ -124,6 +142,7 @@
   { ADDR_PRNT(a);                  \
     ADDR_PRNT(("  WARNING in file %s, line %d\n", __FILE__, __LINE__)); \
 } }
+
 
 /// @brief Macro for reporting fatal error conditions
 /// @ingroup util
@@ -147,27 +166,35 @@
 
 #define ADDRDPF 1 ? (void)0 : (void)
 
-#define ADDR_PRNT(a) do {} while(0)
+#define ADDR_PRNT(a)
 
-#define ADDR_DBG_BREAK() do {} while(0)
+#define ADDR_DBG_BREAK()
 
-#define ADDR_INFO(cond, a) do {} while(0)
+#define ADDR_INFO(cond, a)
 
-#define ADDR_WARN(cond, a) do {} while(0)
+#define ADDR_WARN(cond, a)
 
-#define ADDR_EXIT(cond, a) do {} while(0)
+#define ADDR_EXIT(cond, a)
 
 #endif // DEBUG
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 
-#define ADDR_C_ASSERT(__e) STATIC_ASSERT(__e)
+#if defined(static_assert)
+#define ADDR_C_ASSERT(__e) static_assert(__e, "")
+#else
+   /* This version of STATIC_ASSERT() relies on VLAs.  If COND is
+    * false/zero, the array size will be -1 and we'll get a compile
+    * error
+    */
+#  define ADDR_C_ASSERT(__e) do {         \
+      (void) sizeof(char [1 - 2*!(__e)]); \
+   } while (0)
+#endif
 
 namespace rocr {
-namespace Addr
-{
+namespace Addr {
+namespace V1 {
 
-namespace V1
-{
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 // Common constants
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -206,21 +233,6 @@ static const UINT_32 MaxSurfaceHeight = 16384;
 
 /// Helper macros to select a single bit from an int (undefined later in section)
 #define _BIT(v,b)      (((v) >> (b) ) & 1)
-
-/**
-****************************************************************************************************
-* @brief Enums to identify AddrLib type
-****************************************************************************************************
-*/
-enum LibClass
-{
-    BASE_ADDRLIB = 0x0,
-    R600_ADDRLIB = 0x6,
-    R800_ADDRLIB = 0x8,
-    SI_ADDRLIB   = 0xa,
-    CI_ADDRLIB   = 0xb,
-    AI_ADDRLIB   = 0xd,
-};
 
 /**
 ****************************************************************************************************
@@ -271,8 +283,9 @@ union ConfigFlags
         UINT_32 disableLinearOpt       : 1;    ///< Disallow tile modes to be optimized to linear
         UINT_32 use32bppFor422Fmt      : 1;    ///< View 422 formats as 32 bits per pixel element
         UINT_32 forceDccAndTcCompat    : 1;    ///< Force enable DCC and TC compatibility
-        UINT_32 nonPower2MemConfig     : 1;    ///< Physical video memory size is not power of 2
-        UINT_32 reserved               : 19;   ///< Reserved bits for future use
+        UINT_32 nonPower2MemConfig     : 1;    ///< Video memory bit width is not power of 2
+        UINT_32 enableAltTiling        : 1;    ///< Enable alt tile mode
+        UINT_32 reserved               : 18;   ///< Reserved bits for future use
     };
 
     UINT_32 value;
@@ -431,6 +444,38 @@ static inline INT_32 Max(
     INT_32 value2)
 {
     return ((value1 > (value2)) ? (value1) : value2);
+}
+
+/**
+****************************************************************************************************
+*   RoundUpQuotient
+*
+*   @brief
+*       Divides two numbers, rounding up any remainder.
+****************************************************************************************************
+*/
+static inline UINT_32 RoundUpQuotient(
+    UINT_32 numerator,
+    UINT_32 denominator)
+{
+    ADDR_ASSERT(denominator > 0);
+    return ((numerator + (denominator - 1)) / denominator);
+}
+
+/**
+****************************************************************************************************
+*   RoundUpQuotient
+*
+*   @brief
+*       Divides two numbers, rounding up any remainder.
+****************************************************************************************************
+*/
+static inline UINT_64 RoundUpQuotient(
+    UINT_64 numerator,
+    UINT_64 denominator)
+{
+    ADDR_ASSERT(denominator > 0);
+    return ((numerator + (denominator - 1)) / denominator);
 }
 
 /**
@@ -856,6 +901,7 @@ static inline VOID InitChannel(
     pChanSet->index = index;
 }
 
+
 /**
 ****************************************************************************************************
 *   InitChannel
@@ -933,7 +979,7 @@ static inline UINT_32 GetCoordActiveMask(
 *   ShiftCeil
 *
 *   @brief
-*       Apply righ-shift with ceiling
+*       Apply right-shift with ceiling
 ****************************************************************************************************
 */
 static inline UINT_32 ShiftCeil(
@@ -943,9 +989,23 @@ static inline UINT_32 ShiftCeil(
     return (a >> b) + (((a & ((1 << b) - 1)) != 0) ? 1 : 0);
 }
 
+/**
+****************************************************************************************************
+*   ShiftRight
+*
+*   @brief
+*       Return right-shift value and minimum is 1
+****************************************************************************************************
+*/
+static inline UINT_32 ShiftRight(
+    UINT_32 a,  ///< [in] value to be right-shifted
+    UINT_32 b)  ///< [in] number of bits to shift
+{
+    return Max(a >> b, 1u);
+}
+
 } // Addr
 } // rocr
-
 
 #endif // __ADDR_COMMON_H__
 

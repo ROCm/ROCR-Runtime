@@ -87,7 +87,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.5.0" )
+get_version ( "1.7.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
@@ -95,8 +95,10 @@ set ( SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
 set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}" )
 
 ## Find external dependencies.
+find_package(PkgConfig)
 find_package(LibElf REQUIRED)
 find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
+pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
 
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
@@ -119,10 +121,11 @@ endif()
 target_include_directories( ${CORE_RUNTIME_TARGET}
   PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/inc>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}/hsa>
+  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode )
+  ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler)
 
 ## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
@@ -182,6 +185,7 @@ set ( SRCS core/util/lnx/os_linux.cpp
            core/runtime/signal.cpp
            core/runtime/queue.cpp
            core/runtime/cache.cpp
+           core/runtime/svm_profiler.cpp
            core/common/shared.cpp
            core/common/hsa_table_interface.cpp
            loader/executable.cpp
@@ -192,6 +196,10 @@ set ( SRCS core/util/lnx/os_linux.cpp
            libamdhsacode/amd_hsa_code.cpp )
 
 target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
+
+## Depend on trap handler target.
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
+add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
@@ -220,6 +228,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/r800/siaddrlib.cpp
                    image/addrlib/src/gfx9/gfx9addrlib.cpp
                    image/addrlib/src/gfx10/gfx10addrlib.cpp
+                   image/addrlib/src/gfx11/gfx11addrlib.cpp
                    image/device_info.cpp
                    image/hsa_ext_image.cpp
                    image/image_runtime.cpp
@@ -227,7 +236,9 @@ if(${IMAGE_SUPPORT})
                    image/image_manager_kv.cpp
                    image/image_manager_ai.cpp
                    image/image_manager_nv.cpp
+                   image/image_manager_gfx11.cpp
                    image/image_lut_kv.cpp
+                   image/image_lut_gfx11.cpp
                    image/blit_object_gfx7xx.cpp
                    image/blit_object_gfx8xx.cpp
                    image/blit_object_gfx9xx.cpp
@@ -246,9 +257,11 @@ if(${IMAGE_SUPPORT})
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx10
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx11
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx9
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10 )
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11 )
 
   target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_SRCS} )
 
@@ -259,7 +272,7 @@ if(${IMAGE_SUPPORT})
 endif()
 
 ## Link dependencies.
-target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt )
+target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
 
 ## Set the VERSION and SOVERSION values
@@ -286,13 +299,6 @@ if( NOT ${BUILD_SHARED_LIBS} )
   install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
 endif()
 
-## Create symlinks for legacy packaging and install
-add_custom_target ( hsa_include_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_INCLUDEDIR}/hsa hsa_include_link )
-if ( ${BUILD_SHARED_LIBS} )
-    add_custom_target ( hsa_lib_link ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so ${CORE_RUNTIME_LIBRARY}-link.so )
-    add_custom_target ( hsa_lib_link2 ALL WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR} COMMAND ${CMAKE_COMMAND} -E create_symlink ../../${CMAKE_INSTALL_LIBDIR}/${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} ${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} )
-endif()
-
 ## Set install information
 # Installs binaries and exports the library usage data to ${HSAKMT_TARGET}Targets
 install ( TARGETS ${CORE_RUNTIME_TARGET} EXPORT ${CORE_RUNTIME_NAME}Targets
@@ -305,14 +311,14 @@ install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTA
 # Install public headers
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hsa COMPONENT dev )
 
-# Legacy symlink - not packaged (CPack is bugged until ~3.18, see https://gitlab.kitware.com/cmake/cmake/-/merge_requests/4637)
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/hsa_include_link DESTINATION hsa/include PERMISSIONS OWNER_WRITE OWNER_READ RENAME hsa )
-
-# Legacy symlinks.
-if ( ${BUILD_SHARED_LIBS} )
-    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so DESTINATION hsa/lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so COMPONENT binary)
-    install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/${CORE_RUNTIME_LIBRARY}-link.so.${VERSION_MAJOR} DESTINATION hsa/lib PERMISSIONS OWNER_WRITE OWNER_READ RENAME ${CORE_RUNTIME_LIBRARY}.so.${VERSION_MAJOR} COMPONENT binary)
-endif ()
+# Option to build header path migration helpers.
+option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
+if(INCLUDE_PATH_COMPATIBILITY)
+  include(hsa-backward-compat.cmake)
+  target_include_directories( ${CORE_RUNTIME_TARGET}
+    PUBLIC
+    $<INSTALL_INTERFACE:hsa/include/hsa> )
+endif()
 
 ## Configure and install package config file
 # Record our usage data for clients find_package calls.
@@ -380,7 +386,7 @@ set ( CPACK_DEB_COMPONENT_INSTALL ON)
 set ( CPACK_RPM_COMPONENT_INSTALL ON)
 set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
 set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
-set ( CPACK_PACKAGE_CONTACT "TODO Advanced Micro Devices, Inc." )
+set ( CPACK_PACKAGE_CONTACT "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>")
 set ( CPACK_COMPONENT_BINARY_DESCRIPTION "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
 set ( CPACK_COMPONENT_DEV_DESCRIPTION "AMD Heterogeneous System Architecture HSA development package.\n This package contains the headers and cmake files for the hsa-rocr package." )
 set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
@@ -405,23 +411,22 @@ set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-R
 ## Process the Debian install/remove scripts to update the CPACK variables
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Binary/postinst @ONLY )
 configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/postinst.in DEBIAN/Dev/postinst @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Dev/prerm.in DEBIAN/Dev/prerm @ONLY )
-
 set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_CONTROL_EXTRA "DEBIAN/Dev/postinst;DEBIAN/Dev/prerm" )
 
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "hsakmt-roct" )
-set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr" )
+# package dependencies
+set( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1")
+set( CPACK_DEBIAN_BINARY_PACKAGE_RECOMMENDS "libdrm-amdgpu-amdgpu1")
+set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr, hsakmt-roct-dev" )
 if ( ROCM_DEP_ROCMCORE )
   string ( APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
-  string ( APPEND CPACK_DEBIAN_DEV_PACKAGE_DEPENDS ", rocm-core" )
 endif()
+# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
 set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
 
 # RPM package specific variables
+set ( EL7_DISTRO "FALSE" )
+checksetel7(EL7_DISTRO)
 set ( CPACK_RPM_BINARY_PACKAGE_NAME "hsa-rocr" )
 set ( CPACK_RPM_DEV_PACKAGE_NAME "hsa-rocr-devel" )
 if ( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
@@ -438,21 +443,21 @@ set( CPACK_RPM_PACKAGE_LICENSE "NCSA" )
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )
 configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/postun @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/post.in" RPM/Dev/post @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Dev/postun.in" RPM/Dev/postun @ONLY )
-
 set ( CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post" )
 set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun" )
-set ( CPACK_RPM_DEV_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/post" )
-set ( CPACK_RPM_DEV_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Dev/postun" )
 
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "hsakmt-roct" )
-set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr" )
+# package dependencies
+if (${EL7_DISTRO} STREQUAL "TRUE")
+  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "libdrm-amdgpu, numactl-libs" )
+else()
+  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs)" )
+  set ( CPACK_RPM_BINARY_PACKAGE_SUGGESTS "libdrm-amdgpu" )
+endif()
+set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr , hsakmt-roct-devel" )
 if ( ROCM_DEP_ROCMCORE )
   string ( APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocm-core" )
-  string ( APPEND CPACK_RPM_DEV_PACKAGE_REQUIRES " rocm-core" )
 endif()
+# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
 set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 

@@ -106,6 +106,12 @@ struct ValidityError<const T*> {
       return hsa_status_t(ValidityError<decltype(ptr)>::value); \
   } while (false)
 
+#define IS_NULL_OR_VALID(ptr)                                                                      \
+  do {                                                                                             \
+    if ((ptr) != NULL && !(ptr)->IsValid())                                                        \
+      return hsa_status_t(ValidityError<decltype(ptr)>::value);                                    \
+  } while (false)
+
 #define CHECK_ALLOC(ptr)                                         \
   do {                                                           \
     if ((ptr) == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES; \
@@ -232,10 +238,11 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
                                        uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                        hsa_signal_t completion_signal) {
   TRY;
-  if (dst == NULL || src == NULL) { return HSA_STATUS_ERROR_INVALID_ARGUMENT; }
+  IS_BAD_PTR(dst);
+  IS_BAD_PTR(src);
 
-  if ((num_dep_signals == 0 && dep_signals != NULL) ||
-      (num_dep_signals > 0 && dep_signals == NULL)) {
+  if ((num_dep_signals == 0 && dep_signals != nullptr) ||
+      (num_dep_signals > 0 && dep_signals == nullptr)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -260,8 +267,8 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   bool rev_copy_dir = core::Runtime::runtime_singleton_->flag().rev_copy_dir();
   if (size > 0) {
     return core::Runtime::runtime_singleton_->CopyMemory(
-        dst, (rev_copy_dir ? *src_agent  : *dst_agent),
-        src, (rev_copy_dir ? *dst_agent  : *src_agent),
+        dst, (rev_copy_dir ? src_agent : dst_agent),
+        src, (rev_copy_dir ? dst_agent : src_agent),
         size, dep_signal_list, *out_signal_obj);
   }
 
@@ -679,7 +686,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   TRY;
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL || flags != 0) {
+  if (size == 0 || ptr == NULL || (flags > HSA_AMD_MEMORY_POOL_PCIE_FLAG)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -690,8 +697,11 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
     return (hsa_status_t)HSA_STATUS_ERROR_INVALID_MEMORY_POOL;
   }
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(
-      mem_region, size, core::MemoryRegion::AllocateRestrict, ptr);
+  MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateRestrict;
+
+  if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+
+  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr);
   CATCH;
 }
 

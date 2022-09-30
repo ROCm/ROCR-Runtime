@@ -95,6 +95,7 @@ class ScratchCache {
     uint32_t lanes_per_wave;
     uint32_t waves_per_group;
     uint64_t wanted_slots;
+    uint32_t mem_alignment_size;
     bool cooperative;
     ptrdiff_t queue_process_offset;
     bool large;

@@ -45,7 +45,7 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_MEMORY_REGION_H_
 #define HSA_RUNTIME_CORE_INC_AMD_MEMORY_REGION_H_
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/inc/agent.h"
 #include "core/inc/runtime.h"
@@ -137,6 +137,8 @@ class MemoryRegion : public core::MemoryRegion {
                            hsa_access_permission_t access) const;
 
   void Trim() const;
+
+  HSAuint64 GetCacheSize() const { return fragment_allocator_.cache_size(); }
 
   __forceinline bool IsLocalMemory() const {
     return ((mem_props_.HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE) ||

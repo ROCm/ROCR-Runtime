@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ************************************************************************************************************************
@@ -38,10 +37,8 @@
 #include "coord.h"
 
 namespace rocr {
-namespace Addr
-{
-namespace V2
-{
+namespace Addr {
+namespace V2 {
 
 /**
 ************************************************************************************************************************
@@ -63,7 +60,8 @@ struct Gfx9ChipSettings
         // Display engine IP version name
         UINT_32 isDce12             : 1;
         UINT_32 isDcn1              : 1;
-        UINT_32 reserved1           : 30;
+        UINT_32 isDcn2              : 1;
+        UINT_32 reserved1           : 29;
 
         // Misc configuration bits
         UINT_32 metaBaseAlignFix    : 1;
@@ -216,6 +214,16 @@ const UINT_32 Dcn1Bpp64SwModeMask = (1u << ADDR_SW_4KB_D)    |
                                     (1u << ADDR_SW_64KB_D_X) |
                                     Dcn1NonBpp64SwModeMask;
 
+const UINT_32 Dcn2NonBpp64SwModeMask = (1u << ADDR_SW_LINEAR)   |
+                                       (1u << ADDR_SW_64KB_S)   |
+                                       (1u << ADDR_SW_64KB_S_T) |
+                                       (1u << ADDR_SW_64KB_S_X);
+
+const UINT_32 Dcn2Bpp64SwModeMask = (1u << ADDR_SW_64KB_D)   |
+                                    (1u << ADDR_SW_64KB_D_T) |
+                                    (1u << ADDR_SW_64KB_D_X) |
+                                    Dcn2NonBpp64SwModeMask;
+
 /**
 ************************************************************************************************************************
 * @brief GFX9 meta equation parameters
@@ -315,7 +323,10 @@ protected:
         const ADDR2_COMPUTE_HTILE_COORDFROMADDR_INPUT* pIn,
         ADDR2_COMPUTE_HTILE_COORDFROMADDR_OUTPUT*      pOut);
 
-    virtual ADDR_E_RETURNCODE HwlComputeDccAddrFromCoord(
+    virtual ADDR_E_RETURNCODE HwlSupportComputeDccAddrFromCoord(
+        const ADDR2_COMPUTE_DCC_ADDRFROMCOORD_INPUT* pIn);
+
+    virtual VOID HwlComputeDccAddrFromCoord(
         const ADDR2_COMPUTE_DCC_ADDRFROMCOORD_INPUT* pIn,
         ADDR2_COMPUTE_DCC_ADDRFROMCOORD_OUTPUT*      pOut);
 
@@ -637,7 +648,6 @@ private:
 } // V2
 } // Addr
 } // rocr
-
 
 #endif
 

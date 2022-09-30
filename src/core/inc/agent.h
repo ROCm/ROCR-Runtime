@@ -115,7 +115,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   explicit Agent(uint32_t node_id, DeviceType type)
       : node_id_(node_id),
         device_type_(uint32_t(type)),
-        profiling_enabled_(false) {
+        profiling_enabled_(false),
+        enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -267,6 +268,10 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
     return stat;
   }
 
+  __forceinline bool Enabled() const { return enabled_; }
+
+  __forceinline void Enable() { enabled_ = true; }
+
   virtual void Trim() {
     for (auto region : regions()) region->Trim();
   }
@@ -305,6 +310,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   const uint32_t device_type_;
 
   bool profiling_enabled_;
+
+  bool enabled_;
 
   // Used by an Agent's MemoryRegions to ensure serial memory operation on the device.
   // Serial memory operations are needed to ensure, among other things, that allocation failures are

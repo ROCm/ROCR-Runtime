@@ -42,48 +42,14 @@
 
 cmake_minimum_required ( VERSION 3.7 )
 
-# Flag to abort before executing after default initialization of cache variables
-set (QUIT 0)
-
 # Import target 'clang'
-find_package(Clang REQUIRED HINTS ${CMAKE_INSTALL_PREFIX}/llvm ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
-
-# Device libs doesn't support find_package yet.
-set(PREFIX_HINTS "")
-foreach(hint "/amdgcn/bitcode" "/lib/bitcode" "/lib/x86_64/bitcode")
-  foreach(path ${CMAKE_PREFIX_PATH})
-    string(APPEND path ${hint})
-    list(APPEND PREFIX_HINTS ${path})
-  endforeach(path)
-endforeach(hint)
-
-get_include_path(BITCODE_DIR "Bitcode library path" RESULT FOUND NAMES "opencl.bc" "opencl.amdgcn.bc"
-  HINTS
-    "${CMAKE_INSTALL_PREFIX}/amdgcn/bitcode"
-    "${CMAKE_INSTALL_PREFIX}/lib/bitcode"
-    "${CMAKE_INSTALL_PREFIX}/lib/x86_64/bitcode"
-    "${PREFIX_HINTS}"
-  PATHS
-    "/opt/rocm/amdgcn/bitcode"
-    "/opt/rocm/lib/bitcode"
-    "/opt/rocm/lib"
-    "/opt/rocm/lib/x86_64/bitcode")
-if (NOT ${FOUND})
-  set (QUIT 1)
-endif()
+find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
 # Determine the target devices if not specified
 if (NOT DEFINED TARGET_DEVICES)
-  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx1010;gfx1011;gfx1012;gfx1013;gfx1030;gfx1031;gfx1032;gfx1033;gfx1034;gfx1035")
+  set (TARGET_DEVICES "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810;gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx1010;gfx1011;gfx1012;gfx1013;gfx1030;gfx1031;gfx1032;gfx1033;gfx1034;gfx1035;gfx1036;gfx1100;gfx1102;gfx1103")
 endif()
 set( TARGET_DEVICES ${TARGET_DEVICES} CACHE STRING "Build targets" FORCE )
-
-# End of default configuration and path checking.
-# Quit if configuration is incomplete.
-if (QUIT)
-  message(FATAL_ERROR "Configuration halted.")
-  return()
-endif()
 
 if(${CMAKE_VERBOSE_MAKEFILE})
   get_property(clang_path TARGET clang PROPERTY LOCATION)
@@ -92,7 +58,6 @@ if(${CMAKE_VERBOSE_MAKEFILE})
   message("  Target Devices*: ${TARGET_DEVICES}")
   message("  (Specify \";\" separated list of target IDs.)")
   message("       Clang path: ${clang_path}")
-  message("      Bitcode Dir: ${BITCODE_DIR}")
 endif()
 
 ##==========================================
@@ -100,36 +65,12 @@ endif()
 ##==========================================
 function(gen_kernel_bc TARGET_ID INPUT_FILE OUTPUT_FILE)
 
-  string (REGEX MATCH "^gfx([^:]+)" GFXIP "${TARGET_ID}")
-  set (GFXIP_NUMBER "${CMAKE_MATCH_1}")
-  # Report syntactically invalid target IDs and terminate.
-  if (NOT GFXIP)
-    message(FATAL_ERROR "Invalid target (${TARGET_ID}) specified for generating BLIT kerenel")
-    return()
-  endif()
-  # Determine if device-libs is following old or new layout
-  if(EXISTS "${BITCODE_DIR}/opencl.amdgcn.bc")
-    set(BITCODE_ARGS "-nogpulib
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/opencl.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ockl.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/ocml.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_daz_opt_on.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_isa_version_${GFXIP_NUMBER}.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_unsafe_math_off.amdgcn.bc
-      -Xclang -mlink-bitcode-file -Xclang ${BITCODE_DIR}/oclc_finite_only_off.amdgcn.bc")
-  else()
-    set(BITCODE_ARGS "--hip-device-lib-path=${BITCODE_DIR}")
-  endif()
-
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
-    "-O2 -x cl -cl-denorms-are-zero -cl-std=CL2.0 -target amdgcn-amd-amdhsa
-    -Xclang -finclude-default-header -mcpu=${TARGET_ID}
-    ${BITCODE_ARGS} -o ${OUTPUT_FILE} ${INPUT_FILE}")
+    "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0
+    -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
 
   ## Add custom command to produce a code object file.
   ## This depends on the kernel source file & compiler.
-  ## It does not pickup devicelib changes.  It is not clear
-  ## how to do that after conversion to --rocm-path is done.
   add_custom_command(OUTPUT ${OUTPUT_FILE} COMMAND clang ${CLANG_ARG_LIST}
     DEPENDS ${INPUT_FILE} clang
     COMMENT "BUILDING bitcode for ${OUTPUT_FILE}..."
@@ -147,15 +88,8 @@ endfunction(gen_kernel_bc)
 ##==========================================
 function(build_kernel BLIT_NAME TARGET_ID)
 
-  string (REGEX MATCH "^gfx([^:]+)" GFXIP "${TARGET_ID}")
-  # Report syntactically invalid target IDs and terminate.
-  if (NOT GFXIP)
-    message(FATAL_ERROR "Invalid target (${TARGET_ID}) specified for generating BLIT kerenel (${BLIT_NAME})")
-    return()
-  endif()
-
   ## generate kernel bitcodes
-  set (CODE_OBJECT_FILE "${BLIT_NAME}_${GFXIP}")
+  set (CODE_OBJECT_FILE "${BLIT_NAME}_${TARGET_ID}")
   set (CL_FILE ${CMAKE_CURRENT_SOURCE_DIR}/imageblit_kernels.cl)
   gen_kernel_bc(${TARGET_ID} ${CL_FILE} ${CODE_OBJECT_FILE})
 

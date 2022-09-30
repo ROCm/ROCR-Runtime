@@ -50,6 +50,7 @@
 #include <memory>
 #include <tuple>
 #include <utility>
+#include <thread>
 
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/hsa_internal.h"
@@ -60,6 +61,7 @@
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/svm_profiler.h"
 #include "core/util/flag.h"
 #include "core/util/locks.h"
 #include "core/util/os.h"
@@ -132,7 +134,7 @@ class Runtime {
 
   /// @brief Insert agent into agent list ::agents_.
   /// @param [in] agent Pointer to the agent object.
-  void RegisterAgent(Agent* agent);
+  void RegisterAgent(Agent* agent, bool Enabled);
 
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
@@ -221,10 +223,9 @@ class Runtime {
   ///
   /// @retval ::HSA_STATUS_SUCCESS if copy command has been submitted
   /// successfully to the agent DMA queue.
-  hsa_status_t CopyMemory(void* dst, core::Agent& dst_agent, const void* src,
-                          core::Agent& src_agent, size_t size,
-                          std::vector<core::Signal*>& dep_signals,
-                          core::Signal& completion_signal);
+  hsa_status_t CopyMemory(void* dst, core::Agent* dst_agent, const void* src,
+                          core::Agent* src_agent, size_t size,
+                          std::vector<core::Signal*>& dep_signals, core::Signal& completion_signal);
 
   /// @brief Fill the first @p count of uint32_t in ptr with value.
   ///
@@ -282,6 +283,7 @@ class Runtime {
   struct PtrInfoBlockData {
     void* base;
     size_t length;
+    core::Agent* agentOwner;
   };
 
   hsa_status_t PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
@@ -310,7 +312,11 @@ class Runtime {
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
 
+  const std::vector<Agent*>& disabled_gpu_agents() { return disabled_gpu_agents_; }
+
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
+
+  Agent* agent_by_gpuid(uint32_t gpuid) { return agents_by_gpuid_[gpuid]; }
 
   Agent* region_gpu() { return region_gpu_; }
 
@@ -505,8 +511,14 @@ class Runtime {
   // Agent list containing all compatible GPU agents in the platform.
   std::vector<Agent*> gpu_agents_;
 
+  // Agent list containing incompletely initialized GPU agents not to be used by the process.
+  std::vector<Agent*> disabled_gpu_agents_;
+
   // Agent map containing all agents indexed by their KFD node IDs.
   std::map<uint32_t, std::vector<Agent*> > agents_by_node_;
+
+  // Agent map containing all agents indexed by their KFD gpuid.
+  std::map<uint32_t, Agent*> agents_by_gpuid_;
 
   // Agent list containing all compatible gpu agent ids in the platform.
   std::vector<uint32_t> gpu_ids_;
@@ -589,6 +601,8 @@ class Runtime {
 
   // Kfd version
   KfdVersion_t kfd_version;
+
+  std::unique_ptr<AMD::SvmProfileControl> svm_profile_;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is

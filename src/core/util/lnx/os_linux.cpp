@@ -59,6 +59,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include "core/inc/runtime.h"
 
 namespace rocr {
 namespace os {
@@ -99,16 +100,18 @@ class os_thread {
       assert(err == 0 && "pthread_attr_setstacksize failed.");
     }
 
-    int cores = get_nprocs_conf();
-    cpu_set_t* cpuset = CPU_ALLOC(cores);
-    for(int i=0; i<cores; i++){
-      CPU_SET(i, cpuset);
+    if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
+      int cores = get_nprocs_conf();
+      cpu_set_t* cpuset = CPU_ALLOC(cores);
+      for (int i = 0; i < cores; i++) {
+        CPU_SET(i, cpuset);
+      }
+      int err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
+      assert(err == 0 && "pthread_attr_setaffinity_np failed.");
+      CPU_FREE(cpuset);
     }
-    int err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
-    assert(err == 0 && "pthread_attr_setaffinity_np failed.");
-    CPU_FREE(cpuset);
 
-    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
     // Attempt to grow the stack within reason.
@@ -199,6 +202,35 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 }
 
 void CloseLib(LibHandle lib) { dlclose(*(void**)&lib); }
+
+std::vector<LibHandle> GetLoadedLibs() {
+
+  std::vector<LibHandle> ret;
+  std::vector<std::string> names;
+  auto callback = [&](dl_phdr_info* info) {
+    if(info->dlpi_name[0] != '\0')
+      names.push_back(info->dlpi_name);
+  };
+  typedef decltype(callback) call_t;
+
+  dl_iterate_phdr([](dl_phdr_info* info, size_t size, void* data){
+    auto& call = *(call_t*)data;
+    call(info);
+    return 0;
+  }, &callback);
+
+  for(auto& name : names)
+    ret.push_back(LoadLib(name));
+
+  return ret;
+}
+
+std::string GetLibraryName(LibHandle lib) {
+  link_map *map;
+  if(dlinfo(lib, RTLD_DI_LINKMAP, &map)!=0)
+    return "";
+  return map->l_name;
+}
 
 Mutex CreateMutex() {
   pthread_mutex_t* mutex = new pthread_mutex_t;
@@ -513,6 +545,25 @@ void SharedReleaseSharedMutex(SharedMutex lock) {
 void DestroySharedMutex(SharedMutex lock) {
   pthread_rwlock_destroy(*(pthread_rwlock_t**)&lock);
   delete *(pthread_rwlock_t**)&lock;
+}
+
+static uint64_t sys_clock_period_ = 0;
+
+uint64_t ReadSystemClock() {
+  struct timespec ts;
+  clock_gettime(CLOCK_BOOTTIME, &ts);
+  uint64_t time = (uint64_t(ts.tv_sec) * 1000000000 + uint64_t(ts.tv_nsec));
+  if (sys_clock_period_ != 1)
+    return time / sys_clock_period_;
+  else
+    return time;
+}
+
+uint64_t SystemClockFrequency() {
+  struct timespec ts;
+  clock_getres(CLOCK_BOOTTIME, &ts);
+  sys_clock_period_ = (uint64_t(ts.tv_sec) * 1000000000 + uint64_t(ts.tv_nsec));
+  return 1000000000 / sys_clock_period_;
 }
 
 }   //  namespace os

@@ -1012,8 +1012,16 @@ typedef enum {
    * Minor version of the HSA runtime specification supported by the
    * agent. The type of this attribute is uint16_t.
    */
-  HSA_AGENT_INFO_VERSION_MINOR = 22
-
+  HSA_AGENT_INFO_VERSION_MINOR = 22,
+  /**
+   * This enum does not have a fixed underlying type, thus in C++ post D2338:
+   * If the enumeration type does not have a fixed underlying type, the value is
+   * unchanged if the original value is within the range of the enumeration
+   * values (9.7.1 [dcl.enum]), and otherwise, the behavior is
+   * undefined.
+   * Thus increase the range of this enum to encompass vendor extensions.
+   */
+  HSA_AGENT_INFO_LAST = INT32_MAX
 } hsa_agent_info_t;
 
 /**

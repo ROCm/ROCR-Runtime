@@ -46,8 +46,8 @@
 #include <atomic>
 #include <cstring>
 #include <string>
-#include <thread>
 #include <vector>
+#include <list>
 
 #include "core/common/shared.h"
 #include "core/inc/hsa_ext_interface.h"
@@ -150,13 +150,15 @@ bool Runtime::IsOpen() {
 
 // Register agent information only.  Must not call anything that may use the registered information
 // since those tables are incomplete.
-void Runtime::RegisterAgent(Agent* agent) {
+void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
   // Record the agent in the node-to-agent reverse lookup table.
   agents_by_node_[agent->node_id()].push_back(agent);
 
   // Process agent as a cpu or gpu device.
   if (agent->device_type() == Agent::DeviceType::kAmdCpuDevice) {
     cpu_agents_.push_back(agent);
+
+    agents_by_gpuid_[0] = agent;
 
     // Add cpu regions to the system region list.
     for (const core::MemoryRegion* region : agent->regions()) {
@@ -199,12 +201,16 @@ void Runtime::RegisterAgent(Agent* agent) {
       }
     }
   } else if (agent->device_type() == Agent::DeviceType::kAmdGpuDevice) {
-    gpu_agents_.push_back(agent);
+    if (Enabled) {
+      gpu_agents_.push_back(agent);
+      gpu_ids_.push_back(agent->node_id());
+      agents_by_gpuid_[((AMD::GpuAgent*)agent)->KfdGpuID()] = agent;
 
-    gpu_ids_.push_back(agent->node_id());
-
-    // Assign the first discovered gpu agent as region gpu.
-    if (region_gpu_ == NULL) region_gpu_ = agent;
+      // Assign the first discovered gpu agent as region gpu.
+      if (region_gpu_ == NULL) region_gpu_ = agent;
+    } else {
+      disabled_gpu_agents_.push_back(agent);
+    }
   }
 }
 
@@ -213,6 +219,9 @@ void Runtime::DestroyAgents() {
 
   std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
   gpu_agents_.clear();
+
+  std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
+  disabled_gpu_agents_.clear();
 
   gpu_ids_.clear();
 
@@ -462,53 +471,34 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   return err;
 }
 
-hsa_status_t Runtime::CopyMemory(void* dst, core::Agent& dst_agent,
-                                 const void* src, core::Agent& src_agent,
-                                 size_t size,
+hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* src,
+                                 core::Agent* src_agent, size_t size,
                                  std::vector<core::Signal*>& dep_signals,
                                  core::Signal& completion_signal) {
-  const bool dst_gpu =
-      (dst_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  const bool src_gpu =
-      (src_agent.device_type() == core::Agent::DeviceType::kAmdGpuDevice);
-  if (dst_gpu || src_gpu) {
-    core::Agent* copy_agent = (src_gpu) ? &src_agent : &dst_agent;
-    return copy_agent->DmaCopy(dst, dst_agent, src, src_agent, size, dep_signals,
-                               completion_signal);
+  auto lookupAgent = [this](core::Agent* agent, const void* ptr) {
+    hsa_amd_pointer_info_t info;
+    PtrInfoBlockData block;
+    info.size = sizeof(info);
+    PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+    // Limit to IPC and GFX types for now.  These are the only types for which the application may
+    // not posess a proper agent handle.
+    if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS)) {
+      return agent;
+    }
+    return block.agentOwner;
+  };
+
+  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
+  // Lookup owning agent if blit kernel is selected or if flag override is set.
+  if ((dst_agent == src_agent) || flag().discover_copy_agents()) {
+    dst_agent = lookupAgent(dst_agent, dst);
+    src_agent = lookupAgent(src_agent, src);
   }
-
-  // For cpu to cpu, fire and forget a copy thread.
-  const bool profiling_enabled =
-      (dst_agent.profiling_enabled() || src_agent.profiling_enabled());
-  if (profiling_enabled) completion_signal.async_copy_agent(&dst_agent);
-  std::thread(
-      [](void* dst, const void* src, size_t size,
-         std::vector<core::Signal*> dep_signals,
-         core::Signal* completion_signal, bool profiling_enabled) {
-
-        for (core::Signal* dep : dep_signals) {
-          dep->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 0, UINT64_MAX,
-                           HSA_WAIT_STATE_BLOCKED);
-        }
-
-        if (profiling_enabled) {
-          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
-                                                           &completion_signal->signal_.start_ts);
-        }
-
-        memcpy(dst, src, size);
-
-        if (profiling_enabled) {
-          core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP,
-                                                           &completion_signal->signal_.end_ts);
-        }
-
-        completion_signal->SubRelease(1);
-      },
-      dst, src, size, dep_signals, &completion_signal,
-      profiling_enabled).detach();
-
-  return HSA_STATUS_SUCCESS;
+  return copy_agent->DmaCopy(dst, *dst_agent, src, *src_agent, size, dep_signals,
+                             completion_signal);
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
@@ -580,9 +570,7 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((uint16_t*)value) = HSA_VERSION_MINOR;
       break;
     case HSA_SYSTEM_INFO_TIMESTAMP: {
-      HsaClockCounters clocks;
-      hsaKmtGetClockCounters(0, &clocks);
-      *((uint64_t*)value) = clocks.SystemClockCounter;
+      *((uint64_t*)value) = os::ReadSystemClock();
       break;
     }
     case HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY: {
@@ -780,6 +768,8 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
 
+  bool allocation_map_entry_found = false;
+
   {  // memory_lock protects access to the NMappedNodes array and fragment user data since these may
      // change with calls to memory APIs.
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -816,6 +806,11 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
       assert((retInfo.hostBaseAddress || retInfo.agentBaseAddress) && "Thunk pointer info returned no base address.");
       block_info->base = (retInfo.hostBaseAddress ? retInfo.hostBaseAddress : retInfo.agentBaseAddress);
       block_info->length = retInfo.sizeInBytes;
+
+      // Report the owning agent, even if such an agent is not usable in the process.
+      auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
+      assert(nodeAgents != agents_by_node_.end() && "Node id not found!");
+      block_info->agentOwner = nodeAgents->second[0];
     }
     auto fragment = allocation_map_.upper_bound(ptr);
     if (fragment != allocation_map_.begin()) {
@@ -829,19 +824,30 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
           retInfo.hostBaseAddress = retInfo.agentBaseAddress;
           retInfo.sizeInBytes = fragment->second.size;
           retInfo.userData = fragment->second.user_ptr;
+          allocation_map_entry_found = true;
       }
     }
   }  // end lock scope
+
+  // Return type UNKNOWN for released fragments.  Do not report the underlying block info to users!
+  if ((!allocation_map_entry_found) &&
+      ((retInfo.type == HSA_EXT_POINTER_TYPE_HSA) || (retInfo.type == HSA_EXT_POINTER_TYPE_IPC))) {
+    retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+  }
 
   retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
 
   // IPC and Graphics memory may come from a node that does not have an agent in this process.
   // Ex. ROCR_VISIBLE_DEVICES or peer GPU is not supported by ROCm.
+  retInfo.agentOwner.handle = 0;
   auto nodeAgents = agents_by_node_.find(thunkInfo.Node);
-  if (nodeAgents != agents_by_node_.end())
-    retInfo.agentOwner = nodeAgents->second[0]->public_handle();
-  else
-    retInfo.agentOwner.handle = 0;
+  assert(nodeAgents != agents_by_node_.end() && "Node id not found!");
+  for (auto agent : nodeAgents->second) {
+    if (agent->Enabled()) {
+      retInfo.agentOwner = agent->public_handle();
+      break;
+    }
+  }
 
   // Correct agentOwner for locked memory.  Thunk reports the GPU that owns the
   // alias but users are expecting to see a CPU when the memory is system.
@@ -949,9 +955,10 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   uint32_t fragOffset = 0;
 
   auto fixFragment = [&]() {
-    if (!isFragment) return;
-    importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
-    len = Min(len, importSize - fragOffset);
+    if (isFragment) {
+      importAddress = reinterpret_cast<uint8_t*>(importAddress) + fragOffset;
+      len = Min(len, importSize - fragOffset);
+    }
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
     allocation_map_[importAddress] = AllocationRegion(nullptr, len);
   };
@@ -1349,10 +1356,8 @@ hsa_status_t Runtime::Load() {
 
   // Setup system clock frequency for the first time.
   if (sys_clock_freq_ == 0) {
-    // Cache system clock frequency
-    HsaClockCounters clocks;
-    hsaKmtGetClockCounters(0, &clocks);
-    sys_clock_freq_ = clocks.SystemClockFrequencyHz;
+    sys_clock_freq_ = os::SystemClockFrequency();
+    if (sys_clock_freq_ < 100000) debug_warning("System clock resolution is low.");
   }
 
   BindVmFaultHandler();
@@ -1375,10 +1380,15 @@ hsa_status_t Runtime::Load() {
   // Load tools libraries
   LoadTools();
 
+  // Load svm profiler
+  svm_profile_.reset(new AMD::SvmProfileControl);
+
   return HSA_STATUS_SUCCESS;
 }
 
 void Runtime::Unload() {
+  svm_profile_.reset(nullptr);
+
   UnloadTools();
   UnloadExtensions();
 
@@ -1387,6 +1397,9 @@ void Runtime::Unload() {
 
   std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
   gpu_agents_.clear();
+
+  std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
+  disabled_gpu_agents_.clear();
 
   async_events_control_.Shutdown();
 
@@ -1489,53 +1502,118 @@ void Runtime::LoadTools() {
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
 
-  // Load tool libs
+  std::vector<const char*> failed;
+
+  //Get loaded libs and filter to tool libraries.
+  struct lib_t {
+    lib_t(os::LibHandle lib, uint32_t order, std::string name) : lib_(lib), order_(order), name_(name) {}
+    os::LibHandle lib_;
+    uint32_t order_;
+    std::string name_;
+  };
+
+  std::list<lib_t> sorted;
+  uint32_t env_count=0;
+
+  // Load env var tool lib names and determine ordering offset.
   std::string tool_names = flag_.tools_lib_names();
+  std::vector<std::string> names;
   if (tool_names != "") {
-    std::vector<std::string> names = parse_tool_names(tool_names);
-    std::vector<const char*> failed;
-    for (auto& name : names) {
-      os::LibHandle tool = os::LoadLib(name);
+    names = parse_tool_names(tool_names);
+    env_count = names.size();
+  }
 
-      if (tool != NULL) {
-        tool_libs_.push_back(tool);
+  // Discover loaded tools.
+  std::vector<os::LibHandle> loaded = os::GetLoadedLibs();
+  for(auto& handle : loaded) {
+    const uint32_t* order = (const uint32_t*)os::GetExportAddress(handle, "HSA_AMD_TOOL_PRIORITY");
+    if(order) {
+      sorted.push_back(lib_t(handle, *order+env_count, os::GetLibraryName(handle)));
+    } else {
+      os::CloseLib(handle);
+    }
+  }
+  
+  // Load env var tools.
+  env_count=0;
+  for (auto& name : names) {
+    os::LibHandle tool = os::LoadLib(name);
 
-        rocr::AMD::callback_t<tool_init_t> ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
-        if (ld) {
-          if (!ld(&hsa_api_table_.hsa_api,
-                  hsa_api_table_.hsa_api.version.major_id,
-                  failed.size(), &failed[0])) {
-            failed.push_back(name.c_str());
-            os::CloseLib(tool);
-            continue;
-          }
-        }
+    if (tool != nullptr) {
+      sorted.push_back(lib_t(tool, env_count, name));
+      env_count++;
+    } else {
+      failed.push_back(name.c_str());
+      if (flag().report_tool_load_failures())
+        fprintf(stderr, "Tool lib \"%s\" failed to load.\n", name.c_str());
+    }
+  }
 
-        rocr::AMD::callback_t<tool_wrap_t> wrap =
-            (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
-        if (wrap) {
-          std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
-                                                       &gpu_agents_};
-          for (std::vector<core::Agent*>* agent_list : agent_lists) {
-            for (size_t agent_idx = 0; agent_idx < agent_list->size();
-                 ++agent_idx) {
+  if(!sorted.empty()) {
+    // Close duplicate handles
+    sorted.sort([](const lib_t& lhs, const lib_t& rhs) {
+      if(lhs.lib_ == rhs.lib_)
+        return lhs.order_ < rhs.order_;
+      return lhs.lib_ < rhs.lib_;
+    });
+
+    os::LibHandle current = sorted.front().lib_;
+    auto it = sorted.begin();
+    it++;
+    while(it != sorted.end()) {
+      if(it->lib_==current) {
+        os::CloseLib(current);
+        auto rem = it;
+        it = sorted.erase(rem);
+      } else {
+        current = it->lib_;
+        it++;
+      }
+    }
+
+    // Sort to load order
+    sorted.sort([](const lib_t& lhs, const lib_t& rhs) {
+      return lhs.order_ < rhs.order_;
+    });
+    
+    for(auto& lib : sorted) {
+      auto& tool = lib.lib_;
+
+      rocr::AMD::callback_t<tool_init_t> ld = (tool_init_t)os::GetExportAddress(tool, "OnLoad");
+      if (!ld) {
+        failed.push_back(lib.name_.c_str());
+        os::CloseLib(tool);
+        continue;
+      }
+      if (!ld(&hsa_api_table_.hsa_api,
+        hsa_api_table_.hsa_api.version.major_id,
+        failed.size(), &failed[0])) {
+          failed.push_back(lib.name_.c_str());
+          os::CloseLib(tool);
+          continue;
+      }
+      tool_libs_.push_back(tool);
+
+      rocr::AMD::callback_t<tool_wrap_t> wrap =
+        (tool_wrap_t)os::GetExportAddress(tool, "WrapAgent");
+      if (wrap) {
+        std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_,
+          &gpu_agents_};
+        for (std::vector<core::Agent*>* agent_list : agent_lists) {
+          for (size_t agent_idx = 0; agent_idx < agent_list->size();
+            ++agent_idx) {
               Agent* agent = wrap(agent_list->at(agent_idx));
               if (agent != NULL) {
                 assert(agent->IsValid() &&
-                       "Agent returned from WrapAgent is not valid");
+                  "Agent returned from WrapAgent is not valid");
                 agent_list->at(agent_idx) = agent;
               }
-            }
           }
         }
+      }
 
-        rocr::AMD::callback_t<tool_add_t> add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
-        if (add) add(this);
-      }
-      else {
-        if (flag().report_tool_load_failures())
-          fprintf(stderr, "Tool lib \"%s\" failed to load.\n", name.c_str());
-      }
+      rocr::AMD::callback_t<tool_add_t> add = (tool_add_t)os::GetExportAddress(tool, "AddAgent");
+      if (add) add(this);
     }
   }
 }
@@ -2102,7 +2180,6 @@ hsa_status_t Runtime::SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent,
 Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   uintptr_t base = reinterpret_cast<uintptr_t>(AlignDown(ptr, 4096));
   uintptr_t end = AlignUp(reinterpret_cast<uintptr_t>(ptr) + size, 4096);
-  size_t len = end - base;
 
   std::vector<std::pair<uintptr_t, uintptr_t>> holes;
 

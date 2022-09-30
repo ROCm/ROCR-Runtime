@@ -188,8 +188,27 @@ uint32_t DevIDToAddrLibFamily(uint32_t dev_id) {
               case 3:
               case 4:
               case 5:
+              case 6:
                 return FAMILY_NV;
 
+              default:
+                return FAMILY_UNKNOWN;
+            }
+
+          default:
+            return FAMILY_UNKNOWN;
+        }
+
+      case 11:
+        switch (minor_ver) {
+          case 0:
+            switch (step) {
+              case 0:
+              case 1:
+              case 2:
+                return FAMILY_GFX1100;
+              case 3:
+                return FAMILY_GFX1103;
               default:
                 return FAMILY_UNKNOWN;
             }

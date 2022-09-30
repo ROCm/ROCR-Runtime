@@ -318,7 +318,19 @@ typedef enum hsa_amd_agent_info_s {
    * cooperative dispatch.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014
+  HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT = 0xA014,
+  /**
+   * Queries the amount of memory available in bytes accross all global pools
+   * owned by the agent.
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_AVAIL = 0xA015,
+  /**
+   * Timestamp value increase rate, in Hz. The timestamp (clock) frequency is
+   * in the range 1-400MHz.
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY = 0xA016
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -821,6 +833,9 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT @p num_cu_mask_count is not
  * a multiple of 32 or @p num_cu_mask_count is not 0 and cu_mask is NULL.
+ * Devices with work group processors must even-index contiguous pairwise
+ * CU enable e.g. 0x33(b'110011) is valid while 0x5(0x101) and 0x6(b'0110)
+ * are invalid.
  *
  */
 hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
@@ -986,6 +1001,24 @@ typedef enum {
 } hsa_amd_memory_pool_info_t;
 
 /**
+ * @brief Memory pool flag used to specify allocation directives
+ *
+ */
+typedef enum hsa_amd_memory_pool_flag_s {
+  /**
+   * Allocates memory that conforms to standard HSA memory consistency model
+   */
+  HSA_AMD_MEMORY_POOL_STANDARD_FLAG = 0,
+  /**
+   * Allocates fine grain memory type where memory ordering is per point to point
+   * connection. Atomic memory operations on these memory buffers are not
+   * guaranteed to be visible at system scope.
+   */
+  HSA_AMD_MEMORY_POOL_PCIE_FLAG = 1,
+
+} hsa_amd_memory_pool_flag_t;
+
+/**
  * @brief Get the current value of an attribute of a memory pool.
  *
  * @param[in] memory_pool A valid memory pool.
@@ -1053,7 +1086,7 @@ hsa_status_t HSA_API hsa_amd_agent_iterate_memory_pools(
  * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE in @p memory_pool.
  *
  * @param[in] flags A bit-field that is used to specify allocation
- * directives. Reserved parameter, must be 0.
+ * directives.
  *
  * @param[out] ptr Pointer to the location where to store the base virtual
  * address of
@@ -1110,6 +1143,8 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] dst_agent Agent associated with the @p dst. The agent must be able to directly
  * access both the source and destination buffers in their current locations.
+ * May be zero in which case the runtime will attempt to discover the destination agent.
+ * Discovery may have variable and/or high latency.
  *
  * @param[in] src A valid pointer to the source of data to be copied. The source
  * buffer must not overlap with the destination buffer, otherwise the copy will succeed
@@ -1117,6 +1152,8 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] src_agent Agent associated with the @p src. The agent must be able to directly
  * access both the source and destination buffers in their current locations.
+ * May be zero in which case the runtime will attempt to discover the destination agent.
+ * Discovery may have variable and/or high latency.
  *
  * @param[in] size Number of bytes to copy. If @p size is 0, no copy is
  * performed and the function returns success. Copying a number of bytes larger
@@ -1127,9 +1164,9 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  *
  * @param[in] dep_signals List of signals that must be waited on before the copy
  * operation starts. The copy will start after every signal has been observed with
- * the value 0. The dependent signal should not include completion signal from hsa_amd_memory_async_copy
- * operation to be issued in future as that can result in a deadlock. If @p num_dep_signals is 0, this
- * argument is ignored.
+ * the value 0. The dependent signal should not include completion signal from
+ * hsa_amd_memory_async_copy operation to be issued in future as that can result
+ * in a deadlock. If @p num_dep_signals is 0, this argument is ignored.
  *
  * @param[in] completion_signal Signal used to indicate completion of the copy
  * operation. When the copy operation is finished, the value of the signal is
@@ -1144,7 +1181,7 @@ hsa_status_t HSA_API hsa_amd_memory_pool_free(void* ptr);
  * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
  * initialized.
  *
- * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The agent is invalid.
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT An agent is invalid or no discovered agent has access.
  *
  * @retval ::HSA_STATUS_ERROR_INVALID_SIGNAL @p completion_signal is invalid.
  *

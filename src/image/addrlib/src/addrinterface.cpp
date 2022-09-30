@@ -1,28 +1,27 @@
 /*
- * Copyright © 2007-2019 Advanced Micro Devices, Inc.
- * All Rights Reserved.
- *
- * Permission is hereby granted, free of charge, to any person obtaining
- * a copy of this software and associated documentation files (the
- * "Software"), to deal in the Software without restriction, including
- * without limitation the rights to use, copy, modify, merge, publish,
- * distribute, sub license, and/or sell copies of the Software, and to
- * permit persons to whom the Software is furnished to do so, subject to
- * the following conditions:
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES
- * OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NON-INFRINGEMENT. IN NO EVENT SHALL THE COPYRIGHT HOLDERS, AUTHORS
- * AND/OR ITS SUPPLIERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
- * ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE
- * USE OR OTHER DEALINGS IN THE SOFTWARE.
- *
- * The above copyright notice and this permission notice (including the
- * next paragraph) shall be included in all copies or substantial portions
- * of the Software.
- */
+************************************************************************************************************************
+*
+*  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
+*
+* Permission is hereby granted, free of charge, to any person obtaining a
+* copy of this software and associated documentation files (the "Software"),
+* to deal in the Software without restriction, including without limitation
+* the rights to use, copy, modify, merge, publish, distribute, sublicense,
+* and/or sell copies of the Software, and to permit persons to whom the
+* Software is furnished to do so, subject to the following conditions:
+*
+* The above copyright notice and this permission notice shall be included in
+* all copies or substantial portions of the Software.
+*
+* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
+* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
+* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
+* OTHER DEALINGS IN THE SOFTWARE
+*
+***********************************************************************************************************************/
 
 /**
 ****************************************************************************************************
@@ -35,8 +34,6 @@
 #include "addrlib2.h"
 
 #include "addrcommon.h"
-
-#include "util/macros.h"
 
 namespace rocr {
 using namespace Addr;
@@ -68,6 +65,8 @@ ADDR_E_RETURNCODE ADDR_API AddrCreate(
     return returnCode;
 }
 
+
+
 /**
 ****************************************************************************************************
 *   AddrDestroy
@@ -96,6 +95,8 @@ ADDR_E_RETURNCODE ADDR_API AddrDestroy(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                    Surface functions
@@ -132,6 +133,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeSurfaceInfo(
 
     return returnCode;
 }
+
+
 
 /**
 ****************************************************************************************************
@@ -196,6 +199,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeSurfaceCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                   HTile functions
@@ -297,6 +302,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeHtileCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     C-mask functions
@@ -400,6 +407,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeCmaskCoordFromAddr(
     return returnCode;
 }
 
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     F-mask functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -500,6 +509,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeFmaskCoordFromAddr(
     return returnCode;
 }
 
+
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     DCC key functions
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -533,6 +544,8 @@ ADDR_E_RETURNCODE ADDR_API AddrComputeDccInfo(
 
     return returnCode;
 }
+
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Below functions are element related or helper functions
@@ -820,7 +833,7 @@ BOOL_32 ADDR_API ElemGetExportNorm(
     Addr::Lib* pLib = Lib::GetLib(hLib);
     BOOL_32 enabled = FALSE;
 
-    ASSERTED ADDR_E_RETURNCODE returnCode = ADDR_OK;
+    ADDR_E_RETURNCODE returnCode = ADDR_OK;
 
     if (pLib != NULL)
     {
@@ -1119,6 +1132,7 @@ ADDR_E_RETURNCODE ADDR_API AddrGetMaxMetaAlignments(
     return returnCode;
 }
 
+
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                    Surface functions for Addr2
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -1155,6 +1169,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeSurfaceInfo(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeSurfaceAddrFromCoord
@@ -1187,6 +1202,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeSurfaceAddrFromCoord(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeSurfaceCoordFromAddr
@@ -1218,6 +1234,8 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeSurfaceCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                   HTile functions for Addr2
@@ -1255,6 +1273,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeHtileInfo(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeHtileAddrFromCoord
@@ -1286,6 +1305,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeHtileAddrFromCoord(
 
     return returnCode;
 }
+
 
 /**
 ****************************************************************************************************
@@ -1319,6 +1339,8 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeHtileCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     C-mask functions for Addr2
@@ -1357,6 +1379,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeCmaskInfo(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeCmaskAddrFromCoord
@@ -1388,6 +1411,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeCmaskAddrFromCoord(
 
     return returnCode;
 }
+
 
 /**
 ****************************************************************************************************
@@ -1421,6 +1445,8 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeCmaskCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     F-mask functions for Addr2
@@ -1458,6 +1484,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeFmaskInfo(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeFmaskAddrFromCoord
@@ -1490,6 +1517,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeFmaskAddrFromCoord(
     return returnCode;
 }
 
+
 /**
 ****************************************************************************************************
 *   Addr2ComputeFmaskCoordFromAddr
@@ -1521,6 +1549,8 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeFmaskCoordFromAddr(
 
     return returnCode;
 }
+
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                                     DCC key functions for Addr2
@@ -1677,6 +1707,35 @@ ADDR_E_RETURNCODE ADDR_API Addr2ComputeSubResourceOffsetForSwizzlePattern(
 
 /**
 ****************************************************************************************************
+*   Addr2ComputeNonBlockCompressedView
+*
+*   @brief
+*       Compute non-block-compressed view for a given mipmap level/slice.
+****************************************************************************************************
+*/
+ADDR_E_RETURNCODE ADDR_API Addr2ComputeNonBlockCompressedView(
+    ADDR_HANDLE                                       hLib, ///< handle of addrlib
+    const ADDR2_COMPUTE_NONBLOCKCOMPRESSEDVIEW_INPUT* pIn,  ///< [in] input
+    ADDR2_COMPUTE_NONBLOCKCOMPRESSEDVIEW_OUTPUT*      pOut) ///< [out] output
+{
+    ADDR_E_RETURNCODE returnCode;
+
+    V2::Lib* pLib = V2::Lib::GetLib(hLib);
+
+    if (pLib != NULL)
+    {
+        returnCode = pLib->ComputeNonBlockCompressedView(pIn, pOut);
+    }
+    else
+    {
+        returnCode = ADDR_ERROR;
+    }
+
+    return returnCode;
+}
+
+/**
+****************************************************************************************************
 *   Addr2GetPreferredSurfaceSetting
 *
 *   @brief
@@ -1709,14 +1768,14 @@ ADDR_E_RETURNCODE ADDR_API Addr2GetPreferredSurfaceSetting(
 *   Addr2IsValidDisplaySwizzleMode
 *
 *   @brief
-*       Return whether the swizzle mode is supported by DCE / DCN.
+*       Return whether the swizzle mode is supported by display engine
 ****************************************************************************************************
 */
 ADDR_E_RETURNCODE ADDR_API Addr2IsValidDisplaySwizzleMode(
     ADDR_HANDLE     hLib,
     AddrSwizzleMode swizzleMode,
     UINT_32         bpp,
-    bool            *result)
+    BOOL_32         *pResult)
 {
     ADDR_E_RETURNCODE returnCode;
 
@@ -1724,12 +1783,12 @@ ADDR_E_RETURNCODE ADDR_API Addr2IsValidDisplaySwizzleMode(
 
     if (pLib != NULL)
     {
-        ADDR2_COMPUTE_SURFACE_INFO_INPUT in;
+        ADDR2_COMPUTE_SURFACE_INFO_INPUT in = {};
         in.resourceType = ADDR_RSRC_TEX_2D;
-        in.swizzleMode = swizzleMode;
-        in.bpp = bpp;
+        in.swizzleMode  = swizzleMode;
+        in.bpp          = bpp;
 
-        *result = pLib->IsValidDisplaySwizzleMode(&in);
+        *pResult   = pLib->IsValidDisplaySwizzleMode(&in);
         returnCode = ADDR_OK;
     }
     else
@@ -1737,7 +1796,7 @@ ADDR_E_RETURNCODE ADDR_API Addr2IsValidDisplaySwizzleMode(
         returnCode = ADDR_ERROR;
     }
 
-    return returnCode;
+  return returnCode;
 }
 
-} // rocr
+}  // namespace rocr

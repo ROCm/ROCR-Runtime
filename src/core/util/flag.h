@@ -153,6 +153,17 @@ class Flag {
     // Will become opt-out and possibly removed in future releases.
     var = os::GetEnvVar("HSA_COOP_CU_COUNT");
     coop_cu_count_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_DISCOVER_COPY_AGENTS");
+    discover_copy_agents_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_SVM_PROFILE");
+    svm_profile_ = var;
+
+    // Temporary environment variable to disable CPU affinity override
+    // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
+    var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
+    override_cpu_affinity_ = (var == "0") ? false : true;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -206,6 +217,8 @@ class Flag {
 
   bool check_sramecc_validity() const { return check_sramecc_validity_; }
 
+  bool override_cpu_affinity() const { return override_cpu_affinity_; }
+
   XNACK_REQUEST xnack() const { return xnack_; }
 
   bool debug() const { return debug_; }
@@ -220,6 +233,10 @@ class Flag {
   bool cu_mask_skip_init() const { return cu_mask_skip_init_; }
 
   bool coop_cu_count() const { return coop_cu_count_; }
+
+  bool discover_copy_agents() const { return discover_copy_agents_; }
+
+  const std::string& svm_profile() const { return svm_profile_; }
 
  private:
   bool check_flat_scratch_;
@@ -241,6 +258,8 @@ class Flag {
   bool debug_;
   bool cu_mask_skip_init_;
   bool coop_cu_count_;
+  bool discover_copy_agents_;
+  bool override_cpu_affinity_;
 
   SDMA_OVERRIDE enable_sdma_;
 
@@ -252,6 +271,7 @@ class Flag {
   size_t scratch_mem_size_;
 
   std::string tools_lib_names_;
+  std::string svm_profile_;
 
   size_t force_sdma_size_;
 

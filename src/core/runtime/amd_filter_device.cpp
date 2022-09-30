@@ -52,7 +52,7 @@
 #include <iostream>
 #include <climits>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #include "core/util/utils.h"
 #include "core/inc/runtime.h"

@@ -48,7 +48,7 @@
 #include <algorithm>
 #include <climits>
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include "inc/hsa_ext_amd.h"
 #include "core/inc/hsa_internal.h"
 #include "addrlib/src/core/addrlib.h"
@@ -113,12 +113,12 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
   bool atc_access = true;
   const void* image_data_addr = image.data;
 
-  ImageProperty image_prop = image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   if((image_prop.cap == HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED) ||
      (image_prop.element_size == 0))
     return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
-  const Swizzle swizzle = image_lut_.MapSwizzle(image.desc.format.channel_order);
+  const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
 
   if (IsLocalMemory(image.data)) {
     atc_access = false;
@@ -161,7 +161,8 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
     image.srd[1] = word1.val;
     image.srd[3] = word3.val;
   } else {
-    uint32_t hwPixelSize = image_lut_.GetPixelSize(desc->word1.bitfields.DATA_FORMAT, desc->word1.bitfields.NUM_FORMAT);
+    uint32_t hwPixelSize = ImageLut().GetPixelSize(desc->word1.bitfields.DATA_FORMAT,
+                                                   desc->word1.bitfields.NUM_FORMAT);
     if(image_prop.element_size!=hwPixelSize)
       return (hsa_status_t)HSA_EXT_STATUS_ERROR_IMAGE_FORMAT_UNSUPPORTED;
 
@@ -175,7 +176,8 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
     ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.DST_SEL_W = swizzle.w;
     if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DA ||
         image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1D) {
-      ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.TYPE = image_lut_.MapGeometry(image.desc.geometry);
+      ((SQ_IMG_RSRC_WORD3*)(&image.srd[3]))->bits.TYPE =
+          ImageLut().MapGeometry(image.desc.geometry);
     }
     
     // Imported metadata holds the offset to metadata, add the image base address.
@@ -265,8 +267,7 @@ static TEX_BC_SWIZZLE GetBcSwizzle(const Swizzle& swizzle) {
 
 
 hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
@@ -296,8 +297,7 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
 
     word2.f.num_records = image.desc.width * image_prop.element_size;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
     word3.f.dst_sel_x = swizzle.x;
     word3.f.dst_sel_y = swizzle.y;
@@ -306,7 +306,7 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
     word3.f.num_format = image_prop.data_type;
     word3.f.data_format = image_prop.data_format;
     word3.f.index_stride = image_prop.element_size;
-    word3.f.type = image_lut_.MapGeometry(image.desc.geometry);
+    word3.f.type = ImageLut().MapGeometry(image.desc.geometry);
 
     image.srd[0] = word0.val;
     image.srd[1] = word1.val;
@@ -350,15 +350,14 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
     word2.f.height = image.desc.height - 1;
     word2.f.perf_mod = 0;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
     word3.f.dst_sel_x = swizzle.x;
     word3.f.dst_sel_y = swizzle.y;
     word3.f.dst_sel_z = swizzle.z;
     word3.f.dst_sel_w = swizzle.w;
     word3.f.sw_mode = swizzleMode;
-    word3.f.type = image_lut_.MapGeometry(image.desc.geometry);
+    word3.f.type = ImageLut().MapGeometry(image.desc.geometry);
 
     const bool image_array =
         (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DA ||
@@ -402,14 +401,12 @@ hsa_status_t ImageManagerAi::ModifyImageSrd(
     Image& image, hsa_ext_image_format_t& new_format) const {
   image.desc.format = new_format;
 
-  ImageProperty image_prop =
-      image_lut_.MapFormat(image.desc.format, image.desc.geometry);
+  ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_BUF_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_BUF_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.DST_SEL_X = swizzle.x;
@@ -424,8 +421,7 @@ hsa_status_t ImageManagerAi::ModifyImageSrd(
     word1->bits.DATA_FORMAT = image_prop.data_format;
     word1->bits.NUM_FORMAT = image_prop.data_type;
 
-    const Swizzle swizzle =
-        image_lut_.MapSwizzle(image.desc.format.channel_order);
+    const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     SQ_IMG_RSRC_WORD3* word3 =
         reinterpret_cast<SQ_IMG_RSRC_WORD3*>(&image.srd[3]);
     word3->bits.DST_SEL_X = swizzle.x;

@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2022, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -57,7 +57,6 @@
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
 #include "core/inc/amd_gpu_pm4.h"
-#include "core/inc/amd_gpu_shaders.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
@@ -65,6 +64,18 @@
 #include "core/util/os.h"
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
+
+#include "core/inc/amd_trap_handler_v1.h"
+#include "core/inc/amd_blit_shaders.h"
+// Generated header
+#include "amd_trap_handler_v2.h"
+
+#if defined(__linux__)
+// libdrm headers
+#include <xf86drm.h>
+#include <amdgpu.h>
+#endif
+
 
 // Size of scratch (private) segment pre-allocated per thread, in bytes.
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
@@ -154,6 +165,31 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   max_queues_ = std::min(128U, max_queues_);
 #endif
 
+#if !defined(__linux__)
+  wallclock_frequency_ = 0;
+#else
+  // Get wallclock freq from libdrm.
+  int drm_fd = drmOpenRender(node_props.DrmRenderMinor);
+  if (drm_fd < 0)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm open failed.\n");
+  MAKE_SCOPE_GUARD([&]() { drmClose(drm_fd); });
+
+  amdgpu_device_handle device_handle;
+  uint32_t major_version;
+  uint32_t minor_version;
+  if (amdgpu_device_initialize(drm_fd, &major_version, &minor_version, &device_handle) < 0) {
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm error.\n");
+  }
+  MAKE_SCOPE_GUARD([&]() { amdgpu_device_deinitialize(device_handle); });
+
+  amdgpu_gpu_info info;
+  if (amdgpu_query_gpu_info(device_handle, &info) < 0)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
+
+  // Reported by libdrm in KHz.
+  wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
+#endif
+
   // Populate region list.
   InitRegionList();
 
@@ -162,6 +198,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 }
 
 GpuAgent::~GpuAgent() {
+  if (!(this)->Enabled()) return;
+
   for (auto& blit : blits_) {
     if (!blit.empty()) {
       hsa_status_t status = blit->Destroy(*this);
@@ -205,6 +243,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_90a;
     ASICShader compute_1010;
     ASICShader compute_10;
+    ASICShader compute_11;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
@@ -216,6 +255,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},
            {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},
            {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},
+           {NULL, 0, 0, 0},
        }},
       {"TrapHandlerKfdExceptions",
        {
@@ -225,6 +265,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},
            {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},
            {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},
+           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},
        }},
       {"CopyAligned",
        {
@@ -234,6 +275,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
            {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},
+           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},
        }},
       {"CopyMisaligned",
        {
@@ -243,6 +285,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
            {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},
+           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},
        }},
       {"Fill",
        {
@@ -252,6 +295,7 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
            {kCodeFill8, sizeof(kCodeFill8), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
            {kCodeFill10, sizeof(kCodeFill10), 19, 8},
+           {kCodeFill11, sizeof(kCodeFill11), 19, 8},
        }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
@@ -278,6 +322,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
         asic_shader = &compiled_shader_it->second.compute_1010;
       else
         asic_shader = &compiled_shader_it->second.compute_10;
+      break;
+    case 11:
+        asic_shader = &compiled_shader_it->second.compute_11;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
@@ -556,6 +603,9 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
       sdma = new BlitSdmaV4();
       break;
     case 10:
+      sdma = new BlitSdmaV5();
+      break;
+    case 11:
       sdma = new BlitSdmaV5();
       break;
     default:
@@ -1027,6 +1077,24 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         break;
       }
       return GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, value);
+    case HSA_AMD_AGENT_INFO_MEMORY_AVAIL: {
+      HSAuint64 availableBytes;
+      HSAKMT_STATUS status;
+
+      status = hsaKmtAvailableMemory(node_id(), &availableBytes);
+
+      if (status != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+      for (auto r : regions()) availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
+
+      availableBytes += scratch_cache_.free_bytes();
+
+      *((uint64_t*)value) = availableBytes;
+      break;
+    }
+    case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
+      *((uint64_t*)value) = wallclock_frequency_;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -1478,7 +1546,7 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() > 10) {
+  } else if (isa_->GetMajorVersion() > 11) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 
@@ -1555,8 +1623,10 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
           (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
          ("Both devices are CPU agents which is not expected"));
 
-  // Determine if Src and Dst devices are same
-  if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle)) {
+  // Determine if Src and Dst devices are same and are the copying device
+  // Such a copy is in the device local memory, which can only be saturated by a blit kernel.
+  if ((src_agent.public_handle().handle) == (dst_agent.public_handle().handle) &&
+      (dst_agent.public_handle().handle == public_handle_.handle)) {
     // If the copy is very small then cache flush overheads can dominate.
     // Choose a (potentially) SDMA enabled engine to avoid cache flushing.
     if (size < core::Runtime::runtime_singleton_->flag().force_sdma_size()) {
