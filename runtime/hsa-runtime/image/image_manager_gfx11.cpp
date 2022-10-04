@@ -201,7 +201,10 @@ hsa_status_t ImageManagerGfx11::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR2_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
+
   hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
+  if (status != HSA_STATUS_SUCCESS) return status;
+
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&
@@ -239,7 +242,6 @@ bool ImageManagerGfx11::IsLocalMemory(const void* address) const {
 hsa_status_t ImageManagerGfx11::PopulateImageSrd(Image& image,
                                      const metadata_amd_t* descriptor) const {
   const metadata_amd_gfx11_t* desc = reinterpret_cast<const metadata_amd_gfx11_t*>(descriptor);
-  bool atc_access = true;
   const void* image_data_addr = image.data;
 
   ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
@@ -250,7 +252,6 @@ hsa_status_t ImageManagerGfx11::PopulateImageSrd(Image& image,
   const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
 
   if (IsLocalMemory(image.data)) {
-    atc_access = false;
     image_data_addr = reinterpret_cast<const void*>(
         reinterpret_cast<uintptr_t>(image.data) - local_memory_base_address_);
   }
@@ -267,7 +268,6 @@ hsa_status_t ImageManagerGfx11::PopulateImageSrd(Image& image,
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
     SQ_BUF_RSRC_WORD0 word0;
     SQ_BUF_RSRC_WORD1 word1;
-    SQ_BUF_RSRC_WORD2 word2;
     SQ_BUF_RSRC_WORD3 word3;
 
     word0.val = 0;
@@ -390,14 +390,11 @@ hsa_status_t ImageManagerGfx11::PopulateImageSrd(Image& image) const {
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
-  bool atc_access = true;
   const void* image_data_addr = image.data;
 
-  if (IsLocalMemory(image.data)) {
-    atc_access = false;
+  if (IsLocalMemory(image.data))
     image_data_addr = reinterpret_cast<const void*>(
         reinterpret_cast<uintptr_t>(image.data) - local_memory_base_address_);
-  }
 
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
     SQ_BUF_RSRC_WORD0 word0;
@@ -635,7 +632,6 @@ uint32_t ImageManagerGfx11::GetAddrlibSurfaceInfoNv(
   const uint32_t num_slice = static_cast<uint32_t>(
       std::max(kMinNumSlice, std::max(desc.array_size, desc.depth)));
 
-  uint32_t minor_ver = MinorVerFromDevID(chip_id_);
   ADDR2_COMPUTE_SURFACE_INFO_INPUT in = {0};
   in.size = sizeof(ADDR2_COMPUTE_SURFACE_INFO_INPUT);
   in.format = addrlib_format;

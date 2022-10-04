@@ -363,7 +363,6 @@ ADDR_E_RETURNCODE Gfx9Lib::HwlComputeCmaskInfo(
 
     // Generate the CMASK address equation.
     pOut->equation.gfx9.num_bits = Min(32u, eq->getsize());
-    bool checked = false;
     for (unsigned b = 0; b < pOut->equation.gfx9.num_bits; b++) {
        CoordTerm &bit = (*eq)[b];
 
@@ -728,7 +727,6 @@ ADDR_E_RETURNCODE Gfx9Lib::HwlComputeDccInfo(
 
         // Generate the DCC address equation.
         pOut->equation.gfx9.num_bits = Min(32u, eq->getsize());
-        bool checked = false;
         for (unsigned b = 0; b < pOut->equation.gfx9.num_bits; b++) {
            CoordTerm &bit = (*eq)[b];
 
@@ -3765,7 +3763,6 @@ ADDR_E_RETURNCODE Gfx9Lib::HwlGetPreferredSurfaceSetting(
 
                     const UINT_32 ratioLow           = computeMinSize ? 1 : (pIn->flags.opt4space ? 3 : 2);
                     const UINT_32 ratioHi            = computeMinSize ? 1 : (pIn->flags.opt4space ? 2 : 1);
-                    const UINT_64 sizeAlignInElement = Max(NextPow2(pIn->minSizeAlign) / (bpp >> 3), 1u);
                     UINT_32       minSizeBlk         = AddrBlockMicro;
                     UINT_64       minSize            = 0;
 

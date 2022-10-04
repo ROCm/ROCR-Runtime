@@ -386,7 +386,6 @@ ADDR_E_RETURNCODE Gfx11Lib::HwlComputeDccInfo(
 
             // Get the DCC address equation (copied from DccAddrFromCoord)
             const UINT_32 elemLog2    = Log2(pIn->bpp >> 3);
-            const UINT_32 numPipeLog2 = m_pipesLog2;
             UINT_32       index       = m_dccBaseIndex + elemLog2;
             const UINT_8* patIdxTable = (pIn->swizzleMode == ADDR_SW_64KB_R_X) ?
                                         GFX11_DCC_64K_R_X_PATIDX : GFX11_DCC_256K_R_X_PATIDX;
@@ -2222,7 +2221,6 @@ BOOL_32 Gfx11Lib::ValidateSwModeParams(
     const BOOL_32             thin3d      = flags.view3dAs2dArray;
     const BOOL_32             linear      = IsLinear(swizzle);
     const BOOL_32             blk256B     = IsBlock256b(swizzle);
-    const BOOL_32             isNonPrtXor = IsNonPrtXor(swizzle);
     const BOOL_32             prt         = flags.prt;
 
     // Misc check
@@ -2629,7 +2627,6 @@ ADDR_E_RETURNCODE Gfx11Lib::HwlGetPreferredSurfaceSetting(
 
                         const UINT_32 ratioLow           = computeMinSize ? 1 : (pIn->flags.opt4space ? 3 : 2);
                         const UINT_32 ratioHi            = computeMinSize ? 1 : (pIn->flags.opt4space ? 2 : 1);
-                        const UINT_64 sizeAlignInElement = Max(NextPow2(pIn->minSizeAlign) / (bpp >> 3), 1u);
                         UINT_32       minSizeBlk         = AddrBlockMicro;
                         UINT_64       minSize            = 0;
 
