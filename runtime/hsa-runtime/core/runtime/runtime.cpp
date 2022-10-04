@@ -488,7 +488,6 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
     return block.agentOwner;
   };
 
-  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
 

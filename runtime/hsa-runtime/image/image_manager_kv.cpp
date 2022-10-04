@@ -205,7 +205,10 @@ hsa_status_t ImageManagerKv::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
+
   hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
+  if (status != HSA_STATUS_SUCCESS) return status;
+
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&

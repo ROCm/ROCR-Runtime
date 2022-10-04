@@ -2597,7 +2597,6 @@ BOOL_32 Gfx10Lib::ValidateSwModeParams(
     const BOOL_32             linear      = IsLinear(swizzle);
     const BOOL_32             blk256B     = IsBlock256b(swizzle);
     const BOOL_32             blkVar      = IsBlockVariable(swizzle);
-    const BOOL_32             isNonPrtXor = IsNonPrtXor(swizzle);
     const BOOL_32             prt         = flags.prt;
     const BOOL_32             fmask       = flags.fmask;
 
@@ -3108,7 +3107,6 @@ ADDR_E_RETURNCODE Gfx10Lib::HwlGetPreferredSurfaceSetting(
 
                         const UINT_32 ratioLow           = computeMinSize ? 1 : (pIn->flags.opt4space ? 3 : 2);
                         const UINT_32 ratioHi            = computeMinSize ? 1 : (pIn->flags.opt4space ? 2 : 1);
-                        const UINT_64 sizeAlignInElement = Max(NextPow2(pIn->minSizeAlign) / (bpp >> 3), 1u);
                         UINT_32       minSizeBlk         = AddrBlockMicro;
                         UINT_64       minSize            = 0;
 

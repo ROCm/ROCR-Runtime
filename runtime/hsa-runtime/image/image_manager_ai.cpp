@@ -73,7 +73,10 @@ hsa_status_t ImageManagerAi::CalculateImageSizeAndAlignment(
     hsa_ext_image_data_info_t& image_info) const {
   ADDR2_COMPUTE_SURFACE_INFO_OUTPUT out = {0};
   hsa_profile_t profile;
+
   hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_PROFILE, &profile);
+  if (status != HSA_STATUS_SUCCESS) return status;
+
   Image::TileMode tileMode = Image::TileMode::LINEAR;
   if (image_data_layout == HSA_EXT_IMAGE_DATA_LAYOUT_OPAQUE) {
     tileMode = (profile == HSA_PROFILE_BASE &&
@@ -110,7 +113,6 @@ bool ImageManagerAi::IsLocalMemory(const void* address) const {
 
 hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t* descriptor) const {
   metadata_amd_ai_t* desc = (metadata_amd_ai_t*)descriptor;
-  bool atc_access = true;
   const void* image_data_addr = image.data;
 
   ImageProperty image_prop = ImageLut().MapFormat(image.desc.format, image.desc.geometry);
@@ -121,7 +123,6 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
   const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
 
   if (IsLocalMemory(image.data)) {
-    atc_access = false;
     image_data_addr = reinterpret_cast<const void*>(
         reinterpret_cast<uintptr_t>(image.data) - local_memory_base_address_);
   }
@@ -138,7 +139,6 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image, const metadata_amd_t
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
     sq_buf_rsrc_word0_u word0;
     sq_buf_rsrc_word1_u word1;
-    sq_buf_rsrc_word2_u word2;
     sq_buf_rsrc_word3_u word3;
 
     word0.val = 0;
@@ -271,14 +271,11 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
   assert(image_prop.cap != HSA_EXT_IMAGE_CAPABILITY_NOT_SUPPORTED);
   assert(image_prop.element_size != 0);
 
-  bool atc_access = true;
   const void* image_data_addr = image.data;
 
-  if (IsLocalMemory(image.data)) {
-    atc_access = false;
+  if (IsLocalMemory(image.data))
     image_data_addr = reinterpret_cast<const void*>(
         reinterpret_cast<uintptr_t>(image.data) - local_memory_base_address_);
-  }
 
   if (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_1DB) {
     sq_buf_rsrc_word0_u word0;
