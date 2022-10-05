@@ -95,9 +95,15 @@ const char *CopyDwordIsa = R"(
         v_mov_b32 v1, s1
         v_mov_b32 v2, s2
         v_mov_b32 v3, s3
-        flat_load_dword v4, v[0:1] glc slc
-        s_waitcnt 0
-        flat_store_dword v[2:3], v4 glc slc
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_load_dword v4, v[0:1] nt sc1 sc0
+            s_waitcnt 0
+            flat_store_dword v[2:3], v4 nt sc1 sc0
+        .else
+            flat_load_dword v4, v[0:1] glc slc
+            s_waitcnt 0
+            flat_store_dword v[2:3], v4 glc slc
+        .endif
         s_endpgm
 )";
 
@@ -112,7 +118,10 @@ const char *AtomicIncIsa = R"(
         .text
         v_mov_b32 v0, s0
         v_mov_b32 v1, s1
-        .if (.amdgcn.gfx_generation_number >= 8)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            v_mov_b32 v2, 1
+            flat_atomic_add v3, v[0:1], v2 nt sc1 sc0
+        .elseif (.amdgcn.gfx_generation_number >= 8)
             v_mov_b32 v2, 1
             flat_atomic_add v3, v[0:1], v2 glc slc
         .else
@@ -153,9 +162,15 @@ const char *ScratchCopyDwordIsa = R"(
             s_mov_b32 flat_scratch_hi, 0
         .endif
         // Copy a dword between the passed addresses
-        flat_load_dword v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        flat_store_dword v[2:3], v4 slc
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_load_dword v4, v[0:1] nt sc1 sc0
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            flat_store_dword v[2:3], v4 nt sc1 sc0
+        .else
+            flat_load_dword v4, v[0:1] slc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            flat_store_dword v[2:3], v4 slc
+        .endif
         s_endpgm
 )";
 
@@ -179,6 +194,8 @@ const char *PollMemoryIsa = R"(
         s_cbranch_scc0   LOOP
         .if (.amdgcn.gfx_generation_number >= 10)
             flat_store_dword v[0:1], v2 slc
+        .elseif (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_store_dword v[0:1], v2 nt sc1 sc0
         .else
             s_store_dword s18, s[2:3], 0x0 glc
         .endif
@@ -524,7 +541,11 @@ const char *ReadMemoryIsa = SHADER_MACROS R"(
         V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
 
         // Load 64bit local buffer address stored at v[2:3] to v[6:7]
-        flat_load_dwordx2       v[6:7], v[2:3] slc
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_load_dwordx2       v[6:7], v[2:3] nt sc1 sc0
+        .else
+            flat_load_dwordx2       v[6:7], v[2:3] slc
+        .endif
         s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
         v_mov_b32               v8, 0x5678
         s_movk_i32              s8, 0x5678
@@ -542,7 +563,11 @@ const char *ReadMemoryIsa = SHADER_MACROS R"(
         v_mov_b32               v12, v6
         v_mov_b32               v13, v7
         L_LOOP_READ:
-        flat_load_dwordx2       v[14:15], v[12:13] slc
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_load_dwordx2       v[14:15], v[12:13] nt sc1 sc0
+        .else
+            flat_load_dwordx2       v[14:15], v[12:13] slc
+        .endif
         V_ADD_CO_U32            v9, v9, v10
         V_ADD_CO_U32            v12, v12, v10
         V_ADD_CO_CI_U32         v13, v13, 0
