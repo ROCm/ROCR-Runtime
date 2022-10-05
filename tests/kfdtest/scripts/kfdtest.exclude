@@ -116,19 +116,13 @@ BLACKLIST_GFX10_NV2X=\
 "$BLACKLIST_GFX10:"\
 "KFDPerfCountersTest.*"
 
-# GFX11 still undergoing debug. Ticket links:
 # KFDMemoryTest.FlatScratchAccess           - SWDEV-329877
-# KFDEvictTest.QueueTest                    - SWDEV-325064
 # KFDQMTest.MultipleCpQueuesStressDispatch  - SWDEV-340965
-# KFDExceptionTest.*                        - SWDEV-340972
-TEMPORARY_BLACKLIST_GFX11=\
+BLACKLIST_GFX11=\
 "KFDQMTest.CreateAqlCpQueue:"\
 "KFDQMTest.MultipleCpQueuesStressDispatch:"\
 "KFDCWSRTest.InterruptRestore:"\
-"KFDExceptionTest.*:"\
-"KFDEvictTest.QueueTest:"\
-"KFDSVMRangeTest.*Migrate*:"\
-"KFDSVMRangeTest.*Migration*:"\
+"KFDPerfCountersTest.*:"\
 "KFDMemoryTest.FlatScratchAccess"
 
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
@@ -291,23 +285,21 @@ FILTER[yellow_carp]=\
 
 FILTER[gfx1100]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$BLACKLIST_GFX10_NV2X:"\
-"$TEMPORARY_BLACKLIST_GFX11"
+"$BLACKLIST_GFX11"
 
+# SWDEV-384028
 FILTER[gfx1101]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$BLACKLIST_GFX10_NV2X:"\
-"$TEMPORARY_BLACKLIST_GFX11"
+"$BLACKLIST_GFX11:"\
+"KFDExceptionTest.SdmaQueueException"
 
 FILTER[gfx1102]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$BLACKLIST_GFX10_NV2X:"\
-"$TEMPORARY_BLACKLIST_GFX11"
+"$BLACKLIST_GFX11"
 
 FILTER[gfx1103]=\
 "$BLACKLIST_ALL_ASICS:"\
-"$BLACKLIST_GFX10_NV2X:"\
-"$TEMPORARY_BLACKLIST_GFX11"
+"$BLACKLIST_GFX11"
 
 FILTER[gfx1036]=\
 "$BLACKLIST_ALL_ASICS:"\
