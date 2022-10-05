@@ -48,7 +48,7 @@ extern const char *WriteAndSignalIsa;
 extern const char *LoopIsa;
 
 /* KFDCWSRTest */
-extern const char *IterateIsa;
+extern const char *PersistentIterateIsa;
 
 /* KFDEvictTest */
 extern const char *ReadMemoryIsa;

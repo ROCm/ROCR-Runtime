@@ -51,7 +51,7 @@ static inline uint32_t checkCWSREnabled() {
 /**
  * KFDCWSRTest.BasicTest
  *
- * This test dispatches the IterateIsa shader, which continuously increments a vgpr for
+ * This test dispatches the PersistentIterateIsa shader, which continuously increments a vgpr for
  * (num_witems / WAVE_SIZE) waves. While this shader is running, dequeue/requeue requests
  * are sent in a loop to trigger CWSRs.
  *
@@ -83,7 +83,7 @@ TEST_P(KFDCWSRTest, BasicTest) {
 
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true, false, true);
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(IterateIsa, isaBuffer.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PersistentIterateIsa, isaBuffer.As<char*>()));
 
         unsigned stopval = 0x1234'5678;
         unsigned outval  = 0x8765'4321;
