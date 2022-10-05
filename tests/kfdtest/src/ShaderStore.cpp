@@ -39,7 +39,7 @@ const std::vector<const char*> ShaderList = {
     WriteFlagAndValueIsa,
     WriteAndSignalIsa,
     LoopIsa,
-    IterateIsa,
+    PersistentIterateIsa,
     ReadMemoryIsa,
     GwsInitIsa,
     GwsAtomicIncreaseIsa,
@@ -463,7 +463,7 @@ const char *LoopIsa = R"(
  *   v6 - register storing known-value output for mangle testing
  *   v7 - counter
  */
-const char *IterateIsa = SHADER_MACROS R"(
+const char *PersistentIterateIsa = SHADER_MACROS R"(
         // Compute address of output buffer
         v_mov_b32               v0, s4          // use workgroup id as index
         v_lshlrev_b32           v0, 2, v0       // v0 *= 4
