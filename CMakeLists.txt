@@ -159,7 +159,7 @@ get_os_info()
 
 find_package(PkgConfig)
 # Check for libraries required for building
-find_library(LIBC NAMES libc.so.6 REQUIRED)
+find_library(LIBC NAMES c REQUIRED)
 find_library(NUMA NAMES numa REQUIRED)
 message(STATUS "LIBC:" ${LIBC})
 message(STATUS "NUMA:" ${NUMA})
@@ -183,15 +183,10 @@ endif()
 include_directories(${DRM_INCLUDE_DIRS})
 
 target_link_libraries ( ${HSAKMT_TARGET}
-  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt ${LIBC} numa
+  PRIVATE ${DRM_LDFLAGS} ${DRM_AMDGPU_LDFLAGS} pthread rt c numa
 )
 
 target_compile_options(${HSAKMT_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
-if(NOT DISTRO_ID MATCHES "ubuntu")
-  find_library(LIBGCC NAMES libgcc_s.so.1 REQUIRED)
-  message(STATUS "LIBGCC:" ${LIBGCC})
-  target_link_libraries( ${HSAKMT_TARGET} PRIVATE ${LIBGCC} )
-endif()
 
 ## Define default paths and packages.
 if( CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT )
