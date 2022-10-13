@@ -777,8 +777,11 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     // We don't care if this returns an error code.
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
     auto err = hsaKmtQueryPointerInfo(ptr, &thunkInfo);
-    assert(((err == HSAKMT_STATUS_SUCCESS) || (thunkInfo.Type == HSA_POINTER_UNKNOWN)) &&
-           "Thunk ptr info error and not type HSA_POINTER_UNKNOWN.");
+    if (err != HSAKMT_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
+      memset(info, 0, sizeof(*info));
+      info->type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+      return HSA_STATUS_SUCCESS;
+    }
 
     if (returnListData) {
       assert(thunkInfo.NMappedNodes <= agents_by_node_.size() &&
