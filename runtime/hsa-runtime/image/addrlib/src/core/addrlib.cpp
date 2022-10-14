@@ -234,6 +234,7 @@ ADDR_E_RETURNCODE Lib::Create(
                         break;
                     case FAMILY_GFX1100:
                     case FAMILY_GFX1103:
+                    case FAMILY_GFX1150:
                         pLib = Gfx11HwlInit(&client);
                         break;
                     default:
