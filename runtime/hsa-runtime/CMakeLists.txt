@@ -127,9 +127,6 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
   ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler)
 
-## Set RUNPATH - ../../lib covers use of the legacy symlink in /hsa/lib/
-set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY INSTALL_RPATH "$ORIGIN;$ORIGIN/../../lib;$ORIGIN/../../lib64;$ORIGIN/../lib64" )
-
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
 
