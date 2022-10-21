@@ -204,24 +204,24 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
 void CloseLib(LibHandle lib) { dlclose(*(void**)&lib); }
 
+static int callback(struct dl_phdr_info* info, size_t size, void* data) {
+  if ((info) && (info->dlpi_name[0] != '\0')) {
+    std::vector<std::string>* loadedlib = (std::vector<std::string>*)data;
+    loadedlib->push_back(info->dlpi_name);
+  }
+  return 0;
+}
+
 std::vector<LibHandle> GetLoadedLibs() {
 
   std::vector<LibHandle> ret;
   std::vector<std::string> names;
-  auto callback = [&](dl_phdr_info* info) {
-    if(info->dlpi_name[0] != '\0')
-      names.push_back(info->dlpi_name);
-  };
-  typedef decltype(callback) call_t;
 
-  dl_iterate_phdr([](dl_phdr_info* info, size_t size, void* data){
-    auto& call = *(call_t*)data;
-    call(info);
-    return 0;
-  }, &callback);
+  dl_iterate_phdr(callback, &names);
 
-  for(auto& name : names)
-    ret.push_back(LoadLib(name));
+  if (!names.empty()) {
+    for (auto& name : names) ret.push_back(LoadLib(name));
+  }
 
   return ret;
 }
