@@ -555,6 +555,12 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
     }
 
     amd_region = reinterpret_cast<const AMD::MemoryRegion*>(it->second.region);
+
+    // Imported IPC handle entries inside allocation_map_ do not have an amd_region because they
+    // were allocated in the other process. Access is already granted during IPCAttach().
+    if (!amd_region)
+      return HSA_STATUS_SUCCESS;
+
     alloc_size = it->second.size;
   }
 
