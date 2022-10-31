@@ -564,7 +564,9 @@ typedef struct _HsaMemFlags
             unsigned int FixedAddress : 1; // Allocate memory at specified virtual address. Fail if address is not free.
             unsigned int NoNUMABind:    1; // Don't bind system memory to a specific NUMA node
             unsigned int Uncached:      1; // Caching flag for fine-grained memory on A+A HW platform
-            unsigned int Reserved    : 14;
+            unsigned int NoAddress:     1; // only do vram allocation, return a handle, not allocate virtual address.
+            unsigned int OnlyAddress:   1; // only do virtal address allocation without vram allocation.
+            unsigned int Reserved:     12;
 
         } ui32;
         HSAuint32 Value;

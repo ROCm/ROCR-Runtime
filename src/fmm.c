@@ -1091,6 +1091,10 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
 		args.mmap_offset = *mmap_offset;
 
+	/* if allocate vram-only, use an invalid VA */
+	if (aperture == &mem_handle_aperture)
+		args.va_addr = 0;
+
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
 		return NULL;
 
@@ -1471,6 +1475,35 @@ static void *fmm_map_to_cpu(void *mem, uint64_t size, bool host_access,
 	return ret;
 }
 
+static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
+			manageable_aperture_t *aperture, HsaMemFlags mflags)
+{
+	void *mem = NULL;
+	vm_object_t *vm_obj = NULL;
+
+	/* Check aperture is properly initialized/supported */
+	if (!aperture_is_valid(aperture->base, aperture->limit))
+		return NULL;
+
+	/* Allocate address space */
+	pthread_mutex_lock(&aperture->fmm_mutex);
+	mem = aperture_allocate_area(aperture, address, size);
+	/* assing handle 0 to vm_obj since no mem allocted */
+	vm_obj = aperture_allocate_object(aperture, mem, 0,
+					size, mflags);
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+
+	if (!vm_obj) {
+		pthread_mutex_lock(&aperture->fmm_mutex);
+		aperture_release_area(aperture, mem, size);
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+
+		mem = NULL;
+	}
+
+	return mem;
+}
+
 void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 			  uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
@@ -1501,6 +1534,14 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 	}
 
+	/* special case for va allocation without vram alloc */
+	if (mflags.ui32.OnlyAddress)
+		return fmm_allocate_va(gpu_id, address, size, aperture, mflags);
+
+	/* special case for vram allocation without addr */
+	if(mflags.ui32.NoAddress)
+		aperture = &mem_handle_aperture;
+
 	if (!mflags.ui32.CoarseGrain || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
@@ -1518,7 +1559,8 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
 
-	if (mem) {
+	/* if alloc vram-only not mmap to cpu vm since no va */
+	if (mem && !mflags.ui32.NoAddress) {
 		void *ret = fmm_map_to_cpu(mem, MemorySizeInBytes,
 					   mflags.ui32.HostAccess,
 					   gpu_mem[gpu_mem_id].drm_render_fd,
@@ -1838,7 +1880,7 @@ static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	 * free the BO before unmapping the pages.
 	 */
 	args.handle = object->handle;
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
+	if (args.handle && kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return -errno;
 	}
@@ -3040,6 +3082,18 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 	}
 	/* Successful vm_find_object returns with the aperture locked */
 
+	/* allocate VA only */
+	if (object && object->handle == 0) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+
+	/* allocate buffer only, should be mapped by GEM API */
+	if (aperture == &mem_handle_aperture) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+
 	if (aperture == &cpuvm_aperture) {
 		/* Prefetch memory on APUs with dummy-reads */
 		fmm_check_user_memory(address, size);
@@ -3790,6 +3844,18 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	if (!object && !svm.is_svm_api_supported)
 		return HSAKMT_STATUS_ERROR;
 	/* Successful vm_find_object returns with aperture locked */
+
+	/* allocates VA only */
+	if (object && object->handle == 0) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+
+	/* allocates buffer only, should be mapped by GEM API */
+	if (aperture == &mem_handle_aperture) {
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
 
 	/* APU memory is not supported by this function */
 	if (aperture &&
