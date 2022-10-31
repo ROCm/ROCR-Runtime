@@ -171,6 +171,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated VRAM */
+	/* sanity check cannot do OnlyAddress and NoAddress alloc at same time */
+	if (MemFlags.ui32.OnlyAddress && MemFlags.ui32.NoAddress) {
+		pr_err("[%s] allocate addr-only and memory-only at same time\n",
+			__func__);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+	}
+
 	*MemoryAddress = fmm_allocate_device(gpu_id, PreferredNode, *MemoryAddress,
 					     SizeInBytes, MemFlags);
 
