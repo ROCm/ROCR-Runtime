@@ -264,22 +264,31 @@ TEST_F(KFDMemoryTest, MemoryAlloc) {
 // Basic test for hsaKmtAllocMemory
 TEST_F(KFDMemoryTest, MemoryAllocAll) {
     TEST_START(TESTPROFILE_RUNALL)
-
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     HsaMemFlags memFlags = {0};
     memFlags.ui32.NonPaged = 1; // sys mem vs vram
     HSAuint64 available;
     void *object = NULL;
     int shrink = 21, success = HSAKMT_STATUS_NO_MEMORY;
-
     EXPECT_SUCCESS(hsaKmtAvailableMemory(defaultGPUNode, &available));
     LOG() << "Available: " << available << " bytes" << std::endl;
+    HSAuint64 leeway = (10 << shrink), size = available + leeway;
     for (int i = 0; i < available >> shrink; i++) {
-        HSAuint64 size = available - ((HSAuint64)i << shrink);
         if (hsaKmtAllocMemory(defaultGPUNode, size, memFlags, &object) == HSAKMT_STATUS_SUCCESS) {
-            LOG() << "Allocated: " << size << " bytes" << std::endl;
             success = hsaKmtFreeMemory(object, available);
             break;
+        }
+        size -= (1 << shrink);
+    }
+    if (success == HSAKMT_STATUS_SUCCESS) {
+        LOG() << "Allocated: " << size << " bytes" << std::endl;
+        if (size > available + leeway) {
+            LOG() << "Under-reported available memory!" << std::endl;
+            success = HSAKMT_STATUS_ERROR;
+        }
+        if (size < available - leeway) {
+            LOG() << "Over-reported available memory!" << std::endl;
+            success = HSAKMT_STATUS_NO_MEMORY;
         }
     }
     EXPECT_SUCCESS(success);
