@@ -411,7 +411,7 @@ configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binar
 set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
 
 # package dependencies
-set( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1")
+set( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1, libelf-dev")
 set( CPACK_DEBIAN_BINARY_PACKAGE_RECOMMENDS "libdrm-amdgpu-amdgpu1")
 set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr, hsakmt-roct-dev" )
 if ( ROCM_DEP_ROCMCORE )
