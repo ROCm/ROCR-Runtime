@@ -76,6 +76,9 @@
 #define vm_object_tree(app, is_userptr)				\
 		((is_userptr) ? &(app)->user_tree : &(app)->tree)
 
+#define START_NON_CANONICAL_ADDR (1ULL << 47)
+#define END_NON_CANONICAL_ADDR (~0UL - (1UL << 47))
+
 struct vm_object {
 	void *start;
 	void *userptr;
@@ -257,6 +260,12 @@ static svm_t svm = {
  */
 static manageable_aperture_t cpuvm_aperture = INIT_MANAGEABLE_APERTURE(0, 0);
 
+/* mem_handle_aperture is used to generate memory handles
+ * for allocations that don't have a valid virtual address
+ * its size is 47bits.
+*/
+static manageable_aperture_t mem_handle_aperture = INIT_MANAGEABLE_APERTURE(START_NON_CANONICAL_ADDR, (START_NON_CANONICAL_ADDR + (1ULL << 47)));
+
 /* GPU node array for default mappings */
 static uint32_t all_gpu_id_array_size;
 static uint32_t *all_gpu_id_array;
@@ -267,7 +276,8 @@ typedef enum _HSA_APERTURE {
 	HSA_APERTURE_DGPU,
 	HSA_APERTURE_DGPU_ALT,
 	HSA_APERTURE_GPUVM,
-	HSA_APERTURE_CPUVM
+	HSA_APERTURE_CPUVM,
+	HSA_APERTURE_MEMHANDLE
 } HSA_APERTURE;
 
 typedef struct _HsaApertureInfo {
@@ -890,6 +900,8 @@ static manageable_aperture_t *fmm_get_aperture(HsaApertureInfo info)
 		return &gpu_mem[info.idx].gpuvm_aperture;
 	case HSA_APERTURE_CPUVM:
 		return &cpuvm_aperture;
+	case HSA_APERTURE_MEMHANDLE:
+		return &mem_handle_aperture;
 	default:
 		return NULL;
 	}
@@ -918,7 +930,13 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 	uint32_t i;
 	HsaApertureInfo _info = { .type = HSA_APERTURE_UNSUPPORTED, .idx = 0};
 
-	if (is_dgpu) {
+	if ((address >= mem_handle_aperture.base) &&
+		(address <= mem_handle_aperture.limit)){
+
+		aperture = &mem_handle_aperture;
+		_info.type = HSA_APERTURE_MEMHANDLE;
+
+	} else if (is_dgpu) {
 		if (address >= svm.dgpu_aperture->base &&
 			address <= svm.dgpu_aperture->limit) {
 
@@ -1184,6 +1202,13 @@ static vm_object_t *vm_find_object(const void *addr, uint64_t size,
 			aper = &gpu_mem[i].gpuvm_aperture;
 			break;
 		}
+
+	if (!aper) {
+		if ((addr >= mem_handle_aperture.base) &&
+			 (addr <= mem_handle_aperture.limit)){
+			 aper = &mem_handle_aperture;
+		}
+	}
 
 	if (!aper) {
 		if (!svm.dgpu_aperture)
@@ -2202,6 +2227,8 @@ static void fmm_init_rbtree(void)
 		rbtree_init(&svm.apertures[SVM_COHERENT].user_tree);
 		rbtree_init(&cpuvm_aperture.tree);
 		rbtree_init(&cpuvm_aperture.user_tree);
+		rbtree_init(&mem_handle_aperture.tree);
+		rbtree_init(&mem_handle_aperture.user_tree);
 	}
 
 	while (i--) {
@@ -2271,6 +2298,66 @@ static void release_mmio(void)
 		munmap(gpu_mem[gpu_mem_id].mmio_aperture.base, PAGE_SIZE);
 		fmm_release(gpu_mem[gpu_mem_id].mmio_aperture.base);
 	}
+}
+
+static bool two_apertures_overlap(void *start_1, void *limit_1, void *start_2, void *limit_2)
+{
+    return (start_1 >= start_2 && start_1 <= limit_2) || (start_2 >= start_1 && start_2 <= limit_1);
+}
+
+static bool init_mem_handle_aperture(HSAuint32 align, HSAuint32 guard_pages)
+{
+	bool found;
+	uint32_t i;
+
+	/* init mem_handle_aperture for buffer handler management*/
+	mem_handle_aperture.align = align;
+	mem_handle_aperture.guard_pages = guard_pages;
+	mem_handle_aperture.is_cpu_accessible = false;
+	mem_handle_aperture.ops = &reserved_aperture_ops;
+
+	while (PORT_VPTR_TO_UINT64(mem_handle_aperture.base) < END_NON_CANONICAL_ADDR - 1) {
+
+		found = true;
+		for (i = 0; i < gpu_mem_count; i++) {
+
+			if (gpu_mem[i/*gpu_mem_id*/].lds_aperture.base &&
+				two_apertures_overlap(gpu_mem[i].lds_aperture.base, gpu_mem[i].lds_aperture.limit,
+									mem_handle_aperture.base, mem_handle_aperture.limit)) {
+					found = false;
+					break;
+			}
+
+			if (gpu_mem[i].scratch_aperture.base &&
+				two_apertures_overlap(gpu_mem[i].scratch_aperture.base, gpu_mem[i].scratch_aperture.limit,
+									mem_handle_aperture.base, mem_handle_aperture.limit)){
+					found = false;
+					break;
+			}
+
+			if (gpu_mem[i].gpuvm_aperture.base &&
+			   two_apertures_overlap(gpu_mem[i].gpuvm_aperture.base, gpu_mem[i].gpuvm_aperture.limit,
+									mem_handle_aperture.base, mem_handle_aperture.limit)){
+					found = false;
+					break;
+			}
+		}
+
+		if (found) {
+			pr_info("mem_handle_aperture start %p, mem_handle_aperture limit %p\n", mem_handle_aperture.base, mem_handle_aperture.limit);
+			return true;
+		} else {
+			/*increase base by 1UL<<47 to check next hole*/
+			mem_handle_aperture.base =  VOID_PTR_ADD(mem_handle_aperture.base, (1UL << 47));
+			mem_handle_aperture.limit = VOID_PTR_ADD(mem_handle_aperture.base, (1ULL << 47));
+		}
+	}
+
+	/* set invalid aperture if fail locating a hole for it*/
+	mem_handle_aperture.base =  0;
+	mem_handle_aperture.limit = 0;
+
+	return false;
 }
 
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
@@ -2570,6 +2657,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	cpuvm_aperture.limit = (void *)0x7FFFFFFFFFFF; /* 2^47 - 1 */
 
 	fmm_init_rbtree();
+
+	if (!init_mem_handle_aperture(PAGE_SIZE, guardPages))
+		pr_err("Failed to init mem_handle_aperture\n");
 
 	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
 		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId))
@@ -3962,6 +4052,7 @@ void fmm_clear_all_mem(void)
 			drm_render_fds[i] = 0;
 		}
 
+	fmm_clear_aperture(&mem_handle_aperture);
 	fmm_clear_aperture(&cpuvm_aperture);
 	fmm_clear_aperture(&svm.apertures[SVM_DEFAULT]);
 	fmm_clear_aperture(&svm.apertures[SVM_COHERENT]);
