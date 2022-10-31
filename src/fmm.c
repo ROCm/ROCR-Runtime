@@ -2263,7 +2263,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
-	char *maxVaAlignStr;
+	char *maxVaAlignStr, *useSvmStr;
 	unsigned int guardPages = 1;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0;
@@ -2302,6 +2302,9 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	if (!maxVaAlignStr || sscanf(maxVaAlignStr, "%u", &svm.alignment_order) != 1)
 		svm.alignment_order = 9;
 
+	useSvmStr = getenv("HSA_USE_SVM");
+	svm.is_svm_api_supported = !(useSvmStr && !strcmp(useSvmStr, "0"));
+
 	gpu_mem_count = 0;
 	g_first_gpu_mem = NULL;
 
@@ -2319,7 +2322,6 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 */
 
 	is_dgpu = false;
-	svm.is_svm_api_supported = true;
 
 	for (i = 0; i < NumNodes; i++) {
 		HsaNodeProperties props;
