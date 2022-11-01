@@ -3539,7 +3539,11 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	gpu_mem_id = gpu_mem_find_by_gpu_id(infoArgs.gpu_id);
 	if (gpu_mem_id < 0)
 		goto error_free_metadata;
-	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
+
+	/* import DMA buffer without VA assigned */
+	if (!gpu_id_array && gpu_id_array_size == 0) {
+		aperture = &mem_handle_aperture;
+	} else if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
 		aperture_base = NULL;
 	} else {
@@ -3556,7 +3560,11 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		goto error_free_metadata;
 
 	/* Import DMA buffer */
-	importArgs.va_addr = VOID_PTRS_SUB(mem, aperture_base);
+	if (aperture == &mem_handle_aperture)
+		importArgs.va_addr = 0;
+	else
+		importArgs.va_addr = VOID_PTRS_SUB(mem, aperture_base);
+
 	importArgs.gpu_id = infoArgs.gpu_id;
 	importArgs.dmabuf_fd = GraphicsResourceHandle;
 	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IMPORT_DMABUF, (void *)&importArgs);
