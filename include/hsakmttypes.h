@@ -1303,8 +1303,9 @@ typedef enum _HSA_POINTER_TYPE {
     HSA_POINTER_ALLOCATED = 1,           // Allocated with hsaKmtAllocMemory (except scratch)
     HSA_POINTER_REGISTERED_USER = 2,     // Registered user pointer
     HSA_POINTER_REGISTERED_GRAPHICS = 3, // Registered graphics buffer
-    HSA_POINTER_REGISTERED_SHARED = 4    // Registered shared buffer (IPC)
+    HSA_POINTER_REGISTERED_SHARED = 4,   // Registered shared buffer (IPC)
                                          // (hsaKmtRegisterGraphicsToNodes)
+    HSA_POINTER_RESERVED_ADDR = 5        // address-only reservation VA
 } HSA_POINTER_TYPE;
 
 typedef struct _HsaPointerInfo {

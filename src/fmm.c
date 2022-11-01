@@ -3963,6 +3963,8 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		info->Type = HSA_POINTER_REGISTERED_GRAPHICS;
 	else if (vm_obj->userptr)
 		info->Type = HSA_POINTER_REGISTERED_USER;
+	else if (vm_obj->handle == 0)
+		info->Type = HSA_POINTER_RESERVED_ADDR;
 	else
 		info->Type = HSA_POINTER_ALLOCATED;
 

@@ -339,6 +339,9 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 		pr_err("Memory is allocated using hsaKmtAllocMemory\n");
 		pr_err("CPU address of the memory is %p\n", info.CPUAddress);
 		break;
+	case HSA_POINTER_RESERVED_ADDR:
+		pr_err("Memory is allocated by OnlyAddress mode\n");
+		break;
 	default:
 		pr_err("Invalid memory type %d\n", info.Type);
 		break;
