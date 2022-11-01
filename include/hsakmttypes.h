@@ -607,7 +607,7 @@ typedef struct _HsaGraphicsResourceInfo {
     HSAuint64  SizeInBytes;         // Buffer size
     const void *Metadata;           // Pointer to metadata owned by Thunk
     HSAuint32  MetadataSizeInBytes; // Size of metadata
-    HSAuint32  Reserved;            // Reserved for future use, will be set to 0
+    HSAuint32  NodeId;              // GPU exported the buffer
 } HsaGraphicsResourceInfo;
 
 typedef enum _HSA_CACHING_TYPE
