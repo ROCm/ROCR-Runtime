@@ -2889,3 +2889,51 @@ TEST_F(KFDMemoryTest, ExportDMABufTest) {
 
     TEST_END
 }
+
+TEST_F(KFDMemoryTest, VA_VRAM_Only_AllocTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+   if (m_VersionInfo.KernelInterfaceMinorVersion < 12) {
+        LOG() << "Skipping test, requires KFD ioctl version 1.12 or newer" << std::endl;
+        return;
+    }
+
+    HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    HsaMemFlags memFlags = m_MemoryFlags;
+    memFlags.ui32.NonPaged = 1;
+    memFlags.ui32.HostAccess = 0;
+
+    HsaMemMapFlags mapFlags = {0};
+
+    HSAuint32 *buf;
+
+    /*alloc va without vram alloc*/
+    memFlags.ui32.OnlyAddress = 1;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, memFlags,
+                                          reinterpret_cast<void**>(&buf)));
+
+    /*mapping VA allocated by kfd api would fail*/
+    ASSERT_EQ(HSAKMT_STATUS_ERROR, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPUNodes(buf, PAGE_SIZE, NULL,
+                               mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+
+    ASSERT_SUCCESS(hsaKmtFreeMemory(buf, PAGE_SIZE));
+
+    /*alloc vram without va assigned*/
+    memFlags.ui32.OnlyAddress = 0;
+    memFlags.ui32.NoAddress = 1;
+    ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, memFlags,
+                                      reinterpret_cast<void**>(&buf)));
+
+    /*mapping handle allocated by kfd API would fail*/
+    ASSERT_EQ(HSAKMT_STATUS_ERROR, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPUNodes(buf, PAGE_SIZE, NULL,
+                               mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+
+    ASSERT_SUCCESS(hsaKmtFreeMemory(buf, PAGE_SIZE));
+
+    TEST_END
+}
