@@ -3590,7 +3590,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	GraphicsResourceInfo->SizeInBytes = infoArgs.size;
 	GraphicsResourceInfo->Metadata = (void *)(unsigned long)infoArgs.metadata_ptr;
 	GraphicsResourceInfo->MetadataSizeInBytes = infoArgs.metadata_size;
-	GraphicsResourceInfo->Reserved = 0;
+	gpuid_to_nodeid(infoArgs.gpu_id, &GraphicsResourceInfo->NodeId);
 
 	return HSAKMT_STATUS_SUCCESS;
 
