@@ -46,6 +46,7 @@
 #include <vector>
 #include <string>
 #include <thread>
+#include "core/util/os.h"
 
 namespace rocr {
 namespace AMD {
@@ -57,8 +58,11 @@ namespace AMD {
 
     private:
       template <typename... Args> std::string format(const char* format, Args... arg);
+      void PollSmi();
+      static void PollSmiRun(void* profileControl);
       int event;
-      std::thread* thread;
+      bool exit;
+      os::Thread poll_smi_thread_;
       std::vector<char> format_buffer;
     };
 
