@@ -134,24 +134,24 @@ trap_entry:
   s_or_b32             ttmp6, ttmp6, ttmp2
 
   // Fetch doorbell id for our queue.
+.if .amdgcn.gfx_generation_number < 11
   s_mov_b32            ttmp2, exec_lo
   s_mov_b32            ttmp3, exec_hi
-.if .amdgcn.gfx_generation_number < 11
   s_mov_b32            exec_lo, 0x80000000
   s_sendmsg            sendmsg(MSG_GET_DOORBELL)
 .wait_sendmsg:
   s_nop                0x7
   s_bitcmp0_b32        exec_lo, 0x1F
   s_cbranch_scc0       .wait_sendmsg
-.else
-  s_sendmsg_rtn_b32    exec_lo, sendmsg(MSG_RTN_GET_DOORBELL)
-  s_waitcnt            lgkmcnt(0)
-.endif
   s_mov_b32            exec_hi, ttmp3
-
   // Restore exec_lo, move the doorbell_id into ttmp3
   s_and_b32            ttmp3, exec_lo, DOORBELL_ID_MASK
   s_mov_b32            exec_lo, ttmp2
+.else
+  s_sendmsg_rtn_b32    ttmp3, sendmsg(MSG_RTN_GET_DOORBELL)
+  s_waitcnt            lgkmcnt(0)
+  s_and_b32            ttmp3, ttmp3, DOORBELL_ID_MASK
+.endif
 
   // Map trap reason to an exception code.
   s_getreg_b32         ttmp2, hwreg(HW_REG_TRAPSTS)
