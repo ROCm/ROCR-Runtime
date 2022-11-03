@@ -351,3 +351,164 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetRuntimeCapabilities(HSAuint32 *caps_mask)
 	*caps_mask = runtime_capabilities_mask;
 	return HSAKMT_STATUS_SUCCESS;
 }
+
+static HSAKMT_STATUS dbg_trap_get_device_data(void *data,
+					      uint32_t *n_entries,
+					      uint32_t entry_size)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+
+	args.device_snapshot.snapshot_buf_ptr = (uint64_t) data;
+	args.device_snapshot.num_devices = *n_entries;
+	args.device_snapshot.entry_size = entry_size;
+	args.op = KFD_IOC_DBG_TRAP_GET_DEVICE_SNAPSHOT;
+	args.pid = getpid();
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args))
+		return HSAKMT_STATUS_ERROR;
+	*n_entries = args.device_snapshot.num_devices;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS dbg_trap_get_queue_data(void *data,
+					     uint32_t *n_entries,
+					     uint32_t entry_size,
+					     uint32_t *queue_ids)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+
+	args.queue_snapshot.num_queues = *n_entries;
+	args.queue_snapshot.entry_size = entry_size;
+	args.queue_snapshot.exception_mask = KFD_EC_MASK(EC_QUEUE_NEW);
+	args.op = KFD_IOC_DBG_TRAP_GET_QUEUE_SNAPSHOT;
+	args.queue_snapshot.snapshot_buf_ptr = (uint64_t) data;
+	args.pid = getpid();
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args))
+		return HSAKMT_STATUS_ERROR;
+
+	*n_entries = args.queue_snapshot.num_queues;
+	if (queue_ids && *n_entries) {
+		struct kfd_queue_snapshot_entry *queue_entry =
+		    (struct kfd_queue_snapshot_entry *) data;
+		for (uint32_t i = 0; i < *n_entries; i++)
+			queue_ids[i] = queue_entry[i].queue_id;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+static HSAKMT_STATUS dbg_trap_suspend_queues(uint32_t *queue_ids,
+					     uint32_t num_queues)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+	int r;
+
+	args.suspend_queues.queue_array_ptr = (uint64_t) queue_ids;
+	args.suspend_queues.num_queues = num_queues;
+	args.suspend_queues.exception_mask = KFD_EC_MASK(EC_QUEUE_NEW);
+	args.op = KFD_IOC_DBG_TRAP_SUSPEND_QUEUES;
+	args.pid = getpid();
+
+	r = kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args);
+	if (r < 0)
+		return HSAKMT_STATUS_ERROR;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgEnable(void **runtime_info,
+					     HSAuint32 *data_size)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	*data_size = sizeof(struct kfd_runtime_info);
+	args.enable.rinfo_size = *data_size;
+	args.enable.dbg_fd = kfd_fd;
+	*runtime_info = malloc(args.enable.rinfo_size);
+	if (!*runtime_info)
+		return HSAKMT_STATUS_NO_MEMORY;
+	args.enable.rinfo_ptr = (uint64_t) *runtime_info;
+	args.op = KFD_IOC_DBG_TRAP_ENABLE;
+	args.pid = getpid();
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args)) {
+		free(*runtime_info);
+		return HSAKMT_STATUS_ERROR;
+	}
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgDisable(void)
+{
+	struct kfd_ioctl_dbg_trap_args args = {0};
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	args.enable.dbg_fd = kfd_fd;
+	args.op = KFD_IOC_DBG_TRAP_DISABLE;
+	args.pid = getpid();
+
+	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DBG_TRAP, &args))
+		return HSAKMT_STATUS_ERROR;
+
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgGetDeviceData(void **data,
+						HSAuint32 *n_entries,
+						HSAuint32 *entry_size)
+{
+	HSAKMT_STATUS ret = HSAKMT_STATUS_NO_MEMORY;
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	*n_entries = UINT32_MAX;
+	*entry_size = sizeof(struct kfd_dbg_device_info_entry);
+	*data = malloc(*entry_size * *n_entries);
+	if (!*data)
+		return ret;
+	ret = dbg_trap_get_device_data(*data, n_entries, *entry_size);
+	if (ret)
+		free(*data);
+
+	return ret;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtDbgGetQueueData(void **data,
+						HSAuint32 *n_entries,
+						HSAuint32 *entry_size,
+						bool suspend_queues)
+{
+	uint32_t *queue_ids = NULL;
+
+	CHECK_KFD_OPEN();
+	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	*entry_size = sizeof(struct kfd_queue_snapshot_entry);
+	*n_entries = 0;
+	if (dbg_trap_get_queue_data(NULL, n_entries, *entry_size, NULL))
+		return HSAKMT_STATUS_ERROR;
+	*data = malloc(*n_entries * *entry_size);
+	if (!*data)
+		return HSAKMT_STATUS_NO_MEMORY;
+	if (suspend_queues && *n_entries)
+		queue_ids = (uint32_t *)malloc(sizeof(uint32_t) * *n_entries);
+	if (!queue_ids ||
+	    dbg_trap_get_queue_data(*data, n_entries, *entry_size, queue_ids))
+		goto free_data;
+	if (queue_ids) {
+		if (dbg_trap_suspend_queues(queue_ids, *n_entries) ||
+		    dbg_trap_get_queue_data(*data, n_entries, *entry_size, NULL))
+			goto free_data;
+		free(queue_ids);
+	}
+	return HSAKMT_STATUS_SUCCESS;
+free_data:
+	free(*data);
+	if (queue_ids)
+		free(queue_ids);
+
+	return HSAKMT_STATUS_ERROR;
+}
