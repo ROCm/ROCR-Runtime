@@ -735,6 +735,46 @@ hsaKmtGetRuntimeCapabilities(
     );
 
 /**
+  Enable debug trap.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDbgEnable(
+    void **runtime_info, //Out
+    HSAuint32 *data_size //Out
+    );
+
+/**
+  Disable debug trap.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDbgDisable(void);
+
+/**
+  Get device snapshot.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDbgGetDeviceData(
+    void **data, //Out
+    HSAuint32 *n_entries, //Out
+    HSAuint32 *entry_size //Out
+    );
+
+/**
+  Get queues snapshot.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtDbgGetQueueData(
+    void **data, //Out
+    HSAuint32 *n_entries, //Out
+    HSAuint32 *entry_size, //Out
+    bool suspend_queues //In
+    );
+
+/**
   Gets GPU and CPU clock counters for particular Node
 */
 
