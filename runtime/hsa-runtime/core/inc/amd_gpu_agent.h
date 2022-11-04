@@ -329,6 +329,9 @@ class GpuAgent : public GpuAgentInt {
   // GPU devices.
   __forceinline uint32_t enumeration_index() const { return enum_index_; }
 
+  // @brief returns true if agent uses MES scheduler
+  __forceinline const bool isMES() const { return (isa_->GetMajorVersion() >= 11) ? true : false; };
+
   void Trim() override;
 
   const std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>&
