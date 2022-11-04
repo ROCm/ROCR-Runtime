@@ -358,19 +358,20 @@ if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
 endif()
 
 # Setting devel package dependendent version
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-dev, rocm-core")
-set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libdrm-amdgpu-amdgpu1")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-amdgpu-dev | libdrm-dev, rocm-core")
+set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libdrm-amdgpu-dev")
 set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct")
 
-set(CPACK_RPM_PACKAGE_REQUIRES "libdrm-devel, rocm-core")
+set(CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 # NOTE: CentOS/RHEL <8 and SUSE <10 do not have support for rpm recommends,
 # so HSAKMT_REQUIRES_LIBDRM should be defined when building EL7 to avoid
 # producing binaries which do not install on CentOS7 or RHEL7
 if(HSAKMT_REQUIRES_LIBDRM)
-  string ( APPEND CPACK_RPM_PACKAGE_REQUIRES ", libdrm-amdgpu" )
+  string ( APPEND CPACK_RPM_PACKAGE_REQUIRES ", libdrm-amdgpu-devel" )
 else()
-  set(CPACK_RPM_PACKAGE_RECOMMENDS "libdrm-amdgpu" )
+  string ( APPEND CPACK_RPM_PACKAGE_REQUIRES ", (libdrm-amdgpu-devel or libdrm-devel)" )
+  set(CPACK_RPM_PACKAGE_RECOMMENDS "libdrm-amdgpu-devel" )
 endif()
 
 # Set the names now using CPACK utility
