@@ -913,6 +913,9 @@ hsa_status_t Runtime::SetPtrInfoData(const void* ptr, void* userptr) {
 hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
   static_assert(sizeof(hsa_amd_ipc_memory_t) == sizeof(HsaSharedMemoryHandle),
                 "Thunk IPC mismatch.");
+
+  static const size_t pageSize = 4096;
+
   // Reject sharing allocations larger than ~8TB due to thunk limitations.
   if (len > 0x7FFFFFFF000ull) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
@@ -922,8 +925,14 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  if ((info.agentBaseAddress != ptr) || (info.sizeInBytes != len))
+
+  // Temporary: Previous versions of HIP will call hsa_amd_ipc_memory_create with the len aligned to
+  // granularity. We need to maintain backward compatibility for 2 releases so we temporarily allow
+  // this. After 2 releases, we will only allow info.sizeInBytes != len.
+  if ((info.agentBaseAddress != ptr) ||
+      (info.sizeInBytes != len && AlignUp(info.sizeInBytes, pageSize) != len)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
   if ((block.base != ptr) || (block.length != len)) {
     if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
       assert(false && "Fragment's block not aligned to 2MB!");
