@@ -2916,7 +2916,7 @@ TEST_F(KFDMemoryTest, VA_VRAM_Only_AllocTest) {
                                           reinterpret_cast<void**>(&buf)));
 
     /*mapping VA allocated by kfd api would fail*/
-    ASSERT_EQ(HSAKMT_STATUS_ERROR, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
     ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPUNodes(buf, PAGE_SIZE, NULL,
                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
@@ -2929,7 +2929,7 @@ TEST_F(KFDMemoryTest, VA_VRAM_Only_AllocTest) {
                                       reinterpret_cast<void**>(&buf)));
 
     /*mapping handle allocated by kfd API would fail*/
-    ASSERT_EQ(HSAKMT_STATUS_ERROR, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
+    ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPU(buf, PAGE_SIZE, NULL));
     ASSERT_EQ(HSAKMT_STATUS_INVALID_PARAMETER, hsaKmtMapMemoryToGPUNodes(buf, PAGE_SIZE, NULL,
                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 

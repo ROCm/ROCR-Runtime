@@ -2946,13 +2946,14 @@ static void add_device_ids_to_mapped_array(vm_object_t *obj,
 
 
 /* If nodes_to_map is not NULL, map the nodes specified; otherwise map all. */
-static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
+static HSAKMT_STATUS _fmm_map_to_gpu(manageable_aperture_t *aperture,
 			void *address, uint64_t size, vm_object_t *obj,
 			uint32_t *nodes_to_map, uint32_t nodes_array_size)
 {
 	struct kfd_ioctl_map_memory_to_gpu_args args = {0};
 	vm_object_t *object;
-	int ret = 0;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	int ret_ioctl;
 
 	if (!obj)
 		pthread_mutex_lock(&aperture->fmm_mutex);
@@ -2962,7 +2963,7 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 		/* Find the object to retrieve the handle */
 		object = vm_find_object_by_address(aperture, address, 0);
 		if (!object) {
-			ret = -EINVAL;
+			ret = HSAKMT_STATUS_INVALID_HANDLE;
 			goto err_object_not_found;
 		}
 	}
@@ -3004,10 +3005,11 @@ static int _fmm_map_to_gpu(manageable_aperture_t *aperture,
 	}
 	args.n_success = 0;
 
-	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args);
-	if (ret) {
+	ret_ioctl = kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args);
+	if (ret_ioctl) {
 		pr_err("GPU mapping failed (%d) for obj at %p, userptr %p, size %lu",
-		       ret, object->start, object->userptr, object->size);
+		       ret_ioctl, object->start, object->userptr, object->size);
+		ret = HSAKMT_STATUS_ERROR;
 		goto err_map_failed;
 	}
 
@@ -3035,11 +3037,11 @@ err_map_failed:
 	return ret;
 }
 
-static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *aperture,
+static HSAKMT_STATUS _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *aperture,
 				   void *address, uint64_t size)
 {
 	int32_t gpu_mem_id;
-	int ret;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	bool is_debugger = 0;
 	uint32_t flags;
 	void *mmap_ret = NULL;
@@ -3049,15 +3051,15 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	/* Retrieve gpu_mem id according to gpu_id */
 	gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 	if (gpu_mem_id < 0)
-		return -1;
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (!is_dgpu)
-		return 0; /* Nothing to do on APU */
+		return HSAKMT_STATUS_SUCCESS; /* Nothing to do on APU */
 
 	/* sanity check the address */
 	if (address < aperture->base ||
 	    VOID_PTR_ADD(address, size - 1) > aperture->limit)
-		return -1;
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	is_debugger = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id);
 	flags = is_debugger ? KFD_IOC_ALLOC_MEM_FLAGS_GTT :
@@ -3067,32 +3069,32 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	obj = fmm_allocate_memory_object(gpu_id, address, size,
 					 aperture, &mmap_offset, flags);
 	if (!obj)
-		return -1;
+		return HSAKMT_STATUS_INVALID_HANDLE;
 	/* Create a CPU mapping for the debugger */
 	mmap_ret = fmm_map_to_cpu(address, size, is_debugger,
 				  gpu_mem[gpu_mem_id].drm_render_fd,
 				  mmap_offset);
 	if (mmap_ret == MAP_FAILED) {
 		__fmm_release(obj, aperture);
-		return -1;
+		return HSAKMT_STATUS_ERROR;
 	}
 
 	/* map to GPU */
 	ret = _fmm_map_to_gpu(aperture, address, size, NULL, &gpu_id, sizeof(uint32_t));
-	if (ret != 0)
+	if (ret != HSAKMT_STATUS_SUCCESS)
 		__fmm_release(obj, aperture);
 
 	return ret;
 }
 
-static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
-				   uint64_t *gpuvm_addr, vm_object_t *object,
-				   uint32_t *nodes_to_map, uint32_t nodes_array_size)
+static HSAKMT_STATUS _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
+					     uint64_t *gpuvm_addr, vm_object_t *object,
+					     uint32_t *nodes_to_map, uint32_t nodes_array_size)
 {
 	manageable_aperture_t *aperture;
 	void *svm_addr;
 	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
-	int ret;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	aperture = svm.dgpu_aperture;
 
@@ -3116,18 +3118,18 @@ static int _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 		svm_addr = object->start;
 		ret = _fmm_map_to_gpu(aperture, svm_addr, object->size, object, NULL, 0);
 	}
-	if (ret == 0 && gpuvm_addr)
+	if (ret == HSAKMT_STATUS_SUCCESS && gpuvm_addr)
 		*gpuvm_addr = (uint64_t)svm_addr + page_offset;
 
 	return ret;
 }
 
-int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
+HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object;
 	uint32_t i;
-	int ret;
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	/* Special handling for scratch memory */
 	for (i = 0; i < gpu_mem_count; i++)
@@ -3143,10 +3145,10 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 		if (!is_dgpu) {
 			/* Prefetch memory on APUs with dummy-reads */
 			fmm_check_user_memory(address, size);
-			return 0;
+			return HSAKMT_STATUS_SUCCESS;
 		}
 		pr_err("Object not found at %p\n", address);
-		return -EINVAL;
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 	/* Successful vm_find_object returns with the aperture locked */
 
@@ -3165,7 +3167,7 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 	if (aperture == &cpuvm_aperture) {
 		/* Prefetch memory on APUs with dummy-reads */
 		fmm_check_user_memory(address, size);
-		ret = 0;
+		ret = HSAKMT_STATUS_SUCCESS;
 	} else if ((svm.is_svm_api_supported && !object) || object->userptr) {
 		ret = _fmm_map_to_gpu_userptr(address, size, gpuvm_address, object, NULL, 0);
 	} else {
@@ -3173,7 +3175,7 @@ int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 		/* Update alternate GPUVM address only for
 		 * CPU-invisible apertures on old APUs
 		 */
-		if (!ret && gpuvm_address && !aperture->is_cpu_accessible)
+		if (ret == HSAKMT_STATUS_SUCCESS && gpuvm_address && !aperture->is_cpu_accessible)
 			*gpuvm_address = VOID_PTRS_SUB(object->start, aperture->base);
 	}
 
