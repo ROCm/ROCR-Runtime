@@ -619,3 +619,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtReturnAsanHeaderPage(void *addr)
 	return HSAKMT_STATUS_NOT_SUPPORTED;
 #endif
 }
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetAMDGPUDeviceHandle( HSAuint32 NodeId,
+						HsaAMDGPUDeviceHandle   *DeviceHandle)
+{
+	CHECK_KFD_OPEN();
+
+	return fmm_get_amdgpu_device_handle(NodeId, DeviceHandle);
+}

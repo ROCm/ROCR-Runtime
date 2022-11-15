@@ -603,6 +603,16 @@ hsaKmtUnmapGraphicHandle(
                 );
 
 /**
+ * Get an AMDGPU device handle for a GPU node
+ */
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetAMDGPUDeviceHandle(
+                HSAuint32               NodeId,                    //IN
+                HsaAMDGPUDeviceHandle   *DeviceHandle              //OUT
+                );
+
+/**
   Allocate GWS resource for a queue
  */
 
