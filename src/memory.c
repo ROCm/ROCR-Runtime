@@ -457,10 +457,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPU(void *MemoryAddress,
 	if (AlternateVAGPU)
 		*AlternateVAGPU = 0;
 
-	if (!fmm_map_to_gpu(MemoryAddress, MemorySizeInBytes, AlternateVAGPU))
-		return HSAKMT_STATUS_SUCCESS;
-	else
-		return HSAKMT_STATUS_ERROR;
+	return fmm_map_to_gpu(MemoryAddress, MemorySizeInBytes, AlternateVAGPU);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,

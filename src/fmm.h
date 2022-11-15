@@ -58,7 +58,7 @@ void *fmm_allocate_host(uint32_t node_id, void *address, uint64_t MemorySizeInBy
 			HsaMemFlags flags);
 void fmm_print(uint32_t node);
 HSAKMT_STATUS fmm_release(void *address);
-int fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address);
+HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address);
 int fmm_unmap_from_gpu(void *address);
 bool fmm_get_handle(void *address, uint64_t *handle);
 HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info);
