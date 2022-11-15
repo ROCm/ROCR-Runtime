@@ -71,6 +71,7 @@ const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_B
 namespace rocr {
 namespace core {
 bool g_use_interrupt_wait = true;
+bool g_use_mwaitx = true;
 
 Runtime* Runtime::runtime_singleton_ = NULL;
 
@@ -678,6 +679,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       for(auto agent : gpu_agents_)
         ret &= (agent->isa()->GetXnack() == IsaFeature::Enabled);
       *(bool*)value = ret;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_MWAITX_ENABLED: {
+      *((bool*)value) = g_use_mwaitx;
       break;
     }
     default:
@@ -1405,6 +1410,7 @@ hsa_status_t Runtime::Load() {
 
   flag_.Refresh();
   g_use_interrupt_wait = flag_.enable_interrupt();
+  g_use_mwaitx = flag_.check_mwaitx(cpuinfo.mwaitx);
 
   if (!AMD::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
