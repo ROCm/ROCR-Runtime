@@ -41,6 +41,8 @@
 #include <numa.h>
 #include <numaif.h>
 #include "rbtree.h"
+#include <amdgpu.h>
+
 #ifndef MPOL_F_STATIC_NODES
 /* Bug in numaif.h, this should be defined in there. Definition copied
  * from linux/mempolicy.h.
@@ -195,6 +197,7 @@ typedef struct {
 	int drm_render_fd;
 	uint32_t usable_peer_id_num;
 	uint32_t *usable_peer_id_array;
+	int drm_render_minor;
 } gpu_mem_t;
 
 enum svm_aperture_type {
@@ -2026,10 +2029,15 @@ static HSAKMT_STATUS get_process_apertures(
 #define DRM_LAST_RENDER_NODE 255
 static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
 
+/* amdgpu device handle for each gpu that libdrm uses */
+static struct amdgpu_device *amdgpu_handle[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
+
 int open_drm_render_device(int minor)
 {
 	char path[128];
 	int index, fd;
+	uint32_t major_drm, minor_drm;
+	struct amdgpu_device **device_handle;
 
 	if (minor < DRM_FIRST_RENDER_NODE || minor > DRM_LAST_RENDER_NODE) {
 		pr_err("DRM render minor %d out of range [%d, %d]\n", minor,
@@ -2053,6 +2061,23 @@ int open_drm_render_device(int minor)
 		return -errno;
 	}
 	drm_render_fds[index] = fd;
+
+	/* if amdgpu_device_get_fd availabe query render fd that libdrm uses,
+	 * then close drm_render_fds above, replace it by fd libdrm uses.
+	 */
+	device_handle = &amdgpu_handle[index];
+	if (fn_amdgpu_device_get_fd &&
+	    !amdgpu_device_initialize(fd, &major_drm, &minor_drm, device_handle)) {
+		fd = fn_amdgpu_device_get_fd(*device_handle);
+		if (fd > 0) {
+			close(drm_render_fds[index]);
+			drm_render_fds[index] = fd;
+		} else {
+			pr_err("amdgpu_device_get_fd failed: %d\n", fd);
+			amdgpu_device_deinitialize(*device_handle);
+			*device_handle = 0;
+		}
+	}
 
 	return fd;
 }
@@ -2366,6 +2391,23 @@ static void release_mmio(void)
 	}
 }
 
+HSAKMT_STATUS fmm_get_amdgpu_device_handle(uint32_t node_id,
+						HsaAMDGPUDeviceHandle *DeviceHandle)
+{
+	int32_t i = gpu_mem_find_by_node_id(node_id);
+	int index;
+
+	if (i < 0)
+		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	index = gpu_mem[i].drm_render_minor - DRM_FIRST_RENDER_NODE;
+	if (!amdgpu_handle[index])
+		return HSAKMT_STATUS_INVALID_HANDLE;
+
+	*DeviceHandle = amdgpu_handle[index];
+	return HSAKMT_STATUS_SUCCESS;
+}
+
 static bool two_apertures_overlap(void *start_1, void *limit_1, void *start_2, void *limit_2)
 {
     return (start_1 >= start_2 && start_1 <= limit_2) || (start_2 >= start_1 && start_2 <= limit_1);
@@ -2376,7 +2418,7 @@ static bool init_mem_handle_aperture(HSAuint32 align, HSAuint32 guard_pages)
 	bool found;
 	uint32_t i;
 
-	/* init mem_handle_aperture for buffer handler management*/
+	/* init mem_handle_aperture for buffer handler management */
 	mem_handle_aperture.align = align;
 	mem_handle_aperture.guard_pages = guard_pages;
 	mem_handle_aperture.is_cpu_accessible = false;
@@ -2387,7 +2429,7 @@ static bool init_mem_handle_aperture(HSAuint32 align, HSAuint32 guard_pages)
 		found = true;
 		for (i = 0; i < gpu_mem_count; i++) {
 
-			if (gpu_mem[i/*gpu_mem_id*/].lds_aperture.base &&
+			if (gpu_mem[i].lds_aperture.base &&
 				two_apertures_overlap(gpu_mem[i].lds_aperture.base, gpu_mem[i].lds_aperture.limit,
 									mem_handle_aperture.base, mem_handle_aperture.limit)) {
 					found = false;
@@ -2410,16 +2452,17 @@ static bool init_mem_handle_aperture(HSAuint32 align, HSAuint32 guard_pages)
 		}
 
 		if (found) {
-			pr_info("mem_handle_aperture start %p, mem_handle_aperture limit %p\n", mem_handle_aperture.base, mem_handle_aperture.limit);
+			pr_info("mem_handle_aperture start %p, mem_handle_aperture limit %p\n",
+					mem_handle_aperture.base, mem_handle_aperture.limit);
 			return true;
 		} else {
-			/*increase base by 1UL<<47 to check next hole*/
+			/* increase base by 1UL<<47 to check next hole */
 			mem_handle_aperture.base =  VOID_PTR_ADD(mem_handle_aperture.base, (1UL << 47));
 			mem_handle_aperture.limit = VOID_PTR_ADD(mem_handle_aperture.base, (1ULL << 47));
 		}
 	}
 
-	/* set invalid aperture if fail locating a hole for it*/
+	/* set invalid aperture if fail locating a hole for it */
 	mem_handle_aperture.base =  0;
 	mem_handle_aperture.limit = 0;
 
@@ -2511,6 +2554,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 				goto gpu_mem_init_failed;
 			}
 
+			gpu_mem[gpu_mem_count].drm_render_minor = props.DrmRenderMinor;
 			gpu_mem[gpu_mem_count].usable_peer_id_array =
 				calloc(NumNodes, sizeof(uint32_t));
 			if (!gpu_mem[gpu_mem_count].usable_peer_id_array) {
@@ -4146,11 +4190,16 @@ void fmm_clear_all_mem(void)
 	void *map_addr;
 
 	/* Close render node FDs. The child process needs to open new ones */
-	for (i = 0; i <= DRM_LAST_RENDER_NODE - DRM_FIRST_RENDER_NODE; i++)
-		if (drm_render_fds[i]) {
+	for (i = 0; i <= DRM_LAST_RENDER_NODE - DRM_FIRST_RENDER_NODE; i++) {
+
+		if (amdgpu_handle[i]) {
+			amdgpu_device_deinitialize(amdgpu_handle[i]);
+			amdgpu_handle[i] = NULL;
+		} else if (drm_render_fds[i]) {
 			close(drm_render_fds[i]);
-			drm_render_fds[i] = 0;
 		}
+		drm_render_fds[i] = 0;
+	}
 
 	fmm_clear_aperture(&mem_handle_aperture);
 	fmm_clear_aperture(&cpuvm_aperture);

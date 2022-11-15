@@ -45,6 +45,7 @@ typedef struct {
 	void *start_address;
 } aperture_properties_t;
 
+HSAKMT_STATUS fmm_get_amdgpu_device_handle(uint32_t node_id,  HsaAMDGPUDeviceHandle *DeviceHandle);
 HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes);
 void fmm_destroy_process_apertures(void);
 
@@ -101,4 +102,5 @@ int open_drm_render_device(int minor);
 void *mmap_allocate_aligned(int prot, int flags, uint64_t size, uint64_t align,
 			    uint64_t guard_size, void *aper_base, void *aper_limit);
 
+extern int (*fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle);
 #endif /* FMM_H_ */

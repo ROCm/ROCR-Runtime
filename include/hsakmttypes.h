@@ -1409,6 +1409,8 @@ typedef enum _HSA_SVM_UNMAP_TRIGGERS {
 #define HSA_SMI_EVENT_MASK_FROM_INDEX(i) (1ULL << ((i) - 1))
 #define HSA_SMI_EVENT_MSG_SIZE	96
 
+typedef void *HsaAMDGPUDeviceHandle;
+
 #pragma pack(pop, hsakmttypes_h)
 
 

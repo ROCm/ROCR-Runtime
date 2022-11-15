@@ -23,6 +23,11 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+/* glibc macro that enables access some nonstandard GNU/Linux extensions
+ * such as RTLD_DEFAULT used by dlsym
+ */
+#define _GNU_SOURCE
+
 #include "libhsakmt.h"
 
 #include <stdlib.h>
@@ -34,6 +39,9 @@
 #include <stdio.h>
 #include <strings.h>
 #include "fmm.h"
+#include <dlfcn.h>
+
+int (*fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle);
 
 static const char kfd_device_name[] = "/dev/kfd";
 static pid_t parent_pid = -1;
@@ -143,6 +151,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 	HSAKMT_STATUS result;
 	int fd = -1;
 	HsaSystemProperties sys_props;
+	char *error;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
@@ -155,6 +164,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 
 	if (kfd_open_count == 0) {
 		static bool atfork_installed = false;
+
+		fn_amdgpu_device_get_fd = dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
+		if ((error = dlerror()) != NULL)
+			pr_err("amdgpu_device_get_fd is not available: %s\n", error);
+		else
+			pr_info("amdgpu_device_get_fd is available %p\n", fn_amdgpu_device_get_fd);
 
 		result = init_vars_from_env();
 		if (result != HSAKMT_STATUS_SUCCESS)
