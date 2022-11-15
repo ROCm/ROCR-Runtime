@@ -203,9 +203,9 @@ void ImageRuntime::DestroySingleton() {
 hsa_status_t ImageRuntime::GetImageInfoMaxDimension(hsa_agent_t component,
                                                     hsa_agent_info_t attribute,
                                                     void* value) {
-  size_t* value_u32 = NULL;
-  size_t* value_u32_v2 = NULL;
-  size_t* value_u32_v3 = NULL;
+  uint32_t* value_u32 = NULL;
+  uint32_t* value_u32_v2 = NULL;
+  uint32_t* value_u32_v3 = NULL;
 
   hsa_ext_image_geometry_t geometry;
 
@@ -213,48 +213,48 @@ hsa_status_t ImageRuntime::GetImageInfoMaxDimension(hsa_agent_t component,
   switch (image_attribute) {
     case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_1D;
-      value_u32 = static_cast<size_t*>(value);
+      value_u32 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_1DA;
-      value_u32 = static_cast<size_t*>(value);
+      value_u32 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_1DB_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_1DB;
-      value_u32 = static_cast<size_t*>(value);
+      value_u32 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_2D_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_2D;
-      value_u32_v2 = static_cast<size_t*>(value);
+      value_u32_v2 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_2DA_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_2DA;
-      value_u32_v2 = static_cast<size_t*>(value);
+      value_u32_v2 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_2DDEPTH_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_2DDEPTH;
-      value_u32_v2 = static_cast<size_t*>(value);
+      value_u32_v2 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_2DADEPTH_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_2DADEPTH;
-      value_u32_v2 = static_cast<size_t*>(value);
+      value_u32_v2 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_3D_MAX_ELEMENTS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_3D;
-      value_u32_v3 = static_cast<size_t*>(value);
+      value_u32_v3 = static_cast<uint32_t*>(value);
       break;
     case HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_LAYERS:
       geometry = HSA_EXT_IMAGE_GEOMETRY_2DA;
-      value_u32 = static_cast<size_t*>(value);
+      value_u32 = static_cast<uint32_t*>(value);
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  size_t width = 0;
-  size_t height = 0;
-  size_t depth = 0;
-  size_t array_size = 0;
+  uint32_t width = 0;
+  uint32_t height = 0;
+  uint32_t depth = 0;
+  uint32_t array_size = 0;
 
   hsa_device_type_t device_type;
   hsa_status_t status = HSA::hsa_agent_get_info(component, HSA_AGENT_INFO_DEVICE, &device_type);
@@ -327,10 +327,10 @@ hsa_status_t ImageRuntime::GetImageSizeAndAlignment(
   }
 
   const hsa_ext_image_geometry_t geometry = desc.geometry;
-  size_t max_width = 0;
-  size_t max_height = 0;
-  size_t max_depth = 0;
-  size_t max_array_size = 0;
+  uint32_t max_width = 0;
+  uint32_t max_height = 0;
+  uint32_t max_depth = 0;
+  uint32_t max_array_size = 0;
 
   ImageManager* manager = image_manager(component);
 

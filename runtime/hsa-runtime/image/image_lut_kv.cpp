@@ -296,8 +296,7 @@ const Swizzle ImageLutKv::kSwizzleLut_[ORDER_COUNT] = {
     {SEL_Y, SEL_0, SEL_0, SEL_0}   // HSA_EXT_IMAGE_CHANNEL_ORDER_DEPTH_STENCIL
 };
 
-// Each record contains four values: width, height, depth, array_size.
-const size_t ImageLutKv::kMaxDimensionLut_[GEOMETRY_COUNT][4] = {
+const uint32_t ImageLutKv::kMaxDimensionLut_[GEOMETRY_COUNT][4] = {
     {16384, 1, 1, 1},         // HSA_EXT_IMAGE_GEOMETRY_1D
     {16384, 16384, 1, 1},     // HSA_EXT_IMAGE_GEOMETRY_2D
     {16384, 16384, 8192, 1},  // HSA_EXT_IMAGE_GEOMETRY_3D
@@ -402,19 +401,19 @@ Swizzle ImageLutKv::MapSwizzle(hsa_ext_image_channel_order32_t order) const {
   };
 }
 
-size_t ImageLutKv::GetMaxWidth(hsa_ext_image_geometry_t geometry) const {
+uint32_t ImageLutKv::GetMaxWidth(hsa_ext_image_geometry_t geometry) const {
   return kMaxDimensionLut_[geometry][0];
 }
 
-size_t ImageLutKv::GetMaxHeight(hsa_ext_image_geometry_t geometry) const {
+uint32_t ImageLutKv::GetMaxHeight(hsa_ext_image_geometry_t geometry) const {
   return kMaxDimensionLut_[geometry][1];
 }
 
-size_t ImageLutKv::GetMaxDepth(hsa_ext_image_geometry_t geometry) const {
+uint32_t ImageLutKv::GetMaxDepth(hsa_ext_image_geometry_t geometry) const {
   return kMaxDimensionLut_[geometry][2];
 }
 
-size_t ImageLutKv::GetMaxArraySize(hsa_ext_image_geometry_t geometry) const {
+uint32_t ImageLutKv::GetMaxArraySize(hsa_ext_image_geometry_t geometry) const {
   return kMaxDimensionLut_[geometry][3];
 }
 
