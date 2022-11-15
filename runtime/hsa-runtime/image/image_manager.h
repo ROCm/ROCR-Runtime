@@ -73,9 +73,9 @@ class ImageManager {
   /// and array size of an image geometry.
   virtual void GetImageInfoMaxDimension(hsa_agent_t component,
                                         hsa_ext_image_geometry_t geometry,
-                                        size_t& width, size_t& height,
-                                        size_t& depth,
-                                        size_t& array_size) const = 0;
+                                        uint32_t& width, uint32_t& height,
+                                        uint32_t& depth,
+                                        uint32_t& array_size) const = 0;
 
   /// @brief Calculate the size and alignment of the backing storage of an
   /// image.

@@ -65,13 +65,13 @@ class ImageLut {
 
   virtual Swizzle MapSwizzle(hsa_ext_image_channel_order32_t order) const = 0;
 
-  virtual size_t GetMaxWidth(hsa_ext_image_geometry_t geometry) const = 0;
+  virtual uint32_t GetMaxWidth(hsa_ext_image_geometry_t geometry) const = 0;
 
-  virtual size_t GetMaxHeight(hsa_ext_image_geometry_t geometry) const = 0;
+  virtual uint32_t GetMaxHeight(hsa_ext_image_geometry_t geometry) const = 0;
 
-  virtual size_t GetMaxDepth(hsa_ext_image_geometry_t geometry) const = 0;
+  virtual uint32_t GetMaxDepth(hsa_ext_image_geometry_t geometry) const = 0;
 
-  virtual size_t GetMaxArraySize(hsa_ext_image_geometry_t geometry) const = 0;
+  virtual uint32_t GetMaxArraySize(hsa_ext_image_geometry_t geometry) const = 0;
 
  private:
    DISALLOW_COPY_AND_ASSIGN(ImageLut);
