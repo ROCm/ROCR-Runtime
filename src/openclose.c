@@ -99,7 +99,7 @@ static void clear_after_fork(void)
 	destroy_device_debugging_memory();
 	if (kfd_fd) {
 		close(kfd_fd);
-		kfd_fd = 0;
+		kfd_fd = -1;
 	}
 	kfd_open_count = 0;
 	parent_pid = -1;
@@ -160,14 +160,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto open_failed;
 
-		fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
+		if (kfd_fd < 0) {
+			fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
-		if (fd == -1) {
-			result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
-			goto open_failed;
+			if (fd == -1) {
+				result = HSAKMT_STATUS_KERNEL_IO_CHANNEL_NOT_OPENED;
+				goto open_failed;
+			}
+
+			kfd_fd = fd;
 		}
-
-		kfd_fd = fd;
 
 		init_page_size();
 
@@ -223,10 +225,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCloseKFD(void)
 		if (--kfd_open_count == 0) {
 			destroy_counter_props();
 			destroy_device_debugging_memory();
-			if (kfd_fd) {
-				close(kfd_fd);
-				kfd_fd = 0;
-			}
 		}
 
 		result = HSAKMT_STATUS_SUCCESS;
