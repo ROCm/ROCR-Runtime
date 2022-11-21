@@ -85,9 +85,11 @@ class Blit {
   /// @param size Size of the data to be copied.
   /// @param dep_signals Arrays of dependent signal.
   /// @param out_signal Output signal.
+  /// @param gang_signals Array of gang signals.
   virtual hsa_status_t SubmitLinearCopyCommand(
       void* dst, const void* src, size_t size,
-      std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) = 0;
+      std::vector<core::Signal*>& dep_signals, core::Signal& out_signal,
+      std::vector<core::Signal*>& gang_signals) = 0;
 
   /// @brief Submit a linear fill command to the the underlying compute device's
   /// control block. The call is blocking until the command execution is
@@ -114,6 +116,11 @@ class Blit {
   /// @Brief Reports the approximate number of remaining bytes to copy or fill.  Any return of zero
   /// must be exact.
   virtual uint64_t PendingBytes() = 0;
+
+  virtual void GangLeader(bool gang_leader) = 0;
+  virtual bool GangLeader() const { return false; };
+  virtual void GangStatus(bool is_ganged) = 0;
+  virtual bool GangStatus() const { return false; };
 };
 }  // namespace core
 }  // namespace rocr

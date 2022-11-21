@@ -58,6 +58,7 @@
 #include "core/inc/amd_blit_sdma.h"
 #include "core/inc/amd_gpu_pm4.h"
 #include "core/inc/amd_memory_region.h"
+#include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
@@ -850,25 +851,137 @@ void GpuAgent::SetCopyStatusCheckRefCount(bool set) {
   else pending_copy_stat_check_ref_++;
 }
 
+// Assign direct peer gang factor to GPU
+void GpuAgent::RegisterGangPeer(core::Agent& peer, unsigned int max_bandwidth_factor) {
+  unsigned int max_gang_factor = std::min(max_bandwidth_factor, properties_.NumSdmaXgmiEngines);
+  gang_peers_info_.push_back(std::pair<core::Agent&,unsigned int>(peer, max_gang_factor));
+}
+
+// Destroy gang signal
+static bool GangCopyCompleteHandler(hsa_signal_value_t, void *arg ) {
+  core::Signal *gang_signal = reinterpret_cast<core::Signal*>(arg);
+  if (gang_signal->IsValid()) {
+    gang_signal->DestroySignal();
+  }
+  return true;
+}
+
 hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                const void* src, core::Agent& src_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
-  SetCopyRequestRefCount(true);
-  // Bind the Blit object that will drive this copy operation
-  lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent, size);
-
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
-  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
-  SetCopyRequestRefCount(false);
+  // Calculate the number of gang items
+  int tmp_gang_factor = 1;
+  for (auto peer_info : gang_peers_info_) {
+    Flag::SDMA_OVERRIDE sdma_gang_override =
+        core::Runtime::runtime_singleton_->flag().enable_sdma_gang();
+    Flag::SDMA_OVERRIDE sdma_override =
+        core::Runtime::runtime_singleton_->flag().enable_sdma();
+    // Blit copies already saturate xGMI
+    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override == Flag::SDMA_DISABLE) {
+      break;
+    }
 
-  return stat;
+    // Avoid the latency boundary on small copies
+    if (size < HSA_PAGE_SIZE_4KB) {
+      break;
+    }
+
+    if (dst_agent.public_handle().handle == peer_info.first.public_handle().handle) {
+      tmp_gang_factor = peer_info.second;
+    }
+  }
+
+  int gang_factor = 0;
+  uint32_t gang_mask = 0;
+  for (int i = 0; i < tmp_gang_factor; i++) {
+    uint32_t engine_offset = 0;
+    for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
+      if (xgmi_peer_list_[idx]->public_handle().handle == dst_agent.public_handle().handle) {
+        engine_offset = ((idx + i) % properties_.NumSdmaXgmiEngines) + DefaultBlitCount;
+	break;
+      }
+    }
+
+    // Avoid oversubscribing unavailable blit engines that are not already ganged
+    if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset) &&
+        !blits_[engine_offset]->GangStatus()) {
+      continue;
+    }
+
+    gang_mask |= 1 << i;
+    gang_factor++;
+  }
+
+  if (!gang_factor) gang_factor = 1;
+
+  // Manage internal gang signals
+  std::vector<core::Signal*> gang_signals;
+  if (gang_factor > 1) {
+    for (int i = 0; i < gang_factor - 1; i++) {
+      core::Signal *gang_signal;
+
+      // Initial value is 2 where 1 is for gang-leader to ack and
+      // 1 for non-leader gang item to decrement
+      gang_signal = new core::DefaultSignal(2);
+
+      // Fall back to non-gang copy
+      if (!gang_signal->IsValid()) {
+        for (int j = 0; j < gang_signals.size(); j++) gang_signals[j]->DestroySignal();
+        gang_factor = 1;
+        break;
+      }
+
+      core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+                                         core::Signal::Convert(gang_signal),
+                                         HSA_SIGNAL_CONDITION_EQ, 0, GangCopyCompleteHandler,
+                                         reinterpret_cast<void*>(gang_signal));
+      gang_signals.push_back(gang_signal);
+    }
+  }
+
+  // Bind the Blit object that will drive this copy operation
+  size_t offset = 0, remainder_size = size;
+  bool gang_leader_set = false;
+  int gang_sig_count = 0;
+  for (int i = 0; i < gang_factor; i++) {
+    if (gang_factor > 1 && !!!(gang_mask & (1 << i)))
+      continue;
+
+    // Set leader and gang status to blit
+    SetCopyRequestRefCount(true);
+    lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent, size, i);
+    blit->GangLeader(gang_factor > 1 && !gang_leader_set);
+    blit->GangStatus(gang_factor > 1);
+
+    hsa_status_t stat;
+    size_t chunk = std::min(remainder_size, (size + gang_factor - 1)/gang_factor);
+    if (!blit->GangLeader() && !gang_signals.empty()) {
+      stat = blit->SubmitLinearCopyCommand(dst + offset, src + offset, chunk,
+                                           dep_signals, *gang_signals[gang_sig_count], gang_signals);
+      gang_sig_count++;
+    } else {
+      stat = blit->SubmitLinearCopyCommand(dst + offset, src + offset, chunk,
+                                           dep_signals, out_signal, gang_signals);
+    }
+    SetCopyRequestRefCount(false);
+
+    if (stat)
+      return stat;
+
+    offset += chunk;
+    remainder_size -= chunk;
+    gang_leader_set = true;
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
@@ -934,7 +1047,10 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
-  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
+  std::vector<core::Signal*> gang_signals(0);
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal,
+                                                    gang_signals);
   SetCopyRequestRefCount(false);
 
   return stat;
@@ -1888,7 +2004,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(uint32_t engine_offset) {
   return blits_[engine_offset];
 }
 
-lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
+lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent, int gang_id) {
   // Determine if destination is a member xgmi peers list
   uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
   assert((xgmi_engine_cnt > 0) && ("Illegal condition, should not happen"));
@@ -1899,7 +2015,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
     uint64_t dst_handle = dst_agent.public_handle().handle;
     uint64_t peer_handle = xgmi_peer_list_[idx]->public_handle().handle;
     if (peer_handle == dst_handle) {
-      return GetBlitObject((idx % xgmi_engine_cnt) + DefaultBlitCount);
+      return blits_[((idx + gang_id) % xgmi_engine_cnt) + DefaultBlitCount];
     }
   }
 
@@ -1918,7 +2034,9 @@ lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
-                                              const core::Agent& src_agent, const size_t size) {
+                                              const core::Agent& src_agent,
+                                              const size_t size,
+                                              int gang_id) {
   // At this point it is guaranteed that one of
   // the two devices is a GPU, potentially both
   assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
@@ -1978,7 +2096,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
     return GetPcieBlit(dst_agent, src_agent);
   }
 
-  return GetXgmiBlit(dst_agent);
+  return GetXgmiBlit(dst_agent, gang_id);
 }
 
 void GpuAgent::Trim() {
