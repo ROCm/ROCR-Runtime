@@ -982,9 +982,10 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
   HSA::hsa_signal_store_relaxed(completion_signal_, 1);
 
   std::vector<core::Signal*> dep_signals(0);
+  std::vector<core::Signal*> gang_signals(0);
 
   hsa_status_t stat = SubmitLinearCopyCommand(
-      dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_));
+      dst, src, size, dep_signals, *core::Signal::Convert(completion_signal_), gang_signals);
 
   if (stat != HSA_STATUS_SUCCESS) {
     return stat;
@@ -1002,7 +1003,8 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
 
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     void* dst, const void* src, size_t size,
-    std::vector<core::Signal*>& dep_signals, core::Signal& out_signal) {
+    std::vector<core::Signal*>& dep_signals, core::Signal& out_signal,
+    std::vector<core::Signal*>& gang_signals) {
   // Reserve write index for barrier(s) + dispatch packet.
   const uint32_t num_barrier_packet = uint32_t((dep_signals.size() + 4) / 5);
   const uint32_t total_num_packet = num_barrier_packet + 1;

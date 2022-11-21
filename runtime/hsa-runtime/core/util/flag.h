@@ -90,6 +90,10 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_PEER_SDMA");
     enable_peer_sdma_ = (var == "0") ? SDMA_DISABLE : ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
 
+    var = os::GetEnvVar("HSA_ENABLE_SDMA_GANG");
+    enable_sdma_gang_ = (var == "0") ? SDMA_DISABLE :
+                       ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
+
     visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
     filter_visible_gpus_ = os::IsEnvVarSet("ROCR_VISIBLE_DEVICES");
 
@@ -230,6 +234,8 @@ class Flag {
 
   SDMA_OVERRIDE enable_peer_sdma() const { return enable_peer_sdma_; }
 
+  SDMA_OVERRIDE enable_sdma_gang() const { return enable_sdma_gang_; }
+
   std::string visible_gpus() const { return visible_gpus_; }
 
   bool filter_visible_gpus() const { return filter_visible_gpus_; }
@@ -308,6 +314,7 @@ class Flag {
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;
+  SDMA_OVERRIDE enable_sdma_gang_;
 
   bool filter_visible_gpus_;
   std::string visible_gpus_;

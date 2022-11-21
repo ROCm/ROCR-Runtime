@@ -145,6 +145,8 @@ class GpuAgentInt : public core::Agent {
   // @retval Coherency type.
   virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
 
+  virtual void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) = 0;
+
   // @brief Query if agent represent Kaveri GPU.
   //
   // @retval true if agent is Kaveri GPU.
@@ -290,6 +292,8 @@ class GpuAgent : public GpuAgentInt {
   }
 
   core::Agent* GetNearestCpuAgent(void) const;
+  
+  void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) override;
 
   // Getter & setters.
 
@@ -509,7 +513,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief HDP flush registers
   hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};
-
  private:
   // @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
@@ -546,7 +549,7 @@ class GpuAgent : public GpuAgentInt {
   void ReleaseScratch(void* base, size_t size, bool large);
 
   // Bind index of peer device that is connected via xGMI links
-  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
+  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent, int gang_id);
 
   // Bind the Blit object that will drive the copy operation
   // across PCIe links (H2D or D2H) or is within same device D2D
@@ -554,7 +557,7 @@ class GpuAgent : public GpuAgentInt {
 
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
-                                      const size_t size);
+                                      const size_t size, int gang_id);
 
   // Bind the Blit object that will drive the copy operation by engine ID
   lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
@@ -599,6 +602,8 @@ class GpuAgent : public GpuAgentInt {
 
   // Check if SDMA engine by ID is free
   bool DmaEngineIsFree(uint32_t engine_id);
+
+  std::vector<std::pair<core::Agent&,unsigned int>> gang_peers_info_;
 };
 
 }  // namespace amd
