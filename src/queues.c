@@ -654,16 +654,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	q->queue_id = args.queue_id;
 
 	if (IS_SOC15(q->gfxv)) {
+		HSAuint64 mask = DOORBELLS_PAGE_SIZE(DOORBELL_SIZE(q->gfxv)) - 1;
+
 		/* On SOC15 chips, the doorbell offset within the
 		 * doorbell page is included in the doorbell offset
 		 * returned by KFD. This allows CP queue doorbells to be
 		 * allocated dynamically (while SDMA queue doorbells fixed)
 		 * rather than based on the its process queue ID.
 		 */
-		doorbell_mmap_offset = args.doorbell_offset &
-			~(HSAuint64)(doorbells[NodeId].size - 1);
-		doorbell_offset = args.doorbell_offset &
-			(doorbells[NodeId].size - 1);
+		doorbell_mmap_offset = args.doorbell_offset & ~mask;
+		doorbell_offset = args.doorbell_offset & mask;
 	} else {
 		/* On older chips, the doorbell offset within the
 		 * doorbell page is based on the queue ID.
