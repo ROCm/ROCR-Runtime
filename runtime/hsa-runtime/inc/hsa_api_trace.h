@@ -186,6 +186,9 @@ struct AmdExtTable {
   decltype(hsa_amd_svm_attributes_set)* hsa_amd_svm_attributes_set_fn;
   decltype(hsa_amd_svm_attributes_get)* hsa_amd_svm_attributes_get_fn;
   decltype(hsa_amd_svm_prefetch_async)* hsa_amd_svm_prefetch_async_fn;
+  decltype(hsa_amd_spm_acquire)* hsa_amd_spm_acquire_fn;
+  decltype(hsa_amd_spm_release)* hsa_amd_spm_release_fn;
+  decltype(hsa_amd_spm_set_dest_buffer)* hsa_amd_spm_set_dest_buffer_fn;
   decltype(hsa_amd_queue_cu_get_mask)* hsa_amd_queue_cu_get_mask_fn;
 };
 

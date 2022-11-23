@@ -226,6 +226,9 @@ global:
 	hsa_amd_svm_attributes_set;
 	hsa_amd_svm_attributes_get;
 	hsa_amd_svm_prefetch_async;
+	hsa_amd_spm_acquire;
+	hsa_amd_spm_release;
+	hsa_amd_spm_set_dest_buffer;
 
 local:
     *;

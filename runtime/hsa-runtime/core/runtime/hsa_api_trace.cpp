@@ -395,6 +395,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_svm_attributes_set_fn = AMD::hsa_amd_svm_attributes_set;
   amd_ext_api.hsa_amd_svm_attributes_get_fn = AMD::hsa_amd_svm_attributes_get;
   amd_ext_api.hsa_amd_svm_prefetch_async_fn = AMD::hsa_amd_svm_prefetch_async;
+  amd_ext_api.hsa_amd_spm_acquire_fn = AMD::hsa_amd_spm_acquire;
+  amd_ext_api.hsa_amd_spm_release_fn = AMD::hsa_amd_spm_release;
+  amd_ext_api.hsa_amd_spm_set_dest_buffer_fn = AMD::hsa_amd_spm_set_dest_buffer;
 }
 
 void LoadInitialHsaApiTable() {

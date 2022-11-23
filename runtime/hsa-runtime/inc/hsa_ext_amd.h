@@ -2411,6 +2411,59 @@ hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agen
                                         uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                         hsa_signal_t completion_signal);
 
+/**
+ * @brief Acquire Stream Performance Monitor on an agent
+ *
+ * Acquire exclusive use of SPM on @p preferred_agent.
+ * See hsa_amd_spm_set_dest_buffer to provide a destination buffer to KFD to start recording and
+ * retrieve this data.
+ * @param[in] preferred_agent Agent on which to acquire SPM
+ */
+hsa_status_t hsa_amd_spm_acquire(hsa_agent_t preferred_agent);
+
+/**
+ * @brief Release Stream Performance Monitor on an agent
+ *
+ * Release exclusive use of SPM on @p preferred_agent. This will stop KFD writing SPM data.
+ * If a destination buffer is set, then data in the destination buffer is available to user
+ * when this function returns.
+ *
+ * @param[in] preferred_agent Agent on which to release SPM
+ */
+hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
+
+/**
+ * @brief  Set up the current destination user mode buffer for stream performance
+ * counter data. KFD will start writing SPM data into the destination buffer. KFD will continue
+ * to copy data into the current destination buffer until any of the following functions are called
+ * - hsa_amd_spm_release
+ * - hsa_amd_spm_set_dest_buffer with dest set to NULL
+ * - hsa_amd_spm_set_dest_buffer with dest set to a new buffer
+ *
+ * if @p timeout is non-0, the call will wait for up to @p timeout ms for the previous
+ * buffer to be filled. If previous buffer to be filled before timeout, the @p timeout
+ * will be updated value with the time remaining. If the timeout is exceeded, the function
+ * copies any partial data available into the previous user buffer and returns success.
+ * User should not access destination data while KFD is copying data.
+ * If the previous destination buffer was full, then @p is_data_loss flag is set.
+ * @p dest is CPU accessible memory. It could be malloc'ed memory or host allocated memory
+ *
+ * @param[in] preferred_agent Agent on which to set the dest buffer
+ *
+ * @param[in] size_in_bytes size of the buffer
+ *
+ * @param[in/out] timeout timeout in milliseconds
+ *
+ * @param[out] size_copied number of bytes copied
+ *
+ * @param[in] dest destination address. Set to NULL to stop copy on previous buffer
+ *
+ * @param[out] is_data_loss true is data was lost
+ */
+hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
+                                         uint32_t* timeout, uint32_t* size_copied, void* dest,
+                                         bool* is_data_loss);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

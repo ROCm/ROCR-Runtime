@@ -265,6 +265,17 @@ hsa_status_t HSA_API hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agen
                                         uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                         hsa_signal_t completion_signal);
 
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_spm_acquire(hsa_agent_t agent);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_spm_release(hsa_agent_t agent);
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_spm_set_dest_buffer(hsa_agent_t agent, size_t size, uint32_t* timeout,
+                                                 uint32_t* size_copied, void* dest,
+                                                 bool* is_data_loss);
+
 }  // namespace amd
 }  // namespace rocr
 
