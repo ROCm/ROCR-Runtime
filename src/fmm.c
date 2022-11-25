@@ -296,7 +296,6 @@ static inline HsaSharedMemoryHandle *to_hsa_shared_memory_handle(
 	return (HsaSharedMemoryHandle *)SharedMemoryStruct;
 }
 
-extern int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
 static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture);
 static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 				       manageable_aperture_t *aperture,
@@ -2841,9 +2840,9 @@ static int _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_aperture_t *apert
 	    VOID_PTR_ADD(address, size - 1) > aperture->limit)
 		return -1;
 
-	ret = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id, &is_debugger);
+	is_debugger = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id);
 	/* allocate object within the scratch backing aperture */
-	if (!ret && !is_debugger) {
+	if (!is_debugger) {
 		obj = fmm_allocate_memory_object(
 			gpu_id, address, size, aperture, &mmap_offset,
 			KFD_IOC_ALLOC_MEM_FLAGS_VRAM |

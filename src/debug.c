@@ -33,8 +33,6 @@
 static bool *is_device_debugged;
 
 
-int debug_get_reg_status(uint32_t node_id, bool *is_debugged);
-
 HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
 {
 	unsigned int i;
@@ -55,6 +53,11 @@ void destroy_device_debugging_memory(void)
 		free(is_device_debugged);
 		is_device_debugged = NULL;
 	}
+}
+
+bool debug_get_reg_status(uint32_t node_id)
+{
+	return is_device_debugged[node_id];
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtDbgRegister(HSAuint32 NodeId)
@@ -260,16 +263,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgAddressWatch(HSAuint32 NodeId,
 	if (err)
 		return HSAKMT_STATUS_ERROR;
 	return HSAKMT_STATUS_SUCCESS;
-}
-
-int debug_get_reg_status(uint32_t node_id, bool *is_debugged)
-{
-	*is_debugged = NULL;
-	if (!is_device_debugged)
-		return -1;
-
-	*is_debugged = is_device_debugged[node_id];
-	return 0;
 }
 
 /* Get the major and minor version of the kernel debugger support. */
