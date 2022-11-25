@@ -189,10 +189,6 @@ const char *PollMemoryIsa = R"(
  * polled can be Non-coherant memory. SCC system-level
  * cache coherence is not supported in scalar (smem) path.
  * Use vmem operations with scc
- *
- * Note: Only works on Aldebaran, and even then the scc modifier
- *       has been defeatured. This shader is more or less
- *       deprecated.
  */
 const char *PollNCMemoryIsa = R"(
         .text
