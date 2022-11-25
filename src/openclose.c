@@ -141,7 +141,7 @@ static HSAKMT_STATUS init_vars_from_env(void)
 HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 {
 	HSAKMT_STATUS result;
-	int fd;
+	int fd = -1;
 	HsaSystemProperties sys_props;
 
 	pthread_mutex_lock(&hsakmt_mutex);
