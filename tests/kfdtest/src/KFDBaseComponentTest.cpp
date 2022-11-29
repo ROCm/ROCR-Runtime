@@ -21,6 +21,8 @@
  *
  */
 
+#include <syslog.h>
+
 #include "KFDBaseComponentTest.hpp"
 #include "KFDTestUtil.hpp"
 
@@ -70,6 +72,14 @@ void KFDBaseComponentTest::SetUp() {
 
     m_pAsm = new Assembler(GetGfxVersion(nodeProperties));
 
+    const testing::TestInfo* curr_test_info =
+                ::testing::UnitTest::GetInstance()->current_test_info();
+
+    openlog("KFDTEST", LOG_CONS , LOG_USER);
+    syslog(LOG_INFO, "[Node#%03d] STARTED ========== %s.%s ==========",
+                m_NodeInfo.HsaDefaultGPUNode(),
+                curr_test_info->test_case_name(), curr_test_info->name());
+
     ROUTINE_END
 }
 
@@ -91,6 +101,20 @@ void KFDBaseComponentTest::TearDown() {
     if (m_pAsm)
         delete m_pAsm;
     m_pAsm = nullptr;
+
+    const testing::TestInfo* curr_test_info =
+                ::testing::UnitTest::GetInstance()->current_test_info();
+
+    if (curr_test_info->result()->Passed())
+        syslog(LOG_INFO, "[Node#%03d] PASSED  ========== %s.%s ==========",
+                m_NodeInfo.HsaDefaultGPUNode(),
+                curr_test_info->test_case_name(), curr_test_info->name());
+    else
+        syslog(LOG_WARNING, "[Node#%03d] FAILED  ========== %s.%s ==========",
+                m_NodeInfo.HsaDefaultGPUNode(),
+                curr_test_info->test_case_name(), curr_test_info->name());
+
+    closelog();
 
     ROUTINE_END
 }
