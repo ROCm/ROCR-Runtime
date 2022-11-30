@@ -367,6 +367,9 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       return core::Runtime::runtime_singleton_->GetSystemInfo(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY,
                                                               value);
       break;
+    case HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.FamilyID);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
