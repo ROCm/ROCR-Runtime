@@ -488,7 +488,6 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
     return block.agentOwner;
   };
 
-  const bool dst_gpu = (dst_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
   core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
 
@@ -555,6 +554,12 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
     }
 
     amd_region = reinterpret_cast<const AMD::MemoryRegion*>(it->second.region);
+
+    // Imported IPC handle entries inside allocation_map_ do not have an amd_region because they
+    // were allocated in the other process. Access is already granted during IPCAttach().
+    if (!amd_region)
+      return HSA_STATUS_SUCCESS;
+
     alloc_size = it->second.size;
   }
 
@@ -1824,6 +1829,14 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
           set_flags |= HSA_SVM_FLAG_GPU_READ_MOSTLY;
         else
           clear_flags |= HSA_SVM_FLAG_GPU_READ_MOSTLY;
+        break;
+      }
+      case HSA_AMD_SVM_ATTRIB_GPU_EXEC: {
+        Check(attrib);
+        if (value)
+          set_flags |= HSA_SVM_FLAG_GPU_EXEC;
+        else
+          clear_flags |= HSA_SVM_FLAG_GPU_EXEC;
         break;
       }
       case HSA_AMD_SVM_ATTRIB_AGENT_ACCESSIBLE: {

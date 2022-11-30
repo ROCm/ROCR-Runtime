@@ -1068,6 +1068,13 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT:
       if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
+          !(core::Runtime::runtime_singleton_->flag().cu_mask(enum_index_).empty())) {
+        debug_warning("Cooperative launch and CU masking are currently incompatible!");
+        *((uint32_t*)value) = 0;
+        break;
+      }
+
+      if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
           (isa_->GetMajorVersion() == 9) && (isa_->GetMinorVersion() == 0) &&
           (isa_->GetStepping() == 10)) {
         uint32_t count = 0;
@@ -1094,6 +1101,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     }
     case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
       *((uint64_t*)value) = wallclock_frequency_;
+      break;
+    case HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.FamilyID);
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

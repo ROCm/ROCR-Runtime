@@ -330,7 +330,13 @@ typedef enum hsa_amd_agent_info_s {
    * in the range 1-400MHz.
    * The type of this attribute is uint64_t.
    */
-  HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY = 0xA016
+  HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY = 0xA016,
+  /**
+   * Queries for the ASIC family ID of an agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID = 0xA107
+
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -2280,6 +2286,9 @@ typedef enum hsa_amd_svm_attribute_s {
   // range will be read operations.
   // Type of this attribute is bool.
   HSA_AMD_SVM_ATTRIB_READ_MOSTLY = 6,
+  // Allows the execution on GPU.
+  // Type of this attribute is bool.
+  HSA_AMD_SVM_ATTRIB_GPU_EXEC = 7,
   // This attribute can not be used in ::hsa_amd_svm_attributes_get.
   // Enables an agent for access to the range.  Access may incur a page fault
   // and associated memory migration.  Either this or
