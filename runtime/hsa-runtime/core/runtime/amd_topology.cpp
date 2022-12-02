@@ -374,14 +374,20 @@ bool Load() {
   }
   MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
 
+  // Build topology table.
+  BuildTopology();
+
   // Register runtime and optionally enable the debugger
+  // BuildTopology calls hsaKmtAcquireSystemProperties() causes libhsakmt to cache topology
+  // information. So we need to call hsaKmtRuntimeEnable() after calling BuildTopology() so that
+  // Thunk can re-use it's cached copy instead of re-parsing whole system topology. Otherwise
+  // BuildTopology will cause libhsakmt to destroyed cached copy because it calls
+  // hsaKmtReleaseSystemProperties() at the beginning.
+
   HSAKMT_STATUS err =
       hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
   if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
   core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
-
-  // Build topology table.
-  BuildTopology();
 
   kfd.Dismiss();
   return true;
