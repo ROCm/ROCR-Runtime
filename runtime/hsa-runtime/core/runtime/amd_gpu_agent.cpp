@@ -1105,6 +1105,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.FamilyID);
       break;
+    case HSA_AMD_AGENT_INFO_UCODE_VERSION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.EngineId.ui32.uCode);
+      break;
+    case HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.uCodeEngineVersions.uCodeSDMA);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;

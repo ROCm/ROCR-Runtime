@@ -335,7 +335,17 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for the ASIC family ID of an agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID = 0xA107
+  HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID = 0xA107,
+  /**
+   * Queries for the Packet Processor(CP Firmware) ucode version of an agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_UCODE_VERSION = 0xA108,
+  /**
+   * Queries for the SDMA engine ucode of an agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109
 
 } hsa_amd_agent_info_t;
 
