@@ -1765,8 +1765,8 @@ namespace code {
           hsatext = sec;
         }
       }
-      for (size_t i = 0; i < img->symtab()->symbolCount(); ++i) {
-        amd::elf::Symbol* elfsym = img->symtab()->symbol(i);
+      for (size_t i = 0; i < img->getSymbolTable()->symbolCount(); ++i) {
+        amd::elf::Symbol* elfsym = img->getSymbolTable()->symbol(i);
         Symbol* sym = 0;
         switch (elfsym->type()) {
         case STT_AMDGPU_HSA_KERNEL: {
