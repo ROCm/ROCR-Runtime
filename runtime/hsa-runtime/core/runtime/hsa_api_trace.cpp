@@ -404,6 +404,8 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_portable_close_dmabuf_fn = AMD::hsa_amd_portable_close_dmabuf;
   amd_ext_api.hsa_amd_vmem_address_reserve_fn = AMD::hsa_amd_vmem_address_reserve;
   amd_ext_api.hsa_amd_vmem_address_free_fn = AMD::hsa_amd_vmem_address_free;
+  amd_ext_api.hsa_amd_vmem_handle_create_fn = AMD::hsa_amd_vmem_handle_create;
+  amd_ext_api.hsa_amd_vmem_handle_release_fn = AMD::hsa_amd_vmem_handle_release;
 }
 
 void LoadInitialHsaApiTable() {

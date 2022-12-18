@@ -175,6 +175,8 @@ class MemoryRegion : public core::MemoryRegion {
 
   __forceinline bool extended_scope_fine_grain() const { return extended_scope_fine_grain_; }
 
+  __forceinline size_t GetPageSize() const { return kPageSize_; }
+
  private:
   const HsaMemoryProperties mem_props_;
 

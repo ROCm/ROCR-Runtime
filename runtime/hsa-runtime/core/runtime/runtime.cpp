@@ -2446,5 +2446,51 @@ hsa_status_t Runtime::VMemoryAddressFree(void* va, size_t size) {
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t Runtime::VMemoryHandleCreate(const MemoryRegion* region, size_t size,
+                                          MemoryRegion::AllocateFlags alloc_flags,
+                                          uint64_t flags_unused,
+                                          hsa_amd_vmem_alloc_handle_t* memoryOnlyHandle) {
+  const AMD::MemoryRegion* memRegion = static_cast<const AMD::MemoryRegion*>(region);
+  if (!memRegion->IsLocalMemory()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  if (!IsMultipleOf(size, memRegion->GetPageSize()))
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  void* thunk_handle;
+  hsa_status_t status = region->Allocate(size, alloc_flags, &thunk_handle);
+  if (status == HSA_STATUS_SUCCESS) {
+    memory_handle_map_[thunk_handle] =
+        MemoryHandle(region, size, flags_unused, thunk_handle, alloc_flags);
+    *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
+  }
+  return status;
+}
+
+hsa_status_t Runtime::VMemoryHandleRelease(hsa_amd_vmem_alloc_handle_t memoryOnlyHandle) {
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  auto memoryHandleIt = memory_handle_map_.find(reinterpret_cast<void*>(memoryOnlyHandle.handle));
+
+  if (memoryHandleIt == memory_handle_map_.end()) {
+    debug_warning(false && "Can't find memory handle");
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
+
+  if (!memoryHandleIt->second.ref_count) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  if (--(memoryHandleIt->second.ref_count) == 0) {
+    // From documentation, the handle can be released while there are still outstanding mappings. If
+    // there are outstanding mappings, then we just decrement the ref count and exit. We will free
+    // this handle when the last MappedHandle is deleted
+    // and use_count == 0 and ref_count == 0.
+
+    if (memoryHandleIt->second.use_count > 0) return HSA_STATUS_SUCCESS;
+
+    memoryHandleIt->second.region->Free(memoryHandleIt->first, memoryHandleIt->second.size);
+    memory_handle_map_.erase(memoryHandleIt);
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace core
 }  // namespace rocr

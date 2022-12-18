@@ -2744,6 +2744,62 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t addre
  */
 hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size);
 
+/**
+ * @brief Struct containing an opaque handle to a memory allocation handle
+ */
+typedef struct hsa_amd_vmem_alloc_handle_s {
+  /**
+   * Opaque handle. Two handles reference the same object of the enclosing type
+   * if and only if they are equal.
+   */
+  uint64_t handle;
+} hsa_amd_vmem_alloc_handle_t;
+
+typedef enum {
+  MEMORY_TYPE_NONE,
+  MEMORY_TYPE_PINNED,
+} hsa_amd_memory_type_t;
+
+/*
+ * @brief Create a virtual memory handle
+ *
+ * Create a virtual memory handle within this pool
+ * @p size must be a aligned to allocation granule size for this memory pool, see
+ * HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE
+ * To minimize internal memory fragmentation, align the size to the recommended allocation granule
+ * size, see HSA_AMD_REGION_INFO_RUNTIME_ALLOC_RECOMMENDED_GRANULE
+ *
+ * @param[in] pool memory to use
+ * @param[in] size of the memory allocation
+ * @param[in] type of memory
+ * @param[in] flags - currently unsupported
+ * @param[out] memory_handle - handle for the allocation
+ *
+ * @retval ::HSA_STATUS_SUCCESS memory allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT Invalid arguments
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION This memory pool does not support allocations
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate this memory
+ */
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle);
+
+/*
+ * @brief Release a virtual memory handle
+ *
+ * @param[in] memory handle that was previously allocated
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory handle
+ */
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

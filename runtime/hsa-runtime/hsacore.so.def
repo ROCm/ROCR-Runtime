@@ -235,6 +235,8 @@ global:
 	hsa_amd_portable_close_dmabuf;
 	hsa_amd_vmem_address_reserve;
 	hsa_amd_vmem_address_free;
+	hsa_amd_vmem_handle_create;
+	hsa_amd_vmem_handle_release;
 
 local:
     *;

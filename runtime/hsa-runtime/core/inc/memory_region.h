@@ -92,6 +92,8 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     AllocateNonPaged = (1 << 4),    // Non-paged system memory (AllocateIPC alias)
     AllocatePCIeRW = (1 << 5),      // Enforce pseudo fine grain/RW memory
     AllocateAsan = (1 << 6),        // ASAN - First page of allocation remapped to system memory
+    AllocatePinned = (1 << 7),      // Currently treating Pinned memory as NoSubstitute
+    AllocateMemoryOnly = (1 << 8),  // Memory only handle from thunk, no virtual address
   };
 
   typedef uint32_t AllocateFlags;

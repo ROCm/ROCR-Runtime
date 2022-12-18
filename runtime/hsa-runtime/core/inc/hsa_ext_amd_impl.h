@@ -304,6 +304,15 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t addr
 
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_vmem_address_free(void* ptr, size_t size);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
+
 }  // namespace amd
 }  // namespace rocr
 
