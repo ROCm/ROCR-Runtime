@@ -237,6 +237,8 @@ global:
 	hsa_amd_vmem_address_free;
 	hsa_amd_vmem_handle_create;
 	hsa_amd_vmem_handle_release;
+	hsa_amd_vmem_map;
+	hsa_amd_vmem_unmap;
 
 local:
     *;

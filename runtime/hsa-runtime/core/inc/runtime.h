@@ -364,6 +364,11 @@ class Runtime {
 
   hsa_status_t VMemoryHandleRelease(hsa_amd_vmem_alloc_handle_t memoryHandle);
 
+  hsa_status_t VMemoryHandleMap(void* va, size_t size, size_t in_offset,
+                                hsa_amd_vmem_alloc_handle_t memoryHandle, uint64_t flags);
+
+  hsa_status_t VMemoryHandleUnmap(void* va, size_t size);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
@@ -681,6 +686,7 @@ class Runtime {
 
  private:
   void CheckVirtualMemApiSupport();
+  int GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd, uint64_t* cpu_addr);
 
   bool virtual_mem_api_supported_;
 
@@ -721,8 +727,43 @@ class Runtime {
     ThunkHandle thunk_handle;  // handle returned by hsaKmtAllocMemory(NoAddress = 1)
     MemoryRegion::AllocateFlags alloc_flag;
   };
-
   std::map<ThunkHandle, MemoryHandle> memory_handle_map_;
+
+  struct MappedHandle {
+    MappedHandle()
+        : mem_handle(NULL),
+          address_handle(NULL),
+          offset(0),
+          mmap_offset(0),
+          size(0),
+          drm_fd(-1),
+          drm_cpu_addr(NULL),
+          ldrm_bo(0) {}
+
+    MappedHandle(MemoryHandle* mem_handle, AddressHandle* address_handle, uint64_t offset,
+                 size_t size, int drm_fd, void* drm_cpu_addr, hsa_access_permission_t perm,
+                 amdgpu_bo_handle bo)
+        : mem_handle(mem_handle),
+          address_handle(address_handle),
+          offset(offset),
+          mmap_offset(0),
+          size(size),
+          drm_fd(drm_fd),
+          drm_cpu_addr(drm_cpu_addr),
+          ldrm_bo(bo) {}
+
+    __forceinline core::Agent* agentOwner() const { return mem_handle->region->owner(); }
+
+    MemoryHandle* mem_handle;
+    AddressHandle* address_handle;
+    uint64_t offset;
+    uint64_t mmap_offset;
+    size_t size;
+    int drm_fd;
+    void* drm_cpu_addr;  // CPU Buffer address
+    amdgpu_bo_handle ldrm_bo;
+  };
+  std::map<const void*, MappedHandle> mapped_handle_map_;  // Indexed by VA
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is

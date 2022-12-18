@@ -2800,6 +2800,50 @@ hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
  */
 hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
 
+/*
+ * @brief Map a virtual memory handle
+ *
+ * Map a virtual memory handle to a reserved address range. The virtual address requested must be
+ * within a previously reserved address range. @p va and (@p va + size) must be must be within
+ * (va + size) of the previous allocated address range.
+ * @p size must be equal to size of the @p memory_handle
+ * hsa_amd_vmem_set_access needs to be called to make the memory accessible to specific agents
+ *
+ * @param[in] va virtual address range where memory will be mapped
+ * @param[in] size of memory mapping
+ * @param[in] in_offset offset into memory. Currently unsupported
+ * @param[in] memory_handle virtual memory handle to be mapped
+ * @param[in] flags. Currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Memory mapped successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT va, size or memory_handle are invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                              hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags);
+
+/*
+ * @brief Unmap a virtual memory handle
+ *
+ * Unmap previously mapped virtual address range
+ *
+ * @param[in] va virtual address range where memory will be mapped
+ * @param[in] size of memory mapping
+ *
+ * @retval ::HSA_STATUS_SUCCESS Memory backing unmapped successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION memory_handle is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT size is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif
