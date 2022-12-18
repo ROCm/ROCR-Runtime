@@ -354,6 +354,9 @@ class Runtime {
 
   hsa_status_t DmaBufClose(int dmabuf);
 
+  hsa_status_t VMemoryAddressReserve(void** ptr, size_t size, uint64_t address, uint64_t flags);
+
+  hsa_status_t VMemoryAddressFree(void* ptr, size_t size);
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
@@ -673,6 +676,15 @@ class Runtime {
   void CheckVirtualMemApiSupport();
 
   bool virtual_mem_api_supported_;
+
+  struct AddressHandle {
+    AddressHandle() : size(0), use_count(0) {}
+    AddressHandle(size_t size) : size(size), use_count(0) {}
+
+    size_t size;
+    int use_count;
+  };
+  std::map<const void*, AddressHandle> reserved_address_map_;  // Indexed by VA
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is

@@ -95,6 +95,11 @@ struct ValidityError<const T*> {
   enum { value = ValidityError<T*>::value };
 };
 
+#define IS_TRUE(var)                                                                               \
+  do {                                                                                             \
+    if ((var) != true) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                   \
+  } while (false)
+
 #define IS_BAD_PTR(ptr)                                          \
   do {                                                           \
     if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
@@ -1197,5 +1202,23 @@ hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf) {
   CATCH;
 }
 
+hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
+                                          uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+  return core::Runtime::runtime_singleton_->VMemoryAddressFree(va, size);
+  CATCH;
+}
 }   //  namespace amd
 }   //  namespace rocr
