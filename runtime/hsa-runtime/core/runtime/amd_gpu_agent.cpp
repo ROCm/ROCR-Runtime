@@ -178,25 +178,15 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   max_queues_ = std::min(128U, max_queues_);
 #endif
 
+  // Initialize libdrm device handle
+  InitLibDrm();
+
 #if !defined(__linux__)
   wallclock_frequency_ = 0;
 #else
   // Get wallclock freq from libdrm.
-  int drm_fd = drmOpenRender(node_props.DrmRenderMinor);
-  if (drm_fd < 0)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm open failed.\n");
-  MAKE_SCOPE_GUARD([&]() { drmClose(drm_fd); });
-
-  amdgpu_device_handle device_handle;
-  uint32_t major_version;
-  uint32_t minor_version;
-  if (amdgpu_device_initialize(drm_fd, &major_version, &minor_version, &device_handle) < 0) {
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm error.\n");
-  }
-  MAKE_SCOPE_GUARD([&]() { amdgpu_device_deinitialize(device_handle); });
-
   amdgpu_gpu_info info;
-  if (amdgpu_query_gpu_info(device_handle, &info) < 0)
+  if (amdgpu_query_gpu_info(ldrm_dev_, &info) < 0)
     throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
 
   // Reported by libdrm in KHz.
@@ -572,6 +562,18 @@ void GpuAgent::InitCacheList() {
   for (size_t i = 0; i < caches_.size(); i++)
     caches_[i].reset(new core::Cache(deviceName + " L" + std::to_string(cache_props_[i].CacheLevel),
                                      cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
+}
+
+void GpuAgent::InitLibDrm() {
+  HSAKMT_STATUS status;
+
+  HsaAMDGPUDeviceHandle device_handle;
+  status = hsaKmtGetAMDGPUDeviceHandle(node_id(), &device_handle);
+  if (status != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR,
+                             "Agent creation failed.\nlibdrm get device handle failed.\n");
+
+  ldrm_dev_ = (amdgpu_device_handle)device_handle;
 }
 
 hsa_status_t GpuAgent::IterateRegion(
