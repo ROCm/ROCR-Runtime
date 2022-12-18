@@ -343,6 +343,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief returns true if agent uses MES scheduler
   __forceinline const bool isMES() const { return (isa_->GetMajorVersion() >= 11) ? true : false; };
 
+  // @brief returns the libdrm device handle
+  __forceinline amdgpu_device_handle libDrmDev() const { return ldrm_dev_; }
+
   void ReserveScratch();
 
   void Trim() override;
@@ -554,6 +557,9 @@ class GpuAgent : public GpuAgentInt {
   // Bind the Blit object that will drive the copy operation by engine ID
   lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
 
+  // @brief initialize libdrm handle
+  void InitLibDrm();
+
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
@@ -583,6 +589,9 @@ class GpuAgent : public GpuAgentInt {
       system_allocator_;
 
   std::function<void(void*)> system_deallocator_;
+
+  // @brief device handle
+  amdgpu_device_handle ldrm_dev_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 

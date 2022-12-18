@@ -52,6 +52,11 @@
 #include <utility>
 #include <thread>
 
+#if defined(__linux__)
+#include <xf86drm.h>
+#include <amdgpu.h>
+#endif
+
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/hsa_internal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
