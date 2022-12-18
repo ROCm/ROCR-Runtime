@@ -49,6 +49,8 @@
 #include <vector>
 #include <list>
 #include <dlfcn.h>
+#include <amdgpu_drm.h>
+#include <sys/mman.h>
 
 #include "core/common/shared.h"
 #include "core/inc/hsa_ext_interface.h"
@@ -1594,6 +1596,27 @@ int fn_amdgpu_device_get_fd_nosupport(HsaAMDGPUDeviceHandle device_handle) {
   return -1;
 }
 
+int Runtime::GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd,
+                                 uint64_t* cpu_addr) {
+  int renderFd = fn_amdgpu_device_get_fd(static_cast<AMD::GpuAgent*>(agent)->libDrmDev());
+  if (renderFd < 0) return HSA_STATUS_ERROR;
+
+  uint32_t gem_handle = 0;
+  if (amdgpu_bo_export(bo, amdgpu_bo_handle_type_kms, &gem_handle)) return HSA_STATUS_ERROR;
+
+  union drm_amdgpu_gem_mmap args;
+  memset(&args, 0, sizeof(args));
+  /* Query the buffer address (args.addr_ptr).
+   * The kernel driver ignores the offset and size parameters. */
+  args.in.handle = gem_handle;
+  if (drmCommandWriteRead(renderFd, DRM_AMDGPU_GEM_MMAP, &args, sizeof(args)))
+    return HSA_STATUS_ERROR;
+
+  *drm_fd = renderFd;
+  *cpu_addr = args.out.addr_ptr;
+  return HSA_STATUS_SUCCESS;
+}
+
 void Runtime::CheckVirtualMemApiSupport() {
   virtual_mem_api_supported_ = false;
   // TODO: May have to change the minor version required once Thunk merges changes into amd-staging
@@ -2492,5 +2515,131 @@ hsa_status_t Runtime::VMemoryHandleRelease(hsa_amd_vmem_alloc_handle_t memoryOnl
   return HSA_STATUS_SUCCESS;
 }
 
+__forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
+  switch (perm) {
+    case HSA_ACCESS_PERMISSION_RO:
+      return AMDGPU_VM_PAGE_READABLE;
+    case HSA_ACCESS_PERMISSION_WO:
+      return AMDGPU_VM_PAGE_WRITEABLE;
+    case HSA_ACCESS_PERMISSION_RW:
+      return AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
+    case HSA_ACCESS_PERMISSION_NONE:
+      return 0;
+    default:
+      break;
+  }
+
+  return 0;
+}
+
+__forceinline int mmap_perm(hsa_access_permission_t perms) {
+  switch (perms) {
+    case HSA_ACCESS_PERMISSION_RO:
+      return PROT_READ;
+    case HSA_ACCESS_PERMISSION_WO:
+      return PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_RW:
+      return PROT_READ | PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_NONE:
+      return PROT_NONE;
+    default:
+      break;
+  }
+
+  return 0;
+}
+
+hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
+                                       hsa_amd_vmem_alloc_handle_t memoryOnlyHandle,
+                                       uint64_t flags) {
+  int drm_fd, dmabuf_fd = 0;
+  uint64_t offset = 0, ret;
+  uint64_t drm_cpu_addr = 0;
+  amdgpu_bo_handle ldrm_bo = 0;
+  bool reservedAddressFound = false;
+
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  auto reservedAddressIt = reserved_address_map_.upper_bound(va);
+  if (reservedAddressIt != reserved_address_map_.begin()) {
+    reservedAddressIt--;
+    if ((reservedAddressIt->first <= va) &&
+        ((va + size) <= (reservedAddressIt->first + reservedAddressIt->second.size))) {
+      reservedAddressFound = true;
+    }
+  }
+  if (!reservedAddressFound) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  /* Confirm that this VA range has not been mapped yet */
+  auto upperMappedHandleIt = mapped_handle_map_.upper_bound(va);
+  if (upperMappedHandleIt != mapped_handle_map_.begin()) {
+    upperMappedHandleIt--;
+    if (upperMappedHandleIt->first + upperMappedHandleIt->second.size > va)
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  auto lowerMappedHandleIt = mapped_handle_map_.lower_bound(va);
+  if (lowerMappedHandleIt != mapped_handle_map_.end()) {
+    if (va + size > lowerMappedHandleIt->first) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  auto memoryHandleIt = memory_handle_map_.find(reinterpret_cast<void*>(memoryOnlyHandle.handle));
+  if (memoryHandleIt == memory_handle_map_.end()) {
+    debug_warning(false && "Can't find memory handle");
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  ret = hsaKmtExportDMABufHandle(memoryHandleIt->first, size, &dmabuf_fd, &offset);
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  assert(offset == 0);
+
+  AMD::GpuAgent* agent = static_cast<AMD::GpuAgent*>(memoryHandleIt->second.agentOwner());
+  amdgpu_bo_import_result res;
+  ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
+  if (ret) return HSA_STATUS_ERROR;
+
+  close(dmabuf_fd);
+
+  ldrm_bo = res.buf_handle;
+  ret = GetAmdgpuDeviceArgs(agent, ldrm_bo, &drm_fd, &drm_cpu_addr);
+  if (ret) return HSA_STATUS_ERROR;
+  mapped_handle_map_[va] =
+      MappedHandle(&memoryHandleIt->second, &reservedAddressIt->second, offset, size, drm_fd,
+                   reinterpret_cast<void*>(drm_cpu_addr), HSA_ACCESS_PERMISSION_NONE, ldrm_bo);
+
+  reservedAddressIt->second.use_count++;
+  memoryHandleIt->second.use_count++;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
+  int ret;
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+
+  auto mappedHandleIt = mapped_handle_map_.find(va);
+  if (mappedHandleIt == mapped_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  if (mappedHandleIt->second.size != size) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  if (mappedHandleIt->second.ldrm_bo) ret = amdgpu_bo_free(mappedHandleIt->second.ldrm_bo);
+
+  if (ret) return HSA_STATUS_ERROR;
+
+  assert(mappedHandleIt->second.address_handle->use_count >= 1);
+  mappedHandleIt->second.address_handle->use_count--;
+  assert(mappedHandleIt->second.mem_handle->use_count >= 1);
+  mappedHandleIt->second.mem_handle->use_count--;
+
+  if (!mappedHandleIt->second.mem_handle->use_count &&
+      !mappedHandleIt->second.mem_handle->ref_count) {
+    // User called VMemoryHandleRelease while this mapping was still outstanding. We need to delete
+    // the MemoryHandle as is the last MappedHandle that was using it
+    mappedHandleIt->second.mem_handle->region->Free(mappedHandleIt->second.mem_handle->thunk_handle,
+                                                    mappedHandleIt->second.mem_handle->size);
+    memory_handle_map_.erase(mappedHandleIt->second.mem_handle->thunk_handle);
+  }
+
+  mapped_handle_map_.erase(mappedHandleIt);
+  return HSA_STATUS_SUCCESS;
+}
 }  // namespace core
 }  // namespace rocr

@@ -1250,6 +1250,15 @@ hsa_status_t HSA_API hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t mem
   return amdExtTable->hsa_amd_vmem_handle_release_fn(memory_handle);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                                      hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_map_fn(va, size, in_offset, memory_handle, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_unmap(void* va, size_t size) {
+  return amdExtTable->hsa_amd_vmem_unmap_fn(va, size);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

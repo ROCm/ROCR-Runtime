@@ -1254,5 +1254,27 @@ hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_hand
   CATCH;
 }
 
+hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                              hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleMap(va, size, in_offset, memory_handle,
+                                                             flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleUnmap(va, size);
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr

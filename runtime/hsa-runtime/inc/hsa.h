@@ -314,6 +314,10 @@ typedef struct hsa_dim3_s {
  */
 typedef enum {
   /**
+   * Used to remove existing access
+   */
+  HSA_ACCESS_PERMISSION_NONE = 0,
+  /**
    * Read-only access.
    */
   HSA_ACCESS_PERMISSION_RO = 1,
