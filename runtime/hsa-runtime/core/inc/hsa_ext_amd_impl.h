@@ -298,6 +298,12 @@ hsa_status_t HSA_API hsa_amd_portable_export_dmabuf(const void* ptr, size_t size
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t address,
+                                          uint64_t flags);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_address_free(void* ptr, size_t size);
 }  // namespace amd
 }  // namespace rocr
 

@@ -194,6 +194,8 @@ struct AmdExtTable {
   decltype(hsa_amd_queue_cu_get_mask)* hsa_amd_queue_cu_get_mask_fn;
   decltype(hsa_amd_portable_export_dmabuf)* hsa_amd_portable_export_dmabuf_fn;
   decltype(hsa_amd_portable_close_dmabuf)* hsa_amd_portable_close_dmabuf_fn;
+  decltype(hsa_amd_vmem_address_reserve)* hsa_amd_vmem_address_reserve_fn;
+  decltype(hsa_amd_vmem_address_free)* hsa_amd_vmem_address_free_fn;
 };
 
 // Table to export HSA Core Runtime Apis

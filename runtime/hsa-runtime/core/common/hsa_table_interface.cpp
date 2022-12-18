@@ -1231,6 +1231,15 @@ hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf) {
   return amdExtTable->hsa_amd_portable_close_dmabuf_fn(dmabuf);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t address,
+                                                  uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_address_reserve_fn(ptr, size, address, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_address_free(void* ptr, size_t size) {
+  return amdExtTable->hsa_amd_vmem_address_free_fn(ptr, size);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

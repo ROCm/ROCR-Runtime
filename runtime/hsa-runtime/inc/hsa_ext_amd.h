@@ -2702,6 +2702,48 @@ hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* d
  */
 hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
+/*
+ * @brief Allocate a reserved address range
+ *
+ * Reserve a virtual address range. The size must be a multiple of the system page size.
+ * If it is not possible to allocate the address specified by @p address, then @p va will be
+ * a different address range.
+ * Address range should be released by calling hsa_amd_vmem_address_free.
+ *
+ * @param[out] va virtual address allocated
+ * @param[in] size of address range requested
+ * @param[in] address requested
+ * @param[in] flags currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
+ * range of this size.
+ */
+hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
+                                          uint64_t flags);
+
+/*
+ * @brief Free a reserved address range
+ *
+ * Free a previously allocated address range. The size must match the size of a previously
+ * allocated address range.
+ *
+ * @param[out] va virtual address to be freed
+ * @param[in] size of address range
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range released successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid va specified
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT Invalid size specified
+ * @retval ::HSA_STATUS_ERROR_RESOURCE_FREE Address range is still in use
+ * @retval ::HSA_STATUS_ERROR Internal unexpected error
+ */
+hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

@@ -2406,5 +2406,45 @@ hsa_status_t Runtime::DmaBufClose(int dmabuf) {
 #endif
 }
 
+hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t address,
+                                            uint64_t flags) {
+  void* addr = (void*)address;
+  HsaMemFlags memFlags = {0};
+
+
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+
+  /* Try to reserving the VA requested by user */
+  if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
+    memFlags.ui32.FixedAddress = 0;
+    /* Could not reserved VA requested, allocate alternate VA */
+    if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  reserved_address_map_[addr] = AddressHandle(size);
+  *va = addr;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemoryAddressFree(void* va, size_t size) {
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  std::map<const void*, AddressHandle>::iterator it = reserved_address_map_.find(va);
+
+  if (it == reserved_address_map_.end()) {
+    debug_warning(false && "Can't find address in reserved address");
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
+
+  if (size != it->second.size) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  if (it->second.use_count > 0) return HSA_STATUS_ERROR_RESOURCE_FREE;
+
+  if (hsaKmtFreeMemory(va, size) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  reserved_address_map_.erase(it);
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace core
 }  // namespace rocr
