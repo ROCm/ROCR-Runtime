@@ -357,6 +357,13 @@ class Runtime {
   hsa_status_t VMemoryAddressReserve(void** ptr, size_t size, uint64_t address, uint64_t flags);
 
   hsa_status_t VMemoryAddressFree(void* ptr, size_t size);
+
+  hsa_status_t VMemoryHandleCreate(const MemoryRegion* region, size_t size,
+                                   MemoryRegion::AllocateFlags alloc_flags,
+                                   uint64_t flags, hsa_amd_vmem_alloc_handle_t* memoryHandle);
+
+  hsa_status_t VMemoryHandleRelease(hsa_amd_vmem_alloc_handle_t memoryHandle);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
@@ -677,6 +684,8 @@ class Runtime {
 
   bool virtual_mem_api_supported_;
 
+  typedef void* ThunkHandle;
+
   struct AddressHandle {
     AddressHandle() : size(0), use_count(0) {}
     AddressHandle(size_t size) : size(size), use_count(0) {}
@@ -685,6 +694,35 @@ class Runtime {
     int use_count;
   };
   std::map<const void*, AddressHandle> reserved_address_map_;  // Indexed by VA
+
+  struct MemoryHandle {
+    MemoryHandle() : region(NULL), size(0), ref_count(0), thunk_handle(NULL), alloc_flag(0) {}
+    MemoryHandle(const MemoryRegion* region, size_t size, uint64_t flags_unused,
+                 ThunkHandle thunk_handle, MemoryRegion::AllocateFlags alloc_flag)
+        : region(region),
+          size(size),
+          ref_count(1),
+          use_count(0),
+          thunk_handle(thunk_handle),
+          alloc_flag(alloc_flag) {}
+
+    static __forceinline hsa_amd_vmem_alloc_handle_t Convert(void* handle) {
+      hsa_amd_vmem_alloc_handle_t ret_handle = {
+          static_cast<uint64_t>(reinterpret_cast<uintptr_t>(handle))};
+      return ret_handle;
+    }
+
+    __forceinline core::Agent* agentOwner() const { return region->owner(); }
+
+    const MemoryRegion* region;
+    size_t size;
+    int ref_count;
+    int use_count;
+    ThunkHandle thunk_handle;  // handle returned by hsaKmtAllocMemory(NoAddress = 1)
+    MemoryRegion::AllocateFlags alloc_flag;
+  };
+
+  std::map<ThunkHandle, MemoryHandle> memory_handle_map_;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is

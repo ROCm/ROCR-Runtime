@@ -1220,5 +1220,39 @@ hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size) {
   return core::Runtime::runtime_singleton_->VMemoryAddressFree(va, size);
   CATCH;
 }
+
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t memory_pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+
+  if (type != MEMORY_TYPE_NONE && type != MEMORY_TYPE_PINNED)
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  hsa_region_t region = {memory_pool.handle};
+  const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
+
+  if (mem_region == NULL || !mem_region->IsValid()) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateMemoryOnly;
+  if (type == MEMORY_TYPE_PINNED) alloc_flag |= core::MemoryRegion::AllocatePinned;
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleCreate(mem_region, size, alloc_flag, flags,
+                                                                memory_handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle) {
+  TRY;
+  IS_OPEN();
+  return core::Runtime::runtime_singleton_->VMemoryHandleRelease(memory_handle);
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr
