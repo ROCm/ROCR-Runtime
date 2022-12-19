@@ -386,6 +386,12 @@ TEST(rocrtstFunc, VirtMemory_Basic_Test) {
   RunCustomTestEpilog(&vmt);
 }
 
+TEST(rocrtstFunc, VirtMemory_Interprocess_Test) {
+  VirtMemoryTestInterProcess vmt;
+  RunCustomTestProlog(&vmt);
+  RunCustomTestEpilog(&vmt);
+}
+
 TEST(rocrtstNeg, Memory_Negative_Tests) {
   MemoryAllocateNegativeTest mt;
   RunCustomTestProlog(&mt);
