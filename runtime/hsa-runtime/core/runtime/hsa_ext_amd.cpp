@@ -110,6 +110,11 @@ struct ValidityError<const T*> {
     if ((arg) == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                      \
   } while (false)
 
+#define IS_VALID_FD(fd)                                                                            \
+  do {                                                                                             \
+    if ((fd) < 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                        \
+  } while (false)
+
 #define IS_VALID(ptr)                                           \
   do {                                                          \
     if ((ptr) == NULL || !(ptr)->IsValid())                     \
@@ -1297,6 +1302,27 @@ hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
   IS_BAD_PTR(perms);
 
   return core::Runtime::runtime_singleton_->VMemoryGetAccess(va, perms, agent_handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t handle,
+                                                  uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(dmabuf_fd);
+
+  return core::Runtime::runtime_singleton_->VMemoryExportShareableHandle(dmabuf_fd, handle, flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t* handle) {
+  TRY;
+  IS_BAD_PTR(handle);
+  IS_VALID_FD(dmabuf_fd);
+
+  return core::Runtime::runtime_singleton_->VMemoryImportShareableHandle(dmabuf_fd, handle);
   CATCH;
 }
 

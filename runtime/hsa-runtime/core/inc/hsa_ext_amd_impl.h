@@ -329,6 +329,14 @@ hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
 hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* flags,
                                      const hsa_agent_t agent_handle);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t handle,
+                                                  uint64_t flags);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t* handle);
 }  // namespace amd
 }  // namespace rocr
 

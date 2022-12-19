@@ -1270,6 +1270,17 @@ hsa_status_t HSA_API hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* 
   return amdExtTable->hsa_amd_vmem_get_access_fn(va, perms, agent_handle);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                          hsa_amd_vmem_alloc_handle_t handle,
+                                                          uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_export_shareable_handle_fn(dmabuf_fd, handle, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                          hsa_amd_vmem_alloc_handle_t* handle) {
+  return amdExtTable->hsa_amd_vmem_import_shareable_handle_fn(dmabuf_fd, handle);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 
