@@ -85,6 +85,7 @@ typedef struct pool_info_t_ {
     bool alloc_allowed;
     size_t alloc_granule;
     size_t alloc_alignment;
+    size_t alloc_rec_granule;
     bool accessible_by_all;
     uint32_t global_flag;
     uint64_t aggregate_alloc_max;
@@ -92,6 +93,7 @@ typedef struct pool_info_t_ {
       if (a.segment == segment && a.size == size
           && a.alloc_allowed == alloc_allowed
           && a.alloc_granule == alloc_granule
+          && a.alloc_rec_granule == alloc_rec_granule
           && a.alloc_alignment == alloc_alignment
           && a.accessible_by_all == accessible_by_all
           && a.aggregate_alloc_max == aggregate_alloc_max
