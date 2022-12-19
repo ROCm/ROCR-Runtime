@@ -57,6 +57,7 @@
 #include "suites/functional/memory_atomics.h"
 #include "suites/functional/memory_allocation.h"
 #include "suites/functional/deallocation_notifier.h"
+#include "suites/functional/virtual_memory.h"
 #include "suites/performance/dispatch_time.h"
 #include "suites/performance/memory_async_copy.h"
 #include "suites/performance/memory_async_copy_numa.h"
@@ -371,6 +372,18 @@ TEST(rocrtstFunc, AgentProp_UUID) {
   RunCustomTestProlog(&propTest);
   propTest.QueryAgentUUID();
   RunCustomTestEpilog(&propTest);
+}
+
+TEST(rocrtstFunc, VirtMemory_Basic_Test) {
+  VirtMemoryTestBasic vmt;
+
+  RunCustomTestProlog(&vmt);
+  vmt.TestCreateDestroy();
+  vmt.TestRefCount();
+  vmt.TestPartialMapping();
+  vmt.CPUAccessToGPUMemoryTest();
+  vmt.GPUAccessToCPUMemoryTest();
+  RunCustomTestEpilog(&vmt);
 }
 
 TEST(rocrtstNeg, Memory_Negative_Tests) {

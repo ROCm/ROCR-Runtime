@@ -105,6 +105,7 @@ struct pool_info_t {
     size_t pool_size;
     bool alloc_allowed;
     size_t alloc_granule;
+    size_t alloc_recommended_granule;
     size_t pool_alloc_alignment;
     bool pl_access;
     uint32_t global_flag;
@@ -507,6 +508,11 @@ static hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
   err = hsa_amd_memory_pool_get_info(pool,
                            HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
                                                &pool_i->pool_alloc_alignment);
+  RET_IF_HSA_ERR(err);
+
+  err =
+      hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE,
+                                   &pool_i->alloc_recommended_granule);
   RET_IF_HSA_ERR(err);
 
   err = hsa_amd_memory_pool_get_info(pool,

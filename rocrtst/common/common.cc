@@ -410,6 +410,10 @@ hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
                                                       &pool_i->alloc_granule);
   RET_IF_HSA_COMMON_ERR(err);
 
+  err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE,
+                                     &pool_i->alloc_rec_granule);
+  RET_IF_HSA_COMMON_ERR(err);
+
   err = hsa_amd_memory_pool_get_info(pool,
                            HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT,
                                                &pool_i->alloc_alignment);
@@ -445,6 +449,9 @@ hsa_status_t DumpMemoryPoolInfo(const pool_info_t *pool_i,
   fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(), "Pool Alloc Granule:",
           gr_str.c_str());
 
+  std::string recgr_str = std::to_string(pool_i->alloc_rec_granule / 1024) + "KB";
+  fprintf(stdout, "%s%-28s%-36s\n", ind_lvl.c_str(),
+          "Pool Alloc Recommended Granule:", recgr_str.c_str());
 
   std::string al_str =
                    std::to_string(pool_i->alloc_alignment / 1024) + "KB";
