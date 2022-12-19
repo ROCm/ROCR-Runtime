@@ -443,7 +443,7 @@ typedef enum hsa_amd_region_info_s {
    * Max Memory Clock, the return value type is uint32_t.
    * This attribute is deprecated. Use HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY.
    */
-  HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY = 0xA003
+  HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY = 0xA003,
 } hsa_amd_region_info_t;
 
 /**
@@ -1072,32 +1072,44 @@ typedef enum {
   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED = 5,
   /**
-  * Allocation granularity of buffers allocated by
-  * ::hsa_amd_memory_pool_allocate
-  * in this memory pool. The size of a buffer allocated in this pool is a
-  * multiple of the value of this attribute. The value of this attribute is
-  * only defined if ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for
-  * this pool. The type of this attribute is size_t.
-  */
+   * Allocation granularity of buffers allocated by
+   * ::hsa_amd_memory_pool_allocate
+   * in this memory pool. The size of a buffer allocated in this pool is a
+   * multiple of the value of this attribute. While this is the minimum size of
+   * allocation allowed, it is recommened to use
+   * HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE to obtain the recommended
+   * allocation granularity size for this pool.
+   * The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for
+   * this pool. The type of this attribute is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE = 6,
   /**
-  * Alignment of buffers allocated by ::hsa_amd_memory_pool_allocate in this
-  * pool. The value of this attribute is only defined if
-  * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool, and
-  * must be a power of 2. The type of this attribute is size_t.
-  */
+   * Alignment of buffers allocated by ::hsa_amd_memory_pool_allocate in this
+   * pool. The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool, and
+   * must be a power of 2. The type of this attribute is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT = 7,
   /**
-  * This memory_pool can be made directly accessible by all the agents in the
-  * system (::hsa_amd_agent_memory_pool_get_info does not return 
-  * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
-  * attribute is bool.
-  */
+   * Internal block size for allocations. This would also be the recommended
+   * granularity size for allocations as this prevents internal fragmentation.
+   * The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool.
+   * The size of this attribute is size_t.
+   */
+  HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE = 8,
+  /**
+   * This memory_pool can be made directly accessible by all the agents in the
+   * system (::hsa_amd_agent_memory_pool_get_info does not return
+   * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
+   * attribute is bool.
+   */
   HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL = 15,
   /**
-  * Maximum aggregate allocation size in bytes. The type of this attribute
-  * is size_t.
-  */
+   * Maximum aggregate allocation size in bytes. The type of this attribute
+   * is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE = 16,
   /**
    * Location of this memory pool. The type of this attribute
