@@ -2786,5 +2786,88 @@ hsa_status_t Runtime::VMemoryGetAccess(const void* va, hsa_access_permission_t* 
   return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 }
 
+hsa_status_t Runtime::VMemoryExportShareableHandle(int* dmabuf_fd,
+                                                   hsa_amd_vmem_alloc_handle_t handle,
+                                                   uint64_t flags) {
+  *dmabuf_fd = -1;
+  auto memoryHandle = memory_handle_map_.find((void*)handle.handle);
+  if (memoryHandle == memory_handle_map_.end()) {
+    debug_warning(false && "Can't find memory handle");
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
+
+  uint64_t offset, ret;
+
+  ret = hsaKmtExportDMABufHandle(memoryHandle->second.thunk_handle, memoryHandle->second.size,
+                                 dmabuf_fd, &offset);
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemoryImportShareableHandle(int dmabuf_fd,
+                                                   hsa_amd_vmem_alloc_handle_t* memoryOnlyHandle) {
+  auto lookupRegion = [this](int nodeid, const AMD::MemoryRegion** ret) {
+    auto nodeAgent = agents_by_node_.find(nodeid);
+    if (nodeAgent == agents_by_node_.end()) {
+      *ret = NULL;
+      return;
+    }
+
+    Agent* agent = nodeAgent->second.front();
+    if (agent == nullptr || !agent->IsValid() || agent->device_type() != Agent::kAmdGpuDevice) {
+      *ret = NULL;
+      return;
+    }
+
+    for (const core::MemoryRegion* region : agent->regions()) {
+      const AMD::MemoryRegion* amd_region = reinterpret_cast<const AMD::MemoryRegion*>(region);
+
+      // TODO: Verify that this works on a system with FINE_GRAINED memory.
+      // System's with FINE_GRAINED will have both COARSE and FINE grain... need to get the
+      // rigtht one.
+
+      bool alloc_allowed;
+      hsa_status_t status =
+          amd_region->GetInfo(HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED, &alloc_allowed);
+      if (status == HSA_STATUS_SUCCESS && alloc_allowed) *ret = amd_region;
+    }
+  };
+
+  HsaGraphicsResourceInfo info;
+  int ret = hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, 0, NULL);
+  if (ret) return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
+
+  ThunkHandle thunk_handle = info.MemoryAddress;
+  size_t size = info.SizeInBytes;
+  int gpuid = info.NodeId;
+
+
+  auto memoryHandleIt = memory_handle_map_.find(thunk_handle);
+  if (memoryHandleIt != memory_handle_map_.end()) {
+    /* This handle was already imported, increment ref_count and return */
+    memoryHandleIt->second.ref_count++;
+    *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
+    return HSA_STATUS_SUCCESS;
+  }
+
+  const AMD::MemoryRegion* region = NULL;
+  lookupRegion(gpuid, &region);
+  if (!region) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  HsaPointerInfo ptrInfo;
+  ret = hsaKmtQueryPointerInfo(info.MemoryAddress, &ptrInfo);
+  if (ret != HSA_STATUS_SUCCESS || ptrInfo.Type == HSA_POINTER_UNKNOWN)
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateNoFlags;
+  if (ptrInfo.MemFlags.ui32.NoSubstitute) alloc_flag |= core::MemoryRegion::AllocatePinned;
+
+  memory_handle_map_[thunk_handle] = MemoryHandle(region, size, 0, thunk_handle, alloc_flag);
+  *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
+
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace core
 }  // namespace rocr

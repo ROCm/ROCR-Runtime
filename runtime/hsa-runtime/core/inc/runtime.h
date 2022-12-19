@@ -375,6 +375,13 @@ class Runtime {
   hsa_status_t VMemoryGetAccess(const void* va, hsa_access_permission_t* perms,
                                 hsa_agent_t agent_handle);
 
+  hsa_status_t VMemoryExportShareableHandle(int* dmabuf_fd,
+                                            const hsa_amd_vmem_alloc_handle_t handle,
+                                            const uint64_t flags);
+
+  hsa_status_t VMemoryImportShareableHandle(const int dmabuf_fd,
+                                            hsa_amd_vmem_alloc_handle_t* handle);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
