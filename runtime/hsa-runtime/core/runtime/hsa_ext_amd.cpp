@@ -1326,5 +1326,35 @@ hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
   CATCH;
 }
 
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* allocHandle,
+                                              void* addr) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(addr);
+
+  return core::Runtime::runtime_singleton_->VMemoryRetainAllocHandle(allocHandle, addr);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_handle_t allocHandle,
+                                                           hsa_amd_memory_pool_t* pool,
+                                                           hsa_amd_memory_type_t* type) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(pool);
+  IS_BAD_PTR(type);
+
+  const core::MemoryRegion* mem_region = NULL;
+  hsa_status_t ret = core::Runtime::runtime_singleton_->VMemoryGetAllocPropertiesFromHandle(
+      allocHandle, &mem_region, type);
+  if (ret == HSA_STATUS_SUCCESS) {
+    hsa_region_t region = core::MemoryRegion::Convert(mem_region);
+    pool->handle = region.handle;
+  }
+
+  return ret;
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr

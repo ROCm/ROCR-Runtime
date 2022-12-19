@@ -2941,6 +2941,40 @@ hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
  */
 hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
                                                   hsa_amd_vmem_alloc_handle_t* handle);
+
+/*
+ * @brief Returns memory handle for mapped memory
+ *
+ * Return a memory handle for previously mapped memory. The handle will be the same value of handle
+ * used to map the memory. The returned handle must be released with corresponding number of calls
+ * to hsa_amd_vmem_handle_release.
+ *
+ * @param[out] memory_handle memory handle for this mapped address
+ * @param[in] mapped address
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid address
+ */
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memory_handle,
+                                              void* addr);
+
+/*
+* @brief Returns the current allocation properties of a handle
+*
+* Returns the allocation properties of an existing handle
+*
+* @param[in] memory_handle memory handle to be queried
+* @param[out] pool memory pool that owns this handle
+* @param[out] memory type
+
+* @retval ::HSA_STATUS_SUCCESS
+*
+* @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
+*/
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
+    hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
+    hsa_amd_memory_type_t* type);
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

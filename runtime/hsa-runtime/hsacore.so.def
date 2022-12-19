@@ -243,6 +243,8 @@ global:
 	hsa_amd_vmem_get_access;
 	hsa_amd_vmem_export_shareable_handle;
 	hsa_amd_vmem_import_shareable_handle;
+	hsa_amd_vmem_retain_alloc_handle;
+	hsa_amd_vmem_get_alloc_properties_from_handle;
 
 local:
     *;
