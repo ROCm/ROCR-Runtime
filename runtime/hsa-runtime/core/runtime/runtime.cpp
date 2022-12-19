@@ -2869,5 +2869,31 @@ hsa_status_t Runtime::VMemoryImportShareableHandle(int dmabuf_fd,
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t Runtime::VMemoryRetainAllocHandle(hsa_amd_vmem_alloc_handle_t* mapped_handle,
+                                               void* va) {
+  auto mappedHandleIt = mapped_handle_map_.find(va);
+  if (mappedHandleIt == mapped_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  MemoryHandle* memoryHandle = mappedHandleIt->second.mem_handle;
+  memoryHandle->ref_count++;
+  *mapped_handle = MemoryHandle::Convert(memoryHandle->thunk_handle);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemoryGetAllocPropertiesFromHandle(hsa_amd_vmem_alloc_handle_t allocHandle,
+                                                          const core::MemoryRegion** mem_region,
+                                                          hsa_amd_memory_type_t* type) {
+  auto memoryHandleIt = memory_handle_map_.find(reinterpret_cast<void*>(allocHandle.handle));
+  if (memoryHandleIt == memory_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  *mem_region = memoryHandleIt->second.region;
+  *type = (memoryHandleIt->second.alloc_flag & core::MemoryRegion::AllocatePinned)
+      ? MEMORY_TYPE_PINNED
+      : MEMORY_TYPE_NONE;
+
+  return HSA_STATUS_SUCCESS;
+}
+
 }  // namespace core
 }  // namespace rocr

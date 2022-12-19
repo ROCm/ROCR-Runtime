@@ -382,6 +382,12 @@ class Runtime {
   hsa_status_t VMemoryImportShareableHandle(const int dmabuf_fd,
                                             hsa_amd_vmem_alloc_handle_t* handle);
 
+  hsa_status_t VMemoryRetainAllocHandle(hsa_amd_vmem_alloc_handle_t* memoryHandle, void* addr);
+
+  hsa_status_t VMemoryGetAllocPropertiesFromHandle(const hsa_amd_vmem_alloc_handle_t memoryHandle,
+                                                   const core::MemoryRegion** mem_region,
+                                                   hsa_amd_memory_type_t* type);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }

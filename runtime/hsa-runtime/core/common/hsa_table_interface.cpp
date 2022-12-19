@@ -1281,6 +1281,17 @@ hsa_status_t HSA_API hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
   return amdExtTable->hsa_amd_vmem_import_shareable_handle_fn(dmabuf_fd, handle);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* handle,
+                                                      void* addr) {
+  return amdExtTable->hsa_amd_vmem_retain_alloc_handle_fn(handle, addr);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_get_alloc_properties_from_handle(
+    hsa_amd_vmem_alloc_handle_t alloc_handle, hsa_amd_memory_pool_t* pool,
+    hsa_amd_memory_type_t* type) {
+  return amdExtTable->hsa_amd_vmem_get_alloc_properties_from_handle_fn(alloc_handle, pool, type);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

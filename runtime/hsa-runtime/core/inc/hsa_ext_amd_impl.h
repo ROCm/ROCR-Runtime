@@ -337,6 +337,15 @@ hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
                                                   hsa_amd_vmem_alloc_handle_t* handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* allocHandle, void* addr);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_handle_t allocHandle,
+                                                           hsa_amd_memory_pool_t* pool,
+                                                           hsa_amd_memory_type_t* type);
+
 }  // namespace amd
 }  // namespace rocr
 

@@ -412,6 +412,9 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_vmem_get_access_fn = AMD::hsa_amd_vmem_get_access;
   amd_ext_api.hsa_amd_vmem_export_shareable_handle_fn = AMD::hsa_amd_vmem_export_shareable_handle;
   amd_ext_api.hsa_amd_vmem_import_shareable_handle_fn = AMD::hsa_amd_vmem_import_shareable_handle;
+  amd_ext_api.hsa_amd_vmem_retain_alloc_handle_fn = AMD::hsa_amd_vmem_retain_alloc_handle;
+  amd_ext_api.hsa_amd_vmem_get_alloc_properties_from_handle_fn =
+      AMD::hsa_amd_vmem_get_alloc_properties_from_handle;
 }
 
 void LoadInitialHsaApiTable() {
