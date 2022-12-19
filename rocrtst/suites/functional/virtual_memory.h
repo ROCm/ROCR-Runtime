@@ -89,5 +89,51 @@ class VirtMemoryTestBasic : public TestBase {
                                 hsa_amd_memory_pool_t pool);
 };
 
+struct SharedVirtMem {
+  std::atomic<int> token;
+  std::atomic<int> count;
+  std::atomic<size_t> size;
+  std::atomic<int> child_status;
+  std::atomic<int> parent_status;
+
+  int sv[2];
+};
+
+class VirtMemoryTestInterProcess : public TestBase {
+ public:
+  VirtMemoryTestInterProcess();
+
+  // @Brief: Destructor for test case of VirtMemoryTest
+  virtual ~VirtMemoryTestInterProcess();
+
+  // @Brief: Setup the environment for measurement
+  virtual void SetUp();
+
+  // @Brief: Core measurement execution
+  virtual void Run();
+
+  // @Brief: Clean up and retrive the resource
+  virtual void Close();
+
+  // @Brief: Display  results
+  virtual void DisplayResults() const;
+
+  // @Brief: Display information about what this test does
+  virtual void DisplayTestInfo(void);
+
+  void ParentProcessImpl();
+  void ChildProcessImpl();
+
+
+ private:
+  int SendDmaBufFd(int socket, int dmabuf_fd);
+  int ReceiveDmaBufFd(int socket);
+
+  int child_;
+  SharedVirtMem* shared_;
+  bool parentProcess_;
+  size_t min_gpu_mem_granule; /* Minimum granularity */
+  size_t rec_gpu_mem_granule; /* Recommented granularity */
+};
 
 #endif  // ROCRTST_SUITES_FUNCTIONAL_VIRTUAL_MEMORY_H_

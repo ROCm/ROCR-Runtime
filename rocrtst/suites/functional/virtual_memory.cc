@@ -824,3 +824,302 @@ void VirtMemoryTestBasic::Close() {
   // hsa_shut_down(), so it should be done after other hsa cleanup
   TestBase::Close();
 }
+
+VirtMemoryTestInterProcess::VirtMemoryTestInterProcess(void) : TestBase() {
+  set_title("ROCr Virtual Memory Test - InterProcess ");
+  set_description(" Tests Virtual Memory API with memory shared between two processes");
+}
+
+VirtMemoryTestInterProcess::~VirtMemoryTestInterProcess(void) {}
+
+// See if the other process wrote an error value to the token; if not, write
+// the newVal to the token.
+static int CheckAndSetToken(std::atomic<int>* token, int newVal) {
+  if (*token == -1) {
+    return -1;
+  } else {
+    *token = newVal;
+  }
+
+  return 0;
+}
+
+static void ClearShared(SharedVirtMem* s) {
+  s->token = 0;
+  s->count = 0;
+  s->size = 0;
+  s->child_status = 0;
+  s->parent_status = 0;
+  memset(&s->sv, 0, sizeof(s->sv));
+}
+
+// Any 1-time setup involving member variables used in the rest of the test
+// should be done here.
+void VirtMemoryTestInterProcess::SetUp(void) {
+  hsa_status_t err;
+
+  // We must fork process before doing HSA stuff, specifically, hsa_init, as
+  // each process needs to do this.
+  // Allocate linux shared_ memory.
+  shared_ = reinterpret_cast<SharedVirtMem*>(mmap(
+      nullptr, sizeof(SharedVirtMem), PROT_READ | PROT_WRITE, MAP_SHARED | MAP_ANONYMOUS, -1, 0));
+  ASSERT_NE(shared_, MAP_FAILED) << "mmap failed to allocated shared_ memory";
+
+  // Initialize shared control block to zeros. The field "token"
+  // is used to signal state changes between the 2 processes.
+  ClearShared(shared_);
+
+  if (socketpair(AF_UNIX, SOCK_DGRAM, 0, shared_->sv) != 0) {
+    std::cout << "Failed to create Unix-domain socket pair" << std::endl;
+    ASSERT_EQ(0, 1);
+  }
+
+  // Spawn second process and verify communication
+  child_ = 0;
+  child_ = fork();
+  ASSERT_NE(-1, child_) << "fork failed";
+  std::atomic<int>* token = &shared_->token;
+  if (child_ != 0) {
+    parentProcess_ = true;
+
+    // Signal to other process we are waiting, and then wait...
+    *token = 1;
+    while (*token == 1) {
+      sched_yield();
+    }
+
+    PROCESS_LOG("Second process observed, handshake...\n");
+    *token = 1;
+    while (*token == 1) {
+      sched_yield();
+    }
+
+  } else {
+    parentProcess_ = false;
+    set_verbosity(0);
+    PROCESS_LOG("Second process running.\n");
+
+    while (*token == 0) {
+      sched_yield();
+    }
+
+    int ret;
+    ret = CheckAndSetToken(token, 0);
+    ASSERT_EQ(0, ret) << "Error detected in child process\n";
+    // Wait for handshake
+    while (*token == 0) {
+      sched_yield();
+    }
+    ret = CheckAndSetToken(token, 0);
+    ASSERT_EQ(0, ret) << "Error detected in child process\n";
+  }
+
+  TestBase::SetUp();
+
+  ASSERT_SUCCESS(rocrtst::SetDefaultAgents(this));
+  ASSERT_SUCCESS(rocrtst::SetPoolsTypical(this));
+
+  ASSERT_SUCCESS(hsa_amd_memory_pool_get_info(
+      device_pool(), HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE, &min_gpu_mem_granule));
+
+  ASSERT_SUCCESS(hsa_amd_memory_pool_get_info(
+      device_pool(), HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE, &rec_gpu_mem_granule));
+
+  return;
+}
+
+void VirtMemoryTestInterProcess::Run(void) {
+  // Compare required profile for this test case with what we're actually
+  // running on
+  if (!rocrtst::CheckProfile(this)) {
+    return;
+  }
+
+  TestBase::Run();
+
+  // Note: Close() (and hsa_shut_down()) will be called from main()
+  // processOne is true for parent process, false for child process
+  if (parentProcess_) {
+    ParentProcessImpl();
+  } else {
+    ChildProcessImpl();
+    exit(0);
+  }
+}
+
+void VirtMemoryTestInterProcess::DisplayTestInfo(void) { TestBase::DisplayTestInfo(); }
+
+void VirtMemoryTestInterProcess::DisplayResults(void) const {
+  // Compare required profile for this test case with what we're actually
+  // running on
+  if (!rocrtst::CheckProfile(this)) {
+    return;
+  }
+
+  return;
+}
+
+void VirtMemoryTestInterProcess::Close() {
+  // This will close handles opened within rocrtst utility calls and call
+  // hsa_shut_down(), so it should be done after other hsa cleanup
+  TestBase::Close();
+}
+
+/* Send the dmabuf_fd to another process via Unix socket */
+int VirtMemoryTestInterProcess::SendDmaBufFd(int socket, int dmabuf_fd) {
+  char* iov_str = (char*)"rocrtst";
+  struct msghdr msg = {0};
+  char buf[CMSG_SPACE(sizeof(dmabuf_fd))];
+
+  memset(buf, '\0', sizeof(buf));
+
+  struct iovec io = {.iov_base = iov_str, .iov_len = strlen(iov_str)};
+
+  msg.msg_iov = &io;
+  msg.msg_iovlen = 1;
+  msg.msg_control = buf;
+  msg.msg_controllen = sizeof(buf);
+
+  struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+  cmsg->cmsg_level = SOL_SOCKET;
+  cmsg->cmsg_type = SCM_RIGHTS;
+  cmsg->cmsg_len = CMSG_LEN(sizeof(dmabuf_fd));
+
+  // memmove(CMSG_DATA(cmsg), &dmabuf_fd, sizeof(dmabuf_fd));
+  memcpy(CMSG_DATA(cmsg), &dmabuf_fd, sizeof(dmabuf_fd));
+
+  msg.msg_controllen = CMSG_SPACE(sizeof(dmabuf_fd));
+
+  size_t sent = sendmsg(socket, &msg, 0);
+
+  return (sent < 0) ? -1 : 0;
+}
+
+/* Receive the dmabuf_fd to from process via Unix socket */
+int VirtMemoryTestInterProcess::ReceiveDmaBufFd(int socket) {
+  struct msghdr msg = {0};
+
+  /* On Mac OS X, the struct iovec is needed, even if it points to minimal data */
+  char m_buffer[1];
+  struct iovec io = {.iov_base = m_buffer, .iov_len = sizeof(m_buffer)};
+  msg.msg_iov = &io;
+  msg.msg_iovlen = 1;
+
+  char c_buffer[256];
+  msg.msg_control = c_buffer;
+  msg.msg_controllen = sizeof(c_buffer);
+
+  size_t rcv = recvmsg(socket, &msg, 0);
+  if (rcv < 0) return -1;
+
+  struct cmsghdr* cmsg = CMSG_FIRSTHDR(&msg);
+
+  int fd;
+  memmove(&fd, CMSG_DATA(cmsg), sizeof(fd));
+
+  return fd;
+}
+
+void VirtMemoryTestInterProcess::ParentProcessImpl() {
+  hsa_status_t err;
+
+  void* addrRange = NULL;
+
+  bool supp = false;
+  ASSERT_SUCCESS(hsa_system_get_info(HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED, (void*)&supp));
+  if (!supp) {
+    if (verbosity() > 0) {
+      std::cout << "    Virtual Memory API not supported on this system - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
+  ASSERT_SUCCESS(hsa_amd_vmem_address_reserve(&addrRange, 20 * rec_gpu_mem_granule, 0, 0));
+
+  hsa_amd_vmem_alloc_handle_t exported_handle;
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_create(device_pool(), 20 * rec_gpu_mem_granule,
+                                            MEMORY_TYPE_NONE, 0, &exported_handle));
+
+  int dmabuf_fd;
+  ASSERT_SUCCESS(hsa_amd_vmem_export_shareable_handle(&dmabuf_fd, exported_handle, 0));
+  ASSERT_GE(dmabuf_fd, 0);
+
+  // Signal child process that the gpu buffer is ready to read.
+  PROCESS_LOG("Parent: Signalling child proces process\n");
+  CheckAndSetToken(&shared_->token, 1);
+
+  close(shared_->sv[1]);
+  ASSERT_EQ(SendDmaBufFd(shared_->sv[0], dmabuf_fd), 0);
+
+  hsa_amd_vmem_alloc_handle_t imported_handle;
+  ASSERT_SUCCESS(hsa_amd_vmem_import_shareable_handle(dmabuf_fd, &imported_handle));
+
+  /* Test importing same handle twice */
+  hsa_amd_vmem_alloc_handle_t imported_handle2;
+  ASSERT_SUCCESS(hsa_amd_vmem_import_shareable_handle(dmabuf_fd, &imported_handle2));
+  ASSERT_SUCCESS(hsa_amd_vmem_map(addrRange, 10 * rec_gpu_mem_granule, 0, imported_handle, 0));
+  ASSERT_SUCCESS(hsa_amd_vmem_unmap(addrRange, 10 * rec_gpu_mem_granule));
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_release(imported_handle));
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_release(imported_handle2));
+
+  PROCESS_LOG("Parent: Waiting for child process to signal\n");
+  while (shared_->token == 1) {
+    sched_yield();
+  }
+  if (shared_->token != 2) {
+    shared_->token = -1;
+  }
+  FORK_ASSERT_EQ(2, shared_->token, "Parent: Error detected in signaling token\n");
+  PROCESS_LOG("Parent: Waking upon signal from child process\n");
+
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_release(exported_handle));
+
+  ASSERT_SUCCESS(hsa_amd_vmem_address_free(addrRange, 20 * rec_gpu_mem_granule));
+
+  PROCESS_LOG("Parent: Virtual Memory test PASSED\n");
+}
+
+void VirtMemoryTestInterProcess::ChildProcessImpl() {
+  int dmabuf_fd = -1;
+  bool supp = false;
+  hsa_status_t err;
+  ASSERT_SUCCESS(hsa_system_get_info(HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED, (void*)&supp));
+  if (!supp) {
+    if (verbosity() > 0) {
+      std::cout << "    Virtual Memory API not supported on this system - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
+  void* addrRange = NULL;
+  ASSERT_SUCCESS(hsa_amd_vmem_address_reserve(&addrRange, 20 * rec_gpu_mem_granule, 0, 0));
+
+  // Yield until shared token value changes i.e. is updated by parent.
+  // Validate parent's update is per expectation
+  PROCESS_LOG("Child: Waiting for parent process to signal\n");
+  while (shared_->token == 0) {
+    sched_yield();
+  }
+  if (shared_->token != 1) {
+    shared_->token = -1;
+  }
+  FORK_ASSERT_EQ(1, shared_->token, "Child: Error detected in signaling token\n");
+  PROCESS_LOG("Child: Waking upon signal from parent process\n");
+
+  close(shared_->sv[0]);
+  dmabuf_fd = ReceiveDmaBufFd(shared_->sv[1]);
+
+  hsa_amd_vmem_alloc_handle_t imported_handle;
+  ASSERT_SUCCESS(hsa_amd_vmem_import_shareable_handle(dmabuf_fd, &imported_handle));
+  ASSERT_SUCCESS(hsa_amd_vmem_map(addrRange, 10 * rec_gpu_mem_granule, 0, imported_handle, 0));
+  ASSERT_SUCCESS(hsa_amd_vmem_unmap(addrRange, 10 * rec_gpu_mem_granule));
+
+  PROCESS_LOG("Child: Signalling parent process\n");
+  CheckAndSetToken(&shared_->token, 2);
+
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_release(imported_handle));
+
+  PROCESS_LOG("Child: Virtual Memory test PASSED\n");
+}
