@@ -2844,6 +2844,60 @@ hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
  */
 hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size);
 
+typedef struct hsa_amd_memory_access_desc_s {
+  hsa_access_permission_t permissions;
+  hsa_agent_t agent_handle;
+} hsa_amd_memory_access_desc_t;
+
+/*
+ * @brief Make a memory mapping accessible
+ *
+ * Make previously mapped virtual address accessible to specific agents. @p size must be equal to
+ * size of previously mapped virtual memory handle.
+ * Calling hsa_amd_vmem_set_access multiple times on the same @p va will overwrite previous
+ * permissions for all agents
+ *
+ * @param[in] va previously mapped virtual address
+ * @param[in] size of memory mapping
+ * @param[in] desc list of access permissions for each agent
+ * @param[in] desc_cnt number of elements in desc
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT va, size or memory_handle are invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION memory_handle is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT Invalid agent in desc
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     size_t desc_cnt);
+
+/*
+ * @brief Get current access permissions for memory mapping
+ *
+ * Get access permissions for memory mapping for specific agent.
+ *
+ * @param[in] va previously mapped virtual address
+ * @param[in] perms current permissions
+ * @param[in] agent_handle agent
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT Invalid agent
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION va is not mapped or permissions never set for this
+ * agent
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
+                                     hsa_agent_t agent_handle);
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

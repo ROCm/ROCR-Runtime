@@ -369,6 +369,12 @@ class Runtime {
 
   hsa_status_t VMemoryHandleUnmap(void* va, size_t size);
 
+  hsa_status_t VMemorySetAccess(void* va, size_t size, const hsa_amd_memory_access_desc_t* desc,
+                                size_t desc_cnt);
+
+  hsa_status_t VMemoryGetAccess(const void* va, hsa_access_permission_t* perms,
+                                hsa_agent_t agent_handle);
+
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
@@ -729,6 +735,30 @@ class Runtime {
   };
   std::map<ThunkHandle, MemoryHandle> memory_handle_map_;
 
+  struct MappedHandle;
+  struct MappedHandleAllowedAgent {
+    MappedHandleAllowedAgent()
+        : va(NULL), permissions(HSA_ACCESS_PERMISSION_NONE), mappedHandle(NULL), ldrm_bo(0) {}
+    MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
+                             hsa_access_permission_t perms)
+        : va(va),
+          size(size),
+          targetAgent(targetAgent),
+          permissions(perms),
+          mappedHandle(_mappedHandle),
+          ldrm_bo(0) {}
+
+    hsa_status_t RemoveAccess();
+    hsa_status_t EnableAccess(hsa_access_permission_t perms);
+
+    void* va;
+    size_t size;
+    Agent* targetAgent;
+    hsa_access_permission_t permissions;
+    MappedHandle* mappedHandle;
+    amdgpu_bo_handle ldrm_bo;
+  };
+
   struct MappedHandle {
     MappedHandle()
         : mem_handle(NULL),
@@ -762,6 +792,7 @@ class Runtime {
     int drm_fd;
     void* drm_cpu_addr;  // CPU Buffer address
     amdgpu_bo_handle ldrm_bo;
+    std::map<Agent*, MappedHandleAllowedAgent> allowed_agents;
   };
   std::map<const void*, MappedHandle> mapped_handle_map_;  // Indexed by VA
 

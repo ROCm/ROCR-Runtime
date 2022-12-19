@@ -1276,5 +1276,29 @@ hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size) {
   CATCH;
 }
 
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     size_t desc_cnt) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_BAD_PTR(desc);
+  IS_ZERO(desc_cnt);
+
+  return core::Runtime::runtime_singleton_->VMemorySetAccess(va, size, desc, desc_cnt);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
+                                     hsa_agent_t agent_handle) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_BAD_PTR(perms);
+
+  return core::Runtime::runtime_singleton_->VMemoryGetAccess(va, perms, agent_handle);
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr

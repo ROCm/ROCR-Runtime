@@ -2620,7 +2620,22 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
 
   if (mappedHandleIt->second.size != size) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-  if (mappedHandleIt->second.ldrm_bo) ret = amdgpu_bo_free(mappedHandleIt->second.ldrm_bo);
+  for (auto agentPermsIt = mappedHandleIt->second.allowed_agents.begin();
+       agentPermsIt != mappedHandleIt->second.allowed_agents.end();) {
+    assert(va == agentPermsIt->second.va);
+    if (agentPermsIt->second.ldrm_bo)
+      ret = amdgpu_bo_va_op(agentPermsIt->second.ldrm_bo, mappedHandleIt->second.offset, size,
+                            reinterpret_cast<uint64_t>(va), 0, AMDGPU_VA_OP_UNMAP);
+    else
+      ret = munmap(va, size);
+    if (ret) return HSA_STATUS_ERROR;
+    agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
+  }
+
+  if (mappedHandleIt->second.ldrm_bo)
+    ret = amdgpu_bo_free(mappedHandleIt->second.ldrm_bo);
+  else
+    ret = munmap(va, size);
 
   if (ret) return HSA_STATUS_ERROR;
 
@@ -2641,5 +2656,135 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   mapped_handle_map_.erase(mappedHandleIt);
   return HSA_STATUS_SUCCESS;
 }
+
+hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permission_t perms) {
+  if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
+    void* ret_cpu_addr =
+        mmap(va, size, mmap_perm(perms), MAP_SHARED | MAP_FIXED, mappedHandle->drm_fd,
+             reinterpret_cast<uint64_t>(mappedHandle->drm_cpu_addr));
+    assert(ret_cpu_addr == va);
+  } else {
+    int ret;
+    ret = amdgpu_bo_va_op(mappedHandle->ldrm_bo, mappedHandle->offset, mappedHandle->size,
+                          reinterpret_cast<uint64_t>(va), drm_perm(perms), AMDGPU_VA_OP_MAP);
+    if (ret) return HSA_STATUS_ERROR;
+
+    ldrm_bo = mappedHandle->ldrm_bo;
+  }
+  permissions = perms;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::MappedHandleAllowedAgent::RemoveAccess() {
+  int ret;
+
+  if (!ldrm_bo)  // Mapped to host
+    ret = munmap(va, mappedHandle->size);
+  else  // Mapped to device
+    ret = amdgpu_bo_va_op(ldrm_bo, mappedHandle->offset, mappedHandle->size,
+                          reinterpret_cast<uint64_t>(va), 0, AMDGPU_VA_OP_UNMAP);
+
+  return (ret) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
+                                       const hsa_amd_memory_access_desc_t* desc,
+                                       const size_t desc_cnt) {
+  int nodesCnt = 0;
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+
+  auto mappedHandleIt = mapped_handle_map_.find(va);
+  if (mappedHandleIt == mapped_handle_map_.end() || mappedHandleIt->second.size != size)
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  static const int tinyArraySize = 8;
+
+  HSAuint32 short_nodes[tinyArraySize];
+  HSAuint32* nodes = short_nodes;
+  if (desc_cnt > tinyArraySize) {
+    nodes = new HSAuint32[desc_cnt];
+
+    if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+  MAKE_SCOPE_GUARD([&]() {
+    if (desc_cnt > tinyArraySize) delete[] nodes;
+  });
+
+  for (int i = 0; i < desc_cnt; i++) {
+    Agent* targetAgent = Agent::Convert(desc[i].agent_handle);
+
+    if (targetAgent == NULL || !targetAgent->IsValid()) return HSA_STATUS_ERROR_INVALID_AGENT;
+
+    if (targetAgent->device_type() == core::Agent::DeviceType::kAmdGpuDevice)
+      nodes[nodesCnt++] = targetAgent->node_id();
+
+    auto agentPermsIt = mappedHandleIt->second.allowed_agents.find(targetAgent);
+    if (agentPermsIt == mappedHandleIt->second.allowed_agents.end()) {
+      /* Agent not previously allowed, we need a new entry */
+      MappedHandleAllowedAgent newAgentPerms(&mappedHandleIt->second, targetAgent, va, size,
+                                             desc[i].permissions);
+      if (newAgentPerms.EnableAccess(desc[i].permissions) != HSA_STATUS_SUCCESS)
+        return HSA_STATUS_ERROR;
+
+      mappedHandleIt->second.allowed_agents[targetAgent] = newAgentPerms;
+    } else {
+      /* Previous permissions are same as current permission */
+      if (agentPermsIt->second.permissions == desc[i].permissions) continue;
+
+      if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+      if (agentPermsIt->second.EnableAccess(desc[i].permissions) != HSA_STATUS_SUCCESS) {
+        mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
+        return HSA_STATUS_ERROR;
+      }
+    }
+  }
+
+  // Remove agents that were previously allowed but not included in current list
+  for (auto agentPermsIt = mappedHandleIt->second.allowed_agents.begin();
+       agentPermsIt != mappedHandleIt->second.allowed_agents.end();) {
+    bool agent_removed = true;
+    for (int i = 0; i < desc_cnt; i++) {
+      if (agentPermsIt->first == Agent::Convert(desc[i].agent_handle)) {
+        agent_removed = false;
+        continue;
+      }
+    }
+    if (agent_removed) {
+      assert(agentPermsIt->second.va == va);
+
+      if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+      agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
+    } else {
+      ++agentPermsIt;
+    }
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::VMemoryGetAccess(const void* va, hsa_access_permission_t* perms,
+                                       hsa_agent_t agent_handle) {
+  *perms = HSA_ACCESS_PERMISSION_NONE;
+
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+
+  auto mappedHandleIt = mapped_handle_map_.find(va);
+  if (mappedHandleIt == mapped_handle_map_.end()) {
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
+
+  Agent* agent = Agent::Convert(agent_handle);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  auto agentPermsIt = mappedHandleIt->second.allowed_agents.find(agent);
+  if (agentPermsIt != mappedHandleIt->second.allowed_agents.end()) {
+    *perms = agentPermsIt->second.permissions;
+    return HSA_STATUS_SUCCESS;
+  }
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+}
+
 }  // namespace core
 }  // namespace rocr
