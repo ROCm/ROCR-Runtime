@@ -48,6 +48,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <dlfcn.h>
 
 #include "core/common/shared.h"
 #include "core/inc/hsa_ext_interface.h"
@@ -700,6 +701,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         *(reinterpret_cast<bool*>(value)) = true;
       else
         *(reinterpret_cast<bool*>(value)) = false;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED: {
+      *((bool*)value) = core::Runtime::runtime_singleton_->VirtualMemApiSupported();
       break;
     }
     default:
@@ -1462,6 +1467,9 @@ hsa_status_t Runtime::Load() {
   // Load tools libraries
   LoadTools();
 
+  // Initialize libdrm helper function
+  CheckVirtualMemApiSupport();
+
   // Load svm profiler
   svm_profile_.reset(new AMD::SvmProfileControl);
 
@@ -1576,6 +1584,35 @@ static std::vector<std::string> parse_tool_names(std::string tool_names) {
 
   if (name != "") names.push_back(name);
   return names;
+}
+
+
+static int (*fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle) = NULL;
+
+int fn_amdgpu_device_get_fd_nosupport(HsaAMDGPUDeviceHandle device_handle) {
+  fprintf(stderr, "amdgpu_device_get_fd not available. Please update version of libdrm");
+  return -1;
+}
+
+void Runtime::CheckVirtualMemApiSupport() {
+  virtual_mem_api_supported_ = false;
+  // TODO: May have to change the minor version required once Thunk merges changes into amd-staging
+  auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+
+  if (kfd_version.KernelInterfaceMajorVersion > 1 ||
+      kfd_version.KernelInterfaceMajorVersion == 1 &&
+          kfd_version.KernelInterfaceMinorVersion >= 12) {
+    char* error;
+
+    fn_amdgpu_device_get_fd =
+        (int (*)(HsaAMDGPUDeviceHandle device_handle))dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
+    if ((error = dlerror()) != NULL) {
+      debug_warning("amdgpu_device_get_fd not available. Please update version of libdrm");
+      fn_amdgpu_device_get_fd = &fn_amdgpu_device_get_fd_nosupport;
+    } else {
+      virtual_mem_api_supported_ = true;
+    }
+  }
 }
 
 void Runtime::LoadTools() {
