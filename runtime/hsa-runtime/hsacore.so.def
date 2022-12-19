@@ -239,6 +239,8 @@ global:
 	hsa_amd_vmem_handle_release;
 	hsa_amd_vmem_map;
 	hsa_amd_vmem_unmap;
+	hsa_amd_vmem_set_access;
+	hsa_amd_vmem_get_access;
 
 local:
     *;

@@ -320,6 +320,15 @@ hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
 // Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     const size_t desc_cnt);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* flags,
+                                     const hsa_agent_t agent_handle);
+
 }  // namespace amd
 }  // namespace rocr
 
