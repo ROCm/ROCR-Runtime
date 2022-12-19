@@ -504,7 +504,12 @@ typedef enum {
    * Returns true if DMABUF APIs are supported by the driver.  The type of
    * this attribute is bool.
    */
-  HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED = 0x204
+  HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED = 0x204,
+  /**
+   * Returns true if Virtual Memory APIs are supported by the driver.  The type of
+   * this attribute is bool.
+   */
+  HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED = 0x205,
 } hsa_system_info_t;
 
 /**

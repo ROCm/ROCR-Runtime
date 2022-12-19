@@ -415,6 +415,8 @@ class Runtime {
 
   KfdVersion_t KfdVersion() const { return kfd_version; }
 
+  bool VirtualMemApiSupported() const { return virtual_mem_api_supported_; }
+
  protected:
   static void AsyncEventsLoop(void*);
 
@@ -661,6 +663,11 @@ class Runtime {
   KfdVersion_t kfd_version;
 
   std::unique_ptr<AMD::SvmProfileControl> svm_profile_;
+
+ private:
+  void CheckVirtualMemApiSupport();
+
+  bool virtual_mem_api_supported_;
 
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
