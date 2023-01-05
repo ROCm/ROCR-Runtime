@@ -60,6 +60,25 @@
 namespace rocr {
 namespace image {
 
+static_assert(sizeof(SQ_BUF_RSRC_WORD0) == sizeof(uint32_t));
+static_assert(sizeof(SQ_BUF_RSRC_WORD1) == sizeof(uint32_t));
+static_assert(sizeof(SQ_BUF_RSRC_WORD2) == sizeof(uint32_t));
+static_assert(sizeof(SQ_BUF_RSRC_WORD3) == sizeof(uint32_t));
+
+static_assert(sizeof(SQ_IMG_RSRC_WORD0) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD1) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD2) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD3) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD4) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD5) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD6) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_RSRC_WORD7) == sizeof(uint32_t));
+
+static_assert(sizeof(SQ_IMG_SAMP_WORD0) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_SAMP_WORD1) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_SAMP_WORD2) == sizeof(uint32_t));
+static_assert(sizeof(SQ_IMG_SAMP_WORD3) == sizeof(uint32_t));
+
 //-----------------------------------------------------------------------------
 // Workaround switch to combined format/type codes and missing gfx11
 // specific look up table.  Only covers types used in image_lut_gfx11.cpp.
@@ -414,7 +433,6 @@ hsa_status_t ImageManagerGfx11::PopulateImageSrd(Image& image) const {
 
     const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
-    word3.f.RESOURCE_LEVEL = 1;
     word3.f.DST_SEL_X = swizzle.x;
     word3.f.DST_SEL_Y = swizzle.y;
     word3.f.DST_SEL_Z = swizzle.z;
