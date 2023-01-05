@@ -305,19 +305,26 @@ const char *CopyOnSignalIsa =
  */
 const char *PollAndCopyIsa =
     SHADER_START
+    SHADER_MACROS_FLAT
     R"(
         // Assume src buffer in s[0:1] and dst buffer in s[2:3]
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_stepping == 10)
-            // Path for Aldebaran
+        // Path for Aldebaran, Aqua Vanjaram
+        .if (.amdgcn.gfx_generation_number == 9 &&
+              (.amdgcn.gfx_generation_minor == 4 ||
+               .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             v_mov_b32 v18, 0x1
-            LOOP_ALDBRN:
-            flat_load_dword v16, v[0:1] glc
+            LOOP0:
+            FLAT_LOAD_DWORD_NSS v16, v[0:1] glc
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             v_cmp_eq_i32 vcc, v16, v18
-            s_cbranch_vccz   LOOP_ALDBRN
-            buffer_invl2
+            s_cbranch_vccz LOOP0
+            .if (.amdgcn.gfx_generation_minor == 4)
+                buffer_invl2 sc1 sc0
+            .else
+                buffer_invl2
+            .endif
             s_load_dword s17, s[0:1], 0x4 glc
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             s_store_dword s17, s[2:3], 0x0 glc
@@ -325,10 +332,10 @@ const char *PollAndCopyIsa =
             buffer_wbl2
         .elseif (.amdgcn.gfx_generation_number == 9)
             s_movk_i32 s18, 0x1
-            LOOP:
+            LOOP1:
             s_load_dword s16, s[0:1], 0x0 glc
             s_cmp_eq_i32 s16, s18
-            s_cbranch_scc0   LOOP
+            s_cbranch_scc0 LOOP1
             s_load_dword s17, s[0:1], 0x4 glc
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             s_store_dword s17, s[2:3], 0x0 glc
@@ -344,13 +351,16 @@ const char *PollAndCopyIsa =
  * Input1: A buffer of at least 2 dwords.
  * DW0: used as the value to be written.
  *
- * Note: Only works on Aldebaran
+ * Note: Only works on Aldebaran and Aqua Vanjaram
  */
 const char *WriteFlagAndValueIsa =
     SHADER_START
+    SHADER_MACROS_FLAT
     R"(
         // Assume two inputs buffer in s[0:1] and s[2:3]
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_stepping == 10)
+        .if (.amdgcn.gfx_generation_number == 9 &&
+              (.amdgcn.gfx_generation_minor == 4 ||
+               .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             s_load_dword s18, s[2:3], 0x0 glc
@@ -360,7 +370,7 @@ const char *WriteFlagAndValueIsa =
             buffer_wbl2
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             v_mov_b32 v16, 0x1
-            flat_store_dword v[0:1], v16 glc
+            FLAT_STORE_DWORD_NSS v[0:1], v16 glc
         .endif
         s_endpgm
 )";
