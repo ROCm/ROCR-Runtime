@@ -2191,8 +2191,8 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithRemoteGPU) {
     const int dwSource = 0x40 * sizeof(int); /* At 3rd cache line */
     const int dwLocation = 0x80 * sizeof(int); /* At 5th cache line  */
 
-    if (m_FamilyId != FAMILY_AL) {
-        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+    if (m_FamilyId != FAMILY_AL && m_FamilyId != FAMILY_AV) {
+        LOG() << "Skipping test: Test requires aldebaran or aqua vanjaram series asics." << std::endl;
         return;
     }
 
@@ -2271,8 +2271,8 @@ TEST_F(KFDMemoryTest, VramCacheCoherenceWithCPU) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    if (m_FamilyId != FAMILY_AL) {
-        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+    if (m_FamilyId != FAMILY_AL && m_FamilyId != FAMILY_AV) {
+        LOG() << "Skipping test: Test requires aldebaran or aqua vanjaram series asics." << std::endl;
         return;
     }
 
@@ -2335,8 +2335,8 @@ TEST_F(KFDMemoryTest, SramCacheCoherenceWithGPU) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    if (m_FamilyId != FAMILY_AL) {
-        LOG() << "Skipping test: Test requires aldebaran series asics." << std::endl;
+    if (m_FamilyId != FAMILY_AL && m_FamilyId != FAMILY_AV) {
+        LOG() << "Skipping test: Test requires aldebaran or aqua vanjaram series asics." << std::endl;
         return;
     }
 
