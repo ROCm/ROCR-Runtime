@@ -2971,6 +2971,11 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	args.n_success = 0;
 	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 
+	/* unmap from CPU while keeping the address space reserved */
+	mmap(address, object->size, PROT_NONE,
+	     MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE | MAP_FIXED,
+	     -1, 0);
+
 	remove_device_ids_from_mapped_array(object,
 			(uint32_t *)args.device_ids_array_ptr,
 			args.n_success * sizeof(uint32_t));
