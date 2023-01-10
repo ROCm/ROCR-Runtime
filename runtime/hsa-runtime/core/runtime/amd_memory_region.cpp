@@ -420,6 +420,14 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
           *((size_t*)value) = 0;
       }
       break;
+    case HSA_AMD_MEMORY_POOL_INFO_LOCATION:
+      if (IsLocalMemory())
+        *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_GPU;
+      else if (IsSystem())
+        *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_CPU;
+      else
+        return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

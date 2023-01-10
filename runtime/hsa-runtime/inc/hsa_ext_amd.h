@@ -956,6 +956,17 @@ typedef enum hsa_amd_memory_pool_global_flag_s {
   HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4
 } hsa_amd_memory_pool_global_flag_t;
 
+typedef enum hsa_amd_memory_pool_location_s {
+    /**
+     * This memory pool resides on the host (CPU)
+     */
+    HSA_AMD_MEMORY_POOL_LOCATION_CPU = 0,
+    /**
+     * This memory pool resides on a GPU
+     */
+    HSA_AMD_MEMORY_POOL_LOCATION_GPU = 1
+} hsa_amd_memory_pool_location_t;
+
 /**
  * @brief Memory pool features.
  */
@@ -1014,6 +1025,12 @@ typedef enum {
   * is size_t.
   */
   HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE = 16,
+  /**
+   * Location of this memory pool. The type of this attribute
+   * is hsa_amd_memory_pool_location_t.
+   */
+  HSA_AMD_MEMORY_POOL_INFO_LOCATION = 17,
+
 } hsa_amd_memory_pool_info_t;
 
 /**
