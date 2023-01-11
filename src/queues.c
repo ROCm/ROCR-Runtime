@@ -490,6 +490,8 @@ static int handle_concrete_asic(struct queue *q,
 
 		if (hsaKmtGetNodeProperties(NodeId, &node))
 			svm_api = false;
+		else if (HSA_GET_GFX_VERSION_MAJOR_HEX(q->gfxv) == 11)
+			svm_api = false;
 		else
 			svm_api = node.Capability.ui32.SVMAPISupported;
 
