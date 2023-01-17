@@ -60,6 +60,7 @@ class KFDSVMEvictTest :  public KFDLocalMemoryTest {
     void ForkChildProcesses(int nprocesses);
     void WaitChildProcesses();
     HSAint32 GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBufSize);
+    HSAint64 GetBufferSize(HSAuint64 vramSize, HSAuint32 count);
 
  protected:  // members
     std::string     m_psName;

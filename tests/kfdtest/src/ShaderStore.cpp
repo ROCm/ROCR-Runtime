@@ -523,6 +523,7 @@ const char *PersistentIterateIsa = SHADER_MACROS R"(
  *   v[2:3] - address of corresponding local buf address offset: s[0:1] + v0 * 8
  *   v[4:5] - corresponding output buf address: s[2:3] + v0 * 4
  *   v[6:7] - local buf address used for read test
+ *   v11 - size of local buffer in MB
  */
 const char *ReadMemoryIsa = SHADER_MACROS R"(
         // Compute address of corresponding output buffer
@@ -537,6 +538,13 @@ const char *ReadMemoryIsa = SHADER_MACROS R"(
         V_ADD_CO_U32            v2, s0, v0      // v[2:3] = s[0:1] + v0 * 8
         v_mov_b32               v3, s1          // v[2:3] = s[0:1] + v0 * 8
         V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
+
+        //Load local buffer size from output buffer
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
+            flat_load_dword       v11, v[4:5] nt sc1 sc0
+        .else
+            flat_load_dword       v11, v[4:5] slc
+        .endif
 
         // Load 64bit local buffer address stored at v[2:3] to v[6:7]
         .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
@@ -553,11 +561,10 @@ const char *ReadMemoryIsa = SHADER_MACROS R"(
         s_cmp_eq_i32            s16, s8
         s_cbranch_scc1          L_QUIT          // if notified to quit by host
 
-        // Loop read 64M local buffer starting at v[6:7]
+        // Loop read local buffer starting at v[6:7]
         // every 4k page only read once
         v_mov_b32               v9, 0
         v_mov_b32               v10, 0x1000     // 4k page
-        v_mov_b32               v11, 0x4000000  // 64M size
         v_mov_b32               v12, v6
         v_mov_b32               v13, v7
         L_LOOP_READ:
