@@ -201,6 +201,21 @@ enum {
 };
 
 /**
+ * @brief IOMMU version supported
+ */
+typedef enum {
+  /**
+   * IOMMU not supported
+   */
+  HSA_IOMMU_SUPPORT_NONE = 0,
+  /* IOMMU V1 support is not relevant to user applications, so not reporting it */
+  /**
+   * IOMMU V2 supported
+   */
+  HSA_IOMMU_SUPPORT_V2 = 1,
+} hsa_amd_iommu_version_t;
+
+/**
  * @brief Agent attributes.
  */
 typedef enum hsa_amd_agent_info_s {
@@ -345,8 +360,12 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for the SDMA engine ucode of an agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109
-
+  HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109,
+  /**
+   * Queries for version of IOMMU supported by agent.
+   * The type of this attribute is hsa_amd_iommu_version_t.
+   */
+  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
