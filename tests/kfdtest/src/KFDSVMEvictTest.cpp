@@ -34,6 +34,7 @@
 #define N_PROCESSES             (4)     /* number of processes running in parallel, at least 2 */
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
+#define MAX_WAVEFRONTS          (512)
 
 void KFDSVMEvictTest::SetUp() {
     ROUTINE_START
@@ -64,7 +65,7 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
     LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
 
     /* use one third of total system memory for eviction buffer to test
-     * limit max allocate size to duoble of vramSize
+     * limit max allocate size to double of vramSize
      * count is zero if not enough memory (sysMemSize/3 + vramSize) < (vramBufSize * N_PROCESSES)
      */
     size = sysMemSize / 3 + vramSize;
@@ -79,6 +80,25 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
     count = sizeInPages / (vramBufSizeInPages * N_PROCESSES);
 
     return count;
+}
+
+HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
+    HSAuint64 sysMemSize = GetSysMemSize();
+    HSAuint64 size, sizeInPages;
+    HSAuint64 vramBufSizeInPages;
+
+    LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
+
+    /* use one third of total system memory for eviction buffer to test
+     * limit max allocate size to duoble of vramSize
+     * count is zero if not enough memory (sysMemSize/3 + vramSize) < (vramBufSize * N_PROCESSES)
+     */
+    size = sysMemSize / 3 + vramSize;
+    size = size > vramSize << 1 ? vramSize << 1 : size;
+    sizeInPages = size >> PAGE_SHIFT;
+    vramBufSizeInPages = sizeInPages / (count * N_PROCESSES);
+
+    return vramBufSizeInPages << 20;
 }
 
 void KFDSVMEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
@@ -266,7 +286,7 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
 
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-    HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
+    unsigned int count = MAX_WAVEFRONTS;
 
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
@@ -286,8 +306,8 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
     }
 
-    HSAuint32 count = GetBufferCounter(vramSize, vramBufSize);
-    if (count == 0) {
+    HSAuint64 vramBufSize = GetBufferSize(vramSize, count);
+    if (vramBufSize == 0) {
         LOG() << "Not enough system memory, skipping the test" << std::endl;
         return;
     }
@@ -314,6 +334,9 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
 
     for (i = 0; i < wavefront_num; i++)
         *(localBufAddr + i) = pBuffers[i];
+
+    for (i = 0; i < wavefront_num; i++)
+        *(result + i) = vramBufSize;
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(ReadMemoryIsa, isaBuffer.As<char*>()));
 

@@ -33,6 +33,7 @@
 #define N_PROCESSES             (2)     /* Number of processes running in parallel, must be at least 2 */
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
+#define MAX_WAVEFRONTS          (512)
 
 #define SDMA_NOP  0x0
 
@@ -382,7 +383,7 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-    HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
+    unsigned int count = MAX_WAVEFRONTS;
 
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
@@ -406,9 +407,10 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     // Use 7/8 of VRAM between all processes
     HSAuint64 testSize = vramSize * 7 / 8;
-    HSAuint32 count = testSize / (vramBufSize * N_PROCESSES);
+    HSAuint32 vramBufSize = testSize / (count * N_PROCESSES);
+    vramBufSize = (vramBufSize / (1024 * 1024)) * (1024 * 1024);
 
-    if (count == 0) {
+    if (vramBufSize == 0) {
         LOG() << "Skipping test: Not enough system memory available." << std::endl;
         return;
     }
@@ -454,6 +456,9 @@ TEST_F(KFDEvictTest, QueueTest) {
 
     for (i = 0; i < wavefront_num; i++)
         *(localBufAddr + i) = pBuffers[i];
+
+    for (i = 0; i < wavefront_num; i++)
+        *(result + i) = vramBufSize;
 
     dispatch0.SetArgs(localBufAddr, result);
     dispatch0.SetDim(wavefront_num, 1, 1);
