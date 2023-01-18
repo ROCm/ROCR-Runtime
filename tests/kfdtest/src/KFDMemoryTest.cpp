@@ -268,6 +268,12 @@ TEST_F(KFDMemoryTest, MemoryAllocAll) {
     HsaMemFlags memFlags = {0};
     memFlags.ui32.NonPaged = 1; // sys mem vs vram
     HSAuint64 available;
+
+    if (m_VersionInfo.KernelInterfaceMinorVersion < 9) {
+        LOG() << "Available memory IOCTL not present in KFD. Exiting." << std::endl;
+        return;
+    }
+
     void *object = NULL;
     int shrink = 21, success = HSAKMT_STATUS_NO_MEMORY;
     EXPECT_SUCCESS(hsaKmtAvailableMemory(defaultGPUNode, &available));
