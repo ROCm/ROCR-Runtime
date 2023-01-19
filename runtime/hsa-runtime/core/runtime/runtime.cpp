@@ -1542,7 +1542,7 @@ void Runtime::LoadTools() {
   }
 
   // Discover loaded tools.
-  std::vector<os::LibHandle> loaded = os::GetLoadedLibs();
+  std::vector<os::LibHandle> loaded = os::GetLoadedToolsLib();
   for(auto& handle : loaded) {
     const uint32_t* order = (const uint32_t*)os::GetExportAddress(handle, "HSA_AMD_TOOL_PRIORITY");
     if(order) {
