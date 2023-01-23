@@ -686,16 +686,6 @@ HSAKMTAPI
 hsaKmtRuntimeDisable(void);
 
 /**
-  Get the major and minor version of the kernel debugger support.
-*/
-HSAKMT_STATUS
-HSAKMTAPI
-hsaKmtGetKernelDebugTrapVersionInfo(
-    HSAuint32 *Major,  //Out
-    HSAuint32 *Minor   //Out
-    );
-
-/**
   Gets GPU and CPU clock counters for particular Node
 */
 
