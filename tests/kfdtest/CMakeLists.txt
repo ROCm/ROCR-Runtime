@@ -59,6 +59,19 @@ if( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
   set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
 endif()
 
+## Note: rpm --eval %{?dist} will evaluate to NULL in Debian
+## So Debian distros won't append dist tag to CPACK_RPM_PACKAGE_RELEASE.
+## Also for debian package name , the dist tag is added from build env
+execute_process( COMMAND rpm --eval %{?dist}
+                 RESULT_VARIABLE PROC_RESULT
+                 OUTPUT_VARIABLE EVAL_RESULT
+                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+message("RESULT_VARIABLE ${PROC_RESULT} OUTPUT_VARIABLE: ${EVAL_RESULT}")
+## Add distribution tag to rpm package name
+if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
+  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
+endif()
+
 set(PACKAGE_VERSION_STR "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}.${ROCM_VERSION_FOR_PACKAGE}")
 set(CPACK_PACKAGE_VERSION "${PACKAGE_VERSION_STR}")
 
