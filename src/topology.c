@@ -1239,7 +1239,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 		/* Get VGPR/SGPR size in byte per CU */
 		props->SGPRSizePerCU = SGPR_SIZE_PER_CU;
-		props->VGPRSizePerCU = VGPR_SIZE_PER_CU(HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
+		props->VGPRSizePerCU = get_vgpr_size_per_cu(HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
 
 	} else if (props->DeviceId)
 		/* still return success */

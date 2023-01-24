@@ -149,6 +149,8 @@ enum full_gfx_versions {
 	GFX_VERSION_VANGOGH	 	= 0x0A0303,
 	GFX_VERSION_BEIGE_GOBY	 	= 0x0A0304,
 	GFX_VERSION_YELLOW_CARP	 	= 0x0A0305,
+	GFX_VERSION_PLUM_BONITO		= 0x0B0000,
+	GFX_VERSION_WHEAT_NAS		= 0x0B0001,
 };
 
 struct hsa_gfxip_table {
@@ -222,8 +224,6 @@ uint32_t get_num_sysfs_nodes(void);
 bool is_forked_child(void);
 
 /* Calculate VGPR and SGPR register file size per CU */
-#define VGPR_SIZE_PER_CU(gfxv)			\
-	(((gfxv) == GFX_VERSION_ARCTURUS ||	\
-	  (gfxv) == GFX_VERSION_ALDEBARAN) ? 0x80000 : 0x40000)
+uint32_t get_vgpr_size_per_cu(uint32_t gfxv);
 #define SGPR_SIZE_PER_CU 0x4000
 #endif

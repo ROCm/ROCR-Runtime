@@ -45,7 +45,7 @@
 	(((gfxv) >= 0x80000) ? 4096 : 0))
 
 #define WG_CONTEXT_DATA_SIZE_PER_CU(gfxv) 		\
-	(VGPR_SIZE_PER_CU(gfxv) + SGPR_SIZE_PER_CU +	\
+	(get_vgpr_size_per_cu(gfxv) + SGPR_SIZE_PER_CU +	\
 	 LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
 
 #define CNTL_STACK_BYTES_PER_WAVE(gfxv)	\
@@ -86,6 +86,28 @@ struct process_doorbells {
 
 static unsigned int num_doorbells;
 static struct process_doorbells *doorbells;
+
+uint32_t get_vgpr_size_per_cu(uint32_t gfxv)
+{
+	uint32_t vgpr_size = 0;
+
+	switch (gfxv)
+	{
+		case GFX_VERSION_ARCTURUS:
+		case GFX_VERSION_ALDEBARAN:
+			vgpr_size = 0x80000;
+			break;
+		case GFX_VERSION_PLUM_BONITO:
+		case GFX_VERSION_WHEAT_NAS:
+			vgpr_size = 0x60000;
+			break;
+		default:
+			vgpr_size = 0x40000;
+			break;
+	}
+
+	return vgpr_size;
+}
 
 HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
 {
