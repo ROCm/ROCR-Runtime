@@ -239,3 +239,73 @@ HSAKMT_STATUS BaseDebug::DeviceSnapshot(uint64_t exceptionsToClear,
 
     return result;
 }
+
+HSAKMT_STATUS BaseDebug::SetWaveLaunchOverride(int mode,
+                                               uint32_t *enableMask,
+                                               uint32_t *supportMask)
+{
+    struct kfd_ioctl_dbg_trap_args args = {0};
+    HSAKMT_STATUS Result;
+
+    memset(&args, 0x00, sizeof(args));
+
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_SET_WAVE_LAUNCH_OVERRIDE;
+    args.launch_override.override_mode = mode;
+    args.launch_override.enable_mask = *enableMask;
+    args.launch_override.support_request_mask = *supportMask;
+
+    Result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+
+    *enableMask = args.launch_override.enable_mask;
+    *supportMask = args.launch_override.support_request_mask;
+
+    return Result;
+}
+
+HSAKMT_STATUS BaseDebug::SetAddressWatch(uint64_t address,
+                                         int mode,
+                                         uint64_t mask,
+                                         uint32_t gpuId,
+                                         uint32_t *id)
+{
+    struct kfd_ioctl_dbg_trap_args args = {};
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_SET_NODE_ADDRESS_WATCH;
+    args.set_node_address_watch.address = address;
+    args.set_node_address_watch.mode = mode;
+    args.set_node_address_watch.mask = mask;
+    args.set_node_address_watch.gpu_id = gpuId;
+
+    HSAKMT_STATUS result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+
+    *id = args.set_node_address_watch.id;
+
+    return result;
+}
+
+HSAKMT_STATUS BaseDebug::ClearAddressWatch(uint32_t gpuId,
+                                           uint32_t id)
+{
+    struct kfd_ioctl_dbg_trap_args args = {};
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_CLEAR_NODE_ADDRESS_WATCH;
+    args.clear_node_address_watch.gpu_id = gpuId;
+    args.clear_node_address_watch.id = id;
+
+    return hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+}
+
+HSAKMT_STATUS BaseDebug::SetFlags(uint32_t *flags)
+{
+    struct kfd_ioctl_dbg_trap_args args = {};
+    args.pid = m_Pid;
+    args.op = KFD_IOC_DBG_TRAP_SET_FLAGS;
+    args.set_flags.flags = *flags;
+
+    HSAKMT_STATUS result = hsaKmtDebugTrapIoctl(&args, NULL, NULL);
+
+    *flags = args.set_flags.flags;
+
+    return result;
+}
