@@ -52,6 +52,10 @@ class BaseDebug {
                                 uint32_t *numSnapshots);
     HSAKMT_STATUS DeviceSnapshot(uint64_t exceptionsToClear, uint64_t snapshotBuffAddr,
                                  uint32_t *numSnapshots);
+    HSAKMT_STATUS SetWaveLaunchOverride(int mode, uint32_t *enableMask, uint32_t *supportMask);
+    HSAKMT_STATUS SetAddressWatch(uint64_t address, int mode, uint64_t mask, uint32_t gpuId, uint32_t *id);
+    HSAKMT_STATUS ClearAddressWatch(uint32_t gpuId, uint32_t id);
+    HSAKMT_STATUS SetFlags(uint32_t *flags);
 
  private:
     unsigned int m_Pid;
