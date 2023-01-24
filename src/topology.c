@@ -539,6 +539,8 @@ static int get_cpu_cache_info(const char *prefix, struct proc_cpuinfo *cpuinfo,
 		fscanf_dec(path, &this_cache->CacheLevel);
 		/* CacheType */
 		snprintf(path, 256, "%s/index%d/type", prefix, idx);
+
+		memset(str, 0, sizeof(str));
 		fscanf_str(path, str);
 		if (!strcmp(str, "Data"))
 			this_cache->CacheType.ui32.Data = 1;
