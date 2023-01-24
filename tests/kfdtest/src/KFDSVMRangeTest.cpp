@@ -1001,12 +1001,12 @@ TEST_F(KFDSVMRangeTest, MultiGPUMigrationTest) {
     const std::vector<int> gpuNodesAll = m_NodeInfo.GetNodesWithGPU();
     std::vector<int> gpuNodes;
 
-    for (int i : gpuNodesAll) {
+    for (auto node : gpuNodesAll) {
         const HsaNodeProperties *pNodeProperties;
 
-        pNodeProperties = m_NodeInfo.GetNodeProperties(gpuNodesAll.at(i));
+        pNodeProperties = m_NodeInfo.GetNodeProperties(node);
         if (pNodeProperties->Capability.ui32.SVMAPISupported)
-            gpuNodes.push_back(gpuNodesAll.at(i));
+            gpuNodes.push_back(node);
     }
     if (gpuNodes.size() < 2) {
         LOG() << "Skipping test: at least two SVM supported GPUs needed." << std::endl;
@@ -1025,16 +1025,16 @@ TEST_F(KFDSVMRangeTest, MultiGPUMigrationTest) {
     for (HSAuint64 i = 0; i < BufferSize / 8; i++)
         pBuf[i] = i;
 
-    for (HSAuint64 gpuidx = 0; gpuidx < gpuNodes.size(); gpuidx++) {
-        EXPECT_SUCCESS(SVMRangeMapToNode(pBuf, BufferSize, gpuNodes.at(gpuidx)));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, gpuNodes.at(gpuidx)));
+    for (auto node : gpuNodes) {
+        EXPECT_SUCCESS(SVMRangeMapToNode(pBuf, BufferSize, node));
+        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, node));
 
-        EXPECT_SUCCESS(SVMRangeMapToNode(pData, BufferSize, gpuNodes.at(gpuidx)));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, gpuNodes.at(gpuidx)));
+        EXPECT_SUCCESS(SVMRangeMapToNode(pData, BufferSize, node));
+        EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, node));
     }
 
-    for (HSAuint64 gpuidx = 0; gpuidx < gpuNodes.size(); gpuidx++) {
-        ASSERT_SUCCESS(sdmaQueue.Create(gpuNodes.at(gpuidx)));
+    for (auto node : gpuNodes) {
+        ASSERT_SUCCESS(sdmaQueue.Create(node));
 
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
                     pData, pBuf, BufferSize));
@@ -1085,12 +1085,12 @@ TEST_F(KFDSVMRangeTest, MultiGPUAccessInPlaceTest) {
     const std::vector<int> gpuNodesAll = m_NodeInfo.GetNodesWithGPU();
     std::vector<int> gpuNodes;
 
-    for (int i : gpuNodesAll) {
+    for (auto node : gpuNodesAll) {
         const HsaNodeProperties *pNodeProperties;
 
-        pNodeProperties = m_NodeInfo.GetNodeProperties(gpuNodesAll.at(i));
+        pNodeProperties = m_NodeInfo.GetNodeProperties(node);
         if (pNodeProperties->Capability.ui32.SVMAPISupported)
-            gpuNodes.push_back(gpuNodesAll.at(i));
+            gpuNodes.push_back(node);
     }
     if (gpuNodes.size() < 2) {
         LOG() << "Skipping test: at least two SVM supported GPUs needed." << std::endl;
@@ -1109,16 +1109,16 @@ TEST_F(KFDSVMRangeTest, MultiGPUAccessInPlaceTest) {
     for (HSAuint64 i = 0; i < BufferSize / 8; i++)
         pBuf[i] = i;
 
-    for (HSAuint64 gpuidx = 0; gpuidx < gpuNodes.size(); gpuidx++) {
-        EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pBuf, BufferSize, gpuNodes.at(gpuidx)));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, gpuNodes.at(gpuidx)));
+    for (auto node : gpuNodes) {
+        EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pBuf, BufferSize, node));
+        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, node));
 
-        EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pData, BufferSize, gpuNodes.at(gpuidx)));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, gpuNodes.at(gpuidx)));
+        EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pData, BufferSize, node));
+        EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, node));
     }
 
-    for (HSAuint64 gpuidx = 0; gpuidx < gpuNodes.size(); gpuidx++) {
-        ASSERT_SUCCESS(sdmaQueue.Create(gpuNodes.at(gpuidx)));
+    for (auto node : gpuNodes) {
+        ASSERT_SUCCESS(sdmaQueue.Create(node));
 
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
                     pData, pBuf, BufferSize));
