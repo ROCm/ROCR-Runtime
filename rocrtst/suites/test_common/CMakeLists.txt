@@ -58,6 +58,8 @@ set ( CPACK_GENERATOR "DEB;RPM"  CACHE STRING "Default packaging generators." )
 set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
 set ( CPACK_RPM_PACKAGE_AUTOREQ 0 )
+set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
+set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" )
 ## Debian package values
 set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
 if( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
@@ -69,6 +71,14 @@ set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
 set ( CPACK_RPM_PACKAGE_RELEASE "local" )
 if( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
   set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
+endif()
+## Add os details to rpm package name. For deb packages, its set from build environment
+execute_process( COMMAND rpm --eval %{?dist}
+                 RESULT_VARIABLE PROC_RESULT
+                 OUTPUT_VARIABLE EVAL_RESULT
+                 OUTPUT_STRIP_TRAILING_WHITESPACE )
+if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
+  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 endif()
 set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
