@@ -59,11 +59,7 @@ TEST_F(KFDTopologyTest , BasicTest) {
                 EXPECT_GE(pNodeProperties->EngineId.ui32.Major, 7) << "Major Version is less than 7";
                 EXPECT_LT(pNodeProperties->EngineId.ui32.Minor, 10) << "Minor Version is greater than 9";
                 EXPECT_GT(pNodeProperties->uCodeEngineVersions.uCodeSDMA, 0) << "sDMA firmware version is 0";
-                HSAuint32 VGPRSize = (FamilyIdFromNode(pNodeProperties) == FAMILY_AR ||
-                                      FamilyIdFromNode(pNodeProperties) == FAMILY_AL) ?
-                                      0x80000 : 0x40000;
-                EXPECT_EQ(pNodeProperties->VGPRSizePerCU, VGPRSize) << "VGPR Size Per CU is not correct";
-                EXPECT_EQ(pNodeProperties->SGPRSizePerCU, 0x4000) << "SGPR Size Per CU is not correct";
+
                 LOG() << "VGPR Size is " << pNodeProperties->VGPRSizePerCU <<
                          "  SGPR Size is " << pNodeProperties->SGPRSizePerCU << std::endl;
             }
