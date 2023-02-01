@@ -381,6 +381,20 @@ typedef enum hsa_amd_agent_info_s {
   HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
 } hsa_amd_agent_info_t;
 
+/**
+ * @brief SDMA engine IDs unique by single set bit position.
+ */
+typedef enum hsa_amd_sdma_engine_id {
+  HSA_AMD_SDMA_ENGINE_0 = 0x1,
+  HSA_AMD_SDMA_ENGINE_1 = 0x2,
+  HSA_AMD_SDMA_ENGINE_2 = 0x4,
+  HSA_AMD_SDMA_ENGINE_3 = 0x8,
+  HSA_AMD_SDMA_ENGINE_4 = 0x10,
+  HSA_AMD_SDMA_ENGINE_5 = 0x20,
+  HSA_AMD_SDMA_ENGINE_6 = 0x40,
+  HSA_AMD_SDMA_ENGINE_7 = 0x80
+} hsa_amd_sdma_engine_id_t;
+
 typedef struct hsa_amd_hdp_flush_s {
   uint32_t* HDP_MEM_FLUSH_CNTL;
   uint32_t* HDP_REG_FLUSH_CNTL;
@@ -1259,6 +1273,26 @@ hsa_status_t HSA_API
                               uint32_t num_dep_signals,
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal);
+/**
+ * @brief Reports the availability of SDMA copy engines.
+ *
+ * @param[in] dst_agent Destination agent of copy status direction.
+ *
+ * @param[in] src_agent Source agent of copy status direction.
+ *
+ * @param[out] engine_ids_mask returns available SDMA engine IDs that can be masked
+ * with hsa_amd_sdma_engine_id_t.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Agent has available SDMA engines.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Agent does not have available SDMA engines.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT dst_agent and src_agent are the same as
+ * dst_agent == src_agent is generally used for shader copies.
+ */
+hsa_status_t HSA_API
+    hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent, hsa_agent_t src_agent,
+                                      uint32_t *engine_ids_mask);
 
 /*
 [Provisional API]

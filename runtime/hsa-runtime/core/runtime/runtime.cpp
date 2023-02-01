@@ -459,7 +459,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   /*
   GPU-GPU - functional support, not a performance path.
-  
+
   This goes through system memory because we have to support copying between non-peer GPUs
   and we can't use P2P pointers even if the GPUs are peers.  Because hsa_amd_agents_allow_access
   requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
@@ -499,6 +499,18 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
   }
   return copy_agent->DmaCopy(dst, *dst_agent, src, *src_agent, size, dep_signals,
                              completion_signal);
+}
+
+hsa_status_t Runtime::CopyMemoryStatus(core::Agent* dst_agent, core::Agent* src_agent,
+                                       uint32_t *engine_ids_mask) {
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
+  if (dst_agent == src_agent) {
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
+
+  return copy_agent->DmaCopyStatus(*dst_agent, *src_agent, engine_ids_mask);
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {

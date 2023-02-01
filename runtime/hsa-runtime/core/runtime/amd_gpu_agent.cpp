@@ -775,6 +775,43 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   return stat;
 }
 
+hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_agent,
+                                     uint32_t *engine_ids_mask) {
+  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
+         ("Both devices are CPU agents which is not expected"));
+
+  *engine_ids_mask = 0;
+  if (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                   dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                     dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
+                       properties_.NumSdmaXgmiEngines) {
+    // Find a free xGMI SDMA engine
+    for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
+      if (!!!blits_[DefaultBlitCount + i]->PendingBytes()) {
+         *engine_ids_mask |= (HSA_AMD_SDMA_ENGINE_2 << i);
+      }
+    }
+  } else {
+    bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+      dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+    // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
+    bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
+
+    if (!!!blits_[BlitHostToDev]->PendingBytes()) {
+      if (is_h2d_blit || !limit_h2d_blit) {
+        *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_0;
+      }
+    }
+
+    if (!!!blits_[BlitDevToHost]->PendingBytes()) {
+      *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_1;
+    }
+  }
+
+  return !!(*engine_ids_mask) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+}
+
 hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
                                    const hsa_pitched_ptr_t* src, const hsa_dim3_t* src_offset,
                                    const hsa_dim3_t* range, hsa_amd_copy_direction_t dir,
