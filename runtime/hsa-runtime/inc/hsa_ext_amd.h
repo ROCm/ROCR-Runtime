@@ -362,6 +362,19 @@ typedef enum hsa_amd_agent_info_s {
    */
   HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109,
   /**
+   * Queries the number of SDMA engines.
+   * If HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG query returns non-zero,
+   * this query returns the the number of SDMA engines optimized for
+   * host to device bidirectional traffic.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SDMA_ENG = 0xA10A,
+  /**
+   * Queries the number of additional SDMA engines optimized for D2D xGMI copies.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG = 0xA10B,
+  /**
    * Queries for version of IOMMU supported by agent.
    * The type of this attribute is hsa_amd_iommu_version_t.
    */
