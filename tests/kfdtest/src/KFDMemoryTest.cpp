@@ -176,14 +176,7 @@ TEST_F(KFDMemoryTest, MapUnmapToNodes) {
     HsaMemoryBuffer srcBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode);
 
-    const char *pReadMemory;
-    if (m_NodeInfo.IsNodeXGMItoCPU(defaultGPUNode) && (m_FamilyId != FAMILY_AL))
-        /* On A+A system memory is mapped as NC */
-        pReadMemory = PollNCMemoryIsa;
-    else
-        pReadMemory = PollMemoryIsa;
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(pReadMemory, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PollMemoryIsa, isaBuffer.As<char*>()));
 
     PM4Queue pm4Queue;
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
