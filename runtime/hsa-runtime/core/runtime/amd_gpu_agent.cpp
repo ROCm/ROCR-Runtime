@@ -1111,6 +1111,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.uCodeEngineVersions.uCodeSDMA);
       break;
+    case HSA_AMD_AGENT_INFO_NUM_SDMA_ENG:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumSdmaEngines);
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumSdmaXgmiEngines);
+      break;
     case HSA_AMD_AGENT_INFO_IOMMU_SUPPORT:
       if (properties_.Capability.ui32.HSAMMUPresent)
         *((hsa_amd_iommu_version_t*)value) = HSA_IOMMU_SUPPORT_V2;
