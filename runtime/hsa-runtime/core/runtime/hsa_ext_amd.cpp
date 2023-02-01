@@ -276,6 +276,17 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
   CATCH;
 }
 
+hsa_status_t hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent_handle, hsa_agent_t src_agent_handle,
+                                               uint32_t *engine_ids_mask) {
+  core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
+  IS_VALID(dst_agent);
+
+  core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
+  IS_VALID(src_agent);
+
+  return core::Runtime::runtime_singleton_->CopyMemoryStatus(dst_agent, src_agent, engine_ids_mask);
+}
+
 hsa_status_t hsa_amd_memory_async_copy_rect(
     const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
     const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,

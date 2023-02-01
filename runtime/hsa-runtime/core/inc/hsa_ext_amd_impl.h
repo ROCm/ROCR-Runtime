@@ -146,6 +146,11 @@ hsa_status_t
                               hsa_signal_t completion_signal);
 
 // Mirrors Amd Extension Apis
+hsa_status_t
+    hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent, hsa_agent_t src_agent,
+                                      uint32_t *engine_ids_mask);
+
+// Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_memory_async_copy_rect(
     const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
     const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
