@@ -501,6 +501,24 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
                              completion_signal);
 }
 
+hsa_status_t Runtime::CopyMemoryOnEngine(void* dst, core::Agent* dst_agent, const void* src,
+                                 core::Agent* src_agent, size_t size,
+                                 std::vector<core::Signal*>& dep_signals,
+                                 core::Signal& completion_signal,
+                                 hsa_amd_sdma_engine_id_t engine_id, bool force_copy_on_sdma) {
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
+  // engine_id is single bitset unique.
+  int engine_offset = ffs(engine_id) - 1;
+  if (!engine_id || !!((engine_id >> (engine_offset + 1)))) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  return copy_agent->DmaCopyOnEngine(dst, *dst_agent, src, *src_agent, size, dep_signals,
+                             completion_signal, engine_offset, force_copy_on_sdma);
+}
+
 hsa_status_t Runtime::CopyMemoryStatus(core::Agent* dst_agent, core::Agent* src_agent,
                                        uint32_t *engine_ids_mask) {
   const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);

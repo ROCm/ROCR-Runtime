@@ -229,6 +229,24 @@ class Runtime {
                           core::Agent* src_agent, size_t size,
                           std::vector<core::Signal*>& dep_signals, core::Signal& completion_signal);
 
+  /// @brief Non-blocking memory copy from src to dst on engine_id.
+  ///
+  /// @details All semantics and params are dentical to CopyMemory
+  ///  with the exception of engine_id.
+  ///
+  /// @param [in] engine_id Target engine to copy on.
+  ///
+  /// @param [in] force_copy_on_sdma By default, a blit kernel copy is used
+  /// when dst_agent == src_agent.  Setting this to true will force the copy
+  /// over SDMA1.
+  ///
+  /// @retval ::HSA_STATUS_SUCCESS if copy command has been submitted
+  /// successfully to the agent DMA queue.
+  hsa_status_t CopyMemoryOnEngine(void* dst, core::Agent* dst_agent, const void* src,
+                          core::Agent* src_agent, size_t size,
+                          std::vector<core::Signal*>& dep_signals, core::Signal& completion_signal,
+                          hsa_amd_sdma_engine_id_t  engine_id, bool force_copy_on_sdma);
+
   /// @brief Return SDMA availability status for copy direction
   ///
   /// @param [in] dst_agent Destination agent.

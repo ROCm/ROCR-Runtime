@@ -775,6 +775,59 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   return stat;
 }
 
+hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
+                               const void* src, core::Agent& src_agent,
+                               size_t size,
+                               std::vector<core::Signal*>& dep_signals,
+                               core::Signal& out_signal,
+                               int engine_offset,
+                               bool force_copy_on_sdma) {
+  // At this point it is guaranteed that one of
+  // the two devices is a GPU, potentially both
+  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
+         ("Both devices are CPU agents which is not expected"));
+
+  if (engine_offset >= properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  // check if dst and src are the same gpu or over xGMI.
+  bool is_same_gpu = (src_agent.public_handle().handle == dst_agent.public_handle().handle) &&
+      (dst_agent.public_handle().handle == public_handle_.handle);
+  bool is_xgmi = !is_same_gpu &&
+                   src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                     dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                       dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
+                         properties_.NumSdmaXgmiEngines;
+
+  // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
+  bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+    dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+  bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
+
+  // Ensure engine selection is within proper range based on transfer type
+  if ((is_xgmi && engine_offset < properties_.NumSdmaEngines) ||
+       (!is_xgmi && engine_offset >= properties_.NumSdmaEngines) ||
+         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit && !engine_offset)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  lazy_ptr<core::Blit>& blit = is_same_gpu ?
+                                 (force_copy_on_sdma ? blits_[BlitDevToHost] :
+                                   blits_[BlitDevToDev]) : blits_[engine_offset];
+
+  if (profiling_enabled()) {
+    // Track the agent so we could translate the resulting timestamp to system
+    // domain correctly.
+    out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
+  }
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
+
+  return stat;
+}
+
 hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_agent,
                                      uint32_t *engine_ids_mask) {
   assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
