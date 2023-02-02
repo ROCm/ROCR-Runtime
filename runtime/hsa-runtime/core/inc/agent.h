@@ -171,6 +171,27 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
     return HSA_STATUS_ERROR;
   }
 
+  // @brief Submit DMA copy command to move data from src to dst on engine_id.
+  // This call does not wait until the copy is finished
+  //
+  // @details All semantics and params are identical to DmaCopy except for engine_id.
+  //
+  // @param [in] engine_offset Target engine
+  // @param [in] force_copy_on_sdma By default, blit kernel copies are used if
+  // dst_agent == src_agent.  Setting this true forces the copy over SDMA1.
+  //
+  //
+  // @retval HSA_STATUS_SUCCESS The memory copy is finished and successful.
+  virtual hsa_status_t DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
+                               const void* src, core::Agent& src_agent,
+                               size_t size,
+                               std::vector<core::Signal*>& dep_signals,
+                               core::Signal& out_signal,
+                               int engine_offset,
+                               bool force_copy_on_sdma) {
+    return HSA_STATUS_ERROR;
+  }
+
   // @brief Return DMA availability status for copy direction.
   //
   // @param [in] dst_agent Destination agent.

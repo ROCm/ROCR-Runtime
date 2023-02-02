@@ -1273,6 +1273,41 @@ hsa_status_t HSA_API
                               uint32_t num_dep_signals,
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal);
+
+/**
+ * @brief Asynchronously copy a block of memory from the location pointed to by
+ * @p src on the @p src_agent to the memory block pointed to by @p dst on the @p
+ * dst_agent on engine_id.
+ *
+ * WARNING: Concurrent use of this call with hsa_amd_memory_async_copy can result
+ * in resource conflicts as HSA runtime will auto assign engines with the latter
+ * call.  Approach using both calls concurrently with caution.
+ *
+ * All param definitions are identical to hsa_amd_memory_async_copy with the
+ * exception of engine_id and force_copy_on_sdma.
+ *
+ * @param[in] - engine_id Target engine defined by hsa_amd_sdma_engine_id_t.
+ * Client should use hsa_amd_memory_copy_engine_status first to get the ID
+ * availability.
+ *
+ * @param[in] - force_copy_on_sdma By default, blit kernel copies are used when
+ * dst_agent == src_agent.  Setting this to true will force the copy over SDMA1.
+ *
+ * All return definitions are identical to hsa_amd_memory_async_copy with the
+ * following ammendments:
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT The source or destination
+ * pointers are NULL, or the completion signal is 0 or engine_id is improperly
+ * bounded.
+ */
+hsa_status_t HSA_API
+    hsa_amd_memory_async_copy_on_engine(void* dst, hsa_agent_t dst_agent, const void* src,
+                              hsa_agent_t src_agent, size_t size,
+                              uint32_t num_dep_signals,
+                              const hsa_signal_t* dep_signals,
+                              hsa_signal_t completion_signal,
+                              hsa_amd_sdma_engine_id_t engine_id,
+                              bool force_copy_on_sdma);
 /**
  * @brief Reports the availability of SDMA copy engines.
  *
