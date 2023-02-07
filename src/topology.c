@@ -1067,6 +1067,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	uint32_t sys_node_id;
 	uint32_t gfxv = 0;
 	uint8_t gfxv_major, gfxv_minor, gfxv_stepping;
+	uint32_t simd_arrays_count;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
@@ -1140,7 +1141,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 		else if (strcmp(prop_name, "wave_front_size") == 0)
 			props->WaveFrontSize = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "array_count") == 0)
-			props->NumShaderBanks = (uint32_t)prop_val;
+			simd_arrays_count = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "simd_arrays_per_engine") == 0)
 			props->NumArrays = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "cu_per_simd_array") == 0)
@@ -1190,6 +1191,9 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	/* Bail out early, if a CPU node */
 	if (props->NumCPUCores)
 		goto err;
+
+	if (props->NumArrays != 0)
+		props->NumShaderBanks = simd_arrays_count/props->NumArrays;
 
 	gfxv_major = HSA_GET_GFX_VERSION_MAJOR(gfxv);
 	gfxv_minor = HSA_GET_GFX_VERSION_MINOR(gfxv);
