@@ -406,3 +406,9 @@ void LoadInitialHsaApiTable() {
 
 }   //  namespace core
 }   //  namespace rocr
+
+class Init {
+ public:
+  Init() { rocr::core::LoadInitialHsaApiTable(); }
+};
+static Init LinkAtLoadOrFirstTranslationUnitAccess;
