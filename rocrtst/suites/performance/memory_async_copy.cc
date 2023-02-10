@@ -175,18 +175,20 @@ hsa_status_t AcquireAccess(hsa_agent_t agent,
 // succeeds a pointer to the second agent will be returned. If it fails, a
 // nullptr will be returned.
 hsa_agent_t *
-AcquireAsyncCopyAccess(
+MemoryAsyncCopy::AcquireAsyncCopyAccess(
          void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
          void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag) {
-  if (AcquireAccess(*dst_ag, src_pool, src_ptr) != HSA_STATUS_SUCCESS) {
-    if (AcquireAccess(*src_ag, dst_pool, dst_ptr) == HSA_STATUS_SUCCESS) {
-      return src_ag;
-    } else {
-      return nullptr;
-    }
-  } else {
+  hsa_status_t err;
+
+  err = AcquireAccess(*src_ag, dst_pool, dst_ptr);
+  if (err == HSA_STATUS_SUCCESS && src_ag->handle != cpu_agent_.handle)
+    return src_ag;
+
+  err = AcquireAccess(*dst_ag, src_pool, src_ptr);
+  if (err == HSA_STATUS_SUCCESS && dst_ag->handle != cpu_agent_.handle)
     return dst_ag;
-  }
+
+  return &cpu_agent_;
 }
 
 void MemoryAsyncCopy::PrintTransactionType(Transaction *t) {
@@ -312,7 +314,6 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
     std::cout << "Skipping..." << std::endl;
     return;
   }
-  ASSERT_NE(cpy_ag, nullptr);
 
   err = hsa_amd_memory_async_copy(ptr_src, *cpy_ag, host_ptr_src, *cpy_ag,
                                                             size, 0, NULL, s);
@@ -375,7 +376,7 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
 
 
       err = hsa_amd_memory_async_copy(host_ptr_dst, cpu_agent_, ptr_dst,
-                                                 dst_agent, size, 0, NULL, s);
+                                                 dst_agent, Size[i], 0, NULL, s);
       ASSERT_EQ(HSA_STATUS_SUCCESS, err);
 
       while (hsa_signal_wait_scacquire(s, HSA_SIGNAL_CONDITION_LT, 1,
