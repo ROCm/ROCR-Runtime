@@ -56,11 +56,6 @@
 #include "hsa/hsa_ext_amd.h"
 #include "suites/test_common/test_base.h"
 
-hsa_agent_t *
-AcquireAsyncCopyAccess(
-         void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
-         void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag);
-
 hsa_status_t AcquireAccess(hsa_agent_t agent,
                                     hsa_amd_memory_pool_t pool, void* ptr);
 typedef enum TransType
@@ -194,6 +189,11 @@ class MemoryAsyncCopy : public TestBase {
 
   hsa_agent_t cpu_agent() const {return cpu_agent_;}
   void set_cpu_agent(hsa_agent_t a) {cpu_agent_ = a;}
+
+  hsa_agent_t *
+  AcquireAsyncCopyAccess(
+         void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
+         void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag);
 
  protected:
   void PrintTransactionType(Transaction *t);
