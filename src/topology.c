@@ -1059,17 +1059,17 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 						   uint32_t *num_p2pLinks)
 {
 	FILE *fd;
-	char *read_buf, *p, *envvar, dummy;
+	char *read_buf, *p, *envvar, dummy = '\0';
 	char prop_name[256];
 	char path[256];
-	unsigned long long prop_val;
-	uint32_t prog, major, minor, step;
+	unsigned long long prop_val = 0;
+	uint32_t prog, major = 0, minor = 0, step = 0;
 	int read_size;
 	const struct hsa_gfxip_table *hsa_gfxip;
 	uint32_t sys_node_id;
 	uint32_t gfxv = 0;
 	uint8_t gfxv_major, gfxv_minor, gfxv_stepping;
-	uint32_t simd_arrays_count;
+	uint32_t simd_arrays_count = 0;
 
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
