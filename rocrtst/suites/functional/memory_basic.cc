@@ -268,7 +268,7 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
   rocrtst::pool_info_t pool_i;
   char ag_name[64];
   hsa_device_type_t ag_type;
-  uint64_t ag_avail_memory_before, ag_avail_memory_after;
+  uint64_t allocate_sz2, ag_avail_memory_before, ag_avail_memory_after;
 
   err = hsa_agent_get_info(ag, HSA_AGENT_INFO_NAME, ag_name);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
@@ -325,8 +325,12 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
   // Memory available after could be smaller because of fragmentation
   ASSERT_GE(ag_avail_memory_before - allocate_sz1, ag_avail_memory_after);
 
-  // Try to allocate 80% of remaining
-  uint64_t allocate_sz2 = (0.8 * ag_avail_memory_after * gran_sz) / gran_sz;
+  // Try to allocate 30%/80% of remaining
+  if (pool_i.aggregate_alloc_max <= 536870912)
+    allocate_sz2 = (0.3 * ag_avail_memory_after * gran_sz) / gran_sz;
+  else
+    allocate_sz2 = (0.8 * ag_avail_memory_after * gran_sz) / gran_sz;
+
 
   err = hsa_amd_memory_pool_allocate(pool, allocate_sz2, 0, &memPtr2);
   if (err != HSA_STATUS_SUCCESS) hsa_memory_free(memPtr1);
