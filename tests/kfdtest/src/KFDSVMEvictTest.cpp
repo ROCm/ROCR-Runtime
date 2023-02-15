@@ -69,6 +69,12 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
      */
     size = sysMemSize / 3 + vramSize;
     size = size > vramSize << 1 ? vramSize << 1 : size;
+    /* Check if there is enough system memory to pass test,
+     * KFD system memory limit is 15/16.
+     */
+    if (size > (sysMemSize - (sysMemSize >> 4)))
+        return 0;
+
     sizeInPages = size >> PAGE_SHIFT;
     count = sizeInPages / (vramBufSizeInPages * N_PROCESSES);
 
