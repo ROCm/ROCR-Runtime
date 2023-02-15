@@ -233,6 +233,7 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
   size_t dst_alloc_size;
   size_t max_alloc_size;
   size_t size;
+  hsa_device_type_t ag_type;
 
 
   size_t max_trans_size = t->max_size * 1024;
@@ -248,13 +249,34 @@ void MemoryAsyncCopy::RunBenchmarkWithVerification(Transaction *t) {
                                       &src_alloc_size);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
+  err = hsa_agent_get_info(src_agent, HSA_AGENT_INFO_DEVICE, &ag_type);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  if (src_alloc_size <= 536870912 && ag_type == HSA_DEVICE_TYPE_GPU) {
+    err = hsa_agent_get_info(src_agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                              &src_alloc_size);
+    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+  }
+
   err = hsa_amd_memory_pool_get_info(dst_pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &dst_alloc_size);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
+  err = hsa_agent_get_info(dst_agent, HSA_AGENT_INFO_DEVICE, &ag_type);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  if (dst_alloc_size <= 536870912 && ag_type == HSA_DEVICE_TYPE_GPU) {
+    err = hsa_agent_get_info(dst_agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                              &dst_alloc_size);
+    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+  }
+
   max_alloc_size = (src_alloc_size < dst_alloc_size) ? src_alloc_size: dst_alloc_size;
 
-  size = (max_alloc_size/2 <= max_trans_size) ? max_alloc_size/2: max_trans_size;
+  if (dst_alloc_size <= 536870912 && ag_type == HSA_DEVICE_TYPE_GPU)
+    size = (max_alloc_size/3 <= max_trans_size) ? max_alloc_size/3: max_trans_size;
+  else
+    size = (max_alloc_size/2 <= max_trans_size) ? max_alloc_size/2: max_trans_size;
 
   err = hsa_amd_memory_pool_allocate(src_pool, size, 0,
 				      &ptr_src);
