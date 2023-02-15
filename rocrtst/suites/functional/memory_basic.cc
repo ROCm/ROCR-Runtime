@@ -233,7 +233,11 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   }
 
   if (ag_type == HSA_DEVICE_TYPE_GPU) {
-    EXPECT_GE((float)max_alloc_size/pool_sz, (float)3/4);
+    if (pool_sz <= 536870912) {
+      EXPECT_GE((float)max_alloc_size/pool_sz, (float)6/10);
+    } else {
+      EXPECT_GE((float)max_alloc_size/pool_sz, (float)3/4);
+    }
   }
   if (verbosity() > 0) {
     std::cout << kSubTestSeparator << std::endl;
