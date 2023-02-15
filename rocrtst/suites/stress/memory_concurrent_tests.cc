@@ -269,13 +269,27 @@ void MemoryConcurrentTest::MemoryConcurrentAllocate(hsa_agent_t agent,
   if (alloc) {
     size_t alloc_size;
     size_t total_vram_size;
+    hsa_device_type_t ag_type;
 
     err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &total_vram_size);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
-    // Make sure do not allocate more than 3/4 of the vram size
-    alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+    err = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &ag_type);
+    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+    // If VRAM size <= 512MB, it should be APU whose VRAM is carved from system memory
+    // and much smaller than dGPU. Change the threshold accordingly.
+    if (total_vram_size <= 536870912 && ag_type == HSA_DEVICE_TYPE_GPU) {
+      // Make sure do not allocate more than 1/4 of the available vram size
+      err = hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                                &total_vram_size);
+      ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+      alloc_size = (total_vram_size*1/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*1/(4*kNumThreads): kMaxAllocSize;
+    } else {
+      // Make sure do not allocate more than 3/4 of the vram size
+      alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+    }
 
     // Page align the alloc_size
     alloc_size = alloc_size - (alloc_size & ((1 << 12) - 1));
@@ -359,12 +373,27 @@ void MemoryConcurrentTest::MemoryConcurrentFree(hsa_agent_t agent,
     // Get the maximum allocation size
     size_t alloc_size;
     size_t total_vram_size;
+    hsa_device_type_t ag_type;
+
     err = hsa_amd_memory_pool_get_info(pool, HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE,
                                       &total_vram_size);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
-    // Make sure do not allocate more than 3/4 of the vram size
-    alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+    err = hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &ag_type);
+    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+    // If VRAM size <= 512MB, it should be APU whose VRAM is carved from system memory
+    // and much smaller than dGPU. Change the threshold accordingly.
+    if (total_vram_size <= 536870912 && ag_type == HSA_DEVICE_TYPE_GPU) {
+      // Make sure do not allocate more than 1/4 of the available vram size
+      err = hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
+                                &total_vram_size);
+      ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+      alloc_size = (total_vram_size*1/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*1/(4*kNumThreads): kMaxAllocSize;
+    } else {
+      // Make sure do not allocate more than 3/4 of the vram size
+      alloc_size = (total_vram_size*3/4 <= kMaxAllocSize*kNumThreads) ? total_vram_size*3/(4*kNumThreads): kMaxAllocSize;
+    }
 
     // Page align the alloc_size
     alloc_size = alloc_size - (alloc_size & ((1 << 12) - 1));
