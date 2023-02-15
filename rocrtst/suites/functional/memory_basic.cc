@@ -329,6 +329,7 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
   uint64_t allocate_sz2 = (0.8 * ag_avail_memory_after * gran_sz) / gran_sz;
 
   err = hsa_amd_memory_pool_allocate(pool, allocate_sz2, 0, &memPtr2);
+  if (err != HSA_STATUS_SUCCESS) hsa_memory_free(memPtr1);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
