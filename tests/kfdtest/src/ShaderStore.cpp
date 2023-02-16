@@ -194,8 +194,6 @@ const char *PollMemoryIsa = R"(
         s_cbranch_scc0   LOOP
         .if (.amdgcn.gfx_generation_number >= 10)
             flat_store_dword v[0:1], v2 slc
-        .elseif (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4 && .amdgcn.gfx_generation_stepping == 0)
-            flat_store_dword v[0:1], v2 nt sc1 sc0
         .else
             s_store_dword s18, s[2:3], 0x0 glc
         .endif
