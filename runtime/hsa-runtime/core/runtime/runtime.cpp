@@ -1396,8 +1396,14 @@ Runtime::Runtime()
       kfd_version{0} {}
 
 hsa_status_t Runtime::Load() {
-  flag_.Refresh();
+  os::cpuid_t cpuinfo;
 
+  // Assume features are not supported if parse CPUID fails
+  if (!os::ParseCpuID(&cpuinfo)) {
+    fprintf(stderr, "Failed to parse CPUID\n");
+  }
+
+  flag_.Refresh();
   g_use_interrupt_wait = flag_.enable_interrupt();
 
   if (!AMD::Load()) {

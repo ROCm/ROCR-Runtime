@@ -60,6 +60,7 @@
 #include <string>
 #include <utility>
 #include "core/inc/runtime.h"
+#include <cpuid.h>
 
 namespace rocr {
 namespace os {
@@ -641,6 +642,29 @@ uint64_t SystemClockFrequency() {
   clock_getres(CLOCK_BOOTTIME, &ts);
   sys_clock_period_ = (uint64_t(ts.tv_sec) * 1000000000 + uint64_t(ts.tv_nsec));
   return 1000000000 / sys_clock_period_;
+}
+
+bool ParseCpuID(cpuid_t* cpuinfo) {
+  uint32_t eax, ebx, ecx, edx, max_eax = 0;
+
+  memset(cpuinfo, 0, sizeof(*cpuinfo));
+
+  /* Make sure current CPU supports at least EAX 4 */
+  if (!__get_cpuid_max(0x80000004, NULL)) return false;
+
+  // Manufacturer ID is a twelve-character ASCII string stored in order EBX, EDX, ECX.
+  if (!__get_cpuid(0, &max_eax, (uint32_t*)&cpuinfo->ManufacturerID[0],
+                   (uint32_t*)&cpuinfo->ManufacturerID[8],
+                   (uint32_t*)&cpuinfo->ManufacturerID[4])) {
+    return false;
+  }
+
+  if (!strcmp(cpuinfo->ManufacturerID, "AuthenticAMD")) {
+    if (__get_cpuid(0x80000001, &eax, &ebx, &ecx, &edx)) {
+      cpuinfo->mwaitx = !!((ecx >> 29) & 0x1);
+    }
+  }
+  return true;
 }
 
 }   //  namespace os

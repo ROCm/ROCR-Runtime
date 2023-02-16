@@ -285,6 +285,15 @@ uint64_t ReadSystemClock();
 /// @brief read the system clock frequency
 uint64_t SystemClockFrequency();
 
+typedef struct cpuid_s {
+  char ManufacturerID[13];  // 12 char, NULL terminated
+  bool mwaitx;
+} cpuid_t;
+
+/// @brief parse CPUID
+/// @param: cpuinfo struct to be filled
+bool ParseCpuID(cpuid_t* cpuinfo);
+
 }   //  namespace os
 }   //  namespace rocr
 
