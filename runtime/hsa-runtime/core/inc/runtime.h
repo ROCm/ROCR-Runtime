@@ -124,6 +124,7 @@ class Runtime {
     HsaVersionInfo version;
     bool supports_exception_debugging;
     bool supports_event_age;
+    bool supports_core_dump;
   };
 
   /// @brief Open connection to kernel driver and increment reference count.
@@ -451,8 +452,9 @@ class Runtime {
       kfd_version.supports_event_age = true;
   }
 
-  void KfdVersion(bool exception_debugging) {
+  void KfdVersion(bool exception_debugging, bool core_dump) {
     kfd_version.supports_exception_debugging = exception_debugging;
+    kfd_version.supports_core_dump = core_dump;
   }
 
   KfdVersion_t KfdVersion() const { return kfd_version; }

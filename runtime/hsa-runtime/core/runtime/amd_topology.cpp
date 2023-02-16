@@ -417,7 +417,10 @@ bool Load() {
   HSAKMT_STATUS err =
       hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
   if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
-  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
+  HSAuint32 caps_mask;
+  hsaKmtGetRuntimeCapabilities(&caps_mask);
+  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED,
+                                    !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
 
   kfd.Dismiss();
   return true;
