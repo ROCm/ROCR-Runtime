@@ -133,6 +133,9 @@ BLACKLIST_GFX11=\
 "KFDMemoryTest.FlatScratchAccess:"\
 "KFDGWSTest.*"
 
+BLACKLIST_GFX12=\
+""
+
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
 # KFDMemoryTest.MemoryRegister fails on SDMA queue creation (KFD-337)
 FILTER[kaveri]=\
@@ -341,3 +344,7 @@ FILTER[gfx942]=\
 "KFDMemoryTest.FlatScratchAccess:"\
 "KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency"
+
+FILTER[gfx1200]=\
+"$BLACKLIST_ALL_ASICS:"\
+"$BLACKLIST_GFX12"
