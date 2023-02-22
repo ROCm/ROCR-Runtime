@@ -190,7 +190,6 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
 
   // Allocate pseudo fine grain memory
   kmt_alloc_flags.ui32.CoarseGrain = (alloc_flags & AllocatePCIeRW ? 0 : kmt_alloc_flags.ui32.CoarseGrain);
-  kmt_alloc_flags.ui32.Uncached  = (alloc_flags & AllocatePCIeRW ? 1 : kmt_alloc_flags.ui32.Uncached);
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory()) {
