@@ -1174,7 +1174,7 @@ TEST_F(KFDQMTest, CreateAqlCpQueue) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    HsaMemoryBuffer pointers(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer pointers(PAGE_SIZE, defaultGPUNode, /*zero*/true, /*local*/false, /*exec*/false, /*isScratch */false, /* isReadOnly */false, /* isUncached */false, /* NonPaged */g_baseTest->NeedNonPagedWptr(defaultGPUNode));
 
     ASSERT_SUCCESS(queue.Create(defaultGPUNode, PAGE_SIZE, pointers.As<HSAuint64 *>()));
 
