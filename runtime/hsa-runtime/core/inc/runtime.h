@@ -177,13 +177,11 @@ class Runtime {
   /// @param [in] size Allocation size in bytes.
   /// @param [in] alloc_flags Modifiers to pass to MemoryRegion allocator.
   /// @param [out] address Pointer to store the allocation result.
-  /// @param [in] user_request Set to true if this is an external allocation, i.e this address
-  /// is directly visible to the user of this library
   ///
   /// @retval ::HSA_STATUS_SUCCESS If allocation is successful.
   hsa_status_t AllocateMemory(const MemoryRegion* region, size_t size,
-                              MemoryRegion::AllocateFlags alloc_flags, void** address,
-                              bool user_request = false);
+                              MemoryRegion::AllocateFlags alloc_flags,
+                              void** address);
 
   /// @brief Free memory previously allocated with AllocateMemory.
   ///
@@ -320,7 +318,7 @@ class Runtime {
 
   hsa_status_t PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                        uint32_t* num_agents_accessible, hsa_agent_t** accessible,
-                       PtrInfoBlockData* block_info = nullptr, bool user_request = false);
+                       PtrInfoBlockData* block_info = nullptr);
 
   hsa_status_t SetPtrInfoData(const void* ptr, void* userptr);
 
@@ -406,13 +404,8 @@ class Runtime {
 
   struct AllocationRegion {
     AllocationRegion() : region(NULL), size(0), size_requested(0), user_ptr(nullptr) {}
-    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested,
-                     bool user_request = false)
-        : region(region_arg),
-          size(size_arg),
-          size_requested(size_requested),
-          user_ptr(nullptr),
-          user_request(user_request) {}
+    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested)
+        : region(region_arg), size(size_arg), size_requested(size_requested), user_ptr(nullptr) {}
 
     struct notifier_t {
       void* ptr;
@@ -425,7 +418,6 @@ class Runtime {
     size_t size_requested; /* size requested by user */
     void* user_ptr;
     std::unique_ptr<std::vector<notifier_t>> notifiers;
-    bool user_request;
   };
 
   struct AsyncEventsControl {

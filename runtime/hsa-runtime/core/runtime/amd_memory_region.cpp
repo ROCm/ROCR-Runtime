@@ -546,8 +546,8 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   ScopedAcquire<KernelMutex> lock(&access_lock_);
 
   if (core::Runtime::runtime_singleton_->PtrInfo(const_cast<void*>(ptr), &info, malloc,
-                                                 &agent_count, &accessible, &blockInfo,
-                                                 true) == HSA_STATUS_SUCCESS) {
+                                                 &agent_count, &accessible,
+                                                 &blockInfo) == HSA_STATUS_SUCCESS) {
     /*  Thunk may return type = HSA_EXT_POINTER_TYPE_UNKNOWN for userptrs */
     if (info.type != HSA_EXT_POINTER_TYPE_UNKNOWN &&
         (blockInfo.length != size || info.sizeInBytes != size)) {

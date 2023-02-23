@@ -1092,7 +1092,7 @@ hsa_status_t
   IS_VALID(mem_region);
 
   return core::Runtime::runtime_singleton_->AllocateMemory(
-      mem_region, size, core::MemoryRegion::AllocateNoFlags, ptr, true);
+      mem_region, size, core::MemoryRegion::AllocateNoFlags, ptr);
   CATCH;
 }
 
