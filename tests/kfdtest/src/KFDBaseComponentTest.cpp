@@ -164,6 +164,11 @@ unsigned int KFDBaseComponentTest::GetFamilyIdFromNodeId(unsigned int nodeId)
     return  FamilyIdFromNode(m_NodeInfo.GetNodeProperties(nodeId));
 }
 
+bool KFDBaseComponentTest::isMES(unsigned int nodeId)
+{
+    return CheckMES(m_NodeInfo.GetNodeProperties(nodeId));
+}
+
 int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {
     HsaNodeProperties *nodeProperties;
     _HSAKMT_STATUS status;
