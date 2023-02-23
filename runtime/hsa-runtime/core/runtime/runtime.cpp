@@ -284,14 +284,14 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 }
 
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
-                                     MemoryRegion::AllocateFlags alloc_flags, void** address,
-                                     bool user_request) {
+                                     MemoryRegion::AllocateFlags alloc_flags,
+                                     void** address) {
   size_t size_requested = size;  // region->Allocate(...) may align-up size to granularity
   hsa_status_t status = region->Allocate(size, alloc_flags, address);
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[*address] = AllocationRegion(region, size, size_requested, user_request);
+    allocation_map_[*address] = AllocationRegion(region, size, size_requested);
   }
 
   return status;
@@ -788,7 +788,7 @@ hsa_status_t Runtime::InteropUnmap(void* ptr) {
 
 hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, void* (*alloc)(size_t),
                               uint32_t* num_agents_accessible, hsa_agent_t** accessible,
-                              PtrInfoBlockData* block_info, bool user_request) {
+                              PtrInfoBlockData* block_info) {
   static_assert(static_cast<int>(HSA_POINTER_UNKNOWN) == static_cast<int>(HSA_EXT_POINTER_TYPE_UNKNOWN),
                 "Thunk pointer info mismatch");
   static_assert(static_cast<int>(HSA_POINTER_ALLOCATED) == static_cast<int>(HSA_EXT_POINTER_TYPE_HSA),
@@ -859,13 +859,11 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     auto fragment = allocation_map_.upper_bound(ptr);
     if (fragment != allocation_map_.begin()) {
       fragment--;
-      if ((fragment->first <= ptr) && (user_request && fragment->second.user_request) &&
-          (ptr <
-           reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size_requested)) {
+      if ((fragment->first <= ptr) &&
+          (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size_requested)) {
         // agent and host address must match here. Only lock memory is allowed to have differing
         // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
         // suballocated.
-
         retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
         retInfo.hostBaseAddress = retInfo.agentBaseAddress;
         retInfo.sizeInBytes = fragment->second.size_requested;
@@ -960,7 +958,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   PtrInfoBlockData block;
   hsa_amd_pointer_info_t info;
   info.size = sizeof(info);
-  if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block, true) != HSA_STATUS_SUCCESS)
+  if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   // Temporary: Previous versions of HIP will call hsa_amd_ipc_memory_create with the len aligned to

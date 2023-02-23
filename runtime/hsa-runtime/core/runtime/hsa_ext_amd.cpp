@@ -756,7 +756,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
 
   if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr, true);
+  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr);
   CATCH;
 }
 
@@ -907,8 +907,7 @@ hsa_status_t hsa_amd_pointer_info(const void* ptr, hsa_amd_pointer_info_t* info,
   IS_OPEN();
   IS_BAD_PTR(ptr);
   IS_BAD_PTR(info);
-  return core::Runtime::runtime_singleton_->PtrInfo(ptr, info, alloc, num_accessible, accessible,
-                                                    NULL, true);
+  return core::Runtime::runtime_singleton_->PtrInfo(ptr, info, alloc, num_accessible, accessible);
   CATCH;
 }
 
