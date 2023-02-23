@@ -58,6 +58,7 @@ class KFDBaseComponentTest : public testing::Test {
 // @return DRM Render Node if successful or -1 on failure
     int FindDRMRenderNode(int gpuNode);
     unsigned int GetFamilyIdFromNodeId(unsigned int nodeId);
+    bool NeedNonPagedWptr(unsigned int nodeId);
     unsigned int GetFamilyIdFromDefaultNode(){ return m_FamilyId; }
 
     // @brief Executed before the first test that uses KFDBaseComponentTest.

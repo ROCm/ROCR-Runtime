@@ -164,6 +164,11 @@ unsigned int KFDBaseComponentTest::GetFamilyIdFromNodeId(unsigned int nodeId)
     return  FamilyIdFromNode(m_NodeInfo.GetNodeProperties(nodeId));
 }
 
+bool KFDBaseComponentTest::NeedNonPagedWptr(unsigned int nodeId)
+{
+    return GetFamilyIdFromNodeId(nodeId) >= FAMILY_GFX11;
+}
+
 int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {
     HsaNodeProperties *nodeProperties;
     _HSAKMT_STATUS status;
