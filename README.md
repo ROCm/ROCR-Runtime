@@ -7,9 +7,8 @@ NOTE: Users of Ubuntu 20.04 will need to add the user to the new "render" group,
 
 #### ROCk Driver
 
-The ROCt library is not a standalone product and requires that you have the correct ROCk driver set installed. We recommend reading the full compatibility and installation details which are available in the ROCk github:
-
-https://github.com/RadeonOpenCompute/ROCK-Radeon-Open-Compute-Kernel-Driver
+The ROCt library is not a standalone product and requires that you have the correct ROCk driver installed, or are using a compatible upstream kernel.
+Please refer to https://docs.amd.com/ under "Getting Started Guide" for a list of supported Operating Systems and kernel versions, as well as supported hardware.
 
 #### Building the Thunk
 
@@ -43,4 +42,4 @@ The information contained herein is for informational purposes only, and is subj
 
 AMD, the AMD Arrow logo, and combinations thereof are trademarks of Advanced Micro Devices, Inc. Other product names used in this publication are for identification purposes only and may be trademarks of their respective companies.
 
-Copyright (c) 2014-2020 Advanced Micro Devices, Inc. All rights reserved.
+Copyright (c) 2014-2023 Advanced Micro Devices, Inc. All rights reserved.
