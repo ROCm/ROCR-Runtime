@@ -1919,6 +1919,11 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
         return;
     }
 
+    if (m_NodeInfo.IsNodeXGMItoCPU(nodes[0])) {
+        LOG() << "Skipping test: PCIe link to CPU is required." << std::endl;
+        return;
+    }
+
     HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
     EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(nodes[0], pNodeProperties->NumMemoryBanks,
                    memoryProperties));
