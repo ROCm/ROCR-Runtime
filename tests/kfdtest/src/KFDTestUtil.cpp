@@ -140,6 +140,10 @@ bool hasPciAtomicsSupport(int node) {
     if (pNodeProperties->NumCPUCores && pNodeProperties->NumFComputeCores)
         return true;
 
+    /* gfx11 is able to perform aotmic ops even PCI reports no atomic support. */
+    if (pNodeProperties->EngineId.ui32.Major >= 11)
+        return true;
+
     HsaIoLinkProperties *IolinkProperties = new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
     if (hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties)) {
         LOG() << "Unable to get Node IO Link Information for node " << node << std::endl;
