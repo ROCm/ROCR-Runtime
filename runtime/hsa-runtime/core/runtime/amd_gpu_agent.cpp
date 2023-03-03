@@ -807,9 +807,9 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
 
   // Ensure engine selection is within proper range based on transfer type
-  if ((is_xgmi && engine_offset < properties_.NumSdmaEngines) ||
-       (!is_xgmi && engine_offset >= properties_.NumSdmaEngines) ||
-         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit && !engine_offset)) {
+  if ((is_xgmi && engine_offset <= properties_.NumSdmaEngines) ||
+       (!is_xgmi && engine_offset > properties_.NumSdmaEngines) ||
+         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit && engine_offset == BlitHostToDev)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
