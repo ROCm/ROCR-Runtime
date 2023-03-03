@@ -511,8 +511,8 @@ hsa_status_t Runtime::CopyMemoryOnEngine(void* dst, core::Agent* dst_agent, cons
   core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
 
   // engine_id is single bitset unique.
-  int engine_offset = ffs(engine_id) - 1;
-  if (!engine_id || !!((engine_id >> (engine_offset + 1)))) {
+  int engine_offset = ffs(engine_id);
+  if (!engine_id || !!((engine_id >> engine_offset))) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
