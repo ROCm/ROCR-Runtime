@@ -210,6 +210,20 @@ install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/ DESTINATION ${CMAKE_INS
 # Option to build header path migration helpers.
 option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
 if(INCLUDE_PATH_COMPATIBILITY)
+  # To enable/disable #error in wrapper header files
+  if(NOT DEFINED ROCM_HEADER_WRAPPER_WERROR)
+      if(DEFINED ENV{ROCM_HEADER_WRAPPER_WERROR})
+          set(ROCM_HEADER_WRAPPER_WERROR "$ENV{ROCM_HEADER_WRAPPER_WERROR}"
+                  CACHE STRING "Header wrapper warnings as errors.")
+      else()
+          set(ROCM_HEADER_WRAPPER_WERROR "ON" CACHE STRING "Header wrapper warnings as errors.")
+      endif()
+  endif()
+  if(ROCM_HEADER_WRAPPER_WERROR)
+      set(deprecated_error 1)
+  else()
+      set(deprecated_error 0)
+  endif()
   include(hsakmt-backward-compat.cmake)
 endif()
 
