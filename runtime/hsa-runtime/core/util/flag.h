@@ -164,7 +164,7 @@ class Flag {
     image_print_srd_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_ENABLE_MWAITX");
-    enable_mwaitx_ = (var == "0") ? false : true;
+    enable_mwaitx_ = (var == "1") ? true : false;
 
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
