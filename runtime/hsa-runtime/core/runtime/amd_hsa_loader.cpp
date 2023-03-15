@@ -118,6 +118,18 @@ std::string GetUriFromMemoryInExecutableFile(const void *memory, size_t size) {
 
     int n = info->dlpi_phnum;
     while (--n >= 0) {
+      // Check if lib name is not empty and its not a "vdso.so" lib,
+      // The vDSO is a special shared object file that is built into
+      // the Linux kernel. It is not a regular shared library and thus
+      // does not have all the properties of regular shared libraries.
+      // The way the vDSO is loaded and organized in memory is different
+      // from regular shared libraries and it's not guaranteed that it
+      // will have a specific segment or section. Hence its skipped.
+      if (info->dlpi_name[0] != '\0'
+          && std::string(info->dlpi_name).find("vdso.so") != std::string::npos) {
+        continue;
+      }
+
       if (info->dlpi_phdr[n].p_type == PT_LOAD
           && elf_address - info->dlpi_phdr[n].p_vaddr >= 0
           && elf_address - info->dlpi_phdr[n].p_vaddr < info->dlpi_phdr[n].p_memsz) {
