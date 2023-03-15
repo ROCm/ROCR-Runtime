@@ -788,7 +788,7 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
           (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
          ("Both devices are CPU agents which is not expected"));
 
-  if (engine_offset >= properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines) {
+  if (engine_offset > properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
