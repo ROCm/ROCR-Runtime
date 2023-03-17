@@ -160,6 +160,9 @@ class Flag {
     var = os::GetEnvVar("HSA_SVM_PROFILE");
     svm_profile_ = var;
 
+    var = os::GetEnvVar("HSA_IMAGE_PRINT_SRD");
+    image_print_srd_ = (var == "1") ? true : false;
+
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
     var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
@@ -219,6 +222,8 @@ class Flag {
 
   bool override_cpu_affinity() const { return override_cpu_affinity_; }
 
+  bool image_print_srd() const { return image_print_srd_; }
+
   XNACK_REQUEST xnack() const { return xnack_; }
 
   bool debug() const { return debug_; }
@@ -260,6 +265,7 @@ class Flag {
   bool coop_cu_count_;
   bool discover_copy_agents_;
   bool override_cpu_affinity_;
+  bool image_print_srd_;
 
   SDMA_OVERRIDE enable_sdma_;
 

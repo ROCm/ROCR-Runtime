@@ -204,24 +204,100 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
 void CloseLib(LibHandle lib) { dlclose(*(void**)&lib); }
 
-std::vector<LibHandle> GetLoadedLibs() {
+/*
+ * @brief Look for a symbol called "HSA_AMD_TOOL_PRIORITY" across all loaded
+ * shared libraries, and if found, store the name of the library
+ *
+ * @param[in]: info A dl_phdr_info struct pointer, which contains information
+ * about library's load address, header, and name.
+ *
+ * @param[in]: size integer size of dl_phdr_info struct
+ *
+ * @param[out]: data copy of the data argument to dl_phdr_iterate call
+ *
+ * @retval:: Return 0 on Success. If callback returns a non-zero value,
+ * dl_iterate_phdr() will stop processing, even if there are unprocessed
+ * shared objects.
+ */
 
+static int callback(struct dl_phdr_info* info, size_t size, void* data) {
+  std::vector<std::string>* loadedToolsLib = (std::vector<std::string>*)data;
+  assert(loadedToolsLib != nullptr);
+  /*
+   * Check if lib name is not empty and its not a "vdso.so" lib,
+   * The vDSO is a special shared object file that is built into the Linux kernel.
+   * It is not a regular shared library and thus does not have all the properties
+   * of regular shared libraries. The way the vDSO is loaded and organized in memory
+   * is different from regular shared libraries and it's not guaranteed that it
+   * will have a specific segment or section. Hence its skipped.
+   */
+
+  if ((info) && (info->dlpi_name[0] != '\0')) {
+    if (std::string(info->dlpi_name).find("vdso.so") != std::string::npos) return 0;
+
+    /*
+     * Iterate through the program headers of the loaded lib and check for PT_DYNAMIC program
+     * header. If the PT_DYNAMIC program header is found, use dlpi_addr and dlpi_phdr members
+     * of dl_phdr_info struct to get the address of the dynamic section of the loaded
+     * library in memory
+     */
+
+    for (int i = 0; i < info->dlpi_phnum; i++) {
+      if (info->dlpi_phdr[i].p_type == PT_DYNAMIC) {
+        Elf64_Dyn* dyn_section = (Elf64_Dyn*)(info->dlpi_addr + info->dlpi_phdr[i].p_vaddr);
+
+        char* strings = nullptr;
+        Elf64_Xword limit = 0;
+
+        /*
+         * The dynamic section is searched for DT_STRTAB (address of string table),
+         * and DT_STRSZ (size of string table)
+         * DT_NULL - Marks the end of the _DYNAMIC array
+         */
+
+        for (int j = 0;; j++) {
+          if (dyn_section[j].d_tag == DT_NULL) break;
+
+          if (dyn_section[j].d_tag == DT_STRTAB) strings = (char*)(dyn_section[j].d_un.d_ptr);
+
+          if (dyn_section[j].d_tag == DT_STRSZ) limit = dyn_section[j].d_un.d_val;
+        }
+
+        if (strings == nullptr) debug_print("String table not found");
+
+        /*
+         * Hacky lookup, if string and symbol tables are found,
+         * iterate through the strings in string table and check if
+         * any string matches "HSA_AMD_TOOL_PRIORITY".
+         * If yes, then add the name of the library to the vector of
+         * lib names
+         */
+        if (strings != nullptr) {
+          char* end = strings + limit;
+          while (strings < end) {
+            if (strcmp(strings, "HSA_AMD_TOOL_PRIORITY") == 0) {
+              loadedToolsLib->push_back(info->dlpi_name);
+              return 0;
+            }
+            strings += (strlen(strings) + 1);
+          }
+        }
+      }
+    }
+  }
+  return 0;
+}
+
+std::vector<LibHandle> GetLoadedToolsLib() {
   std::vector<LibHandle> ret;
   std::vector<std::string> names;
-  auto callback = [&](dl_phdr_info* info) {
-    if(info->dlpi_name[0] != '\0')
-      names.push_back(info->dlpi_name);
-  };
-  typedef decltype(callback) call_t;
 
-  dl_iterate_phdr([](dl_phdr_info* info, size_t size, void* data){
-    auto& call = *(call_t*)data;
-    call(info);
-    return 0;
-  }, &callback);
+  /* Iterate through all of the loaded shared libraries in the process */
+  dl_iterate_phdr(callback, &names);
 
-  for(auto& name : names)
-    ret.push_back(LoadLib(name));
+  if (!names.empty()) {
+    for (auto& name : names) ret.push_back(LoadLib(name));
+  }
 
   return ret;
 }

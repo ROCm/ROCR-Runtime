@@ -86,9 +86,10 @@ void* GetExportAddress(LibHandle lib, std::string export_name);
 /// @param: lib(Input), library handle which will be unloaded.
 void CloseLib(LibHandle lib);
 
-/// @brief: Lists libraries in the process
+/// @brief: Lists loaded tool libraries that contain
+/// symbol HSA_AMD_TOOL_PRIORITY
 /// @return: List of library handles
-std::vector<LibHandle> GetLoadedLibs();
+std::vector<LibHandle> GetLoadedToolsLib();
 
 /// @brief: Returns the library's path name.
 /// @param: lib(Input), libray handle

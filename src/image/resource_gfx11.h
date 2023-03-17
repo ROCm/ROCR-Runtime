@@ -129,8 +129,7 @@ union SQ_BUF_RSRC_WORD2 {
 #define SQ_BUF_RSC_WRD3_FORMAT_SZ           6
 #define SQ_BUF_RSC_WRD3_INDEX_STRIDE_SZ     2
 #define SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ   1
-#define SQ_BUF_RSC_WRD3_RESOURCE_LEVEL      1
-#define SQ_BUF_RSC_WRD3_RESERVED_1          2
+#define SQ_BUF_RSC_WRD3_LLC_NOALLOC_SZ      2
 #define SQ_BUF_RSC_WORD3_OOB_SELECT_SZ      2
 #define SQ_BUF_RSC_WRD3_TYPE_SZ             2
 struct sq_buf_rsrc_word3_t {
@@ -143,18 +142,16 @@ struct sq_buf_rsrc_word3_t {
   unsigned int                : 3;
   unsigned int INDEX_STRIDE   : SQ_BUF_RSC_WRD3_INDEX_STRIDE_SZ;
   unsigned int ADD_TID_ENABLE : SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ;
-  unsigned int RESOURCE_LEVEL : SQ_BUF_RSC_WRD3_RESOURCE_LEVEL;
-  unsigned int                : 1;
-  unsigned int RESERVED_1     : SQ_BUF_RSC_WRD3_RESERVED_1;
+  unsigned int                : 2;
+  unsigned int LLC_NOALLOC    : SQ_BUF_RSC_WRD3_LLC_NOALLOC_SZ;
   unsigned int OOB_SELECT     : SQ_BUF_RSC_WORD3_OOB_SELECT_SZ;
   unsigned int TYPE           : SQ_BUF_RSC_WRD3_TYPE_SZ;
 
 #elif defined(BIGENDIAN_CPU)
   unsigned int TYPE           : SQ_BUF_RSC_WRD3_TYPE_SZ;
   unsigned int OOB_SELECT     : SQ_BUF_RSC_WORD3_OOB_SELECT_SZ;
-  unsigned int RESERVED_1     : SQ_BUF_RSC_WRD3_RESERVED_1;
-  unsigned int                : 1;
-  unsigned int RESOURCE_LEVEL : SQ_BUF_RSC_WRD3_RESOURCE_LEVEL;
+  unsigned int LLC_NOALLOC    : SQ_BUF_RSC_WRD3_LLC_NOALLOC_SZ;
+  unsigned int                : 2;
   unsigned int ADD_TID_ENABLE : SQ_BUF_RSC_WRD3_ADD_TID_ENABLE_SZ;
   unsigned int INDEX_STRIDE   : SQ_BUF_RSC_WRD3_INDEX_STRIDE_SZ;
   unsigned int                : 3;
@@ -197,7 +194,7 @@ union SQ_IMG_RSRC_WORD0 {
 
 #define SQ_IMG_RSC_WRD1_REG_SZ 32
 #define SQ_IMG_RSC_WRD1_BASE_ADDRESS_HI_SZ  8
-#define SQ_IMG_RSC_WRD1_RESERVED_2_SZ       2
+#define SQ_IMG_RSC_WRD1_LLC_NOALLOC_SZ      2
 #define SQ_IMG_RSC_WRD1_BIG_PAGE_SZ         1
 #define SQ_IMG_RSC_WRD1_MAX_MIP_SZ          4
 #define SQ_IMG_RSC_WRD1_FORMAT_SZ           8
@@ -207,7 +204,7 @@ struct sq_img_rsrc_word1_t{
 #if defined(LITTLEENDIAN_CPU)
   unsigned int BASE_ADDRESS_HI : SQ_IMG_RSC_WRD1_BASE_ADDRESS_HI_SZ;
   unsigned int                 : 5;
-  unsigned int RESERVED_2      : SQ_IMG_RSC_WRD1_RESERVED_2_SZ;
+  unsigned int LLC_NOALLOC     : SQ_IMG_RSC_WRD1_LLC_NOALLOC_SZ;
   unsigned int BIG_PAGE        : SQ_IMG_RSC_WRD1_BIG_PAGE_SZ;
   unsigned int MAX_MIP         : SQ_IMG_RSC_WRD1_MAX_MIP_SZ;
   unsigned int FORMAT          : SQ_IMG_RSC_WRD1_FORMAT_SZ;
@@ -219,7 +216,7 @@ struct sq_img_rsrc_word1_t{
   unsigned int FORMAT          : SQ_IMG_RSC_WRD1_FORMAT_SZ;
   unsigned int MAX_MIP         : SQ_IMG_RSC_WRD1_MAX_MIP_SZ;
   unsigned int BIG_PAGE        : SQ_IMG_RSC_WRD1_BIG_PAGE_SZ;
-  unsigned int RESERVED_2      : SQ_IMG_RSC_WRD1_RESERVED_2_SZ;
+  unsigned int LLC_NOALLOC     : SQ_IMG_RSC_WRD1_LLC_NOALLOC_SZ;
   unsigned int                 : 5;
   unsigned int BASE_ADDRESS_HI : SQ_IMG_RSC_WRD1_BASE_ADDRESS_HI_SZ;
 #endif
@@ -236,7 +233,6 @@ union SQ_IMG_RSRC_WORD1 {
 #define SQ_IMG_RSC_WRD2_REG_SZ 32
 #define SQ_IMG_RSC_WRD2_WIDTH_HI_SZ        12
 #define SQ_IMG_RSC_WRD2_HEIGHT_SZ          14
-#define SQ_IMG_RSC_WRD2_RESOURCE_LEVEL_SZ  1
 struct sq_img_rsrc_word2_t {
 #if defined(LITTLEENDIAN_CPU)
   unsigned int WIDTH_HI       : SQ_IMG_RSC_WRD2_WIDTH_HI_SZ;
@@ -305,14 +301,14 @@ union SQ_IMG_RSRC_WORD3 {
 
 #define SQ_IMG_RSC_WRD4_REG_SZ 32
 #define SQ_IMG_RSC_WRD4_DEPTH_SZ    13
+#define SQ_IMG_RSC_WRD4_PITCH_SZ    14
 #define SQ_IMG_RSC_WRD4_BASE_ARR_SZ 13
-#define SQ_IMG_RSC_WRD4_PITCH_SZ 14
 union sq_img_rsrc_word4_t {
   struct {
 #if defined(LITTLEENDIAN_CPU)
     // For arrays this is last slice in view, for 3D this is depth-1, For remaining this is pitch-1
     unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ;
-    unsigned int            : 1; //Pitch[13] in gfx1030
+    unsigned int            : 1;  // Pitch[13]
     unsigned int            : 2;
     unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
     unsigned int            : 3;
@@ -320,10 +316,11 @@ union sq_img_rsrc_word4_t {
     unsigned int            : 3;
     unsigned int BASE_ARRAY : SQ_IMG_RSC_WRD4_BASE_ARR_SZ;
     unsigned int            : 2;
-    unsigned int            : 1; //Pitch[13] in gfx1030
-    unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ; //Pitch[0:12] in gfx1030
+    unsigned int            : 1;  // Pitch[13]
+    unsigned int DEPTH      : SQ_IMG_RSC_WRD4_DEPTH_SZ;
 #endif
   };
+
   struct {
 #if defined(LITTLEENDIAN_CPU)
     // For 1d, 2d and 2d-msaa in gfx1030 this is pitch-1
@@ -346,33 +343,41 @@ union SQ_IMG_RSRC_WORD4 {
 
 #define SQ_IMG_RSC_WRD5_REG_SZ 32
 #define SQ_IMG_RSC_WRD5_ARRAY_PITCH_SZ               4
-#define SQ_IMG_RSC_WRD5_MID_LOD_WRN_SZ               12
+#define SQ_IMG_RSC_WRD5_DEPTH_SCALE_SZ               4
+#define SQ_IMG_RSC_WRD5_HEIGHT_SCALE_SZ              4
+#define SQ_IMG_RSC_WRD5_WIDTH_SCALE_SZ               4
 #define SQ_IMG_RSC_WRD5_PERF_MOD_SZ                  3
 #define SQ_IMG_RSC_WRD5_CORNER_SAMPLES_SZ            1
 #define SQ_IMG_RSC_WRD5_LINKED_RESOURCE_SZ           1
+#define SQ_IMG_RSC_WRD5_LOD_HWD_CNT_EN               1
 #define SQ_IMG_RSC_WRD5_PRT_DEFAULT_SZ               1
 #define SQ_IMG_RSC_WRD5_MIN_LOD_LO_SZ                5
+
 
 struct sq_img_rsrc_word5_t {
 #if defined(LITTLEENDIAN_CPU)
   unsigned int ARRAY_PITCH          : SQ_IMG_RSC_WRD5_ARRAY_PITCH_SZ;
   unsigned int                      : 4;
-  unsigned int MID_LOD_WRN          : SQ_IMG_RSC_WRD5_MID_LOD_WRN_SZ;
+  unsigned int DEPTH_SCALE          : SQ_IMG_RSC_WRD5_DEPTH_SCALE_SZ;
+  unsigned int HEIGHT_SCALE         : SQ_IMG_RSC_WRD5_HEIGHT_SCALE_SZ;
+  unsigned int WIDTH_SCALE          : SQ_IMG_RSC_WRD5_WIDTH_SCALE_SZ;
   unsigned int PERF_MOD             : SQ_IMG_RSC_WRD5_PERF_MOD_SZ;
   unsigned int CORNER_SAMPLES       : SQ_IMG_RSC_WRD5_CORNER_SAMPLES_SZ;
   unsigned int LINKED_RESOURCE      : SQ_IMG_RSC_WRD5_LINKED_RESOURCE_SZ;
+  unsigned int LOD_HWD_CNT          : SQ_IMG_RSC_WRD5_LOD_HWD_CNT_EN;
   unsigned int PRT_DEFAULT          : SQ_IMG_RSC_WRD5_PRT_DEFAULT_SZ;
   unsigned int MIN_LOD_LO           : SQ_IMG_RSC_WRD5_MIN_LOD_LO_SZ;
-  unsigned int                      : 4;
-  
+
 #elif defined(BIGENDIAN_CPU)
-  unsigned int                      : 4;
   unsigned int MIN_LOD_LO           : SQ_IMG_RSC_WRD5_MIN_LOD_LO_SZ;
   unsigned int PRT_DEFAULT          : SQ_IMG_RSC_WRD5_PRT_DEFAULT_SZ;
+  unsigned int LOD_HWD_CNT          : SQ_IMG_RSC_WRD5_LOD_HWD_CNT_EN;
   unsigned int LINKED_RESOURCE      : SQ_IMG_RSC_WRD5_LINKED_RESOURCE_SZ;
   unsigned int CORNER_SAMPLES       : SQ_IMG_RSC_WRD5_CORNER_SAMPLES_SZ;
   unsigned int PERF_MOD             : SQ_IMG_RSC_WRD5_PERF_MOD_SZ;
-  unsigned int MID_LOD_WRN          : SQ_IMG_RSC_WRD5_MID_LOD_WRN_SZ;
+  unsigned int WIDTH_SCALE          : SQ_IMG_RSC_WRD5_WIDTH_SCALE_SZ;
+  unsigned int HEIGHT_SCALE         : SQ_IMG_RSC_WRD5_HEIGHT_SCALE_SZ;
+  unsigned int DEPTH_SCALE          : SQ_IMG_RSC_WRD5_DEPTH_SCALE_SZ;
   unsigned int                      : 4;
   unsigned int ARRAY_PITCH          : SQ_IMG_RSC_WRD5_ARRAY_PITCH_SZ;
 #endif
@@ -389,6 +394,8 @@ union SQ_IMG_RSRC_WORD5 {
 
 #define SQ_IMG_RSC_WRD6_REG_SZ 32
 #define SQ_IMG_RSC_WRD6_MIN_LOD_HI_SZ             7
+#define SQ_IMG_RSC_WRD6_ITERATE_256               1
+#define SQ_IMG_RSC_WRD6_SAMPLE_PATTERN_OFFSET     4
 #define SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ      2
 #define SQ_IMG_RSC_WRD6_MAX_COMP_BLK_SZ_SZ        2
 #define SQ_IMG_RSC_WRD6_META_PIPE_ALIGNED_SZ      1
@@ -400,6 +407,9 @@ union SQ_IMG_RSRC_WORD5 {
 struct sq_img_rsrc_word6_t {
 #if defined(LITTLEENDIAN_CPU)
   unsigned int MIN_LOD_HI            : SQ_IMG_RSC_WRD6_MIN_LOD_HI_SZ;
+  unsigned int                       : 3;
+  unsigned int ITERATE_256           : SQ_IMG_RSC_WRD6_ITERATE_256;
+  unsigned int SAMPLE_PATTERN_OFFSET : SQ_IMG_RSC_WRD6_SAMPLE_PATTERN_OFFSET;
   unsigned int MAX_UNCOMP_BLK_SZ     : SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ;
   unsigned int MAX_COMP_BLK_SZ       : SQ_IMG_RSC_WRD6_MAX_COMP_BLK_SZ_SZ;
   unsigned int META_PIPE_ALIGNED     : SQ_IMG_RSC_WRD6_META_PIPE_ALIGNED_SZ;
@@ -417,6 +427,9 @@ struct sq_img_rsrc_word6_t {
   unsigned int META_PIPE_ALIGNED     : SQ_IMG_RSC_WRD6_META_PIPE_ALIGNED_SZ;
   unsigned int MAX_COMP_BLK_SZ       : SQ_IMG_RSC_WRD6_MAX_COMP_BLK_SZ_SZ;
   unsigned int MAX_UNCOMP_BLK_SZ     : SQ_IMG_RSC_WRD6_MAX_UNCOMP_BLK_SZ_SZ;
+  unsigned int SAMPLE_PATTERN_OFFSET : SQ_IMG_RSC_WRD6_SAMPLE_PATTERN_OFFSET;
+  unsigned int ITERATE_256           : SQ_IMG_RSC_WRD6_ITERATE_256;
+  unsigned int                       : 3;
   unsigned int MIN_LOD_HI            : SQ_IMG_RSC_WRD6_MIN_LOD_HI_SZ;
 #endif
 };
@@ -536,39 +549,41 @@ union SQ_IMG_SAMP_WORD1 {
 /***********/
 
 #define SQ_IMG_SAMP_WORD2_REG_SZ 32
-#define SQ_IMG_SAMP_WORD2_BC_LRS_LB_SZ            12
-#define SQ_IMG_SAMP_WORD2_BC_OR_BCT_SZ            2
+#define SQ_IMG_SAMP_WORD2_BC_PTR_SZ               12
+#define SQ_IMG_SAMP_WORD2_BC_TYPE_SZ              2
 #define SQ_IMG_SAMP_WORD2_LOD_BIAS_SEC_SZ         6
 #define SQ_IMG_SAMP_WORD2_XY_MAG_FILTER_SZ        2
 #define SQ_IMG_SAMP_WORD2_XY_MIN_FILTER_SZ        2
 #define SQ_IMG_SAMP_WORD2_Z_FILTER_SZ             2
 #define SQ_IMG_SAMP_WORD2_MIP_FILTER_SZ           2
-#define SQ_IMG_SAMP_WORD2_MIP_POINT_PRECLAMP_SZ   1
 #define SQ_IMG_SAMP_WORD2_ANISO_OVERRIDE_SZ       1
-#define SQ_IMG_SAMP_WORD2_BLEND_ZERO_PRT_SZ       1
+#define SQ_IMG_SAMP_WORD2_BLEND_PTR_SZ            1
+#define SQ_IMG_SAMP_WORD2_DERIV_ADJUST_EN_SZ      1
 struct sq_img_samp_word2_t {
 #if defined(LITTLEENDIAN_CPU)
-  unsigned int BC_LRS_LB          : SQ_IMG_SAMP_WORD2_BC_LRS_LB_SZ;
-  unsigned int BC_OR_BCT          : SQ_IMG_SAMP_WORD2_BC_OR_BCT_SZ;
+  unsigned int BC_PTR             : SQ_IMG_SAMP_WORD2_BC_PTR_SZ;
+  unsigned int BC_TYPE            : SQ_IMG_SAMP_WORD2_BC_TYPE_SZ;
   unsigned int LOD_BIAS_SEC       : SQ_IMG_SAMP_WORD2_LOD_BIAS_SEC_SZ;
   unsigned int XY_MAG_FILTER      : SQ_IMG_SAMP_WORD2_XY_MAG_FILTER_SZ;
   unsigned int XY_MIN_FILTER      : SQ_IMG_SAMP_WORD2_XY_MIN_FILTER_SZ;
   unsigned int Z_FILTER           : SQ_IMG_SAMP_WORD2_Z_FILTER_SZ;
   unsigned int MIP_FILTER         : SQ_IMG_SAMP_WORD2_MIP_FILTER_SZ;
-  unsigned int MIP_POINT_PRECLAMP : SQ_IMG_SAMP_WORD2_MIP_POINT_PRECLAMP_SZ;
+  unsigned int                    : 1;
   unsigned int ANISO_OVERRIDE     : SQ_IMG_SAMP_WORD2_ANISO_OVERRIDE_SZ;
-  unsigned int BLEND_ZERO_PRT     : SQ_IMG_SAMP_WORD2_BLEND_ZERO_PRT_SZ;
+  unsigned int BLEND_PRT          : SQ_IMG_SAMP_WORD2_BLEND_PTR_SZ;
+  unsigned int DERIV_ADJUST_EN    : SQ_IMG_SAMP_WORD2_DERIV_ADJUST_EN_SZ;
 #elif defined(BIGENDIAN_CPU)
-  unsigned int BLEND_ZERO_PRT     : SQ_IMG_SAMP_WORD2_BLEND_ZERO_PRT_SZ;
+  unsigned int DERIV_ADJUST_EN    : SQ_IMG_SAMP_WORD2_DERIV_ADJUST_EN_SZ 
+  unsigned int BLEND_PRT          : SQ_IMG_SAMP_WORD2_BLEND_PRT_SZ;
   unsigned int ANISO_OVERRIDE     : SQ_IMG_SAMP_WORD2_ANISO_OVERRIDE_SZ;
-  unsigned int MIP_POINT_PRECLAMP : SQ_IMG_SAMP_WORD2_MIP_POINT_PRECLAMP_SZ;
+  unsigned int                    : 1;
   unsigned int MIP_FILTER         : SQ_IMG_SAMP_WORD2_MIP_FILTER_SZ;
   unsigned int Z_FILTER           : SQ_IMG_SAMP_WORD2_Z_FILTER_SZ;
   unsigned int XY_MIN_FILTER      : SQ_IMG_SAMP_WORD2_XY_MIN_FILTER_SZ;
   unsigned int XY_MAG_FILTER      : SQ_IMG_SAMP_WORD2_XY_MAG_FILTER_SZ;
   unsigned int LOD_BIAS_SEC       : SQ_IMG_SAMP_WORD2_LOD_BIAS_SEC_SZ;
-  unsigned int BC_OR_BCT          : SQ_IMG_SAMP_WORD2_BC_OR_BCT_SZ;
-  unsigned int LOD_BIAS           : SQ_IMG_SAMP_WORD2_BC_LRS_LB_SZ;
+  unsigned int BC_TYPE            : SQ_IMG_SAMP_WORD2_BC_TYPE_SZ;
+  unsigned int BC_PTR             : SQ_IMG_SAMP_WORD2_BC_PTR_SZ;
 #endif
 };
 
@@ -582,10 +597,10 @@ union SQ_IMG_SAMP_WORD2 {
 /***********/
 
 #define SQ_IMG_SAMP_WORD3_REG_SZ 32
-#define SQ_IMG_SAMP_WORD3_GRAD_ADJ_OR_DAV_SZ  16
-#define SQ_IMG_SAMP_WORD3_RES_OR_DAV_SZ       2
-#define SQ_IMG_SAMP_WORD3_BCP_LRS_DAV_SZ      12
-#define SQ_IMG_SAMP_WORD3_BORD_COLOR_TYPE_SZ  2
+#define SQ_IMG_SAMP_WORD3_GRAD_ADJ_OR_DAV_SZ 16
+#define SQ_IMG_SAMP_WORD3_RES_OR_DAV_SZ      2
+#define SQ_IMG_SAMP_WORD3_BCP_LRS_DAV_SZ     12
+#define SQ_IMG_SAMP_WORD3_BORD_COLOR_TYPE_SZ 2
 
 struct sq_img_samp_word3_t {
 #if defined(LITTLEENDIAN_CPU)
@@ -826,4 +841,3 @@ typedef struct metadata_amd_gfx11_s {
 }  // namespace image
 }  // namespace rocr
 #endif  // EXT_IMAGE_RESOURCE_GFX11_H_
-
