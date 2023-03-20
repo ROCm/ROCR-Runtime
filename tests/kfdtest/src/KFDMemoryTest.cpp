@@ -1924,6 +1924,11 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
         return;
     }
 
+    if (!m_NodeInfo.IsGPUNodeLargeBar(nodes[0])) {
+        LOG() << "Skipping test: Test requires device 0 large bar GPU." << std::endl;
+        return;
+    }
+
     HsaMemoryProperties *memoryProperties = new HsaMemoryProperties[pNodeProperties->NumMemoryBanks];
     EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(nodes[0], pNodeProperties->NumMemoryBanks,
                    memoryProperties));
