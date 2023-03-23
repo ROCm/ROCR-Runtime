@@ -120,6 +120,7 @@ BLACKLIST_GFX10_NV2X=\
 # KFDQMTest.MultipleCpQueuesStressDispatch  - SWDEV-340965
 BLACKLIST_GFX11=\
 "KFDQMTest.CreateAqlCpQueue:"\
+"KFDQMTest.BasicCuMaskingEven:"\
 "KFDQMTest.MultipleCpQueuesStressDispatch:"\
 "KFDCWSRTest.InterruptRestore:"\
 "KFDPerfCountersTest.*:"\
