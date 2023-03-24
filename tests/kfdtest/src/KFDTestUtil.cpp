@@ -672,6 +672,39 @@ const bool HsaNodeInfo::IsGPUNodeLargeBar(int node) const {
     return false;
 }
 
+const bool HsaNodeInfo::IsAppAPU(int node) const {
+    const HsaNodeProperties *pNodeProperties = GetNodeProperties(node);
+
+    /*  CPU with compute cores is small APU, not AppAPU */
+    if (pNodeProperties->NumCPUCores && pNodeProperties->NumFComputeCores)
+        return false;
+
+    HsaIoLinkProperties *IolinkProperties = new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
+    if (hsaKmtGetNodeIoLinkProperties(node, pNodeProperties->NumIOLinks, IolinkProperties)) {
+        LOG() << "Unable to get Node IO Link Information for node " << node << std::endl;
+        delete [] IolinkProperties;
+        return false;
+    }
+
+    /* Checking GPU-to-CPU connection weight */
+    for (int linkId = 0; linkId < pNodeProperties->NumIOLinks; linkId++) {
+        HsaNodeProperties linkProps;
+
+        if (hsaKmtGetNodeProperties(IolinkProperties[linkId].NodeTo, &linkProps)) {
+            LOG() << "Unable to get connected device's IO Link information" << std::endl;
+            break;
+        }
+
+        /* If it's GPU-CPU link with connection weight KFD_CRAT_INTRA_SOCKET_WEIGHT 13 */
+        if (linkProps.NumCPUCores && IolinkProperties[linkId].Weight == 13) {
+            delete [] IolinkProperties;
+            return true;
+        }
+    }
+    delete [] IolinkProperties;
+    return false;
+}
+
 const bool HsaNodeInfo::IsPeerAccessibleByNode(int peer, int node) const {
     const HsaNodeProperties *pNodeProperties;
 
