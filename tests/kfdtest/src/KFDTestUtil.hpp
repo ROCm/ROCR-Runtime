@@ -233,6 +233,7 @@ class HsaNodeInfo {
 
     void PrintNodeInfo() const;
     const bool IsGPUNodeLargeBar(int node) const;
+    const bool IsAppAPU(int node) const;
     const bool IsPeerAccessibleByNode(int peer, int node) const;
     // @brief Find the first available Large-BAR GPU node
     // @return: Node ID if successful or -1
