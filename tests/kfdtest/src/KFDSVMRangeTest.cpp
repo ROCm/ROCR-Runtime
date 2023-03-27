@@ -1466,6 +1466,11 @@ TEST_F(KFDSVMRangeTest, HMMProfilingEvent) {
         return;
     }
 
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
+        return;
+    }
+
     pthread_barrier_t barrier;
     ASSERT_SUCCESS(pthread_barrier_init(&barrier, NULL, 2));
 

@@ -228,6 +228,11 @@ TEST_F(KFDSVMEvictTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
+        return;
+    }
+
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
 
     if (!vramSize) {
@@ -293,6 +298,11 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
     /* Skip test for chip it doesn't have CWSR, which the test depends on */
     if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties) || m_FamilyId >= FAMILY_NV) {
         LOG() << std::hex << "Test is skipped for family ID 0x" << m_FamilyId << std::endl;
+        return;
+    }
+
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
         return;
     }
 
