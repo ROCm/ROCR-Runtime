@@ -250,11 +250,7 @@ FILTER[aqua_vanjaram]=\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest:"\
-"KFDEvictTest.BasicTest:"\
-"KFDEvictTest.QueueTest:"\
-"KFDEvictTest.BurstyTest:"\
-"KFDSVMEvictTest.*"
+"KFDIPCTest.BasicTest"
 
 FILTER[navi10]=\
 "$BLACKLIST_ALL_ASICS:"\
