@@ -61,6 +61,7 @@ hsaKmtGetQueueInfo;
 hsaKmtAllocQueueGWS;
 hsaKmtRuntimeEnable;
 hsaKmtRuntimeDisable;
+hsaKmtGetRuntimeCapabilities;
 hsaKmtSPMAcquire;
 hsaKmtSPMRelease;
 hsaKmtSPMSetDestBuffer;

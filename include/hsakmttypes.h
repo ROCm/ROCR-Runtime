@@ -893,6 +893,7 @@ typedef enum HSA_DBG_NODE_CONTROL {
     HSA_DBG_NODE_CONTROL_FLAG_MAX = 0x01
 } HSA_DBG_NODE_CONTROL;
 
+#define HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK 0x80000000
 
 //This structure is hardware specific and may change in the future
 typedef struct _HsaDbgWaveMsgAMDGen2
