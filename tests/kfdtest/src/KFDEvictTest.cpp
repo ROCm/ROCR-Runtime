@@ -319,6 +319,11 @@ TEST_F(KFDEvictTest, BasicTest) {
         return;
     }
 
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
+        return;
+    }
+
     LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB" << std::endl;
     LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
 
@@ -390,6 +395,11 @@ TEST_F(KFDEvictTest, QueueTest) {
     /* Skip test for chip if it doesn't have CWSR, which the test depends on */
     if (m_FamilyId < FAMILY_VI || isTonga(pNodeProperties)) {
         LOG() << std::hex << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
         return;
     }
 
@@ -508,6 +518,11 @@ TEST_F(KFDEvictTest, BurstyTest) {
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
+
+    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
+        return;
+    }
 
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
     HSAuint64 sysMemSize = GetSysMemSize();
