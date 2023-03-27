@@ -31,7 +31,7 @@
 #include <unistd.h>
 
 static bool *is_device_debugged;
-
+static uint32_t runtime_capabilities_mask = 0;
 
 HSAKMT_STATUS init_device_debugging_memory(unsigned int NumNodes)
 {
@@ -324,6 +324,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeEnable(void *rDebug,
 		else
 			return HSAKMT_STATUS_ERROR;
 	}
+	runtime_capabilities_mask= args.capabilities_mask;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -342,5 +343,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRuntimeDisable(void)
 	if (kmtIoctl(kfd_fd, AMDKFD_IOC_RUNTIME_ENABLE, &args))
 		return HSAKMT_STATUS_ERROR;
 
+	return HSAKMT_STATUS_SUCCESS;
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtGetRuntimeCapabilities(HSAuint32 *caps_mask)
+{
+	*caps_mask = runtime_capabilities_mask;
 	return HSAKMT_STATUS_SUCCESS;
 }

@@ -728,6 +728,12 @@ HSAKMT_STATUS
 HSAKMTAPI
 hsaKmtRuntimeDisable(void);
 
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtGetRuntimeCapabilities(
+    HSAuint32	*caps_mask // OUT
+    );
+
 /**
   Gets GPU and CPU clock counters for particular Node
 */
