@@ -238,11 +238,6 @@ bool isTonga(const HsaNodeProperties *props) {
     return false;
 }
 
-bool CheckMES(const HsaNodeProperties *props) {
-    /* MES devices need GART mappings and therefore need non-paged memory */
-    return (props->EngineId.ui32.Major >= 11) ? true : false;
-}
-
 const uint32_t GetGfxVersion(const HsaNodeProperties *props) {
     return ((props->EngineId.ui32.Major << 16) |
             (props->EngineId.ui32.Minor <<  8) |
