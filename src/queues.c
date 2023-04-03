@@ -86,23 +86,16 @@ static struct process_doorbells *doorbells;
 
 uint32_t get_vgpr_size_per_cu(uint32_t gfxv)
 {
-	uint32_t vgpr_size = 0;
+	uint32_t vgpr_size = 0x40000;
 
-	switch (gfxv)
-	{
-		case GFX_VERSION_ARCTURUS:
-		case GFX_VERSION_ALDEBARAN:
-		case GFX_VERSION_AQUA_VANJARAM:
-			vgpr_size = 0x80000;
-			break;
-		case GFX_VERSION_PLUM_BONITO:
-		case GFX_VERSION_WHEAT_NAS:
-			vgpr_size = 0x60000;
-			break;
-		default:
-			vgpr_size = 0x40000;
-			break;
-	}
+	if ((gfxv & ~(0xff)) == GFX_VERSION_AQUA_VANJARAM ||
+		 gfxv == GFX_VERSION_ALDEBARAN ||
+		 gfxv == GFX_VERSION_ARCTURUS)
+		vgpr_size = 0x80000;
+
+	else if (gfxv == GFX_VERSION_PLUM_BONITO ||
+		 gfxv == GFX_VERSION_WHEAT_NAS)
+		vgpr_size = 0x60000;
 
 	return vgpr_size;
 }
@@ -616,7 +609,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	if (q->gfxv == GFX_VERSION_TONGA)
 		q->eop_buffer_size = TONGA_PAGE_SIZE;
-	else if (q->gfxv == GFX_VERSION_AQUA_VANJARAM)
+	else if ((q->gfxv & ~(0xff)) == GFX_VERSION_AQUA_VANJARAM)
 		q->eop_buffer_size = ((Type == HSA_QUEUE_COMPUTE) ? 4096 : 0);
 	else if (q->gfxv >= 0x80000)
 		q->eop_buffer_size = 4096;
