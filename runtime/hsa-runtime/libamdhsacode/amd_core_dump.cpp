@@ -49,9 +49,14 @@
 #include <memory>
 #include "core/util/utils.h"
 #include "./amd_hsa_code_util.hpp"
+#include "core/inc/amd_core_dump.hpp"
 #include "hsakmt/hsakmt.h"
 
 constexpr char SNAPSHOT_INFO_ALIGNMENT = 0x8;
+constexpr uint32_t LOAD_ALIGNMENT_SHIFT = 4;
+constexpr uint32_t NOTE_ALIGNMENT_SHIFT = 2;
+const std::string PREFIX_FILE_NAME = "gpucore";
+constexpr size_t MAX_BUFFER_SIZE = 4 * 1024 * 1024;
 
 namespace rocr {
 namespace amd {
@@ -252,7 +257,144 @@ struct LoadSegmentBuilder : public SegmentBuilder {
  private:
   int fd_ = -1;
 };
+
+hsa_status_t build_core_dump(const std::string& filename, const SegmentsInfo& segments) {
+  std::unique_ptr<unsigned char[]> copy_buffer(new unsigned char[MAX_BUFFER_SIZE]);
+
+  int fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
+  if (fd == -1) {
+    perror("Failed to create GPU coredump");
+    return HSA_STATUS_ERROR;
+  }
+  Elf64_Ehdr ehdr{};
+  off_t offset = sizeof(Elf64_Ehdr);
+  ehdr.e_ident[EI_MAG0] = ELFMAG0;
+  ehdr.e_ident[EI_MAG1] = ELFMAG1;
+  ehdr.e_ident[EI_MAG2] = ELFMAG2;
+  ehdr.e_ident[EI_MAG3] = ELFMAG3;
+  ehdr.e_ident[EI_CLASS] = ELFCLASS64;
+  ehdr.e_ident[EI_DATA] = ELFDATA2LSB;
+  ehdr.e_ident[EI_VERSION] = EV_CURRENT;
+  ehdr.e_ident[EI_OSABI] = ELF::ELFOSABI_AMDGPU_HSA;
+  ehdr.e_ident[EI_ABIVERSION] = 0;
+  ehdr.e_type = ET_CORE;
+  ehdr.e_machine = ELF::EM_AMDGPU;
+  ehdr.e_version = EV_CURRENT;
+  ehdr.e_entry = 0;
+  ehdr.e_phoff = offset;
+  ehdr.e_shoff = 0;
+  ehdr.e_flags = 0;
+  ehdr.e_ehsize = sizeof(Elf64_Ehdr);
+  ehdr.e_phentsize = sizeof(Elf64_Phdr);
+  ehdr.e_phnum = segments.size();
+  ehdr.e_shentsize = 0;
+  ehdr.e_shnum = 0;
+  ehdr.e_shstrndx = 0;
+
+  if (write(fd, &ehdr, sizeof(ehdr)) == -1) {
+    perror("Failed to write ELF header");
+    close(fd);
+    return HSA_STATUS_ERROR;
+  }
+
+  /* Make sure that the underlying file has enough space for the file headers. */
+  int error = posix_fallocate(fd, sizeof(Elf64_Ehdr), segments.size() * sizeof(Elf64_Phdr));
+  if (error != 0) {
+    fprintf(stderr, "Failed to allocate file: %s\n", strerror(error));
+    close(fd);
+    return HSA_STATUS_ERROR;
+  }
+  size_t idx = 0;
+  offset += segments.size() * sizeof(Elf64_Phdr);
+  for (SegmentInfo seg : segments) {
+    Elf64_Phdr phdr{};
+    phdr.p_type = [](SegmentType s) {
+      switch (s) {
+        case LOAD:
+          return PT_LOAD;
+        case NOTE:
+          return PT_NOTE;
+        default:
+          assert(false);
+          return PT_NULL;
+      }
+    }(seg.stype);
+    phdr.p_flags = seg.flags;
+    phdr.p_vaddr = seg.vaddr;
+    phdr.p_paddr = 0;
+    phdr.p_memsz = seg.size;
+    phdr.p_filesz = seg.size;
+    phdr.p_align = [](SegmentType s) {
+      switch (s) {
+        case LOAD:
+          return LOAD_ALIGNMENT_SHIFT;
+        case NOTE:
+          return NOTE_ALIGNMENT_SHIFT;
+        default:
+          assert(false);
+          return (uint32_t)0;
+      }
+    }(seg.stype);
+    phdr.p_offset = alignUp(offset, (uint64_t)1 << phdr.p_align);
+    if (pwrite(fd, &phdr, sizeof(phdr), sizeof(Elf64_Ehdr) + idx * sizeof(Elf64_Phdr)) == -1) {
+      perror("Failed to write ELF header");
+      close(fd);
+      return HSA_STATUS_ERROR;
+    }
+    /* Allocate stace for the segment on the file, and write the segment
+       content.  */
+    error = posix_fallocate(fd, phdr.p_offset, phdr.p_filesz);
+    if (error != 0) {
+      fprintf(stderr, "Failed to allocate file: %s\n", strerror(error));
+      close(fd);
+      return HSA_STATUS_ERROR;
+    }
+    size_t remaining = phdr.p_filesz;
+    while (remaining > 0) {
+      size_t curr_chunk = std::min(remaining, MAX_BUFFER_SIZE);
+      try {
+        hsa_status_t st = seg.builder->Read(copy_buffer.get(), curr_chunk,
+                                                    phdr.p_vaddr + phdr.p_filesz - remaining);
+        if (st != HSA_STATUS_SUCCESS) {
+          close(fd);
+          return st;
+        }
+        if (pwrite(fd, copy_buffer.get(), curr_chunk, phdr.p_offset + phdr.p_filesz - remaining) ==
+            -1) {
+          perror("Failed to white core dump");
+          close(fd);
+          return HSA_STATUS_ERROR;
+        }
+      } catch (...) {
+        close(fd);
+        return HSA_STATUS_ERROR;
+      }
+      remaining -= curr_chunk;
+    }
+    offset += phdr.p_filesz;
+    idx++;
+  }
+  printf("GPU core dump created: %s\n", filename.c_str());
+  close(fd);
+  return HSA_STATUS_SUCCESS;
+}
 }   //  namespace impl
+
+hsa_status_t dump_gpu_core() {
+  impl::NoteSegmentBuilder nbuilder;
+  impl::LoadSegmentBuilder lbuilder;
+  impl::SegmentsInfo segments;
+
+  hsa_status_t status = nbuilder.Collect(segments);
+  if (status != HSA_STATUS_SUCCESS) return status;
+
+  status = lbuilder.Collect(segments);
+  if (status != HSA_STATUS_SUCCESS) return status;
+
+  std::stringstream st;
+  st << PREFIX_FILE_NAME << "." << getpid();
+  return build_core_dump(st.str(), segments);
+}
 }   //  namespace coredump
 }   //  namespace amd
 }   //  namespace rocr
