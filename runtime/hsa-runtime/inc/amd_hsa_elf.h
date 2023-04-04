@@ -262,6 +262,8 @@ typedef enum {
 #define NT_AMD_HSA_PRODUCER_OPTIONS    5
 #define NT_AMD_HSA_EXTENSION           6
 #define NT_AMD_HSA_ISA_NAME            11
+/* AMDGPU snapshots of runtime, agent and queues state for use in core dump */
+#define NT_AMDGPU_CORE_STATE           33
 #define NT_AMD_HSA_HLDEBUG_DEBUG       101
 #define NT_AMD_HSA_HLDEBUG_TARGET      102
 
