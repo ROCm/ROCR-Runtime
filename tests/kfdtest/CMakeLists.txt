@@ -92,20 +92,12 @@ set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
 
 find_package(PkgConfig)
 
-if( DEFINED ENV{DRM_DIR} )
-#assume header files and libraries are under the same path
-    set ( DRM_DIR $ENV{DRM_DIR} )
-    set ( DRM_INCLUDE_DIRS ${DRM_DIR}/include )
-    link_directories(${DRM_DIR}/lib64)
-    set ( DRM_LIBRARIES drm )
-    set ( DRM_AMDGPU_LIBRARIES drm_amdgpu )
-else()
+list (PREPEND CMAKE_PREFIX_PATH "${DRM_DIR}")
 # The module name passed to pkg_check_modules() is determined by the
 # name of file *.pc
-    pkg_check_modules(DRM REQUIRED libdrm)
-    pkg_check_modules(DRM_AMDGPU REQUIRED libdrm_amdgpu)
-    include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
-endif()
+pkg_check_modules(DRM REQUIRED libdrm)
+pkg_check_modules(DRM_AMDGPU REQUIRED libdrm_amdgpu)
+include_directories(${DRM_AMDGPU_INCLUDE_DIRS})
 
 if( DEFINED ENV{LIBHSAKMT_PATH} )
     set ( LIBHSAKMT_PATH $ENV{LIBHSAKMT_PATH} )
