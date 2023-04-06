@@ -64,6 +64,7 @@ enum KfdFamilyId {
     FAMILY_AV,    // Aqua Vanjaram
     FAMILY_NV,    // Navi10
     FAMILY_GFX11, // GFX11
+    FAMILY_GFX12, // GFX12
 };
 
 #endif  //  __KFD_TEST_FLAGS__H__
