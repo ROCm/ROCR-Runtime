@@ -818,6 +818,8 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
   // check output struct has an initialized size.
   if (info->size == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
+  retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
+
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
 
@@ -831,8 +833,8 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
     auto err = hsaKmtQueryPointerInfo(ptr, &thunkInfo);
     if (err != HSAKMT_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
-      memset(info, 0, sizeof(*info));
-      info->type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+      retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+      memcpy(info, &retInfo, retInfo.size);
       return HSA_STATUS_SUCCESS;
     }
 
@@ -890,8 +892,6 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
       ((retInfo.type == HSA_EXT_POINTER_TYPE_HSA) || (retInfo.type == HSA_EXT_POINTER_TYPE_IPC))) {
     retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
   }
-
-  retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
 
   // IPC and Graphics memory may come from a node that does not have an agent in this process.
   // Ex. ROCR_VISIBLE_DEVICES or peer GPU is not supported by ROCm.
