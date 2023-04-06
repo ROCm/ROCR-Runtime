@@ -288,18 +288,17 @@ std::string LocateKernelFile(std::string filename, hsa_agent_t agent) {
   std::string obj_file;
   hsa_status_t err = hsa_agent_get_info(agent, HSA_AGENT_INFO_NAME, agent_name);
   RET_IF_HSA_UTILS_ERR_RET(err, obj_file);
-  
+
   obj_file = "./" + filename;
   int file_handle = open(obj_file.c_str(), O_RDONLY);
-  if (file_handle == -1) {
+  if (file_handle < 0) {
     obj_file = "./" + std::string(agent_name) + "/" + filename;
     file_handle = open(obj_file.c_str(), O_RDONLY);
+    if(file_handle < 0)
+      std::runtime_error("Could not open file.\n");
   }
 
-  if(file_handle == -1)
-    obj_file.clear();
-  else
-    close(file_handle);
+  close(file_handle);
   return obj_file;
 }
 
