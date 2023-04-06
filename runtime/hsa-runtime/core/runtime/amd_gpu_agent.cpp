@@ -212,6 +212,8 @@ GpuAgent::~GpuAgent() {
   }
 
   scratch_cache_.trim(true);
+  scratch_cache_.free_reserve();
+
   if (scratch_pool_.base() != NULL) {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
@@ -477,6 +479,18 @@ void GpuAgent::InitScratchPool() {
     new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
   } else {
     new (&scratch_pool_) SmallHeap();
+  }
+
+  size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  if (reserved_sz) {
+    HSAuint64 alt_va;
+    void* reserved_base = scratch_pool_.alloc(reserved_sz);
+    assert(reserved_base && "Could not allocate reserved memory");
+
+    if (hsaKmtMapMemoryToGPU(reserved_base, reserved_sz, &alt_va) == HSAKMT_STATUS_SUCCESS)
+      scratch_cache_.reserve(reserved_sz, reserved_base);
+    else
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Reserve scratch memory failed.");
   }
 }
 
@@ -1345,11 +1359,12 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   */
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   size_t small_limit = scratch_pool_.size() >> 3;
-  // Lift limit for 2.10 release RCCL workaround.
-  size_t single_limit = 146800640; //small_limit >> 2;
+  const size_t single_scratch_limit =
+      core::Runtime::runtime_singleton_->flag().scratch_single_limit();
   bool use_reclaim = true;
-  bool large = (scratch.size > single_limit) ||
-    (scratch_pool_.size() - scratch_pool_.remaining() - scratch_cache_.free_bytes() + scratch.size > small_limit);
+  bool large = (scratch.size > single_scratch_limit) ||
+      ((scratch_pool_.size() - scratch_pool_.remaining() - scratch_cache_.free_bytes() +
+        scratch.size) > small_limit);
   if ((isa_->GetMajorVersion() < 8) ||
       core::Runtime::runtime_singleton_->flag().no_scratch_reclaim()) {
     large = false;
@@ -1382,7 +1397,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     if (scratch_cache_.alloc(scratch)) return;
 
     // Attempt new allocation.
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
       if (large)
         scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
       else
@@ -1406,8 +1421,17 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       scratch.queue_base = nullptr;
 
       // Release cached scratch and retry.
-      // First iteration trims unused blocks, second trims all.
-      scratch_cache_.trim(i == 1);
+      // First iteration trims unused blocks, second trims all. 3rd uses reserved memory
+      switch (i) {
+        case 0:
+          scratch_cache_.trim(false);
+          break;
+        case 1:
+          scratch_cache_.trim(true);
+          break;
+        case 2:
+          if (scratch_cache_.use_reserved(scratch)) return;
+      }
     }
 
     // Retry if large may yield needed space.

@@ -63,6 +63,9 @@ class Flag {
   static_assert(XNACK_DISABLE == 0, "XNACK_REQUEST enum values improperly changed.");
   static_assert(XNACK_ENABLE == 1, "XNACK_REQUEST enum values improperly changed.");
 
+  // Lift limit for 2.10 release RCCL workaround.
+  const size_t DEFAULT_SCRATCH_SINGLE_LIMIT = 146800640;  // small_limit >> 2;
+
   explicit Flag() { Refresh(); }
 
   virtual ~Flag() {}
@@ -95,8 +98,20 @@ class Flag {
     var = os::GetEnvVar("HSA_MAX_QUEUES");
     max_queues_ = static_cast<uint32_t>(atoi(var.c_str()));
 
+    // Maximum amount of scratch mem that can be used per process per gpu
     var = os::GetEnvVar("HSA_SCRATCH_MEM");
     scratch_mem_size_ = atoi(var.c_str());
+
+    // Scratch memory sizes > HSA_SCRATCH_SINGLE_LIMIT will trigger a use-once scheme
+    // We also reserve HSA_SCRATCH_SINGLE_LIMIT per process per gpu to guarrantee we
+    // have sufficient memory to for scratch in case user tried to allocate all device
+    // memory
+    if (os::IsEnvVarSet("HSA_SCRATCH_SINGLE_LIMIT")) {
+      var = os::GetEnvVar("HSA_SCRATCH_SINGLE_LIMIT");
+      scratch_single_limit_ = atoi(var.c_str());
+    } else {
+      scratch_single_limit_ = DEFAULT_SCRATCH_SINGLE_LIMIT;
+    }
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 
@@ -213,6 +228,8 @@ class Flag {
 
   size_t scratch_mem_size() const { return scratch_mem_size_; }
 
+  size_t scratch_single_limit() const { return scratch_single_limit_; }
+
   std::string tools_lib_names() const { return tools_lib_names_; }
 
   bool disable_image() const { return disable_image_; }
@@ -285,6 +302,7 @@ class Flag {
   uint32_t max_queues_;
 
   size_t scratch_mem_size_;
+  size_t scratch_single_limit_;
 
   std::string tools_lib_names_;
   std::string svm_profile_;
