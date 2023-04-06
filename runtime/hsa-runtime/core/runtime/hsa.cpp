@@ -2751,6 +2751,11 @@ hsa_status_t hsa_status_string(
           "enable a CU which was disabled for the process.  CUs disabled for the process remain "
           "disabled.";
       break;
+    case HSA_STATUS_ERROR_OUT_OF_REGISTERS:
+      *status_string =
+          "HSA_STATUS_ERROR_OUT_OF_REGISTERS: Kernel has requested more VGPRs than are available "
+          "on this agent";
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

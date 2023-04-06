@@ -202,6 +202,11 @@ enum {
    * disabled.
    */
   HSA_STATUS_CU_MASK_REDUCED = 44,
+
+  /**
+   * Exceeded number of VGPRs available on this agent
+   */
+  HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
 };
 
 /**

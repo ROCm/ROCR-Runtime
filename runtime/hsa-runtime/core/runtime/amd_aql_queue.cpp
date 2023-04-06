@@ -941,7 +941,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
         errorCode = HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
       } else if ((error_code & 128) == 128) {  // Out of VGPRs
-        errorCode = HSA_STATUS_ERROR_INVALID_ISA;
+        errorCode = hsa_status_t(HSA_STATUS_ERROR_OUT_OF_REGISTERS);
 
       } else if ((error_code & 0x20000000) == 0x20000000) {  // Memory violation (>48-bit)
         errorCode = hsa_status_t(HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION);
