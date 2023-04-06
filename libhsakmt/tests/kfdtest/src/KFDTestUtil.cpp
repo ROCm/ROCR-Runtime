@@ -211,6 +211,9 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
     case 11:
         familyId = FAMILY_GFX11;
         break;
+    case 12:
+        familyId = FAMILY_GFX12;
+	break;
     }
 
     if (props->NumCPUCores && props->NumFComputeCores)
