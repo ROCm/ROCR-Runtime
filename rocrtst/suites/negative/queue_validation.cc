@@ -175,6 +175,10 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
 
+  // Create the executable, get symbol by name and load the code object
+  err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
   // get queue size
   uint32_t queue_max = 0;
   err = hsa_agent_get_info(gpuAgent,
@@ -199,11 +203,6 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
     err = hsa_queue_create(gpuAgent,
                        queue_max, HSA_QUEUE_TYPE_SINGLE,
                        CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
-    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-
-
-    // Create the executable, get symbol by name and load the code object
-    err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     // setting the dimesion more than 3
@@ -249,12 +248,18 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
     ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
+
+  clear_code_object();
 }
 
 
 void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
+
+  // Create the executable, get symbol by name and load the code object
+  err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   // Fill up the kernel packet except header
   err = rocrtst::InitializeAQLPacket(this, &aql());
@@ -285,11 +290,6 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
     err = hsa_queue_create(gpuAgent,
                        queue_max, HSA_QUEUE_TYPE_SINGLE,
                        CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
-    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-
-
-    // Create the executable, get symbol by name and load the code object
-    err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     aql().kernel_object = kernel_object();
@@ -336,11 +336,18 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
     ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
+
+  clear_code_object();
 }
 
 void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
+
+  // Create the executable, get symbol by name and load the code object
+  err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
 
   // Fill up the kernel packet except header
   err = rocrtst::InitializeAQLPacket(this, &aql());
@@ -370,11 +377,6 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
     err = hsa_queue_create(gpuAgent,
                            kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE,
                            CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
-    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-
-
-    // Create the executable, get symbol by name and load the code object
-    err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     // setting the null code object
@@ -420,11 +422,17 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
     ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
+
+  clear_code_object();
 }
 
 void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
+
+  // Create the executable, get symbol by name and load the code object
+  err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   // Fill up the kernel packet except header
   err = rocrtst::InitializeAQLPacket(this, &aql());
@@ -454,11 +462,6 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
     err = hsa_queue_create(gpuAgent,
                        queue_max, HSA_QUEUE_TYPE_SINGLE,
                        CallbackQueueErrorHandling, &user_data[ii], 0, 0, &queue[ii]);
-    ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-
-
-    // Create the executable, get symbol by name and load the code object
-    err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     const uint32_t queue_mask = queue[ii]->size - 1;
@@ -499,11 +502,17 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
     ASSERT_EQ(user_data[ii].cb_triggered, true);
     if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
   }
+
+  clear_code_object();
 }
 
 void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgent,
                                             hsa_agent_t gpuAgent) {
   hsa_status_t err;
+
+  // Create the executable, get symbol by name and load the code object
+  err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
   // Fill up the kernel packet except header
   err = rocrtst::InitializeAQLPacket(this, &aql());
@@ -535,11 +544,6 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
       err = hsa_queue_create(gpuAgent,
               kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE,
               CallbackQueueErrorHandling, &user_data[ii][jj - 1], 0, 0, &queue[ii]);
-      ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-
-
-      // Create the executable, get symbol by name and load the code object
-      err = rocrtst::LoadKernelFromObjFile(this, &gpuAgent);
       ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
       aql().setup |= jj << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
@@ -591,6 +595,8 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
       ASSERT_EQ(user_data[ii][jj].cb_triggered, true);
     }
   }
+
+  clear_code_object();
 }
 
 
