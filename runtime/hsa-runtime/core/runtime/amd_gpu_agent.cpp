@@ -1242,6 +1242,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       else
         *((hsa_amd_iommu_version_t*)value) = HSA_IOMMU_SUPPORT_NONE;
       break;
+    case HSA_AMD_AGENT_INFO_NUM_XCC:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumXcc);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
