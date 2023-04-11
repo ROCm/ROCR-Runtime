@@ -1659,7 +1659,7 @@ void Runtime::LoadTools() {
       }
       if (!ld(&hsa_api_table_.hsa_api,
         hsa_api_table_.hsa_api.version.major_id,
-        failed.size(), &failed[0])) {
+        failed.size(), failed.data())) {
           failed.push_back(lib.name_.c_str());
           os::CloseLib(tool);
           continue;
