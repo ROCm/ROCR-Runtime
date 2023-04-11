@@ -387,7 +387,12 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for version of IOMMU supported by agent.
    * The type of this attribute is hsa_amd_iommu_version_t.
    */
-  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
+  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110,
+  /**
+   * Queries for number of XCCs within the agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_XCC = 0xA111
 } hsa_amd_agent_info_t;
 
 /**
