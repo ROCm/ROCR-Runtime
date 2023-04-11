@@ -57,6 +57,7 @@ namespace rocr {
 class Flag {
  public:
   enum SDMA_OVERRIDE { SDMA_DISABLE, SDMA_ENABLE, SDMA_DEFAULT };
+  enum SRAMECC_ENABLE { SRAMECC_DISABLED, SRAMECC_ENABLED, SRAMECC_DEFAULT };
 
   // The values are meaningful and chosen to satisfy the thunk API.
   enum XNACK_REQUEST { XNACK_DISABLE = 0, XNACK_ENABLE = 1, XNACK_UNCHANGED = 2 };
@@ -175,6 +176,10 @@ class Flag {
     var = os::GetEnvVar("HSA_SVM_PROFILE");
     svm_profile_ = var;
 
+    var = os::GetEnvVar("HSA_ENABLE_SRAMECC");
+    sramecc_enable_ =
+        (var == "0") ? SRAMECC_DISABLED : ((var == "1") ? SRAMECC_ENABLED : SRAMECC_DEFAULT);
+
     var = os::GetEnvVar("HSA_IMAGE_PRINT_SRD");
     image_print_srd_ = (var == "1") ? true : false;
 
@@ -269,6 +274,8 @@ class Flag {
 
   const std::string& svm_profile() const { return svm_profile_; }
 
+  SRAMECC_ENABLE sramecc_enable() const { return sramecc_enable_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -311,6 +318,8 @@ class Flag {
 
   // Indicates user preference for Xnack state.
   XNACK_REQUEST xnack_;
+
+  SRAMECC_ENABLE sramecc_enable_;
 
   // Map GPU index post RVD to its default cu mask.
   std::map<uint32_t, std::vector<uint32_t>> cu_mask_;

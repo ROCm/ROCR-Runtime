@@ -124,8 +124,18 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 
   rocr::core::IsaFeature sramecc = rocr::core::IsaFeature::Unsupported;
   if (isa_base->IsSrameccSupported()) {
-    sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1 ? core::IsaFeature::Enabled
-                                                              : core::IsaFeature::Disabled;
+    switch (core::Runtime::runtime_singleton_->flag().sramecc_enable()) {
+      case Flag::SRAMECC_DISABLED:
+        sramecc = core::IsaFeature::Disabled;
+        break;
+      case Flag::SRAMECC_ENABLED:
+        sramecc = core::IsaFeature::Enabled;
+        break;
+      case Flag::SRAMECC_DEFAULT:
+        sramecc = node_props.Capability.ui32.SRAM_EDCSupport == 1 ? core::IsaFeature::Enabled
+                                                                  : core::IsaFeature::Disabled;
+        break;
+    }
   }
 
   rocr::core::IsaFeature xnack = rocr::core::IsaFeature::Unsupported;
