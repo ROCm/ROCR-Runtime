@@ -445,8 +445,7 @@ static void free_queue(struct queue *q)
 					 q->eop_buffer_size,
 					 PAGE_SIZE, q->use_ats);
 	if (q->unified_ctx_save_restore)
-		munmap(q->ctx_save_restore,
-		       PAGE_ALIGN_UP(q->ctx_save_restore_size + q->debug_memory_size));
+		munmap(q->ctx_save_restore, q->total_mem_alloc_size);
 	else if (q->ctx_save_restore)
 		free_exec_aligned_memory(q->ctx_save_restore,
 					 q->total_mem_alloc_size,
