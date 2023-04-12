@@ -517,6 +517,7 @@ const char *LoopIsa =
 const char *PersistentIterateIsa =
     SHADER_START
     SHADER_MACROS_U32
+    SHADER_MACROS_FLAT
     R"(
         // Compute address of output buffer
         v_mov_b32               v0, s4          // use workgroup id as index
@@ -526,7 +527,7 @@ const char *PersistentIterateIsa =
         V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
 
         // Store known-value output in register
-        flat_load_dword         v6, v[4:5] glc
+        FLAT_LOAD_DWORD_NSS     v6, v[4:5] glc
         s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
 
         // Initialize counter
