@@ -1098,7 +1098,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
 	if (read_size <= 0) {
 		ret = HSAKMT_STATUS_ERROR;
-		goto err;
+		goto out;
 	}
 
 	/* Since we're using the buffer as a string, we make sure the string terminates */
@@ -1193,8 +1193,8 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	}
 
 	/* Bail out early, if a CPU node */
-	if (props->NumCPUCores)
-		goto err;
+	if (!props->NumFComputeCores)
+		goto out;
 
 	if (props->NumArrays != 0)
 		props->NumShaderBanks = simd_arrays_count/props->NumArrays;
@@ -1214,7 +1214,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 				pr_err("HSA_OVERRIDE_GFX_VERSION %s is invalid\n",
 					envvar);
 				ret = HSAKMT_STATUS_ERROR;
-				goto err;
+				goto out;
 			}
 			props->EngineId.ui32.Major = major & 0x3f;
 			props->EngineId.ui32.Minor = minor & 0xff;
@@ -1263,7 +1263,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 	if (!props->NumXcc)
 		props->NumXcc = 1;
 
-err:
+out:
 	free(read_buf);
 	fclose(fd);
 	return ret;
