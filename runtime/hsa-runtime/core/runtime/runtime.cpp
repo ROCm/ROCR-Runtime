@@ -690,8 +690,8 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
 
       // Implemented in KFD in 1.12
       if (kfd_version.KernelInterfaceMajorVersion > 1 ||
-          kfd_version.KernelInterfaceMajorVersion == 1 &&
-              kfd_version.KernelInterfaceMinorVersion >= 12)
+          (kfd_version.KernelInterfaceMajorVersion == 1 &&
+              kfd_version.KernelInterfaceMinorVersion >= 12))
         *(reinterpret_cast<bool*>(value)) = true;
       else
         *(reinterpret_cast<bool*>(value)) = false;
