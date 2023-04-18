@@ -81,6 +81,8 @@ class Assembler {
       int RunAssemble(const char* const AssemblySource);
       int RunAssembleBuf(const char* const AssemblySource, char* OutBuf,
                          const size_t BufSize = PAGE_SIZE);
+      int RunAssembleBuf(const char* const AssemblySource, char* OutBuf,
+                         const size_t BufSize, const uint32_t Gfxv);
 };
 
 #endif  // _ASSEMBLE_H_

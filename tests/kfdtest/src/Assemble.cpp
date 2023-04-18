@@ -224,11 +224,20 @@ int Assembler::ExtractELFText(const char* RawData) {
  * @param AssemblySource Shader source represented as a raw C string
  * @param OutBuf Raw instruction stream output buffer
  * @param BufSize Size of OutBuf (defaults to PAGE_SIZE)
+ * @param Gfxv Optional overload to temporarily set target ASIC
  * @return Value of RunAssemble() (0 on success)
  */
 int Assembler::RunAssembleBuf(const char* const AssemblySource, char* OutBuf,
                               const size_t BufSize) {
     int ret = RunAssemble(AssemblySource);
+    return ret ? ret : CopyInstrStream(OutBuf, BufSize);
+}
+int Assembler::RunAssembleBuf(const char* const AssemblySource, char* OutBuf,
+                              const size_t BufSize, const uint32_t Gfxv) {
+    const char* defaultMCPU = GetTargetAsic();
+    SetTargetAsic(Gfxv);
+    int ret = RunAssemble(AssemblySource);
+    strncpy(MCPU, defaultMCPU, ASM_MCPU_LEN);
     return ret ? ret : CopyInstrStream(OutBuf, BufSize);
 }
 
