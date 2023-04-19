@@ -64,6 +64,8 @@ struct rbtree_s {
 
 void rbtree_insert(rbtree_t *tree, rbtree_node_t *node);
 void rbtree_delete(rbtree_t *tree, rbtree_node_t *node);
+rbtree_node_t *rbtree_prev(rbtree_t *tree,
+		rbtree_node_t *node);
 rbtree_node_t *rbtree_next(rbtree_t *tree,
 		rbtree_node_t *node);
 
