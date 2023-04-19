@@ -372,3 +372,31 @@ rbtree_next(rbtree_t *tree, rbtree_node_t *node)
 		node = parent;
 	}
 }
+
+rbtree_node_t *
+rbtree_prev(rbtree_t *tree, rbtree_node_t *node)
+{
+	rbtree_node_t  *root, *sentinel, *parent;
+
+	sentinel = &tree->sentinel;
+
+	if (node->left != sentinel) {
+		return rbtree_max(node->left, sentinel);
+	}
+
+	root = tree->root;
+
+	for ( ;; ) {
+		parent = node->parent;
+
+		if (node == root) {
+			return NULL;
+		}
+
+		if (node == parent->right) {
+			return parent;
+		}
+
+		node = parent;
+	}
+}

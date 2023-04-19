@@ -470,17 +470,34 @@ static vm_object_t *vm_find_object_by_address_userptr_range(manageable_aperture_
 	vm_object_t *cur = NULL;
 	rbtree_t *tree = vm_object_tree(app, is_userptr);
 	rbtree_key_t key = rbtree_key((unsigned long)address, 0);
-	rbtree_node_t *ln = rbtree_lookup_nearest(tree, &key,
-			LKP_ALL, LEFT);
-	rbtree_node_t *rn = rbtree_lookup_nearest(tree, &key,
-			LKP_ALL, RIGHT);
+	rbtree_node_t *rn = rbtree_lookup_nearest(tree, &key, LKP_ALL, RIGHT);
+	rbtree_node_t *ln;
 	void *start;
 	uint64_t size;
-	int bad = 0;
 
-loop:
-	while (ln) {
-		cur = vm_object_entry(ln, is_userptr);
+	/* all nodes might sit on left side of *address*, in this case rn is NULL.
+	 * So pick up the rightest one as rn.
+	 */
+	if (!rn)
+		rn = rbtree_min_max(tree, RIGHT);
+
+	if (is_userptr) {
+		/* userptr might overlap. Need walk through the tree from right to left as only left nodes
+		 * can obtain the *address*
+		 */
+		ln = rbtree_min_max(tree, LEFT);
+	} else {
+		/* if key->size is -1, it match the node with start <= address.
+		 * if key->size is 0, it match the node with start < address.
+		 */
+		key = rbtree_key((unsigned long)address, -1);
+		ln = rbtree_lookup_nearest(tree, &key, LKP_ALL, LEFT);
+	}
+	if (!ln)
+		return NULL;
+
+	while (rn) {
+		cur = vm_object_entry(rn, is_userptr);
 		if (is_userptr == 0) {
 			start = cur->start;
 			size = cur->size;
@@ -498,20 +515,7 @@ loop:
 		if (ln == rn)
 			break;
 
-		ln = rbtree_next(tree, ln);
-	}
-
-	if (cur == NULL && bad == 0) {
-		/* As there is area overlap, say, (address, size) like
-		 * (0x100, 32), (0x108, 8), and the key.address is 0x118
-		 * The lookup above only find (0x108, 8), but the correct node should
-		 * be (0x100, 16). So try to walk though the tree to find the node.
-		 */
-		rn = ln;
-		key = rbtree_key(0, 0);
-		ln = rbtree_lookup_nearest(tree, &key, LKP_ALL, RIGHT);
-		bad = 1;
-		goto loop;
+		rn = rbtree_prev(tree, rn);
 	}
 
 	return cur; /* NULL if not found */
