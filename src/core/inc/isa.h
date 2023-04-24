@@ -76,11 +76,14 @@ public:
   bool GetInfo(const hsa_wavefront_info_t &attribute, void *value) const;
 
 private:
+  uint32_t num_threads_;
   /// @brief Default constructor.
-  Wavefront() {}
+  Wavefront() : num_threads_(0) {}
+  Wavefront(uint32_t num_threads) : num_threads_(num_threads) {}
 
   /// @brief Wavefront's friends.
   friend class Isa;
+  friend class IsaRegistry;
 };
 
 enum class IsaFeature : uint8_t {

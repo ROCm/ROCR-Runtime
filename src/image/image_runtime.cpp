@@ -47,6 +47,7 @@
 #include <climits>
 #include <mutex>
 
+#include "core/inc/runtime.h"
 #include "core/inc/hsa_internal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "resource.h"
@@ -397,6 +398,8 @@ hsa_status_t ImageRuntime::CreateImageHandle(
 
   image_manager(component)->PopulateImageSrd(*image);
 
+  if (core::Runtime::runtime_singleton_->flag().image_print_srd()) image->printSRD();
+
   image_handle.handle = image->Convert();
 
   return HSA_STATUS_SUCCESS;
@@ -433,6 +436,8 @@ hsa_status_t ImageRuntime::CreateImageHandleWithLayout(
     Image::Destroy(image);
     return err;
   }
+
+  if (core::Runtime::runtime_singleton_->flag().image_print_srd()) image->printSRD();
 
   image_handle.handle = image->Convert();
   return HSA_STATUS_SUCCESS;

@@ -1069,5 +1069,52 @@ hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agen
   CATCH;
 }
 
+hsa_status_t hsa_amd_spm_acquire(hsa_agent_t preferred_agent) {
+  TRY;
+  IS_OPEN();
+  const core::Agent* agent = core::Agent::Convert(preferred_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  if (hsaKmtSPMAcquire(agent->node_id()) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  return HSA_STATUS_SUCCESS;
+
+  CATCH;
+}
+
+hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent) {
+  TRY;
+  IS_OPEN();
+
+  const core::Agent* agent = core::Agent::Convert(preferred_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  if (hsaKmtSPMRelease(agent->node_id()) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+
+  CATCH;
+}
+
+hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
+                                         uint32_t* timeout, uint32_t* size_copied, void* dest,
+                                         bool* is_data_loss) {
+  TRY;
+  IS_OPEN();
+
+  const core::Agent* agent = core::Agent::Convert(preferred_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  if (hsaKmtSPMSetDestBuffer(agent->node_id(), size_in_bytes, timeout, size_copied, dest,
+                             is_data_loss) != HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr

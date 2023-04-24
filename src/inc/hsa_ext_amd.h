@@ -201,6 +201,21 @@ enum {
 };
 
 /**
+ * @brief IOMMU version supported
+ */
+typedef enum {
+  /**
+   * IOMMU not supported
+   */
+  HSA_IOMMU_SUPPORT_NONE = 0,
+  /* IOMMU V1 support is not relevant to user applications, so not reporting it */
+  /**
+   * IOMMU V2 supported
+   */
+  HSA_IOMMU_SUPPORT_V2 = 1,
+} hsa_amd_iommu_version_t;
+
+/**
  * @brief Agent attributes.
  */
 typedef enum hsa_amd_agent_info_s {
@@ -335,8 +350,22 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for the ASIC family ID of an agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID = 0xA107
-
+  HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID = 0xA107,
+  /**
+   * Queries for the Packet Processor(CP Firmware) ucode version of an agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_UCODE_VERSION = 0xA108,
+  /**
+   * Queries for the SDMA engine ucode of an agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109,
+  /**
+   * Queries for version of IOMMU supported by agent.
+   * The type of this attribute is hsa_amd_iommu_version_t.
+   */
+  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
 } hsa_amd_agent_info_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -946,6 +975,17 @@ typedef enum hsa_amd_memory_pool_global_flag_s {
   HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4
 } hsa_amd_memory_pool_global_flag_t;
 
+typedef enum hsa_amd_memory_pool_location_s {
+    /**
+     * This memory pool resides on the host (CPU)
+     */
+    HSA_AMD_MEMORY_POOL_LOCATION_CPU = 0,
+    /**
+     * This memory pool resides on a GPU
+     */
+    HSA_AMD_MEMORY_POOL_LOCATION_GPU = 1
+} hsa_amd_memory_pool_location_t;
+
 /**
  * @brief Memory pool features.
  */
@@ -1004,6 +1044,12 @@ typedef enum {
   * is size_t.
   */
   HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE = 16,
+  /**
+   * Location of this memory pool. The type of this attribute
+   * is hsa_amd_memory_pool_location_t.
+   */
+  HSA_AMD_MEMORY_POOL_INFO_LOCATION = 17,
+
 } hsa_amd_memory_pool_info_t;
 
 /**
@@ -2400,6 +2446,59 @@ hsa_status_t hsa_amd_svm_attributes_get(void* ptr, size_t size,
 hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agent,
                                         uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                         hsa_signal_t completion_signal);
+
+/**
+ * @brief Acquire Stream Performance Monitor on an agent
+ *
+ * Acquire exclusive use of SPM on @p preferred_agent.
+ * See hsa_amd_spm_set_dest_buffer to provide a destination buffer to KFD to start recording and
+ * retrieve this data.
+ * @param[in] preferred_agent Agent on which to acquire SPM
+ */
+hsa_status_t hsa_amd_spm_acquire(hsa_agent_t preferred_agent);
+
+/**
+ * @brief Release Stream Performance Monitor on an agent
+ *
+ * Release exclusive use of SPM on @p preferred_agent. This will stop KFD writing SPM data.
+ * If a destination buffer is set, then data in the destination buffer is available to user
+ * when this function returns.
+ *
+ * @param[in] preferred_agent Agent on which to release SPM
+ */
+hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
+
+/**
+ * @brief  Set up the current destination user mode buffer for stream performance
+ * counter data. KFD will start writing SPM data into the destination buffer. KFD will continue
+ * to copy data into the current destination buffer until any of the following functions are called
+ * - hsa_amd_spm_release
+ * - hsa_amd_spm_set_dest_buffer with dest set to NULL
+ * - hsa_amd_spm_set_dest_buffer with dest set to a new buffer
+ *
+ * if @p timeout is non-0, the call will wait for up to @p timeout ms for the previous
+ * buffer to be filled. If previous buffer to be filled before timeout, the @p timeout
+ * will be updated value with the time remaining. If the timeout is exceeded, the function
+ * copies any partial data available into the previous user buffer and returns success.
+ * User should not access destination data while KFD is copying data.
+ * If the previous destination buffer was full, then @p is_data_loss flag is set.
+ * @p dest is CPU accessible memory. It could be malloc'ed memory or host allocated memory
+ *
+ * @param[in] preferred_agent Agent on which to set the dest buffer
+ *
+ * @param[in] size_in_bytes size of the buffer
+ *
+ * @param[in/out] timeout timeout in milliseconds
+ *
+ * @param[out] size_copied number of bytes copied
+ *
+ * @param[in] dest destination address. Set to NULL to stop copy on previous buffer
+ *
+ * @param[out] is_data_loss true is data was lost
+ */
+hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
+                                         uint32_t* timeout, uint32_t* size_copied, void* dest,
+                                         bool* is_data_loss);
 
 #ifdef __cplusplus
 }  // end extern "C" block

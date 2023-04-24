@@ -285,11 +285,12 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
                                      void** address) {
+  size_t size_requested = size;  // region->Allocate(...) may align-up size to granularity
   hsa_status_t status = region->Allocate(size, alloc_flags, address);
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[*address] = AllocationRegion(region, size);
+    allocation_map_[*address] = AllocationRegion(region, size, size_requested);
   }
 
   return status;
@@ -770,6 +771,8 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
   // check output struct has an initialized size.
   if (info->size == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
+  retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
+
   bool returnListData =
       ((alloc != nullptr) && (num_agents_accessible != nullptr) && (accessible != nullptr));
 
@@ -782,8 +785,11 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     // We don't care if this returns an error code.
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
     auto err = hsaKmtQueryPointerInfo(ptr, &thunkInfo);
-    assert(((err == HSAKMT_STATUS_SUCCESS) || (thunkInfo.Type == HSA_POINTER_UNKNOWN)) &&
-           "Thunk ptr info error and not type HSA_POINTER_UNKNOWN.");
+    if (err != HSAKMT_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
+      retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
+      memcpy(info, &retInfo, retInfo.size);
+      return HSA_STATUS_SUCCESS;
+    }
 
     if (returnListData) {
       assert(thunkInfo.NMappedNodes <= agents_by_node_.size() &&
@@ -821,15 +827,15 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     if (fragment != allocation_map_.begin()) {
       fragment--;
       if ((fragment->first <= ptr) &&
-        (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size)) {
-          // agent and host address must match here.  Only lock memory is allowed to have differing
-          // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
-          // suballocated.
-          retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
-          retInfo.hostBaseAddress = retInfo.agentBaseAddress;
-          retInfo.sizeInBytes = fragment->second.size;
-          retInfo.userData = fragment->second.user_ptr;
-          allocation_map_entry_found = true;
+          (ptr < reinterpret_cast<const uint8_t*>(fragment->first) + fragment->second.size_requested)) {
+        // agent and host address must match here. Only lock memory is allowed to have differing
+        // addresses but lock memory has type HSA_EXT_POINTER_TYPE_LOCKED and cannot be
+        // suballocated.
+        retInfo.agentBaseAddress = const_cast<void*>(fragment->first);
+        retInfo.hostBaseAddress = retInfo.agentBaseAddress;
+        retInfo.sizeInBytes = fragment->second.size_requested;
+        retInfo.userData = fragment->second.user_ptr;
+        allocation_map_entry_found = true;
       }
     }
   }  // end lock scope
@@ -839,8 +845,6 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
       ((retInfo.type == HSA_EXT_POINTER_TYPE_HSA) || (retInfo.type == HSA_EXT_POINTER_TYPE_IPC))) {
     retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
   }
-
-  retInfo.size = Min(size_t(info->size), sizeof(hsa_amd_pointer_info_t));
 
   // IPC and Graphics memory may come from a node that does not have an agent in this process.
   // Ex. ROCR_VISIBLE_DEVICES or peer GPU is not supported by ROCm.
@@ -909,6 +913,9 @@ hsa_status_t Runtime::SetPtrInfoData(const void* ptr, void* userptr) {
 hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* handle) {
   static_assert(sizeof(hsa_amd_ipc_memory_t) == sizeof(HsaSharedMemoryHandle),
                 "Thunk IPC mismatch.");
+
+  static const size_t pageSize = 4096;
+
   // Reject sharing allocations larger than ~8TB due to thunk limitations.
   if (len > 0x7FFFFFFF000ull) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
@@ -918,8 +925,14 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  if ((info.agentBaseAddress != ptr) || (info.sizeInBytes != len))
+
+  // Temporary: Previous versions of HIP will call hsa_amd_ipc_memory_create with the len aligned to
+  // granularity. We need to maintain backward compatibility for 2 releases so we temporarily allow
+  // this. After 2 releases, we will only allow info.sizeInBytes != len.
+  if ((info.agentBaseAddress != ptr) ||
+      (info.sizeInBytes != len && AlignUp(info.sizeInBytes, pageSize) != len)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
   if ((block.base != ptr) || (block.length != len)) {
     if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
       assert(false && "Fragment's block not aligned to 2MB!");
@@ -965,7 +978,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       len = Min(len, importSize - fragOffset);
     }
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[importAddress] = AllocationRegion(nullptr, len);
+    allocation_map_[importAddress] = AllocationRegion(nullptr, len, len);
   };
 
   if ((importHandle.handle[6] & 0x80000000) != 0) {
@@ -1529,7 +1542,7 @@ void Runtime::LoadTools() {
   }
 
   // Discover loaded tools.
-  std::vector<os::LibHandle> loaded = os::GetLoadedLibs();
+  std::vector<os::LibHandle> loaded = os::GetLoadedToolsLib();
   for(auto& handle : loaded) {
     const uint32_t* order = (const uint32_t*)os::GetExportAddress(handle, "HSA_AMD_TOOL_PRIORITY");
     if(order) {
