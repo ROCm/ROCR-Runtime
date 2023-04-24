@@ -134,6 +134,15 @@ public:
   __ALIGNED__(
       HSA_IMAGE_OBJECT_ALIGNMENT) uint32_t srd[HSA_IMAGE_OBJECT_SIZE_DWORD];
 
+  void const printSRD() const {
+    char hexStr[200];
+    size_t hexStrLen = 0;
+    for (int i = 0; i < sizeof(srd) / sizeof(srd[0]); i++)
+      hexStrLen += sprintf(&hexStr[hexStrLen], "0x%08x ", srd[i]);
+
+    printf("\nSRD:%s\n\n", hexStr);
+  }
+
   // HSA component of the image object.
   hsa_agent_t component;
 

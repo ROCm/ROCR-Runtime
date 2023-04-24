@@ -419,6 +419,14 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
           *((size_t*)value) = 0;
       }
       break;
+    case HSA_AMD_MEMORY_POOL_INFO_LOCATION:
+      if (IsLocalMemory())
+        *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_GPU;
+      else if (IsSystem())
+        *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_CPU;
+      else
+        return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -536,10 +544,13 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   info.size = sizeof(info);
 
   ScopedAcquire<KernelMutex> lock(&access_lock_);
+
   if (core::Runtime::runtime_singleton_->PtrInfo(const_cast<void*>(ptr), &info, malloc,
                                                  &agent_count, &accessible,
                                                  &blockInfo) == HSA_STATUS_SUCCESS) {
-    if (blockInfo.length != size || info.sizeInBytes != size) {
+    /*  Thunk may return type = HSA_EXT_POINTER_TYPE_UNKNOWN for userptrs */
+    if (info.type != HSA_EXT_POINTER_TYPE_UNKNOWN &&
+        (blockInfo.length != size || info.sizeInBytes != size)) {
       for (int i = 0; i < num_agents; i++) union_agents.push_back(agents[i].handle);
       for (int i = 0; i < agent_count; i++) union_agents.push_back(accessible[i].handle);
       std::sort(union_agents.begin(), union_agents.end());
