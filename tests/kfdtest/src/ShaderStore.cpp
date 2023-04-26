@@ -309,9 +309,7 @@ const char *PollAndCopyIsa =
     R"(
         // Assume src buffer in s[0:1] and dst buffer in s[2:3]
         // Path for Aldebaran, Aqua Vanjaram
-        .if (.amdgcn.gfx_generation_number == 9 &&
-              (.amdgcn.gfx_generation_minor == 4 ||
-               .amdgcn.gfx_generation_stepping == 10))
+        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor == 4 || .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             v_mov_b32 v18, 0x1
@@ -321,7 +319,7 @@ const char *PollAndCopyIsa =
             v_cmp_eq_i32 vcc, v16, v18
             s_cbranch_vccz LOOP0
             .if (.amdgcn.gfx_generation_minor == 4)
-                buffer_invl2 sc1 sc0
+                buffer_inv sc1 sc0
             .else
                 buffer_invl2
             .endif
@@ -358,9 +356,7 @@ const char *WriteFlagAndValueIsa =
     SHADER_MACROS_FLAT
     R"(
         // Assume two inputs buffer in s[0:1] and s[2:3]
-        .if (.amdgcn.gfx_generation_number == 9 &&
-              (.amdgcn.gfx_generation_minor == 4 ||
-               .amdgcn.gfx_generation_stepping == 10))
+        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor == 4 || .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             s_load_dword s18, s[2:3], 0x0 glc
