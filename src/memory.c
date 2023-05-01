@@ -588,3 +588,27 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryUserData(const void *Pointer,
 
 	return fmm_set_mem_user_data(Pointer, UserData);
 }
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtReplaceAsanHeaderPage(void *addr)
+{
+#ifdef SANITIZER_AMDGPU
+	pr_debug("[%s] address %p\n", __func__, addr);
+	CHECK_KFD_OPEN();
+
+	return fmm_replace_asan_header_page(addr);
+#else
+	return HSAKMT_STATUS_NOT_SUPPORTED;
+#endif
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtReturnAsanHeaderPage(void *addr)
+{
+#ifdef SANITIZER_AMDGPU
+	pr_debug("[%s] address %p\n", __func__, addr);
+	CHECK_KFD_OPEN();
+
+	return fmm_return_asan_header_page(addr);
+#else
+	return HSAKMT_STATUS_NOT_SUPPORTED;
+#endif
+}

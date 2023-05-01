@@ -913,6 +913,30 @@ hsaKmtOpenSMI(
     int *fd             // OUT: anonymous file handle
 );
 
+/**
+   If this is GPU Mapped memory, remap the first page at this address to be normal system memory
+
+   This is used in ASAN mode to remap the first page of device memory to share host ASAN logic.
+   This function is only supported when libhsakmt is compiled in ASAN mode.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtReplaceAsanHeaderPage(
+    void *addr     // IN: Start of othe virtual address page
+);
+
+/**
+   If this is GPU Mapped memory, remap the first page back to the original GPU memory
+
+   This is used in ASAN mode to remap the first page back to its original mapping.
+   This function is only supported when libhsakmt is compiled in ASAN mode.
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtReturnAsanHeaderPage(
+    void *addr     // IN: Start of othe virtual address page
+);
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif

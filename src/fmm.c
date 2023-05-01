@@ -23,9 +23,9 @@
  * DEALINGS IN THE SOFTWARE.
  */
 
+#include "libhsakmt.h"
 #include "fmm.h"
 #include "linux/kfd_ioctl.h"
-#include "libhsakmt.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -106,6 +106,11 @@ struct vm_object {
 	void *user_data;
 	/* Flag to indicate imported KFD buffer */
 	bool is_imported_kfd_bo;
+#ifdef SANITIZER_AMDGPU
+	int mmap_flags;
+	int mmap_fd;
+	off_t mmap_offset;
+#endif
 };
 typedef struct vm_object vm_object_t;
 
@@ -340,6 +345,9 @@ static vm_object_t *vm_create_and_init_object(void *start, uint64_t size,
 		object->is_imported_kfd_bo = false;
 		object->node.key = rbtree_key((unsigned long)start, size);
 		object->user_node.key = rbtree_key(0, 0);
+#ifdef SANITIZER_AMDGPU
+		object->mmap_fd = 0;
+#endif
 	}
 
 	return object;
@@ -1495,6 +1503,13 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 			__fmm_release(vm_obj, aperture);
 			return NULL;
 		}
+#ifdef SANITIZER_AMDGPU
+		if (vm_obj) {
+			vm_obj->mmap_flags = mflags.ui32.HostAccess ? PROT_READ | PROT_WRITE : PROT_NONE;
+			vm_obj->mmap_fd = gpu_mem[gpu_mem_id].drm_render_fd;
+			vm_obj->mmap_offset = mmap_offset;
+		}
+#endif
 	}
 
 	return mem;
@@ -1738,6 +1753,14 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				return NULL;
 			}
 		}
+
+#ifdef SANITIZER_AMDGPU
+		if (mem && vm_obj) {
+			vm_obj->mmap_flags = mflags.ui32.HostAccess ? PROT_READ | PROT_WRITE : PROT_NONE;
+			vm_obj->mmap_fd = gpu_drm_fd;
+			vm_obj->mmap_offset = mmap_offset;
+		}
+#endif
 	}
 
 	if (mem && vm_obj) {
@@ -3845,6 +3868,64 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	return ret;
 }
+
+#ifdef SANITIZER_AMDGPU
+HSAKMT_STATUS fmm_replace_asan_header_page(void* address)
+{
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	manageable_aperture_t* aperture;
+	vm_object_t* vm_obj;
+
+	vm_obj = vm_find_object(address, UINT64_MAX, &aperture);
+	if (!vm_obj)
+		return HSAKMT_STATUS_ERROR;
+	/* Successful vm_find_object returns with the aperture locked */
+
+	/* If this is a GPU-mapped memory, remap the first page to be normal system memory*/
+	if (vm_obj->mmap_fd) {
+		void* p = mmap(address,
+				PAGE_SIZE,
+				PROT_WRITE | PROT_READ, MAP_ANONYMOUS | MAP_PRIVATE | MAP_FIXED,
+				-1,
+				0);
+
+		if (p == MAP_FAILED)
+			ret = HSAKMT_STATUS_ERROR;
+	}
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return ret;
+}
+
+HSAKMT_STATUS fmm_return_asan_header_page(void* address)
+{
+	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
+	manageable_aperture_t* aperture;
+	vm_object_t* vm_obj;
+
+	vm_obj = vm_find_object(address, UINT64_MAX, &aperture);
+	if (!vm_obj)
+		return HSAKMT_STATUS_ERROR;
+	/* Successful vm_find_object returns with the aperture locked */
+
+	/* If this is a GPU-mapped memory, remap the first page back to the original GPU memory*/
+	if (vm_obj->mmap_fd) {
+		off_t mmap_offset = vm_obj->mmap_offset + ((char*)address - (char*)vm_obj->start);
+		void* p = mmap(address,
+				PAGE_SIZE,
+				vm_obj->mmap_flags,
+				MAP_SHARED | MAP_FIXED,
+				vm_obj->mmap_fd,
+				mmap_offset);
+
+		if (p == MAP_FAILED)
+			ret = HSAKMT_STATUS_ERROR;
+	}
+
+	pthread_mutex_unlock(&aperture->fmm_mutex);
+	return ret;
+}
+#endif
 
 HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
 {
