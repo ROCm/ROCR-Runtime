@@ -62,6 +62,10 @@ int fmm_unmap_from_gpu(void *address);
 bool fmm_get_handle(void *address, uint64_t *handle);
 HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info);
 HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data);
+#ifdef SANITIZER_AMDGPU
+HSAKMT_STATUS fmm_replace_asan_header_page(void* address);
+HSAKMT_STATUS fmm_return_asan_header_page(void* address);
+#endif
 
 /* Topology interface*/
 HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);

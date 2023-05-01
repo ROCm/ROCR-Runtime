@@ -43,6 +43,12 @@ extern HsaVersionInfo kfd_version_info;
 #undef HSAKMTAPI
 #define HSAKMTAPI __attribute__((visibility ("default")))
 
+#if defined(__clang__)
+#if __has_feature(address_sanitizer)
+#define SANITIZER_AMDGPU 1
+#endif
+#endif
+
 /*Avoid pointer-to-int-cast warning*/
 #define PORT_VPTR_TO_UINT64(vptr) ((uint64_t)(unsigned long)(vptr))
 
