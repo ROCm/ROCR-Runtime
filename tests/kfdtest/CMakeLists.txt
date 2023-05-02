@@ -159,6 +159,7 @@ llvm_map_components_to_libnames(llvm_libs AMDGPUAsmParser Core Support)
 include_directories(${PROJECT_SOURCE_DIR}/gtest-1.6.0)
 include_directories(${PROJECT_SOURCE_DIR}/include)
 include_directories(${PROJECT_SOURCE_DIR}/../../include)
+include_directories(${PROJECT_SOURCE_DIR}/../../libhsakmt/include)
 
 include_directories(${DRM_INCLUDE_DIRS})
 
