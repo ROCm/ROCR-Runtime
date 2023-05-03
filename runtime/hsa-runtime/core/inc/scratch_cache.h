@@ -195,6 +195,7 @@ class ScratchCache {
   }
 
   size_t free_bytes() const { return available_bytes_; }
+  size_t reserved_bytes() const { return reserved_.first; }
 
   void reserve(size_t bytes, void* base) {
     assert(!reserved_.first && "Already reserved memory.");
