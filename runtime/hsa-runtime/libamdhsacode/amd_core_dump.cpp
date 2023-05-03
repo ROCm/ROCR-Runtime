@@ -42,6 +42,7 @@
 #include <unistd.h>
 #include <elf.h>
 #include <fcntl.h>
+#include <sys/resource.h>
 #include <cstring>
 #include <vector>
 #include <sstream>
@@ -260,14 +261,26 @@ struct LoadSegmentBuilder : public SegmentBuilder {
 
 hsa_status_t build_core_dump(const std::string& filename, const SegmentsInfo& segments) {
   std::unique_ptr<unsigned char[]> copy_buffer(new unsigned char[MAX_BUFFER_SIZE]);
+  struct rlimit rlimit;
 
+  if (getrlimit(RLIMIT_CORE, &rlimit)) {
+    perror("Could not get core file size\n");
+    return HSA_STATUS_ERROR;
+  }
+  debug_print("core file size: %ld\n", rlimit.rlim_cur);
+  if (!segments.size()) return HSA_STATUS_SUCCESS;
+  SegmentInfo front = segments.front();
+  off_t offset = sizeof(Elf64_Ehdr) + segments.size() * sizeof(Elf64_Phdr);
+  if (rlimit.rlim_cur != -1 && (offset + front.size > rlimit.rlim_cur)) {
+    debug_print("Core file size over limit\n");
+    return HSA_STATUS_SUCCESS;
+  }
   int fd = open(filename.c_str(), O_WRONLY | O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
   if (fd == -1) {
     perror("Failed to create GPU coredump");
     return HSA_STATUS_ERROR;
   }
   Elf64_Ehdr ehdr{};
-  off_t offset = sizeof(Elf64_Ehdr);
   ehdr.e_ident[EI_MAG0] = ELFMAG0;
   ehdr.e_ident[EI_MAG1] = ELFMAG1;
   ehdr.e_ident[EI_MAG2] = ELFMAG2;
@@ -281,7 +294,7 @@ hsa_status_t build_core_dump(const std::string& filename, const SegmentsInfo& se
   ehdr.e_machine = ELF::EM_AMDGPU;
   ehdr.e_version = EV_CURRENT;
   ehdr.e_entry = 0;
-  ehdr.e_phoff = offset;
+  ehdr.e_phoff = sizeof(Elf64_Ehdr);
   ehdr.e_shoff = 0;
   ehdr.e_flags = 0;
   ehdr.e_ehsize = sizeof(Elf64_Ehdr);
@@ -305,7 +318,6 @@ hsa_status_t build_core_dump(const std::string& filename, const SegmentsInfo& se
     return HSA_STATUS_ERROR;
   }
   size_t idx = 0;
-  offset += segments.size() * sizeof(Elf64_Phdr);
   for (SegmentInfo seg : segments) {
     Elf64_Phdr phdr{};
     phdr.p_type = [](SegmentType s) {
@@ -335,6 +347,11 @@ hsa_status_t build_core_dump(const std::string& filename, const SegmentsInfo& se
           return (uint32_t)0;
       }
     }(seg.stype);
+    if (rlimit.rlim_cur != -1 && (offset + seg.size > rlimit.rlim_cur)) {
+      printf("Core limit file reached. GPU core dump created: %s\n", filename.c_str());
+      close(fd);
+      return HSA_STATUS_SUCCESS;
+    }
     phdr.p_offset = alignUp(offset, (uint64_t)1 << phdr.p_align);
     if (pwrite(fd, &phdr, sizeof(phdr), sizeof(Elf64_Ehdr) + idx * sizeof(Elf64_Phdr)) == -1) {
       perror("Failed to write ELF header");
