@@ -1231,7 +1231,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       for (auto r : regions()) availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
 
-      availableBytes += scratch_cache_.free_bytes();
+      availableBytes += scratch_cache_.free_bytes() - scratch_cache_.reserved_bytes();
 
       *((uint64_t*)value) = availableBytes;
       break;
