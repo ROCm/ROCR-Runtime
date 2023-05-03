@@ -1947,31 +1947,38 @@ typedef struct hsa_amd_pointer_info_s {
   */
   hsa_amd_pointer_type_t type;
   /*
-  Base address at which non-host agents may access the allocation.
+  Base address at which non-host agents may access the allocation. This field is
+  not meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* agentBaseAddress;
   /*
-  Base address at which the host agent may access the allocation.
+  Base address at which the host agent may access the allocation. This field is
+  not meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* hostBaseAddress;
   /*
-  Size of the allocation
+  Size of the allocation. This field is not meaningful if the type of the allocation
+  is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   size_t sizeInBytes;
   /*
-  Application provided value.
+  Application provided value. This field is not meaningful if the type of the
+  allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* userData;
   /*
-  Reports an agent which "owns" (ie has preferred access to) the pool in which the allocation was
+  Reports an agent which "owns" (ie has preferred access to) the pool in which the
+  allocation was
   made.  When multiple agents share equal access to a pool (ex: multiple CPU agents, or multi-die
-  GPU boards) any such agent may be returned.
+  GPU boards) any such agent may be returned. This field is not meaningful if
+  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN or if this agent is not available in
+  this process, for e.g if this agent is masked using ROCR_VISIBLE_DEVICES.
   */
   hsa_agent_t agentOwner;
   /*
   Contains a bitfield of hsa_amd_memory_pool_global_flag_t values.
-  Reports the effective global flags bitmask for the allocation.  This field is not meaningful if
-  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
+  Reports the effective global flags bitmask for the allocation.  This field is not
+  meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   uint32_t global_flags;
 } hsa_amd_pointer_info_t;
@@ -1979,7 +1986,9 @@ typedef struct hsa_amd_pointer_info_s {
 /**
  * @brief Retrieves information about the allocation referenced by the given
  * pointer.  Optionally returns the number and list of agents which can
- * directly access the allocation.
+ * directly access the allocation. In case this virtual address is unknown, the
+ * pointer type returned will be HSA_EXT_POINTER_TYPE_UNKNOWN and the only fields
+ * that are valid after hsa_amd_pointer_info returns are size and type.
  *
  * @param[in] ptr Pointer which references the allocation to retrieve info for.
  *
