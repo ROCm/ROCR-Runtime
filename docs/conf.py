@@ -4,7 +4,13 @@
 # list see the documentation:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
+import os
+
 from rocm_docs import ROCmDocs
+
+
+os.system("cp ../README.md index.md")
+os.system("cp ../src/README.md structure.md")
 
 docs_core = ROCmDocs("ROCR Documentation")
 docs_core.run_doxygen()
