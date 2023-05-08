@@ -223,7 +223,7 @@ if(INCLUDE_PATH_COMPATIBILITY)
           set(ROCM_HEADER_WRAPPER_WERROR "$ENV{ROCM_HEADER_WRAPPER_WERROR}"
                   CACHE STRING "Header wrapper warnings as errors.")
       else()
-          set(ROCM_HEADER_WRAPPER_WERROR "ON" CACHE STRING "Header wrapper warnings as errors.")
+          set(ROCM_HEADER_WRAPPER_WERROR "OFF" CACHE STRING "Header wrapper warnings as errors.")
       endif()
   endif()
   if(ROCM_HEADER_WRAPPER_WERROR)
