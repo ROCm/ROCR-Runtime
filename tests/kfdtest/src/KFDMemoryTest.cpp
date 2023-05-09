@@ -1908,13 +1908,19 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
         }
     }
 
+    const HsaNodeProperties *pNodePropertiesDev1 = NULL;
+    unsigned int m_FamilyIdDev1 = 0;
+
     pNodeProperties = m_NodeInfo.GetNodeProperties(nodes[0]);
-    if (!pNodeProperties) {
+    pNodePropertiesDev1 = m_NodeInfo.GetNodeProperties(nodes[1]);
+    if (!pNodeProperties || !pNodePropertiesDev1) {
         LOG() << "Failed to get gpu node properties." << std::endl;
         return;
     }
 
-    if (m_FamilyId < FAMILY_AI) {
+    m_FamilyIdDev1 = FamilyIdFromNode(pNodePropertiesDev1);
+
+    if (m_FamilyId < FAMILY_AI || m_FamilyIdDev1 < FAMILY_AI) {
         LOG() << "Skipping test: Test requires gfx9 and later asics." << std::endl;
         return;
     }
@@ -1969,7 +1975,9 @@ TEST_F(KFDMemoryTest, DeviceHdpFlush) {
     ASSERT_SUCCESS(queue0.Create(nodes[1]));
     HsaMemoryBuffer isaBuffer0(PAGE_SIZE, nodes[1], true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteAndSignalIsa, isaBuffer0.As<char*>()));
+    /* Temporarily set target ASIC for Dev1 */
+    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WriteAndSignalIsa, isaBuffer0.As<char*>(),
+                        PAGE_SIZE, GetGfxVersion(pNodePropertiesDev1)));
 
     Dispatch dispatch0(isaBuffer0);
     dispatch0.SetArgs(buffer, mmioBase);
