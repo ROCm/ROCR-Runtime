@@ -343,6 +343,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief returns true if agent uses MES scheduler
   __forceinline const bool isMES() const { return (isa_->GetMajorVersion() >= 11) ? true : false; };
 
+  void ReserveScratch();
+
   void Trim() override;
 
   const std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>&

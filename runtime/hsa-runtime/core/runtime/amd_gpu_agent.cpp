@@ -499,9 +499,12 @@ void GpuAgent::InitScratchPool() {
   } else {
     new (&scratch_pool_) SmallHeap();
   }
+}
 
+void GpuAgent::ReserveScratch()
+{
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
-  if (reserved_sz) {
+  if (!scratch_cache_.reserved_bytes() && reserved_sz) {
     HSAuint64 alt_va;
     void* reserved_base = scratch_pool_.alloc(reserved_sz);
     assert(reserved_base && "Could not allocate reserved memory");
