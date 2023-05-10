@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2022, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -827,7 +827,7 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
 
   // check if dst and src are the same gpu or over xGMI.
   bool is_same_gpu = (src_agent.public_handle().handle == dst_agent.public_handle().handle) &&
-      (dst_agent.public_handle().handle == public_handle_.handle);
+                     (dst_agent.public_handle().handle == public_handle_.handle);
   bool is_xgmi = !is_same_gpu &&
                    src_agent.device_type() == core::Agent::kAmdGpuDevice &&
                      dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
@@ -841,8 +841,10 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
 
   // Ensure engine selection is within proper range based on transfer type
   if ((is_xgmi && engine_offset <= properties_.NumSdmaEngines) ||
-       (!is_xgmi && engine_offset > properties_.NumSdmaEngines) ||
-         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit && engine_offset == BlitHostToDev)) {
+      (!is_xgmi && engine_offset > (properties_.NumSdmaEngines +
+                                    properties_.NumSdmaXgmiEngines)) ||
+         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit &&
+          engine_offset == BlitHostToDev)) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -892,6 +894,12 @@ hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_ag
 
     if (!!!blits_[BlitDevToHost]->PendingBytes()) {
       *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_1;
+    }
+    // Find a free xGMI SDMA engine for H2D/D2H though it may be lower bandwidth
+    for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
+      if (!!!blits_[DefaultBlitCount + i]->PendingBytes()) {
+         *engine_ids_mask |= (HSA_AMD_SDMA_ENGINE_2 << i);
+      }
     }
   }
 
