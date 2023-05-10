@@ -285,6 +285,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   queue_id_ = queue_rsrc.QueueId;
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
+  // On the first queue creation, reserve some scratch memory on this agent.
+  agent_->ReserveScratch();
+
   // Initialize scratch memory related entities
   queue_scratch_.queue_retry = amd_queue_.queue_inactive_signal;
   InitScratchSRD();
