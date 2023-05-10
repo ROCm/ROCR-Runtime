@@ -1084,7 +1084,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_EXT_AGENT_INFO_IMAGE_2DADEPTH_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_3D_MAX_ELEMENTS:
     case HSA_EXT_AGENT_INFO_IMAGE_ARRAY_MAX_LAYERS:
-      if (isa_has_image_support)
+      if (!isa_has_image_support)
         *((uint32_t*)value) = 0;
       else
         return hsa_amd_image_get_info_max_dim(public_handle(), attribute, value);
