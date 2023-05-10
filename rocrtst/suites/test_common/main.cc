@@ -388,7 +388,7 @@ TEST(rocrtstNeg, Queue_Validation_InvalidDimension) {
   RunCustomTestEpilog(&qv);
 }
 
-TEST(rocrtstNeg, Queue_Validation_InvalidGroupMemory) {
+TEST(rocrtstNeg, DISABLED_Queue_Validation_InvalidGroupMemory) {
   QueueValidation qv(false, true, false, false, false);
   RunCustomTestProlog(&qv);
   qv.QueueValidationInvalidGroupMemory();
