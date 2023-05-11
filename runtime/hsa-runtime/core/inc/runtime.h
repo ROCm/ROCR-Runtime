@@ -70,6 +70,12 @@
 #include "core/inc/amd_loader_context.hpp"
 #include "core/inc/amd_hsa_code.hpp"
 
+#if defined(__clang__)
+#if __has_feature(address_sanitizer)
+#define SANITIZER_AMDGPU 1
+#endif
+#endif
+
 //---------------------------------------------------------------------------//
 //    Constants                                                              //
 //---------------------------------------------------------------------------//
@@ -407,9 +413,19 @@ class Runtime {
   static void AsyncEventsLoop(void*);
 
   struct AllocationRegion {
-    AllocationRegion() : region(NULL), size(0), size_requested(0), user_ptr(nullptr) {}
-    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested)
-        : region(region_arg), size(size_arg), size_requested(size_requested), user_ptr(nullptr) {}
+    AllocationRegion()
+        : region(NULL),
+          size(0),
+          size_requested(0),
+          alloc_flags(core::MemoryRegion::AllocateNoFlags),
+          user_ptr(nullptr) {}
+    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested,
+                     MemoryRegion::AllocateFlags alloc_flags)
+        : region(region_arg),
+          size(size_arg),
+          size_requested(size_requested),
+          alloc_flags(alloc_flags),
+          user_ptr(nullptr) {}
 
     struct notifier_t {
       void* ptr;
@@ -420,6 +436,7 @@ class Runtime {
     const MemoryRegion* region;
     size_t size;           /* actual size = align_up(size_requested, granularity) */
     size_t size_requested; /* size requested by user */
+    MemoryRegion::AllocateFlags alloc_flags;
     void* user_ptr;
     std::unique_ptr<std::vector<notifier_t>> notifiers;
   };

@@ -1084,6 +1084,8 @@ hsa_status_t
   TRY;
   IS_OPEN();
 
+  core::MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateNoFlags;
+
   if (size == 0 || ptr == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -1091,8 +1093,7 @@ hsa_status_t
   const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
   IS_VALID(mem_region);
 
-  return core::Runtime::runtime_singleton_->AllocateMemory(
-      mem_region, size, core::MemoryRegion::AllocateNoFlags, ptr);
+  return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr);
   CATCH;
 }
 

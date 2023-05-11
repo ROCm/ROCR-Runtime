@@ -761,6 +761,10 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
 
   if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
 
+#ifdef SANITIZER_AMDGPU
+  alloc_flag |= core::MemoryRegion::AllocateAsan;
+#endif
+
   return core::Runtime::runtime_singleton_->AllocateMemory(mem_region, size, alloc_flag, ptr);
   CATCH;
 }

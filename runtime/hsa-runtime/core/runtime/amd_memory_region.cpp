@@ -199,6 +199,13 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
     useSubAlloc &= ((alloc_flags & (~AllocateRestrict)) == 0);
     if (useSubAlloc) {
       *address = fragment_allocator_.alloc(size);
+
+      if ((alloc_flags & AllocateAsan) &&
+          hsaKmtReplaceAsanHeaderPage(*address) != HSAKMT_STATUS_SUCCESS) {
+        fragment_allocator_.free(*address);
+        *address = NULL;
+        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+      }
       return HSA_STATUS_SUCCESS;
     }
   }
@@ -253,6 +260,12 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
 
+    if ((alloc_flags & AllocateAsan) &&
+        hsaKmtReplaceAsanHeaderPage(*address) != HSAKMT_STATUS_SUCCESS) {
+      FreeKfdMemory(*address, size);
+      *address = NULL;
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
     return HSA_STATUS_SUCCESS;
   }
 
