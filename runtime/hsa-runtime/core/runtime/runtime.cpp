@@ -291,7 +291,7 @@ hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[*address] = AllocationRegion(region, size, size_requested);
+    allocation_map_[*address] = AllocationRegion(region, size, size_requested, alloc_flags);
   }
 
   return status;
@@ -305,6 +305,7 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   const MemoryRegion* region = nullptr;
   size_t size = 0;
   std::unique_ptr<std::vector<AllocationRegion::notifier_t>> notifiers;
+  MemoryRegion::AllocateFlags alloc_flags = core::MemoryRegion::AllocateNoFlags;
 
   {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -317,6 +318,7 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
     }
     region = it->second.region;
     size = it->second.size;
+    alloc_flags = it->second.alloc_flags;
 
     // Imported fragments can't be released with FreeMemory.
     if (region == nullptr) {
@@ -337,6 +339,9 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
       notifier.callback(notifier.ptr, notifier.user_data);
     }
   }
+
+  if (alloc_flags & core::MemoryRegion::AllocateAsan)
+    assert(hsaKmtReturnAsanHeaderPage(ptr) == HSAKMT_STATUS_SUCCESS);
 
   return region->Free(ptr, size);
 }
@@ -1025,7 +1030,8 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       len = Min(len, importSize - fragOffset);
     }
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-    allocation_map_[importAddress] = AllocationRegion(nullptr, len, len);
+    allocation_map_[importAddress] =
+        AllocationRegion(nullptr, len, len, core::MemoryRegion::AllocateNoFlags);
   };
 
   if ((importHandle.handle[6] & 0x80000000) != 0) {
