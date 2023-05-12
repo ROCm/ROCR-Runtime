@@ -1486,8 +1486,11 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       debug_print("Failed to map requested scratch (%ld) - reducing queue occupancy.\n",
                   scratch.size);
     const uint64_t num_cus = properties_.NumFComputeCores / properties_.NumSIMDPerCU;
+    const uint64_t se_per_xcc = properties_.NumShaderBanks / properties_.NumXcc;
+
     const uint64_t total_waves = scratch.size / size_per_wave;
-    uint64_t waves_per_cu = total_waves / num_cus;
+    uint64_t waves_per_cu = AlignUp(total_waves / num_cus, scratch.waves_per_group);
+
     while (waves_per_cu != 0) {
       size_t size = waves_per_cu * num_cus * size_per_wave;
       void* base = scratch_pool_.alloc_high(size);
@@ -1507,7 +1510,14 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
         return;
       }
       scratch_pool_.free(base);
-      waves_per_cu = waves_per_cu - scratch.waves_per_group;
+
+      // Wave count must be divisible by #SEs in an XCC. If occupancy must be reduced
+      // such that waves_per_cu < waves_per_group, continue reducing by #SEs per XCC
+      // (only allowed if waves_per_group is a multiple #SEs per XCC).
+      waves_per_cu -= (waves_per_cu <= scratch.waves_per_group &&
+                       se_per_xcc < scratch.waves_per_group &&
+                       scratch.waves_per_group % se_per_xcc == 0) ?
+                       se_per_xcc : scratch.waves_per_group;
     }
 
     // Failed to allocate minimal scratch
