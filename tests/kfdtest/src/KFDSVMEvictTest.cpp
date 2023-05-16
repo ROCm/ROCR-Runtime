@@ -41,7 +41,7 @@ void KFDSVMEvictTest::SetUp() {
 
     KFDLocalMemoryTest::SetUp();
 
-    SVMSetXNACKMode();
+    SVMSetXNACKMode(GetParam());
 
     ROUTINE_END
 }
@@ -217,7 +217,7 @@ void KFDSVMEvictTest::WaitChildProcesses() {
  *    - Synchronization between the processes, so they know for sure when
  *        they are done allocating memory
  */
-TEST_F(KFDSVMEvictTest, BasicTest) {
+TEST_P(KFDSVMEvictTest, BasicTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -282,7 +282,7 @@ TEST_F(KFDSVMEvictTest, BasicTest) {
  *    - notify shader to quit
  *    - check result buffer with specific value to confirm all wavefronts quit normally
  */
-TEST_F(KFDSVMEvictTest, QueueTest) {
+TEST_P(KFDSVMEvictTest, QueueTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -383,3 +383,4 @@ TEST_F(KFDSVMEvictTest, QueueTest) {
     TEST_END
 }
 
+INSTANTIATE_TEST_CASE_P(, KFDSVMEvictTest,::testing::Values(0, 1));

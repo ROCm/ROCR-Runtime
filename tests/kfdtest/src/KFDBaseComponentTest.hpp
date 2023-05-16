@@ -92,27 +92,38 @@ class KFDBaseComponentTest : public testing::Test {
         return supported;
     }
 
-    void SVMSetXNACKMode() {
+    // Set xnack_override to -1 if parameter is not passed in, to avoid unnecessary code churn
+    void SVMSetXNACKMode(int xnack_override = -1) {
         if (!SVMAPISupported())
             return;
 
         m_xnack = -1;
-
-        char *hsa_xnack = getenv("HSA_XNACK");
-        if (!hsa_xnack)
-            return;
-
         HSAKMT_STATUS ret = hsaKmtGetXNACKMode(&m_xnack);
         if (ret != HSAKMT_STATUS_SUCCESS) {
             LOG() << "Failed " << ret << " to get XNACK mode" << std::endl;
             return;
         }
 
-        // XNACK OFF if defined HSA_XNACK=0
-        HSAint32 xnack_on = strncmp(hsa_xnack, "0", 1);
+        HSAint32 xnack_on = -1;
+        char *hsa_xnack = getenv("HSA_XNACK");
+
+        // HSA_XNACK takes priority over kfdtest parameters
+        if (hsa_xnack)
+                xnack_on = strncmp(hsa_xnack, "0", 1);
+        else if (xnack_override > -1)
+                xnack_on = xnack_override;
+        else
+                return;
+
+	// No need to set XNACK if it's already the current value
+	if (xnack_on == m_xnack)
+		return;
+
         ret = hsaKmtSetXNACKMode(xnack_on);
         if (ret != HSAKMT_STATUS_SUCCESS)
             LOG() << "Failed " << ret << " to set XNACK mode " << xnack_on << std::endl;
+        else
+            LOG() << "Setting XNACK mode to " << xnack_on << std::endl;
     }
 
     void SVMRestoreXNACKMode() {

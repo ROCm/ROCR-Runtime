@@ -28,7 +28,8 @@
 
 #include "KFDBaseComponentTest.hpp"
 
-class KFDSVMRangeTest : public KFDBaseComponentTest {
+class KFDSVMRangeTest : public KFDBaseComponentTest,
+                        public ::testing::WithParamInterface<int> {
  public:
     KFDSVMRangeTest() {}
     ~KFDSVMRangeTest() {}

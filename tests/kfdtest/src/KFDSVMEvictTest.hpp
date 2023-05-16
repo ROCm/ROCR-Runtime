@@ -31,7 +31,8 @@
 
 // @class KFDEvictTest
 // Test eviction and restore procedure using two processes
-class KFDSVMEvictTest :  public KFDLocalMemoryTest {
+class KFDSVMEvictTest : public KFDLocalMemoryTest,
+                        public ::testing::WithParamInterface<int> {
  public:
     KFDSVMEvictTest(void): m_ChildStatus(HSAKMT_STATUS_ERROR), m_IsParent(true) {}
 
