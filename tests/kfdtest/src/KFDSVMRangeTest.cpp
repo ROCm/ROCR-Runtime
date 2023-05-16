@@ -35,7 +35,7 @@ void KFDSVMRangeTest::SetUp() {
 
     KFDBaseComponentTest::SetUp();
 
-    SVMSetXNACKMode();
+    SVMSetXNACKMode(GetParam());
 
     ROUTINE_END
 }
@@ -50,7 +50,7 @@ void KFDSVMRangeTest::TearDown() {
     ROUTINE_END
 }
 
-TEST_F(KFDSVMRangeTest, BasicSystemMemTest) {
+TEST_P(KFDSVMRangeTest, BasicSystemMemTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -93,7 +93,7 @@ TEST_F(KFDSVMRangeTest, BasicSystemMemTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
+TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -167,7 +167,7 @@ TEST_F(KFDSVMRangeTest, SetGetAttributesTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, XNACKModeTest) {
+TEST_P(KFDSVMRangeTest, XNACKModeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -204,7 +204,7 @@ TEST_F(KFDSVMRangeTest, XNACKModeTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, InvalidRangeTest) {
+TEST_P(KFDSVMRangeTest, InvalidRangeTest) {
     TEST_START(TESTPROFILE_RUNALL)
 
     if (!SVMAPISupported())
@@ -303,7 +303,7 @@ void KFDSVMRangeTest::SplitRangeTest(int defaultGPUNode, int prefetch_location) 
     delete sysBuffer;
 }
 
-TEST_F(KFDSVMRangeTest, SplitSystemRangeTest) {
+TEST_P(KFDSVMRangeTest, SplitSystemRangeTest) {
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -323,7 +323,7 @@ TEST_F(KFDSVMRangeTest, SplitSystemRangeTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, EvictSystemRangeTest) {
+TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
     TEST_START(TESTPROFILE_RUNALL)
 
@@ -426,7 +426,7 @@ TEST_F(KFDSVMRangeTest, EvictSystemRangeTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, PartialUnmapSysMemTest) {
+TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -478,7 +478,7 @@ TEST_F(KFDSVMRangeTest, PartialUnmapSysMemTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, BasicVramTest) {
+TEST_P(KFDSVMRangeTest, BasicVramTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -526,7 +526,7 @@ TEST_F(KFDSVMRangeTest, BasicVramTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, SplitVramRangeTest) {
+TEST_P(KFDSVMRangeTest, SplitVramRangeTest) {
     TEST_START(TESTPROFILE_RUNALL)
 
     if (!SVMAPISupported())
@@ -544,7 +544,7 @@ TEST_F(KFDSVMRangeTest, SplitVramRangeTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, PrefetchTest) {
+TEST_P(KFDSVMRangeTest, PrefetchTest) {
     TEST_START(TESTPROFILE_RUNALL);
 
     if (!SVMAPISupported())
@@ -582,7 +582,7 @@ TEST_F(KFDSVMRangeTest, PrefetchTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, MigrateTest) {
+TEST_P(KFDSVMRangeTest, MigrateTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -671,7 +671,7 @@ TEST_F(KFDSVMRangeTest, MigrateTest) {
  *   4. Use GPU sdma to fill the range in system memory
  *   5. Check if data is correct in system memory
  */
-TEST_F(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
+TEST_P(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -735,7 +735,7 @@ TEST_F(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
  * [  292.730010] amdgpu:svm_migrate_to_ram:744: CPU page fault address 0x7f22597f1000
  * [  292.730931] amdgpu:svm_migrate_to_ram:744: CPU page fault address 0x7f22597f2000
  */
-TEST_F(KFDSVMRangeTest, MigrateGranularityTest) {
+TEST_P(KFDSVMRangeTest, MigrateGranularityTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -789,7 +789,7 @@ TEST_F(KFDSVMRangeTest, MigrateGranularityTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, MigrateLargeBufTest) {
+TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -877,7 +877,7 @@ TEST_F(KFDSVMRangeTest, MigrateLargeBufTest) {
     TEST_END
 }
 
-TEST_F(KFDSVMRangeTest, MigratePolicyTest) {
+TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -983,7 +983,7 @@ TEST_F(KFDSVMRangeTest, MigratePolicyTest) {
  *
  * Test will skip if only one GPU found
  */
-TEST_F(KFDSVMRangeTest, MultiGPUMigrationTest) {
+TEST_P(KFDSVMRangeTest, MultiGPUMigrationTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1067,7 +1067,7 @@ TEST_F(KFDSVMRangeTest, MultiGPUMigrationTest) {
  *
  * Test will skip if only one GPU found
  */
-TEST_F(KFDSVMRangeTest, MultiGPUAccessInPlaceTest) {
+TEST_P(KFDSVMRangeTest, MultiGPUAccessInPlaceTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1167,7 +1167,7 @@ unsigned int GpuReadThread(void* p) {
     return 0;
 }
 
-TEST_F(KFDSVMRangeTest, MultiThreadMigrationTest) {
+TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1228,7 +1228,7 @@ TEST_F(KFDSVMRangeTest, MultiThreadMigrationTest) {
  * Use sdma to write data to memory, should write to file
  * Close file, and then check if file data is updated correctly
  */
-TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
+TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1287,7 +1287,7 @@ TEST_F(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
  * Map read only range to GPU, test sdma can read the range
  * write to range should trigger GPU vm fault for both xnack on and off
  */
-TEST_F(KFDSVMRangeTest, ReadOnlyRangeTest) {
+TEST_P(KFDSVMRangeTest, ReadOnlyRangeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1448,7 +1448,7 @@ unsigned int ReadSMIEventThread(void* p) {
     return 0;
 }
 
-TEST_F(KFDSVMRangeTest, HMMProfilingEvent) {
+TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1498,7 +1498,7 @@ TEST_F(KFDSVMRangeTest, HMMProfilingEvent) {
  * KFD should support VRAM overcommitment by evicting SVM ranges to system memory to alloc
  * VRAM for new ranges.
  */
-TEST_F(KFDSVMRangeTest, VramOvercommitTest) {
+TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1558,7 +1558,7 @@ TEST_F(KFDSVMRangeTest, VramOvercommitTest) {
  * by spliting giant range into smaller ranges, evicting SVM ranges to system memory to
  * alloc VRAM for overcommitment ranges.
  */
-TEST_F(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
+TEST_P(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1608,7 +1608,7 @@ TEST_F(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
  * use sdma to memset the rest 2 pages, each page has different value 0x1, 0x2, 0x3, 0x4
  * then check if all page have the specific value after migrating 4 pages to system memory.
  */
-TEST_F(KFDSVMRangeTest, PrefaultPartialRangeTest) {
+TEST_P(KFDSVMRangeTest, PrefaultPartialRangeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
@@ -1653,3 +1653,5 @@ TEST_F(KFDSVMRangeTest, PrefaultPartialRangeTest) {
     munmap(pBuf, BufSize);
     TEST_END
 }
+
+INSTANTIATE_TEST_CASE_P(, KFDSVMRangeTest,::testing::Values(0, 1));
