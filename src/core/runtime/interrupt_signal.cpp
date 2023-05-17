@@ -144,8 +144,15 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
 
   uint32_t prior = waiting_++;
   MAKE_SCOPE_GUARD([&]() { waiting_--; });
-  // Allow only the first waiter to sleep (temporary, known to be bad).
-  if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
+
+  uint64_t event_age = 1;
+
+  if (!core::Runtime::runtime_singleton_->KfdVersion().supports_event_age) {
+      event_age = 0;
+      // Allow only the first waiter to sleep. Without event age tracking,
+      // race condition can cause some threads to sleep without wakeup since missing interrupt.
+      if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
+  }
 
   int64_t value;
 
@@ -209,7 +216,7 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
     uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
       time_remaining).count();
     wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
-    hsaKmtWaitOnEvent(event_, wait_ms);
+    hsaKmtWaitOnEvent_Ext(event_, wait_ms, &event_age);
   }
 }
 
