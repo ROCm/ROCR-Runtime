@@ -244,6 +244,25 @@ hsaKmtWaitOnEvent(
     );
 
 /**
+  Checks the current state of the event object. If the object's state is
+  nonsignaled, the calling thread enters the wait state. event_age can
+  help avoiding race conditions.
+
+ The function returns when one of the following occurs:
+- The specified event object is in the signaled state.
+- The time-out interval elapses.
+- Tracking event age
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtWaitOnEvent_Ext(
+    HsaEvent*   Event,          //IN
+    HSAuint32   Milliseconds,   //IN
+    uint64_t   *event_age       //IN/OUT
+    );
+
+/**
   Checks the current state of multiple event objects.
 
  The function returns when one of the following occurs:
@@ -262,6 +281,30 @@ hsaKmtWaitOnMultipleEvents(
     HSAuint32   NumEvents,      //IN
     bool        WaitOnAll,      //IN
     HSAuint32   Milliseconds    //IN
+    );
+
+/**
+  Checks the current state of multiple event objects.
+  event_age can help avoiding race conditions.
+
+ The function returns when one of the following occurs:
+- Either any one or all of the specified objects are in the signaled state
+  - if "WaitOnAll" is "true" the function returns when the state of all
+    objects in array is signaled
+  - if "WaitOnAll" is "false" the function returns when the state of any
+    one of the objects is set to signaled
+- The time-out interval elapses.
+- Tracking event age
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtWaitOnMultipleEvents_Ext(
+    HsaEvent*   Events[],       //IN
+    HSAuint32   NumEvents,      //IN
+    bool        WaitOnAll,      //IN
+    HSAuint32   Milliseconds,   //IN
+    uint64_t   *event_age       //IN/OUT
     );
 
 /**

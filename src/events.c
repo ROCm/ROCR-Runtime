@@ -214,10 +214,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtQueryEventState(HsaEvent *Event)
 HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent(HsaEvent *Event,
 		HSAuint32 Milliseconds)
 {
+	return hsaKmtWaitOnEvent_Ext(Event, Milliseconds, NULL);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent_Ext(HsaEvent *Event,
+		HSAuint32 Milliseconds, uint64_t *event_age)
+{
 	if (!Event)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	return hsaKmtWaitOnMultipleEvents(&Event, 1, true, Milliseconds);
+	return hsaKmtWaitOnMultipleEvents_Ext(&Event, 1, true, Milliseconds, event_age);
 }
 
 static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
@@ -366,6 +372,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 						   bool WaitOnAll,
 						   HSAuint32 Milliseconds)
 {
+	return hsaKmtWaitOnMultipleEvents_Ext(Events, NumEvents, WaitOnAll, Milliseconds, NULL);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
+						   HSAuint32 NumEvents,
+						   bool WaitOnAll,
+						   HSAuint32 Milliseconds,
+						   uint64_t *event_age)
+{
 	CHECK_KFD_OPEN();
 
 	if (!Events)
@@ -376,6 +391,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 	for (HSAuint32 i = 0; i < NumEvents; i++) {
 		event_data[i].event_id = Events[i]->EventId;
 		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
+		if (event_age && Events[i]->EventData.EventType == HSA_EVENTTYPE_SIGNAL)
+			event_data[i].signal_event_data.last_event_age = event_age[i];
 	}
 
 	struct kfd_ioctl_wait_events_args args = {0};
@@ -413,6 +430,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents(HsaEvent *Events[],
 		}
 	}
 out:
+
+	for (HSAuint32 i = 0; i < NumEvents; i++) {
+		if (event_age && Events[i]->EventData.EventType == HSA_EVENTTYPE_SIGNAL)
+			event_age[i] = event_data[i].signal_event_data.last_event_age;
+	}
+
 	free(event_data);
 
 	return result;
