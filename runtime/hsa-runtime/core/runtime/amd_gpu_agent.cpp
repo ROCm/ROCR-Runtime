@@ -831,29 +831,41 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   // check if dst and src are the same gpu or over xGMI.
   bool is_same_gpu = (src_agent.public_handle().handle == dst_agent.public_handle().handle) &&
                      (dst_agent.public_handle().handle == public_handle_.handle);
-  bool is_xgmi = !is_same_gpu &&
-                   src_agent.device_type() == core::Agent::kAmdGpuDevice &&
-                     dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
-                       dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
+
+  bool is_p2p = !is_same_gpu && src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                                dst_agent.device_type() == core::Agent::kAmdGpuDevice;
+
+  if (is_p2p &&
+      core::Runtime::runtime_singleton_->flag().enable_peer_sdma() == Flag::SDMA_DISABLE) {
+    // Note  that VDI/HIP will call DmaCopy instead of DmaCopyOnEngine for P2P copies, but
+    // we still want to handle force Blit Kernels in this function in case other libraries
+    // decide to use DmaCopyOnEngine for P2P copies
+
+    engine_offset = BlitDevToDev;
+  } else {
+    bool is_xgmi = is_p2p && dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
                          properties_.NumSdmaXgmiEngines;
 
-  // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
-  bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
-    dst_agent.device_type() == core::Agent::kAmdGpuDevice);
-  bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
 
-  // Ensure engine selection is within proper range based on transfer type
-  if ((is_xgmi && engine_offset <= properties_.NumSdmaEngines) ||
-      (!is_xgmi && engine_offset > (properties_.NumSdmaEngines +
-                                    properties_.NumSdmaXgmiEngines)) ||
-         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit &&
-          engine_offset == BlitHostToDev)) {
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
+    bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+      dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+    bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
+
+    // Ensure engine selection is within proper range based on transfer type
+    if ((is_xgmi && engine_offset <= properties_.NumSdmaEngines) ||
+        (!is_xgmi && engine_offset > (properties_.NumSdmaEngines +
+                                      properties_.NumSdmaXgmiEngines)) ||
+          (!is_h2d_blit && !is_same_gpu && limit_h2d_blit &&
+            engine_offset == BlitHostToDev)) {
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    engine_offset = is_same_gpu ?(force_copy_on_sdma ? BlitDevToHost :
+                                   BlitDevToDev) : engine_offset;
   }
 
-  lazy_ptr<core::Blit>& blit = is_same_gpu ?
-                                 (force_copy_on_sdma ? blits_[BlitDevToHost] :
-                                   blits_[BlitDevToDev]) : blits_[engine_offset];
+  lazy_ptr<core::Blit>& blit = blits_[engine_offset];
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
@@ -1824,6 +1836,12 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
       return blits_[BlitDevToHost];
     }
     return blits_[BlitDevToDev];
+  }
+
+  if (core::Runtime::runtime_singleton_->flag().enable_peer_sdma() == Flag::SDMA_DISABLE
+      && src_agent.device_type() == core::Agent::kAmdGpuDevice
+      && dst_agent.device_type() == core::Agent::kAmdGpuDevice) {
+      return blits_[BlitDevToDev];
   }
 
   // Acquire Hive Id of Src and Dst devices - ignore hive id for CPU devices.
