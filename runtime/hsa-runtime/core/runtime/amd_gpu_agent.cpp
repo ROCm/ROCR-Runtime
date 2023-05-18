@@ -504,6 +504,7 @@ void GpuAgent::InitScratchPool() {
 void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   if (!scratch_cache_.reserved_bytes() && reserved_sz) {
     HSAuint64 alt_va;
     void* reserved_base = scratch_pool_.alloc(reserved_sz);
