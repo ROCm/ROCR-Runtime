@@ -376,15 +376,23 @@ void BuildTopology() {
         continue;
 
       auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
+      GpuAgent *gpu = (AMD::GpuAgent*)src_gpu;
+      // xGMI link type cannot determine bandwidth keep it fixed for ganging
+      bool has_fixed_gang = linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI &&
+                            linfo.info.numa_distance != 15;
 
       // Min Bandwidth < Max Bandwidth if source and destination GPUs are a
       // single hop way and there exists more than a single xGMI link between
       // them.  Otherwise, destination GPU is not a gang candidate.
       if (linfo.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI ||
-          linfo.info.min_bandwidth == linfo.info.max_bandwidth)
+          (linfo.info.min_bandwidth == linfo.info.max_bandwidth && !has_fixed_gang)) {
         continue;
+      }
 
-      ((AMD::GpuAgent*)src_gpu)->RegisterGangPeer(*dst_gpu, linfo.info.max_bandwidth/linfo.info.min_bandwidth);
+      uint32_t gang_factor = has_fixed_gang ? 2 : (linfo.info.min_bandwidth ?
+                             linfo.info.max_bandwidth/linfo.info.min_bandwidth : 0);
+
+      gpu->RegisterGangPeer(*dst_gpu, gang_factor);
     }
   }
 }

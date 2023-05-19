@@ -853,8 +853,7 @@ void GpuAgent::SetCopyStatusCheckRefCount(bool set) {
 
 // Assign direct peer gang factor to GPU
 void GpuAgent::RegisterGangPeer(core::Agent& peer, unsigned int max_bandwidth_factor) {
-  unsigned int max_gang_factor = std::min(max_bandwidth_factor, properties_.NumSdmaXgmiEngines);
-  gang_peers_info_.push_back(std::pair<core::Agent&,unsigned int>(peer, max_gang_factor));
+  gang_peers_info_.push_back(std::pair<core::Agent&,unsigned int>(peer, max_bandwidth_factor));
 }
 
 // Destroy gang signal
@@ -878,7 +877,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   }
 
   // Calculate the number of gang items
-  int tmp_gang_factor = 1;
+  unsigned int tmp_gang_factor = 1;
   for (auto peer_info : gang_peers_info_) {
     Flag::SDMA_OVERRIDE sdma_gang_override =
         core::Runtime::runtime_singleton_->flag().enable_sdma_gang();
@@ -902,19 +901,27 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
 
   int gang_factor = 0;
   uint32_t gang_mask = 0;
+  // Use non-D2D (auxillary) SDMA engines in the event of xGMI D2D support
+  // when xGMI SDMA context is not available.
+  bool has_aux_gang = tmp_gang_factor >= properties_.NumSdmaEngines && !!!properties_.NumSdmaXgmiEngines;
+  tmp_gang_factor = has_aux_gang ? tmp_gang_factor : std::min(tmp_gang_factor, properties_.NumSdmaXgmiEngines);
   for (int i = 0; i < tmp_gang_factor; i++) {
-    uint32_t engine_offset = 0;
-    for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
-      if (xgmi_peer_list_[idx]->public_handle().handle == dst_agent.public_handle().handle) {
-        engine_offset = ((idx + i) % properties_.NumSdmaXgmiEngines) + DefaultBlitCount;
-	break;
+    if (has_aux_gang) {
+      if (!DmaEngineIsFree(i + 1) && !blits_[i + 1]->GangStatus()) continue;
+    } else {
+      uint32_t engine_offset = 0;
+      for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
+        if (xgmi_peer_list_[idx]->public_handle().handle == dst_agent.public_handle().handle) {
+          engine_offset = ((idx + i) % properties_.NumSdmaXgmiEngines) + DefaultBlitCount;
+          break;
+        }
       }
-    }
 
-    // Avoid oversubscribing unavailable blit engines that are not already ganged
-    if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset) &&
-        !blits_[engine_offset]->GangStatus()) {
-      continue;
+      // Avoid oversubscribing unavailable blit engines that are not already ganged
+      if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset) &&
+          !blits_[engine_offset]->GangStatus()) {
+        continue;
+      }
     }
 
     gang_mask |= 1 << i;
@@ -958,7 +965,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
 
     // Set leader and gang status to blit
     SetCopyRequestRefCount(true);
-    lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent, size, i);
+    lazy_ptr<core::Blit>& blit = has_aux_gang ? blits_[i + 1] :
+                                                GetBlitObject(dst_agent, src_agent, size, i);
     blit->GangLeader(gang_factor > 1 && !gang_leader_set);
     blit->GangStatus(gang_factor > 1);
 
