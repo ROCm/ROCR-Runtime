@@ -306,13 +306,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 							    HSAuint32 *NodeArray)
 {
 	CHECK_KFD_OPEN();
-	uint32_t *gpu_id_array;
+	uint32_t *gpu_id_array = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
 	pr_debug("[%s] number of nodes %lu\n", __func__, NumberOfNodes);
 
-	ret = validate_nodeid_array(&gpu_id_array,
-			NumberOfNodes, NodeArray);
+	if (NodeArray != NULL || NumberOfNodes != 0) {
+		ret = validate_nodeid_array(&gpu_id_array,
+				NumberOfNodes, NodeArray);
+	}
 
 	if (ret == HSAKMT_STATUS_SUCCESS) {
 		ret = fmm_register_graphics_handle(
