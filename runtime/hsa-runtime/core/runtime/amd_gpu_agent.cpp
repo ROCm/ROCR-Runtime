@@ -1367,6 +1367,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_DRIVER_UID:
       *((uint32_t*)value) = KfdGpuID();
       break;
+    case HSA_AMD_AGENT_INFO_NEAREST_CPU:
+      *((hsa_agent_t*)value) = GetNearestCpuAgent()->public_handle();
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
@@ -1985,18 +1988,7 @@ void GpuAgent::Trim() {
 }
 
 void GpuAgent::InitNumaAllocator() {
-  Agent* nearCpu = nullptr;
-  uint32_t dist = -1u;
-  for (auto cpu : core::Runtime::runtime_singleton_->cpu_agents()) {
-    const core::Runtime::LinkInfo link_info =
-        core::Runtime::runtime_singleton_->GetLinkInfo(node_id(), cpu->node_id());
-    if (link_info.info.numa_distance < dist) {
-      dist = link_info.info.numa_distance;
-      nearCpu = cpu;
-    }
-  }
-
-  for (auto pool : nearCpu->regions()) {
+  for (auto pool : GetNearestCpuAgent()->regions()) {
     if (pool->kernarg()) {
       system_allocator_ = [pool](size_t size, size_t alignment,
                                  MemoryRegion::AllocateFlags alloc_flags) -> void* {
@@ -2014,6 +2006,20 @@ void GpuAgent::InitNumaAllocator() {
     }
   }
   assert(false && "Nearest NUMA node did not have a kernarg pool.");
+}
+
+core::Agent* GpuAgent::GetNearestCpuAgent() const {
+  core::Agent* nearCpu = nullptr;
+  uint32_t dist = -1u;
+  for (auto cpu : core::Runtime::runtime_singleton_->cpu_agents()) {
+    const core::Runtime::LinkInfo link_info =
+        core::Runtime::runtime_singleton_->GetLinkInfo(node_id(), cpu->node_id());
+    if (link_info.info.numa_distance < dist) {
+      dist = link_info.info.numa_distance;
+      nearCpu = cpu;
+    }
+  }
+  return nearCpu;
 }
 
 }  // namespace amd

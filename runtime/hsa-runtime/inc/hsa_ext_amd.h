@@ -399,7 +399,12 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for driver unique identifier.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112
+  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112,
+  /**
+   * Returns the hsa_agent_t of the nearest CPU agent
+   * The type of this attribute is hsa_agent_t.
+   */
+  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113
 } hsa_amd_agent_info_t;
 
 /**

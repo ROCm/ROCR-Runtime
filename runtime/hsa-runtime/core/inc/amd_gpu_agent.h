@@ -289,6 +289,8 @@ class GpuAgent : public GpuAgentInt {
     return current_coherency_type_;
   }
 
+  core::Agent* GetNearestCpuAgent(void) const;
+
   // Getter & setters.
 
   // @brief Returns Hive ID
