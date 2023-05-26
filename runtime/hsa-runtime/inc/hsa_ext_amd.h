@@ -51,9 +51,10 @@
 /*
  * - 1.0 - initial version
  * - 1.1 - dmabuf export
+ * - 1.2 - hsa_amd_memory_async_copy_on_engine
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 1
+#define HSA_AMD_INTERFACE_VERSION_MINOR 2
 
 #ifdef __cplusplus
 extern "C" {
