@@ -3552,7 +3552,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	HsaMemFlags mflags;
 	vm_object_t *obj;
 	void *metadata;
-	void *mem, *aperture_base;
+	void *mem, *aperture_base = NULL;
 	int32_t gpu_mem_id;
 	int r;
 	HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
@@ -3591,7 +3591,6 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		aperture = &mem_handle_aperture;
 	} else if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
-		aperture_base = NULL;
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
 		aperture_base = aperture->base;
