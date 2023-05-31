@@ -22,7 +22,7 @@ list ( APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/../cmake_modules" )
 include ( utils )
 
 ## Compiler preproc definitions.
-add_definitions ( -D__linux__ )
+#add_definitions ( -D__linux__ )
 add_definitions ( -DUNIX_OS )
 add_definitions ( -DLINUX )
 add_definitions ( -D__AMD64__ )
