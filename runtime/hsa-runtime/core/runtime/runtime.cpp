@@ -1421,7 +1421,11 @@ hsa_status_t Runtime::Load() {
 
   // Assume features are not supported if parse CPUID fails
   if (!os::ParseCpuID(&cpuinfo)) {
-    fprintf(stderr, "Failed to parse CPUID\n");
+    /*
+     * This is not a failure, in some environments such as SRIOV, not all CPUID info is
+     * exposed inside the guest
+     */
+    debug_warning("Parsing CPUID failed.");
   }
 
   flag_.Refresh();
