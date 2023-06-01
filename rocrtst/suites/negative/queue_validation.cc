@@ -240,7 +240,6 @@ void QueueValidation::QueueValidationForInvalidDimension(hsa_agent_t cpuAgent,
     ASSERT_EQ(completion, 1);
 
     hsa_signal_store_relaxed(aql().completion_signal, 1);
-    clear_code_object();
   }
   sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
@@ -328,7 +327,6 @@ void QueueValidation::QueueValidationInvalidGroupMemory(hsa_agent_t cpuAgent,
     ASSERT_EQ(completion, 1);
 
     hsa_signal_store_relaxed(aql().completion_signal, 1);
-    clear_code_object();
   }
   sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
@@ -414,7 +412,6 @@ void QueueValidation::QueueValidationForInvalidKernelObject(hsa_agent_t cpuAgent
     ASSERT_EQ(completion, 1);
 
     hsa_signal_store_relaxed(aql().completion_signal, 1);
-    clear_code_object();
   }
   sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
@@ -494,7 +491,6 @@ void QueueValidation::QueueValidationForInvalidPacket(hsa_agent_t cpuAgent,
     ASSERT_EQ(completion, 1);
 
     hsa_signal_store_relaxed(aql().completion_signal, 1);
-    clear_code_object();
   }
   sleep(1);
   for (ii = 0; ii < kMaxQueue; ++ii) {
@@ -585,7 +581,6 @@ void QueueValidation::QueueValidationForInvalidWorkGroupSize(hsa_agent_t cpuAgen
 
       hsa_signal_store_relaxed(aql().completion_signal, 1);
       if (queue[ii]) { hsa_queue_destroy(queue[ii]); }
-      clear_code_object();
     }
   }
   sleep(1);
