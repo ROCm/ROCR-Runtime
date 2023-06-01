@@ -118,6 +118,7 @@ class Runtime {
   struct KfdVersion_t {
     HsaVersionInfo version;
     bool supports_exception_debugging;
+    bool supports_event_age;
   };
 
   /// @brief Open connection to kernel driver and increment reference count.
@@ -401,7 +402,12 @@ class Runtime {
 
   uint64_t sys_clock_freq() const { return sys_clock_freq_; }
 
-  void KfdVersion(const HsaVersionInfo& version) { kfd_version.version = version; }
+  void KfdVersion(const HsaVersionInfo& version) {
+    kfd_version.version = version;
+    if (version.KernelInterfaceMajorVersion == 1 &&
+      version.KernelInterfaceMinorVersion >= 14)
+      kfd_version.supports_event_age = true;
+  }
 
   void KfdVersion(bool exception_debugging) {
     kfd_version.supports_exception_debugging = exception_debugging;
