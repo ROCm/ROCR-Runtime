@@ -117,6 +117,71 @@ TEST_F(KFDEventTest, SignalEvent) {
     TEST_END;
 }
 
+/* test event signaling with event age enabled wait */
+TEST_F(KFDEventTest, SignalEventExt) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    PM4Queue queue;
+    HsaEvent *tmp_event;
+    uint64_t event_age;
+
+    if (m_VersionInfo.KernelInterfaceMajorVersion == 1 &&
+		m_VersionInfo.KernelInterfaceMinorVersion < 14) {
+        LOG() << "event age tracking isn't supported in KFD. Exiting." << std::endl;
+        return;
+    }
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &tmp_event));
+
+    /* Intentionally let event id for m_pHsaEvent be non zero */
+    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &m_pHsaEvent));
+    ASSERT_NE(0, m_pHsaEvent->EventData.HWData2);
+
+    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+    /* 1. event_age gets incremented every time when the event signals */
+    event_age = 1;
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
+                    m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+    ASSERT_EQ(event_age, 2);
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
+                    m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+    ASSERT_EQ(event_age, 3);
+
+    /* 2. event wait return without sleep after the event signals */
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
+                    m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+    sleep(1); /* wait for event signaling */
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+    ASSERT_EQ(event_age, 4);
+
+    /* 3. signaling from CPU */
+    hsaKmtSetEvent(m_pHsaEvent);
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+    ASSERT_EQ(event_age, 5);
+
+    /* 4. when event_age is 0, hsaKmtWaitOnEvent_Ext always sleeps */
+    event_age = 0;
+    ASSERT_EQ(HSAKMT_STATUS_WAIT_TIMEOUT, hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+
+    /* 5. when event_age is 0, it always stays 0 after the event signals */
+    queue.PlaceAndSubmitPacket(PM4ReleaseMemoryPacket(m_FamilyId, false,
+                    m_pHsaEvent->EventData.HWData2, m_pHsaEvent->EventId));
+    EXPECT_SUCCESS(hsaKmtWaitOnEvent_Ext(m_pHsaEvent, g_TestTimeOut, &event_age));
+    ASSERT_EQ(event_age, 0);
+
+    EXPECT_SUCCESS(hsaKmtDestroyEvent(tmp_event));
+
+    EXPECT_SUCCESS(queue.Destroy());
+
+    TEST_END;
+}
+
 static uint64_t gettime() {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);
