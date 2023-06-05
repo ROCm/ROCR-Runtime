@@ -65,17 +65,18 @@ HSAKMT_STATUS fscanf_dec(const char *file, uint32_t *num)
 }
 
 uint64_t RoundToPowerOf2(uint64_t val) {
-  int bytes = sizeof(uint64_t);
+    val--;
 
-  val--;
+    /* Shift with amount larger than the bit width can result in
+     * undefined behavior by compiler for release builds.
+     * Shift till 32 bit only which is less than bit width of val.
+     */
+    for (int i = 1; i <= 32; i *= 2)
+        val |= val >> i;
 
-  for (int i = 0; i < bytes; i++) {
-    val |= val >> (1 << i);
-  }
+    val++;
 
-  val++;
-
-  return val;
+    return val;
 }
 
 bool WaitOnValue(const volatile unsigned int *buf, unsigned int value, unsigned int timeOut) {
