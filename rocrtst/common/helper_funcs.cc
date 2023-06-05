@@ -103,16 +103,15 @@ int FillRandom(T* arrayPtr,
 }
 
 uint64_t RoundToPowerOf2(uint64_t val) {
-  int bytes = sizeof(uint64_t);
-
   val--;
-
-  for (int i = 0; i < bytes; i++) {
-    val |= val >> (1 << i);
-  }
+  /*
+   * Shift with amount larger than the bit width can result in
+   * undefined behavior by compiler for release builds.
+   * Shift till 32 bit only which is less than bit width of val.
+   */
+  for (int i = 1; i <= 32; i *= 2) val |= val >> i;
 
   val++;
-
   return val;
 }
 
