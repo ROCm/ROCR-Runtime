@@ -521,8 +521,11 @@ void GpuAgent::InitScratchPool() {
 void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  size_t available;
+  HSAKMT_STATUS err = hsaKmtAvailableMemory(node_id(), &available);
+  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAvailableMemory failed");
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
-  if (!scratch_cache_.reserved_bytes() && reserved_sz) {
+  if (!scratch_cache_.reserved_bytes() && reserved_sz && available > 8 * reserved_sz) {
     HSAuint64 alt_va;
     void* reserved_base = scratch_pool_.alloc(reserved_sz);
     assert(reserved_base && "Could not allocate reserved memory");
