@@ -2062,9 +2062,10 @@ typedef struct hsa_amd_ipc_memory_s {
  * region has been attached (via hsa_amd_ipc_memory_attach) in the remote
  * process prior to releasing that memory in the local process.
  * Repeated calls for the same allocation may, but are not required to, return
- * unique handles.
+ * unique handles. The allocation needs to be on memory on an agent of type
+ * HSA_DEVICE_TYPE_GPU.
  *
- * @param[in] ptr Pointer to memory allocated via ROCr APIs to prepare for
+ * @param[in] ptr Pointer to device memory allocated via ROCr APIs to prepare for
  * sharing.
  *
  * @param[in] len Length in bytes of the allocation to share.
