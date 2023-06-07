@@ -930,8 +930,8 @@ hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_ag
 
     if (!!!blits_[BlitDevToHost]->PendingBytes()) {
       *engine_ids_mask |= properties_.NumSdmaEngines > 1 ?
-			  HSA_AMD_SDMA_ENGINE_1 :
-			  HSA_AMD_SDMA_ENGINE_0;
+                          HSA_AMD_SDMA_ENGINE_1 :
+                          HSA_AMD_SDMA_ENGINE_0;
     }
     // Find a free xGMI SDMA engine for H2D/D2H though it may be lower bandwidth
     for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
