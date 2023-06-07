@@ -1523,7 +1523,7 @@ TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
 
     /* With XNACK off, KFD checks that all SVM memory will fit into system memory */
     if (vramSize + overCommitSize > GetSysMemSize() / 2) {
-        LOG() << "Skipping test: no enough system memory." << std::endl;
+        LOG() << "Skipping test: Not enough system memory." << std::endl;
         return;
     }
 
