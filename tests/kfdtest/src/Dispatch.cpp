@@ -45,6 +45,7 @@ Dispatch::Dispatch(const HsaMemoryBuffer& isaBuf, const bool eventAutoReset)
     hsaKmtCreateEvent(&eventDesc, !eventAutoReset, false, &m_pEop);
 
     m_FamilyId  = g_baseTest->GetFamilyIdFromNodeId(isaBuf.Node());
+    m_NeedCwsrWA = g_baseTest->NeedCwsrWA(isaBuf.Node());
 }
 
 Dispatch::~Dispatch() {
@@ -138,7 +139,11 @@ void Dispatch::BuildIb() {
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__EXCP_EN_MSB__SHIFT)
             & COMPUTE_PGM_RSRC2__EXCP_EN_MSB_MASK;
 
-    const bool priv = (m_FamilyId == FAMILY_GFX11);
+    /*
+     * For some special asics in the list of DEGFX11_12113
+     * COMPUTE_PGM_RSRC needs priv=1 to prevent hardware traps
+     */
+    const bool priv = m_NeedCwsrWA;
     const unsigned int COMPUTE_PGM_RSRC[] = {
         // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0
         // PRIV: 0 (1 for GFX11) DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
