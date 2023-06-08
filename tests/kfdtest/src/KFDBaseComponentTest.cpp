@@ -164,6 +164,25 @@ unsigned int KFDBaseComponentTest::GetFamilyIdFromNodeId(unsigned int nodeId)
     return  FamilyIdFromNode(m_NodeInfo.GetNodeProperties(nodeId));
 }
 
+/*
+ * Some asics need CWSR workround for DEGFX11_12113
+ */
+bool KFDBaseComponentTest::NeedCwsrWA(unsigned int nodeId)
+{
+    bool needCwsrWA = false;
+    const HsaNodeProperties *props = m_NodeInfo.GetNodeProperties(nodeId);
+
+    needCwsrWA = props->EngineId.ui32.Major == 11 &&
+                  props->EngineId.ui32.Minor == 0 &&
+                  (props->EngineId.ui32.Stepping == 0 ||
+                   props->EngineId.ui32.Stepping == 1 ||
+                   props->EngineId.ui32.Stepping == 2 ||
+                   props->EngineId.ui32.Stepping == 5 ||
+                   (props->EngineId.ui32.Stepping == 3 && props->NumArrays > 1));
+
+    return needCwsrWA;
+}
+
 bool KFDBaseComponentTest::NeedNonPagedWptr(unsigned int nodeId)
 {
     return GetFamilyIdFromNodeId(nodeId) >= FAMILY_GFX11;
