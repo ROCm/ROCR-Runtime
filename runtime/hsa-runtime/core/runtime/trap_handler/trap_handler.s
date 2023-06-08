@@ -212,6 +212,7 @@ trap_entry:
   s_mov_b32            m0, ttmp3
   s_nop                0x0 // Manually inserted wait states
   s_sendmsg            sendmsg(MSG_INTERRUPT)
+  s_waitcnt            lgkmcnt(0) // Wait for the message to go out.
   s_mov_b32            m0, ttmp2
 
   // Parking the wave requires saving the original pc in the preserved ttmps.
