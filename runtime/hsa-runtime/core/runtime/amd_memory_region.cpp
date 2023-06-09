@@ -100,19 +100,27 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
   hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
+MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
+                           bool extended_scope_fine_grain, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
     : core::MemoryRegion(fine_grain, kernarg, full_profile, owner),
       mem_props_(mem_props),
+      extended_scope_fine_grain_(extended_scope_fine_grain),
       max_single_alloc_size_(0),
       virtual_size_(0),
       fragment_allocator_(BlockAllocator(*this)) {
   virtual_size_ = GetPhysicalSize();
 
+  // extended_scope_fine_grain and fine_grain memory regions are mutually exclusive
+  assert(!(fine_grain && extended_scope_fine_grain));
+
   mem_flag_.Value = 0;
   map_flag_.Value = 0;
-
   static const HSAuint64 kGpuVmSize = (1ULL << 40);
+
+  // Bind the memory region based on whether it is
+  // coarse or fine grain or extended scope fine grain.
+  mem_flag_.ui32.CoarseGrain = (fine_grain || extended_scope_fine_grain) ? 0 : 1;
 
   if (IsLocalMemory()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
@@ -122,6 +130,20 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, cor
     mem_flag_.ui32.NonPaged = 1;
 
     virtual_size_ = kGpuVmSize;
+
+    // If memory region is extended scope fine grained
+    // mark the page table entries for this memory region
+    // as MTYPE_UC. Full read and write ordering are guaranteed
+    // to this address.
+    if (extended_scope_fine_grain) {
+      AMD::GpuAgent* agent_ =
+          const_cast<AMD::GpuAgent*>(reinterpret_cast<const AMD::GpuAgent*>(owner));
+      if (agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 0) ||
+          agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 1) ||
+          agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 2))
+        mem_flag_.ui32.Uncached = 1;
+    }
+
   } else if (IsSystem()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     mem_flag_.ui32.NoSubstitute = 0;
@@ -134,8 +156,6 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, cor
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
   }
 
-  // Bind if memory region is coarse or fine grain
-  mem_flag_.ui32.CoarseGrain = (fine_grain) ? 0 : 1;
 
   // Adjust allocatable size per page align
   max_single_alloc_size_ = AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize_);
@@ -317,8 +337,12 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_HEAPTYPE_SYSTEM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE: {
-          uint32_t ret = fine_grain() ? HSA_REGION_GLOBAL_FLAG_FINE_GRAINED
-                                      : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+          uint32_t ret = 0;
+
+          ret = fine_grain()                ? HSA_REGION_GLOBAL_FLAG_FINE_GRAINED
+              : extended_scope_fine_grain() ? HSA_REGION_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED
+                                            : HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED;
+
           if (kernarg()) ret |= HSA_REGION_GLOBAL_FLAG_KERNARG;
           *((uint32_t*)value) = ret;
           break;
@@ -480,7 +504,7 @@ hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
 
     // Return disallowed by default if memory is coarse
     // grained without regard to link type
-    if  (fine_grain() == false) {
+    if (extended_scope_fine_grain() == false && fine_grain() == false) {
       return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
     }
 

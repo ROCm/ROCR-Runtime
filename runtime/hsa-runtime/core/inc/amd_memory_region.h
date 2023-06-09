@@ -95,8 +95,8 @@ class MemoryRegion : public core::MemoryRegion {
   /// @brief Unpin memory.
   static void MakeKfdMemoryUnresident(const void* ptr);
 
-  MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
-               const HsaMemoryProperties& mem_props);
+  MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
+               core::Agent* owner, const HsaMemoryProperties& mem_props);
 
   ~MemoryRegion();
 
@@ -173,6 +173,8 @@ class MemoryRegion : public core::MemoryRegion {
     return static_cast<uint32_t>(mem_props_.MemoryClockMax);
   }
 
+  __forceinline bool extended_scope_fine_grain() const { return extended_scope_fine_grain_; }
+
  private:
   const HsaMemoryProperties mem_props_;
 
@@ -181,6 +183,9 @@ class MemoryRegion : public core::MemoryRegion {
   HsaMemMapFlags map_flag_;
 
   size_t max_single_alloc_size_;
+
+  // Enables creating an extended scope fine grained memory pool region
+  const bool extended_scope_fine_grain_;
 
   // Used to collect total system memory
   static size_t max_sysmem_alloc_size_;
