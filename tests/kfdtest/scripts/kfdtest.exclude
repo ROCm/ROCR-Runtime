@@ -41,6 +41,10 @@ FILTER[core]=\
 # CU Masking Linear are not working correctly due to how the HW distributes work over CUs.
 # They are available for testing but are not currently expected to pass on CI/VI/AI.
 #
+# CU Masking Even is added here due to some non-obvious baseline measurements. Though
+# using wallclock to measure performance is always risky, there are just too many ASICs
+# where this test is failing. Ideally we'll get better CU Masking coverage via rocrtst
+#
 # The CheckZeroInitializationVram test is no longer expected to pass as KFD no longer
 # clears memory at allocation time.
 PERMANENT_BLACKLIST_ALL_ASICS=\
@@ -48,6 +52,7 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 "${FILTER[pm]}:"\
 "KFDLocalMemoryTest.Fragmentation:"\
 "KFDQMTest.BasicCuMaskingLinear:"\
+"KFDQMTest.BasicCuMaskingEven:"\
 "RDMATest.GPUDirect:"\
 "KFDRASTest.*:"\
 "KFDLocalMemoryTest.CheckZeroInitializationVram"
@@ -108,7 +113,6 @@ KV_QUEUE_BLACKLIST=\
 # KFDCWSRTest.BasicTest*: SWDEV-353206
 BLACKLIST_GFX10=\
 "KFDMemoryTest.DeviceHdpFlush:"\
-"KFDQMTest.BasicCuMaskingEven:"\
 "KFDSVMEvictTest.*:"\
 "KFDCWSRTest.BasicTest*"
 
@@ -119,7 +123,6 @@ BLACKLIST_GFX10_NV2X=\
 # KFDMemoryTest.FlatScratchAccess           - SWDEV-329877
 BLACKLIST_GFX11=\
 "KFDQMTest.CreateAqlCpQueue:"\
-"KFDQMTest.BasicCuMaskingEven:"\
 "KFDCWSRTest.InterruptRestore:"\
 "KFDPerfCountersTest.*:"\
 "KFDMemoryTest.FlatScratchAccess"
@@ -226,15 +229,12 @@ FILTER[renoir]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDEvictTest.*:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
-"KFDQMTest.BasicCuMaskingEven:"\
 "KFDMemoryTest.SignalHandling"
 
 # KFDExceptionTest.* (KFD-435)
-# KFQMTest.BasicCuMaskingEven (Issues with baseline measurement)
 FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDExceptionTest.FaultStorm:"\
-"KFDQMTest.BasicCuMaskingEven"\
+"KFDExceptionTest.FaultStorm"\
 
 FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
@@ -244,7 +244,6 @@ FILTER[aldebaran]=\
 
 FILTER[aqua_vanjaram]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDQMTest.BasicCuMaskingEven:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDMemoryTest.FlatScratchAccess:"\
