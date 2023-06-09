@@ -52,9 +52,10 @@
  * - 1.0 - initial version
  * - 1.1 - dmabuf export
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
+ * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 2
+#define HSA_AMD_INTERFACE_VERSION_MINOR 3
 
 #ifdef __cplusplus
 extern "C" {
@@ -1014,7 +1015,14 @@ typedef enum hsa_amd_memory_pool_global_flag_s {
   /**
    * Writes to memory in this pool can be performed by a single agent at a time.
    */
-  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4
+  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4,
+
+  /** Updates to memory in this memory pool have extended scope, acting as
+   * system-scope atomics for variables in memory regions of this type.
+   * Note: On non-compliant systems, device-specific actions may be required
+   * for system-scope coherence. */
+  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED = 8,
+
 } hsa_amd_memory_pool_global_flag_t;
 
 typedef enum hsa_amd_memory_pool_location_s {

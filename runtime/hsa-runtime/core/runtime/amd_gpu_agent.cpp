@@ -447,15 +447,19 @@ void GpuAgent::InitRegionList() {
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
-          MemoryRegion* region = new MemoryRegion(false, false, false, this, mem_props[mem_idx]);
+          MemoryRegion* region =
+              new MemoryRegion(false, false, false, false, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
 
           if (region->IsLocalMemory()) {
+            regions_.push_back(
+                new MemoryRegion(false, false, false, true, this, mem_props[mem_idx]));
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
             if ((properties_.HiveID != 0) ||
                 (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
-              regions_.push_back(new MemoryRegion(true, false, false, this, mem_props[mem_idx]));
+              regions_.push_back(
+                  new MemoryRegion(true, false, false, false, this, mem_props[mem_idx]));
             }
           }
           break;
