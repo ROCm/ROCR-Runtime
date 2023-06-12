@@ -98,7 +98,7 @@ HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
     sizeInPages = size >> PAGE_SHIFT;
     vramBufSizeInPages = sizeInPages / (count * N_PROCESSES);
 
-    return vramBufSizeInPages << 20;
+    return vramBufSizeInPages << PAGE_SHIFT;
 }
 
 void KFDSVMEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
