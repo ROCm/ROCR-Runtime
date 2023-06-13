@@ -1738,6 +1738,12 @@ void GpuAgent::BindTrapHandler() {
     AssembleShader("TrapHandlerKfdExceptions", AssembleTarget::ISA, trap_code_buf_,
                    trap_code_buf_size_);
   } else {
+    if (isa_->GetMajorVersion() >= 11 ||
+       (isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() == 4)) {
+      // No trap handler support without exception handling, soft error.
+      return;
+    }
+
     AssembleShader("TrapHandler", AssembleTarget::ISA, trap_code_buf_, trap_code_buf_size_);
 
     // Make an empty map from doorbell index to queue.
