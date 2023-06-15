@@ -709,6 +709,7 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
                                                          copy_size_overrides[1];
       break;
     case 11:
+    case 12:
       sdma = new BlitSdmaV5();
       copy_size_override = copy_size_overrides[1];
       break;
@@ -2165,7 +2166,7 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() > 11) {
+  } else if (isa_->GetMajorVersion() > 12) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 

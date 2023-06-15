@@ -1773,6 +1773,7 @@ void AqlQueue::FillComputeTmpRingSize_Gfx11() {
 // that enable kernel access scratch memory
 void AqlQueue::InitScratchSRD() {
   switch (agent_->isa()->GetMajorVersion()) {
+    case 12:
     case 11:
       FillBufRsrcWord0();
       FillBufRsrcWord1_Gfx11();
