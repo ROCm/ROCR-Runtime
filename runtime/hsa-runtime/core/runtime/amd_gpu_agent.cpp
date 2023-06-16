@@ -856,8 +856,9 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   bool is_p2p = !is_same_gpu && src_agent.device_type() == core::Agent::kAmdGpuDevice &&
                                 dst_agent.device_type() == core::Agent::kAmdGpuDevice;
 
-  if (is_p2p &&
-      core::Runtime::runtime_singleton_->flag().enable_peer_sdma() == Flag::SDMA_DISABLE) {
+  if ((is_p2p &&
+      core::Runtime::runtime_singleton_->flag().enable_peer_sdma() == Flag::SDMA_DISABLE) ||
+      core::Runtime::runtime_singleton_->flag().enable_sdma() == Flag::SDMA_DISABLE) {
     // Note  that VDI/HIP will call DmaCopy instead of DmaCopyOnEngine for P2P copies, but
     // we still want to handle force Blit Kernels in this function in case other libraries
     // decide to use DmaCopyOnEngine for P2P copies
@@ -866,7 +867,6 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   } else {
     bool is_xgmi = is_p2p && dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
                          properties_.NumSdmaXgmiEngines;
-
 
     // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
     bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
