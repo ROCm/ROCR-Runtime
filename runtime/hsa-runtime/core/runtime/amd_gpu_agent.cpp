@@ -106,6 +106,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       ape1_size_(0),
       pending_copy_req_ref_(0),
       pending_copy_stat_check_ref_(0),
+      sdma_blit_used_mask_(0),
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
@@ -724,6 +725,7 @@ void GpuAgent::InitDma() {
       // On gfx90a ensure that HostToDevice queue is created first and so is placed on SDMA0.
       if ((!use_xgmi) && (!isHostToDev) && (isa_->GetMajorVersion() == 9) &&
           (isa_->GetMinorVersion() == 0) && (isa_->GetStepping() == 10)) {
+        GetBlitObject(BlitHostToDev);
         *blits_[BlitHostToDev];
       }
 
@@ -918,7 +920,7 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   }
 
   SetCopyRequestRefCount(true);
-  lazy_ptr<core::Blit>& blit = blits_[engine_offset];
+  lazy_ptr<core::Blit>& blit = GetBlitObject(engine_offset);
 
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
@@ -932,6 +934,15 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   return stat;
 }
 
+bool GpuAgent::DmaEngineIsFree(uint32_t engine_offset) {
+  SetCopyStatusCheckRefCount(true);
+  bool is_free = !!!(sdma_blit_used_mask_ & (1 << engine_offset)) ||
+                    (blits_[engine_offset]->isSDMA() &&
+                     !!!blits_[engine_offset]->PendingBytes());
+  SetCopyStatusCheckRefCount(false);
+  return is_free;
+}
+
 hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_agent,
                                      uint32_t *engine_ids_mask) {
   assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
@@ -939,16 +950,13 @@ hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_ag
          ("Both devices are CPU agents which is not expected"));
 
   *engine_ids_mask = 0;
-  uint32_t engine_offset = BlitDevToDev;
-  SetCopyStatusCheckRefCount(true);
   if (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
                    dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
                      dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
                        properties_.NumSdmaXgmiEngines) {
     //Find a free xGMI SDMA engine
     for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
-      engine_offset = DefaultBlitCount + i;
-      if (blits_[engine_offset]->isSDMA() && !!!blits_[engine_offset]->PendingBytes()) {
+      if (DmaEngineIsFree(DefaultBlitCount + i)) {
         *engine_ids_mask |= (HSA_AMD_SDMA_ENGINE_2 << i);
       }
     }
@@ -959,30 +967,25 @@ hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_ag
     bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
 
     // Check if H2D is free
-    engine_offset = BlitHostToDev;
-    if (blits_[engine_offset]->isSDMA() && !!!blits_[engine_offset]->PendingBytes()) {
+    if (DmaEngineIsFree(BlitHostToDev)) {
       if (is_h2d_blit || !limit_h2d_blit) {
         *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_0;
       }
     }
 
     // Check is D2H is free
-    engine_offset = BlitDevToHost;
-    if (blits_[engine_offset]->isSDMA() && !!!blits_[engine_offset]->PendingBytes()) {
+    if (DmaEngineIsFree(BlitDevToHost)) {
       *engine_ids_mask |= properties_.NumSdmaEngines > 1 ?
                           HSA_AMD_SDMA_ENGINE_1 :
                           HSA_AMD_SDMA_ENGINE_0;
     }
     // Find a free xGMI SDMA engine for H2D/D2H though it may be lower bandwidth
     for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
-      engine_offset = DefaultBlitCount + i;
-      if (blits_[engine_offset]->isSDMA() && !!!blits_[engine_offset]->PendingBytes()) {
+      if (DmaEngineIsFree(DefaultBlitCount + i)) {
          *engine_ids_mask |= (HSA_AMD_SDMA_ENGINE_2 << i);
       }
     }
   }
-
-  SetCopyStatusCheckRefCount(false);
 
   return !!(*engine_ids_mask) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
@@ -995,8 +998,8 @@ hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_
   if (isa_->GetMajorVersion() < 9) return HSA_STATUS_ERROR_INVALID_AGENT;
 
   SetCopyRequestRefCount(true);
-  lazy_ptr<core::Blit>& blit =
-      (dir == hsaHostToDevice) ? blits_[BlitHostToDev] : blits_[BlitDevToHost];
+  lazy_ptr<core::Blit>& blit = GetBlitObject((dir == hsaHostToDevice) ? BlitHostToDev :
+                                                                        BlitDevToHost);
 
   if (!blit->isSDMA()) {
     SetCopyRequestRefCount(false);
@@ -1862,6 +1865,11 @@ void GpuAgent::InvalidateCodeCaches() {
   queues_[QueueUtility]->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));
 }
 
+lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(uint32_t engine_offset) {
+  sdma_blit_used_mask_ |= 1 << engine_offset;
+  return blits_[engine_offset];
+}
+
 lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
   // Determine if destination is a member xgmi peers list
   uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
@@ -1873,25 +1881,21 @@ lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
     uint64_t dst_handle = dst_agent.public_handle().handle;
     uint64_t peer_handle = xgmi_peer_list_[idx]->public_handle().handle;
     if (peer_handle == dst_handle) {
-      return blits_[(idx % xgmi_engine_cnt) + DefaultBlitCount];
+      return GetBlitObject((idx % xgmi_engine_cnt) + DefaultBlitCount);
     }
   }
 
   // Add agent to the xGMI neighbours list
   xgmi_peer_list_.push_back(&dst_agent);
-  return blits_[((xgmi_peer_list_.size() - 1) % xgmi_engine_cnt) + DefaultBlitCount];
+  return GetBlitObject(((xgmi_peer_list_.size() - 1) % xgmi_engine_cnt) + DefaultBlitCount);
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
                                             const core::Agent& src_agent) {
-  lazy_ptr<core::Blit>& blit =
-    (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
-     dst_agent.device_type() == core::Agent::kAmdGpuDevice)
-       ? blits_[BlitHostToDev]  // CPU->GPU transfer.
-       : (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
-          dst_agent.device_type() == core::Agent::kAmdCpuDevice)
-            ? blits_[BlitDevToHost]   // GPU->CPU transfer.
-            : blits_[BlitDevToHost];  // GPU->GPU transfer.
+  bool is_h2d = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+                 dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+
+  lazy_ptr<core::Blit>& blit = GetBlitObject(is_h2d ? BlitHostToDev : BlitDevToHost);
   return blit;
 }
 
@@ -1910,7 +1914,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
     // If the copy is very small then cache flush overheads can dominate.
     // Choose a (potentially) SDMA enabled engine to avoid cache flushing.
     if (size < core::Runtime::runtime_singleton_->flag().force_sdma_size()) {
-      return blits_[BlitDevToHost];
+      return GetBlitObject(BlitDevToHost);
     }
     return blits_[BlitDevToDev];
   }
