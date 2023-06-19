@@ -563,6 +563,12 @@ class GpuAgent : public GpuAgentInt {
     KernelMutex lock_;
   } gws_queue_;
 
+  // Sets and Tracks pending SDMA status check or request counts
+  void SetCopyRequestRefCount(bool set);
+  void SetCopyStatusCheckRefCount(bool set);
+  int pending_copy_req_ref_;
+  int pending_copy_stat_check_ref_;
+
   ScratchCache scratch_cache_;
 
   // System memory allocator in the nearest NUMA node.
