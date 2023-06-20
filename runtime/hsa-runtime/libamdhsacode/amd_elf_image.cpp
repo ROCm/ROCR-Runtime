@@ -711,6 +711,10 @@ namespace elf {
 
       GElfStringTable* shstrtab() override;
       GElfStringTable* strtab() override;
+      GElfSymbolTable* getReferencedSymbolTable(uint16_t index)
+      {
+        return static_cast<GElfSymbolTable*>(section(index));
+      }
       GElfSymbolTable* getSymtab(uint16_t index) override
       {
         if (section(index)->type() == SHT_SYMTAB)
@@ -1261,7 +1265,7 @@ namespace elf {
     bool GElfRelocationSection::pullData()
     {
       section = elf->section(hdr.sh_info);
-      symtab = elf->getSymtab(hdr.sh_link);
+      symtab = elf->getReferencedSymbolTable(hdr.sh_link);
       Elf_Scn *lScn = elf_getscn(elf->e, ndxscn);
       assert(lScn);
       Elf_Data *lData = elf_getdata(lScn, nullptr);
