@@ -161,6 +161,9 @@ getNodeName() {
           gpuName="gfx$(echo "$HSA_OVERRIDE_GFX_VERSION" | awk 'BEGIN {FS="."; RS=""} {printf "%d%x%x", $1, $2, $3 }')"
       else
           local GfxVersionDec=$(cat $TOPOLOGY_SYSFS_DIR/$nodeId/properties | grep gfx_target_version | awk '{print $2}')
+          if [[ ${#GfxVersionDec} = 5 ]]; then
+              GfxVersionDec="0${GfxVersionDec}"
+          fi
           gpuName="gfx$(printf "$GfxVersionDec" | fold -w2 | awk 'BEGIN {FS="\n"; RS=""} {printf "%d%x%x", $1, $2, $3}')"
       fi
     fi
