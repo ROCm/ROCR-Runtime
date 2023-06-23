@@ -394,7 +394,12 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for number of XCCs within the agent.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_NUM_XCC = 0xA111
+  HSA_AMD_AGENT_INFO_NUM_XCC = 0xA111,
+  /**
+   * Queries for driver unique identifier.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112
 } hsa_amd_agent_info_t;
 
 /**
