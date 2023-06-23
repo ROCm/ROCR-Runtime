@@ -1352,6 +1352,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_NUM_XCC:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumXcc);
       break;
+    case HSA_AMD_AGENT_INFO_DRIVER_UID:
+      *((uint32_t*)value) = KfdGpuID();
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
