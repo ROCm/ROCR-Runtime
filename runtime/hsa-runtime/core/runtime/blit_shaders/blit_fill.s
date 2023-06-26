@@ -117,7 +117,12 @@ Fill:
     s_load_dwordx4  s[8:11], s[0:1], 0x10
     s_waitcnt       lgkmcnt(0)
 
-    s_lshl_b32       s2, s2, 0x6
+   .if (.amdgcn.gfx_generation_number == 12)
+     s_lshl_b32      s2, ttmp9, 0x6
+   .else
+     s_lshl_b32      s2, s2, 0x6
+   .endif
+
     V_ADD_CO_U32     v0, s2, v0
 
 .macro mFillPattern iter iter_end

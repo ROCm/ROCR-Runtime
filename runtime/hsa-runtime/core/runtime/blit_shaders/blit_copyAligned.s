@@ -146,8 +146,12 @@ compute_pgm_rsrc1_vgprs = CopyAlignedRsrc1VGPRs
   s_load_dword    s24, s[0:1], 0x50
   s_waitcnt                lgkmcnt(0)
 
-
+  .if (.amdgcn.gfx_generation_number == 12)
+    s_lshl_b32              s2, ttmp9, 0x6
+  .else
     s_lshl_b32              s2, s2, 0x6
+  .endif
+
     V_ADD_CO_U32            v0, s2, v0
 
     v_mov_b32               v3, s5
