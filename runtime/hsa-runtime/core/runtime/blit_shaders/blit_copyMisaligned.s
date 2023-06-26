@@ -117,7 +117,12 @@ CopyMisaligned:
   s_load_dword    s16, s[0:1], 0x30
   s_waitcnt             lgkmcnt(0)
 
-  s_lshl_b32            s2, s2, 0x6
+  .if (.amdgcn.gfx_generation_number == 12)
+    s_lshl_b32          s2, ttmp9, 0x6
+  .else
+    s_lshl_b32          s2, s2, 0x6
+  .endif
+
   V_ADD_CO_U32          v0, s2, v0
 
   v_mov_b32             v3, s5
