@@ -42,6 +42,9 @@
 
 #include "core/inc/default_signal.h"
 #include "core/util/timer.h"
+#include <mwaitxintrin.h>
+
+#define MWAITX_ECX_TIMER_ENABLE 0x2  // BIT(1)
 
 namespace rocr {
 namespace core {
@@ -100,6 +103,8 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
       timer::duration_from_seconds<timer::fast_clock::duration>(
           double(timeout) / double(hsa_freq));
 
+  if (g_use_mwaitx) _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+
   while (true) {
     if (!IsValid()) return 0;
 
@@ -132,8 +137,12 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
       value = atomic::Load(&signal_.value, std::memory_order_relaxed);
       return hsa_signal_value_t(value);
     }
-    if (time - start_time > kMaxElapsed) {
+
+    if (time - start_time > kMaxElapsed)
       os::uSleep(20);
+    else if (g_use_mwaitx) {
+      _mm_mwaitx(0, 60000, MWAITX_ECX_TIMER_ENABLE);  // 60000 ~20us on a 1.5Ghz CPU
+      _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
     }
   }
 }

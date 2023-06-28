@@ -71,6 +71,7 @@ const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_B
 namespace rocr {
 namespace core {
 bool g_use_interrupt_wait = true;
+bool g_use_mwaitx = true;
 
 Runtime* Runtime::runtime_singleton_ = NULL;
 
@@ -459,7 +460,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   /*
   GPU-GPU - functional support, not a performance path.
-  
+
   This goes through system memory because we have to support copying between non-peer GPUs
   and we can't use P2P pointers even if the GPUs are peers.  Because hsa_amd_agents_allow_access
   requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
@@ -499,6 +500,36 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
   }
   return copy_agent->DmaCopy(dst, *dst_agent, src, *src_agent, size, dep_signals,
                              completion_signal);
+}
+
+hsa_status_t Runtime::CopyMemoryOnEngine(void* dst, core::Agent* dst_agent, const void* src,
+                                 core::Agent* src_agent, size_t size,
+                                 std::vector<core::Signal*>& dep_signals,
+                                 core::Signal& completion_signal,
+                                 hsa_amd_sdma_engine_id_t engine_id, bool force_copy_on_sdma) {
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
+  // engine_id is single bitset unique.
+  int engine_offset = ffs(engine_id);
+  if (!engine_id || !!((engine_id >> engine_offset))) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  return copy_agent->DmaCopyOnEngine(dst, *dst_agent, src, *src_agent, size, dep_signals,
+                             completion_signal, engine_offset, force_copy_on_sdma);
+}
+
+hsa_status_t Runtime::CopyMemoryStatus(core::Agent* dst_agent, core::Agent* src_agent,
+                                       uint32_t *engine_ids_mask) {
+  const bool src_gpu = (src_agent->device_type() == core::Agent::DeviceType::kAmdGpuDevice);
+  core::Agent* copy_agent = (src_gpu) ? src_agent : dst_agent;
+
+  if (dst_agent == src_agent) {
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
+
+  return copy_agent->DmaCopyStatus(*dst_agent, *src_agent, engine_ids_mask);
 }
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
@@ -648,6 +679,22 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       for(auto agent : gpu_agents_)
         ret &= (agent->isa()->GetXnack() == IsaFeature::Enabled);
       *(bool*)value = ret;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_MWAITX_ENABLED: {
+      *((bool*)value) = g_use_mwaitx;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED: {
+      auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+
+      // Implemented in KFD in 1.12
+      if (kfd_version.KernelInterfaceMajorVersion > 1 ||
+          kfd_version.KernelInterfaceMajorVersion == 1 &&
+              kfd_version.KernelInterfaceMinorVersion >= 12)
+        *(reinterpret_cast<bool*>(value)) = true;
+      else
+        *(reinterpret_cast<bool*>(value)) = false;
       break;
     }
     default:
@@ -1364,9 +1411,16 @@ Runtime::Runtime()
       kfd_version{0} {}
 
 hsa_status_t Runtime::Load() {
-  flag_.Refresh();
+  os::cpuid_t cpuinfo;
 
+  // Assume features are not supported if parse CPUID fails
+  if (!os::ParseCpuID(&cpuinfo)) {
+    fprintf(stderr, "Failed to parse CPUID\n");
+  }
+
+  flag_.Refresh();
   g_use_interrupt_wait = flag_.enable_interrupt();
+  g_use_mwaitx = flag_.check_mwaitx(cpuinfo.mwaitx);
 
   if (!AMD::Load()) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -1605,7 +1659,7 @@ void Runtime::LoadTools() {
       }
       if (!ld(&hsa_api_table_.hsa_api,
         hsa_api_table_.hsa_api.version.major_id,
-        failed.size(), &failed[0])) {
+        failed.size(), failed.data())) {
           failed.push_back(lib.name_.c_str());
           os::CloseLib(tool);
           continue;
@@ -2256,6 +2310,53 @@ Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   assert(prefetch_node != -2 && "prefetch_node was not updated.");
   assert(prefetch_node != -1 && "Should have already returned.");
   return agents_by_node_[prefetch_node][0];
+}
+
+hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset) {
+#ifdef __linux__
+  ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
+  // Lookup containing allocation.
+  auto mem = allocation_map_.upper_bound(ptr);
+  if (mem != allocation_map_.begin()) {
+    mem--;
+    if ((mem->first <= ptr) &&
+        (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
+      // Check size is in bounds.
+      if (uintptr_t(ptr) - uintptr_t(mem->first) + size <= mem->second.size) {
+        // Check allocation is on GPU
+        if (mem->second.region->owner()->device_type() != Agent::kAmdGpuDevice)
+          return HSA_STATUS_ERROR_INVALID_AGENT;
+
+        int fd;
+        uint64_t off;
+        HSAKMT_STATUS err = hsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off);
+        if (err == HSAKMT_STATUS_SUCCESS) {
+          *dmabuf = fd;
+          *offset = off;
+          return HSA_STATUS_SUCCESS;
+        }
+
+        assert((err != HSAKMT_STATUS_INVALID_PARAMETER) &&
+               "Thunk does not recognize an expected allocation.");
+        if (err == HSAKMT_STATUS_ERROR) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+        return HSA_STATUS_ERROR;
+      }
+    }
+  }
+  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+#else
+  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+#endif
+}
+
+hsa_status_t Runtime::DmaBufClose(int dmabuf) {
+#ifdef __linux__
+  int err = close(dmabuf);
+  if (err == 0) return HSA_STATUS_SUCCESS;
+  return HSA_STATUS_ERROR_RESOURCE_FREE;
+#else
+  return HSA_STATUS_ERROR_NOT_INITIALIZED;
+#endif
 }
 
 }  // namespace core

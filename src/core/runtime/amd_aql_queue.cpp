@@ -285,6 +285,9 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   queue_id_ = queue_rsrc.QueueId;
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
+  // On the first queue creation, reserve some scratch memory on this agent.
+  agent_->ReserveScratch();
+
   // Initialize scratch memory related entities
   queue_scratch_.queue_retry = amd_queue_.queue_inactive_signal;
   InitScratchSRD();
@@ -941,7 +944,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
         errorCode = HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
       } else if ((error_code & 128) == 128) {  // Out of VGPRs
-        errorCode = HSA_STATUS_ERROR_INVALID_ISA;
+        errorCode = hsa_status_t(HSA_STATUS_ERROR_OUT_OF_REGISTERS);
 
       } else if ((error_code & 0x20000000) == 0x20000000) {  // Memory violation (>48-bit)
         errorCode = hsa_status_t(HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION);
@@ -1191,6 +1194,8 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // To respect multi-producer semantics, first buffer commands for the queue slot.
   constexpr uint32_t slot_size_dw = uint32_t(slot_size_b / sizeof(uint32_t));
   uint32_t slot_data[slot_size_dw];
+  hsa_signal_t signal = {0};
+  hsa_status_t err;
 
   if (agent_->isa()->GetMajorVersion() <= 8) {
     // Construct a set of PM4 to fit inside the AQL packet slot.
@@ -1243,6 +1248,9 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
     constexpr uint32_t AMD_AQL_FORMAT_PM4_IB = 0x1;
 
+    err = hsa_signal_create(1, 0, NULL, &signal);
+    assert(err == HSA_STATUS_SUCCESS);
+
     amd_aql_pm4_ib aql_pm4_ib{};
     aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
     aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
@@ -1251,6 +1259,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];
     aql_pm4_ib.ib_jump_cmd[3] = ib_jump_cmd[3];
     aql_pm4_ib.dw_cnt_remain = 0xA;
+    aql_pm4_ib.completion_signal = signal;
 
     memcpy(slot_data, &aql_pm4_ib, sizeof(aql_pm4_ib));
   } else {
@@ -1268,10 +1277,15 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   doorbell->StoreRelease(write_idx);
 
   // Wait for the packet to be consumed.
-  // Should be switched to a signal wait when aql_pm4_ib can be used on all
-  // supported platforms.
-  while (queue->LoadReadIndexRelaxed() <= write_idx) {
-    os::YieldThread();
+  if (agent_->isa()->GetMajorVersion() <= 8) {
+    while (queue->LoadReadIndexRelaxed() <= write_idx)
+      os::YieldThread();
+  } else {
+    hsa_signal_value_t ret;
+    ret = hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1,
+                                    (uint64_t)-1, HSA_WAIT_STATE_ACTIVE);
+    err = hsa_signal_destroy(signal);
+    assert(ret == 0 && err == HSA_STATUS_SUCCESS);
   }
 }
 

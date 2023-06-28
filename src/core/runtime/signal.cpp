@@ -245,6 +245,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
 
   bool condition_met = false;
   while (true) {
+    // Cannot mwaitx - polling multiple signals
     for (uint32_t i = 0; i < signal_count; i++) {
       if (!signals[i]->IsValid()) return uint32_t(-1);
 

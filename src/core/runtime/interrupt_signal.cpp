@@ -44,6 +44,9 @@
 #include "core/inc/runtime.h"
 #include "core/util/timer.h"
 #include "core/util/locks.h"
+#include <mwaitxintrin.h>
+
+#define MWAITX_ECX_TIMER_ENABLE 0x2  // BIT(1)
 
 namespace rocr {
 namespace core {
@@ -162,6 +165,8 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
           double(timeout) / double(hsa_freq));
 
   bool condition_met = false;
+  if (g_use_mwaitx) _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+
   while (true) {
     if (!IsValid()) return 0;
 
@@ -194,13 +199,21 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
       value = atomic::Load(&signal_.value, std::memory_order_relaxed);
       return hsa_signal_value_t(value);
     }
-    
+
     if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
+      if (g_use_mwaitx) {
+        _mm_mwaitx(0, 0, 0);
+        _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+      }
       continue;
     }
 
     if (time - start_time < kMaxElapsed) {
-    //  os::uSleep(20);
+      //  os::uSleep(20);
+      if (g_use_mwaitx) {
+        _mm_mwaitx(0, 60000, MWAITX_ECX_TIMER_ENABLE);
+        _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+      }
       continue;
     }
 

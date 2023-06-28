@@ -155,6 +155,8 @@ struct AmdExtTable {
   decltype(hsa_amd_memory_pool_allocate)* hsa_amd_memory_pool_allocate_fn;
   decltype(hsa_amd_memory_pool_free)* hsa_amd_memory_pool_free_fn;
   decltype(hsa_amd_memory_async_copy)* hsa_amd_memory_async_copy_fn;
+  decltype(hsa_amd_memory_async_copy_on_engine)* hsa_amd_memory_async_copy_on_engine_fn;
+  decltype(hsa_amd_memory_copy_engine_status)* hsa_amd_memory_copy_engine_status_fn;
   decltype(hsa_amd_agent_memory_pool_get_info)* hsa_amd_agent_memory_pool_get_info_fn;
   decltype(hsa_amd_agents_allow_access)* hsa_amd_agents_allow_access_fn;
   decltype(hsa_amd_memory_pool_can_migrate)* hsa_amd_memory_pool_can_migrate_fn;
@@ -190,6 +192,8 @@ struct AmdExtTable {
   decltype(hsa_amd_spm_release)* hsa_amd_spm_release_fn;
   decltype(hsa_amd_spm_set_dest_buffer)* hsa_amd_spm_set_dest_buffer_fn;
   decltype(hsa_amd_queue_cu_get_mask)* hsa_amd_queue_cu_get_mask_fn;
+  decltype(hsa_amd_portable_export_dmabuf)* hsa_amd_portable_export_dmabuf_fn;
+  decltype(hsa_amd_portable_close_dmabuf)* hsa_amd_portable_close_dmabuf_fn;
 };
 
 // Table to export HSA Core Runtime Apis

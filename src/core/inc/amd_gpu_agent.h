@@ -232,6 +232,17 @@ class GpuAgent : public GpuAgentInt {
                        core::Signal& out_signal) override;
 
   // @brief Override from core::Agent.
+  hsa_status_t DmaCopyOnEngine(void* dst, core::Agent& dst_agent, const void* src,
+                       core::Agent& src_agent, size_t size,
+                       std::vector<core::Signal*>& dep_signals,
+                       core::Signal& out_signal, int engine_offset,
+                       bool force_copy_on_sdma) override;
+
+  // @brief Override from core::Agent.
+  hsa_status_t DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_agent,
+                             uint32_t *engine_ids_mask) override;
+
+  // @brief Override from core::Agent.
   hsa_status_t DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
                            const hsa_pitched_ptr_t* src, const hsa_dim3_t* src_offset,
                            const hsa_dim3_t* range, hsa_amd_copy_direction_t dir,
@@ -331,6 +342,8 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief returns true if agent uses MES scheduler
   __forceinline const bool isMES() const { return (isa_->GetMajorVersion() >= 11) ? true : false; };
+
+  void ReserveScratch();
 
   void Trim() override;
 

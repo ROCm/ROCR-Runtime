@@ -48,8 +48,12 @@
 #include "hsa.h"
 #include "hsa_ext_image.h"
 
+/*
+ * - 1.0 - initial version
+ * - 1.1 - dmabuf export
+ */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 0
+#define HSA_AMD_INTERFACE_VERSION_MINOR 1
 
 #ifdef __cplusplus
 extern "C" {
@@ -198,6 +202,11 @@ enum {
    * disabled.
    */
   HSA_STATUS_CU_MASK_REDUCED = 44,
+
+  /**
+   * Exceeded number of VGPRs available on this agent
+   */
+  HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
 };
 
 /**
@@ -362,11 +371,38 @@ typedef enum hsa_amd_agent_info_s {
    */
   HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION = 0xA109,
   /**
+   * Queries the number of SDMA engines.
+   * If HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG query returns non-zero,
+   * this query returns the the number of SDMA engines optimized for
+   * host to device bidirectional traffic.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SDMA_ENG = 0xA10A,
+  /**
+   * Queries the number of additional SDMA engines optimized for D2D xGMI copies.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG = 0xA10B,
+  /**
    * Queries for version of IOMMU supported by agent.
    * The type of this attribute is hsa_amd_iommu_version_t.
    */
   HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
 } hsa_amd_agent_info_t;
+
+/**
+ * @brief SDMA engine IDs unique by single set bit position.
+ */
+typedef enum hsa_amd_sdma_engine_id {
+  HSA_AMD_SDMA_ENGINE_0 = 0x1,
+  HSA_AMD_SDMA_ENGINE_1 = 0x2,
+  HSA_AMD_SDMA_ENGINE_2 = 0x4,
+  HSA_AMD_SDMA_ENGINE_3 = 0x8,
+  HSA_AMD_SDMA_ENGINE_4 = 0x10,
+  HSA_AMD_SDMA_ENGINE_5 = 0x20,
+  HSA_AMD_SDMA_ENGINE_6 = 0x40,
+  HSA_AMD_SDMA_ENGINE_7 = 0x80
+} hsa_amd_sdma_engine_id_t;
 
 typedef struct hsa_amd_hdp_flush_s {
   uint32_t* HDP_MEM_FLUSH_CNTL;
@@ -1246,6 +1282,61 @@ hsa_status_t HSA_API
                               uint32_t num_dep_signals,
                               const hsa_signal_t* dep_signals,
                               hsa_signal_t completion_signal);
+
+/**
+ * @brief Asynchronously copy a block of memory from the location pointed to by
+ * @p src on the @p src_agent to the memory block pointed to by @p dst on the @p
+ * dst_agent on engine_id.
+ *
+ * WARNING: Concurrent use of this call with hsa_amd_memory_async_copy can result
+ * in resource conflicts as HSA runtime will auto assign engines with the latter
+ * call.  Approach using both calls concurrently with caution.
+ *
+ * All param definitions are identical to hsa_amd_memory_async_copy with the
+ * exception of engine_id and force_copy_on_sdma.
+ *
+ * @param[in] - engine_id Target engine defined by hsa_amd_sdma_engine_id_t.
+ * Client should use hsa_amd_memory_copy_engine_status first to get the ID
+ * availability.
+ *
+ * @param[in] - force_copy_on_sdma By default, blit kernel copies are used when
+ * dst_agent == src_agent.  Setting this to true will force the copy over SDMA1.
+ *
+ * All return definitions are identical to hsa_amd_memory_async_copy with the
+ * following ammendments:
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT The source or destination
+ * pointers are NULL, or the completion signal is 0 or engine_id is improperly
+ * bounded.
+ */
+hsa_status_t HSA_API
+    hsa_amd_memory_async_copy_on_engine(void* dst, hsa_agent_t dst_agent, const void* src,
+                              hsa_agent_t src_agent, size_t size,
+                              uint32_t num_dep_signals,
+                              const hsa_signal_t* dep_signals,
+                              hsa_signal_t completion_signal,
+                              hsa_amd_sdma_engine_id_t engine_id,
+                              bool force_copy_on_sdma);
+/**
+ * @brief Reports the availability of SDMA copy engines.
+ *
+ * @param[in] dst_agent Destination agent of copy status direction.
+ *
+ * @param[in] src_agent Source agent of copy status direction.
+ *
+ * @param[out] engine_ids_mask returns available SDMA engine IDs that can be masked
+ * with hsa_amd_sdma_engine_id_t.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Agent has available SDMA engines.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Agent does not have available SDMA engines.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT dst_agent and src_agent are the same as
+ * dst_agent == src_agent is generally used for shader copies.
+ */
+hsa_status_t HSA_API
+    hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent, hsa_agent_t src_agent,
+                                      uint32_t *engine_ids_mask);
 
 /*
 [Provisional API]
@@ -2499,6 +2590,76 @@ hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
 hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
                                          uint32_t* timeout, uint32_t* size_copied, void* dest,
                                          bool* is_data_loss);
+/**
+ * @brief Obtains an OS specific, vendor neutral, handle to a memory allocation.
+ *
+ * Obtains an OS specific handle to GPU agent memory.  The memory must be part
+ * of a single allocation from an hsa_amd_memory_pool_t exposed by a GPU Agent.
+ * The handle may be used with other APIs (e.g. Vulkan) to obtain shared access
+ * to the allocation.
+ *
+ * Shared access to the memory is not guaranteed to be fine grain coherent even
+ * if the allocation exported is from a fine grain pool.  The shared memory
+ * consistency model will be no stronger than the model exported from, consult
+ * the importing API to determine the final consistency model.
+ *
+ * The allocation's memory remains valid as long as the handle and any mapping
+ * of the handle remains valid.  When the handle and all mappings are closed
+ * the backing memory will be released for reuse.
+ *
+ * @param[in] ptr Pointer to the allocation being exported.
+ *
+ * @param[in] size Size in bytes to export following @p ptr.  The entire range
+ * being exported must be contained within a single allocation.
+ *
+ * @param[out] dmabuf Pointer to a dma-buf file descriptor holding a reference to the
+ * allocation.  Contents will not be altered in the event of failure.
+ *
+ * @param[out] offset Offset in bytes into the memory referenced by the dma-buf
+ * object at which @p ptr resides.  Contents will not be altered in the event
+ * of failure.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Export completed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT One or more arguments is NULL.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION The address range described by
+ * @p ptr and @p size are not contained within a single allocation.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The allocation described by @p ptr
+ * and @p size was allocated on a device which can not export memory.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES The return file descriptor,
+ * @p dmabuf, could not be created.
+ */
+hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                            uint64_t* offset);
+
+/**
+ * @brief Closes an OS specific, vendor neutral, handle to a memory allocation.
+ *
+ * Closes an OS specific handle to GPU agent memory.
+ *
+ * Applications should close a handle after imports are complete.  The handle
+ * is not required to remain open for the lifetime of imported mappings.  The
+ * referenced allocation will remain valid until all handles and mappings
+ * are closed.
+ *
+ * @param[in] dmabuf Handle to be closed.
+ *
+ * @retval ::HSA_STATUS_SUCCESS Handle closed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_RESOURCE_FREE A generic error was encountered
+ * when closing the handle.  The handle may have been closed already or an
+ * async IO error may have occured.
+ */
+hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
 #ifdef __cplusplus
 }  // end extern "C" block

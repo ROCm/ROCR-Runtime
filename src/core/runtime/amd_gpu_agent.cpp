@@ -212,6 +212,8 @@ GpuAgent::~GpuAgent() {
   }
 
   scratch_cache_.trim(true);
+  scratch_cache_.free_reserve();
+
   if (scratch_pool_.base() != NULL) {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
@@ -477,6 +479,22 @@ void GpuAgent::InitScratchPool() {
     new (&scratch_pool_) SmallHeap(scratch_base, max_scratch_len);
   } else {
     new (&scratch_pool_) SmallHeap();
+  }
+}
+
+void GpuAgent::ReserveScratch()
+{
+  size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  if (!scratch_cache_.reserved_bytes() && reserved_sz) {
+    HSAuint64 alt_va;
+    void* reserved_base = scratch_pool_.alloc(reserved_sz);
+    assert(reserved_base && "Could not allocate reserved memory");
+
+    if (hsaKmtMapMemoryToGPU(reserved_base, reserved_sz, &alt_va) == HSAKMT_STATUS_SUCCESS)
+      scratch_cache_.reserve(reserved_sz, reserved_base);
+    else
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES, "Reserve scratch memory failed.");
   }
 }
 
@@ -773,6 +791,96 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
 
   return stat;
+}
+
+hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
+                               const void* src, core::Agent& src_agent,
+                               size_t size,
+                               std::vector<core::Signal*>& dep_signals,
+                               core::Signal& out_signal,
+                               int engine_offset,
+                               bool force_copy_on_sdma) {
+  // At this point it is guaranteed that one of
+  // the two devices is a GPU, potentially both
+  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
+         ("Both devices are CPU agents which is not expected"));
+
+  if (engine_offset > properties_.NumSdmaEngines + properties_.NumSdmaXgmiEngines) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  // check if dst and src are the same gpu or over xGMI.
+  bool is_same_gpu = (src_agent.public_handle().handle == dst_agent.public_handle().handle) &&
+      (dst_agent.public_handle().handle == public_handle_.handle);
+  bool is_xgmi = !is_same_gpu &&
+                   src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                     dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                       dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
+                         properties_.NumSdmaXgmiEngines;
+
+  // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
+  bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+    dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+  bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
+
+  // Ensure engine selection is within proper range based on transfer type
+  if ((is_xgmi && engine_offset <= properties_.NumSdmaEngines) ||
+       (!is_xgmi && engine_offset > properties_.NumSdmaEngines) ||
+         (!is_h2d_blit && !is_same_gpu && limit_h2d_blit && engine_offset == BlitHostToDev)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  lazy_ptr<core::Blit>& blit = is_same_gpu ?
+                                 (force_copy_on_sdma ? blits_[BlitDevToHost] :
+                                   blits_[BlitDevToDev]) : blits_[engine_offset];
+
+  if (profiling_enabled()) {
+    // Track the agent so we could translate the resulting timestamp to system
+    // domain correctly.
+    out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
+  }
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
+
+  return stat;
+}
+
+hsa_status_t GpuAgent::DmaCopyStatus(core::Agent& dst_agent, core::Agent& src_agent,
+                                     uint32_t *engine_ids_mask) {
+  assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
+          (dst_agent.device_type() == core::Agent::kAmdGpuDevice)) &&
+         ("Both devices are CPU agents which is not expected"));
+
+  *engine_ids_mask = 0;
+  if (src_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                   dst_agent.device_type() == core::Agent::kAmdGpuDevice &&
+                     dst_agent.HiveId() && src_agent.HiveId() == dst_agent.HiveId() &&
+                       properties_.NumSdmaXgmiEngines) {
+    // Find a free xGMI SDMA engine
+    for (int i = 0; i < properties_.NumSdmaXgmiEngines; i++) {
+      if (!!!blits_[DefaultBlitCount + i]->PendingBytes()) {
+         *engine_ids_mask |= (HSA_AMD_SDMA_ENGINE_2 << i);
+      }
+    }
+  } else {
+    bool is_h2d_blit = (src_agent.device_type() == core::Agent::kAmdCpuDevice &&
+      dst_agent.device_type() == core::Agent::kAmdGpuDevice);
+    // Due to a RAS issue, GFX90a can only support H2D copies on SDMA0
+    bool limit_h2d_blit = isa_->GetVersion() == core::Isa::Version(9, 0, 10);
+
+    if (!!!blits_[BlitHostToDev]->PendingBytes()) {
+      if (is_h2d_blit || !limit_h2d_blit) {
+        *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_0;
+      }
+    }
+
+    if (!!!blits_[BlitDevToHost]->PendingBytes()) {
+      *engine_ids_mask |= HSA_AMD_SDMA_ENGINE_1;
+    }
+  }
+
+  return !!(*engine_ids_mask) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
 hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset,
@@ -1094,7 +1202,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       for (auto r : regions()) availableBytes += ((AMD::MemoryRegion*)r)->GetCacheSize();
 
-      availableBytes += scratch_cache_.free_bytes();
+      availableBytes += scratch_cache_.free_bytes() - scratch_cache_.reserved_bytes();
 
       *((uint64_t*)value) = availableBytes;
       break;
@@ -1110,6 +1218,12 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION:
       *((uint32_t*)value) = static_cast<uint32_t>(properties_.uCodeEngineVersions.uCodeSDMA);
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SDMA_ENG:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumSdmaEngines);
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG:
+      *((uint32_t*)value) = static_cast<uint32_t>(properties_.NumSdmaXgmiEngines);
       break;
     case HSA_AMD_AGENT_INFO_IOMMU_SUPPORT:
       if (properties_.Capability.ui32.HSAMMUPresent)
@@ -1249,11 +1363,12 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
   */
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   size_t small_limit = scratch_pool_.size() >> 3;
-  // Lift limit for 2.10 release RCCL workaround.
-  size_t single_limit = 146800640; //small_limit >> 2;
+  const size_t single_scratch_limit =
+      core::Runtime::runtime_singleton_->flag().scratch_single_limit();
   bool use_reclaim = true;
-  bool large = (scratch.size > single_limit) ||
-    (scratch_pool_.size() - scratch_pool_.remaining() - scratch_cache_.free_bytes() + scratch.size > small_limit);
+  bool large = (scratch.size > single_scratch_limit) ||
+      ((scratch_pool_.size() - scratch_pool_.remaining() - scratch_cache_.free_bytes() +
+        scratch.size) > small_limit);
   if ((isa_->GetMajorVersion() < 8) ||
       core::Runtime::runtime_singleton_->flag().no_scratch_reclaim()) {
     large = false;
@@ -1286,7 +1401,7 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
     if (scratch_cache_.alloc(scratch)) return;
 
     // Attempt new allocation.
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
       if (large)
         scratch.queue_base = scratch_pool_.alloc_high(scratch.size);
       else
@@ -1310,8 +1425,17 @@ void GpuAgent::AcquireQueueScratch(ScratchInfo& scratch) {
       scratch.queue_base = nullptr;
 
       // Release cached scratch and retry.
-      // First iteration trims unused blocks, second trims all.
-      scratch_cache_.trim(i == 1);
+      // First iteration trims unused blocks, second trims all. 3rd uses reserved memory
+      switch (i) {
+        case 0:
+          scratch_cache_.trim(false);
+          break;
+        case 1:
+          scratch_cache_.trim(true);
+          break;
+        case 2:
+          if (scratch_cache_.use_reserved(scratch)) return;
+      }
     }
 
     // Retry if large may yield needed space.
