@@ -282,11 +282,19 @@ void DestroySharedMutex(SharedMutex lock) {
 uint64_t ReadSystemClock() {
   assert(false && "Not implemented.");
   abort();
+  return 0;
 }
 
 uint64_t SystemClockFrequency() {
   assert(false && "Not implemented.");
   abort();
+  return 0;
+}
+
+bool ParseCpuID(cpuid_t* cpuinfo) {
+  assert(false && "Not implemented.");
+  abort();
+  return false;
 }
 
 }   //  namespace os

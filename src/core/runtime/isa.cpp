@@ -224,15 +224,15 @@ const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
 constexpr size_t hsa_name_size = 63;
 
 // FIXME: Use static_assert when C++17 used.
-#define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize)                             				  \
-  assert(std::char_traits<char>::length(name) <= hsa_name_size);                                         			 	  \
+#define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize)                                                              \
+  assert(std::char_traits<char>::length(name) <= hsa_name_size);                                                                          \
   Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize;                                     \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.targetid_ = name;                        \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.version_ = Isa::Version(maj, min, stp);  \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.sramecc_ = sramecc;                      \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.xnack_ = xnack;                          \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.wavefront_.num_threads_ = wavefrontsize; \
-  supported_isas.insert(std::make_pair(                                                                  				  \
+  supported_isas.insert(std::make_pair(                                                                                                   \
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.GetIsaName(),                        \
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize));                                   \
 
@@ -258,10 +258,10 @@ constexpr size_t hsa_name_size = 63;
   ISAREG_ENTRY_GEN("gfx900",                 9, 0, 0,  unsupported, any,         64)
   ISAREG_ENTRY_GEN("gfx900:xnack-",          9, 0, 0,  unsupported, disabled,    64)
   ISAREG_ENTRY_GEN("gfx900:xnack+",          9, 0, 0,  unsupported, enabled,     64)
-  ISAREG_ENTRY_GEN("gfx902",                 9, 0, 2,  unsupported, any, 	 64)
+  ISAREG_ENTRY_GEN("gfx902",                 9, 0, 2,  unsupported, any,         64)
   ISAREG_ENTRY_GEN("gfx902:xnack-",          9, 0, 2,  unsupported, disabled,    64)
   ISAREG_ENTRY_GEN("gfx902:xnack+",          9, 0, 2,  unsupported, enabled,     64)
-  ISAREG_ENTRY_GEN("gfx904",                 9, 0, 4,  unsupported, any, 	 64)
+  ISAREG_ENTRY_GEN("gfx904",                 9, 0, 4,  unsupported, any,         64)
   ISAREG_ENTRY_GEN("gfx904:xnack-",          9, 0, 4,  unsupported, disabled,    64)
   ISAREG_ENTRY_GEN("gfx904:xnack+",          9, 0, 4,  unsupported, enabled,     64)
   ISAREG_ENTRY_GEN("gfx906",                 9, 0, 6,  any,         any,         64)

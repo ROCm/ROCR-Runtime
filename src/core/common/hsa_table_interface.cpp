@@ -57,12 +57,6 @@ const HsaApiTable* hsa_table_interface_get_table() {
   return hsaApiTable;
 }
 
-class Init {
- public:
-  Init() { rocr::core::LoadInitialHsaApiTable(); }
-};
-static Init LinkAtLoadOrFirstTranslationUnitAccess;
-
 // Pass through stub functions
 hsa_status_t HSA_API hsa_init() { return coreApiTable->hsa_init_fn(); }
 
@@ -976,6 +970,28 @@ hsa_status_t HSA_API
 }
 
 // Mirrors Amd Extension Apis
+hsa_status_t HSA_API
+    hsa_amd_memory_async_copy_on_engine(void* dst, hsa_agent_t dst_agent, const void* src,
+                              hsa_agent_t src_agent, size_t size,
+                              uint32_t num_dep_signals,
+                              const hsa_signal_t* dep_signals,
+                              hsa_signal_t completion_signal,
+                              hsa_amd_sdma_engine_id_t engine_id,
+                              bool force_copy_on_sdma) {
+  return amdExtTable->hsa_amd_memory_async_copy_on_engine_fn(
+                                     dst, dst_agent, src, src_agent, size,
+                                     num_dep_signals, dep_signals, completion_signal,
+                                     engine_id, force_copy_on_sdma);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API
+    hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent, hsa_agent_t src_agent,
+                                      uint32_t *engine_ids_mask) {
+  return amdExtTable->hsa_amd_memory_copy_engine_status_fn(dst_agent, src_agent, engine_ids_mask);
+}
+
+// Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_memory_async_copy_rect(
     const hsa_pitched_ptr_t* dst, const hsa_dim3_t* dst_offset, const hsa_pitched_ptr_t* src,
     const hsa_dim3_t* src_offset, const hsa_dim3_t* range, hsa_agent_t copy_agent,
@@ -1194,6 +1210,17 @@ hsa_status_t HSA_API hsa_amd_spm_set_dest_buffer(hsa_agent_t agent, size_t size,
                                                  bool* is_data_loss) {
   return amdExtTable->hsa_amd_spm_set_dest_buffer_fn(agent, size, timeout, size_copied, dest,
                                                      is_data_loss);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                                    uint64_t* offset) {
+  return amdExtTable->hsa_amd_portable_export_dmabuf_fn(ptr, size, dmabuf, offset);
+}
+
+// Mirrors Amd Extension Apis
+hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf) {
+  return amdExtTable->hsa_amd_portable_close_dmabuf_fn(dmabuf);
 }
 
 // Tools only table interfaces.

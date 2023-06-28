@@ -100,6 +100,11 @@ struct ValidityError<const T*> {
     if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
   } while (false)
 
+#define IS_ZERO(arg)                                                                               \
+  do {                                                                                             \
+    if ((arg) == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                      \
+  } while (false)
+
 #define IS_VALID(ptr)                                           \
   do {                                                          \
     if ((ptr) == NULL || !(ptr)->IsValid())                     \
@@ -274,6 +279,61 @@ hsa_status_t hsa_amd_memory_async_copy(void* dst, hsa_agent_t dst_agent_handle, 
 
   return HSA_STATUS_SUCCESS;
   CATCH;
+}
+
+hsa_status_t hsa_amd_memory_async_copy_on_engine(void* dst, hsa_agent_t dst_agent_handle,
+                                       const void* src, hsa_agent_t src_agent_handle, size_t size,
+                                       uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
+                                       hsa_signal_t completion_signal, hsa_amd_sdma_engine_id_t engine_id,
+                                       bool force_copy_on_sdma) {
+  TRY;
+  IS_BAD_PTR(dst);
+  IS_BAD_PTR(src);
+
+  if ((num_dep_signals == 0 && dep_signals != nullptr) ||
+      (num_dep_signals > 0 && dep_signals == nullptr)) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
+  IS_VALID(dst_agent);
+
+  core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
+  IS_VALID(src_agent);
+
+  std::vector<core::Signal*> dep_signal_list(num_dep_signals);
+  if (num_dep_signals > 0) {
+    for (size_t i = 0; i < num_dep_signals; ++i) {
+      core::Signal* dep_signal_obj = core::Signal::Convert(dep_signals[i]);
+      IS_VALID(dep_signal_obj);
+      dep_signal_list[i] = dep_signal_obj;
+    }
+  }
+
+  core::Signal* out_signal_obj = core::Signal::Convert(completion_signal);
+  IS_VALID(out_signal_obj);
+
+  bool rev_copy_dir = core::Runtime::runtime_singleton_->flag().rev_copy_dir();
+  if (size > 0) {
+    return core::Runtime::runtime_singleton_->CopyMemoryOnEngine(
+        dst, (rev_copy_dir ? src_agent : dst_agent),
+        src, (rev_copy_dir ? dst_agent : src_agent),
+        size, dep_signal_list, *out_signal_obj, engine_id, force_copy_on_sdma);
+  }
+
+  return HSA_STATUS_SUCCESS;
+  CATCH;
+}
+
+hsa_status_t hsa_amd_memory_copy_engine_status(hsa_agent_t dst_agent_handle, hsa_agent_t src_agent_handle,
+                                               uint32_t *engine_ids_mask) {
+  core::Agent* dst_agent = core::Agent::Convert(dst_agent_handle);
+  IS_VALID(dst_agent);
+
+  core::Agent* src_agent = core::Agent::Convert(src_agent_handle);
+  IS_VALID(src_agent);
+
+  return core::Runtime::runtime_singleton_->CopyMemoryStatus(dst_agent, src_agent, engine_ids_mask);
 }
 
 hsa_status_t hsa_amd_memory_async_copy_rect(
@@ -1112,7 +1172,24 @@ hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t siz
     return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
+  CATCH;
+}
 
+hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* dmabuf,
+                                            uint64_t* offset) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(dmabuf);
+  IS_BAD_PTR(offset);
+  IS_ZERO(size);
+  return core::Runtime::runtime_singleton_->DmaBufExport(ptr, size, dmabuf, offset);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf) {
+  TRY;
+  return core::Runtime::runtime_singleton_->DmaBufClose(dmabuf);
   CATCH;
 }
 

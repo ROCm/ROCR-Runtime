@@ -109,7 +109,7 @@ class ScratchCache {
   ScratchCache& operator=(const ScratchCache& rhs) = delete;
   ScratchCache& operator=(ScratchCache&& rhs) = delete;
 
-  ScratchCache(deallocator_t deallocator) : dealloc(deallocator), available_bytes(0) {}
+  ScratchCache(deallocator_t deallocator) : dealloc(deallocator), available_bytes_(0) {}
 
   ~ScratchCache() { assert(map.empty() && "ScratchCache not empty at shutdown."); }
 
@@ -124,7 +124,7 @@ class ScratchCache {
           it->second.alloc();
           info.queue_base = it->second.base;
           info.scratch_node = it;
-          available_bytes -= it->first;
+          available_bytes_ -= it->first;
           return true;
         }
         it++;
@@ -138,7 +138,7 @@ class ScratchCache {
         it->second.alloc();
         info.queue_base = it->second.base;
         info.scratch_node = it;
-        available_bytes -= it->first;
+        available_bytes_ -= it->first;
         return true;
       }
       it++;
@@ -147,6 +147,14 @@ class ScratchCache {
   }
 
   void free(ScratchInfo& info) {
+    if (info.scratch_node == map.end()) {
+      // This is reserved scratch memory. Do not de-allocate, just mark it as free.
+      assert(!reserved_.second.isFree() && "free called when reserved node already free.");
+      reserved_.second.free();
+      available_bytes_ += reserved_.first;
+      return;
+    }
+
     assert(!info.scratch_node->second.isFree() && "free called on free scratch node.");
     auto it = info.scratch_node;
     if (it->second.trimPending()) {
@@ -155,7 +163,7 @@ class ScratchCache {
       return;
     }
     it->second.free();
-    available_bytes += it->first;
+    available_bytes_ += it->first;
   }
 
   bool trim(bool trim_nodes_in_use) {
@@ -163,7 +171,7 @@ class ScratchCache {
     auto it = map.begin();
     while (it != map.end()) {
       if (it->second.isFree()) {
-        available_bytes -= it->first;
+        available_bytes_ -= it->first;
         dealloc(it->second.base, it->first, it->second.large);
         auto temp = it;
         it++;
@@ -186,14 +194,51 @@ class ScratchCache {
     info.scratch_node = it;
   }
 
-  size_t free_bytes() const {
-    return available_bytes;
+  size_t free_bytes() const { return available_bytes_; }
+  size_t reserved_bytes() const { return reserved_.first; }
+
+  void reserve(size_t bytes, void* base) {
+    assert(!reserved_.first && "Already reserved memory.");
+
+    node n;
+    n.base = base;
+    n.large = 0;
+
+    available_bytes_ += bytes;
+
+    reserved_ = std::make_pair(bytes, n);
+  }
+
+  bool use_reserved(ScratchInfo& info) {
+    if (!reserved_.second.isFree() || info.size > reserved_.first) {
+      debug_print("reserved node is already in use or too small (requested:%ld reserved:%ld)\n",
+                  info.size, reserved_.first);
+      return false;
+    }
+    reserved_.second.large = info.large;
+    reserved_.second.alloc();
+    info.queue_base = reserved_.second.base;
+    // Special case to indicate that this node is reserved memory
+    info.scratch_node = map.end();
+    available_bytes_ -= reserved_.first;
+    return true;
+  }
+
+  void free_reserve() {
+    available_bytes_ -= reserved_.first;
+    if (reserved_.first) dealloc(reserved_.second.base, reserved_.first, reserved_.second.large);
+
+    reserved_.first = 0;
+    reserved_.second.base = NULL;
+    reserved_.second.large = 0;
   }
 
  private:
   map_t map;
   deallocator_t dealloc;
-  size_t available_bytes;
+  size_t available_bytes_;
+
+  std::pair<size_t, node> reserved_;
 };
 
 }  // namespace AMD
