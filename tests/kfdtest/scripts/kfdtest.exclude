@@ -76,7 +76,7 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDMemoryTest.CacheInvalidateOnRemoteWrite:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDHWSTest.*:"\
-"KFDSVMRangeTest.ReadOnlyRangeTest"
+"KFDSVMRangeTest.ReadOnlyRangeTest*"
 
 BLACKLIST_ALL_ASICS=\
 "$PERMANENT_BLACKLIST_ALL_ASICS:"\
