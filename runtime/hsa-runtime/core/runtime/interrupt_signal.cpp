@@ -44,9 +44,11 @@
 #include "core/inc/runtime.h"
 #include "core/util/timer.h"
 #include "core/util/locks.h"
-#include <mwaitxintrin.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#include <mwaitxintrin.h>
 #define MWAITX_ECX_TIMER_ENABLE 0x2  // BIT(1)
+#endif
 
 namespace rocr {
 namespace core {
@@ -172,7 +174,10 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
           double(timeout) / double(hsa_freq));
 
   bool condition_met = false;
+
+#if defined(__i386__) || defined(__x86_64__)
   if (g_use_mwaitx) _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+#endif
 
   while (true) {
     if (!IsValid()) return 0;
@@ -208,19 +213,23 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
     }
 
     if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
+#if defined(__i386__) || defined(__x86_64__)
       if (g_use_mwaitx) {
         _mm_mwaitx(0, 0, 0);
         _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
       }
+#endif
       continue;
     }
 
     if (time - start_time < kMaxElapsed) {
       //  os::uSleep(20);
+#if defined(__i386__) || defined(__x86_64__)
       if (g_use_mwaitx) {
         _mm_mwaitx(0, 60000, MWAITX_ECX_TIMER_ENABLE);
         _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
       }
+#endif
       continue;
     }
 
