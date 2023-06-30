@@ -60,7 +60,9 @@
 #include <string>
 #include <utility>
 #include "core/inc/runtime.h"
+#if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
+#endif
 
 namespace rocr {
 namespace os {
@@ -693,8 +695,8 @@ uint64_t SystemClockFrequency() {
 }
 
 bool ParseCpuID(cpuid_t* cpuinfo) {
+#if defined(__i386__) || defined(__x86_64__)
   uint32_t eax, ebx, ecx, edx, max_eax = 0;
-
   memset(cpuinfo, 0, sizeof(*cpuinfo));
 
   /* Make sure current CPU supports at least EAX 4 */
@@ -713,6 +715,9 @@ bool ParseCpuID(cpuid_t* cpuinfo) {
     }
   }
   return true;
+#else
+  return false;
+#endif
 }
 
 }   //  namespace os
