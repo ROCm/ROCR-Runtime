@@ -231,7 +231,8 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
     if (signal_count > small_size) delete[] evts;
   });
 
-  uint64_t event_age[unique_evts] = {0};
+  uint64_t event_age[unique_evts];
+  memset(event_age, 0, unique_evts * sizeof(uint64_t));
   if (core::Runtime::runtime_singleton_->KfdVersion().supports_event_age)
     for (uint32_t i = 0; i < unique_evts; i++)
       event_age[i] = 1;
