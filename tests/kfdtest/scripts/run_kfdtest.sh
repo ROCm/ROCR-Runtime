@@ -91,12 +91,16 @@ printUsage() {
                                "pass on the specified platform. Usually you"\
                                "don't need this option"
     echo "  -g            , --gdb                    Run in debugger"
-    echo "  -n            , --node                   NodeId to test. If"\
-                               "not specified test will be run on all nodes"
+    echo "  -n <node(s)>  , --node <node(s)>         NodeId(s) to test. Takes a single integer, or a"\
+                               "quoted, space-separated string as an argument"\
+                               "(e.g. -n 1 OR -n \"1 2 3\")"\
+                               "NOTE: Node numbers come from /sys/class/kfd/kfd/topology/nodes/#"
     echo "  -l            , --list                   List available nodes"
     echo "  --high                                   Force clocks to high for test execution"
     echo "  -d            , --docker                 Run in docker container"
-    echo "  -e            , --exclude                Additional tests to exclude, in addition to kfdtest.exclude (colon-separated, single quoted string as an argument)"
+    echo "  -e <list>     , --exclude <list>         Additional tests to exclude, in addition to kfdtest.exclude."\
+                               "Takes a colon-separated string as an argument"\
+                               "(e.g. -e KFDEvictTest.*:KFDSVMEvictTest.*)"
     echo "  -h            , --help                   Prints this help"
     echo
     echo "Gtest arguments will be forwarded to the app"
@@ -264,7 +268,7 @@ while [ "$1" != "" ]; do
         -d  | --docker )
             RUN_IN_DOCKER="true" ;;
         -e  | --exclude )
-            ADDITIONAL_EXCLUDE="$2" ; shift ;;
+            shift 1; ADDITIONAL_EXCLUDE="$1" ;;
         -h  | --help )
             printUsage; exit 0 ;;
         *)
