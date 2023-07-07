@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -158,16 +158,80 @@ static_assert(sizeof(SharedSignal) == 128,
               "Bad SharedSignal size.");
 
 /// @brief Pool class for SharedSignal suitable for use with Shared.
-class SharedSignalPool_t : private BaseShared {
+template <typename AllocatorT = SystemSharedAllocator>
+class SharedSignalPool_t : private AllocatorT {
  public:
   SharedSignalPool_t() : block_size_(minblock_) {}
   ~SharedSignalPool_t() { clear(); }
 
-  SharedSignal* alloc();
-  void free(SharedSignal* ptr);
-  void clear();
+  void clear() {
+    ifdebug {
+      size_t capacity = 0;
+      for (auto& block : block_list_) capacity += block.second;
+      if (capacity != free_list_.size())
+        debug_print("Warning: Resource leak detected by SharedSignalPool, %ld Signals leaked.\n",
+                    capacity - free_list_.size());
+    }
+
+    for (auto& block : block_list_) free_(block.first);
+    block_list_.clear();
+    free_list_.clear();
+  }
+
+  SharedSignal* alloc() {
+    ScopedAcquire<KernelMutex> lock(&lock_);
+    if (free_list_.empty()) {
+      SharedSignal* block = reinterpret_cast<SharedSignal*>(
+          allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0));
+      if (block == nullptr) {
+        block_size_ = minblock_;
+        block = reinterpret_cast<SharedSignal*>(
+            allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0));
+        if (block == nullptr) throw std::bad_alloc();
+      }
+
+      MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(block); });
+      block_list_.push_back(std::make_pair(block, block_size_));
+      throwGuard.Dismiss();
+
+      for (int i = 0; i < block_size_; i++) {
+        free_list_.push_back(&block[i]);
+      }
+
+      block_size_ *= 2;
+    }
+
+    SharedSignal* ret = free_list_.back();
+    new (ret) SharedSignal();
+    free_list_.pop_back();
+    return ret;
+  }
+
+  void free(SharedSignal* ptr) {
+    if (ptr == nullptr) return;
+
+    ptr->~SharedSignal();
+    ScopedAcquire<KernelMutex> lock(&lock_);
+
+    ifdebug {
+      bool valid = false;
+      for (auto& block : block_list_) {
+        if ((block.first <= ptr) &&
+            (uintptr_t(ptr) < uintptr_t(block.first) + block.second * sizeof(SharedSignal))) {
+          valid = true;
+          break;
+        }
+      }
+      assert(valid && "Object does not belong to pool.");
+    }
+
+    free_list_.push_back(ptr);
+  }
 
  private:
+  using AllocatorT::allocate_;
+  using AllocatorT::free_;
+
   static const size_t minblock_ = 4096 / sizeof(SharedSignal);
   KernelMutex lock_;
   std::vector<SharedSignal*> free_list_;
@@ -186,7 +250,7 @@ class LocalSignal {
   SharedSignal* signal() const { return local_signal_.shared_object(); }
 
  private:
-  Shared<SharedSignal, SharedSignalPool_t> local_signal_;
+  SharedPool<SharedSignal, SharedSignalPool_t<>> local_signal_;
 };
 
 /// @brief An abstract base class which helps implement the public hsa_signal_t

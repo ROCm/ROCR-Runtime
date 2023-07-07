@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -389,7 +389,7 @@ class Runtime {
 
   void InternalQueueCreateNotify(const hsa_queue_t* queue, hsa_agent_t agent);
 
-  SharedSignalPool_t* GetSharedSignalPool() { return &SharedSignalPool; }
+  SharedSignalPool_t<>* GetSharedSignalPool() { return &SharedSignalPool; }
 
   InterruptSignal::EventPool* GetEventPool() { return &EventPool; }
 
@@ -629,7 +629,7 @@ class Runtime {
   Flag flag_;
 
   // Pools memory for SharedSignal (Signal ABI blocks)
-  SharedSignalPool_t SharedSignalPool;
+  SharedSignalPool_t<> SharedSignalPool;
 
   // Pools KFD Events for InterruptSignal
   InterruptSignal::EventPool EventPool;

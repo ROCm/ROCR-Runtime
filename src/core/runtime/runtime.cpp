@@ -196,7 +196,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
             core::Runtime::runtime_singleton_->FreeMemory(ptr);
           };
 
-          BaseShared::SetAllocateAndFree(system_allocator_, system_deallocator_);
+          SystemSharedAllocator::SetAllocateAndFree(system_allocator_, system_deallocator_);
           break;
         }
       }

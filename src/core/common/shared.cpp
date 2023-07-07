@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -44,7 +44,7 @@
 
 namespace rocr {
 namespace core {
-std::function<void*(size_t, size_t, uint32_t)> BaseShared::allocate_ = nullptr;
-std::function<void(void*)> BaseShared::free_ = nullptr;
+std::function<void*(size_t, size_t, uint32_t)> SystemSharedAllocator::allocate_ = nullptr;
+std::function<void(void*)> SystemSharedAllocator::free_ = nullptr;
 }   // namespace core
 }   // namespace rocr

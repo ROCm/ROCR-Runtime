@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 // 
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 // 
 // Developed by:
 // 
@@ -52,10 +52,10 @@
 
 namespace rocr {
 namespace core {
-/// @brief Base class encapsulating the allocator and deallocator for
-/// shared shared object.  As used this will allocate GPU visible host
+/// @brief Base class encapsulating the system allocator and deallocator for
+/// shared objects. As used this will allocate GPU visible host
 /// memory mapped to all GPUs.
-class BaseShared {
+class SystemSharedAllocator {
  public:
   static void SetAllocateAndFree(
       const std::function<void*(size_t, size_t, uint32_t)>& allocate,
@@ -69,8 +69,11 @@ class BaseShared {
   static std::function<void(void*)> free_;
 };
 
-/// @brief Default Allocator for Shared.  Ensures allocations are whole pages.
-template <typename T> class PageAllocator : private BaseShared {
+/// @brief Page-based wrapper for allocators for Shared and SharedPool.
+/// Ensures allocations are whole pages. If no allocator is provided the
+/// SystemSharedAllocator will be used.
+template <typename T, typename AllocatorT = SystemSharedAllocator>
+class PageAllocator : private AllocatorT {
  public:
   __forceinline static T* alloc(int flags = 0) {
     T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, flags));
@@ -90,41 +93,37 @@ template <typename T> class PageAllocator : private BaseShared {
       free_(ptr);
     }
   }
+
+ private:
+  using AllocatorT::allocate_;
+  using AllocatorT::free_;
 };
 
-/// @brief Container for object located in GPU visible host memory.
-/// If a custom allocator is not given then data will be placed in dedicated pages.
-template <typename T, typename Allocator = PageAllocator<T>>
-class Shared final : private BaseShared {
+/// @brief Container for pooled objects located in device-visible memory.
+/// If a custom allocator is not given then data will be placed in
+/// dedicated pages in system memory.
+template <typename T, typename PoolT>
+class SharedPool {
  public:
-  explicit Shared(Allocator* pool = nullptr, int flags = 0) : pool_(pool) {
-    assert(allocate_ != nullptr && free_ != nullptr &&
-           "Shared object allocator is not set");
-
-    if (pool_)
-      shared_object_ = pool_->alloc();
-    else
-      shared_object_ = PageAllocator<T>::alloc(flags);
+  explicit SharedPool(PoolT* pool = nullptr, int flags = 0) : pool_(pool) {
+    assert(pool && "No pool allocator set");
+    shared_object_ = pool_->alloc();
   }
 
-  ~Shared() {
-    assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
-
-    if (pool_)
-      pool_->free(shared_object_);
-    else
-      PageAllocator<T>::free(shared_object_);
+  ~SharedPool() {
+    pool_->free(shared_object_);
   }
 
-  Shared(Shared&& rhs) {
-    this->~Shared();
+  SharedPool(SharedPool&& rhs) {
+    this->~SharedPool();
     shared_object_ = rhs.shared_object_;
     rhs.shared_object_ = nullptr;
     pool_ = rhs.pool_;
     rhs.pool_ = nullptr;
   }
-  Shared& operator=(Shared&& rhs) {
-    this->~Shared();
+
+  SharedPool& operator=(SharedPool&& rhs) {
+    this->~SharedPool();
     shared_object_ = rhs.shared_object_;
     rhs.shared_object_ = nullptr;
     pool_ = rhs.pool_;
@@ -136,22 +135,21 @@ class Shared final : private BaseShared {
 
  private:
   T* shared_object_;
-  Allocator* pool_;
+  PoolT* pool_;
 };
 
-template <typename T> class Shared<T, PageAllocator<T>> final : private BaseShared {
+/// @brief Container for object located in device-visible memory.
+/// If a custom allocator is not given then data will be placed in
+/// dedicated pages in system memory.
+template <typename T, typename AllocatorT = PageAllocator<T>>
+class Shared {
  public:
-  Shared(int flags = 0) {
-    assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
-
-    shared_object_ = PageAllocator<T>::alloc(flags);
+  explicit Shared(int flags = 0) {
+    shared_object_ = AllocatorT::alloc(flags);
   }
 
   ~Shared() {
-    assert(allocate_ != nullptr && free_ != nullptr &&
-           "Shared object allocator is not set");
-
-    PageAllocator<T>::free(shared_object_);
+    AllocatorT::free(shared_object_);
   }
 
   Shared(Shared&& rhs) {
@@ -159,6 +157,7 @@ template <typename T> class Shared<T, PageAllocator<T>> final : private BaseShar
     shared_object_ = rhs.shared_object_;
     rhs.shared_object_ = nullptr;
   }
+
   Shared& operator=(Shared&& rhs) {
     this->~Shared();
     shared_object_ = rhs.shared_object_;
@@ -174,7 +173,7 @@ template <typename T> class Shared<T, PageAllocator<T>> final : private BaseShar
 
 /// @brief Container for array located in GPU visible host memory.
 /// Alignment defaults to __alignof(T) but may be increased.
-template <typename T, size_t Align> class SharedArray final : private BaseShared {
+template <typename T, size_t Align> class SharedArray final : private SystemSharedAllocator {
  public:
   SharedArray() : shared_object_(nullptr) {}
 
