@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -59,11 +59,11 @@ namespace core {
 
 // @brief Generic container to forward Queue interfaces into Queue* member.
 // Class only has utility as a base type customized Queue wrappers.
-class QueueWrapper : public Queue {
+class QueueWrapper : public LocalQueue, public Queue {
  public:
   std::unique_ptr<Queue> wrapped;
 
-  explicit QueueWrapper(std::unique_ptr<Queue> queue) : Queue(), wrapped(std::move(queue)) {
+  explicit QueueWrapper(std::unique_ptr<Queue> queue) : LocalQueue(0), Queue(GetSharedQueue()), wrapped(std::move(queue)) {
     memcpy(&amd_queue_, &wrapped->amd_queue_, sizeof(amd_queue_t));
     wrapped->set_public_handle(wrapped.get(), public_handle_);
   }

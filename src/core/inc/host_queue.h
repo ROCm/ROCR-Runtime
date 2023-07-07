@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -50,7 +50,7 @@
 
 namespace rocr {
 namespace core {
-class HostQueue : public Queue {
+class HostQueue : public LocalQueue, public Queue {
  public:
   static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
 

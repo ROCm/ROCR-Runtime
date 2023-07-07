@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -54,7 +54,8 @@ namespace AMD {
 /// @brief Encapsulates HW Aql Command Processor functionality. It
 /// provide the interface for things such as Doorbell register, read,
 /// write pointers and a buffer.
-class AqlQueue : public core::Queue, private core::LocalSignal, public core::DoorbellSignal {
+class AqlQueue : public core::LocalQueue, public core::Queue,
+                 private core::LocalSignal, public core::DoorbellSignal {
  public:
   static __forceinline bool IsType(core::Signal* signal) {
     return signal->IsType(&rtti_id_);

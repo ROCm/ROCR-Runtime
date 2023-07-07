@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -128,7 +128,7 @@ struct SharedQueue {
 class LocalQueue {
  public:
   LocalQueue(int mem_flags) : local_queue_(mem_flags) {}
-  SharedQueue* queue() const { return local_queue_.shared_object(); }
+  SharedQueue* GetSharedQueue() const { return local_queue_.shared_object(); }
 
  private:
   Shared<SharedQueue> local_queue_;
@@ -142,10 +142,10 @@ Queue is intended to be an pure interface class and may be wrapped or replaced
 by tools.
 All funtions other than Convert and public_handle must be virtual.
 */
-class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
+class Queue : public Checked<0xFA3906A679F9DB49> {
  public:
-  Queue(int mem_flags = 0) : LocalQueue(mem_flags), amd_queue_(queue()->amd_queue) {
-    queue()->core_queue = this;
+  Queue(SharedQueue* abi_block) : amd_queue_(abi_block->amd_queue) {
+    abi_block->core_queue = this;
     public_handle_ = Convert(this);
   }
 

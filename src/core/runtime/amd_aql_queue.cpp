@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -80,7 +80,8 @@ int AqlQueue::rtti_id_ = 0;
 
 AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
-    : Queue(agent->isMES() ? MemoryRegion::AllocateNonPaged : 0),
+    : LocalQueue(agent->isMES() ? MemoryRegion::AllocateNonPaged : 0),
+      Queue(GetSharedQueue()),
       LocalSignal(0, false),
       DoorbellSignal(signal()),
       ring_buf_(nullptr),

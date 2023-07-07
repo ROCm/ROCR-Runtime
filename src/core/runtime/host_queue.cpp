@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,7 +53,7 @@ std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
 
 HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
                      uint32_t features, hsa_signal_t doorbell_signal)
-    : Queue(), size_(ring_size) {
+    : LocalQueue(0), Queue(GetSharedQueue()), size_(ring_size) {
   HSA::hsa_memory_register(this, sizeof(HostQueue));
   MAKE_NAMED_SCOPE_GUARD(registerGuard,
                          [&]() { HSA::hsa_memory_deregister(this, sizeof(HostQueue)); });
