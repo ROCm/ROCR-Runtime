@@ -66,14 +66,17 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
 
     /* use one third of total system memory for eviction buffer to test
      * limit max allocate size to double of vramSize
-     * count is zero if not enough memory (sysMemSize/3 + vramSize) < (vramBufSize * N_PROCESSES)
+     * count is zero if not enough memory for XNACK off case
      */
-    size = sysMemSize / 3 + vramSize;
-    size = size > vramSize << 1 ? vramSize << 1 : size;
-    /* Check if there is enough system memory to pass test,
+    size = MIN(sysMemSize / 3, vramSize / 2);
+    size += vramSize;
+
+    /* Check if there is enough system memory to pass test for XNACK off
      * KFD system memory limit is 15/16.
      */
-    if (size > (sysMemSize - (sysMemSize >> 4)))
+    HSAint32 xnack_enable = 0;
+    EXPECT_SUCCESS(hsaKmtGetXNACKMode(&xnack_enable));
+    if (!xnack_enable && size > (sysMemSize - (sysMemSize >> 4)))
         return 0;
 
     sizeInPages = size >> PAGE_SHIFT;
@@ -89,12 +92,20 @@ HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
 
     LOG() << "Found System RAM of " << std::dec << (sysMemSize >> 20) << "MB" << std::endl;
 
-    /* use one third of total system memory for eviction buffer to test
-     * limit max allocate size to duoble of vramSize
-     * count is zero if not enough memory (sysMemSize/3 + vramSize) < (vramBufSize * N_PROCESSES)
+    /* use up to one third of total system memory for eviction buffer to test
+     * limit max eviction size to 1/2 of vramSize.
      */
-    size = sysMemSize / 3 + vramSize;
-    size = size > vramSize << 1 ? vramSize << 1 : size;
+    size = MIN(sysMemSize / 3, vramSize / 2);
+    size += vramSize;
+
+    /* Check if there is enough system memory to pass test for XNACK off
+     * KFD system memory limit is 15/16.
+     */
+    HSAint32 xnack_enable = 0;
+    EXPECT_SUCCESS(hsaKmtGetXNACKMode(&xnack_enable));
+    if (!xnack_enable && size > (sysMemSize - (sysMemSize >> 4)))
+        return 0;
+
     sizeInPages = size >> PAGE_SHIFT;
     vramBufSizeInPages = sizeInPages / (count * N_PROCESSES);
 
