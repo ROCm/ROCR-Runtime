@@ -225,7 +225,7 @@ trap_entry:
   //
   // ttmp7:  pc_lo[31:0]
   // ttmp11: 1st_level_ttmp11[31:23] pc_hi[15:0] 1st_level_ttmp11[6:0]
-.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || (.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3)
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || (.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3) || (.amdgcn.gfx_generation_number == 11)
   // Save the PC
   s_mov_b32            ttmp7, ttmp0
   s_and_b32            ttmp1, ttmp1, SQ_WAVE_PC_HI_ADDRESS_MASK
@@ -283,3 +283,11 @@ trap_entry:
 .parked:
   s_trap               0x2
   s_branch             .parked
+
+// For gfx11, add padding instructions so we can ensure instruction cache
+// prefetch always has something to load.
+.if .amdgcn.gfx_generation_number == 11
+.rept (256 - ((. - trap_entry) % 64)) / 4
+  s_code_end
+.endr
+.endif
