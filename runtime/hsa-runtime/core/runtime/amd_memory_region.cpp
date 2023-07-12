@@ -495,21 +495,16 @@ hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
 
   // Determine access type for device local memory which is
   // guaranteed to be HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC
-  // Return disallowed by default if framebuffer is coarse grained
-  // without regard to type of requesting device (CPU / GPU)
-  // Return disallowed by default if framebuffer is fine grained
-  // and requesting device is connected via xGMI link
 
   if (IsLocalMemory()) {
-
     // Return disallowed by default if memory is coarse
-    // grained without regard to link type
-    if (extended_scope_fine_grain() == false && fine_grain() == false) {
+    // grained or extended scope fine grained without regard to link type
+    if (fine_grain() == false) {
       return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
     }
 
     // Return disallowed by default if memory is fine
-    // grained and link type is xGMI.
+    // grained and requesting device is connected via xGMI link
     if (agent.HiveId() == owner()->HiveId()) {
       return HSA_AMD_MEMORY_POOL_ACCESS_DISALLOWED_BY_DEFAULT;
     }
