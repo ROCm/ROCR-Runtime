@@ -829,7 +829,9 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, const void* src, size_t size) {
 void GpuAgent::SetCopyRequestRefCount(bool set) {
   ScopedAcquire<KernelMutex> lock(&blit_lock_);
   while (pending_copy_stat_check_ref_) {
+    blit_lock_.Release();
     os::YieldThread();
+    blit_lock_.Acquire();
   }
   if (!set && pending_copy_req_ref_) pending_copy_req_ref_--;
   else pending_copy_req_ref_++;
@@ -838,7 +840,9 @@ void GpuAgent::SetCopyRequestRefCount(bool set) {
 void GpuAgent::SetCopyStatusCheckRefCount(bool set) {
   ScopedAcquire<KernelMutex> lock(&blit_lock_);
   while (pending_copy_req_ref_) {
+    blit_lock_.Release();
     os::YieldThread();
+    blit_lock_.Acquire();
   }
   if (!set && pending_copy_stat_check_ref_) pending_copy_stat_check_ref_--;
   else pending_copy_stat_check_ref_++;
