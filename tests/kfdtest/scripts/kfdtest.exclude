@@ -121,11 +121,13 @@ BLACKLIST_GFX10_NV2X=\
 "KFDPerfCountersTest.*"
 
 # KFDMemoryTest.FlatScratchAccess           - SWDEV-329877
+# KFDGWSTest.*: GFX11 will no longer use global wave sync
 BLACKLIST_GFX11=\
 "KFDQMTest.CreateAqlCpQueue:"\
 "KFDCWSRTest.InterruptRestore:"\
 "KFDPerfCountersTest.*:"\
-"KFDMemoryTest.FlatScratchAccess"
+"KFDMemoryTest.FlatScratchAccess:"\
+"KFDGWSTest.*"
 
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
 # KFDMemoryTest.MemoryRegister fails on SDMA queue creation (KFD-337)
