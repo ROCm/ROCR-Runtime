@@ -173,8 +173,6 @@ class MemoryRegion : public core::MemoryRegion {
     return static_cast<uint32_t>(mem_props_.MemoryClockMax);
   }
 
-  __forceinline bool extended_scope_fine_grain() const { return extended_scope_fine_grain_; }
-
   __forceinline size_t GetPageSize() const { return kPageSize_; }
 
  private:
@@ -183,9 +181,6 @@ class MemoryRegion : public core::MemoryRegion {
   HsaMemFlags mem_flag_;
 
   HsaMemMapFlags map_flag_;
-
-  // Enables creating an extended scope fine grained memory pool region
-  const bool extended_scope_fine_grain_;
 
   size_t max_single_alloc_size_;
 
