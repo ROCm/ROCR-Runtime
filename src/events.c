@@ -291,6 +291,8 @@ static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
 				pr_err("GPU exec allowed\n");
 			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_GPU_ALWAYS_MAPPED)
 				 pr_err("GPU always mapped\n");
+			if (args->attrs[i].value & KFD_IOCTL_SVM_FLAG_EXT_COHERENT)
+				 pr_err("Extended-scope fine grained coherency between devices\n");
 			break;
 		default:
 			pr_debug("get invalid attr type 0x%x\n", args->attrs[i].type);

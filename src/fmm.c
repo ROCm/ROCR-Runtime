@@ -1017,6 +1017,8 @@ static HsaMemFlags fmm_translate_ioc_to_hsa_flags(uint32_t ioc_flags)
 		mflags.ui32.ReadOnly = 1;
 	if (!(ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_COHERENT))
 		mflags.ui32.CoarseGrain = 1;
+	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT)
+		mflags.ui32.ExtendedCoherent = 1;
 	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_PUBLIC)
 		mflags.ui32.HostAccess = 1;
 	return mflags;
@@ -1024,7 +1026,8 @@ static HsaMemFlags fmm_translate_ioc_to_hsa_flags(uint32_t ioc_flags)
 
 static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 					      uint64_t size,
-					      bool coarse_grain)
+					      bool coarse_grain,
+					      bool ext_coherent)
 {
 	struct kfd_ioctl_svm_args *args;
 	size_t s_attr;
@@ -1035,15 +1038,17 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	if (!g_first_gpu_mem)
 		return HSAKMT_STATUS_ERROR;
 
-	s_attr = sizeof(struct kfd_ioctl_svm_attribute);
+	s_attr = 2 * sizeof(struct kfd_ioctl_svm_attribute);
 	args = alloca(sizeof(*args) + s_attr);
 	args->start_addr = aligned_addr;
 	args->size = aligned_size;
 	args->op = KFD_IOCTL_SVM_OP_SET_ATTR;
-	args->nattr = 1;
+	args->nattr = 2;
 	args->attrs[0].type = coarse_grain ?
 			      HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
 	args->attrs[0].value = HSA_SVM_FLAG_COHERENT;
+	args->attrs[1].type = ext_coherent ? HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
+	args->attrs[1].value = HSA_SVM_FLAG_EXT_COHERENT;
 	pr_debug("Registering to SVM %p size: %ld\n", (void*)aligned_addr,
 		 aligned_size);
 	/* Driver does one copy_from_user, with extra attrs size */
@@ -1575,6 +1580,9 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 	if (mflags.ui32.Uncached || svm.disable_cache)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED;
 
+	if (mflags.ui32.ExtendedCoherent)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT;
+
 	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
 				    ioc_flags, &vm_obj);
 
@@ -1639,7 +1647,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		mflags.Value = 0;
 		mflags.ui32.NonPaged = 1;
 		mflags.ui32.HostAccess = 1;
-		mflags.ui32.Reserved = 0xBe1;
+		mflags.ui32.Reserved = 0x3e1;
 
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		vm_obj->mflags = mflags;
@@ -3409,8 +3417,11 @@ bool fmm_get_handle(void *address, uint64_t *handle)
 	return found;
 }
 
-static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
-				  vm_object_t **obj_ret, bool coarse_grain)
+static HSAKMT_STATUS fmm_register_user_memory(void *addr,
+						HSAuint64 size,
+						vm_object_t **obj_ret,
+						bool coarse_grain,
+						bool ext_coherent)
 {
 	manageable_aperture_t *aperture = svm.dgpu_aperture;
 	HSAuint32 page_offset = (HSAuint64)addr & (PAGE_SIZE-1);
@@ -3435,7 +3446,8 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
 			 &aligned_addr, KFD_IOC_ALLOC_MEM_FLAGS_USERPTR |
 			 KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE |
-			 (coarse_grain ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_COHERENT),
+			 (coarse_grain ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_COHERENT) |
+			 (ext_coherent ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT),
 			 &obj);
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
@@ -3472,13 +3484,17 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr, HSAuint64 size,
 HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 				  uint32_t *gpu_id_array,
 				  uint32_t gpu_id_array_size,
-				  bool coarse_grain)
+				  bool coarse_grain,
+				  bool ext_coherent)
 {
 	manageable_aperture_t *aperture = NULL;
 	vm_object_t *object = NULL;
 	HSAKMT_STATUS ret;
 
 	if (gpu_id_array_size > 0 && !gpu_id_array)
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
+	if (coarse_grain && ext_coherent)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	object = vm_find_object(address, size_in_bytes, &aperture);
@@ -3489,9 +3505,17 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 
 		/* Register a new user ptr */
 		if (svm.is_svm_api_supported)
-			return fmm_register_mem_svm_api(address, size_in_bytes, coarse_grain);
+			return fmm_register_mem_svm_api(address,
+							size_in_bytes,
+							coarse_grain,
+							ext_coherent);
 
-		ret = fmm_register_user_memory(address, size_in_bytes, &object, coarse_grain);
+		ret = fmm_register_user_memory(address,
+					       size_in_bytes,
+					       &object,
+					       coarse_grain,
+					       ext_coherent);
+
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			return ret;
 		if (gpu_id_array_size == 0)
