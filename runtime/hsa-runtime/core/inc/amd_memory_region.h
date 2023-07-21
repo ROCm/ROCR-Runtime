@@ -184,10 +184,10 @@ class MemoryRegion : public core::MemoryRegion {
 
   HsaMemMapFlags map_flag_;
 
-  size_t max_single_alloc_size_;
-
   // Enables creating an extended scope fine grained memory pool region
   const bool extended_scope_fine_grain_;
+
+  size_t max_single_alloc_size_;
 
   // Used to collect total system memory
   static size_t max_sysmem_alloc_size_;
