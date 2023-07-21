@@ -1062,7 +1062,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
 
   // Suppress VM fault reporting.  This is more useful when reported through the system error
   // handler.
-  if (errorCode == HSA_STATUS_ERROR_MEMORY_FAULT) {
+  if (errorCode == static_cast<hsa_status_t>(HSA_STATUS_ERROR_MEMORY_FAULT)) {
     debug_print("Queue error - HSA_STATUS_ERROR_MEMORY_FAULT\n");
     return false;
   }
