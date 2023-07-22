@@ -1467,6 +1467,32 @@ typedef enum _HSA_SVM_UNMAP_TRIGGERS {
 
 typedef void *HsaAMDGPUDeviceHandle;
 
+typedef HSAuint32 HsaPcSamplingTraceId;
+
+typedef enum _HSA_PC_SAMPLING_METHOD_KIND
+{
+    HSA_PC_SAMPLING_METHOD_KIND_HOSTTRAP_V1 = 1,
+    HSA_PC_SAMPLING_METHOD_KIND_STOCHASTIC_V1,
+} HSA_PC_SAMPLING_METHOD_KIND;
+
+typedef enum _HSA_PC_SAMPLING_UNITS
+{
+    HSA_PC_SAMPLING_UNIT_INTERVAL_MICROSECONDS,
+    HSA_PC_SAMPLING_UNIT_INTERVAL_CYCLES,
+    HSA_PC_SAMPLING_UNIT_INTERVAL_INSTRUCTIONS,
+} HSA_PC_SAMPLING_UNIT_INTERVAL;
+
+typedef struct _HsaPcSamplingInfo
+{
+    HSAuint64 value;
+    HSAuint64 value_min;
+    HSAuint64 value_max;
+    HSAuint64 flags;
+    HSA_PC_SAMPLING_METHOD_KIND method;
+    HSA_PC_SAMPLING_UNIT_INTERVAL units;
+}
+HsaPcSamplingInfo;
+
 #pragma pack(pop, hsakmttypes_h)
 
 

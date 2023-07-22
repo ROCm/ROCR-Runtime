@@ -82,6 +82,11 @@ hsaKmtWaitOnMultipleEvents_Ext;
 hsaKmtReplaceAsanHeaderPage;
 hsaKmtReturnAsanHeaderPage;
 hsaKmtGetAMDGPUDeviceHandle;
+hsaKmtPcSamplingQueryCapabilities;
+hsaKmtPcSamplingCreate;
+hsaKmtPcSamplingDestroy;
+hsaKmtPcSamplingStart;
+hsaKmtPcSamplingStop;
 
 local: *;
 };
