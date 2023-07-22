@@ -1044,6 +1044,122 @@ hsaKmtReturnAsanHeaderPage(
     void *addr     // IN: Start of othe virtual address page
 );
 
+/**
+   Check whether kernel support pc sampling
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingSupport(
+    void
+);
+
+/**
+ * Query device PC Sampling capabilities
+ *
+ *  Arguments:
+ *   @NodeId        (IN) - GPU node_id
+ *   @sample_info   (IN) - Pointer to array of HSAPcSamplingInfo
+ *   @sample_info_sz(IN) - Size of sampling_info in units of HSAPcSamplingInfo
+ *   @sz_needed     (OUT)- If sampling_info_sz is too small, sample_info_sz needed
+ *
+ *  Return:
+ *   HSAKMT_STATUS_ERROR             - failed
+ *   HSAKMT_STATUS_SUCCESS           - successfully complete
+ *   HSAKMT_STATUS_INVALID_PARAMETER - invalid input
+ *   HSAKMT_STATUS_BUFFER_TOO_SMALL  - sample buffer size is too small. Retry with sample_info_sz
+ *                                     >= sz_needed
+ *   HSAKMT_STATUS_NOT_SUPPORTED     - this asic doesn't support pc sampling
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingQueryCapabilities(
+    HSAuint32 NodeId,
+    void *sample_info,
+    HSAuint32 sample_info_sz,
+    HSAuint32 *sz_needed
+);
+
+/**
+ * Create PC Sampling Session
+ *
+ *  Arguments:
+ *   @NodeId     (IN)  - GPU node_id
+ *   @sample_info(IN)  - PC Sampling configuration requested
+ *   @traceId    (OUT) - Unique PC Sampling trace Id
+ *
+ *  Return:
+ *   HSAKMT_STATUS_ERROR             - failed
+ *   HSAKMT_STATUS_SUCCESS           - successfully complete
+ *   HSAKMT_STATUS_INVALID_PARAMETER - invalid input
+ *   HSAKMT_STATUS_NO_MEMORY         - not enough memory to create new pc sampling session
+ *   HSAKMT_STATUS_UNAVAILABLE       - a different pc sampling session started on this node
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingCreate(
+  HSAuint32 node_id,
+  HsaPcSamplingInfo *sample_info,
+  HsaPcSamplingTraceId *traceId
+);
+
+/**
+ * Destroy PC Sampling Session
+ *
+ *  Arguments:
+ *   @NodeId (IN) - GPU node_id
+ *   @traceId(IN) - PC Sampling trace Id
+ *
+ *  Return:
+ *   HSAKMT_STATUS_ERROR             - failed
+ *   HSAKMT_STATUS_SUCCESS           - successfully complete
+ *   HSAKMT_STATUS_INVALID_PARAMETER - invalid input
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingDestroy(
+    HSAuint32 NodeId,
+    HsaPcSamplingTraceId traceId
+);
+
+/**
+ * Start PC Sampling Session
+ *
+ *  Arguments:
+ *   @NodeId (IN) - GPU node_id
+ *   @traceId(IN) - PC Sampling trace Id
+ *
+ *  Return:
+ *   HSAKMT_STATUS_ERROR             - failed
+ *   HSAKMT_STATUS_SUCCESS           - successfully complete
+ *   HSAKMT_STATUS_INVALID_PARAMETER - invalid input
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingStart(
+    HSAuint32 NodeId,
+    HsaPcSamplingTraceId traceId
+);
+
+/**
+ * Stop PC Sampling Session
+ *
+ *  Arguments:
+ *   @NodeId (IN) - GPU node_id
+ *   @traceId(IN) - PC Sampling trace Id
+ *
+ *  Return:
+ *   HSAKMT_STATUS_ERROR                 - failed
+ *   HSAKMT_STATUS_SUCCESS               - successfully complete
+ *   HSAKMT_STATUS_INVALID_PARAMETER     - invalid input
+ *   HSAKMT_STATUS_KERNEL_ALREADY_OPENED - stop already
+*/
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtPcSamplingStop(
+    HSAuint32 NodeId,
+    HsaPcSamplingTraceId traceId
+);
+
 #ifdef __cplusplus
 }   //extern "C"
 #endif
