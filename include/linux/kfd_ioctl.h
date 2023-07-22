@@ -40,9 +40,10 @@
  * - 1.12 - Add DMA buf export ioctl
  * - 1.13 - Add debugger API
  * - 1.14 - Update kfd_event_data
+ * - 1.16 - Add PC Sampling ioctl
  */
 #define KFD_IOCTL_MAJOR_VERSION 1
-#define KFD_IOCTL_MINOR_VERSION 14
+#define KFD_IOCTL_MINOR_VERSION 16
 
 struct kfd_ioctl_get_version_args {
 	__u32 major_version;	/* from KFD */
@@ -1528,6 +1529,62 @@ struct kfd_ioctl_set_xnack_mode_args {
 	__s32 xnack_enabled;
 };
 
+/**
+ * kfd_ioctl_pc_sample_op - PC Sampling ioctl operations
+ *
+ * @KFD_IOCTL_PCS_OP_QUERY_CAPABILITIES: Query device PC Sampling capabilities
+ * @KFD_IOCTL_PCS_OP_CREATE:             Register this process with a per-device PC sampler instance
+ * @KFD_IOCTL_PCS_OP_DESTROY:            Unregister from a previously registered PC sampler instance
+ * @KFD_IOCTL_PCS_OP_START:              Process begins taking samples from a previously registered PC sampler instance
+ * @KFD_IOCTL_PCS_OP_STOP:               Process stops taking samples from a previously registered PC sampler instance
+ */
+enum kfd_ioctl_pc_sample_op {
+	KFD_IOCTL_PCS_OP_QUERY_CAPABILITIES,
+	KFD_IOCTL_PCS_OP_CREATE,
+	KFD_IOCTL_PCS_OP_DESTROY,
+	KFD_IOCTL_PCS_OP_START,
+	KFD_IOCTL_PCS_OP_STOP,
+};
+
+/* Values have to be a power of 2*/
+#define KFD_IOCTL_PCS_FLAG_POWER_OF_2 0x00000001
+
+enum kfd_ioctl_pc_sample_method {
+	KFD_IOCTL_PCS_METHOD_HOSTTRAP = 1,
+	KFD_IOCTL_PCS_METHOD_STOCHASTIC,
+};
+
+enum kfd_ioctl_pc_sample_type {
+	KFD_IOCTL_PCS_TYPE_TIME_US,
+	KFD_IOCTL_PCS_TYPE_CLOCK_CYCLES,
+	KFD_IOCTL_PCS_TYPE_INSTRUCTIONS
+};
+
+struct kfd_pc_sample_info {
+	__u64 interval;      /* [IN] if PCS_TYPE_INTERVAL_US: sample interval in us
+	                      * if PCS_TYPE_CLOCK_CYCLES: sample interval in graphics core clk cycles
+	                      * if PCS_TYPE_INSTRUCTIONS: sample interval in instructions issued by
+	                      * graphics compute units
+	                      */
+	__u64 interval_min;  /* [OUT] */
+	__u64 interval_max;  /* [OUT] */
+	__u64 flags;         /* [OUT] indicate potential restrictions e.g FLAG_POWER_OF_2 */
+	__u32 method;        /* [IN/OUT] kfd_ioctl_pc_sample_method */
+	__u32 type;          /* [IN/OUT] kfd_ioctl_pc_sample_type */
+};
+
+#define KFD_IOCTL_PCS_QUERY_TYPE_FULL (1 << 0) /* If not set, return current */
+
+struct kfd_ioctl_pc_sample_args {
+	__u64 sample_info_ptr;   /* array of kfd_pc_sample_info */
+	__u32 num_sample_info;
+	__u32 op;                /* kfd_ioctl_pc_sample_op */
+	__u32 gpu_id;
+	__u32 trace_id;
+	__u32 flags;             /* kfd_ioctl_pcs_query flags */
+	__u32 reserved;
+};
+
 #define AMDKFD_IOCTL_BASE 'K'
 #define AMDKFD_IO(nr)			_IO(AMDKFD_IOCTL_BASE, nr)
 #define AMDKFD_IOR(nr, type)		_IOR(AMDKFD_IOCTL_BASE, nr, type)
@@ -1636,7 +1693,7 @@ struct kfd_ioctl_set_xnack_mode_args {
 #define AMDKFD_IOC_CRIU_OP			\
 		AMDKFD_IOWR(0x22, struct kfd_ioctl_criu_args)
 
-#define AMDKFD_IOC_AVAILABLE_MEMORY            \
+#define AMDKFD_IOC_AVAILABLE_MEMORY		\
 		AMDKFD_IOWR(0x23, struct kfd_ioctl_get_available_memory_args)
 
 #define AMDKFD_IOC_EXPORT_DMABUF		\
@@ -1664,8 +1721,10 @@ struct kfd_ioctl_set_xnack_mode_args {
 #define AMDKFD_IOC_RLC_SPM		\
 		AMDKFD_IOWR(0x84, struct kfd_ioctl_spm_args)
 
+#define AMDKFD_IOC_PC_SAMPLE		\
+		AMDKFD_IOWR(0x85, struct kfd_ioctl_pc_sample_args)
 
 #define AMDKFD_COMMAND_START_2		0x80
-#define AMDKFD_COMMAND_END_2		0x85
+#define AMDKFD_COMMAND_END_2		0x86
 
 #endif
