@@ -1623,8 +1623,8 @@ void Runtime::CheckVirtualMemApiSupport() {
   auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
   if (kfd_version.KernelInterfaceMajorVersion > 1 ||
-      kfd_version.KernelInterfaceMajorVersion == 1 &&
-          kfd_version.KernelInterfaceMinorVersion >= 12) {
+      (kfd_version.KernelInterfaceMajorVersion == 1 &&
+          kfd_version.KernelInterfaceMinorVersion >= 12)) {
     char* error;
 
     fn_amdgpu_device_get_fd =
