@@ -44,43 +44,6 @@
 #define KFD_IOCTL_MAJOR_VERSION 1
 #define KFD_IOCTL_MINOR_VERSION 14
 
-/*
- * Debug revision change log
- *
- * 0.1 - Initial revision
- * 0.2 - Fix to include querying pending event that is both trap and vmfault
- * 1.0 - Removed function to set debug data (renumbering functions broke ABI)
- * 1.1 - Allow attaching to processes that have not opened /dev/kfd yet
- * 1.2 - Allow flag option to clear queue status on queue suspend
- * 1.3 - Fix race condition between clear on suspend and trap event handling
- * 1.4 - Fix bad kfifo free
- * 1.5 - Fix ABA issue between queue snapshot and suspend
- * 2.0 - Return number of queues suspended/resumed and mask invalid/error
- *	 array slots
- * 2.1 - Add Set Address Watch, and Clear Address Watch support.
- * 3.0 - Overhaul set wave launch override API
- * 3.1 - Add support for GFX10
- * 3.2 - Add support for GFX10.3
- * 3.3 - Add precise memory operations enable
- * 4.0 - Remove gpu_id from api
- * 5.0 - Report exception codes to the debugger
- * 6.0 - Pass event file descriptor from userspace.
- * 6.1 - Add KFD_IOC_DBG_TRAP_QUERY_EXCEPTION_INFO.
- * 6.2 - Add KFD_IOC_DBG_TRAP_DEVICE_SNAPSHOT.
- * 7.0 - Redefine exception codes
- * 7.1 - Add KFD_IOC_DBG_TRAP_RUNTIME_ENABLE
- * 7.2 - Add KFD_IOC_DBG_TRAP_SEND_RUNTIME_EVENT
- * 8.0 - Expand runtime information given to the debugger
- * 8.1 - Allow the debugger to set the exception mask
- * 9.0 - Handle multiple exceptions from single trap signal
- * 10.0 - Query debug event returns both queue_id and gpu_id
- * 10.1 - Add additional debug capability information
- * 10.2 - Reserved
- * 10.3 - Pass context_save_restore_area size to user-space
- */
-#define KFD_IOCTL_DBG_MAJOR_VERSION	10
-#define KFD_IOCTL_DBG_MINOR_VERSION	3
-
 struct kfd_ioctl_get_version_args {
 	__u32 major_version;	/* from KFD */
 	__u32 minor_version;	/* from KFD */
