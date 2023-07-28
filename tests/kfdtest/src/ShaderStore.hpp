@@ -66,4 +66,9 @@ extern const char *GwsAtomicIncreaseIsa;
 extern const char *jump_to_trap_gfx;
 extern const char *trap_handler_gfx;
 
+/* HitWatchPointEvent */
+extern const char *watch_read_isa;
+extern const char *watch_write_isa;
+extern const char *watch_atomic_isa;
+
 #endif  // _SHADERSTORE_H_

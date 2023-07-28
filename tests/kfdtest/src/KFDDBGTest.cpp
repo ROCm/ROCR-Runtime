@@ -518,3 +518,115 @@ exit:
     LOG() << std::endl;
     TEST_END
 }
+
+TEST_F(KFDDBGTest, HitAddressWatch) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_VI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        if (hsaKmtCheckRuntimeDebugSupport()) {
+            LOG() << "Skip test as debug API not supported";
+            goto exit;
+        }
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+        HsaNodeProperties nodeProps;
+        ASSERT_SUCCESS(hsaKmtGetNodeProperties(defaultGPUNode, &nodeProps));
+
+        HsaMemoryBuffer readerBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer writerBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false, false);
+
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(watch_read_isa, readerBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(watch_write_isa, writerBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+        ASSERT_SUCCESS(hsaKmtSetTrapHandler(defaultGPUNode,
+                                            trap.As<void *>(),
+                                            0x1000,
+                                            tmaBuf.As<void*>(),
+                                            0x1000));
+
+        uint32_t rDebug;
+        ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
+
+        struct kfd_runtime_info r_info = {0};
+        BaseDebug *debug = new BaseDebug();
+        ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
+        ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
+
+        const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+        uint32_t numDevices = gpuNodes.size();
+        struct kfd_dbg_device_info_entry deviceInfo[numDevices] = {0};
+        ASSERT_SUCCESS(debug->DeviceSnapshot(0, (uint64_t)(&deviceInfo[0]), &numDevices));
+        ASSERT_EQ(numDevices, gpuNodes.size());
+        bool is_precise = nodeProps.Capability.ui32.PreciseMemoryOperationsSupported;
+
+        if (is_precise) {
+            uint32_t trapFlags = KFD_DBG_TRAP_FLAG_SINGLE_MEM_OP;
+            ASSERT_SUCCESS(debug->SetFlags(&trapFlags));
+        }
+
+        uint32_t enableMask = KFD_DBG_TRAP_MASK_DBG_ADDRESS_WATCH;
+        uint32_t supportedMask = enableMask;
+        ASSERT_SUCCESS(debug->SetWaveLaunchOverride(KFD_DBG_TRAP_OVERRIDE_OR,
+                                                    &enableMask,
+                                                    &supportedMask));
+        ASSERT_NE(supportedMask & KFD_DBG_TRAP_MASK_DBG_ADDRESS_WATCH, 0);
+        ASSERT_EQ(enableMask & KFD_DBG_TRAP_MASK_DBG_ADDRESS_WATCH, 0); // previous set mask
+
+        PM4Queue queue;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+        const uint32_t watchMask = -1 & UINT_MAX;
+
+        HsaMemoryBuffer targetBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer resultBuf(PAGE_SIZE, defaultGPUNode, true, false, false);
+        unsigned int *target = targetBuf.As<unsigned int*>();
+        unsigned int *result = resultBuf.As<unsigned int*>();
+
+        for (int mode = KFD_DBG_TRAP_ADDRESS_WATCH_MODE_READ;
+                 mode < KFD_DBG_TRAP_ADDRESS_WATCH_MODE_ALL; mode++) {
+
+            // atomics may not be supported on all devices so skip for now.
+            if (mode != KFD_DBG_TRAP_ADDRESS_WATCH_MODE_READ &&
+                mode != KFD_DBG_TRAP_ADDRESS_WATCH_MODE_NONREAD)
+                continue;
+
+            uint32_t watchId = -1;
+            ASSERT_SUCCESS(debug->SetAddressWatch((uint64_t)(&target[0]), mode,
+                                                  watchMask, deviceInfo[0].gpu_id, &watchId));
+            ASSERT_EQ(watchId, 0);
+
+            const HsaMemoryBuffer &shaderBuf =
+                mode == KFD_DBG_TRAP_ADDRESS_WATCH_MODE_READ ? readerBuf : writerBuf;
+            uint32_t preciseMask = 0x1;
+            uint32_t watchStsMask = 0x80;
+            result[0] = preciseMask;
+            Dispatch dispatch(shaderBuf);
+            dispatch.SetDim(1, 1, 1);
+            dispatch.SetArgs(&target[0], &result[0]);
+            dispatch.SetPriv(false); // Override GFX11 CWSR WA
+            dispatch.Submit(queue);
+            dispatch.Sync();
+
+            ASSERT_EQ(result[0] & watchStsMask, watchStsMask);
+
+            if (is_precise)
+                ASSERT_EQ(result[0] & preciseMask, preciseMask);
+
+            ASSERT_SUCCESS(debug->ClearAddressWatch(deviceInfo[0].gpu_id, watchId));
+            resultBuf.Fill(0);
+            targetBuf.Fill(0);
+        }
+
+        ASSERT_SUCCESS(queue.Destroy());
+        debug->Detach();
+        hsaKmtRuntimeDisable();
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+exit:
+    LOG() << std::endl;
+    TEST_END
+}

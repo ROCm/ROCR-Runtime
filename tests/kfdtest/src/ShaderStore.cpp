@@ -926,6 +926,12 @@ const char *trap_handler_gfx =
         s_getreg_b32 ttmp14, hwreg(HW_REG_TRAPSTS)
         s_and_b32 ttmp2, ttmp14, 0x800
         s_cbranch_scc1 RESTORE_AND_EXIT
+        /*check for address watch event and record pc check point delta*/
+        s_and_b32 ttmp2, ttmp14, 0x7080
+        s_cbranch_scc0 GET_DOORBELL
+        v_mov_b32 v5, v4 // capture watch checkpoint
+        v_mov_b32 v6, ttmp14 // capture watch trapsts
+        s_branch RESTORE_AND_EXIT
         GET_DOORBELL:
         .if .amdgcn.gfx_generation_number < 11
             s_mov_b32 ttmp2, exec_lo
@@ -971,3 +977,33 @@ const char *trap_handler_gfx =
         s_setreg_b32 hwreg(HW_REG_STATUS), ttmp12
         s_rfe_b64 [ttmp0, ttmp1]
 )";
+
+#define WATCH_START SHADER_START SHADER_MACROS_U32\
+    "v_mov_b32 v0, s0\n"\
+    "v_mov_b32 v1, s1\n"\
+    "v_mov_b32 v2, s2\n"\
+    "v_mov_b32 v3, s3\n"\
+    "flat_load_dword v4, v[2:3]\n"\
+    "s_waitcnt vmcnt(0) & lgkmcnt(0)\n"\
+    "v_mov_b32 v5, 0\n"\
+    "v_mov_b32 v6, 0\n"
+
+#define WATCH_END "\n"\
+    "v_mov_b32 v4, 2\n"\
+    "LOOP:\n"\
+    "V_CMP_EQ_U32 v6, 0\n"\
+    "s_cbranch_vccnz LOOP\n"\
+    "V_ADD_CO_U32 v6, v6, v5\n"\
+    "flat_store_dword v[2:3], v6\n"\
+    "s_waitcnt vmcnt(0) & lgkmcnt(0)\n"\
+    "s_endpgm\n"
+
+const char *watch_read_isa =
+    WATCH_START
+    "flat_load_dword v7, v[0:1]"
+    WATCH_END;
+
+const char *watch_write_isa =
+    WATCH_START
+    "flat_store_dword v[0:1], v4"
+    WATCH_END;
