@@ -99,7 +99,6 @@ extern bool g_use_mwaitx;
 /// - maintain loader state.
 /// - monitor asynchronous event from agent.
 class Runtime {
- friend class AMD::MemoryRegion;
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
@@ -402,6 +401,8 @@ class Runtime {
   }
 
   KfdVersion_t KfdVersion() const { return kfd_version; }
+
+  KernelSharedMutex& MemoryLock() { return memory_lock_; }
 
  protected:
   static void AsyncEventsLoop(void*);

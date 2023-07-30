@@ -61,8 +61,12 @@
 #include "core/util/lazy_ptr.h"
 
 namespace rocr {
-namespace AMD {
+
+namespace core {
 class MemoryRegion;
+}
+
+namespace AMD {
 
 typedef ScratchCache::ScratchInfo ScratchInfo;
 

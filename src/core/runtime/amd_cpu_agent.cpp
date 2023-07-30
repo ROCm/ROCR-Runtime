@@ -46,7 +46,7 @@
 #include <cstring>
 #include <thread>
 
-#include "core/inc/amd_memory_region.h"
+#include "core/inc/amd_kfd_memory_region.h"
 #include "core/inc/host_queue.h"
 
 #include "inc/hsa_ext_image.h"
@@ -84,16 +84,16 @@ void CpuAgent::InitRegionList() {
 
     if (system_prop != mem_props.end()) system_props = *system_prop;
 
-    MemoryRegion* system_region_fine =
-        new MemoryRegion(true, false, is_apu_node, this, system_props);
+    core::MemoryRegion* system_region_fine =
+        new KfdMemoryRegion(true, false, is_apu_node, this, system_props);
     regions_.push_back(system_region_fine);
-    MemoryRegion* system_region_kernarg =
-        new MemoryRegion(true, true, is_apu_node, this, system_props);
+    core::MemoryRegion* system_region_kernarg =
+        new KfdMemoryRegion(true, true, is_apu_node, this, system_props);
     regions_.push_back(system_region_kernarg);
 
     if (!is_apu_node) {
-      MemoryRegion* system_region_coarse =
-          new MemoryRegion(false, false, is_apu_node, this, system_props);
+      core::MemoryRegion* system_region_coarse =
+          new KfdMemoryRegion(false, false, is_apu_node, this, system_props);
       regions_.push_back(system_region_coarse);
     }
   }

@@ -51,18 +51,13 @@
 #include "core/inc/checked.h"
 #include "core/inc/isa.h"
 #include "core/inc/queue.h"
-#include "core/inc/memory_region.h"
 #include "core/util/utils.h"
 #include "core/util/locks.h"
 
 namespace rocr {
-
-// Forward declare AMD::MemoryRegion
-namespace AMD {
-class MemoryRegion;
-}
-
 namespace core {
+
+class MemoryRegion;
 class Signal;
 
 typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
@@ -72,8 +67,6 @@ typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
 // replaced by tools libraries. All funtions other than Convert, node_id,
 // device_type, and public_handle must be virtual.
 class Agent : public Checked<0xF6BC25EB17E6F917> {
-  friend class rocr::AMD::MemoryRegion;
-
  public:
   // @brief Convert agent object into hsa_agent_t.
   //
@@ -309,6 +302,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   virtual void Trim() {
     for (auto region : regions()) region->Trim();
   }
+
+  KernelMutex& AgentMemoryLock() { return agent_memory_lock_; }
 
  protected:
   // Intention here is to have a polymorphic update procedure for public_handle_

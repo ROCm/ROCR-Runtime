@@ -40,7 +40,7 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "core/inc/amd_memory_region.h"
+#include "core/inc/amd_kfd_memory_region.h"
 
 #include <algorithm>
 #include <set>
@@ -55,16 +55,16 @@ namespace rocr {
 namespace AMD {
 
 // Tracks aggregate size of system memory available on platform
-size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
+size_t KfdMemoryRegion::max_sysmem_alloc_size_ = 0;
 
-void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
-                                      HSAuint32 node_id, size_t size) {
+void* KfdMemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
+                                         HSAuint32 node_id, size_t size) {
   void* ret = NULL;
   const HSAKMT_STATUS status = hsaKmtAllocMemory(node_id, size, flag, &ret);
   return (status == HSAKMT_STATUS_SUCCESS) ? ret : NULL;
 }
 
-void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
+void KfdMemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
   if (ptr == NULL || size == 0) {
     return;
   }
@@ -73,7 +73,7 @@ void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
   assert(status == HSAKMT_STATUS_SUCCESS);
 }
 
-bool MemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags) {
+bool KfdMemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags) {
   assert(ptr != NULL);
   assert(size != 0);
 
@@ -81,9 +81,9 @@ bool MemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& Mem
   return (status == HSAKMT_STATUS_SUCCESS);
 }
 
-void MemoryRegion::DeregisterMemory(void* ptr) { hsaKmtDeregisterMemory(ptr); }
+void KfdMemoryRegion::DeregisterMemory(void* ptr) { hsaKmtDeregisterMemory(ptr); }
 
-bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes, const void* ptr,
+bool KfdMemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes, const void* ptr,
                                          size_t size, uint64_t* alternate_va,
                                          HsaMemMapFlags map_flag) {
   assert(num_node > 0);
@@ -96,13 +96,13 @@ bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
   return (status == HSAKMT_STATUS_SUCCESS);
 }
 
-void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
+void KfdMemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
   hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
 }
 
-MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
+KfdMemoryRegion::KfdMemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, kernarg, full_profile, owner),
+    : MemoryRegion(fine_grain, kernarg, full_profile, owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0),
@@ -154,14 +154,14 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, cor
   assert(IsMultipleOf(max_single_alloc_size_, kPageSize_));
 }
 
-MemoryRegion::~MemoryRegion() {}
+KfdMemoryRegion::~KfdMemoryRegion() {}
 
-hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const {
-  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
+hsa_status_t KfdMemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->AgentMemoryLock());
   return AllocateImpl(size, alloc_flags, address);
 }
 
-hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
+hsa_status_t KfdMemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
                                         void** address) const {
   if (address == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -259,12 +259,12 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
-hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
-  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
+hsa_status_t KfdMemoryRegion::Free(void* address, size_t size) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->AgentMemoryLock());
   return FreeImpl(address, size);
 }
 
-hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
+hsa_status_t KfdMemoryRegion::FreeImpl(void* address, size_t size) const {
   if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
 
   MakeKfdMemoryUnresident(address);
@@ -275,13 +275,13 @@ hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
 }
 
 // TODO:  Look into a better name and/or making this process transparent to exporting.
-hsa_status_t MemoryRegion::IPCFragmentExport(void* address) const {
-  ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
+hsa_status_t KfdMemoryRegion::IPCFragmentExport(void* address) const {
+  ScopedAcquire<KernelMutex> lock(&owner()->AgentMemoryLock());
   if (!fragment_allocator_.discardBlock(address)) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
+hsa_status_t KfdMemoryRegion::GetInfo(hsa_region_info_t attribute,
                                    void* value) const {
   switch (attribute) {
     case HSA_REGION_INFO_SEGMENT:
@@ -392,7 +392,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
+hsa_status_t KfdMemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
                                        void* value) const {
   switch (attribute) {
     case HSA_AMD_MEMORY_POOL_INFO_SEGMENT:
@@ -434,7 +434,7 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
+hsa_amd_memory_pool_access_t KfdMemoryRegion::GetAccessInfo(
     const core::Agent& agent, const core::Runtime::LinkInfo& link_info) const {
 
   // Return allowed by default if memory pool is owned by requesting device
@@ -488,7 +488,7 @@ hsa_amd_memory_pool_access_t MemoryRegion::GetAccessInfo(
   return HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
 }
 
-hsa_status_t MemoryRegion::GetAgentPoolInfo(
+hsa_status_t KfdMemoryRegion::GetAgentPoolInfo(
     const core::Agent& agent, hsa_amd_agent_memory_pool_info_t attribute,
     void* value) const {
   const uint32_t node_id_from = agent.node_id();
@@ -522,7 +522,7 @@ hsa_status_t MemoryRegion::GetAgentPoolInfo(
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
+hsa_status_t KfdMemoryRegion::AllowAccess(uint32_t num_agents,
                                        const hsa_agent_t* agents,
                                        const void* ptr, size_t size) const {
   if (num_agents == 0 || agents == NULL || ptr == NULL || size == 0) {
@@ -586,7 +586,7 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
     assert(cpu_in_list);
     // This is a system region and only CPU agents in the whitelist.
     // Remove old mappings.
-    AMD::MemoryRegion::MakeKfdMemoryUnresident(ptr);
+    MakeKfdMemoryUnresident(ptr);
     return HSA_STATUS_SUCCESS;
   }
 
@@ -605,9 +605,9 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   {  // Sequence with pointer info since queries to other fragments of the block may be adjusted by
      // this call.
     ScopedAcquire<KernelSharedMutex::Shared> lock(
-        core::Runtime::runtime_singleton_->memory_lock_.shared());
+        core::Runtime::runtime_singleton_->MemoryLock().shared());
     uint64_t alternate_va = 0;
-    if (!AMD::MemoryRegion::MakeKfdMemoryResident(
+    if (!MakeKfdMemoryResident(
       whitelist_nodes.size(), &whitelist_nodes[0], ptr,
       size, &alternate_va, map_flag)) {
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -617,19 +617,19 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::CanMigrate(const MemoryRegion& dst,
+hsa_status_t KfdMemoryRegion::CanMigrate(const MemoryRegion& dst,
                                       bool& result) const {
   // TODO: not implemented yet.
   result = false;
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
-hsa_status_t MemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
+hsa_status_t KfdMemoryRegion::Migrate(uint32_t flag, const void* ptr) const {
   // TODO: not implemented yet.
   return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 }
 
-hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
+hsa_status_t KfdMemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
                                 void* host_ptr, size_t size,
                                 void** agent_ptr) const {
   if (!IsSystem()) {
@@ -685,14 +685,14 @@ hsa_status_t MemoryRegion::Lock(uint32_t num_agents, const hsa_agent_t* agents,
 
       return HSA_STATUS_SUCCESS;
     }
-    AMD::MemoryRegion::DeregisterMemory(host_ptr);
+    DeregisterMemory(host_ptr);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
   return HSA_STATUS_ERROR;
 }
 
-hsa_status_t MemoryRegion::Unlock(void* host_ptr) const {
+hsa_status_t KfdMemoryRegion::Unlock(void* host_ptr) const {
   if (!IsSystem()) {
     return HSA_STATUS_ERROR;
   }
@@ -707,15 +707,15 @@ hsa_status_t MemoryRegion::Unlock(void* host_ptr) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t MemoryRegion::AssignAgent(void* ptr, size_t size,
+hsa_status_t KfdMemoryRegion::AssignAgent(void* ptr, size_t size,
                                        const core::Agent& agent,
                                        hsa_access_permission_t access) const {
   return HSA_STATUS_SUCCESS;
 }
 
-void MemoryRegion::Trim() const { fragment_allocator_.trim(); }
+void KfdMemoryRegion::Trim() const { fragment_allocator_.trim(); }
 
-void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
+void* KfdMemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated_size) const {
   void* ret;
   size_t bsize = AlignUp(request_size, block_size());
 

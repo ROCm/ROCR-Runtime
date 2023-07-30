@@ -57,7 +57,7 @@
 #include "core/inc/amd_blit_kernel.h"
 #include "core/inc/amd_blit_sdma.h"
 #include "core/inc/amd_gpu_pm4.h"
-#include "core/inc/amd_memory_region.h"
+#include "core/inc/amd_kfd_memory_region.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
@@ -411,7 +411,7 @@ void GpuAgent::InitRegionList() {
           memory_max_frequency_ = mem_props[mem_idx].MemoryClockMax;
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
-          MemoryRegion* region = new MemoryRegion(false, false, false, this, mem_props[mem_idx]);
+          KfdMemoryRegion* region = new KfdMemoryRegion(false, false, false, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
 
@@ -419,7 +419,7 @@ void GpuAgent::InitRegionList() {
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
             if ((properties_.HiveID != 0) ||
                 (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
-              regions_.push_back(new MemoryRegion(true, false, false, this, mem_props[mem_idx]));
+              regions_.push_back(new KfdMemoryRegion(true, false, false, this, mem_props[mem_idx]));
             }
           }
           break;
