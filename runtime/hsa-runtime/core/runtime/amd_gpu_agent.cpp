@@ -964,12 +964,16 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     hsa_status_t stat;
     size_t chunk = std::min(remainder_size, (size + gang_factor - 1)/gang_factor);
     if (!blit->GangLeader() && !gang_signals.empty()) {
-      stat = blit->SubmitLinearCopyCommand(dst + offset, src + offset, chunk,
-                                           dep_signals, *gang_signals[gang_sig_count], gang_signals);
+      stat = blit->SubmitLinearCopyCommand(reinterpret_cast<uint8_t*>(dst) + offset,
+                                           reinterpret_cast<const uint8_t*>(src) + offset,
+                                           chunk, dep_signals,
+                                           *gang_signals[gang_sig_count], gang_signals);
       gang_sig_count++;
     } else {
-      stat = blit->SubmitLinearCopyCommand(dst + offset, src + offset, chunk,
-                                           dep_signals, out_signal, gang_signals);
+      stat = blit->SubmitLinearCopyCommand(reinterpret_cast<uint8_t*>(dst) + offset,
+                                           reinterpret_cast<const uint8_t*>(src) + offset,
+                                           chunk, dep_signals,
+                                           out_signal, gang_signals);
     }
     SetCopyRequestRefCount(false);
 

@@ -1421,7 +1421,7 @@ Runtime::Runtime()
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
       ref_count_(0),
-      kfd_version{0} {}
+      kfd_version{} {}
 
 hsa_status_t Runtime::Load() {
   os::cpuid_t cpuinfo;
@@ -2432,7 +2432,7 @@ hsa_status_t Runtime::DmaBufClose(int dmabuf) {
 hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t address,
                                             uint64_t flags) {
   void* addr = (void*)address;
-  HsaMemFlags memFlags = {0};
+  HsaMemFlags memFlags = {};
 
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -2563,7 +2563,8 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
   if (reservedAddressIt != reserved_address_map_.begin()) {
     reservedAddressIt--;
     if ((reservedAddressIt->first <= va) &&
-        ((va + size) <= (reservedAddressIt->first + reservedAddressIt->second.size))) {
+        ((reinterpret_cast<uint8_t*>(va) + size) <=
+         (reinterpret_cast<const uint8_t*>(reservedAddressIt->first) + reservedAddressIt->second.size))) {
       reservedAddressFound = true;
     }
   }
@@ -2573,12 +2574,12 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
   auto upperMappedHandleIt = mapped_handle_map_.upper_bound(va);
   if (upperMappedHandleIt != mapped_handle_map_.begin()) {
     upperMappedHandleIt--;
-    if (upperMappedHandleIt->first + upperMappedHandleIt->second.size > va)
+    if ((reinterpret_cast<const uint8_t*>(upperMappedHandleIt->first) + upperMappedHandleIt->second.size) > va)
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
   auto lowerMappedHandleIt = mapped_handle_map_.lower_bound(va);
   if (lowerMappedHandleIt != mapped_handle_map_.end()) {
-    if (va + size > lowerMappedHandleIt->first) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    if (reinterpret_cast<uint8_t*>(va) + size > lowerMappedHandleIt->first) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
   auto memoryHandleIt = memory_handle_map_.find(reinterpret_cast<void*>(memoryOnlyHandle.handle));
