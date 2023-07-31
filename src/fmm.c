@@ -2062,20 +2062,21 @@ int open_drm_render_device(int minor)
 	}
 	drm_render_fds[index] = fd;
 
-	/* if amdgpu_device_get_fd availabe query render fd that libdrm uses,
-	 * then close drm_render_fds above, replace it by fd libdrm uses.
-	 */
 	device_handle = &amdgpu_handle[index];
-	if (fn_amdgpu_device_get_fd &&
-	    !amdgpu_device_initialize(fd, &major_drm, &minor_drm, device_handle)) {
-		fd = fn_amdgpu_device_get_fd(*device_handle);
-		if (fd > 0) {
-			close(drm_render_fds[index]);
-			drm_render_fds[index] = fd;
-		} else {
-			pr_err("amdgpu_device_get_fd failed: %d\n", fd);
-			amdgpu_device_deinitialize(*device_handle);
-			*device_handle = 0;
+	if (!amdgpu_device_initialize(fd, &major_drm, &minor_drm, device_handle)) {
+		/* if amdgpu_device_get_fd available query render fd that libdrm uses,
+		 * then close drm_render_fds above, replace it by fd libdrm uses.
+		 */
+		if (fn_amdgpu_device_get_fd) {
+			fd = fn_amdgpu_device_get_fd(*device_handle);
+			if (fd > 0) {
+				close(drm_render_fds[index]);
+				drm_render_fds[index] = fd;
+			} else {
+				pr_err("amdgpu_device_get_fd failed: %d\n", fd);
+				amdgpu_device_deinitialize(*device_handle);
+				*device_handle = 0;
+			}
 		}
 	}
 
