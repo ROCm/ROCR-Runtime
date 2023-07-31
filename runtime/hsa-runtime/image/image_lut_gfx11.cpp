@@ -85,7 +85,7 @@ namespace image {
      {RW, 4, FMT_32, TYPE_UINT},
      {RW, 2, FMT_16, TYPE_FLOAT},
      {RW, 4, FMT_32, TYPE_FLOAT}},
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RX
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RX
     {     // HSA_EXT_IMAGE_CHANNEL_ORDER_RG
      {RW, 2, FMT_8_8, TYPE_SNORM},
      {RW, 4, FMT_16_16, TYPE_SNORM},
@@ -103,7 +103,7 @@ namespace image {
      {RW, 8, FMT_32_32, TYPE_UINT},
      {RW, 4, FMT_16_16, TYPE_FLOAT},
      {RW, 8, FMT_32_32, TYPE_FLOAT}},
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RGX
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RGX
     {     // HSA_EXT_IMAGE_CHANNEL_ORDER_RA
      {RW, 2, FMT_8_8, TYPE_SNORM},
      {RW, 4, FMT_16_16, TYPE_SNORM},
@@ -138,7 +138,7 @@ namespace image {
      {0, 0, 0, 0},
      {0, 0, 0, 0},
      {0, 0, 0, 0}},
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RGBX
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_RGBX
     {     // HSA_EXT_IMAGE_CHANNEL_ORDER_RGBA
      {RW, 4, FMT_8_8_8_8, TYPE_SNORM},
      {RW, 8, FMT_16_16_16_16, TYPE_SNORM},
@@ -190,9 +190,9 @@ namespace image {
      {0, 0, 0, 0},
      {0, 0, 0, 0},
      {0, 0, 0, 0}},
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_ABGR
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SRGB
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SRGBX
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_ABGR
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SRGB
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SRGBX
     {     // HSA_EXT_IMAGE_CHANNEL_ORDER_SRGBA
      {0, 0, 0, 0},
      {0, 0, 0, 0},
@@ -210,7 +210,7 @@ namespace image {
      {0, 0, 0, 0},
      {0, 0, 0, 0},
      {0, 0, 0, 0}},
-    {0},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SBGRA
+    {},  // HSA_EXT_IMAGE_CHANNEL_ORDER_SBGRA
     {     // HSA_EXT_IMAGE_CHANNEL_ORDER_INTENSITY
      {RW, 1, FMT_8, TYPE_SNORM},
      {RW, 2, FMT_16, TYPE_SNORM},
@@ -263,7 +263,7 @@ namespace image {
      {0, 0, 0, 0},
      {0, 0, 0, 0},
      {ROWO, 4, FMT_32, TYPE_FLOAT}},
-    {0}  // HSA_EXT_IMAGE_CHANNEL_ORDER_DEPTH_STENCIL
+    {}  // HSA_EXT_IMAGE_CHANNEL_ORDER_DEPTH_STENCIL
 };
 
 ImageProperty ImageLutGfx11::MapFormat(const hsa_ext_image_format_t& format,

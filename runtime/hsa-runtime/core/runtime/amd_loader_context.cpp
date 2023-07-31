@@ -287,7 +287,7 @@ const core::MemoryRegion* RegionMemory::AgentLocal(hsa_agent_t agent, bool is_co
       std::find_if(amd_agent->regions().begin(), amd_agent->regions().end(),
                    [&](const core::MemoryRegion* region) {
                      const AMD::MemoryRegion* amd_region = (const AMD::MemoryRegion*)region;
-                     return amd_region->IsLocalMemory() & (!amd_region->fine_grain());
+                     return amd_region->IsLocalMemory() && (!amd_region->fine_grain());
                    });
   return agent_local_region == amd_agent->regions().end() ? nullptr : *agent_local_region;
 }
