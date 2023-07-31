@@ -60,24 +60,24 @@
 namespace rocr {
 namespace image {
 
-static_assert(sizeof(SQ_BUF_RSRC_WORD0) == sizeof(uint32_t));
-static_assert(sizeof(SQ_BUF_RSRC_WORD1) == sizeof(uint32_t));
-static_assert(sizeof(SQ_BUF_RSRC_WORD2) == sizeof(uint32_t));
-static_assert(sizeof(SQ_BUF_RSRC_WORD3) == sizeof(uint32_t));
+ASSERT_SIZE_UINT32(SQ_BUF_RSRC_WORD0)
+ASSERT_SIZE_UINT32(SQ_BUF_RSRC_WORD1)
+ASSERT_SIZE_UINT32(SQ_BUF_RSRC_WORD2)
+ASSERT_SIZE_UINT32(SQ_BUF_RSRC_WORD3)
 
-static_assert(sizeof(SQ_IMG_RSRC_WORD0) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD1) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD2) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD3) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD4) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD5) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD6) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_RSRC_WORD7) == sizeof(uint32_t));
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD0)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD1)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD2)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD3)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD4)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD5)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD6)
+ASSERT_SIZE_UINT32(SQ_IMG_RSRC_WORD7)
 
-static_assert(sizeof(SQ_IMG_SAMP_WORD0) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_SAMP_WORD1) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_SAMP_WORD2) == sizeof(uint32_t));
-static_assert(sizeof(SQ_IMG_SAMP_WORD3) == sizeof(uint32_t));
+ASSERT_SIZE_UINT32(SQ_IMG_SAMP_WORD0)
+ASSERT_SIZE_UINT32(SQ_IMG_SAMP_WORD1)
+ASSERT_SIZE_UINT32(SQ_IMG_SAMP_WORD2)
+ASSERT_SIZE_UINT32(SQ_IMG_SAMP_WORD3)
 
 //-----------------------------------------------------------------------------
 // Workaround switch to combined format/type codes and missing gfx10
