@@ -2433,10 +2433,10 @@ hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t add
                                             uint64_t flags) {
   void* addr = (void*)address;
   HsaMemFlags memFlags = {};
-
-
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
+  memFlags.ui32.OnlyAddress = 1;
+  memFlags.ui32.FixedAddress = 1;
   /* Try to reserving the VA requested by user */
   if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
     memFlags.ui32.FixedAddress = 0;
