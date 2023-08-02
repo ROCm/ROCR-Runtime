@@ -703,6 +703,22 @@ class GpuAgent : public GpuAgentInt {
   std::function<void(void*)> finegrain_deallocator_;
 
   /* PC Sampling fields - begin */
+  /* 2nd level Trap handler code is based on the offsets within this structure */
+  typedef struct {
+    uint64_t buf_write_val;
+    uint32_t buf_size;
+    uint32_t reserved0;
+    uint32_t buf_written_val0;
+    uint32_t buf_watermark0;
+    hsa_signal_t done_sig0;
+    uint32_t buf_written_val1;
+    uint32_t buf_watermark1;
+    hsa_signal_t done_sig1;
+    uint8_t reserved1[16];
+    /* pc_sample_t buffer0[buf_size]; */
+    /* pc_sample_t buffer1[buf_size]; */
+  } pcs_hosttrap_sampling_data_t;
+
   typedef struct {
     os::Thread thread;
     pcs::PcsRuntime::PcSamplingSession* session;
