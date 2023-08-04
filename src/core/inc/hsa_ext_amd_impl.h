@@ -101,6 +101,11 @@ hsa_status_t hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t nu
                                            hsa_signal_t* signal);
 
 // Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_signal_create_on_agent(hsa_signal_value_t initial_value, uint32_t num_consumers,
+                                           const hsa_agent_t* consumers, const hsa_agent_t* owner,
+                                           uint64_t attributes, hsa_signal_t* signal);
+
+// Mirrors Amd Extension Apis
 uint32_t
     hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* signals,
                             hsa_signal_condition_t* conds,

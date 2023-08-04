@@ -51,6 +51,7 @@
 
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
+#include "core/inc/amd_agent_signal.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
@@ -535,6 +536,21 @@ hsa_status_t hsa_amd_signal_create(hsa_signal_value_t initial_value, uint32_t nu
   *hsa_signal = core::Signal::Convert(ret);
   return HSA_STATUS_SUCCESS;
   CATCH;
+}
+
+hsa_status_t hsa_amd_signal_create_on_agent(hsa_signal_value_t initial_value,
+                                            uint32_t num_consumers,
+                                            const hsa_agent_t* consumers,
+                                            const hsa_agent_t* owner,
+                                            uint64_t attributes,
+                                            hsa_signal_t* hsa_signal) {
+  core::Signal* core_signal(nullptr);
+  core::Agent* core_agent_owner(core::Agent::Convert(*owner));
+
+  core_signal = new AmdAgentSignal(core_agent_owner, initial_value);
+
+  *hsa_signal = core::Signal::Convert(core_signal);
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t hsa_amd_signal_value_pointer(hsa_signal_t hsa_signal,

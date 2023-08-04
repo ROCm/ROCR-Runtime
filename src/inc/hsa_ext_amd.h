@@ -704,6 +704,12 @@ hsa_status_t HSA_API hsa_amd_signal_create(hsa_signal_value_t initial_value, uin
                                            const hsa_agent_t* consumers, uint64_t attributes,
                                            hsa_signal_t* signal);
 
+hsa_status_t HSA_API hsa_amd_signal_create_on_agent(hsa_signal_value_t initial_value,
+                                                    uint32_t num_consumers,
+                                                    const hsa_agent_t* consumers,
+                                                    const hsa_agent_t* owner,
+                                                    uint64_t attributes,
+                                                    hsa_signal_t* hsa_signal);
 /**
  * @brief Returns a pointer to the value of a signal.
  *

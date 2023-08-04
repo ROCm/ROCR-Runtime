@@ -173,6 +173,7 @@ struct AmdExtTable {
   decltype(hsa_amd_ipc_memory_attach)* hsa_amd_ipc_memory_attach_fn;
   decltype(hsa_amd_ipc_memory_detach)* hsa_amd_ipc_memory_detach_fn;
   decltype(hsa_amd_signal_create)* hsa_amd_signal_create_fn;
+  decltype(hsa_amd_signal_create_on_agent)* hsa_amd_signal_create_on_agent_fn;
   decltype(hsa_amd_ipc_signal_create)* hsa_amd_ipc_signal_create_fn;
   decltype(hsa_amd_ipc_signal_attach)* hsa_amd_ipc_signal_attach_fn;
   decltype(hsa_amd_register_system_event_handler)* hsa_amd_register_system_event_handler_fn;

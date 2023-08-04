@@ -68,6 +68,10 @@ typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
 // device_type, and public_handle must be virtual.
 class Agent : public Checked<0xF6BC25EB17E6F917> {
  public:
+  using AgentAllocatorFn = std::function<void*(size_t size, size_t align,
+                                         core::MemoryRegion::AllocateFlags)>;
+  using AgentDeallocatorFn = std::function<void(void*)>;
+
   // @brief Convert agent object into hsa_agent_t.
   //
   // @param [in] agent Pointer to an agent.
@@ -305,6 +309,11 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
 
   KernelMutex& AgentMemoryLock() { return agent_memory_lock_; }
 
+  /// @brief Allocator for agent-local memory.
+  const AgentAllocatorFn& AgentAllocator() const { return agent_allocator_; }
+  /// @brief Deallocator for agent-local memory.
+  const AgentDeallocatorFn& AgentDeallocator() const { return agent_deallocator_; }
+
  protected:
   // Intention here is to have a polymorphic update procedure for public_handle_
   // which is callable on any Agent* but only from some class dervied from
@@ -331,6 +340,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   }
 
   hsa_agent_t public_handle_;
+
+  AgentAllocatorFn agent_allocator_ = nullptr;
+  AgentDeallocatorFn agent_deallocator_ = nullptr;
 
  private:
   // @brief Node id.
