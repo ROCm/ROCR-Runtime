@@ -104,7 +104,8 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   }
 
   // Lightweight RTTI for vendor specific implementations.
-  enum DeviceType { kAmdGpuDevice = 0, kAmdCpuDevice = 1, kUnknownDevice = 2 };
+  enum DeviceType { kAmdGpuDevice = 0, kAmdCpuDevice = 1, kAmdAieDevice = 2,
+                    kUnknownDevice = 3 };
 
   // @brief Agent class contructor.
   //

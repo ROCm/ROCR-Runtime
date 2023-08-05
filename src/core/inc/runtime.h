@@ -57,6 +57,7 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
+#include "core/inc/amd_air_driver.h"
 #include "core/inc/exceptions.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
@@ -138,6 +139,8 @@ class Runtime {
 
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
+  /// @brief Delete all agent driver objects.
+  void DestroyDrivers();
 
   /// @brief Set the number of links connecting the agents in the platform.
   void SetLinkCount(size_t num_link);
@@ -345,6 +348,8 @@ class Runtime {
 
   const std::vector<Agent*>& gpu_agents() { return gpu_agents_; }
 
+  const std::vector<Agent*>& aie_agents() { return aie_agents_; }
+
   const std::vector<Agent*>& disabled_gpu_agents() { return disabled_gpu_agents_; }
 
   const std::vector<uint32_t>& gpu_ids() { return gpu_ids_; }
@@ -403,6 +408,24 @@ class Runtime {
   KfdVersion_t KfdVersion() const { return kfd_version; }
 
   KernelSharedMutex& MemoryLock() { return memory_lock_; }
+
+  Driver* AgentDriver(Agent::DeviceType dev_type) {
+    auto is_dev_type =
+      [&](const Driver* d) {
+        return d->agent_device_type_ == dev_type;
+      };
+
+    auto driver(std::find_if(agent_drivers_.begin(), agent_drivers_.end(),
+                             is_dev_type));
+
+    if (driver == agent_drivers_.end()) {
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                               "Invalid agent device type, no driver found.");
+      return nullptr;
+    }
+
+    return *driver;
+  }
 
  protected:
   static void AsyncEventsLoop(void*);
@@ -538,6 +561,14 @@ class Runtime {
   // registered & mapped arrays.
   KernelSharedMutex memory_lock_;
 
+  // Array containing driver interfaces for compatible agent kernel-mode
+  // drivers. Currently supports AIE agents. There is only one driver supported
+  // per agent type.
+  std::vector<Driver*> agent_drivers_{
+    // amdair driver for AIE agents.
+    new AMD::AirDriver{"/dev/amdair", Agent::DeviceType::kAmdAieDevice}
+  };
+
   // Array containing tools library handles.
   std::vector<os::LibHandle> tool_libs_;
 
@@ -546,6 +577,9 @@ class Runtime {
 
   // Agent list containing all compatible GPU agents in the platform.
   std::vector<Agent*> gpu_agents_;
+
+  // Agent list containing all compatible AIE agents in the platform.
+  std::vector<Agent*> aie_agents_;
 
   // Agent list containing incompletely initialized GPU agents not to be used by the process.
   std::vector<Agent*> disabled_gpu_agents_;

@@ -52,6 +52,7 @@
 #include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/amd_agent_signal.h"
+#include "core/inc/amd_aie_agent.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
@@ -546,8 +547,14 @@ hsa_status_t hsa_amd_signal_create_on_agent(hsa_signal_value_t initial_value,
                                             hsa_signal_t* hsa_signal) {
   core::Signal* core_signal(nullptr);
   core::Agent* core_agent_owner(core::Agent::Convert(*owner));
+  bool aie_device_signal(core_agent_owner->device_type() == core::Agent::kAmdAieDevice);
 
-  core_signal = new AmdAgentSignal(core_agent_owner, initial_value);
+  if (aie_device_signal) {
+    core_signal = new AmdAgentSignal(core_agent_owner, initial_value);
+  } else {
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                             "Only AIE agents support on-device signals at this time.\n");
+  }
 
   *hsa_signal = core::Signal::Convert(core_signal);
   return HSA_STATUS_SUCCESS;
@@ -744,6 +751,11 @@ hsa_status_t hsa_amd_agent_iterate_memory_pools(
 
   if (agent->device_type() == core::Agent::kAmdCpuDevice) {
     return reinterpret_cast<const AMD::CpuAgent*>(agent)->VisitRegion(
+        false, reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
+                                                 void* data)>(callback),
+        data);
+  } else if (agent->device_type() == core::Agent::kAmdAieDevice) {
+    return reinterpret_cast<const AMD::AieAgent*>(agent)->VisitRegion(
         false, reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
                                                  void* data)>(callback),
         data);

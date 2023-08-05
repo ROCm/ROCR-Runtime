@@ -154,11 +154,16 @@ set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY LINK_FLAGS ${HSA_SHARED_LINK
 ##  -------------------------  End Compiler and Linker options ----------------------------
 
 ## Source files.
-set ( SRCS core/driver/driver.cpp
+set ( SRCS core/driver/air/amd_air_driver.cpp
+           core/driver/driver.cpp
            core/util/lnx/os_linux.cpp
            core/util/small_heap.cpp
            core/util/timer.cpp
            core/util/flag.cpp
+           core/runtime/amd_agent_signal.cpp
+           core/runtime/amd_aie_agent.cpp
+           core/runtime/amd_aie_aql_queue.cpp
+           core/runtime/amd_air_memory_region.cpp
            core/runtime/amd_blit_kernel.cpp
            core/runtime/amd_blit_sdma.cpp
            core/runtime/amd_cpu_agent.cpp

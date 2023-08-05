@@ -781,7 +781,11 @@ typedef enum {
     /**
      * DSP device.
      */
-    HSA_DEVICE_TYPE_DSP = 2
+    HSA_DEVICE_TYPE_DSP = 2,
+    /**
+     * AI Engine (AIE) device.
+     */
+    HSA_DEVICE_TYPE_AIE = 3
 } hsa_device_type_t;
 
 /**
