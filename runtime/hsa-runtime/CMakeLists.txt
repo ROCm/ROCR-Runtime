@@ -316,11 +316,8 @@ install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTA
 
 # Install public headers
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hsa COMPONENT dev )
-# Disable header path migration helpers for ASAN package
-if(NOT ENABLE_ASAN_PACKAGING)
 # Option to build header path migration helpers.
-  option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
-endif()
+option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." OFF)
 if(INCLUDE_PATH_COMPATIBILITY)
 # To enable/disable #error in wrapper header files
   if(NOT DEFINED ROCM_HEADER_WRAPPER_WERROR)
