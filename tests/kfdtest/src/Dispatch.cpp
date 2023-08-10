@@ -74,6 +74,10 @@ void Dispatch::SetSpiPriority(unsigned int priority) {
     m_SpiPriority = priority;
 }
 
+void Dispatch::SetPriv(bool priv) {
+    m_NeedCwsrWA = priv;
+}
+
 void Dispatch::Submit(BaseQueue& queue) {
     ASSERT_NE(m_pEop, (void*)0);
     EXPECT_EQ(m_FamilyId, queue.GetFamilyId());
