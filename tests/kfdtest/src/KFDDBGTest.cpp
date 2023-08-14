@@ -313,6 +313,95 @@ exit:
     TEST_END
 }
 
+TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
+    TEST_START(TESTPROFILE_RUNALL)
+    if (m_FamilyId >= FAMILY_AI) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+
+        if (hsaKmtCheckRuntimeDebugSupport()) {
+            LOG() << "Skip test as debug API not supported";
+            goto exit;
+        }
+
+        ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+
+        // create shader and trap bufs then enable 2nd level trap
+        HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false, false);
+
+        ASSERT_SUCCESS(hsaKmtSetTrapHandler(defaultGPUNode,
+                                            trap.As<void *>(),
+                                            0x1000,
+                                            tmaBuf.As<void*>(),
+                                            0x1000));
+
+        // compile and dispatch shader
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(NoopIsa, isaBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+
+        uint32_t rDebug;
+        ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
+
+        BaseDebug *debug = new BaseDebug();
+        struct kfd_runtime_info r_info = {0};
+        ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
+        ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
+
+        PM4Queue queue;
+        HsaQueueResource *qResources;
+        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+
+        for (int i = 0; i < 2; i++) {
+            uint32_t enableMask = !!!(i % 2) ? KFD_DBG_TRAP_MASK_TRAP_ON_WAVE_START :
+                                               KFD_DBG_TRAP_MASK_TRAP_ON_WAVE_END;
+            uint32_t supportedMask = enableMask;
+            debug->SetWaveLaunchOverride(KFD_DBG_TRAP_OVERRIDE_OR,
+                                                    &enableMask,
+                                                    &supportedMask);
+
+            if (!!!(supportedMask & enableMask)) {
+                EXPECT_SUCCESS(queue.Destroy());
+                debug->Detach();
+                hsaKmtRuntimeDisable();
+                LOG() << "Skipping test: Trap on start/end override not supported." << std::endl;
+                goto exit;
+            }
+
+            ASSERT_EQ(enableMask, 0); // previous set mask
+
+            Dispatch *dispatch;
+            dispatch = new Dispatch(isaBuf);
+            dispatch->SetArgs(NULL, NULL);
+            dispatch->SetDim(1, 1, 1);
+
+            /* Subscribe to trap events and submit the queue */
+            uint64_t trapMask = KFD_EC_MASK(EC_QUEUE_WAVE_TRAP);
+            debug->SetExceptionsEnabled(trapMask);
+            dispatch->Submit(queue);
+
+            /* Wait for trap event */
+            uint32_t QueueId = -1;
+            ASSERT_SUCCESS(debug->QueryDebugEvent(&trapMask, NULL, &QueueId, 5000));
+            ASSERT_NE(QueueId, -1);
+            ASSERT_EQ(trapMask, KFD_EC_MASK(EC_QUEUE_WAVE_TRAP) | KFD_EC_MASK(EC_QUEUE_NEW));
+
+            dispatch->Sync();
+        }
+
+        EXPECT_SUCCESS(queue.Destroy());
+
+        debug->Detach();
+        hsaKmtRuntimeDisable();
+    } else {
+        LOG() << "Skipping test: Test not supported on family ID 0x"
+              << m_FamilyId << "." << std::endl;
+    }
+exit:
+    LOG() << std::endl;
+    TEST_END
+}
+
 TEST_F(KFDDBGTest, SuspendQueues) {
     TEST_START(TESTPROFILE_RUNALL)
     if (m_FamilyId >= FAMILY_AI) {
