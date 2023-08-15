@@ -885,7 +885,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     Flag::SDMA_OVERRIDE sdma_override =
         core::Runtime::runtime_singleton_->flag().enable_sdma();
     // Blit copies already saturate xGMI
-    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override == Flag::SDMA_DISABLE) {
+    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override != Flag::SDMA_ENABLE) {
       break;
     }
 
