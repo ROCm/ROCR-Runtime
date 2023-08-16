@@ -896,6 +896,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
 
     if (dst_agent.public_handle().handle == peer_info.first.public_handle().handle) {
       tmp_gang_factor = peer_info.second;
+      break;
     }
   }
 
