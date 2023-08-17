@@ -67,6 +67,7 @@ class Flag {
   // Lift limit for 2.10 release RCCL workaround. This limit is not used when asynchronous scratch
   // reclaim is supported
   const size_t DEFAULT_SCRATCH_SINGLE_LIMIT = 146800640;  // small_limit >> 2;
+  const size_t DEFAULT_PCS_MAX_DEVICE_BUFFER_SIZE = 256 * 1024 * 1024;
 
   explicit Flag() { Refresh(); }
 
@@ -230,6 +231,13 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
     enable_ipc_mode_legacy_ = (var == "1") ? true : false;
+    if (os::IsEnvVarSet("HSA_PCS_MAX_DEVICE_BUFFER_SIZE")) {
+      var = os::GetEnvVar("HSA_PCS_MAX_DEVICE_BUFFER_SIZE");
+      char* end;
+      pc_sampling_max_device_buffer_size_ = strtoul(var.c_str(), &end, 10);
+    } else {
+      pc_sampling_max_device_buffer_size_ = DEFAULT_PCS_MAX_DEVICE_BUFFER_SIZE;
+    }
 
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
@@ -341,6 +349,8 @@ class Flag {
 
   bool enable_ipc_mode_legacy() const { return enable_ipc_mode_legacy_; }
 
+  size_t pc_sampling_max_device_buffer_size() const { return pc_sampling_max_device_buffer_size_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -395,6 +405,8 @@ class Flag {
   XNACK_REQUEST xnack_;
 
   SRAMECC_ENABLE sramecc_enable_;
+
+  size_t pc_sampling_max_device_buffer_size_;
 
   // Map GPU index post RVD to its default cu mask.
   std::map<uint32_t, std::vector<uint32_t>> cu_mask_;
