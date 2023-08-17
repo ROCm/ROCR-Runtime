@@ -47,6 +47,7 @@
 
 #include "hsa.h"
 #include "hsa_ext_image.h"
+#include "hsa_ven_amd_pc_sampling.h"
 
 /**
  * - 1.0 - initial version
@@ -221,6 +222,11 @@ enum {
    * Exceeded number of VGPRs available on this agent
    */
   HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
+
+  /**
+   * Resource is busy or temporarily unavailable
+   */
+  HSA_STATUS_ERROR_RESOURCE_BUSY = 46,
 };
 
 /**
