@@ -116,8 +116,6 @@ class BlitKernel : public core::Blit {
 
   void GangLeader(bool gang_leader) {}
   bool GangLeader() const { return false; }
-  void GangStatus(bool is_ganged) {}
-  bool GangStatus() const { return false; }
 
  private:
   union KernelArgs {

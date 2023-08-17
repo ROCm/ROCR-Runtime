@@ -119,8 +119,6 @@ class Blit {
 
   virtual void GangLeader(bool gang_leader) = 0;
   virtual bool GangLeader() const { return false; };
-  virtual void GangStatus(bool is_ganged) = 0;
-  virtual bool GangStatus() const { return false; };
 };
 }  // namespace core
 }  // namespace rocr

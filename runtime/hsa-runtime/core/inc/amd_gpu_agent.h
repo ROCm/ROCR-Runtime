@@ -468,6 +468,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Mutex to protect access to blit objects.
   KernelMutex blit_lock_;
 
+  // @brief Mutex to protect sdma gang submissions.
+  KernelMutex sdma_gang_lock_;
+
   // @brief GPU tick on initialization.
   HsaClockCounters t0_;
 

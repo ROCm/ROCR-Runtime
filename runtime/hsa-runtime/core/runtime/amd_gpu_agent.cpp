@@ -876,6 +876,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
+  ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
+
   // Calculate the number of gang items
   unsigned int tmp_gang_factor = 1;
   for (auto peer_info : gang_peers_info_) {
@@ -884,7 +886,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     Flag::SDMA_OVERRIDE sdma_override =
         core::Runtime::runtime_singleton_->flag().enable_sdma();
     // Blit copies already saturate xGMI
-    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override != Flag::SDMA_ENABLE) {
+    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override == Flag::SDMA_DISABLE) {
       break;
     }
 
@@ -906,8 +908,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   bool has_aux_gang = tmp_gang_factor >= properties_.NumSdmaEngines && !!!properties_.NumSdmaXgmiEngines;
   tmp_gang_factor = has_aux_gang ? tmp_gang_factor : std::min(tmp_gang_factor, properties_.NumSdmaXgmiEngines);
   for (int i = 0; i < tmp_gang_factor; i++) {
-    if (has_aux_gang) {
-      if (!DmaEngineIsFree(i + 1) && !blits_[i + 1]->GangStatus()) continue;
+    if (has_aux_gang && !DmaEngineIsFree(i + 1)) {
+      break;
     } else {
       uint32_t engine_offset = 0;
       for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
@@ -918,9 +920,8 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
       }
 
       // Avoid oversubscribing unavailable blit engines that are not already ganged
-      if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset) &&
-          !blits_[engine_offset]->GangStatus()) {
-        continue;
+      if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset)) {
+        break;
       }
     }
 
@@ -968,7 +969,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     lazy_ptr<core::Blit>& blit = has_aux_gang ? blits_[i + 1] :
                                                 GetBlitObject(dst_agent, src_agent, size, i);
     blit->GangLeader(gang_factor > 1 && !gang_leader_set);
-    blit->GangStatus(gang_factor > 1);
 
     hsa_status_t stat;
     size_t chunk = std::min(remainder_size, (size + gang_factor - 1)/gang_factor);
