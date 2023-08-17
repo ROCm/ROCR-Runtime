@@ -2375,12 +2375,13 @@ hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configura
 }
 
 hsa_status_t GpuAgent::PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) {
+  hsa_status_t ret;
   HsaPcSamplingInfo sampleInfo = {};
   HsaPcSamplingTraceId thunkId;
 
   // IOCTL id does not exist at the moment, so passing 0 is OK,
   // since it will be overridden later in this function.
-  hsa_status_t ret = PcSamplingCreateFromId(0, session);
+  ret = PcSamplingCreateFromId(0, session);
   if (ret != HSA_STATUS_SUCCESS) return ret;
 
   session.GetHsaKmtSamplingInfo(&sampleInfo);
@@ -2401,8 +2402,141 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
                                               pcs::PcsRuntime::PcSamplingSession& session) {
   pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
 
-  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1 && ht_data.session)
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    // TODO: For now can only have 1 hosttrap session at a time. As a final solution, we want to be
+    // able to support multiple sessions at a time. But this makes the session->HandleSampleData
+    // more complicated if multiple sessions have different buffer sizes.
+    if (ht_data.session) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // Local copy of hosttrap data - we cannot access device memory directly on non-large BAR
+    // systems
+    pcs_hosttrap_sampling_data_t* device_datahost =
+        (pcs_hosttrap_sampling_data_t*)system_allocator()(sizeof(*device_datahost), 0x1000, 0);
+    if (!device_datahost) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    MAKE_SCOPE_GUARD([&]() { system_deallocator()(device_datahost); });
+
+    memset(device_datahost, 0, sizeof(*device_datahost));
+
+    if (AMD::hsa_amd_agents_allow_access(1, &public_handle_, NULL, device_datahost) !=
+        HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    MAKE_NAMED_SCOPE_GUARD(freeHostTrapResources, [&]() {
+      if (ht_data.device_data) {
+        if (ht_data.device_data->done_sig0.handle)
+          HSA::hsa_signal_destroy(ht_data.device_data->done_sig0);
+        if (ht_data.device_data->done_sig1.handle)
+          HSA::hsa_signal_destroy(ht_data.device_data->done_sig1);
+
+        finegrain_deallocator()(ht_data.device_data);
+      }
+      if (ht_data.host_buffer) system_deallocator()(ht_data.host_buffer);
+    });
+
+    // Force creating of PC Sampling queue to trigger exception early in case we exceed max availble
+    // CP queues on this agent
+    queues_[QueuePCSampling].touch();
+
+    /*
+     * When calling queue->ExecutePM4() Indirect Buffer size which is 0x1000 bytes (1024 DW).
+     * The maximum indirect buffer size we need occurs when we enqueue the
+     * WAIT_REG_MEM, DMA_COPY(s), WRITE_DATA ops:
+     * For WAIT_REG_MEM = 7 DW
+     * For each DMA_COPY = 7 DW
+     * For WRITE_DATA_CMD = 6 DW
+     *
+     * So maximum number of DMA_COPY ops is:
+     * (MAX_IB_SIZE - sizeof(WAIT_REG_MEM) - sizeof(WRITE_DATA_CMD)) / sizeof(DMA_COPY)
+     * (1024 - 7 - 6) / 7 = 144
+     *
+     * Each DMA_COPY op can transfer (1 << 26) bytes, which is 9 GB. trap_buffer_size is a 32-bit
+     * number, so the buffer must be < 4 GB. So we are not limited by Indirect Buffer size.
+     * Set current limit to 256 MB to limit device VRAM usage
+     */
+    const size_t max_trap_buffer_size =
+        core::Runtime::runtime_singleton_->flag().pc_sampling_max_device_buffer_size();
+
+    /*
+     * We use a double-buffer mechanism where there are 2 trap-buffers and 1 host-buffer
+     * Warning: This currently assumes that client latency is smaller than time to fill 1
+     * trap-buffer If latency is bigger, we have to increate host-buffer
+     *
+     * host-buffer must be >= client-buffer so that we can copy full size of client-buffer each
+     * time. To avoid having to deal with wrap-arounds, host-buffer must be a multiple of
+     * trap-buffers
+     *
+     * if client-buffer size is greater than 2x max_trap_buffer_size:
+     *    We are limited by max_trap_buffer_size.
+     *    trap-buffer = max-trap-buffer-size
+     *    host-buffer = 2*smallest size greater than client-buffer but multiple of 1 trap-buffer
+     * else:
+     *    We reduce the trap-buffers so that:
+     *    trap-buffer = half of user-buffer
+     *    host-buffer = 2*user-buffer
+     *
+     * TODO: We are currently using a temporary host-buffer so that we can increase host-buffer to
+     * factor in client latency. Using a direct-copy to the client buffer would be more efficient.
+     * Revisit this once we have empirical data of latency vs how long it takes to fill 1
+     * trap-buffer.
+     */
+
+    size_t trap_buffer_size = 0;
+    if (session.buffer_size() > 2 * max_trap_buffer_size) {
+      trap_buffer_size = max_trap_buffer_size;
+      ht_data.host_buffer_size = 2 * AlignUp(session.buffer_size(), trap_buffer_size);
+    } else {
+      trap_buffer_size = session.buffer_size() / 2;
+      ht_data.host_buffer_size = 2 * session.buffer_size();
+    }
+
+    ht_data.host_buffer = (uint8_t*)system_allocator()(ht_data.host_buffer_size, 0x1000, 0);
+    if (!ht_data.host_buffer) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    if (AMD::hsa_amd_agents_allow_access(1, &public_handle_, NULL, ht_data.host_buffer) !=
+        HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    device_datahost->buf_size = trap_buffer_size / session.sample_size();
+
+    if (HSA::hsa_signal_create(1, 0, NULL, &device_datahost->done_sig0) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    if (HSA::hsa_signal_create(1, 0, NULL, &device_datahost->done_sig1) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // TODO: Once we have things working and can measure
+    // latency after 2nd level trap handler decrements signals and set watermark accordingly
+    device_datahost->buf_watermark0 = 0.8 * device_datahost->buf_size;
+    device_datahost->buf_watermark1 = 0.8 * device_datahost->buf_size;
+
+    // Allocate device memory for 2nd level trap handler TMA
+    size_t deviceAllocSize = sizeof(*ht_data.device_data) + (2 * trap_buffer_size);
+    ht_data.device_data = (pcs_hosttrap_sampling_data_t*)finegrain_allocator()(deviceAllocSize, 0);
+    if (ht_data.device_data == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // This cpuAgent is the owner of the system_allocator() pool
+    auto cpuAgent = GetNearestCpuAgent()->public_handle();
+    hsa_status_t ret = AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, ht_data.device_data);
+    assert(ret == HSA_STATUS_SUCCESS);
+
+    if (DmaCopy(ht_data.device_data, device_datahost, sizeof(*device_datahost)) !=
+        HSA_STATUS_SUCCESS) {
+      debug_print("Failed to dmaCopy!\n");
+      return HSA_STATUS_ERROR;
+    }
+
+    uint8_t* device_buf_ptr =
+        ((uint8_t*)ht_data.device_data) + sizeof(pcs_hosttrap_sampling_data_t);
+    if (DmaFill(device_buf_ptr, 0, deviceAllocSize - sizeof(pcs_hosttrap_sampling_data_t)) !=
+        HSA_STATUS_SUCCESS) {
+      debug_print("Failed to dmaFill!\n");
+      return HSA_STATUS_ERROR;
+    }
+
+    ht_data.session = &session;
+    freeHostTrapResources.Dismiss();
+  }
 
   session.SetThunkId(ioctlId);
   ht_data.session = &session;
@@ -2417,6 +2551,16 @@ hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& ses
   HSAKMT_STATUS retKmt = hsaKmtPcSamplingDestroy(node_id(), session.ThunkId());
   ht_data.session = NULL;
 
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    HSA::hsa_signal_destroy(ht_data.device_data->done_sig0);
+    HSA::hsa_signal_destroy(ht_data.device_data->done_sig1);
+    finegrain_deallocator()(ht_data.device_data);
+    system_deallocator()(ht_data.host_buffer);
+
+    ht_data.device_data = NULL;
+    ht_data.host_buffer = NULL;
+    ht_data.session = NULL;
+  }
   return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
 }
 
@@ -2466,6 +2610,10 @@ hsa_status_t GpuAgent::PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& sessio
     throw AMD::hsa_exception(HSA_STATUS_ERROR, "Failed to stop PC Sampling session.");
 
   if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    // Wake up pcs_hosttrap_thread_ if it is waiting for data
+    HSA::hsa_signal_store_screlease(ht_data.device_data->done_sig0, -1);
+    HSA::hsa_signal_store_screlease(ht_data.device_data->done_sig1, -1);
+
     os::WaitForThread(ht_data.thread);
     os::CloseThread(ht_data.thread);
     ht_data.thread = NULL;
@@ -2475,11 +2623,24 @@ hsa_status_t GpuAgent::PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& sessio
 }
 
 void GpuAgent::PcSamplingThread() {
+  uint64_t which_buffer = 0;
   pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  hsa_signal_t done_sig[] = {ht_data.device_data->done_sig0, ht_data.device_data->done_sig1};
+
   while (ht_data.session->isActive()) {
+    do {
+      hsa_signal_value_t val = HSA::hsa_signal_wait_scacquire(
+          done_sig[which_buffer], HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX,
+          HSA_WAIT_STATE_ACTIVE);  // TODO: change to HSA_WAIT_STATE_BLOCKED later
+
+      if (val == -1) goto thread_exit;
+      if (val == 0) break;
+    } while (true);
+
     // Implement code to read data from 2nd level trap handler here
     sleep(1);
   }
+thread_exit:
   debug_print("PcSamplingThread::Exiting\n");
 }
 

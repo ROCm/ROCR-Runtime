@@ -46,6 +46,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_
 
 #include <vector>
+#include <list>
 #include <map>
 
 #include "hsakmt/hsakmt.h"
@@ -720,6 +721,13 @@ class GpuAgent : public GpuAgentInt {
   } pcs_hosttrap_sampling_data_t;
 
   typedef struct {
+    /* Hosttrap data - stored on device so that trap_handler code can access efficiently */
+    pcs_hosttrap_sampling_data_t* device_data;
+
+    /* Hosttrap host buffer - stored on host */
+    uint8_t* host_buffer;
+    size_t host_buffer_size;
+
     os::Thread thread;
     pcs::PcsRuntime::PcSamplingSession* session;
   } pcs_hosttrap_t;
