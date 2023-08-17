@@ -147,8 +147,6 @@ class BlitSdma : public BlitSdmaBase {
   virtual uint64_t PendingBytes() override;
   void GangLeader(bool gang_leader) { gang_leader_ = gang_leader; }
   bool GangLeader() const { return gang_leader_; }
-  void GangStatus(bool is_ganged) { is_ganged_ = is_ganged; }
-  bool GangStatus() const { return is_ganged_; }
 
  private:
   /// @brief Acquires the address into queue buffer where a new command
