@@ -71,6 +71,54 @@
 	.endif
 .endm
 
+//sc1 sc0 params are only needed for gfx940/gfx941. On gfx942, we use the compiled code for gfx9
+.macro FLAT_LOAD_DWORD dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_load_dword      \dst, \src sc1 sc0
+  .else
+    flat_load_dword      \dst, \src
+  .endif
+.endm
+
+.macro FLAT_STORE_DWORD dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_store_dword      \dst, \src sc1 sc0
+  .else
+    flat_store_dword      \dst, \src
+  .endif
+.endm
+
+.macro FLAT_LOAD_DWORDX4 dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_load_dwordx4    \dst, \src sc1 sc0
+  .else
+    flat_load_dwordx4    \dst, \src
+  .endif
+.endm
+
+.macro FLAT_STORE_DWORDX4 dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_store_dwordx4    \dst, \src sc1 sc0
+  .else
+    flat_store_dwordx4    \dst, \src
+  .endif
+.endm
+
+.macro FLAT_LOAD_UBYTE dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_load_ubyte      \dst, \src sc1 sc0
+  .else
+    flat_load_ubyte      \dst, \src
+  .endif
+.endm
+
+.macro FLAT_STORE_BYTE dst, src
+  .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+    flat_store_byte      \dst, \src sc1 sc0
+  .else
+    flat_store_byte      \dst, \src
+  .endif
+.endm
 
 .p2align 8
 
@@ -118,13 +166,13 @@ compute_pgm_rsrc1_vgprs = CopyAlignedRsrc1VGPRs
     s_and_b64               exec, exec, vcc
 
 
-    flat_load_ubyte         v1, v[2:3]
+    FLAT_LOAD_UBYTE         v1, v[2:3]
     s_waitcnt               vmcnt(0)
     V_ADD_CO_U32            v2, v2, s24
     V_ADD_CO_CI_U32         v3, v3, 0x0
 
 
-    flat_store_byte         v[4:5], v1
+    FLAT_STORE_BYTE         v[4:5], v1
     V_ADD_CO_U32            v4, v4, s24
     V_ADD_CO_CI_U32         v5, v5, 0x0
 
@@ -162,9 +210,9 @@ compute_pgm_rsrc1_vgprs = CopyAlignedRsrc1VGPRs
 
 .macro mCopyAlignedPhase2Load iter iter_end
     .if kCopyAlignedVecWidth == 4
-      flat_load_dwordx4    v[8 + (\iter * 4):8 + (\iter * 4) + 3], v[2:3]
+      FLAT_LOAD_DWORDX4    v[8 + (\iter * 4):8 + (\iter * 4) + 3], v[2:3]
     .else
-      flat_load_dword      v[8 + \iter], v[2:3]
+      FLAT_LOAD_DWORD      v[8 + \iter], v[2:3]
     .endif
 
     V_ADD_CO_U32           v2, v2, s25
@@ -181,9 +229,9 @@ mCopyAlignedPhase2Load 0, (kCopyAlignedUnroll - 1)
 
 .macro mCopyAlignedPhase2Store iter iter_end
     .if kCopyAlignedVecWidth == 4
-      flat_store_dwordx4   v[4:5], v[8 + (\iter * 4):8 + (\iter * 4) + 3]
+      FLAT_STORE_DWORDX4   v[4:5], v[8 + (\iter * 4):8 + (\iter * 4) + 3]
     .else
-      flat_store_dword     v[4:5], v[8 + \iter]
+      FLAT_STORE_DWORD     v[4:5], v[8 + \iter]
     .endif
 
 	V_ADD_CO_U32         v4, v4, s25
@@ -219,13 +267,13 @@ mCopyAlignedPhase2Store 0, (kCopyAlignedUnroll - 1)
     s_and_b64               exec, exec, vcc
 
 
-    flat_load_dword         v1, v[2:3]
+    FLAT_LOAD_DWORD         v1, v[2:3]
     V_ADD_CO_U32            v2, v2, s25
     V_ADD_CO_CI_U32         v3, v3, 0x0
     s_waitcnt               vmcnt(0)
 
 
-    flat_store_dword        v[4:5], v1
+    FLAT_STORE_DWORD        v[4:5], v1
     V_ADD_CO_U32            v4, v4, s25
     V_ADD_CO_CI_U32         v5, v5, 0x0
 
@@ -247,10 +295,10 @@ mCopyAlignedPhase2Store 0, (kCopyAlignedUnroll - 1)
     s_cbranch_vccz          L_COPY_ALIGNED_PHASE_4_DONE
     s_and_b64               exec, exec, vcc
 
-    flat_load_ubyte         v1, v[2:3]
+    FLAT_LOAD_UBYTE         v1, v[2:3]
     s_waitcnt               vmcnt(0)
 
-    flat_store_byte         v[4:5], v1
+    FLAT_STORE_BYTE         v[4:5], v1
 
   L_COPY_ALIGNED_PHASE_4_DONE:
     s_endpgm
