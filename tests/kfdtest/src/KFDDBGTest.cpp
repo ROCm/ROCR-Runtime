@@ -441,7 +441,8 @@ TEST_F(KFDDBGTest, SuspendQueues) {
 
         uint32_t NumQueues = 1;
         uint32_t QueueIds[NumQueues];
-        struct kfd_queue_snapshot_entry Snapshots[NumQueues] = {0};
+        struct kfd_queue_snapshot_entry Snapshots[NumQueues];
+        memset(Snapshots, 0, NumQueues * sizeof(struct kfd_queue_snapshot_entry));
         ASSERT_SUCCESS(debug->SuspendQueues(&NumQueues, Queues, &QueueIds[0], 0));
 
         // Suspend should fail as new queues cannot be suspended
