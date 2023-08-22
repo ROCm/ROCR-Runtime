@@ -376,7 +376,6 @@ void BuildTopology() {
         continue;
 
       auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
-      GpuAgent *gpu = (AMD::GpuAgent*)src_gpu;
       // xGMI link type cannot determine bandwidth keep it fixed for ganging
       bool has_fixed_gang = linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI &&
                             linfo.info.numa_distance != 15;
@@ -392,7 +391,7 @@ void BuildTopology() {
       uint32_t gang_factor = has_fixed_gang ? 2 : (linfo.info.min_bandwidth ?
                              linfo.info.max_bandwidth/linfo.info.min_bandwidth : 0);
 
-      gpu->RegisterGangPeer(*dst_gpu, gang_factor);
+      ((AMD::GpuAgent*)src_gpu)->RegisterGangPeer(*dst_gpu, gang_factor);
     }
   }
 }
