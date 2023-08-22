@@ -496,6 +496,7 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session);
   hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session);
   hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingFlushHostTrapDeviceBuffers(pcs::PcsRuntime::PcSamplingSession& session);
 
   static void PcSamplingThreadRun(void* agent);
   void PcSamplingThread();
@@ -730,6 +731,17 @@ class GpuAgent : public GpuAgentInt {
     /* Hosttrap host buffer - stored on host */
     uint8_t* host_buffer;
     size_t host_buffer_size;
+    uint8_t* host_buffer_wrap_pos;
+    uint8_t* host_write_ptr;
+    uint8_t* host_read_ptr;
+
+    uint32_t which_buffer;
+    uint64_t* old_val;
+    uint32_t* cmd_data;
+    size_t cmd_data_sz;
+    // signal to pass into ExecutePM4() so that we do not need to re-allocate a
+    // new signal on each call
+    hsa_signal_t exec_pm4_signal;
 
     os::Thread thread;
     pcs::PcsRuntime::PcSamplingSession* session;
