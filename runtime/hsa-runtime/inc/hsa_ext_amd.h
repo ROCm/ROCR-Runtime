@@ -1105,14 +1105,6 @@ typedef enum {
    */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT = 7,
   /**
-   * Internal block size for allocations. This would also be the recommended
-   * granularity size for allocations as this prevents internal fragmentation.
-   * The value of this attribute is only defined if
-   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool.
-   * The size of this attribute is size_t.
-   */
-  HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE = 8,
-  /**
    * This memory_pool can be made directly accessible by all the agents in the
    * system (::hsa_amd_agent_memory_pool_get_info does not return
    * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
@@ -1129,7 +1121,14 @@ typedef enum {
    * is hsa_amd_memory_pool_location_t.
    */
   HSA_AMD_MEMORY_POOL_INFO_LOCATION = 17,
-
+  /**
+   * Internal block size for allocations. This would also be the recommended
+   * granularity size for allocations as this prevents internal fragmentation.
+   * The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool.
+   * The size of this attribute is size_t.
+   */
+  HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE = 18,
 } hsa_amd_memory_pool_info_t;
 
 /**
@@ -2780,7 +2779,7 @@ typedef enum {
  * @p size must be a aligned to allocation granule size for this memory pool, see
  * HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE
  * To minimize internal memory fragmentation, align the size to the recommended allocation granule
- * size, see HSA_AMD_REGION_INFO_RUNTIME_ALLOC_RECOMMENDED_GRANULE
+ * size, see HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE
  *
  * @param[in] pool memory to use
  * @param[in] size of the memory allocation
