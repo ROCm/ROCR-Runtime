@@ -123,7 +123,8 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
-  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler)
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/blit_shaders)
 
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
@@ -201,6 +202,10 @@ target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
 ## Depend on trap handler target.
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
+
+## Depend on blit shader target.
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/blit_shaders )
+add_dependencies( ${CORE_RUNTIME_TARGET} amd_blit_shaders_v2)
 
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
