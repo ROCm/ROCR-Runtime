@@ -420,21 +420,6 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
         case HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY:
           *((uint32_t*)value) = MaxMemCloc();
           break;
-        case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE:
-          switch (mem_props_.HeapType) {
-            case HSA_HEAPTYPE_SYSTEM:
-              *((size_t*)value) = kPageSize_;
-              break;
-            case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
-            case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
-              *((size_t*)value) = core::Runtime::runtime_singleton_->flag().disable_fragment_alloc()
-                  ? kPageSize_ : fragment_allocator_.default_block_size();
-              break;
-            default:
-              *((size_t*)value) = 0;
-              break;
-          }
-          break;
         default:
           return HSA_STATUS_ERROR_INVALID_ARGUMENT;
           break;
@@ -452,7 +437,6 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
     case HSA_AMD_MEMORY_POOL_INFO_SIZE:
     case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED:
     case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE:
-    case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE:
     case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT:
       return GetInfo(static_cast<hsa_region_info_t>(attribute), value);
     case HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL:
@@ -479,6 +463,22 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
         *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_CPU;
       else
         return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      break;
+    case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE:
+      switch (mem_props_.HeapType) {
+        case HSA_HEAPTYPE_SYSTEM:
+          *((size_t*)value) = kPageSize_;
+          break;
+        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
+        case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
+          *((size_t*)value) = core::Runtime::runtime_singleton_->flag().disable_fragment_alloc()
+              ? kPageSize_
+              : fragment_allocator_.default_block_size();
+          break;
+        default:
+          *((size_t*)value) = 0;
+          break;
+      }
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
