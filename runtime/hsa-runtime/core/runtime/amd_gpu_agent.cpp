@@ -902,7 +902,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   }
 
   int gang_factor = 0;
-  uint32_t gang_mask = 0;
   // Use non-D2D (auxillary) SDMA engines in the event of xGMI D2D support
   // when xGMI SDMA context is not available.
   bool has_aux_gang = tmp_gang_factor >= properties_.NumSdmaEngines && !!!properties_.NumSdmaXgmiEngines;
@@ -925,7 +924,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
       }
     }
 
-    gang_mask |= 1 << i;
     gang_factor++;
   }
 
@@ -961,9 +959,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   bool gang_leader_set = false;
   int gang_sig_count = 0;
   for (int i = 0; i < gang_factor; i++) {
-    if (gang_factor > 1 && !!!(gang_mask & (1 << i)))
-      continue;
-
     // Set leader and gang status to blit
     SetCopyRequestRefCount(true);
     lazy_ptr<core::Blit>& blit = has_aux_gang ? blits_[i + 1] :
