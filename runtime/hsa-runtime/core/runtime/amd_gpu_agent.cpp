@@ -448,19 +448,20 @@ void GpuAgent::InitRegionList() {
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
           MemoryRegion* region =
-              new MemoryRegion(false, false, false, false, this, mem_props[mem_idx]);
+              new MemoryRegion(false, false, false, false, true, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
 
           if (region->IsLocalMemory()) {
             regions_.push_back(
-                new MemoryRegion(false, false, false, true, this, mem_props[mem_idx]));
+                new MemoryRegion(false, false, false, true, true, this, mem_props[mem_idx]));
+
             // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
-            if ((properties_.HiveID != 0) ||
-                (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
-              regions_.push_back(
-                  new MemoryRegion(true, false, false, false, this, mem_props[mem_idx]));
-            }
+            bool user_visible = (properties_.HiveID != 0) ||
+                core::Runtime::runtime_singleton_->flag().fine_grain_pcie();
+
+            regions_.push_back(new MemoryRegion(true, false, false, false, user_visible, this,
+                                                mem_props[mem_idx]));
           }
           break;
         }
@@ -650,6 +651,8 @@ hsa_status_t GpuAgent::VisitRegion(
     void* data) const {
   AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
+    if (!region->user_visible()) continue;
+
     const AMD::MemoryRegion* amd_region =
         reinterpret_cast<const AMD::MemoryRegion*>(region);
 
@@ -850,7 +853,7 @@ void GpuAgent::PreloadBlits() {
 
 hsa_status_t GpuAgent::PostToolsInit() {
   // Defer memory allocation until agents have been discovered.
-  InitNumaAllocator();
+  InitAllocators();
   InitScratchPool();
   BindTrapHandler();
   InitDma();
@@ -2241,7 +2244,7 @@ void GpuAgent::Trim() {
   scratch_cache_.trim(false);
 }
 
-void GpuAgent::InitNumaAllocator() {
+void GpuAgent::InitAllocators() {
   for (auto pool : GetNearestCpuAgent()->regions()) {
     if (pool->kernarg()) {
       system_allocator_ = [pool](size_t size, size_t alignment,
@@ -2255,11 +2258,29 @@ void GpuAgent::InitNumaAllocator() {
       };
 
       system_deallocator_ = [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
-
-      return;
     }
   }
-  assert(false && "Nearest NUMA node did not have a kernarg pool.");
+  assert(system_allocator_ && "Nearest NUMA node did not have a kernarg pool.");
+
+  // Setup fine-grain allocator
+  for (auto region : regions()) {
+    const AMD::MemoryRegion* amd_region = (const AMD::MemoryRegion*)region;
+    if (amd_region->IsLocalMemory() && amd_region->fine_grain()) {
+      finegrain_allocator_ = [region](size_t size,
+                                      MemoryRegion::AllocateFlags alloc_flags) -> void* {
+        void* ptr = nullptr;
+        return (HSA_STATUS_SUCCESS ==
+                core::Runtime::runtime_singleton_->AllocateMemory(region, size, alloc_flags, &ptr))
+            ? ptr
+            : nullptr;
+      };
+
+      finegrain_deallocator_ = [](void* ptr) {
+        core::Runtime::runtime_singleton_->FreeMemory(ptr);
+      };
+    }
+  }
+  assert(finegrain_deallocator_ && "Agent does not have a fine-grain allocator");
 }
 
 core::Agent* GpuAgent::GetNearestCpuAgent() const {

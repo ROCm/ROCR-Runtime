@@ -411,6 +411,13 @@ class GpuAgent : public GpuAgentInt {
 
   const std::function<void(void*)>& system_deallocator() const { return system_deallocator_; }
 
+  const std::function<void*(size_t size, core::MemoryRegion::AllocateFlags flags)>&
+  finegrain_allocator() const {
+    return finegrain_allocator_;
+  }
+
+  const std::function<void(void*)>& finegrain_deallocator() const { return finegrain_deallocator_; }
+
  protected:
   // Sizes are in packets.
   static const uint32_t minAqlSize_ = 0x40;     // 4KB min
@@ -581,8 +588,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief Setup GWS accessing queue.
   void InitGWS();
 
-  // @brief Setup NUMA aware system memory allocator.
-  void InitNumaAllocator();
+  // @brief Set-up memory allocators
+  void InitAllocators();
 
   // @brief Initialize scratch handler thresholds
   void InitAsyncScratchThresholds();
@@ -657,6 +664,10 @@ class GpuAgent : public GpuAgentInt {
 
   std::function<void(void*)> system_deallocator_;
 
+  // Fine grain allocator on this device
+  std::function<void*(size_t size, core::MemoryRegion::AllocateFlags flags)> finegrain_allocator_;
+
+  std::function<void(void*)> finegrain_deallocator_;
   // @brief device handle
   amdgpu_device_handle ldrm_dev_;
 

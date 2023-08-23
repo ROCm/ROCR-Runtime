@@ -96,7 +96,7 @@ class MemoryRegion : public core::MemoryRegion {
   static void MakeKfdMemoryUnresident(const void* ptr);
 
   MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
-               core::Agent* owner, const HsaMemoryProperties& mem_props);
+               bool user_visible, core::Agent* owner, const HsaMemoryProperties& mem_props);
 
   ~MemoryRegion();
 
