@@ -102,9 +102,10 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
 }
 
 MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
-                           bool extended_scope_fine_grain, core::Agent* owner,
+                           bool extended_scope_fine_grain, bool user_visible, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, kernarg, full_profile, extended_scope_fine_grain, owner),
+    : core::MemoryRegion(fine_grain, kernarg, full_profile, extended_scope_fine_grain, user_visible,
+                         owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0),

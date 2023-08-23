@@ -85,15 +85,15 @@ void CpuAgent::InitRegionList() {
     if (system_prop != mem_props.end()) system_props = *system_prop;
 
     MemoryRegion* system_region_fine =
-        new MemoryRegion(true, false, is_apu_node, false, this, system_props);
+        new MemoryRegion(true, false, is_apu_node, false, true, this, system_props);
     regions_.push_back(system_region_fine);
     MemoryRegion* system_region_kernarg =
-        new MemoryRegion(true, true, is_apu_node, false, this, system_props);
+        new MemoryRegion(true, true, is_apu_node, false, true, this, system_props);
     regions_.push_back(system_region_kernarg);
 
     if (!is_apu_node) {
       MemoryRegion* system_region_coarse =
-          new MemoryRegion(false, false, is_apu_node, false, this, system_props);
+          new MemoryRegion(false, false, is_apu_node, false, true, this, system_props);
       regions_.push_back(system_region_coarse);
     }
   }
@@ -152,6 +152,7 @@ hsa_status_t CpuAgent::VisitRegion(
     hsa_status_t (*callback)(hsa_region_t region, void* data),
     void* data) const {
   for (const core::MemoryRegion* region : regions) {
+    if (!region->user_visible()) continue;
     hsa_region_t region_handle = core::MemoryRegion::Convert(region);
     hsa_status_t status = callback(region_handle, data);
     if (status != HSA_STATUS_SUCCESS) {
