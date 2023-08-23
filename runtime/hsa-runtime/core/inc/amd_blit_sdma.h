@@ -309,6 +309,9 @@ class BlitSdma : public BlitSdmaBase {
 
   /// True if SDMA blit is ganged
   bool is_ganged_;
+
+  /// Minimum submission size in bytes.
+  size_t min_submission_size_;
 };
 
 // Ring indices are 32-bit.
