@@ -121,7 +121,8 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BlitSdma()
       cached_reserve_index_(0),
       cached_commit_index_(0),
       platform_atomic_support_(true),
-      hdp_flush_support_(false) {
+      hdp_flush_support_(false),
+      min_submission_size_(0) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
@@ -145,6 +146,13 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (HSA_PROFILE_FULL == agent_->profile()) {
     assert(false && "Only support SDMA for dgpu currently");
     return HSA_STATUS_ERROR;
+  }
+
+  // Some GFX9 devices require a minimum of 64 DWORDS per ring buffer submission.
+  if (agent_->isa()->GetVersion() >= core::Isa::Version(9, 0, 0) &&
+      (agent_->isa()->GetVersion() <= core::Isa::Version(9, 0, 4) ||
+       agent_->isa()->GetVersion() == core::Isa::Version(9, 0, 12))) {
+    min_submission_size_ = 256;
   }
 
   const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
@@ -322,13 +330,15 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
 
   const uint32_t total_command_size = total_poll_command_size + cmd_size + sync_command_size +
       total_timestamp_command_size + interrupt_command_size + flush_cmd_size + total_gang_command_size;
+  const uint32_t pad_size = total_command_size < min_submission_size_ ?
+                            min_submission_size_ - total_command_size : 0;
 
   RingIndexTy curr_index;
   char* command_addr;
   uint64_t prior_bytes, post_bytes;
   {
     std::lock_guard<std::mutex> lock(reservation_lock_);
-    command_addr = AcquireWriteAddress(total_command_size, curr_index);
+    command_addr = AcquireWriteAddress(total_command_size + pad_size, curr_index);
     if (command_addr == nullptr) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
@@ -463,7 +473,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += trap_command_size_;
   }
 
-  ReleaseWriteAddress(curr_index, total_command_size);
+  // Pad size is DWORD aligned since all commands are dword aligned.
+  // Insert NOP header DWORD with value of the number of null DWORDs shifted
+  // by 16 bits to pad total submission.
+  if (pad_size) {
+    memset(command_addr, 0, pad_size);
+    uint32_t *dword_command_addr = reinterpret_cast<uint32_t*>(command_addr);
+    dword_command_addr[total_command_size/4] = (pad_size/4 - 1) << 16;
+  }
+
+  ReleaseWriteAddress(curr_index, total_command_size + pad_size);
 
   return HSA_STATUS_SUCCESS;
 }
