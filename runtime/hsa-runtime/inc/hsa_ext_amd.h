@@ -53,9 +53,10 @@
  * - 1.1 - dmabuf export
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
  * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
+ * - 1.4 - Virtual Memory API
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 3
+#define HSA_AMD_INTERFACE_VERSION_MINOR 4
 
 #ifdef __cplusplus
 extern "C" {
