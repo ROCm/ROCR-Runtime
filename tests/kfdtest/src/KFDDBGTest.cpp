@@ -108,7 +108,8 @@ TEST_F(KFDDBGTest, AttachToSpawnedProcess) {
             exit(0);
         } else {
             BaseDebug *debug = new BaseDebug();
-            struct kfd_runtime_info r_info = {0};
+            struct kfd_runtime_info r_info;
+            memset(&r_info, 0, sizeof(struct kfd_runtime_info));
             uint64_t runtimeMask = KFD_EC_MASK(EC_PROCESS_RUNTIME);
             int childStatus;
 
@@ -199,7 +200,8 @@ TEST_F(KFDDBGTest, AttachToRunningProcess) {
              exit(0);
         } else {
             BaseDebug *debug = new BaseDebug();
-            struct kfd_runtime_info r_info = {0};
+            struct kfd_runtime_info r_info;
+            memset(&r_info, 0, sizeof(struct kfd_runtime_info));
             uint64_t runtimeMask = KFD_EC_MASK(EC_PROCESS_RUNTIME);
             int childStatus;
 
@@ -271,7 +273,8 @@ TEST_F(KFDDBGTest, HitTrapEvent) {
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
 
         BaseDebug *debug = new BaseDebug();
-        struct kfd_runtime_info r_info = {0};
+        struct kfd_runtime_info r_info;
+        memset(&r_info, 0, sizeof(struct kfd_runtime_info));
         ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
         ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
 
@@ -344,7 +347,8 @@ TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
 
         BaseDebug *debug = new BaseDebug();
-        struct kfd_runtime_info r_info = {0};
+        struct kfd_runtime_info r_info;
+        memset(&r_info, 0, sizeof(struct kfd_runtime_info));
         ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
         ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
 
@@ -424,7 +428,8 @@ TEST_F(KFDDBGTest, SuspendQueues) {
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
 
         BaseDebug *debug = new BaseDebug();
-        struct kfd_runtime_info r_info = {0};
+        struct kfd_runtime_info r_info;
+        memset(&r_info, 0, sizeof(struct kfd_runtime_info));
         ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
         ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
 
@@ -547,7 +552,8 @@ TEST_F(KFDDBGTest, HitMemoryViolation) {
             exit(0);
         } else {
             BaseDebug *debug = new BaseDebug();
-            struct kfd_runtime_info r_info = {0};
+            struct kfd_runtime_info r_info;
+            memset(&r_info, 0, sizeof(struct kfd_runtime_info));
             uint64_t runtimeMask = KFD_EC_MASK(EC_PROCESS_RUNTIME);
             uint64_t memViolMask = KFD_EC_MASK(EC_DEVICE_MEMORY_VIOLATION);
             uint64_t subscribeMask = runtimeMask | memViolMask;
@@ -579,7 +585,8 @@ TEST_F(KFDDBGTest, HitMemoryViolation) {
 
             const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
             uint32_t snapshotSize = gpuNodes.size();
-            struct kfd_dbg_device_info_entry deviceInfo[snapshotSize] = {0};
+            struct kfd_dbg_device_info_entry deviceInfo[snapshotSize];
+            memset(deviceInfo, 0, snapshotSize * sizeof(struct kfd_dbg_device_info_entry));
 
             // Check device snapshot aligns with memory violation on target device.
             ASSERT_SUCCESS(debug->DeviceSnapshot(memViolMask, (uint64_t)(&deviceInfo[0]),
@@ -640,14 +647,16 @@ TEST_F(KFDDBGTest, HitAddressWatch) {
         uint32_t rDebug;
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
 
-        struct kfd_runtime_info r_info = {0};
+        struct kfd_runtime_info r_info;
+        memset(&r_info, 0, sizeof(struct kfd_runtime_info));
         BaseDebug *debug = new BaseDebug();
         ASSERT_SUCCESS(debug->Attach(&r_info, sizeof(r_info), getpid(), 0));
         ASSERT_EQ(r_info.runtime_state, DEBUG_RUNTIME_STATE_ENABLED);
 
         const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
         uint32_t numDevices = gpuNodes.size();
-        struct kfd_dbg_device_info_entry deviceInfo[numDevices] = {0};
+        struct kfd_dbg_device_info_entry deviceInfo[numDevices];
+        memset(deviceInfo, 0, numDevices * sizeof(struct kfd_dbg_device_info_entry));
         ASSERT_SUCCESS(debug->DeviceSnapshot(0, (uint64_t)(&deviceInfo[0]), &numDevices));
         ASSERT_EQ(numDevices, gpuNodes.size());
         bool is_precise = nodeProps.Capability.ui32.PreciseMemoryOperationsSupported;
