@@ -75,6 +75,28 @@ HsaApiTable::HsaApiTable() {
 // Member fields for Finalizer and Image extensions will be
 // updated as part of Hsa Runtime initialization.
 void HsaApiTable::Init() {
+  // Compile time checks to make sure we increment STEPPING when new APIs are added.
+  // Profiler team needs STEPPING to change every time we add functions to the tables so that
+  // they can add preprocessor macros on the new functions
+
+  constexpr size_t expected_core_api_table_size = 1016;
+  constexpr size_t expected_amd_ext_table_size = 552;
+  constexpr size_t expected_image_ext_table_size = 120;
+  constexpr size_t expected_finalizer_ext_table_size = 64;
+
+  static_assert(sizeof(CoreApiTable) == expected_core_api_table_size,
+                "HSA core API table size changed, bump HSA_CORE_API_TABLE_STEP_VERSION and set "
+                "expected_core_api_table_size to the new size of the struct");
+  static_assert(sizeof(AmdExtTable) == expected_amd_ext_table_size,
+                "HSA AMD ext table size changed, bump HSA_AMD_EXT_API_TABLE_STEP_VERSION, "
+                "HSA_AMD_INTERFACE_VERSION_MINOR and set expected_amd_ext_table_size to the new "
+                "size of the struct");
+  static_assert(sizeof(ImageExtTable) == expected_image_ext_table_size,
+                "HSA image ext table size changed, bump HSA_IMAGE_API_TABLE_STEP_VERSION and set "
+                "expected_image_ext_table_size to the new size of the struct");
+  static_assert(sizeof(FinalizerExtTable) == expected_finalizer_ext_table_size,
+                "HSA finalizer ext table size changed, bump HSA_FINALIZER_API_TABLE_STEP_VERSION "
+                "and set expected_finalizer_ext_table_size to the new size of the struct");
 
   // Initialize Version of Api Table
   hsa_api.version.major_id = HSA_API_TABLE_MAJOR_VERSION;

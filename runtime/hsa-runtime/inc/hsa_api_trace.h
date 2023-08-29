@@ -59,11 +59,11 @@
 #include <stddef.h>
 
 // Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION               0x01
-#define HSA_CORE_API_TABLE_MAJOR_VERSION          0x01
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x01
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x01
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x01
+#define HSA_API_TABLE_MAJOR_VERSION               0x02
+#define HSA_CORE_API_TABLE_MAJOR_VERSION          0x02
+#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x02
+#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x02
+#define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x02
 #define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION    0x01
 
 // Step Ids of the Api tables exported by Hsa Core Runtime
