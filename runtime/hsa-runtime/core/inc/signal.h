@@ -157,10 +157,13 @@ static_assert((offsetof(SharedSignal, sdma_end_ts) % 32) == 0,
 static_assert(sizeof(SharedSignal) == 128,
               "Bad SharedSignal size.");
 
+
+#define SIGNAL_PREALLOC_BLOCKS 512 //16K Signals
+
 /// @brief Pool class for SharedSignal suitable for use with Shared.
 class SharedSignalPool_t : private BaseShared {
  public:
-  SharedSignalPool_t() : block_size_(minblock_) {}
+  SharedSignalPool_t() : block_size_(SIGNAL_PREALLOC_BLOCKS * minblock_) {}
   ~SharedSignalPool_t() { clear(); }
 
   SharedSignal* alloc();
