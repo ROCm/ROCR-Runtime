@@ -1395,7 +1395,12 @@ void AqlQueue::SetProfiling(bool enabled) {
   return;
 }
 
-void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
+// If in_signal is NULL then this ExecutePM4 will block and wait for PM4 commands to complete
+// If in_signal is provided, then ExecutePM4 will return and caller may wait for in_signal
+// Note: On gfx8, there is no completion signal support, so ExecutePM4 will block even if
+// in_signal is provided, and it is still valid to check in_signal after ExecutePM4 returns.
+void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b, hsa_fence_scope_t acquireFence,
+                          hsa_fence_scope_t releaseFence, hsa_signal_t* in_signal) {
   // pm4_ib_buf_ is a shared resource, so mutually exclude here.
   ScopedAcquire<KernelMutex> lock(&pm4_ib_mutex_);
 
@@ -1431,7 +1436,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // To respect multi-producer semantics, first buffer commands for the queue slot.
   constexpr uint32_t slot_size_dw = uint32_t(slot_size_b / sizeof(uint32_t));
   uint32_t slot_data[slot_size_dw];
-  hsa_signal_t signal = {0};
+  hsa_signal_t local_signal = {0};
   hsa_status_t err;
 
   if (agent_->isa()->GetMajorVersion() <= 8) {
@@ -1476,28 +1481,32 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     // Construct an AQL packet to jump to the PM4 IB.
     struct amd_aql_pm4_ib {
       uint16_t header;
-      uint8_t  amd_format;
-      uint8_t  reserved0;
+      uint16_t ven_hdr;
       uint32_t ib_jump_cmd[4];
       uint32_t dw_cnt_remain;
-      uint32_t reserved1[8];
+      uint32_t reserved[8];
       hsa_signal_t completion_signal;
     };
 
+    if (!in_signal) {
+      err = hsa_signal_create(1, 0, NULL, &local_signal);
+      assert(err == HSA_STATUS_SUCCESS);
+    }
+
     constexpr uint32_t AMD_AQL_FORMAT_PM4_IB = 0x1;
 
-    err = hsa_signal_create(1, 0, NULL, &signal);
-    assert(err == HSA_STATUS_SUCCESS);
-
     amd_aql_pm4_ib aql_pm4_ib{};
-    aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
-    aql_pm4_ib.amd_format = AMD_AQL_FORMAT_PM4_IB;
+    aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE |
+                        (acquireFence << HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) |
+                        (releaseFence << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+
+    aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
     aql_pm4_ib.ib_jump_cmd[0] = ib_jump_cmd[0];
     aql_pm4_ib.ib_jump_cmd[1] = ib_jump_cmd[1];
     aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];
     aql_pm4_ib.ib_jump_cmd[3] = ib_jump_cmd[3];
     aql_pm4_ib.dw_cnt_remain = 0xA;
-    aql_pm4_ib.completion_signal = signal;
+    aql_pm4_ib.completion_signal = in_signal ? *in_signal : local_signal;
 
     memcpy(slot_data, &aql_pm4_ib, sizeof(aql_pm4_ib));
   } else {
@@ -1518,11 +1527,14 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   if (agent_->isa()->GetMajorVersion() <= 8) {
     while (queue->LoadReadIndexRelaxed() <= write_idx)
       os::YieldThread();
-  } else {
+
+    if (in_signal) hsa_signal_store_screlease(*in_signal, 0);
+  } else if (!in_signal) {
+    // On gfx9 and newer, if in_signal is not provided, we block and wait for own signal
     hsa_signal_value_t ret;
-    ret = hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1,
-                                    (uint64_t)-1, HSA_WAIT_STATE_ACTIVE);
-    err = hsa_signal_destroy(signal);
+    ret = hsa_signal_wait_scacquire(local_signal, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+                                    HSA_WAIT_STATE_ACTIVE);
+    err = hsa_signal_destroy(local_signal);
     assert(ret == 0 && err == HSA_STATUS_SUCCESS);
   }
 }

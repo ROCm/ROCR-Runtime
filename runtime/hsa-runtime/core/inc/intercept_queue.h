@@ -120,8 +120,11 @@ class QueueWrapper : public Queue {
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override {
     return wrapped->GetCUMasking(num_cu_mask_count, cu_mask);
   }
-  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override {
-    wrapped->ExecutePM4(cmd_data, cmd_size_b);
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b,
+                  hsa_fence_scope_t acquireFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_signal_t* signal = NULL) override {
+    wrapped->ExecutePM4(cmd_data, cmd_size_b, acquireFence, releaseFence, signal);
   }
   void SetProfiling(bool enabled) override { wrapped->SetProfiling(enabled); }
 
