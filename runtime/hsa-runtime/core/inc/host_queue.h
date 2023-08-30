@@ -152,7 +152,10 @@ class HostQueue : public Queue {
     return HSA_STATUS_ERROR_INVALID_QUEUE;
   }
 
-  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override {
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b,
+                  hsa_fence_scope_t acquireFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_signal_t* signal = NULL) override {
     assert(false && "HostQueue::ExecutePM4 is unimplemented");
   }
 
