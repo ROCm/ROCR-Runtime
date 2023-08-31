@@ -609,6 +609,7 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX10_3_GENERIC: MI.Name = "gfx10-3-generic"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX11_GENERIC:   MI.Name = "gfx11-generic";   MI.XnackSupported = false; MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1200: MI.Name = "gfx1200"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1201: MI.Name = "gfx1201"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
       default: return false;
       }
       return true;
