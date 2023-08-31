@@ -1339,7 +1339,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       for (auto& cache : cache_props_) {
         if ((cache.CacheLevel == 2) && (cache.CacheLineSize != 0)) {
           *((uint32_t*)value) = cache.CacheLineSize;
-          break;
+          return HSA_STATUS_SUCCESS;
         }
       }
       // Fallback for when KFD is returning zero.
