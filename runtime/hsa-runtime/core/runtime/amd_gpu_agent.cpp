@@ -114,6 +114,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       scratch_limit_async_threshold_(0),
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
+      trap_handler_tma_region_(NULL),
       pcs_hosttrap_data_() {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
@@ -2065,6 +2066,58 @@ void GpuAgent::SyncClocks() {
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
 
+hsa_status_t GpuAgent::UpdateTrapHandlerWithPCS(void* pcs_hosttrap_buffers, void* pcs_stochastic_buffers) {
+  // Assemble the trap handler source code.
+  void* tma_addr = nullptr;
+  uint64_t tma_size = 0;
+
+  assert(core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging);
+
+  AssembleShader("TrapHandlerKfdExceptions", AssembleTarget::ISA, trap_code_buf_,
+                 trap_code_buf_size_);
+
+  /* pcs_hosttrap_buffers and pcs_stochastic_buffers are NULL until PC sampling is enabled */
+  if (pcs_hosttrap_buffers || pcs_stochastic_buffers) {
+    // ON non-large BAR systems, we cannot access device memory so we create a host copy
+    // and then do a DmaCopy to device memory
+    void* tma_region_host = (uint64_t*)system_allocator()(2 * sizeof(void*), 0x1000, 0);
+    if (tma_region_host == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    MAKE_SCOPE_GUARD([&]() { system_deallocator()(tma_region_host); });
+
+    ((uint64_t*)tma_region_host)[0] = (uint64_t)pcs_hosttrap_buffers;
+    ((uint64_t*)tma_region_host)[1] = (uint64_t)pcs_stochastic_buffers;
+
+    if (!trap_handler_tma_region_) {
+      trap_handler_tma_region_ = (uint64_t*)finegrain_allocator()(2 * sizeof(void*), 0);
+      if (trap_handler_tma_region_ == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+      // NearestCpuAgent owns pool returned system_allocator()
+      auto cpuAgent = GetNearestCpuAgent()->public_handle();
+
+      hsa_status_t ret =
+          AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, trap_handler_tma_region_);
+      assert(ret == HSA_STATUS_SUCCESS);
+    }
+
+    /* On non-large BAR systems, we may not be able to access device memory, so do a DmaCopy */
+    if (DmaCopy(trap_handler_tma_region_, tma_region_host, 2 * sizeof(void*)) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    tma_size = 2 * sizeof(void*);
+    tma_addr = trap_handler_tma_region_;
+  } else if (trap_handler_tma_region_) {
+    finegrain_deallocator()(trap_handler_tma_region_);
+    trap_handler_tma_region_ = NULL;
+  }
+
+  // Bind the trap handler to this node.
+  HSAKMT_STATUS retKmt =
+      hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_, tma_addr, tma_size);
+
+  return (retKmt != HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+}
+
 void GpuAgent::BindTrapHandler() {
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
@@ -2355,6 +2408,9 @@ hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configura
                                                void* cb_data) {
    uint32_t size = 0;
 
+  if (!core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging)
+    return HSA_STATUS_ERROR;
+
   // First query to get size of list needed
   HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(node_id(), NULL, 0, &size);
   if (ret != HSAKMT_STATUS_SUCCESS || size == 0) return HSA_STATUS_ERROR;
@@ -2536,6 +2592,8 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
 
     ht_data.session = &session;
     freeHostTrapResources.Dismiss();
+
+    if (UpdateTrapHandlerWithPCS(ht_data.device_data, NULL) != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
   }
 
   session.SetThunkId(ioctlId);
@@ -2560,6 +2618,8 @@ hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& ses
     ht_data.device_data = NULL;
     ht_data.host_buffer = NULL;
     ht_data.session = NULL;
+
+    UpdateTrapHandlerWithPCS(NULL, NULL);
   }
   return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
 }

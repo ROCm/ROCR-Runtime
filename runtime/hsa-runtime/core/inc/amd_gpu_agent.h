@@ -482,6 +482,7 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Binds the second-level trap handler to this node.
   void BindTrapHandler();
+  hsa_status_t UpdateTrapHandlerWithPCS(void* pcs_hosttrap_buffers, void* stochastic_hosttrap_buffers);
 
   // @brief Override from core::Agent.
   hsa_status_t EnableDmaProfiling(bool enable) override;
@@ -702,6 +703,8 @@ class GpuAgent : public GpuAgentInt {
   std::function<void*(size_t size, core::MemoryRegion::AllocateFlags flags)> finegrain_allocator_;
 
   std::function<void(void*)> finegrain_deallocator_;
+
+  void* trap_handler_tma_region_;
 
   /* PC Sampling fields - begin */
   /* 2nd level Trap handler code is based on the offsets within this structure */
