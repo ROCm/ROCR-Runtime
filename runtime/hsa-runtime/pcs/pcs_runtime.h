@@ -84,6 +84,9 @@ class PcsRuntime {
     const size_t sample_size() { return sample_size_; }
 
     void GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sampleInfo);
+    hsa_status_t HandleSampleData(uint8_t* buf1, size_t buf1_sz, uint8_t* buf2, size_t buf2_sz,
+                                  size_t lost_sample_count);
+    hsa_status_t DataCopyCallback(uint8_t* buffer, size_t buffer_size);
 
     core::Agent* agent;
     void SetThunkId(HsaPcSamplingTraceId thunkId) { thunkId_ = thunkId; }
@@ -109,6 +112,14 @@ class PcsRuntime {
       void* client_callback_data;
     };
     struct client_session_data_t csd;
+
+    struct data_ready_info_t {
+      uint8_t* buf1;
+      size_t buf1_sz;
+      uint8_t* buf2;
+      size_t buf2_sz;
+    };
+    struct data_ready_info_t data_rdy;
   };  // class PcSamplingSession
 
   hsa_status_t PcSamplingIterateConfig(

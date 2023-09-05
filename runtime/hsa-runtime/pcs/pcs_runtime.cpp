@@ -159,6 +159,40 @@ void PcsRuntime::PcSamplingSession::GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sam
   }
 }
 
+hsa_status_t PcSamplingDataCopyCallback(void* _session, size_t bytes_to_copy, void* destination) {
+  assert(_session);
+  assert(destination);
+
+  PcsRuntime::PcSamplingSession* session =
+      reinterpret_cast<PcsRuntime::PcSamplingSession*>(_session);
+
+  return session->DataCopyCallback(reinterpret_cast<uint8_t*>(destination), bytes_to_copy);
+}
+
+hsa_status_t PcsRuntime::PcSamplingSession::DataCopyCallback(uint8_t* buffer,
+                                                             size_t bytes_to_copy) {
+  if (bytes_to_copy != (data_rdy.buf1_sz + data_rdy.buf2_sz)) return HSA_STATUS_ERROR_EXCEPTION;
+
+  if (data_rdy.buf1_sz) memcpy(buffer, data_rdy.buf1, data_rdy.buf1_sz);
+  if (data_rdy.buf2_sz) memcpy(buffer + data_rdy.buf1_sz, data_rdy.buf2, data_rdy.buf2_sz);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t PcsRuntime::PcSamplingSession::HandleSampleData(uint8_t* buf1, size_t buf1_sz,
+                                                             uint8_t* buf2, size_t buf2_sz,
+                                                             size_t lost_sample_count) {
+  data_rdy.buf1 = buf1;
+  data_rdy.buf1_sz = buf1_sz;
+  data_rdy.buf2 = buf2;
+  data_rdy.buf2_sz = buf2_sz;
+
+  csd.data_ready_callback(csd.client_callback_data, buf1_sz + buf2_sz, lost_sample_count,
+                          &PcSamplingDataCopyCallback,
+                          /* hsa_callback_data*/ this);
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t PcsRuntime::PcSamplingIterateConfig(
     core::Agent* agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
     void* callback_data) {

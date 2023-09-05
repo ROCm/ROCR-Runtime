@@ -2867,7 +2867,6 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   next_buffer = (which_buffer + 1) % 2;
   reset_write_val = (uint64_t)next_buffer << 63;
 
-  // HSA::hsa_signal_store_screlease(done_sig[which_buffer], 1);
   /*
    * ATOMIC_MEM, perform atomic_exchange
    * We use a double-buffer mechanism so that trap handlers calls are writing to one buffer while
@@ -3031,7 +3030,58 @@ void GpuAgent::PcSamplingThread() {
     } while (true);
     HSA::hsa_signal_store_screlease(done_sig[which_buffer], 1);
 
-    if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS) break;
+    if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS)
+      goto thread_exit;
+
+    size_t bytes_before_wrap;
+    size_t bytes_after_wrap;
+
+    assert(ht_data.host_read_ptr >= host_buffer_begin && ht_data.host_read_ptr < host_buffer_end);
+    assert(ht_data.host_write_ptr >= host_buffer_begin && ht_data.host_write_ptr < host_buffer_end);
+    assert(ht_data.host_buffer_wrap_pos ? (ht_data.host_read_ptr > ht_data.host_write_ptr)
+                                        : (ht_data.host_read_ptr <= ht_data.host_write_ptr));
+
+    if (ht_data.host_buffer_wrap_pos) {
+      assert(ht_data.host_buffer_wrap_pos <= host_buffer_end &&
+             ht_data.host_buffer_wrap_pos > host_buffer_begin);
+      assert(ht_data.host_read_ptr <= ht_data.host_buffer_wrap_pos);
+
+      // Wrapped around
+      bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+      bytes_after_wrap = ht_data.host_write_ptr - host_buffer_begin;
+
+      while (bytes_before_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+      }
+
+      if (bytes_before_wrap + bytes_after_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, bytes_before_wrap, host_buffer_begin,
+                                 (session.buffer_size() - bytes_before_wrap), 0);
+        ht_data.host_read_ptr = host_buffer_begin + (session.buffer_size() - bytes_before_wrap);
+        bytes_before_wrap = 0;
+        ht_data.host_buffer_wrap_pos = 0;
+        bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      }
+
+      while (bytes_after_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = 0;
+        bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      }
+    } else {
+      bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+
+      while (bytes_before_wrap >= session.buffer_size()) {
+        assert(ht_data.host_read_ptr >= host_buffer_begin &&
+               ht_data.host_read_ptr + session.buffer_size() < host_buffer_end);
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      }
+    }
   }
 thread_exit:
   debug_print("PcSamplingThread::Exiting\n");
