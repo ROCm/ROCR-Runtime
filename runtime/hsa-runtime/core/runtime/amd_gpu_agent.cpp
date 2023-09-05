@@ -741,17 +741,28 @@ core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
 
 void GpuAgent::InitDma() {
   // Setup lazy init pointers on queues and blits.
-  auto queue_lambda = [this]() {
-    auto ret = CreateInterceptibleQueue();
-    if (ret == nullptr)
+  auto queue_lambda = [this](HSA_QUEUE_PRIORITY priority = HSA_QUEUE_PRIORITY_NORMAL) {
+    auto queue = CreateInterceptibleQueue();
+    if (queue == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");
-    return ret;
+
+    if (priority != HSA_QUEUE_PRIORITY_NORMAL)
+      if (queue->SetPriority(priority) != HSA_STATUS_SUCCESS)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR,
+                                "Failed to increase queue priority for PC Sampling");
+    return queue;
   };
+
   // Dedicated compute queue for host-to-device blits.
   queues_[QueueBlitOnly].reset(queue_lambda);
   // Share utility queue with device-to-host blits.
   queues_[QueueUtility].reset(queue_lambda);
+
+  // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
+  // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
+  // other dispatches/barriers that could be in the other AQL queues.
+  queues_[QueuePCSampling].reset(queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM));
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev) {
