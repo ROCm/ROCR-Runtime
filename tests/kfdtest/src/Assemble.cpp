@@ -249,7 +249,7 @@ int Assembler::RunAssembleBuf(const char* const AssemblySource, char* OutBuf,
  */
 int Assembler::RunAssemble(const char* const AssemblySource) {
     // Ensure target ASIC has been set
-    if (!MCPU) {
+    if (!*MCPU) {
         outs() << "ASM Error: target asic is uninitialized\n";
         return -1;
     }
