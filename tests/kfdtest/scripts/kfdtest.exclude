@@ -69,6 +69,7 @@ PERMANENT_BLACKLIST_ALL_ASICS=\
 # KFDEvictTest.BurstyTest (ROCMOPS-464)
 # KFDEvictTest.BurstyTest (SWDEV-291256)
 # KFDEvictTest.BurstyTest (KFD-425)
+# KFDDBGTest.SuspendQueues (SWDEV-417850)
 TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDQMTest.GPUDoorbellWrite:"\
 "KFDQMTest.mGPUShareBO:"\
@@ -76,7 +77,8 @@ TEMPORARY_BLACKLIST_ALL_ASICS=\
 "KFDMemoryTest.CacheInvalidateOnRemoteWrite:"\
 "KFDEvictTest.BurstyTest:"\
 "KFDHWSTest.*:"\
-"KFDSVMRangeTest.ReadOnlyRangeTest*"
+"KFDSVMRangeTest.ReadOnlyRangeTest*:"\
+"KFDDBGTest.SuspendQueues"
 
 BLACKLIST_ALL_ASICS=\
 "$PERMANENT_BLACKLIST_ALL_ASICS:"\
