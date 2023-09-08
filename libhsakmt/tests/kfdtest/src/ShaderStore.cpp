@@ -923,11 +923,20 @@ const char *TrapHandlerIsa =
     R"(
         CHECK_VMFAULT:
         /*if trap jumped to by vmfault, restore skip m0 signalling*/
-        s_getreg_b32 ttmp14, hwreg(HW_REG_TRAPSTS)
-        s_and_b32 ttmp2, ttmp14, 0x800
+        .if (.amdgcn.gfx_generation_number < 12)
+            s_getreg_b32 ttmp14, hwreg(HW_REG_TRAPSTS)
+            s_and_b32 ttmp2, ttmp14, 0x800
+        .else
+            s_getreg_b32 ttmp14, hwreg(HW_REG_EXCP_FLAG_PRIV)
+            s_and_b32 ttmp2, ttmp14, 0x10
+        .endif
         s_cbranch_scc1 RESTORE_AND_EXIT
         /*check for address watch event and record pc check point delta*/
-        s_and_b32 ttmp2, ttmp14, 0x7080
+        .if (.amdgcn.gfx_generation_number < 12)
+            s_and_b32 ttmp2, ttmp14, 0x7080
+        .else
+            s_and_b32 ttmp2, ttmp14, 0xf
+        .endif
         s_cbranch_scc0 GET_DOORBELL
         v_mov_b32 v5, v4 // capture watch checkpoint
         v_mov_b32 v6, ttmp14 // capture watch trapsts
