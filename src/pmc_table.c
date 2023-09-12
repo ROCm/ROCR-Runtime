@@ -1963,16 +1963,6 @@ static struct perf_counter_block navi_blocks[PERFCOUNTER_BLOCKID__MAX] = {
  */
 static struct perf_counter_block iommu_block;
 
-uint32_t pmc_table_get_max_concurrent(int block_id)
-{
-	switch (block_id) {
-	case PERFCOUNTER_BLOCKID__IOMMUV2:
-		return iommu_block.num_of_slots;
-	default:
-		return 0;
-	}
-}
-
 static HSAKMT_STATUS alloc_pmc_blocks_iommu(void)
 {
 	DIR *dir;
@@ -2094,11 +2084,6 @@ HSAKMT_STATUS get_block_properties(uint32_t node_id,
 	if (block_id > PERFCOUNTER_BLOCKID__MAX ||
 			block_id < PERFCOUNTER_BLOCKID__FIRST)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-
-	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2) {
-		*block = iommu_block;
-		return HSAKMT_STATUS_SUCCESS;
-	}
 
 	/* Major GFX Version */
 	switch (gfxv >> 16) {
