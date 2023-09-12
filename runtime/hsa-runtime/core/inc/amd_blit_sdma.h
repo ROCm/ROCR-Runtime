@@ -145,8 +145,8 @@ class BlitSdma : public BlitSdmaBase {
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
   virtual uint64_t PendingBytes() override;
-  void GangLeader(bool gang_leader) override { gang_leader_ = gang_leader; }
-  bool GangLeader() const override { return gang_leader_; }
+  virtual void GangLeader(bool gang_leader) override { gang_leader_ = gang_leader; }
+  virtual bool GangLeader() const override { return gang_leader_; }
 
  private:
   /// @brief Acquires the address into queue buffer where a new command
