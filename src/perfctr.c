@@ -64,16 +64,6 @@ struct perf_trace {
 	struct perf_trace_block blocks[0];
 };
 
-enum perf_trace_action {
-	PERF_TRACE_ACTION__ACQUIRE = 0,
-	PERF_TRACE_ACTION__RELEASE
-};
-
-struct perf_shared_table {
-	uint32_t magic4cc;
-	uint32_t iommu_slots_left;
-};
-
 struct perf_counts_values {
 	union {
 		struct {
@@ -87,11 +77,6 @@ struct perf_counts_values {
 
 static HsaCounterProperties **counter_props;
 static unsigned int counter_props_count;
-static const char shmem_name[] = "/hsakmt_shared_mem";
-static int shmem_fd;
-static const char sem_name[] = "hsakmt_semaphore";
-static sem_t *sem = SEM_FAILED;
-struct perf_shared_table *shared_table;
 
 static ssize_t readn(int fd, void *buf, size_t n)
 {
@@ -114,71 +99,6 @@ static ssize_t readn(int fd, void *buf, size_t n)
 	return n;
 }
 
-static HSAKMT_STATUS init_shared_region(void)
-{
-	sem = sem_open(sem_name, O_CREAT, 0666, 1);
-	if (sem == SEM_FAILED)
-		return HSAKMT_STATUS_ERROR;
-
-	shmem_fd = shm_open(shmem_name, O_CREAT | O_RDWR, 0666);
-	if (shmem_fd < 0)
-		goto exit_1;
-
-	if (ftruncate(shmem_fd, sizeof(struct perf_shared_table)) < 0)
-		goto exit_2;
-
-	shared_table = mmap(NULL, sizeof(*shared_table),
-			PROT_READ | PROT_WRITE, MAP_SHARED, shmem_fd, 0);
-	if (shared_table == MAP_FAILED)
-		goto exit_2;
-
-	return HSAKMT_STATUS_SUCCESS;
-
-exit_2:
-	shm_unlink(shmem_name);
-	shmem_fd = 0;
-exit_1:
-	sem_close(sem);
-	sem_unlink(sem_name);
-	sem = SEM_FAILED;
-	return HSAKMT_STATUS_ERROR;
-}
-
-static void destroy_shared_region(void)
-{
-	if (shared_table && shared_table != MAP_FAILED)
-		munmap(shared_table, sizeof(*shared_table));
-
-	if (shmem_fd > 0) {
-		close(shmem_fd);
-		shm_unlink(shmem_name);
-	}
-
-	if (sem != SEM_FAILED) {
-		sem_close(sem);
-		sem_unlink(sem_name);
-		sem = SEM_FAILED;
-	}
-}
-
-static void init_perf_shared_table(void)
-{
-	sem_wait(sem);
-
-	/* If the magic number exists, the perf shared table has been
-	 * initialized by another process and is in use. Don't overwrite it.
-	 */
-	if (shared_table->magic4cc == HSA_PERF_MAGIC4CC) {
-		sem_post(sem);
-		return;
-	}
-
-	/* write the perf content */
-	shared_table->magic4cc = HSA_PERF_MAGIC4CC;
-
-	sem_post(sem);
-}
-
 HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 {
 	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties *));
@@ -189,20 +109,12 @@ HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 
 	counter_props_count = NumNodes;
 
-	if (init_shared_region() != HSAKMT_STATUS_SUCCESS) {
-		pr_warn("Profiling of privileged blocks is not available.\n");
-		return HSAKMT_STATUS_ERROR;
-	}
-	init_perf_shared_table();
-
 	return HSAKMT_STATUS_SUCCESS;
 }
 
 void destroy_counter_props(void)
 {
 	unsigned int i;
-
-	destroy_shared_region();
 
 	if (!counter_props)
 		return;
