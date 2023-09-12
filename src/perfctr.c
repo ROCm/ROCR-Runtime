@@ -175,8 +175,6 @@ static void init_perf_shared_table(void)
 
 	/* write the perf content */
 	shared_table->magic4cc = HSA_PERF_MAGIC4CC;
-	shared_table->iommu_slots_left =
-		pmc_table_get_max_concurrent(PERFCOUNTER_BLOCKID__IOMMUV2);
 
 	sem_post(sem);
 }
@@ -294,9 +292,6 @@ static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
 	case PERFCOUNTER_BLOCKID__WD:
 		*uuid = HSA_PROFILEBLOCK_AMD_WD;
 		break;
-	case PERFCOUNTER_BLOCKID__IOMMUV2:
-		*uuid = HSA_PROFILEBLOCK_AMD_IOMMUV2;
-		break;
 	default:
 		/* If we reach this point, it's a bug */
 		rc = -1;
@@ -319,144 +314,6 @@ static HSAuint32 get_block_concurrent_limit(uint32_t node_id,
 	}
 
 	return 0;
-}
-
-static HSAKMT_STATUS update_block_slots(enum perf_trace_action action,
-					uint32_t block_id, uint32_t num_slots)
-{
-	uint32_t *slots_left;
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	if (shmem_fd <= 0)
-		return HSAKMT_STATUS_UNAVAILABLE;
-	if (sem == SEM_FAILED)
-		return HSAKMT_STATUS_UNAVAILABLE;
-
-	sem_wait(sem);
-
-	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
-		slots_left = &shared_table->iommu_slots_left;
-	else {
-		ret = HSAKMT_STATUS_UNAVAILABLE;
-		goto out;
-	}
-
-	switch (action) {
-	case PERF_TRACE_ACTION__ACQUIRE:
-		if (*slots_left >= num_slots)
-			*slots_left -= num_slots;
-		else
-			ret = HSAKMT_STATUS_UNAVAILABLE;
-		break;
-	case PERF_TRACE_ACTION__RELEASE:
-		if ((*slots_left + num_slots) <=
-				pmc_table_get_max_concurrent(block_id))
-			*slots_left += num_slots;
-		else
-			ret = HSAKMT_STATUS_ERROR;
-		break;
-	default:
-		ret = HSAKMT_STATUS_INVALID_PARAMETER;
-		break;
-	}
-
-out:
-	sem_post(sem);
-
-	return ret;
-}
-
-static unsigned int get_perf_event_type(enum perf_block_id block_id)
-{
-	FILE *file = NULL;
-	unsigned int type = 0;
-
-	if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2) {
-		/* Starting from kernel 4.12, amd_iommu_0 is used */
-		file = fopen("/sys/bus/event_source/devices/amd_iommu_0/type",
-			 "r");
-		if (!file)
-			file = fopen(/* kernel 4.11 and older */
-				"/sys/bus/event_source/devices/amd_iommu/type",
-				"r");
-	}
-
-	if (!file)
-		return 0;
-
-	if (fscanf(file, "%d", &type) != 1)
-		type = 0;
-	fclose(file);
-
-	return type;
-}
-
-/* close_perf_event_fd - Close all FDs opened for this block.
- * When RT acquires the trace access, RT has no ideas about each
- * individual FD opened for this block. We should treat the whole
- * block as one and close all of them.
- */
-static void close_perf_event_fd(struct perf_trace_block *block)
-{
-	uint32_t i;
-
-	if (!block || !block->perf_event_fd)
-		return;
-
-	for (i = 0; i < block->num_counters; i++)
-		if (block->perf_event_fd[i] > 0) {
-			close(block->perf_event_fd[i]);
-			block->perf_event_fd[i] = 0;
-		}
-}
-
-/* open_perf_event_fd - Open FDs required for this block.
- * If one of them fails, we should close all FDs that have been
- * opened because RT has no ideas about those FDs successfully
- * opened and it won't send anything to close them.
- */
-static HSAKMT_STATUS open_perf_event_fd(struct perf_trace_block *block)
-{
-	struct perf_event_attr attr;
-	uint32_t i;
-	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-
-	if (!block || !block->perf_event_fd)
-		return HSAKMT_STATUS_INVALID_HANDLE;
-
-	if (getuid()) {
-		pr_err("Must be root to open perf_event.\n");
-		return HSAKMT_STATUS_ERROR;
-	}
-
-	memset(&attr, 0, sizeof(struct perf_event_attr));
-	attr.type = get_perf_event_type(block->block_id);
-	if (!attr.type)
-		return HSAKMT_STATUS_ERROR;
-
-	for (i = 0; i < block->num_counters; i++) {
-		attr.size = sizeof(struct perf_event_attr);
-		attr.config = block->counter_id[i];
-		attr.read_format = PERF_FORMAT_TOTAL_TIME_ENABLED |
-					PERF_FORMAT_TOTAL_TIME_RUNNING;
-		attr.disabled = 1;
-		attr.inherit = 1;
-
-		/* We are profiling system wide, not per cpu, so no threads,
-		 * no groups -> pid=-1 and group_fd=-1. cpu = 0
-		 * flags=PERF_FLAG_FD_NO_GROUP
-		 */
-		block->perf_event_fd[i] = syscall(__NR_perf_event_open, &attr,
-					-1, 0, -1, PERF_FLAG_FD_NO_GROUP);
-
-		if (block->perf_event_fd[i] < 0) {
-			ret = HSAKMT_STATUS_ERROR;
-			close_perf_event_fd(block);
-			break;
-		}
-	}
-
-	return ret;
 }
 
 static HSAKMT_STATUS perf_trace_ioctl(struct perf_trace_block *block,
@@ -556,10 +413,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 			block_prop->Counters[i].CounterSizeInBits = block.counter_size_in_bits;
 			block_prop->Counters[i].CounterMask = block.counter_mask;
 			block_prop->Counters[i].Flags.ui32.Global = 1;
-			if (block_id == PERFCOUNTER_BLOCKID__IOMMUV2)
-				block_prop->Counters[i].Type = HSA_PROFILE_TYPE_PRIVILEGED_IMMEDIATE;
-			else
-				block_prop->Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
+			block_prop->Counters[i].Type = HSA_PROFILE_TYPE_NONPRIV_IMMEDIATE;
 		}
 
 		block_prop = (HsaCounterBlockProperties *)&block_prop->Counters[block_prop->NumCounters];
@@ -750,8 +604,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcAcquireTraceAccess(HSAuint32 NodeId,
 {
 	struct perf_trace *trace;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
-	uint32_t gpu_id, i;
-	int j;
+	uint32_t gpu_id;
 
 	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
 
@@ -766,29 +619,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcAcquireTraceAccess(HSAuint32 NodeId,
 	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
-	for (i = 0; i < trace->num_blocks; i++) {
-		ret = update_block_slots(PERF_TRACE_ACTION__ACQUIRE,
-					trace->blocks[i].block_id,
-					trace->blocks[i].num_counters);
-		if (ret != HSAKMT_STATUS_SUCCESS)
-			goto out;
-		ret = open_perf_event_fd(&trace->blocks[i]);
-		if (ret != HSAKMT_STATUS_SUCCESS) {
-			i++; /* to release slots just reserved */
-			goto out;
-		}
-	}
-
-out:
-	if (ret != HSAKMT_STATUS_SUCCESS) {
-		for (j = i-1; j >= 0; j--) {
-			update_block_slots(PERF_TRACE_ACTION__RELEASE,
-					trace->blocks[j].block_id,
-					trace->blocks[j].num_counters);
-			close_perf_event_fd(&trace->blocks[j]);
-		}
-	}
-
 	return ret;
 }
 
@@ -796,7 +626,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcReleaseTraceAccess(HSAuint32 NodeId,
 						    HSATraceId TraceId)
 {
 	struct perf_trace *trace;
-	uint32_t i;
 
 	pr_debug("[%s] Trace ID 0x%lx\n", __func__, TraceId);
 
@@ -807,13 +636,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcReleaseTraceAccess(HSAuint32 NodeId,
 
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
 		return HSAKMT_STATUS_INVALID_HANDLE;
-
-	for (i = 0; i < trace->num_blocks; i++) {
-		update_block_slots(PERF_TRACE_ACTION__RELEASE,
-				trace->blocks[i].block_id,
-				trace->blocks[i].num_counters);
-		close_perf_event_fd(&trace->blocks[i]);
-	}
 
 	return HSAKMT_STATUS_SUCCESS;
 }
