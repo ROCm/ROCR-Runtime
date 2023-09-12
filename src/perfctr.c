@@ -188,7 +188,6 @@ HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 	}
 
 	counter_props_count = NumNodes;
-	alloc_pmc_blocks();
 
 	if (init_shared_region() != HSAKMT_STATUS_SUCCESS) {
 		pr_warn("Profiling of privileged blocks is not available.\n");
@@ -215,7 +214,6 @@ void destroy_counter_props(void)
 		}
 
 	free(counter_props);
-	free_pmc_blocks();
 }
 
 static int blockid2uuid(enum perf_block_id block_id, HSA_UUID *uuid)
