@@ -901,7 +901,7 @@ const char *GwsAtomicIncreaseIsa =
         s_endpgm
 )";
 
-const char *jump_to_trap_gfx =
+const char *JumpToTrapIsa =
     SHADER_START
     SHADER_MACROS_U32
     R"(
@@ -918,7 +918,7 @@ const char *jump_to_trap_gfx =
         s_endpgm
 )";
 
-const char *trap_handler_gfx =
+const char *TrapHandlerIsa =
     SHADER_START
     R"(
         CHECK_VMFAULT:
@@ -998,12 +998,12 @@ const char *trap_handler_gfx =
     "s_waitcnt vmcnt(0) & lgkmcnt(0)\n"\
     "s_endpgm\n"
 
-const char *watch_read_isa =
+const char *WatchReadIsa =
     WATCH_START
     "flat_load_dword v7, v[0:1]"
     WATCH_END;
 
-const char *watch_write_isa =
+const char *WatchWriteIsa =
     WATCH_START
     "flat_store_dword v[0:1], v4"
     WATCH_END;

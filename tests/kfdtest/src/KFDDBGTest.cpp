@@ -266,8 +266,8 @@ TEST_F(KFDDBGTest, HitTrapEvent) {
                                             0x1000));
 
         // compile and dispatch shader
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(jump_to_trap_gfx, isaBuf.As<char*>()));
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(JumpToTrapIsa, isaBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(TrapHandlerIsa, trap.As<char*>()));
 
         uint32_t rDebug;
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
@@ -341,7 +341,7 @@ TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
 
         // compile and dispatch shader
         ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(NoopIsa, isaBuf.As<char*>()));
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(TrapHandlerIsa, trap.As<char*>()));
 
         uint32_t rDebug;
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
@@ -422,7 +422,7 @@ TEST_F(KFDDBGTest, SuspendQueues) {
         HsaMemoryBuffer isaBuf(PAGE_SIZE, defaultGPUNode, true, false, true);
 
         // compile and dispatch shader
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(jump_to_trap_gfx, isaBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(JumpToTrapIsa, isaBuf.As<char*>()));
 
         uint32_t rDebug;
         ASSERT_SUCCESS(hsaKmtRuntimeEnable(&rDebug, true));
@@ -635,9 +635,9 @@ TEST_F(KFDDBGTest, HitAddressWatch) {
         HsaMemoryBuffer trap(PAGE_SIZE*2, defaultGPUNode, true, false, true);
         HsaMemoryBuffer tmaBuf(PAGE_SIZE, defaultGPUNode, false, false, false);
 
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(watch_read_isa, readerBuf.As<char*>()));
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(watch_write_isa, writerBuf.As<char*>()));
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(trap_handler_gfx, trap.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WatchReadIsa, readerBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(WatchWriteIsa, writerBuf.As<char*>()));
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(TrapHandlerIsa, trap.As<char*>()));
         ASSERT_SUCCESS(hsaKmtSetTrapHandler(defaultGPUNode,
                                             trap.As<void *>(),
                                             0x1000,
