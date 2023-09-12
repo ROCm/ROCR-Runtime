@@ -114,8 +114,8 @@ class BlitKernel : public core::Blit {
 
   virtual uint64_t PendingBytes() override;
 
-  void GangLeader(bool gang_leader) override {}
-  bool GangLeader() const override { return false; }
+  virtual void GangLeader(bool gang_leader) override {}
+  virtual bool GangLeader() const override { return false; }
 
  private:
   union KernelArgs {
