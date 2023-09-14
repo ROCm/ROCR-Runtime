@@ -2771,13 +2771,20 @@ hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
 hsa_status_t Runtime::VMemoryGetAccess(const void* va, hsa_access_permission_t* perms,
                                        hsa_agent_t agent_handle) {
   *perms = HSA_ACCESS_PERMISSION_NONE;
+  bool mappedHandleFound = false;
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
-  auto mappedHandleIt = mapped_handle_map_.find(va);
-  if (mappedHandleIt == mapped_handle_map_.end()) {
-    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  auto mappedHandleIt = mapped_handle_map_.upper_bound(va);
+  if (mappedHandleIt != mapped_handle_map_.begin()) {
+    mappedHandleIt--;
+    if ((mappedHandleIt->first <= va) &&
+        reinterpret_cast<const uint8_t*>(va) <=
+         (reinterpret_cast<const uint8_t*>(mappedHandleIt->first) + mappedHandleIt->second.size)) {
+      mappedHandleFound = true;
+    }
   }
+  if (!mappedHandleFound) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
   Agent* agent = Agent::Convert(agent_handle);
   if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
