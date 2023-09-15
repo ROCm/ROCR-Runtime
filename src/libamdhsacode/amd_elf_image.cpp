@@ -711,9 +711,30 @@ namespace elf {
 
       GElfStringTable* shstrtab() override;
       GElfStringTable* strtab() override;
-      GElfSymbolTable* getSymtab(uint16_t index) override
+      GElfSymbolTable* getReferencedSymbolTable(uint16_t index)
       {
         return static_cast<GElfSymbolTable*>(section(index));
+      }
+      GElfSymbolTable* getSymtab(uint16_t index) override
+      {
+        if (section(index)->type() == SHT_SYMTAB)
+          return static_cast<GElfSymbolTable*>(section(index));
+        return nullptr;
+      }
+      GElfSymbolTable* getDynsym(uint16_t index) override
+      {
+        if (section(index)->type() == SHT_DYNSYM)
+          return static_cast<GElfSymbolTable*>(section(index));
+        return nullptr;
+      }
+
+      GElfSymbolTable* getSymbolTable() override;
+      GElfSymbolTable* getSymbolTable(uint16_t index) override
+      {
+        const char *UseDynsym = getenv("LOADER_USE_DYNSYM");
+        if (UseDynsym && std::strncmp(UseDynsym, "0", 1) != 0)
+          return getDynsym(index);
+        return getSymtab(index);
       }
 
       GElfStringTable* addStringTable(const std::string& name) override;
@@ -721,6 +742,7 @@ namespace elf {
 
       GElfSymbolTable* addSymbolTable(const std::string& name, StringTable* stab = 0) override;
       GElfSymbolTable* symtab() override;
+      GElfSymbolTable* dynsym() override;
 
       GElfSegment* segment(size_t i) override { return segments[i].get(); }
       Segment* segmentByVAddr(uint64_t vaddr) override;
@@ -759,6 +781,7 @@ namespace elf {
       GElfStringTable* shstrtabSection;
       GElfStringTable* strtabSection;
       GElfSymbolTable* symtabSection;
+      GElfSymbolTable* dynsymSection;
       GElfNoteSection* noteSection;
       std::vector<std::unique_ptr<GElfSegment>> segments;
       std::vector<std::unique_ptr<GElfSection>> sections;
@@ -1242,7 +1265,7 @@ namespace elf {
     bool GElfRelocationSection::pullData()
     {
       section = elf->section(hdr.sh_info);
-      symtab = elf->getSymtab(hdr.sh_link);
+      symtab = elf->getReferencedSymbolTable(hdr.sh_link);
       Elf_Scn *lScn = elf_getscn(elf->e, ndxscn);
       assert(lScn);
       Elf_Data *lData = elf_getdata(lScn, nullptr);
@@ -1261,6 +1284,7 @@ namespace elf {
         e(0),
         shstrtabSection(0), strtabSection(0),
         symtabSection(0),
+        dynsymSection(0),
         noteSection(0)
     {
       if (EV_NONE == elf_version(EV_CURRENT)) {
@@ -1436,6 +1460,7 @@ namespace elf {
         if (section->type() == SHT_STRTAB) { strtabSection = static_cast<GElfStringTable*>(section.get()); }
         if (section->type() == SHT_SYMTAB) { symtabSection = static_cast<GElfSymbolTable*>(section.get()); }
         if (section->type() == SHT_NOTE) { noteSection = static_cast<GElfNoteSection*>(section.get()); }
+        if (section->type() == SHT_DYNSYM) { dynsymSection = static_cast<GElfSymbolTable*>(section.get()); }
       }
 
       size_t phnum;
@@ -1553,7 +1578,7 @@ namespace elf {
       }
     }
 
-    GElfStringTable* GElfImage::addStringTable(const std::string& name) 
+    GElfStringTable* GElfImage::addStringTable(const std::string& name)
     {
       GElfStringTable* stab = new GElfStringTable(this);
       sections.push_back(std::unique_ptr<GElfStringTable>(stab));
@@ -1597,6 +1622,21 @@ namespace elf {
       return symtabSection;
     }
 
+    GElfSymbolTable* GElfImage::dynsym()
+    {
+      if (!dynsymSection) {
+        dynsymSection = addSymbolTable(".dynsym", strtab());
+      }
+      return dynsymSection;
+    }
+
+    GElfSymbolTable* GElfImage::getSymbolTable()
+    {
+      const char *UseDynsym = getenv("LOADER_USE_DYNSYM");
+      if (UseDynsym && std::strncmp(UseDynsym, "0", 1) != 0)
+        return dynsym();
+      return symtab();
+    }
 
     GElfNoteSection* GElfImage::note()
     {

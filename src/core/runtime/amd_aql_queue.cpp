@@ -1332,7 +1332,11 @@ void AqlQueue::FillBufRsrcWord1_Gfx11() {
 
 void AqlQueue::FillBufRsrcWord2() {
   SQ_BUF_RSRC_WORD2 srd2;
-  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size);
+  const auto& agent_props = agent_->properties();
+  const uint32_t num_xcc = agent_props.NumXcc;
+
+   // report size per XCC
+  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size / num_xcc);
 
   amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
 }
@@ -1403,8 +1407,10 @@ void AqlQueue::FillComputeTmpRingSize() {
     return;
   }
 
-  // Determine the maximum number of waves device can support
   const auto& agent_props = agent_->properties();
+  const uint32_t num_xcc = agent_props.NumXcc;
+
+  // Determine the maximum number of waves device can support
   uint32_t num_cus = agent_props.NumFComputeCores / agent_props.NumSIMDPerCU;
   uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
 
@@ -1416,10 +1422,11 @@ void AqlQueue::FillComputeTmpRingSize() {
   tmpring_size.bits.WAVESIZE = wave_scratch;
   assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
   uint32_t num_waves =
-      queue_scratch_.size / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+      (queue_scratch_.size / num_xcc) / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+
   tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
-  assert((tmpring_size.bits.WAVES % agent_props.NumShaderBanks == 0) &&
+  assert((tmpring_size.bits.WAVES % (agent_props.NumShaderBanks / num_xcc) == 0) &&
          "Invalid scratch wave count.  Must be divisible by #SEs.");
 }
 
@@ -1431,9 +1438,11 @@ void AqlQueue::FillComputeTmpRingSize_Gfx11() {
     return;
   }
 
-  // Determine the maximum number of waves device can support
   const auto& agent_props = agent_->properties();
-  uint32_t num_cus = agent_props.NumFComputeCores / agent_props.NumSIMDPerCU;
+  const uint32_t num_xcc = agent_props.NumXcc;
+
+  // Determine the maximum number of waves device can support
+  uint32_t num_cus = agent_props.NumFComputeCores / (agent_props.NumSIMDPerCU * num_xcc);
   uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
 
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
@@ -1483,7 +1492,11 @@ void AqlQueue::InitScratchSRD() {
 
   // Populate flat scratch parameters in amd_queue_.
   amd_queue_.scratch_backing_memory_location = queue_scratch_.queue_process_offset;
-  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size;
+
+  const auto& agent_props = agent_->properties();
+  const uint32_t num_xcc = agent_props.NumXcc;
+  // report size per XCC
+  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size / num_xcc;
 
   // For backwards compatibility this field records the per-lane scratch
   // for a 64 lane wavefront. If scratch was allocated for 32 lane waves

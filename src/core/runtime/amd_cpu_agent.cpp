@@ -85,15 +85,15 @@ void CpuAgent::InitRegionList() {
     if (system_prop != mem_props.end()) system_props = *system_prop;
 
     MemoryRegion* system_region_fine =
-        new MemoryRegion(true, false, is_apu_node, this, system_props);
+        new MemoryRegion(true, false, is_apu_node, false, this, system_props);
     regions_.push_back(system_region_fine);
     MemoryRegion* system_region_kernarg =
-        new MemoryRegion(true, true, is_apu_node, this, system_props);
+        new MemoryRegion(true, true, is_apu_node, false, this, system_props);
     regions_.push_back(system_region_kernarg);
 
     if (!is_apu_node) {
       MemoryRegion* system_region_coarse =
-          new MemoryRegion(false, false, is_apu_node, this, system_props);
+          new MemoryRegion(false, false, is_apu_node, false, this, system_props);
       regions_.push_back(system_region_coarse);
     }
   }
@@ -384,6 +384,12 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_IOMMU_SUPPORT:
       *((hsa_amd_iommu_version_t*)value) = HSA_IOMMU_SUPPORT_NONE;
+      break;
+    case HSA_AMD_AGENT_INFO_NUM_XCC:
+      *((uint32_t*)value) = 0;
+      break;
+    case HSA_AMD_AGENT_INFO_DRIVER_UID:
+      *((uint32_t*)value) = 0;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

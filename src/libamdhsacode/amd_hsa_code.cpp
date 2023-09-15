@@ -580,6 +580,9 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX909:  MI.Name = "gfx909";  MI.XnackSupported = true;  MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX90A:  MI.Name = "gfx90a";  MI.XnackSupported = true;  MI.SrameccSupported = true;  break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C:  MI.Name = "gfx90c";  MI.XnackSupported = true;  MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX940:  MI.Name = "gfx940";  MI.XnackSupported = true;  MI.SrameccSupported = true;  break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX941:  MI.Name = "gfx941";  MI.XnackSupported = true;  MI.SrameccSupported = true;  break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX942:  MI.Name = "gfx942";  MI.XnackSupported = true;  MI.SrameccSupported = true;  break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1010: MI.Name = "gfx1010"; MI.XnackSupported = true;  MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1011: MI.Name = "gfx1011"; MI.XnackSupported = true;  MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1012: MI.Name = "gfx1012"; MI.XnackSupported = true;  MI.SrameccSupported = false; break;
@@ -643,14 +646,6 @@ namespace code {
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX906;
       else if (old_name == "AMD:AMDGPU:9:0:12")
         mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX90C;
-      else if (old_name == "AMD:AMDGPU:11:0:0")
-        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1100;
-      else if (old_name == "AMD:AMDGPU:11:0:1")
-        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1101;
-      else if (old_name == "AMD:AMDGPU:11:0:2")
-        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1102;
-      else if (old_name == "AMD:AMDGPU:11:0:3")
-        mach = ELF::EF_AMDGPU_MACH_AMDGCN_GFX1103;
       else {
         // Code object v2 only supports asics up to gfx906 plus gfx90c. Do NOT
         // add handling of new asics into this if-else-if* block.
@@ -1770,8 +1765,8 @@ namespace code {
           hsatext = sec;
         }
       }
-      for (size_t i = 0; i < img->symtab()->symbolCount(); ++i) {
-        amd::elf::Symbol* elfsym = img->symtab()->symbol(i);
+      for (size_t i = 0; i < img->getSymbolTable()->symbolCount(); ++i) {
+        amd::elf::Symbol* elfsym = img->getSymbolTable()->symbol(i);
         Symbol* sym = 0;
         switch (elfsym->type()) {
         case STT_AMDGPU_HSA_KERNEL: {

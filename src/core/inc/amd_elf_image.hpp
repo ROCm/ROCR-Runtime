@@ -183,6 +183,10 @@ namespace elf {
       virtual StringTable* strtab() = 0;
       virtual SymbolTable* symtab() = 0;
       virtual SymbolTable* getSymtab(uint16_t index) = 0;
+      virtual SymbolTable* dynsym() = 0;
+      virtual SymbolTable* getDynsym(uint16_t index) = 0;
+      virtual SymbolTable* getSymbolTable() = 0;
+      virtual SymbolTable* getSymbolTable(uint16_t index) = 0;
 
       virtual StringTable* addStringTable(const std::string& name) = 0;
       virtual StringTable* getStringTable(uint16_t index) = 0;

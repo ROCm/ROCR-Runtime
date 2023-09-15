@@ -197,8 +197,10 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
     for (uint32_t i = 0; i < signal_count; i++) signals[i]->waiting_--;
   });
 
-  // Allow only the first waiter to sleep (temporary, known to be bad).
-  if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
+  if (!core::Runtime::runtime_singleton_->KfdVersion().supports_event_age)
+      // Allow only the first waiter to sleep. Without event age tracking,
+      // race condition can cause some threads to sleep without wakeup since missing interrupt.
+      if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
 
   // Ensure that all signals in the list can be slept on.
   if (wait_hint != HSA_WAIT_STATE_ACTIVE) {
@@ -228,6 +230,12 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   MAKE_SCOPE_GUARD([&]() {
     if (signal_count > small_size) delete[] evts;
   });
+
+  uint64_t event_age[unique_evts];
+  memset(event_age, 0, unique_evts * sizeof(uint64_t));
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_event_age)
+    for (uint32_t i = 0; i < unique_evts; i++)
+      event_age[i] = 1;
 
   int64_t value;
 
@@ -310,7 +318,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
     uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
       time_remaining).count();
     wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
-    hsaKmtWaitOnMultipleEvents(evts, unique_evts, false, wait_ms);
+    hsaKmtWaitOnMultipleEvents_Ext(evts, unique_evts, false, wait_ms, event_age);
   }
 }
 
