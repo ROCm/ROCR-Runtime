@@ -550,6 +550,10 @@ class GpuAgent : public GpuAgentInt {
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
                                       const size_t size);
+
+  // Bind the Blit object that will drive the copy operation by engine ID
+  lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
+
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
@@ -563,6 +567,15 @@ class GpuAgent : public GpuAgentInt {
     KernelMutex lock_;
   } gws_queue_;
 
+  // Sets and Tracks pending SDMA status check or request counts
+  void SetCopyRequestRefCount(bool set);
+  void SetCopyStatusCheckRefCount(bool set);
+  int pending_copy_req_ref_;
+  int pending_copy_stat_check_ref_;
+
+  // Tracks what SDMA blits have been used since initialization.
+  uint32_t sdma_blit_used_mask_;
+
   ScratchCache scratch_cache_;
 
   // System memory allocator in the nearest NUMA node.
@@ -572,6 +585,9 @@ class GpuAgent : public GpuAgentInt {
   std::function<void(void*)> system_deallocator_;
 
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
+
+  // Check if SDMA engine by ID is free
+  bool DmaEngineIsFree(uint32_t engine_id);
 };
 
 }  // namespace amd

@@ -70,6 +70,12 @@
 #include "core/inc/amd_loader_context.hpp"
 #include "core/inc/amd_hsa_code.hpp"
 
+#if defined(__clang__)
+#if __has_feature(address_sanitizer)
+#define SANITIZER_AMDGPU 1
+#endif
+#endif
+
 //---------------------------------------------------------------------------//
 //    Constants                                                              //
 //---------------------------------------------------------------------------//
@@ -112,6 +118,7 @@ class Runtime {
   struct KfdVersion_t {
     HsaVersionInfo version;
     bool supports_exception_debugging;
+    bool supports_event_age;
   };
 
   /// @brief Open connection to kernel driver and increment reference count.
@@ -395,7 +402,12 @@ class Runtime {
 
   uint64_t sys_clock_freq() const { return sys_clock_freq_; }
 
-  void KfdVersion(const HsaVersionInfo& version) { kfd_version.version = version; }
+  void KfdVersion(const HsaVersionInfo& version) {
+    kfd_version.version = version;
+    if (version.KernelInterfaceMajorVersion == 1 &&
+      version.KernelInterfaceMinorVersion >= 14)
+      kfd_version.supports_event_age = true;
+  }
 
   void KfdVersion(bool exception_debugging) {
     kfd_version.supports_exception_debugging = exception_debugging;
@@ -407,9 +419,19 @@ class Runtime {
   static void AsyncEventsLoop(void*);
 
   struct AllocationRegion {
-    AllocationRegion() : region(NULL), size(0), size_requested(0), user_ptr(nullptr) {}
-    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested)
-        : region(region_arg), size(size_arg), size_requested(size_requested), user_ptr(nullptr) {}
+    AllocationRegion()
+        : region(NULL),
+          size(0),
+          size_requested(0),
+          alloc_flags(core::MemoryRegion::AllocateNoFlags),
+          user_ptr(nullptr) {}
+    AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested,
+                     MemoryRegion::AllocateFlags alloc_flags)
+        : region(region_arg),
+          size(size_arg),
+          size_requested(size_requested),
+          alloc_flags(alloc_flags),
+          user_ptr(nullptr) {}
 
     struct notifier_t {
       void* ptr;
@@ -420,6 +442,7 @@ class Runtime {
     const MemoryRegion* region;
     size_t size;           /* actual size = align_up(size_requested, granularity) */
     size_t size_requested; /* size requested by user */
+    MemoryRegion::AllocateFlags alloc_flags;
     void* user_ptr;
     std::unique_ptr<std::vector<notifier_t>> notifiers;
   };

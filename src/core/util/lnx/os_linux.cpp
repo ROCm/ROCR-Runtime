@@ -60,7 +60,9 @@
 #include <string>
 #include <utility>
 #include "core/inc/runtime.h"
+#if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
+#endif
 
 namespace rocr {
 namespace os {
@@ -84,6 +86,7 @@ class os_thread {
  public:
   explicit os_thread(ThreadEntry function, void* threadArgument, uint stackSize)
       : thread(0), lock(nullptr), state(RUNNING) {
+    int err;
     std::unique_ptr<ThreadArgs> args(new ThreadArgs);
     lock = CreateMutex();
     if (lock == nullptr) return;
@@ -92,45 +95,68 @@ class os_thread {
     args->entry_function = function;
 
     pthread_attr_t attrib;
-    pthread_attr_init(&attrib);
+    err = pthread_attr_init(&attrib);
+    if (err != 0) {
+      fprintf(stderr, "pthread_attr_init failed: %s\n", strerror(err));
+      return;
+    }
 
     if (stackSize != 0) {
       stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
       stackSize = AlignUp(stackSize, 4096);
-      int err = pthread_attr_setstacksize(&attrib, stackSize);
-      assert(err == 0 && "pthread_attr_setstacksize failed.");
+      err = pthread_attr_setstacksize(&attrib, stackSize);
+      if (err != 0) {
+        fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+        return;
+      }
     }
 
     if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
       int cores = get_nprocs_conf();
       cpu_set_t* cpuset = CPU_ALLOC(cores);
+      if (cpuset == nullptr) {
+        fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
+        return;
+      }
       CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
       for (int i = 0; i < cores; i++) {
         CPU_SET(i, cpuset);
       }
-      int err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
-      assert(err == 0 && "pthread_attr_setaffinity_np failed.");
+      err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
       CPU_FREE(cpuset);
+      if (err != 0) {
+        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
+        return;
+      }
     }
 
-    int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
     // Attempt to grow the stack within reason.
     if ((err == EINVAL) && stackSize != 0) {
       while (stackSize < 20 * 1024 * 1024) {
         stackSize *= 2;
-        pthread_attr_setstacksize(&attrib, stackSize);
+        err = pthread_attr_setstacksize(&attrib, stackSize);
+        if (err != 0) {
+          fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+          return;
+        }
         err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
         if (err != EINVAL) break;
+        debug_print("pthread_create returned EINVAL, doubling stack size\n");
       }
     }
 
-    pthread_attr_destroy(&attrib);
     if (err == 0)
       args.release();
     else
       thread = 0;
+
+    err = pthread_attr_destroy(&attrib);
+    if (err != 0) {
+      fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+    }
   }
 
   os_thread(os_thread&& rhs) {
@@ -145,7 +171,10 @@ class os_thread {
 
   ~os_thread() {
     if (lock != nullptr) DestroyMutex(lock);
-    if ((state == RUNNING) && (thread != 0)) pthread_detach(thread);
+    if ((state == RUNNING) && (thread != 0)) {
+      int err = pthread_detach(thread);
+      if (err != 0) fprintf(stderr, "pthread_detach failed: %s\n", strerror(err));
+    }
   }
 
   bool Valid() { return (lock != nullptr) && (thread != 0); }
@@ -192,11 +221,17 @@ void* GetExportAddress(LibHandle lib, std::string export_name) {
 
   link_map* map;
   int err = dlinfo(*(void**)&lib, RTLD_DI_LINKMAP, &map);
-  assert(err != -1 && "dlinfo failed.");
+  if (err == -1) {
+    fprintf(stderr, "dlinfo failed: %s\n", dlerror());
+    return nullptr;
+  }
 
   Dl_info info;
   err = dladdr(ret, &info);
-  assert(err != 0 && "dladdr failed.");
+  if (err == 0) {
+    fprintf(stderr, "dladdr failed.\n");
+    return nullptr;
+  }
 
   if (strcmp(info.dli_fname, map->l_name) == 0) return ret;
 
@@ -529,7 +564,10 @@ uint64_t ReadAccurateClock() {
   if (invPeriod == 0.0) AccurateClockFrequency();
   timespec time;
   int err = clock_gettime(CLOCK_MONOTONIC_RAW, &time);
-  assert(err == 0 && "clock_gettime(CLOCK_MONOTONIC_RAW,...) failed");
+  if (err != 0) {
+    perror("clock_gettime(CLOCK_MONOTONIC_RAW,...) failed");
+    abort();
+  }
   return (uint64_t(time.tv_sec) * 1000000000ull + uint64_t(time.tv_nsec)) * invPeriod;
 }
 
@@ -558,13 +596,16 @@ uint64_t AccurateClockFrequency() {
   }
   timespec time;
   int err = clock_getres(clock, &time);
-  assert(err == 0 && "clock_getres(CLOCK_MONOTONIC(_RAW),...) failed");
-  assert(time.tv_sec == 0 &&
-         "clock_getres(CLOCK_MONOTONIC(_RAW),...) returned very low frequency "
-         "(<1Hz).");
-  assert(time.tv_nsec < 0xFFFFFFFF &&
-         "clock_getres(CLOCK_MONOTONIC(_RAW),...) returned very low frequency "
-         "(<1Hz).");
+  if (err != 0) {
+    perror("clock_getres failed");
+    abort();
+  }
+  if (time.tv_sec != 0 || time.tv_nsec >= 0xFFFFFFFF) {
+    fprintf(stderr,
+            "clock_getres(CLOCK_MONOTONIC(_RAW),...) returned very low "
+            "frequency (<1Hz).\n");
+    abort();
+  }
   if (invPeriod == 0.0) invPeriod = 1.0 / double(time.tv_nsec);
   return 1000000000ull / uint64_t(time.tv_nsec);
 }
@@ -573,16 +614,19 @@ SharedMutex CreateSharedMutex() {
   pthread_rwlockattr_t attrib;
   int err = pthread_rwlockattr_init(&attrib);
   if (err != 0) {
-    assert(false && "rw lock attribute init failed.");
+    fprintf(stderr, "rw lock attribute init failed: %s\n", strerror(err));
     return nullptr;
   }
   err = pthread_rwlockattr_setkind_np(&attrib, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-  assert(err == 0 && "Set rw lock attribute failure.");
+  if (err != 0) {
+    fprintf(stderr, "Set rw lock attribute failure: %s\n", strerror(err));
+    return nullptr;
+  }
 
   pthread_rwlock_t* lock = new pthread_rwlock_t;
   err = pthread_rwlock_init(lock, &attrib);
   if (err != 0) {
-    assert(false && "rw lock init failed.");
+    fprintf(stderr, "rw lock init failed: %s\n", strerror(err));
     return nullptr;
   }
 
@@ -602,7 +646,10 @@ bool AcquireSharedMutex(SharedMutex lock) {
 
 void ReleaseSharedMutex(SharedMutex lock) {
   int err = pthread_rwlock_unlock(*(pthread_rwlock_t**)&lock);
-  assert(err == 0 && "SharedMutex unlock failed.");
+  if (err != 0) {
+    fprintf(stderr, "SharedMutex unlock failed: %s\n", strerror(err));
+    abort();
+  }
 }
 
 bool TrySharedAcquireSharedMutex(SharedMutex lock) {
@@ -617,7 +664,10 @@ bool SharedAcquireSharedMutex(SharedMutex lock) {
 
 void SharedReleaseSharedMutex(SharedMutex lock) {
   int err = pthread_rwlock_unlock(*(pthread_rwlock_t**)&lock);
-  assert(err == 0 && "SharedMutex unlock failed.");
+  if (err != 0) {
+    fprintf(stderr, "SharedMutex unlock failed: %s\n", strerror(err));
+    abort();
+  }
 }
 
 void DestroySharedMutex(SharedMutex lock) {
@@ -645,8 +695,8 @@ uint64_t SystemClockFrequency() {
 }
 
 bool ParseCpuID(cpuid_t* cpuinfo) {
+#if defined(__i386__) || defined(__x86_64__)
   uint32_t eax, ebx, ecx, edx, max_eax = 0;
-
   memset(cpuinfo, 0, sizeof(*cpuinfo));
 
   /* Make sure current CPU supports at least EAX 4 */
@@ -665,6 +715,9 @@ bool ParseCpuID(cpuid_t* cpuinfo) {
     }
   }
   return true;
+#else
+  return false;
+#endif
 }
 
 }   //  namespace os

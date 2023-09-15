@@ -3218,7 +3218,16 @@ typedef enum {
    * region, the application must explicitely invoke ::hsa_memory_assign_agent
    * in order to transfer ownership to that agent for a particular buffer.
    */
-  HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED = 4
+  HSA_REGION_GLOBAL_FLAG_COARSE_GRAINED = 4,
+
+  /**
+   * Updates to memory in this region have extended scope, where the device-scope atomics
+   * to this memory type act as system-scope with respect to all variables located in
+   * memory regions of this type.
+   * Note: On non-compliant systems, the application may still be responsible for performing
+   * device-specific actions necessary to achieve system-scope coherence.
+   */
+  HSA_REGION_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED = 8
 } hsa_region_global_flag_t;
 
 /**

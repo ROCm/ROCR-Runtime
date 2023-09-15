@@ -44,9 +44,11 @@
 #include "core/inc/runtime.h"
 #include "core/util/timer.h"
 #include "core/util/locks.h"
-#include <mwaitxintrin.h>
 
+#if defined(__i386__) || defined(__x86_64__)
+#include <mwaitxintrin.h>
 #define MWAITX_ECX_TIMER_ENABLE 0x2  // BIT(1)
+#endif
 
 namespace rocr {
 namespace core {
@@ -147,8 +149,15 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
 
   uint32_t prior = waiting_++;
   MAKE_SCOPE_GUARD([&]() { waiting_--; });
-  // Allow only the first waiter to sleep (temporary, known to be bad).
-  if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
+
+  uint64_t event_age = 1;
+
+  if (!core::Runtime::runtime_singleton_->KfdVersion().supports_event_age) {
+      event_age = 0;
+      // Allow only the first waiter to sleep. Without event age tracking,
+      // race condition can cause some threads to sleep without wakeup since missing interrupt.
+      if (prior != 0) wait_hint = HSA_WAIT_STATE_ACTIVE;
+  }
 
   int64_t value;
 
@@ -165,7 +174,10 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
           double(timeout) / double(hsa_freq));
 
   bool condition_met = false;
+
+#if defined(__i386__) || defined(__x86_64__)
   if (g_use_mwaitx) _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
+#endif
 
   while (true) {
     if (!IsValid()) return 0;
@@ -201,19 +213,23 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
     }
 
     if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
+#if defined(__i386__) || defined(__x86_64__)
       if (g_use_mwaitx) {
         _mm_mwaitx(0, 0, 0);
         _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
       }
+#endif
       continue;
     }
 
     if (time - start_time < kMaxElapsed) {
       //  os::uSleep(20);
+#if defined(__i386__) || defined(__x86_64__)
       if (g_use_mwaitx) {
         _mm_mwaitx(0, 60000, MWAITX_ECX_TIMER_ENABLE);
         _mm_monitorx(const_cast<int64_t*>(&signal_.value), 0, 0);
       }
+#endif
       continue;
     }
 
@@ -222,7 +238,7 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
     uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
       time_remaining).count();
     wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
-    hsaKmtWaitOnEvent(event_, wait_ms);
+    hsaKmtWaitOnEvent_Ext(event_, wait_ms, &event_age);
   }
 }
 

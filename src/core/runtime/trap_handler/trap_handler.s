@@ -71,20 +71,25 @@
 .set TTMP6_SAVED_TRAP_ID_SIZE                , 4
 .set TTMP6_SAVED_TRAP_ID_MASK                , (((1 << TTMP6_SAVED_TRAP_ID_SIZE) - 1) << TTMP6_SAVED_TRAP_ID_SHIFT)
 .set TTMP6_SAVED_TRAP_ID_BFE                 , (TTMP6_SAVED_TRAP_ID_SHIFT | (TTMP6_SAVED_TRAP_ID_SIZE << 16))
-.set TTMP11_PC_HI_SHIFT                      , 7
-.set TTMP11_DEBUG_ENABLED_SHIFT              , 23
+
+.set TTMP_PC_HI_SHIFT                        , 7
+.set TTMP_DEBUG_ENABLED_SHIFT                , 23
 
 .if .amdgcn.gfx_generation_number == 9
-  .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 26
+  .set TTMP_SAVE_RCNT_FIRST_REPLAY_SHIFT     , 26
   .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
   .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x1F8000
 .elseif .amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3
-  .set TTMP11_SAVE_REPLAY_W64H_SHIFT         , 31
-  .set TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT   , 24
+  .set TTMP_SAVE_REPLAY_W64H_SHIFT           , 31
+  .set TTMP_SAVE_RCNT_FIRST_REPLAY_SHIFT     , 24
   .set SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT      , 25
   .set SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT     , 15
   .set SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK , 0x3F8000
   .set SQ_WAVE_IB_STS_REPLAY_W64H_MASK       , 0x2000000
+.endif
+
+.if .amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4
+  .set TTMP11_TTMPS_SETUP_SHIFT              , 31
 .endif
 
 // ABI between first and second level trap handler:
@@ -94,7 +99,10 @@
 //   ttmp15 = TMA[63:32]
 // gfx9:
 //   ttmp1 = 0[2:0], PCRewind[3:0], HostTrap[0], TrapId[7:0], PC[47:32]
+// gfx906/gfx908/gfx90a:
 //   ttmp11 = SQ_WAVE_IB_STS[20:15], 0[1:0], DebugEnabled[0], 0[15:0], NoScratch[0], WaveIdInWG[5:0]
+// gfx940/gfx941/gfx942:
+//   ttmp13 = SQ_WAVE_IB_STS[20:15], 0[1:0], DebugEnabled[0], 0[22:0]
 // gfx10:
 //   ttmp1 = 0[0], PCRewind[5:0], HostTrap[0], TrapId[7:0], PC[47:32]
 // gfx1010:
@@ -117,7 +125,11 @@ trap_entry:
   // If llvm.debugtrap and debugger is not attached.
   s_cmp_eq_u32         ttmp2, TRAP_ID_DEBUGTRAP
   s_cbranch_scc0       .no_skip_debugtrap
-  s_bitcmp0_b32        ttmp11, TTMP11_DEBUG_ENABLED_SHIFT
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || .amdgcn.gfx_generation_number == 10
+  s_bitcmp0_b32        ttmp11, TTMP_DEBUG_ENABLED_SHIFT
+.else
+  s_bitcmp0_b32        ttmp13, TTMP_DEBUG_ENABLED_SHIFT
+.endif
   s_cbranch_scc0       .no_skip_debugtrap
 
   // Ignore llvm.debugtrap.
@@ -200,6 +212,7 @@ trap_entry:
   s_mov_b32            m0, ttmp3
   s_nop                0x0 // Manually inserted wait states
   s_sendmsg            sendmsg(MSG_INTERRUPT)
+  s_waitcnt            lgkmcnt(0) // Wait for the message to go out.
   s_mov_b32            m0, ttmp2
 
   // Parking the wave requires saving the original pc in the preserved ttmps.
@@ -212,26 +225,18 @@ trap_entry:
   //
   // ttmp7:  pc_lo[31:0]
   // ttmp11: 1st_level_ttmp11[31:23] pc_hi[15:0] 1st_level_ttmp11[6:0]
-
-.if ((.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor >= 3) || .amdgcn.gfx_generation_number > 10)
-  s_branch             .halt_wave
-.else
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || (.amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3) || (.amdgcn.gfx_generation_number == 11)
   // Save the PC
   s_mov_b32            ttmp7, ttmp0
   s_and_b32            ttmp1, ttmp1, SQ_WAVE_PC_HI_ADDRESS_MASK
-  s_lshl_b32           ttmp1, ttmp1, TTMP11_PC_HI_SHIFT
-  s_andn2_b32          ttmp11, ttmp11, (SQ_WAVE_PC_HI_ADDRESS_MASK << TTMP11_PC_HI_SHIFT)
+  s_lshl_b32           ttmp1, ttmp1, TTMP_PC_HI_SHIFT
+  s_andn2_b32          ttmp11, ttmp11, (SQ_WAVE_PC_HI_ADDRESS_MASK << TTMP_PC_HI_SHIFT)
   s_or_b32             ttmp11, ttmp11, ttmp1
 
   // Park the wave
   s_getpc_b64          [ttmp0, ttmp1]
   s_add_u32            ttmp0, ttmp0, .parked - .
   s_addc_u32           ttmp1, ttmp1, 0x0
-  s_branch             .halt_wave
-
-.parked:
-  s_trap               0x2
-  s_branch             .parked
 .endif
 
 .halt_wave:
@@ -239,17 +244,29 @@ trap_entry:
   s_bitset1_b32        ttmp6, TTMP6_WAVE_STOPPED_SHIFT
   s_bitset1_b32        ttmp12, SQ_WAVE_STATUS_HALT_SHIFT
 
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
+  s_bitcmp1_b32        ttmp11, TTMP11_TTMPS_SETUP_SHIFT
+  s_cbranch_scc1       .ttmps_initialized
+  s_mov_b32            ttmp4, 0
+  s_mov_b32            ttmp5, 0
+  s_bitset1_b32        ttmp11, TTMP11_TTMPS_SETUP_SHIFT
+.ttmps_initialized:
+.endif
+
 .exit_trap:
   // Restore SQ_WAVE_IB_STS.
 .if .amdgcn.gfx_generation_number == 9
-  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+.if .amdgcn.gfx_generation_minor < 4
+  s_lshr_b32           ttmp2, ttmp11, (TTMP_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+.else
+  s_lshr_b32           ttmp2, ttmp13, (TTMP_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+.endif
   s_and_b32            ttmp2, ttmp2, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
   s_setreg_b32         hwreg(HW_REG_IB_STS), ttmp2
-.endif
-.if .amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3
-  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
+.elseif .amdgcn.gfx_generation_number == 10 && .amdgcn.gfx_generation_minor < 3
+  s_lshr_b32           ttmp2, ttmp11, (TTMP_SAVE_RCNT_FIRST_REPLAY_SHIFT - SQ_WAVE_IB_STS_FIRST_REPLAY_SHIFT)
   s_and_b32            ttmp3, ttmp2, SQ_WAVE_IB_STS_RCNT_FIRST_REPLAY_MASK
-  s_lshr_b32           ttmp2, ttmp11, (TTMP11_SAVE_REPLAY_W64H_SHIFT - SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT)
+  s_lshr_b32           ttmp2, ttmp11, (TTMP_SAVE_REPLAY_W64H_SHIFT - SQ_WAVE_IB_STS_REPLAY_W64H_SHIFT)
   s_and_b32            ttmp2, ttmp2, SQ_WAVE_IB_STS_REPLAY_W64H_MASK
   s_or_b32             ttmp2, ttmp2, ttmp3
   s_setreg_b32         hwreg(HW_REG_IB_STS), ttmp2
@@ -262,3 +279,15 @@ trap_entry:
 
   // Return to original (possibly modified) PC.
   s_rfe_b64            [ttmp0, ttmp1]
+
+.parked:
+  s_trap               0x2
+  s_branch             .parked
+
+// For gfx11, add padding instructions so we can ensure instruction cache
+// prefetch always has something to load.
+.if .amdgcn.gfx_generation_number == 11
+.rept (256 - ((. - trap_entry) % 64)) / 4
+  s_code_end
+.endr
+.endif

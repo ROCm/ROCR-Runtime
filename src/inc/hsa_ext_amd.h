@@ -51,9 +51,11 @@
 /*
  * - 1.0 - initial version
  * - 1.1 - dmabuf export
+ * - 1.2 - hsa_amd_memory_async_copy_on_engine
+ * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 1
+#define HSA_AMD_INTERFACE_VERSION_MINOR 3
 
 #ifdef __cplusplus
 extern "C" {
@@ -387,7 +389,17 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for version of IOMMU supported by agent.
    * The type of this attribute is hsa_amd_iommu_version_t.
    */
-  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110
+  HSA_AMD_AGENT_INFO_IOMMU_SUPPORT = 0xA110,
+  /**
+   * Queries for number of XCCs within the agent.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_NUM_XCC = 0xA111,
+  /**
+   * Queries for driver unique identifier.
+   * The type of this attribute is uint32_t.
+   */
+  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112
 } hsa_amd_agent_info_t;
 
 /**
@@ -1008,7 +1020,14 @@ typedef enum hsa_amd_memory_pool_global_flag_s {
   /**
    * Writes to memory in this pool can be performed by a single agent at a time.
    */
-  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4
+  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED = 4,
+
+  /** Updates to memory in this memory pool have extended scope, acting as
+   * system-scope atomics for variables in memory regions of this type.
+   * Note: On non-compliant systems, device-specific actions may be required
+   * for system-scope coherence. */
+  HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED = 8,
+
 } hsa_amd_memory_pool_global_flag_t;
 
 typedef enum hsa_amd_memory_pool_location_s {
@@ -1942,31 +1961,38 @@ typedef struct hsa_amd_pointer_info_s {
   */
   hsa_amd_pointer_type_t type;
   /*
-  Base address at which non-host agents may access the allocation.
+  Base address at which non-host agents may access the allocation. This field is
+  not meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* agentBaseAddress;
   /*
-  Base address at which the host agent may access the allocation.
+  Base address at which the host agent may access the allocation. This field is
+  not meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* hostBaseAddress;
   /*
-  Size of the allocation
+  Size of the allocation. This field is not meaningful if the type of the allocation
+  is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   size_t sizeInBytes;
   /*
-  Application provided value.
+  Application provided value. This field is not meaningful if the type of the
+  allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   void* userData;
   /*
-  Reports an agent which "owns" (ie has preferred access to) the pool in which the allocation was
+  Reports an agent which "owns" (ie has preferred access to) the pool in which the
+  allocation was
   made.  When multiple agents share equal access to a pool (ex: multiple CPU agents, or multi-die
-  GPU boards) any such agent may be returned.
+  GPU boards) any such agent may be returned. This field is not meaningful if
+  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN or if this agent is not available in
+  this process, for e.g if this agent is masked using ROCR_VISIBLE_DEVICES.
   */
   hsa_agent_t agentOwner;
   /*
   Contains a bitfield of hsa_amd_memory_pool_global_flag_t values.
-  Reports the effective global flags bitmask for the allocation.  This field is not meaningful if
-  the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
+  Reports the effective global flags bitmask for the allocation.  This field is not
+  meaningful if the type of the allocation is HSA_EXT_POINTER_TYPE_UNKNOWN.
   */
   uint32_t global_flags;
 } hsa_amd_pointer_info_t;
@@ -1974,7 +2000,9 @@ typedef struct hsa_amd_pointer_info_s {
 /**
  * @brief Retrieves information about the allocation referenced by the given
  * pointer.  Optionally returns the number and list of agents which can
- * directly access the allocation.
+ * directly access the allocation. In case this virtual address is unknown, the
+ * pointer type returned will be HSA_EXT_POINTER_TYPE_UNKNOWN and the only fields
+ * that are valid after hsa_amd_pointer_info returns are size and type.
  *
  * @param[in] ptr Pointer which references the allocation to retrieve info for.
  *
@@ -2047,9 +2075,10 @@ typedef struct hsa_amd_ipc_memory_s {
  * region has been attached (via hsa_amd_ipc_memory_attach) in the remote
  * process prior to releasing that memory in the local process.
  * Repeated calls for the same allocation may, but are not required to, return
- * unique handles.
+ * unique handles. The allocation needs to be on memory on an agent of type
+ * HSA_DEVICE_TYPE_GPU.
  *
- * @param[in] ptr Pointer to memory allocated via ROCr APIs to prepare for
+ * @param[in] ptr Pointer to device memory allocated via ROCr APIs to prepare for
  * sharing.
  *
  * @param[in] len Length in bytes of the allocation to share.
