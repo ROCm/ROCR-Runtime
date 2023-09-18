@@ -742,14 +742,22 @@ const char *PersistentIterateIsa =
     SHADER_MACROS_FLAT
     R"(
         // Compute address of output buffer
-        v_mov_b32               v0, s4          // use workgroup id as index
+        .if (.amdgcn.gfx_generation_number >= 12)
+            v_mov_b32               v0, ttmp9   // use workgroup id as index
+        .else
+            v_mov_b32               v0, s4      // use workgroup id as index
+        .endif
         v_lshlrev_b32           v0, 2, v0       // v0 *= 4
         V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
         v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
         V_ADD_CO_CI_U32         v5, v5, 0       // v[4:5] = s[2:3] + v0 * 4
 
         // Store known-value output in register
-        FLAT_LOAD_DWORD_NSS     v6, v[4:5] glc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORD_NSS     v6, v[4:5] scope:SCOPE_SYS
+        .else
+            FLAT_LOAD_DWORD_NSS     v6, v[4:5] glc
+        .endif
         s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
 
         // Initialize counter
@@ -759,7 +767,11 @@ const char *PersistentIterateIsa =
         flat_store_dword        v[4:5], v6      // store known-val in output
         V_ADD_CO_U32            v7, 1, v7       // increment counter
 
-        s_load_dword            s6, s[0:1], 0 glc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_load_dword            s6, s[0:1], 0 scope:SCOPE_SYS
+        .else
+            s_load_dword            s6, s[0:1], 0 glc
+        .endif
         s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
         s_cmp_eq_i32            s6, 0x12345678  // compare input buf to stopval
         s_cbranch_scc1          L_QUIT          // branch if notified to quit by host
