@@ -514,6 +514,11 @@ typedef enum {
    * this attribute is bool.
    */
   HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED = 0x205,
+  /**
+   * Returns true if XNACK is enabled on this system.  The type of
+   * this attribute is bool.
+   */
+  HSA_AMD_SYSTEM_INFO_XNACK_ENABLED = 0x206,
 } hsa_system_info_t;
 
 /**

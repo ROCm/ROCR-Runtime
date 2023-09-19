@@ -709,6 +709,10 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((bool*)value) = core::Runtime::runtime_singleton_->VirtualMemApiSupported();
       break;
     }
+    case HSA_AMD_SYSTEM_INFO_XNACK_ENABLED: {
+      *((bool*)value) = core::Runtime::runtime_singleton_->XnackEnabled();
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
