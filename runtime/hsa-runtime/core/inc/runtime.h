@@ -455,6 +455,8 @@ class Runtime {
   KfdVersion_t KfdVersion() const { return kfd_version; }
 
   bool VirtualMemApiSupported() const { return virtual_mem_api_supported_; }
+  bool XnackEnabled() const { return xnack_enabled_; }
+  void XnackEnabled(bool enable) { xnack_enabled_ = enable; }
 
  protected:
   static void AsyncEventsLoop(void*);
@@ -708,6 +710,7 @@ class Runtime {
   int GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd, uint64_t* cpu_addr);
 
   bool virtual_mem_api_supported_;
+  bool xnack_enabled_;
 
   typedef void* ThunkHandle;
 

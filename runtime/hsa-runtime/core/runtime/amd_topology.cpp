@@ -351,6 +351,7 @@ void BuildTopology() {
 
   // Determine the Xnack mode to be bound for system
   bool xnack_mode = BindXnackMode();
+  core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
 
   // Instantiate ROCr objects to encapsulate Gpu devices
   SurfaceGpuList(gpu_usr_list, xnack_mode, true);
