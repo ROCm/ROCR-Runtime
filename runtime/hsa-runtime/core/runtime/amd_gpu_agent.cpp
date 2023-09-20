@@ -962,6 +962,7 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   for (int i = 0; i < gang_factor; i++) {
     // Set leader and gang status to blit
     SetCopyRequestRefCount(true);
+    MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
     lazy_ptr<core::Blit>& blit = has_aux_gang ? blits_[i + 1] :
                                                 GetBlitObject(dst_agent, src_agent, size, i);
     blit->GangLeader(gang_factor > 1 && !gang_leader_set);
@@ -980,7 +981,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                            chunk, dep_signals,
                                            out_signal, gang_signals);
     }
-    SetCopyRequestRefCount(false);
 
     if (stat)
       return stat;
@@ -1048,6 +1048,7 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
   }
 
   SetCopyRequestRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
   lazy_ptr<core::Blit>& blit = GetBlitObject(engine_offset);
 
   if (profiling_enabled()) {
@@ -1060,17 +1061,16 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
 
   hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal,
                                                     gang_signals);
-  SetCopyRequestRefCount(false);
 
   return stat;
 }
 
 bool GpuAgent::DmaEngineIsFree(uint32_t engine_offset) {
   SetCopyStatusCheckRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyStatusCheckRefCount(false); });
   bool is_free = !!!(sdma_blit_used_mask_ & (1 << engine_offset)) ||
                     (blits_[engine_offset]->isSDMA() &&
                      !!!blits_[engine_offset]->PendingBytes());
-  SetCopyStatusCheckRefCount(false);
   return is_free;
 }
 
@@ -1129,11 +1129,11 @@ hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_
   if (isa_->GetMajorVersion() < 9) return HSA_STATUS_ERROR_INVALID_AGENT;
 
   SetCopyRequestRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
   lazy_ptr<core::Blit>& blit = GetBlitObject((dir == hsaHostToDevice) ? BlitHostToDev :
                                                                         BlitDevToHost);
 
   if (!blit->isSDMA()) {
-    SetCopyRequestRefCount(false);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -1146,7 +1146,6 @@ hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_
   BlitSdmaBase* sdmaBlit = static_cast<BlitSdmaBase*>((*blit).get());
   hsa_status_t stat = sdmaBlit->SubmitCopyRectCommand(dst, dst_offset, src, src_offset, range,
                                                       dep_signals, out_signal);
-  SetCopyRequestRefCount(false);
 
   return stat;
 }
