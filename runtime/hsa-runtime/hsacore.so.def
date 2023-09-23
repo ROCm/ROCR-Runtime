@@ -252,6 +252,7 @@ global:
 	hsa_tools_scratch_event_free_end;
 	hsa_tools_scratch_event_async_reclaim_start;
 	hsa_tools_scratch_event_async_reclaim_end;
+	hsa_ven_amd_pcs_iterate_configuration;
 
 local:
     *;

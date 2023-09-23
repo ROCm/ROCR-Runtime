@@ -65,6 +65,7 @@
 #include "core/util/os.h"
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
+#include "inc/hsa_ven_amd_pc_sampling.h"
 
 #include "core/inc/amd_trap_handler_v1.h"
 #include "core/inc/amd_blit_shaders.h"
@@ -2300,6 +2301,67 @@ core::Agent* GpuAgent::GetNearestCpuAgent() const {
   }
   return nearCpu;
 }
+
+hsa_status_t ConvertHsaKmtPcSamplingInfoToHsa(HsaPcSamplingInfo* hsaKmtPcSampling,
+                                              hsa_ven_amd_pcs_configuration_t* hsaPcSampling) {
+  assert(hsaKmtPcSampling && "Invalid hsaKmtPcSampling");
+  assert(hsaPcSampling && "Invalid hsaPcSampling");
+
+  switch (hsaKmtPcSampling->method) {
+    case HSA_PC_SAMPLING_METHOD_KIND_HOSTTRAP_V1:
+      hsaPcSampling->method = HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1;
+      break;
+    case HSA_PC_SAMPLING_METHOD_KIND_STOCHASTIC_V1:
+      hsaPcSampling->method = HSA_VEN_AMD_PCS_METHOD_STOCHASTIC_V1;
+      break;
+    default:
+      // Sampling method not supported do not return this method to the user
+      return HSA_STATUS_ERROR;
+  }
+  switch (hsaKmtPcSampling->units) {
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_MICROSECONDS:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_MICRO_SECONDS;
+      break;
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_CYCLES:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_CLOCK_CYCLES;
+      break;
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_INSTRUCTIONS:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_INSTRUCTIONS;
+      break;
+    default:
+      // Sampling unit not supported do not return this method to the user
+      return HSA_STATUS_ERROR;
+  }
+
+  hsaPcSampling->min_interval = hsaKmtPcSampling->value_min;
+  hsaPcSampling->max_interval = hsaKmtPcSampling->value_max;
+  hsaPcSampling->flags = hsaKmtPcSampling->flags;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                               void* cb_data) {
+   uint32_t size = 0;
+
+  // First query to get size of list needed
+  HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(node_id(), NULL, 0, &size);
+  if (ret != HSAKMT_STATUS_SUCCESS || size == 0) return HSA_STATUS_ERROR;
+
+  std::vector<HsaPcSamplingInfo> sampleInfoList(size);
+  ret = hsaKmtPcSamplingQueryCapabilities(node_id(), sampleInfoList.data(), sampleInfoList.size(),
+                                          &size);
+
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  for (uint32_t i = 0; i < size; i++) {
+    hsa_ven_amd_pcs_configuration_t hsaPcSampling;
+    if (ConvertHsaKmtPcSamplingInfoToHsa(&sampleInfoList[i], &hsaPcSampling) == HSA_STATUS_SUCCESS
+        && cb(&hsaPcSampling, cb_data) == HSA_STATUS_INFO_BREAK)
+          return HSA_STATUS_SUCCESS;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
 
 }  // namespace amd
 }  // namespace rocr

@@ -79,6 +79,22 @@ template <class T> static __forceinline bool IsValid(T* ptr) {
 
 namespace pcs {
 
+hsa_status_t hsa_ven_amd_pcs_iterate_configuration(
+    hsa_agent_t hsa_agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
+    void* callback_data) {
+  TRY;
+  IS_OPEN();
+
+  core::Agent* agent = core::Agent::Convert(hsa_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  return PcsRuntime::instance()->PcSamplingIterateConfig(agent, configuration_callback,
+                                                         callback_data);
+  CATCH;
+}
+
+
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api) {
   pcs_api->hsa_ven_amd_pcs_iterate_configuration_fn = hsa_ven_amd_pcs_iterate_configuration;
   pcs_api->hsa_ven_amd_pcs_create_fn = hsa_ven_amd_pcs_create;

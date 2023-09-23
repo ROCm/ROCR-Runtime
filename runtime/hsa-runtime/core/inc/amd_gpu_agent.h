@@ -187,6 +187,11 @@ class GpuAgentInt : public core::Agent {
   // Only valid when async scratch reclaim is supported
   // @retval HSA_STATUS_SUCCESS if successful
   virtual hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) = 0;
+
+  // @brief Iterate through supported PC Sampling configurations
+  // @retval HSA_STATUS_SUCCESS if successful
+  virtual hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                               void* cb_data) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -466,6 +471,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief Override from core::Agent.
   hsa_status_t EnableDmaProfiling(bool enable) override;
+
+  hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                       void* cb_data);
 
   // @brief Node properties.
   const HsaNodeProperties properties_;
