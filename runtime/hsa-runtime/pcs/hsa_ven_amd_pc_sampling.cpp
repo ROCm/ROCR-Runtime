@@ -94,10 +94,50 @@ hsa_status_t hsa_ven_amd_pcs_iterate_configuration(
   CATCH;
 }
 
+hsa_status_t hsa_ven_amd_pcs_create(hsa_agent_t hsa_agent, hsa_ven_amd_pcs_method_kind_t method,
+                                    hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency,
+                                    size_t buffer_size,
+                                    hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                    void* client_cb_data, hsa_ven_amd_pcs_t* handle) {
+  TRY;
+  IS_OPEN();
+  core::Agent* agent = core::Agent::Convert(hsa_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  return PcsRuntime::instance()->PcSamplingCreate(
+      agent, method, units, interval, latency, buffer_size, data_ready_cb, client_cb_data, handle);
+  CATCH;
+}
+
+hsa_status_t hsa_ven_amd_pcs_create_from_id(uint32_t pcs_id, hsa_agent_t hsa_agent,
+                                            hsa_ven_amd_pcs_method_kind_t method,
+                                            hsa_ven_amd_pcs_units_t units, size_t interval,
+                                            size_t latency, size_t buffer_size,
+                                            hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                            void* client_cb_data, hsa_ven_amd_pcs_t* handle) {
+  TRY;
+  IS_OPEN();
+  core::Agent* agent = core::Agent::Convert(hsa_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  return PcsRuntime::instance()->PcSamplingCreateFromId(pcs_id, agent, method, units, interval,
+                                                        latency, buffer_size, data_ready_cb,
+                                                        client_cb_data, handle);
+  CATCH;
+}
+
+hsa_status_t hsa_ven_amd_pcs_destroy(hsa_ven_amd_pcs_t handle) {
+  TRY;
+  return PcsRuntime::instance()->PcSamplingDestroy(handle);
+  CATCH;
+}
 
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api) {
   pcs_api->hsa_ven_amd_pcs_iterate_configuration_fn = hsa_ven_amd_pcs_iterate_configuration;
   pcs_api->hsa_ven_amd_pcs_create_fn = hsa_ven_amd_pcs_create;
+  pcs_api->hsa_ven_amd_pcs_create_from_id_fn = hsa_ven_amd_pcs_create_from_id;
   pcs_api->hsa_ven_amd_pcs_destroy_fn = hsa_ven_amd_pcs_destroy;
   pcs_api->hsa_ven_amd_pcs_start_fn = hsa_ven_amd_pcs_start;
   pcs_api->hsa_ven_amd_pcs_stop_fn = hsa_ven_amd_pcs_stop;

@@ -59,6 +59,20 @@ hsa_status_t hsa_ven_amd_pcs_iterate_configuration(
     hsa_agent_t agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
     void* callback_data);
 
+hsa_status_t hsa_ven_amd_pcs_create(hsa_agent_t agent, hsa_ven_amd_pcs_method_kind_t method,
+                                    hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency,
+                                    size_t buffer_size,
+                                    hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback,
+                                    void* client_callback_data, hsa_ven_amd_pcs_t* pc_sampling);
+
+hsa_status_t hsa_ven_amd_pcs_create_from_id(
+    uint32_t pcs_id, hsa_agent_t agent, hsa_ven_amd_pcs_method_kind_t method,
+    hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency, size_t buffer_size,
+    hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback, void* client_callback_data,
+    hsa_ven_amd_pcs_t* pc_sampling);
+
+hsa_status_t hsa_ven_amd_pcs_destroy(hsa_ven_amd_pcs_t pc_sampling);
+
 // Update Api table with func pointers that implement functionality
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api);
 
