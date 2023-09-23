@@ -2400,11 +2400,87 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
 }
 
 hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (PcSamplingStop(session) != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
   pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
   HSAKMT_STATUS retKmt = hsaKmtPcSamplingDestroy(node_id(), session.ThunkId());
   ht_data.session = NULL;
 
   return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+}
+
+hsa_status_t GpuAgent::PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (session.isActive()) return HSA_STATUS_SUCCESS;
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  auto method = session.method();
+  if (method == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    if (ht_data.session->isActive()) {
+      debug_warning("Already have a Host trap session in progress!");
+      return (hsa_status_t)HSA_STATUS_ERROR_RESOURCE_BUSY;
+    }
+    ht_data.session->start();
+    // This thread will handle all hosttrap sessions on this agent
+    // In the future, there will be another thread to handle stochastic sessions.
+    ht_data.thread = os::CreateThread(PcSamplingThreadRun, (void*)this);
+    if (!ht_data.thread)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Failed to start PC Sampling thread.");
+  }
+
+  if (hsaKmtPcSamplingStart(node_id(), session.ThunkId()) == HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_SUCCESS;
+
+  debug_print("Failed to start PC sampling session with thunkId:%d\n", session.ThunkId());
+  if (method == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    ht_data.session->stop();
+    os::WaitForThread(ht_data.thread);
+    os::CloseThread(ht_data.thread);
+    ht_data.thread = NULL;
+  }
+
+  return HSA_STATUS_ERROR;
+}
+
+hsa_status_t GpuAgent::PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (!session.isActive()) return HSA_STATUS_SUCCESS;
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  session.stop();
+
+  HSAKMT_STATUS retKmt = hsaKmtPcSamplingStop(node_id(), session.ThunkId());
+  if (retKmt != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Failed to stop PC Sampling session.");
+
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    os::WaitForThread(ht_data.thread);
+    os::CloseThread(ht_data.thread);
+    ht_data.thread = NULL;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+void GpuAgent::PcSamplingThread() {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  while (ht_data.session->isActive()) {
+    // Implement code to read data from 2nd level trap handler here
+    sleep(1);
+  }
+  debug_print("PcSamplingThread::Exiting\n");
+}
+
+void GpuAgent::PcSamplingThreadRun(void* _agent) {
+  GpuAgent* agent = (GpuAgent*)_agent;
+  agent->PcSamplingThread();
+  debug_print("PcSamplingThread exiting...");
+}
+
+hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) {
+  // TODO: implement me
+  return HSA_STATUS_SUCCESS;
 }
 
 }  // namespace amd

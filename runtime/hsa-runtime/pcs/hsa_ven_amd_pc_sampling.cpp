@@ -134,6 +134,24 @@ hsa_status_t hsa_ven_amd_pcs_destroy(hsa_ven_amd_pcs_t handle) {
   CATCH;
 }
 
+hsa_status_t hsa_ven_amd_pcs_start(hsa_ven_amd_pcs_t handle) {
+  TRY;
+  return PcsRuntime::instance()->PcSamplingStart(handle);
+  CATCH;
+}
+
+hsa_status_t hsa_ven_amd_pcs_stop(hsa_ven_amd_pcs_t handle) {
+  TRY;
+  return PcsRuntime::instance()->PcSamplingStop(handle);
+  CATCH;
+}
+
+hsa_status_t hsa_ven_amd_pcs_flush(hsa_ven_amd_pcs_t handle) {
+  TRY;
+  return PcsRuntime::instance()->PcSamplingFlush(handle);
+  CATCH;
+}
+
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api) {
   pcs_api->hsa_ven_amd_pcs_iterate_configuration_fn = hsa_ven_amd_pcs_iterate_configuration;
   pcs_api->hsa_ven_amd_pcs_create_fn = hsa_ven_amd_pcs_create;

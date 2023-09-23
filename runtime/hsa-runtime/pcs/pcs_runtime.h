@@ -70,7 +70,7 @@ class PcsRuntime {
 
   class PcSamplingSession {
    public:
-    PcSamplingSession() : agent(NULL), thunkId_(0){};
+    PcSamplingSession() : agent(NULL), thunkId_(0), active_(false){};
     PcSamplingSession(core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method,
                       hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency,
                       size_t buffer_size, hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback,
@@ -88,11 +88,15 @@ class PcsRuntime {
     core::Agent* agent;
     void SetThunkId(HsaPcSamplingTraceId thunkId) { thunkId_ = thunkId; }
     HsaPcSamplingTraceId ThunkId() { return thunkId_; }
+    bool isActive() { return active_; }
+    void start() { active_ = true; }
+    void stop() { active_ = false; }
 
    private:
     HsaPcSamplingTraceId thunkId_;
 
-    bool valid_;  // Whether configuration parameters are valid
+    bool active_;  // Set to true when the session is started
+    bool valid_;   // Whether configuration parameters are valid
     size_t sample_size_;
 
     struct client_session_data_t {
@@ -126,6 +130,9 @@ class PcsRuntime {
                                       void* client_cb_data, hsa_ven_amd_pcs_t* handle);
 
   hsa_status_t PcSamplingDestroy(hsa_ven_amd_pcs_t handle);
+  hsa_status_t PcSamplingStart(hsa_ven_amd_pcs_t handle);
+  hsa_status_t PcSamplingStop(hsa_ven_amd_pcs_t handle);
+  hsa_status_t PcSamplingFlush(hsa_ven_amd_pcs_t handle);
 
  private:
   /// @brief Initialize singleton object, must be called once.
