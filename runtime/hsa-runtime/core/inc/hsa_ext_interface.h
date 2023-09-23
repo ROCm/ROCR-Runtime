@@ -57,11 +57,16 @@ struct ImageExtTableInternal : public ImageExtTable {
   decltype(::hsa_amd_image_get_info_max_dim)* hsa_amd_image_get_info_max_dim_fn;
 };
 
+struct PcSamplingExtTableInternal : public PcSamplingExtTable {};
+
 class ExtensionEntryPoints {
  public:
 
   // Table of function pointers for Hsa Extension Image
   ImageExtTableInternal image_api;
+
+  // Table of function pointers for Hsa vendor PC Sampling
+  PcSamplingExtTableInternal pcs_api;
 
   // Table of function pointers for Hsa Extension Finalizer
   FinalizerExtTable finalizer_api;
@@ -77,6 +82,12 @@ class ExtensionEntryPoints {
   // Reset Api tables to point to null implementations
   void UnloadImage();
 
+  // Update PC Sampling Api table with handles to implementation
+  void LoadPcSampling();
+
+  // Reset PC Sampling tables to point to null implementations
+  void UnloadPcSampling();
+
  private:
   typedef void (*Load_t)(const ::HsaApiTable* table);
   typedef void (*Unload_t)();
@@ -89,6 +100,9 @@ class ExtensionEntryPoints {
   // Initialize table for HSA Image Extension Api's
   void InitImageExtTable();
 
+  // Initialize table for HSA PC Sampling Extension Api's
+  void InitPcSamplingExtTable();
+
   // Initialize Amd Ext table for Api related to Images
   void InitAmdExtTable();
 
@@ -96,7 +110,7 @@ class ExtensionEntryPoints {
   void UpdateAmdExtTable(decltype(::hsa_amd_image_create)* func_ptr);
 
   DISALLOW_COPY_AND_ASSIGN(ExtensionEntryPoints);
-};  
+};
 }   //  namespace core
 }   //  namespace rocr
 

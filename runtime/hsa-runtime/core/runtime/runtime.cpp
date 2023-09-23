@@ -1998,6 +1998,11 @@ void Runtime::LoadExtensions() {
   extensions_.LoadImage();
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
+
+  // Update Hsa Api Table with handle of PCS extension Apis
+  extensions_.LoadPcSampling();
+  hsa_api_table_.LinkExts(&extensions_.pcs_api,
+                          core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }

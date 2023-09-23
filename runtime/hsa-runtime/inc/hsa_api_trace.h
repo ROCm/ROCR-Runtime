@@ -50,11 +50,13 @@
 #include "hsa_ext_amd.h"
 #include "hsa_ext_finalize.h"
 #include "hsa_amd_tool.h"
+#include "hsa_ven_amd_pc_sampling.h"
 #else
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_finalize.h"
 #include "inc/hsa_amd_tool.h"
+#include "inc/hsa_ven_amd_pc_sampling.h"
 #endif
 
 #include <string.h>
@@ -175,6 +177,19 @@ struct ImageExtTable {
   decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
   decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
 };
+
+// Table to export HSA PC Sampling Extension Apis
+struct PcSamplingExtTable {
+  ApiTableVersion version;
+  decltype(hsa_ven_amd_pcs_iterate_configuration)* hsa_ven_amd_pcs_iterate_configuration_fn;
+  decltype(hsa_ven_amd_pcs_create)* hsa_ven_amd_pcs_create_fn;
+  decltype(hsa_ven_amd_pcs_create_from_id)* hsa_ven_amd_pcs_create_from_id_fn;
+  decltype(hsa_ven_amd_pcs_destroy)* hsa_ven_amd_pcs_destroy_fn;
+  decltype(hsa_ven_amd_pcs_start)* hsa_ven_amd_pcs_start_fn;
+  decltype(hsa_ven_amd_pcs_stop)* hsa_ven_amd_pcs_stop_fn;
+  decltype(hsa_ven_amd_pcs_flush)* hsa_ven_amd_pcs_flush_fn;
+};
+
 
 // Table to export AMD Extension Apis
 struct AmdExtTable {
@@ -449,6 +464,9 @@ struct HsaApiTable {
 
   // Table of function pointers for tools to use
   ToolsApiTable* tools_;
+
+  // Table of function pointers to AMD PC Sampling Extension
+  PcSamplingExtTable* pc_sampling_ext_;
 };
 
 // Structure containing instances of different api tables
@@ -459,6 +477,7 @@ struct HsaApiTableContainer {
 	FinalizerExtTable finalizer_ext;
 	ImageExtTable image_ext;
 	ToolsApiTable tools;
+  PcSamplingExtTable pc_sampling_ext;
 
   // Default initialization of a container instance
   HsaApiTableContainer() {
@@ -490,6 +509,11 @@ struct HsaApiTableContainer {
     tools.version.minor_id = sizeof(ToolsApiTable);
     tools.version.step_id = HSA_TOOLS_API_TABLE_STEP_VERSION;
     root.tools_ = &tools;
+
+    pc_sampling_ext.version.major_id = HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION;
+    pc_sampling_ext.version.minor_id = sizeof(PcSamplingExtTable);
+    pc_sampling_ext.version.step_id = HSA_PC_SAMPLING_API_TABLE_STEP_VERSION;
+    root.pc_sampling_ext_ = &pc_sampling_ext;
   }
 };
 
@@ -547,5 +571,7 @@ static void inline copyTables(const HsaApiTable* src, HsaApiTable* dest) {
     copyElement(&dest->image_ext_->version, &src->image_ext_->version);
   if ((offsetof(HsaApiTable, tools_) < dest->version.minor_id))
     copyElement(&dest->tools_->version, &src->tools_->version);
+  if ((offsetof(HsaApiTable, pc_sampling_ext_) < dest->version.minor_id))
+    copyElement(&dest->pc_sampling_ext_->version, &src->pc_sampling_ext_->version);
 }
 #endif

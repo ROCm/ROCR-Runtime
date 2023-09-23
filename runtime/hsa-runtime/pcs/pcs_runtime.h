@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,29 +40,45 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
-#define HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+#ifndef HSA_RUNTIME_PCS_RUNTIME_H
+#define HSA_RUNTIME_PCS_RUNTIME_H
 
-// CODE IN THIS FILE **MUST** BE C-COMPATIBLE
+#include <atomic>
+#include <map>
+#include <mutex>
 
-// Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION                 0x03
-#define HSA_CORE_API_TABLE_MAJOR_VERSION            0x02
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION         0x02
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION       0x02
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION           0x02
-#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION      0x01
-#define HSA_TOOLS_API_TABLE_MAJOR_VERSION           0x01
-#define HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION     0x01
+#include "hsakmt/hsakmt.h"
 
-// Step Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_STEP_VERSION                  0x01
-#define HSA_CORE_API_TABLE_STEP_VERSION             0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x01
-#define HSA_FINALIZER_API_TABLE_STEP_VERSION        0x00
-#define HSA_IMAGE_API_TABLE_STEP_VERSION            0x00
-#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION       0x00
-#define HSA_TOOLS_API_TABLE_STEP_VERSION            0x00
-#define HSA_PC_SAMPLING_API_TABLE_STEP_VERSION      0x00
+#include "hsa_ven_amd_pc_sampling.h"
+#include "core/inc/agent.h"
+#include "core/inc/exceptions.h"
 
-#endif  // HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+
+namespace rocr {
+namespace pcs {
+
+class PcsRuntime {
+ public:
+  PcsRuntime() {}
+  ~PcsRuntime() {}
+
+  /// @brief Getter for the PcsRuntime singleton object.
+  static PcsRuntime* instance();
+
+  /// @brief Destroy singleton object.
+  static void DestroySingleton();
+
+ private:
+  /// @brief Initialize singleton object, must be called once.
+  static PcsRuntime* CreateSingleton();
+
+  /// Pointer to singleton object.
+  static std::atomic<PcsRuntime*> instance_;
+  static std::mutex instance_mutex_;
+
+  DISALLOW_COPY_AND_ASSIGN(PcsRuntime);
+};
+
+}  // namespace pcs
+}  // namespace rocr
+#endif  // HSA_RUNTIME_PCS_RUNTIME_H
