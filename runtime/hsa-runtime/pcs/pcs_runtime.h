@@ -59,7 +59,7 @@ namespace pcs {
 
 class PcsRuntime {
  public:
-  PcsRuntime() {}
+  PcsRuntime() : pc_sampling_id_(0) {}
   ~PcsRuntime() {}
 
   /// @brief Getter for the PcsRuntime singleton object.
@@ -68,9 +68,64 @@ class PcsRuntime {
   /// @brief Destroy singleton object.
   static void DestroySingleton();
 
+  class PcSamplingSession {
+   public:
+    PcSamplingSession() : agent(NULL), thunkId_(0){};
+    PcSamplingSession(core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method,
+                      hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency,
+                      size_t buffer_size, hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback,
+                      void* client_callback_data);
+    ~PcSamplingSession(){};
+
+    const bool isValid() { return valid_; }
+    const size_t buffer_size() { return csd.buffer_size; }
+    const hsa_ven_amd_pcs_method_kind_t method() { return csd.method; }
+    const size_t latency() { return csd.latency; }
+    const size_t sample_size() { return sample_size_; }
+
+    void GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sampleInfo);
+
+    core::Agent* agent;
+    void SetThunkId(HsaPcSamplingTraceId thunkId) { thunkId_ = thunkId; }
+    HsaPcSamplingTraceId ThunkId() { return thunkId_; }
+
+   private:
+    HsaPcSamplingTraceId thunkId_;
+
+    bool valid_;  // Whether configuration parameters are valid
+    size_t sample_size_;
+
+    struct client_session_data_t {
+      hsa_ven_amd_pcs_method_kind_t method;
+      hsa_ven_amd_pcs_units_t units;
+      size_t interval;
+      size_t latency;
+      size_t buffer_size;
+      hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback;
+      void* client_callback_data;
+    };
+    struct client_session_data_t csd;
+  };  // class PcSamplingSession
+
   hsa_status_t PcSamplingIterateConfig(
       core::Agent* agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
       void* callback_data);
+
+  hsa_status_t PcSamplingCreate(core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method,
+                                hsa_ven_amd_pcs_units_t units, size_t interval, size_t latency,
+                                size_t buffer_size,
+                                hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                void* client_cb_data, hsa_ven_amd_pcs_t* handle);
+
+
+  hsa_status_t PcSamplingCreateFromId(uint32_t ioctl_pcs_id, core::Agent* agent,
+                                      hsa_ven_amd_pcs_method_kind_t method,
+                                      hsa_ven_amd_pcs_units_t units, size_t interval,
+                                      size_t latency, size_t buffer_size,
+                                      hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                      void* client_cb_data, hsa_ven_amd_pcs_t* handle);
+
+  hsa_status_t PcSamplingDestroy(hsa_ven_amd_pcs_t handle);
 
  private:
   /// @brief Initialize singleton object, must be called once.
@@ -80,7 +135,20 @@ class PcsRuntime {
   static std::atomic<PcsRuntime*> instance_;
   static std::mutex instance_mutex_;
 
+  // Map of pc sampling sessions indexed by hsa_ven_amd_pcs_t handle
+  std::map<uint64_t, PcSamplingSession> pc_sampling_;
+  KernelMutex pc_sampling_lock_;
+  uint64_t pc_sampling_id_;
+
   DISALLOW_COPY_AND_ASSIGN(PcsRuntime);
+
+  using agent_pcs_create_fn_t = std::function<hsa_status_t(core::Agent*, PcSamplingSession&)>;
+  hsa_status_t PcSamplingCreateInternal(core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method,
+                                        hsa_ven_amd_pcs_units_t units, size_t interval,
+                                        size_t latency, size_t buffer_size,
+                                        hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                        void* client_cb_data, hsa_ven_amd_pcs_t* handle,
+                                        agent_pcs_create_fn_t agent_pcs_create_fn);
 };
 
 }  // namespace pcs

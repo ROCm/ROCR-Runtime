@@ -192,6 +192,13 @@ class GpuAgentInt : public core::Agent {
   // @retval HSA_STATUS_SUCCESS if successful
   virtual hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
                                                void* cb_data) = 0;
+
+  virtual hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
+                                              pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -474,6 +481,10 @@ class GpuAgent : public GpuAgentInt {
 
   hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
                                        void* cb_data);
+  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
+                                      pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session);
 
   // @brief Node properties.
   const HsaNodeProperties properties_;
@@ -677,6 +688,15 @@ class GpuAgent : public GpuAgentInt {
   std::function<void*(size_t size, core::MemoryRegion::AllocateFlags flags)> finegrain_allocator_;
 
   std::function<void(void*)> finegrain_deallocator_;
+
+  /* PC Sampling fields - begin */
+  typedef struct {
+    pcs::PcsRuntime::PcSamplingSession* session;
+  } pcs_hosttrap_t;
+
+  pcs_hosttrap_t pcs_hosttrap_data_;
+  /* PC Sampling fields - end */
+
   // @brief device handle
   amdgpu_device_handle ldrm_dev_;
 

@@ -52,6 +52,11 @@
 namespace rocr {
 namespace pcs {
 
+#define IS_BAD_PTR(ptr)                                          \
+do {                                                           \
+  if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
+} while (false)
+
 std::atomic<PcsRuntime*> PcsRuntime::instance_(NULL);
 std::mutex PcsRuntime::instance_mutex_;
 
@@ -94,11 +99,145 @@ void PcsRuntime::DestroySingleton() {
 }
 
 void ReleasePcSamplingRsrcs() { PcsRuntime::DestroySingleton(); }
+
+PcsRuntime::PcSamplingSession::PcSamplingSession(
+    core::Agent* _agent, hsa_ven_amd_pcs_method_kind_t method, hsa_ven_amd_pcs_units_t units,
+    size_t interval, size_t latency, size_t buffer_size,
+    hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback, void* client_callback_data)
+    : agent(_agent), thunkId_(0), valid_(true), sample_size_(0) {
+  switch (method) {
+    case HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1:
+      sample_size_ = sizeof(perf_sample_hosttrap_v1_t);
+      break;
+    case HSA_VEN_AMD_PCS_METHOD_STOCHASTIC_V1:
+      sample_size_ = sizeof(perf_sample_snapshot_v1_t);
+      break;
+    default:
+      valid_ = false;
+      return;
+  }
+
+  if (!interval || !buffer_size || (buffer_size % (2 * sample_size_))) {
+    valid_ = false;
+    return;
+  }
+
+  csd.method = method;
+  csd.units = units;
+  csd.interval = interval;
+  csd.latency = latency;
+  csd.buffer_size = buffer_size;
+  csd.data_ready_callback = data_ready_callback;
+  csd.client_callback_data = client_callback_data;
+}
+
+void PcsRuntime::PcSamplingSession::GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sampleInfo) {
+  sampleInfo->value_min = 0;
+  sampleInfo->value_max = 0;
+  sampleInfo->flags = 0;
+  sampleInfo->value = csd.interval;
+
+  switch (csd.method) {
+    case HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1:
+      sampleInfo->method = HSA_PC_SAMPLING_METHOD_KIND_HOSTTRAP_V1;
+      break;
+    case HSA_VEN_AMD_PCS_METHOD_STOCHASTIC_V1:
+      sampleInfo->method = HSA_PC_SAMPLING_METHOD_KIND_STOCHASTIC_V1;
+      break;
+  }
+
+  switch (csd.units) {
+    case HSA_VEN_AMD_PCS_INTERVAL_UNITS_MICRO_SECONDS:
+      sampleInfo->units = HSA_PC_SAMPLING_UNIT_INTERVAL_MICROSECONDS;
+      break;
+    case HSA_VEN_AMD_PCS_INTERVAL_UNITS_CLOCK_CYCLES:
+      sampleInfo->units = HSA_PC_SAMPLING_UNIT_INTERVAL_CYCLES;
+      break;
+    case HSA_VEN_AMD_PCS_INTERVAL_UNITS_INSTRUCTIONS:
+      sampleInfo->units = HSA_PC_SAMPLING_UNIT_INTERVAL_INSTRUCTIONS;
+      break;
+  }
+}
+
 hsa_status_t PcsRuntime::PcSamplingIterateConfig(
     core::Agent* agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
     void* callback_data) {
   AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(agent);
   return gpu_agent->PcSamplingIterateConfig(configuration_callback, callback_data);
+}
+
+hsa_status_t PcsRuntime::PcSamplingCreate(core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method,
+                                          hsa_ven_amd_pcs_units_t units, size_t interval,
+                                          size_t latency, size_t buffer_size,
+                                          hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                          void* client_cb_data, hsa_ven_amd_pcs_t* handle) {
+
+  IS_BAD_PTR(handle);
+  IS_BAD_PTR(data_ready_cb);
+
+  return PcSamplingCreateInternal(
+      agent, method, units, interval, latency, buffer_size, data_ready_cb, client_cb_data, handle,
+      [](core::Agent* agent_, PcSamplingSession& session_) {
+        return static_cast<AMD::GpuAgentInt*>(agent_)->PcSamplingCreate(session_);
+      });
+}
+
+hsa_status_t PcsRuntime::PcSamplingCreateFromId(uint32_t ioctl_pcs_id, core::Agent* agent,
+                                                hsa_ven_amd_pcs_method_kind_t method,
+                                                hsa_ven_amd_pcs_units_t units, size_t interval,
+                                                size_t latency, size_t buffer_size,
+                                                hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb,
+                                                void* client_cb_data, hsa_ven_amd_pcs_t* handle) {
+  IS_BAD_PTR(handle);
+  IS_BAD_PTR(data_ready_cb);
+
+  return PcSamplingCreateInternal(
+      agent, method, units, interval, latency, buffer_size, data_ready_cb, client_cb_data, handle,
+      [&](core::Agent* agent_, PcSamplingSession& session_) {
+        return static_cast<AMD::GpuAgentInt*>(agent_)->PcSamplingCreateFromId(ioctl_pcs_id,
+                                                                              session_);
+      });
+}
+
+hsa_status_t PcsRuntime::PcSamplingCreateInternal(
+    core::Agent* agent, hsa_ven_amd_pcs_method_kind_t method, hsa_ven_amd_pcs_units_t units,
+    size_t interval, size_t latency, size_t buffer_size,
+    hsa_ven_amd_pcs_data_ready_callback_t data_ready_cb, void* client_cb_data,
+    hsa_ven_amd_pcs_t* handle, agent_pcs_create_fn_t agent_pcs_create_fn) {
+  ScopedAcquire<KernelMutex> lock(&pc_sampling_lock_);
+
+  handle->handle = ++pc_sampling_id_;
+  // create a new PcSamplingSession(agent, method, units, interval, latency, buffer_size,
+  // data_ready_cb, client_cb_data) reference and insert into pc_sampling_
+  pc_sampling_.emplace(std::piecewise_construct, std::forward_as_tuple(handle->handle),
+                       std::forward_as_tuple(agent, method, units, interval, latency, buffer_size,
+                                             data_ready_cb, client_cb_data));
+
+  if (!pc_sampling_[handle->handle].isValid()) {
+      pc_sampling_.erase(handle->handle);
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  hsa_status_t ret = agent_pcs_create_fn(agent, pc_sampling_[handle->handle]);
+  if (ret != HSA_STATUS_SUCCESS) {
+    pc_sampling_.erase(handle->handle);
+    return ret;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t PcsRuntime::PcSamplingDestroy(hsa_ven_amd_pcs_t handle) {
+  ScopedAcquire<KernelMutex> lock(&pc_sampling_lock_);
+  auto pcSamplingSessionIt = pc_sampling_.find(reinterpret_cast<uint64_t>(handle.handle));
+  if (pcSamplingSessionIt == pc_sampling_.end()) {
+    debug_warning(false && "Cannot find PcSampling session");
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(pcSamplingSessionIt->second.agent);
+
+  hsa_status_t ret = gpu_agent->PcSamplingDestroy(pcSamplingSessionIt->second);
+  pc_sampling_.erase(pcSamplingSessionIt);
+  return ret;
 }
 
 

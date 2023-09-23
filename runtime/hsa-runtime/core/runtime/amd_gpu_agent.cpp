@@ -113,7 +113,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       sdma_blit_used_mask_(0),
       scratch_limit_async_threshold_(0),
       scratch_cache_(
-          [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }) {
+          [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
+      pcs_hosttrap_data_() {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -2362,6 +2363,49 @@ hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configura
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t GpuAgent::PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) {
+  HsaPcSamplingInfo sampleInfo = {};
+  HsaPcSamplingTraceId thunkId;
+
+  // IOCTL id does not exist at the moment, so passing 0 is OK,
+  // since it will be overridden later in this function.
+  hsa_status_t ret = PcSamplingCreateFromId(0, session);
+  if (ret != HSA_STATUS_SUCCESS) return ret;
+
+  session.GetHsaKmtSamplingInfo(&sampleInfo);
+  HSAKMT_STATUS retkmt = hsaKmtPcSamplingCreate(node_id(), &sampleInfo, &thunkId);
+  if (retkmt != HSAKMT_STATUS_SUCCESS) {
+    return (retkmt == HSAKMT_STATUS_KERNEL_ALREADY_OPENED) ? (hsa_status_t)HSA_STATUS_ERROR_RESOURCE_BUSY
+            : HSA_STATUS_ERROR;
+  }
+
+  debug_print("Created PC sampling session with thunkId:%d\n", thunkId);
+
+  session.SetThunkId(thunkId);
+
+  return ret;
+}
+
+hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
+                                              pcs::PcsRuntime::PcSamplingSession& session) {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1 && ht_data.session)
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  session.SetThunkId(ioctlId);
+  ht_data.session = &session;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  HSAKMT_STATUS retKmt = hsaKmtPcSamplingDestroy(node_id(), session.ThunkId());
+  ht_data.session = NULL;
+
+  return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+}
 
 }  // namespace amd
 }  // namespace rocr
