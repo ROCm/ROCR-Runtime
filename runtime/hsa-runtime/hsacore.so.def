@@ -256,6 +256,9 @@ global:
 	hsa_ven_amd_pcs_create;
 	hsa_ven_amd_pcs_create_from_id;
 	hsa_ven_amd_pcs_destroy;
+	hsa_ven_amd_pcs_start;
+	hsa_ven_amd_pcs_stop;
+	hsa_ven_amd_pcs_flush;
 
 local:
     *;

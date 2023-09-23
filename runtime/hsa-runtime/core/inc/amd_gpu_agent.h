@@ -199,6 +199,12 @@ class GpuAgentInt : public core::Agent {
                                               pcs::PcsRuntime::PcSamplingSession& session) = 0;
 
   virtual hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -485,6 +491,12 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
                                       pcs::PcsRuntime::PcSamplingSession& session);
   hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session);
+
+  static void PcSamplingThreadRun(void* agent);
+  void PcSamplingThread();
 
   // @brief Node properties.
   const HsaNodeProperties properties_;
@@ -691,6 +703,7 @@ class GpuAgent : public GpuAgentInt {
 
   /* PC Sampling fields - begin */
   typedef struct {
+    os::Thread thread;
     pcs::PcsRuntime::PcSamplingSession* session;
   } pcs_hosttrap_t;
 

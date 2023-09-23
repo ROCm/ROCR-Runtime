@@ -73,6 +73,12 @@ hsa_status_t hsa_ven_amd_pcs_create_from_id(
 
 hsa_status_t hsa_ven_amd_pcs_destroy(hsa_ven_amd_pcs_t pc_sampling);
 
+hsa_status_t hsa_ven_amd_pcs_start(hsa_ven_amd_pcs_t pc_sampling);
+
+hsa_status_t hsa_ven_amd_pcs_stop(hsa_ven_amd_pcs_t pc_sampling);
+
+hsa_status_t hsa_ven_amd_pcs_flush(hsa_ven_amd_pcs_t pc_sampling);
+
 // Update Api table with func pointers that implement functionality
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api);
 
