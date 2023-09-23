@@ -94,6 +94,13 @@ void PcsRuntime::DestroySingleton() {
 }
 
 void ReleasePcSamplingRsrcs() { PcsRuntime::DestroySingleton(); }
+hsa_status_t PcsRuntime::PcSamplingIterateConfig(
+    core::Agent* agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
+    void* callback_data) {
+  AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(agent);
+  return gpu_agent->PcSamplingIterateConfig(configuration_callback, callback_data);
+}
+
 
 }  // namespace pcs
 }  // namespace rocr

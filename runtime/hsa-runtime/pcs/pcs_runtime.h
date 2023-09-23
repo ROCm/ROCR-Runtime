@@ -68,6 +68,10 @@ class PcsRuntime {
   /// @brief Destroy singleton object.
   static void DestroySingleton();
 
+  hsa_status_t PcSamplingIterateConfig(
+      core::Agent* agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
+      void* callback_data);
+
  private:
   /// @brief Initialize singleton object, must be called once.
   static PcsRuntime* CreateSingleton();

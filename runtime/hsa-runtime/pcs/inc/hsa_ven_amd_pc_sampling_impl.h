@@ -55,6 +55,10 @@
 namespace rocr {
 namespace pcs {
 
+hsa_status_t hsa_ven_amd_pcs_iterate_configuration(
+    hsa_agent_t agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
+    void* callback_data);
+
 // Update Api table with func pointers that implement functionality
 void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api);
 
