@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,29 +40,60 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
-#define HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+#include "pcs_runtime.h"
 
-// CODE IN THIS FILE **MUST** BE C-COMPATIBLE
+#include <assert.h>
+#include <mutex>
 
-// Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION                 0x03
-#define HSA_CORE_API_TABLE_MAJOR_VERSION            0x02
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION         0x02
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION       0x02
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION           0x02
-#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION      0x01
-#define HSA_TOOLS_API_TABLE_MAJOR_VERSION           0x01
-#define HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION     0x01
+#include "core/inc/runtime.h"
 
-// Step Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_STEP_VERSION                  0x01
-#define HSA_CORE_API_TABLE_STEP_VERSION             0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x01
-#define HSA_FINALIZER_API_TABLE_STEP_VERSION        0x00
-#define HSA_IMAGE_API_TABLE_STEP_VERSION            0x00
-#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION       0x00
-#define HSA_TOOLS_API_TABLE_STEP_VERSION            0x00
-#define HSA_PC_SAMPLING_API_TABLE_STEP_VERSION      0x00
+#include "core/inc/amd_gpu_agent.h"
 
-#endif  // HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+namespace rocr {
+namespace pcs {
+
+std::atomic<PcsRuntime*> PcsRuntime::instance_(NULL);
+std::mutex PcsRuntime::instance_mutex_;
+
+PcsRuntime* PcsRuntime::instance() {
+  PcsRuntime* instance = instance_.load(std::memory_order_acquire);
+  if (instance == NULL) {
+    // Protect the initialization from multi threaded access.
+    std::lock_guard<std::mutex> lock(instance_mutex_);
+
+    // Make sure we are not initializing it twice.
+    instance = instance_.load(std::memory_order_relaxed);
+    if (instance != NULL) {
+      return instance;
+    }
+
+    instance = CreateSingleton();
+    if (instance == NULL) {
+      return NULL;
+    }
+  }
+
+  return instance;
+}
+
+PcsRuntime* PcsRuntime::CreateSingleton() {
+  PcsRuntime* instance = new PcsRuntime();
+
+  instance_.store(instance, std::memory_order_release);
+  return instance;
+}
+
+void PcsRuntime::DestroySingleton() {
+  PcsRuntime* instance = instance_.load(std::memory_order_acquire);
+  if (instance == NULL) {
+    return;
+  }
+
+  instance_.store(NULL, std::memory_order_release);
+  delete instance;
+}
+
+void ReleasePcSamplingRsrcs() { PcsRuntime::DestroySingleton(); }
+
+}  // namespace pcs
+}  // namespace rocr

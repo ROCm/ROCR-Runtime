@@ -184,6 +184,9 @@ class Flag {
     var = os::GetEnvVar("HSA_DISABLE_IMAGE");
     disable_image_ = (var == "1") ? true : false;
 
+    var = os::GetEnvVar("HSA_DISABLE_PC_SAMPLING");
+    disable_pc_sampling_ = (var == "1") ? true : false;
+
     var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
     loader_enable_mmap_uri_ = (var == "1") ? true : false;
 
@@ -297,6 +300,8 @@ class Flag {
 
   bool disable_image() const { return disable_image_; }
 
+  bool disable_pc_sampling() const { return disable_pc_sampling_; }
+
   bool loader_enable_mmap_uri() const { return loader_enable_mmap_uri_; }
 
   size_t force_sdma_size() const { return force_sdma_size_; }
@@ -353,6 +358,7 @@ class Flag {
   bool no_scratch_reclaim_;
   bool no_scratch_thread_limit_;
   bool disable_image_;
+  bool disable_pc_sampling_;
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
   bool debug_;

@@ -53,6 +53,7 @@ namespace core {
     static const uint32_t HSA_EXT_FINALIZER_API_TABLE_ID = 0;
     static const uint32_t HSA_EXT_IMAGE_API_TABLE_ID = 1;
     static const uint32_t HSA_EXT_AQLPROFILE_API_TABLE_ID = 2;
+    static const uint32_t HSA_EXT_PC_SAMPLING_API_TABLE_ID = 3;
 
     ::HsaApiTable hsa_api;
     ::CoreApiTable core_api;
@@ -60,6 +61,7 @@ namespace core {
     ::FinalizerExtTable finalizer_api;
     ::ImageExtTable image_api;
     ::ToolsApiTable tools_api;
+    ::PcSamplingExtTable pcs_api;
 
     HsaApiTable();
     void Init();

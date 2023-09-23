@@ -59,6 +59,7 @@
 #include "core/util/small_heap.h"
 #include "core/util/locks.h"
 #include "core/util/lazy_ptr.h"
+#include "pcs/pcs_runtime.h"
 
 namespace rocr {
 namespace AMD {

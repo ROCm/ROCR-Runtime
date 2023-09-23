@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,29 +40,28 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
-#define HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+#ifndef HSA_VEN_AMD_PC_SAMPLING_IMPL_H
+#define HSA_VEN_AMD_PC_SAMPLING_IMPL_H
 
-// CODE IN THIS FILE **MUST** BE C-COMPATIBLE
+#include "inc/hsa.h"
+#include "inc/hsa_ext_amd.h"
+#include "inc/hsa_ven_amd_pc_sampling.h"
+#include "core/inc/hsa_ext_interface.h"
 
-// Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION                 0x03
-#define HSA_CORE_API_TABLE_MAJOR_VERSION            0x02
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION         0x02
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION       0x02
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION           0x02
-#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION      0x01
-#define HSA_TOOLS_API_TABLE_MAJOR_VERSION           0x01
-#define HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION     0x01
+//---------------------------------------------------------------------------//
+//  APIs that implement PC Sampling functionality
+//---------------------------------------------------------------------------//
 
-// Step Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_STEP_VERSION                  0x01
-#define HSA_CORE_API_TABLE_STEP_VERSION             0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x01
-#define HSA_FINALIZER_API_TABLE_STEP_VERSION        0x00
-#define HSA_IMAGE_API_TABLE_STEP_VERSION            0x00
-#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION       0x00
-#define HSA_TOOLS_API_TABLE_STEP_VERSION            0x00
-#define HSA_PC_SAMPLING_API_TABLE_STEP_VERSION      0x00
+namespace rocr {
+namespace pcs {
 
-#endif  // HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+// Update Api table with func pointers that implement functionality
+void LoadPcSampling(core::PcSamplingExtTableInternal* pcs_api);
+
+// Release resources acquired by Image implementation
+void ReleasePcSamplingRsrcs();
+
+}  // namespace pcs
+}  // namespace rocr
+
+#endif  //  HSA_VEN_AMD_PC_SAMPLING_IMPL_H
