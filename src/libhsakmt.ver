@@ -77,6 +77,10 @@ hsaKmtSetXNACKMode;
 hsaKmtGetXNACKMode;
 hsaKmtOpenSMI;
 hsaKmtExportDMABufHandle;
+hsaKmtWaitOnEvent_Ext;
+hsaKmtWaitOnMultipleEvents_Ext;
+hsaKmtReplaceAsanHeaderPage;
+hsaKmtReturnAsanHeaderPage;
 
 local: *;
 };
