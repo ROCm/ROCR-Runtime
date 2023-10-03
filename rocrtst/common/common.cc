@@ -327,6 +327,10 @@ static hsa_status_t MakeGlobalFlagsString(const pool_info_t *pool_i,
     flags.push_back("FINE GRAINED");
   }
 
+  if (HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED & global_flag) {
+    flags.push_back("EXT-SCOPE FINE GRAINED");
+  }
+
   if (HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED & global_flag) {
     flags.push_back("COARSE GRAINED");
   }
