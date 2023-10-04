@@ -413,7 +413,7 @@ static HSAKMT_STATUS register_svm_range(void *mem, uint32_t size,
 		flags |= HSA_SVM_FLAG_GPU_ALWAYS_MAPPED;
 	}
 
-	nattr = 5;
+	nattr = 6;
 	s_attr = sizeof(*attrs) * nattr;
 	attrs = (HSA_SVM_ATTRIBUTE *)alloca(s_attr);
 
@@ -427,6 +427,8 @@ static HSAKMT_STATUS register_svm_range(void *mem, uint32_t size,
 	attrs[3].value = flags;
 	attrs[4].type = HSA_SVM_ATTR_ACCESS;
 	attrs[4].value = gpuNode;
+	attrs[5].type = HSA_SVM_ATTR_GRANULARITY;
+	attrs[5].value = 0xFF;
 
 	return hsaKmtSVMSetAttr(mem, size, nattr, attrs);
 }
