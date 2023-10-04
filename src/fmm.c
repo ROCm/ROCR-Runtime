@@ -1047,7 +1047,7 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	args->attrs[0].type = coarse_grain ?
 			      HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
 	args->attrs[0].value = HSA_SVM_FLAG_COHERENT;
-	args->attrs[1].type = ext_coherent ? HSA_SVM_ATTR_CLR_FLAGS : HSA_SVM_ATTR_SET_FLAGS;
+	args->attrs[1].type = ext_coherent ? HSA_SVM_ATTR_SET_FLAGS : HSA_SVM_ATTR_CLR_FLAGS ;
 	args->attrs[1].value = HSA_SVM_FLAG_EXT_COHERENT;
 	pr_debug("Registering to SVM %p size: %ld\n", (void*)aligned_addr,
 		 aligned_size);
@@ -3447,7 +3447,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr,
 			 KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE |
 			 (coarse_grain ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_COHERENT) |
-			 (ext_coherent ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT),
+			 (ext_coherent ? KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT : 0),
 			 &obj);
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
