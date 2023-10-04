@@ -285,7 +285,7 @@ endif()
 # TODO: Add support for relocatable packages.
 configure_file ( libhsakmt.pc.in libhsakmt.pc @ONLY )
 
-install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INSTALL_DATADIR}/pkgconfig COMPONENT devel)
+install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig COMPONENT devel)
 
 ###########################
 # Packaging directives
