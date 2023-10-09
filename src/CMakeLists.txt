@@ -202,7 +202,7 @@ target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 
-if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
+if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64|loongarch64" )
   set ( IMAGE_SUPPORT ON )
 endif()
 set ( IMAGE_SUPPORT ${IMAGE_SUPPORT} CACHE BOOL "Build with image support (default: ON for x86, OFF elsewise)." )
