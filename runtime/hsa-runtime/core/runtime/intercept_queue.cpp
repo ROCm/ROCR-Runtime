@@ -178,15 +178,17 @@ void InterceptQueue::Submit(const void* pkts, uint64_t pkt_count, uint64_t user_
   const AqlPacket* packets = (const AqlPacket*)pkts;
 
   // Submit final packet transform to hardware.
-  if (queue->Submit(packets, pkt_count)) return;
+  uint64_t submitted_count = queue->Submit(packets, pkt_count);
+  if (submitted_count == pkt_count) return;
 
-  // Could not submit final packets, stash for later.
+  // Could not submit all the final packets, stash unsubmitted ones for later.
   assert(queue->overflow_.empty() && "Packet intercept error: overflow buffer not empty.\n");
-  for (uint64_t i = 0; i < pkt_count; i++) queue->overflow_.push_back(packets[i]);
+  for (uint64_t i = submitted_count; i < pkt_count; i++)
+    queue->overflow_.push_back(packets[i]);
 }
 
-bool InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
-  if (count == 0) return true;
+uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
+  if (count == 0) return 0;
 
   AqlPacket* ring = reinterpret_cast<AqlPacket*>(wrapped->amd_queue_.hsa_queue.base_address);
   uint64_t mask = wrapped->amd_queue_.hsa_queue.size - 1;
@@ -197,50 +199,67 @@ bool InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
     uint64_t free_slots = wrapped->amd_queue_.hsa_queue.size - (write - read);
     bool pending_retry_point = IsPendingRetryPoint(read);
 
-    // If out of space defer packet insertion. Always make sure there is a free
-    // slot available for the retry barrier packet if there is not already one
-    // present.
-    if (free_slots < count + (pending_retry_point ? 0 : 1)) {
-      // If there is not already a pending retry point add one.
-      if (!pending_retry_point) {
-        // Reserve one slot for the barrier packet. There will always be at
-        // least one free slot.
-        assert(free_slots >= 1 &&
-               "Packet intercept error: there is no free slot for a retry barrier packet.\n");
-        // Reserve a slot for the barrier packet.
-        uint64_t barrier = wrapped->AddWriteIndexRelaxed(1);
-        assert(barrier == write &&
-               "Packet intercept error: wrapped queue has been updated by another thread.\n");
-        ++write;
+    uint64_t submitted_count = count;
 
-        // Submit barrier which will wake async queue processing.
-        ring[barrier & mask].barrier_and = kBarrierPacket;
-        ring[barrier & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
-        atomic::Store(&ring[barrier & mask].barrier_and.header, kBarrierHeader,
-                      std::memory_order_release);
-        // Update the wrapped queue's doorbell so it knows there is a new packet in the queue.
-        HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal, barrier);
-
-        // Record the retry point
-        retry_index_ = barrier;
-      }
-      return false;
+    // If the number of packets is greater than the wrapped queue size, then we
+    // can never submit them all at once. So submit what will fit, leaving one
+    // slot free for the retry barrier packet if it is not already on the
+    // queue.
+    if (count >= wrapped->amd_queue_.hsa_queue.size) {
+      submitted_count = free_slots - (pending_retry_point ? 0 : 1);
     }
 
+    // Prefer to either submit all the packets, or none of the packets. This
+    // ensures that all the packets of a rewrite will be on the queue at the
+    // same time. This may be desirable for some rewrites. So if out of space
+    // defer packet insertion. Always make sure there is a free slot available
+    // for the retry barrier packet if there is not already one present.
+    else if (free_slots < count + (pending_retry_point ? 0 : 1)) {
+      submitted_count = 0;
+    }
+
+    // If we are not submitting all the packets, we need to ensure there is a
+    // retry packet to cause the remaining packets to be submitted. If there is
+    // not already a pending retry point add one.
+    if (submitted_count < count && !pending_retry_point) {
+      // Reserve one slot for the barrier packet. There will always be at least
+      // one free slot.
+      assert(free_slots >= 1 &&
+             "Packet intercept error: there is no free slot for a retry barrier packet.\n");
+      // Reserve a slot for the barrier packet.
+      uint64_t barrier = wrapped->AddWriteIndexRelaxed(1);
+      assert(barrier == write &&
+             "Packet intercept error: wrapped queue has been updated by another thread.\n");
+      ++write;
+
+      // Submit barrier which will wake async queue processing.
+      ring[barrier & mask].barrier_and = kBarrierPacket;
+      ring[barrier & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
+      atomic::Store(&ring[barrier & mask].barrier_and.header, kBarrierHeader,
+                    std::memory_order_release);
+      // Update the wrapped queue's doorbell so it knows there is a new packet in the queue.
+      HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal, barrier);
+
+      // Record the retry point
+      retry_index_ = barrier;
+    }
+
+    if (submitted_count == 0) return 0;
+
     // Attempt to reserve useable queue space
-    uint64_t new_write = wrapped->CasWriteIndexRelaxed(write, write + count);
+    uint64_t new_write = wrapped->CasWriteIndexRelaxed(write, write + submitted_count);
     if (new_write == write) {
       AqlPacket first = packets[0];
       uint16_t header = first.dispatch.header;
       first.dispatch.header = kInvalidHeader;
 
       ring[write & mask] = first;
-      for (uint64_t i = 1; i < count; i++) ring[(write + i) & mask] = packets[i];
+      for (uint64_t i = 1; i < submitted_count; i++) ring[(write + i) & mask] = packets[i];
       atomic::Store(&ring[write & mask].dispatch.header, header, std::memory_order_release);
       HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal,
-                                      write + count - 1);
+                                      write + submitted_count - 1);
 
-      return true;
+      return submitted_count;
     }
   }
 }
@@ -259,7 +278,16 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   // Submit overflow packets.
   if (!overflow_.empty()) {
-    if (!Submit(&overflow_[0], overflow_.size())) return;
+    uint64_t submitted_count = Submit(&overflow_[0], overflow_.size());
+
+    if (submitted_count < overflow_.size()) {
+      overflow_.erase(overflow_.begin(), overflow_.begin() + submitted_count);
+      // Since there was no space to submit all the overflow packets, there is
+      // no space for other packets either.
+      return;
+    }
+
+    // All overflow packets have been submitted.
     overflow_.clear();
   }
 
