@@ -226,8 +226,8 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   // Loop over valid packets and process.
   uint64_t end = LoadWriteIndexAcquire();
-  uint64_t i;
-  for (i = next_packet_; i < end; i++) {
+  uint64_t i = next_packet_;
+  while (i < end) {
     if (!ring[i & mask].IsValid()) break;
 
     // Process callbacks.
@@ -238,6 +238,17 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
     // Invalidate consumed packet
     atomic::Store(&ring[i & mask].dispatch.header, kInvalidHeader, std::memory_order_release);
+
+    // Packet has now been processed so advance the read index.
+    ++i;
+
+    // Only allow the rewrite of one packet to be on the overflow queue. When
+    // packets are put on the overflow queue a barrier packet will also be
+    // added which has an async handler that will ring the doorbell, That
+    // doorbell ring will ensure this function is re-invoked to put the
+    // overflow packets on the hardware queue and continue rewriting packets on
+    // the intercept queue.
+    if (!overflow_.empty()) break;
   }
 
   next_packet_ = i;
