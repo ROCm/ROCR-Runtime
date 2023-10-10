@@ -207,7 +207,7 @@ add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/blit_shaders )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_blit_shaders_v2)
 
-if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
+if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64|loongarch64" )
   set ( IMAGE_SUPPORT ON )
 endif()
 set ( IMAGE_SUPPORT ${IMAGE_SUPPORT} CACHE BOOL "Build with image support (default: ON for x86, OFF elsewise)." )
