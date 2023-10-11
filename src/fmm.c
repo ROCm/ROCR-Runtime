@@ -1772,14 +1772,20 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 				   uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
-	void *mem;
 	manageable_aperture_t *aperture;
-	uint64_t mmap_offset;
-	uint32_t ioc_flags;
-	uint64_t size;
-	int32_t gpu_drm_fd;
-	uint32_t gpu_id;
 	vm_object_t *vm_obj = NULL;
+	int flags = MADV_DONTFORK;
+	uint64_t mmap_offset;
+	int32_t gpu_drm_fd;
+	uint32_t ioc_flags;
+	uint32_t gpu_id;
+	uint64_t size;
+	void *mem;
+
+	/* set madvise flags to HUGEPAGE always for 2MB pages */
+	if (MemorySizeInBytes >= (2 * 1024 * 1024))
+		flags |= MADV_HUGEPAGE;
+
 
 	if (!g_first_gpu_mem)
 		return NULL;
@@ -1830,7 +1836,7 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 		 * fork. This avoids MMU notifiers and evictions due to user
 		 * memory mappings on fork.
 		 */
-		madvise(mem, MemorySizeInBytes, MADV_DONTFORK);
+		madvise(mem, MemorySizeInBytes, flags);
 
 		/* Create userptr BO */
 		mmap_offset = (uint64_t)mem;
