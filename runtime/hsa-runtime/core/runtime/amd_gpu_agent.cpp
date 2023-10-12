@@ -1043,8 +1043,7 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
 
-    engine_offset = is_same_gpu ?(force_copy_on_sdma ? BlitDevToHost :
-                                   BlitDevToDev) : engine_offset;
+    engine_offset = is_same_gpu && !force_copy_on_sdma ? BlitDevToDev : engine_offset;
   }
 
   SetCopyRequestRefCount(true);
