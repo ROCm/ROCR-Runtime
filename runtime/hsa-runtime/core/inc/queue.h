@@ -60,6 +60,17 @@ namespace core {
 struct AqlPacket {
 
   union {
+    struct {
+      uint16_t header;
+      struct {
+        uint8_t user_data[62];
+      } body;
+     } packet;
+    struct {
+      uint16_t header;
+      uint8_t format;
+      uint8_t rest[61];
+    } amd_vendor;
     hsa_kernel_dispatch_packet_t dispatch;
     hsa_barrier_and_packet_t barrier_and;
     hsa_barrier_or_packet_t barrier_or;

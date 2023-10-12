@@ -80,6 +80,46 @@ static inline uint32_t Min(const uint32_t a, const uint32_t b) {
 }
 
 // Declarations of APIs intended for use only by tools.
+
+// An AQL packet that can be put in an intercept queue to cause a callback to
+// be invoked when the packet is about to be submitted to the underlying
+// hardware queue. These packets are not copied to the underlying hardware
+// queue. These packets should come immediately before the regular AQL packet
+// they relate to. This implies that packet rewriters should always keep these
+// packets adjacent to the regular AQL packet that follows them.
+const uint32_t AMD_AQL_FORMAT_INTERCEPT_MARKER = 0xFE;
+
+struct amd_aql_intercept_marker_s;
+
+// When an intercept queue is processing rewritten packets to put them on the
+// underlying hardware queue, if it encounters a
+// AMD_AQL_FORMAT_INTERCEPT_MARKER vendor AQL packet it will call the following
+// handler. packet points to the packet, queue is the underlying hardware
+// queue, and packet_id is the packet id of the next packet to be put on the
+// underlying hardware queue. The intercept queue does not put these packets
+// onto the underlying hardware queue.
+typedef void (*amd_intercept_marker_handler)(const struct amd_aql_intercept_marker_s* packet,
+                                             hsa_queue_t* queue, uint64_t packet_id);
+// An AQL vendor packet used by the intercept queue to mark the following
+// packet. The callback will be invoked to allow a tool to know where in the
+// underlying hardware queue the following packet will be placed. user_data can
+// be used to hold any data useful to the tool.
+typedef struct amd_aql_intercept_marker_s {
+  uint16_t header; // Must have a packet type of HSA_PACKET_TYPE_VENDOR_SPECIFIC.
+  uint8_t format; // Must be AMD_AQL_FORMAT_INTERCEPT_MARKER.
+  uint8_t reserved[5]; // Must be 0.
+#ifdef HSA_LARGE_MODEL
+  amd_intercept_marker_handler callback;
+#elif defined HSA_LITTLE_ENDIAN
+  amd_intercept_marker_handler callback;
+  uint32_t reserved1; // Must be 0.
+#else
+  uint32_t reserved1; // Must be 0.
+  amd_intercept_marker_handler callback;
+#endif
+  uint64_t user_data[6];
+} amd_aql_intercept_marker_t;
+
 typedef void (*hsa_amd_queue_intercept_packet_writer)(const void* pkts, uint64_t pkt_count);
 typedef void (*hsa_amd_queue_intercept_handler)(const void* pkts, uint64_t pkt_count,
                                                 uint64_t user_pkt_index, void* data,
