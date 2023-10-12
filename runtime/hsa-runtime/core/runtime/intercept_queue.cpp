@@ -42,9 +42,19 @@
 
 #include "core/inc/intercept_queue.h"
 #include "core/util/utils.h"
+#include "inc/hsa_api_trace.h"
 
 namespace rocr {
 namespace core {
+
+namespace {
+
+bool inline IsInterceptMarkerPacket(const AqlPacket* packet) {
+  return (packet->type() == HSA_PACKET_TYPE_VENDOR_SPECIFIC) &&
+      (packet->amd_vendor.format == AMD_AQL_FORMAT_INTERCEPT_MARKER);
+}
+
+}  // namespace
 
 struct InterceptFrame {
   InterceptQueue* queue;
@@ -63,8 +73,6 @@ static const uint16_t kBarrierHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKE
     (1 << HSA_PACKET_HEADER_BARRIER) |
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
-
-static const hsa_barrier_and_packet_t kBarrierPacket = {kInvalidHeader, 0, 0, {}, 0, {}};
 
 int InterceptQueue::rtti_id_ = 0;
 
@@ -117,7 +125,7 @@ InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
   // Fill the ring buffer with invalid packet headers.
   // Leave packet content uninitialized to help trigger application errors.
   for (uint32_t pkt_id = 0; pkt_id < wrapped->amd_queue_.hsa_queue.size; ++pkt_id) {
-    buffer_[pkt_id].dispatch.header = HSA_PACKET_TYPE_INVALID;
+    buffer_[pkt_id].packet.header = HSA_PACKET_TYPE_INVALID;
   }
 
   // Match the queue's signal ABI block to async_doorbell_'s
@@ -194,6 +202,11 @@ void InterceptQueue::Submit(const void* pkts, uint64_t pkt_count, uint64_t user_
 uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
   if (count == 0) return 0;
 
+  uint64_t marker_count = 0;
+  for (uint64_t i = 0; i < count; i++) {
+    if (IsInterceptMarkerPacket(&packets[i])) ++marker_count;
+  }
+
   AqlPacket* ring = reinterpret_cast<AqlPacket*>(wrapped->amd_queue_.hsa_queue.base_address);
   uint64_t mask = wrapped->amd_queue_.hsa_queue.size - 1;
 
@@ -203,13 +216,13 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
     uint64_t free_slots = wrapped->amd_queue_.hsa_queue.size - (write - read);
     bool pending_retry_point = IsPendingRetryPoint(read);
 
-    uint64_t submitted_count = count;
+    uint64_t submitted_count = count - marker_count;
 
     // If the number of packets is greater than the wrapped queue size, then we
     // can never submit them all at once. So submit what will fit, leaving one
     // slot free for the retry barrier packet if it is not already on the
     // queue.
-    if (count >= wrapped->amd_queue_.hsa_queue.size) {
+    if (submitted_count >= wrapped->amd_queue_.hsa_queue.size) {
       submitted_count = free_slots - (pending_retry_point ? 0 : 1);
     }
 
@@ -218,14 +231,14 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
     // same time. This may be desirable for some rewrites. So if out of space
     // defer packet insertion. Always make sure there is a free slot available
     // for the retry barrier packet if there is not already one present.
-    else if (free_slots < count + (pending_retry_point ? 0 : 1)) {
+    else if (free_slots < submitted_count + (pending_retry_point ? 0 : 1)) {
       submitted_count = 0;
     }
 
     // If we are not submitting all the packets, we need to ensure there is a
     // retry packet to cause the remaining packets to be submitted. If there is
     // not already a pending retry point add one.
-    if (submitted_count < count && !pending_retry_point) {
+    if (submitted_count < (count - marker_count) && !pending_retry_point) {
       // Reserve one slot for the barrier packet. There will always be at least
       // one free slot.
       assert(free_slots >= 1 &&
@@ -237,7 +250,7 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
       ++write;
 
       // Submit barrier which will wake async queue processing.
-      ring[barrier & mask].barrier_and = kBarrierPacket;
+      ring[barrier & mask].packet.body = {};
       ring[barrier & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
       atomic::Store(&ring[barrier & mask].barrier_and.header, kBarrierHeader,
                     std::memory_order_release);
@@ -248,22 +261,46 @@ uint64_t InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
       retry_index_ = barrier;
     }
 
-    if (submitted_count == 0) return 0;
-
-    // Attempt to reserve useable queue space
-    uint64_t new_write = wrapped->CasWriteIndexRelaxed(write, write + submitted_count);
+    // Attempt to reserve useable queue space if some packets need to be
+    // submitted.
+    uint64_t new_write = submitted_count == 0
+        ? write
+        : wrapped->CasWriteIndexRelaxed(write, write + submitted_count);
     if (new_write == write) {
-      AqlPacket first = packets[0];
-      uint16_t header = first.dispatch.header;
-      first.dispatch.header = kInvalidHeader;
-
-      ring[write & mask] = first;
-      for (uint64_t i = 1; i < submitted_count; i++) ring[(write + i) & mask] = packets[i];
-      atomic::Store(&ring[write & mask].dispatch.header, header, std::memory_order_release);
-      HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal,
-                                      write + submitted_count - 1);
-
-      return submitted_count;
+      uint64_t packets_index = 0;
+      uint64_t write_index = 0;
+      uint64_t first_written_packet_index;
+      while (submitted_count > 0 || (packets_index < count && IsInterceptMarkerPacket(&packets[packets_index]))) {
+        // Ensure the marker packet callback is invoked before following
+        // packets are made available for the packet processor.
+        if (IsInterceptMarkerPacket(&packets[packets_index])) {
+          const amd_aql_intercept_marker_t* marker_packet =
+              reinterpret_cast<const amd_aql_intercept_marker_t*>(&packets[packets_index]);
+          marker_packet->callback(marker_packet, &wrapped->amd_queue_.hsa_queue,
+                                  write + write_index);
+        } else {
+          if (write_index == 0) {
+            // Leave the header of the first packet as INVALID so packet
+            // processor will not start processing any packets until all have
+            // been written and the first packet header atomically store
+            // released.
+            ring[(write + write_index) & mask].packet.body = packets[packets_index].packet.body;
+            first_written_packet_index = packets_index;
+          } else {
+            ring[(write + write_index) & mask] = packets[packets_index];
+          }
+          ++write_index;
+          --submitted_count;
+        }
+        ++packets_index;
+      }
+      if (write_index != 0) {
+        atomic::Store(&ring[write & mask].packet.header, packets[first_written_packet_index].packet.header,
+                      std::memory_order_release);
+        HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal,
+                                        write + write_index - 1);
+      }
+      return packets_index;
     }
   }
 }
@@ -319,8 +356,8 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
     auto& handler = interceptors[Cursor.interceptor_index];
     handler.first(&ring[i & mask], 1, i, handler.second, PacketWriter);
 
-    // Invalidate consumed packet
-    atomic::Store(&ring[i & mask].dispatch.header, kInvalidHeader, std::memory_order_release);
+    // Invalidate consumed packet.
+    atomic::Store(&ring[i & mask].packet.header, kInvalidHeader, std::memory_order_release);
 
     // Packet has now been processed so advance the read index.
     ++i;
