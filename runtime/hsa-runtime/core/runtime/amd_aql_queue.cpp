@@ -1237,10 +1237,11 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     // Construct an AQL packet to jump to the PM4 IB.
     struct amd_aql_pm4_ib {
       uint16_t header;
-      uint16_t ven_hdr;
+      uint8_t  amd_format;
+      uint8_t  reserved0;
       uint32_t ib_jump_cmd[4];
       uint32_t dw_cnt_remain;
-      uint32_t reserved[8];
+      uint32_t reserved1[8];
       hsa_signal_t completion_signal;
     };
 
@@ -1251,7 +1252,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
     amd_aql_pm4_ib aql_pm4_ib{};
     aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
-    aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
+    aql_pm4_ib.amd_format = AMD_AQL_FORMAT_PM4_IB;
     aql_pm4_ib.ib_jump_cmd[0] = ib_jump_cmd[0];
     aql_pm4_ib.ib_jump_cmd[1] = ib_jump_cmd[1];
     aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];
