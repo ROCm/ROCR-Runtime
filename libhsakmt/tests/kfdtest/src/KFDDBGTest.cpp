@@ -699,7 +699,7 @@ TEST_F(KFDDBGTest, HitAddressWatch) {
             const HsaMemoryBuffer &shaderBuf =
                 mode == KFD_DBG_TRAP_ADDRESS_WATCH_MODE_READ ? readerBuf : writerBuf;
             uint32_t preciseMask = 0x1;
-            uint32_t watchStsMask = 0x80;
+            uint32_t watchStsMask = m_FamilyId >= FAMILY_GFX12 ? 0x1 : 0x80;
             result[0] = preciseMask;
             Dispatch dispatch(shaderBuf);
             dispatch.SetDim(1, 1, 1);
@@ -708,10 +708,23 @@ TEST_F(KFDDBGTest, HitAddressWatch) {
             dispatch.Submit(queue);
             dispatch.Sync();
 
-            ASSERT_EQ(result[0] & watchStsMask, watchStsMask);
+            /*
+             * result[0] contains both the HW watch status result mask and the
+             * precise memory operation value check (precise = 1, non-precise = 2)
+             * For devices before GFX12, these masks did not bit wise overlap and
+             * are added into result[0].
+             * In GFX12 and above, they overlap and must be subtracted instead of masked
+             * to assert the correct value.
+             */
+            if (m_FamilyId < FAMILY_GFX12) {
+                ASSERT_EQ(result[0] & watchStsMask, watchStsMask);
 
-            if (is_precise)
-                ASSERT_EQ(result[0] & preciseMask, preciseMask);
+                if (is_precise)
+                    ASSERT_EQ(result[0] & preciseMask, preciseMask);
+            } else {
+                uint32_t maskCheck = result[0] - watchStsMask - preciseMask;
+                ASSERT_EQ(maskCheck, is_precise ? 0 : 1);
+            }
 
             ASSERT_SUCCESS(debug->ClearAddressWatch(deviceInfo[0].gpu_id, watchId));
             resultBuf.Fill(0);
