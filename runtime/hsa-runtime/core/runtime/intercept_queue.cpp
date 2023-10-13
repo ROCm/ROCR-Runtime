@@ -167,9 +167,13 @@ bool InterceptQueue::HandleAsyncDoorbell(hsa_signal_value_t value, void* arg) {
 }
 
 void InterceptQueue::PacketWriter(const void* pkts, uint64_t pkt_count) {
-  Cursor.interceptor_index--;
+  assert(Cursor.interceptor_index > 0 &&
+         "Packet intercept error: final submit handler must not call PacketWritter.\n");
+  --Cursor.interceptor_index;
   auto& handler = Cursor.queue->interceptors[Cursor.interceptor_index];
   handler.first(pkts, pkt_count, Cursor.pkt_index, handler.second, PacketWriter);
+  // Restore index as the same rewrite handler may call the PacketWriter more than once.
+  ++Cursor.interceptor_index;
 }
 
 void InterceptQueue::Submit(const void* pkts, uint64_t pkt_count, uint64_t user_pkt_index,
