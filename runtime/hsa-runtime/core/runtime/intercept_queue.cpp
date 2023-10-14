@@ -302,6 +302,13 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   // Loop over valid packets and process.
   uint64_t end = LoadWriteIndexAcquire();
+
+  // Can only process packets that are occupying slots in the queue buffer. No
+  // need to add a barrier packet to ensure the extra packets are processed as
+  // the producer must ring the doorbell once the extra packets are made valid.
+  if (end > next_packet_ + amd_queue_.hsa_queue.size)
+    end = next_packet_ + amd_queue_.hsa_queue.size;
+
   uint64_t i = next_packet_;
   while (i < end) {
     if (!ring[i & mask].IsValid()) break;
