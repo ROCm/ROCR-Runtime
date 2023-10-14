@@ -195,25 +195,34 @@ bool InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
     uint64_t write = wrapped->LoadWriteIndexRelaxed();
     uint64_t read = wrapped->LoadReadIndexRelaxed();
     uint64_t free_slots = wrapped->amd_queue_.hsa_queue.size - (write - read);
+    bool pending_retry_point = IsPendingRetryPoint(read);
 
-    // If out of space defer packet insertion.
-    if (free_slots <= count) {
+    // If out of space defer packet insertion. Always make sure there is a free
+    // slot available for the retry barrier packet if there is not already one
+    // present.
+    if (free_slots < count + (pending_retry_point ? 0 : 1)) {
       // If there is not already a pending retry point add one.
-      if (!IsPendingRetryPoint(read)) {
-        // Reserve and wait for one slot.
-        write = wrapped->AddWriteIndexRelaxed(1);
-        read = write - wrapped->amd_queue_.hsa_queue.size + 1;
-        while (wrapped->LoadReadIndexRelaxed() < read) os::YieldThread();
+      if (!pending_retry_point) {
+        // Reserve one slot for the barrier packet. There will always be at
+        // least one free slot.
+        assert(free_slots >= 1 &&
+               "Packet intercept error: there is no free slot for a retry barrier packet.\n");
+        // Reserve a slot for the barrier packet.
+        uint64_t barrier = wrapped->AddWriteIndexRelaxed(1);
+        assert(barrier == write &&
+               "Packet intercept error: wrapped queue has been updated by another thread.\n");
+        ++write;
 
-        // Submit barrer which will wake async queue processing.
-        ring[write & mask].barrier_and = kBarrierPacket;
-        ring[write & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
-        atomic::Store(&ring[write & mask].barrier_and.header, kBarrierHeader,
+        // Submit barrier which will wake async queue processing.
+        ring[barrier & mask].barrier_and = kBarrierPacket;
+        ring[barrier & mask].barrier_and.completion_signal = Signal::Convert(async_doorbell_);
+        atomic::Store(&ring[barrier & mask].barrier_and.header, kBarrierHeader,
                       std::memory_order_release);
-        HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal, write);
+        // Update the wrapped queue's doorbell so it knows there is a new packet in the queue.
+        HSA::hsa_signal_store_screlease(wrapped->amd_queue_.hsa_queue.doorbell_signal, barrier);
 
         // Record the retry point
-        retry_index_ = write;
+        retry_index_ = barrier;
       }
       return false;
     }
