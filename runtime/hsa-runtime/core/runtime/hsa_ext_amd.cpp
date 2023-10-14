@@ -1016,6 +1016,12 @@ hsa_status_t hsa_amd_queue_intercept_create(
   TRY;
   IS_OPEN();
   IS_BAD_PTR(queue);
+
+  // A wrapped queue for the intercept queue must have at least 3 slots so
+  // there is space for a packet, a new retry barrier packet, and an existing
+  // retry packet that is in the process of being processed.
+  if (size < 3) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
   hsa_queue_t* lower_queue;
   hsa_status_t err = HSA::hsa_queue_create(agent_handle, size, type, callback, data,
                                            private_segment_size, group_segment_size, &lower_queue);

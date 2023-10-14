@@ -68,6 +68,36 @@ static const hsa_barrier_and_packet_t kBarrierPacket = {kInvalidHeader, 0, 0, {}
 
 int InterceptQueue::rtti_id_ = 0;
 
+bool InterceptQueue::IsPendingRetryPoint(uint64_t wrapped_current_read_index) const {
+  // This function is intended to determine if the last retry barrier packet
+  // has definitely not been processed in order to avoid putting multiple retry
+  // packets on the wrapped queue.
+  //
+  // The AQL protocol allows the packet processor to advance the read index any
+  // time after the producer advances the write index. It does not specify the
+  // latest that the read index must be advanced. This makes it impossible to
+  // use the read index to determine if a packet has definitely not been
+  // processed.
+  //
+  // This code assumes that the read index will be advanced no later than the
+  // start of processing the next packet. So at worst, if the read index equals
+  // the retry index the packet may have already been processed, and its
+  // completion signal updated (perhaps that was the cause of entering
+  // InterceptQueue::StoreRelaxed that is now invoking this function). But if
+  // the read index is less than the retry index, then the packet has not yet
+  // been processed, This implies that the minimum queue size is 3 (enforced in
+  // hsa_amd_queue_intercept_create): a non-retry packet, a retry packet that
+  // is being processed, and space for a new retry packet.
+  //
+  // FIXME: The above assumption can be removed by using a distinct interrupt
+  // signal for the retry packet completion signal, and tracking when that
+  // signal is updated and invokes its async handler. Currently the wrapped
+  // queue doorbell signal is also being used as the retry completion signal.
+  // If that is done then the minimum queue size needs to be changed from 3 to
+  // 2 (enforced in hsa_amd_queue_intercept_create).
+  return retry_index_ > wrapped_current_read_index;
+}
+
 InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
     : QueueProxy(std::move(queue)),
       LocalSignal(0, false),
@@ -76,6 +106,11 @@ InterceptQueue::InterceptQueue(std::unique_ptr<Queue> queue)
       retry_index_(0),
       quit_(false),
       active_(true) {
+  // Initial retry_index_ value must ensure that
+  // InterceptQueue::IsPendingRetryPoint will return false before the first
+  // retry barrier packet is inserted.
+  assert(!IsPendingRetryPoint(next_packet_) &&
+         "Packet intercept error: initial retry index is incompatible with IsPendingRetryPoint.\n");
   buffer_ = SharedArray<AqlPacket, 4096>(wrapped->amd_queue_.hsa_queue.size);
   amd_queue_.hsa_queue.base_address = reinterpret_cast<void*>(&buffer_[0]);
 
@@ -164,7 +199,7 @@ bool InterceptQueue::Submit(const AqlPacket* packets, uint64_t count) {
     // If out of space defer packet insertion.
     if (free_slots <= count) {
       // If there is not already a pending retry point add one.
-      if (retry_index_ <= read) {
+      if (!IsPendingRetryPoint(read)) {
         // Reserve and wait for one slot.
         write = wrapped->AddWriteIndexRelaxed(1);
         read = write - wrapped->amd_queue_.hsa_queue.size + 1;

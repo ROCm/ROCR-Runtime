@@ -218,6 +218,10 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
   // Index at which async intercept processing was scheduled.
   uint64_t retry_index_;
 
+  // Given the current value of the wrapped queue read index, determine if
+  // there is a retry barrier packet already in the wrapped queue.
+  bool IsPendingRetryPoint(uint64_t wrapped_current_read_index) const;
+
   // Event signal to use for async packet processing and control flag.
   InterruptSignal* async_doorbell_;
   std::atomic<bool> quit_;
