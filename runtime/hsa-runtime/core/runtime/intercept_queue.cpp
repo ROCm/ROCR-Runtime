@@ -49,8 +49,13 @@ namespace core {
 
 namespace {
 
+// Determine if a packet is the AMD_AQL_FORMAT_INTERCEPT_MARKER packet. Loads
+// the packet header non-atomically. That is permissable if the calling thread
+// has previously loaded the header atomically to determine if it is not an
+// INVALID packet. Once a packet is no longer INVALID its ownership belongs to
+// the packer processor.
 bool inline IsInterceptMarkerPacket(const AqlPacket* packet) {
-  return (packet->type() == HSA_PACKET_TYPE_VENDOR_SPECIFIC) &&
+  return (AqlPacket::type(packet->packet.header) == HSA_PACKET_TYPE_VENDOR_SPECIFIC) &&
       (packet->amd_vendor.format == AMD_AQL_FORMAT_INTERCEPT_MARKER);
 }
 
@@ -348,7 +353,12 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   uint64_t i = next_packet_;
   while (i < end) {
-    if (!ring[i & mask].IsValid()) break;
+    // Load the packet header as atomic acquire as it may have been written by
+    // another thread as atomic release. This ensures the rest of the packet
+    // fields are visible. Once loaded and proven not to be INVALID, further
+    // loads by this thread can be non-atomic.
+    uint16_t header = atomic::Load(&ring[i & mask].packet.header, std::memory_order_acquire);
+    if (!AqlPacket::IsValid(header)) break;
 
     // Process callbacks.
     Cursor.interceptor_index = interceptors.size() - 1;

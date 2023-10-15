@@ -827,8 +827,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       core::AqlPacket& pkt =
           ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
-      assert(pkt.IsValid() && "Invalid packet in dynamic scratch handler.");
-      assert(pkt.type() == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
+      // Load the packet header as atomic acquire as it it written by another
+      // thread as atomic release. This ensures the rest of the packet fields
+      // are visible.
+      uint16_t pkt_header = atomic::Load(&pkt.packet.header, std::memory_order_acquire);
+      assert(core::AqlPacket::IsValid(pkt_header) && "Invalid packet in dynamic scratch handler.");
+      assert(core::AqlPacket::type(pkt_header) == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
              "Invalid packet in dynamic scratch handler.");
       assert((pkt.dispatch.workgroup_size_x != 0) && (pkt.dispatch.workgroup_size_y != 0) &&
              (pkt.dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
