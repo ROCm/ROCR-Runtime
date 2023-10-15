@@ -99,6 +99,11 @@ struct AqlPacket {
         "HSA_PACKET_TYPE_KERNEL_DISPATCH", "HSA_PACKET_TYPE_BARRIER_AND",
         "HSA_PACKET_TYPE_AGENT_DISPATCH",  "HSA_PACKET_TYPE_BARRIER_OR"};
 
+    if (t >= sizeof(type_names) / sizeof(const char*)) {
+      string << "type: UNKNOWN#" << t;
+      return string.str();
+    }
+
     string << "type: " << type_names[t]
            << "\nbarrier: " << ((dispatch.header >> HSA_PACKET_HEADER_BARRIER) &
                                 ((1 << HSA_PACKET_HEADER_WIDTH_BARRIER) - 1))
