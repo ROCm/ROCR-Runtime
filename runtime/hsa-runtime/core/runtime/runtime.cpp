@@ -45,12 +45,17 @@
 #include <algorithm>
 #include <atomic>
 #include <cstring>
+#include <regex>
 #include <string>
 #include <vector>
 #include <list>
 #include <dlfcn.h>
 #include <amdgpu_drm.h>
 #include <sys/mman.h>
+
+#if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
+#include <rocprofiler-register/rocprofiler-register.h>
+#endif
 
 #include "core/common/shared.h"
 #include "core/inc/hsa_ext_interface.h"
@@ -66,8 +71,22 @@
 #include "core/inc/exceptions.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
 
+#ifndef HSA_VERSION_MAJOR
 #define HSA_VERSION_MAJOR 1
+#endif
+#ifndef HSA_VERSION_MINOR
 #define HSA_VERSION_MINOR 1
+#endif
+#ifndef HSA_VERSION_PATCH
+#define HSA_VERSION_PATCH 0
+#endif
+
+#if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
+#define ROCP_REG_VERSION                                                                           \
+  ROCPROFILER_REGISTER_COMPUTE_VERSION_3(HSA_VERSION_MAJOR, HSA_VERSION_MINOR, HSA_VERSION_PATCH)
+
+ROCPROFILER_REGISTER_DEFINE_IMPORT(hsa, ROCP_REG_VERSION)
+#endif
 
 const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
@@ -1719,6 +1738,36 @@ void Runtime::LoadTools() {
                               const char* const*);
   typedef Agent* (*tool_wrap_t)(Agent*);
   typedef void (*tool_add_t)(Runtime*);
+
+#if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
+  auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table_);
+  auto lib_id = rocprofiler_register_library_indentifier_t{};
+  auto success =
+      rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
+                                             ROCP_REG_VERSION, &profiler_api_table_, 1, &lib_id);
+
+  bool allow_v1_registration = false;
+  if(os::IsEnvVarSet("HSA_TOOLS_ROCPROFILER_V1_TOOLS"))
+  {
+    // assume true if env variable is set
+    allow_v1_registration = true;
+    auto allow_v1_value = os::GetEnvVar("HSA_TOOLS_ROCPROFILER_V1_TOOLS");
+    // support using numbers, off, false, no, n, or f
+    if (!allow_v1_value.empty()) {
+      if (allow_v1_value.find_first_not_of("0123456789") == std::string::npos) {
+        allow_v1_registration = (std::stoi(allow_v1_value) != 0);
+      } else if (std::regex_match(
+                     allow_v1_value,
+                     std::regex{"^(off|false|no|n|f)$", std::regex_constants::icase})) {
+        allow_v1_registration = false;
+      }
+    }
+  }
+
+  // if rocprofiler library supports registration and v1 support not explicitly requested, do not
+  // use old method
+  if (success != 0 && !allow_v1_registration) return;
+#endif
 
   std::vector<const char*> failed;
 
