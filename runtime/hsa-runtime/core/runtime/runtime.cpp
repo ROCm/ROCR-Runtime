@@ -733,6 +733,14 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
       *((bool*)value) = core::Runtime::runtime_singleton_->XnackEnabled();
       break;
     }
+    case HSA_AMD_SYSTEM_INFO_EXT_VERSION_MAJOR: {
+      *((uint16_t*)value) = HSA_AMD_INTERFACE_VERSION_MAJOR;
+      break;
+    }
+    case HSA_AMD_SYSTEM_INFO_EXT_VERSION_MINOR: {
+      *((uint16_t*)value) = HSA_AMD_INTERFACE_VERSION_MINOR;
+      break;
+    }
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }

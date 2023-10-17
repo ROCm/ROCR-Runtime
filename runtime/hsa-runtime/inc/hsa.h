@@ -519,6 +519,16 @@ typedef enum {
    * this attribute is bool.
    */
   HSA_AMD_SYSTEM_INFO_XNACK_ENABLED = 0x206,
+  /**
+   * Major version of the HSA runtime extension specification supported by the
+   * implementation. The type of this attribute is uint16_t.
+   */
+  HSA_AMD_SYSTEM_INFO_EXT_VERSION_MAJOR = 0x207,
+  /**
+   * Minor version of the HSA runtime extension specification supported by the
+   * implementation. The type of this attribute is uint16_t.
+   */
+  HSA_AMD_SYSTEM_INFO_EXT_VERSION_MINOR = 0x208,
 } hsa_system_info_t;
 
 /**
