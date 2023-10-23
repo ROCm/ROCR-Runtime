@@ -163,6 +163,10 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   err = hsa_agent_get_info(ag, HSA_AGENT_INFO_DEVICE, &ag_type);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
+  uint32_t node_id;
+  err = hsa_agent_get_info(ag, HSA_AGENT_INFO_NODE, &node_id);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
   if (verbosity() > 0) {
     std::cout << "  Agent: " << ag_name << " (";
     switch (ag_type) {
@@ -186,14 +190,27 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
       rocrtst::DumpMemoryPoolInfo(&pool_i, 2);
   }
 
-  if (!pool_i.alloc_allowed || pool_i.alloc_granule == 0 ||
-                                           pool_i.alloc_alignment == 0) {
+  if (!pool_i.alloc_allowed || pool_i.alloc_granule == 0 || pool_i.alloc_alignment == 0 ||
+      (pool_i.global_flag & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED)
+      ) {
     if (verbosity() > 0) {
       std::cout << "  Test not applicable. Skipping." << std::endl;
       std::cout << kSubTestSeparator << std::endl;
     }
     return;
   }
+
+  // To speed-up test, test all pools on CPU-0, only test coare-grained on remaining CPU agents
+  if (ag_type == HSA_DEVICE_TYPE_CPU && node_id > 0 &&
+      !(pool_i.global_flag & HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED)) {
+
+    if (verbosity() > 0) {
+      std::cout << "  Test not applicable. Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
   // Do everything in "granule" units
   auto gran_sz = pool_i.alloc_granule;
   auto pool_sz = pool_i.aggregate_alloc_max / gran_sz;
@@ -206,10 +223,12 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   uint64_t upper_bound = pool_sz;
   uint64_t lower_bound = 0;
 
+  /* Stop bisecting once we have reached size diff within 5 % of total  */
+  size_t alloc_size_delta = max_alloc_size * 0.05;
+
   while (true) {
     err = TestAllocate(pool, max_alloc_size * gran_sz);
-    ASSERT_TRUE(err == HSA_STATUS_SUCCESS ||
-                                    err == HSA_STATUS_ERROR_OUT_OF_RESOURCES);
+    ASSERT_TRUE(err == HSA_STATUS_SUCCESS || err == HSA_STATUS_ERROR_OUT_OF_RESOURCES);
     if (err == HSA_STATUS_SUCCESS) {
       lower_bound = max_alloc_size;
       max_alloc_size += (upper_bound - lower_bound)/2;
@@ -218,7 +237,7 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
       max_alloc_size -= (upper_bound - lower_bound)/2;
     }
 
-    if ((upper_bound - lower_bound) < 2) {
+    if ((upper_bound - lower_bound) < alloc_size_delta) {
       break;
     }
     ASSERT_GT(upper_bound, lower_bound);
