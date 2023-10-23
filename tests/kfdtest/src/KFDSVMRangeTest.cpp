@@ -118,7 +118,7 @@ TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
                                                 {HSA_SVM_ATTR_PREFERRED_LOC, (HSAuint32)defaultGPUNode},
                                                 {HSA_SVM_ATTR_SET_FLAGS,
                                                  HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_GPU_EXEC | HSA_SVM_FLAG_COHERENT},
-                                                {HSA_SVM_ATTR_GRANULARITY, 0xFF},
+                                                {HSA_SVM_ATTR_GRANULARITY, 0x3F},
                                                 {HSA_SVM_ATTR_ACCESS, (HSAuint32)defaultGPUNode},
                                           };
 
