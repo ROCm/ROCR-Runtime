@@ -674,9 +674,12 @@ static hsa_status_t GetGPUAgents(hsa_agent_t agent, void* data) {
                                           name2, bus, device, function, name);
   }
 
+  uint32_t pci_domain_id = 0;
+  err = hsa_agent_get_info(agent, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_DOMAIN, &pci_domain_id);
+  RET_IF_HSA_ERR(err);
+
   hwloc_obj_t gpu_hwl_dev;
-  // Assume domain of 0 for now
-  gpu_hwl_dev = hwloc_get_pcidev_by_busid(ptr->topology(), 0, bus, device,
+  gpu_hwl_dev = hwloc_get_pcidev_by_busid(ptr->topology(), pci_domain_id, bus, device,
                                                                     function);
 
   if (gpu_hwl_dev == nullptr) {
