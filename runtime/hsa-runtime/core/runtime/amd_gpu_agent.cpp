@@ -661,6 +661,8 @@ core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t st
 
 core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
   AMD::BlitSdmaBase* sdma;
+  size_t copy_size_override = 0;
+  const size_t copy_size_overrides[2] = {0x3fffff, 0x3fffffff};
 
   switch (isa_->GetMajorVersion()) {
     case 7:
@@ -669,19 +671,29 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
       break;
     case 9:
       sdma = new BlitSdmaV4();
+      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ||
+                            isa_->GetMinorVersion() > 0 ? copy_size_overrides[1] :
+                                                          copy_size_overrides[0];
       break;
     case 10:
       sdma = new BlitSdmaV5();
+      copy_size_override = isa_->GetMinorVersion() < 3 ? copy_size_overrides[0] :
+                                                         copy_size_overrides[1];
       break;
     case 11:
       sdma = new BlitSdmaV5();
+      copy_size_override = copy_size_overrides[1];
       break;
     default:
       assert(false && "Unexpected device major version.");
       return nullptr;
   }
 
-  if (sdma->Initialize(*this, use_xgmi) != HSA_STATUS_SUCCESS) {
+  Flag::SDMA_OVERRIDE copy_size_override_setting =
+    core::Runtime::runtime_singleton_->flag().enable_sdma_copy_size_override();
+  if (copy_size_override_setting == Flag::SDMA_DISABLE) copy_size_override = 0;
+
+  if (sdma->Initialize(*this, use_xgmi, copy_size_override) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
     delete sdma;
     sdma = nullptr;
