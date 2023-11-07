@@ -414,6 +414,11 @@ hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
     hsa_status_t err = agent->profiling_enabled(enable);
     if (err != HSA_STATUS_SUCCESS) ret = err;
   }
+
+  for (core::Agent* agent : core::Runtime::runtime_singleton_->cpu_agents()) {
+    hsa_status_t err = agent->profiling_enabled(enable);
+    if (err != HSA_STATUS_SUCCESS) ret = err;
+  }
   return ret;
 
   CATCH;
