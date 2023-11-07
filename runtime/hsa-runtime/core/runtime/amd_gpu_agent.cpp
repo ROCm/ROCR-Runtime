@@ -496,9 +496,10 @@ void GpuAgent::InitScratchPool() {
   size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
+  const size_t max_scratch_device = properties_.NumXcc * 4294967296;
   // For 64-bit linux use max queues unless otherwise specified
-  if ((max_scratch_len == 0) || (max_scratch_len > 4294967296)) {
-    max_scratch_len = 4294967296;  // 4GB apeture max
+  if ((max_scratch_len == 0) || (max_scratch_len > max_scratch_device)) {
+    max_scratch_len = max_scratch_device;  // 4GB per XCC apeture max
   }
 #endif
 
