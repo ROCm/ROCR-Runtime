@@ -51,6 +51,7 @@
 #include <tuple>
 #include <utility>
 #include <thread>
+#include <sys/un.h>
 
 #if defined(__linux__)
 #include <xf86drm.h>
@@ -465,6 +466,7 @@ class Runtime {
 
  protected:
   static void AsyncEventsLoop(void*);
+  static void AsyncIPCSockServerConnLoop(void*);
 
   struct AllocationRegion {
     AllocationRegion()
@@ -472,7 +474,8 @@ class Runtime {
           size(0),
           size_requested(0),
           alloc_flags(core::MemoryRegion::AllocateNoFlags),
-          user_ptr(nullptr) {}
+          user_ptr(nullptr),
+          ldrm_bo(NULL) {}
     AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested,
                      MemoryRegion::AllocateFlags alloc_flags)
         : region(region_arg),
@@ -493,6 +496,7 @@ class Runtime {
     MemoryRegion::AllocateFlags alloc_flags;
     void* user_ptr;
     std::unique_ptr<std::vector<notifier_t>> notifiers;
+    amdgpu_bo_handle ldrm_bo;
   };
 
   struct AsyncEventsControl {
@@ -716,6 +720,11 @@ class Runtime {
 
   std::unique_ptr<AMD::SvmProfileControl> svm_profile_;
 
+  // IPC DMA buf unix domain socket server dmabuf FD passing
+  int ipc_sock_server_fd_;
+  std::map<uint64_t, int> ipc_sock_server_conns_;
+  KernelMutex ipc_sock_server_lock_;
+
  private:
   void CheckVirtualMemApiSupport();
   int GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd, uint64_t* cpu_addr);
@@ -827,6 +836,9 @@ class Runtime {
   // Failure to release the runtime indicates an incorrect application but is
   // common (example: calls library routines at process exit).
   friend class RuntimeCleanup;
+
+  void InitIPCDmaBufSupport();
+  bool ipc_dmabuf_supported_;
 };
 
 }  // namespace core

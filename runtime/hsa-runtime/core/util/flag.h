@@ -218,6 +218,9 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_MWAITX");
     enable_mwaitx_ = (var == "1") ? true : false;
 
+    var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
+    enable_ipc_mode_legacy_ = (var == "1") ? true : true; // Temporarily always enable
+
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
     var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
@@ -320,6 +323,8 @@ class Flag {
 
   SRAMECC_ENABLE sramecc_enable() const { return sramecc_enable_; }
 
+  bool enable_ipc_mode_legacy() const { return enable_ipc_mode_legacy_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -344,6 +349,7 @@ class Flag {
   bool override_cpu_affinity_;
   bool image_print_srd_;
   bool enable_mwaitx_;
+  bool enable_ipc_mode_legacy_;
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;
