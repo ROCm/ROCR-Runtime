@@ -125,7 +125,7 @@ trap_entry:
   // If llvm.debugtrap and debugger is not attached.
   s_cmp_eq_u32         ttmp2, TRAP_ID_DEBUGTRAP
   s_cbranch_scc0       .no_skip_debugtrap
-.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || .amdgcn.gfx_generation_number == 10
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) || .amdgcn.gfx_generation_number >= 10
   s_bitcmp0_b32        ttmp11, TTMP_DEBUG_ENABLED_SHIFT
 .else
   s_bitcmp0_b32        ttmp13, TTMP_DEBUG_ENABLED_SHIFT
