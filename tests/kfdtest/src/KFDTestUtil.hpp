@@ -44,6 +44,8 @@ bool WaitOnValue(const volatile unsigned int *buf, unsigned int value, unsigned 
 
 void SplitU64(const HSAuint64 value, unsigned int& rLoPart, unsigned int& rHiPart);
 
+bool CheckEmuModeEnabled();
+
 bool GetHwCapabilityHWS();
 
 HSAKMT_STATUS CreateQueueTypeEvent(bool ManualReset, bool IsSignaled, unsigned int NodeId, HsaEvent** Event);

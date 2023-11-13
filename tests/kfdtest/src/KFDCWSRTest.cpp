@@ -80,6 +80,8 @@ TEST_P(KFDCWSRTest, BasicTest) {
     int num_witems = std::get<0>(GetParam());
     int cwsr_thresh = std::get<1>(GetParam());
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    // Increase delay on emulator by this factor.
+    const int delayMult = (g_IsEmuMode ? 20 : 1);
 
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
         HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true, false, true);
@@ -106,7 +108,7 @@ TEST_P(KFDCWSRTest, BasicTest) {
         dispatch.SetDim(num_witems, 1, 1);
         dispatch.Submit(queue);
 
-        Delay(5);
+        Delay(5 * delayMult);
 
         LOG() << "Starting iteration for " << std::dec << num_witems
               << " work items(s) (targeting " << std::dec << cwsr_thresh
@@ -117,12 +119,12 @@ TEST_P(KFDCWSRTest, BasicTest) {
             // Send dequeue request
             EXPECT_SUCCESS(queue.Update(0, BaseQueue::DEFAULT_PRIORITY, false));
 
-            Delay(5);
+            Delay(5 * delayMult);
 
             // Send requeue request
             EXPECT_SUCCESS(queue.Update(100, BaseQueue::DEFAULT_PRIORITY, false));
 
-            Delay(50);
+            Delay(50 * delayMult);
 
             // Check for reg mangling
             for (int i = 0; i < num_witems; i++) {

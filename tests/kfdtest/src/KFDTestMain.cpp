@@ -53,6 +53,7 @@ unsigned int g_TestTimeOut;
 int g_TestNodeId;
 int g_TestDstNodeId;
 bool g_IsChildProcess;
+bool g_IsEmuMode;
 unsigned int g_SleepTime;
 unsigned int g_TestGPUFamilyId;
 class KFDBaseComponentTest *g_baseTest;
@@ -90,8 +91,15 @@ GTEST_API_ int main(int argc, char **argv) {
         g_TestNodeId = args.NodeId;
         g_TestDstNodeId = args.DstNodeId;
 
+        g_IsEmuMode = CheckEmuModeEnabled();
+
         LOG() << "Profile: " << (TESTPROFILE)g_TestRunProfile << std::endl;
         LOG() << "HW capabilities: 0x" << std::hex << g_TestENVCaps << std::endl;
+        if (g_IsEmuMode)
+        {
+            LOG() << "Emulation Mode Enabled" << std::endl;
+        }
+
         if (g_SleepTime > 0) {
             LOG() << "Sleep time in seconds as specified by user: " << std::dec << g_SleepTime << std::endl;
         }

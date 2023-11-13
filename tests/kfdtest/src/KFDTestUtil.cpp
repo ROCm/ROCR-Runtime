@@ -95,6 +95,13 @@ void SplitU64(const HSAuint64 value, unsigned int& rLoPart, unsigned int& rHiPar
     rHiPart = static_cast<unsigned int>(value >> 32);
 }
 
+bool CheckEmuModeEnabled()
+{
+    uint32_t emu_mode = false;
+    fscanf_dec("/sys/module/amdgpu/parameters/emu_mode", &emu_mode);
+    return (emu_mode != 0);
+}
+
 bool GetHwCapabilityHWS() {
     unsigned int value = 0;
     bool valExists = ReadDriverConfigValue(CONFIG_HWS, value);
