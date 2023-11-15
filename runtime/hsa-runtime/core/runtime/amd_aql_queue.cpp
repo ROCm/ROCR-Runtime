@@ -348,7 +348,7 @@ AqlQueue::~AqlQueue() {
   }
 
   Inactivate();
-  agent_->ReleaseQueueScratch(queue_scratch_);
+  agent_->ReleaseQueueMainScratch(queue_scratch_);
   FreeRegisteredRingBuffer();
   exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
@@ -798,11 +798,11 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
   if ((queue->dynamicScratchState & ERROR_HANDLER_TERMINATE) != ERROR_HANDLER_TERMINATE) {
     if (error_code == 512) {  // Large scratch reclaim
       auto& scratch = queue->queue_scratch_;
-      queue->agent_->ReleaseQueueScratch(scratch);
-      scratch.queue_base = nullptr;
-      scratch.size = 0;
-      scratch.size_per_thread = 0;
-      scratch.queue_process_offset = 0;
+      queue->agent_->ReleaseQueueMainScratch(scratch);
+      scratch.main_queue_base = nullptr;
+      scratch.main_size = 0;
+      scratch.main_size_per_thread = 0;
+      scratch.main_queue_process_offset = 0;
       queue->InitScratchSRD();
 
       HSA::hsa_signal_store_relaxed(queue->amd_queue_.queue_inactive_signal, 0);
@@ -819,7 +819,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
       auto& scratch = queue->queue_scratch_;
 
-      queue->agent_->ReleaseQueueScratch(scratch);
+      queue->agent_->ReleaseQueueMainScratch(scratch);
 
       uint64_t pkt_slot_idx =
           queue->amd_queue_.read_dispatch_id & (queue->amd_queue_.hsa_queue.size - 1);
@@ -847,13 +847,14 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       const uint32_t MaxScratchSlots =
           AlignUp(cu_count, engines) * queue->agent_->properties().MaxSlotsScratchCU;
 
-      scratch.size_per_thread = scratch_request;
-      scratch.lanes_per_wave = (error_code & 0x400) ? 32 : 64;
+      scratch.main_size_per_thread = scratch_request;
+      scratch.main_lanes_per_wave = (error_code & 0x400) ? 32 : 64;
 
-      scratch.size_per_thread =
-          AlignUp(scratch.size_per_thread, scratch.mem_alignment_size / scratch.lanes_per_wave);
+      scratch.main_size_per_thread = AlignUp(
+          scratch.main_size_per_thread, scratch.mem_alignment_size / scratch.main_lanes_per_wave);
 
-      scratch.size = scratch.size_per_thread * MaxScratchSlots * scratch.lanes_per_wave;
+      scratch.main_size =
+          scratch.main_size_per_thread * MaxScratchSlots * scratch.main_lanes_per_wave;
 
       // Smaller dispatches may not need to reach full device occupancy.
       // For these we need to ensure that the scratch we give doesn't restrict the dispatch even
@@ -862,8 +863,8 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
           (uint64_t(pkt.dispatch.workgroup_size_x) * pkt.dispatch.workgroup_size_y) *
           pkt.dispatch.workgroup_size_z;
       uint64_t waves_per_group =
-          (lanes_per_group + scratch.lanes_per_wave - 1) / scratch.lanes_per_wave;
-      scratch.waves_per_group = waves_per_group;
+          (lanes_per_group + scratch.main_lanes_per_wave - 1) / scratch.main_lanes_per_wave;
+      scratch.main_waves_per_group = waves_per_group;
 
       uint64_t groups = ((uint64_t(pkt.dispatch.grid_size_x) + pkt.dispatch.workgroup_size_x - 1) /
                          pkt.dispatch.workgroup_size_x) *
@@ -891,14 +892,14 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
       // Populate all engines at max group occupancy, then clip down to device limits.
       groups = maxGroupsPerEngine * engines;
-      scratch.wanted_slots = groups * waves_per_group;
-      scratch.wanted_slots = Min(scratch.wanted_slots, uint64_t(MaxScratchSlots));
+      scratch.dispatch_slots = groups * waves_per_group;
+      scratch.dispatch_slots = Min(scratch.dispatch_slots, uint64_t(MaxScratchSlots));
       scratch.dispatch_size =
-          scratch.size_per_thread * scratch.wanted_slots * scratch.lanes_per_wave;
+          scratch.main_size_per_thread * scratch.dispatch_slots * scratch.main_lanes_per_wave;
 
       scratch.cooperative = (queue->amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
 
-      queue->agent_->AcquireQueueScratch(scratch);
+      queue->agent_->AcquireQueueMainScratch(scratch);
 
       if (scratch.retry) {
         queue->dynamicScratchState |= ERROR_HANDLER_SCRATCH_RETRY;
@@ -906,7 +907,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
         waitVal = error_code;
       } else {
         // Out of scratch - promote error
-        if (scratch.queue_base == nullptr) {
+        if (scratch.main_queue_base == nullptr) {
           errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
         } else {
           // Mark large scratch allocation for single use.
@@ -1294,7 +1295,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
 void AqlQueue::FillBufRsrcWord0() {
   SQ_BUF_RSRC_WORD0 srd0;
-  uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
+  uintptr_t scratch_base = uintptr_t(queue_scratch_.main_queue_base);
 
   srd0.bits.BASE_ADDRESS = uint32_t(scratch_base);
   amd_queue_.scratch_resource_descriptor[0] = srd0.u32All;
@@ -1305,7 +1306,7 @@ void AqlQueue::FillBufRsrcWord1() {
   uint32_t scratch_base_hi = 0;
 
 #ifdef HSA_LARGE_MODEL
-  uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
+  uintptr_t scratch_base = uintptr_t(queue_scratch_.main_queue_base);
   scratch_base_hi = uint32_t(scratch_base >> 32);
   #endif
 
@@ -1322,7 +1323,7 @@ void AqlQueue::FillBufRsrcWord1_Gfx11() {
   uint32_t scratch_base_hi = 0;
 
 #ifdef HSA_LARGE_MODEL
-  uintptr_t scratch_base = uintptr_t(queue_scratch_.queue_base);
+  uintptr_t scratch_base = uintptr_t(queue_scratch_.main_queue_base);
   scratch_base_hi = uint32_t(scratch_base >> 32);
 #endif
 
@@ -1339,7 +1340,7 @@ void AqlQueue::FillBufRsrcWord2() {
   const uint32_t num_xcc = agent_props.NumXcc;
 
    // report size per XCC
-  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.size / num_xcc);
+  srd2.bits.NUM_RECORDS = uint32_t(queue_scratch_.main_size / num_xcc);
 
   amd_queue_.scratch_resource_descriptor[2] = srd2.u32All;
 }
@@ -1405,7 +1406,7 @@ void AqlQueue::FillBufRsrcWord3_Gfx11() {
 // Set concurrent wavefront limits only when scratch is being used.
 void AqlQueue::FillComputeTmpRingSize() {
   COMPUTE_TMPRING_SIZE tmpring_size = {};
-  if (queue_scratch_.size == 0) {
+  if (queue_scratch_.main_size == 0) {
     amd_queue_.compute_tmpring_size = tmpring_size.u32All;
     return;
   }
@@ -1419,13 +1420,14 @@ void AqlQueue::FillComputeTmpRingSize() {
 
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
   // Scratch Size per Wave is specified in terms of kilobytes
-  uint32_t wave_scratch = (((queue_scratch_.lanes_per_wave * queue_scratch_.size_per_thread) +
-                            queue_scratch_.mem_alignment_size - 1) /
-                           queue_scratch_.mem_alignment_size);
+  uint32_t wave_scratch =
+      (((queue_scratch_.main_lanes_per_wave * queue_scratch_.main_size_per_thread) +
+        queue_scratch_.mem_alignment_size - 1) /
+       queue_scratch_.mem_alignment_size);
   tmpring_size.bits.WAVESIZE = wave_scratch;
   assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
-  uint32_t num_waves =
-      (queue_scratch_.size / num_xcc) / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+  uint32_t num_waves = (queue_scratch_.main_size / num_xcc) /
+      (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
 
   tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
@@ -1436,7 +1438,7 @@ void AqlQueue::FillComputeTmpRingSize() {
 // Set concurrent wavefront limits only when scratch is being used.
 void AqlQueue::FillComputeTmpRingSize_Gfx11() {
   COMPUTE_TMPRING_SIZE_GFX11 tmpring_size = {};
-  if (queue_scratch_.size == 0) {
+  if (queue_scratch_.main_size == 0) {
     amd_queue_.compute_tmpring_size = tmpring_size.u32All;
     return;
   }
@@ -1450,15 +1452,16 @@ void AqlQueue::FillComputeTmpRingSize_Gfx11() {
 
   // Scratch is allocated program COMPUTE_TMPRING_SIZE register
   // Scratch Size per Wave is specified in terms of kilobytes
-  uint32_t wave_scratch = (((queue_scratch_.lanes_per_wave * queue_scratch_.size_per_thread) +
-                            queue_scratch_.mem_alignment_size - 1) /
-                           queue_scratch_.mem_alignment_size);
+  uint32_t wave_scratch =
+      (((queue_scratch_.main_lanes_per_wave * queue_scratch_.main_size_per_thread) +
+        queue_scratch_.mem_alignment_size - 1) /
+       queue_scratch_.mem_alignment_size);
 
   tmpring_size.bits.WAVESIZE = wave_scratch;
   assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
 
   uint32_t num_waves =
-      queue_scratch_.size / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+      queue_scratch_.main_size / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
 
   // For GFX11 we specify number of waves per engine instead of total
   num_waves /= agent_->properties().NumShaderBanks;
@@ -1494,18 +1497,18 @@ void AqlQueue::InitScratchSRD() {
   }
 
   // Populate flat scratch parameters in amd_queue_.
-  amd_queue_.scratch_backing_memory_location = queue_scratch_.queue_process_offset;
+  amd_queue_.scratch_backing_memory_location = queue_scratch_.main_queue_process_offset;
 
   const auto& agent_props = agent_->properties();
   const uint32_t num_xcc = agent_props.NumXcc;
   // report size per XCC
-  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.size / num_xcc;
+  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.main_size / num_xcc;
 
   // For backwards compatibility this field records the per-lane scratch
   // for a 64 lane wavefront. If scratch was allocated for 32 lane waves
   // then the effective size for a 64 lane wave is halved.
   amd_queue_.scratch_wave64_lane_byte_size =
-      uint32_t((queue_scratch_.size_per_thread * queue_scratch_.lanes_per_wave) / 64);
+      uint32_t((queue_scratch_.main_size_per_thread * queue_scratch_.main_lanes_per_wave) / 64);
 
   return;
 }
