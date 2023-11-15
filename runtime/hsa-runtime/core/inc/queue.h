@@ -90,6 +90,20 @@ struct AqlPacket {
             (type(header) != HSA_PACKET_TYPE_INVALID));
   }
 
+  void __forceinline AssertIsDispatchAndNeedsScratch() const {
+    assert(IsValid(packet.header) && "Invalid packet in dynamic scratch handler.");
+    assert(type(packet.header) == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
+           "Invalid packet in dynamic scratch handler.");
+
+    assert((dispatch.workgroup_size_x != 0) && (dispatch.workgroup_size_y != 0) &&
+           (dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
+
+    assert((dispatch.private_segment_size != 0) &&
+           "Scratch memory request from packet with no scratch demand.  Possible bad kernel code "
+           "object.");
+    return;
+  }
+
   std::string string() const {
     std::stringstream string;
     uint8_t t = type(packet.header);
