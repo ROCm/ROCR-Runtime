@@ -245,6 +245,7 @@ global:
 	hsa_amd_vmem_import_shareable_handle;
 	hsa_amd_vmem_retain_alloc_handle;
 	hsa_amd_vmem_get_alloc_properties_from_handle;
+	hsa_amd_agent_set_async_scratch_limit;
 
 local:
     *;

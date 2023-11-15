@@ -3026,6 +3026,29 @@ hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memor
 hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type);
+
+/**
+ * @brief Set the asynchronous scratch limit threshold on all the queues for this agent.
+ * Dispatches that are enqueued on HW queues on this agent that are smaller than threshold will not
+ * result in a scratch use-once method. This API is only supported on devices that support
+ * asynchronous scratch reclaim.
+ *
+ * @param[in] agent A valid agent.
+ *
+ * @param[in] threshold Threshold size in bytes
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The agent is invalid.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT This agent does not support asynchronous scratch
+ * reclaim
+ */
+hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

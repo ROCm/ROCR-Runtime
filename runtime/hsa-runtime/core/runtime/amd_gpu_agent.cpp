@@ -83,6 +83,8 @@
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 #define MAX_NUM_DOORBELLS 0x400
+#define MAX_SCRATCH_APERTURE_PER_XCC 4294967296
+#define DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC (1 << 30)  // 1 GB
 
 namespace rocr {
 namespace core {
@@ -109,6 +111,7 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       pending_copy_req_ref_(0),
       pending_copy_stat_check_ref_(0),
       sdma_blit_used_mask_(0),
+      scratch_limit_async_threshold_(0),
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
@@ -200,6 +203,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 
   // Populate cache list.
   InitCacheList();
+
+  // Initialize thresholds for async-scratch handling
+  InitAsyncScratchThresholds();
 }
 
 GpuAgent::~GpuAgent() {
@@ -496,10 +502,10 @@ void GpuAgent::InitScratchPool() {
   size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  const size_t max_scratch_device = properties_.NumXcc * 4294967296;
+  const size_t max_scratch_device = properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC;
   // For 64-bit linux use max queues unless otherwise specified
   if ((max_scratch_len == 0) || (max_scratch_len > max_scratch_device)) {
-    max_scratch_len = max_scratch_device;  // 4GB per XCC apeture max
+    max_scratch_len = max_scratch_device;  // 4GB per XCC aperture max
   }
 #endif
 
@@ -516,6 +522,15 @@ void GpuAgent::InitScratchPool() {
   } else {
     new (&scratch_pool_) SmallHeap();
   }
+}
+
+void GpuAgent::InitAsyncScratchThresholds() {
+  scratch_limit_async_threshold_ =
+      core::Runtime::runtime_singleton_->flag().scratch_single_limit_async();
+
+  if (!scratch_limit_async_threshold_)
+    scratch_limit_async_threshold_ =
+        DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC * properties().NumXcc;
 }
 
 void GpuAgent::ReserveScratch()
@@ -1555,6 +1570,10 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  // Asynchronous reclaim flag bit is set by CP FW on queue-connect, we will update this when
+  // we get the first scratch request.
+  scratch.async_reclaim = false;
+
   scratch.main_lanes_per_wave = 64;
   scratch.main_size_per_thread = AlignUp(private_segment_size, 1024 / scratch.main_lanes_per_wave);
   if (scratch.main_size_per_thread > 262128) {
@@ -1586,6 +1605,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   auto aql_queue =
       new AqlQueue(this, size, node_id(), scratch, event_callback, data, is_kv_device_);
   *queue = aql_queue;
+  aql_queues_.push_back(aql_queue);
 
   if (doorbell_queue_map_) {
     // Calculate index of the queue doorbell within the doorbell aperture.
@@ -1803,6 +1823,28 @@ void GpuAgent::ReleaseScratch(void* base, size_t size, bool large) {
     HSA::hsa_signal_or_relaxed(notifier.first, notifier.second);
   }
   ClearScratchNotifiers();
+}
+
+// Go through all the AQL queues and try to release scratch memory
+void GpuAgent::AsyncReclaimScratchQueues() {
+  for (auto iter : aql_queues_) {
+    auto aqlQueue = static_cast<AqlQueue*>(iter);
+    aqlQueue->AsyncReclaimMainScratch();
+  }
+}
+
+hsa_status_t GpuAgent::SetAsyncScratchThresholds(size_t use_once_limit) {
+  if (use_once_limit > properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC)
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  scratch_limit_async_threshold_ = use_once_limit;
+
+  for (auto iter : aql_queues_) {
+    auto aqlQueue = static_cast<AqlQueue*>(iter);
+    aqlQueue->CheckScratchLimits();
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 void GpuAgent::TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) {
@@ -2126,6 +2168,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
 
 void GpuAgent::Trim() {
   Agent::Trim();
+  AsyncReclaimScratchQueues();
   ScopedAcquire<KernelMutex> lock(&scratch_lock_);
   scratch_cache_.trim(false);
 }

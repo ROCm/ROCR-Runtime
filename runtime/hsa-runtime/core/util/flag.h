@@ -64,7 +64,8 @@ class Flag {
   static_assert(XNACK_DISABLE == 0, "XNACK_REQUEST enum values improperly changed.");
   static_assert(XNACK_ENABLE == 1, "XNACK_REQUEST enum values improperly changed.");
 
-  // Lift limit for 2.10 release RCCL workaround.
+  // Lift limit for 2.10 release RCCL workaround. This limit is not used when asynchronous scratch
+  // reclaim is supported
   const size_t DEFAULT_SCRATCH_SINGLE_LIMIT = 146800640;  // small_limit >> 2;
 
   explicit Flag() { Refresh(); }
@@ -120,10 +121,25 @@ class Flag {
     // memory
     if (os::IsEnvVarSet("HSA_SCRATCH_SINGLE_LIMIT")) {
       var = os::GetEnvVar("HSA_SCRATCH_SINGLE_LIMIT");
-      scratch_single_limit_ = atoi(var.c_str());
+      char* end;
+      scratch_single_limit_ = strtoul(var.c_str(), &end, 10);
     } else {
       scratch_single_limit_ = DEFAULT_SCRATCH_SINGLE_LIMIT;
     }
+
+    // On GPUs that support asynchronous scratch reclaim
+    // Scratch memory sizes > HSA_SCRATCH_SINGLE_LIMIT_ASYNC will trigger a use-once scheme
+    if (os::IsEnvVarSet("HSA_SCRATCH_SINGLE_LIMIT_ASYNC")) {
+      var = os::GetEnvVar("HSA_SCRATCH_SINGLE_LIMIT_ASYNC");
+      char* end;
+      scratch_single_limit_async_ = strtoul(var.c_str(), &end, 10);
+    } else {
+      scratch_single_limit_async_ = 0;  // DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC;
+    }
+
+    // On GPUs that support asynchronous scratch reclaim this can be used to disable this feature.
+    var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ASYNC_RECLAIM");
+    enable_scratch_async_reclaim_ = (var == "0") ? false : true;
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 
@@ -252,6 +268,10 @@ class Flag {
 
   size_t scratch_single_limit() const { return scratch_single_limit_; }
 
+  bool enable_scratch_async_reclaim() const { return enable_scratch_async_reclaim_; }
+
+  size_t scratch_single_limit_async() const { return scratch_single_limit_async_; }
+
   std::string tools_lib_names() const { return tools_lib_names_; }
 
   bool disable_image() const { return disable_image_; }
@@ -330,6 +350,8 @@ class Flag {
 
   size_t scratch_mem_size_;
   size_t scratch_single_limit_;
+  size_t scratch_single_limit_async_;
+  bool enable_scratch_async_reclaim_;
 
   std::string tools_lib_names_;
   std::string svm_profile_;
