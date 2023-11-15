@@ -239,9 +239,13 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Halt the queue without destroying it or fencing memory.
   void Suspend();
 
+  /// @brief Handle insufficient scratch
+  void HandleInsufficientScratch(hsa_signal_value_t& error_code, hsa_signal_value_t& waitVal,
+                                 bool& changeWait);
+
   /// @brief Handler for hardware queue events.
   template <bool HandleExceptions>
-  static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
+  static bool DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* arg);
 
   /// @brief Handler for KFD exceptions.
   static bool ExceptionHandler(hsa_signal_value_t error_code, void* arg);
