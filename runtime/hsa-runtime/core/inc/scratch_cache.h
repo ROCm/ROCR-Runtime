@@ -92,6 +92,7 @@ class ScratchCache {
 
     bool large;
     size_t use_once_limit;
+    size_t use_alt_limit;
     bool async_reclaim;  // This version of CP FW supports async_reclaim
     bool retry;
     uint32_t mem_alignment_size;  // Populated into SRD
@@ -106,6 +107,18 @@ class ScratchCache {
     void* main_queue_base;
     ptrdiff_t main_queue_process_offset;
     ScratchCache::ref_t main_scratch_node;
+
+    size_t alt_size;
+    size_t alt_size_per_thread;    // Populated into SRD
+    uint32_t alt_lanes_per_wave;   // Populated into SRD
+    uint32_t alt_waves_per_group;  // Used during waves reduction
+
+    uint64_t alt_dispatch_limit_x;
+    uint64_t alt_dispatch_limit_y;
+    uint64_t alt_dispatch_limit_z;
+    void* alt_queue_base;
+    ptrdiff_t alt_queue_process_offset;
+    ScratchCache::ref_t alt_scratch_node;
   };
 
   ScratchCache(const ScratchCache& rhs) = delete;
@@ -196,6 +209,46 @@ class ScratchCache {
       }
     }
     return ret;
+  }
+
+  bool allocAlt(ScratchInfo& info) {
+    ref_t it = map.upper_bound(info.alt_size - 1);
+    if (it == map.end()) return false;
+
+    // Alt requests should have exact size
+    while ((it != map.end()) && (it->first == info.alt_size)) {
+      if (it->second.isFree() && (!it->second.large)) {
+        it->second.alloc();
+        info.alt_queue_base = it->second.base;
+        info.alt_scratch_node = it;
+        available_bytes_ -= it->first;
+        return true;
+      }
+      it++;
+    }
+    return false;
+  }
+
+  void freeAlt(ScratchInfo& info) {
+    assert(!info.alt_scratch_node->second.isFree() && "free called on free scratch node.");
+    auto it = info.alt_scratch_node;
+    if (it->second.trimPending()) {
+      dealloc(it->second.base, it->first, it->second.large);
+      map.erase(it);
+      return;
+    }
+    it->second.free();
+    available_bytes_ += it->first;
+  }
+
+  void insertAlt(ScratchInfo& info) {
+    node n;
+    n.base = info.alt_queue_base;
+    n.large = false;
+    n.alloc();
+
+    auto it = map.insert(std::make_pair(info.alt_size, n));
+    info.alt_scratch_node = it;
   }
 
   size_t free_bytes() const { return available_bytes_; }

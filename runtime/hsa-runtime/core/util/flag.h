@@ -138,8 +138,13 @@ class Flag {
     }
 
     // On GPUs that support asynchronous scratch reclaim this can be used to disable this feature.
+    // Disabling asynchronous scratch reclaim also disables use of alternate scratch
+    // HSA_ENABLE_SCRATCH_ALT
     var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ASYNC_RECLAIM");
     enable_scratch_async_reclaim_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ALT");
+    enable_scratch_alt_ = (var == "0") || !enable_scratch_async_reclaim_ ? false : true;
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 
@@ -270,6 +275,8 @@ class Flag {
 
   bool enable_scratch_async_reclaim() const { return enable_scratch_async_reclaim_; }
 
+  bool enable_scratch_alt() const { return enable_scratch_alt_; }
+
   size_t scratch_single_limit_async() const { return scratch_single_limit_async_; }
 
   std::string tools_lib_names() const { return tools_lib_names_; }
@@ -352,6 +359,7 @@ class Flag {
   size_t scratch_single_limit_;
   size_t scratch_single_limit_async_;
   bool enable_scratch_async_reclaim_;
+  bool enable_scratch_alt_;
 
   std::string tools_lib_names_;
   std::string svm_profile_;

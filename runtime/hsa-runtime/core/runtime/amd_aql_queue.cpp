@@ -217,9 +217,15 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     queue_scratch_.mem_alignment_size = 1024;
 
   queue_scratch_.use_once_limit = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  queue_scratch_.use_alt_limit = 0;
+
   queue_scratch_.async_reclaim = agent_->AsyncScratchReclaimEnabled();
-  if (queue_scratch_.async_reclaim)
+  if (queue_scratch_.async_reclaim) {
     queue_scratch_.use_once_limit = agent_->ScratchSingleLimitAsyncThreshold();
+    queue_scratch_.use_alt_limit = core::Runtime::runtime_singleton_->flag().enable_scratch_alt()
+        ? (queue_scratch_.use_once_limit / 4)
+        : 0;
+  }
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
     ScopedAcquire<KernelMutex> _lock(&queue_lock_);
@@ -289,6 +295,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
 
   amd_queue_.scratch_last_used_index = UINT64_MAX;
+  amd_queue_.alt_scratch_last_used_index = UINT64_MAX;
 
   // On the first queue creation, reserve some scratch memory on this agent.
   agent_->ReserveScratch();
@@ -356,6 +363,8 @@ AqlQueue::~AqlQueue() {
 
   Inactivate();
   agent_->ReleaseQueueMainScratch(queue_scratch_);
+  agent_->ReleaseQueueAltScratch(queue_scratch_);
+
   FreeRegisteredRingBuffer();
   exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
@@ -790,8 +799,13 @@ void AqlQueue::CheckScratchLimits() {
   if (!scratch.async_reclaim) return;
 
   scratch.use_once_limit = agent_->ScratchSingleLimitAsyncThreshold();
+  scratch.use_alt_limit = core::Runtime::runtime_singleton_->flag().enable_scratch_alt()
+      ? (scratch.use_once_limit / 4)
+      : 0;
 
   if (scratch.main_size > scratch.use_once_limit) AsyncReclaimMainScratch();
+
+  if (scratch.alt_size > scratch.use_alt_limit) AsyncReclaimAltScratch();
 
   return;
 }
@@ -828,6 +842,38 @@ void AqlQueue::AsyncReclaimMainScratch() {
   }
 }
 
+void AqlQueue::FreeAltScratchSpace() {
+  auto& scratch = queue_scratch_;
+  agent_->ReleaseQueueAltScratch(scratch);
+  scratch.alt_size = 0;
+  scratch.alt_size_per_thread = 0;
+  scratch.alt_queue_process_offset = 0;
+  InitScratchSRD();
+
+  HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0);
+}
+
+void AqlQueue::AsyncReclaimAltScratch() {
+  auto& scratch = queue_scratch_;
+  if (!scratch.async_reclaim || !scratch.alt_size) return;
+
+  // Notify CP that we are trying to reclaim scratch. CP will assume scratch is reclaimed on next
+  // dispatch
+  amd_queue_.alt_scratch_wave64_lane_byte_size = 0;
+  uint64_t last_used = atomic::Exchange(
+      &amd_queue_.alt_scratch_last_used_index, UINT64_MAX,
+      std::memory_order_relaxed);  // TODO: Confirm this is the correct memory order
+  // Wait for scratch to be idle.
+  while (true) {
+    uint64_t last = amd_queue_.alt_scratch_last_used_index;
+
+    if (std::min(last, last_used) < amd_queue_.read_dispatch_id) {
+      FreeAltScratchSpace();
+      return;
+    }
+  }
+}
+
 void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
                                          hsa_signal_value_t& waitVal, bool& changeWait) {
   // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
@@ -844,6 +890,25 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
    * size_t use_once_limit = 128 MB      // When async reclaim not supported
    *                       = 1GB per-XCC // When async reclaim is supported
    *
+   * size_t use_alt_limit  = 256 MB per-XCC
+   *
+   * if (async-scratch-reclaim-supported
+   *     && dispatch_slots < max_scratch_slots
+   *     && dispatch_size < use_alt_limit) {
+   *   // This dispatch wants less waves than number of slots, use alternate scratch
+   *   // alt_tmpring_size will have limited waves
+   *  use_alt()
+   * } else if (all_slots_size <= use_once_limit) {
+   *  use_main()
+   *
+   *  //If we failed to allocate memory to fill all slots, scratch.use_once will be set
+   *  if (scratch.use_once) {
+   *    use_once
+   *  } else if (all_slots_size > scratch.alt_size) {
+   *    //Primary scratch is large enough to handle needs of alt-scratch
+   *    free_alt()
+   *  }
+   * }
    *
    *******************************************************************************************/
 
@@ -925,6 +990,35 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   const uint64_t device_size = size_per_thread * lanes_per_wave * device_slots;
   const uint64_t dispatch_size = size_per_thread * lanes_per_wave * dispatch_slots;
 
+  // scratch.use_alt_limit will be 0 if alt scratch is not supported or disabled
+  if (dispatch_size < scratch.use_alt_limit && dispatch_slots < device_slots) {
+    // Try to use ALT scratch
+    agent_->ReleaseQueueAltScratch(scratch);
+
+    scratch.alt_size = dispatch_size;
+    scratch.alt_size_per_thread = size_per_thread;
+    scratch.alt_lanes_per_wave = lanes_per_wave;
+    scratch.alt_waves_per_group = waves_per_group;
+
+    agent_->AcquireQueueAltScratch(scratch);
+    if (scratch.alt_queue_base) {
+      scratch.alt_dispatch_limit_x = pkt.dispatch.grid_size_x;
+      scratch.alt_dispatch_limit_y = pkt.dispatch.grid_size_y;
+      scratch.alt_dispatch_limit_z = pkt.dispatch.grid_size_z;
+
+      // Update queue SRD
+      InitScratchSRD();
+      // Restart the queue.
+      HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0);
+
+      return;
+    }
+    // Could not allocate enough memory for alternate scratch fallback to primary scratch
+    scratch.alt_size = 0;
+    scratch.alt_size_per_thread = 0;
+  }
+
+  // Use PRIMARY scratch
   agent_->ReleaseQueueMainScratch(scratch);
   scratch.main_size = device_size;
   scratch.main_size_per_thread = size_per_thread;
@@ -954,6 +1048,10 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
                                << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
       pkt.dispatch.header |= (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
     }
+  } else if (scratch.alt_size && scratch.main_size > scratch.alt_size) {
+    // Not using use-scratch-once, and dispatches that would fit in alt-scratch would also fit in
+    // main scratch. No need for alt-scratch.
+    AsyncReclaimAltScratch();
   }
 
   // Reset scratch memory related entities for the queue
@@ -1004,7 +1102,8 @@ bool AqlQueue::DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* ar
       queue->HandleInsufficientScratch(error_code, waitVal, changeWait);
 
       // Out of scratch - promote error
-      if (queue->queue_scratch_.main_queue_base == nullptr)
+      if (queue->queue_scratch_.main_queue_base == nullptr &&
+          queue->queue_scratch_.alt_queue_base == nullptr)
         errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
 
@@ -1515,6 +1614,38 @@ void AqlQueue::FillComputeTmpRingSize() {
 }
 
 // Set concurrent wavefront limits only when scratch is being used.
+void AqlQueue::FillAltComputeTmpRingSize() {
+  COMPUTE_TMPRING_SIZE tmpring_size = {};
+  if (queue_scratch_.alt_size == 0) {
+    amd_queue_.alt_compute_tmpring_size = tmpring_size.u32All;
+    return;
+  }
+
+  const auto& agent_props = agent_->properties();
+  const uint32_t num_xcc = agent_props.NumXcc;
+
+  // Determine the maximum number of waves device can support
+  uint32_t num_cus = agent_props.NumFComputeCores / agent_props.NumSIMDPerCU;
+  uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
+
+  // Scratch is allocated program COMPUTE_TMPRING_SIZE register
+  // Scratch Size per Wave is specified in terms of kilobytes
+  uint32_t wave_scratch =
+      (((queue_scratch_.alt_lanes_per_wave * queue_scratch_.alt_size_per_thread) +
+        queue_scratch_.mem_alignment_size - 1) /
+       queue_scratch_.mem_alignment_size);
+  tmpring_size.bits.WAVESIZE = wave_scratch;
+  assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
+  uint32_t num_waves = (queue_scratch_.alt_size / num_xcc) /
+      (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+
+  tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
+  amd_queue_.alt_compute_tmpring_size = tmpring_size.u32All;
+  assert((tmpring_size.bits.WAVES % (agent_props.NumShaderBanks / num_xcc) == 0) &&
+         "Invalid scratch wave count.  Must be divisible by #SEs.");
+}
+
+// Set concurrent wavefront limits only when scratch is being used.
 void AqlQueue::FillComputeTmpRingSize_Gfx11() {
   COMPUTE_TMPRING_SIZE_GFX11 tmpring_size = {};
   if (queue_scratch_.main_size == 0) {
@@ -1572,22 +1703,32 @@ void AqlQueue::InitScratchSRD() {
       FillBufRsrcWord2();
       FillBufRsrcWord3();
       FillComputeTmpRingSize();
+      FillAltComputeTmpRingSize();
       break;
   }
 
   // Populate flat scratch parameters in amd_queue_.
   amd_queue_.scratch_backing_memory_location = queue_scratch_.main_queue_process_offset;
+  amd_queue_.alt_scratch_backing_memory_location = queue_scratch_.alt_queue_process_offset;
 
   const auto& agent_props = agent_->properties();
   const uint32_t num_xcc = agent_props.NumXcc;
   // report size per XCC
   amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.main_size / num_xcc;
+  amd_queue_.alt_scratch_backing_memory_byte_size = queue_scratch_.alt_size / num_xcc;
 
   // For backwards compatibility this field records the per-lane scratch
   // for a 64 lane wavefront. If scratch was allocated for 32 lane waves
   // then the effective size for a 64 lane wave is halved.
   amd_queue_.scratch_wave64_lane_byte_size =
       uint32_t((queue_scratch_.main_size_per_thread * queue_scratch_.main_lanes_per_wave) / 64);
+
+  amd_queue_.alt_scratch_wave64_lane_byte_size =
+      uint32_t((queue_scratch_.alt_size_per_thread * queue_scratch_.alt_lanes_per_wave) / 64);
+
+  amd_queue_.alt_scratch_dispatch_limit_x = queue_scratch_.alt_dispatch_limit_x;
+  amd_queue_.alt_scratch_dispatch_limit_y = queue_scratch_.alt_dispatch_limit_y;
+  amd_queue_.alt_scratch_dispatch_limit_z = queue_scratch_.alt_dispatch_limit_z;
 
   return;
 }
