@@ -292,7 +292,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
 
   if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
     if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
-                                          0, DynamicScratchHandler<false>,
+                                          0, DynamicQueueEventsHandler<false>,
                                           this) != HSA_STATUS_SUCCESS)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Queue event handler failed registration.\n");
@@ -303,7 +303,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
                                "Queue event handler failed registration.\n");
   } else {
     if (AMD::hsa_amd_signal_async_handler(amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE,
-                                          0, DynamicScratchHandler<true>,
+                                          0, DynamicQueueEventsHandler<true>,
                                           this) != HSA_STATUS_SUCCESS)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Queue event handler failed registration.\n");
@@ -778,8 +778,135 @@ hsa_status_t AqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
   return (err == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
 }
 
+void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
+                                         hsa_signal_value_t& waitVal, bool& changeWait) {
+  // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
+  auto& scratch = queue_scratch_;
+
+  /*******************************************************************************************
+   * uint32_t max_scratch_slots;   // Maximum number of slots for this device based on num CUs
+   * uint64_t dispatch_slots;      // Number of slots wanted for this dispatch
+   *
+   * uint64_t all_slots_size;      // Size needed to fill all slots on this device
+   * uint64_t dispatch_size;       // Size needed to fill wanted slots for this dispatch
+   *
+   *******************************************************************************************/
+
+  auto calc_dispatch_waves_per_group = [&](core::AqlPacket& pkt) {
+    const uint64_t lanes_per_group =
+        (uint64_t(pkt.dispatch.workgroup_size_x) * pkt.dispatch.workgroup_size_y) *
+        pkt.dispatch.workgroup_size_z;
+
+    const uint32_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
+    return (lanes_per_group + lanes_per_wave - 1) / lanes_per_wave;
+  };
+
+  auto calc_dispatch_groups = [&](core::AqlPacket& pkt) {
+    const uint64_t lanes_per_group =
+        (uint64_t(pkt.dispatch.workgroup_size_x) * pkt.dispatch.workgroup_size_y) *
+        pkt.dispatch.workgroup_size_z;
+
+    uint64_t groups = ((uint64_t(pkt.dispatch.grid_size_x) + pkt.dispatch.workgroup_size_x - 1) /
+                       pkt.dispatch.workgroup_size_x) *
+                      ((uint64_t(pkt.dispatch.grid_size_y) + pkt.dispatch.workgroup_size_y - 1) /
+                       pkt.dispatch.workgroup_size_y) *
+                      ((uint64_t(pkt.dispatch.grid_size_z) + pkt.dispatch.workgroup_size_z - 1) /
+                       pkt.dispatch.workgroup_size_z);
+    const uint32_t cu_count = amd_queue_.max_cu_id + 1;
+
+    const uint32_t engines = agent_->properties().NumShaderBanks;
+
+    const uint32_t symmetric_cus = AlignDown(cu_count, engines);
+    const uint32_t asymmetryPerRound = cu_count - symmetric_cus;
+    const uint64_t rounds = groups / cu_count;
+    const uint64_t asymmetricGroups = rounds * asymmetryPerRound;
+    const uint64_t symmetricGroups = groups - asymmetricGroups;
+    uint64_t maxGroupsPerEngine =
+        ((symmetricGroups + engines - 1) / engines) + (asymmetryPerRound ? rounds : 0);
+
+    // For gfx10+ devices we must attempt to assign the smaller of 256 lanes or 16 groups to each
+    // engine.
+    if (agent_->isa()->GetMajorVersion() >= 10 && maxGroupsPerEngine < 16 &&
+        lanes_per_group * maxGroupsPerEngine < 256) {
+      uint64_t groups_per_interleave = (256 + lanes_per_group - 1) / lanes_per_group;
+      maxGroupsPerEngine = Min(groups_per_interleave, 16ul);
+    }
+
+    // Populate all engines at max group occupancy, then clip down to device limits.
+    return maxGroupsPerEngine * engines;
+  };
+
+  // TODO: Move this to queue constructor since it does not depend on pkt, must be re-computed if
+  // CU Masking is enabled
+  auto calc_device_slots = [&]() {
+    // Get the hw maximum scratch slot count taking into consideration asymmetric harvest.
+    const uint32_t engines = agent_->properties().NumShaderBanks;
+    const uint32_t cu_count = amd_queue_.max_cu_id + 1;
+    return AlignUp(cu_count, engines) * agent_->properties().MaxSlotsScratchCU;
+  };
+
+  scratch.use_once_limit = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  scratch.cooperative = (amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
+
+  uint64_t pkt_slot_idx = amd_queue_.read_dispatch_id & (amd_queue_.hsa_queue.size - 1);
+
+  core::AqlPacket& pkt = ((core::AqlPacket*)amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
+
+  pkt.AssertIsDispatchAndNeedsScratch();
+
+  uint32_t device_slots = calc_device_slots();
+
+  uint32_t groups = calc_dispatch_groups(pkt);
+  uint32_t waves_per_group = calc_dispatch_waves_per_group(pkt);
+
+  uint32_t dispatch_slots = groups * waves_per_group;
+  dispatch_slots = std::min(dispatch_slots, device_slots);
+
+  const uint64_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
+
+  uint64_t device_size = pkt.dispatch.private_segment_size * lanes_per_wave * device_slots;
+  uint64_t dispatch_size = pkt.dispatch.private_segment_size * lanes_per_wave * dispatch_slots;
+
+  agent_->ReleaseQueueMainScratch(scratch);
+  scratch.main_size = device_size;
+  scratch.main_size_per_thread = pkt.dispatch.private_segment_size;
+  scratch.main_lanes_per_wave = lanes_per_wave;
+  scratch.main_waves_per_group = waves_per_group;
+
+  scratch.dispatch_size = dispatch_size;
+  scratch.dispatch_slots = dispatch_slots;
+
+  agent_->AcquireQueueMainScratch(scratch);
+
+  if (scratch.retry) {
+    dynamicScratchState |= ERROR_HANDLER_SCRATCH_RETRY;
+    changeWait = true;
+    waitVal = error_code;
+  } else if (scratch.main_queue_base == nullptr) {
+    // We could not allocate memory to fit even 1 wave
+    return;
+  }
+
+  // If we had to reduce number of waves
+  if (scratch.large) {
+    amd_queue_.queue_properties |= AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE;
+    // Set system release fence to flush scratch stores with older firmware versions.
+    if ((agent_->isa()->GetMajorVersion() == 8) && (agent_->GetMicrocodeVersion() < 729)) {
+      pkt.dispatch.header &= ~(((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1)
+                               << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+      pkt.dispatch.header |= (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+    }
+  }
+
+  // Reset scratch memory related entities for the queue
+  InitScratchSRD();
+  // Restart the queue.
+  HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0);
+  return;
+}
+
 template <bool HandleExceptions>
-bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
+bool AqlQueue::DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* arg) {
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_SUCCESS;
   bool fatal = false;
@@ -816,118 +943,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
 
     // Process only one queue error.
     if (error_code & 0x401) {  // insufficient scratch, wave64 or wave32
-      // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
-      auto& scratch = queue->queue_scratch_;
+      queue->HandleInsufficientScratch(error_code, waitVal, changeWait);
 
-      queue->agent_->ReleaseQueueMainScratch(scratch);
+      // Out of scratch - promote error
+      if (queue->queue_scratch_.main_queue_base == nullptr)
+        errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
-      uint64_t pkt_slot_idx =
-          queue->amd_queue_.read_dispatch_id & (queue->amd_queue_.hsa_queue.size - 1);
-
-      core::AqlPacket& pkt =
-          ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
-
-      // Load the packet header as atomic acquire as it it written by another
-      // thread as atomic release. This ensures the rest of the packet fields
-      // are visible.
-      uint16_t pkt_header = atomic::Load(&pkt.packet.header, std::memory_order_acquire);
-      assert(core::AqlPacket::IsValid(pkt_header) && "Invalid packet in dynamic scratch handler.");
-      assert(core::AqlPacket::type(pkt_header) == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
-             "Invalid packet in dynamic scratch handler.");
-      assert((pkt.dispatch.workgroup_size_x != 0) && (pkt.dispatch.workgroup_size_y != 0) &&
-             (pkt.dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
-
-      uint32_t scratch_request = pkt.dispatch.private_segment_size;
-      assert((scratch_request != 0) &&
-             "Scratch memory request from packet with no scratch demand.  Possible bad kernel code object.");
-
-      // Get the hw maximum scratch slot count taking into consideration asymmetric harvest.
-      const uint32_t engines = queue->agent_->properties().NumShaderBanks;
-      const uint32_t cu_count = queue->amd_queue_.max_cu_id + 1;
-      const uint32_t MaxScratchSlots =
-          AlignUp(cu_count, engines) * queue->agent_->properties().MaxSlotsScratchCU;
-
-      scratch.main_size_per_thread = scratch_request;
-      scratch.main_lanes_per_wave = (error_code & 0x400) ? 32 : 64;
-
-      scratch.main_size_per_thread = AlignUp(
-          scratch.main_size_per_thread, scratch.mem_alignment_size / scratch.main_lanes_per_wave);
-
-      scratch.main_size =
-          scratch.main_size_per_thread * MaxScratchSlots * scratch.main_lanes_per_wave;
-
-      // Smaller dispatches may not need to reach full device occupancy.
-      // For these we need to ensure that the scratch we give doesn't restrict the dispatch even
-      // though it does not fill the device. Figure the total requested dispatch size.
-      uint64_t lanes_per_group =
-          (uint64_t(pkt.dispatch.workgroup_size_x) * pkt.dispatch.workgroup_size_y) *
-          pkt.dispatch.workgroup_size_z;
-      uint64_t waves_per_group =
-          (lanes_per_group + scratch.main_lanes_per_wave - 1) / scratch.main_lanes_per_wave;
-      scratch.main_waves_per_group = waves_per_group;
-
-      uint64_t groups = ((uint64_t(pkt.dispatch.grid_size_x) + pkt.dispatch.workgroup_size_x - 1) /
-                         pkt.dispatch.workgroup_size_x) *
-          ((uint64_t(pkt.dispatch.grid_size_y) + pkt.dispatch.workgroup_size_y - 1) /
-           pkt.dispatch.workgroup_size_y) *
-          ((uint64_t(pkt.dispatch.grid_size_z) + pkt.dispatch.workgroup_size_z - 1) /
-           pkt.dispatch.workgroup_size_z);
-
-      // Find the maximum number of groups assigned to any engine.
-      const uint32_t symmetric_cus = AlignDown(cu_count, engines);
-      const uint32_t asymmetryPerRound = cu_count - symmetric_cus;
-      const uint64_t rounds = groups / cu_count;
-      const uint64_t asymmetricGroups = rounds * asymmetryPerRound;
-      const uint64_t symmetricGroups = groups - asymmetricGroups;
-      uint64_t maxGroupsPerEngine =
-          ((symmetricGroups + engines - 1) / engines) + (asymmetryPerRound ? rounds : 0);
-
-      // For gfx10+ devices we must attempt to assign the smaller of 256 lanes or 16 groups to each
-      // engine.
-      if (queue->agent_->isa()->GetMajorVersion() >= 10 && maxGroupsPerEngine < 16 &&
-          lanes_per_group * maxGroupsPerEngine < 256) {
-        uint64_t groups_per_interleave = (256 + lanes_per_group - 1) / lanes_per_group;
-        maxGroupsPerEngine = Min(groups_per_interleave, 16ul);
-      }
-
-      // Populate all engines at max group occupancy, then clip down to device limits.
-      groups = maxGroupsPerEngine * engines;
-      scratch.dispatch_slots = groups * waves_per_group;
-      scratch.dispatch_slots = Min(scratch.dispatch_slots, uint64_t(MaxScratchSlots));
-      scratch.dispatch_size =
-          scratch.main_size_per_thread * scratch.dispatch_slots * scratch.main_lanes_per_wave;
-
-      scratch.cooperative = (queue->amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
-
-      queue->agent_->AcquireQueueMainScratch(scratch);
-
-      if (scratch.retry) {
-        queue->dynamicScratchState |= ERROR_HANDLER_SCRATCH_RETRY;
-        changeWait = true;
-        waitVal = error_code;
-      } else {
-        // Out of scratch - promote error
-        if (scratch.main_queue_base == nullptr) {
-          errorCode = HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-        } else {
-          // Mark large scratch allocation for single use.
-          if (scratch.large) {
-            queue->amd_queue_.queue_properties |= AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE;
-            // Set system release fence to flush scratch stores with older firmware versions.
-            if ((queue->agent_->isa()->GetMajorVersion() == 8) &&
-                (queue->agent_->GetMicrocodeVersion() < 729)) {
-              pkt.dispatch.header &= ~(((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1)
-                                       << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
-              pkt.dispatch.header |=
-                  (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
-            }
-          }
-          // Reset scratch memory related entities for the queue
-          queue->InitScratchSRD();
-          // Restart the queue.
-          HSA::hsa_signal_store_screlease(queue->amd_queue_.queue_inactive_signal, 0);
-        }
-      }
 
     } else if (HandleExceptions) {
       if ((error_code & 2) == 2) {  // Invalid dim
@@ -973,7 +994,7 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       if (changeWait) {
         core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
             queue->amd_queue_.queue_inactive_signal, HSA_SIGNAL_CONDITION_NE, waitVal,
-            DynamicScratchHandler<HandleExceptions>, queue);
+            DynamicQueueEventsHandler<HandleExceptions>, queue);
         return false;
       }
       return true;
