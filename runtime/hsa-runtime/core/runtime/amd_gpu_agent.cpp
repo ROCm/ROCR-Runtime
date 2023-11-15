@@ -1191,11 +1191,7 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
     }
   }
 
-  // If we did not update t1 since agent initialization, force a SyncClock. Otherwise computing
-  // the SystemClockCounter to GPUClockCounter ratio in TranslateTime(tick) results to a division
-  // by 0. We perform the check here because we do not want to check everytime there is a call to
-  // TranslateTime(tick)
-  if (enable && t0_.GPUClockCounter == t1_.GPUClockCounter) SyncClocks();
+  if (enable) CheckClockTicks();
 
   return HSA_STATUS_SUCCESS;
 }
