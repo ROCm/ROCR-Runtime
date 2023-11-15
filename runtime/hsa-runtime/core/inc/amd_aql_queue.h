@@ -215,6 +215,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @brief Async reclaim main scratch memory
   void AsyncReclaimMainScratch();
 
+  /// @brief Async reclaim alternate scratch memory
+  void AsyncReclaimAltScratch();
+
  protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
@@ -241,9 +244,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void FillBufRsrcWord3_Gfx10();
   void FillBufRsrcWord3_Gfx11();
   void FillComputeTmpRingSize();
+  void FillAltComputeTmpRingSize();
   void FillComputeTmpRingSize_Gfx11();
 
   void FreeMainScratchSpace();
+  void FreeAltScratchSpace();
 
   /// @brief Halt the queue without destroying it or fencing memory.
   void Suspend();

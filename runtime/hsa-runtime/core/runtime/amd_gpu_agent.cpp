@@ -1808,6 +1808,81 @@ void GpuAgent::ReleaseQueueMainScratch(ScratchInfo& scratch) {
   scratch.main_queue_base = nullptr;
 }
 
+void GpuAgent::AcquireQueueAltScratch(ScratchInfo& scratch) {
+  assert(scratch.async_reclaim && "Acquire Alt Scratch when FW does not support it");
+  assert(scratch.alt_queue_base == nullptr &&
+         "AcquireQueueAltScratch called while holding alt scratch.");
+
+  // Fail scratch allocation if per wave limits are exceeded.
+  uint64_t size_per_wave = AlignUp(scratch.alt_size_per_thread * properties_.WaveFrontSize, 1024);
+  if (size_per_wave > MAX_WAVE_SCRATCH) return;
+
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+
+  // Ensure mapping will be in whole pages.
+  scratch.alt_size = AlignUp(scratch.alt_size, 4096);
+
+  /*
+  Sequence of attempts is:
+    check cache
+    attempt a new allocation
+    trim unused blocks from cache
+    attempt a new allocation
+    check cache for sufficient used block, steal and wait (not implemented)
+    trim used blocks from cache, evaluate retry
+  */
+
+  // Lambda called in place.
+  // Used to allow exit from nested loops.
+  [&]() {
+    // Check scratch cache
+    if (scratch_cache_.allocAlt(scratch)) return;
+
+    // Attempt new allocation.
+    for (int i = 0; i < 2; i++) {
+      scratch.alt_queue_base = scratch_pool_.alloc(scratch.alt_size);
+      if (scratch.alt_queue_base != nullptr) {
+        HSAuint64 alternate_va;
+        if ((profile_ == HSA_PROFILE_FULL) ||
+            (hsaKmtMapMemoryToGPU(scratch.alt_queue_base, scratch.alt_size, &alternate_va) ==
+             HSAKMT_STATUS_SUCCESS)) {
+          scratch_cache_.insertAlt(scratch);
+          return;
+        }
+      }
+
+      // Scratch request failed allocation or mapping.
+      scratch_pool_.free(scratch.alt_queue_base);
+      scratch.alt_queue_base = nullptr;
+
+      // Release cached scratch and retry.
+      // First iteration trims unused blocks, second trims all. 3rd uses reserved memory
+      switch (i) {
+        case 0:
+          scratch_cache_.trim(false);
+          break;
+        case 1:
+          scratch_cache_.trim(true);
+          break;
+      }
+    }
+
+    if (core::Runtime::runtime_singleton_->flag().enable_queue_fault_message())
+      debug_print("  Could not allocate alt scratch.\n");
+    return;
+  }();
+
+  scratch.alt_queue_process_offset = uintptr_t(scratch.alt_queue_base);
+}
+
+void GpuAgent::ReleaseQueueAltScratch(ScratchInfo& scratch) {
+  ScopedAcquire<KernelMutex> lock(&scratch_lock_);
+  if (scratch.alt_queue_base == nullptr) return;
+
+  scratch_cache_.freeAlt(scratch);
+  scratch.alt_queue_base = nullptr;
+}
+
 void GpuAgent::ReleaseScratch(void* base, size_t size, bool large) {
   if (profile_ == HSA_PROFILE_BASE) {
     if (HSAKMT_STATUS_SUCCESS != hsaKmtUnmapMemoryToGPU(base)) {
@@ -1830,6 +1905,7 @@ void GpuAgent::AsyncReclaimScratchQueues() {
   for (auto iter : aql_queues_) {
     auto aqlQueue = static_cast<AqlQueue*>(iter);
     aqlQueue->AsyncReclaimMainScratch();
+    aqlQueue->AsyncReclaimAltScratch();
   }
 }
 

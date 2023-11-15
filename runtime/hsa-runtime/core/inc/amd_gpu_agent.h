@@ -104,11 +104,23 @@ class GpuAgentInt : public core::Agent {
   // information.
   virtual void AcquireQueueMainScratch(ScratchInfo& scratch) = 0;
 
+  // @brief Carve scratch memory for alt from scratch pool.
+  //
+  // @param [in/out] scratch Structure to be populated with the carved memory
+  // information.
+  virtual void AcquireQueueAltScratch(ScratchInfo& scratch) = 0;
+
   // @brief Release scratch memory from main back to scratch pool.
   //
   // @param [in/out] scratch Scratch memory previously acquired with call to
   // ::AcquireQueueMainScratch.
   virtual void ReleaseQueueMainScratch(ScratchInfo& base) = 0;
+
+  // @brief Release scratch memory back from alternate to scratch pool.
+  //
+  // @param [in/out] scratch Scratch memory  previously acquired with call to
+  // ::AcquireQueueAltcratch.
+  virtual void ReleaseQueueAltScratch(ScratchInfo& base) = 0;
 
   // @brief Translate the kernel start and end dispatch timestamp from agent
   // domain to host domain.
@@ -277,6 +289,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from AMD::GpuAgentInt.
   void AcquireQueueMainScratch(ScratchInfo& scratch) override;
   void ReleaseQueueMainScratch(ScratchInfo& scratch) override;
+
+  void AcquireQueueAltScratch(ScratchInfo& scratch) override;
+  void ReleaseQueueAltScratch(ScratchInfo& scratch) override;
 
   // @brief Override from AMD::GpuAgentInt.
   void TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) override;
