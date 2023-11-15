@@ -69,7 +69,7 @@
 // Step Ids of the Api tables exported by Hsa Core Runtime
 #define HSA_API_TABLE_STEP_VERSION                0x00
 #define HSA_CORE_API_TABLE_STEP_VERSION           0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION        0x00
+#define HSA_AMD_EXT_API_TABLE_STEP_VERSION        0x01
 #define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
 #define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
 #define HSA_AQLPROFILE_API_TABLE_STEP_VERSION     0x00
@@ -247,6 +247,7 @@ struct AmdExtTable {
   decltype(hsa_amd_vmem_retain_alloc_handle)* hsa_amd_vmem_retain_alloc_handle_fn;
   decltype(hsa_amd_vmem_get_alloc_properties_from_handle)*
       hsa_amd_vmem_get_alloc_properties_from_handle_fn;
+  decltype(hsa_amd_agent_set_async_scratch_limit)* hsa_amd_agent_set_async_scratch_limit_fn;
 };
 
 // Table to export HSA Core Runtime Apis

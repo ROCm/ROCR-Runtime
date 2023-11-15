@@ -166,6 +166,14 @@ class GpuAgentInt : public core::Agent {
   //
   // @retval Bus width in MHz.
   virtual uint32_t memory_max_frequency() const = 0;
+
+  // @brief Whether agent supports asynchronous scratch reclaim. Depends on CP FW
+  virtual bool AsyncScratchReclaimEnabled() const = 0;
+
+  // @brief Update the agent's scratch use-once threshold.
+  // Only valid when async scratch reclaim is supported
+  // @retval HSA_STATUS_SUCCESS if successful
+  virtual hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -352,6 +360,23 @@ class GpuAgent : public GpuAgentInt {
 
   void ReserveScratch();
 
+  // @brief If agent supports it, release scratch memory for all AQL queues on this agent.
+  void AsyncReclaimScratchQueues();
+
+  // @brief Returns true if scratch reclaim is enabled
+  __forceinline bool AsyncScratchReclaimEnabled() const override {
+    // TODO: Need to update min CP FW ucode version once it is released
+    return (core::Runtime::runtime_singleton_->flag().enable_scratch_async_reclaim() &&
+            isa()->GetMajorVersion() == 9 && isa()->GetMinorVersion() == 4 &&
+            properties_.EngineId.ui32.uCode > 999);
+  };
+
+  hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) override;
+
+  __forceinline size_t ScratchSingleLimitAsyncThreshold() const {
+    return scratch_limit_async_threshold_;
+  }
+
   void Trim() override;
 
   const std::function<void*(size_t size, size_t align, core::MemoryRegion::AllocateFlags flags)>&
@@ -534,6 +559,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Setup NUMA aware system memory allocator.
   void InitNumaAllocator();
 
+  // @brief Initialize scratch handler thresholds
+  void InitAsyncScratchThresholds();
+
   // @brief Register signal for notification when scratch may become available.
   // @p signal is notified by OR'ing with @p value.
   bool AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
@@ -579,6 +607,9 @@ class GpuAgent : public GpuAgentInt {
     KernelMutex lock_;
   } gws_queue_;
 
+  // @brief list of AQL queues owned by this agent. Indexed by queue pointer
+  std::vector<core::Queue*> aql_queues_;
+
   // Sets and Tracks pending SDMA status check or request counts
   void SetCopyRequestRefCount(bool set);
   void SetCopyStatusCheckRefCount(bool set);
@@ -587,6 +618,9 @@ class GpuAgent : public GpuAgentInt {
 
   // Tracks what SDMA blits have been used since initialization.
   uint32_t sdma_blit_used_mask_;
+
+  // Scratch limit thresholds when async scratch is enabled.
+  size_t scratch_limit_async_threshold_;
 
   ScratchCache scratch_cache_;
 

@@ -216,6 +216,11 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   else
     queue_scratch_.mem_alignment_size = 1024;
 
+  queue_scratch_.use_once_limit = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  queue_scratch_.async_reclaim = agent_->AsyncScratchReclaimEnabled();
+  if (queue_scratch_.async_reclaim)
+    queue_scratch_.use_once_limit = agent_->ScratchSingleLimitAsyncThreshold();
+
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
     ScopedAcquire<KernelMutex> _lock(&queue_lock_);
     queue_count_--;
@@ -282,6 +287,8 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
 
   queue_id_ = queue_rsrc.QueueId;
   MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { hsaKmtDestroyQueue(queue_id_); });
+
+  amd_queue_.scratch_last_used_index = UINT64_MAX;
 
   // On the first queue creation, reserve some scratch memory on this agent.
   agent_->ReserveScratch();
@@ -778,6 +785,49 @@ hsa_status_t AqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
   return (err == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
 }
 
+void AqlQueue::CheckScratchLimits() {
+  auto& scratch = queue_scratch_;
+  if (!scratch.async_reclaim) return;
+
+  scratch.use_once_limit = agent_->ScratchSingleLimitAsyncThreshold();
+
+  if (scratch.main_size > scratch.use_once_limit) AsyncReclaimMainScratch();
+
+  return;
+}
+
+void AqlQueue::FreeMainScratchSpace() {
+  auto& scratch = queue_scratch_;
+  agent_->ReleaseQueueMainScratch(scratch);
+  scratch.main_size = 0;
+  scratch.main_size_per_thread = 0;
+  scratch.main_queue_process_offset = 0;
+  InitScratchSRD();
+
+  HSA::hsa_signal_store_relaxed(amd_queue_.queue_inactive_signal, 0);
+}
+
+void AqlQueue::AsyncReclaimMainScratch() {
+  auto& scratch = queue_scratch_;
+  if (!scratch.async_reclaim || !scratch.main_size) return;
+
+  // Notify CP that we are trying to reclaim scratch. CP will assume scratch is reclaimed on next
+  // dispatch
+  amd_queue_.scratch_wave64_lane_byte_size = 0;
+  uint64_t last_used =
+      atomic::Exchange(&amd_queue_.scratch_last_used_index, UINT64_MAX, std::memory_order_relaxed);
+
+  // Wait for scratch to be idle.
+  while (true) {
+    uint64_t last = amd_queue_.scratch_last_used_index;
+
+    if (std::min(last, last_used) < amd_queue_.read_dispatch_id) {
+      FreeMainScratchSpace();
+      return;
+    }
+  }
+}
+
 void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
                                          hsa_signal_value_t& waitVal, bool& changeWait) {
   // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
@@ -789,6 +839,11 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
    *
    * uint64_t all_slots_size;      // Size needed to fill all slots on this device
    * uint64_t dispatch_size;       // Size needed to fill wanted slots for this dispatch
+   *
+   * //Default values:
+   * size_t use_once_limit = 128 MB      // When async reclaim not supported
+   *                       = 1GB per-XCC // When async reclaim is supported
+   *
    *
    *******************************************************************************************/
 
@@ -845,7 +900,9 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
     return AlignUp(cu_count, engines) * agent_->properties().MaxSlotsScratchCU;
   };
 
-  scratch.use_once_limit = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  assert((!scratch.async_reclaim || (amd_queue_.caps & AMD_QUEUE_CAPS_ASYNC_RECLAIM)) &&
+         "Asynchronous scratch reclaim capability not set, but this FW version should support it");
+
   scratch.cooperative = (amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
 
   uint64_t pkt_slot_idx = amd_queue_.read_dispatch_id & (amd_queue_.hsa_queue.size - 1);
@@ -855,7 +912,6 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   pkt.AssertIsDispatchAndNeedsScratch();
 
   uint32_t device_slots = calc_device_slots();
-
   uint32_t groups = calc_dispatch_groups(pkt);
   uint32_t waves_per_group = calc_dispatch_waves_per_group(pkt);
 
@@ -864,12 +920,14 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
 
   const uint64_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
 
-  uint64_t device_size = pkt.dispatch.private_segment_size * lanes_per_wave * device_slots;
-  uint64_t dispatch_size = pkt.dispatch.private_segment_size * lanes_per_wave * dispatch_slots;
+  const uint64_t size_per_thread =
+      AlignUp(pkt.dispatch.private_segment_size, scratch.mem_alignment_size / lanes_per_wave);
+  const uint64_t device_size = size_per_thread * lanes_per_wave * device_slots;
+  const uint64_t dispatch_size = size_per_thread * lanes_per_wave * dispatch_slots;
 
   agent_->ReleaseQueueMainScratch(scratch);
   scratch.main_size = device_size;
-  scratch.main_size_per_thread = pkt.dispatch.private_segment_size;
+  scratch.main_size_per_thread = size_per_thread;
   scratch.main_lanes_per_wave = lanes_per_wave;
   scratch.main_waves_per_group = waves_per_group;
 
