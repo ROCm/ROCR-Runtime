@@ -1339,6 +1339,13 @@ hsa_status_t AqlQueue::GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mas
   return HSA_STATUS_SUCCESS;
 }
 
+void AqlQueue::SetProfiling(bool enabled) {
+  Queue::SetProfiling(enabled);
+
+  if (enabled) agent_->CheckClockTicks();
+  return;
+}
+
 void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
   // pm4_ib_buf_ is a shared resource, so mutually exclude here.
   ScopedAcquire<KernelMutex> lock(&pm4_ib_mutex_);

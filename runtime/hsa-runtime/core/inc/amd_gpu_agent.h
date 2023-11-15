@@ -373,6 +373,13 @@ class GpuAgent : public GpuAgentInt {
   // @brief returns the libdrm device handle
   __forceinline amdgpu_device_handle libDrmDev() const { return ldrm_dev_; }
 
+  __forceinline void CheckClockTicks() {
+    // If we did not update t1 since agent initialization, force a SyncClock. Otherwise computing
+    // the SystemClockCounter to GPUClockCounter ratio in TranslateTime(tick) results to a division
+    // by 0.
+    if (t0_.GPUClockCounter == t1_.GPUClockCounter) SyncClocks();
+  }
+
   void ReserveScratch();
 
   // @brief If agent supports it, release scratch memory for all AQL queues on this agent.

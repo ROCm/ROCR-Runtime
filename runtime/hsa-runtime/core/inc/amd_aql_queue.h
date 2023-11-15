@@ -196,8 +196,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @return hsa_status_t
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override;
 
-  // @brief Submits a block of PM4 and waits until it has been executed.
+  /// @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
+
+  /// @brief Enables/Disables profiling overrides SetProfiling from core::Queue
+  void SetProfiling(bool enabled) override;
 
   /// @brief Update signal value using Relaxed semantics
   void StoreRelaxed(hsa_signal_value_t value) override;
