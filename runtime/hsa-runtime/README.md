@@ -79,7 +79,7 @@ ROCm packages installed, execute the following from `src/`:
 ```bash
 mkdir build
 cd build
-cmake -DCMAKE_INSTALL_PATH=/opt/rocm ..
+cmake -DCMAKE_INSTALL_PREFIX=/opt/rocm ..
 make
 make install
 make package
