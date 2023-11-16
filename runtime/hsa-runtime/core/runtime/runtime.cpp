@@ -1238,27 +1238,90 @@ void Runtime::AsyncEventsLoop(void*) {
   new_async_events_.Clear();
 }
 
-void Runtime::BindVmFaultHandler() {
-  if (core::g_use_interrupt_wait && !gpu_agents_.empty()) {
-    // Create memory event with manual reset to avoid racing condition
-    // with driver in case of multiple concurrent VM faults.
-    vm_fault_event_ =
-        core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_MEMORY, true);
+void Runtime::BindErrorHandlers() {
+  if (!core::g_use_interrupt_wait || gpu_agents_.empty()) return;
 
-    // Create an interrupt signal object to contain the memory event.
-    // This signal object will be registered with the async handler global
-    // thread.
-    vm_fault_signal_ = new core::InterruptSignal(0, vm_fault_event_);
+  // Create memory event with manual reset to avoid racing condition
+  // with driver in case of multiple concurrent VM faults.
+  vm_fault_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_MEMORY, true);
 
-    if (!vm_fault_signal_->IsValid() || vm_fault_signal_->EopEvent() == NULL) {
-      assert(false && "Failed on creating VM fault signal");
-      return;
-    }
+  // Create an interrupt signal object to contain the memory event.
+  // This signal object will be registered with the async handler global
+  // thread.
+  vm_fault_signal_ = new core::InterruptSignal(0, vm_fault_event_);
 
-    SetAsyncSignalHandler(core::Signal::Convert(vm_fault_signal_),
-                          HSA_SIGNAL_CONDITION_NE, 0, VMFaultHandler,
-                          reinterpret_cast<void*>(vm_fault_signal_));
+  if (!vm_fault_signal_->IsValid() || vm_fault_signal_->EopEvent() == NULL) {
+    assert(false && "Failed on creating VM fault signal");
+    return;
   }
+
+  SetAsyncSignalHandler(core::Signal::Convert(vm_fault_signal_), HSA_SIGNAL_CONDITION_NE, 0,
+                        VMFaultHandler, reinterpret_cast<void*>(vm_fault_signal_));
+
+  // Create HW exception event which is for Non-RAS events
+  hw_exception_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_HW_EXCEPTION, true);
+
+  hw_exception_signal_ = new core::InterruptSignal(0, hw_exception_event_);
+
+  if (!hw_exception_signal_->IsValid() || hw_exception_signal_->EopEvent() == NULL) {
+    assert(false && "Failed on creating HW Exception signal");
+    return;
+  }
+
+  SetAsyncSignalHandler(core::Signal::Convert(hw_exception_signal_), HSA_SIGNAL_CONDITION_NE, 0,
+                        HwExceptionHandler, reinterpret_cast<void*>(hw_exception_signal_));
+}
+
+bool Runtime::HwExceptionHandler(hsa_signal_value_t val, void* arg) {
+  core::InterruptSignal* hw_exception_signal = reinterpret_cast<core::InterruptSignal*>(arg);
+
+  assert(hw_exception_signal != NULL);
+
+  if (hw_exception_signal == NULL) return false;
+
+  HsaEvent* exception_event = hw_exception_signal->EopEvent();
+
+  HsaHwException& exception = exception_event->EventData.EventData.HwException;
+
+  hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
+  auto system_event_handlers = runtime_singleton_->GetSystemEventHandlers();
+  // If custom handler is registered, pack the fault info and call the handler
+
+  if (!system_event_handlers.empty()) {
+    hsa_amd_event_t hw_exception_event;
+    hw_exception_event.event_type = HSA_AMD_GPU_HW_EXCEPTION_EVENT;
+    hsa_amd_gpu_hw_exception_info_t& exception_info = hw_exception_event.hw_exception;
+
+    // Find the faulty agent
+    auto it = runtime_singleton_->agents_by_node_.find(exception.NodeId);
+    assert(it != runtime_singleton_->agents_by_node_.end() && "Can't find faulty agent.");
+    Agent* faulty_agent = it->second.front();
+    exception_info.agent = Agent::Convert(faulty_agent);
+
+    // This field is not set by KFD at the moment
+    exception_info.reset_type = HSA_AMD_HW_EXCEPTION_RESET_TYPE_OTHER;
+
+    exception_info.reset_cause = (exception.ResetCause == HSA_EVENTID_HW_EXCEPTION_ECC)
+        ? HSA_AMD_HW_EXCEPTION_CAUSE_ECC
+        : HSA_AMD_HW_EXCEPTION_CAUSE_GPU_HANG;
+
+    for (auto& callback : system_event_handlers) {
+      hsa_status_t err = callback.first(&hw_exception_event, callback.second);
+      if (err == HSA_STATUS_SUCCESS) custom_handler_status = HSA_STATUS_SUCCESS;
+    }
+  }
+
+  if (custom_handler_status != HSA_STATUS_SUCCESS) {
+    core::Agent* faultingAgent = runtime_singleton_->agents_by_node_[exception.NodeId][0];
+    fprintf(stderr, "HW Exception by GPU node-%u (Agent handle: %p) reason :%s\n", exception.NodeId,
+            reinterpret_cast<void*>(faultingAgent->public_handle().handle),
+            (exception.ResetCause == HSA_EVENTID_HW_EXCEPTION_ECC) ? "ECC" : "GPU Hang");
+
+    assert(false && "GPU HW Exception");
+    std::abort();
+  }
+  // No need to keep the signal because we are done.
+  return false;
 }
 
 bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
@@ -1424,6 +1487,8 @@ Runtime::Runtime()
       sys_clock_freq_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
+      hw_exception_event_(nullptr),
+      hw_exception_signal_(nullptr),
       ref_count_(0),
       kfd_version{} {}
 
@@ -1453,7 +1518,7 @@ hsa_status_t Runtime::Load() {
     if (sys_clock_freq_ < 100000) debug_warning("System clock resolution is low.");
   }
 
-  BindVmFaultHandler();
+  BindErrorHandlers();
 
   loader_ = amd::hsa::loader::Loader::Create(&loader_context_);
 
@@ -1505,6 +1570,13 @@ void Runtime::Unload() {
   }
   core::InterruptSignal::DestroyEvent(vm_fault_event_);
   vm_fault_event_ = nullptr;
+
+  if (hw_exception_signal_ != nullptr) {
+    hw_exception_signal_->DestroySignal();
+    hw_exception_signal_ = nullptr;
+  }
+  core::InterruptSignal::DestroyEvent(hw_exception_event_);
+  hw_exception_event_ = nullptr;
 
   SharedSignalPool.clear();
 
