@@ -1722,12 +1722,12 @@ int Runtime::GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd,
 
 void Runtime::CheckVirtualMemApiSupport() {
   virtual_mem_api_supported_ = false;
-  // TODO: May have to change the minor version required once Thunk merges changes into amd-staging
+
   auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
   if (kfd_version.KernelInterfaceMajorVersion > 1 ||
       (kfd_version.KernelInterfaceMajorVersion == 1 &&
-          kfd_version.KernelInterfaceMinorVersion >= 12)) {
+          kfd_version.KernelInterfaceMinorVersion >= 15)) {
     char* error;
 
     fn_amdgpu_device_get_fd =
