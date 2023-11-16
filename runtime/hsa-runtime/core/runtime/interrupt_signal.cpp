@@ -89,6 +89,8 @@ HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
     if (type == HSA_EVENTTYPE_MEMORY) {
       memset(&ret->EventData.EventData.MemoryAccessFault.Failure, 0,
              sizeof(HsaAccessAttributeFailure));
+    } else if (type == HSA_EVENTTYPE_HW_EXCEPTION) {
+      memset(&ret->EventData.EventData.HwException, 0, sizeof(HsaHwException));
     }
   }
 

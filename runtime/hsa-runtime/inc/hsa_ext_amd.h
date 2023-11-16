@@ -2241,6 +2241,10 @@ typedef enum hsa_amd_event_type_s {
    AMD GPU memory fault.
    */
   HSA_AMD_GPU_MEMORY_FAULT_EVENT = 0,
+  /*
+   AMD GPU HW Exception.
+   */
+  HSA_AMD_GPU_HW_EXCEPTION_EVENT,
 } hsa_amd_event_type_t;
 
 /**
@@ -2285,6 +2289,36 @@ typedef struct hsa_amd_gpu_memory_fault_info_s {
 } hsa_amd_gpu_memory_fault_info_t;
 
 /**
+ * @brief Flags denoting the type of a HW exception
+ */
+typedef enum {
+  // Unused for now
+  HSA_AMD_HW_EXCEPTION_RESET_TYPE_OTHER = 1 << 0,
+} hsa_amd_hw_exception_reset_type_t;
+
+/**
+ * @brief Flags denoting the cause of a HW exception
+ */
+typedef enum {
+  // GPU Hang
+  HSA_AMD_HW_EXCEPTION_CAUSE_GPU_HANG = 1 << 0,
+  // SRAM ECC
+  HSA_AMD_HW_EXCEPTION_CAUSE_ECC = 1 << 1,
+} hsa_amd_hw_exception_reset_cause_t;
+
+/**
+ * @brief AMD GPU HW Exception event data.
+ */
+typedef struct hsa_amd_gpu_hw_exception_info_s {
+  /*
+  The agent where the HW exception occurred.
+  */
+  hsa_agent_t agent;
+  hsa_amd_hw_exception_reset_type_t reset_type;
+  hsa_amd_hw_exception_reset_cause_t reset_cause;
+} hsa_amd_gpu_hw_exception_info_t;
+
+/**
  * @brief AMD GPU event data passed to event handler.
  */
 typedef struct hsa_amd_event_s {
@@ -2297,6 +2331,10 @@ typedef struct hsa_amd_event_s {
     The memory fault info, only valid when @p event_type is HSA_AMD_GPU_MEMORY_FAULT_EVENT.
     */
     hsa_amd_gpu_memory_fault_info_t memory_fault;
+    /*
+    The memory fault info, only valid when @p event_type is HSA_AMD_GPU_HW_EXCEPTION_EVENT.
+    */
+    hsa_amd_gpu_hw_exception_info_t hw_exception;
   };
 } hsa_amd_event_t;
 

@@ -136,6 +136,9 @@ class Runtime {
   /// @retval True if the connection to kernel driver is opened.
   static bool IsOpen();
 
+  // @brief Callback handler for HW Exceptions.
+  static bool HwExceptionHandler(hsa_signal_value_t val, void* arg);
+
   // @brief Callback handler for VM fault access.
   static bool VMFaultHandler(hsa_signal_value_t val, void* arg);
 
@@ -577,8 +580,8 @@ class Runtime {
   /// @brief Close tool libraries.
   void CloseTools();
 
-  // @brief Binds virtual memory access fault handler to this node.
-  void BindVmFaultHandler();
+  // @brief Binds Error handlers to this node.
+  void BindErrorHandlers();
 
   // @brief Acquire snapshot of system event handlers.
   // Returns a copy to avoid holding a lock during callbacks.
@@ -675,6 +678,12 @@ class Runtime {
 
   // @brief HSA signal to contain the VM fault event.
   Signal* vm_fault_signal_;
+
+  // @brief AMD HSA event to monitor for HW exceptions.
+  HsaEvent* hw_exception_event_;
+
+  // @brief HSA signal to contain the HW exceptionevent.
+  Signal* hw_exception_signal_;
 
   // Custom system event handlers.
   std::vector<std::pair<AMD::callback_t<hsa_amd_system_event_callback_t>, void*>>
