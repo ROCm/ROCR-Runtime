@@ -428,6 +428,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
 						((event_data[i].memory_exception_data.ErrorType == 1) || (event_data[i].memory_exception_data.ErrorType == 2)) ? 1 : 0;
 				Events[i]->EventData.EventData.MemoryAccessFault.Flags = HSA_EVENTID_MEMORY_FATAL_PROCESS;
 				analysis_memory_exception(&event_data[i].memory_exception_data);
+			} else if (Events[i]->EventData.EventType == HSA_EVENTTYPE_HW_EXCEPTION &&
+				event_data[i].hw_exception_data.gpu_id) {
+
+				result = gpuid_to_nodeid(event_data[i].hw_exception_data.gpu_id, &Events[i]->EventData.EventData.HwException.NodeId);
+				if (result != HSAKMT_STATUS_SUCCESS)
+					goto out;
+
+				Events[i]->EventData.EventData.HwException.ResetType = event_data[i].hw_exception_data.reset_type;
+				Events[i]->EventData.EventData.HwException.ResetCause = event_data[i].hw_exception_data.reset_cause;
+				Events[i]->EventData.EventData.HwException.MemoryLost = event_data[i].hw_exception_data.memory_lost;
 			}
 		}
 	}

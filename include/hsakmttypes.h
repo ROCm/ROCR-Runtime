@@ -1044,6 +1044,21 @@ typedef struct _HsaMemoryAccessFault
     HSA_EVENTID_MEMORYFLAGS         Flags;              // event flags
 } HsaMemoryAccessFault;
 
+typedef enum _HSA_EVENTID_HW_EXCEPTION_CAUSE
+{
+    HSA_EVENTID_HW_EXCEPTION_GPU_HANG  = 0, // GPU Hang
+    HSA_EVENTID_HW_EXCEPTION_ECC       = 1, // SRAM ECC error
+} HSA_EVENTID_HW_EXCEPTION_CAUSE;
+
+// data associated with HSA_EVENTID_HW_EXCEPTION
+typedef struct _HsaHwException
+{
+    HSAuint32                       NodeId;    // Node Id where the memory exception occured
+    HSAuint32                       ResetType;
+    HSAuint32                       MemoryLost;
+    HSA_EVENTID_HW_EXCEPTION_CAUSE  ResetCause;
+} HsaHwException;
+
 typedef struct _HsaEventData
 {
     HSA_EVENTTYPE   EventType;      //event type
@@ -1062,6 +1077,8 @@ typedef struct _HsaEventData
         // data associated with HSA_EVENTTYPE_MEMORY
         HsaMemoryAccessFault    MemoryAccessFault;
 
+        // data associated with HSA_EVENTTYPE_HW_EXCEPTION
+        HsaHwException          HwException;
     } EventData;
 
     // the following data entries are internal to the KFD & thunk itself.
