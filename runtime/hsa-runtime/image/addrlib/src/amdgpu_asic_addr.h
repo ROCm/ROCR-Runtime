@@ -46,9 +46,11 @@
 #define FAMILY_VGH     0x90
 #define FAMILY_GFX1100 0x91
 #define FAMILY_GFX1103 0x94
+#define FAMILY_GFX1150 0x96
 #define FAMILY_RMB     0x92
 #define FAMILY_GC_10_3_6  0x95
 #define FAMILY_GC_10_3_7  0x97
+
 
 // AMDGPU_FAMILY_IS(familyId, familyName)
 #define FAMILY_IS(f, fn)     (f == FAMILY_##fn)
@@ -65,6 +67,7 @@
 #define FAMILY_IS_RMB(f)     FAMILY_IS(f, RMB)
 #define FAMILY_IS_GFX1100(f) FAMILY_IS(f, GFX1100)
 #define FAMILY_IS_GFX1103(f) FAMILY_IS(f, GFX1103)
+#define FAMILY_IS_GFX1150(f) FAMILY_IS(f, GFX1150)
 
 #define AMDGPU_UNKNOWN          0xFF
 
@@ -117,8 +120,8 @@
 #define AMDGPU_GFX1100_RANGE    0x01, 0x10
 #define AMDGPU_GFX1101_RANGE    0x20, 0xFF
 #define AMDGPU_GFX1102_RANGE    0x10, 0x20
-
 #define AMDGPU_GFX1103_RANGE    0x01, 0xFF
+#define AMDGPU_GFX1150_RANGE    0x01, 0xFF
 
 #define AMDGPU_REMBRANDT_RANGE  0x01, 0xFF
 
@@ -191,6 +194,7 @@
 #define ASICREV_IS_GFX1101(r)          ASICREV_IS(r, GFX1101)
 #define ASICREV_IS_GFX1102(r)          ASICREV_IS(r, GFX1102)
 #define ASICREV_IS_GFX1103(r)          ASICREV_IS(r, GFX1103)
+#define ASICREV_IS_GFX1150(r)          ASICREV_IS(r, GFX1150)
 
 #define ASICREV_IS_REMBRANDT(r)        ASICREV_IS(r, REMBRANDT)
 
