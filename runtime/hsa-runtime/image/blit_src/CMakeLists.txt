@@ -70,7 +70,8 @@ function(gen_kernel_bc TARGET_ID INPUT_FILE OUTPUT_FILE)
 
   separate_arguments(CLANG_ARG_LIST UNIX_COMMAND
     "-O2 -x cl -Xclang -finclude-default-header -cl-denorms-are-zero -cl-std=CL2.0
-    -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -o ${OUTPUT_FILE} ${INPUT_FILE}")
+    -target amdgcn-amd-amdhsa -mcpu=${TARGET_ID} -mcode-object-version=4
+    -o ${OUTPUT_FILE} ${INPUT_FILE}")
 
   ## Add custom command to produce a code object file.
   ## This depends on the kernel source file & compiler.
