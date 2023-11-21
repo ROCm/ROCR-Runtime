@@ -149,15 +149,62 @@ hsa_status_t hsa_ven_amd_aqlprofile_validate_event(
 // All parameters are generic and if not applicable for a specific
 // profile configuration then error status will be returned.
 typedef enum {
-  // Trace applicable parameters
+  /*
+  * Select the target compute unit (wgp) for profiling.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_COMPUTE_UNIT_TARGET = 0,
+  /*
+  * VMID Mask
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_VM_ID_MASK = 1,
+  /*
+  * Legacy. Deprecated.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_MASK = 2,
+  /*
+  * Legacy. Deprecated.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK = 3,
+  /*
+  * Legacy. Deprecated.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_TOKEN_MASK2 = 4,
+  /*
+  * Shader engine mask for selection.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SE_MASK = 5,
+  /*
+  * Legacy. Deprecated.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SAMPLE_RATE = 6,
+  /*
+  * Legacy. Deprecated.
+  */
   HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_K_CONCURRENT = 7,
+  /*
+  * Set SIMD Mask (GFX9) or SIMD ID for collection (Navi)
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_SIMD_SELECTION = 8,
+  /*
+  * Set true for occupancy collection only.
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_OCCUPANCY_MODE = 9,
+  /*
+  * ATT collection max data size, in MB. Shared among shader engines.
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_ATT_BUFFER_SIZE = 10,
+  /*
+  * Mask of which compute units to generate perfcounters. GFX9 only.
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_PERFCOUNTER_MASK = 240,
+  /*
+  * Select collection period for perfcounters. GFX9 only.
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_PERFCOUNTER_CTRL = 241,
+  /*
+  * Select perfcounter ID (SQ block) for collection. GFX9 only.
+  */
+  HSA_VEN_AMD_AQLPROFILE_PARAMETER_NAME_PERFCOUNTER_NAME = 242,
 } hsa_ven_amd_aqlprofile_parameter_name_t;
 
 // Profile parameter object
@@ -165,6 +212,13 @@ typedef struct {
   hsa_ven_amd_aqlprofile_parameter_name_t parameter_name;
   uint32_t value;
 } hsa_ven_amd_aqlprofile_parameter_t;
+
+typedef enum {
+  HSA_VEN_AMD_AQLPROFILE_ATT_CHANNEL_0 = 0,
+  HSA_VEN_AMD_AQLPROFILE_ATT_CHANNEL_1,
+  HSA_VEN_AMD_AQLPROFILE_ATT_CHANNEL_2,
+  HSA_VEN_AMD_AQLPROFILE_ATT_CHANNEL_3
+} hsa_ven_amd_aqlprofile_att_marker_channel_t;
 
 //
 // Profile context object:
@@ -236,6 +290,13 @@ const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
 hsa_status_t hsa_ven_amd_aqlprofile_legacy_get_pm4(
     const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // [in] AQL packet
     void* data);                                     // [out] PM4 packet blob
+
+// Method to add a marker (correlation ID) into the ATT buffer.
+hsa_status_t hsa_ven_amd_aqlprofile_att_marker(
+    hsa_ven_amd_aqlprofile_profile_t* profile,            // [in/out] profile contex object
+    hsa_ext_amd_aql_pm4_packet_t* aql_marker_packet,      // [out] profile marker AQL packet
+    uint32_t data,                                        // [in] Data to be inserted
+    hsa_ven_amd_aqlprofile_att_marker_channel_t channel); // [in] Comm channel
 
 //
 // Get profile info:
@@ -398,6 +459,12 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       const hsa_ven_amd_aqlprofile_profile_t* profile,
       hsa_ven_amd_aqlprofile_data_callback_t callback,
       void* data);
+
+  hsa_status_t (*hsa_ven_amd_aqlprofile_att_marker)(
+      hsa_ven_amd_aqlprofile_profile_t* profile,
+      hsa_ext_amd_aql_pm4_packet_t* aql_packet,
+      uint32_t data,
+      hsa_ven_amd_aqlprofile_att_marker_channel_t channel);
 } hsa_ven_amd_aqlprofile_1_00_pfn_t;
 
 typedef hsa_ven_amd_aqlprofile_1_00_pfn_t hsa_ven_amd_aqlprofile_pfn_t;
