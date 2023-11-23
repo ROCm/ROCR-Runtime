@@ -120,7 +120,7 @@ class os_thread {
       }
       CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
       for (int i = 0; i < cores; i++) {
-        CPU_SET(i, cpuset);
+        CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
       }
       err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
       CPU_FREE(cpuset);
