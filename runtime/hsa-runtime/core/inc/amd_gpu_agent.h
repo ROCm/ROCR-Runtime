@@ -609,6 +609,8 @@ class GpuAgent : public GpuAgentInt {
   // @brief initialize libdrm handle
   void InitLibDrm();
 
+  void GetInfoMemoryProperties(uint8_t value[8]) const;
+
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
 
