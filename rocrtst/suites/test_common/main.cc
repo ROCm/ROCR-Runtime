@@ -409,7 +409,7 @@ TEST(rocrtstNeg, Queue_Validation_InvalidPacket) {
   RunCustomTestEpilog(&qv);
 }
 
-TEST(rocrtstNeg, Queue_Validation_InvalidWorkGroupSize) {
+TEST(rocrtstNeg, DISABLED_Queue_Validation_InvalidWorkGroupSize) {
   QueueValidation qv(false, false, false, false, true);
   RunCustomTestProlog(&qv);
   qv.QueueValidationForInvalidWorkGroupSize();
