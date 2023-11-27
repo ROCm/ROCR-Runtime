@@ -67,6 +67,17 @@ extern "C" {
  */
 
 /**
+ * @brief Macro to use to determine that a  flag is set when querying flags within uint8_t[8]
+ * types
+ */
+static __inline__ __attribute__((always_inline)) bool hsa_flag_isset64(uint8_t* value,
+                                                                       uint32_t bit) {
+  unsigned int index = bit / 8;
+  unsigned int subBit = bit % 8;
+  return ((uint8_t*)value)[index] & (1 << subBit);
+}
+
+/**
  * @brief A fixed-size type used to represent ::hsa_signal_condition_t constants.
  */
 typedef uint32_t hsa_signal_condition32_t;
@@ -405,8 +416,27 @@ typedef enum hsa_amd_agent_info_s {
    * Returns the hsa_agent_t of the nearest CPU agent
    * The type of this attribute is hsa_agent_t.
    */
-  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113
+  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113,
+  /**
+   * Bit-mask indicating memory properties of this agent. A memory property is set if the flag bit
+   * is set at that position. User may use the hsa_flag_isset64 macro to verify whether a flag
+   * is set. The type of this attribute is uint8_t[8].
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES = 0xA114,
+  /**
+   * Bit-mask indicating AQL Extensions supported by this agent. An AQL extension is set if the flag
+   * bit is set at that position. User may use the hsa_flag_isset64 macro to verify whether a flag
+   * is set. The type of this attribute is uint8_t[8].
+   */
+  HSA_AMD_AGENT_INFO_AQL_EXTENSIONS = 0xA115 /* Not implemented yet */
 } hsa_amd_agent_info_t;
+
+/**
+ * @brief Agent memory properties attributes
+ */
+typedef enum hsa_amd_agent_memory_properties_s {
+  HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU = (1 << 0),
+} hsa_amd_agent_memory_properties_t;
 
 /**
  * @brief SDMA engine IDs unique by single set bit position.

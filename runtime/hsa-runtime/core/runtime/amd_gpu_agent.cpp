@@ -1200,6 +1200,28 @@ hsa_status_t GpuAgent::EnableDmaProfiling(bool enable) {
   return HSA_STATUS_SUCCESS;
 }
 
+void GpuAgent::GetInfoMemoryProperties(uint8_t value[8]) const {
+  auto setFlag = [&](uint32_t bit) {
+    assert(bit < 8 * 8 && "Flag value exceeds input parameter size");
+
+    uint index = bit / 8;
+    uint subBit = bit % 8;
+    ((uint8_t*)value)[index] |= 1 << subBit;
+  };
+
+  // Fill the HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU flag
+  switch (properties_.DeviceId) {
+    case 0x15DD: /* gfx902 - Raven Ridge */
+    case 0x15D8: /* gfx909 - Raven Ridge 2 */
+    case 0x1636: /* gfx90c - Renoir */
+    case 0x74A0: /* gfx940 and gfx942-APU */
+      setFlag(HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU);
+      break;
+    default:
+      break;
+  }
+}
+
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
   // agent, and vendor name size limit
   const size_t attribute_u = static_cast<size_t>(attribute);
@@ -1520,6 +1542,14 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_NEAREST_CPU:
       *((hsa_agent_t*)value) = GetNearestCpuAgent()->public_handle();
+      break;
+    case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
+      memset(value, 0, sizeof(uint8_t) * 8);
+      GetInfoMemoryProperties((uint8_t*)value);
+      break;
+    case HSA_AMD_AGENT_INFO_AQL_EXTENSIONS:
+      memset(value, 0, sizeof(uint8_t) * 8);
+      /* Not yet implemented */
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

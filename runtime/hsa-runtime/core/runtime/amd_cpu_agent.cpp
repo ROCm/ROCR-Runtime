@@ -392,6 +392,12 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_NEAREST_CPU:
       ((hsa_agent_t*)value)->handle = 0;
       break;
+    case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
+      memset(value, 0, sizeof(uint8_t) * 8);
+      break;
+    case HSA_AMD_AGENT_INFO_AQL_EXTENSIONS:
+      memset(value, 0, sizeof(uint8_t) * 8);
+      break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
       break;
