@@ -165,6 +165,19 @@ class GpuAgentInt : public core::Agent {
   //
   // @retval Bus width in MHz.
   virtual uint32_t memory_max_frequency() const = 0;
+
+  virtual hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                               void* cb_data) = 0;
+
+  virtual hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+  
+  virtual hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+
+  virtual hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -403,6 +416,17 @@ class GpuAgent : public GpuAgentInt {
   // @brief Override from core::Agent.
   hsa_status_t EnableDmaProfiling(bool enable) override;
 
+  hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                       void* cb_data);
+  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session);
+
+  static void PcSamplingThreadRun(void* agent);
+  void PcSamplingThread();
+
   // @brief Node properties.
   const HsaNodeProperties properties_;
 
@@ -466,6 +490,12 @@ class GpuAgent : public GpuAgentInt {
   HsaClockCounters t1_;
 
   double historical_clock_ratio_;
+
+
+  /* PC Sampling fields - begin */
+  os::Thread pcs_hosttrap_thread_;
+  pcs::PcsRuntime::PcSamplingSession* pcs_hosttrap_session_;
+  /* PC Sampling fields - end */
 
   // @brief s_memrealtime nominal clock frequency
   uint64_t wallclock_frequency_;
