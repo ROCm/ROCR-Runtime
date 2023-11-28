@@ -202,6 +202,19 @@ target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 
+## Depend on PC Sampling target - TODO: Make PCS support optional in the future
+set ( PC_SAMPLING_SUPPORT ON )
+if (${PC_SAMPLING_SUPPORT})
+       target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE
+               HSA_PC_SAMPLING_SUPPORT)
+
+       set (PCS_SRCS pcs/hsa_ven_amd_pc_sampling.cpp
+                     pcs/pcs_runtime.cpp )
+
+       target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${PCS_SRCS} )
+
+endif()
+
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
 endif()

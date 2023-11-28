@@ -94,6 +94,7 @@ void HsaApiTable::Init() {
   // of Hsa Runtime initialization, including their major ids
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
+  hsa_api.pc_sampling_ext_ = NULL;
 }
 
 void HsaApiTable::Reset() {
@@ -117,6 +118,13 @@ void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
     hsa_api.image_ext_ = &image_api;
     return;
   }
+
+  // Update HSA Extension PC Sampling Api table
+  if (table_id == HSA_EXT_PC_SAMPLING_API_TABLE_ID) {
+    pcs_api = *reinterpret_cast<PcSamplingExtTable*>(ext_table);
+    hsa_api.pc_sampling_ext_ = &pcs_api;
+    return;
+  }
 }
 
 void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
@@ -134,6 +142,12 @@ void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
     image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
     hsa_api.image_ext_ = reinterpret_cast<ImageExtTable*>(ext_table);
+    return;
+  }
+  // Update HSA Extension PC Sampling Api table
+  if (table_id == HSA_EXT_PC_SAMPLING_API_TABLE_ID) {
+    pcs_api = *reinterpret_cast<PcSamplingExtTable*>(ext_table);
+    hsa_api.pc_sampling_ext_ = &pcs_api;
     return;
   }
 }

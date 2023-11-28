@@ -41,6 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "image/inc/hsa_ext_image_impl.h"
+#include "pcs/inc/hsa_ven_amd_pc_sampling_impl.h"
 #include "core/inc/hsa_ext_interface.h"
 #include "core/inc/runtime.h"
 
@@ -56,6 +57,7 @@ namespace core {
 ExtensionEntryPoints::ExtensionEntryPoints() {
   InitFinalizerExtTable();
   InitImageExtTable();
+  InitPcSamplingExtTable();
   InitAmdExtTable();
 }
 
@@ -132,6 +134,10 @@ void ExtensionEntryPoints::Unload() {
   // Reset Image apis to hsa_ext_null function
   UnloadImage();
 
+#ifdef HSA_PC_SAMPLING_SUPPORT
+  rocr::pcs::ReleasePcSamplingRsrcs();
+#endif
+
   for (auto lib : libs_) {
     void* ptr = os::GetExportAddress(lib, "Unload");
     if (ptr) {
@@ -148,6 +154,7 @@ void ExtensionEntryPoints::Unload() {
   libs_.clear();
 
   InitFinalizerExtTable();
+  InitPcSamplingExtTable();
   InitImageExtTable();
   InitAmdExtTable();
   core::hsa_internal_api_table_.Reset();
@@ -176,6 +183,29 @@ bool ExtensionEntryPoints::LoadImage() {
 
   // Update Amd Ext Api table Api that deals with Images
   UpdateAmdExtTable(func);
+#endif
+  return true;
+}
+
+bool ExtensionEntryPoints::LoadPcSampling() {
+#ifdef HSA_PC_SAMPLING_SUPPORT
+  // Consult user input on linking to Image implementation
+  bool disable_pc_sampling = core::Runtime::runtime_singleton_->flag().disable_pc_sampling();
+  if (disable_pc_sampling) {
+    return true;
+  }
+
+  // Bind to Image implementation api's
+  rocr::pcs::LoadPcSampling(&pcs_api);
+
+  // Initialize Version of Api Table
+  pcs_api.version.major_id = HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION;
+  pcs_api.version.minor_id = sizeof(PcSamplingExtTable);
+  pcs_api.version.step_id = HSA_PC_SAMPLING_API_TABLE_STEP_VERSION;
+
+  // Update private copy of Api table with handle for Image extensions
+  hsa_internal_api_table_.CloneExts(&pcs_api,
+                                    core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
 #endif
   return true;
 }
@@ -427,6 +457,43 @@ hsa_status_t hsa_ext_image_create_with_layout(
                                access_permission, image_data_layout,
                                image_data_row_pitch, image_data_slice_pitch,
                                image);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_iterate_configuration(
+    hsa_agent_t agent, hsa_ven_amd_pcs_iterate_configuration_callback_t configuration_callback,
+    void* callback_data) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api
+      .hsa_ven_amd_pcs_iterate_configuration_fn(agent, configuration_callback, callback_data);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_create(
+    hsa_agent_t agent, hsa_ven_amd_pcs_method_kind_t method, hsa_ven_amd_pcs_units_t units,
+    size_t interval, size_t latency, size_t buffer_size,
+    hsa_ven_amd_pcs_data_ready_callback_t data_ready_callback, void* client_callback_data,
+    hsa_ven_amd_pcs_t* pc_sampling) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api.hsa_ven_amd_pcs_create_fn(
+      agent, method, units, interval, latency, buffer_size, data_ready_callback,
+      client_callback_data, pc_sampling);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_destroy(hsa_ven_amd_pcs_t pc_sampling) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api.hsa_ven_amd_pcs_destroy_fn(
+      pc_sampling);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_start(hsa_ven_amd_pcs_t pc_sampling) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api.hsa_ven_amd_pcs_start_fn(
+      pc_sampling);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_stop(hsa_ven_amd_pcs_t pc_sampling) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api.hsa_ven_amd_pcs_stop_fn(
+      pc_sampling);
+}
+
+hsa_status_t HSA_API hsa_ven_amd_pcs_flush(hsa_ven_amd_pcs_t pc_sampling) {
+  return rocr::core::Runtime::runtime_singleton_->extensions_.pcs_api.hsa_ven_amd_pcs_flush_fn(
+      pc_sampling);
 }
 
 //---------------------------------------------------------------------------//

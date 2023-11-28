@@ -571,9 +571,13 @@ typedef enum {
    */
   HSA_EXTENSION_AMD_AQLPROFILE = 0x202,
   /**
+   * PC Sampling extension.
+   */
+  HSA_EXTENSION_AMD_PC_SAMPLING = 0x203,
+  /**
    * Last AMD extension.
    */
-  HSA_AMD_LAST_EXTENSION = 0x202
+  HSA_AMD_LAST_EXTENSION = 0x203
 } hsa_extension_t;
 
 /**
