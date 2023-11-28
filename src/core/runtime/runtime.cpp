@@ -1520,6 +1520,11 @@ void Runtime::LoadExtensions() {
   hsa_api_table_.LinkExts(&extensions_.finalizer_api,
                           core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
+  // Update Hsa Api Table with handle of PCS extension Apis
+  extensions_.LoadPcSampling();
+  hsa_api_table_.LinkExts(&extensions_.pcs_api,
+                          core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
+
   // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadImage();
   hsa_api_table_.LinkExts(&extensions_.image_api,

@@ -1167,6 +1167,10 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
+      if (core::hsa_internal_api_table_.pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
+        setFlag(HSA_EXTENSION_AMD_PC_SAMPLING);
+      }
+
       if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
         os::CloseLib(lib);
         setFlag(HSA_EXTENSION_AMD_AQLPROFILE);

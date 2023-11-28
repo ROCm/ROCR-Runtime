@@ -48,10 +48,12 @@
 #include "hsa_ext_image.h"
 #include "hsa_ext_amd.h"
 #include "hsa_ext_finalize.h"
+#include "hsa_ven_amd_pc_sampling.h"
 #else
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_finalize.h"
+#include "inc/hsa_ven_amd_pc_sampling.h"
 #endif
 
 #include <string.h>
@@ -65,6 +67,7 @@
 #define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x01
 #define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x01
 #define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION    0x01
+#define HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION   0x01
 
 // Step Ids of the Api tables exported by Hsa Core Runtime
 #define HSA_API_TABLE_STEP_VERSION                0x00
@@ -73,6 +76,7 @@
 #define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
 #define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
 #define HSA_AQLPROFILE_API_TABLE_STEP_VERSION     0x00
+#define HSA_PC_SAMPLING_API_TABLE_STEP_VERSION    0x00
 
 // Min function used to copy Api Tables
 static inline uint32_t Min(const uint32_t a, const uint32_t b) {
@@ -134,6 +138,17 @@ struct ImageExtTable {
   decltype(hsa_ext_image_get_capability_with_layout)* hsa_ext_image_get_capability_with_layout_fn;
   decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
   decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
+};
+
+// Table to export HSA PC Sampling Extension Apis
+struct PcSamplingExtTable {
+  ApiTableVersion version;
+  decltype(hsa_ven_amd_pcs_iterate_configuration)* hsa_ven_amd_pcs_iterate_configuration_fn;
+  decltype(hsa_ven_amd_pcs_create)* hsa_ven_amd_pcs_create_fn;
+  decltype(hsa_ven_amd_pcs_destroy)* hsa_ven_amd_pcs_destroy_fn;
+  decltype(hsa_ven_amd_pcs_start)* hsa_ven_amd_pcs_start_fn;
+  decltype(hsa_ven_amd_pcs_stop)* hsa_ven_amd_pcs_stop_fn;
+  decltype(hsa_ven_amd_pcs_flush)* hsa_ven_amd_pcs_flush_fn;
 };
 
 // Table to export AMD Extension Apis
@@ -392,6 +407,9 @@ struct HsaApiTable {
 
   // Table of function pointers to HSA Image Extension
 	ImageExtTable* image_ext_;
+
+  // Table of function pointers to AMD PC Sampling Extension
+  PcSamplingExtTable* pc_sampling_ext_;
 };
 
 // Structure containing instances of different api tables
@@ -401,6 +419,7 @@ struct HsaApiTableContainer {
 	AmdExtTable amd_ext;
 	FinalizerExtTable finalizer_ext;
 	ImageExtTable image_ext;
+  PcSamplingExtTable pc_sampling_ext;
 
   // Default initialization of a container instance
   HsaApiTableContainer() {
@@ -427,6 +446,11 @@ struct HsaApiTableContainer {
     image_ext.version.minor_id = sizeof(ImageExtTable);
     image_ext.version.step_id = HSA_IMAGE_API_TABLE_STEP_VERSION;
     root.image_ext_ = &image_ext;
+
+    pc_sampling_ext.version.major_id = HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION;
+    pc_sampling_ext.version.minor_id = sizeof(PcSamplingExtTable);
+    pc_sampling_ext.version.step_id = HSA_PC_SAMPLING_API_TABLE_STEP_VERSION;
+    root.pc_sampling_ext_ = &pc_sampling_ext;
   }
 };
 
@@ -482,5 +506,7 @@ static void inline copyTables(const HsaApiTable* src, HsaApiTable* dest) {
     copyElement(&dest->finalizer_ext_->version, &src->finalizer_ext_->version);
   if ((offsetof(HsaApiTable, image_ext_) < dest->version.minor_id))
     copyElement(&dest->image_ext_->version, &src->image_ext_->version);
+  if ((offsetof(HsaApiTable, pc_sampling_ext_) < dest->version.minor_id))
+    copyElement(&dest->pc_sampling_ext_->version, &src->pc_sampling_ext_->version);
 }
 #endif
