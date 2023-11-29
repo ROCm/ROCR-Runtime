@@ -3030,6 +3030,7 @@ void GpuAgent::PcSamplingThread() {
     } while (true);
     HSA::hsa_signal_store_screlease(done_sig[which_buffer], 1);
 
+    std::lock_guard<std::mutex> lock(ht_data.host_buffer_mutex);
     if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS)
       goto thread_exit;
 
@@ -3094,7 +3095,64 @@ void GpuAgent::PcSamplingThreadRun(void* _agent) {
 }
 
 hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) {
-  // TODO: implement me
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  uint8_t* host_buffer_begin = ht_data.host_buffer;
+  uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
+
+  size_t bytes_before_wrap;
+  size_t bytes_after_wrap;
+
+  std::lock_guard<std::mutex> lock(ht_data.host_buffer_mutex);
+  if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+
+  assert(ht_data.host_read_ptr >= host_buffer_begin && ht_data.host_read_ptr < host_buffer_end);
+  assert(ht_data.host_write_ptr >= host_buffer_begin && ht_data.host_write_ptr < host_buffer_end);
+  assert(ht_data.host_buffer_wrap_pos ? (ht_data.host_read_ptr > ht_data.host_write_ptr)
+                                      : (ht_data.host_read_ptr <= ht_data.host_write_ptr));
+
+  if (ht_data.host_buffer_wrap_pos) {
+    assert(ht_data.host_buffer_wrap_pos <= host_buffer_end &&
+           ht_data.host_buffer_wrap_pos > host_buffer_begin);
+    assert(ht_data.host_read_ptr <= ht_data.host_buffer_wrap_pos);
+
+    // Wrapped around
+    bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+    bytes_after_wrap = ht_data.host_write_ptr - host_buffer_begin;
+
+    while (bytes_before_wrap > 0) {
+      size_t bytes_to_copy = std::min(bytes_before_wrap, session.buffer_size());
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+    }
+
+    assert(ht_data.host_read_ptr == ht_data.host_buffer_wrap_pos);
+    ht_data.host_buffer_wrap_pos = 0;
+    ht_data.host_read_ptr = host_buffer_begin;
+
+    while (bytes_after_wrap > 0) {
+      size_t bytes_to_copy = std::min(bytes_after_wrap, session.buffer_size());
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+    }
+  } else {
+    bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+
+    while (bytes_before_wrap) {
+      size_t bytes_to_copy = std::min(bytes_before_wrap, session.buffer_size());
+      assert(ht_data.host_read_ptr >= host_buffer_begin &&
+             ht_data.host_read_ptr + bytes_to_copy <= host_buffer_end);
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+    }
+  }
   return HSA_STATUS_SUCCESS;
 }
 
