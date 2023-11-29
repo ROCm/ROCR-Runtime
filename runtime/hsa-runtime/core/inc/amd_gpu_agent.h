@@ -734,6 +734,7 @@ class GpuAgent : public GpuAgentInt {
     uint8_t* host_buffer_wrap_pos;
     uint8_t* host_write_ptr;
     uint8_t* host_read_ptr;
+    std::mutex host_buffer_mutex;
 
     uint32_t which_buffer;
     uint64_t* old_val;
