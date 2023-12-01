@@ -47,6 +47,7 @@
 .set SQ_WAVE_PC_HI_TRAP_ID_SIZE              , 8
 .set SQ_WAVE_PC_HI_TRAP_ID_BFE               , (SQ_WAVE_PC_HI_TRAP_ID_SHIFT | (SQ_WAVE_PC_HI_TRAP_ID_SIZE << 16))
 .set SQ_WAVE_STATUS_HALT_SHIFT               , 13
+.set SQ_WAVE_STATUS_TRAP_SKIP_EXPORT_SHIFT   , 18
 .set SQ_WAVE_STATUS_HALT_BFE                 , (SQ_WAVE_STATUS_HALT_SHIFT | (1 << 16))
 .set SQ_WAVE_TRAPSTS_MEM_VIOL_SHIFT          , 8
 .set SQ_WAVE_TRAPSTS_ILLEGAL_INST_SHIFT      , 11
@@ -64,6 +65,7 @@
 .set EC_QUEUE_WAVE_MEMORY_VIOLATION_M0       , (1 << (DOORBELL_ID_SIZE + 4))
 .set EC_QUEUE_WAVE_APERTURE_VIOLATION_M0     , (1 << (DOORBELL_ID_SIZE + 5))
 
+.set TTMP6_SPI_TTMPS_SETUP_DISABLED_SHIFT    , 31
 .set TTMP6_WAVE_STOPPED_SHIFT                , 30
 .set TTMP6_SAVED_STATUS_HALT_SHIFT           , 29
 .set TTMP6_SAVED_STATUS_HALT_MASK            , (1 << TTMP6_SAVED_STATUS_HALT_SHIFT)
@@ -243,12 +245,16 @@ trap_entry:
   // Halt the wavefront upon restoring STATUS below.
   s_bitset1_b32        ttmp6, TTMP6_WAVE_STOPPED_SHIFT
   s_bitset1_b32        ttmp12, SQ_WAVE_STATUS_HALT_SHIFT
+  // Set WAVE.SKIP_EXPORT as a maker so the debugger knows the trap handler was
+  // entered and has decided to halt the wavee.
+  s_bitset1_b32        ttmp12, SQ_WAVE_STATUS_TRAP_SKIP_EXPORT_SHIFT
 
 .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
   s_bitcmp1_b32        ttmp11, TTMP11_TTMPS_SETUP_SHIFT
   s_cbranch_scc1       .ttmps_initialized
   s_mov_b32            ttmp4, 0
   s_mov_b32            ttmp5, 0
+  s_bitset0_b32        ttmp6, TTMP6_SPI_TTMPS_SETUP_DISABLED_SHIFT
   s_bitset1_b32        ttmp11, TTMP11_TTMPS_SETUP_SHIFT
 .ttmps_initialized:
 .endif
