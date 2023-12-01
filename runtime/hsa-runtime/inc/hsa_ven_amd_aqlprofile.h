@@ -364,47 +364,46 @@ hsa_status_t hsa_ven_amd_aqlprofile_error_string(
     const char** str);  // [out] pointer on the error string
 
 /**
- * @brief Returns the number of available dimension ids for given event.
- * @param[in] agent HSA Agent
- * @param[in] event event (counter+block) to query the num_ids for.
- * @param[out] num_ids number of valid dimension IDs.
- * @return HSA_STATUS_SUCCESS on successful query.
- * @return HSA_STATUS_ERROR for invalid agent/event combination.
- */
-hsa_status_t hsa_ven_amd_aqlprofile_get_event_num_ids(
-  hsa_agent_t agent,
-  hsa_ven_amd_aqlprofile_event_t event,
-  uint64_t* num_ids
-);
-
-typedef enum {
-  // value is of type uint64_t*. get_event_info returns the name length of a dimension id.
-  HSA_VEN_AMD_AQLPROFILE_INFO_EVENT_DIMENSION_NAME_LENGTH = 0,
-  // value is of type char*, with minimum capacity returned by INFO_EVENT_DIMENSION_NAME_LENGTH.
-  // get_event_info copies the name of dimension id to value.
-  HSA_VEN_AMD_AQLPROFILE_INFO_EVENT_DIMENSION_NAME = 1,
-  // value is of type uint64_t*. get_event_info returns the extent of a dimension id.
-  HSA_VEN_AMD_AQLPROFILE_INFO_EVENT_DIMENSION_EXTENT = 2,
-} hsa_ven_amd_aqlprofile_event_attribute_t;
+ * @brief Callback for iteration of all possible event coordinate IDs and coordinate names.
+*/
+typedef hsa_status_t(*hsa_ven_amd_aqlprofile_eventname_callback_t)(int id, const char* name);
+/**
+ * @brief Iterate over all possible event coordinate IDs and their names.
+*/
+hsa_status_t hsa_ven_amd_aqlprofile_iterate_event_ids(hsa_ven_amd_aqlprofile_eventname_callback_t);
 
 /**
- * @brief Returns a query for a given event and dimension id.
- * The maximum value of dim_id can be queried with _get_event_num_ids().
- * @param[in] agent HSA Agent
- * @param[in] event event (counter+block) to query the attribute for.
- * @param[in] attribute what is going to be queried for event.
- * @param[in] dim_id dimension id in the range [0,_get_event_num_ids()-1]
- * @param[out] value returned data, of type defined by attribute.
- * @return HSA_STATUS_SUCCESS on successful query.
- * @return HSA_STATUS_ERROR_INVALID_ARGUMENT for invalid attribute.
- * @return HSA_STATUS_ERROR for invalid agent/event combination.
- */
-hsa_status_t hsa_ven_amd_aqlprofile_get_event_info(
+ * @brief Iterate over all event coordinates for a given agent_t and event_t.
+ * @param position A counting sequence indicating callback number.
+ * @param id Coordinate ID as in _iterate_event_ids.
+ * @param extent Coordinate extent indicating maximum allowed instances.
+ * @param coordinate The coordinate, in the range [0,extent-1].
+ * @param name Coordinate name as in _iterate_event_ids.
+ * @param userdata Userdata returned from _iterate_event_coord function.
+*/
+typedef hsa_status_t(*hsa_ven_amd_aqlprofile_coordinate_callback_t)(
+  int position,
+  int id,
+  int extent,
+  int coordinate,
+  const char* name,
+  void* userdata
+);
+
+/**
+ * @brief Iterate over all event coordinates for a given agent_t and event_t.
+ * @param[in] agent HSA agent.
+ * @param[in] event The event ID and block ID to iterate for.
+ * @param[in] sample_id aqlprofile_info_data_t.sample_id returned from _aqlprofile_iterate_data.
+ * @param[in] callback Callback function to return the coordinates.
+ * @param[in] userdata Arbitrary data pointer to be sent back to the user via callback.
+*/
+hsa_status_t hsa_ven_amd_aqlprofile_iterate_event_coord(
   hsa_agent_t agent,
   hsa_ven_amd_aqlprofile_event_t event,
-  hsa_ven_amd_aqlprofile_event_attribute_t attribute,
-  uint64_t dim_id,
-  void* value
+  uint32_t sample_id,
+  hsa_ven_amd_aqlprofile_coordinate_callback_t callback,
+  void* userdata
 );
 
 /**
@@ -460,11 +459,24 @@ typedef struct hsa_ven_amd_aqlprofile_1_00_pfn_s {
       hsa_ven_amd_aqlprofile_data_callback_t callback,
       void* data);
 
+  hsa_status_t (*hsa_ven_amd_aqlprofile_iterate_event_ids)(
+      hsa_ven_amd_aqlprofile_eventname_callback_t
+  );
+
+  hsa_status_t (*hsa_ven_amd_aqlprofile_iterate_event_coord)(
+      hsa_agent_t agent,
+      hsa_ven_amd_aqlprofile_event_t event,
+      uint32_t sample_id,
+      hsa_ven_amd_aqlprofile_coordinate_callback_t callback,
+      void* userdata
+  );
+
   hsa_status_t (*hsa_ven_amd_aqlprofile_att_marker)(
       hsa_ven_amd_aqlprofile_profile_t* profile,
       hsa_ext_amd_aql_pm4_packet_t* aql_packet,
       uint32_t data,
-      hsa_ven_amd_aqlprofile_att_marker_channel_t channel);
+      hsa_ven_amd_aqlprofile_att_marker_channel_t channel
+  );
 } hsa_ven_amd_aqlprofile_1_00_pfn_t;
 
 typedef hsa_ven_amd_aqlprofile_1_00_pfn_t hsa_ven_amd_aqlprofile_pfn_t;
