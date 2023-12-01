@@ -1742,9 +1742,13 @@ void Runtime::LoadTools() {
 #if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
   auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table_);
   auto lib_id = rocprofiler_register_library_indentifier_t{};
-  auto success =
+  auto rocp_reg_status =
       rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
                                              ROCP_REG_VERSION, &profiler_api_table_, 1, &lib_id);
+
+  if (rocp_reg_status != ROCP_REG_SUCCESS && flag().report_tool_load_failures())
+    fprintf(stderr, "rocprofiler-register failed with error code %i: %s\n", rocp_reg_status,
+            rocprofiler_register_error_string(rocp_reg_status));
 
   bool allow_v1_registration = false;
   if(os::IsEnvVarSet("HSA_TOOLS_ROCPROFILER_V1_TOOLS"))
@@ -1764,9 +1768,9 @@ void Runtime::LoadTools() {
     }
   }
 
-  // if rocprofiler library supports registration and v1 support not explicitly requested, do not
-  // use old method
-  if (success != 0 && !allow_v1_registration) return;
+  // if rocprofiler library supports registration and v1 support not explicitly requested,
+  // do not use old method
+  if (rocp_reg_status == ROCP_REG_SUCCESS && !allow_v1_registration) return;
 #endif
 
   std::vector<const char*> failed;
@@ -1800,7 +1804,7 @@ void Runtime::LoadTools() {
       os::CloseLib(handle);
     }
   }
-  
+
   // Load env var tools.
   env_count=0;
   for (auto& name : names) {
@@ -1842,7 +1846,7 @@ void Runtime::LoadTools() {
     sorted.sort([](const lib_t& lhs, const lib_t& rhs) {
       return lhs.order_ < rhs.order_;
     });
-    
+
     for(auto& lib : sorted) {
       auto& tool = lib.lib_;
 
