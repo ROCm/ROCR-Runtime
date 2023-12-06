@@ -64,7 +64,11 @@ TEST_F(KFDTopologyTest , BasicTest) {
                          "  SGPR Size is " << pNodeProperties->SGPRSizePerCU << std::endl;
             }
             EXPECT_GT(pNodeProperties->NumMemoryBanks, HSAuint32(0)) << "Node index: " << node << "No MemoryBanks.";
-            EXPECT_GT(pNodeProperties->NumCaches, HSAuint32(0)) << "Node index: " << node << "No Caches.";
+            if (pNodeProperties->NumCaches ==0)
+                // SWDEV-420270
+                // For "Intel Meteor lake Mobile", the cache info is not in sysfs,
+                // That means /sys/devices/system/node/node%d/%s/cache is not exist.
+                LOG() <<  "Node index: " << node << "  No Caches or not available to read ." << std::endl;
         }
     }
 

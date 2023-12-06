@@ -1466,8 +1466,11 @@ static HSAKMT_STATUS topology_get_cpu_cache_props(int node,
 	tbl->node.NumCaches = topology_create_temp_cpu_cache_list(
 					node, cpuinfo, &cpu_ci_list);
 	if (!tbl->node.NumCaches) {
-		pr_err("Fail to get cache info for node %d\n", node);
-		ret = HSAKMT_STATUS_ERROR;
+		/* For "Intel Meteor lake Mobile", the cache info is not in sysfs,
+		 * That means /sys/devices/system/node/node%d/%s/cache is not exist.
+		 * here AMD will not black this issue.
+		 */
+		pr_debug("CPU cache info is not available for node %d \n", node);
 		goto exit;
 	}
 
