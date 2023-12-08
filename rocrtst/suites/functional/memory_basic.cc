@@ -47,6 +47,7 @@
 #include <iostream>
 #include <vector>
 #include <memory>
+#include <sys/sysinfo.h>
 
 #include "suites/functional/memory_basic.h"
 #include "common/base_rocr_utils.h"
@@ -152,6 +153,7 @@ static void PrintMemorySubtestHeader(const char *header) {
 void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
                                                  hsa_amd_memory_pool_t pool) {
   hsa_status_t err;
+  struct sysinfo info;
 
   rocrtst::pool_info_t pool_i;
   char ag_name[64];
@@ -167,11 +169,19 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   err = hsa_agent_get_info(ag, HSA_AGENT_INFO_NODE, &node_id);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
+  sysinfo(&info);
   if (verbosity() > 0) {
+    time_t t = time(&t);
+
+    std::cout << "  Current date and time: " << ctime(&t);
     std::cout << "  Agent: " << ag_name << " (";
     switch (ag_type) {
       case HSA_DEVICE_TYPE_CPU:
-        std::cout << "CPU)";
+        std::cout << "CPU)" << std::endl;
+        std::cout << "  System Total Memory:        "
+                  << info.totalram / 1024 << " KB" << std::endl;
+        std::cout << "  System Free Memory:         "
+                  << info.freeram / 1024 << " KB";
         break;
       case HSA_DEVICE_TYPE_GPU:
         std::cout << "GPU)";
@@ -219,27 +229,27 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
   err = TestAllocate(pool, pool_sz*gran_sz + gran_sz);
   EXPECT_EQ(HSA_STATUS_ERROR_INVALID_ALLOCATION, err);
 
-  auto max_alloc_size = pool_sz/2;
+  pool_sz = (ag_type == HSA_DEVICE_TYPE_CPU)?
+              std::min(pool_sz, info.totalram / gran_sz) :
+              pool_sz;
+
   uint64_t upper_bound = pool_sz;
   uint64_t lower_bound = 0;
-
-  /* Stop bisecting once we have reached size diff within 5 % of total  */
-  size_t alloc_size_delta = max_alloc_size * 0.05;
+  auto max_alloc_size = upper_bound;
 
   while (true) {
     err = TestAllocate(pool, max_alloc_size * gran_sz);
-    ASSERT_TRUE(err == HSA_STATUS_SUCCESS || err == HSA_STATUS_ERROR_OUT_OF_RESOURCES);
+    ASSERT_TRUE(err == HSA_STATUS_SUCCESS ||
+                err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+                err == HSA_STATUS_ERROR_INVALID_ALLOCATION);
     if (err == HSA_STATUS_SUCCESS) {
-      lower_bound = max_alloc_size;
-      max_alloc_size += (upper_bound - lower_bound)/2;
-    } else if (err == HSA_STATUS_ERROR_OUT_OF_RESOURCES) {
+      break;
+    } else if (err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
+               err == HSA_STATUS_ERROR_INVALID_ALLOCATION) {
       upper_bound = max_alloc_size;
-      max_alloc_size -= (upper_bound - lower_bound)/2;
+      max_alloc_size -= 1;
     }
 
-    if ((upper_bound - lower_bound) < alloc_size_delta) {
-      break;
-    }
     ASSERT_GT(upper_bound, lower_bound);
   }
 
