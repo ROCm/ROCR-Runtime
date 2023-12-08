@@ -259,7 +259,7 @@ global:
 	hsa_ven_amd_pcs_start;
 	hsa_ven_amd_pcs_stop;
 	hsa_ven_amd_pcs_flush;
-
+	hsa_amd_queue_get_info;
 local:
     *;
 };

@@ -535,6 +535,25 @@ void AqlQueue::StoreRelease(hsa_signal_value_t value) {
   StoreRelaxed(value);
 }
 
+hsa_status_t AqlQueue::GetInfo(hsa_queue_info_attribute_t attribute, void* value) {
+  switch (attribute) {
+    case HSA_AMD_QUEUE_INFO_AGENT:
+      *(reinterpret_cast<hsa_agent_t*>(value)) = agent_->public_handle();
+      break;
+    case HSA_AMD_QUEUE_INFO_DOORBELL_ID:
+      if (doorbell_type_ == 2)
+        // Hardware doorbell supports AQL semantics.
+        *(reinterpret_cast<uint64_t*>(value)) =
+            reinterpret_cast<uint64_t>(signal_.hardware_doorbell_ptr);
+      else
+        return HSA_STATUS_ERROR_INVALID_QUEUE;
+      break;
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
 uint32_t AqlQueue::ComputeRingBufferMinPkts() {
   // From CP_HQD_PQ_CONTROL.QUEUE_SIZE specification:
   //   Size of the primary queue (PQ) will be: 2^(HQD_QUEUE_SIZE+1) DWs.

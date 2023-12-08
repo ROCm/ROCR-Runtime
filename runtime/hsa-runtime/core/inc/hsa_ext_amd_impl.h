@@ -349,6 +349,10 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_ha
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_queue_get_info(hsa_queue_t* queue, hsa_queue_info_attribute_t attribute,
+                                    void* value);
+
 }  // namespace amd
 }  // namespace rocr
 
