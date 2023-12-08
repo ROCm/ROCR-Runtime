@@ -46,8 +46,9 @@ cmake_minimum_required ( VERSION 3.7 )
 find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 find_package(LLVM REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
 
-set (TARGET_DEVS "gfx900;gfx940;gfx941;gfx942;gfx1010;gfx1030;gfx1100")
-set (POSTFIX "9;940;941;942;1010;10;11")
+set (TARGET_DEVS "gfx900;gfx940;gfx941;gfx942;gfx1010;gfx1030;gfx1100;gfx1200")
+set (POSTFIX "9;940;941;942;1010;10;11;12")
+set (SOURCE_SUFFIX ";;;;;;;_gfx12")
 
 if(${CMAKE_VERBOSE_MAKEFILE})
   get_property(clang_path TARGET clang PROPERTY LOCATION)
@@ -92,11 +93,11 @@ endfunction(gen_kernel_bc)
 ##==========================================
 ## Find device code object name and forward to custom command
 ##==========================================
-function(build_kernel TRAP_HANDLER_NAME TARGET_ID POSTFIX)
+function(build_kernel TRAP_HANDLER_NAME TARGET_ID POSTFIX SOURCE_SUFFIX)
 
   ## generate trap handler object code files
   set (CODE_OBJECT_FILE "${TRAP_HANDLER_NAME}_${POSTFIX}")
-  set (TRAP_FILE "${CMAKE_CURRENT_SOURCE_DIR}/trap_handler.s")
+  set (TRAP_FILE "${CMAKE_CURRENT_SOURCE_DIR}/trap_handler${SOURCE_SUFFIX}.s")
   gen_kernel_bc(${TARGET_ID} ${TRAP_FILE} ${CODE_OBJECT_FILE})
 
   ## Build a list of code object file names
@@ -117,10 +118,11 @@ function(build_kernel_for_devices TRAP_HANDLER_NAME)
   foreach(ind RANGE ${dev_count})
     list(GET TARGET_DEVS ${ind} dev)
     list(GET POSTFIX ${ind} post)
+    list(GET SOURCE_SUFFIX ${ind} suffix)
     if(${CMAKE_VERBOSE_MAKEFILE})
       message("\n  Generating: ${dev} ...")
     endif()
-    build_kernel(${TRAP_HANDLER_NAME} ${dev} ${post})
+    build_kernel(${TRAP_HANDLER_NAME} ${dev} ${post} "${suffix}")
   endforeach(ind)
 
   set(HSACO_TARG_LIST ${HSACO_TARG_LIST} PARENT_SCOPE)
