@@ -269,6 +269,9 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
     StoreRelaxed(value);
   }
 
+  /// @brief Provide information about the queue
+  hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) override;
+
   static __forceinline bool IsType(core::Signal* signal) { return signal->IsType(&rtti_id_); }
   static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
 

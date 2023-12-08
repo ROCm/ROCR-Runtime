@@ -41,6 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/intercept_queue.h"
+#include "core/inc/amd_aql_queue.h"
 #include "core/util/utils.h"
 #include "inc/hsa_api_trace.h"
 
@@ -384,6 +385,19 @@ void InterceptQueue::StoreRelaxed(hsa_signal_value_t value) {
   next_packet_ = i;
   Cursor.queue = nullptr;
   atomic::Store(&amd_queue_.read_dispatch_id, next_packet_, std::memory_order_release);
+}
+
+hsa_status_t InterceptQueue::GetInfo(hsa_queue_info_attribute_t attribute, void* value) {
+  switch (attribute) {
+    case HSA_AMD_QUEUE_INFO_AGENT:
+    case HSA_AMD_QUEUE_INFO_DOORBELL_ID: {
+      if (!AMD::AqlQueue::IsType(wrapped.get())) return HSA_STATUS_ERROR_INVALID_QUEUE;
+
+      AMD::AqlQueue* aqlQueue = static_cast<AMD::AqlQueue*>(wrapped.get());
+      return aqlQueue->GetInfo(attribute, value);
+    }
+  }
+  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 }
 
 }  // namespace core

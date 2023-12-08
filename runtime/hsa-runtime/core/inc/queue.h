@@ -52,7 +52,7 @@
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
 #include "inc/amd_hsa_queue.h"
-
+#include "inc/hsa_ext_amd.h"
 #include "hsakmt/hsakmt.h"
 
 namespace rocr {
@@ -369,6 +369,9 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
     AMD_HSA_BITS_SET(amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING,
                      (enabled != 0));
   }
+
+  /// @ brief Returns queue queries about the queue
+  virtual hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) = 0;
 
   /// @ brief Reports async queue errors to stderr if no other error handler was registered.
   static void DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data);

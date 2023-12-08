@@ -3090,6 +3090,22 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
  */
 hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
 
+typedef enum {
+  /*
+   * Returns the agent that owns the underlying HW queue.
+   * The type of this attribute is hsa_agent_t.
+   */
+  HSA_AMD_QUEUE_INFO_AGENT,
+  /*
+   * Returns the doorbell ID of the completion signal of the queue
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_QUEUE_INFO_DOORBELL_ID,
+} hsa_queue_info_attribute_t;
+
+hsa_status_t hsa_amd_queue_get_info(hsa_queue_t* queue, hsa_queue_info_attribute_t attribute,
+                                    void* value);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

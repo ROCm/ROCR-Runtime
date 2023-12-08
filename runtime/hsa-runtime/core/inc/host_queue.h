@@ -159,6 +159,11 @@ class HostQueue : public Queue {
     assert(false && "HostQueue::ExecutePM4 is unimplemented");
   }
 
+  hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) override {
+    assert(false && "HostQueue::GetInfo is unimplemented");
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
+
   void* operator new(size_t size) {
     return _aligned_malloc(size, HSA_QUEUE_ALIGN_BYTES);
   }

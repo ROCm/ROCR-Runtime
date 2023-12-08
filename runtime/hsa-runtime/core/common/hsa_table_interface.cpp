@@ -1298,6 +1298,11 @@ hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, si
   return amdExtTable->hsa_amd_agent_set_async_scratch_limit_fn(agent, threshold);
 }
 
+hsa_status_t HSA_API hsa_amd_queue_get_info(hsa_queue_t* queue,
+                                            hsa_queue_info_attribute_t attribute, void* value) {
+  return amdExtTable->hsa_amd_queue_get_info_fn(queue, attribute, value);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 
