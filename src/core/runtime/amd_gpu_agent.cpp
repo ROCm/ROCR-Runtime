@@ -58,6 +58,7 @@
 #include "core/inc/amd_blit_sdma.h"
 #include "core/inc/amd_gpu_pm4.h"
 #include "core/inc/amd_memory_region.h"
+#include "core/inc/default_signal.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/isa.h"
 #include "core/inc/runtime.h"
@@ -69,6 +70,7 @@
 #include "core/inc/amd_blit_shaders.h"
 // Generated header
 #include "amd_trap_handler_v2.h"
+#include "amd_blit_shaders_v2.h"
 
 #if defined(__linux__)
 // libdrm headers
@@ -178,25 +180,15 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   max_queues_ = std::min(128U, max_queues_);
 #endif
 
+  // Initialize libdrm device handle
+  InitLibDrm();
+
 #if !defined(__linux__)
   wallclock_frequency_ = 0;
 #else
   // Get wallclock freq from libdrm.
-  int drm_fd = drmOpenRender(node_props.DrmRenderMinor);
-  if (drm_fd < 0)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm open failed.\n");
-  MAKE_SCOPE_GUARD([&]() { drmClose(drm_fd); });
-
-  amdgpu_device_handle device_handle;
-  uint32_t major_version;
-  uint32_t minor_version;
-  if (amdgpu_device_initialize(drm_fd, &major_version, &minor_version, &device_handle) < 0) {
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm error.\n");
-  }
-  MAKE_SCOPE_GUARD([&]() { amdgpu_device_deinitialize(device_handle); });
-
   amdgpu_gpu_info info;
-  if (amdgpu_query_gpu_info(device_handle, &info) < 0)
+  if (amdgpu_query_gpu_info(ldrm_dev_, &info) < 0)
     throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
 
   // Reported by libdrm in KHz.
@@ -266,63 +258,63 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
   std::map<std::string, CompiledShader> compiled_shaders = {
       {"TrapHandler",
        {
-           {NULL, 0, 0, 0},                                                 // gfx7
-           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},            // gfx8
-           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},            // gfx9
-           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},        // gfx90a
-           {NULL, 0, 0, 0},                                                 // gfx940
-           {NULL, 0, 0, 0},                                                 // gfx942
-           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},      // gfx1010
-           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},          // gfx10
-           {NULL, 0, 0, 0},                                                 // gfx11
+           {NULL, 0, 0, 0},                                             // gfx7
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},        // gfx8
+           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},        // gfx9
+           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},    // gfx90a
+           {NULL, 0, 0, 0},                                             // gfx940
+           {NULL, 0, 0, 0},                                             // gfx942
+           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},  // gfx1010
+           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},      // gfx10
+           {NULL, 0, 0, 0},                                             // gfx11
        }},
       {"TrapHandlerKfdExceptions",
        {
-           {NULL, 0, 0, 0},                                                 // gfx7
-           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},            // gfx8
-           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},      // gfx9
-           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},      // gfx90a
-           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},  // gfx940
-           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},  // gfx942
-           {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},// gfx1010
-           {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},    // gfx10
-           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},    // gfx11
+           {NULL, 0, 0, 0},                                                   // gfx7
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},              // gfx8
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},        // gfx9
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},        // gfx90a
+           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},    // gfx940
+           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},    // gfx942
+           {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},  // gfx1010
+           {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},      // gfx10
+           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},      // gfx11
        }},
       {"CopyAligned",
        {
-           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},          // gfx7
-           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},          // gfx8
-           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},          // gfx9
-           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},          // gfx90a
-           {kCodeCopyAligned940, sizeof(kCodeCopyAligned940), 32, 12},      // gfx940
-           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},          // gfx942
-           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},        // gfx1010
-           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},        // gfx10
-           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},        // gfx11
+           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},      // gfx7
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},      // gfx8
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx9
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx90a
+           {kCodeCopyAligned940, sizeof(kCodeCopyAligned940), 32, 12},  // gfx940
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx942
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},    // gfx1010
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},    // gfx10
+           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},    // gfx11
        }},
       {"CopyMisaligned",
        {
-           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},    // gfx7
-           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},    // gfx8
-           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},    // gfx9
-           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},    // gfx90a
-           {kCodeCopyMisaligned940, sizeof(kCodeCopyMisaligned940), 23, 10},// gfx940
-           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},    // gfx942
-           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},  // gfx1010
-           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},  // gfx10
-           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},  // gfx11
+           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},      // gfx7
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},      // gfx8
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx9
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx90a
+           {kCodeCopyMisaligned940, sizeof(kCodeCopyMisaligned940), 23, 10},  // gfx940
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx942
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},    // gfx1010
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},    // gfx10
+           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},    // gfx11
        }},
       {"Fill",
        {
-           {kCodeFill7, sizeof(kCodeFill7), 19, 8},                         // gfx7
-           {kCodeFill8, sizeof(kCodeFill8), 19, 8},                         // gfx8
-           {kCodeFill8, sizeof(kCodeFill8), 19, 8},                         // gfx9
-           {kCodeFill8, sizeof(kCodeFill8), 19, 8},                         // gfx90a
-           {kCodeFill940, sizeof(kCodeFill940), 19, 8},                     // gfx940
-           {kCodeFill8, sizeof(kCodeFill8), 19, 8},                         // gfx942
-           {kCodeFill10, sizeof(kCodeFill10), 19, 8},                       // gfx1010
-           {kCodeFill10, sizeof(kCodeFill10), 19, 8},                       // gfx10
-           {kCodeFill11, sizeof(kCodeFill11), 19, 8},                       // gfx11
+           {kCodeFill7, sizeof(kCodeFill7), 19, 8},      // gfx7
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},      // gfx8
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx9
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx90a
+           {kCodeFill940, sizeof(kCodeFill940), 19, 8},  // gfx940
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx942
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},    // gfx1010
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},    // gfx10
+           {kCodeFill11, sizeof(kCodeFill11), 19, 8},    // gfx11
        }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
@@ -572,6 +564,18 @@ void GpuAgent::InitCacheList() {
   for (size_t i = 0; i < caches_.size(); i++)
     caches_[i].reset(new core::Cache(deviceName + " L" + std::to_string(cache_props_[i].CacheLevel),
                                      cache_props_[i].CacheLevel, cache_props_[i].CacheSize));
+}
+
+void GpuAgent::InitLibDrm() {
+  HSAKMT_STATUS status;
+
+  HsaAMDGPUDeviceHandle device_handle;
+  status = hsaKmtGetAMDGPUDeviceHandle(node_id(), &device_handle);
+  if (status != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR,
+                             "Agent creation failed.\nlibdrm get device handle failed.\n");
+
+  ldrm_dev_ = (amdgpu_device_handle)device_handle;
 }
 
 hsa_status_t GpuAgent::IterateRegion(
@@ -848,25 +852,145 @@ void GpuAgent::SetCopyStatusCheckRefCount(bool set) {
   else pending_copy_stat_check_ref_++;
 }
 
+// Assign direct peer gang factor to GPU
+void GpuAgent::RegisterGangPeer(core::Agent& peer, unsigned int max_bandwidth_factor) {
+  gang_peers_info_.push_back(std::pair<core::Agent&,unsigned int>(peer, max_bandwidth_factor));
+}
+
+// Destroy gang signal
+static bool GangCopyCompleteHandler(hsa_signal_value_t, void *arg ) {
+  core::Signal *gang_signal = reinterpret_cast<core::Signal*>(arg);
+  if (gang_signal->IsValid()) {
+    gang_signal->DestroySignal();
+  }
+  return true;
+}
+
 hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                const void* src, core::Agent& src_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
-  SetCopyRequestRefCount(true);
-  // Bind the Blit object that will drive this copy operation
-  lazy_ptr<core::Blit>& blit = GetBlitObject(dst_agent, src_agent, size);
-
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
-  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
-  SetCopyRequestRefCount(false);
+  ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
 
-  return stat;
+  // Calculate the number of gang items
+  unsigned int tmp_gang_factor = 1;
+  for (auto peer_info : gang_peers_info_) {
+    Flag::SDMA_OVERRIDE sdma_gang_override =
+        core::Runtime::runtime_singleton_->flag().enable_sdma_gang();
+    Flag::SDMA_OVERRIDE sdma_override =
+        core::Runtime::runtime_singleton_->flag().enable_sdma();
+    // Blit copies already saturate xGMI
+    if (sdma_override == Flag::SDMA_DISABLE || sdma_gang_override == Flag::SDMA_DISABLE) {
+      break;
+    }
+
+    // Avoid the latency boundary on small copies
+    if (size < HSA_PAGE_SIZE_4KB) {
+      break;
+    }
+
+    if (dst_agent.public_handle().handle == peer_info.first.public_handle().handle) {
+      tmp_gang_factor = peer_info.second;
+      break;
+    }
+  }
+
+  int gang_factor = 0;
+  // Use non-D2D (auxillary) SDMA engines in the event of xGMI D2D support
+  // when xGMI SDMA context is not available.
+  bool has_aux_gang = tmp_gang_factor >= properties_.NumSdmaEngines && !!!properties_.NumSdmaXgmiEngines;
+  tmp_gang_factor = has_aux_gang ? tmp_gang_factor : std::min(tmp_gang_factor, properties_.NumSdmaXgmiEngines);
+  for (int i = 0; i < tmp_gang_factor; i++) {
+    if (has_aux_gang && !DmaEngineIsFree(i + 1)) {
+      break;
+    } else {
+      uint32_t engine_offset = 0;
+      for (uint32_t idx = 0; idx < xgmi_peer_list_.size(); idx++) {
+        if (xgmi_peer_list_[idx]->public_handle().handle == dst_agent.public_handle().handle) {
+          engine_offset = ((idx + i) % properties_.NumSdmaXgmiEngines) + DefaultBlitCount;
+          break;
+        }
+      }
+
+      // Avoid oversubscribing unavailable blit engines that are not already ganged
+      if (!!engine_offset && tmp_gang_factor > 1 && !DmaEngineIsFree(engine_offset)) {
+        break;
+      }
+    }
+
+    gang_factor++;
+  }
+
+  if (!gang_factor) gang_factor = 1;
+
+  // Manage internal gang signals
+  std::vector<core::Signal*> gang_signals;
+  if (gang_factor > 1) {
+    for (int i = 0; i < gang_factor - 1; i++) {
+      core::Signal *gang_signal;
+
+      // Initial value is 2 where 1 is for gang-leader to ack and
+      // 1 for non-leader gang item to decrement
+      gang_signal = new core::DefaultSignal(2);
+
+      // Fall back to non-gang copy
+      if (!gang_signal->IsValid()) {
+        for (int j = 0; j < gang_signals.size(); j++) gang_signals[j]->DestroySignal();
+        gang_factor = 1;
+        break;
+      }
+
+      core::Runtime::runtime_singleton_->SetAsyncSignalHandler(
+                                         core::Signal::Convert(gang_signal),
+                                         HSA_SIGNAL_CONDITION_EQ, 0, GangCopyCompleteHandler,
+                                         reinterpret_cast<void*>(gang_signal));
+      gang_signals.push_back(gang_signal);
+    }
+  }
+
+  // Bind the Blit object that will drive this copy operation
+  size_t offset = 0, remainder_size = size;
+  bool gang_leader_set = false;
+  int gang_sig_count = 0;
+  for (int i = 0; i < gang_factor; i++) {
+    // Set leader and gang status to blit
+    SetCopyRequestRefCount(true);
+    MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
+    lazy_ptr<core::Blit>& blit = has_aux_gang ? blits_[i + 1] :
+                                                GetBlitObject(dst_agent, src_agent, size, i);
+    blit->GangLeader(gang_factor > 1 && !gang_leader_set);
+
+    hsa_status_t stat;
+    size_t chunk = std::min(remainder_size, (size + gang_factor - 1)/gang_factor);
+    if (!blit->GangLeader() && !gang_signals.empty()) {
+      stat = blit->SubmitLinearCopyCommand(reinterpret_cast<uint8_t*>(dst) + offset,
+                                           reinterpret_cast<const uint8_t*>(src) + offset,
+                                           chunk, dep_signals,
+                                           *gang_signals[gang_sig_count], gang_signals);
+      gang_sig_count++;
+    } else {
+      stat = blit->SubmitLinearCopyCommand(reinterpret_cast<uint8_t*>(dst) + offset,
+                                           reinterpret_cast<const uint8_t*>(src) + offset,
+                                           chunk, dep_signals,
+                                           out_signal, gang_signals);
+    }
+
+    if (stat)
+      return stat;
+
+    offset += chunk;
+    remainder_size -= chunk;
+    gang_leader_set = true;
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
@@ -919,11 +1043,11 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
 
-    engine_offset = is_same_gpu ?(force_copy_on_sdma ? BlitDevToHost :
-                                   BlitDevToDev) : engine_offset;
+    engine_offset = is_same_gpu && !force_copy_on_sdma ? BlitDevToDev : engine_offset;
   }
 
   SetCopyRequestRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
   lazy_ptr<core::Blit>& blit = GetBlitObject(engine_offset);
 
   if (profiling_enabled()) {
@@ -932,18 +1056,20 @@ hsa_status_t GpuAgent::DmaCopyOnEngine(void* dst, core::Agent& dst_agent,
     out_signal.async_copy_agent(core::Agent::Convert(this->public_handle()));
   }
 
-  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal);
-  SetCopyRequestRefCount(false);
+  std::vector<core::Signal*> gang_signals(0);
+
+  hsa_status_t stat = blit->SubmitLinearCopyCommand(dst, src, size, dep_signals, out_signal,
+                                                    gang_signals);
 
   return stat;
 }
 
 bool GpuAgent::DmaEngineIsFree(uint32_t engine_offset) {
   SetCopyStatusCheckRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyStatusCheckRefCount(false); });
   bool is_free = !!!(sdma_blit_used_mask_ & (1 << engine_offset)) ||
                     (blits_[engine_offset]->isSDMA() &&
                      !!!blits_[engine_offset]->PendingBytes());
-  SetCopyStatusCheckRefCount(false);
   return is_free;
 }
 
@@ -1002,11 +1128,11 @@ hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_
   if (isa_->GetMajorVersion() < 9) return HSA_STATUS_ERROR_INVALID_AGENT;
 
   SetCopyRequestRefCount(true);
+  MAKE_SCOPE_GUARD([&]() { SetCopyRequestRefCount(false); });
   lazy_ptr<core::Blit>& blit = GetBlitObject((dir == hsaHostToDevice) ? BlitHostToDev :
                                                                         BlitDevToHost);
 
   if (!blit->isSDMA()) {
-    SetCopyRequestRefCount(false);
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
@@ -1019,7 +1145,6 @@ hsa_status_t GpuAgent::DmaCopyRect(const hsa_pitched_ptr_t* dst, const hsa_dim3_
   BlitSdmaBase* sdmaBlit = static_cast<BlitSdmaBase*>((*blit).get());
   hsa_status_t stat = sdmaBlit->SubmitCopyRectCommand(dst, dst_offset, src, src_offset, range,
                                                       dep_signals, out_signal);
-  SetCopyRequestRefCount(false);
 
   return stat;
 }
@@ -1213,7 +1338,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       for (auto& cache : cache_props_) {
         if ((cache.CacheLevel == 2) && (cache.CacheLineSize != 0)) {
           *((uint32_t*)value) = cache.CacheLineSize;
-          break;
+          return HSA_STATUS_SUCCESS;
         }
       }
       // Fallback for when KFD is returning zero.
@@ -1364,6 +1489,9 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_DRIVER_UID:
       *((uint32_t*)value) = KfdGpuID();
+      break;
+    case HSA_AMD_AGENT_INFO_NEAREST_CPU:
+      *((hsa_agent_t*)value) = GetNearestCpuAgent()->public_handle();
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -1883,7 +2011,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(uint32_t engine_offset) {
   return blits_[engine_offset];
 }
 
-lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
+lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent, int gang_id) {
   // Determine if destination is a member xgmi peers list
   uint32_t xgmi_engine_cnt = properties_.NumSdmaXgmiEngines;
   assert((xgmi_engine_cnt > 0) && ("Illegal condition, should not happen"));
@@ -1894,7 +2022,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetXgmiBlit(const core::Agent& dst_agent) {
     uint64_t dst_handle = dst_agent.public_handle().handle;
     uint64_t peer_handle = xgmi_peer_list_[idx]->public_handle().handle;
     if (peer_handle == dst_handle) {
-      return GetBlitObject((idx % xgmi_engine_cnt) + DefaultBlitCount);
+      return blits_[((idx + gang_id) % xgmi_engine_cnt) + DefaultBlitCount];
     }
   }
 
@@ -1913,7 +2041,9 @@ lazy_ptr<core::Blit>& GpuAgent::GetPcieBlit(const core::Agent& dst_agent,
 }
 
 lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
-                                              const core::Agent& src_agent, const size_t size) {
+                                              const core::Agent& src_agent,
+                                              const size_t size,
+                                              int gang_id) {
   // At this point it is guaranteed that one of
   // the two devices is a GPU, potentially both
   assert(((src_agent.device_type() == core::Agent::kAmdGpuDevice) ||
@@ -1973,7 +2103,7 @@ lazy_ptr<core::Blit>& GpuAgent::GetBlitObject(const core::Agent& dst_agent,
     return GetPcieBlit(dst_agent, src_agent);
   }
 
-  return GetXgmiBlit(dst_agent);
+  return GetXgmiBlit(dst_agent, gang_id);
 }
 
 void GpuAgent::Trim() {
@@ -1983,18 +2113,7 @@ void GpuAgent::Trim() {
 }
 
 void GpuAgent::InitNumaAllocator() {
-  Agent* nearCpu = nullptr;
-  uint32_t dist = -1u;
-  for (auto cpu : core::Runtime::runtime_singleton_->cpu_agents()) {
-    const core::Runtime::LinkInfo link_info =
-        core::Runtime::runtime_singleton_->GetLinkInfo(node_id(), cpu->node_id());
-    if (link_info.info.numa_distance < dist) {
-      dist = link_info.info.numa_distance;
-      nearCpu = cpu;
-    }
-  }
-
-  for (auto pool : nearCpu->regions()) {
+  for (auto pool : GetNearestCpuAgent()->regions()) {
     if (pool->kernarg()) {
       system_allocator_ = [pool](size_t size, size_t alignment,
                                  MemoryRegion::AllocateFlags alloc_flags) -> void* {
@@ -2012,6 +2131,20 @@ void GpuAgent::InitNumaAllocator() {
     }
   }
   assert(false && "Nearest NUMA node did not have a kernarg pool.");
+}
+
+core::Agent* GpuAgent::GetNearestCpuAgent() const {
+  core::Agent* nearCpu = nullptr;
+  uint32_t dist = -1u;
+  for (auto cpu : core::Runtime::runtime_singleton_->cpu_agents()) {
+    const core::Runtime::LinkInfo link_info =
+        core::Runtime::runtime_singleton_->GetLinkInfo(node_id(), cpu->node_id());
+    if (link_info.info.numa_distance < dist) {
+      dist = link_info.info.numa_distance;
+      nearCpu = cpu;
+    }
+  }
+  return nearCpu;
 }
 
 }  // namespace amd

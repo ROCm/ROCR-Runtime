@@ -121,10 +121,11 @@ class BlitSdma : public BlitSdmaBase {
   /// @param size Size of the data to be copied.
   /// @param dep_signals Arrays of dependent signal.
   /// @param out_signal Output signal.
+  /// @param gang_signals Array of gang signals.
   virtual hsa_status_t SubmitLinearCopyCommand(
       void* dst, const void* src, size_t size,
       std::vector<core::Signal*>& dep_signals,
-      core::Signal& out_signal) override;
+      core::Signal& out_signal, std::vector<core::Signal*>& gang_signals) override;
 
   virtual hsa_status_t SubmitCopyRectCommand(const hsa_pitched_ptr_t* dst,
                                              const hsa_dim3_t* dst_offset,
@@ -144,6 +145,8 @@ class BlitSdma : public BlitSdmaBase {
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
   virtual uint64_t PendingBytes() override;
+  virtual void GangLeader(bool gang_leader) override { gang_leader_ = gang_leader; }
+  virtual bool GangLeader() const override { return gang_leader_; }
 
  private:
   /// @brief Acquires the address into queue buffer where a new command
@@ -216,7 +219,7 @@ class BlitSdma : public BlitSdmaBase {
 
   hsa_status_t SubmitCommand(const void* cmds, size_t cmd_size, uint64_t size,
                              const std::vector<core::Signal*>& dep_signals,
-                             core::Signal& out_signal);
+                             core::Signal& out_signal, std::vector<core::Signal*>& gang_signals);
 
   hsa_status_t SubmitBlockingCommand(const void* cmds, size_t cmd_size, uint64_t size);
 
@@ -300,6 +303,15 @@ class BlitSdma : public BlitSdmaBase {
 
   /// True if sDMA supports HDP flush
   bool hdp_flush_support_;
+
+  /// True if SDMA blit is gang leader
+  bool gang_leader_;
+
+  /// True if SDMA blit is ganged
+  bool is_ganged_;
+
+  /// Minimum submission size in bytes.
+  size_t min_submission_size_;
 };
 
 // Ring indices are 32-bit.

@@ -298,6 +298,54 @@ hsa_status_t HSA_API hsa_amd_portable_export_dmabuf(const void* ptr, size_t size
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf);
 
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t address,
+                                          uint64_t flags);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_address_free(void* ptr, size_t size);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                              hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     const size_t desc_cnt);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* flags,
+                                     const hsa_agent_t agent_handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t handle,
+                                                  uint64_t flags);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t* handle);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* allocHandle, void* addr);
+
+// Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_handle_t allocHandle,
+                                                           hsa_amd_memory_pool_t* pool,
+                                                           hsa_amd_memory_type_t* type);
+
 }  // namespace amd
 }  // namespace rocr
 

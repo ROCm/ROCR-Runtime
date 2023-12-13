@@ -57,8 +57,13 @@ class Agent;
 
 class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
  public:
-  MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, core::Agent* owner)
-      : fine_grain_(fine_grain), kernarg_(kernarg), full_profile_(full_profile), owner_(owner) {
+  MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
+               core::Agent* owner)
+      : fine_grain_(fine_grain),
+        kernarg_(kernarg),
+        full_profile_(full_profile),
+        extended_scope_fine_grain_(extended_scope_fine_grain),
+        owner_(owner) {
     assert(owner_ != NULL);
   }
 
@@ -92,6 +97,8 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     AllocateNonPaged = (1 << 4),    // Non-paged system memory (AllocateIPC alias)
     AllocatePCIeRW = (1 << 5),      // Enforce pseudo fine grain/RW memory
     AllocateAsan = (1 << 6),        // ASAN - First page of allocation remapped to system memory
+    AllocatePinned = (1 << 7),      // Currently treating Pinned memory as NoSubstitute
+    AllocateMemoryOnly = (1 << 8),  // Memory only handle from thunk, no virtual address
   };
 
   typedef uint32_t AllocateFlags;
@@ -115,6 +122,8 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
 
   __forceinline bool fine_grain() const { return fine_grain_; }
 
+  __forceinline bool extended_scope_fine_grain() const { return extended_scope_fine_grain_; }
+
   __forceinline bool kernarg() const { return kernarg_; }
 
   __forceinline bool full_profile() const { return full_profile_; }
@@ -125,7 +134,7 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
   const bool fine_grain_;
   const bool kernarg_;
   const bool full_profile_;
-
+  const bool extended_scope_fine_grain_;
   core::Agent* owner_;
 };
 }  // namespace core

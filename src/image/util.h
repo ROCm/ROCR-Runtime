@@ -66,6 +66,9 @@ namespace image {
 
 #define MULTILINE(...) # __VA_ARGS__
 
+#define ASSERT_SIZE_UINT32(desc)                                                                   \
+  static_assert(sizeof(desc) == sizeof(uint32_t), #desc " size should be 32-bits");
+
 }  // namespace image
 }  // namespace rocr
 

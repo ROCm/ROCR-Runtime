@@ -95,10 +95,11 @@ class BlitKernel : public core::Blit {
   /// @param size Size of the data to be copied.
   /// @param dep_signals Arrays of dependent signal.
   /// @param out_signal Output signal.
+  /// @param gang_signals Array of gang signals.
   virtual hsa_status_t SubmitLinearCopyCommand(
       void* dst, const void* src, size_t size,
       std::vector<core::Signal*>& dep_signals,
-      core::Signal& out_signal) override;
+      core::Signal& out_signal, std::vector<core::Signal*>& gang_signals) override;
 
   /// @brief Submit an AQL packet to perform memory fill. The call is blocking
   /// until the command execution is finished.
@@ -112,6 +113,9 @@ class BlitKernel : public core::Blit {
   virtual hsa_status_t EnableProfiling(bool enable) override;
 
   virtual uint64_t PendingBytes() override;
+
+  virtual void GangLeader(bool gang_leader) override {}
+  virtual bool GangLeader() const override { return false; }
 
  private:
   union KernelArgs {

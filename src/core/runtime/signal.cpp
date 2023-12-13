@@ -267,6 +267,9 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
           if (fault.Flags == HSA_EVENTID_MEMORY_FATAL_PROCESS) {
             return i;
           }
+        } else if (event_type == HSA_EVENTTYPE_HW_EXCEPTION) {
+          const HsaHwException& exception = signals[i]->EopEvent()->EventData.EventData.HwException;
+          if (exception.MemoryLost) return i;
         }
       }
 

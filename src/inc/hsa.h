@@ -314,6 +314,10 @@ typedef struct hsa_dim3_s {
  */
 typedef enum {
   /**
+   * Used to remove existing access
+   */
+  HSA_ACCESS_PERMISSION_NONE = 0,
+  /**
    * Read-only access.
    */
   HSA_ACCESS_PERMISSION_RO = 1,
@@ -504,7 +508,17 @@ typedef enum {
    * Returns true if DMABUF APIs are supported by the driver.  The type of
    * this attribute is bool.
    */
-  HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED = 0x204
+  HSA_AMD_SYSTEM_INFO_DMABUF_SUPPORTED = 0x204,
+  /**
+   * Returns true if Virtual Memory APIs are supported by the driver.  The type of
+   * this attribute is bool.
+   */
+  HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED = 0x205,
+  /**
+   * Returns true if XNACK is enabled on this system.  The type of
+   * this attribute is bool.
+   */
+  HSA_AMD_SYSTEM_INFO_XNACK_ENABLED = 0x206,
 } hsa_system_info_t;
 
 /**
