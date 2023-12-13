@@ -53,9 +53,10 @@
  * - 1.1 - dmabuf export
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
  * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
+ * - 1.4 - Virtual Memory API
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 3
+#define HSA_AMD_INTERFACE_VERSION_MINOR 4
 
 #ifdef __cplusplus
 extern "C" {
@@ -399,7 +400,12 @@ typedef enum hsa_amd_agent_info_s {
    * Queries for driver unique identifier.
    * The type of this attribute is uint32_t.
    */
-  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112
+  HSA_AMD_AGENT_INFO_DRIVER_UID = 0xA112,
+  /**
+   * Returns the hsa_agent_t of the nearest CPU agent
+   * The type of this attribute is hsa_agent_t.
+   */
+  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113
 } hsa_amd_agent_info_t;
 
 /**
@@ -413,7 +419,15 @@ typedef enum hsa_amd_sdma_engine_id {
   HSA_AMD_SDMA_ENGINE_4 = 0x10,
   HSA_AMD_SDMA_ENGINE_5 = 0x20,
   HSA_AMD_SDMA_ENGINE_6 = 0x40,
-  HSA_AMD_SDMA_ENGINE_7 = 0x80
+  HSA_AMD_SDMA_ENGINE_7 = 0x80,
+  HSA_AMD_SDMA_ENGINE_8 = 0x100,
+  HSA_AMD_SDMA_ENGINE_9 = 0x200,
+  HSA_AMD_SDMA_ENGINE_10 = 0x400,
+  HSA_AMD_SDMA_ENGINE_11 = 0x800,
+  HSA_AMD_SDMA_ENGINE_12 = 0x1000,
+  HSA_AMD_SDMA_ENGINE_13 = 0x2000,
+  HSA_AMD_SDMA_ENGINE_14 = 0x4000,
+  HSA_AMD_SDMA_ENGINE_15 = 0x8000
 } hsa_amd_sdma_engine_id_t;
 
 typedef struct hsa_amd_hdp_flush_s {
@@ -443,7 +457,7 @@ typedef enum hsa_amd_region_info_s {
    * Max Memory Clock, the return value type is uint32_t.
    * This attribute is deprecated. Use HSA_AMD_AGENT_INFO_MEMORY_MAX_FREQUENCY.
    */
-  HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY = 0xA003
+  HSA_AMD_REGION_INFO_MAX_CLOCK_FREQUENCY = 0xA003,
 } hsa_amd_region_info_t;
 
 /**
@@ -1072,39 +1086,50 @@ typedef enum {
   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED = 5,
   /**
-  * Allocation granularity of buffers allocated by
-  * ::hsa_amd_memory_pool_allocate
-  * in this memory pool. The size of a buffer allocated in this pool is a
-  * multiple of the value of this attribute. The value of this attribute is
-  * only defined if ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for
-  * this pool. The type of this attribute is size_t.
-  */
+   * Allocation granularity of buffers allocated by
+   * ::hsa_amd_memory_pool_allocate
+   * in this memory pool. The size of a buffer allocated in this pool is a
+   * multiple of the value of this attribute. While this is the minimum size of
+   * allocation allowed, it is recommened to use
+   * HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE to obtain the recommended
+   * allocation granularity size for this pool.
+   * The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for
+   * this pool. The type of this attribute is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE = 6,
   /**
-  * Alignment of buffers allocated by ::hsa_amd_memory_pool_allocate in this
-  * pool. The value of this attribute is only defined if
-  * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool, and
-  * must be a power of 2. The type of this attribute is size_t.
-  */
+   * Alignment of buffers allocated by ::hsa_amd_memory_pool_allocate in this
+   * pool. The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool, and
+   * must be a power of 2. The type of this attribute is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALIGNMENT = 7,
   /**
-  * This memory_pool can be made directly accessible by all the agents in the
-  * system (::hsa_amd_agent_memory_pool_get_info does not return 
-  * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
-  * attribute is bool.
-  */
+   * This memory_pool can be made directly accessible by all the agents in the
+   * system (::hsa_amd_agent_memory_pool_get_info does not return
+   * ::HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED for any agent). The type of this
+   * attribute is bool.
+   */
   HSA_AMD_MEMORY_POOL_INFO_ACCESSIBLE_BY_ALL = 15,
   /**
-  * Maximum aggregate allocation size in bytes. The type of this attribute
-  * is size_t.
-  */
+   * Maximum aggregate allocation size in bytes. The type of this attribute
+   * is size_t.
+   */
   HSA_AMD_MEMORY_POOL_INFO_ALLOC_MAX_SIZE = 16,
   /**
    * Location of this memory pool. The type of this attribute
    * is hsa_amd_memory_pool_location_t.
    */
   HSA_AMD_MEMORY_POOL_INFO_LOCATION = 17,
-
+  /**
+   * Internal block size for allocations. This would also be the recommended
+   * granularity size for allocations as this prevents internal fragmentation.
+   * The value of this attribute is only defined if
+   * ::HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED is true for this pool.
+   * The size of this attribute is size_t.
+   */
+  HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE = 18,
 } hsa_amd_memory_pool_info_t;
 
 /**
@@ -2216,6 +2241,10 @@ typedef enum hsa_amd_event_type_s {
    AMD GPU memory fault.
    */
   HSA_AMD_GPU_MEMORY_FAULT_EVENT = 0,
+  /*
+   AMD GPU HW Exception.
+   */
+  HSA_AMD_GPU_HW_EXCEPTION_EVENT,
 } hsa_amd_event_type_t;
 
 /**
@@ -2260,6 +2289,36 @@ typedef struct hsa_amd_gpu_memory_fault_info_s {
 } hsa_amd_gpu_memory_fault_info_t;
 
 /**
+ * @brief Flags denoting the type of a HW exception
+ */
+typedef enum {
+  // Unused for now
+  HSA_AMD_HW_EXCEPTION_RESET_TYPE_OTHER = 1 << 0,
+} hsa_amd_hw_exception_reset_type_t;
+
+/**
+ * @brief Flags denoting the cause of a HW exception
+ */
+typedef enum {
+  // GPU Hang
+  HSA_AMD_HW_EXCEPTION_CAUSE_GPU_HANG = 1 << 0,
+  // SRAM ECC
+  HSA_AMD_HW_EXCEPTION_CAUSE_ECC = 1 << 1,
+} hsa_amd_hw_exception_reset_cause_t;
+
+/**
+ * @brief AMD GPU HW Exception event data.
+ */
+typedef struct hsa_amd_gpu_hw_exception_info_s {
+  /*
+  The agent where the HW exception occurred.
+  */
+  hsa_agent_t agent;
+  hsa_amd_hw_exception_reset_type_t reset_type;
+  hsa_amd_hw_exception_reset_cause_t reset_cause;
+} hsa_amd_gpu_hw_exception_info_t;
+
+/**
  * @brief AMD GPU event data passed to event handler.
  */
 typedef struct hsa_amd_event_s {
@@ -2272,6 +2331,10 @@ typedef struct hsa_amd_event_s {
     The memory fault info, only valid when @p event_type is HSA_AMD_GPU_MEMORY_FAULT_EVENT.
     */
     hsa_amd_gpu_memory_fault_info_t memory_fault;
+    /*
+    The memory fault info, only valid when @p event_type is HSA_AMD_GPU_HW_EXCEPTION_EVENT.
+    */
+    hsa_amd_gpu_hw_exception_info_t hw_exception;
   };
 } hsa_amd_event_t;
 
@@ -2690,6 +2753,279 @@ hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* d
  */
 hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
+/*
+ * @brief Allocate a reserved address range
+ *
+ * Reserve a virtual address range. The size must be a multiple of the system page size.
+ * If it is not possible to allocate the address specified by @p address, then @p va will be
+ * a different address range.
+ * Address range should be released by calling hsa_amd_vmem_address_free.
+ *
+ * @param[out] va virtual address allocated
+ * @param[in] size of address range requested
+ * @param[in] address requested
+ * @param[in] flags currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
+ * range of this size.
+ */
+hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
+                                          uint64_t flags);
+
+/*
+ * @brief Free a reserved address range
+ *
+ * Free a previously allocated address range. The size must match the size of a previously
+ * allocated address range.
+ *
+ * @param[out] va virtual address to be freed
+ * @param[in] size of address range
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range released successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid va specified
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT Invalid size specified
+ * @retval ::HSA_STATUS_ERROR_RESOURCE_FREE Address range is still in use
+ * @retval ::HSA_STATUS_ERROR Internal unexpected error
+ */
+hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size);
+
+/**
+ * @brief Struct containing an opaque handle to a memory allocation handle
+ */
+typedef struct hsa_amd_vmem_alloc_handle_s {
+  /**
+   * Opaque handle. Two handles reference the same object of the enclosing type
+   * if and only if they are equal.
+   */
+  uint64_t handle;
+} hsa_amd_vmem_alloc_handle_t;
+
+typedef enum {
+  MEMORY_TYPE_NONE,
+  MEMORY_TYPE_PINNED,
+} hsa_amd_memory_type_t;
+
+/*
+ * @brief Create a virtual memory handle
+ *
+ * Create a virtual memory handle within this pool
+ * @p size must be a aligned to allocation granule size for this memory pool, see
+ * HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_GRANULE
+ * To minimize internal memory fragmentation, align the size to the recommended allocation granule
+ * size, see HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE
+ *
+ * @param[in] pool memory to use
+ * @param[in] size of the memory allocation
+ * @param[in] type of memory
+ * @param[in] flags - currently unsupported
+ * @param[out] memory_handle - handle for the allocation
+ *
+ * @retval ::HSA_STATUS_SUCCESS memory allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT Invalid arguments
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION This memory pool does not support allocations
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate this memory
+ */
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle);
+
+/*
+ * @brief Release a virtual memory handle
+ *
+ * @param[in] memory handle that was previously allocated
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory handle
+ */
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
+
+/*
+ * @brief Map a virtual memory handle
+ *
+ * Map a virtual memory handle to a reserved address range. The virtual address requested must be
+ * within a previously reserved address range. @p va and (@p va + size) must be must be within
+ * (va + size) of the previous allocated address range.
+ * @p size must be equal to size of the @p memory_handle
+ * hsa_amd_vmem_set_access needs to be called to make the memory accessible to specific agents
+ *
+ * @param[in] va virtual address range where memory will be mapped
+ * @param[in] size of memory mapping
+ * @param[in] in_offset offset into memory. Currently unsupported
+ * @param[in] memory_handle virtual memory handle to be mapped
+ * @param[in] flags. Currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Memory mapped successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT va, size or memory_handle are invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                              hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags);
+
+/*
+ * @brief Unmap a virtual memory handle
+ *
+ * Unmap previously mapped virtual address range
+ *
+ * @param[in] va virtual address range where memory will be mapped
+ * @param[in] size of memory mapping
+ *
+ * @retval ::HSA_STATUS_SUCCESS Memory backing unmapped successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION memory_handle is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT size is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size);
+
+typedef struct hsa_amd_memory_access_desc_s {
+  hsa_access_permission_t permissions;
+  hsa_agent_t agent_handle;
+} hsa_amd_memory_access_desc_t;
+
+/*
+ * @brief Make a memory mapping accessible
+ *
+ * Make previously mapped virtual address accessible to specific agents. @p size must be equal to
+ * size of previously mapped virtual memory handle.
+ * Calling hsa_amd_vmem_set_access multiple times on the same @p va will overwrite previous
+ * permissions for all agents
+ *
+ * @param[in] va previously mapped virtual address
+ * @param[in] size of memory mapping
+ * @param[in] desc list of access permissions for each agent
+ * @param[in] desc_cnt number of elements in desc
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT va, size or memory_handle are invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION memory_handle is invalid
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT Invalid agent in desc
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     size_t desc_cnt);
+
+/*
+ * @brief Get current access permissions for memory mapping
+ *
+ * Get access permissions for memory mapping for specific agent.
+ *
+ * @param[in] va previously mapped virtual address
+ * @param[in] perms current permissions
+ * @param[in] agent_handle agent
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT Invalid agent
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION va is not mapped or permissions never set for this
+ * agent
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
+                                     hsa_agent_t agent_handle);
+
+/*
+ * @brief Get an exportable shareable handle
+ *
+ * Get an exportable shareable handle for a memory_handle. This shareabl handle can then be used to
+ * re-create a virtual memory handle using hsa_amd_vmem_import_shareable_handle. The shareable
+ * handle can be transferred using mechanisms that support posix file descriptors Once all shareable
+ * handles are closed, the memory_handle is released.
+ *
+ * @param[out] dmabuf_fd shareable handle
+ * @param[in] handle previously allocated virtual memory handle
+ * @param[in] flags Currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory handle
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Out of resources
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t handle,
+                                                  uint64_t flags);
+/*
+ * @brief Import a shareable handle
+ *
+ * Import a shareable handle for a memory handle. Importing a shareable handle that has been closed
+ * and released results in undefined behavior.
+ *
+ * @param[in] dmabuf_fd shareable handle exported with hsa_amd_vmem_export_shareable_handle
+ * @param[out] handle virtual memory handle
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory handle
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Out of resources
+ *
+ * @retval ::HSA_STATUS_ERROR Unexpected internal error
+ */
+hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t* handle);
+
+/*
+ * @brief Returns memory handle for mapped memory
+ *
+ * Return a memory handle for previously mapped memory. The handle will be the same value of handle
+ * used to map the memory. The returned handle must be released with corresponding number of calls
+ * to hsa_amd_vmem_handle_release.
+ *
+ * @param[out] memory_handle memory handle for this mapped address
+ * @param[in] mapped address
+ *
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid address
+ */
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memory_handle,
+                                              void* addr);
+
+/*
+* @brief Returns the current allocation properties of a handle
+*
+* Returns the allocation properties of an existing handle
+*
+* @param[in] memory_handle memory handle to be queried
+* @param[out] pool memory pool that owns this handle
+* @param[out] memory type
+
+* @retval ::HSA_STATUS_SUCCESS
+*
+* @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
+*/
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
+    hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
+    hsa_amd_memory_type_t* type);
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

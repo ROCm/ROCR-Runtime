@@ -60,31 +60,51 @@ namespace core {
 struct AqlPacket {
 
   union {
+    struct {
+      uint16_t header;
+      struct {
+        uint8_t user_data[62];
+      } body;
+     } packet;
+    struct {
+      uint16_t header;
+      uint8_t format;
+      uint8_t rest[61];
+    } amd_vendor;
     hsa_kernel_dispatch_packet_t dispatch;
     hsa_barrier_and_packet_t barrier_and;
     hsa_barrier_or_packet_t barrier_or;
     hsa_agent_dispatch_packet_t agent;
   };
 
-  uint8_t type() const {
-    return ((dispatch.header >> HSA_PACKET_HEADER_TYPE) &
-                      ((1 << HSA_PACKET_HEADER_WIDTH_TYPE) - 1));
+  // Access the type field from a packet header. The caller is responsible for
+  // loading the header using an atomic or ordinary load as appropriate.
+  static uint8_t type(uint16_t header) {
+    return ((header >> HSA_PACKET_HEADER_TYPE) & ((1 << HSA_PACKET_HEADER_WIDTH_TYPE) - 1));
   }
 
-  bool IsValid() const {
-    return int(type() <= HSA_PACKET_TYPE_BARRIER_OR) & (type() != HSA_PACKET_TYPE_INVALID);
+  // Determine if a packet is valid. The caller is responsible for loading the
+  // header using an atomic or ordinary load as appropriate.
+  static bool IsValid(uint16_t header) {
+    return ((type(header) <= HSA_PACKET_TYPE_BARRIER_OR) &&
+            (type(header) != HSA_PACKET_TYPE_INVALID));
   }
 
   std::string string() const {
     std::stringstream string;
-    uint8_t type = this->type();
+    uint8_t t = type(packet.header);
 
-    const char* type_names[] = {
+    static const char* type_names[] = {
         "HSA_PACKET_TYPE_VENDOR_SPECIFIC", "HSA_PACKET_TYPE_INVALID",
         "HSA_PACKET_TYPE_KERNEL_DISPATCH", "HSA_PACKET_TYPE_BARRIER_AND",
         "HSA_PACKET_TYPE_AGENT_DISPATCH",  "HSA_PACKET_TYPE_BARRIER_OR"};
 
-    string << "type: " << type_names[type]
+    if (t >= sizeof(type_names) / sizeof(const char*)) {
+      string << "type: UNKNOWN#" << t;
+      return string.str();
+    }
+
+    string << "type: " << type_names[t]
            << "\nbarrier: " << ((dispatch.header >> HSA_PACKET_HEADER_BARRIER) &
                                 ((1 << HSA_PACKET_HEADER_WIDTH_BARRIER) - 1))
            << "\nacquire: " << ((dispatch.header >> HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE) &
@@ -92,7 +112,7 @@ struct AqlPacket {
            << "\nrelease: " << ((dispatch.header >> HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE) &
                                 ((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1));
 
-    if (type == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
+    if (t == HSA_PACKET_TYPE_KERNEL_DISPATCH) {
       string << "\nDim: " << dispatch.setup
              << "\nworkgroup_size: " << dispatch.workgroup_size_x << ", "
              << dispatch.workgroup_size_y << ", " << dispatch.workgroup_size_z
@@ -105,8 +125,8 @@ struct AqlPacket {
              << "\nsignal: " << dispatch.completion_signal.handle;
     }
 
-    if ((type == HSA_PACKET_TYPE_BARRIER_AND) ||
-        (type == HSA_PACKET_TYPE_BARRIER_OR)) {
+    if ((t == HSA_PACKET_TYPE_BARRIER_AND) ||
+        (t == HSA_PACKET_TYPE_BARRIER_OR)) {
       for (int i = 0; i < 5; i++)
         string << "\ndep[" << i << "]: " << barrier_and.dep_signal[i].handle;
       string << "\nsignal: " << barrier_and.completion_signal.handle;

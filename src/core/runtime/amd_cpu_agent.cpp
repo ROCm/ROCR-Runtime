@@ -266,8 +266,6 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AGENT_INFO_CACHE_SIZE: {
       std::memset(value, 0, sizeof(uint32_t) * 4);
-
-      assert(cache_props_.size() > 0 && "CPU cache info missing.");
       const size_t num_cache = cache_props_.size();
       for (size_t i = 0; i < num_cache; ++i) {
         const uint32_t line_level = cache_props_[i].CacheLevel;
@@ -390,6 +388,9 @@ hsa_status_t CpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       break;
     case HSA_AMD_AGENT_INFO_DRIVER_UID:
       *((uint32_t*)value) = 0;
+      break;
+    case HSA_AMD_AGENT_INFO_NEAREST_CPU:
+      ((hsa_agent_t*)value)->handle = 0;
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

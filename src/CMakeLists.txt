@@ -85,7 +85,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.11.0" )
+get_version ( "1.12.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
@@ -123,7 +123,8 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
   PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}/libamdhsacode
-  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler)
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler
+  ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/blit_shaders)
 
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
@@ -201,6 +202,10 @@ target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${SRCS} )
 ## Depend on trap handler target.
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/trap_handler )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
+
+## Depend on blit shader target.
+add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/blit_shaders )
+add_dependencies( ${CORE_RUNTIME_TARGET} amd_blit_shaders_v2)
 
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64" )
   set ( IMAGE_SUPPORT ON )
@@ -316,11 +321,8 @@ install ( FILES ${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md DESTINATION ${CMAKE_INSTA
 
 # Install public headers
 install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/inc/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/hsa COMPONENT dev )
-# Disable header path migration helpers for ASAN package
-if(NOT ENABLE_ASAN_PACKAGING)
 # Option to build header path migration helpers.
-  option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." ON)
-endif()
+option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." OFF)
 if(INCLUDE_PATH_COMPATIBILITY)
 # To enable/disable #error in wrapper header files
   if(NOT DEFINED ROCM_HEADER_WRAPPER_WERROR)

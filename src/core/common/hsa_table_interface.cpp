@@ -1231,6 +1231,67 @@ hsa_status_t HSA_API hsa_amd_portable_close_dmabuf(int dmabuf) {
   return amdExtTable->hsa_amd_portable_close_dmabuf_fn(dmabuf);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t address,
+                                                  uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_address_reserve_fn(ptr, size, address, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_address_free(void* ptr, size_t size) {
+  return amdExtTable->hsa_amd_vmem_address_free_fn(ptr, size);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
+                                                hsa_amd_memory_type_t type, uint64_t flags,
+                                                hsa_amd_vmem_alloc_handle_t* memory_handle) {
+  return amdExtTable->hsa_amd_vmem_handle_create_fn(pool, size, type, flags, memory_handle);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle) {
+  return amdExtTable->hsa_amd_vmem_handle_release_fn(memory_handle);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                                      hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_map_fn(va, size, in_offset, memory_handle, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_unmap(void* va, size_t size) {
+  return amdExtTable->hsa_amd_vmem_unmap_fn(va, size);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_set_access(void* va, size_t size,
+                                             const hsa_amd_memory_access_desc_t* desc,
+                                             const size_t desc_cnt) {
+  return amdExtTable->hsa_amd_vmem_set_access_fn(va, size, desc, desc_cnt);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
+                                             const hsa_agent_t agent_handle) {
+  return amdExtTable->hsa_amd_vmem_get_access_fn(va, perms, agent_handle);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                          hsa_amd_vmem_alloc_handle_t handle,
+                                                          uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_export_shareable_handle_fn(dmabuf_fd, handle, flags);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                          hsa_amd_vmem_alloc_handle_t* handle) {
+  return amdExtTable->hsa_amd_vmem_import_shareable_handle_fn(dmabuf_fd, handle);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* handle,
+                                                      void* addr) {
+  return amdExtTable->hsa_amd_vmem_retain_alloc_handle_fn(handle, addr);
+}
+
+hsa_status_t HSA_API hsa_amd_vmem_get_alloc_properties_from_handle(
+    hsa_amd_vmem_alloc_handle_t alloc_handle, hsa_amd_memory_pool_t* pool,
+    hsa_amd_memory_type_t* type) {
+  return amdExtTable->hsa_amd_vmem_get_alloc_properties_from_handle_fn(alloc_handle, pool, type);
+}
+
 // Tools only table interfaces.
 namespace rocr {
 

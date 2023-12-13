@@ -95,6 +95,11 @@ struct ValidityError<const T*> {
   enum { value = ValidityError<T*>::value };
 };
 
+#define IS_TRUE(var)                                                                               \
+  do {                                                                                             \
+    if ((var) != true) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                   \
+  } while (false)
+
 #define IS_BAD_PTR(ptr)                                          \
   do {                                                           \
     if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
@@ -103,6 +108,11 @@ struct ValidityError<const T*> {
 #define IS_ZERO(arg)                                                                               \
   do {                                                                                             \
     if ((arg) == 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                      \
+  } while (false)
+
+#define IS_VALID_FD(fd)                                                                            \
+  do {                                                                                             \
+    if ((fd) < 0) return HSA_STATUS_ERROR_INVALID_ARGUMENT;                                        \
   } while (false)
 
 #define IS_VALID(ptr)                                           \
@@ -401,6 +411,11 @@ hsa_status_t hsa_amd_profiling_async_copy_enable(bool enable) {
 
   hsa_status_t ret = HSA_STATUS_SUCCESS;
   for (core::Agent* agent : core::Runtime::runtime_singleton_->gpu_agents()) {
+    hsa_status_t err = agent->profiling_enabled(enable);
+    if (err != HSA_STATUS_SUCCESS) ret = err;
+  }
+
+  for (core::Agent* agent : core::Runtime::runtime_singleton_->cpu_agents()) {
     hsa_status_t err = agent->profiling_enabled(enable);
     if (err != HSA_STATUS_SUCCESS) ret = err;
   }
@@ -1006,6 +1021,12 @@ hsa_status_t hsa_amd_queue_intercept_create(
   TRY;
   IS_OPEN();
   IS_BAD_PTR(queue);
+
+  // A wrapped queue for the intercept queue must have at least 3 slots so
+  // there is space for a packet, a new retry barrier packet, and an existing
+  // retry packet that is in the process of being processed.
+  if (size < 3) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
   hsa_queue_t* lower_queue;
   hsa_status_t err = HSA::hsa_queue_create(agent_handle, size, type, callback, data,
                                            private_segment_size, group_segment_size, &lower_queue);
@@ -1194,6 +1215,155 @@ hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* d
 hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf) {
   TRY;
   return core::Runtime::runtime_singleton_->DmaBufClose(dmabuf);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
+                                          uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+  return core::Runtime::runtime_singleton_->VMemoryAddressFree(va, size);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t memory_pool, size_t size,
+                                        hsa_amd_memory_type_t type, uint64_t flags,
+                                        hsa_amd_vmem_alloc_handle_t* memory_handle) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+
+  if (type != MEMORY_TYPE_NONE && type != MEMORY_TYPE_PINNED)
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  hsa_region_t region = {memory_pool.handle};
+  const core::MemoryRegion* mem_region = core::MemoryRegion::Convert(region);
+
+  if (mem_region == NULL || !mem_region->IsValid()) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+
+  MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateMemoryOnly;
+  if (type == MEMORY_TYPE_PINNED) alloc_flag |= core::MemoryRegion::AllocatePinned;
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleCreate(mem_region, size, alloc_flag, flags,
+                                                                memory_handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle) {
+  TRY;
+  IS_OPEN();
+  return core::Runtime::runtime_singleton_->VMemoryHandleRelease(memory_handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
+                              hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleMap(va, size, in_offset, memory_handle,
+                                                             flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_unmap(void* va, size_t size) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_ZERO(size);
+
+  return core::Runtime::runtime_singleton_->VMemoryHandleUnmap(va, size);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
+                                     const hsa_amd_memory_access_desc_t* desc,
+                                     size_t desc_cnt) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_BAD_PTR(desc);
+  IS_ZERO(desc_cnt);
+
+  return core::Runtime::runtime_singleton_->VMemorySetAccess(va, size, desc, desc_cnt);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
+                                     hsa_agent_t agent_handle) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(va);
+  IS_BAD_PTR(perms);
+
+  return core::Runtime::runtime_singleton_->VMemoryGetAccess(va, perms, agent_handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t handle,
+                                                  uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(dmabuf_fd);
+
+  return core::Runtime::runtime_singleton_->VMemoryExportShareableHandle(dmabuf_fd, handle, flags);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
+                                                  hsa_amd_vmem_alloc_handle_t* handle) {
+  TRY;
+  IS_BAD_PTR(handle);
+  IS_VALID_FD(dmabuf_fd);
+
+  return core::Runtime::runtime_singleton_->VMemoryImportShareableHandle(dmabuf_fd, handle);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* allocHandle,
+                                              void* addr) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(addr);
+
+  return core::Runtime::runtime_singleton_->VMemoryRetainAllocHandle(allocHandle, addr);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_handle_t allocHandle,
+                                                           hsa_amd_memory_pool_t* pool,
+                                                           hsa_amd_memory_type_t* type) {
+  TRY;
+  IS_OPEN();
+  IS_BAD_PTR(pool);
+  IS_BAD_PTR(type);
+
+  const core::MemoryRegion* mem_region = NULL;
+  hsa_status_t ret = core::Runtime::runtime_singleton_->VMemoryGetAllocPropertiesFromHandle(
+      allocHandle, &mem_region, type);
+  if (ret == HSA_STATUS_SUCCESS) {
+    hsa_region_t region = core::MemoryRegion::Convert(mem_region);
+    pool->handle = region.handle;
+  }
+
+  return ret;
   CATCH;
 }
 

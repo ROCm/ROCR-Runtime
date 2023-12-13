@@ -103,9 +103,8 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
 MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
                            bool extended_scope_fine_grain, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, kernarg, full_profile, owner),
+    : core::MemoryRegion(fine_grain, kernarg, full_profile, extended_scope_fine_grain, owner),
       mem_props_(mem_props),
-      extended_scope_fine_grain_(extended_scope_fine_grain),
       max_single_alloc_size_(0),
       virtual_size_(0),
       fragment_allocator_(BlockAllocator(*this)) {
@@ -122,6 +121,12 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
   // coarse or fine grain or extended scope fine grain.
   mem_flag_.ui32.CoarseGrain = (fine_grain || extended_scope_fine_grain) ? 0 : 1;
 
+  // Extended scope fine-grained memory: Device scope atomics are promoted
+  // to system scope atomics. Non-compliant systems may require the
+  // application to perform device-specific actions, like HDP flushes,
+  // to achieve system-scope coherence
+  mem_flag_.ui32.ExtendedCoherent = (extended_scope_fine_grain) ? 1 : 0;
+
   if (IsLocalMemory()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     mem_flag_.ui32.NoSubstitute = 1;
@@ -130,19 +135,6 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
     mem_flag_.ui32.NonPaged = 1;
 
     virtual_size_ = kGpuVmSize;
-
-    // If memory region is extended scope fine grained
-    // mark the page table entries for this memory region
-    // as MTYPE_UC. Full read and write ordering are guaranteed
-    // to this address.
-    if (extended_scope_fine_grain) {
-      AMD::GpuAgent* agent_ =
-          const_cast<AMD::GpuAgent*>(reinterpret_cast<const AMD::GpuAgent*>(owner));
-      if (agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 0) ||
-          agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 1) ||
-          agent_->isa()->GetVersion() == core::Isa::Version(9, 4, 2))
-        mem_flag_.ui32.Uncached = 1;
-    }
 
   } else if (IsSystem()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
@@ -463,6 +455,22 @@ hsa_status_t MemoryRegion::GetPoolInfo(hsa_amd_memory_pool_info_t attribute,
         *((hsa_amd_memory_pool_location_t*)value) = HSA_AMD_MEMORY_POOL_LOCATION_CPU;
       else
         return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      break;
+    case HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_REC_GRANULE:
+      switch (mem_props_.HeapType) {
+        case HSA_HEAPTYPE_SYSTEM:
+          *((size_t*)value) = kPageSize_;
+          break;
+        case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
+        case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
+          *((size_t*)value) = core::Runtime::runtime_singleton_->flag().disable_fragment_alloc()
+              ? kPageSize_
+              : fragment_allocator_.default_block_size();
+          break;
+        default:
+          *((size_t*)value) = 0;
+          break;
+      }
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;

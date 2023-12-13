@@ -75,6 +75,28 @@ HsaApiTable::HsaApiTable() {
 // Member fields for Finalizer and Image extensions will be
 // updated as part of Hsa Runtime initialization.
 void HsaApiTable::Init() {
+  // Compile time checks to make sure we increment STEPPING when new APIs are added.
+  // Profiler team needs STEPPING to change every time we add functions to the tables so that
+  // they can add preprocessor macros on the new functions
+
+  constexpr size_t expected_core_api_table_size = 1016;
+  constexpr size_t expected_amd_ext_table_size = 552;
+  constexpr size_t expected_image_ext_table_size = 120;
+  constexpr size_t expected_finalizer_ext_table_size = 64;
+
+  static_assert(sizeof(CoreApiTable) == expected_core_api_table_size,
+                "HSA core API table size changed, bump HSA_CORE_API_TABLE_STEP_VERSION and set "
+                "expected_core_api_table_size to the new size of the struct");
+  static_assert(sizeof(AmdExtTable) == expected_amd_ext_table_size,
+                "HSA AMD ext table size changed, bump HSA_AMD_EXT_API_TABLE_STEP_VERSION, "
+                "HSA_AMD_INTERFACE_VERSION_MINOR and set expected_amd_ext_table_size to the new "
+                "size of the struct");
+  static_assert(sizeof(ImageExtTable) == expected_image_ext_table_size,
+                "HSA image ext table size changed, bump HSA_IMAGE_API_TABLE_STEP_VERSION and set "
+                "expected_image_ext_table_size to the new size of the struct");
+  static_assert(sizeof(FinalizerExtTable) == expected_finalizer_ext_table_size,
+                "HSA finalizer ext table size changed, bump HSA_FINALIZER_API_TABLE_STEP_VERSION "
+                "and set expected_finalizer_ext_table_size to the new size of the struct");
 
   // Initialize Version of Api Table
   hsa_api.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
@@ -402,6 +424,19 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_spm_set_dest_buffer_fn = AMD::hsa_amd_spm_set_dest_buffer;
   amd_ext_api.hsa_amd_portable_export_dmabuf_fn = AMD::hsa_amd_portable_export_dmabuf;
   amd_ext_api.hsa_amd_portable_close_dmabuf_fn = AMD::hsa_amd_portable_close_dmabuf;
+  amd_ext_api.hsa_amd_vmem_address_reserve_fn = AMD::hsa_amd_vmem_address_reserve;
+  amd_ext_api.hsa_amd_vmem_address_free_fn = AMD::hsa_amd_vmem_address_free;
+  amd_ext_api.hsa_amd_vmem_handle_create_fn = AMD::hsa_amd_vmem_handle_create;
+  amd_ext_api.hsa_amd_vmem_handle_release_fn = AMD::hsa_amd_vmem_handle_release;
+  amd_ext_api.hsa_amd_vmem_map_fn = AMD::hsa_amd_vmem_map;
+  amd_ext_api.hsa_amd_vmem_unmap_fn = AMD::hsa_amd_vmem_unmap;
+  amd_ext_api.hsa_amd_vmem_set_access_fn = AMD::hsa_amd_vmem_set_access;
+  amd_ext_api.hsa_amd_vmem_get_access_fn = AMD::hsa_amd_vmem_get_access;
+  amd_ext_api.hsa_amd_vmem_export_shareable_handle_fn = AMD::hsa_amd_vmem_export_shareable_handle;
+  amd_ext_api.hsa_amd_vmem_import_shareable_handle_fn = AMD::hsa_amd_vmem_import_shareable_handle;
+  amd_ext_api.hsa_amd_vmem_retain_alloc_handle_fn = AMD::hsa_amd_vmem_retain_alloc_handle;
+  amd_ext_api.hsa_amd_vmem_get_alloc_properties_from_handle_fn =
+      AMD::hsa_amd_vmem_get_alloc_properties_from_handle;
 }
 
 void LoadInitialHsaApiTable() {

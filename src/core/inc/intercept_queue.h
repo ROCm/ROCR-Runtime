@@ -218,6 +218,10 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
   // Index at which async intercept processing was scheduled.
   uint64_t retry_index_;
 
+  // Given the current value of the wrapped queue read index, determine if
+  // there is a retry barrier packet already in the wrapped queue.
+  bool IsPendingRetryPoint(uint64_t wrapped_current_read_index) const;
+
   // Event signal to use for async packet processing and control flag.
   InterruptSignal* async_doorbell_;
   std::atomic<bool> quit_;
@@ -236,7 +240,12 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
   static bool HandleAsyncDoorbell(hsa_signal_value_t value, void* arg);
   static void PacketWriter(const void* pkts, uint64_t pkt_count);
 
-  bool Submit(const AqlPacket* packets, uint64_t count);
+  // Submit packets to the wrapped queue and return number of packets that were
+  // submitted.
+  uint64_t Submit(const AqlPacket* packets, uint64_t count);
+
+  // Used as the final packet rewriter that submits the packets to the wrapped
+  // queue.
   static void Submit(const void* pkts, uint64_t pkt_count, uint64_t user_pkt_index, void* data,
                      hsa_amd_queue_intercept_packet_writer writer);
 

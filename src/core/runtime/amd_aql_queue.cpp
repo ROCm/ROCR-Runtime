@@ -70,8 +70,6 @@
 
 namespace rocr {
 namespace AMD {
-// Queue::amd_queue_ is cache-aligned for performance.
-const uint32_t kAmdQueueAlignBytes = 0x40;
 
 HsaEvent* AqlQueue::queue_event_ = nullptr;
 std::atomic<uint32_t> AqlQueue::queue_count_(0);
@@ -829,8 +827,12 @@ bool AqlQueue::DynamicScratchHandler(hsa_signal_value_t error_code, void* arg) {
       core::AqlPacket& pkt =
           ((core::AqlPacket*)queue->amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
-      assert(pkt.IsValid() && "Invalid packet in dynamic scratch handler.");
-      assert(pkt.type() == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
+      // Load the packet header as atomic acquire as it it written by another
+      // thread as atomic release. This ensures the rest of the packet fields
+      // are visible.
+      uint16_t pkt_header = atomic::Load(&pkt.packet.header, std::memory_order_acquire);
+      assert(core::AqlPacket::IsValid(pkt_header) && "Invalid packet in dynamic scratch handler.");
+      assert(core::AqlPacket::type(pkt_header) == HSA_PACKET_TYPE_KERNEL_DISPATCH &&
              "Invalid packet in dynamic scratch handler.");
       assert((pkt.dispatch.workgroup_size_x != 0) && (pkt.dispatch.workgroup_size_y != 0) &&
              (pkt.dispatch.workgroup_size_z != 0) && "Invalid dispatch dimension.");
@@ -1002,43 +1004,43 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   };
   static const queue_error_t QueueErrors[] = {
       // EC_QUEUE_WAVE_ABORT
-      1, HSA_STATUS_ERROR_EXCEPTION,
+      { 1, HSA_STATUS_ERROR_EXCEPTION },
       // EC_QUEUE_WAVE_TRAP
-      2, HSA_STATUS_ERROR_EXCEPTION,
+      { 2, HSA_STATUS_ERROR_EXCEPTION },
       // EC_QUEUE_WAVE_MATH_ERROR
-      3, HSA_STATUS_ERROR_EXCEPTION,
+      { 3, HSA_STATUS_ERROR_EXCEPTION },
       // EC_QUEUE_WAVE_ILLEGAL_INSTRUCTION
-      4, (hsa_status_t)HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION,
+      { 4, (hsa_status_t)HSA_STATUS_ERROR_ILLEGAL_INSTRUCTION },
       // EC_QUEUE_WAVE_MEMORY_VIOLATION
-      5, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_FAULT,
+      { 5, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_FAULT },
       // EC_QUEUE_WAVE_APERTURE_VIOLATION
-      6, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION,
+      { 6, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION },
       // EC_QUEUE_PACKET_DISPATCH_DIM_INVALID
-      16, HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS,
+      { 16, HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS },
       // EC_QUEUE_PACKET_DISPATCH_GROUP_SEGMENT_SIZE_INVALID
-      17, HSA_STATUS_ERROR_INVALID_ALLOCATION,
+      { 17, HSA_STATUS_ERROR_INVALID_ALLOCATION },
       // EC_QUEUE_PACKET_DISPATCH_CODE_INVALID
-      18, HSA_STATUS_ERROR_INVALID_CODE_OBJECT,
+      { 18, HSA_STATUS_ERROR_INVALID_CODE_OBJECT },
       // EC_QUEUE_PACKET_UNSUPPORTED
-      20, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
+      { 20, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT },
       // EC_QUEUE_PACKET_DISPATCH_WORK_GROUP_SIZE_INVALID
-      21, HSA_STATUS_ERROR_INVALID_ARGUMENT,
+      { 21, HSA_STATUS_ERROR_INVALID_ARGUMENT },
       // EC_QUEUE_PACKET_DISPATCH_REGISTER_SIZE_INVALID
-      22, HSA_STATUS_ERROR_INVALID_ISA,
+      { 22, HSA_STATUS_ERROR_INVALID_ISA },
       // EC_QUEUE_PACKET_VENDOR_UNSUPPORTED
-      23, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT,
+      { 23, HSA_STATUS_ERROR_INVALID_PACKET_FORMAT },
       // EC_QUEUE_PREEMPTION_ERROR
-      31, HSA_STATUS_ERROR,
+      { 31, HSA_STATUS_ERROR },
       // EC_DEVICE_MEMORY_VIOLATION
-      33, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION,
+      { 33, (hsa_status_t)HSA_STATUS_ERROR_MEMORY_APERTURE_VIOLATION },
       // EC_DEVICE_RAS_ERROR
-      34, HSA_STATUS_ERROR,
+      { 34, HSA_STATUS_ERROR },
       // EC_DEVICE_FATAL_HALT
-      35, HSA_STATUS_ERROR,
+      { 35, HSA_STATUS_ERROR },
       // EC_DEVICE_NEW
-      36, HSA_STATUS_ERROR,
+      { 36, HSA_STATUS_ERROR },
       // EC_PROCESS_DEVICE_REMOVE
-      50, HSA_STATUS_ERROR};
+      { 50, HSA_STATUS_ERROR }};
 
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_ERROR;
@@ -1062,7 +1064,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
 
   // Suppress VM fault reporting.  This is more useful when reported through the system error
   // handler.
-  if (errorCode == HSA_STATUS_ERROR_MEMORY_FAULT) {
+  if (errorCode == static_cast<hsa_status_t>(HSA_STATUS_ERROR_MEMORY_FAULT)) {
     debug_print("Queue error - HSA_STATUS_ERROR_MEMORY_FAULT\n");
     return false;
   }
@@ -1239,10 +1241,11 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
     // Construct an AQL packet to jump to the PM4 IB.
     struct amd_aql_pm4_ib {
       uint16_t header;
-      uint16_t ven_hdr;
+      uint8_t  amd_format;
+      uint8_t  reserved0;
       uint32_t ib_jump_cmd[4];
       uint32_t dw_cnt_remain;
-      uint32_t reserved[8];
+      uint32_t reserved1[8];
       hsa_signal_t completion_signal;
     };
 
@@ -1253,7 +1256,7 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) {
 
     amd_aql_pm4_ib aql_pm4_ib{};
     aql_pm4_ib.header = HSA_PACKET_TYPE_VENDOR_SPECIFIC << HSA_PACKET_HEADER_TYPE;
-    aql_pm4_ib.ven_hdr = AMD_AQL_FORMAT_PM4_IB;
+    aql_pm4_ib.amd_format = AMD_AQL_FORMAT_PM4_IB;
     aql_pm4_ib.ib_jump_cmd[0] = ib_jump_cmd[0];
     aql_pm4_ib.ib_jump_cmd[1] = ib_jump_cmd[1];
     aql_pm4_ib.ib_jump_cmd[2] = ib_jump_cmd[2];

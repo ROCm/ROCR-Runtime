@@ -145,6 +145,8 @@ class GpuAgentInt : public core::Agent {
   // @retval Coherency type.
   virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
 
+  virtual void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) = 0;
+
   // @brief Query if agent represent Kaveri GPU.
   //
   // @retval true if agent is Kaveri GPU.
@@ -289,6 +291,10 @@ class GpuAgent : public GpuAgentInt {
     return current_coherency_type_;
   }
 
+  core::Agent* GetNearestCpuAgent(void) const;
+  
+  void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) override;
+
   // Getter & setters.
 
   // @brief Returns Hive ID
@@ -342,6 +348,9 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief returns true if agent uses MES scheduler
   __forceinline const bool isMES() const { return (isa_->GetMajorVersion() >= 11) ? true : false; };
+
+  // @brief returns the libdrm device handle
+  __forceinline amdgpu_device_handle libDrmDev() const { return ldrm_dev_; }
 
   void ReserveScratch();
 
@@ -459,6 +468,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Mutex to protect access to blit objects.
   KernelMutex blit_lock_;
 
+  // @brief Mutex to protect sdma gang submissions.
+  KernelMutex sdma_gang_lock_;
+
   // @brief GPU tick on initialization.
   HsaClockCounters t0_;
 
@@ -504,7 +516,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief HDP flush registers
   hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};
-
  private:
   // @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
@@ -541,7 +552,7 @@ class GpuAgent : public GpuAgentInt {
   void ReleaseScratch(void* base, size_t size, bool large);
 
   // Bind index of peer device that is connected via xGMI links
-  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
+  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent, int gang_id);
 
   // Bind the Blit object that will drive the copy operation
   // across PCIe links (H2D or D2H) or is within same device D2D
@@ -549,10 +560,13 @@ class GpuAgent : public GpuAgentInt {
 
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
-                                      const size_t size);
+                                      const size_t size, int gang_id);
 
   // Bind the Blit object that will drive the copy operation by engine ID
   lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
+
+  // @brief initialize libdrm handle
+  void InitLibDrm();
 
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
@@ -584,10 +598,15 @@ class GpuAgent : public GpuAgentInt {
 
   std::function<void(void*)> system_deallocator_;
 
+  // @brief device handle
+  amdgpu_device_handle ldrm_dev_;
+
   DISALLOW_COPY_AND_ASSIGN(GpuAgent);
 
   // Check if SDMA engine by ID is free
   bool DmaEngineIsFree(uint32_t engine_id);
+
+  std::vector<std::pair<core::Agent&,unsigned int>> gang_peers_info_;
 };
 
 }  // namespace amd

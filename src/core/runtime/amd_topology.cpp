@@ -351,6 +351,7 @@ void BuildTopology() {
 
   // Determine the Xnack mode to be bound for system
   bool xnack_mode = BindXnackMode();
+  core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
 
   // Instantiate ROCr objects to encapsulate Gpu devices
   SurfaceGpuList(gpu_usr_list, xnack_mode, true);
@@ -365,6 +366,35 @@ void BuildTopology() {
     maxCu = Max(maxCu, cus);
   }
   const_cast<Flag&>(core::Runtime::runtime_singleton_->flag()).parse_masks(maxGpu, maxCu);
+
+  // Register destination agents that can SDMA gang copy for source agents
+  for (auto& src_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+    uint32_t src_id = src_gpu->node_id();
+    for (auto& dst_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+      uint32_t dst_id = dst_gpu->node_id();
+
+      if (src_id == dst_gpu->node_id())
+        continue;
+
+      auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
+      // xGMI link type cannot determine bandwidth keep it fixed for ganging
+      bool has_fixed_gang = linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI &&
+                            linfo.info.numa_distance != 15;
+
+      // Min Bandwidth < Max Bandwidth if source and destination GPUs are a
+      // single hop way and there exists more than a single xGMI link between
+      // them.  Otherwise, destination GPU is not a gang candidate.
+      if (linfo.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI ||
+          (linfo.info.min_bandwidth == linfo.info.max_bandwidth && !has_fixed_gang)) {
+        continue;
+      }
+
+      uint32_t gang_factor = has_fixed_gang ? 2 : (linfo.info.min_bandwidth ?
+                             linfo.info.max_bandwidth/linfo.info.min_bandwidth : 0);
+
+      ((AMD::GpuAgent*)src_gpu)->RegisterGangPeer(*dst_gpu, gang_factor);
+    }
+  }
 }
 
 bool Load() {

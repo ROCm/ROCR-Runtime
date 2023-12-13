@@ -121,7 +121,8 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BlitSdma()
       cached_reserve_index_(0),
       cached_commit_index_(0),
       platform_atomic_support_(true),
-      hdp_flush_support_(false) {
+      hdp_flush_support_(false),
+      min_submission_size_(0) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
 
@@ -145,6 +146,13 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (HSA_PROFILE_FULL == agent_->profile()) {
     assert(false && "Only support SDMA for dgpu currently");
     return HSA_STATUS_ERROR;
+  }
+
+  // Some GFX9 devices require a minimum of 64 DWORDS per ring buffer submission.
+  if (agent_->isa()->GetVersion() >= core::Isa::Version(9, 0, 0) &&
+      (agent_->isa()->GetVersion() <= core::Isa::Version(9, 0, 4) ||
+       agent_->isa()->GetVersion() == core::Isa::Version(9, 0, 12))) {
+    min_submission_size_ = 256;
   }
 
   const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
@@ -247,9 +255,12 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   MAKE_SCOPE_GUARD([&]() { completionSignal->StoreRelaxed(0); });
   lock.Release();
 
+  std::vector<core::Signal*> gang_signals(0);
+
   // Submit command and wait for completion
   hsa_status_t ret =
-      SubmitCommand(cmd, cmd_size, size, std::vector<core::Signal*>(), *completionSignal);
+      SubmitCommand(cmd, cmd_size, size, std::vector<core::Signal*>(), *completionSignal,
+                    gang_signals);
   completionSignal->WaitRelaxed(HSA_SIGNAL_CONDITION_EQ, 1, -1, HSA_WAIT_STATE_BLOCKED);
   return ret;
 }
@@ -257,7 +268,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCommand(
     const void* cmd, size_t cmd_size, uint64_t size, const std::vector<core::Signal*>& dep_signals,
-    core::Signal& out_signal) {
+    core::Signal& out_signal, std::vector<core::Signal*>& gang_signals) {
+
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
   const uint32_t num_poll_command =
@@ -273,7 +285,15 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   uint64_t* end_ts_addr = nullptr;
   uint32_t total_timestamp_command_size = 0;
 
-  if (profiling_enabled) {
+  // Gang leader polls gang item completions and does final decrement or
+  // completion of gang signal to prevent race between poll and signal
+  // destruction.
+  uint32_t total_gang_complete_command_size = poll_command_size_ +
+         (platform_atomic_support_ ? atomic_command_size_ : fence_command_size_);
+  uint32_t total_gang_command_size = gang_leader_ ?
+          static_cast<uint32_t>(gang_signals.size()) * total_gang_complete_command_size : 0;
+
+  if (profiling_enabled && (gang_leader_ || gang_signals.empty())) {
     out_signal.GetSdmaTsAddresses(start_ts_addr, end_ts_addr);
     total_timestamp_command_size = 2 * timestamp_command_size_;
   }
@@ -309,14 +329,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (useGCR) flush_cmd_size += gcr_command_size_ * 2;
 
   const uint32_t total_command_size = total_poll_command_size + cmd_size + sync_command_size +
-      total_timestamp_command_size + interrupt_command_size + flush_cmd_size;
+      total_timestamp_command_size + interrupt_command_size + flush_cmd_size + total_gang_command_size;
+  const uint32_t pad_size = total_command_size < min_submission_size_ ?
+                            min_submission_size_ - total_command_size : 0;
 
   RingIndexTy curr_index;
   char* command_addr;
   uint64_t prior_bytes, post_bytes;
   {
     std::lock_guard<std::mutex> lock(reservation_lock_);
-    command_addr = AcquireWriteAddress(total_command_size, curr_index);
+    command_addr = AcquireWriteAddress(total_command_size + pad_size, curr_index);
     if (command_addr == nullptr) {
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
@@ -341,7 +363,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += poll_command_size_;
   }
 
-  if (profiling_enabled) {
+  if (profiling_enabled && (gang_leader_ || gang_signals.empty())) {
     BuildGetGlobalTimestampCommand(command_addr, reinterpret_cast<void*>(start_ts_addr));
     command_addr += timestamp_command_size_;
     bytes_written_[wrapped_index] = prior_bytes;
@@ -380,13 +402,38 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += gcr_command_size_;
   }
 
-  if (profiling_enabled) {
+  if (profiling_enabled && (gang_leader_ || gang_signals.empty())) {
     assert(IsMultipleOf(end_ts_addr, 32));
     BuildGetGlobalTimestampCommand(command_addr,
                                    reinterpret_cast<void*>(end_ts_addr));
     command_addr += timestamp_command_size_;
     bytes_written_[wrapped_index] = post_bytes;
     wrapped_index += timestamp_command_size_;
+  }
+
+  // Wait for non-leaders gang items to complete
+  if (gang_leader_) {
+    for (int i = 0; i < gang_signals.size(); i++) {
+      uint32_t* gang_signal_addr =
+          reinterpret_cast<uint32_t*>(gang_signals[i]->ValueLocation());
+      BuildPollCommand(command_addr, gang_signal_addr, 1);
+      command_addr += poll_command_size_;
+      bytes_written_[wrapped_index] = prior_bytes;
+      wrapped_index += poll_command_size_;
+
+      // After non-leader gang-items have completed, decrement the gang signal value.
+      if (platform_atomic_support_) {
+        BuildAtomicDecrementCommand(command_addr, gang_signal_addr);
+        command_addr += atomic_command_size_;
+        bytes_written_[wrapped_index] = post_bytes;
+        wrapped_index += atomic_command_size_;
+      } else {
+        BuildFenceCommand(command_addr, gang_signal_addr, 0);
+        command_addr += fence_command_size_;
+        bytes_written_[wrapped_index] = post_bytes;
+        wrapped_index += fence_command_size_;
+      }
+    }
   }
 
   // After transfer is completed, decrement the signal value.
@@ -426,7 +473,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += trap_command_size_;
   }
 
-  ReleaseWriteAddress(curr_index, total_command_size);
+  // Pad size is DWORD aligned since all commands are dword aligned.
+  // Insert NOP header DWORD with value of the number of null DWORDs shifted
+  // by 16 bits to pad total submission.
+  if (pad_size) {
+    memset(command_addr, 0, pad_size);
+    uint32_t *dword_command_addr = reinterpret_cast<uint32_t*>(command_addr);
+    dword_command_addr[total_command_size/4] = (pad_size/4 - 1) << 16;
+  }
+
+  ReleaseWriteAddress(curr_index, total_command_size + pad_size);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -448,7 +504,8 @@ template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bo
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
                       useGCR>::SubmitLinearCopyCommand(void* dst, const void* src, size_t size,
                                                        std::vector<core::Signal*>& dep_signals,
-                                                       core::Signal& out_signal) {
+                                                       core::Signal& out_signal,
+                                                       std::vector<core::Signal*>& gang_signals) {
   // Break the copy into multiple copy operations when the copy size exceeds
   // the SDMA linear copy limit.
   const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
@@ -458,7 +515,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
   BuildCopyCommand(reinterpret_cast<char*>(&buff[0]), num_copy_command, dst, src, size);
 
   return SubmitCommand(&buff[0], buff.size() * sizeof(SDMA_PKT_COPY_LINEAR), size, dep_signals,
-                       out_signal);
+                       out_signal, gang_signals);
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
@@ -524,8 +581,10 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCopyRe
 
   uint64_t size = range->x * range->y * range->z;
 
+  std::vector<core::Signal*> gang_signals(0);
+
   return SubmitCommand(&pkts[0], pkts.size() * sizeof(SDMA_PKT_COPY_LINEAR_RECT), size, dep_signals,
-                       out_signal);
+                       out_signal, gang_signals);
 }
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
