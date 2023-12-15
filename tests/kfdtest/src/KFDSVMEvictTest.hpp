@@ -56,12 +56,13 @@ class KFDSVMEvictTest : public KFDLocalMemoryTest,
  protected:
     std::string CreateShader();
     void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
-                    std::vector<void *> &pBuffers);
+                    std::vector<void *> &pBuffers, HSAuint32 Granularity);
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
     void ForkChildProcesses(int nprocesses);
     void WaitChildProcesses();
     HSAint32 GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBufSize);
-    HSAint64 GetBufferSize(HSAuint64 vramSize, HSAuint32 count);
+    HSAint64 GetBufferSize(HSAuint64 vramSize, HSAuint32 count,
+                           HSAint32 xnack_enable);
 
  protected:  // members
     std::string     m_psName;

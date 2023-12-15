@@ -85,7 +85,8 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
     return count;
 }
 
-HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
+HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count,
+                                        HSAint32 xnack_enable) {
     HSAuint64 sysMemSize = GetSysMemSize();
     HSAuint64 size, sizeInPages;
     HSAuint64 vramBufSizeInPages;
@@ -101,8 +102,6 @@ HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
     /* Check if there is enough system memory to pass test for XNACK off
      * KFD system memory limit is 15/16.
      */
-    HSAint32 xnack_enable = 0;
-    EXPECT_SUCCESS(hsaKmtGetXNACKMode(&xnack_enable));
     if (!xnack_enable && size > (sysMemSize - (sysMemSize >> 4)))
         return 0;
 
@@ -113,7 +112,7 @@ HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count) {
 }
 
 void KFDSVMEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
-        std::vector<void *> &pBuffers) {
+        std::vector<void *> &pBuffers, HSAuint32 Granularity) {
     HSAuint64   totalMB;
 
     totalMB = N_PROCESSES * count * (vramBufSize >> 20);
@@ -132,6 +131,8 @@ retry:
         ret = RegisterSVMRange(defaultGPUNode, m_pBuf, vramBufSize, defaultGPUNode, m_Flags);
         if (ret == HSAKMT_STATUS_SUCCESS) {
             pBuffers.push_back(m_pBuf);
+            if (Granularity)
+                EXPECT_SUCCESS(SVMRangSetGranularity(m_pBuf, vramBufSize, Granularity));
             retry = 0;
         } else {
             if (retry++ > ALLOCATE_RETRY_TIMES) {
@@ -263,7 +264,7 @@ TEST_P(KFDSVMEvictTest, BasicTest) {
     ForkChildProcesses(N_PROCESSES);
 
     std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers, 0);
 
     /* wait for other processes to finish allocation, then free buffer */
     sleep(ALLOCATE_RETRY_TIMES);
@@ -327,7 +328,9 @@ TEST_P(KFDSVMEvictTest, QueueTest) {
         LOG() << "Found VRAM of " << std::dec << (vramSize >> 20) << "MB." << std::endl;
     }
 
-    HSAuint64 vramBufSize = GetBufferSize(vramSize, count);
+    HSAint32 xnack_enable = 0;
+    EXPECT_SUCCESS(hsaKmtGetXNACKMode(&xnack_enable));
+    HSAuint64 vramBufSize = GetBufferSize(vramSize, count, xnack_enable);
     if (vramBufSize == 0) {
         LOG() << "Not enough system memory, skipping the test" << std::endl;
         return;
@@ -345,7 +348,15 @@ TEST_P(KFDSVMEvictTest, QueueTest) {
     HsaMemoryBuffer resultBuffer(PAGE_SIZE, defaultGPUNode);
 
     std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+    HSAuint32 granularity = 0;
+    /* xnack is on, shadder code will trigger gpu page fault that bring data
+     * to vram. use granularity to move all data from system buffer to vram
+     * to reduce system ram pressure in order to avoid system ram oom in system
+     * that has less system ram.
+     */
+    if (xnack_enable)
+       granularity = 0xff;
+    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers, granularity);
 
     unsigned int wavefront_num = pBuffers.size();
     LOG() << m_psName << "wavefront number " << wavefront_num << std::endl;
