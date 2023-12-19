@@ -64,6 +64,8 @@ static_assert(sizeof(LibHandle) == sizeof(HMODULE),
               "OS abstraction size mismatch");
 static_assert(sizeof(LibHandle) == sizeof(::HANDLE),
               "OS abstraction size mismatch");
+static_assert(sizeof(Semaphore) == sizeof(::HANDLE),
+              "OS abstraction size mismatch");
 static_assert(sizeof(Mutex) == sizeof(::HANDLE),
               "OS abstraction size mismatch");
 static_assert(sizeof(Thread) == sizeof(::HANDLE),
@@ -89,6 +91,28 @@ std::vector<LibHandle> GetLoadedLibs() {
 
 std::string GetLibraryName(LibHandle lib) {
   static_assert(false, "Not implemented.");
+}
+
+Semaphore CreateSemaphore() {
+  sem = static_cast<void*>(CreateSemaphore(NULL, 0, LONG_MAX, NULL));
+  assert(sem != NULL && "CreateSemaphore failed");
+
+  return *(Semaphore*)&sem;
+}
+
+bool WaitSemaphore(Semaphore sem) {
+  return WaitForSingleObject(*(::HANDLE*)&lock, INFINITE) == WAIT_OBJECT_0;
+}
+
+void PostSemaphore(Semaphore sem) {
+  ReleaseSemaphore(static_cast<HANDLE>(*sem), 1, NULL);
+}
+
+void DestroySemaphore(Semaphore sem) {
+  if (!CloseHandle(static_cast<HANDLE>(*sem))) {
+    assert("CloseHandle() failed");
+  }
+  *sem = NULL;
 }
 
 Mutex CreateMutex() { return CreateEvent(NULL, false, true, NULL); }

@@ -172,7 +172,7 @@ class SharedSignalPool_t : private BaseShared {
 
  private:
   static const size_t minblock_ = 4096 / sizeof(SharedSignal);
-  KernelMutex lock_;
+  HybridMutex lock_;
   std::vector<SharedSignal*> free_list_;
   std::vector<std::pair<void*, size_t>> block_list_;
   size_t block_size_;

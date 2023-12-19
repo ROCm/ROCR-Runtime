@@ -83,7 +83,7 @@ class InterruptSignal : private LocalSignal, public Signal {
     }
 
    private:
-    KernelMutex lock_;
+    HybridMutex lock_;
     std::vector<unique_event_ptr> events_;
     bool allEventsAllocated;
   };
