@@ -70,7 +70,7 @@ void SharedSignalPool_t::clear() {
 }
 
 SharedSignal* SharedSignalPool_t::alloc() {
-  ScopedAcquire<KernelMutex> lock(&lock_);
+  ScopedAcquire<HybridMutex> lock(&lock_);
   if (free_list_.empty()) {
     SharedSignal* block = reinterpret_cast<SharedSignal*>(
         allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0));
@@ -103,7 +103,7 @@ void SharedSignalPool_t::free(SharedSignal* ptr) {
   if (ptr == nullptr) return;
 
   ptr->~SharedSignal();
-  ScopedAcquire<KernelMutex> lock(&lock_);
+  ScopedAcquire<HybridMutex> lock(&lock_);
 
   ifdebug {
     bool valid = false;

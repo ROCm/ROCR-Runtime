@@ -501,7 +501,7 @@ class Runtime {
 
     hsa_signal_t wake;
     os::Thread async_events_thread_;
-    KernelMutex lock;
+    HybridMutex lock;
     bool exit;
   };
 

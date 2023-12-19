@@ -754,7 +754,7 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
   // Indicate that this signal is in use.
   if (signal.handle != 0) hsa_signal_handle(signal)->Retain();
 
-  ScopedAcquire<KernelMutex> scope_lock(&async_events_control_.lock);
+  ScopedAcquire<HybridMutex> scope_lock(&async_events_control_.lock);
 
   // Lazy initializer
   if (async_events_control_.async_events_thread_ == NULL) {
@@ -1233,7 +1233,7 @@ void Runtime::AsyncEventsLoop(void*) {
     typedef std::pair<void (*)(void*), void*> func_arg_t;
     std::vector<func_arg_t> functions;
     {
-      ScopedAcquire<KernelMutex> scope_lock(&async_events_control_.lock);
+      ScopedAcquire<HybridMutex> scope_lock(&async_events_control_.lock);
       for (size_t i = 0; i < new_async_events_.Size(); i++) {
         if (new_async_events_.signal_[i].handle == 0) {
           functions.push_back(
