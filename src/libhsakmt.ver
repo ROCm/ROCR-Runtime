@@ -81,6 +81,7 @@ hsaKmtWaitOnEvent_Ext;
 hsaKmtWaitOnMultipleEvents_Ext;
 hsaKmtReplaceAsanHeaderPage;
 hsaKmtReturnAsanHeaderPage;
+hsaKmtGetAMDGPUDeviceHandle;
 
 local: *;
 };
