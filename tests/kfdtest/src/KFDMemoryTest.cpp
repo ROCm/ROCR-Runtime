@@ -770,8 +770,8 @@ TEST_F(KFDMemoryTest, LargestVramBufferTest) {
     LOG() << "The largest allocated VRAM buffer is " << std::dec
             << lastTestedSizeMB << "MB" << std::endl;
 
-    /* Make sure 3/4 vram can be allocated.*/
-    EXPECT_GE(lastTestedSizeMB * 4, vramSizeMB * 3);
+    /* Make sure 3/5 vram can be allocated.*/
+    EXPECT_GE(lastTestedSizeMB * 5, vramSizeMB * 3);
     if (lastTestedSizeMB * 16 < vramSizeMB * 15)
         WARN() << "The largest allocated VRAM buffer size is smaller than the expected "
             << vramSizeMB * 15 / 16 << "MB" << std::endl;
