@@ -471,6 +471,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += fence_command_size_;
 
     BuildTrapCommand(command_addr, out_signal.signal_.event_id);
+    command_addr += trap_command_size_;
     bytes_written_[wrapped_index] = post_bytes;
     wrapped_index += trap_command_size_;
   }
@@ -481,7 +482,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (pad_size) {
     memset(command_addr, 0, pad_size);
     uint32_t *dword_command_addr = reinterpret_cast<uint32_t*>(command_addr);
-    dword_command_addr[total_command_size/4] = (pad_size/4 - 1) << 16;
+    dword_command_addr[0] = (pad_size/4 - 1) << 16;
   }
 
   ReleaseWriteAddress(curr_index, total_command_size + pad_size);
