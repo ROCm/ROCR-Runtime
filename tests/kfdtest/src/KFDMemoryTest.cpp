@@ -963,9 +963,13 @@ TEST_F(KFDMemoryTest, MMBench) {
             memFlags.ui32.NonPaged = 1;
 
             /* Buffer sizes are 2MB aligned to match new allocation policy.
-             * Upper limit of buffer number to fit 80% vram size.
+             * Upper limit of buffer number to fit 80% vram size. APUs w/
+			 * smaller VRAM needs different criteria.
              */
-            bufLimit = ((vramSizeMB << 20) * 8 / 10) / ALIGN_UP(bufSize, VRAM_ALLOCATION_ALIGN);
+            if (vramSizeMB <= 512)
+                bufLimit = ((vramSizeMB << 20) * 6 / 10) / ALIGN_UP(bufSize, VRAM_ALLOCATION_ALIGN);
+            else
+                bufLimit = ((vramSizeMB << 20) * 8 / 10) / ALIGN_UP(bufSize, VRAM_ALLOCATION_ALIGN);
 
             if (bufLimit == 0)
                 continue; // skip when bufSize > vram
