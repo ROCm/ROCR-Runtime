@@ -309,7 +309,7 @@ hsa_status_t ImageManagerAi::PopulateImageSrd(Image& image) const {
     word1.f.swizzle_enable = false;
     word1.f.cache_swizzle = false;
 
-    word2.f.num_records = image.desc.width * image_prop.element_size;
+    word2.f.num_records = image.desc.width;
 
     const Swizzle swizzle = ImageLut().MapSwizzle(image.desc.format.channel_order);
     word3.val = 0;
