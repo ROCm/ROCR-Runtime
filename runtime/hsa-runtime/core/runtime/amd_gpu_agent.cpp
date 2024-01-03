@@ -2606,6 +2606,7 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
       return HSA_STATUS_ERROR;
     }
 
+    ht_data.lost_sample_count = 0;
     ht_data.host_buffer_wrap_pos = 0;
     ht_data.host_write_ptr = ht_data.host_buffer;
     ht_data.host_read_ptr = ht_data.host_write_ptr;
@@ -2913,8 +2914,10 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   /* If the number of entries in old_val is larger than buf_size, then there was a buffer overflow
    * and the 2nd level trap handler code will skip recording samples, causing lost samples
    */
-  if (*old_val > (uint64_t)ht_data.device_data->buf_size)
+  if (*old_val > (uint64_t)ht_data.device_data->buf_size) {
+    ht_data.lost_sample_count = *old_val - (uint64_t)ht_data.device_data->buf_size;
     *old_val = (uint64_t)ht_data.device_data->buf_size;
+  }
 
   to_copy = *old_val * session.sample_size();
 
@@ -3052,9 +3055,11 @@ void GpuAgent::PcSamplingThread() {
       bytes_after_wrap = ht_data.host_write_ptr - host_buffer_begin;
 
       while (bytes_before_wrap >= session.buffer_size()) {
-        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
         ht_data.host_read_ptr += session.buffer_size();
         bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
       }
 
       if (bytes_before_wrap + bytes_after_wrap >= session.buffer_size()) {
@@ -3064,13 +3069,16 @@ void GpuAgent::PcSamplingThread() {
         bytes_before_wrap = 0;
         ht_data.host_buffer_wrap_pos = 0;
         bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
       }
 
       while (bytes_after_wrap >= session.buffer_size()) {
-        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
         ht_data.host_read_ptr += session.buffer_size();
         bytes_before_wrap = 0;
         bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
       }
     } else {
       bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
@@ -3078,9 +3086,11 @@ void GpuAgent::PcSamplingThread() {
       while (bytes_before_wrap >= session.buffer_size()) {
         assert(ht_data.host_read_ptr >= host_buffer_begin &&
                ht_data.host_read_ptr + session.buffer_size() < host_buffer_end);
-        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0, 0);
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
         ht_data.host_read_ptr += session.buffer_size();
         bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
       }
     }
   }
@@ -3124,9 +3134,11 @@ hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& sessi
     while (bytes_before_wrap > 0) {
       size_t bytes_to_copy = std::min(bytes_before_wrap, session.buffer_size());
 
-      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
       ht_data.host_read_ptr += bytes_to_copy;
       bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
     }
 
     assert(ht_data.host_read_ptr == ht_data.host_buffer_wrap_pos);
@@ -3136,9 +3148,11 @@ hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& sessi
     while (bytes_after_wrap > 0) {
       size_t bytes_to_copy = std::min(bytes_after_wrap, session.buffer_size());
 
-      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
       ht_data.host_read_ptr += bytes_to_copy;
       bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
     }
   } else {
     bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
@@ -3148,9 +3162,11 @@ hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& sessi
       assert(ht_data.host_read_ptr >= host_buffer_begin &&
              ht_data.host_read_ptr + bytes_to_copy <= host_buffer_end);
 
-      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0, 0);
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
       ht_data.host_read_ptr += bytes_to_copy;
       bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
     }
   }
   return HSA_STATUS_SUCCESS;
