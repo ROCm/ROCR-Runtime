@@ -494,7 +494,6 @@ static int handle_concrete_asic(struct queue *q,
 
 	if (ret) {
 		HsaNodeProperties node;
-		bool svm_api;
 
 		if (hsaKmtGetNodeProperties(NodeId, &node))
 			return HSAKMT_STATUS_ERROR;
@@ -509,12 +508,10 @@ static int handle_concrete_asic(struct queue *q,
 		q->total_mem_alloc_size = (q->ctx_save_restore_size +
 					q->debug_memory_size) * node.NumXcc;
 
-		svm_api = node.Capability.ui32.SVMAPISupported;
-
 		/* Allocate unified memory for context save restore
 		 * area on dGPU.
 		 */
-		if (!q->use_ats && svm_api) {
+		if (!q->use_ats && is_svm_api_supported) {
 			uint32_t size = PAGE_ALIGN_UP(q->total_mem_alloc_size);
 			void *addr;
 			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;

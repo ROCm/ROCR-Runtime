@@ -231,9 +231,6 @@ typedef struct {
 
 	/* specifies the alignment size as PAGE_SIZE * 2^alignment_order */
 	uint32_t alignment_order;
-
-	/* whether to check all dGPUs in the topology support SVM API */
-	bool is_svm_api_supported;
 } svm_t;
 
 /* The other apertures are specific to each GPU. gpu_mem_t manages GPU
@@ -254,7 +251,6 @@ static svm_t svm = {
 	.userptr_for_paged_mem = false,
 	.check_userptr = false,
 	.disable_cache = false,
-	.is_svm_api_supported = false
 };
 
 /* On APU, for memory allocated on the system memory that GPU doesn't access
@@ -1951,7 +1947,7 @@ HSAKMT_STATUS fmm_release(void *address)
 	object = vm_find_object(address, 0, &aperture);
 
 	if (!object)
-		return svm.is_svm_api_supported ?
+		return is_svm_api_supported ?
 			HSAKMT_STATUS_SUCCESS :
 			HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 
@@ -2492,7 +2488,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	uint32_t num_of_sysfs_nodes;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	char *disableCache, *pagedUserptr, *checkUserptr, *guardPagesStr, *reserveSvm;
-	char *maxVaAlignStr, *useSvmStr;
+	char *maxVaAlignStr;
 	unsigned int guardPages = 1;
 	uint64_t svm_base = 0, svm_limit = 0;
 	uint32_t svm_alignment = 0;
@@ -2530,9 +2526,6 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	maxVaAlignStr = getenv("HSA_MAX_VA_ALIGN");
 	if (!maxVaAlignStr || sscanf(maxVaAlignStr, "%u", &svm.alignment_order) != 1)
 		svm.alignment_order = 9;
-
-	useSvmStr = getenv("HSA_USE_SVM");
-	svm.is_svm_api_supported = !(useSvmStr && !strcmp(useSvmStr, "0"));
 
 	gpu_mem_count = 0;
 	g_first_gpu_mem = NULL;
@@ -2588,7 +2581,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
 			gpu_mem[gpu_mem_count].node_id = i;
-			svm.is_svm_api_supported &= props.Capability.ui32.SVMAPISupported;
+			is_svm_api_supported &= props.Capability.ui32.SVMAPISupported;
 
 			gpu_mem[gpu_mem_count].scratch_physical.align = PAGE_SIZE;
 			gpu_mem[gpu_mem_count].scratch_physical.ops = &reserved_aperture_ops;
@@ -3116,7 +3109,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	if (svm.is_svm_api_supported) {
+	if (is_svm_api_supported) {
 		svm_addr = (void*)((HSAuint64)addr - page_offset);
 		if (!nodes_to_map) {
 			nodes_to_map = all_gpu_id_array;
@@ -3156,7 +3149,7 @@ HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_addre
 							address, size);
 
 	object = vm_find_object(address, size, &aperture);
-	if (!object && !svm.is_svm_api_supported ) {
+	if (!object && !is_svm_api_supported) {
 		if (!is_dgpu) {
 			/* Prefetch memory on APUs with dummy-reads */
 			fmm_check_user_memory(address, size);
@@ -3183,7 +3176,7 @@ HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_addre
 		/* Prefetch memory on APUs with dummy-reads */
 		fmm_check_user_memory(address, size);
 		ret = HSAKMT_STATUS_SUCCESS;
-	} else if ((svm.is_svm_api_supported && !object) || object->userptr) {
+	} else if ((is_svm_api_supported && !object) || object->userptr) {
 		ret = _fmm_map_to_gpu_userptr(address, size, gpuvm_address, object, NULL, 0);
 	} else {
 		ret = _fmm_map_to_gpu(aperture, address, size, object, NULL, 0);
@@ -3361,7 +3354,7 @@ int fmm_unmap_from_gpu(void *address)
 	object = vm_find_object(address, 0, &aperture);
 	if (!object)
 		/* On APUs GPU unmapping of system memory is a no-op */
-		return (!is_dgpu || svm.is_svm_api_supported) ? 0 : -EINVAL;
+		return (!is_dgpu || is_svm_api_supported) ? 0 : -EINVAL;
 	/* Successful vm_find_object returns with the aperture locked */
 
 	if (aperture == &cpuvm_aperture)
@@ -3510,7 +3503,7 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 			return HSAKMT_STATUS_SUCCESS;
 
 		/* Register a new user ptr */
-		if (svm.is_svm_api_supported)
+		if (is_svm_api_supported)
 			return fmm_register_mem_svm_api(address,
 							size_in_bytes,
 							coarse_grain,
@@ -3885,7 +3878,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		/* On APUs we assume it's a random system memory address
 		 * where registration and dergistration is a no-op
 		 */
-		return (!is_dgpu || svm.is_svm_api_supported) ?
+		return (!is_dgpu || is_svm_api_supported) ?
 			HSAKMT_STATUS_SUCCESS :
 			HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 	/* Successful vm_find_object returns with aperture locked */
@@ -3949,7 +3942,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	object = vm_find_object(address, size, &aperture);
-	if (!object && !svm.is_svm_api_supported)
+	if (!object && !is_svm_api_supported)
 		return HSAKMT_STATUS_ERROR;
 	/* Successful vm_find_object returns with aperture locked */
 
@@ -3972,7 +3965,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	if ((svm.is_svm_api_supported && !object) || object->userptr) {
+	if ((is_svm_api_supported && !object) || object->userptr) {
 		retcode = _fmm_map_to_gpu_userptr(address, size, gpuvm_address,
 				object, nodes_to_map, num_of_nodes * sizeof(uint32_t));
 		if (object)

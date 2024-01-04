@@ -34,3 +34,6 @@ pthread_mutex_t hsakmt_mutex = PTHREAD_MUTEX_INITIALIZER;
 bool is_dgpu;
 int PAGE_SIZE;
 int PAGE_SHIFT;
+
+/* whether to check all dGPUs in the topology support SVM API */
+bool is_svm_api_supported;

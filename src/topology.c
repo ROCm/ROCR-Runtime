@@ -1192,6 +1192,9 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			gfxv = (uint32_t)prop_val;
 	}
 
+	if (!is_svm_api_supported)
+		props->Capability.ui32.SVMAPISupported = 0;
+
 	/* Bail out early, if a CPU node */
 	if (!props->NumFComputeCores)
 		goto out;
