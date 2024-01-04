@@ -40,6 +40,7 @@
 #include <strings.h>
 #include "fmm.h"
 #include <dlfcn.h>
+#include <string.h>
 
 int (*fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle);
 
@@ -152,6 +153,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 	int fd = -1;
 	HsaSystemProperties sys_props;
 	char *error;
+	char *useSvmStr;
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
@@ -191,6 +193,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 		result = init_kfd_version();
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto kfd_version_failed;
+
+		useSvmStr = getenv("HSA_USE_SVM");
+		is_svm_api_supported = !(useSvmStr && !strcmp(useSvmStr, "0"));
 
 		result = topology_sysfs_get_system_props(&sys_props);
 		if (result != HSAKMT_STATUS_SUCCESS)
