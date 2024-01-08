@@ -3287,7 +3287,10 @@ hsa_status_t Runtime::VMemoryGetAccess(const void* va, hsa_access_permission_t* 
     *perms = agentPermsIt->second.permissions;
     return HSA_STATUS_SUCCESS;
   }
-  return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  /* Set access was not called on this memory handle */
+  *perms = HSA_ACCESS_PERMISSION_NONE;
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::VMemoryExportShareableHandle(int* dmabuf_fd,
