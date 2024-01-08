@@ -3115,19 +3115,55 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   return HSA_STATUS_SUCCESS;
 }
 
+Runtime::MappedHandleAllowedAgent::MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
+                             hsa_access_permission_t perms)
+        : va(va),
+          size(size),
+          targetAgent(targetAgent),
+          permissions(perms),
+          mappedHandle(_mappedHandle),
+          ldrm_bo(NULL) {
+
+  if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) return;
+
+  AMD::GpuAgent* gpuAgent = static_cast<AMD::GpuAgent*>(targetAgent);
+  int dmabuf_fd = 0;
+  uint64_t offset = 0;
+  MemoryHandle *memHandle = mappedHandle->mem_handle;
+
+  int ret = hsaKmtExportDMABufHandle(memHandle->thunk_handle, mappedHandle->size, &dmabuf_fd, &offset);
+  assert(ret == HSAKMT_STATUS_SUCCESS);
+
+  if (ret != HSAKMT_STATUS_SUCCESS) return;
+  assert(offset == 0);
+
+  amdgpu_bo_import_result res;
+  ret = amdgpu_bo_import(gpuAgent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
+  assert(ret == 0);
+  if (ret) return;
+
+  close(dmabuf_fd);
+  ldrm_bo = res.buf_handle;
+}
+
+Runtime::MappedHandleAllowedAgent::~MappedHandleAllowedAgent() {
+  if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) return;
+
+  amdgpu_bo_free(ldrm_bo);
+}
+
 hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permission_t perms) {
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
     void* ret_cpu_addr =
         mmap(va, size, mmap_perm(perms), MAP_SHARED | MAP_FIXED, mappedHandle->drm_fd,
              reinterpret_cast<uint64_t>(mappedHandle->drm_cpu_addr));
     assert(ret_cpu_addr == va);
-  } else {
+  } else { // GPU Memory
     int ret;
-    ret = amdgpu_bo_va_op(mappedHandle->ldrm_bo, mappedHandle->offset, mappedHandle->size,
+    if (!ldrm_bo) return HSA_STATUS_ERROR;
+    ret = amdgpu_bo_va_op(ldrm_bo, mappedHandle->offset, mappedHandle->size,
                           reinterpret_cast<uint64_t>(va), drm_perm(perms), AMDGPU_VA_OP_MAP);
     if (ret) return HSA_STATUS_ERROR;
-
-    ldrm_bo = mappedHandle->ldrm_bo;
   }
   permissions = perms;
   return HSA_STATUS_SUCCESS;
@@ -3179,12 +3215,15 @@ hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
     auto agentPermsIt = mappedHandleIt->second.allowed_agents.find(targetAgent);
     if (agentPermsIt == mappedHandleIt->second.allowed_agents.end()) {
       /* Agent not previously allowed, we need a new entry */
-      MappedHandleAllowedAgent newAgentPerms(&mappedHandleIt->second, targetAgent, va, size,
-                                             desc[i].permissions);
-      if (newAgentPerms.EnableAccess(desc[i].permissions) != HSA_STATUS_SUCCESS)
-        return HSA_STATUS_ERROR;
+      mappedHandleIt->second.allowed_agents.emplace(std::piecewise_construct,
+        std::forward_as_tuple(targetAgent),
+        std::forward_as_tuple(&mappedHandleIt->second, targetAgent, va, size, desc[i].permissions));
 
-      mappedHandleIt->second.allowed_agents[targetAgent] = newAgentPerms;
+      if (mappedHandleIt->second.allowed_agents[targetAgent].EnableAccess(desc[i].permissions)
+          != HSA_STATUS_SUCCESS) {
+        mappedHandleIt->second.allowed_agents.erase(targetAgent);
+        return HSA_STATUS_ERROR;
+      }
     } else {
       /* Previous permissions are same as current permission */
       if (agentPermsIt->second.permissions == desc[i].permissions) continue;

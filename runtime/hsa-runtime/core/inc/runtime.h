@@ -776,13 +776,8 @@ class Runtime {
     MappedHandleAllowedAgent()
         : va(NULL), permissions(HSA_ACCESS_PERMISSION_NONE), mappedHandle(NULL), ldrm_bo(0) {}
     MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
-                             hsa_access_permission_t perms)
-        : va(va),
-          size(size),
-          targetAgent(targetAgent),
-          permissions(perms),
-          mappedHandle(_mappedHandle),
-          ldrm_bo(0) {}
+                             hsa_access_permission_t perms);
+    ~MappedHandleAllowedAgent();
 
     hsa_status_t RemoveAccess();
     hsa_status_t EnableAccess(hsa_access_permission_t perms);
