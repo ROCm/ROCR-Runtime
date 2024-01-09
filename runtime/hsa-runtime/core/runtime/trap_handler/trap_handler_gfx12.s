@@ -88,11 +88,7 @@ trap_entry:
   s_bfe_u32            ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
   s_cbranch_scc0       .no_skip_debugtrap
 
-  s_getreg_b32         ttmp3, hwreg(HW_REG_EXCP_FLAG_PRIV)
-  s_bitcmp1_b32        ttmp3, SQ_WAVE_EXCP_FLAG_PRIV_HT_SHIFT
-
   // If caused by s_trap then advance PC.
-  s_cbranch_scc1       .not_s_trap
   s_add_u32            ttmp0, ttmp0, 0x4
   s_addc_u32           ttmp1, ttmp1, 0x0
 
@@ -117,13 +113,12 @@ trap_entry:
   s_lshl_b32           ttmp2, ttmp2, TTMP6_SAVED_STATUS_HALT_SHIFT
   s_or_b32             ttmp6, ttmp6, ttmp2
 
-  // Save trap status.
-  s_mov_b32            ttmp2, ttmp3
-
   // Fetch doorbell id for our queue.
   s_sendmsg_rtn_b32    ttmp3, sendmsg(MSG_RTN_GET_DOORBELL)
   s_wait_kmcnt         0
   s_and_b32            ttmp3, ttmp3, DOORBELL_ID_MASK
+
+  s_getreg_b32	       ttmp2, hwreg(HW_REG_EXCP_FLAG_PRIV)
 
   s_bitcmp1_b32        ttmp2, SQ_WAVE_EXCP_FLAG_PRIV_XNACK_ERROR_SHIFT
   s_cbranch_scc0       .not_memory_violation
