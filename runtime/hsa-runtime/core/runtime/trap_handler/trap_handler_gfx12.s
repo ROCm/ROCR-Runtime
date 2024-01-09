@@ -41,14 +41,14 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 /// Trap Handler V2 source
-.set DOORBELL_ID_MASK                          , ((1 << DOORBELL_ID_SIZE) - 1)
 .set DOORBELL_ID_SIZE                          , 10
+.set DOORBELL_ID_MASK                          , ((1 << DOORBELL_ID_SIZE) - 1)
 .set EC_QUEUE_WAVE_ABORT_M0                    , (1 << (DOORBELL_ID_SIZE + 0))
-.set EC_QUEUE_WAVE_APERTURE_VIOLATION_M0       , (1 << (DOORBELL_ID_SIZE + 5))
-.set EC_QUEUE_WAVE_ILLEGAL_INSTRUCTION_M0      , (1 << (DOORBELL_ID_SIZE + 3))
-.set EC_QUEUE_WAVE_MATH_ERROR_M0               , (1 << (DOORBELL_ID_SIZE + 2))
-.set EC_QUEUE_WAVE_MEMORY_VIOLATION_M0         , (1 << (DOORBELL_ID_SIZE + 4))
 .set EC_QUEUE_WAVE_TRAP_M0                     , (1 << (DOORBELL_ID_SIZE + 1))
+.set EC_QUEUE_WAVE_MATH_ERROR_M0               , (1 << (DOORBELL_ID_SIZE + 2))
+.set EC_QUEUE_WAVE_ILLEGAL_INSTRUCTION_M0      , (1 << (DOORBELL_ID_SIZE + 3))
+.set EC_QUEUE_WAVE_MEMORY_VIOLATION_M0         , (1 << (DOORBELL_ID_SIZE + 4))
+.set EC_QUEUE_WAVE_APERTURE_VIOLATION_M0       , (1 << (DOORBELL_ID_SIZE + 5))
 .set SQ_WAVE_EXCP_FLAG_PRIV_MEMVIOL_SHIFT      , 4
 .set SQ_WAVE_EXCP_FLAG_PRIV_HT_SHIFT           , 7
 .set SQ_WAVE_EXCP_FLAG_PRIV_ILLEGAL_INST_SHIFT , 6
