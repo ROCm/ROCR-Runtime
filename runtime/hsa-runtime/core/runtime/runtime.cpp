@@ -2940,8 +2940,10 @@ hsa_status_t Runtime::VMemoryHandleCreate(const MemoryRegion* region, size_t siz
   void* thunk_handle;
   hsa_status_t status = region->Allocate(size, alloc_flags, &thunk_handle);
   if (status == HSA_STATUS_SUCCESS) {
-    memory_handle_map_[thunk_handle] =
-        MemoryHandle(region, size, flags_unused, thunk_handle, alloc_flags);
+    memory_handle_map_.emplace(std::piecewise_construct,
+          std::forward_as_tuple(thunk_handle),
+          std::forward_as_tuple(region, size, flags_unused, thunk_handle, alloc_flags));
+
     *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
   }
   return status;
@@ -3059,9 +3061,11 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
   ldrm_bo = res.buf_handle;
   ret = GetAmdgpuDeviceArgs(agent, ldrm_bo, &drm_fd, &drm_cpu_addr);
   if (ret) return HSA_STATUS_ERROR;
-  mapped_handle_map_[va] =
-      MappedHandle(&memoryHandleIt->second, &reservedAddressIt->second, offset, size, drm_fd,
-                   reinterpret_cast<void*>(drm_cpu_addr), HSA_ACCESS_PERMISSION_NONE, ldrm_bo);
+
+  mapped_handle_map_.emplace(std::piecewise_construct,
+          std::forward_as_tuple(va),
+          std::forward_as_tuple(&memoryHandleIt->second, &reservedAddressIt->second, offset, size, drm_fd,
+                   reinterpret_cast<void*>(drm_cpu_addr), HSA_ACCESS_PERMISSION_NONE, ldrm_bo));
 
   reservedAddressIt->second.use_count++;
   memoryHandleIt->second.use_count++;
@@ -3370,7 +3374,9 @@ hsa_status_t Runtime::VMemoryImportShareableHandle(int dmabuf_fd,
   MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateNoFlags;
   if (ptrInfo.MemFlags.ui32.NoSubstitute) alloc_flag |= core::MemoryRegion::AllocatePinned;
 
-  memory_handle_map_[thunk_handle] = MemoryHandle(region, size, 0, thunk_handle, alloc_flag);
+  memory_handle_map_.emplace(std::piecewise_construct,
+          std::forward_as_tuple(thunk_handle),
+          std::forward_as_tuple(region, size, 0, thunk_handle, alloc_flag));
   *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
 
   return HSA_STATUS_SUCCESS;
