@@ -39,7 +39,7 @@ class KFDMemoryTest :  public KFDBaseComponentTest {
     virtual void TearDown();
 
  protected:
-    void BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
+    void SearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
                                             HSAuint64 highMB, int nodeToMap,
                                             HSAuint64 *lastSizeMB);
     void AcquireReleaseTestRunCPU(HSAuint32 acquireNode, bool scalar);

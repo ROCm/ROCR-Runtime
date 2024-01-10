@@ -647,26 +647,24 @@ TEST_F(KFDMemoryTest, GetTileConfigTest) {
     TEST_END
 }
 
-void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
+void KFDMemoryTest::SearchLargestBuffer(int allocNode, const HsaMemFlags &memFlags,
                                         HSAuint64 highMB, int nodeToMap,
                                         HSAuint64 *lastSizeMB) {
     int ret;
-    int iter = 0;
 
     HsaMemMapFlags mapFlags = {0};
-    HSAuint64 granularityMB = highMB > 512 ? 128 : 16;
+    HSAuint64 granularityMB = 8;
 
     /* Testing big buffers in VRAM */
     unsigned int * pDb = NULL;
-    HSAuint64 lowMB = 0;
 
     highMB = (highMB + granularityMB - 1) & ~(granularityMB - 1);
 
     HSAuint64 sizeMB;
     HSAuint64 size = 0;
 
-    while (highMB - lowMB > granularityMB) {
-        sizeMB = (lowMB + highMB) / 2;
+    while (highMB > granularityMB) {
+        sizeMB = highMB - granularityMB;
         size = sizeMB * 1024 * 1024;
         ret = hsaKmtAllocMemory(allocNode, size, memFlags,
                                 reinterpret_cast<void**>(&pDb));
@@ -676,12 +674,9 @@ void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &
         }
 
         /* Code snippet to allow CRIU checkpointing */
-        iter++;
-        if (iter == 3) {
-            if (g_SleepTime > 0) {
-                LOG() << "Pause for: " << g_SleepTime << " seconds" <<  std::endl;
-                sleep(g_SleepTime);
-            }
+        if (g_SleepTime > 0) {
+            LOG() << "Pause for: " << g_SleepTime << " seconds" <<  std::endl;
+            sleep(g_SleepTime);
         }
 
         ret = hsaKmtMapMemoryToGPUNodes(pDb, size, NULL,
@@ -694,17 +689,16 @@ void KFDMemoryTest::BinarySearchLargestBuffer(int allocNode, const HsaMemFlags &
         EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
         EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, size));
 
-        lowMB = sizeMB;
+        if (lastSizeMB)
+           *lastSizeMB = sizeMB;
+        break;
     }
-
-    if (lastSizeMB)
-        *lastSizeMB = lowMB;
 }
 
 /*
  * Largest*BufferTest allocates, maps/unmaps, and frees the largest possible
  * buffers. Its size is found using binary search in the range
- * (0, RAM SIZE) with a granularity of 128M. Also, the similar logic is
+ * (0, RAM SIZE) with a granularity of 8M. Also, the similar logic is
  * repeated on local buffers (VRAM).
  * Please note we limit the largest possible system buffer to be smaller than
  * the RAM size. The reason is that the system buffer can make use of virtual
@@ -733,7 +727,7 @@ TEST_F(KFDMemoryTest, LargestSysBufferTest) {
     LOG() << "Found System Memory of " << std::dec << sysMemSizeMB
                 << "MB" << std::endl;
 
-    BinarySearchLargestBuffer(0, m_MemoryFlags, sysMemSizeMB, defaultGPUNode,
+    SearchLargestBuffer(0, m_MemoryFlags, sysMemSizeMB, defaultGPUNode,
                     &lastTestedSizeMB);
 
     LOG() << "The largest allocated system buffer is " << std::dec
@@ -764,7 +758,7 @@ TEST_F(KFDMemoryTest, LargestVramBufferTest) {
 
     LOG() << "Found VRAM of " << std::dec << vramSizeMB << "MB." << std::endl;
 
-    BinarySearchLargestBuffer(defaultGPUNode, memFlags, vramSizeMB, defaultGPUNode,
+    SearchLargestBuffer(defaultGPUNode, memFlags, vramSizeMB, defaultGPUNode,
                     &lastTestedSizeMB);
 
     LOG() << "The largest allocated VRAM buffer is " << std::dec
