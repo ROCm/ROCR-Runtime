@@ -150,6 +150,7 @@ class Flag {
 
     var = os::GetEnvVar("HSA_TOOLS_REPORT_LOAD_FAILURE");
 
+    report_tool_load_failures_explicit_ = (var.empty()) ? false : true;
     ifdebug {
       report_tool_load_failures_ = (var == "1") ? true : false;
     } else {
@@ -185,7 +186,7 @@ class Flag {
 
     var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
     check_sramecc_validity_ = (var == "1") ? false : true;
-    
+
     // Legal values are zero "0" or one "1". Any other value will
     // be interpreted as not defining the env variable.
     var = os::GetEnvVar("HSA_XNACK");
@@ -247,6 +248,10 @@ class Flag {
   bool sdma_wait_idle() const { return sdma_wait_idle_; }
 
   bool report_tool_load_failures() const { return report_tool_load_failures_; }
+
+  bool report_tool_load_failures_explicitly_set() const {
+    return report_tool_load_failures_explicit_;
+  }
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
 
@@ -334,6 +339,7 @@ class Flag {
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
   bool report_tool_load_failures_;
+  bool report_tool_load_failures_explicit_;
   bool disable_fragment_alloc_;
   bool rev_copy_dir_;
   bool fine_grain_pcie_;
