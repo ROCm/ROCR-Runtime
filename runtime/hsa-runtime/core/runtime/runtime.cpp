@@ -2063,9 +2063,20 @@ void Runtime::LoadTools() {
       rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
                                              ROCP_REG_VERSION, &profiler_api_table_, 1, &lib_id);
 
-  if (rocp_reg_status != ROCP_REG_SUCCESS && flag().report_tool_load_failures())
-    fprintf(stderr, "rocprofiler-register failed with error code %i: %s\n", rocp_reg_status,
-            rocprofiler_register_error_string(rocp_reg_status));
+  if (rocp_reg_status != ROCP_REG_SUCCESS && flag().report_tool_load_failures()) {
+    // hsa-runtime, in non-debug mode, enables reporting tool load failures by default,
+    // which is good scheme for when tools were only loaded via the HSA_TOOLS_LIB env variable
+    // but, with automatic detection, this will result in reporting that no tools were available.
+    // So if no tools were available and flag().report_tool_load_failures() is true, we make
+    // sure that HSA_TOOLS_REPORT_LOAD_FAILURE was explicitly set and, if not, we suppress
+    // reporting that no tools were found
+    if (rocp_reg_status != ROCP_REG_NO_TOOLS ||
+        (rocp_reg_status == ROCP_REG_NO_TOOLS &&
+         flag().report_tool_load_failures_explicitly_set())) {
+      fprintf(stderr, "[hsa-runtime][%i] rocprofiler-register failed with error code %i: %s\n",
+              getpid(), rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
+    }
+  }
 
   bool allow_v1_registration = false;
   if(os::IsEnvVarSet("HSA_TOOLS_ROCPROFILER_V1_TOOLS"))
