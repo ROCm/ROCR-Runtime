@@ -230,6 +230,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/core/addrlib.cpp
                    image/addrlib/src/core/addrlib1.cpp
                    image/addrlib/src/core/addrlib2.cpp
+                   image/addrlib/src/core/addrlib3.cpp
                    image/addrlib/src/core/addrobject.cpp
                    image/addrlib/src/core/addrelemlib.cpp
                    image/addrlib/src/r800/ciaddrlib.cpp
@@ -238,6 +239,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/gfx9/gfx9addrlib.cpp
                    image/addrlib/src/gfx10/gfx10addrlib.cpp
                    image/addrlib/src/gfx11/gfx11addrlib.cpp
+                   image/addrlib/src/gfx12/gfx12addrlib.cpp
                    image/device_info.cpp
                    image/hsa_ext_image.cpp
                    image/image_runtime.cpp
@@ -267,10 +269,12 @@ if(${IMAGE_SUPPORT})
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx10
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx11
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx12
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11 )
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx12 )
 
   target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_SRCS} )
 
