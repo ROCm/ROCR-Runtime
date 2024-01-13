@@ -219,7 +219,7 @@ class Flag {
     enable_mwaitx_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
-    enable_ipc_mode_legacy_ = (var == "1") ? true : true; // Temporarily always enable
+    enable_ipc_mode_legacy_ = (var == "1") ? true : false;
 
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
