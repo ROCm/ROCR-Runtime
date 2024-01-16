@@ -1,0 +1,12 @@
+# Anywhere {branch} is used, the branch name will be substituted.
+# These comments will also be removed.
+root: index
+subtrees:
+  - numbered: False
+    entries:
+    - file: structure
+    - file: api
+    - file: environment_variables
+  - caption: About
+    entries:
+    - file: license
