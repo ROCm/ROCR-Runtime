@@ -46,11 +46,13 @@
 static const HsaApiTable* hsaApiTable;
 static const CoreApiTable* coreApiTable;
 static const AmdExtTable* amdExtTable;
+static const ToolsApiTable* toolsApiTable;
 
 void hsa_table_interface_init(const HsaApiTable* apiTable) {
     hsaApiTable = apiTable;
     coreApiTable = apiTable->core_;
     amdExtTable = apiTable->amd_ext_;
+    toolsApiTable = apiTable->tools_;
 }
 
 const HsaApiTable* hsa_table_interface_get_table() {

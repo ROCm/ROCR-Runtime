@@ -59,11 +59,13 @@ namespace core {
     ::AmdExtTable amd_ext_api;
     ::FinalizerExtTable finalizer_api;
     ::ImageExtTable image_api;
+    ::ToolsApiTable tools_api;
 
     HsaApiTable();
     void Init();
     void UpdateCore();
     void UpdateAmdExts();
+    void UpdateTools();
     void CloneExts(void* ptr, uint32_t table_id);
     void LinkExts(void* ptr, uint32_t table_id);
     void Reset();

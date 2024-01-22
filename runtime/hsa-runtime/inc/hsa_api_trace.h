@@ -48,10 +48,12 @@
 #include "hsa_ext_image.h"
 #include "hsa_ext_amd.h"
 #include "hsa_ext_finalize.h"
+#include "hsa_amd_tool.h"
 #else
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ext_amd.h"
 #include "inc/hsa_ext_finalize.h"
+#include "inc/hsa_amd_tool.h"
 #endif
 
 #include <string.h>
@@ -59,12 +61,13 @@
 #include <stddef.h>
 
 // Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION               0x02
+#define HSA_API_TABLE_MAJOR_VERSION               0x03
 #define HSA_CORE_API_TABLE_MAJOR_VERSION          0x02
 #define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x02
 #define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x02
 #define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x02
 #define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION    0x01
+#define HSA_TOOLS_API_TABLE_MAJOR_VERSION         0x01
 
 // Step Ids of the Api tables exported by Hsa Core Runtime
 #define HSA_API_TABLE_STEP_VERSION                0x00
@@ -73,6 +76,7 @@
 #define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
 #define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
 #define HSA_AQLPROFILE_API_TABLE_STEP_VERSION     0x00
+#define HSA_TOOLS_API_TABLE_STEP_VERSION          0x00
 
 // Min function used to copy Api Tables
 static inline uint32_t Min(const uint32_t a, const uint32_t b) {
@@ -145,6 +149,17 @@ struct ApiTableVersion {
   uint32_t minor_id;
   uint32_t step_id;
   uint32_t reserved;
+};
+
+struct ToolsApiTable {
+  ApiTableVersion version;
+
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_alloc_start_fn;
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_alloc_end_fn;
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_free_start_fn;
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_free_end_fn;
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_async_reclaim_start_fn;
+  hsa_amd_tool_event hsa_amd_tool_scratch_event_async_reclaim_end_fn;
 };
 
 // Table to export HSA Finalizer Extension Apis
@@ -446,6 +461,9 @@ struct HsaApiTable {
 
   // Table of function pointers to HSA Image Extension
 	ImageExtTable* image_ext_;
+
+  // Table of function pointers for tools to use
+  ToolsApiTable* tools_;
 };
 
 // Structure containing instances of different api tables
@@ -455,6 +473,7 @@ struct HsaApiTableContainer {
 	AmdExtTable amd_ext;
 	FinalizerExtTable finalizer_ext;
 	ImageExtTable image_ext;
+	ToolsApiTable tools;
 
   // Default initialization of a container instance
   HsaApiTableContainer() {
@@ -475,12 +494,17 @@ struct HsaApiTableContainer {
     finalizer_ext.version.major_id = HSA_FINALIZER_API_TABLE_MAJOR_VERSION;
     finalizer_ext.version.minor_id = sizeof(FinalizerExtTable);
     finalizer_ext.version.step_id = HSA_FINALIZER_API_TABLE_STEP_VERSION;
-    root.finalizer_ext_ = & finalizer_ext;
+    root.finalizer_ext_ = &finalizer_ext;
 
     image_ext.version.major_id = HSA_IMAGE_API_TABLE_MAJOR_VERSION;
     image_ext.version.minor_id = sizeof(ImageExtTable);
     image_ext.version.step_id = HSA_IMAGE_API_TABLE_STEP_VERSION;
     root.image_ext_ = &image_ext;
+
+    tools.version.major_id = HSA_TOOLS_API_TABLE_MAJOR_VERSION;
+    tools.version.minor_id = sizeof(ToolsApiTable);
+    tools.version.step_id = HSA_TOOLS_API_TABLE_STEP_VERSION;
+    root.tools_ = &tools;
   }
 };
 
@@ -536,5 +560,7 @@ static void inline copyTables(const HsaApiTable* src, HsaApiTable* dest) {
     copyElement(&dest->finalizer_ext_->version, &src->finalizer_ext_->version);
   if ((offsetof(HsaApiTable, image_ext_) < dest->version.minor_id))
     copyElement(&dest->image_ext_->version, &src->image_ext_->version);
+  if ((offsetof(HsaApiTable, tools_) < dest->version.minor_id))
+    copyElement(&dest->tools_->version, &src->tools_->version);
 }
 #endif
