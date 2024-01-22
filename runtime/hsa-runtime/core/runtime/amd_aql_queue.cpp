@@ -67,6 +67,7 @@
 #include "core/inc/default_signal.h"
 #include "core/inc/hsa_ext_amd_impl.h"
 #include "core/inc/amd_gpu_pm4.h"
+#include "core/inc/hsa_amd_tool_int.hpp"
 
 namespace rocr {
 namespace AMD {
@@ -827,6 +828,9 @@ void AqlQueue::AsyncReclaimMainScratch() {
 
   // Notify CP that we are trying to reclaim scratch. CP will assume scratch is reclaimed on next
   // dispatch
+  tool::notify_event_scratch_async_reclaim_start(public_handle(),
+                                                 HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+
   amd_queue_.scratch_wave64_lane_byte_size = 0;
   uint64_t last_used =
       atomic::Exchange(&amd_queue_.scratch_last_used_index, UINT64_MAX, std::memory_order_relaxed);
@@ -837,6 +841,8 @@ void AqlQueue::AsyncReclaimMainScratch() {
 
     if (std::min(last, last_used) < amd_queue_.read_dispatch_id) {
       FreeMainScratchSpace();
+      tool::notify_event_scratch_async_reclaim_end(public_handle(),
+                                                   HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
       return;
     }
   }
@@ -859,6 +865,9 @@ void AqlQueue::AsyncReclaimAltScratch() {
 
   // Notify CP that we are trying to reclaim scratch. CP will assume scratch is reclaimed on next
   // dispatch
+  tool::notify_event_scratch_async_reclaim_start(public_handle(),
+                                                 HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+
   amd_queue_.alt_scratch_wave64_lane_byte_size = 0;
   uint64_t last_used = atomic::Exchange(
       &amd_queue_.alt_scratch_last_used_index, UINT64_MAX,
@@ -869,6 +878,8 @@ void AqlQueue::AsyncReclaimAltScratch() {
 
     if (std::min(last, last_used) < amd_queue_.read_dispatch_id) {
       FreeAltScratchSpace();
+      tool::notify_event_scratch_async_reclaim_end(public_handle(),
+                                                   HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
       return;
     }
   }
@@ -911,6 +922,10 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
    * }
    *
    *******************************************************************************************/
+
+  const auto& dispatch_id = amd_queue_.read_dispatch_id;
+  tool::notify_event_scratch_alloc_start(public_handle(), HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE,
+                                         dispatch_id);
 
   auto calc_dispatch_waves_per_group = [&](core::AqlPacket& pkt) {
     const uint64_t lanes_per_group =
@@ -970,7 +985,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
 
   scratch.cooperative = (amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
 
-  uint64_t pkt_slot_idx = amd_queue_.read_dispatch_id & (amd_queue_.hsa_queue.size - 1);
+  uint64_t pkt_slot_idx = dispatch_id & (amd_queue_.hsa_queue.size - 1);
 
   core::AqlPacket& pkt = ((core::AqlPacket*)amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
 
@@ -1010,7 +1025,8 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
       InitScratchSRD();
       // Restart the queue.
       HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0);
-
+      tool::notify_event_scratch_alloc_end(public_handle(), HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT,
+                                           dispatch_id, scratch.alt_size, dispatch_slots);
       return;
     }
     // Could not allocate enough memory for alternate scratch fallback to primary scratch
@@ -1036,6 +1052,8 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
     waitVal = error_code;
   } else if (scratch.main_queue_base == nullptr) {
     // We could not allocate memory to fit even 1 wave
+    tool::notify_event_scratch_alloc_end(public_handle(), HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_USE_ONCE,
+                                         dispatch_id, scratch.main_size, dispatch_slots);
     return;
   }
 
@@ -1058,6 +1076,12 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   InitScratchSRD();
   // Restart the queue.
   HSA::hsa_signal_store_screlease(amd_queue_.queue_inactive_signal, 0);
+
+  auto alloc_flag = (scratch.large) ? HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_USE_ONCE
+                                    : HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE;
+  tool::notify_event_scratch_alloc_end(public_handle(), alloc_flag, dispatch_id, scratch.main_size,
+                                       dispatch_slots);
+
   return;
 }
 
@@ -1080,6 +1104,9 @@ bool AqlQueue::DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* ar
   // Process errors only if queue is not terminating.
   if ((queue->dynamicScratchState & ERROR_HANDLER_TERMINATE) != ERROR_HANDLER_TERMINATE) {
     if (error_code == 512) {  // Large scratch reclaim
+      tool::notify_event_scratch_free_start(queue->public_handle(),
+                                            HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_USE_ONCE);
+
       auto& scratch = queue->queue_scratch_;
       queue->agent_->ReleaseQueueMainScratch(scratch);
       scratch.main_queue_base = nullptr;
@@ -1094,6 +1121,8 @@ bool AqlQueue::DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* ar
                     queue->amd_queue_.queue_properties & (~AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE),
                     std::memory_order_release);
       atomic::Fence(std::memory_order_release);
+      tool::notify_event_scratch_free_end(queue->public_handle(),
+                                          HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_USE_ONCE);
       return true;
     }
 
