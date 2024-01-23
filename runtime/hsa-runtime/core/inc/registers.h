@@ -134,6 +134,23 @@ SQ_SEL_W                                 = 0x00000007,
           float f32All;
         };
 
+        union COMPUTE_TMPRING_SIZE_GFX12 {
+          struct {
+#if defined(LITTLEENDIAN_CPU)
+            unsigned int WAVES : 12;
+            unsigned int WAVESIZE : 18;
+            unsigned int : 2;
+#elif defined(BIGENDIAN_CPU)
+            unsigned int : 2;
+            unsigned int WAVESIZE : 18;
+            unsigned int WAVES : 12;
+#endif
+          } bitfields, bits;
+          unsigned int u32All;
+          signed int i32All;
+          float f32All;
+        };
+
 
         union SQ_BUF_RSRC_WORD0 {
 	struct {
@@ -293,6 +310,44 @@ SQ_SEL_W                                 = 0x00000007,
             unsigned int TYPE : 2;
             unsigned int OOB_SELECT : 2;
             unsigned int RESERVED2 : 4;
+            unsigned int ADD_TID_ENABLE : 1;
+            unsigned int INDEX_STRIDE : 2;
+            unsigned int RESERVED1 : 3;
+            unsigned int FORMAT : 6;
+            unsigned int DST_SEL_W : 3;
+            unsigned int DST_SEL_Z : 3;
+            unsigned int DST_SEL_Y : 3;
+            unsigned int DST_SEL_X : 3;
+#endif
+          } bitfields, bits;
+        unsigned int	u32All;
+	signed int	i32All;
+	float	f32All;
+        };
+
+        // From V# Table
+        union SQ_BUF_RSRC_WORD3_GFX12 {
+          struct {
+#if defined(LITTLEENDIAN_CPU)
+            unsigned int DST_SEL_X : 3;
+            unsigned int DST_SEL_Y : 3;
+            unsigned int DST_SEL_Z : 3;
+            unsigned int DST_SEL_W : 3;
+            unsigned int FORMAT : 6;
+            unsigned int RESERVED1 : 3;
+            unsigned int INDEX_STRIDE : 2;
+            unsigned int ADD_TID_ENABLE : 1;
+            unsigned int WRITE_COMPRESS_ENABLE : 1;
+            unsigned int COMPRESSION_EN : 1;
+            unsigned int COMPRESSION_ACCESS_MODE : 2;
+            unsigned int OOB_SELECT : 2;
+            unsigned int TYPE : 2;
+#elif defined(BIGENDIAN_CPU)
+            unsigned int TYPE : 2;
+            unsigned int OOB_SELECT : 2;
+            unsigned int COMPRESSION_ACCESS_MODE : 2;
+            unsigned int COMPRESSION_EN : 1;
+            unsigned int WRITE_COMPRESS_ENABLE : 1;
             unsigned int ADD_TID_ENABLE : 1;
             unsigned int INDEX_STRIDE : 2;
             unsigned int RESERVED1 : 3;
