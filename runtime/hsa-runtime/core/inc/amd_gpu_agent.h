@@ -600,7 +600,7 @@ class GpuAgent : public GpuAgentInt {
   void ReleaseScratch(void* base, size_t size, bool large);
 
   // Bind index of peer device that is connected via xGMI links
-  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent, int gang_id);
+  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
 
   // Bind the Blit object that will drive the copy operation
   // across PCIe links (H2D or D2H) or is within same device D2D
@@ -608,7 +608,7 @@ class GpuAgent : public GpuAgentInt {
 
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
-                                      const size_t size, int gang_id);
+                                      const size_t size);
 
   // Bind the Blit object that will drive the copy operation by engine ID
   lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
@@ -662,7 +662,7 @@ class GpuAgent : public GpuAgentInt {
   // Check if SDMA engine by ID is free
   bool DmaEngineIsFree(uint32_t engine_id);
 
-  std::vector<std::pair<core::Agent&,unsigned int>> gang_peers_info_;
+  std::map<uint64_t,unsigned int> gang_peers_info_;
 };
 
 }  // namespace amd
