@@ -55,6 +55,7 @@
 #include "image_manager_ai.h"
 #include "image_manager_nv.h"
 #include "image_manager_gfx11.h"
+#include "image_manager_gfx12.h"
 #include "device_info.h"
 
 namespace rocr {
@@ -110,14 +111,22 @@ hsa_status_t ImageRuntime::CreateImageManager(hsa_agent_t agent, void* data) {
 
     ImageManager* image_manager;
 
-    if (major_ver >= 11) {
+    switch (major_ver) {
+    case 12:
+      image_manager = new ImageManagerGfx12();
+      break;
+    case 11:
       image_manager = new ImageManagerGfx11();
-    } else if (major_ver >= 10) {
+      break;
+    case 10:
       image_manager = new ImageManagerNv();
-    } else if (major_ver >= 9) {
+      break;
+    case  9:
       image_manager = new ImageManagerAi();
-    } else {
+      break;
+    default:
       image_manager = new ImageManagerKv();
+      break;
     }
     hsa_error_code = image_manager->Initialize(agent);
 
