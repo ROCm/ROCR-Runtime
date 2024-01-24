@@ -1674,6 +1674,26 @@ void AqlQueue::FillBufRsrcWord3_Gfx11() {
   amd_queue_.scratch_resource_descriptor[3] = srd3.u32All;
 }
 
+void AqlQueue::FillBufRsrcWord3_Gfx12() {
+  SQ_BUF_RSRC_WORD3_GFX12 srd3;
+
+  srd3.bits.DST_SEL_X = SQ_SEL_X;
+  srd3.bits.DST_SEL_Y = SQ_SEL_Y;
+  srd3.bits.DST_SEL_Z = SQ_SEL_Z;
+  srd3.bits.DST_SEL_W = SQ_SEL_W;
+  srd3.bits.FORMAT = BUF_FORMAT_32_UINT;
+  srd3.bits.RESERVED1 = 0;
+  srd3.bits.INDEX_STRIDE = 0;  // filled in by CP
+  srd3.bits.ADD_TID_ENABLE = 1;
+  srd3.bits.WRITE_COMPRESS_ENABLE = 0;
+  srd3.bits.COMPRESSION_EN = 0;
+  srd3.bits.COMPRESSION_ACCESS_MODE = 0;
+  srd3.bits.OOB_SELECT = 2;  // no bounds check in swizzle mode
+  srd3.bits.TYPE = SQ_RSRC_BUF;
+
+  amd_queue_.scratch_resource_descriptor[3] = srd3.u32All;
+}
+
 // Set concurrent wavefront limits only when scratch is being used.
 void AqlQueue::FillComputeTmpRingSize() {
   COMPUTE_TMPRING_SIZE tmpring_size = {};
@@ -1772,11 +1792,52 @@ void AqlQueue::FillComputeTmpRingSize_Gfx11() {
   amd_queue_.compute_tmpring_size = tmpring_size.u32All;
 }
 
+// Set concurrent wavefront limits only when scratch is being used.
+void AqlQueue::FillComputeTmpRingSize_Gfx12() {
+  // For GFX12, struct field size changes.
+  // Consider refactoring code for GFX11/GFX12 if no other changes.
+  COMPUTE_TMPRING_SIZE_GFX12 tmpring_size = {};
+  if (queue_scratch_.main_size == 0) {
+    amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+    return;
+  }
+
+  const auto& agent_props = agent_->properties();
+  const uint32_t num_xcc = agent_props.NumXcc;
+
+  // Determine the maximum number of waves device can support
+  uint32_t num_cus = agent_props.NumFComputeCores / (agent_props.NumSIMDPerCU * num_xcc);
+  uint32_t max_scratch_waves = num_cus * agent_props.MaxSlotsScratchCU;
+
+  // Scratch is allocated program COMPUTE_TMPRING_SIZE register
+  // Scratch Size per Wave is specified in terms of kilobytes
+  uint32_t wave_scratch = (((queue_scratch_.main_lanes_per_wave * queue_scratch_.main_size_per_thread) +
+                            queue_scratch_.mem_alignment_size - 1) /
+                           queue_scratch_.mem_alignment_size);
+
+  tmpring_size.bits.WAVESIZE = wave_scratch;
+  assert(wave_scratch == tmpring_size.bits.WAVESIZE && "WAVESIZE Overflow.");
+
+  uint32_t num_waves =
+      queue_scratch_.main_size / (tmpring_size.bits.WAVESIZE * queue_scratch_.mem_alignment_size);
+
+  // For GFX11 we specify number of waves per engine instead of total
+  num_waves /= agent_->properties().NumShaderBanks;
+  tmpring_size.bits.WAVES = std::min(num_waves, max_scratch_waves);
+  amd_queue_.compute_tmpring_size = tmpring_size.u32All;
+}
+
 // @brief Define the Scratch Buffer Descriptor and related parameters
 // that enable kernel access scratch memory
 void AqlQueue::InitScratchSRD() {
   switch (agent_->isa()->GetMajorVersion()) {
     case 12:
+      FillBufRsrcWord0();
+      FillBufRsrcWord1_Gfx11();
+      FillBufRsrcWord2();
+      FillBufRsrcWord3_Gfx12();
+      FillComputeTmpRingSize_Gfx12();
+      break;
     case 11:
       FillBufRsrcWord0();
       FillBufRsrcWord1_Gfx11();

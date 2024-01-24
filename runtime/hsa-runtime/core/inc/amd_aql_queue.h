@@ -252,9 +252,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void FillBufRsrcWord3();
   void FillBufRsrcWord3_Gfx10();
   void FillBufRsrcWord3_Gfx11();
+  void FillBufRsrcWord3_Gfx12();
   void FillComputeTmpRingSize();
   void FillAltComputeTmpRingSize();
   void FillComputeTmpRingSize_Gfx11();
+  void FillComputeTmpRingSize_Gfx12();
 
   void FreeMainScratchSpace();
   void FreeAltScratchSpace();
