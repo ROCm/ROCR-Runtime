@@ -2296,7 +2296,7 @@ typedef enum {
   // SRAM ECC failure (ie registers, no fault address).
   HSA_AMD_MEMORY_FAULT_SRAMECC = 1 << 6,
   // GPU reset following unspecified hang.
-  HSA_AMD_MEMORY_FAULT_HANG = 1 << 31
+  HSA_AMD_MEMORY_FAULT_HANG = 1U << 31
 } hsa_amd_memory_fault_reason_t;
 
 /**
