@@ -1375,6 +1375,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   if (ret != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   if (ipc_dmabuf_supported_) {
+    close(dmabuf_fd);
     importAddress = info.MemoryAddress;
     importSize = info.SizeInBytes;
   }
