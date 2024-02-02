@@ -347,6 +347,35 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
   err = hsa_amd_memory_pool_allocate(pool, allocate_sz1, 0, &memPtr1);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
+  hsa_amd_pointer_info_t info = {};
+  info.size = sizeof(info);
+
+  // Check pointer info for valid pointer
+  ASSERT_SUCCESS(hsa_amd_pointer_info(memPtr1, &info, NULL, 0, NULL));
+
+  ASSERT_EQ(info.type, HSA_EXT_POINTER_TYPE_HSA);
+  ASSERT_EQ(info.sizeInBytes, allocate_sz1);
+  ASSERT_EQ(info.agentOwner.handle, ag.handle);
+  // ROCR may return a smaller size of info if it is an older version of ROCr and ROCr's
+  // internal definition hsa_amd_pointer_info_t is smaller than the users. But ROCr cannot
+  // return a bigger size
+  ASSERT_LE(info.size, sizeof(info));
+
+  // Check pointer info for invalid pointer
+  hsa_amd_pointer_info_t info2 = {};
+  info2.size = sizeof(info2);
+  ASSERT_SUCCESS(hsa_amd_pointer_info((memPtr1 + allocate_sz1 + 1), &info2, NULL, 0, NULL));
+  ASSERT_EQ(info2.type, HSA_EXT_POINTER_TYPE_UNKNOWN);
+
+  // Simulate case where ROCr has added extra parameters to hsa_amd_pointer_info.
+  // i.e ROCr's hsa_amd_pointer_info is bigger than user's hsa_amd_pointer_info
+  // ROCr should still return info.size same as user's size
+  hsa_amd_pointer_info_t info3 = {};
+  info3.size = sizeof(info3) - 2;
+  ASSERT_SUCCESS(hsa_amd_pointer_info(memPtr1, &info3, NULL, 0, NULL));
+  ASSERT_EQ(info.type, HSA_EXT_POINTER_TYPE_HSA);
+  ASSERT_EQ(info3.size, sizeof(info3) - 2);
+
   err = hsa_agent_get_info(ag, (hsa_agent_info_t)HSA_AMD_AGENT_INFO_MEMORY_AVAIL,
                             &ag_avail_memory_after);
   ASSERT_EQ(err, HSA_STATUS_SUCCESS);
