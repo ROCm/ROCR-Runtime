@@ -76,6 +76,7 @@ class VirtMemoryTestBasic : public TestBase {
   void TestCreateDestroy(void);
   void TestRefCount(void);
   void TestPartialMapping(void);
+  void NonContiguousChunks(void);
   void GPUAccessToCPUMemoryTest(void);
   void CPUAccessToGPUMemoryTest(void);
   void GPUAccessToGPUMemoryTest(void);
@@ -84,6 +85,9 @@ class VirtMemoryTestBasic : public TestBase {
   void TestCreateDestroy(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
   void TestRefCount(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
   void TestPartialMapping(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
+  void NonContiguousChunks(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
+                           hsa_amd_memory_pool_t pool);
+
   void GPUAccessToCPUMemoryTest(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
                                 hsa_amd_memory_pool_t pool);
   void CPUAccessToGPUMemoryTest(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
