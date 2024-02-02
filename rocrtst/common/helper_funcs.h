@@ -156,5 +156,8 @@ static __forceinline ScopeGuard<lambda> MakeScopeGuard(lambda rel) {
                           __VA_ARGS__)
 
 #define ASSERT_SUCCESS(_val) ASSERT_EQ(HSA_STATUS_SUCCESS, (_val))
+
+#define ARRAY_SIZE(_x) (sizeof(_x) / sizeof(_x[0]))
+
 }  // namespace rocrtst
 #endif  //  ROCRTST_COMMON_HELPER_FUNCS_H_

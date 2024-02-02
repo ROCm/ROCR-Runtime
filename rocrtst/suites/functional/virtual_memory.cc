@@ -575,11 +575,9 @@ void VirtMemoryTestBasic::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent, hsa_age
   hsa_queue_t* queue = NULL;  // command queue
   hsa_signal_t signal = {0};  // completion signal
 
-  // size_t granule_size = pool_i.alloc_granule;
-  size_t granule_size = 4096;  // TODO: Fixme
+  size_t& granule_size = pool_i.alloc_granule;
   size_t alloc_size = granule_size * 100;
   static const int kMemoryAllocSize = 1024;
-  // static const int kMemoryAllocSize = 4096;
   unsigned int max_element = alloc_size / sizeof(unsigned int);
 
   // get queue size
@@ -785,6 +783,261 @@ void VirtMemoryTestBasic::GPUAccessToCPUMemoryTest(void) {
     std::cout << kSubTestSeparator << std::endl;
   }
 }
+
+// Test to check GPU can read & write to GPU memory
+void VirtMemoryTestBasic::GPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent, hsa_agent_t gpuAgent,
+                                                   hsa_amd_memory_pool_t device_pool) {
+  rocrtst::pool_info_t pool_i;
+  hsa_device_type_t ag_type;
+  char ag_name[64];
+  hsa_status_t err;
+
+  ASSERT_SUCCESS(rocrtst::AcquirePoolInfo(device_pool, &pool_i));
+
+  if (!pool_i.alloc_allowed || pool_i.segment != HSA_AMD_SEGMENT_GLOBAL ||
+      pool_i.global_flag != HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED)
+    return;
+
+  hsa_amd_memory_pool_access_t access;
+  ASSERT_SUCCESS(hsa_amd_agent_memory_pool_get_info(
+      cpuAgent, device_pool, HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS, &access));
+
+  if (access == HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) {
+    if (verbosity() > 0) {
+      std::cout << "    Test not applicable as system is not large bar - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+      return;
+    }
+  }
+
+  hsa_queue_t* queue = NULL;  // command queue
+  hsa_signal_t signal = {0};  // completion signal
+
+  size_t& granule_size = pool_i.alloc_granule;
+  size_t alloc_size = granule_size * 100;
+  static const int kMemoryAllocSize = 4096;
+  unsigned int max_element = alloc_size / sizeof(unsigned int);
+
+  // get queue size
+  uint32_t queue_size = 0;
+  ASSERT_SUCCESS(hsa_agent_get_info(gpuAgent, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &queue_size));
+
+  // create queue
+  ASSERT_SUCCESS(
+      hsa_queue_create(gpuAgent, queue_size, HSA_QUEUE_TYPE_MULTI, NULL, NULL, 0, 0, &queue));
+
+  // Find a memory pool that supports kernel arguments.
+  hsa_amd_memory_pool_t kernarg_pool;
+  ASSERT_SUCCESS(
+      hsa_amd_agent_iterate_memory_pools(cpuAgent, rocrtst::GetKernArgMemoryPool, &kernarg_pool));
+
+  // Get System Memory Pool on the cpuAgent to allocate host side buffers
+  hsa_amd_memory_pool_t global_pool;
+  ASSERT_SUCCESS(
+      hsa_amd_agent_iterate_memory_pools(cpuAgent, rocrtst::GetGlobalMemoryPool, &global_pool));
+
+  struct host_data_t {
+    int data[kMemoryAllocSize * 4];
+    int gpuWrite[kMemoryAllocSize * 4];
+    int result[kMemoryAllocSize * 4];
+  };
+
+  struct dev_data_t {
+    int data[kMemoryAllocSize * 4];
+    int result[kMemoryAllocSize * 4];
+  };
+
+
+  struct host_data_t* host_data;
+  struct dev_data_t* dev_data;
+
+  ASSERT_SUCCESS(hsa_amd_memory_pool_allocate(global_pool, sizeof(*host_data), 0,
+                                              reinterpret_cast<void**>(&host_data)));
+
+  // Allow gpuAgent access to all allocated system memory.
+  ASSERT_SUCCESS(hsa_amd_agents_allow_access(1, &gpuAgent, NULL, host_data));
+  ASSERT_SUCCESS(hsa_amd_vmem_address_reserve((void**)&dev_data, sizeof(*dev_data), 0, 0));
+
+  hsa_amd_vmem_alloc_handle_t mem_handle;
+
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_create(device_pool, sizeof(*dev_data), MEMORY_TYPE_PINNED, 0,
+                                            &mem_handle));
+
+  ASSERT_SUCCESS(hsa_amd_vmem_map(dev_data, sizeof(*dev_data), 0, mem_handle, 0));
+
+  // Give host and device access to device data
+  hsa_amd_memory_access_desc_t permsAccess[] = {{HSA_ACCESS_PERMISSION_RW, gpuAgent}};
+
+  ASSERT_SUCCESS(
+      hsa_amd_vmem_set_access(dev_data, sizeof(*dev_data), permsAccess, ARRAY_SIZE(permsAccess)));
+
+  // Allocate the kernel argument buffer from the kernarg_pool.
+  ASSERT_SUCCESS(hsa_amd_memory_pool_allocate(kernarg_pool, sizeof(args_t), 0,
+                                              reinterpret_cast<void**>(&kernArgsVirt)));
+
+  // create completion signal
+  ASSERT_SUCCESS(hsa_signal_create(1, 0, NULL, &signal));
+
+  // initialize the host buffers
+  for (int i = 0; i < kMemoryAllocSize; ++i) {
+    unsigned int seed = time(NULL);
+    host_data->data[i] = 1 + rand_r(&seed) % 1;
+  }
+
+  ASSERT_SUCCESS(hsa_amd_memory_async_copy(dev_data->data, gpuAgent, host_data->data, cpuAgent,
+                                           kMemoryAllocSize * 4, 0, NULL, signal));
+
+  while (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+                                   HSA_WAIT_STATE_ACTIVE)) {
+  }
+  hsa_signal_store_relaxed(signal, 1);
+
+  memset(host_data->result, 0, sizeof(host_data->result));
+
+  ASSERT_SUCCESS(hsa_amd_agents_allow_access(1, &gpuAgent, NULL, kernArgsVirt));
+
+
+  kernArgsVirt->a = dev_data->data;
+  kernArgsVirt->b = host_data->gpuWrite;  // system memory passed to gpu for write
+  kernArgsVirt->c = dev_data->result;     // gpu memory to verify that gpu read system data
+
+  // Create the executable, get symbol by name and load the code object
+  set_kernel_file_name("gpuReadWrite_kernels.hsaco");
+  set_kernel_name("gpuReadWrite");
+  ASSERT_SUCCESS(rocrtst::LoadKernelFromObjFile(this, &gpuAgent));
+
+  // Fill the dispatch packet with
+  // workgroup_size, grid_size, kernelArgs and completion signal
+  // Put it on the queue and launch the kernel by ringing the doorbell
+
+  // create aql packet
+  hsa_kernel_dispatch_packet_t aql;
+  memset(&aql, 0, sizeof(aql));
+
+  // initialize aql packet
+  aql.workgroup_size_x = 256;
+  aql.workgroup_size_y = 1;
+  aql.workgroup_size_z = 1;
+  aql.grid_size_x = kMemoryAllocSize;
+  aql.grid_size_y = 1;
+  aql.grid_size_z = 1;
+  aql.private_segment_size = 0;
+  aql.group_segment_size = 0;
+  aql.kernel_object = kernel_object();  // kernel_code;
+  aql.kernarg_address = kernArgsVirt;
+  aql.completion_signal = signal;
+
+  const uint32_t queue_mask = queue->size - 1;
+
+  // write to command queue
+  uint64_t index = hsa_queue_load_write_index_relaxed(queue);
+  hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+  rocrtst::WriteAQLToQueueLoc(queue, index, &aql);
+
+  hsa_kernel_dispatch_packet_t* q_base_addr =
+      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(queue->base_address);
+  rocrtst::AtomicSetPacketHeader(
+      (HSA_PACKET_TYPE_KERNEL_DISPATCH << HSA_PACKET_HEADER_TYPE) |
+          (1 << HSA_PACKET_HEADER_BARRIER) |
+          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
+          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE),
+      (1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS),
+      reinterpret_cast<hsa_kernel_dispatch_packet_t*>(&q_base_addr[index & queue_mask]));
+
+  // ringdoor bell
+  hsa_signal_store_relaxed(queue->doorbell_signal, index);
+  // wait for the signal and reset it for future use
+  while (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+                                   HSA_WAIT_STATE_ACTIVE)) {
+  }
+  hsa_signal_store_relaxed(signal, 1);
+
+  ASSERT_SUCCESS(hsa_amd_memory_async_copy(host_data->result, cpuAgent, dev_data->result, gpuAgent,
+                                           kMemoryAllocSize * 4, 0, NULL, signal));
+
+  while (hsa_signal_wait_scacquire(signal, HSA_SIGNAL_CONDITION_LT, 1, (uint64_t)-1,
+                                   HSA_WAIT_STATE_ACTIVE)) {
+  }
+  // compare device and host side results
+  if (verbosity() > 0) {
+    std::cout << "    Check GPU has read the system memory" << std::endl;
+  }
+  for (int i = 0; i < kMemoryAllocSize; ++i) {
+    // printf("Verifying data at index[%d]\n", i);
+    ASSERT_EQ(host_data->result[i], host_data->data[i]);
+  }
+
+  if (verbosity() > 0) {
+    std::cout << "    GPU has read the system memory successfully" << std::endl;
+    std::cout << "    Check GPU has written to system memory" << std::endl;
+  }
+  for (int i = 0; i < kMemoryAllocSize; ++i) {
+    ASSERT_EQ(host_data->gpuWrite[i], i);
+  }
+
+  if (verbosity() > 0) {
+    std::cout << "    GPU has written to system memory successfully" << std::endl;
+  }
+
+  ASSERT_SUCCESS(hsa_amd_vmem_unmap(dev_data, sizeof(*dev_data)));
+  ASSERT_SUCCESS(hsa_amd_vmem_handle_release(mem_handle));
+
+  if (dev_data) {
+    ASSERT_SUCCESS(hsa_amd_vmem_address_free(dev_data, sizeof(*dev_data)));
+  }
+
+  if (host_data) hsa_memory_free(host_data);
+  if (kernArgsVirt) {
+    hsa_memory_free(kernArgsVirt);
+  }
+  if (signal.handle) {
+    hsa_signal_destroy(signal);
+  }
+  if (queue) {
+    hsa_queue_destroy(queue);
+  }
+}
+
+void VirtMemoryTestBasic::GPUAccessToGPUMemoryTest(void) {
+  hsa_status_t err;
+  // find all cpu agents
+  std::vector<hsa_agent_t> cpus;
+  ASSERT_SUCCESS(hsa_iterate_agents(rocrtst::IterateCPUAgents, &cpus));
+
+  // find all gpu agents
+  std::vector<hsa_agent_t> gpus;
+  ASSERT_SUCCESS(hsa_iterate_agents(rocrtst::IterateGPUAgents, &gpus));
+
+  if (verbosity() > 0) PrintMemorySubtestHeader("GPU To GPU Access test");
+
+  bool supp = false;
+  ASSERT_SUCCESS(hsa_system_get_info(HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED, (void*)&supp));
+  if (!supp) {
+    if (verbosity() > 0) {
+      std::cout << "    Virtual Memory API not supported on this system - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
+  for (unsigned int i = 0; i < gpus.size(); ++i) {
+    hsa_amd_memory_pool_t gpu_pool;
+    memset(&gpu_pool, 0, sizeof(gpu_pool));
+    ASSERT_SUCCESS(
+        hsa_amd_agent_iterate_memory_pools(gpus[i], rocrtst::GetGlobalMemoryPool, &gpu_pool));
+    if (gpu_pool.handle == 0) {
+      std::cout << "no global mempool in GPU agent" << std::endl;
+      return;
+    }
+    GPUAccessToGPUMemoryTest(cpus[0], gpus[i], gpu_pool);
+  }
+  if (verbosity() > 0) {
+    std::cout << "    Subtest finished" << std::endl;
+    std::cout << kSubTestSeparator << std::endl;
+  }
+}
+
 
 void VirtMemoryTestBasic::SetUp(void) {
   hsa_status_t err;

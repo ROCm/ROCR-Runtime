@@ -381,8 +381,16 @@ TEST(rocrtstFunc, VirtMemory_Basic_Test) {
   vmt.TestCreateDestroy();
   vmt.TestRefCount();
   vmt.TestPartialMapping();
+  RunCustomTestEpilog(&vmt);
+}
+
+TEST(rocrtstFunc, VirtMemory_Access_Test) {
+  VirtMemoryTestBasic vmt;
+
+  RunCustomTestProlog(&vmt);
   vmt.CPUAccessToGPUMemoryTest();
   vmt.GPUAccessToCPUMemoryTest();
+  vmt.GPUAccessToGPUMemoryTest();
   RunCustomTestEpilog(&vmt);
 }
 
