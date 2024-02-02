@@ -1038,6 +1038,109 @@ void VirtMemoryTestBasic::GPUAccessToGPUMemoryTest(void) {
   }
 }
 
+void VirtMemoryTestBasic::NonContiguousChunks(hsa_agent_t cpuAgent, hsa_agent_t gpuAgent,
+                                              hsa_amd_memory_pool_t device_pool) {
+  rocrtst::pool_info_t pool_i;
+  hsa_device_type_t ag_type;
+  char ag_name[64];
+  hsa_status_t err;
+
+  ASSERT_SUCCESS(rocrtst::AcquirePoolInfo(device_pool, &pool_i));
+
+  if (!pool_i.alloc_allowed || pool_i.segment != HSA_AMD_SEGMENT_GLOBAL ||
+      pool_i.global_flag != HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_COARSE_GRAINED)
+    return;
+
+  hsa_amd_memory_pool_access_t access;
+  ASSERT_SUCCESS(hsa_amd_agent_memory_pool_get_info(
+      cpuAgent, device_pool, HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS, &access));
+
+  if (access == HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED) {
+    if (verbosity() > 0) {
+      std::cout << "    Test not applicable as system is not large bar - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+      return;
+    }
+  }
+
+  size_t& granule_size = pool_i.alloc_granule;
+  size_t alloc_size = granule_size * 512;
+  const uint64_t NUM_BUFFERS = 6;
+
+  void* addr;
+  void* addr_chunks[NUM_BUFFERS];
+  hsa_amd_vmem_alloc_handle_t mem_handles[NUM_BUFFERS];
+
+  static const int kMemoryAllocSize = 4096;
+  unsigned int max_element = alloc_size / sizeof(unsigned int);
+
+  ASSERT_SUCCESS(hsa_amd_vmem_address_reserve((void**)&addr, NUM_BUFFERS * alloc_size, 0, 0));
+
+  for (unsigned i = 0; i < NUM_BUFFERS; i++) {
+    // Allocate 6 separate memory memory handles
+    ASSERT_SUCCESS(hsa_amd_vmem_handle_create(device_pool, alloc_size, MEMORY_TYPE_PINNED, 0,
+                                              &(mem_handles[i])));
+    addr_chunks[i] = ((uint8_t*)addr) + (i * alloc_size);
+  }
+
+  for (unsigned i = 0; i < NUM_BUFFERS; i++) {
+    // Map each chunk in reverse order
+    ASSERT_SUCCESS(hsa_amd_vmem_map(addr_chunks[i], alloc_size, 0, mem_handles[NUM_BUFFERS - i - 1],
+                                    alloc_size));
+  }
+
+  hsa_amd_memory_access_desc_t permsAccess[] = {{HSA_ACCESS_PERMISSION_RW, gpuAgent}};
+
+  ASSERT_SUCCESS(hsa_amd_vmem_set_access(addr, NUM_BUFFERS * alloc_size, permsAccess,
+                                         ARRAY_SIZE(permsAccess)));
+
+  for (int i = 0; i < NUM_BUFFERS; i++) {
+    // TODO Map them in opposite order
+    ASSERT_SUCCESS(hsa_amd_vmem_unmap(addr_chunks[i], alloc_size));
+  }
+
+  ASSERT_SUCCESS(hsa_amd_vmem_address_free(addr, NUM_BUFFERS * alloc_size));
+}
+
+void VirtMemoryTestBasic::NonContiguousChunks(void) {
+  hsa_status_t err;
+
+  if (verbosity() > 0) PrintMemorySubtestHeader("GPU To GPU Access test");
+
+  bool supp = false;
+  ASSERT_SUCCESS(hsa_system_get_info(HSA_AMD_SYSTEM_INFO_VIRTUAL_MEM_API_SUPPORTED, (void*)&supp));
+  if (!supp) {
+    if (verbosity() > 0) {
+      std::cout << "    Virtual Memory API not supported on this system - Skipping." << std::endl;
+      std::cout << kSubTestSeparator << std::endl;
+    }
+    return;
+  }
+
+  // find all cpu agents
+  std::vector<hsa_agent_t> cpus;
+  ASSERT_SUCCESS(hsa_iterate_agents(rocrtst::IterateCPUAgents, &cpus));
+
+  // find all gpu agents
+  std::vector<hsa_agent_t> gpus;
+  ASSERT_SUCCESS(hsa_iterate_agents(rocrtst::IterateGPUAgents, &gpus));
+
+  for (unsigned int i = 0; i < gpus.size(); ++i) {
+    hsa_amd_memory_pool_t gpu_pool;
+    memset(&gpu_pool, 0, sizeof(gpu_pool));
+    ASSERT_SUCCESS(
+        hsa_amd_agent_iterate_memory_pools(gpus[i], rocrtst::GetGlobalMemoryPool, &gpu_pool));
+    if (gpu_pool.handle == 0) {
+      std::cout << "no global mempool in GPU agent" << std::endl;
+      return;
+    }
+    NonContiguousChunks(cpus[0], gpus[i], gpu_pool);
+  }
+  if (verbosity() > 0) {
+    std::cout << "    Subtest finished" << std::endl;
+    std::cout << kSubTestSeparator << std::endl;
+  }
+}
 
 void VirtMemoryTestBasic::SetUp(void) {
   hsa_status_t err;
