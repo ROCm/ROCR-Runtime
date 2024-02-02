@@ -1108,6 +1108,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
 
   // Reject sharing allocations larger than ~8TB due to thunk limitations.
   if (len > 0x7FFFFFFF000ull) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  memset(handle->handle, 0, sizeof(handle->handle));
 
   // Check for fragment sharing.
   PtrInfoBlockData block;
@@ -1143,7 +1144,6 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   } else {
     uint64_t fragOffset;
     int dmabuf_fd = -1;
-    bool isSysMem = false;
 
     {
       ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
@@ -1155,7 +1155,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
             (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
           // Check size is in bounds.
           if (uintptr_t(ptr) - uintptr_t(mem->first) + len <= mem->second.size) {
-            isSysMem = mem->second.region->owner()->device_type() == Agent::kAmdCpuDevice;
+            handle->handle[3] = mem->second.region->owner()->device_type() == Agent::kAmdCpuDevice;
           } else {
             return HSA_STATUS_ERROR_INVALID_ALLOCATION;
           }
@@ -1164,13 +1164,12 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
     }
 
     // System sub allocations are not supported for now.
-    if (isSysMem && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
     assert(err == HSAKMT_STATUS_SUCCESS && dmabuf_fd > -1 &&
            "DMA buffer could not be exported for IPC!");
     if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
-    if (isSysMem) handle->handle[3] = 1; // manually import and GPU map with libDRM on attach
 
     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
     if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
@@ -1260,15 +1259,11 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   static const int tinyArraySize = 8;
   void* importAddress;
   HSAuint64 importSize;
-  HSAuint64 altAddress;
-
-  hsa_amd_ipc_memory_t importHandle;
-  importHandle = *handle;
+  hsa_amd_ipc_memory_t importHandle = *handle;
 
   // Extract fragment info
   bool isFragment = false;
   uint32_t fragOffset = 0;
-  int dmabuf_fd = -1;
 
   auto fixFragment = [&](amdgpu_bo_handle ldrm_bo) {
     if (isFragment) {
@@ -1279,6 +1274,54 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     allocation_map_[importAddress] =
         AllocationRegion(nullptr, len, len, core::MemoryRegion::AllocateNoFlags);
     allocation_map_[importAddress].ldrm_bo = ldrm_bo;
+  };
+
+  int dmabuf_fd = -1;
+  HsaGraphicsResourceInfo info;
+  auto importMemory = [&](unsigned int numNodes, HSAuint32 *nodes,
+                          bool closeDmaBufFd) {
+    int ret = ipc_dmabuf_supported_ ?
+          hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, numNodes, nodes) :
+          hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle),
+                                     &importAddress, &importSize);
+    if (ret != HSAKMT_STATUS_SUCCESS) {
+      if (ipc_dmabuf_supported_) close(dmabuf_fd);
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    }
+
+    if (ipc_dmabuf_supported_) {
+      importAddress = info.MemoryAddress;
+      importSize = info.SizeInBytes;
+      if (closeDmaBufFd) close(dmabuf_fd);
+    }
+
+    return HSA_STATUS_SUCCESS;
+  };
+
+  auto mapMemoryToNodes = [&](unsigned int numNodes, HSAuint32 *nodes) {
+    HSAuint64 altAddress;
+    if (!numNodes) {
+      if (hsaKmtMapMemoryToGPU(importAddress, importSize, &altAddress) != HSAKMT_STATUS_SUCCESS) {
+        hsaKmtDeregisterMemory(importAddress);
+        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+      }
+    } else {
+      HsaMemMapFlags map_flags;
+      map_flags.Value = 0;
+      map_flags.ui32.PageSize = HSA_PAGE_SIZE_64KB;
+      if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, numNodes,
+                                    nodes) != HSAKMT_STATUS_SUCCESS) {
+        map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
+        if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, numNodes,
+                                      nodes) != HSAKMT_STATUS_SUCCESS) {
+          hsaKmtDeregisterMemory(importAddress);
+          return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+        }
+      }
+    }
+    fixFragment(NULL);
+    *mapped_ptr = importAddress;
+    return HSA_STATUS_SUCCESS;
   };
 
   if ((importHandle.handle[6] & 0x80000000) != 0) {
@@ -1296,60 +1339,52 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     if (dmabuf_fd == -1) return HSA_STATUS_ERROR;
   }
 
-  HsaGraphicsResourceInfo info;
-  amdgpu_bo_handle bo = NULL;
   if (num_agents == 0) {
-    int ret;
-    ret = ipc_dmabuf_supported_ ? hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, 0, NULL) :
-          hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle),
-                                     &importAddress, &importSize);
-    if (ret != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    hsa_status_t err = importMemory(0, NULL, false);
+    if (err != HSA_STATUS_SUCCESS) return err;
 
-    // Manually libDRM import and GPU map
-    if (ipc_dmabuf_supported_ && importHandle.handle[3]) {
-      auto errCleanup = [](void* registerHandle, amdgpu_bo_handle bo, bool free_cpu_map)
+    if (ipc_dmabuf_supported_) {
+      auto errCleanup = [&](amdgpu_bo_handle bo)
       {
-        hsaKmtDeregisterMemory(registerHandle);
-        if (free_cpu_map) amdgpu_bo_cpu_unmap(bo);
-        amdgpu_bo_free(bo);
+        amdgpu_bo_free(bo); // auto frees cpu map
         return HSA_STATUS_ERROR;
       };
 
-      importAddress = info.MemoryAddress;
-      importSize = info.SizeInBytes;
+      // Thunk mem handle useless now that mem info is acquired
+      // Re-import VRAM shared memory with target node
+      hsaKmtDeregisterMemory(importAddress);
+      if (!importHandle.handle[3]) {
+        HSAuint32 *nodes = new HSAuint32[1];
+        nodes[0] = info.NodeId;
+        err = importMemory(1, nodes, true);
+        if (err != HSA_STATUS_SUCCESS) return err;
+        return mapMemoryToNodes(1, nodes);
+      }
     
+      // Manually libDRM import and GPU map system memory
       AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
       amdgpu_bo_import_result res;
-      ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
-      if (ret) return HSA_STATUS_ERROR;
+      int ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd,
+                                 dmabuf_fd, &res);
       close(dmabuf_fd);
+      if (ret) return HSA_STATUS_ERROR;
 
       // Create a shared cpu access pointer for user
       void *cpuPtr;
-      bo = res.buf_handle;
+      amdgpu_bo_handle bo = res.buf_handle;
       ret = amdgpu_bo_cpu_map(bo, &cpuPtr);
-      if (ret) return errCleanup(importAddress, bo, false);
-
-      int drm_fd;
-      uint64_t drmCpuAddr;
-      ret = GetAmdgpuDeviceArgs(agent, bo, &drm_fd, &drmCpuAddr);
-      if (ret) return errCleanup(importAddress, bo, true);
+      if (ret) return errCleanup(bo);
 
       // Note VA ops will always override flags to allow read/write/exec permissions.
-      ret = amdgpu_bo_va_op(bo, fragOffset, importSize,
+      ret = amdgpu_bo_va_op(bo, 0, importSize,
                             reinterpret_cast<uint64_t>(cpuPtr), 0, AMDGPU_VA_OP_MAP);
-      if (ret) return errCleanup(importAddress, bo, true);
+      if (ret) return errCleanup(bo);
       importAddress = cpuPtr;
-    } else {
-      if (hsaKmtMapMemoryToGPU(importAddress, importSize, &altAddress) != HSAKMT_STATUS_SUCCESS) {
-        hsaKmtDeregisterMemory(importAddress);
-        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-      }
+      fixFragment(bo);
+      *mapped_ptr = importAddress;
+      return HSA_STATUS_SUCCESS;
     }
-
-    fixFragment(bo);
-    *mapped_ptr = importAddress;
-    return HSA_STATUS_SUCCESS;
+    return mapMemoryToNodes(0, NULL);
   }
 
   HSAuint32* nodes = nullptr;
@@ -1366,36 +1401,9 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
-  int ret;
-  ret = ipc_dmabuf_supported_ ?
-                     hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, num_agents, nodes) :
-                     hsaKmtRegisterSharedHandleToNodes(
-                         reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle),
-                         &importAddress, &importSize, num_agents, nodes);
-  if (ret != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-
-  if (ipc_dmabuf_supported_) {
-    close(dmabuf_fd);
-    importAddress = info.MemoryAddress;
-    importSize = info.SizeInBytes;
-  }
-
-  HsaMemMapFlags map_flags;
-  map_flags.Value = 0;
-  map_flags.ui32.PageSize = HSA_PAGE_SIZE_64KB;
-  if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, num_agents,
-                                nodes) != HSAKMT_STATUS_SUCCESS) {
-    map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    if (hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, num_agents,
-                                  nodes) != HSAKMT_STATUS_SUCCESS) {
-      hsaKmtDeregisterMemory(importAddress);
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-  }
-
-  fixFragment(NULL);
-  *mapped_ptr = importAddress;
-  return HSA_STATUS_SUCCESS;
+  hsa_status_t err = importMemory(num_agents, nodes, true);
+  if (err != HSA_STATUS_SUCCESS) return err;
+  return mapMemoryToNodes(num_agents, nodes);
 }
 
 hsa_status_t Runtime::IPCDetach(void* ptr) {
@@ -1425,10 +1433,12 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
     }
   }
 
-  if (!ldrmImportCleaned && hsaKmtUnmapMemoryToGPU(ptr) != HSAKMT_STATUS_SUCCESS)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  if (hsaKmtDeregisterMemory(ptr) != HSAKMT_STATUS_SUCCESS)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (!ldrmImportCleaned) {
+    if (hsaKmtUnmapMemoryToGPU(ptr) != HSAKMT_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    if (hsaKmtDeregisterMemory(ptr) != HSAKMT_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
   return HSA_STATUS_SUCCESS;
 }
 
