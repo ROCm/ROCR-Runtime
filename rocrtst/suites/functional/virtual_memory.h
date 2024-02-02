@@ -78,6 +78,7 @@ class VirtMemoryTestBasic : public TestBase {
   void TestPartialMapping(void);
   void GPUAccessToCPUMemoryTest(void);
   void CPUAccessToGPUMemoryTest(void);
+  void GPUAccessToGPUMemoryTest(void);
 
  private:
   void TestCreateDestroy(hsa_agent_t agent, hsa_amd_memory_pool_t pool);
@@ -86,6 +87,8 @@ class VirtMemoryTestBasic : public TestBase {
   void GPUAccessToCPUMemoryTest(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
                                 hsa_amd_memory_pool_t pool);
   void CPUAccessToGPUMemoryTest(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
+                                hsa_amd_memory_pool_t pool);
+  void GPUAccessToGPUMemoryTest(hsa_agent_t cpu_agent, hsa_agent_t gpu_agent,
                                 hsa_amd_memory_pool_t pool);
 };
 
