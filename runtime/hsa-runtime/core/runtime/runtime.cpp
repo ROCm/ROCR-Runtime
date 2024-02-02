@@ -3200,76 +3200,92 @@ hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
                                        const hsa_amd_memory_access_desc_t* desc,
                                        const size_t desc_cnt) {
   int nodesCnt = 0;
-  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  std::list<std::pair<void*, MappedHandle*>> mappedHandles;
+  bool reservedAddressFound = false;
 
-  auto mappedHandleIt = mapped_handle_map_.find(va);
-  if (mappedHandleIt == mapped_handle_map_.end() || mappedHandleIt->second.size != size)
-    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-
-  static const int tinyArraySize = 8;
-
-  HSAuint32 short_nodes[tinyArraySize];
-  HSAuint32* nodes = short_nodes;
-  if (desc_cnt > tinyArraySize) {
-    nodes = new HSAuint32[desc_cnt];
-
-    if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-  MAKE_SCOPE_GUARD([&]() {
-    if (desc_cnt > tinyArraySize) delete[] nodes;
-  });
-
+  // Validate all agents
   for (int i = 0; i < desc_cnt; i++) {
     Agent* targetAgent = Agent::Convert(desc[i].agent_handle);
 
     if (targetAgent == NULL || !targetAgent->IsValid()) return HSA_STATUS_ERROR_INVALID_AGENT;
-
-    if (targetAgent->device_type() == core::Agent::DeviceType::kAmdGpuDevice)
-      nodes[nodesCnt++] = targetAgent->node_id();
-
-    auto agentPermsIt = mappedHandleIt->second.allowed_agents.find(targetAgent);
-    if (agentPermsIt == mappedHandleIt->second.allowed_agents.end()) {
-      /* Agent not previously allowed, we need a new entry */
-      mappedHandleIt->second.allowed_agents.emplace(std::piecewise_construct,
-        std::forward_as_tuple(targetAgent),
-        std::forward_as_tuple(&mappedHandleIt->second, targetAgent, va, size, desc[i].permissions));
-
-      if (mappedHandleIt->second.allowed_agents[targetAgent].EnableAccess(desc[i].permissions)
-          != HSA_STATUS_SUCCESS) {
-        mappedHandleIt->second.allowed_agents.erase(targetAgent);
-        return HSA_STATUS_ERROR;
-      }
-    } else {
-      /* Previous permissions are same as current permission */
-      if (agentPermsIt->second.permissions == desc[i].permissions) continue;
-
-      if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
-
-      if (agentPermsIt->second.EnableAccess(desc[i].permissions) != HSA_STATUS_SUCCESS) {
-        mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
-        return HSA_STATUS_ERROR;
-      }
-    }
   }
 
-  // Remove agents that were previously allowed but not included in current list
-  for (auto agentPermsIt = mappedHandleIt->second.allowed_agents.begin();
-       agentPermsIt != mappedHandleIt->second.allowed_agents.end();) {
-    bool agent_removed = true;
-    for (int i = 0; i < desc_cnt; i++) {
-      if (agentPermsIt->first == Agent::Convert(desc[i].agent_handle)) {
-        agent_removed = false;
-        continue;
-      }
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+
+  auto reservedAddressIt = reserved_address_map_.upper_bound(va);
+  if (reservedAddressIt != reserved_address_map_.begin()) {
+    reservedAddressIt--;
+    if ((reservedAddressIt->first <= va) &&
+        ((reinterpret_cast<uint8_t*>(va) + size) <=
+         (reinterpret_cast<const uint8_t*>(reservedAddressIt->first) +
+          reservedAddressIt->second.size))) {
+      reservedAddressFound = true;
     }
-    if (agent_removed) {
-      assert(agentPermsIt->second.va == va);
+  }
+  if (!reservedAddressFound) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-      if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  // va + size may consist of multiple MappedHandle's. Build a list lf MappedHandles within this VA
+  // range
+  uint8_t* va_chunk = reinterpret_cast<uint8_t*>(va);
+  while (va_chunk < reinterpret_cast<uint8_t*>(va) + size) {
+    auto mappedHandleIt = mapped_handle_map_.find(va_chunk);
+    // Cannot find a contiguous list of MappedHandles for the full VA range
+    if (mappedHandleIt == mapped_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
-      agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
-    } else {
-      ++agentPermsIt;
+    mappedHandles.push_back(std::make_pair(va_chunk, &mappedHandleIt->second));
+    va_chunk += mappedHandleIt->second.size;
+  }
+
+  for (int i = 0; i < desc_cnt; i++) {
+    Agent* targetAgent = Agent::Convert(desc[i].agent_handle);
+
+    for (auto mappedHandleIt : mappedHandles) {
+      auto agentPermsIt = mappedHandleIt.second->allowed_agents.find(targetAgent);
+      if (agentPermsIt == mappedHandleIt.second->allowed_agents.end()) {
+        /* Agent not previously allowed, we need a new entry */
+        mappedHandleIt.second->allowed_agents.emplace(
+            std::piecewise_construct, std::forward_as_tuple(targetAgent),
+            std::forward_as_tuple(mappedHandleIt.second, targetAgent, mappedHandleIt.first, size,
+                                  desc[i].permissions));
+
+        if (mappedHandleIt.second->allowed_agents[targetAgent].EnableAccess(desc[i].permissions) !=
+            HSA_STATUS_SUCCESS) {
+          mappedHandleIt.second->allowed_agents.erase(targetAgent);
+          return HSA_STATUS_ERROR;
+        }
+      } else {
+        /* Previous permissions are same as current permission */
+        if (agentPermsIt->second.permissions == desc[i].permissions) continue;
+
+        /* Permissions are different - update access */
+        if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+        if (agentPermsIt->second.EnableAccess(desc[i].permissions) != HSA_STATUS_SUCCESS) {
+          mappedHandleIt.second->allowed_agents.erase(agentPermsIt);
+          return HSA_STATUS_ERROR;
+        }
+
+        // Remove agents that were previously allowed but not included in current list
+        for (auto agentPermsIt = mappedHandleIt.second->allowed_agents.begin();
+             agentPermsIt != mappedHandleIt.second->allowed_agents.end();) {
+          bool agent_removed = true;
+          for (int i = 0; i < desc_cnt; i++) {
+            if (agentPermsIt->first == Agent::Convert(desc[i].agent_handle)) {
+              agent_removed = false;
+              continue;
+            }
+          }
+          if (agent_removed) {
+            assert(agentPermsIt->second.va == va);
+
+            if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+            agentPermsIt = mappedHandleIt.second->allowed_agents.erase(agentPermsIt);
+          } else {
+            ++agentPermsIt;
+          }
+        }
+      }
     }
   }
   return HSA_STATUS_SUCCESS;
