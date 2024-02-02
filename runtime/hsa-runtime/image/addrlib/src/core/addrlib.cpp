@@ -2,24 +2,7 @@
 ************************************************************************************************************************
 *
 *  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE
+*  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
 
@@ -80,8 +63,8 @@ UINT_32 __umoddi3(UINT_64 n, UINT_32 base)
 
 #endif // __APPLE__
 
-namespace rocr {
-namespace Addr {
+namespace Addr
+{
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
 //                               Constructor/Destructor
@@ -228,14 +211,17 @@ ADDR_E_RETURNCODE Lib::Create(
                     case FAMILY_NV:
                     case FAMILY_VGH:
                     case FAMILY_RMB:
-                    case FAMILY_GC_10_3_6:
-                    case FAMILY_GC_10_3_7:
+                    case FAMILY_RPL:
+                    case FAMILY_MDN:
                         pLib = Gfx10HwlInit(&client);
                         break;
-                    case FAMILY_GFX1100:
-                    case FAMILY_GFX1103:
+                    case FAMILY_NV3:
                     case FAMILY_GFX1150:
+                    case FAMILY_GFX1103:
                         pLib = Gfx11HwlInit(&client);
+                        break;
+                    case FAMILY_GFX12:
+                        pLib = Gfx12HwlInit(&client);
                         break;
                     default:
                         ADDR_ASSERT_ALWAYS();
@@ -247,7 +233,11 @@ ADDR_E_RETURNCODE Lib::Create(
                 break;
         }
     }
-
+    
+    if(pLib == NULL)
+    {
+        returnCode = ADDR_OUTOFMEMORY;
+    }
     if (pLib != NULL)
     {
         BOOL_32 initValid;
@@ -286,6 +276,7 @@ ADDR_E_RETURNCODE Lib::Create(
         {
             delete pLib;
             pLib = NULL;
+            returnCode = ADDR_OUTOFMEMORY;
             ADDR_ASSERT_ALWAYS();
         }
         else
@@ -304,12 +295,6 @@ ADDR_E_RETURNCODE Lib::Create(
 
         pLib->SetMaxAlignments();
 
-    }
-    else if ((pLib == NULL) &&
-             (returnCode == ADDR_OK))
-    {
-        // Unknown failures, we return the general error code
-        returnCode = ADDR_ERROR;
     }
 
     return returnCode;
@@ -673,4 +658,3 @@ UINT_32 Lib::GetBpe(AddrFormat format) const
 }
 
 } // Addr
-} // rocr

@@ -2,24 +2,7 @@
 ************************************************************************************************************************
 *
 *  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE
+*  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
 
@@ -33,10 +16,11 @@
 #ifndef __GFX10_SWIZZLE_PATTERN_H__
 #define __GFX10_SWIZZLE_PATTERN_H__
 
-namespace rocr {
-namespace Addr {
-namespace V2 {
 
+namespace Addr
+{
+namespace V2
+{
 const ADDR_SW_PATINFO GFX10_SW_256_S_PATINFO[] =
 {
     {   1,    0,    0,    0,    0, } , // 1 pipes 1 bpe @ SW_256_S @ Navi1x
@@ -6031,7 +6015,7 @@ const UINT_64 GFX10_CMASK_SW_PATTERN[][17] =
     {X3,            Y3,            X7,            Y7,            X8,            Y8,            X9,            Y9,            X10,           Y4^X9^Y9,      Z3^X4^Y4,      Z2^Y5^X8,      Z1^X5^Y8,      Y6^X7,         Z0^X6^Y7,      0,             0,             }, //34
 };
 
-} // V2
+}// V2
 } // Addr
-} // rocr
+
 #endif

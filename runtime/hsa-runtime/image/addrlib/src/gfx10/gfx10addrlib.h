@@ -2,24 +2,7 @@
 ************************************************************************************************************************
 *
 *  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE
+*  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
 
@@ -37,9 +20,10 @@
 #include "coord.h"
 #include "gfx10SwizzlePattern.h"
 
-namespace rocr {
-namespace Addr {
-namespace V2 {
+namespace Addr
+{
+namespace V2
+{
 
 /**
 ************************************************************************************************************************
@@ -57,8 +41,8 @@ struct Gfx10ChipSettings
         UINT_32 supportRbPlus       : 1;
         UINT_32 dsMipmapHtileFix    : 1;
         UINT_32 dccUnsup3DSwDis     : 1;
-        UINT_32                     : 2;
-        UINT_32 reserved2           : 26;
+        UINT_32                     : 4;
+        UINT_32 reserved2           : 24;
     };
 };
 
@@ -158,7 +142,9 @@ const UINT_32 Gfx10Rsrc3dPrtSwModeMask = Gfx10Rsrc2dPrtSwModeMask & ~Gfx10Displa
 const UINT_32 Gfx10Rsrc3dThin64KBSwModeMask = (1u << ADDR_SW_64KB_Z_X) |
                                               (1u << ADDR_SW_64KB_R_X);
 
-const UINT_32 Gfx10Rsrc3dThinSwModeMask = Gfx10Rsrc3dThin64KBSwModeMask | Gfx10BlkVarSwModeMask;
+
+const UINT_32 Gfx10Rsrc3dThinSwModeMask = Gfx10Rsrc3dThin64KBSwModeMask |
+                                          Gfx10BlkVarSwModeMask;
 
 const UINT_32 Gfx10Rsrc3dThickSwModeMask = Gfx10Rsrc3dSwModeMask & ~(Gfx10Rsrc3dThinSwModeMask | Gfx10LinearSwModeMask);
 
@@ -166,8 +152,9 @@ const UINT_32 Gfx10Rsrc3dThick4KBSwModeMask = Gfx10Rsrc3dThickSwModeMask & Gfx10
 
 const UINT_32 Gfx10Rsrc3dThick64KBSwModeMask = Gfx10Rsrc3dThickSwModeMask & Gfx10Blk64KBSwModeMask;
 
-const UINT_32 Gfx10MsaaSwModeMask = Gfx10ZSwModeMask |
-                                    Gfx10RenderSwModeMask;
+const UINT_32 Gfx10MsaaSwModeMask = (Gfx10ZSwModeMask       |
+                                     Gfx10RenderSwModeMask)
+                                    ;
 
 const UINT_32 Dcn20NonBpp64SwModeMask = (1u << ADDR_SW_LINEAR)   |
                                         (1u << ADDR_SW_4KB_S)    |
@@ -396,6 +383,12 @@ private:
         UINT_32          log2Elem,
         UINT_32          numFrag) const;
 
+    /**
+     * Will use the indices, "nibbles", to build an index equation inside pSwizzle
+     *
+     * @param pPatInfo Pointer to a patInfo. Contains indices mapping to the 2D nibble arrays which will be used to build an index equation.
+     * @param pSwizzle Array to write the index equation to.
+     */
     VOID GetSwizzlePatternFromPatternInfo(
         const ADDR_SW_PATINFO* pPatInfo,
         ADDR_BIT_SETTING       (&pSwizzle)[20]) const
@@ -570,12 +563,12 @@ private:
 
     UINT_32 m_colorBaseIndex;
     UINT_32 m_xmaskBaseIndex;
+    UINT_32 m_htileBaseIndex;
     UINT_32 m_dccBaseIndex;
 };
 
 } // V2
 } // Addr
-} // rocr
 
 #endif
 
