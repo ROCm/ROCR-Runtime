@@ -233,7 +233,10 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
               std::min(pool_sz, info.totalram / gran_sz) :
               pool_sz;
 
-  uint64_t upper_bound = pool_sz;
+  // Reduce upper_bound by 5% for system-RAM. Otherwise Linux OOM-Killer app can be triggered,
+  // if system has allocated all available physical memory and swap space, and so killing this
+  // process.
+  uint64_t upper_bound = (ag_type == HSA_DEVICE_TYPE_CPU) ? (pool_sz * 0.95) : pool_sz;
   uint64_t lower_bound = 0;
   auto max_alloc_size = upper_bound;
 
@@ -247,7 +250,8 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
     } else if (err == HSA_STATUS_ERROR_OUT_OF_RESOURCES ||
                err == HSA_STATUS_ERROR_INVALID_ALLOCATION) {
       upper_bound = max_alloc_size;
-      max_alloc_size -= 1;
+      max_alloc_size =
+          static_cast<uint64_t>(max_alloc_size * 0.99);  // Reduce by 1% in each iteration
     }
 
     ASSERT_GT(upper_bound, lower_bound);
