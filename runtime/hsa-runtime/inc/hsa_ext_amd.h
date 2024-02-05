@@ -3060,8 +3060,13 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
 /**
  * @brief Set the asynchronous scratch limit threshold on all the queues for this agent.
  * Dispatches that are enqueued on HW queues on this agent that are smaller than threshold will not
- * result in a scratch use-once method. This API is only supported on devices that support
- * asynchronous scratch reclaim.
+ * result in a scratch use-once method.
+ *
+ * Increasing this threshold will only increase the internal limit and not cause immediate allocation
+ * of additional scratch memory. Decreasing this threshold will result in a release in scratch memory
+ * on queues where the current amount of allocated scratch exceeds the new limit.
+ *
+ * This API is only supported on devices that support asynchronous scratch reclaim.
  *
  * @param[in] agent A valid agent.
  *
