@@ -1065,12 +1065,15 @@ static int ReceiveDmaBufFd(int socket) {
 #define IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH 64
 #define IPC_SOCK_SERVER_NAME_LENGTH 32
 #define IPC_SOCK_SERVER_CONN_CLOSE_HANDLE UINT64_MAX
+#define IPC_SOCK_SERVER_CONN_CLOSE_BIT 1ULL << 63
 void Runtime::AsyncIPCSockServerConnLoop(void*) {
    auto& ipc_sock_server_fd_ = runtime_singleton_->ipc_sock_server_fd_;
    auto& ipc_sock_server_conns_ = runtime_singleton_->ipc_sock_server_conns_;
+   auto& ipc_sock_server_lock_ = runtime_singleton_->ipc_sock_server_lock_;
 
    int connection_fd;
    char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
+   std::map<uint64_t, int> openDmaBufs;
    // Wait until the client has connected
    while (1) {
      connection_fd = accept(ipc_sock_server_fd_, NULL, NULL);
@@ -1084,18 +1087,34 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
      }
 
      int dmabuf_fd = -1;
+     uint64_t fragOffset;
+     void *baseAddr = NULL;
+     size_t memLen = 0;
+
+     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
+     bool isClose = !!(IPC_SOCK_SERVER_CONN_CLOSE_BIT & conn_handle);
+     conn_handle &= ~(IPC_SOCK_SERVER_CONN_CLOSE_BIT);
      for (auto& conns : ipc_sock_server_conns_) {
        if (conn_handle == conns.first) {
-         dmabuf_fd = conns.second;
+         baseAddr = conns.second.first;
+         memLen = conns.second.second;
          break;
        }
      }
-     SendDmaBufFd(connection_fd, dmabuf_fd);
+     if (!isClose) {
+       // we can ignore a bad export since importer will catch the bad fd
+       hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+       SendDmaBufFd(connection_fd, dmabuf_fd);
+       openDmaBufs[conn_handle] = dmabuf_fd;
+     } else {
+       close(openDmaBufs[conn_handle]);
+       openDmaBufs.erase(conn_handle);
+     }
    }
 
    // Clean up
-   for (auto& conns : ipc_sock_server_conns_)
-     close(conns.second); // close all exported dmabuf FDs
+   for (auto& conns : openDmaBufs)
+     close(conns.second); // close all dangling open dmabuf FDs
    ipc_sock_server_conns_.clear();
    close(ipc_sock_server_fd_);
 }
@@ -1142,9 +1161,6 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
     }
   } else {
-    uint64_t fragOffset;
-    int dmabuf_fd = -1;
-
     {
       ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
       // Lookup containing allocation.
@@ -1165,11 +1181,6 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
 
     // System sub allocations are not supported for now.
     if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-
-    HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
-    assert(err == HSAKMT_STATUS_SUCCESS && dmabuf_fd > -1 &&
-           "DMA buffer could not be exported for IPC!");
-    if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
 
     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
     if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
@@ -1200,10 +1211,10 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
       // Spin server client acceptance into a socket server thread.
       // Socket server needs to last for the lifetime of the runtime instance
       // as the attach life cycle is unknown.
-      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = dmabuf_fd;
+      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = std::make_pair(baseAddr, memLen);
       os::CreateThread(AsyncIPCSockServerConnLoop, NULL);
     } else {
-      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = dmabuf_fd;
+      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = std::make_pair(baseAddr, memLen);
     }
 
     // User ptr as dmabuf FD handle ID for client to request the actual dmabuf FD.
@@ -1229,7 +1240,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   return HSA_STATUS_SUCCESS;
 }
 
-static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool close_server) {
+static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool close_handle) {
     struct sockaddr_un address;
     int dmabuf_fd = -1, socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     assert(socket_fd > -1 && "DMA buffer could not be imported for IPC!");
@@ -1246,10 +1257,11 @@ static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool 
     // to recieve the dmabuf fd or close the server
     if (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) == -1)
       return -1;
-    dmabuf_fd_handle = !close_server ? dmabuf_fd_handle : IPC_SOCK_SERVER_CONN_CLOSE_HANDLE;
+    // Set high bit to indicate closure of exporter fd
+    if (close_handle) dmabuf_fd_handle |= IPC_SOCK_SERVER_CONN_CLOSE_BIT;
     snprintf(buf, sizeof(buf), "%li", dmabuf_fd_handle);
     write(socket_fd, buf, sizeof(buf));
-    if (!close_server) dmabuf_fd = ReceiveDmaBufFd(socket_fd);
+    if (!close_handle) dmabuf_fd = ReceiveDmaBufFd(socket_fd);
     close(socket_fd);
     return dmabuf_fd;
 }
@@ -1259,6 +1271,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   static const int tinyArraySize = 8;
   void* importAddress;
   HSAuint64 importSize;
+  uint64_t dmaBufFDHandle;
   hsa_amd_ipc_memory_t importHandle = *handle;
 
   // Extract fragment info
@@ -1333,7 +1346,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   if (ipc_dmabuf_supported_) {
     uint64_t dmaBufFDHandleLo = importHandle.handle[0];
     uint64_t dmaBufFDHandleHi = importHandle.handle[1];
-    uint64_t dmaBufFDHandle = (dmaBufFDHandleHi << 32) | dmaBufFDHandleLo;
+    dmaBufFDHandle = (dmaBufFDHandleHi << 32) | dmaBufFDHandleLo;
     dmabuf_fd = GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, false);
     assert(dmabuf_fd > -1 && "IPC importer could not get shared file handle!");
     if (dmabuf_fd == -1) return HSA_STATUS_ERROR;
@@ -1357,16 +1370,18 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
         HSAuint32 *nodes = new HSAuint32[1];
         nodes[0] = info.NodeId;
         err = importMemory(1, nodes, true);
+        GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
         if (err != HSA_STATUS_SUCCESS) return err;
         return mapMemoryToNodes(1, nodes);
       }
-    
+
       // Manually libDRM import and GPU map system memory
       AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
       amdgpu_bo_import_result res;
       int ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd,
                                  dmabuf_fd, &res);
       close(dmabuf_fd);
+      GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
       if (ret) return HSA_STATUS_ERROR;
 
       // Create a shared cpu access pointer for user
@@ -1402,6 +1417,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
   hsa_status_t err = importMemory(num_agents, nodes, true);
+  GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
   if (err != HSA_STATUS_SUCCESS) return err;
   return mapMemoryToNodes(num_agents, nodes);
 }
@@ -1869,7 +1885,7 @@ hsa_status_t Runtime::Load() {
 
 void Runtime::Unload() {
   if (ipc_sock_server_conns_.size())
-    GetIPCDmaBufFD(getpid(), 0, true);
+    GetIPCDmaBufFD(getpid(), IPC_SOCK_SERVER_CONN_CLOSE_HANDLE, true);
 
   svm_profile_.reset(nullptr);
 
