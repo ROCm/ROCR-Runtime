@@ -115,6 +115,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 
 	CHECK_KFD_OPEN();
 
+	if (MemFlags.ui32.Contiguous)
+		CHECK_KFD_MINOR_VERSION(17);
+
 	pr_debug("[%s] node %d\n", __func__, PreferredNode);
 
 	result = validate_nodeid(PreferredNode, &gpu_id);
