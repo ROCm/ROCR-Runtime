@@ -1579,6 +1579,9 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 	if (mflags.ui32.ExtendedCoherent)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT;
 
+	if (mflags.ui32.Contiguous)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_CONTIGUOUS_BEST_EFFORT;
+
 	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
 				    ioc_flags, &vm_obj);
 
