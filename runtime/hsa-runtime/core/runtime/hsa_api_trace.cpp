@@ -121,6 +121,7 @@ void HsaApiTable::Init() {
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
 
+  UpdateTools();
   hsa_api.tools_ = &tools_api;
 }
 
@@ -447,6 +448,10 @@ void HsaApiTable::UpdateAmdExts() {
 }
 
 void HsaApiTable::UpdateTools() {
+  tools_api.version.major_id = HSA_TOOLS_API_TABLE_MAJOR_VERSION;
+  tools_api.version.minor_id = sizeof(::ToolsApiTable);
+  tools_api.version.step_id = HSA_TOOLS_API_TABLE_STEP_VERSION;
+
   tools_api.hsa_amd_tool_scratch_event_alloc_start_fn = nullptr;
   tools_api.hsa_amd_tool_scratch_event_alloc_end_fn = nullptr;
   tools_api.hsa_amd_tool_scratch_event_free_start_fn = nullptr;
