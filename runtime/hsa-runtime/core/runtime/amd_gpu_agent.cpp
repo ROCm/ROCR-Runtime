@@ -910,14 +910,16 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   if (core::Runtime::runtime_singleton_->flag().enable_sdma_gang() != Flag::SDMA_DISABLE &&
       size >= 4096 && dst_agent.device_type() == core::Agent::kAmdGpuDevice)
     gang_factor = gang_peers_info_[dst_agent.public_handle().handle];
-
   // Use non-D2D (auxillary) SDMA engines in the event of xGMI D2D support
   // when xGMI SDMA context is not available.
-  bool has_aux_gang = gang_factor >= properties_.NumSdmaEngines &&
+  bool has_aux_gang = gang_factor > 1 &&
+                      gang_factor >= properties_.NumSdmaEngines &&
                       !!!properties_.NumSdmaXgmiEngines;
-  gang_factor = has_aux_gang ?
+  if (gang_factor > 1) {
+    gang_factor = has_aux_gang ?
                       std::min(gang_factor, properties_.NumSdmaEngines) :
                       std::min(gang_factor, properties_.NumSdmaXgmiEngines);
+  }
 
   ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
   if (gang_factor == 1) sdma_gang_lock_.Release();
