@@ -104,6 +104,7 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     // Note: The node_id needs to be the node_id of the device even though this is allocating
     // system memory
     AllocateGTTAccess = (1 << 9),
+    AllocateContiguous = (1 << 10),  // Physically contiguous memory
   };
 
   typedef uint32_t AllocateFlags;

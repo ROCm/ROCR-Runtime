@@ -209,6 +209,12 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
   kmt_alloc_flags.ui32.NoSubstitute = (alloc_flags & AllocatePinned ? 1 : kmt_alloc_flags.ui32.NoSubstitute);
 
   kmt_alloc_flags.ui32.GTTAccess = (alloc_flags & AllocateGTTAccess ? 1 : kmt_alloc_flags.ui32.GTTAccess);
+  if (IsLocalMemory()) {
+    // Allocate physically contiguous memory - AllocateKfdMemory function call will fail
+    // if this flag is not supported in KFD.
+    kmt_alloc_flags.ui32.Contiguous =
+        (alloc_flags & AllocateContiguous ? 1 : kmt_alloc_flags.ui32.Contiguous);
+  }
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory() && !kmt_alloc_flags.ui32.NoAddress) {
