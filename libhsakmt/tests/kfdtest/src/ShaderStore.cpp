@@ -144,9 +144,15 @@ const char *CopyDwordIsa =
         v_mov_b32 v1, s1
         v_mov_b32 v2, s2
         v_mov_b32 v3, s3
-        FLAT_LOAD_DWORD_NSS v4, v[0:1] glc slc
-        s_waitcnt 0
-        FLAT_STORE_DWORD_NSS v[2:3], v4 glc slc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORD_NSS v4, v[0:1] scope:SCOPE_SYS
+            s_wait_loadcnt 0
+            FLAT_STORE_DWORD_NSS v[2:3], v4 scope:SCOPE_SYS
+        .else
+            FLAT_LOAD_DWORD_NSS v4, v[0:1] glc slc
+            s_waitcnt 0
+            FLAT_STORE_DWORD_NSS v[2:3], v4 glc slc
+        .endif
         s_endpgm
 )";
 
