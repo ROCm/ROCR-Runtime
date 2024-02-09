@@ -522,6 +522,10 @@ bool KernelSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       *((bool*)value) = is_dynamic_callstack;
       break;
     }
+    case HSA_CODE_SYMBOL_INFO_KERNEL_WAVEFRONT_SIZE: {
+      *((uint32_t*)value) = wavefront_size;
+      break;
+    }
     case HSA_EXT_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT_SIZE: {
       *((uint32_t*)value) = size;
       break;
@@ -1434,6 +1438,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
     uint32_t group_segment_size = kd.group_segment_fixed_size;
     uint32_t private_segment_size = kd.private_segment_fixed_size;
     bool is_dynamic_callstack = AMDHSA_BITS_GET(kd.kernel_code_properties, rocr::llvm::amdhsa::KERNEL_CODE_PROPERTY_USES_DYNAMIC_STACK);
+    bool uses_wave32 = AMDHSA_BITS_GET( kd.kernel_code_properties, rocr::llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_WAVEFRONT_SIZE32);
 
     uint64_t size = sym->Size();
 
@@ -1449,6 +1454,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                     is_dynamic_callstack,
                                     size,
                                     64,
+                                    uses_wave32 ? 32 : 64,
                                     address);
     symbol = kernel_symbol;
   } else if (sym->IsVariableSymbol()) {
@@ -1478,6 +1484,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
         uint32_t(akc.workitem_private_segment_byte_size);
       bool is_dynamic_callstack =
         AMD_HSA_BITS_GET(akc.kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK) ? true : false;
+      bool uses_wave32 = akc.wavefront_size == AMD_POWERTWO_32;
 
       uint64_t size = sym->Size();
 
@@ -1498,6 +1505,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                       is_dynamic_callstack,
                                       size,
                                       256,
+                                      uses_wave32 ? 32 : 64,
                                       address);
       kernel_symbol->debug_info.elf_raw = code->ElfData();
       kernel_symbol->debug_info.elf_size = code->ElfSize();

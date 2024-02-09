@@ -5656,7 +5656,12 @@ typedef enum {
    * undefined if the symbol is not an indirect function. The type of this
    * attribute is uint32_t.
    */
-  HSA_CODE_SYMBOL_INFO_INDIRECT_FUNCTION_CALL_CONVENTION = 16
+  HSA_CODE_SYMBOL_INFO_INDIRECT_FUNCTION_CALL_CONVENTION = 16,
+  /**
+   * Wavefront size used by the kernel. The value of this attribute is either
+   * 32 or 64. The type of this attribute is uint32_t.
+   */
+  HSA_CODE_SYMBOL_INFO_KERNEL_WAVEFRONT_SIZE = 19
 } hsa_code_symbol_info_t;
 
 /**
