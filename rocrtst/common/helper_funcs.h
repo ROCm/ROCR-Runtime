@@ -51,6 +51,7 @@
 
 #include <string>
 #include <vector>
+#include <stdint.h>
 
 #if defined(__GNUC__)
 #define __forceinline __inline__ __attribute__((always_inline))

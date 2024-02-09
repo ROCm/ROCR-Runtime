@@ -39,6 +39,7 @@
 // DEALINGS WITH THE SOFTWARE.
 //
 ////////////////////////////////////////////////////////////////////////////////
+
 #include <unistd.h>
 #include <elf.h>
 #include <fcntl.h>
@@ -72,7 +73,7 @@ class PackageBuilder {
   void Write(const T& v) {
     st_.write((char*)&v, sizeof(T));
   }
-  void Write(const std::vector<std::uint8_t>& v) { st_.write((const char*)v.data(), v.size()); }
+  void Write(const std::vector<uint8_t>& v) { st_.write((const char*)v.data(), v.size()); }
   void Write(void* data, uint32_t size) { st_.write((const char*)data, size); }
   bool GetBuffer(void* out) {
     size_t sz = Size();
