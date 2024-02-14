@@ -1073,7 +1073,8 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
 
    int connection_fd;
    char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
-   std::map<uint64_t, int> openDmaBufs;
+   // openDmaBufs pair <int, int> is <dmabuf_fd, ref_count>
+   std::map<uint64_t, std::pair<int, int>> openDmaBufs;
    // Wait until the client has connected
    while (1) {
      connection_fd = accept(ipc_sock_server_fd_, NULL, NULL);
@@ -1091,9 +1092,31 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
      void *baseAddr = NULL;
      size_t memLen = 0;
 
-     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      bool isClose = !!(IPC_SOCK_SERVER_CONN_CLOSE_BIT & conn_handle);
+     bool isAlreadyOpen = false;
      conn_handle &= ~(IPC_SOCK_SERVER_CONN_CLOSE_BIT);
+
+     // send dmabufs that are already opened
+     for (auto&conns : openDmaBufs) {
+       if (conn_handle == conns.first) {
+         if (!isClose) {
+           SendDmaBufFd(connection_fd, openDmaBufs[conn_handle].first);
+           openDmaBufs[conn_handle].second++;
+         } else {
+           openDmaBufs[conn_handle].second--;
+           if (!openDmaBufs[conn_handle].second) {
+             close(openDmaBufs[conn_handle].first);
+             openDmaBufs.erase(conn_handle);
+           }
+         }
+         isAlreadyOpen = true;
+         break;
+       }
+     }
+
+     if (isAlreadyOpen) continue;
+
+     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      for (auto& conns : ipc_sock_server_conns_) {
        if (conn_handle == conns.first) {
          baseAddr = conns.second.first;
@@ -1101,20 +1124,15 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
          break;
        }
      }
-     if (!isClose) {
-       // we can ignore a bad export since importer will catch the bad fd
-       hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
-       SendDmaBufFd(connection_fd, dmabuf_fd);
-       openDmaBufs[conn_handle] = dmabuf_fd;
-     } else {
-       close(openDmaBufs[conn_handle]);
-       openDmaBufs.erase(conn_handle);
-     }
+     // we can ignore a bad export since importer will catch the bad fd
+     hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     SendDmaBufFd(connection_fd, dmabuf_fd);
+     openDmaBufs[conn_handle] = std::make_pair(dmabuf_fd, 1);
    }
 
    // Clean up
    for (auto& conns : openDmaBufs)
-     close(conns.second); // close all dangling open dmabuf FDs
+     close(conns.second.first); // close all dangling open dmabuf FDs
    ipc_sock_server_conns_.clear();
    close(ipc_sock_server_fd_);
 }
