@@ -368,7 +368,7 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
   // Check pointer info for invalid pointer
   hsa_amd_pointer_info_t info2 = {};
   info2.size = sizeof(info2);
-  ASSERT_SUCCESS(hsa_amd_pointer_info((memPtr1 + allocate_sz1 + 1), &info2, NULL, 0, NULL));
+  ASSERT_SUCCESS(hsa_amd_pointer_info((reinterpret_cast<uint8_t *>(memPtr1) + allocate_sz1 + 1), &info2, NULL, 0, NULL));
   ASSERT_EQ(info2.type, HSA_EXT_POINTER_TYPE_UNKNOWN);
 
   // Simulate case where ROCr has added extra parameters to hsa_amd_pointer_info.
