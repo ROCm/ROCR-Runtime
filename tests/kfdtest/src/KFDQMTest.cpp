@@ -865,64 +865,7 @@ TEST_F(KFDQMTest, BasicCuMaskingEven) {
 TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
     TEST_START(TESTPROFILE_RUNALL);
 
-    if (m_FamilyId < FAMILY_VI) {
-        LOG() << "Skipping test: Shader won't run on CI." << std::endl;
-        return;
-    }
-
-    int node = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(node, 0) << "failed to get default GPU Node";
-    HsaMemoryBuffer syncBuf(PAGE_SIZE, node, true/*zero*/, false/*local*/, true/*exec*/);
-    HSAint32 *syncBuffer = syncBuf.As<HSAint32*>();
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, node, true/*zero*/, false/*local*/, true/*exec*/);
-
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(LoopIsa, isaBuffer.As<char*>()));
-
-    Dispatch dispatch[2] = {
-        Dispatch(isaBuffer, true),
-        Dispatch(isaBuffer, true)
-    };
-
-    int activeTaskBitmap = 0x3;
-    HSAuint64 startTime, endTime[2];
-    HsaEvent *pHsaEvent[2];
-    int numEvent = 2;
-    PM4Queue queue[2];
-    HSA_QUEUE_PRIORITY priority[2] = {
-        HSA_QUEUE_PRIORITY_LOW,
-        HSA_QUEUE_PRIORITY_HIGH
-    };
-    int i;
-
-    for (i = 0; i < 2; i++) {
-        syncBuffer[i] = -1;
-        ASSERT_SUCCESS(queue[i].Create(node));
-        queue[i].Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, priority[i], false);
-        pHsaEvent[i] = dispatch[i].GetHsaEvent();
-        pHsaEvent[i]->EventData.EventData.SyncVar.SyncVar.UserData = &syncBuffer[i];
-        dispatch[i].SetDim(1024, 16, 16);
-    }
-
-    startTime = GetSystemTickCountInMicroSec();
-    for (i = 0; i < 2; i++)
-        dispatch[i].Submit(queue[i]);
-
-    while (activeTaskBitmap > 0) {
-        hsaKmtWaitOnMultipleEvents(pHsaEvent, numEvent, false, g_TestTimeOut);
-        for (i = 0; i < 2; i++) {
-            if ((activeTaskBitmap & (1 << i)) && (syncBuffer[i] == pHsaEvent[i]->EventId)) {
-                endTime[i] = GetSystemTickCountInMicroSec();
-                activeTaskBitmap &= ~(1 << i);
-            }
-        }
-    }
-
-    for (i = 0; i < 2; i++) {
-        EXPECT_SUCCESS(queue[i].Destroy());
-        int usecs = endTime[i] - startTime;
-        LOG() << "Task priority: " << std::dec << priority[i] << "\t";
-        LOG() << "Task duration: " << std::dec << usecs << "usecs" << std::endl;
-    }
+    testQueuePriority(false);
 
     TEST_END
 }
@@ -930,10 +873,21 @@ TEST_F(KFDQMTest, QueuePriorityOnDifferentPipe) {
 TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
     TEST_START(TESTPROFILE_RUNALL);
 
+    testQueuePriority(true);
+
+    TEST_END
+}
+
+void KFDQMTest::testQueuePriority(bool isSamePipe)
+{
     if (m_FamilyId < FAMILY_VI) {
         LOG() << "Skipping test: Shader won't run on CI." << std::endl;
         return;
     }
+
+    // Reduce test case if running on emulator
+    // Reduction applies to all 3 dims (effect is cubic)
+    const int scaleDown = (g_IsEmuMode ? 4 : 1);
 
     int node = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(node, 0) << "failed to get default GPU Node";
@@ -948,33 +902,41 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
         Dispatch(isaBuffer, true)
     };
 
+    const int queueCount = isSamePipe ? 13 : 2;
     int activeTaskBitmap = 0x3;
     HSAuint64 startTime, endTime[2];
     HsaEvent *pHsaEvent[2];
     int numEvent = 2;
-    PM4Queue queue[13];
+    PM4Queue queue[queueCount];
     HSA_QUEUE_PRIORITY priority[2] = {
         HSA_QUEUE_PRIORITY_LOW,
         HSA_QUEUE_PRIORITY_HIGH
     };
     int i;
 
-    /* queue[2..12] are dummy queues. Create queue in this sequence to
-     * render queue[0] and queue[1] on same pipe with no assumptions
-     * about the number of pipes used by KFD. Queue #12 is a multiple
-     * of 1, 2, 3 and 4, so it falls on pipe 0 for any number of pipes
+    /*
+     * For different pipe variation:
+     *   Only two queues are created, they should be on two different pipes.
+     *
+     * For same pipe variation:
+     *   queue[2..12] are dummy queues. Create queue in this sequence to
+     *   render queue[0] and queue[1] on same pipe with no assumptions
+     *   about the number of pipes used by KFD. Queue #12 is a multiple
+     *   of 1, 2, 3 and 4, so it falls on pipe 0 for any number of pipes
      */
-    EXPECT_SUCCESS(queue[0].Create(node));  // Queue 0 is on Pipe 0
-    for (i = 2; i <= 12; i++)
-        EXPECT_SUCCESS(queue[i].Create(node));
-    EXPECT_SUCCESS(queue[1].Create(node));  // Queue 12 is on Pipe 0
+    EXPECT_SUCCESS(queue[0].Create(node));
+    if (isSamePipe) {
+        for (i = 2; i < queueCount; i++)
+            EXPECT_SUCCESS(queue[i].Create(node));
+    }
+    EXPECT_SUCCESS(queue[1].Create(node));
 
     for (i = 0; i < 2; i++) {
         syncBuffer[i] = -1;
         queue[i].Update(BaseQueue::DEFAULT_QUEUE_PERCENTAGE, priority[i], false);
         pHsaEvent[i] = dispatch[i].GetHsaEvent();
         pHsaEvent[i]->EventData.EventData.SyncVar.SyncVar.UserData = &syncBuffer[i];
-        dispatch[i].SetDim(1024, 16, 16);
+        dispatch[i].SetDim(1024 / scaleDown , 16 / scaleDown, 16 / scaleDown);
     }
 
     startTime = GetSystemTickCountInMicroSec();
@@ -994,14 +956,12 @@ TEST_F(KFDQMTest, QueuePriorityOnSamePipe) {
     for (i = 0; i < 2; i++) {
         int usecs = endTime[i] - startTime;
         LOG() << "Task priority: " << std::dec << priority[i] << "\t";
-        LOG() << "Task duration: " << std::dec << usecs << "usecs" << std::endl;
+        LOG() << "Task duration: " << std::dec << std::setw(10) << usecs << " usecs" << std::endl;
     }
 
-    for (i = 0; i <= 12; i++) {
+    for (i = 0; i < queueCount; i++) {
         EXPECT_SUCCESS(queue[i].Destroy());
     }
-
-    TEST_END
 }
 
 
