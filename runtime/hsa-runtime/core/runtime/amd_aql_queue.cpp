@@ -363,8 +363,9 @@ AqlQueue::~AqlQueue() {
   }
 
   Inactivate();
-  agent_->ReleaseQueueMainScratch(queue_scratch_);
-  agent_->ReleaseQueueAltScratch(queue_scratch_);
+
+  if (queue_scratch_.main_queue_base) agent_->ReleaseQueueMainScratch(queue_scratch_);
+  if (queue_scratch_.alt_queue_base) agent_->ReleaseQueueAltScratch(queue_scratch_);
 
   FreeRegisteredRingBuffer();
   exception_signal_->DestroySignal();
