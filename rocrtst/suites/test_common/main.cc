@@ -152,6 +152,13 @@ TEST(rocrtstFunc, MemoryAllocateAndFreeTest) {
   RunCustomTestEpilog(&ma);
 }
 
+TEST(rocrtstFunc, MemoryAllocateContiguousTest) {
+  MemoryAllocationTest ma(false, true);
+  RunCustomTestProlog(&ma);
+  ma.MemoryAllocateContiguousTest();
+  RunCustomTestEpilog(&ma);
+}
+
 TEST(rocrtstFunc, Concurrent_Init_Test) {
   ConcurrentInitTest ci;
   RunCustomTestProlog(&ci);

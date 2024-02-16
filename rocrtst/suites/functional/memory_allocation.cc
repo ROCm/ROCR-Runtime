@@ -58,6 +58,7 @@
 #include "common/hsatimer.h"
 #include "gtest/gtest.h"
 #include "hsa/hsa.h"
+#include "hsa/hsa_ext_amd.h"
 
 static const uint32_t kNumBufferElements = 256;
 static const int kValue = 5;
@@ -486,3 +487,79 @@ void MemoryAllocationTest::MemoryBasicAllocationAndFree(void) {
   }
 }
 
+void MemoryAllocationTest::MemoryAllocateContiguousTest(hsa_agent_t agent,
+                                                        hsa_amd_memory_pool_t pool) {
+  rocrtst::pool_info_t pool_i;
+  hsa_device_type_t ag_type;
+  ASSERT_SUCCESS(rocrtst::AcquirePoolInfo(pool, &pool_i));
+
+  if (verbosity() > 0) PrintAgentNameAndType(agent);
+
+  ASSERT_SUCCESS(hsa_agent_get_info(agent, HSA_AGENT_INFO_DEVICE, &ag_type));
+
+  // if allocation is allowed in this pool allocate the memory
+  // and then free it
+  if (ag_type != HSA_DEVICE_TYPE_GPU || !pool_i.alloc_allowed || !pool_i.alloc_granule ||
+      !pool_i.alloc_alignment) {
+    return;
+  }
+
+  if (verbosity() > 0) PrintSegmentNameAndType(pool_i.segment);
+
+  // find all gpu agents
+  std::vector<hsa_agent_t> gpus;
+  ASSERT_SUCCESS(hsa_iterate_agents(rocrtst::IterateGPUAgents, &gpus));
+
+  const size_t alloc_size = pool_i.alloc_granule * 1024;
+
+  char* memoryPtr;
+
+  ASSERT_SUCCESS(hsa_amd_memory_pool_allocate(pool, alloc_size, HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG,
+                                              reinterpret_cast<void**>(&memoryPtr)));
+  if (!memoryPtr) return;
+
+  int dmabuf = -1;
+  uint64_t offset;
+  ASSERT_SUCCESS(hsa_amd_portable_export_dmabuf(memoryPtr, alloc_size, &dmabuf, &offset));
+
+  void* importedPtr;
+  size_t importedSz;
+
+  ASSERT_SUCCESS(hsa_amd_interop_map_buffer(gpus.size(), gpus.data(), dmabuf, 0, &importedSz,
+                                                   &importedPtr, 0, NULL));
+
+  ASSERT_NE((uint64_t)importedPtr, 0);
+  ASSERT_EQ(importedSz, alloc_size);
+
+  close(dmabuf);
+
+  ASSERT_SUCCESS(hsa_amd_interop_unmap_buffer(importedPtr));
+
+  ASSERT_SUCCESS(hsa_amd_memory_pool_free(memoryPtr));
+  return;
+}
+
+void MemoryAllocationTest::MemoryAllocateContiguousTest(void) {
+  hsa_status_t err;
+  std::vector<std::shared_ptr<rocrtst::agent_pools_t>> agent_pools;
+  if (verbosity() > 0) {
+    PrintMemorySubtestHeader("MemoryAllocateContiguousTest");
+  }
+
+  ASSERT_SUCCESS(rocrtst::GetAgentPools(&agent_pools));
+
+  auto pool_idx = 0;
+  for (auto a : agent_pools) {
+    for (auto p : a->pools) {
+      if (verbosity() > 0) {
+        std::cout << "  Pool " << pool_idx++ << ":" << std::endl;
+      }
+      MemoryAllocateContiguousTest(a->agent, p);
+    }
+  }
+
+  if (verbosity() > 0) {
+    std::cout << "subtest Passed" << std::endl;
+    std::cout << kSubTestSeparator << std::endl;
+  }
+}
