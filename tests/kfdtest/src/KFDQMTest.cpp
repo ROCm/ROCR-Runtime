@@ -1663,6 +1663,9 @@ TEST_F(KFDQMTest, PM4EventInterrupt) {
                                                 PM4ReleaseMemoryPacket(m_FamilyId, 0, 0, 0).SizeInBytes();
     const int queueSize = RoundToPowerOf2(totalPacketSize);
 
+    /* Reduce number of iteration if running with emulator. */
+    const int numIter = (g_IsEmuMode ? 32 : 1024);
+
     /* 4 PM4 queues will be running at same time.*/
     const int numPM4Queue = 4;
     HsaEvent *event[numPM4Queue];
@@ -1676,7 +1679,7 @@ TEST_F(KFDQMTest, PM4EventInterrupt) {
     }
 
     /* A simple loop here to give more pressure.*/
-    for (int test_count = 0; test_count < 1024; test_count++) {
+    for (int test_count = 0; test_count < numIter; test_count++) {
         for (int i = 0; i < numPM4Queue; i++) {
             ASSERT_SUCCESS(queue[i].Create(defaultGPUNode, queueSize));
             ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event[i]));
