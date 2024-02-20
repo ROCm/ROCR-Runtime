@@ -380,6 +380,9 @@ class GpuAgent : public GpuAgentInt {
     if (t0_.GPUClockCounter == t1_.GPUClockCounter) SyncClocks();
   }
 
+  const size_t MAX_SCRATCH_APERTURE_PER_XCC = (1ULL << 32);
+  size_t MaxScratchDevice() const { return properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC; }
+
   void ReserveScratch();
 
   // @brief If agent supports it, release scratch memory for all AQL queues on this agent.
