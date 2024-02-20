@@ -219,6 +219,12 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     queue_scratch_.mem_alignment_size = 1024;
 
   queue_scratch_.use_once_limit = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  if (queue_scratch_.use_once_limit > agent_->MaxScratchDevice()) {
+    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n",
+                    queue_scratch_.use_once_limit, agent_->MaxScratchDevice());
+    queue_scratch_.use_once_limit = agent_->MaxScratchDevice();
+  }
+
   queue_scratch_.use_alt_limit = 0;
 
   queue_scratch_.async_reclaim = agent_->AsyncScratchReclaimEnabled();

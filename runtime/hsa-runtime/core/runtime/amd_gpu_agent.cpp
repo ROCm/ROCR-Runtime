@@ -83,7 +83,6 @@
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 #define MAX_NUM_DOORBELLS 0x400
-#define MAX_SCRATCH_APERTURE_PER_XCC 4294967296
 #define DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC (1 << 30)  // 1 GB
 
 namespace rocr {
@@ -502,10 +501,9 @@ void GpuAgent::InitScratchPool() {
   size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  const size_t max_scratch_device = properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC;
   // For 64-bit linux use max queues unless otherwise specified
-  if ((max_scratch_len == 0) || (max_scratch_len > max_scratch_device)) {
-    max_scratch_len = max_scratch_device;  // 4GB per XCC aperture max
+  if ((max_scratch_len == 0) || (max_scratch_len > MaxScratchDevice())) {
+    max_scratch_len = MaxScratchDevice();  // 4GB per XCC aperture max
   }
 #endif
 
@@ -536,6 +534,12 @@ void GpuAgent::InitAsyncScratchThresholds() {
 void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  if (reserved_sz > MaxScratchDevice()) {
+    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n", 
+                    reserved_sz, MaxScratchDevice());
+    reserved_sz = MaxScratchDevice();
+  }
+
   size_t available;
   HSAKMT_STATUS err = hsaKmtAvailableMemory(node_id(), &available);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAvailableMemory failed");
@@ -1900,8 +1904,7 @@ void GpuAgent::AsyncReclaimScratchQueues() {
 }
 
 hsa_status_t GpuAgent::SetAsyncScratchThresholds(size_t use_once_limit) {
-  if (use_once_limit > properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (use_once_limit > MaxScratchDevice()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   scratch_limit_async_threshold_ = use_once_limit;
 
