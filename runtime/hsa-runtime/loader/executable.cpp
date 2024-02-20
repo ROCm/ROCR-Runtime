@@ -1218,7 +1218,8 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   std::string codeIsa;
-  if (!code->GetIsa(codeIsa)) {
+  unsigned genericVersion;
+  if (!code->GetIsa(codeIsa, &genericVersion)) {
     logger_ << "LoaderError: failed to determine code object's ISA\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1229,7 +1230,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion < 1 || majorVersion > 5) {
+  if (majorVersion < 1 || majorVersion > 6) {
     logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1257,7 +1258,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_ISA_NAME;
   }
 
-  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) {
+  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa, genericVersion)) {
     logger_ << "LoaderError: code object's ISA (" << codeIsa.c_str() << ") is not supported by the agent\n";
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
