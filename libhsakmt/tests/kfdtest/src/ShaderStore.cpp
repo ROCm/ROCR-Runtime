@@ -823,10 +823,10 @@ const char *PersistentIterateIsa =
  * then each wavefront fills value 0x5678 at corresponding result buffer and quit
  *
  * Initial state:
- *   s[0:1] - address buffer base address
- *   s[2:3] - result buffer base address
- *   s4 - workgroup id
- *   v0 - workitem id, always 0 because NUM_THREADS_X(number of threads) in workgroup set to 1
+ *   s[0:1]   - address buffer base address
+ *   s[2:3]   - result buffer base address
+ *   s4/ttmp9 - workgroup id (in s4 pre-GFX12, in ttmp9 on GFX12)
+ *   v0       - workitem id, always 0 because NUM_THREADS_X(number of threads) in workgroup set to 1
  * Registers:
  *   v0 - calculated workitem id, v0 = v0 + s4 * NUM_THREADS_X
  *   v[2:3] - address of corresponding local buf address offset: s[0:1] + v0 * 8
@@ -840,7 +840,11 @@ const char *ReadMemoryIsa =
     SHADER_MACROS_FLAT
     R"(
         // Compute address of corresponding output buffer
-        v_mov_b32               v0, s4          // use workgroup id as index
+        .if (.amdgcn.gfx_generation_number >= 12)
+            v_mov_b32           v0, ttmp9       // use workgroup id as index
+        .else
+            v_mov_b32           v0, s4          // use workgroup id as index
+        .endif
         v_lshlrev_b32           v0, 2, v0       // v0 *= 4
         V_ADD_CO_U32            v4, s2, v0      // v[4:5] = s[2:3] + v0 * 4
         v_mov_b32               v5, s3          // v[4:5] = s[2:3] + v0 * 4
@@ -853,16 +857,30 @@ const char *ReadMemoryIsa =
         V_ADD_CO_CI_U32         v3, v3, 0       // v[2:3] = s[0:1] + v0 * 8
 
         // Load local buffer size from output buffer
-        FLAT_LOAD_DWORD_NSS     v11, v[4:5] slc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORD_NSS     v11, v[4:5] scope:SCOPE_DEV
+        .else
+            FLAT_LOAD_DWORD_NSS     v11, v[4:5] slc
+        .endif
 
         // Load 64bit local buffer address stored at v[2:3] to v[6:7]
-        FLAT_LOAD_DWORDX2_NSS   v[6:7], v[2:3] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORDX2_NSS   v[6:7], v[2:3] scope:SCOPE_DEV
+            s_wait_loadcnt 0
+        .else
+            FLAT_LOAD_DWORDX2_NSS   v[6:7], v[2:3] slc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        .endif
         v_mov_b32               v8, 0x5678
         s_movk_i32              s8, 0x5678
         L_REPEAT:
-        s_load_dword            s16, s[0:1], 0x0 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_load_dword        s16, s[0:1], 0x0 scope:SCOPE_SYS
+            s_wait_kmcnt        0                      // wait for memory reads to finish
+        .else
+            s_load_dword        s16, s[0:1], 0x0 glc
+            s_waitcnt           vmcnt(0) & lgkmcnt(0)  // wait for memory reads to finish
+        .endif
         s_cmp_eq_i32            s16, s8
         s_cbranch_scc1          L_QUIT          // if notified to quit by host
 
@@ -873,7 +891,11 @@ const char *ReadMemoryIsa =
         v_mov_b32               v12, v6
         v_mov_b32               v13, v7
         L_LOOP_READ:
-        FLAT_LOAD_DWORDX2_NSS   v[14:15], v[12:13] slc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORDX2_NSS   v[14:15], v[12:13] scope:SCOPE_DEV
+        .else
+            FLAT_LOAD_DWORDX2_NSS   v[14:15], v[12:13] slc
+        .endif
         V_ADD_CO_U32            v9, v9, v10
         V_ADD_CO_U32            v12, v12, v10
         V_ADD_CO_CI_U32         v13, v13, 0
@@ -882,7 +904,11 @@ const char *ReadMemoryIsa =
         s_branch                L_REPEAT
         L_QUIT:
         flat_store_dword        v[4:5], v8
-        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory writes to finish
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_wait_storecnt     0
+        .else
+            s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory writes to finish
+        .endif
         s_endpgm
 )";
 
