@@ -151,12 +151,17 @@ class Flag {
 
     var = os::GetEnvVar("HSA_TOOLS_REPORT_LOAD_FAILURE");
 
-    report_tool_load_failures_explicit_ = (var.empty()) ? false : true;
     ifdebug {
       report_tool_load_failures_ = (var == "1") ? true : false;
     } else {
       report_tool_load_failures_ = (var == "0") ? false : true;
     }
+
+    var = os::GetEnvVar("HSA_TOOLS_DISABLE_REGISTER");
+    disable_tool_register_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_TOOLS_REPORT_REGISTER_FAILURE");
+    report_tool_register_failures_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
@@ -250,9 +255,9 @@ class Flag {
 
   bool report_tool_load_failures() const { return report_tool_load_failures_; }
 
-  bool report_tool_load_failures_explicitly_set() const {
-    return report_tool_load_failures_explicit_;
-  }
+  bool report_tool_register_failures() const { return report_tool_register_failures_; }
+
+  bool disable_tool_register() const { return disable_tool_register_; }
 
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
 
@@ -340,7 +345,8 @@ class Flag {
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
   bool report_tool_load_failures_;
-  bool report_tool_load_failures_explicit_;
+  bool report_tool_register_failures_ = false;
+  bool disable_tool_register_ = false;
   bool disable_fragment_alloc_;
   bool rev_copy_dir_;
   bool fine_grain_pcie_;
