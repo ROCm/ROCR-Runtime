@@ -202,8 +202,12 @@ const char *ScratchCopyDwordIsa =
             v_mov_b32_e32 v2, s2
             v_mov_b32_e32 v3, s3
         .endif
+
         // Setup the scratch parameters. This assumes a single 16-reg block
-        .if (.amdgcn.gfx_generation_number >= 10)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_setreg_b32 hwreg(HW_REG_SCRATCH_BASE_LO), s4
+            s_setreg_b32 hwreg(HW_REG_SCRATCH_BASE_HI), s5
+        .elseif (.amdgcn.gfx_generation_number >= 10)
             s_setreg_b32 hwreg(HW_REG_FLAT_SCR_LO), s4
             s_setreg_b32 hwreg(HW_REG_FLAT_SCR_HI), s5
         .elseif (.amdgcn.gfx_generation_number == 9)
@@ -213,10 +217,18 @@ const char *ScratchCopyDwordIsa =
             s_mov_b32 flat_scratch_lo, 8
             s_mov_b32 flat_scratch_hi, 0
         .endif
+
         // Copy a dword between the passed addresses
-        FLAT_LOAD_DWORD_NSS v4, v[0:1] slc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        FLAT_STORE_DWORD_NSS v[2:3], v4 slc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            FLAT_LOAD_DWORD_NSS v4, v[0:1] scope:SCOPE_SYS
+            s_wait_loadcnt 0
+            FLAT_STORE_DWORD_NSS v[2:3], v4 scope:SCOPE_SYS
+        .else
+            FLAT_LOAD_DWORD_NSS v4, v[0:1] slc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            FLAT_STORE_DWORD_NSS v[2:3], v4 slc
+        .endif
+
         s_endpgm
 )";
 
