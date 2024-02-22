@@ -2102,48 +2102,39 @@ void Runtime::LoadTools() {
   typedef void (*tool_add_t)(Runtime*);
 
 #if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
-  auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table_);
-  auto lib_id = rocprofiler_register_library_indentifier_t{};
-  auto rocp_reg_status =
-      rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
-                                             ROCP_REG_VERSION, &profiler_api_table_, 1, &lib_id);
+  if (!flag().disable_tool_register()) {
+    auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table_);
+    auto lib_id = rocprofiler_register_library_indentifier_t{};
+    auto rocp_reg_status =
+        rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
+                                               ROCP_REG_VERSION, &profiler_api_table_, 1, &lib_id);
 
-  if (rocp_reg_status != ROCP_REG_SUCCESS && flag().report_tool_load_failures()) {
-    // hsa-runtime, in non-debug mode, enables reporting tool load failures by default,
-    // which is good scheme for when tools were only loaded via the HSA_TOOLS_LIB env variable
-    // but, with automatic detection, this will result in reporting that no tools were available.
-    // So if no tools were available and flag().report_tool_load_failures() is true, we make
-    // sure that HSA_TOOLS_REPORT_LOAD_FAILURE was explicitly set and, if not, we suppress
-    // reporting that no tools were found
-    if (rocp_reg_status != ROCP_REG_NO_TOOLS ||
-        (rocp_reg_status == ROCP_REG_NO_TOOLS &&
-         flag().report_tool_load_failures_explicitly_set())) {
-      fprintf(stderr, "[hsa-runtime][%i] rocprofiler-register failed with error code %i: %s\n",
+    if (rocp_reg_status != ROCP_REG_SUCCESS && flag().report_tool_register_failures()) {
+      fprintf(stderr, "[hsa-runtime][%i] rocprofiler-register returned status code %i: %s\n",
               getpid(), rocp_reg_status, rocprofiler_register_error_string(rocp_reg_status));
     }
-  }
 
-  bool allow_v1_registration = false;
-  if(os::IsEnvVarSet("HSA_TOOLS_ROCPROFILER_V1_TOOLS"))
-  {
-    // assume true if env variable is set
-    allow_v1_registration = true;
-    auto allow_v1_value = os::GetEnvVar("HSA_TOOLS_ROCPROFILER_V1_TOOLS");
-    // support using numbers, off, false, no, n, or f
-    if (!allow_v1_value.empty()) {
-      if (allow_v1_value.find_first_not_of("0123456789") == std::string::npos) {
-        allow_v1_registration = (std::stoi(allow_v1_value) != 0);
-      } else if (std::regex_match(
-                     allow_v1_value,
-                     std::regex{"^(off|false|no|n|f)$", std::regex_constants::icase})) {
-        allow_v1_registration = false;
+    bool allow_v1_registration = false;
+    if (os::IsEnvVarSet("HSA_TOOLS_ROCPROFILER_V1_TOOLS")) {
+      // assume true if env variable is set
+      allow_v1_registration = true;
+      auto allow_v1_value = os::GetEnvVar("HSA_TOOLS_ROCPROFILER_V1_TOOLS");
+      // support using numbers, off, false, no, n, or f
+      if (!allow_v1_value.empty()) {
+        if (allow_v1_value.find_first_not_of("0123456789") == std::string::npos) {
+          allow_v1_registration = (std::stoi(allow_v1_value) != 0);
+        } else if (std::regex_match(
+                       allow_v1_value,
+                       std::regex{"^(off|false|no|n|f)$", std::regex_constants::icase})) {
+          allow_v1_registration = false;
+        }
       }
     }
-  }
 
-  // if rocprofiler library supports registration and v1 support not explicitly requested,
-  // do not use old method
-  if (rocp_reg_status == ROCP_REG_SUCCESS && !allow_v1_registration) return;
+    // if rocprofiler library supports registration and v1 support not explicitly requested,
+    // do not use old method
+    if (rocp_reg_status == ROCP_REG_SUCCESS && !allow_v1_registration) return;
+  }
 #endif
 
   std::vector<const char*> failed;
