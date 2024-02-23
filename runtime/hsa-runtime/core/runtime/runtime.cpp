@@ -833,6 +833,10 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
   *size = info.SizeInBytes;
   *ptr = info.MemoryAddress;
 
+  ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  allocation_map_[info.MemoryAddress] = AllocationRegion(
+      nullptr, info.SizeInBytes, info.SizeInBytes, core::MemoryRegion::AllocateNoFlags);
+
   return HSA_STATUS_SUCCESS;
 }
 
