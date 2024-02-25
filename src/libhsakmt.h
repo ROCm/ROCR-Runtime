@@ -38,6 +38,7 @@ extern bool hsakmt_forked;
 extern pthread_mutex_t hsakmt_mutex;
 extern bool is_dgpu;
 extern bool is_svm_api_supported;
+extern int zfb_support;
 
 extern HsaVersionInfo kfd_version_info;
 

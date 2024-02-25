@@ -34,8 +34,6 @@
 #include <fcntl.h>
 #include "fmm.h"
 
-extern int zfb_support;
-
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 					      HSAuint32 DefaultPolicy,
 					      HSAuint32 AlternatePolicy,

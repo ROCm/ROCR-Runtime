@@ -37,3 +37,5 @@ int PAGE_SHIFT;
 
 /* whether to check all dGPUs in the topology support SVM API */
 bool is_svm_api_supported;
+/* zfb is mainly used during emulation */
+int zfb_support;
