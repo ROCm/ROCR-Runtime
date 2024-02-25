@@ -49,9 +49,6 @@ static pid_t parent_pid = -1;
 int hsakmt_debug_level;
 bool hsakmt_forked;
 
-/* zfb is mainly used during emulation */
-int zfb_support;
-
 /* is_forked_child detects when the process has forked since the last
  * time this function was called. We cannot rely on pthread_atfork
  * because the process can fork without calling the fork function in
