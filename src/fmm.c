@@ -1765,7 +1765,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 	return 0;
 }
 
-static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
+static void *fmm_allocate_host_gpu(uint32_t gpu_id, uint32_t node_id, void *address,
 				   uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
@@ -1774,7 +1774,8 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	uint64_t mmap_offset;
 	int32_t gpu_drm_fd;
 	uint32_t ioc_flags;
-	uint32_t gpu_id;
+	uint32_t preferred_gpu_id;
+	int gpu_mem_id = 0; /* default to g_first_gpu_mem */
 	uint64_t size;
 	void *mem;
 
@@ -1786,8 +1787,14 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 	if (!g_first_gpu_mem)
 		return NULL;
 
-	gpu_id = g_first_gpu_mem->gpu_id;
-	gpu_drm_fd = g_first_gpu_mem->drm_render_fd;
+	if (gpu_id) {
+		gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
+		if (gpu_mem_id < 0)
+			return NULL;
+	}
+
+	preferred_gpu_id = gpu_mem[gpu_mem_id].gpu_id;
+	gpu_drm_fd = gpu_mem[gpu_mem_id].drm_render_fd;
 
 	size = MemorySizeInBytes;
 	ioc_flags = 0;
@@ -1837,14 +1844,14 @@ static void *fmm_allocate_host_gpu(uint32_t node_id, void *address,
 		/* Create userptr BO */
 		mmap_offset = (uint64_t)mem;
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_USERPTR;
-		vm_obj = fmm_allocate_memory_object(gpu_id, mem, size,
+		vm_obj = fmm_allocate_memory_object(preferred_gpu_id, mem, size,
 						       aperture, &mmap_offset,
 						       ioc_flags);
 		if (!vm_obj)
 			goto out_release_area;
 	} else {
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
-		mem =  __fmm_allocate_device(gpu_id, address, size, aperture,
+		mem =  __fmm_allocate_device(preferred_gpu_id, address, size, aperture,
 					     &mmap_offset, ioc_flags, &vm_obj);
 
 		if (mem && mflags.ui32.HostAccess) {
@@ -1886,11 +1893,11 @@ out_release_area:
 	return NULL;
 }
 
-void *fmm_allocate_host(uint32_t node_id, void *address,
+void *fmm_allocate_host(uint32_t gpu_id, uint32_t node_id, void *address,
 			uint64_t MemorySizeInBytes, HsaMemFlags mflags)
 {
 	if (is_dgpu)
-		return fmm_allocate_host_gpu(node_id, address, MemorySizeInBytes, mflags);
+		return fmm_allocate_host_gpu(gpu_id, node_id, address, MemorySizeInBytes, mflags);
 	return fmm_allocate_host_cpu(address, MemorySizeInBytes, mflags);
 }
 
