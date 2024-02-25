@@ -163,7 +163,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 		if (zfb_support && gpu_id && MemFlags.ui32.NonPaged == 1)
 			MemFlags.ui32.CoarseGrain = 1;
 
-		*MemoryAddress = fmm_allocate_host(PreferredNode,  *MemoryAddress,
+		*MemoryAddress = fmm_allocate_host(gpu_id, PreferredNode,  *MemoryAddress,
 						   SizeInBytes,	MemFlags);
 
 		if (!(*MemoryAddress)) {
