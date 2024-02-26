@@ -310,15 +310,14 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 	return false;
 }
 
-void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
+void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t gpu_id,
 				       uint32_t NodeId, bool nonPaged,
 				       bool DeviceLocal,
 				       bool Uncached)
 {
-	void *mem;
+	void *mem = NULL;
 	HSAuint64 gpu_va;
 	HsaMemFlags flags;
-	HSAKMT_STATUS ret;
 	HSAuint32 cpu_id = 0;
 
 	flags.Value = 0;
@@ -329,22 +328,32 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align,
 	flags.ui32.CoarseGrain = DeviceLocal;
 	flags.ui32.Uncached = Uncached;
 
-	/* Get the closest cpu_id to GPU NodeId for system memory allocation
-	 * nonPaged=1 system memory allocation uses GTT path
-	 */
-	if (!DeviceLocal && !nonPaged) {
-		cpu_id = get_direct_link_cpu(NodeId);
-		if (cpu_id == INVALID_NODEID) {
-			flags.ui32.NoNUMABind = 1;
-			cpu_id = 0;
-		}
-	}
-
 	size = ALIGN_UP(size, align);
 
-	ret = hsaKmtAllocMemory(DeviceLocal ? NodeId : cpu_id, size, flags, &mem);
-	if (ret != HSAKMT_STATUS_SUCCESS)
+	if (DeviceLocal && !zfb_support)
+		mem = fmm_allocate_device(gpu_id, NodeId, mem, size, flags);
+	else {
+		/* VRAM under ZFB mode should be supported here without any
+		 * additional code
+		 */
+		/* Get the closest cpu_id to GPU NodeId for system memory allocation
+		 * nonPaged=0 system memory allocation uses GTT path
+		 */
+		if (!nonPaged) {
+			cpu_id = get_direct_link_cpu(NodeId);
+			if (cpu_id == INVALID_NODEID) {
+				flags.ui32.NoNUMABind = 1;
+				cpu_id = 0;
+			}
+		}
+		mem = fmm_allocate_host(gpu_id, cpu_id, mem, size, flags);
+	}
+
+	if (!mem) {
+		pr_err("Alloc %s memory failed size %d\n",
+		       DeviceLocal ? "VRAM" : "GTT", size);
 		return NULL;
+	}
 
 	if (NodeId != 0) {
 		uint32_t nodes_array[1] = {NodeId};
@@ -376,13 +385,14 @@ void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
  */
 static void *allocate_exec_aligned_memory(uint32_t size,
 					  bool use_ats,
+					  uint32_t gpu_id,
 					  uint32_t NodeId,
 					  bool nonPaged,
 					  bool DeviceLocal,
 					  bool Uncached)
 {
 	if (!use_ats)
-		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, NodeId,
+		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, gpu_id, NodeId,
 							nonPaged, DeviceLocal,
 							Uncached);
 	return allocate_exec_aligned_memory_cpu(size);
@@ -469,6 +479,7 @@ static inline void fill_cwsr_header(struct queue *q, void *addr,
 
 static int handle_concrete_asic(struct queue *q,
 				struct kfd_ioctl_create_queue_args *args,
+				uint32_t gpu_id,
 				uint32_t NodeId,
 				HsaEvent *Event,
 				volatile HSAint64 *ErrPayload)
@@ -480,8 +491,9 @@ static int handle_concrete_asic(struct queue *q,
 		return HSAKMT_STATUS_SUCCESS;
 
 	if (q->eop_buffer_size > 0) {
+		pr_info("Allocating VRAM for EOP\n");
 		q->eop_buffer = allocate_exec_aligned_memory(q->eop_buffer_size,
-				q->use_ats,
+				q->use_ats, gpu_id,
 				NodeId, true, true, /* Unused for VRAM */false);
 		if (!q->eop_buffer)
 			return HSAKMT_STATUS_NO_MEMORY;
@@ -516,6 +528,7 @@ static int handle_concrete_asic(struct queue *q,
 			void *addr;
 			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
 
+			pr_info("Allocating GTT for CWSR\n");
 			addr = mmap_allocate_aligned(PROT_READ | PROT_WRITE,
 						     MAP_ANONYMOUS | MAP_PRIVATE,
 						     size, GPU_HUGE_PAGE_SIZE, 0,
@@ -548,7 +561,7 @@ static int handle_concrete_asic(struct queue *q,
 		if (!q->unified_ctx_save_restore) {
 			q->ctx_save_restore = allocate_exec_aligned_memory(
 							q->total_mem_alloc_size,
-							q->use_ats, NodeId,
+							q->use_ats, gpu_id, NodeId,
 							false, false, false);
 
 			if (!q->ctx_save_restore)
@@ -597,7 +610,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 		return result;
 
 	struct queue *q = allocate_exec_aligned_memory(sizeof(*q),
-			false, NodeId, true, false, true);
+			false, gpu_id, NodeId, true, false, true);
 	if (!q)
 		return HSAKMT_STATUS_NO_MEMORY;
 
@@ -652,7 +665,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 		QueueResource->QueueWptrValue = (uintptr_t)&q->wptr;
 	}
 
-	err = handle_concrete_asic(q, &args, NodeId, Event, QueueResource->ErrorReason);
+	err = handle_concrete_asic(q, &args, gpu_id, NodeId, Event, QueueResource->ErrorReason);
 	if (err != HSAKMT_STATUS_SUCCESS) {
 		free_queue(q);
 		return err;
