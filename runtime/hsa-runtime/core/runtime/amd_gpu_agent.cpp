@@ -963,10 +963,9 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
     hsa_status_t stat;
     size_t chunk = std::min(remainder_size, (size + gang_factor - 1)/gang_factor);
     if (!blit->GangLeader() && !gang_signals.empty()) {
-      std::vector<core::Signal*> dep_signals_null(0); // only leader has to wait on dependencies
       stat = blit->SubmitLinearCopyCommand(reinterpret_cast<uint8_t*>(dst) + offset,
                                            reinterpret_cast<const uint8_t*>(src) + offset,
-                                           chunk, dep_signals_null,
+                                           chunk, dep_signals,
                                            *gang_signals[gang_sig_count], gang_signals);
       gang_sig_count++;
     } else {
