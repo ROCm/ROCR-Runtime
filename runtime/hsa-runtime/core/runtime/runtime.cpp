@@ -1129,8 +1129,9 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
          break;
        }
      }
-     // we can ignore a bad export since importer will catch the bad fd
-     hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+
+     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     if (err != HSAKMT_STATUS_SUCCESS) continue;
      SendDmaBufFd(connection_fd, dmabuf_fd);
      openDmaBufs[conn_handle] = std::make_pair(dmabuf_fd, 1);
    }
@@ -1205,6 +1206,17 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
     // System sub allocations are not supported for now.
     if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
+    // Work around to defer export on import call to minimize FD creation.
+    // Without this, a deferred export may fail due to the kernel mode driver not
+    // holding the GEM object reference.
+    // Export the dmabuf then close the file to get the reference to ensure the
+    // deferred export will not run into this problem.
+    int dmabuf_fd;
+    uint64_t fragOffset;
+    HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+    close(dmabuf_fd);
+
     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
     if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
       struct sockaddr_un address;
@@ -1268,6 +1280,12 @@ static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool 
     int dmabuf_fd = -1, socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     assert(socket_fd > -1 && "DMA buffer could not be imported for IPC!");
     if (socket_fd == -1) return -1;
+
+    // Set 10 second timeout for ReceiveDmaBufFd
+    struct timeval tv;
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
     memset(&address, 0, sizeof(struct sockaddr_un));
