@@ -44,6 +44,7 @@
 #define HSA_RUNTIME_INC_HSA_API_TRACE_H
 
 #include "hsa.h"
+#include "hsa_api_trace_version.h"
 #ifdef AMD_INTERNAL_BUILD
 #include "hsa_ext_image.h"
 #include "hsa_ext_amd.h"
@@ -60,23 +61,7 @@
 #include <assert.h>
 #include <stddef.h>
 
-// Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION               0x03
-#define HSA_CORE_API_TABLE_MAJOR_VERSION          0x02
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION       0x02
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION     0x02
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION         0x02
-#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION    0x01
-#define HSA_TOOLS_API_TABLE_MAJOR_VERSION         0x01
-
-// Step Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_STEP_VERSION                0x00
-#define HSA_CORE_API_TABLE_STEP_VERSION           0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION        0x01
-#define HSA_FINALIZER_API_TABLE_STEP_VERSION      0x00
-#define HSA_IMAGE_API_TABLE_STEP_VERSION          0x00
-#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION     0x00
-#define HSA_TOOLS_API_TABLE_STEP_VERSION          0x00
+// Table MAJOR_VERSION and STEP_VERSION defines have moved to hsa_api_trace_version.h
 
 // Min function used to copy Api Tables
 static inline uint32_t Min(const uint32_t a, const uint32_t b) {
