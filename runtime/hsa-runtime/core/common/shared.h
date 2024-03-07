@@ -58,14 +58,14 @@ namespace core {
 class BaseShared {
  public:
   static void SetAllocateAndFree(
-      const std::function<void*(size_t, size_t, uint32_t)>& allocate,
+      const std::function<void*(size_t, size_t, uint32_t, int)>& allocate,
       const std::function<void(void*)>& free) {
     allocate_ = allocate;
     free_ = free;
   }
 
  protected:
-  static std::function<void*(size_t, size_t, uint32_t)> allocate_;
+  static std::function<void*(size_t, size_t, uint32_t, int)> allocate_;
   static std::function<void(void*)> free_;
 };
 
@@ -73,7 +73,19 @@ class BaseShared {
 template <typename T> class PageAllocator : private BaseShared {
  public:
   __forceinline static T* alloc(int flags = 0) {
-    T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, flags));
+    T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, flags, 0));
+    if (ret == nullptr) throw std::bad_alloc();
+
+    MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(ret); });
+
+    new (ret) T;
+
+    throwGuard.Dismiss();
+    return ret;
+  }
+
+  __forceinline static T* alloc(int agent_node_id, int flags) {
+    T* ret = reinterpret_cast<T*>(allocate_(AlignUp(sizeof(T), 4096), 4096, flags, agent_node_id));
     if (ret == nullptr) throw std::bad_alloc();
 
     MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(ret); });
@@ -105,6 +117,16 @@ class Shared final : private BaseShared {
       shared_object_ = pool_->alloc();
     else
       shared_object_ = PageAllocator<T>::alloc(flags);
+  }
+
+  explicit Shared(int agent_node_id, Allocator* pool = nullptr, int flags = 0) : pool_(pool) {
+    assert(allocate_ != nullptr && free_ != nullptr &&
+           "Shared object allocator is not set");
+
+    if (pool_)
+      shared_object_ = pool_->alloc();
+    else
+      shared_object_ = PageAllocator<T>::alloc(agent_node_id, flags);
   }
 
   ~Shared() {
@@ -147,6 +169,12 @@ template <typename T> class Shared<T, PageAllocator<T>> final : private BaseShar
     shared_object_ = PageAllocator<T>::alloc(flags);
   }
 
+  Shared(int agent_node_id, int flags) {
+    assert(allocate_ != nullptr && free_ != nullptr && "Shared object allocator is not set");
+
+    shared_object_ = PageAllocator<T>::alloc(agent_node_id, flags);
+  }
+
   ~Shared() {
     assert(allocate_ != nullptr && free_ != nullptr &&
            "Shared object allocator is not set");
@@ -183,7 +211,7 @@ template <typename T, size_t Align> class SharedArray final : private BaseShared
     static_assert((__alignof(T) <= Align) || (Align == 0), "Align is less than alignof(T)");
 
     shared_object_ =
-        reinterpret_cast<T*>(allocate_(sizeof(T) * length, Max(__alignof(T), Align), 0));
+        reinterpret_cast<T*>(allocate_(sizeof(T) * length, Max(__alignof(T), Align), 0, 0));
     if (shared_object_ == nullptr) throw std::bad_alloc();
 
     size_t i = 0;
