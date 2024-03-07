@@ -73,11 +73,11 @@ SharedSignal* SharedSignalPool_t::alloc() {
   ScopedAcquire<HybridMutex> lock(&lock_);
   if (free_list_.empty()) {
     SharedSignal* block = reinterpret_cast<SharedSignal*>(
-        allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0));
+        allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
     if (block == nullptr) {
       block_size_ = minblock_;
       block = reinterpret_cast<SharedSignal*>(
-          allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0));
+          allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
       if (block == nullptr) throw std::bad_alloc();
     }
 
