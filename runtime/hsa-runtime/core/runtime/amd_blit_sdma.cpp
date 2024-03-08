@@ -122,6 +122,8 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BlitSdma()
       cached_commit_index_(0),
       platform_atomic_support_(true),
       hdp_flush_support_(false),
+      gang_leader_(false),
+      is_ganged_(false),
       min_submission_size_(0) {
   std::memset(&queue_resource_, 0, sizeof(queue_resource_));
 }
