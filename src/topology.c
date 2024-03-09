@@ -32,6 +32,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <ctype.h>
+#include <limits.h>
 
 #include <errno.h>
 #include <sys/sysinfo.h>
@@ -1372,6 +1373,10 @@ static int topology_create_temp_cpu_cache_list(int node,
 	 * which can be present twice in the string above. 29 is for the prefix
 	 * and the +6 is for the cache suffix
 	 */
+#ifndef MAXNAMLEN
+/* MAXNAMLEN is the BSD name for NAME_MAX. glibc aliases this as NAME_MAX, but not musl */
+#define MAXNAMLEN NAME_MAX
+#endif
 	const uint32_t MAXPATHSIZE = 29 + MAXNAMLEN + (MAXNAMLEN + 6);
 	cpu_cacheinfo_t *p_temp_cpu_ci_list; /* a list of cpu_ci */
 	char path[MAXPATHSIZE], node_dir[MAXPATHSIZE];

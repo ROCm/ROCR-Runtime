@@ -64,7 +64,11 @@ extern HsaVersionInfo kfd_version_info;
 	do { if ((minor) > kfd_version_info.KernelInterfaceMinorVersion)\
 		return HSAKMT_STATUS_NOT_SUPPORTED; } while (0)
 
+/* Might be defined in limits.h on platforms where it is constant (used by musl) */
+/* See also: https://pubs.opengroup.org/onlinepubs/7908799/xsh/limits.h.html */
+#ifndef PAGE_SIZE
 extern int PAGE_SIZE;
+#endif
 extern int PAGE_SHIFT;
 
 /* VI HW bug requires this virtual address alignment */
