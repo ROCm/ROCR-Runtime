@@ -22,7 +22,7 @@
  */
 
 #include <gtest/gtest.h>
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #ifndef __KFD_OPEN_CLOSE_KFD_TEST__H__
 #define __KFD_OPEN_CLOSE_KFD_TEST__H__

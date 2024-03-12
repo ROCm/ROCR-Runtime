@@ -24,7 +24,7 @@
 #ifndef __KFD__TEST__UTIL__QUEUE__H__
 #define __KFD__TEST__UTIL__QUEUE__H__
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include <vector>
 
 typedef struct {

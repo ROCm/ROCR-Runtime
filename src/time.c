@@ -24,7 +24,7 @@
  */
 
 #include "libhsakmt.h"
-#include "linux/kfd_ioctl.h"
+#include "hsakmt/linux/kfd_ioctl.h"
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtGetClockCounters(HSAuint32 NodeId,
 					       HsaClockCounters *Counters)

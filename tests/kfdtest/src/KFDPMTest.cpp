@@ -25,7 +25,7 @@
 #include "KFDTestUtil.hpp"
 #include "PM4Packet.hpp"
 #include "PM4Queue.hpp"
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 void KFDPMTest::SetUp() {
     ROUTINE_START

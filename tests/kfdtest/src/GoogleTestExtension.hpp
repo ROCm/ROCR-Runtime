@@ -25,7 +25,7 @@
 #define __GOOGLETEST_EXTENSION__H__
 
 #include <gtest/gtest.h>
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include "KFDTestFlags.hpp"
 
 enum LOGTYPE {

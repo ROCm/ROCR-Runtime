@@ -25,7 +25,7 @@
 #include "SDMAQueue.hpp"
 #include "PM4Queue.hpp"
 #include "AqlQueue.hpp"
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include "KFDBaseComponentTest.hpp"
 
 BaseQueue::BaseQueue()
