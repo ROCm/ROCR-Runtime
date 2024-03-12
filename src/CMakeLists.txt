@@ -95,8 +95,14 @@ set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT
 ## Find external dependencies.
 find_package(PkgConfig)
 find_package(LibElf REQUIRED)
-find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
 pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
+
+## Find dependencies that may be built with us or from an installed package.
+if(TARGET hsakmt::hsakmt)
+  message(STATUS "Using build dep on hsakmt")
+else()
+  find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
+endif()
 
 ## Create the rocr target.
 add_library( ${CORE_RUNTIME_TARGET} "" )
@@ -126,6 +132,19 @@ target_include_directories( ${CORE_RUNTIME_TARGET}
   ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/trap_handler
   ${CMAKE_CURRENT_BINARY_DIR}/core/runtime/blit_shaders)
 
+## ------------------------- Device Library Options ----------------------------
+set(ROCR_RUNTIME_DEVICE_LIB_PATH "" CACHE PATH "Builds against custom device-lib bitcode files (passed to clang --rocm-device-lib-path=)")
+set(ROCR_RUNTIME_DEVICE_LIB_DEPS "" CACHE STRING "Custom deps to depend on to ensure device libs are built")
+
+if (ROCR_RUNTIME_DEVICE_LIB_PATH)
+  message(STATUS "ROCR Runtime custom device lib path: ${ROCR_RUNTIME_DEVICE_LIB_PATH}")
+  if(NOT IS_DIRECTORY "${ROCR_RUNTIME_DEVICE_LIB_PATH}")
+    message(WARNING "Custom ROCR_RUNTIME_DEVICE_LIB_PATH does not exist")
+  endif()
+  set(ROCR_RUNTIME_CLANG_DEVICE_LIB_ARGS "--rocm-device-lib-path=${ROCR_RUNTIME_DEVICE_LIB_PATH}")
+else()
+  set(ROCR_RUNTIME_CLANG_DEVICE_LIB_ARGS)
+endif()
 
 ## ------------------------- Linux Compiler and Linker options -------------------------
 set ( HSA_CXX_FLAGS ${HSA_COMMON_CXX_FLAGS} -fexceptions -fno-rtti -fvisibility=hidden -Wno-error=missing-braces -Wno-error=sign-compare -Wno-sign-compare -Wno-write-strings -Wno-conversion-null -fno-math-errno -fno-threadsafe-statics -fmerge-all-constants -fms-extensions -Wno-error=comment -Wno-comment -Wno-error=pointer-arith -Wno-pointer-arith -Wno-error=unused-variable -Wno-error=unused-function )
@@ -156,6 +175,24 @@ target_compile_options(${CORE_RUNTIME_TARGET} PRIVATE ${HSA_CXX_FLAGS})
 #target_link_options not available prior to CMake 3.13
 set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY LINK_FLAGS ${HSA_SHARED_LINK_FLAGS})
 ##  -------------------------  End Compiler and Linker options ----------------------------
+
+## Ensure that 'clang' and 'llvm-objcopy' targets are available
+if(NOT TARGET clang OR NOT TARGET llvm-objcopy)
+  if(TARGET clang OR TARGET llvm-objcopy)
+    message(FATAL_ERROR "Detected one of 'clang' or 'llvm-objcopy' targets but not both")
+  endif()
+  message(STATUS "LLVM deps not found: finding Clang and LLVM packages")
+  find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
+  find_package(LLVM REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
+endif()
+
+if(${CMAKE_VERBOSE_MAKEFILE})
+  get_property(clang_path TARGET clang PROPERTY LOCATION)
+  get_property(objcopy_path TARGET llvm-objcopy PROPERTY LOCATION)
+  message("Using clang from: ${clang_path}")
+  message("Using llvm-objcopy from: ${objcopy_path}")
+  message("Trap handlers assembled for: ${TARGET_DEVS}")
+endif()
 
 ## Source files.
 set ( SRCS core/util/lnx/os_linux.cpp
