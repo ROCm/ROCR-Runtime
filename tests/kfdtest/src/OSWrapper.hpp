@@ -26,7 +26,7 @@
 #include <string>
 
 #include "KFDTestFlags.hpp"
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 
 #ifndef __OS__WRAPPER__H__
 #define __OS__WRAPPER__H__

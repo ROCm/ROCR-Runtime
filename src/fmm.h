@@ -26,7 +26,7 @@
 #ifndef FMM_H_
 #define FMM_H_
 
-#include "hsakmttypes.h"
+#include "hsakmt/hsakmttypes.h"
 #include <stddef.h>
 
 typedef enum {

@@ -31,7 +31,7 @@
 #include <unistd.h>
 #include <sys/mman.h>
 #include <stdio.h>
-#include "linux/kfd_ioctl.h"
+#include "hsakmt/linux/kfd_ioctl.h"
 #include "fmm.h"
 
 static HSAuint64 *events_page = NULL;

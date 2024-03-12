@@ -25,7 +25,7 @@
 #include <stddef.h>
 #include <string.h>
 #include "PM4Packet.hpp"
-#include "hsakmttypes.h"
+#include "hsakmt/hsakmttypes.h"
 #include "KFDBaseComponentTest.hpp"
 
 #include "asic_reg/gfx_7_2_enum.h"

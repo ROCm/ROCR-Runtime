@@ -26,8 +26,8 @@
 #ifndef LIBHSAKMT_H_INCLUDED
 #define LIBHSAKMT_H_INCLUDED
 
-#include "linux/kfd_ioctl.h"
-#include "hsakmt.h"
+#include "hsakmt/linux/kfd_ioctl.h"
+#include "hsakmt/hsakmt.h"
 #include <pthread.h>
 #include <stdint.h>
 #include <limits.h>

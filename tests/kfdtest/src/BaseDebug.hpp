@@ -24,7 +24,7 @@
 #ifndef __KFD_BASE_DEBUG__H__
 #define __KFD_BASE_DEBUG__H__
 
-#include "hsakmt.h"
+#include "hsakmt/hsakmt.h"
 #include <poll.h>
 #include <stdlib.h>
 

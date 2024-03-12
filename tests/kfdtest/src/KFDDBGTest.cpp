@@ -25,7 +25,7 @@
 #include "KFDDBGTest.hpp"
 #include <sys/ptrace.h>
 #include <poll.h>
-#include "linux/kfd_ioctl.h"
+#include "hsakmt/linux/kfd_ioctl.h"
 #include "KFDQMTest.hpp"
 #include "PM4Queue.hpp"
 #include "PM4Packet.hpp"
