@@ -42,20 +42,8 @@
 
 cmake_minimum_required ( VERSION 3.7 )
 
-# Import target 'clang' and 'llvm-objcopy'
-find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
-find_package(LLVM REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
-
 set (TARGET_DEVS "gfx900;gfx940;gfx941;gfx942;gfx1010;gfx1030;gfx1100")
 set (POSTFIX "9;940;941;942;1010;10;11")
-
-if(${CMAKE_VERBOSE_MAKEFILE})
-  get_property(clang_path TARGET clang PROPERTY LOCATION)
-  get_property(objcopy_path TARGET llvm-objcopy PROPERTY LOCATION)
-  message("Using clang from: ${clang_path}")
-  message("Using llvm-objcopy from: ${objcopy_path}")
-  message("Trap handlers assembled for: ${TARGET_DEVS}")
-endif()
 
 ##==========================================
 ##  Add custom command to generate a kernel code object file
