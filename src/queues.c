@@ -135,6 +135,10 @@ static void get_doorbell_map_info(uint32_t node_id,
 	doorbell->use_gpuvm = (is_dgpu && gfxv != GFX_VERSION_TONGA);
 	doorbell->size = DOORBELLS_PAGE_SIZE(DOORBELL_SIZE(gfxv));
 
+	if (doorbell->size < (uint32_t) PAGE_SIZE) {
+		doorbell->size = PAGE_SIZE;
+	}
+
 	return;
 }
 
