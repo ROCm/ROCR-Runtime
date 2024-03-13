@@ -152,7 +152,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated system memory */
-	if (!gpu_id || !MemFlags.ui32.NonPaged || zfb_support) {
+	if (!gpu_id || !MemFlags.ui32.NonPaged || zfb_support || MemFlags.ui32.GTTAccess) {
 		/* Backwards compatibility hack: Allocate system memory if app
 		 * asks for paged memory from a GPU node.
 		 */
