@@ -567,7 +567,9 @@ typedef struct _HsaMemFlags
             unsigned int NoAddress:     1; // only do vram allocation, return a handle, not allocate virtual address.
             unsigned int OnlyAddress:   1; // only do virtal address allocation without vram allocation.
             unsigned int ExtendedCoherent: 1;  // system-scope coherence on atomic instructions
-            unsigned int Reserved:     11;
+            unsigned int GTTAccess:     1;  // default = 0; If 1: The caller indicates this memory will be mapped to GART for MES
+					    // KFD will allocate GTT memory with the Preferred_node set as gpu_id for GART mapping
+            unsigned int Reserved:     10;
 
         } ui32;
         HSAuint32 Value;
