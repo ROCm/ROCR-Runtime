@@ -553,7 +553,13 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCopyRe
   if (range->z > 1 && (src->slice == 0 || dst->slice == 0))
     throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "Copy rect slice needed.");
 
-  const uint max_pitch = 1 << SDMA_PKT_COPY_LINEAR_RECT::pitch_bits;
+  // GFX12 or later use a different packet format that is incompatible (fields changed in size and location).
+  const bool isGFX12Plus = (agent_->isa()->GetMajorVersion() >= 12);
+
+  // Common and GFX12 packet must match in size to use same code for vector/append.
+  static_assert(sizeof(SDMA_PKT_COPY_LINEAR_RECT) == sizeof(SDMA_PKT_COPY_LINEAR_RECT_GFX12));
+
+  const uint max_pitch = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::pitch_bits : SDMA_PKT_COPY_LINEAR_RECT::pitch_bits);
 
   std::vector<SDMA_PKT_COPY_LINEAR_RECT> pkts;
   std::vector<uint64_t> bytes_moved;
@@ -838,12 +844,15 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
     return __builtin_ctz(width | 16);
   };
 
+  // GFX12 or later use a different packet format that is incompatible (fields changed in size and location).
+  const bool isGFX12Plus = (agent_->isa()->GetMajorVersion() >= 12);
+
   // Limits in terms of element count
-  const uint32_t max_pitch = 1 << SDMA_PKT_COPY_LINEAR_RECT::pitch_bits;
-  const uint32_t max_slice = 1 << SDMA_PKT_COPY_LINEAR_RECT::slice_bits;
-  const uint32_t max_x = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
-  const uint32_t max_y = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits;
-  const uint32_t max_z = 1 << SDMA_PKT_COPY_LINEAR_RECT::rect_z_bits;
+  const uint32_t max_pitch = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::pitch_bits   : SDMA_PKT_COPY_LINEAR_RECT::pitch_bits);
+  const uint32_t max_slice = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::slice_bits   : SDMA_PKT_COPY_LINEAR_RECT::slice_bits);
+  const uint32_t max_x     = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::rect_xy_bits : SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits);
+  const uint32_t max_y     = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::rect_xy_bits : SDMA_PKT_COPY_LINEAR_RECT::rect_xy_bits);
+  const uint32_t max_z     = 1 << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::rect_z_bits  : SDMA_PKT_COPY_LINEAR_RECT::rect_z_bits);
 
   // Find maximum element that describes the pitch and slice.
   // Pitch and slice must both be represented in units of elements.  No element larger than this
@@ -918,27 +927,52 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
 
         x += xcount << element;
 
-        SDMA_PKT_COPY_LINEAR_RECT* pkt =
-            (SDMA_PKT_COPY_LINEAR_RECT*)append(sizeof(SDMA_PKT_COPY_LINEAR_RECT));
-        *pkt = {};
-        pkt->HEADER_UNION.op = SDMA_OP_COPY;
-        pkt->HEADER_UNION.sub_op = SDMA_SUBOP_COPY_LINEAR_RECT;
-        pkt->HEADER_UNION.element = element;
-        pkt->SRC_ADDR_LO_UNION.src_addr_31_0 = sbase;
-        pkt->SRC_ADDR_HI_UNION.src_addr_63_32 = sbase >> 32;
-        pkt->SRC_PARAMETER_1_UNION.src_offset_x = soff;
-        pkt->SRC_PARAMETER_2_UNION.src_pitch = (src->pitch >> element) - 1;
-        pkt->SRC_PARAMETER_3_UNION.src_slice_pitch =
+        // GFX12 has a different packet format that is incompatible with pre-GFX12.
+        if (isGFX12Plus) {
+          SDMA_PKT_COPY_LINEAR_RECT_GFX12* pkt =
+            (SDMA_PKT_COPY_LINEAR_RECT_GFX12*)append(sizeof(SDMA_PKT_COPY_LINEAR_RECT));
+          *pkt = {};
+          pkt->HEADER_UNION.op = SDMA_OP_COPY;
+          pkt->HEADER_UNION.sub_op = SDMA_SUBOP_COPY_LINEAR_RECT;
+          pkt->HEADER_UNION.element = element;
+          pkt->SRC_ADDR_LO_UNION.src_addr_31_0 = sbase;
+          pkt->SRC_ADDR_HI_UNION.src_addr_63_32 = sbase >> 32;
+          pkt->SRC_PARAMETER_1_UNION.src_offset_x = soff;
+          pkt->SRC_PARAMETER_2_UNION.src_pitch = (src->pitch >> element) - 1;
+          pkt->SRC_PARAMETER_3_UNION.src_slice_pitch =
             (range->z == 1) ? 0 : (src->slice >> element) - 1;
-        pkt->DST_ADDR_LO_UNION.dst_addr_31_0 = dbase;
-        pkt->DST_ADDR_HI_UNION.dst_addr_63_32 = dbase >> 32;
-        pkt->DST_PARAMETER_1_UNION.dst_offset_x = doff;
-        pkt->DST_PARAMETER_2_UNION.dst_pitch = (dst->pitch >> element) - 1;
-        pkt->DST_PARAMETER_3_UNION.dst_slice_pitch =
+          pkt->DST_ADDR_LO_UNION.dst_addr_31_0 = dbase;
+          pkt->DST_ADDR_HI_UNION.dst_addr_63_32 = dbase >> 32;
+          pkt->DST_PARAMETER_1_UNION.dst_offset_x = doff;
+          pkt->DST_PARAMETER_2_UNION.dst_pitch = (dst->pitch >> element) - 1;
+          pkt->DST_PARAMETER_3_UNION.dst_slice_pitch =
             (range->z == 1) ? 0 : (dst->slice >> element) - 1;
-        pkt->RECT_PARAMETER_1_UNION.rect_x = xcount - 1;
-        pkt->RECT_PARAMETER_1_UNION.rect_y = Min(range->y - y, max_y) - 1;
-        pkt->RECT_PARAMETER_2_UNION.rect_z = Min(range->z - z, max_z) - 1;
+          pkt->RECT_PARAMETER_1_UNION.rect_x = xcount - 1;
+          pkt->RECT_PARAMETER_1_UNION.rect_y = Min(range->y - y, max_y) - 1;
+          pkt->RECT_PARAMETER_2_UNION.rect_z = Min(range->z - z, max_z) - 1;
+        } else {  // Pre-GFX12, common packet used
+          SDMA_PKT_COPY_LINEAR_RECT* pkt =
+            (SDMA_PKT_COPY_LINEAR_RECT*)append(sizeof(SDMA_PKT_COPY_LINEAR_RECT));
+          *pkt = {};
+          pkt->HEADER_UNION.op = SDMA_OP_COPY;
+          pkt->HEADER_UNION.sub_op = SDMA_SUBOP_COPY_LINEAR_RECT;
+          pkt->HEADER_UNION.element = element;
+          pkt->SRC_ADDR_LO_UNION.src_addr_31_0 = sbase;
+          pkt->SRC_ADDR_HI_UNION.src_addr_63_32 = sbase >> 32;
+          pkt->SRC_PARAMETER_1_UNION.src_offset_x = soff;
+          pkt->SRC_PARAMETER_2_UNION.src_pitch = (src->pitch >> element) - 1;
+          pkt->SRC_PARAMETER_3_UNION.src_slice_pitch =
+            (range->z == 1) ? 0 : (src->slice >> element) - 1;
+          pkt->DST_ADDR_LO_UNION.dst_addr_31_0 = dbase;
+          pkt->DST_ADDR_HI_UNION.dst_addr_63_32 = dbase >> 32;
+          pkt->DST_PARAMETER_1_UNION.dst_offset_x = doff;
+          pkt->DST_PARAMETER_2_UNION.dst_pitch = (dst->pitch >> element) - 1;
+          pkt->DST_PARAMETER_3_UNION.dst_slice_pitch =
+            (range->z == 1) ? 0 : (dst->slice >> element) - 1;
+          pkt->RECT_PARAMETER_1_UNION.rect_x = xcount - 1;
+          pkt->RECT_PARAMETER_1_UNION.rect_y = Min(range->y - y, max_y) - 1;
+          pkt->RECT_PARAMETER_2_UNION.rect_z = Min(range->z - z, max_z) - 1;
+	}
       }
     }
   }
