@@ -48,7 +48,7 @@
 #include "hsa.h"
 #include "hsa_ext_image.h"
 
-/*
+/**
  * - 1.0 - initial version
  * - 1.1 - dmabuf export
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
@@ -2783,7 +2783,7 @@ hsa_status_t hsa_amd_portable_export_dmabuf(const void* ptr, size_t size, int* d
  */
 hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
-/*
+/**
  * @brief Allocate a reserved address range
  *
  * Reserve a virtual address range. The size must be a multiple of the system page size.
@@ -2807,7 +2807,7 @@ hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
                                           uint64_t flags);
 
-/*
+/**
  * @brief Free a reserved address range
  *
  * Free a previously allocated address range. The size must match the size of a previously
@@ -2841,7 +2841,7 @@ typedef enum {
   MEMORY_TYPE_PINNED,
 } hsa_amd_memory_type_t;
 
-/*
+/**
  * @brief Create a virtual memory handle
  *
  * Create a virtual memory handle within this pool
@@ -2870,7 +2870,7 @@ hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
                                         hsa_amd_memory_type_t type, uint64_t flags,
                                         hsa_amd_vmem_alloc_handle_t* memory_handle);
 
-/*
+/**
  * @brief Release a virtual memory handle
  *
  * @param[in] memory handle that was previously allocated
@@ -2881,7 +2881,7 @@ hsa_status_t hsa_amd_vmem_handle_create(hsa_amd_memory_pool_t pool, size_t size,
  */
 hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_handle);
 
-/*
+/**
  * @brief Map a virtual memory handle
  *
  * Map a virtual memory handle to a reserved address range. The virtual address requested must be
@@ -2907,7 +2907,7 @@ hsa_status_t hsa_amd_vmem_handle_release(hsa_amd_vmem_alloc_handle_t memory_hand
 hsa_status_t hsa_amd_vmem_map(void* va, size_t size, size_t in_offset,
                               hsa_amd_vmem_alloc_handle_t memory_handle, uint64_t flags);
 
-/*
+/**
  * @brief Unmap a virtual memory handle
  *
  * Unmap previously mapped virtual address range
@@ -2930,7 +2930,7 @@ typedef struct hsa_amd_memory_access_desc_s {
   hsa_agent_t agent_handle;
 } hsa_amd_memory_access_desc_t;
 
-/*
+/**
  * @brief Make a memory mapping accessible
  *
  * Make previously mapped virtual address accessible to specific agents. @p size must be equal to
@@ -2959,7 +2959,7 @@ hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
                                      const hsa_amd_memory_access_desc_t* desc,
                                      size_t desc_cnt);
 
-/*
+/**
  * @brief Get current access permissions for memory mapping
  *
  * Get access permissions for memory mapping for specific agent.
@@ -2980,7 +2980,7 @@ hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
 hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
                                      hsa_agent_t agent_handle);
 
-/*
+/**
  * @brief Get an exportable shareable handle
  *
  * Get an exportable shareable handle for a memory_handle. This shareabl handle can then be used to
@@ -3003,7 +3003,7 @@ hsa_status_t hsa_amd_vmem_get_access(void* va, hsa_access_permission_t* perms,
 hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
                                                   hsa_amd_vmem_alloc_handle_t handle,
                                                   uint64_t flags);
-/*
+/**
  * @brief Import a shareable handle
  *
  * Import a shareable handle for a memory handle. Importing a shareable handle that has been closed
@@ -3023,7 +3023,7 @@ hsa_status_t hsa_amd_vmem_export_shareable_handle(int* dmabuf_fd,
 hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
                                                   hsa_amd_vmem_alloc_handle_t* handle);
 
-/*
+/**
  * @brief Returns memory handle for mapped memory
  *
  * Return a memory handle for previously mapped memory. The handle will be the same value of handle
@@ -3040,19 +3040,19 @@ hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
 hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memory_handle,
                                               void* addr);
 
-/*
-* @brief Returns the current allocation properties of a handle
-*
-* Returns the allocation properties of an existing handle
-*
-* @param[in] memory_handle memory handle to be queried
-* @param[out] pool memory pool that owns this handle
-* @param[out] memory type
+/**
+ * @brief Returns the current allocation properties of a handle
+ *
+ * Returns the allocation properties of an existing handle
+ *
+ * @param[in] memory_handle memory handle to be queried
+ * @param[out] pool memory pool that owns this handle
+ * @param[out] memory type
 
-* @retval ::HSA_STATUS_SUCCESS
-*
-* @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
-*/
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
+ */
 hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type);
