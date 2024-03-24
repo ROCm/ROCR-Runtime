@@ -78,6 +78,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 		events_page = allocate_exec_aligned_memory_gpu(
 			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0, 0, true, false, true);
 		if (!events_page) {
+			free(e);
 			pthread_mutex_unlock(&hsakmt_mutex);
 			return HSAKMT_STATUS_ERROR;
 		}
