@@ -288,18 +288,20 @@ endif()
 ## Link dependencies.
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
-
-find_package(rocprofiler-register)
-if(rocprofiler-register_FOUND)
+# For static package rocprofiler-register dependency is not required
+if( BUILD_SHARED_LIBS )
+  find_package(rocprofiler-register)
+  if(rocprofiler-register_FOUND)
     target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HSA_ROCPROFILER_REGISTER=1
                                                               HSA_VERSION_MAJOR=${VERSION_MAJOR}
                                                               HSA_VERSION_MINOR=${VERSION_MINOR}
                                                               HSA_VERSION_PATCH=${VERSION_PATCH})
     target_link_libraries(${CORE_RUNTIME_TARGET} PRIVATE rocprofiler-register::rocprofiler-register)
     set(HSA_DEP_ROCPROFILER_REGISTER ON)
-else()
+  else()
     set(HSA_DEP_ROCPROFILER_REGISTER OFF)
-endif()
+  endif() # end rocprofiler-register_FOUND
+endif()#end BUILD_SHARED_LIBS
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
@@ -406,5 +408,3 @@ if( NOT ${BUILD_SHARED_LIBS} )
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${CORE_RUNTIME_NAME}
     COMPONENT dev)
 endif()
-
-
