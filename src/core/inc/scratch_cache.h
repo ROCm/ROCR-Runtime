@@ -86,22 +86,39 @@ class ScratchCache {
 
   // @brief Contains scratch memory information.
   struct ScratchInfo {
-    void* queue_base;
-    // Size to fill the machine with size_per_thread
-    size_t size;
     // Size to satisfy the present dispatch without throttling.
     size_t dispatch_size;
-    size_t size_per_thread;
-    uint32_t lanes_per_wave;
-    uint32_t waves_per_group;
-    uint64_t wanted_slots;
-    uint32_t mem_alignment_size;
-    bool cooperative;
-    ptrdiff_t queue_process_offset;
+    uint64_t dispatch_slots;
+
     bool large;
+    size_t use_once_limit;
+    size_t use_alt_limit;
+    bool async_reclaim;  // This version of CP FW supports async_reclaim
     bool retry;
+    uint32_t mem_alignment_size;  // Populated into SRD
+    bool cooperative;
     hsa_signal_t queue_retry;
-    ScratchCache::ref_t scratch_node;
+
+    // Size to fill the main_scratch with size_per_thread
+    size_t main_size;
+    size_t main_size_per_thread;    // Populated into SRD
+    uint32_t main_lanes_per_wave;   // Populated into SRD
+    uint32_t main_waves_per_group;  // Used during waves reduction
+    void* main_queue_base;
+    ptrdiff_t main_queue_process_offset;
+    ScratchCache::ref_t main_scratch_node;
+
+    size_t alt_size;
+    size_t alt_size_per_thread;    // Populated into SRD
+    uint32_t alt_lanes_per_wave;   // Populated into SRD
+    uint32_t alt_waves_per_group;  // Used during waves reduction
+
+    uint64_t alt_dispatch_limit_x;
+    uint64_t alt_dispatch_limit_y;
+    uint64_t alt_dispatch_limit_z;
+    void* alt_queue_base;
+    ptrdiff_t alt_queue_process_offset;
+    ScratchCache::ref_t alt_scratch_node;
   };
 
   ScratchCache(const ScratchCache& rhs) = delete;
@@ -113,17 +130,17 @@ class ScratchCache {
 
   ~ScratchCache() { assert(map.empty() && "ScratchCache not empty at shutdown."); }
 
-  bool alloc(ScratchInfo& info) {
-    ref_t it = map.upper_bound(info.size - 1);
+  bool allocMain(ScratchInfo& info) {
+    ref_t it = map.upper_bound(info.main_size - 1);
     if (it == map.end()) return false;
 
     // Small requests must have an exact size match and be small.
     if (!info.large) {
-      while ((it != map.end()) && (it->first == info.size)) {
+      while ((it != map.end()) && (it->first == info.main_size)) {
         if (it->second.isFree() && (!it->second.large)) {
           it->second.alloc();
-          info.queue_base = it->second.base;
-          info.scratch_node = it;
+          info.main_queue_base = it->second.base;
+          info.main_scratch_node = it;
           available_bytes_ -= it->first;
           return true;
         }
@@ -136,8 +153,8 @@ class ScratchCache {
     while (it != map.end()) {
       if (it->second.isFree()) {
         it->second.alloc();
-        info.queue_base = it->second.base;
-        info.scratch_node = it;
+        info.main_queue_base = it->second.base;
+        info.main_scratch_node = it;
         available_bytes_ -= it->first;
         return true;
       }
@@ -146,8 +163,8 @@ class ScratchCache {
     return false;
   }
 
-  void free(ScratchInfo& info) {
-    if (info.scratch_node == map.end()) {
+  void freeMain(ScratchInfo& info) {
+    if (info.main_scratch_node == map.end()) {
       // This is reserved scratch memory. Do not de-allocate, just mark it as free.
       assert(!reserved_.second.isFree() && "free called when reserved node already free.");
       reserved_.second.free();
@@ -155,8 +172,8 @@ class ScratchCache {
       return;
     }
 
-    assert(!info.scratch_node->second.isFree() && "free called on free scratch node.");
-    auto it = info.scratch_node;
+    assert(!info.main_scratch_node->second.isFree() && "free called on free scratch node.");
+    auto it = info.main_scratch_node;
     if (it->second.trimPending()) {
       dealloc(it->second.base, it->first, it->second.large);
       map.erase(it);
@@ -164,6 +181,16 @@ class ScratchCache {
     }
     it->second.free();
     available_bytes_ += it->first;
+  }
+
+  void insertMain(ScratchInfo& info) {
+    node n;
+    n.base = info.main_queue_base;
+    n.large = info.large;
+    n.alloc();
+
+    auto it = map.insert(std::make_pair(info.main_size, n));
+    info.main_scratch_node = it;
   }
 
   bool trim(bool trim_nodes_in_use) {
@@ -184,14 +211,44 @@ class ScratchCache {
     return ret;
   }
 
-  void insert(ScratchInfo& info) {
+  bool allocAlt(ScratchInfo& info) {
+    ref_t it = map.upper_bound(info.alt_size - 1);
+    if (it == map.end()) return false;
+
+    // Alt requests should have exact size
+    while ((it != map.end()) && (it->first == info.alt_size)) {
+      if (it->second.isFree() && (!it->second.large)) {
+        it->second.alloc();
+        info.alt_queue_base = it->second.base;
+        info.alt_scratch_node = it;
+        available_bytes_ -= it->first;
+        return true;
+      }
+      it++;
+    }
+    return false;
+  }
+
+  void freeAlt(ScratchInfo& info) {
+    assert(!info.alt_scratch_node->second.isFree() && "free called on free scratch node.");
+    auto it = info.alt_scratch_node;
+    if (it->second.trimPending()) {
+      dealloc(it->second.base, it->first, it->second.large);
+      map.erase(it);
+      return;
+    }
+    it->second.free();
+    available_bytes_ += it->first;
+  }
+
+  void insertAlt(ScratchInfo& info) {
     node n;
-    n.base = info.queue_base;
-    n.large = info.large;
+    n.base = info.alt_queue_base;
+    n.large = false;
     n.alloc();
 
-    auto it = map.insert(std::make_pair(info.size, n));
-    info.scratch_node = it;
+    auto it = map.insert(std::make_pair(info.alt_size, n));
+    info.alt_scratch_node = it;
   }
 
   size_t free_bytes() const { return available_bytes_; }
@@ -210,16 +267,16 @@ class ScratchCache {
   }
 
   bool use_reserved(ScratchInfo& info) {
-    if (!reserved_.second.isFree() || info.size > reserved_.first) {
+    if (!reserved_.second.isFree() || info.main_size > reserved_.first) {
       debug_print("reserved node is already in use or too small (requested:%ld reserved:%ld)\n",
-                  info.size, reserved_.first);
+                  info.main_size, reserved_.first);
       return false;
     }
     reserved_.second.large = info.large;
     reserved_.second.alloc();
-    info.queue_base = reserved_.second.base;
+    info.main_queue_base = reserved_.second.base;
     // Special case to indicate that this node is reserved memory
-    info.scratch_node = map.end();
+    info.main_scratch_node = map.end();
     available_bytes_ -= reserved_.first;
     return true;
   }

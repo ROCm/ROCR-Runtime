@@ -59,6 +59,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <semaphore.h>
 #include "core/inc/runtime.h"
 #if defined(__i386__) || defined(__x86_64__)
 #include <cpuid.h>
@@ -110,26 +111,7 @@ class os_thread {
         return;
       }
     }
-
-    if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
-      int cores = get_nprocs_conf();
-      cpu_set_t* cpuset = CPU_ALLOC(cores);
-      if (cpuset == nullptr) {
-        fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
-        return;
-      }
-      CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
-      for (int i = 0; i < cores; i++) {
-        CPU_SET(i, cpuset);
-      }
-      err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
-      CPU_FREE(cpuset);
-      if (err != 0) {
-        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
-        return;
-      }
-    }
-
+\
     err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
@@ -145,6 +127,25 @@ class os_thread {
         err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
         if (err != EINVAL) break;
         debug_print("pthread_create returned EINVAL, doubling stack size\n");
+      }
+    }
+
+    if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
+      int cores = get_nprocs_conf();
+      cpu_set_t* cpuset = CPU_ALLOC(cores);
+      if (cpuset == nullptr) {
+        fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
+        return;
+      }
+      CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
+      for (int i = 0; i < cores; i++) {
+        CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
+      }
+      err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
+      CPU_FREE(cpuset);
+      if (err != 0) {
+        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
+        return;
       }
     }
 
@@ -201,6 +202,7 @@ class os_thread {
 };
 
 static_assert(sizeof(LibHandle) == sizeof(void*), "OS abstraction size mismatch");
+static_assert(sizeof(Semaphore) == sizeof(sem_t*), "OS abstraction size mismatch");
 static_assert(sizeof(Mutex) == sizeof(pthread_mutex_t*), "OS abstraction size mismatch");
 static_assert(sizeof(SharedMutex) == sizeof(pthread_rwlock_t*), "OS abstraction size mismatch");
 static_assert(sizeof(Thread) == sizeof(os_thread*), "OS abstraction size mismatch");
@@ -343,6 +345,29 @@ std::string GetLibraryName(LibHandle lib) {
   if(dlinfo(lib, RTLD_DI_LINKMAP, &map)!=0)
     return "";
   return map->l_name;
+}
+
+Semaphore CreateSemaphore() {
+  sem_t *sem = new sem_t;
+  sem_init(sem, 0, 0);
+  return *(Semaphore*)&sem;
+}
+
+bool WaitSemaphore(Semaphore sem) {
+  while(sem_wait(*(sem_t**)&sem))
+    if (errno != EINTR) return false;
+
+  return true;
+}
+
+void PostSemaphore(Semaphore sem) {
+  if (sem_post(*(sem_t**)&sem))
+    assert(false && "Failed to post semaphore");
+}
+
+void DestroySemaphore(Semaphore sem) {
+  sem_destroy(*(sem_t**)&sem);
+  delete *(sem_t**)&sem;
 }
 
 Mutex CreateMutex() {

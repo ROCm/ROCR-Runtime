@@ -200,11 +200,15 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
   if (IsSystem() && (alloc_flags & AllocateNonPaged))
       kmt_alloc_flags.ui32.NonPaged = 1;
 
+  // Allocating a memory handle for virtual memory
+  kmt_alloc_flags.ui32.NoAddress = !!(alloc_flags & AllocateMemoryOnly);
+
   // Allocate pseudo fine grain memory
   kmt_alloc_flags.ui32.CoarseGrain = (alloc_flags & AllocatePCIeRW ? 0 : kmt_alloc_flags.ui32.CoarseGrain);
+  kmt_alloc_flags.ui32.NoSubstitute = (alloc_flags & AllocatePinned ? 1 : kmt_alloc_flags.ui32.NoSubstitute);
 
   // Only allow using the suballocator for ordinary VRAM.
-  if (IsLocalMemory()) {
+  if (IsLocalMemory() && !kmt_alloc_flags.ui32.NoAddress) {
     bool subAllocEnabled = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
     // Avoid modifying executable or queue allocations.
     bool useSubAlloc = subAllocEnabled;
@@ -229,6 +233,8 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
     owner()->Trim();
     *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
   }
+
+  if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
 
   if (*address != nullptr) {
     // Commit the memory.

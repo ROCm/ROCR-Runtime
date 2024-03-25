@@ -80,9 +80,10 @@ void HsaApiTable::Init() {
   // they can add preprocessor macros on the new functions
 
   constexpr size_t expected_core_api_table_size = 1016;
-  constexpr size_t expected_amd_ext_table_size = 552;
+  constexpr size_t expected_amd_ext_table_size = 560;
   constexpr size_t expected_image_ext_table_size = 120;
   constexpr size_t expected_finalizer_ext_table_size = 64;
+  constexpr size_t expected_tools_table_size = 64;
 
   static_assert(sizeof(CoreApiTable) == expected_core_api_table_size,
                 "HSA core API table size changed, bump HSA_CORE_API_TABLE_STEP_VERSION and set "
@@ -97,6 +98,9 @@ void HsaApiTable::Init() {
   static_assert(sizeof(FinalizerExtTable) == expected_finalizer_ext_table_size,
                 "HSA finalizer ext table size changed, bump HSA_FINALIZER_API_TABLE_STEP_VERSION "
                 "and set expected_finalizer_ext_table_size to the new size of the struct");
+  static_assert(sizeof(ToolsApiTable) == expected_tools_table_size,
+                "HSA tools table size changed, bump HSA_TOOLS_API_TABLE_STEP_VERSION "
+                "and set expected_tools_table_size to the new size of the struct");
 
   // Initialize Version of Api Table
   hsa_api.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
@@ -116,6 +120,9 @@ void HsaApiTable::Init() {
   // of Hsa Runtime initialization, including their major ids
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
+
+  UpdateTools();
+  hsa_api.tools_ = &tools_api;
 }
 
 void HsaApiTable::Reset() {
@@ -437,6 +444,20 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_vmem_retain_alloc_handle_fn = AMD::hsa_amd_vmem_retain_alloc_handle;
   amd_ext_api.hsa_amd_vmem_get_alloc_properties_from_handle_fn =
       AMD::hsa_amd_vmem_get_alloc_properties_from_handle;
+  amd_ext_api.hsa_amd_agent_set_async_scratch_limit_fn = AMD::hsa_amd_agent_set_async_scratch_limit;
+}
+
+void HsaApiTable::UpdateTools() {
+  tools_api.version.major_id = HSA_TOOLS_API_TABLE_MAJOR_VERSION;
+  tools_api.version.minor_id = sizeof(::ToolsApiTable);
+  tools_api.version.step_id = HSA_TOOLS_API_TABLE_STEP_VERSION;
+
+  tools_api.hsa_amd_tool_scratch_event_alloc_start_fn = nullptr;
+  tools_api.hsa_amd_tool_scratch_event_alloc_end_fn = nullptr;
+  tools_api.hsa_amd_tool_scratch_event_free_start_fn = nullptr;
+  tools_api.hsa_amd_tool_scratch_event_free_end_fn = nullptr;
+  tools_api.hsa_amd_tool_scratch_event_async_reclaim_start_fn = nullptr;
+  tools_api.hsa_amd_tool_scratch_event_async_reclaim_end_fn = nullptr;
 }
 
 void LoadInitialHsaApiTable() {

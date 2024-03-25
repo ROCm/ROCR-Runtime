@@ -46,11 +46,13 @@
 static const HsaApiTable* hsaApiTable;
 static const CoreApiTable* coreApiTable;
 static const AmdExtTable* amdExtTable;
+static const ToolsApiTable* toolsApiTable;
 
 void hsa_table_interface_init(const HsaApiTable* apiTable) {
     hsaApiTable = apiTable;
     coreApiTable = apiTable->core_;
     amdExtTable = apiTable->amd_ext_;
+    toolsApiTable = apiTable->tools_;
 }
 
 const HsaApiTable* hsa_table_interface_get_table() {
@@ -1290,6 +1292,10 @@ hsa_status_t HSA_API hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t alloc_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type) {
   return amdExtTable->hsa_amd_vmem_get_alloc_properties_from_handle_fn(alloc_handle, pool, type);
+}
+
+hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold) {
+  return amdExtTable->hsa_amd_agent_set_async_scratch_limit_fn(agent, threshold);
 }
 
 // Tools only table interfaces.

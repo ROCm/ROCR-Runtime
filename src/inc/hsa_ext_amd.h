@@ -67,6 +67,17 @@ extern "C" {
  */
 
 /**
+ * @brief Macro to use to determine that a  flag is set when querying flags within uint8_t[8]
+ * types
+ */
+static __inline__ __attribute__((always_inline)) bool hsa_flag_isset64(uint8_t* value,
+                                                                       uint32_t bit) {
+  unsigned int index = bit / 8;
+  unsigned int subBit = bit % 8;
+  return ((uint8_t*)value)[index] & (1 << subBit);
+}
+
+/**
  * @brief A fixed-size type used to represent ::hsa_signal_condition_t constants.
  */
 typedef uint32_t hsa_signal_condition32_t;
@@ -405,8 +416,27 @@ typedef enum hsa_amd_agent_info_s {
    * Returns the hsa_agent_t of the nearest CPU agent
    * The type of this attribute is hsa_agent_t.
    */
-  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113
+  HSA_AMD_AGENT_INFO_NEAREST_CPU = 0xA113,
+  /**
+   * Bit-mask indicating memory properties of this agent. A memory property is set if the flag bit
+   * is set at that position. User may use the hsa_flag_isset64 macro to verify whether a flag
+   * is set. The type of this attribute is uint8_t[8].
+   */
+  HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES = 0xA114,
+  /**
+   * Bit-mask indicating AQL Extensions supported by this agent. An AQL extension is set if the flag
+   * bit is set at that position. User may use the hsa_flag_isset64 macro to verify whether a flag
+   * is set. The type of this attribute is uint8_t[8].
+   */
+  HSA_AMD_AGENT_INFO_AQL_EXTENSIONS = 0xA115 /* Not implemented yet */
 } hsa_amd_agent_info_t;
+
+/**
+ * @brief Agent memory properties attributes
+ */
+typedef enum hsa_amd_agent_memory_properties_s {
+  HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU = (1 << 0),
+} hsa_amd_agent_memory_properties_t;
 
 /**
  * @brief SDMA engine IDs unique by single set bit position.
@@ -2266,7 +2296,7 @@ typedef enum {
   // SRAM ECC failure (ie registers, no fault address).
   HSA_AMD_MEMORY_FAULT_SRAMECC = 1 << 6,
   // GPU reset following unspecified hang.
-  HSA_AMD_MEMORY_FAULT_HANG = 1 << 31
+  HSA_AMD_MEMORY_FAULT_HANG = 1U << 31
 } hsa_amd_memory_fault_reason_t;
 
 /**
@@ -3026,6 +3056,34 @@ hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memor
 hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type);
+
+/**
+ * @brief Set the asynchronous scratch limit threshold on all the queues for this agent.
+ * Dispatches that are enqueued on HW queues on this agent that are smaller than threshold will not
+ * result in a scratch use-once method.
+ *
+ * Increasing this threshold will only increase the internal limit and not cause immediate allocation
+ * of additional scratch memory. Decreasing this threshold will result in a release in scratch memory
+ * on queues where the current amount of allocated scratch exceeds the new limit.
+ *
+ * This API is only supported on devices that support asynchronous scratch reclaim.
+ *
+ * @param[in] agent A valid agent.
+ *
+ * @param[in] threshold Threshold size in bytes
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_AGENT The agent is invalid.
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ARGUMENT This agent does not support asynchronous scratch
+ * reclaim
+ */
+hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
+
 #ifdef __cplusplus
 }  // end extern "C" block
 #endif

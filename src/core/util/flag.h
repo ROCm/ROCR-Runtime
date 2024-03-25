@@ -64,7 +64,8 @@ class Flag {
   static_assert(XNACK_DISABLE == 0, "XNACK_REQUEST enum values improperly changed.");
   static_assert(XNACK_ENABLE == 1, "XNACK_REQUEST enum values improperly changed.");
 
-  // Lift limit for 2.10 release RCCL workaround.
+  // Lift limit for 2.10 release RCCL workaround. This limit is not used when asynchronous scratch
+  // reclaim is supported
   const size_t DEFAULT_SCRATCH_SINGLE_LIMIT = 146800640;  // small_limit >> 2;
 
   explicit Flag() { Refresh(); }
@@ -93,6 +94,11 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_SDMA_GANG");
     enable_sdma_gang_ = (var == "0") ? SDMA_DISABLE :
                        ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
+    if (enable_sdma_ == SDMA_DISABLE) enable_sdma_gang_ = SDMA_DISABLE;
+
+    var = os::GetEnvVar("HSA_ENABLE_SDMA_COPY_SIZE_OVERRIDE");
+    enable_sdma_copy_size_override_ = (var == "0") ? SDMA_DISABLE :
+                                      ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
 
     visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
     filter_visible_gpus_ = os::IsEnvVarSet("ROCR_VISIBLE_DEVICES");
@@ -116,10 +122,30 @@ class Flag {
     // memory
     if (os::IsEnvVarSet("HSA_SCRATCH_SINGLE_LIMIT")) {
       var = os::GetEnvVar("HSA_SCRATCH_SINGLE_LIMIT");
-      scratch_single_limit_ = atoi(var.c_str());
+      char* end;
+      scratch_single_limit_ = strtoul(var.c_str(), &end, 10);
     } else {
       scratch_single_limit_ = DEFAULT_SCRATCH_SINGLE_LIMIT;
     }
+
+    // On GPUs that support asynchronous scratch reclaim
+    // Scratch memory sizes > HSA_SCRATCH_SINGLE_LIMIT_ASYNC will trigger a use-once scheme
+    if (os::IsEnvVarSet("HSA_SCRATCH_SINGLE_LIMIT_ASYNC")) {
+      var = os::GetEnvVar("HSA_SCRATCH_SINGLE_LIMIT_ASYNC");
+      char* end;
+      scratch_single_limit_async_ = strtoul(var.c_str(), &end, 10);
+    } else {
+      scratch_single_limit_async_ = 0;  // DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC;
+    }
+
+    // On GPUs that support asynchronous scratch reclaim this can be used to disable this feature.
+    // Disabling asynchronous scratch reclaim also disables use of alternate scratch
+    // HSA_ENABLE_SCRATCH_ALT
+    var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ASYNC_RECLAIM");
+    enable_scratch_async_reclaim_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ALT");
+    enable_scratch_alt_ = (var == "0") || !enable_scratch_async_reclaim_ ? false : true;
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 
@@ -130,6 +156,12 @@ class Flag {
     } else {
       report_tool_load_failures_ = (var == "0") ? false : true;
     }
+
+    var = os::GetEnvVar("HSA_TOOLS_DISABLE_REGISTER");
+    disable_tool_register_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_TOOLS_REPORT_REGISTER_FAILURE");
+    report_tool_register_failures_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_DISABLE_FRAGMENT_ALLOCATOR");
     disable_fragment_alloc_ = (var == "1") ? true : false;
@@ -160,7 +192,7 @@ class Flag {
 
     var = os::GetEnvVar("HSA_IGNORE_SRAMECC_MISREPORT");
     check_sramecc_validity_ = (var == "1") ? false : true;
-    
+
     // Legal values are zero "0" or one "1". Any other value will
     // be interpreted as not defining the env variable.
     var = os::GetEnvVar("HSA_XNACK");
@@ -193,6 +225,9 @@ class Flag {
     var = os::GetEnvVar("HSA_ENABLE_MWAITX");
     enable_mwaitx_ = (var == "1") ? true : false;
 
+    var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
+    enable_ipc_mode_legacy_ = (var == "1") ? true : true; // Temporarily always enable
+
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
     var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
@@ -220,6 +255,10 @@ class Flag {
 
   bool report_tool_load_failures() const { return report_tool_load_failures_; }
 
+  bool report_tool_register_failures() const { return report_tool_register_failures_; }
+
+  bool disable_tool_register() const { return disable_tool_register_; }
+
   bool disable_fragment_alloc() const { return disable_fragment_alloc_; }
 
   bool rev_copy_dir() const { return rev_copy_dir_; }
@@ -236,6 +275,8 @@ class Flag {
 
   SDMA_OVERRIDE enable_sdma_gang() const { return enable_sdma_gang_; }
 
+  SDMA_OVERRIDE enable_sdma_copy_size_override() const { return enable_sdma_copy_size_override_; }
+
   std::string visible_gpus() const { return visible_gpus_; }
 
   bool filter_visible_gpus() const { return filter_visible_gpus_; }
@@ -245,6 +286,12 @@ class Flag {
   size_t scratch_mem_size() const { return scratch_mem_size_; }
 
   size_t scratch_single_limit() const { return scratch_single_limit_; }
+
+  bool enable_scratch_async_reclaim() const { return enable_scratch_async_reclaim_; }
+
+  bool enable_scratch_alt() const { return enable_scratch_alt_; }
+
+  size_t scratch_single_limit_async() const { return scratch_single_limit_async_; }
 
   std::string tools_lib_names() const { return tools_lib_names_; }
 
@@ -287,6 +334,8 @@ class Flag {
 
   SRAMECC_ENABLE sramecc_enable() const { return sramecc_enable_; }
 
+  bool enable_ipc_mode_legacy() const { return enable_ipc_mode_legacy_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -296,6 +345,8 @@ class Flag {
   bool sdma_wait_idle_;
   bool enable_queue_fault_message_;
   bool report_tool_load_failures_;
+  bool report_tool_register_failures_ = false;
+  bool disable_tool_register_ = false;
   bool disable_fragment_alloc_;
   bool rev_copy_dir_;
   bool fine_grain_pcie_;
@@ -311,10 +362,12 @@ class Flag {
   bool override_cpu_affinity_;
   bool image_print_srd_;
   bool enable_mwaitx_;
+  bool enable_ipc_mode_legacy_;
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;
   SDMA_OVERRIDE enable_sdma_gang_;
+  SDMA_OVERRIDE enable_sdma_copy_size_override_;
 
   bool filter_visible_gpus_;
   std::string visible_gpus_;
@@ -323,6 +376,9 @@ class Flag {
 
   size_t scratch_mem_size_;
   size_t scratch_single_limit_;
+  size_t scratch_single_limit_async_;
+  bool enable_scratch_async_reclaim_;
+  bool enable_scratch_alt_;
 
   std::string tools_lib_names_;
   std::string svm_profile_;

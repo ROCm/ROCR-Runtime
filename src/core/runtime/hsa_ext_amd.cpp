@@ -1367,5 +1367,23 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(hsa_amd_vmem_alloc_ha
   CATCH;
 }
 
+hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t _agent, size_t threshold) {
+  TRY;
+  IS_OPEN();
+
+  core::Agent* agent = core::Agent::Convert(_agent);
+  if (agent == NULL || !agent->IsValid() || agent->device_type() != core::Agent::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  AMD::GpuAgentInt* gpu_agent = static_cast<AMD::GpuAgentInt*>(agent);
+
+  if (!core::Runtime::runtime_singleton_->flag().enable_scratch_async_reclaim() ||
+      !gpu_agent->AsyncScratchReclaimEnabled())
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+
+  return gpu_agent->SetAsyncScratchThresholds(threshold);
+  CATCH;
+}
+
 }   //  namespace amd
 }   //  namespace rocr

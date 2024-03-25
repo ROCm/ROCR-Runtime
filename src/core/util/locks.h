@@ -50,6 +50,57 @@
 
 namespace rocr {
 
+class HybridMutex {
+ public:
+  HybridMutex():lock_(0) { 
+    sem_ = os::CreateSemaphore(); 
+  }
+
+  ~HybridMutex() { 
+    os::DestroySemaphore(sem_); 
+  }
+
+  bool Try() {
+    int old = 0;
+    return lock_.compare_exchange_strong(old, 1);
+  }
+
+  bool Acquire() {
+    int cnt = maxSpinIterPause + maxSpinIterYield;
+
+    int old = 0;
+    while (!lock_.compare_exchange_strong(old, 1)) {
+      cnt--;
+      if (cnt > maxSpinIterPause) {
+        _mm_pause();
+      } else if (cnt-- > maxSpinIterYield) {
+        os::YieldThread();
+      } else {
+        os::WaitSemaphore(sem_);
+        cnt = maxSpinIterPause + maxSpinIterYield;
+      }
+      old = 0;
+    }
+    return true;
+  }
+
+  void Release() {
+    int old = 1;
+    if (lock_.compare_exchange_strong(old, 0))
+      os::PostSemaphore(sem_);
+  }
+
+ private:
+  std::atomic<int> lock_;
+  os::Semaphore sem_;
+  const uint32_t maxSpinIterPause = 55;
+  const uint32_t maxSpinIterYield = 55;
+
+  /// @brief: Disable copiable and assignable ability.
+  DISALLOW_COPY_AND_ASSIGN(HybridMutex);
+};
+
+
 /// @brief: a class represents a kernel mutex.
 /// Uses the kernel's scheduler to keep the waiting thread from being scheduled
 /// until the lock is released (Best for long waits, though anything using
@@ -159,6 +210,10 @@ class KernelSharedMutex {
 template <class T> class isMutex {
  public:
   enum { value = false };
+};
+template <> class isMutex<HybridMutex> {
+ public:
+  enum { value = true };
 };
 template <> class isMutex<KernelMutex> {
  public:

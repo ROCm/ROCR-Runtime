@@ -131,7 +131,7 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::~BlitSdma() 
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Initialize(
-    const core::Agent& agent, bool use_xgmi) {
+    const core::Agent& agent, bool use_xgmi, size_t linear_copy_size_override) {
   if (queue_start_addr_ != NULL) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
@@ -200,6 +200,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
 
   signals_[0].reset(new core::InterruptSignal(0));
   signals_[1].reset(new core::InterruptSignal(0));
+
+  max_single_linear_copy_size_ = linear_copy_size_override;
 
   cleanupOnException.Dismiss();
   return HSA_STATUS_SUCCESS;
@@ -469,6 +471,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     wrapped_index += fence_command_size_;
 
     BuildTrapCommand(command_addr, out_signal.signal_.event_id);
+    command_addr += trap_command_size_;
     bytes_written_[wrapped_index] = post_bytes;
     wrapped_index += trap_command_size_;
   }
@@ -479,7 +482,7 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   if (pad_size) {
     memset(command_addr, 0, pad_size);
     uint32_t *dword_command_addr = reinterpret_cast<uint32_t*>(command_addr);
-    dword_command_addr[total_command_size/4] = (pad_size/4 - 1) << 16;
+    dword_command_addr[0] = (pad_size/4 - 1) << 16;
   }
 
   ReleaseWriteAddress(curr_index, total_command_size + pad_size);
@@ -492,7 +495,9 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
                       useGCR>::SubmitLinearCopyCommand(void* dst, const void* src, size_t size) {
   // Break the copy into multiple copy operation incase the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
+  const size_t max_copy_size = max_single_linear_copy_size_ ? max_single_linear_copy_size_ :
+                               kMaxSingleCopySize;
+  const uint32_t num_copy_command = (size + max_copy_size - 1) / max_copy_size;
 
   std::vector<SDMA_PKT_COPY_LINEAR> buff(num_copy_command);
   BuildCopyCommand(reinterpret_cast<char*>(&buff[0]), num_copy_command, dst, src, size);
@@ -508,7 +513,9 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset,
                                                        std::vector<core::Signal*>& gang_signals) {
   // Break the copy into multiple copy operations when the copy size exceeds
   // the SDMA linear copy limit.
-  const uint32_t num_copy_command = (size + kMaxSingleCopySize - 1) / kMaxSingleCopySize;
+  const size_t max_copy_size = max_single_linear_copy_size_ ? max_single_linear_copy_size_ :
+                               kMaxSingleCopySize;
+  const uint32_t num_copy_command = (size + max_copy_size - 1) / max_copy_size;
 
   // Assemble copy packets.
   std::vector<SDMA_PKT_COPY_LINEAR> buff(num_copy_command);
@@ -774,9 +781,11 @@ template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bo
 void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCopyCommand(
     char* cmd_addr, uint32_t num_copy_command, void* dst, const void* src, size_t size) {
   size_t cur_size = 0;
+  const size_t max_copy_size = max_single_linear_copy_size_ ? max_single_linear_copy_size_ :
+                                                              kMaxSingleCopySize;
   for (uint32_t i = 0; i < num_copy_command; ++i) {
     const uint32_t copy_size =
-        static_cast<uint32_t>(std::min((size - cur_size), kMaxSingleCopySize));
+        static_cast<uint32_t>(std::min((size - cur_size), max_copy_size));
 
     void* cur_dst = static_cast<char*>(dst) + cur_size;
     const void* cur_src = static_cast<const char*>(src) + cur_size;
@@ -789,7 +798,10 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
     packet_addr->HEADER_UNION.op = SDMA_OP_COPY;
     packet_addr->HEADER_UNION.sub_op = SDMA_SUBOP_COPY_LINEAR;
 
-    packet_addr->COUNT_UNION.count = copy_size + SizeToCountOffset;
+    if (max_copy_size == (1 << 30) -1)
+      packet_addr->COUNT_UNION.count_ext.count = copy_size + SizeToCountOffset;
+    else
+      packet_addr->COUNT_UNION.count.count = copy_size + SizeToCountOffset;
 
     packet_addr->SRC_ADDR_LO_UNION.src_addr_31_0 = ptrlow32(cur_src);
     packet_addr->SRC_ADDR_HI_UNION.src_addr_63_32 = ptrhigh32(cur_src);

@@ -122,10 +122,12 @@ enum : unsigned {
   EF_AMDGPU_MACH_AMDGCN_GFX940        = 0x040,
   EF_AMDGPU_MACH_AMDGCN_GFX1100       = 0x041,
   EF_AMDGPU_MACH_AMDGCN_GFX1013       = 0x042,
+  EF_AMDGPU_MACH_AMDGCN_GFX1150       = 0x043,
   EF_AMDGPU_MACH_AMDGCN_GFX1103       = 0x044,
   EF_AMDGPU_MACH_AMDGCN_GFX1036       = 0x045,
   EF_AMDGPU_MACH_AMDGCN_GFX1101       = 0x046,
   EF_AMDGPU_MACH_AMDGCN_GFX1102       = 0x047,
+  EF_AMDGPU_MACH_AMDGCN_GFX1151       = 0x04a,
   EF_AMDGPU_MACH_AMDGCN_GFX941        = 0x04b,
   EF_AMDGPU_MACH_AMDGCN_GFX942        = 0x04c,
 
@@ -260,6 +262,8 @@ typedef enum {
 #define NT_AMD_HSA_PRODUCER_OPTIONS    5
 #define NT_AMD_HSA_EXTENSION           6
 #define NT_AMD_HSA_ISA_NAME            11
+/* AMDGPU snapshots of runtime, agent and queues state for use in core dump */
+#define NT_AMDGPU_CORE_STATE           33
 #define NT_AMD_HSA_HLDEBUG_DEBUG       101
 #define NT_AMD_HSA_HLDEBUG_TARGET      102
 

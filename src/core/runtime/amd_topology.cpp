@@ -372,26 +372,26 @@ void BuildTopology() {
     uint32_t src_id = src_gpu->node_id();
     for (auto& dst_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
       uint32_t dst_id = dst_gpu->node_id();
+      uint32_t gang_factor = 1;
 
-      if (src_id == dst_gpu->node_id())
-        continue;
-
-      auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
-      // xGMI link type cannot determine bandwidth keep it fixed for ganging
-      bool has_fixed_gang = linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI &&
-                            linfo.info.numa_distance != 15;
-
-      // Min Bandwidth < Max Bandwidth if source and destination GPUs are a
-      // single hop way and there exists more than a single xGMI link between
-      // them.  Otherwise, destination GPU is not a gang candidate.
-      if (linfo.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI ||
-          (linfo.info.min_bandwidth == linfo.info.max_bandwidth && !has_fixed_gang)) {
-        continue;
+      if (src_id != dst_id) {
+        auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
+        // Ganging can only be done over xGMI and is either fixed or variable
+        // based on topology information:
+        // Weight of 13 - Intra-socket GPU link in multi-partition mode
+        // Weigth of 15 - Direct GPU link in single partition mode
+        // Weight of 41 - Inter-socket GPU link in multi-partition mode
+        if (linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
+          if (linfo.info.numa_distance == 13 || linfo.info.numa_distance == 41)
+            gang_factor = 2;
+          else if (linfo.info.numa_distance == 15 && linfo.info.min_bandwidth)
+            gang_factor = linfo.info.max_bandwidth/linfo.info.min_bandwidth;
+          else gang_factor = 1;
+        }
       }
 
-      uint32_t gang_factor = has_fixed_gang ? 2 : (linfo.info.min_bandwidth ?
-                             linfo.info.max_bandwidth/linfo.info.min_bandwidth : 0);
-
+      // Register all GPUs regardless of connection type to take advantage of easy
+      // key-value lookup later on.
       ((AMD::GpuAgent*)src_gpu)->RegisterGangPeer(*dst_gpu, gang_factor);
     }
   }
@@ -417,7 +417,10 @@ bool Load() {
   HSAKMT_STATUS err =
       hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
   if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
-  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED);
+  HSAuint32 caps_mask;
+  hsaKmtGetRuntimeCapabilities(&caps_mask);
+  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED,
+                                    !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
 
   kfd.Dismiss();
   return true;
