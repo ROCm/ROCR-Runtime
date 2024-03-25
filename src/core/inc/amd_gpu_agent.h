@@ -98,17 +98,29 @@ class GpuAgentInt : public core::Agent {
                                                             void* data),
                                    void* data) const = 0;
 
-  // @brief Carve scratch memory from scratch pool.
+  // @brief Carve scratch memory for main from scratch pool.
   //
   // @param [in/out] scratch Structure to be populated with the carved memory
   // information.
-  virtual void AcquireQueueScratch(ScratchInfo& scratch) = 0;
+  virtual void AcquireQueueMainScratch(ScratchInfo& scratch) = 0;
 
-  // @brief Release scratch memory back to scratch pool.
+  // @brief Carve scratch memory for alt from scratch pool.
+  //
+  // @param [in/out] scratch Structure to be populated with the carved memory
+  // information.
+  virtual void AcquireQueueAltScratch(ScratchInfo& scratch) = 0;
+
+  // @brief Release scratch memory from main back to scratch pool.
   //
   // @param [in/out] scratch Scratch memory previously acquired with call to
-  // ::AcquireQueueScratch.
-  virtual void ReleaseQueueScratch(ScratchInfo& base) = 0;
+  // ::AcquireQueueMainScratch.
+  virtual void ReleaseQueueMainScratch(ScratchInfo& base) = 0;
+
+  // @brief Release scratch memory back from alternate to scratch pool.
+  //
+  // @param [in/out] scratch Scratch memory  previously acquired with call to
+  // ::AcquireQueueAltcratch.
+  virtual void ReleaseQueueAltScratch(ScratchInfo& base) = 0;
 
   // @brief Translate the kernel start and end dispatch timestamp from agent
   // domain to host domain.
@@ -166,6 +178,14 @@ class GpuAgentInt : public core::Agent {
   //
   // @retval Bus width in MHz.
   virtual uint32_t memory_max_frequency() const = 0;
+
+  // @brief Whether agent supports asynchronous scratch reclaim. Depends on CP FW
+  virtual bool AsyncScratchReclaimEnabled() const = 0;
+
+  // @brief Update the agent's scratch use-once threshold.
+  // Only valid when async scratch reclaim is supported
+  // @retval HSA_STATUS_SUCCESS if successful
+  virtual hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
@@ -267,10 +287,11 @@ class GpuAgent : public GpuAgentInt {
   void GWSRelease();
 
   // @brief Override from AMD::GpuAgentInt.
-  void AcquireQueueScratch(ScratchInfo& scratch) override;
+  void AcquireQueueMainScratch(ScratchInfo& scratch) override;
+  void ReleaseQueueMainScratch(ScratchInfo& scratch) override;
 
-  // @brief Override from AMD::GpuAgentInt.
-  void ReleaseQueueScratch(ScratchInfo& scratch) override;
+  void AcquireQueueAltScratch(ScratchInfo& scratch) override;
+  void ReleaseQueueAltScratch(ScratchInfo& scratch) override;
 
   // @brief Override from AMD::GpuAgentInt.
   void TranslateTime(core::Signal* signal, hsa_amd_profiling_dispatch_time_t& time) override;
@@ -352,7 +373,31 @@ class GpuAgent : public GpuAgentInt {
   // @brief returns the libdrm device handle
   __forceinline amdgpu_device_handle libDrmDev() const { return ldrm_dev_; }
 
+  __forceinline void CheckClockTicks() {
+    // If we did not update t1 since agent initialization, force a SyncClock. Otherwise computing
+    // the SystemClockCounter to GPUClockCounter ratio in TranslateTime(tick) results to a division
+    // by 0.
+    if (t0_.GPUClockCounter == t1_.GPUClockCounter) SyncClocks();
+  }
+
   void ReserveScratch();
+
+  // @brief If agent supports it, release scratch memory for all AQL queues on this agent.
+  void AsyncReclaimScratchQueues();
+
+  // @brief Returns true if scratch reclaim is enabled
+  __forceinline bool AsyncScratchReclaimEnabled() const override {
+    // TODO: Need to update min CP FW ucode version once it is released
+    return (core::Runtime::runtime_singleton_->flag().enable_scratch_async_reclaim() &&
+            isa()->GetMajorVersion() == 9 && isa()->GetMinorVersion() == 4 &&
+            properties_.EngineId.ui32.uCode > 999);
+  };
+
+  hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) override;
+
+  __forceinline size_t ScratchSingleLimitAsyncThreshold() const {
+    return scratch_limit_async_threshold_;
+  }
 
   void Trim() override;
 
@@ -536,6 +581,9 @@ class GpuAgent : public GpuAgentInt {
   // @brief Setup NUMA aware system memory allocator.
   void InitNumaAllocator();
 
+  // @brief Initialize scratch handler thresholds
+  void InitAsyncScratchThresholds();
+
   // @brief Register signal for notification when scratch may become available.
   // @p signal is notified by OR'ing with @p value.
   bool AddScratchNotifier(hsa_signal_t signal, hsa_signal_value_t value) {
@@ -552,7 +600,7 @@ class GpuAgent : public GpuAgentInt {
   void ReleaseScratch(void* base, size_t size, bool large);
 
   // Bind index of peer device that is connected via xGMI links
-  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent, int gang_id);
+  lazy_ptr<core::Blit>& GetXgmiBlit(const core::Agent& peer_agent);
 
   // Bind the Blit object that will drive the copy operation
   // across PCIe links (H2D or D2H) or is within same device D2D
@@ -560,13 +608,15 @@ class GpuAgent : public GpuAgentInt {
 
   // Bind the Blit object that will drive the copy operation
   lazy_ptr<core::Blit>& GetBlitObject(const core::Agent& dst_agent, const core::Agent& src_agent,
-                                      const size_t size, int gang_id);
+                                      const size_t size);
 
   // Bind the Blit object that will drive the copy operation by engine ID
   lazy_ptr<core::Blit>& GetBlitObject(uint32_t engine_id);
 
   // @brief initialize libdrm handle
   void InitLibDrm();
+
+  void GetInfoMemoryProperties(uint8_t value[8]) const;
 
   // @brief Alternative aperture base address. Only on KV.
   uintptr_t ape1_base_;
@@ -581,6 +631,9 @@ class GpuAgent : public GpuAgentInt {
     KernelMutex lock_;
   } gws_queue_;
 
+  // @brief list of AQL queues owned by this agent. Indexed by queue pointer
+  std::vector<core::Queue*> aql_queues_;
+
   // Sets and Tracks pending SDMA status check or request counts
   void SetCopyRequestRefCount(bool set);
   void SetCopyStatusCheckRefCount(bool set);
@@ -589,6 +642,9 @@ class GpuAgent : public GpuAgentInt {
 
   // Tracks what SDMA blits have been used since initialization.
   uint32_t sdma_blit_used_mask_;
+
+  // Scratch limit thresholds when async scratch is enabled.
+  size_t scratch_limit_async_threshold_;
 
   ScratchCache scratch_cache_;
 
@@ -606,7 +662,7 @@ class GpuAgent : public GpuAgentInt {
   // Check if SDMA engine by ID is free
   bool DmaEngineIsFree(uint32_t engine_id);
 
-  std::vector<std::pair<core::Agent&,unsigned int>> gang_peers_info_;
+  std::map<uint64_t,unsigned int> gang_peers_info_;
 };
 
 }  // namespace amd

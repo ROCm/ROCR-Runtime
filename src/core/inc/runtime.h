@@ -51,6 +51,7 @@
 #include <tuple>
 #include <utility>
 #include <thread>
+#include <sys/un.h>
 
 #if defined(__linux__)
 #include <xf86drm.h>
@@ -124,6 +125,7 @@ class Runtime {
     HsaVersionInfo version;
     bool supports_exception_debugging;
     bool supports_event_age;
+    bool supports_core_dump;
   };
 
   /// @brief Open connection to kernel driver and increment reference count.
@@ -451,8 +453,9 @@ class Runtime {
       kfd_version.supports_event_age = true;
   }
 
-  void KfdVersion(bool exception_debugging) {
+  void KfdVersion(bool exception_debugging, bool core_dump) {
     kfd_version.supports_exception_debugging = exception_debugging;
+    kfd_version.supports_core_dump = core_dump;
   }
 
   KfdVersion_t KfdVersion() const { return kfd_version; }
@@ -463,6 +466,7 @@ class Runtime {
 
  protected:
   static void AsyncEventsLoop(void*);
+  static void AsyncIPCSockServerConnLoop(void*);
 
   struct AllocationRegion {
     AllocationRegion()
@@ -470,7 +474,8 @@ class Runtime {
           size(0),
           size_requested(0),
           alloc_flags(core::MemoryRegion::AllocateNoFlags),
-          user_ptr(nullptr) {}
+          user_ptr(nullptr),
+          ldrm_bo(NULL) {}
     AllocationRegion(const MemoryRegion* region_arg, size_t size_arg, size_t size_requested,
                      MemoryRegion::AllocateFlags alloc_flags)
         : region(region_arg),
@@ -491,6 +496,7 @@ class Runtime {
     MemoryRegion::AllocateFlags alloc_flags;
     void* user_ptr;
     std::unique_ptr<std::vector<notifier_t>> notifiers;
+    amdgpu_bo_handle ldrm_bo;
   };
 
   struct AsyncEventsControl {
@@ -499,7 +505,7 @@ class Runtime {
 
     hsa_signal_t wake;
     os::Thread async_events_thread_;
-    KernelMutex lock;
+    HybridMutex lock;
     bool exit;
   };
 
@@ -714,6 +720,11 @@ class Runtime {
 
   std::unique_ptr<AMD::SvmProfileControl> svm_profile_;
 
+  // IPC DMA buf unix domain socket server dmabuf FD passing
+  int ipc_sock_server_fd_;
+  std::map<uint64_t, std::pair<void*, size_t>> ipc_sock_server_conns_;
+  KernelMutex ipc_sock_server_lock_;
+
  private:
   void CheckVirtualMemApiSupport();
   int GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd, uint64_t* cpu_addr);
@@ -765,13 +776,8 @@ class Runtime {
     MappedHandleAllowedAgent()
         : va(NULL), permissions(HSA_ACCESS_PERMISSION_NONE), mappedHandle(NULL), ldrm_bo(0) {}
     MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
-                             hsa_access_permission_t perms)
-        : va(va),
-          size(size),
-          targetAgent(targetAgent),
-          permissions(perms),
-          mappedHandle(_mappedHandle),
-          ldrm_bo(0) {}
+                             hsa_access_permission_t perms);
+    ~MappedHandleAllowedAgent();
 
     hsa_status_t RemoveAccess();
     hsa_status_t EnableAccess(hsa_access_permission_t perms);
@@ -825,6 +831,9 @@ class Runtime {
   // Failure to release the runtime indicates an incorrect application but is
   // common (example: calls library routines at process exit).
   friend class RuntimeCleanup;
+
+  void InitIPCDmaBufSupport();
+  bool ipc_dmabuf_supported_;
 };
 
 }  // namespace core

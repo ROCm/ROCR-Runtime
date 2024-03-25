@@ -196,8 +196,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @return hsa_status_t
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override;
 
-  // @brief Submits a block of PM4 and waits until it has been executed.
+  /// @brief Submits a block of PM4 and waits until it has been executed.
   void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
+
+  /// @brief Enables/Disables profiling overrides SetProfiling from core::Queue
+  void SetProfiling(bool enabled) override;
 
   /// @brief Update signal value using Relaxed semantics
   void StoreRelaxed(hsa_signal_value_t value) override;
@@ -207,6 +210,16 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   /// @brief Enable use of GWS from this queue.
   hsa_status_t EnableGWS(int gws_slot_count);
+
+  /// @brief Update internal scratch limits based on agent limits. If current allocated scratch are
+  /// larger than new limits, perform async-reclaim.
+  void CheckScratchLimits();
+
+  /// @brief Async reclaim main scratch memory
+  void AsyncReclaimMainScratch();
+
+  /// @brief Async reclaim alternate scratch memory
+  void AsyncReclaimAltScratch();
 
  protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
@@ -234,14 +247,22 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void FillBufRsrcWord3_Gfx10();
   void FillBufRsrcWord3_Gfx11();
   void FillComputeTmpRingSize();
+  void FillAltComputeTmpRingSize();
   void FillComputeTmpRingSize_Gfx11();
+
+  void FreeMainScratchSpace();
+  void FreeAltScratchSpace();
 
   /// @brief Halt the queue without destroying it or fencing memory.
   void Suspend();
 
+  /// @brief Handle insufficient scratch
+  void HandleInsufficientScratch(hsa_signal_value_t& error_code, hsa_signal_value_t& waitVal,
+                                 bool& changeWait);
+
   /// @brief Handler for hardware queue events.
   template <bool HandleExceptions>
-  static bool DynamicScratchHandler(hsa_signal_value_t error_code, void* arg);
+  static bool DynamicQueueEventsHandler(hsa_signal_value_t error_code, void* arg);
 
   /// @brief Handler for KFD exceptions.
   static bool ExceptionHandler(hsa_signal_value_t error_code, void* arg);
@@ -309,6 +330,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   // Mutex for queue_event_ manipulation
   static KernelMutex queue_lock_;
+
+  // Async scratch single limit - may be modified after init
+  size_t async_scratch_single_limit_;
 
   static int rtti_id_;
 

@@ -172,7 +172,7 @@ class SharedSignalPool_t : private BaseShared {
 
  private:
   static const size_t minblock_ = 4096 / sizeof(SharedSignal);
-  KernelMutex lock_;
+  HybridMutex lock_;
   std::vector<SharedSignal*> free_list_;
   std::vector<std::pair<void*, size_t>> block_list_;
   size_t block_size_;
@@ -407,7 +407,7 @@ class Signal {
   core::Agent* async_copy_agent_;
 
  private:
-  static KernelMutex ipcLock_;
+  static HybridMutex ipcLock_;
   static std::map<decltype(hsa_signal_t::handle), Signal*> ipcMap_;
 
   static Signal* lookupIpc(hsa_signal_t signal);

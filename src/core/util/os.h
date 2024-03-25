@@ -52,6 +52,7 @@
 namespace rocr {
 namespace os {
 typedef void* LibHandle;
+typedef void* Semaphore;
 typedef void* Mutex;
 typedef void* SharedMutex;
 typedef void* Thread;
@@ -95,6 +96,27 @@ std::vector<LibHandle> GetLoadedToolsLib();
 /// @param: lib(Input), libray handle
 /// @return: Path name of library
 std::string GetLibraryName(LibHandle lib);
+
+/// @brief: Creates a Semaphore, will return NULL if failed.
+/// @param: void.
+/// @return: Semaphore.
+Semaphore CreateSemaphore();
+
+/// @brief: Waits for the semaphore. This is a blocking wait.
+/// If the Semaphore is signalled, this function will return.
+/// @param: sem(Input), handle to the semaphore.
+/// @return: void.
+bool WaitSemaphore(Semaphore sem);
+
+/// @brief: Post/Signal/Wake-up the semaphore
+/// @param: sem(Input), handle to the semaphore.
+/// @return: void.
+void PostSemaphore(Semaphore sem);
+
+/// @brief: Destroys the semaphore.
+/// @param: sem(Input), handle to the semaphore.
+/// @return: void.
+void DestroySemaphore(Semaphore sem);
 
 /// @brief: Creates a mutex, will return NULL if failed.
 /// @param: void.

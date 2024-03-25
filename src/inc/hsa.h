@@ -79,8 +79,12 @@
 
 // Try to detect CPU endianness
 #if !defined(LITTLEENDIAN_CPU) && !defined(BIGENDIAN_CPU)
-#if defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || \
-    defined(_M_X64)
+#if defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__)
+#define LITTLEENDIAN_CPU
+#elif defined(__BYTE_ORDER__) && (__BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+#define BIGENDIAN_CPU
+#elif defined(__i386__) || defined(__x86_64__) || defined(_M_IX86) || \
+      defined(_M_X64) || defined(__loongarch64) || defined(__riscv)
 #define LITTLEENDIAN_CPU
 #endif
 #endif
@@ -519,6 +523,16 @@ typedef enum {
    * this attribute is bool.
    */
   HSA_AMD_SYSTEM_INFO_XNACK_ENABLED = 0x206,
+  /**
+   * Major version of the HSA runtime extension specification supported by the
+   * implementation. The type of this attribute is uint16_t.
+   */
+  HSA_AMD_SYSTEM_INFO_EXT_VERSION_MAJOR = 0x207,
+  /**
+   * Minor version of the HSA runtime extension specification supported by the
+   * implementation. The type of this attribute is uint16_t.
+   */
+  HSA_AMD_SYSTEM_INFO_EXT_VERSION_MINOR = 0x208,
 } hsa_system_info_t;
 
 /**
