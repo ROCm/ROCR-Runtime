@@ -263,14 +263,14 @@ typedef enum {
 // ELF Symbol Flag Enumeration Values.
 #define STF_AMDGPU_HSA_CONST AMDGPU_HSA_SYMBOL_FLAG_CONST
 
-// AMD GPU Relocation Type Enumeration Values.
-#define R_AMDGPU_NONE         0
-#define R_AMDGPU_32_LOW       1
-#define R_AMDGPU_32_HIGH      2
-#define R_AMDGPU_64           3
-#define R_AMDGPU_INIT_SAMPLER 4
-#define R_AMDGPU_INIT_IMAGE   5
-#define R_AMDGPU_RELATIVE64   13
+// Legacy/V1 AMD GPU Relocation Type Enumeration Values.
+#define R_AMDGPU_V1_NONE         0
+#define R_AMDGPU_V1_32_LOW       1
+#define R_AMDGPU_V1_32_HIGH      2
+#define R_AMDGPU_V1_64           3
+#define R_AMDGPU_V1_INIT_SAMPLER 4
+#define R_AMDGPU_V1_INIT_IMAGE   5
+#define R_AMDGPU_V1_RELATIVE64   13
 
 // AMD GPU Note Type Enumeration Values.
 #define NT_AMD_HSA_CODE_OBJECT_VERSION 1
