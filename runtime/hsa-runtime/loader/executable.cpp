@@ -1857,6 +1857,18 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
+    case ELF::R_AMDGPU_ABS32:
+    {
+      if (!symAddr) {
+        logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
+
+      uint32_t symAddr32 = uint32_t(symAddr);
+      relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
+      break;
+    }
+
     case ELF::R_AMDGPU_ABS64:
     {
       if (!symAddr) {
