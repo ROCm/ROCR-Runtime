@@ -236,10 +236,16 @@ const char *PollMemoryIsa =
             v_mov_b32 v2, 0x5678
         .endif
         LOOP:
-        s_load_dword s16, s[0:1], 0x0 glc
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_load_dword s16, s[0:1], 0x0 scope:SCOPE_SYS
+        .else
+            s_load_dword s16, s[0:1], 0x0 glc
+        .endif
         s_cmp_eq_i32 s16, s18
         s_cbranch_scc0   LOOP
-        .if (.amdgcn.gfx_generation_number >= 10)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            flat_store_dword v[0:1], v2 scope:SCOPE_SYS
+        .elseif (.amdgcn.gfx_generation_number >= 10)
             flat_store_dword v[0:1], v2 slc
         .else
             s_store_dword s18, s[2:3], 0x0 glc
