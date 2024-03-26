@@ -108,31 +108,44 @@ class os_thread {
       err = pthread_attr_setstacksize(&attrib, stackSize);
       if (err != 0) {
         fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+        err = pthread_attr_destroy(&attrib);
+        if (err != 0) {
+          fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+        }
         return;
       }
     }
-\
-    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+
+    int create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
     // Attempt to grow the stack within reason.
-    if ((err == EINVAL) && stackSize != 0) {
+    if ((create_err == EINVAL) && stackSize != 0) {
       while (stackSize < 20 * 1024 * 1024) {
         stackSize *= 2;
         err = pthread_attr_setstacksize(&attrib, stackSize);
         if (err != 0) {
           fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+          err = pthread_attr_destroy(&attrib);
+          if (err != 0) {
+            fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+          }
+
           return;
         }
-        err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
-        if (err != EINVAL) break;
+
+        create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+        if (create_err != EINVAL) break;
         debug_print("pthread_create returned EINVAL, doubling stack size\n");
       }
     }
 
+    int cores = 0;
+    cpu_set_t* cpuset = nullptr;
+
     if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
-      int cores = get_nprocs_conf();
-      cpu_set_t* cpuset = CPU_ALLOC(cores);
+      cores = get_nprocs_conf();
+      cpuset = CPU_ALLOC(cores);
       if (cpuset == nullptr) {
         fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
         return;
@@ -144,12 +157,11 @@ class os_thread {
       err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
       CPU_FREE(cpuset);
       if (err != 0) {
-        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
+        fprintf(stderr, "pthread_setaffinity_np failed: %s\n", strerror(err));
         return;
       }
     }
-
-    if (err == 0)
+    if (create_err == 0)
       args.release();
     else
       thread = 0;
@@ -642,11 +654,20 @@ SharedMutex CreateSharedMutex() {
     fprintf(stderr, "rw lock attribute init failed: %s\n", strerror(err));
     return nullptr;
   }
+
+#ifdef __GLIBC__
   err = pthread_rwlockattr_setkind_np(&attrib, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
   if (err != 0) {
     fprintf(stderr, "Set rw lock attribute failure: %s\n", strerror(err));
     return nullptr;
   }
+#else
+  err = pthread_rwlockattr_setkind(&attrib, PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
+  if (err != 0) {
+    fprintf(stderr, "Set rw lock attribute failure: %s\n", strerror(err));
+    return nullptr;
+  }
+#endif
 
   pthread_rwlock_t* lock = new pthread_rwlock_t;
   err = pthread_rwlock_init(lock, &attrib);
