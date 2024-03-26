@@ -204,6 +204,15 @@ enum : unsigned {
   EF_AMDGPU_GENERIC_VERSION_MAX = 0xff,
 };
 
+// ELF Relocation types for AMDGPU.
+enum : unsigned {
+  R_AMDGPU_ABS32_LO = 1,
+  R_AMDGPU_ABS32_HI = 2,
+  R_AMDGPU_ABS64 = 3,
+  R_AMDGPU_ABS32 = 6,
+  R_AMDGPU_RELATIVE64 = 13,
+};
+
 } // end namespace ELF
 
 // ELF Section Header Flag Enumeration Values.

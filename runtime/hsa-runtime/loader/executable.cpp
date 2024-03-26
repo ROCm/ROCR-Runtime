@@ -1833,7 +1833,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   symAddr += rel->addend();
 
   switch (rel->type()) {
-    case R_AMDGPU_V1_32_HIGH:
+    case ELF::R_AMDGPU_ABS32_HI:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1845,7 +1845,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_V1_32_LOW:
+    case ELF::R_AMDGPU_ABS32_LO:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1857,7 +1857,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_V1_64:
+    case ELF::R_AMDGPU_ABS64:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1868,7 +1868,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_V1_RELATIVE64:
+    case ELF::R_AMDGPU_RELATIVE64:
     {
       int64_t baseDelta = reinterpret_cast<uint64_t>(relSeg->Address(0)) - relSeg->VAddr();
       uint64_t relocatedAddr = baseDelta + rel->addend();
