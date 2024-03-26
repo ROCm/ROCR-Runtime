@@ -954,7 +954,7 @@ namespace code {
       uint64_t offset = ImageInitSection()->addData(&desc, sizeof(desc), 8);
       amd::elf::Symbol* imageInit =
         img->symtab()->addSymbol(ImageInitSection(), "", offset, 0, STT_AMDGPU_HSA_METADATA, STB_LOCAL);
-      image->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_INIT_IMAGE, imageInit, image->elfSym()->value() + destOffset, 0);
+      image->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_V1_INIT_IMAGE, imageInit, image->elfSym()->value() + destOffset, 0);
     }
 
     void AmdHsaCode::AddImageInitializer(
@@ -995,7 +995,7 @@ namespace code {
       uint64_t offset = SamplerInitSection()->addData(&desc, sizeof(desc), 8);
       amd::elf::Symbol* samplerInit =
         img->symtab()->addSymbol(SamplerInitSection(), "", offset, 0, STT_AMDGPU_HSA_METADATA, STB_LOCAL);
-      sampler->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_INIT_SAMPLER, samplerInit, sampler->elfSym()->value() + destOffset, 0);
+      sampler->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_V1_INIT_SAMPLER, samplerInit, sampler->elfSym()->value() + destOffset, 0);
     }
 
     void AmdHsaCode::AddSamplerInitializer(Symbol* sampler, uint64_t destOffset,
@@ -1014,7 +1014,7 @@ namespace code {
 
     void AmdHsaCode::AddInitVarWithAddress(bool large, Symbol* dest, uint64_t destOffset, Symbol* addrOf, uint64_t addrAddend)
     {
-      uint32_t rtype = large ? R_AMDGPU_64 : R_AMDGPU_32_LOW;
+      uint32_t rtype = large ? R_AMDGPU_V1_64 : R_AMDGPU_V1_32_LOW;
       dest->elfSym()->section()->relocationSection()->addRelocation(rtype, addrOf->elfSym(), dest->elfSym()->value() + destOffset, addrAddend);
     }
 
