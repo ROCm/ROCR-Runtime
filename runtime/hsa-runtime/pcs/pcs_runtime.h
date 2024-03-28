@@ -65,6 +65,8 @@ class PcsRuntime {
   /// @brief Getter for the PcsRuntime singleton object.
   static PcsRuntime* instance();
 
+  bool SessionsActive() const;
+
   /// @brief Destroy singleton object.
   static void DestroySingleton();
 
