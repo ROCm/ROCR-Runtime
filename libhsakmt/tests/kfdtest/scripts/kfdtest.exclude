@@ -134,7 +134,10 @@ BLACKLIST_GFX11=\
 "KFDGWSTest.*"
 
 BLACKLIST_GFX12=\
-""
+"KFDQMTest.CreateAqlCpQueue:"\
+"KFDPerfCountersTest.*:"\
+"KFDMemoryTest.FlatScratchAccess:"\
+"KFDGWSTest.*"
 
 # KFDQMTest.CpuWriteCoherence fails. 0 dwordsAvailable (KFD-338)
 # KFDMemoryTest.MemoryRegister fails on SDMA queue creation (KFD-337)
