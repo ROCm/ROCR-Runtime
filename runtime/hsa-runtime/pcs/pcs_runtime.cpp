@@ -100,6 +100,10 @@ void PcsRuntime::DestroySingleton() {
 
 void ReleasePcSamplingRsrcs() { PcsRuntime::DestroySingleton(); }
 
+bool PcsRuntime::SessionsActive() const {
+  return pc_sampling_.size() > 0;
+}
+
 PcsRuntime::PcSamplingSession::PcSamplingSession(
     core::Agent* _agent, hsa_ven_amd_pcs_method_kind_t method, hsa_ven_amd_pcs_units_t units,
     size_t interval, size_t latency, size_t buffer_size,
