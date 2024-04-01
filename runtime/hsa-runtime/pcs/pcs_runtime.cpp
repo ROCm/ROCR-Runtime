@@ -187,6 +187,43 @@ hsa_status_t PcsRuntime::PcSamplingSession::HandleSampleData(uint8_t* buf1, size
   data_rdy.buf2 = buf2;
   data_rdy.buf2_sz = buf2_sz;
 
+  AMD::GpuAgent* gpuAgent = static_cast<AMD::GpuAgent*>(agent);
+
+  switch (csd.method) {
+    case HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1: {
+      size_t buf_samples = buf1_sz / sizeof(perf_sample_hosttrap_v1_t);
+      perf_sample_hosttrap_v1_t* samples = reinterpret_cast<perf_sample_hosttrap_v1_t*>(buf1);
+      while (buf_samples--) {
+        samples->timestamp = gpuAgent->TranslateTime(samples->timestamp);
+        samples++;
+      }
+
+      buf_samples = buf2_sz / sizeof(perf_sample_hosttrap_v1_t);
+      samples = reinterpret_cast<perf_sample_hosttrap_v1_t*>(buf2);
+      while (buf_samples--) {
+        samples->timestamp = gpuAgent->TranslateTime(samples->timestamp);
+        samples++;
+      }
+    }
+    break;
+    case HSA_VEN_AMD_PCS_METHOD_STOCHASTIC_V1: {
+      size_t buf_samples = buf1_sz / sizeof(perf_sample_snapshot_v1_t);
+      perf_sample_snapshot_v1_t* samples = reinterpret_cast<perf_sample_snapshot_v1_t*>(buf1);
+      while (buf_samples--) {
+        samples->timestamp = gpuAgent->TranslateTime(samples->timestamp);
+        samples++;
+      }
+
+      buf_samples = buf2_sz / sizeof(perf_sample_snapshot_v1_t);
+      samples = reinterpret_cast<perf_sample_snapshot_v1_t*>(buf2);
+      while (buf_samples--) {
+        samples->timestamp = gpuAgent->TranslateTime(samples->timestamp);
+        samples++;
+      }
+    }
+    break;
+  }
+
   csd.data_ready_callback(csd.client_callback_data, buf1_sz + buf2_sz, lost_sample_count,
                           &PcSamplingDataCopyCallback,
                           /* hsa_callback_data*/ this);
