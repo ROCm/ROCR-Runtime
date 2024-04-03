@@ -188,6 +188,18 @@ Executable* AmdHsaCodeLoader::CreateExecutable(
   return executables.back();
 }
 
+Executable* AmdHsaCodeLoader::CreateExecutable(
+      std::unique_ptr<Context> isolated_context,
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode)
+{
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
+
+  executables.push_back(new ExecutableImpl(profile, std::move(isolated_context), executables.size(), default_float_rounding_mode));
+  return executables.back();
+}
+
 static void AddCodeObjectInfoIntoDebugMap(link_map* map) {
   if (r_debug_tail) {
       r_debug_tail->l_next = map;
@@ -738,6 +750,22 @@ ExecutableImpl::ExecutableImpl(
   , state_(HSA_EXECUTABLE_STATE_UNFROZEN)
   , program_allocation_segment(nullptr)
 {
+}
+
+ExecutableImpl::ExecutableImpl(
+    const hsa_profile_t &_profile,
+    std::unique_ptr<Context> unique_context,
+    size_t id,
+    hsa_default_float_rounding_mode_t default_float_rounding_mode)
+  : Executable()
+  , profile_(_profile)
+  , unique_context_(std::move(unique_context))
+  , id_(id)
+  , default_float_rounding_mode_(default_float_rounding_mode)
+  , state_(HSA_EXECUTABLE_STATE_UNFROZEN)
+  , program_allocation_segment(nullptr)
+{
+  context_ = unique_context_.get();
 }
 
 ExecutableImpl::~ExecutableImpl() {
