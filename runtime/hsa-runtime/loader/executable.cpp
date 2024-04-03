@@ -1624,15 +1624,24 @@ Segment* ExecutableImpl::SectionSegment(hsa_agent_t agent, code::Section* sec)
 hsa_status_t ExecutableImpl::ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c)
 {
   hsa_status_t status = HSA_STATUS_SUCCESS;
+
+  uint32_t majorVersion, minorVersion;
+  if (!c->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
   for (size_t i = 0; i < c->RelocationSectionCount(); ++i) {
     if (c->GetRelocationSection(i)->targetSection()) {
+      // Static relocations may be present if --emit-relocs
+      // option was passed to lld, but they cannot be applied
+      // again, so skip it for code object v2 and up.
+      if (majorVersion >= 2) {
+        continue;
+      }
+
       status = ApplyStaticRelocationSection(agent, c->GetRelocationSection(i));
     } else {
       // Dynamic relocations are supported starting code object v2.1.
-      uint32_t majorVersion, minorVersion;
-      if (!c->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
-        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
-      }
       if (majorVersion < 2) {
         return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
       }
