@@ -50,6 +50,7 @@
 #include "inc/hsa_ven_amd_loader.h"
 #include "inc/amd_hsa_elf.h"
 #include <string>
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -457,6 +458,13 @@ public:
       const char *options,
       hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) = 0;
 
+  /// @brief Creates empty AMD HSA Executable with specified @p profile,
+  /// @p options and @p isolated_context that is isolated from the runtime.
+  virtual Executable* CreateExecutable(
+      std::unique_ptr<Context> isolated_context,
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) = 0;
 
   /// @brief Freezes @p executable
   virtual hsa_status_t FreezeExecutable(Executable *executable, const char *options) = 0;

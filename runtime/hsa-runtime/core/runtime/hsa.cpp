@@ -2195,6 +2195,7 @@ hsa_status_t hsa_executable_create_alt(
   IS_BAD_PTR(executable);
 
   Executable *exec = GetLoader()->CreateExecutable(
+      std::unique_ptr<amd::LoaderContext>(new amd::LoaderContext()),
       profile, options, default_float_rounding_mode);
   CHECK_ALLOC(exec);
 
