@@ -29,7 +29,9 @@ If the hsakmt-roct and hsakmt-roct-dev packages are desired:
     cmake ..
     make package
 ```
+
 If you choose not to build and install packages, manual installation of the binaries and header files can be done via:
+
 ```bash
     make install
 ```
