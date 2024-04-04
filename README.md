@@ -8,7 +8,7 @@ NOTE: Users of Ubuntu 20.04 will need to add the user to the new "render" group,
 ## ROCk Driver
 
 The ROCt library is not a standalone product and requires that you have the correct ROCk driver installed, or are using a compatible upstream kernel.
-Please refer to https://docs.amd.com/ under "Getting Started Guide" for a list of supported Operating Systems and kernel versions, as well as supported hardware.
+Please refer to <https://rocm.docs.amd.com> under "Getting Started Guide" for a list of supported Operating Systems and kernel versions, as well as supported hardware.
 
 ## Building the Thunk
 
