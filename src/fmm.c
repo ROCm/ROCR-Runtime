@@ -1643,7 +1643,6 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		mflags.Value = 0;
 		mflags.ui32.NonPaged = 1;
 		mflags.ui32.HostAccess = 1;
-		mflags.ui32.Reserved = 0x3e1;
 
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		vm_obj->mflags = mflags;
@@ -2371,7 +2370,6 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	mflags.Value = 0;
 	mflags.ui32.NonPaged = 1;
 	mflags.ui32.HostAccess = 1;
-	mflags.ui32.Reserved = 0;
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	vm_obj->mflags = mflags;
 	vm_obj->node_id = node_id;
