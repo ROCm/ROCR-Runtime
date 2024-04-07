@@ -39,7 +39,7 @@
 #include <linux/io.h>
 #include <linux/uaccess.h>
 
-#include "amd_rdma.h"
+#include "drm/amd_rdma.h"
 #include "amdp2ptest.h"
 
 
@@ -54,7 +54,7 @@ const struct amd_rdma_interface *rdma_interface;
 
 struct va_pages_node {
 	struct list_head node;
-	struct amd_p2p_page_table *pages;
+	struct amd_p2p_info *pages;
 };
 
 
@@ -70,38 +70,6 @@ struct amdp2ptest_pages_list {
 			pr_err(AMDP2PTEST_DEVICE_NAME ": " fmt, ## args)
 #define MSG_warn(fmt, args ...)	\
 			pr_warn(AMDP2PTEST_DEVICE_NAME ": " fmt, ## args)
-
-
-
-static void free_callback(struct amd_p2p_page_table *page_table,
-				void *client_priv)
-{
-	struct va_pages_node	      *va_pages = NULL;
-	struct amdp2ptest_pages_list *list = client_priv;
-	struct list_head *p, *n;
-
-	MSG_ERR("Free callback is called on va 0x%llx\n", page_table->va);
-
-	list_for_each_safe(p, n, &list->head) {
-		va_pages = list_entry(p, struct va_pages_node, node);
-
-		if (va_pages->pages == page_table) {
-			MSG_INFO("Found free page table to free\n");
-
-			mutex_lock(&list->lock);
-			list_del(&va_pages->node);
-			mutex_unlock(&list->lock);
-			kfree(va_pages);
-
-			/* Note: Do not break from loop to allow test
-			 * situation when "get_pages" would be called
-			 * on the same memory several times
-			 **/
-		}
-	}
-}
-
-
 
 static int amdp2ptest_open(struct inode *inode, struct file *filp)
 {
@@ -137,7 +105,7 @@ static int amdp2ptest_release(struct inode *inode, struct file *filp)
 	list_for_each_safe(p, n, &list->head) {
 		va_pages = list_entry(p, struct va_pages_node, node);
 		MSG_INFO("Free pages: VA 0x%llx\n", va_pages->pages->va);
-		retcode = rdma_interface->put_pages(va_pages->pages);
+		retcode = rdma_interface->put_pages(&va_pages->pages);
 
 		if (retcode != 0)
 			MSG_ERR("Could not put pages back: %d\n", retcode);
@@ -199,7 +167,7 @@ static int ioctl_get_pages(struct file *filp, unsigned long arg)
 	struct amdp2ptest_pages_list *list = filp->private_data;
 	struct AMDRDMA_IOCTL_GET_PAGES_PARAM params = {0};
 	int result;
-	struct amd_p2p_page_table  *pages;
+	struct amd_p2p_info  *pages;
 
 	MSG_INFO("AMD2P2PTEST_IOCTL_GET_PAGES");
 
@@ -218,7 +186,7 @@ static int ioctl_get_pages(struct file *filp, unsigned long arg)
 					      to get pages -> no IOMMU support
 					      is needed */
 					&pages,
-					free_callback,
+					NULL,
 					list /* Pointer to the list */
 					);
 
@@ -230,7 +198,7 @@ static int ioctl_get_pages(struct file *filp, unsigned long arg)
 	if (copy_to_user((void *)arg, &params, sizeof(params))) {
 		MSG_ERR("copy_to_user failed on user pointer %p\n",
 							(void *)arg);
-		rdma_interface->put_pages(pages);
+		rdma_interface->put_pages(&pages);
 		return -EFAULT;
 	}
 
@@ -239,7 +207,7 @@ static int ioctl_get_pages(struct file *filp, unsigned long arg)
 
 	if (va_pages == 0) {
 		MSG_ERR("Can't alloc kernel memory\n");
-		rdma_interface->put_pages(pages);
+		rdma_interface->put_pages(&pages);
 		return -ENOMEM;
 	}
 
@@ -279,7 +247,7 @@ static int ioctl_put_pages(struct file *filp, unsigned long arg)
 		if (va_pages->pages->va == params.addr &&
 			va_pages->pages->size == params.length) {
 
-			retcode = rdma_interface->put_pages(va_pages->pages);
+			retcode = rdma_interface->put_pages(&va_pages->pages);
 
 			if (retcode != 0) {
 				MSG_ERR("Could not put pages back: %d\n",
@@ -430,12 +398,20 @@ static struct miscdevice amdp2ptest_dev = {
 	.mode = S_IRWXU | S_IRWXG | S_IRWXO
 };
 
+static int (*p2p_query_rdma_interface)(const struct amd_rdma_interface **);
+
 static int __init amdp2ptest_init(void)
 {
 	int result;
 
-	result = amdkfd_query_rdma_interface(&rdma_interface);
+	p2p_query_rdma_interface = (int (*)(const struct amd_rdma_interface **))
+				   symbol_request(amdkfd_query_rdma_interface);
+	if (!p2p_query_rdma_interface) {
+		MSG_ERR("Can not get symbol amdkfd_query_rdma_interface, please load amdgpu driver\n");
+		return -ENOENT;
+	}
 
+	result = p2p_query_rdma_interface(&rdma_interface);
 	if (result < 0) {
 		MSG_ERR("Can not get RDMA Interface (result = %d)\n", result);
 		return result;
@@ -470,6 +446,8 @@ static void __exit amdp2ptest_cleanup(void)
 	MSG_INFO("Unregistering\n");
 
 	misc_deregister(&amdp2ptest_dev);
+	if (p2p_query_rdma_interface)
+		symbol_put(amdkfd_query_rdma_interface);
 }
 
 
