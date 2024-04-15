@@ -519,16 +519,17 @@ hsa_status_t ImageManagerGfx12::PopulateImageSrd(Image& image) const {
     const bool image_3d = (image.desc.geometry == HSA_EXT_IMAGE_GEOMETRY_3D);
 
     word4.val = 0;
-    word4.f.DEPTH =
+
+    // For 1d, 2d and 2d-msaa, fields DEPTH+PITCH_MSB encode pitch-1
+    if (!image_array && !image_3d) {
+      uint32_t encPitch = out.pitch - 1;
+      word4.f.DEPTH = encPitch & 0x3fff;           // first 14 bits
+      word4.f.PITCH_MSB = (encPitch >> 14) & 0x3;  // last 2 bits
+    } else {
+      word4.f.DEPTH =
         (image_array) // Doesn't hurt but isn't array_size already >0?
             ? std::max(image.desc.array_size, static_cast<size_t>(1)) - 1
             : (image_3d) ? image.desc.depth - 1 : 0;
-
-    // For 1d, 2d and 2d-msaa this is pitch-1
-    if (!image_array && !image_3d) {
-      uint32_t encPitch = out.pitch - 1;
-      word4.f.DEPTH = encPitch & 0x1fff;  // 13 bits
-      word4.f.PITCH_MSB = (encPitch >> 13) & 0x3;  // last 2 bits
     }
 
     word5.val = 0;
