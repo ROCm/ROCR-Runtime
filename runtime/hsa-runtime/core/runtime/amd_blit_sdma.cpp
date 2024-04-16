@@ -166,10 +166,11 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   }
 
   // HDP flush supported on gfx900 and forward.
-  // FIXME: Not working on gfx10, raises SRBM write protection interrupt.
   // gfx90a can support xGMI host to device connections so bypass HDP flush
   // in this case.
-  if (agent_->isa()->GetMajorVersion() == 9) {
+  // gfx101x seems to have issues with HDP flushes
+  if (agent_->isa()->GetMajorVersion() >= 9 &&
+      !(agent_->isa()->GetMajorVersion() == 10 && agent_->isa()->GetMinorVersion() == 1)) {
     hdp_flush_support_ = link.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI;
   }
 
