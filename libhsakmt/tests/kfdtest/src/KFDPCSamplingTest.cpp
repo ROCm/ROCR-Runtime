@@ -74,8 +74,14 @@ TEST_F(KFDPCSamplingTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "Failed to get default GPU Node.";
 
     /* 1. get pc sampling format numbe of entry */
-    ASSERT_SUCCESS(!hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
-                                         num_sample_info, &return_num_sample_info));
+    HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
+                                         num_sample_info, &return_num_sample_info);
+    if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+        LOG() << "Skipping test: This GPU does not support PC Sampling." << std::endl;
+        return;
+    }
+    ASSERT_GE(return_num_sample_info, 1);
+
     num_sample_info = return_num_sample_info;
     void *info_buf = calloc(num_sample_info, sizeof(HsaPcSamplingInfo));
 
@@ -150,12 +156,21 @@ TEST_F(KFDPCSamplingTest, MultiThreadPcSamplingTest) {
 
     HSAuint64 threadId[2];
     struct ThreadParams params[2];
-    HSAuint32 num_sample_info = 2;
+    HSAuint32 num_sample_info = 0;
     HSAuint32 return_num_sample_info = 0;
 
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "Failed to get default GPU Node";
 
+    HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
+                                         num_sample_info, &return_num_sample_info);
+    if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+        LOG() << "Skipping test: This GPU does not support PC Sampling." << std::endl;
+        return;
+    }
+    ASSERT_GE(return_num_sample_info, 1);
+
+    num_sample_info = return_num_sample_info;
     void *info_buf = calloc(num_sample_info, sizeof(HsaPcSamplingInfo));
 
     ASSERT_SUCCESS(hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, info_buf,
@@ -234,8 +249,14 @@ TEST_F(KFDPCSamplingTest, MultiProcPcSamplingTest) {
 
     params.GPUNode = defaultGPUNode;
 
-    ASSERT_SUCCESS(!hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
-                                         num_sample_info, &return_num_sample_info));
+    HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
+                                         num_sample_info, &return_num_sample_info);
+    if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+        LOG() << "Skipping test: This GPU does not support PC Sampling." << std::endl;
+        return;
+    }
+    ASSERT_GE(return_num_sample_info, 1);
+
     num_sample_info = return_num_sample_info;
     void *info_buf = calloc(num_sample_info, sizeof(HsaPcSamplingInfo));
     ASSERT_SUCCESS(hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, info_buf,
@@ -280,8 +301,14 @@ TEST_F(KFDPCSamplingTest, MultiProcPcSamplingTestM) {
     HSAuint32 defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "Failed to get default GPU Node";
 
-    ASSERT_SUCCESS(!hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
-                                         num_sample_info, &return_num_sample_info));
+    HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, NULL,
+                                         num_sample_info, &return_num_sample_info);
+    if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
+        LOG() << "Skipping test: This GPU does not support PC Sampling." << std::endl;
+        return;
+    }
+    ASSERT_GE(return_num_sample_info, 1);
+
     num_sample_info = return_num_sample_info;
     void *info_buf = calloc(num_sample_info, sizeof(HsaPcSamplingInfo));
     ASSERT_SUCCESS(hsaKmtPcSamplingQueryCapabilities(defaultGPUNode, info_buf,
