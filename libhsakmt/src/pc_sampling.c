@@ -35,7 +35,7 @@
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingSupport(void)
 {
     CHECK_KFD_OPEN();
-    CHECK_KFD_MINOR_VERSION(16);
+    CHECK_KFD_MINOR_VERSION(17);
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -50,7 +50,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingQueryCapabilities(HSAuint32 NodeId, void
         return HSAKMT_STATUS_INVALID_PARAMETER;
 
     CHECK_KFD_OPEN();
-    CHECK_KFD_MINOR_VERSION(16);
+    CHECK_KFD_MINOR_VERSION(17);
 
     HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
