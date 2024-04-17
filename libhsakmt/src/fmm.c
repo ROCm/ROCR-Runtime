@@ -3533,6 +3533,10 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 	} else if (object->userptr) {
 		/* Update an existing userptr */
 		++object->registration_count;
+	} else {
+		/* Not a userptr when we are expecting one */
+		pthread_mutex_unlock(&aperture->fmm_mutex);
+		return HSAKMT_STATUS_INVALID_HANDLE;
 	}
 	/* Successful vm_find_object returns with aperture locked */
 
