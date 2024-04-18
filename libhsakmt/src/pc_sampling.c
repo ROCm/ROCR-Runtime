@@ -43,7 +43,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingSupport(void)
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingQueryCapabilities(HSAuint32 NodeId, void *sample_info,
                             HSAuint32 sample_info_sz, HSAuint32 *size)
 {
-    int ret;
     struct kfd_ioctl_pc_sample_args args = {0};
     uint32_t gpu_id;
 
@@ -53,30 +52,37 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingQueryCapabilities(HSAuint32 NodeId, void
     CHECK_KFD_OPEN();
     CHECK_KFD_MINOR_VERSION(16);
 
-    ret = validate_nodeid(NodeId, &gpu_id);
+    HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
         pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
         return ret;
     }
     assert(sizeof(HsaPcSamplingInfo) == sizeof(struct kfd_pc_sample_info));
 
-    ret = HSAKMT_STATUS_SUCCESS;
     args.op = KFD_IOCTL_PCS_OP_QUERY_CAPABILITIES;
     args.gpu_id = gpu_id;
     args.sample_info_ptr = (uint64_t)sample_info;
     args.num_sample_info = sample_info_sz;
     args.flags = 0;
 
-    ret = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
+    int err = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
 
-    if (ret) {
-        return (ret == -ENOSPC) ? HSAKMT_STATUS_BUFFER_TOO_SMALL :
-               (ret == -EINVAL) ? HSAKMT_STATUS_INVALID_PARAMETER :
-               (ret == -EOPNOTSUPP) ? HSAKMT_STATUS_NOT_SUPPORTED :
-               (ret == -EBUSY) ? HSAKMT_STATUS_UNAVAILABLE :
-                HSAKMT_STATUS_ERROR;
-    }
     *size = args.num_sample_info;
+
+    if (err) {
+        switch (errno) {
+        case ENOSPC:
+                return HSAKMT_STATUS_BUFFER_TOO_SMALL;
+        case EINVAL:
+                return HSAKMT_STATUS_INVALID_PARAMETER;
+        case EOPNOTSUPP:
+                return HSAKMT_STATUS_NOT_SUPPORTED;
+        case EBUSY:
+                return HSAKMT_STATUS_UNAVAILABLE;
+        default:
+                return HSAKMT_STATUS_ERROR;
+        }
+    }
 
     return HSAKMT_STATUS_SUCCESS;
 }
@@ -84,7 +90,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingQueryCapabilities(HSAuint32 NodeId, void
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingCreate(HSAuint32 NodeId, HsaPcSamplingInfo *sample_info,
 						HsaPcSamplingTraceId *traceId)
 {
-    int ret;
     struct kfd_ioctl_pc_sample_args args = {0};
     uint32_t gpu_id;
 
@@ -94,25 +99,30 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingCreate(HSAuint32 NodeId, HsaPcSamplingIn
     CHECK_KFD_OPEN();
 
     *traceId = INVALID_TRACE_ID;
-    ret = validate_nodeid(NodeId, &gpu_id);
+    HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
         pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
         return ret;
     }
 
-    ret = HSAKMT_STATUS_SUCCESS;
     args.op = KFD_IOCTL_PCS_OP_CREATE;
     args.gpu_id = gpu_id;
     args.sample_info_ptr = (uint64_t)sample_info;
     args.num_sample_info = 1;
     args.trace_id = INVALID_TRACE_ID;
 
-    ret = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
-    if (ret) {
-        return (ret == -EINVAL) ? HSAKMT_STATUS_INVALID_PARAMETER :
-               (ret == -ENOMEM) ? HSAKMT_STATUS_NO_MEMORY :
-               (ret == -EBUSY) ? HSAKMT_STATUS_UNAVAILABLE :
-                HSAKMT_STATUS_ERROR;
+    int err = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
+    if (err) {
+        switch (errno) {
+        case EINVAL:
+            return HSAKMT_STATUS_INVALID_PARAMETER;
+        case ENOMEM:
+            return HSAKMT_STATUS_NO_MEMORY;
+        case EBUSY:
+            return HSAKMT_STATUS_UNAVAILABLE;
+        default:
+            return HSAKMT_STATUS_ERROR;
+        }
     }
 
     *traceId = args.trace_id;
@@ -121,7 +131,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingCreate(HSAuint32 NodeId, HsaPcSamplingIn
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingDestroy(HSAuint32 NodeId, HsaPcSamplingTraceId traceId)
 {
-    int ret;
     struct kfd_ioctl_pc_sample_args args = {0};
     uint32_t gpu_id;
 
@@ -130,7 +139,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingDestroy(HSAuint32 NodeId, HsaPcSamplingT
 
     CHECK_KFD_OPEN();
 
-    ret = validate_nodeid(NodeId, &gpu_id);
+    HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
         pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
         return ret;
@@ -138,20 +147,22 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingDestroy(HSAuint32 NodeId, HsaPcSamplingT
 
     hsaKmtPcSamplingStop(NodeId, traceId);
 
-    ret = HSAKMT_STATUS_SUCCESS;
     args.op = KFD_IOCTL_PCS_OP_DESTROY;
     args.gpu_id = gpu_id;
     args.trace_id = traceId;
 
-    ret = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
-    return (ret == -EINVAL) ? HSAKMT_STATUS_INVALID_PARAMETER :
-            ret ? HSAKMT_STATUS_ERROR :
-            HSAKMT_STATUS_SUCCESS;
+    int err = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
+    if (err) {
+        if (errno == EINVAL)
+            return HSAKMT_STATUS_INVALID_PARAMETER;
+        return HSAKMT_STATUS_ERROR;
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingStart(HSAuint32 NodeId, HsaPcSamplingTraceId traceId)
 {
-    int ret;
     struct kfd_ioctl_pc_sample_args args = {0};
     uint32_t gpu_id;
 
@@ -160,29 +171,37 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingStart(HSAuint32 NodeId, HsaPcSamplingTra
 
     CHECK_KFD_OPEN();
 
-    ret = validate_nodeid(NodeId, &gpu_id);
+    HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
         pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
         return ret;
     }
 
-    ret = HSAKMT_STATUS_SUCCESS;
     args.op = KFD_IOCTL_PCS_OP_START;
     args.gpu_id = gpu_id;
     args.trace_id = traceId;
 
-    ret = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
-    return (ret == -EINVAL) ? HSAKMT_STATUS_INVALID_PARAMETER :
-           (ret == -ENOMEM) ? HSAKMT_STATUS_OUT_OF_RESOURCES :
-           (ret == -EBUSY) ? HSAKMT_STATUS_UNAVAILABLE :
-           (ret == -EALREADY) ? HSAKMT_STATUS_KERNEL_ALREADY_OPENED :
-            ret ? HSAKMT_STATUS_ERROR :
-            HSAKMT_STATUS_SUCCESS;
+    int err = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
+    if (err) {
+        switch (errno) {
+        case EINVAL:
+            return HSAKMT_STATUS_INVALID_PARAMETER;
+        case ENOMEM:
+            return HSAKMT_STATUS_OUT_OF_RESOURCES;
+        case EBUSY:
+            return HSAKMT_STATUS_UNAVAILABLE;
+        case EALREADY:
+            return HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
+        default:
+            return HSAKMT_STATUS_ERROR;
+        }
+    }
+
+    return HSAKMT_STATUS_SUCCESS;
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingStop(HSAuint32 NodeId, HsaPcSamplingTraceId traceId)
 {
-    int ret;
     struct kfd_ioctl_pc_sample_args args = {0};
     uint32_t gpu_id;
 
@@ -191,20 +210,26 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPcSamplingStop(HSAuint32 NodeId, HsaPcSamplingTrac
 
     CHECK_KFD_OPEN();
 
-    ret = validate_nodeid(NodeId, &gpu_id);
+    HSAKMT_STATUS ret = validate_nodeid(NodeId, &gpu_id);
     if (ret != HSAKMT_STATUS_SUCCESS) {
         pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
         return ret;
     }
 
-    ret = HSAKMT_STATUS_SUCCESS;
     args.op = KFD_IOCTL_PCS_OP_STOP;
     args.gpu_id = gpu_id;
     args.trace_id = traceId;
 
-    ret = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
-    return (ret == -EINVAL) ? HSAKMT_STATUS_INVALID_PARAMETER :
-           (ret == -EALREADY) ? HSAKMT_STATUS_KERNEL_ALREADY_OPENED :
-            ret ? HSAKMT_STATUS_ERROR :
-            HSAKMT_STATUS_SUCCESS;
+    int err = kmtIoctl(kfd_fd, AMDKFD_IOC_PC_SAMPLE, &args);
+    if (err) {
+        switch (errno) {
+        case EINVAL:
+            return HSAKMT_STATUS_INVALID_PARAMETER;
+        case EALREADY:
+            return HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
+        default:
+            return HSAKMT_STATUS_ERROR;
+        }
+    }
+    return HSAKMT_STATUS_SUCCESS;
 }
