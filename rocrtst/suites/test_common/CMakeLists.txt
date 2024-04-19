@@ -35,8 +35,18 @@ cmake_minimum_required(VERSION 3.5.0)
 set(PROJECT_NAME "rocrtst64")
 project (${PROJECT_NAME})
 
+if ( NOT DEFINED BUILD_SHARED_LIBS )
+  set ( BUILD_SHARED_LIBS ON )
+endif()
+
 # For DEB/RPM generation
-set ( CPACK_PACKAGE_NAME "rocrtst" )
+if(BUILD_SHARED_LIBS)
+  set ( CPACK_PACKAGE_NAME "rocrtst" )
+else()
+  set ( CPACK_RPM_PACKAGE_NAME "rocrtst-static" )
+  set ( CPACK_DEBIAN_PACKAGE_NAME "rocrtst-static" )
+endif()
+
 set ( CPACK_PACKAGE_CONTACT "Advanced Micro Devices Inc." )
 set ( CPACK_PACKAGE_DESCRIPTION "This package includes rocrtst and a convenience script to run the test suite" )
 set ( CPACK_PACKAGE_DESCRIPTION_SUMMARY "Test suite for ROCr" )
