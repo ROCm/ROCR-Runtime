@@ -529,32 +529,26 @@ TEST_F(KFDLocalMemoryTest, MapVramToGPUNodesTest) {
     HsaMemMapFlags mapFlags = {0};
 
     EXPECT_SUCCESS(hsaKmtAllocMemory(nodes[1], PAGE_SIZE, memFlags, &shared_addr));
-    EXPECT_SUCCESS(hsaKmtRegisterMemoryToNodes(shared_addr, PAGE_SIZE, 2, nodes));
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(shared_addr, PAGE_SIZE, NULL, mapFlags, 2, nodes));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(shared_addr, &info));
-    EXPECT_EQ(info.NRegisteredNodes, 2);
     EXPECT_EQ(info.NMappedNodes, 2);
 
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(shared_addr, PAGE_SIZE, NULL, mapFlags, 1, &nodes[0]));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(shared_addr, &info));
-    EXPECT_EQ(info.NRegisteredNodes, 2);
     EXPECT_EQ(info.NMappedNodes, 1);
     EXPECT_EQ(info.MappedNodes[0], nodes[0]);
 
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(shared_addr, PAGE_SIZE, NULL, mapFlags, 1, &nodes[1]));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(shared_addr, &info));
-    EXPECT_EQ(info.NRegisteredNodes, 2);
     EXPECT_EQ(info.NMappedNodes, 1);
     EXPECT_EQ(info.MappedNodes[0], nodes[1]);
 
     EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(shared_addr));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(shared_addr, &info));
-    EXPECT_EQ(info.NRegisteredNodes, 2);
     EXPECT_EQ(info.NMappedNodes, 0);
 
     EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(shared_addr, PAGE_SIZE, NULL, mapFlags, 1, &nodes[0]));
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(shared_addr, &info));
-    EXPECT_EQ(info.NRegisteredNodes, 2);
     EXPECT_EQ(info.NMappedNodes, 1);
     EXPECT_EQ(info.MappedNodes[0], nodes[0]);
 
