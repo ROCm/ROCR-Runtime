@@ -468,14 +468,11 @@ unsigned int HsaMemoryBuffer::Node() const {
 }
 
 int HsaMemoryBuffer::MapMemToNodes(unsigned int *nodes, unsigned int nodes_num) {
+    HsaMemMapFlags mapFlags = {0};
     int ret, bit;
 
-    ret = hsaKmtRegisterMemoryToNodes(m_pBuf, m_Size, nodes_num, nodes);
-    if (ret != 0)
-        return ret;
-    ret = hsaKmtMapMemoryToGPU(m_pBuf, m_Size, NULL);
+    ret = hsaKmtMapMemoryToGPUNodes(m_pBuf, m_Size, NULL, mapFlags, nodes_num, nodes);
     if (ret != 0) {
-        hsaKmtDeregisterMemory(m_pBuf);
         return ret;
     }
 
@@ -494,7 +491,6 @@ int HsaMemoryBuffer::UnmapMemToNodes(unsigned int *nodes, unsigned int nodes_num
     if (ret)
         return ret;
 
-    hsaKmtDeregisterMemory(m_pBuf);
     for (unsigned int i = 0; i < nodes_num; i++) {
         bit = 1 << nodes[i];
         m_MappedNodes &= ~bit;
@@ -528,7 +524,6 @@ void HsaMemoryBuffer::UnmapAllNodes() {
      * TODO: When thunk is updated, use hsaKmtRegisterToNodes. Then nodes will be used
      */
     hsaKmtUnmapMemoryToGPU(m_pBuf);
-    hsaKmtDeregisterMemory(m_pBuf);
 
     m_MappedNodes = 0;
 
@@ -543,7 +538,6 @@ HsaMemoryBuffer::~HsaMemoryBuffer() {
         if (is_dgpu()) {
             if (m_MappedNodes) {
                 hsaKmtUnmapMemoryToGPU(m_pBuf);
-                hsaKmtDeregisterMemory(m_pBuf);
             }
         }
         hsaKmtFreeMemory(m_pBuf, m_Size);

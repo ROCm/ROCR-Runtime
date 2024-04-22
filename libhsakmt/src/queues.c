@@ -363,11 +363,16 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 
 	if (NodeId != 0) {
 		uint32_t nodes_array[1] = {NodeId};
+		HsaMemMapFlags map_flags = {0};
+		HSAKMT_STATUS result;
 
-		if (hsaKmtRegisterMemoryToNodes(mem, size, 1, nodes_array) != HSAKMT_STATUS_SUCCESS) {
+		result = hsaKmtMapMemoryToGPUNodes(mem, size, &gpu_va, map_flags, 1, nodes_array);
+		if (result != HSAKMT_STATUS_SUCCESS) {
 			hsaKmtFreeMemory(mem, size);
 			return NULL;
 		}
+
+		return mem;
 	}
 
 	if (hsaKmtMapMemoryToGPU(mem, size, &gpu_va) != HSAKMT_STATUS_SUCCESS) {
