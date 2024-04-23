@@ -1,0 +1,11 @@
+# Default code owners
+@dayatsin-amd @jokim-amd @shwetagkhatri @cfreeamd
+
+# Documentation files
+docs/* @ROCm/rocm-documentation @dayatsin-amd @shwetagkhatri
+
+*.md @ROCm/rocm-documentation @dayatsin-amd @shwetagkhatri
+*.rst @ROCm/rocm-documentation @dayatsin-amd @shwetagkhatri
+
+# Header directory for Doxygen documentation
+src/inc/* @ROCm/rocm-documentation @dayatsin-amd @shwetagkhatri
