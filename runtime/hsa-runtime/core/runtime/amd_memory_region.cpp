@@ -164,7 +164,6 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
   }
 
   assert(GetVirtualSize() != 0);
-  assert(GetPhysicalSize() <= GetVirtualSize());
   assert(IsMultipleOf(max_single_alloc_size_, kPageSize_));
 }
 
