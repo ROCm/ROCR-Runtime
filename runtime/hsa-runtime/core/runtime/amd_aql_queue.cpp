@@ -365,8 +365,11 @@ AqlQueue::~AqlQueue() {
   // Remove kfd exception handler
   exceptionState |= ERROR_HANDLER_TERMINATE;
   while ((exceptionState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
+    const uint64_t timeout_ms = 5000;
+
     exception_signal_->StoreRelease(-1ull);
-    exception_signal_->WaitRelaxed(HSA_SIGNAL_CONDITION_NE, -1ull, -1ull, HSA_WAIT_STATE_BLOCKED);
+    exception_signal_->WaitRelaxed(HSA_SIGNAL_CONDITION_NE, -1ull, timeout_ms,
+                                   HSA_WAIT_STATE_BLOCKED);
   }
 
   Inactivate();
