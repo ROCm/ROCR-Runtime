@@ -954,7 +954,7 @@ hsa_status_t BlitKernel::Initialize(const core::Agent& agent) {
 }
 
 hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
-  std::lock_guard<std::mutex> guard(lock_);
+  ScopedAcquire<KernelMutex> lock(&lock_);
 
   const AMD::GpuAgent& gpuAgent = static_cast<const AMD::GpuAgent&>(agent);
 
@@ -977,7 +977,7 @@ hsa_status_t BlitKernel::Destroy(const core::Agent& agent) {
 hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
                                                  size_t size) {
   // Protect completion_signal_.
-  std::lock_guard<std::mutex> guard(lock_);
+  ScopedAcquire<KernelMutex> lock(&lock_);
 
   HSA::hsa_signal_store_relaxed(completion_signal_, 1);
 
@@ -1124,7 +1124,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
 
 hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
                                                  size_t count) {
-  std::lock_guard<std::mutex> guard(lock_);
+  ScopedAcquire<KernelMutex> lock(&lock_);
 
   // Reject misaligned base address.
   if ((uintptr_t(ptr) & 0x3) != 0) {
