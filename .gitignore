@@ -5,6 +5,7 @@
 #
 !.gitignore
 !.mailmap
+.github*
 patches-*
 build/
 outgoing/
