@@ -114,6 +114,11 @@ CHECK_SYMBOL_EXISTS ( "__NR_memfd_create" "sys/syscall.h" HAVE_MEMFD_CREATE )
 if ( HAVE_MEMFD_CREATE )
   target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HAVE_MEMFD_CREATE )
 endif()
+include(CheckCXXSymbolExists)
+CHECK_CXX_SYMBOL_EXISTS( "pthread_attr_setaffinity_np" "pthread.h" HAVE_PTHREAD_ATTR_SETAFFINITY_NP )
+if ( HAVE_PTHREAD_ATTR_SETAFFINITY_NP )
+  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HAVE_PTHREAD_ATTR_SETAFFINITY_NP )
+endif()
 
 ## Set include directories for ROCr runtime
 target_include_directories( ${CORE_RUNTIME_TARGET}
