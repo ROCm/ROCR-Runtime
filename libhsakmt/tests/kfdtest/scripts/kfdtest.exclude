@@ -323,7 +323,7 @@ FILTER[gfx940]=\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest"\
+"KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency"
 
 FILTER[gfx941]=\
@@ -331,7 +331,7 @@ FILTER[gfx941]=\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest"\
+"KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency"
 
 FILTER[gfx942]=\
@@ -339,5 +339,5 @@ FILTER[gfx942]=\
 "KFDMemoryTest.LargestSysBufferTest:"\
 "KFDMemoryTest.BigSysBufferStressTest:"\
 "KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest"\
+"KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency"
