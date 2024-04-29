@@ -55,9 +55,10 @@
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
  * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
  * - 1.4 - Virtual Memory API
+ * - 1.5 - hsa_amd_agent_info: HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 4
+#define HSA_AMD_INTERFACE_VERSION_MINOR 5
 
 #ifdef __cplusplus
 extern "C" {
