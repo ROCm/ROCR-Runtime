@@ -99,11 +99,15 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
     AllocateAsan = (1 << 6),        // ASAN - First page of allocation remapped to system memory
     AllocatePinned = (1 << 7),      // Currently treating Pinned memory as NoSubstitute
     AllocateMemoryOnly = (1 << 8),  // Memory only handle from thunk, no virtual address
+    // Flag to allocate system memory with GTT Access
+    // Note: The node_id needs to be the node_id of the device even though this is allocating
+    // system memory
+    AllocateGTTAccess = (1 << 9),
   };
 
   typedef uint32_t AllocateFlags;
 
-  virtual hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const = 0;
+  virtual hsa_status_t Allocate(size_t& size, AllocateFlags alloc_flags, void** address, int agent_node_id) const = 0;
 
   virtual hsa_status_t Free(void* address, size_t size) const = 0;
 

@@ -198,7 +198,7 @@ class Runtime {
   /// @retval ::HSA_STATUS_SUCCESS If allocation is successful.
   hsa_status_t AllocateMemory(const MemoryRegion* region, size_t size,
                               MemoryRegion::AllocateFlags alloc_flags,
-                              void** address);
+                              void** address, int agent_node_id = 0);
 
   /// @brief Free memory previously allocated with AllocateMemory.
   ///
@@ -419,7 +419,7 @@ class Runtime {
 
   amd::hsa::code::AmdHsaCodeManager* code_manager() { return &code_manager_; }
 
-  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags)>&
+  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags, int agent_node_id)>&
   system_allocator() {
     return system_allocator_;
   }
@@ -659,7 +659,7 @@ class Runtime {
   prefetch_map_t prefetch_map_;
 
   // Allocator using ::system_region_
-  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags)> system_allocator_;
+  std::function<void*(size_t size, size_t align, MemoryRegion::AllocateFlags flags, int agent_node_id)> system_allocator_;
 
   // Deallocator using ::system_region_
   std::function<void(void*)> system_deallocator_;

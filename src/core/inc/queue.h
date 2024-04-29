@@ -162,6 +162,7 @@ struct SharedQueue {
 class LocalQueue {
  public:
   LocalQueue(int mem_flags) : local_queue_(mem_flags) {}
+  LocalQueue(int agent_node_id, int mem_flags) : local_queue_(agent_node_id, mem_flags) {}
   SharedQueue* queue() const { return local_queue_.shared_object(); }
 
  private:
@@ -179,6 +180,11 @@ All funtions other than Convert and public_handle must be virtual.
 class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
  public:
   Queue(int mem_flags = 0) : LocalQueue(mem_flags), amd_queue_(queue()->amd_queue) {
+    queue()->core_queue = this;
+    public_handle_ = Convert(this);
+  }
+
+  Queue(int agent_node_id, int mem_flags = 0) : LocalQueue(agent_node_id, mem_flags), amd_queue_(queue()->amd_queue) {
     queue()->core_queue = this;
     public_handle_ = Convert(this);
   }
