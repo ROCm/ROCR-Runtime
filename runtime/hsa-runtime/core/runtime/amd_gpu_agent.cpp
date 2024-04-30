@@ -945,7 +945,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   }
 
   ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
-  if (gang_factor == 1) sdma_gang_lock_.Release();
   // Manage internal gang signals
   std::vector<core::Signal*> gang_signals;
   if (gang_factor > 1) {
