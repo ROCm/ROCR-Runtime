@@ -268,7 +268,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgAddressWatch(HSAuint32 NodeId,
 #define HSA_RUNTIME_ENABLE_MAX_MAJOR   1
 #define HSA_RUNTIME_ENABLE_MIN_MINOR   13
 
-HSAKMT_STATUS hsaKmtCheckRuntimeDebugSupport(void) {
+HSAKMT_STATUS HSAKMTAPI hsaKmtCheckRuntimeDebugSupport(void) {
 	HsaNodeProperties node = {0};
 	HsaSystemProperties props = {0};
 	HsaVersionInfo versionInfo = {0};
