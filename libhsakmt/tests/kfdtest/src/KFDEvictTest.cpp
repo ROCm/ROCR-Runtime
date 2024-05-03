@@ -314,13 +314,15 @@ TEST_F(KFDEvictTest, BasicTest) {
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
     HSAuint64 sysMemSize = GetSysMemSize();
 
+    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
+
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
@@ -398,8 +400,8 @@ TEST_F(KFDEvictTest, QueueTest) {
         return;
     }
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
@@ -519,8 +521,10 @@ TEST_F(KFDEvictTest, BurstyTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
+
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 

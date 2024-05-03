@@ -240,8 +240,10 @@ TEST_P(KFDSVMEvictTest, BasicTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
+
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
@@ -313,8 +315,8 @@ TEST_P(KFDSVMEvictTest, QueueTest) {
         return;
     }
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
