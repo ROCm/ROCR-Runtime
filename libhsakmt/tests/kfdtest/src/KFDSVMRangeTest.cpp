@@ -1461,13 +1461,15 @@ TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
+    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
+
+    if (pNodeProperties->Integrated) {
+        LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
-    if (m_NodeInfo.IsAppAPU(defaultGPUNode)) {
-        LOG() << "Skipping test on AppAPU." << std::endl;
+    if (!GetVramSize(defaultGPUNode)) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
