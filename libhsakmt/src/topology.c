@@ -1046,6 +1046,7 @@ static int topology_get_node_props_from_drm(HsaNodeProperties *props)
 	}
 
 	props->FamilyID = gpu_info.family_id;
+	props->Integrated = !!(gpu_info.ids_flags & AMDGPU_IDS_FLAGS_FUSION);
 
 err_query_gpu_info:
 	amdgpu_device_deinitialize(device_handle);
