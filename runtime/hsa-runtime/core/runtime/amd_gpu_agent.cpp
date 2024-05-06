@@ -1192,16 +1192,8 @@ void GpuAgent::GetInfoMemoryProperties(uint8_t value[8]) const {
   };
 
   // Fill the HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU flag
-  switch (properties_.DeviceId) {
-    case 0x15DD: /* gfx902 - Raven Ridge */
-    case 0x15D8: /* gfx909 - Raven Ridge 2 */
-    case 0x1636: /* gfx90c - Renoir */
-    case 0x74A0: /* gfx940 and gfx942-APU */
+  if (properties_.Integrated)
       setFlag(HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU);
-      break;
-    default:
-      break;
-  }
 }
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
