@@ -321,7 +321,7 @@ typedef struct _HsaNodeProperties
     HSAuint8        NumSdmaQueuesPerEngine;// number of SDMA queue per one engine
     HSAuint8        NumCpQueues; // number of Compute queues
     HSAuint8        NumGws;            // number of GWS barriers
-    HSAuint8        Reserved2;
+    HSAuint8        Integrated;        // 0 - discrete GPU, 1 - integrated GPU (including small APU and APP APU)
 
     HSAuint32       Domain;            // PCI domain of the GPU
     HSAuint64       UniqueID;          // Globally unique immutable id
