@@ -6,13 +6,13 @@ resources:
     name: ROCm/ROCm
   pipelines:
   - pipeline: llvm-project_pipeline
-    source: llvm-project
+    source: \llvm-project
     trigger:
       branches:
         include:
         - amd-staging
   - pipeline: roct-thunk-interface_pipeline
-    source: ROCT-Thunk-Interface
+    source: \ROCT-Thunk-Interface
     trigger:
       branches:
         include:
