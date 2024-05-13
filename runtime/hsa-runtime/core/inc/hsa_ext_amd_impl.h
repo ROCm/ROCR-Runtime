@@ -303,6 +303,10 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint64_t addr
                                           uint64_t flags);
 
 // Mirrors Amd Extension Apis
+hsa_status_t hsa_amd_vmem_address_reserve_align(void** ptr, size_t size, uint64_t address,
+                                          uint64_t alignment, uint64_t flags);
+
+// Mirrors Amd Extension Apis
 hsa_status_t hsa_amd_vmem_address_free(void* ptr, size_t size);
 
 // Mirrors Amd Extension Apis

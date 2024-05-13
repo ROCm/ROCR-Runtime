@@ -80,7 +80,7 @@ void HsaApiTable::Init() {
   // they can add preprocessor macros on the new functions
 
   constexpr size_t expected_core_api_table_size = 1016;
-  constexpr size_t expected_amd_ext_table_size = 568;
+  constexpr size_t expected_amd_ext_table_size = 576;
   constexpr size_t expected_image_ext_table_size = 120;
   constexpr size_t expected_finalizer_ext_table_size = 64;
   constexpr size_t expected_tools_table_size = 64;
@@ -451,6 +451,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_portable_export_dmabuf_fn = AMD::hsa_amd_portable_export_dmabuf;
   amd_ext_api.hsa_amd_portable_close_dmabuf_fn = AMD::hsa_amd_portable_close_dmabuf;
   amd_ext_api.hsa_amd_vmem_address_reserve_fn = AMD::hsa_amd_vmem_address_reserve;
+  amd_ext_api.hsa_amd_vmem_address_reserve_align_fn = AMD::hsa_amd_vmem_address_reserve_align;
   amd_ext_api.hsa_amd_vmem_address_free_fn = AMD::hsa_amd_vmem_address_free;
   amd_ext_api.hsa_amd_vmem_handle_create_fn = AMD::hsa_amd_vmem_handle_create;
   amd_ext_api.hsa_amd_vmem_handle_release_fn = AMD::hsa_amd_vmem_handle_release;
