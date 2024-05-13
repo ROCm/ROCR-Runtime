@@ -176,8 +176,8 @@ set(CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Run
 ## Process the Debian install/remove scripts to update the CPACK variables
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Binary/postinst @ONLY)
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY)
-set(CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm")
-
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/preinst DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/DEBIAN)
+set (CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/preinst;DEBIAN/Binary/postinst;DEBIAN/Binary/prerm")
 # Needed since some packages still say they need hsakmt-roct
 set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct,hsa-ext-rocr-dev,hsa-runtime64")
 set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct,hsa-runtime64")
@@ -235,6 +235,9 @@ set(CPACK_RPM_PACKAGE_LICENSE "NCSA")
 ## Process the Rpm install/remove scripts to update the CPACK variables
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY)
 configure_file("${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/postun @ONLY)
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/RPM/preinst DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/RPM)
+set (CPACK_RPM_PRE_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/preinst")
+
 set(CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post")
 set(CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun")
 
