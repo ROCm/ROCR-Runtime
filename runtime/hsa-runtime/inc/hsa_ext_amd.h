@@ -56,9 +56,10 @@
  * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
  * - 1.4 - Virtual Memory API
  * - 1.5 - hsa_amd_agent_info: HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES
+ * - 1.6 - Virtual Memory API: hsa_amd_vmem_address_reserve_align
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 5
+#define HSA_AMD_INTERFACE_VERSION_MINOR 6
 
 #ifdef __cplusplus
 extern "C" {
@@ -2814,9 +2815,37 @@ hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
  *
  * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
  * range of this size.
+ *
+ * Note that this API will be deprecated in a future release and replaced by
+ * hsa_amd_vmem_address_reserve_align
  */
 hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
                                           uint64_t flags);
+
+/**
+ * @brief Allocate a reserved address range
+ *
+ * Reserve a virtual address range. The size must be a multiple of the system page size.
+ * If it is not possible to allocate the address specified by @p address, then @p va will be
+ * a different address range.
+ * Address range should be released by calling hsa_amd_vmem_address_free.
+ *
+ * @param[out] va virtual address allocated
+ * @param[in] size of address range requested
+ * @param[in] address requested
+ * @param[in] alignment requested. 0 for default. Must be >= page-size and a power of 2
+ * @param[in] flags currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
+ * range of this size.
+ */
+hsa_status_t hsa_amd_vmem_address_reserve_align(void** va, size_t size, uint64_t address,
+                                          uint64_t alignment, uint64_t flags);
 
 /**
  * @brief Free a reserved address range

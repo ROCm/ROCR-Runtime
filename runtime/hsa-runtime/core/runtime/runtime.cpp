@@ -2962,18 +2962,23 @@ hsa_status_t Runtime::DmaBufClose(int dmabuf) {
 }
 
 hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t address,
-                                            uint64_t flags) {
+                                            uint64_t alignment, uint64_t flags) {
   void* addr = (void*)address;
   HsaMemFlags memFlags = {};
+
+  if (!alignment)
+    alignment = sysconf(_SC_PAGE_SIZE);
+
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
   memFlags.ui32.OnlyAddress = 1;
   memFlags.ui32.FixedAddress = 1;
+
   /* Try to reserving the VA requested by user */
-  if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
+  if (hsaKmtAllocMemoryAlign(0, size, alignment, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
     memFlags.ui32.FixedAddress = 0;
     /* Could not reserved VA requested, allocate alternate VA */
-    if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS)
+    if (hsaKmtAllocMemoryAlign(0, size, alignment, memFlags, &addr) != HSAKMT_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 

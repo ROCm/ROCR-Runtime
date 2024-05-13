@@ -1231,9 +1231,20 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t addre
   IS_OPEN();
   IS_ZERO(size);
   IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
-  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, flags);
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, 0, flags);
   CATCH;
 }
+
+hsa_status_t hsa_amd_vmem_address_reserve_align(void** va, size_t size, uint64_t address,
+                                          uint64_t alignment, uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, alignment, flags);
+  CATCH;
+}
+
 
 hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size) {
   TRY;
