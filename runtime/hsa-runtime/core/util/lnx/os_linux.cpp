@@ -89,9 +89,11 @@ class os_thread {
       : thread(0), lock(nullptr), state(RUNNING) {
     int err;
     std::unique_ptr<ThreadArgs> args(new ThreadArgs);
-    MAKE_SCOPE_GUARD([&]() { args.release(); });
     lock = CreateMutex();
     if (lock == nullptr) return;
+
+    args->entry_args = threadArgument;
+    args->entry_function = function;
 
     pthread_attr_t attrib;
     err = pthread_attr_init(&attrib);
@@ -99,59 +101,44 @@ class os_thread {
       fprintf(stderr, "pthread_attr_init failed: %s\n", strerror(err));
       return;
     }
-    MAKE_SCOPE_GUARD([&]() {
-      err = pthread_attr_destroy(&attrib);
-      if (err)
-        fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
-    });
 
-    auto thread_create_stacksize = [&](pthread_attr_t& attrib) {
-      if (stackSize != 0) {
-        stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
-        stackSize = AlignUp(stackSize, 4096);
+    if (stackSize != 0) {
+      stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
+      stackSize = AlignUp(stackSize, 4096);
+      err = pthread_attr_setstacksize(&attrib, stackSize);
+      if (err != 0) {
+        fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+        err = pthread_attr_destroy(&attrib);
+        if (err != 0) {
+          fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+        }
+        return;
+      }
+    }
+
+    int create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+
+    // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
+    // Attempt to grow the stack within reason.
+    if ((create_err == EINVAL) && stackSize != 0) {
+      while (stackSize < 20 * 1024 * 1024) {
+        stackSize *= 2;
         err = pthread_attr_setstacksize(&attrib, stackSize);
         if (err != 0) {
           fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
-          if (pthread_attr_destroy(&attrib) != 0)
-            fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
-
-          return err;
-        }
-      }
-
-      int err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
-
-      // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
-      // Attempt to grow the stack within reason.
-      if ((err == EINVAL) && stackSize != 0) {
-        while (stackSize < 20 * 1024 * 1024) {
-          stackSize *= 2;
-          err = pthread_attr_setstacksize(&attrib, stackSize);
+          err = pthread_attr_destroy(&attrib);
           if (err != 0) {
-            fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
-            if (pthread_attr_destroy(&attrib))
-              fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
-
-            return err;
+            fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
           }
 
-          err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
-          if (err != EINVAL) return 0;
-          debug_print("pthread_create returned EINVAL, doubling stack size\n");
+          return;
         }
+
+        create_err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+        if (create_err != EINVAL) break;
+        debug_print("pthread_create returned EINVAL, doubling stack size\n");
       }
-      return 0;
-    };
-
-    args->entry_args = threadArgument;
-    args->entry_function = function;
-
-#ifndef HAVE_PTHREAD_ATTR_SETAFFINITY_NP
-    if (thread_create_stacksize(attrib)) {
-      thread = 0;
-      return;
     }
-#endif
 
     int cores = 0;
     cpu_set_t* cpuset = nullptr;
@@ -167,23 +154,22 @@ class os_thread {
       for (int i = 0; i < cores; i++) {
         CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
       }
-#ifdef HAVE_PTHREAD_ATTR_SETAFFINITY_NP
-      err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
-#else
       err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
-#endif
       CPU_FREE(cpuset);
       if (err != 0) {
         fprintf(stderr, "pthread_setaffinity_np failed: %s\n", strerror(err));
         return;
       }
     }
-
-#ifdef HAVE_PTHREAD_ATTR_SETAFFINITY_NP
-    if (thread_create_stacksize(attrib))
+    if (create_err == 0)
+      args.release();
+    else
       thread = 0;
-#endif
-    return;
+
+    err = pthread_attr_destroy(&attrib);
+    if (err != 0) {
+      fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+    }
   }
 
   os_thread(os_thread&& rhs) {
