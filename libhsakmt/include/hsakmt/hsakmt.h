@@ -407,6 +407,21 @@ hsaKmtAllocMemory(
     );
 
 /**
+  Allocates a memory buffer with specific alignment that may be accessed by the GPU
+  If Alignment is 0, the smallest possible alignment will be used
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtAllocMemoryAlign(
+    HSAuint32       PreferredNode,          //IN
+    HSAuint64       SizeInBytes,            //IN  (multiple of page size)
+    HSAuint64       Alignment,              //IN  (power of 2 and >= page size)
+    HsaMemFlags     MemFlags,               //IN
+    void**          MemoryAddress           //IN/OUT (page-aligned)
+    );
+
+/**
   Frees a memory buffer
 */
 

@@ -109,6 +109,17 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 					  HsaMemFlags MemFlags,
 					  void **MemoryAddress)
 {
+	return hsaKmtAllocMemoryAlign(PreferredNode, SizeInBytes, 0, MemFlags, MemoryAddress);
+}
+
+#define POWER_OF_2(x) ((x && (!(x & (x - 1)))) ? 1 : 0)
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
+					  HSAuint64 SizeInBytes,
+					  HSAuint64 Alignment,
+					  HsaMemFlags MemFlags,
+					  void **MemoryAddress)
+{
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	HSAuint64 page_size;
@@ -128,6 +139,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 
 	page_size = PageSizeFromFlags(MemFlags.ui32.PageSize);
 
+	if (Alignment && (Alignment < page_size || !POWER_OF_2(Alignment)))
+		return HSAKMT_STATUS_INVALID_PARAMETER;
+
 	if (!MemoryAddress || !SizeInBytes || (SizeInBytes & (page_size-1)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
@@ -143,6 +157,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (MemFlags.ui32.Scratch) {
+		if (Alignment) {
+			// Scratch memory currently forced to SCRATCH_ALIGN
+			pr_err("[%s] Alignment not supported for scratch memory: %d\n", __func__, PreferredNode);
+			return HSAKMT_STATUS_NOT_IMPLEMENTED;
+		}
+
 		*MemoryAddress = fmm_allocate_scratch(gpu_id, *MemoryAddress, SizeInBytes);
 
 		if (!(*MemoryAddress)) {
@@ -165,7 +185,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 			MemFlags.ui32.CoarseGrain = 1;
 
 		*MemoryAddress = fmm_allocate_host(gpu_id, MemFlags.ui32.GTTAccess ? 0 : PreferredNode,
-											*MemoryAddress, SizeInBytes, MemFlags);
+						   *MemoryAddress, SizeInBytes, Alignment, MemFlags);
 
 		if (!(*MemoryAddress)) {
 			pr_err("[%s] failed to allocate %lu bytes from host\n",
@@ -185,7 +205,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemory(HSAuint32 PreferredNode,
 	}
 
 	*MemoryAddress = fmm_allocate_device(gpu_id, PreferredNode, *MemoryAddress,
-					     SizeInBytes, MemFlags);
+					     SizeInBytes, Alignment, MemFlags);
 
 	if (!(*MemoryAddress)) {
 		pr_err("[%s] failed to allocate %lu bytes from device\n",

@@ -337,7 +337,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 	size = ALIGN_UP(size, align);
 
 	if (DeviceLocal && !zfb_support)
-		mem = fmm_allocate_device(gpu_id, NodeId, mem, size, flags);
+		mem = fmm_allocate_device(gpu_id, NodeId, mem, size, 0, flags);
 	else {
 		/* VRAM under ZFB mode should be supported here without any
 		 * additional code
@@ -352,7 +352,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 				cpu_id = 0;
 			}
 		}
-		mem = fmm_allocate_host(gpu_id, cpu_id, mem, size, flags);
+		mem = fmm_allocate_host(gpu_id, cpu_id, mem, size, 0, flags);
 	}
 
 	if (!mem) {

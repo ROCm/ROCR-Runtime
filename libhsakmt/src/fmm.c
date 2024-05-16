@@ -856,7 +856,7 @@ static void *aperture_allocate_area_aligned(manageable_aperture_t *app,
 					    uint64_t MemorySizeInBytes,
 					    uint64_t align)
 {
-	return app->ops->allocate_area_aligned(app, address, MemorySizeInBytes, align);
+	return app->ops->allocate_area_aligned(app, address, MemorySizeInBytes, align ? align : app->align);
 }
 static void *aperture_allocate_area(manageable_aperture_t *app, void *address,
 				    uint64_t MemorySizeInBytes)
@@ -1448,7 +1448,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 
 static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes,
 		manageable_aperture_t *aperture, uint64_t *mmap_offset,
-		uint32_t ioc_flags, vm_object_t **vm_obj)
+		uint32_t ioc_flags, uint64_t alignment, vm_object_t **vm_obj)
 {
 	void *mem = NULL;
 	vm_object_t *obj;
@@ -1459,7 +1459,7 @@ static void *__fmm_allocate_device(uint32_t gpu_id, void *address, uint64_t Memo
 
 	/* Allocate address space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture, address, MemorySizeInBytes);
+	mem = aperture_allocate_area_aligned(aperture, address, MemorySizeInBytes, alignment);
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
 	/*
@@ -1504,7 +1504,7 @@ static void *fmm_map_to_cpu(void *mem, uint64_t size, bool host_access,
 }
 
 static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
-			manageable_aperture_t *aperture, HsaMemFlags mflags)
+			manageable_aperture_t *aperture, uint64_t alignment, HsaMemFlags mflags)
 {
 	void *mem = NULL;
 	vm_object_t *vm_obj = NULL;
@@ -1515,7 +1515,7 @@ static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
 
 	/* Allocate address space */
 	pthread_mutex_lock(&aperture->fmm_mutex);
-	mem = aperture_allocate_area(aperture, address, size);
+	mem = aperture_allocate_area_aligned(aperture, address, size, alignment);
 	/* assing handle 0 to vm_obj since no mem allocted */
 	vm_obj = aperture_allocate_object(aperture, mem, 0,
 					size, mflags);
@@ -1533,7 +1533,7 @@ static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
 }
 
 void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
-			  uint64_t MemorySizeInBytes, HsaMemFlags mflags)
+			  uint64_t MemorySizeInBytes, uint64_t alignment, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
 	int32_t gpu_mem_id;
@@ -1564,7 +1564,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 
 	/* special case for va allocation without vram alloc */
 	if (mflags.ui32.OnlyAddress)
-		return fmm_allocate_va(gpu_id, address, size, aperture, mflags);
+		return fmm_allocate_va(gpu_id, address, size, aperture, alignment, mflags);
 
 	/* special case for vram allocation without addr */
 	if(mflags.ui32.NoAddress)
@@ -1583,7 +1583,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_CONTIGUOUS_BEST_EFFORT;
 
 	mem = __fmm_allocate_device(gpu_id, address, size, aperture, &mmap_offset,
-				    ioc_flags, &vm_obj);
+				    ioc_flags, alignment, &vm_obj);
 
 	if (mem && vm_obj) {
 		pthread_mutex_lock(&aperture->fmm_mutex);
@@ -1637,7 +1637,7 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 		    KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 
 	mem = __fmm_allocate_device(gpu_id, NULL, MemorySizeInBytes, aperture, NULL,
-				    ioc_flags, &vm_obj);
+				    ioc_flags, 0, &vm_obj);
 
 	if (mem && vm_obj) {
 		HsaMemFlags mflags;
@@ -1768,7 +1768,7 @@ static int bind_mem_to_numa(uint32_t node_id, void *mem,
 }
 
 static void *fmm_allocate_host_gpu(uint32_t gpu_id, uint32_t node_id, void *address,
-				   uint64_t MemorySizeInBytes, HsaMemFlags mflags)
+				   uint64_t MemorySizeInBytes, uint64_t alignment, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *vm_obj = NULL;
@@ -1822,7 +1822,7 @@ static void *fmm_allocate_host_gpu(uint32_t gpu_id, uint32_t node_id, void *addr
 	if (!mflags.ui32.NonPaged && svm.userptr_for_paged_mem) {
 		/* Allocate address space */
 		pthread_mutex_lock(&aperture->fmm_mutex);
-		mem = aperture_allocate_area(aperture, address, size);
+		mem = aperture_allocate_area_aligned(aperture, address, size, alignment);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		if (!mem)
 			return NULL;
@@ -1854,7 +1854,7 @@ static void *fmm_allocate_host_gpu(uint32_t gpu_id, uint32_t node_id, void *addr
 	} else {
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_GTT;
 		mem =  __fmm_allocate_device(preferred_gpu_id, address, size, aperture,
-					     &mmap_offset, ioc_flags, &vm_obj);
+					     &mmap_offset, ioc_flags, alignment, &vm_obj);
 
 		if (mem && mflags.ui32.HostAccess) {
 			void *ret = fmm_map_to_cpu(mem, MemorySizeInBytes,
@@ -1896,10 +1896,16 @@ out_release_area:
 }
 
 void *fmm_allocate_host(uint32_t gpu_id, uint32_t node_id, void *address,
-			uint64_t MemorySizeInBytes, HsaMemFlags mflags)
+			uint64_t MemorySizeInBytes, uint64_t alignment, HsaMemFlags mflags)
 {
 	if (is_dgpu)
-		return fmm_allocate_host_gpu(gpu_id, node_id, address, MemorySizeInBytes, mflags);
+		return fmm_allocate_host_gpu(gpu_id, node_id, address, MemorySizeInBytes, alignment, mflags);
+
+	if (alignment) {//Alignment not supported on non-dgpu
+		pr_err("Non-default alignment not supported on non-dgpu\n");
+		return NULL;
+	}
+
 	return fmm_allocate_host_cpu(address, MemorySizeInBytes, mflags);
 }
 
@@ -2365,7 +2371,7 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 		KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE |
 		KFD_IOC_ALLOC_MEM_FLAGS_COHERENT;
 	mem = __fmm_allocate_device(gpu_id, NULL, PAGE_SIZE, aperture,
-			&mmap_offset, ioc_flags, &vm_obj);
+			&mmap_offset, ioc_flags, 0, &vm_obj);
 
 	if (!mem || !vm_obj)
 		return NULL;
@@ -3455,6 +3461,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr,
 			 KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE |
 			 (coarse_grain ? 0 : KFD_IOC_ALLOC_MEM_FLAGS_COHERENT) |
 			 (ext_coherent ? KFD_IOC_ALLOC_MEM_FLAGS_EXT_COHERENT : 0),
+			 0,
 			 &obj);
 	if (!svm_addr)
 		return HSAKMT_STATUS_ERROR;
