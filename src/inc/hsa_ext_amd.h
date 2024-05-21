@@ -1176,7 +1176,11 @@ typedef enum hsa_amd_memory_pool_flag_s {
    * connection. Atomic memory operations on these memory buffers are not
    * guaranteed to be visible at system scope.
    */
-  HSA_AMD_MEMORY_POOL_PCIE_FLAG = 1,
+  HSA_AMD_MEMORY_POOL_PCIE_FLAG = (1 << 0),
+  /**
+   *  Allocates physically contiguous memory
+   */
+  HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG = (1 << 1),
 
 } hsa_amd_memory_pool_flag_t;
 

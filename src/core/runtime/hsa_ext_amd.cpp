@@ -761,7 +761,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   TRY;
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL || (flags > HSA_AMD_MEMORY_POOL_PCIE_FLAG)) {
+  if (size == 0 || ptr == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -774,7 +774,12 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
 
   MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateRestrict;
 
-  if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+  if (flags & HSA_AMD_MEMORY_POOL_PCIE_FLAG)
+    alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+
+  if (flags & HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG)
+    alloc_flag |= core::MemoryRegion::AllocateContiguous;
+
 
 #ifdef SANITIZER_AMDGPU
   alloc_flag |= core::MemoryRegion::AllocateAsan;
