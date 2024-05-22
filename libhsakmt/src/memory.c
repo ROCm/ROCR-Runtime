@@ -501,6 +501,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret;
 
+	CHECK_KFD_OPEN();
+
 	pr_debug("[%s] address %p number of nodes %lu\n",
 		__func__, MemoryAddress, NumberOfNodes);
 
@@ -565,6 +567,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapGraphicHandle(HSAuint32 NodeId,
 						 HSAuint64 FlatMemoryAddress,
 						 HSAuint64 SizeInBytes)
 {
+	CHECK_KFD_OPEN();
+
 	return hsaKmtUnmapMemoryToGPU(PORT_UINT64_TO_VPTR(FlatMemoryAddress));
 }
 
@@ -573,6 +577,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *
 	struct kfd_ioctl_get_tile_config_args args = {0};
 	uint32_t gpu_id;
 	HSAKMT_STATUS result;
+
+	CHECK_KFD_OPEN();
 
 	pr_debug("[%s] node %d\n", __func__, NodeId);
 
@@ -609,6 +615,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *
 HSAKMT_STATUS HSAKMTAPI hsaKmtQueryPointerInfo(const void *Pointer,
 					       HsaPointerInfo *PointerInfo)
 {
+	CHECK_KFD_OPEN();
+
 	pr_debug("[%s] pointer %p\n", __func__, Pointer);
 
 	if (!PointerInfo)
@@ -619,6 +627,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtQueryPointerInfo(const void *Pointer,
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryUserData(const void *Pointer,
 						void *UserData)
 {
+	CHECK_KFD_OPEN();
+
 	pr_debug("[%s] pointer %p\n", __func__, Pointer);
 
 	return fmm_set_mem_user_data(Pointer, UserData);
