@@ -63,6 +63,7 @@
 .set SQ_WAVE_PC_HI_TRAP_ID_SIZE                , 4
 .set SQ_WAVE_STATE_PRIV_HALT_BFE               , (SQ_WAVE_STATE_PRIV_HALT_SHIFT | (1 << 16))
 .set SQ_WAVE_STATE_PRIV_HALT_SHIFT             , 14
+.set SQ_WAVE_STATE_PRIV_BARRIER_COMPLETE_SHIFT , 2
 .set TRAP_ID_ABORT                             , 2
 .set TRAP_ID_DEBUGTRAP                         , 3
 .set TTMP6_SAVED_STATUS_HALT_MASK              , (1 << TTMP6_SAVED_STATUS_HALT_SHIFT)
@@ -208,7 +209,9 @@ trap_entry:
   // Restore SQ_WAVE_STATUS.
   s_and_b64            exec, exec, exec // Restore STATUS.EXECZ, not writable by s_setreg_b32
   s_and_b64            vcc, vcc, vcc    // Restore STATUS.VCCZ, not writable by s_setreg_b32
-  s_setreg_b32         hwreg(HW_REG_STATE_PRIV), ttmp12
+  s_setreg_b32         hwreg(HW_REG_STATE_PRIV, 0, SQ_WAVE_STATE_PRIV_BARRIER_COMPLETE_SHIFT), ttmp12
+  s_lshr_b32           ttmp12, ttmp12, (SQ_WAVE_STATE_PRIV_BARRIER_COMPLETE_SHIFT + 1)
+  s_setreg_b32         hwreg(HW_REG_STATE_PRIV, SQ_WAVE_STATE_PRIV_BARRIER_COMPLETE_SHIFT + 1, 32 - SQ_WAVE_STATE_PRIV_BARRIER_COMPLETE_SHIFT - 1), ttmp12
 
   // Return to original (possibly modified) PC.
   s_rfe_b64            [ttmp0, ttmp1]
