@@ -1058,7 +1058,6 @@ ChipFamily Gfx10Lib::HwlConvertChipFamily(
                 ADDR_ASSERT(!"Unknown chip revision");
             }
             break;
-
         case FAMILY_RMB:
             if (ASICREV_IS_REMBRANDT(chipRevision))
             {
@@ -2652,7 +2651,7 @@ BOOL_32 Gfx10Lib::ValidateSwModeParams(
     {
         if (((swizzleMask & Gfx10Rsrc3dSwModeMask) == 0) ||
             (prt && ((swizzleMask & Gfx10Rsrc3dPrtSwModeMask) == 0)) ||
-            (thin3d && ((swizzleMask & Gfx10Rsrc3dThinSwModeMask) == 0)))
+            (thin3d && ((swizzleMask & Gfx10Rsrc3dViewAs2dSwModeMask) == 0)))
         {
             ADDR_ASSERT_ALWAYS();
             valid = FALSE;
@@ -2969,7 +2968,8 @@ ADDR_E_RETURNCODE Gfx10Lib::HwlGetPreferredSurfaceSetting(
 
                     if (pIn->flags.view3dAs2dArray)
                     {
-                        allowedSwModeSet.value &= Gfx10Rsrc3dThinSwModeMask;
+                        // SW_LINEAR can be used for 3D thin images, including BCn image format.
+                        allowedSwModeSet.value &= Gfx10Rsrc3dViewAs2dSwModeMask;
                     }
                     break;
 
