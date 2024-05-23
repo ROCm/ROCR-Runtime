@@ -814,6 +814,13 @@ TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
 
     BufferSize = MIN(BufferSize, vramSize * 3 / 4);
 
+    /* Check if the system memory size is sufficient
+     * to register the system buffer and system buffer 2
+     */
+    if(BufferSize * 2 > GetSysMemSize() / 2) {
+        LOG() << "Skipping test: Not enough system memory." << std::endl;
+        return;
+    }
     HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
     SysBuffer.Fill(0x1);
 
