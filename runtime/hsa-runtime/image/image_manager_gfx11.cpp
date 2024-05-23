@@ -703,11 +703,6 @@ uint32_t ImageManagerGfx11::GetAddrlibSurfaceInfoNv(
       prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
       prefSettingsInput.forbiddenBlock.micro = 1;
       prefSettingsInput.forbiddenBlock.var = 1;
-  } else {
-      // Debug setting, simplifies buffer alignment until language runtimes have official gfx10
-      // support.
-      prefSettingsInput.forbiddenBlock.macroThin64KB = 1;
-      prefSettingsInput.forbiddenBlock.macroThick64KB = 1;
   }
 
   // but don't ever allow the 256b swizzle modes
