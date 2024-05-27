@@ -712,9 +712,8 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
       break;
     case 9:
       sdma = new BlitSdmaV4();
-      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ||
-                            isa_->GetMinorVersion() > 0 ? copy_size_overrides[1] :
-                                                          copy_size_overrides[0];
+      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ?
+                            copy_size_overrides[1] : copy_size_overrides[0];
       break;
     case 10:
       sdma = new BlitSdmaV5();
