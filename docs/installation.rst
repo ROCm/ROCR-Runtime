@@ -20,7 +20,7 @@ Prerequisites
 
 - A system supporting ROCm. See the `supported operating systems <https://rocm.docs.amd.com/projects/install-on-linux/en/latest/reference/system-requirements.html#supported-operating-systems>`_.
 
-- Install ROCm. See `how to install ROCm <>`_.
+- Install ROCm. See `how to install ROCm <https://rocm.docs.amd.com/projects/install-on-linux/en/latest/>`_.
 
 - Install ``libdrm`` package.
 
