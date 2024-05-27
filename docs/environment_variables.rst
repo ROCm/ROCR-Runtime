@@ -10,8 +10,7 @@ Environment variables
 The following table lists the useful environment variables.
 
 .. list-table:: ROCR environment variables
-    :header-rows: 1
-
+    
     *   - Environment Variable
         - Possible values
         - description

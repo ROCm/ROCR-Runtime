@@ -16,7 +16,7 @@ Runtime design
 
 ROCR consists of the following primary layers:
 
-1. `C interface adaptors <c-interface-adaptors>`
+1. :ref:`C interface adaptors <c-interface-adaptors>`
 
 2. C++ interface classes and common functions
 
