@@ -17,7 +17,7 @@ The following table lists the useful environment variables.
       - description
 
     * - HSA_ENABLE_SDMA
-      - :list:
+      - 
         * 0: Disabled
         * 1: Enabled (default)
       - This enables or disables the use of DMA engines in all copy directions (Host-to-Device, Device-to-Host, Device-to-Device) when using the
@@ -25,8 +25,8 @@ The following table lists the useful environment variables.
 
     * - HSA_ENABLE_PEER_SDMA
       - :list:
-            * 0: Disabled
-            * 1: Enabled (default)
+        * 0: Disabled
+        * 1: Enabled (default)
       - This enables or disables the use of DMA engines for Device-to-Device copies when using the `hsa_memory_copy`, `hsa_amd_memory_async_copy`, `hsa_amd_memory_async_copy_on_engine` APIs
 
 .. note::
