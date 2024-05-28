@@ -245,9 +245,9 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
     *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
   }
 
-  if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
-
   if (*address != nullptr) {
+    if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
+
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so
