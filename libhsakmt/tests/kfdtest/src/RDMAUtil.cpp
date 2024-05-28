@@ -60,7 +60,7 @@ void *LocalMemoryAccess::MMap(uint64_t offset, size_t size) {
     if (fd <= 0)
         return NULL;
 
-    gpuAddr = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, offset);
+    gpuAddr = mmap(NULL, size, PROT_READ, MAP_SHARED, fd, offset);
     return gpuAddr;
 }
 
