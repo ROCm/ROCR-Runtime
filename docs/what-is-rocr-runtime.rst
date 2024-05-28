@@ -2,7 +2,7 @@
    :description: HSA runtime implementation
    :keywords: ROCR, ROCm, library, tool, runtime
 
-.. _what-is-rocr:
+.. _what-is-rocr-runtime:
 
 What is ROCR?
 ========================
