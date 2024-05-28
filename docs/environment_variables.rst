@@ -12,7 +12,7 @@ The following table lists the most often used environment variables.
 .. list-table:: ROCR environment variables
     :header-rows: 1
     
-    * - Environment Variable
+    * - Environment variable
       - Possible values
       - Description
 
