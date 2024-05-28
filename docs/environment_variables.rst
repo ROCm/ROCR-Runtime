@@ -7,7 +7,7 @@
 Environment variables
 ========================
 
-The following table lists the useful environment variables.
+The following table lists the most often used environment variables.
 
 .. list-table:: ROCR environment variables
     :header-rows: 1
@@ -20,14 +20,14 @@ The following table lists the useful environment variables.
       - 
         * 0: Disabled
         * 1: Enabled (default)
-      - This enables or disables the use of DMA engines in all copy directions (Host-to-Device, Device-to-Host, Device-to-Device) when using the
+      - This controls the use of DMA engines in all copy directions (Host-to-Device, Device-to-Host, Device-to-Device) when using the
         ``hsa_memory_copy``, ``hsa_amd_memory_fill``, ``hsa_amd_memory_async_copy``, ``hsa_amd_memory_async_copy_on_engine`` APIs
 
     * - HSA_ENABLE_PEER_SDMA
       -
         * 0: Disabled
         * 1: Enabled (default)
-      - This enables or disables the use of DMA engines for Device-to-Device copies when using the ``hsa_memory_copy``, ``hsa_amd_memory_async_copy``, ``hsa_amd_memory_async_copy_on_engine`` APIs
+      - This controls the use of DMA engines for Device-to-Device copies when using the ``hsa_memory_copy``, ``hsa_amd_memory_async_copy``, ``hsa_amd_memory_async_copy_on_engine`` APIs
 
 .. note::
     
