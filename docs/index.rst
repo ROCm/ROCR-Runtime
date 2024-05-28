@@ -25,7 +25,7 @@ The documentation is structured as follows:
 
     * :ref:`c-interface-adaptors`
     * :ref:`environment-variables`
-    * :ref:`api`
+    * :ref:`rocr-api`
 
   .. grid-item-card:: Contribution
 
