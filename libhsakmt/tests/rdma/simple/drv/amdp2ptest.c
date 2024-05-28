@@ -303,38 +303,27 @@ static int amdp2ptest_mmap(struct file *filp, struct vm_area_struct *vma)
 	struct scatterlist *sg;
 	struct va_pages_node	      *va_pages = NULL;
 	struct amdp2ptest_pages_list *list = filp->private_data;
-	size_t size = vma->vm_end - vma->vm_start;
 	struct list_head *p, *n;
 	uint64_t gpu_va = vma->vm_pgoff << PAGE_SHIFT;
 
 	MSG_INFO("Mapping to CPU user space\n");
-	MSG_INFO("Begin vm_end 0x%lx, vm_start 0x%lx\n", vma->vm_end,
-		    vma->vm_start);
-	MSG_INFO("vm_pgoff / pfn 0x%lx\n", vma->vm_pgoff);
-	MSG_INFO("gpu_va / phys. address 0x%llx\n", gpu_va);
+	MSG_INFO("Begin vm_start 0x%lx, vm_end 0x%lx\n", vma->vm_start, vma->vm_end);
+	MSG_INFO("vm_pgoff 0x%lx\n", vma->vm_pgoff);
+	MSG_INFO("gpu_va address 0x%llx\n", gpu_va);
 
-	if (size != PAGE_SIZE) {
-		MSG_ERR("Mapping works now only per page size=%ld", PAGE_SIZE);
-		return -EINVAL;
-	}
-
-	/* This is the first very simple version of getting CPU pointer for
-	* the single page.
-	* The logic is the following:
-	*	- We get GPU VA address and enumerate list to find "get_pages"
-	*	  node  for such range
-	*	- Then we enumerate sg table to find the correct dma_address
-	*
-	* NOTE/TODO: Assumption is that the page size is 4KB to allow testing
-	* of the basic logic. Eventually more complex logic must be added.
-	*/
 	list_for_each_safe(p, n, &list->head) {
+		unsigned long addr = vma->vm_start;
+		long mmap_size = vma->vm_end - vma->vm_start;
+		long size;
+		int ret;
+
 		va_pages = list_entry(p, struct va_pages_node, node);
 
-		if (va_pages->pages->va >= gpu_va  &&
-		    (va_pages->pages->va + va_pages->pages->size)
-								< vma->vm_end) {
+		MSG_INFO("node va 0x%llx size 0x%llx\n", va_pages->pages->va,
+			va_pages->pages->size);
 
+		if (gpu_va >= va_pages->pages->va  &&
+		    gpu_va + size <= va_pages->pages->va + va_pages->pages->size) {
 			MSG_INFO("Found node: va=0x%llx,size=0x%llx,nents %d\n",
 					va_pages->pages->va,
 					va_pages->pages->size,
@@ -342,23 +331,29 @@ static int amdp2ptest_mmap(struct file *filp, struct vm_area_struct *vma)
 
 			for_each_sg(va_pages->pages->pages->sgl, sg,
 					va_pages->pages->pages->nents, i) {
-				if (va_pages->pages->va + (i * sg->length) ==
-						gpu_va) {
 
-					MSG_INFO("Found page[%d]: dma 0x%llx\n",
-							i, sg->dma_address);
+				MSG_INFO("Found page[%d]: dma 0x%llx size 0x%x\n",
+					i, sg->dma_address, sg->length);
 
-					if (remap_pfn_range(vma,
-							vma->vm_start,
-							sg->dma_address,
-							size,
-							vma->vm_page_prot)) {
-						MSG_ERR("Failed remap_pfn()\n");
-						return -EINVAL;
-					}
-					return 0;
+				size = min_t(unsigned long, sg->length, mmap_size);
+				MSG_INFO("remap_pfn range addr 0x%lx to dma_addr 0x%llx size 0x%lx\n",
+					addr, sg->dma_address, size);
+				ret = remap_pfn_range(vma,
+						addr,
+						sg->dma_address >> PAGE_SHIFT,
+						size,
+						vma->vm_page_prot);
+				if (ret) {
+					MSG_ERR("Failed remap_pfn() size 0x%lx ret %d\n",
+						size, ret);
+					return ret;
 				}
+				addr += size;
+				mmap_size -= size;
+				if (mmap_size <= 0)
+					break;
 			}
+			return 0;
 		}
 	}
 
