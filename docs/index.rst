@@ -31,7 +31,6 @@ The documentation is structured as follows:
 
     * :ref:`contributing-to-rocr`
 
-To contribute to ROCR, refer to :ref:`contributing-to-rocr`.     
 To contribute to the documentation, refer to
 `Contributing to ROCm  <https://rocm.docs.amd.com/en/latest/contribute/contributing.html>`_.
 
