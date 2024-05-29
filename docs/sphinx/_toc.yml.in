@@ -4,18 +4,18 @@ root: index
 subtrees:
   - caption: Install
     entries:
-    - file: installation
+    - file: install/installation
 
   - caption: API reference
     entries:
-    - file: c-interface-adaptors
-    - file: environment_variables
-    - file: api
+    - file: api-reference/c-interface-adaptors
+    - file: api-reference/environment_variables
+    - file: api-reference/api
     
   - caption: Contribution
     entries:
-    - file: contributing-to-rocr
+    - file: contribution/contributing-to-rocr
 
   - caption: About
     entries:
-    - file: license
+    - file: about/license
