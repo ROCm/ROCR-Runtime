@@ -67,7 +67,7 @@ The latest source for these projects are available in the `llvm project <https:/
 
 The runtime optionally supports use of the CMake user package registry. By default the registry is not modified. Set CMake variable ``EXPORT_TO_USER_PACKAGE_REGISTRY`` to ON to enable updating the package registry.
 
-To build, install, and produce packages on a system with standard ROCm packages installed, run the following from ``src/``:
+To build, install, and produce packages on a system with standard ROCm packages installed, clone your copy of ROCR and run the following from ``src/``:
 
 .. code-block:: shell
 
