@@ -127,7 +127,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 	CHECK_KFD_OPEN();
 
 	if (MemFlags.ui32.Contiguous)
-		CHECK_KFD_MINOR_VERSION(17);
+		CHECK_KFD_MINOR_VERSION(16);
 
 	pr_debug("[%s] node %d\n", __func__, PreferredNode);
 
