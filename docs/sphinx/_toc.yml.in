@@ -18,4 +18,4 @@ subtrees:
 
   - caption: About
     entries:
-    - file: about/license
+    - file: license
