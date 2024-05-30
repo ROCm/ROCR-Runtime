@@ -299,19 +299,38 @@ const char *CopyOnSignalIsa =
         .else
             s_mov_b32 s18, 0xcafe
         .endif
-        POLLSIGNAL:
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_cmp_eq_i32 s16, s18
-        s_cbranch_scc0   POLLSIGNAL
-        s_load_dword s17, s[0:1], 0x4 glc
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
-        .if (.amdgcn.gfx_generation_number >= 10)
+
+        .if (.amdgcn.gfx_generation_number >= 12)
+
+            POLLSIGNAL:
+            s_load_dword s16, s[0:1], 0x0 scope:SCOPE_CU
+            s_cmp_eq_i32 s16, s18
+            s_cbranch_scc0   POLLSIGNAL
+
+            s_load_dword s17, s[0:1], 0x4 scope:SCOPE_CU
+            s_wait_kmcnt 0
             v_mov_b32 v2, s17
-            flat_store_dword v[4:5], v2 glc
+            flat_store_dword v[4:5], v2 scope:SCOPE_CU
+            s_wait_storecnt 0
+
         .else
-            s_store_dword s17, s[0:1], 0x8 glc
+
+            POLLSIGNAL:
+            s_load_dword s16, s[0:1], 0x0 glc
+            s_cmp_eq_i32 s16, s18
+            s_cbranch_scc0   POLLSIGNAL
+
+            s_load_dword s17, s[0:1], 0x4 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+            .if (.amdgcn.gfx_generation_number >= 10)
+                v_mov_b32 v2, s17
+                flat_store_dword v[4:5], v2 glc
+            .else
+                s_store_dword s17, s[0:1], 0x8 glc
+            .endif
+            s_waitcnt vmcnt(0) & lgkmcnt(0)
+
         .endif
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
         s_endpgm
 )";
 
