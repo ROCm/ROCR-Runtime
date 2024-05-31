@@ -57,8 +57,7 @@ namespace AMD {
 // Tracks aggregate size of system memory available on platform
 size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
 
-void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag,
-                                      HSAuint32 node_id, size_t size) {
+void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id, size_t size) {
   void* ret = NULL;
   const HSAKMT_STATUS status = hsaKmtAllocMemory(node_id, size, flag, &ret);
   return (status == HSAKMT_STATUS_SUCCESS) ? ret : NULL;
@@ -168,13 +167,13 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
 
 MemoryRegion::~MemoryRegion() {}
 
-hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address) const {
+hsa_status_t MemoryRegion::Allocate(size_t& size, AllocateFlags alloc_flags, void** address, int agent_node_id) const {
   ScopedAcquire<KernelMutex> lock(&owner()->agent_memory_lock_);
-  return AllocateImpl(size, alloc_flags, address);
+  return AllocateImpl(size, alloc_flags, address, agent_node_id);
 }
 
 hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
-                                        void** address) const {
+                                        void** address, int agent_node_id) const {
   if (address == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
@@ -207,6 +206,8 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
   kmt_alloc_flags.ui32.CoarseGrain = (alloc_flags & AllocatePCIeRW ? 0 : kmt_alloc_flags.ui32.CoarseGrain);
   kmt_alloc_flags.ui32.NoSubstitute = (alloc_flags & AllocatePinned ? 1 : kmt_alloc_flags.ui32.NoSubstitute);
 
+  kmt_alloc_flags.ui32.GTTAccess = (alloc_flags & AllocateGTTAccess ? 1 : kmt_alloc_flags.ui32.GTTAccess);
+
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory() && !kmt_alloc_flags.ui32.NoAddress) {
     bool subAllocEnabled = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
@@ -226,12 +227,14 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
     }
   }
 
+  const HSAuint32 node_id = (alloc_flags & AllocateGTTAccess) ? agent_node_id : owner()->node_id();
+
   // Allocate memory.
   // If it fails attempt to release memory from the block allocator and retry.
-  *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+  *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
   if (*address == nullptr) {
     owner()->Trim();
-    *address = AllocateKfdMemory(kmt_alloc_flags, owner()->node_id(), size);
+    *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
   }
 
   if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
@@ -766,7 +769,7 @@ void* MemoryRegion::BlockAllocator::alloc(size_t request_size, size_t& allocated
   size_t bsize = AlignUp(request_size, block_size());
 
   hsa_status_t err = region_.AllocateImpl(
-      bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret);
+      bsize, core::MemoryRegion::AllocateRestrict | core::MemoryRegion::AllocateDirect, &ret, 0);
   if (err != HSA_STATUS_SUCCESS)
     throw AMD::hsa_exception(err, "MemoryRegion::BlockAllocator::alloc failed.");
   assert(ret != nullptr && "Region returned nullptr on success.");

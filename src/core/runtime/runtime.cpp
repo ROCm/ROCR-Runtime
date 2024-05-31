@@ -207,12 +207,12 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
       for (auto pool : system_regions_fine_) {
         if (pool->kernarg()) {
           system_allocator_ = [pool](size_t size, size_t alignment,
-                                     MemoryRegion::AllocateFlags alloc_flags) -> void* {
+                                     MemoryRegion::AllocateFlags alloc_flags, int agent_node_id) -> void* {
             assert(alignment <= 4096);
             void* ptr = NULL;
             return (HSA_STATUS_SUCCESS ==
                     core::Runtime::runtime_singleton_->AllocateMemory(pool, size, alloc_flags,
-                                                                      &ptr))
+                                                                      &ptr, agent_node_id))
                 ? ptr
                 : NULL;
           };
@@ -310,9 +310,9 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
 
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
-                                     void** address) {
+                                     void** address, int agent_node_id) {
   size_t size_requested = size;  // region->Allocate(...) may align-up size to granularity
-  hsa_status_t status = region->Allocate(size, alloc_flags, address);
+  hsa_status_t status = region->Allocate(size, alloc_flags, address, agent_node_id);
   // Track the allocation result so that it could be freed properly.
   if (status == HSA_STATUS_SUCCESS) {
     ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -496,7 +496,7 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
   requires the caller to specify all allowed agents we can't assume that a peer mapped pointer
   would remain mapped for the duration of the copy.
   */
-  void* temp = system_allocator_(size, 0, core::MemoryRegion::AllocateNoFlags);
+  void* temp = system_allocator_(size, 0, core::MemoryRegion::AllocateNoFlags, 0);
   MAKE_SCOPE_GUARD([&]() { system_deallocator_(temp); });
   hsa_status_t err = src_agent->DmaCopy(temp, source, size);
   if (err == HSA_STATUS_SUCCESS) err = dst_agent->DmaCopy(dst, temp, size);
@@ -2960,7 +2960,7 @@ hsa_status_t Runtime::VMemoryHandleCreate(const MemoryRegion* region, size_t siz
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
   void* thunk_handle;
-  hsa_status_t status = region->Allocate(size, alloc_flags, &thunk_handle);
+  hsa_status_t status = region->Allocate(size, alloc_flags, &thunk_handle, 0);
   if (status == HSA_STATUS_SUCCESS) {
     memory_handle_map_.emplace(std::piecewise_construct,
           std::forward_as_tuple(thunk_handle),
