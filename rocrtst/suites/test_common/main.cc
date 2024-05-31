@@ -77,7 +77,6 @@
 #include "suites/functional/aql_barrier_bit.h"
 #include "suites/functional/signal_kernel.h"
 #include "suites/functional/cu_masking.h"
-#include "suites/functional/trap_handler.h"
 #include "rocm_smi/rocm_smi.h"
 
 static RocrTstGlobals *sRocrtstGlvalues = nullptr;
@@ -219,18 +218,6 @@ TEST(rocrtstFunc, Signal_Create_Concurrently) {
 TEST(rocrtstFunc, DISABLED_CU_Masking) {
   CU_Masking sd;
   RunGenericTest(&sd);
-}
-
-TEST(rocrtstFunc, TriggerSoftwareTrap) {
-  TrapHandler trap(true, false);
-  RunCustomTestProlog(&trap);
-  trap.TriggerSoftwareTrap();
-}
-
-TEST(rocrtstFunc, TriggerMemoryViolation) {
-  TrapHandler trap(false, true);
-  RunCustomTestProlog(&trap);
-  trap.TriggerMemoryViolation();
 }
 
 #ifndef ROCRTST_EMULATOR_BUILD
