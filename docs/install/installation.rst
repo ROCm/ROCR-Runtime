@@ -24,9 +24,9 @@ Prerequisites
 
 - Install ``libdrm`` package.
 
-    .. code-block:: shell
-        
-        sudo apt install libdrm-dev
+   .. code-block:: shell
+
+    sudo apt install libdrm-dev
 
 The ROCR prebuilt binaries include:
 
