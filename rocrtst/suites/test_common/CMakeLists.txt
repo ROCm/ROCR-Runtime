@@ -65,7 +65,7 @@ set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
 if( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
   set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
 endif()
-set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core")
+set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core,hsa-rocr")
 
 ## RPM package variables
 set ( CPACK_RPM_PACKAGE_RELEASE "local" )
@@ -80,7 +80,7 @@ execute_process( COMMAND rpm --eval %{?dist}
 if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
   string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
 endif()
-set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core")
+set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core,hsa-rocr")
 
 set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810"
                     "gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx940;gfx941;gfx942"
@@ -104,7 +104,7 @@ endif()
 #
 
 # Required Defines first:
-find_package(hsa-runtime64 REQUIRED )
+find_package(hsa-runtime64 REQUIRED)
 find_package(rocm_smi REQUIRED)
 
 set (ONLY64STR "64")

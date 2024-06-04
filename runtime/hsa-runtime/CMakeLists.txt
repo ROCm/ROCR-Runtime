@@ -84,18 +84,9 @@ if (ROCM_CCACHE_BUILD)
   endif() # if (CCACHE_PROGRAM)
 endif() # if (ROCM_CCACHE_BUILD)
 
-## Get version strings
-get_version ( "1.14.0" )
-if ( ${ROCM_PATCH_VERSION} )
-  set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
-endif()
-set ( SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}" )
-set ( PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}" )
-
 ## Find external dependencies.
 find_package(PkgConfig)
 find_package(LibElf REQUIRED)
-find_package(hsakmt 1.0 REQUIRED HINTS ${CMAKE_INSTALL_PREFIX} PATHS /opt/rocm)
 pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
 
 ## Create the rocr target.
@@ -415,123 +406,4 @@ if( NOT ${BUILD_SHARED_LIBS} )
     COMPONENT dev)
 endif()
 
-# Optionally record the package's find module in the user's package cache.
-if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
-  set ( EXPORT_TO_USER_PACKAGE_REGISTRY "off" )
-endif()
-set ( EXPORT_TO_USER_PACKAGE_REGISTRY ${EXPORT_TO_USER_PACKAGE_REGISTRY} CACHE BOOL "Add cmake package config location to the user's cmake package registry.")
-if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
-  # Enable writing to the registry
-  set(CMAKE_EXPORT_PACKAGE_REGISTRY ON)
-  # Generate a target file for the build
-  export(TARGETS ${CORE_RUNTIME_NAME} NAMESPACE ${CORE_RUNTIME_NAME}:: FILE ${CORE_RUNTIME_NAME}Targets.cmake)
-  # Record the package in the user's cache.
-  export(PACKAGE ${CORE_RUNTIME_NAME})
-endif()
 
-## Packaging directives
-set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
-set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
-
-## Only pack the "binary" and "dev" components, post install script will add the directory link.
-set ( CPACK_COMPONENTS_ALL binary dev )
-# ASAN Package will have libraries and license file
-if(ENABLE_ASAN_PACKAGING)
-   set(CPACK_COMPONENTS_ALL asan)
-endif()
-set ( CPACK_DEB_COMPONENT_INSTALL ON)
-set ( CPACK_RPM_COMPONENT_INSTALL ON)
-set ( CPACK_PACKAGE_VENDOR "Advanced Micro Devices, Inc." )
-set ( CPACK_PACKAGE_VERSION ${PACKAGE_VERSION_STRING} )
-set ( CPACK_PACKAGE_CONTACT "AMD HSA Support <dl.HSA-Runtime-Support@amd.com>")
-set ( CPACK_COMPONENT_BINARY_DESCRIPTION "AMD Heterogeneous System Architecture HSA - Linux HSA Runtime for Boltzmann (ROCm) platforms" )
-set ( CPACK_COMPONENT_DEV_DESCRIPTION "AMD Heterogeneous System Architecture HSA development package.\n This package contains the headers and cmake files for the hsa-rocr package." )
-set ( CPACK_COMPONENT_ASAN_DESCRIPTION "AMD Heterogeneous System Architecture HSA - Linux HSA instrumented libraries for Boltzmann (ROCm) platforms" )
-set ( CPACK_RESOURCE_FILE_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/LICENSE.md" )
-
-if ( DEFINED ENV{ROCM_LIBPATCH_VERSION} )
-  set ( CPACK_PACKAGE_VERSION "${CPACK_PACKAGE_VERSION}.$ENV{ROCM_LIBPATCH_VERSION}" )
-  message ( "Using CPACK_PACKAGE_VERSION ${CPACK_PACKAGE_VERSION}" )
-endif()
-
-# Debian package specific variables
-set ( CPACK_DEBIAN_BINARY_PACKAGE_NAME "hsa-rocr")
-set ( CPACK_DEBIAN_DEV_PACKAGE_NAME "hsa-rocr-dev")
-set ( CPACK_DEBIAN_ASAN_PACKAGE_NAME "hsa-rocr-asan")
-if ( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
-  set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
-else()
-  set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
-endif()
-message ( "Using CPACK_DEBIAN_PACKAGE_RELEASE ${CPACK_DEBIAN_PACKAGE_RELEASE}" )
-set ( CPACK_DEBIAN_FILE_NAME "DEB-DEFAULT" )
-set ( CPACK_DEBIAN_PACKAGE_HOMEPAGE "https://github.com/RadeonOpenCompute/ROCR-Runtime" )
-
-## Process the Debian install/remove scripts to update the CPACK variables
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/postinst.in DEBIAN/Binary/postinst @ONLY )
-configure_file ( ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/prerm @ONLY )
-set ( CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/Binary/postinst;DEBIAN/Binary/prerm" )
-
-# package dependencies
-set( CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1, libelf1")
-set( CPACK_DEBIAN_ASAN_PACKAGE_DEPENDS "libdrm-amdgpu-amdgpu1 | libdrm-amdgpu1, libnuma1, libelf1")
-set( CPACK_DEBIAN_BINARY_PACKAGE_RECOMMENDS "libdrm-amdgpu-amdgpu1")
-set ( CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "hsa-rocr, hsakmt-roct-dev" )
-if ( ROCM_DEP_ROCMCORE )
-  string ( APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocm-core" )
-  string ( APPEND CPACK_DEBIAN_ASAN_PACKAGE_DEPENDS ", rocm-core-asan" )
-endif()
-if ( HSA_DEP_ROCPROFILER_REGISTER )
-  string ( APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocprofiler-register" )
-endif()
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev" )
-set ( CPACK_DEBIAN_PACKAGE_REPLACES "hsa-ext-rocr-dev" )
-
-# RPM package specific variables
-set ( EL7_DISTRO "FALSE" )
-checksetel7(EL7_DISTRO)
-set ( CPACK_RPM_BINARY_PACKAGE_NAME "hsa-rocr" )
-set ( CPACK_RPM_DEV_PACKAGE_NAME "hsa-rocr-devel" )
-set ( CPACK_RPM_ASAN_PACKAGE_NAME "hsa-rocr-asan" )
-if ( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
-  set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
-else()
-  set ( CPACK_RPM_PACKAGE_RELEASE "local" )
-endif()
-
-string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
-set ( CPACK_RPM_FILE_NAME "RPM-DEFAULT" )
-message("CPACK_RPM_PACKAGE_RELEASE: ${CPACK_RPM_PACKAGE_RELEASE}")
-set( CPACK_RPM_PACKAGE_LICENSE "NCSA" )
-
-## Process the Rpm install/remove scripts to update the CPACK variables
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/post.in" RPM/Binary/post @ONLY )
-configure_file ( "${CMAKE_CURRENT_SOURCE_DIR}/RPM/Binary/postun.in" RPM/Binary/postun @ONLY )
-set ( CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/post" )
-set ( CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun" )
-
-# package dependencies
-if (${EL7_DISTRO} STREQUAL "TRUE")
-  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "libdrm-amdgpu, numactl-libs" )
-  set ( CPACK_RPM_ASAN_PACKAGE_REQUIRES "libdrm-amdgpu, numactl-libs" )
-else()
-  set ( CPACK_RPM_BINARY_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs)" )
-  set ( CPACK_RPM_ASAN_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs)" )
-  set ( CPACK_RPM_USER_BINARY_SPECFILE "${CMAKE_CURRENT_SOURCE_DIR}/RPM/hsa-rocr.spec.in" )
-  set ( CPACK_RPM_PACKAGE_RECOMMENDS "libdrm-amdgpu" )
-endif()
-set ( CPACK_RPM_DEV_PACKAGE_REQUIRES "hsa-rocr , hsakmt-roct-devel" )
-if ( ROCM_DEP_ROCMCORE )
-  string ( APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocm-core" )
-  string ( APPEND CPACK_RPM_ASAN_PACKAGE_REQUIRES " rocm-core-asan" )
-endif()
-if ( HSA_DEP_ROCPROFILER_REGISTER )
-  string ( APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocprofiler-register" )
-endif()
-# Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
-set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
-
-## Include packaging
-include ( CPack )
