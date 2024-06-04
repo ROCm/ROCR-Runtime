@@ -111,7 +111,26 @@ class os_thread {
         return;
       }
     }
-\
+
+    if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
+      int cores = get_nprocs_conf();
+      cpu_set_t* cpuset = CPU_ALLOC(cores);
+      if (cpuset == nullptr) {
+        fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
+        return;
+      }
+      CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
+      for (int i = 0; i < cores; i++) {
+        CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
+      }
+      err = pthread_attr_setaffinity_np(&attrib, CPU_ALLOC_SIZE(cores), cpuset);
+      CPU_FREE(cpuset);
+      if (err != 0) {
+        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
+        return;
+      }
+    }
+
     err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
 
     // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
@@ -127,25 +146,6 @@ class os_thread {
         err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
         if (err != EINVAL) break;
         debug_print("pthread_create returned EINVAL, doubling stack size\n");
-      }
-    }
-
-    if (core::Runtime::runtime_singleton_->flag().override_cpu_affinity()) {
-      int cores = get_nprocs_conf();
-      cpu_set_t* cpuset = CPU_ALLOC(cores);
-      if (cpuset == nullptr) {
-        fprintf(stderr, "CPU_ALLOC failed: %s\n", strerror(errno));
-        return;
-      }
-      CPU_ZERO_S(CPU_ALLOC_SIZE(cores), cpuset);
-      for (int i = 0; i < cores; i++) {
-        CPU_SET_S(i, CPU_ALLOC_SIZE(cores), cpuset);
-      }
-      err = pthread_setaffinity_np(thread, CPU_ALLOC_SIZE(cores), cpuset);
-      CPU_FREE(cpuset);
-      if (err != 0) {
-        fprintf(stderr, "pthread_attr_setaffinity_np failed: %s\n", strerror(err));
-        return;
       }
     }
 
