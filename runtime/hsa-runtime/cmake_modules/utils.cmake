@@ -206,28 +206,4 @@ function ( get_version DEFAULT_VERSION_STRING )
 
 endfunction()
 
-## Collects subdirectory names and returns them in a list
-function ( listsubdirs DIRPATH SUBDIRECTORIES )
-    file( GLOB CONTENTS RELATIVE ${DIRPATH} "${DIRPATH}/*" )
-    set ( FOLDERS, "" )
-    foreach( ITEM IN LISTS CONTENTS)
-        if( IS_DIRECTORY "${DIRPATH}/${ITEM}" )
-            list( APPEND FOLDERS ${ITEM} )
-        endif()
-    endforeach()
-    set (${SUBDIRECTORIES} ${FOLDERS} PARENT_SCOPE)
-endfunction()
 
-## Sets el7 flag to be true
-function ( Checksetel7 EL7_DISTRO )
-execute_process(COMMAND rpm --eval %{?dist}
-                 RESULT_VARIABLE PROC_RESULT
-                 OUTPUT_VARIABLE EVAL_RESULT
-                 OUTPUT_STRIP_TRAILING_WHITESPACE)
-message("RESULT_VARIABLE ${PROC_RESULT} OUTPUT_VARIABLE: ${EVAL_RESULT}")
-if(PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "")
-  if( "${EVAL_RESULT}" STREQUAL ".el7")
-     set (${EL7_DISTRO} TRUE PARENT_SCOPE)
-  endif()
-endif()
-endfunction()

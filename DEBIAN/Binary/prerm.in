@@ -45,17 +45,19 @@
 set -e
 
 # left-hand term originates from @ENABLE_LDCONFIG@ = ON/OFF at package build
-do_ldconfig() {
+rm_ldconfig() {
   if [ "@ENABLE_LDCONFIG@" == "ON" ]; then
-    echo @CPACK_PACKAGING_INSTALL_PREFIX@/@CMAKE_INSTALL_LIBDIR@ > /etc/ld.so.conf.d/hsa-rocr.conf
+    rm -f /etc/ld.so.conf.d/rocr-runtime.conf
     ldconfig
   fi
 }
 
 case "$1" in
-   ( configure )
-       do_ldconfig
+   ( remove | upgrade)
+       rm_ldconfig
    ;;
+  ( purge )
+  ;;
    ( * )
        exit 0
    ;;
