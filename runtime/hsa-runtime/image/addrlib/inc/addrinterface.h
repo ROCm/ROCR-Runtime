@@ -18,11 +18,7 @@
 // Includes should be before extern "C"
 #include "addrtypes.h"
 
-#if defined(__cplusplus)
-extern "C"
-{
-#endif
-
+namespace rocr {
 #define ADDRLIB_VERSION_MAJOR 8
 #define ADDRLIB_VERSION_MINOR 10
 #define ADDRLIB_VERSION ((ADDRLIB_VERSION_MAJOR << 16) | ADDRLIB_VERSION_MINOR)
@@ -3720,7 +3716,7 @@ typedef struct _ADDR2_COMPUTE_NONBLOCKCOMPRESSEDVIEW_INPUT
     AddrResourceType      resourceType;      ///< Surface type
     AddrFormat            format;            ///< Surface format
     UINT_32               width;             ///< Width of mip0 in texels (not in compressed block)
-    UINT_32               height;            ///< Height of mip0 in texels (not in compressed block) 
+    UINT_32               height;            ///< Height of mip0 in texels (not in compressed block)
     UINT_32               numSlices;         ///< Number surface slice/depth of mip0
     UINT_32               numMipLevels;      ///< Total mipmap levels.
     UINT_32               pipeBankXor;       ///< Combined swizzle used to do bank/pipe rotation
@@ -4496,9 +4492,5 @@ ADDR_E_RETURNCODE ADDR_API Addr3ComputeSlicePipeBankXor(
     const ADDR3_COMPUTE_SLICE_PIPEBANKXOR_INPUT* pIn,
     ADDR3_COMPUTE_SLICE_PIPEBANKXOR_OUTPUT*      pOut);
 
-
-#if defined(__cplusplus)
-}
-#endif
-
+} // namespace rocr
 #endif // __ADDR_INTERFACE_H__

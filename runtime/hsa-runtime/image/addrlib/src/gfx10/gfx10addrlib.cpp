@@ -21,7 +21,7 @@
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
+namespace rocr {
 namespace Addr
 {
 /**
@@ -3121,7 +3121,7 @@ ADDR_E_RETURNCODE Gfx10Lib::HwlGetPreferredSurfaceSetting(
                         // Iterate through all block types
                         for (UINT_32 i = AddrBlockLinear; i < AddrBlockMaxTiledType; i++)
                         {
-                            if (Addr2IsBlockTypeAvailable(allowedBlockSet, static_cast<::AddrBlockType>(i)))
+                            if (Addr2IsBlockTypeAvailable(allowedBlockSet, static_cast<rocr::AddrBlockType>(i)))
                             {
                                 localIn.swizzleMode = swMode[i];
 
@@ -3195,7 +3195,7 @@ ADDR_E_RETURNCODE Gfx10Lib::HwlGetPreferredSurfaceSetting(
                             for (UINT_32 i = AddrBlockMicro; i < AddrBlockMaxTiledType; i++)
                             {
                                 if ((i != minSizeBlk) &&
-                                    Addr2IsBlockTypeAvailable(allowedBlockSet, static_cast<::AddrBlockType>(i)))
+                                    Addr2IsBlockTypeAvailable(allowedBlockSet, static_cast<rocr::AddrBlockType>(i)))
                                 {
                                     if (Addr2BlockTypeWithinMemoryBudget(
                                             minSize,
@@ -4802,3 +4802,4 @@ ADDR_E_RETURNCODE Gfx10Lib::HwlComputeSurfaceInfoLinear(
 
 } // V2
 } // Addr
+} // namespace rocr

@@ -16,6 +16,7 @@
 #ifndef __GFX12_SWIZZLE_PATTERN_H__
 #define __GFX12_SWIZZLE_PATTERN_H__
 
+namespace rocr {
 namespace Addr
 {
 namespace V3
@@ -275,5 +276,5 @@ namespace V3
 
 } // V3
 } // Addr
-
+} // namespace
 #endif

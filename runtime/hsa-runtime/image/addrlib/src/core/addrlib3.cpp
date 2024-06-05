@@ -18,6 +18,7 @@
 #include "addrlib3.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V3
@@ -1069,3 +1070,4 @@ ADDR_E_RETURNCODE Lib::ApplyCustomizedPitchHeight(
 
 } // V3
 } // Addr
+} // namespace rocr

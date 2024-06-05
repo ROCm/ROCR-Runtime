@@ -11,6 +11,7 @@
 #include "addrcommon.h"
 #include "coord.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V2
@@ -584,3 +585,4 @@ BOOL_32 CoordEq::operator!=(const CoordEq& b)
 
 } // V2
 } // Addr
+} // namespace rocr

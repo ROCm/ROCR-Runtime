@@ -21,6 +21,7 @@
 #include "addrobject.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 
@@ -257,6 +258,6 @@ private:
 };
 
 } //Addr
-
+} //namespace rocr
 #endif
 

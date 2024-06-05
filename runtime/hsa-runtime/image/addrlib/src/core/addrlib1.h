@@ -19,6 +19,7 @@
 
 #include "addrlib.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -523,6 +524,7 @@ private:
 
 } // V1
 } // Addr
+} // namespace rocr
 
 #endif
 

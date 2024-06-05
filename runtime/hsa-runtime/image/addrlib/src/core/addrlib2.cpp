@@ -18,6 +18,7 @@
 #include "addrlib2.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V2
@@ -2159,4 +2160,5 @@ VOID Lib::ValidateStereoInfo(
 
 } // V2
 } // Addr
+} // namespace rocr
 

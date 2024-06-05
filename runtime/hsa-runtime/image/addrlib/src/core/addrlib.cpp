@@ -63,6 +63,7 @@ UINT_32 __umoddi3(UINT_64 n, UINT_32 base)
 
 #endif // __APPLE__
 
+namespace rocr {
 namespace Addr
 {
 
@@ -233,7 +234,6 @@ ADDR_E_RETURNCODE Lib::Create(
                 break;
         }
     }
-    
     if(pLib == NULL)
     {
         returnCode = ADDR_OUTOFMEMORY;
@@ -658,3 +658,4 @@ UINT_32 Lib::GetBpe(AddrFormat format) const
 }
 
 } // Addr
+} // namespace rocr
