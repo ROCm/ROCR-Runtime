@@ -184,6 +184,7 @@
    } while (0)
 #endif
 
+namespace rocr {
 namespace Addr
 {
 
@@ -1073,6 +1074,7 @@ static inline UINT_32 ShiftRight(
 }
 
 } // Addr
+} // namespace rocr
 
 #endif // __ADDR_COMMON_H__
 

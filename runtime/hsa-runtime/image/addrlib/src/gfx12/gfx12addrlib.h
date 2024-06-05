@@ -20,6 +20,7 @@
 #include "coord.h"
 #include "gfx12SwizzlePattern.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V3
@@ -213,5 +214,5 @@ private:
 
 } // V3
 } // Addr
-
+} // namespace rocr
 #endif

@@ -17,6 +17,7 @@
 #include "addrlib1.h"
 #include "addrcommon.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -4055,3 +4056,4 @@ ADDR_E_RETURNCODE Lib::ComputePrtInfo(
 
 } // V1
 } // Addr
+} // namespace rocr

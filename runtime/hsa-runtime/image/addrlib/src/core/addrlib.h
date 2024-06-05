@@ -39,6 +39,7 @@
 #define CIASICIDGFXENGINE_ARCTICISLAND 0x0000000D
 #endif
 
+namespace rocr {
 namespace Addr
 {
 
@@ -409,5 +410,5 @@ Lib* Gfx10HwlInit(const Client* pClient);
 Lib* Gfx11HwlInit(const Client* pClient);
 Lib* Gfx12HwlInit(const Client* pClient);
 } // Addr
-
+} // namespace rocr
 #endif

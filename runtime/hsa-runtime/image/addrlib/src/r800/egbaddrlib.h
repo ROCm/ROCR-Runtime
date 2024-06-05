@@ -18,6 +18,7 @@
 
 #include "addrlib1.h"
 
+namespace rocr {
 namespace Addr
 {
 namespace V1
@@ -407,6 +408,6 @@ protected:
 
 } // V1
 } // Addr
-
+} // namespace rocr
 #endif
 

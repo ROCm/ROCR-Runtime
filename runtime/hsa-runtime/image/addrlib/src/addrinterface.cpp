@@ -19,6 +19,7 @@
 
 #include "addrcommon.h"
 
+namespace rocr {
 using namespace Addr;
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -2152,3 +2153,4 @@ ADDR_E_RETURNCODE ADDR_API Addr3ComputeSlicePipeBankXor(
 
     return returnCode;
 }
+} //namespace rocr

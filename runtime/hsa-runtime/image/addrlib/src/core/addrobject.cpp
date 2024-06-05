@@ -17,6 +17,7 @@
 #include "addrinterface.h"
 #include "addrobject.h"
 
+namespace rocr {
 namespace Addr
 {
 
@@ -220,3 +221,4 @@ VOID Object::DebugPrint(
 }
 
 } // Addr
+} // namespace rocr

@@ -16,7 +16,7 @@
 #ifndef __GFX10_SWIZZLE_PATTERN_H__
 #define __GFX10_SWIZZLE_PATTERN_H__
 
-
+namespace rocr {
 namespace Addr
 {
 namespace V2
@@ -6017,5 +6017,6 @@ const UINT_64 GFX10_CMASK_SW_PATTERN[][17] =
 
 }// V2
 } // Addr
+} // namespace rocr
 
 #endif
