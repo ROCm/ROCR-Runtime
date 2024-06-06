@@ -217,7 +217,7 @@ class BlitKernel : public core::Blit {
   std::atomic<uint64_t> pending_search_index_;
 
   /// Lock to synchronize access to kernarg_ and completion_signal_
-  std::mutex lock_;
+  KernelMutex lock_;
 
   /// Number of CUs on the underlying agent.
   int num_cus_;
