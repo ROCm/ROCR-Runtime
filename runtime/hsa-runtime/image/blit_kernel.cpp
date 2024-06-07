@@ -105,6 +105,7 @@ extern uint8_t ocl_blit_object_gfx1102[];
 extern uint8_t ocl_blit_object_gfx1103[];
 extern uint8_t ocl_blit_object_gfx1150[];
 extern uint8_t ocl_blit_object_gfx1151[];
+extern uint8_t ocl_blit_object_gfx1152[];
 extern uint8_t ocl_blit_object_gfx1200[];
 extern uint8_t ocl_blit_object_gfx1201[];
 
@@ -1054,6 +1055,8 @@ hsa_status_t BlitKernel::GetPatchedBlitObject(const char* agent_name,
     *blit_code_object = ocl_blit_object_gfx1150;
   } else if (sname == "gfx1151") {
     *blit_code_object = ocl_blit_object_gfx1151;
+  } else if (sname == "gfx1152") {
+    *blit_code_object = ocl_blit_object_gfx1152;
   } else if (sname == "gfx1200") {
     *blit_code_object = ocl_blit_object_gfx1200;
   } else if (sname == "gfx1201") {
