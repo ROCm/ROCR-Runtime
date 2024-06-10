@@ -393,6 +393,7 @@ trap_entry:
   s_waitcnt             lgkmcnt(0)
   s_mov_b32             ttmp13, m0                      // save off m0
   s_mov_b32             m0, ttmp7                       // put ID into message payload
+  s_nop                 0x0                             // Manually inserted wait states
   s_sendmsg             sendmsg(MSG_INTERRUPT)          // send interrupt message
   s_waitcnt             lgkmcnt(0)                      // wait for message to be sent
   s_mov_b32             m0, ttmp13                      // restore m0
