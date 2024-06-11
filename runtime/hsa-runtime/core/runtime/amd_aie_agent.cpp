@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2022-2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2022-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -111,14 +111,30 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
   case HSA_AGENT_INFO_MACHINE_MODEL:
     *reinterpret_cast<hsa_machine_model_t *>(value) = HSA_MACHINE_MODEL_LARGE;
     break;
-  case HSA_AGENT_INFO_PROFILE:
+  case HSA_AGENT_INFO_BASE_PROFILE_DEFAULT_FLOAT_ROUNDING_MODES:
+  case HSA_AGENT_INFO_DEFAULT_FLOAT_ROUNDING_MODE:
+    // TODO: validate if this is true.
+    *reinterpret_cast<hsa_default_float_rounding_mode_t *>(value) =
+        HSA_DEFAULT_FLOAT_ROUNDING_MODE_NEAR;
+    break;
+   case HSA_AGENT_INFO_PROFILE:
     *reinterpret_cast<hsa_profile_t *>(value) = profile_;
     break;
   case HSA_AGENT_INFO_WAVEFRONT_SIZE:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
   case HSA_AGENT_INFO_WORKGROUP_MAX_DIM:
+    std::memset(value, 0, sizeof(uint16_t) * 3);
+    break;
   case HSA_AGENT_INFO_WORKGROUP_MAX_SIZE:
+    *reinterpret_cast<uint32_t*>(value) = 0;
+    break;
   case HSA_AGENT_INFO_GRID_MAX_DIM:
+    std::memset(value, 0, sizeof(hsa_dim3_t));
+    break;
   case HSA_AGENT_INFO_GRID_MAX_SIZE:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
   case HSA_AGENT_INFO_FBARRIER_MAX_SIZE:
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
@@ -149,6 +165,36 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
   case HSA_AGENT_INFO_VERSION_MINOR:
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
+  case HSA_AMD_AGENT_INFO_CHIP_ID:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_CACHELINE_SIZE:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_MAX_CLOCK_FREQUENCY:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_DRIVER_NODE_ID:
+    *reinterpret_cast<uint32_t *>(value) = node_id();
+    break;
+  case HSA_AMD_AGENT_INFO_MAX_ADDRESS_WATCH_POINTS:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_BDFID:
+   *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_SIMDS_PER_CU:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_SHADER_ENGINES:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_SHADER_ARRAYS_PER_SE:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
   case HSA_EXT_AGENT_INFO_IMAGE_1D_MAX_ELEMENTS:
   case HSA_EXT_AGENT_INFO_IMAGE_1DA_MAX_ELEMENTS:
   case HSA_EXT_AGENT_INFO_IMAGE_1DB_MAX_ELEMENTS:
@@ -165,6 +211,14 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     std::strcpy(reinterpret_cast<char *>(value), product_name_info_.c_str());
     break;
   }
+  case HSA_AMD_AGENT_INFO_ASIC_REVISION:
+    *reinterpret_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_SVM_DIRECT_HOST_ACCESS:
+    // commented out until we populate AIE agent regions
+    assert(regions_.size() != 0 && "No device local memory found!");
+    *reinterpret_cast<bool *>(value) = true;
+    break;
   default:
     *reinterpret_cast<uint32_t *>(value) = 0;
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
