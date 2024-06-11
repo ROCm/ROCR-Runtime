@@ -171,7 +171,10 @@ const char *AtomicIncIsa =
     R"(
         v_mov_b32 v0, s0
         v_mov_b32 v1, s1
-        .if (.amdgcn.gfx_generation_number >= 8)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            v_mov_b32 v2, 1
+            FLAT_ATOMIC_ADD_NSS v3, v[0:1], v2 scope:SCOPE_SYS th:TH_ATOMIC_RETURN
+        .elseif (.amdgcn.gfx_generation_number >= 8)
             v_mov_b32 v2, 1
             FLAT_ATOMIC_ADD_NSS v3, v[0:1], v2 glc slc
         .else
