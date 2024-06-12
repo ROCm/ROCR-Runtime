@@ -27,8 +27,6 @@ find_path (LIBELF_INCLUDE_DIRS
     /usr/local/include/libelf
     /opt/local/include
     /opt/local/include/libelf
-    /sw/include
-    /sw/include/libelf
     ENV CPATH)
 
 find_library (LIBELF_LIBRARIES
@@ -36,9 +34,11 @@ find_library (LIBELF_LIBRARIES
     elf
   PATHS
     /usr/lib
+    /usr/lib64
     /usr/local/lib
+    /usr/local/lib64
     /opt/local/lib
-    /sw/lib
+    /opt/local/lib64
     ENV LIBRARY_PATH
     ENV LD_LIBRARY_PATH)
 
