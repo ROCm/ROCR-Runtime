@@ -125,6 +125,11 @@ TEST_F(RDMATest, ContiguousVRAMAllocation) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
+    if (GetVramSize(defaultGPUNode) < BufferSize + (1UL << 30)) {
+        LOG() << "no enough VRAM, skipping the test" << std::endl;
+        return;
+    }
+
     HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
     HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, defaultGPUNode, false);
     void *LocalBuffer;
