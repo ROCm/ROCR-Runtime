@@ -311,9 +311,10 @@ void MemoryAtomic::MemoryAtomicTest(hsa_agent_t cpuAgent,
     err = hsa_amd_memory_pool_allocate(gpu_pool, kMemoryAllocSize, 0,
                                         reinterpret_cast<void **>(&g_gpuRefData));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
-    // Pinned the Host memory and get the pointer to new adress which is accesible to GPU agent
-    err = hsa_amd_memory_lock(gpuRefData, kMemoryAllocSize, &gpuAgent, 1, reinterpret_cast<void **>(&device_ptr));
+    // Map the Host memory and get the pointer to new adress which is accesible to GPU agent
+    err = hsa_amd_agents_allow_access(1, &gpuAgent, NULL, gpuRefData);
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+    device_ptr = gpuRefData;
   }
 
 
