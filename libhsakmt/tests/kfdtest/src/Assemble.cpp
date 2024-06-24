@@ -69,6 +69,9 @@
 #else
 #include <llvm/Support/TargetRegistry.h>
 #endif
+#if LLVM_VERSION_MAJOR > 18
+#include "llvm/Support/ManagedStatic.h"
+#endif
 
 #include <linux/elf.h>
 #include "OSWrapper.hpp"
