@@ -318,16 +318,15 @@ const char *CopyOnSignalIsa =
         .if (.amdgcn.gfx_generation_number >= 12)
 
             POLLSIGNAL:
-            s_load_dword s16, s[0:1], 0x0 scope:SCOPE_CU
+            s_load_dword s16, s[0:1], 0x0 scope:SCOPE_SYS
             s_cmp_eq_i32 s16, s18
             s_cbranch_scc0   POLLSIGNAL
 
-            s_load_dword s17, s[0:1], 0x4 scope:SCOPE_CU
+            s_load_dword s17, s[0:1], 0x4 scope:SCOPE_SYS
             s_wait_kmcnt 0
-            v_mov_b32 v2, s17
-            flat_store_dword v[4:5], v2 scope:SCOPE_CU
-            s_wait_storecnt 0
 
+            v_mov_b32 v2, s17
+            flat_store_dword v[4:5], v2 scope:SCOPE_SYS
         .else
 
             POLLSIGNAL:
@@ -442,12 +441,21 @@ const char *WriteAndSignalIsa =
             v_mov_b32 v3, s3
             v_mov_b32 v4, s4
             v_mov_b32 v5, s5
-            v_mov_b32 v18, 0xbeef
-            flat_store_dword v[4:5], v18 glc
-            v_mov_b32 v18, 0x1
-            flat_store_dword v[2:3], v18 glc
-            v_mov_b32 v18, 0xcafe
-            flat_store_dword v[0:1], v18 glc
+            .if (.amdgcn.gfx_generation_number >= 12)
+                v_mov_b32 v18, 0xbeef
+                flat_store_dword v[4:5], v18 scope:SCOPE_SYS
+                v_mov_b32 v18, 0x1
+                flat_store_dword v[2:3], v18 scope:SCOPE_SYS
+                v_mov_b32 v18, 0xcafe
+                flat_store_dword v[0:1], v18 scope:SCOPE_SYS
+            .else
+                v_mov_b32 v18, 0xbeef
+                flat_store_dword v[4:5], v18 glc
+                v_mov_b32 v18, 0x1
+                flat_store_dword v[2:3], v18 glc
+                v_mov_b32 v18, 0xcafe
+                flat_store_dword v[0:1], v18 glc
+            .endif
         .else
             s_mov_b32 s18, 0xbeef
             s_store_dword s18, s[0:1], 0x4 glc
