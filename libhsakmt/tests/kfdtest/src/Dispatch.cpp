@@ -127,13 +127,30 @@ void Dispatch::BuildIb() {
         0,      // COMPUTE_PERFCOUNT_ENABLE
     };
 
+    /*
+     * For some special asics in the list of DEGFX11_12113
+     * COMPUTE_PGM_RSRC needs priv=1 to prevent hardware traps
+     */
+    const bool priv = m_NeedCwsrWA;
+
+    unsigned int pgmRsrc1 =
+        (0xc0 << COMPUTE_PGM_RSRC1__FLOAT_MODE__SHIFT) |
+        ((m_SpiPriority & 3) << COMPUTE_PGM_RSRC1__PRIORITY__SHIFT) |
+        (priv << COMPUTE_PGM_RSRC1__PRIV__SHIFT) |
+        ((m_FamilyId < FAMILY_GFX12) ? (0x2 << COMPUTE_PGM_RSRC1__SGPRS__SHIFT) : 0) |
+        (0x4 << COMPUTE_PGM_RSRC1__VGPRS__SHIFT);  // 4 * 8 = 32 VGPRs
+
     unsigned int pgmRsrc2 = 0;
     pgmRsrc2 |= (m_ScratchEn << COMPUTE_PGM_RSRC2__SCRATCH_EN__SHIFT)
             & COMPUTE_PGM_RSRC2__SCRATCH_EN_MASK;
     pgmRsrc2 |= ((m_scratch_base ? 6 : 4) << COMPUTE_PGM_RSRC2__USER_SGPR__SHIFT)
             & COMPUTE_PGM_RSRC2__USER_SGPR_MASK;
-    pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__TRAP_PRESENT__SHIFT)
+
+    if (m_FamilyId < FAMILY_GFX12) {
+        pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__TRAP_PRESENT__SHIFT)
             & COMPUTE_PGM_RSRC2__TRAP_PRESENT_MASK;
+    }
+
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__TGID_X_EN__SHIFT)
             & COMPUTE_PGM_RSRC2__TGID_X_EN_MASK;
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__TIDIG_COMP_CNT__SHIFT)
@@ -143,15 +160,8 @@ void Dispatch::BuildIb() {
     pgmRsrc2 |= (1 << COMPUTE_PGM_RSRC2__EXCP_EN_MSB__SHIFT)
             & COMPUTE_PGM_RSRC2__EXCP_EN_MSB_MASK;
 
-    /*
-     * For some special asics in the list of DEGFX11_12113
-     * COMPUTE_PGM_RSRC needs priv=1 to prevent hardware traps
-     */
-    const bool priv = m_NeedCwsrWA;
     const unsigned int COMPUTE_PGM_RSRC[] = {
-        // PGM_RSRC1 = { VGPRS: 16 SGPRS: 16 PRIORITY: m_SpiPriority FLOAT_MODE: c0
-        // PRIV: 0 (1 for GFX11) DX10_CLAMP: 0 DEBUG_MODE: 0 IEEE_MODE: 0 BULKY: 0 CDBG_USER: 0 }
-        0x000c0084 | ((m_SpiPriority & 3) << 10) | (priv << 20),
+        pgmRsrc1,
         pgmRsrc2
     };
 
