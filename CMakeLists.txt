@@ -179,20 +179,21 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/preinst DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/DEBIAN)
 set (CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/preinst;DEBIAN/Binary/postinst;DEBIAN/Binary/prerm")
 # Needed since some packages still say they need hsakmt-roct
-set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct,hsa-ext-rocr-dev,hsa-runtime64")
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct,hsa-runtime64")
-set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-dev,hsakmt-roct,hsa-ext-rocr-dev,hsa-runtime64")
-set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct,hsa-ext-rocr-dev,hsa-rocr-dev,hsa-runtime64")
-set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev,hsa-runtime64")
-set(CPACK_DEBIAN_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev,hsa-runtime64")
-set(CPACK_RPM_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev,hsa-runtime64")
+set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev,hsa-ext-rocr-dev")
+set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct")
+set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev")
+set(CPACK_DEBIAN_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev")
+set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel,hsa-ext-rocr-dev")
+set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct")
+set(CPACK_RPM_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-devel")
+set(CPACK_RPM_DEV_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel")
 
 
 # package dependencies
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-amdgpu-dev | libdrm-dev, rocm-core")
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libdrm-amdgpu-dev")
 # Setting devel package dependendent version
-set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "libdrm-amdgpu-dev | libdrm-dev, rocm-core, hsa-rocr, hsakmt-roct-dev")
+set(CPACK_DEBIAN_DEV_PACKAGE_DEPENDS "libdrm-amdgpu-dev | libdrm-dev, rocm-core, hsa-rocr")
 
 set(CPACK_DEBIAN_DEV_PACKAGE_RECOMMENDS "libdrm-amdgpu-dev")
 
@@ -242,7 +243,7 @@ set(CPACK_RPM_BINARY_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/B
 set(CPACK_RPM_BINARY_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_BINARY_DIR}/RPM/Binary/postun")
 
 # package dependencies
-set(CPACK_RPM_DEV_PACKAGE_REQUIRES "rocm-core , hsa-rocr , hsakmt-roct-devel")
+set(CPACK_RPM_DEV_PACKAGE_REQUIRES "rocm-core , hsa-rocr")
 
 #
 if (${EL7_DISTRO} STREQUAL "TRUE")
@@ -250,7 +251,6 @@ if (${EL7_DISTRO} STREQUAL "TRUE")
   set(CPACK_RPM_ASAN_PACKAGE_REQUIRES "libdrm-amdgpu, numactl-libs, libdrm-amdgpu-devel")
   set(CPACK_RPM_PACKAGE_REQUIRES "libdrm-amdgpu-devel")
   string(APPEND CPACK_RPM_DEV_PACKAGE_REQUIRES ", libdrm-amdgpu-devel")
-
 else()
   set(CPACK_RPM_BINARY_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs)")
   set(CPACK_RPM_ASAN_PACKAGE_REQUIRES "(libdrm-amdgpu or libdrm or libdrm_amdgpu1), (libnuma1 or numactl-libs), (libdrm-amdgpu-devel or libdrm-devel)")
@@ -285,9 +285,7 @@ if(NOT BUILD_SHARED_LIBS)
   set(CPACK_DEBIAN_STATIC_PACKAGE_NAME "hsa-rocr-static-dev")
   set(CPACK_COMPONENT_STATIC_DESCRIPTION "HSA (Heterogenous System Architecture) core runtime - Linux static libraries")
   set(CPACK_RPM_STATIC_PACKAGE_REQUIRES "${CPACK_RPM_BINARY_PACKAGE_REQUIRES}")
-  string(APPEND CPACK_RPM_STATIC_PACKAGE_REQUIRES " hsakmt-roct-devel")
   set(CPACK_DEBIAN_STATIC_PACKAGE_DEPENDS "${CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS}")
-  string(APPEND CPACK_DEBIAN_STATIC_PACKAGE_DEPENDS ", hsakmt-roct-dev")
 endif()
 
 ## Include packaging
