@@ -3123,7 +3123,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	if (is_svm_api_supported) {
+	if (!object && is_svm_api_supported) {
 		svm_addr = (void*)((HSAuint64)addr - page_offset);
 		if (!nodes_to_map) {
 			nodes_to_map = all_gpu_id_array;
@@ -3518,12 +3518,15 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 			return HSAKMT_STATUS_SUCCESS;
 
 		/* Register a new user ptr */
-		if (is_svm_api_supported)
-			return fmm_register_mem_svm_api(address,
+		if (is_svm_api_supported) {
+			ret = fmm_register_mem_svm_api(address,
 							size_in_bytes,
 							coarse_grain,
 							ext_coherent);
-
+			if (ret == HSAKMT_STATUS_SUCCESS)
+				return ret;
+			pr_debug("SVM failed, falling back to old registration\n");
+		}
 		ret = fmm_register_user_memory(address,
 					       size_in_bytes,
 					       &object,
