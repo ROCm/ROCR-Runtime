@@ -184,7 +184,7 @@ set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct")
 set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev")
 set(CPACK_DEBIAN_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev")
 set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel,hsa-ext-rocr-dev")
-set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct")
+set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct,hsa-rocr-dev,hsa-ext-rocr-dev")
 set(CPACK_RPM_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-devel")
 set(CPACK_RPM_DEV_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel")
 
