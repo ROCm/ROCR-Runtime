@@ -2298,6 +2298,10 @@ typedef enum hsa_amd_event_type_s {
    AMD GPU HW Exception.
    */
   HSA_AMD_GPU_HW_EXCEPTION_EVENT,
+  /*
+   AMD GPU memory error.
+   */
+  HSA_AMD_GPU_MEMORY_ERROR_EVENT,
 } hsa_amd_event_type_t;
 
 /**
@@ -2340,6 +2344,33 @@ typedef struct hsa_amd_gpu_memory_fault_info_s {
   */
   uint32_t fault_reason_mask;
 } hsa_amd_gpu_memory_fault_info_t;
+
+/**
+ * @brief Flags denoting the cause of a memory error.
+ */
+typedef enum {
+  // Memory was in use by low-level HW component and cannot be released
+  HSA_AMD_MEMORY_ERROR_MEMORY_IN_USE = (1 << 0),
+} hsa_amd_memory_error_reason_t;
+
+/**
+ * @brief AMD GPU memory error event data.
+ */
+typedef struct hsa_amd_gpu_memory_error_info_s {
+  /*
+  The agent where the memory error occurred.
+  */
+  hsa_agent_t agent;
+  /*
+  Virtual address involved.
+  */
+  uint64_t virtual_address;
+  /*
+  Bit field encoding the memory error failure reasons. There could be multiple bits set
+  for one error.  Bits are defined in hsa_amd_memory_error_reason_t.
+  */
+  uint32_t error_reason_mask;
+} hsa_amd_gpu_memory_error_info_t;
 
 /**
  * @brief Flags denoting the type of a HW exception
@@ -2388,6 +2419,10 @@ typedef struct hsa_amd_event_s {
     The memory fault info, only valid when @p event_type is HSA_AMD_GPU_HW_EXCEPTION_EVENT.
     */
     hsa_amd_gpu_hw_exception_info_t hw_exception;
+    /*
+    The memory error info, only valid when @p event_type is HSA_AMD_GPU_MEMORY_ERROR_EVENT.
+    */
+    hsa_amd_gpu_memory_error_info_t memory_error;
   };
 } hsa_amd_event_t;
 
