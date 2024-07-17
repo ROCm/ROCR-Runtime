@@ -297,9 +297,9 @@ if( BUILD_SHARED_LIBS )
                                                               HSA_VERSION_MINOR=${VERSION_MINOR}
                                                               HSA_VERSION_PATCH=${VERSION_PATCH})
     target_link_libraries(${CORE_RUNTIME_TARGET} PRIVATE rocprofiler-register::rocprofiler-register)
-    set(HSA_DEP_ROCPROFILER_REGISTER ON)
+    set(HSA_DEP_ROCPROFILER_REGISTER ON PARENT_SCOPE)
   else()
-    set(HSA_DEP_ROCPROFILER_REGISTER OFF)
+    set(HSA_DEP_ROCPROFILER_REGISTER OFF PARENT_SCOPE)
   endif() # end rocprofiler-register_FOUND
 endif()#end BUILD_SHARED_LIBS
 
