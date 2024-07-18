@@ -285,11 +285,12 @@ if(${IMAGE_SUPPORT})
 
 endif()
 
-## Link dependencies.
-target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
 # For static package rocprofiler-register dependency is not required
+# Link to hsakmt target for shared library builds
+# Link to hsakmt-staticdrm target for static library builds
 if( BUILD_SHARED_LIBS )
+  target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
   find_package(rocprofiler-register)
   if(rocprofiler-register_FOUND)
     target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HSA_ROCPROFILER_REGISTER=1
@@ -301,6 +302,9 @@ if( BUILD_SHARED_LIBS )
   else()
     set(HSA_DEP_ROCPROFILER_REGISTER OFF PARENT_SCOPE)
   endif() # end rocprofiler-register_FOUND
+else()
+  include_directories(${drm_INCLUDE_DIRS})
+  target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt-staticdrm::hsakmt-staticdrm)
 endif()#end BUILD_SHARED_LIBS
 
 ## Set the VERSION and SOVERSION values
@@ -321,7 +325,7 @@ if( NOT ${BUILD_SHARED_LIBS} )
   add_dependencies( ${CORE_RUNTIME_NAME} ${CORE_RUNTIME_TARGET} )
 
   ## Add external link requirements.
-  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE hsakmt::hsakmt )
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE hsakmt-staticdrm::hsakmt-staticdrm )
   target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE elf::elf dl pthread rt )
 
   install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
