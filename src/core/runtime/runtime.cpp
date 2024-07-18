@@ -1838,7 +1838,7 @@ hsa_status_t Runtime::Load() {
      * This is not a failure, in some environments such as SRIOV, not all CPUID info is
      * exposed inside the guest
      */
-    debug_warning("Parsing CPUID failed.");
+    debug_warning(false && "Parsing CPUID failed.");
   }
 
   flag_.Refresh();
@@ -1852,7 +1852,7 @@ hsa_status_t Runtime::Load() {
   // Setup system clock frequency for the first time.
   if (sys_clock_freq_ == 0) {
     sys_clock_freq_ = os::SystemClockFrequency();
-    if (sys_clock_freq_ < 100000) debug_warning("System clock resolution is low.");
+    if (sys_clock_freq_ < 100000) debug_warning(false && "System clock resolution is low.");
   }
 
   BindErrorHandlers();
@@ -2049,7 +2049,7 @@ void Runtime::CheckVirtualMemApiSupport() {
     fn_amdgpu_device_get_fd =
         (int (*)(HsaAMDGPUDeviceHandle device_handle))dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
     if ((error = dlerror()) != NULL) {
-      debug_warning("amdgpu_device_get_fd not available. Please update version of libdrm");
+      debug_warning(false && "amdgpu_device_get_fd not available. Please update version of libdrm");
       fn_amdgpu_device_get_fd = &fn_amdgpu_device_get_fd_nosupport;
     } else {
       virtual_mem_api_supported_ = true;
@@ -2074,7 +2074,7 @@ void Runtime::InitIPCDmaBufSupport() {
   fn_amdgpu_device_get_fd =
       (int (*)(HsaAMDGPUDeviceHandle device_handle))dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
   if ((error = dlerror()) != NULL) {
-    debug_warning("amdgpu_device_get_fd not available. Please update version of libdrm");
+    debug_warning(false && "amdgpu_device_get_fd not available. Please update version of libdrm");
     fn_amdgpu_device_get_fd = &fn_amdgpu_device_get_fd_nosupport;
   } else {
     ipc_dmabuf_supported_ = !flag().enable_ipc_mode_legacy();

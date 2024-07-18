@@ -1440,7 +1440,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
     case HSA_AMD_AGENT_INFO_COOPERATIVE_COMPUTE_UNIT_COUNT:
       if (core::Runtime::runtime_singleton_->flag().coop_cu_count() &&
           !(core::Runtime::runtime_singleton_->flag().cu_mask(enum_index_).empty())) {
-        debug_warning("Cooperative launch and CU masking are currently incompatible!");
+        debug_warning(false && "Cooperative launch and CU masking are currently incompatible!");
         *((uint32_t*)value) = 0;
         break;
       }
