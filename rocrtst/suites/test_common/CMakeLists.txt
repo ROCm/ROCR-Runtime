@@ -83,13 +83,21 @@ if( DEFINED ENV{CPACK_RPM_PACKAGE_RELEASE} )
   set ( CPACK_RPM_PACKAGE_RELEASE $ENV{CPACK_RPM_PACKAGE_RELEASE} )
 endif()
 ## Add os details to rpm package name. For deb packages, its set from build environment
-execute_process( COMMAND rpm --eval %{?dist}
-                 RESULT_VARIABLE PROC_RESULT
-                 OUTPUT_VARIABLE EVAL_RESULT
-                 OUTPUT_STRIP_TRAILING_WHITESPACE )
-if ( PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "" )
-  string ( APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}" )
+# Modify line 87 to be "if the env. variable DISTRO_NAME IS centos or rhel"
+if (DEFINED ENV{DISTRO_NAME} AND
+  (ENV{DISTRO_NAME} MATCHES "centos" OR
+   ENV{DISTRO_NAME} MATCHES "rhel" OR
+   ENV{DISTRO_NAME} MATCHES "sles"))
+  execute_process(COMMAND rpm --eval %{?dist}
+          RESULT_VARIABLE PROC_RESULT
+          OUTPUT_VARIABLE EVAL_RESULT
+          OUTPUT_STRIP_TRAILING_WHITESPACE)
+  if (PROC_RESULT EQUAL "0" AND NOT EVAL_RESULT STREQUAL "")
+    string (APPEND CPACK_RPM_PACKAGE_RELEASE "%{?dist}")
+  endif()
 endif()
+
+
 set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core,hsa-rocr")
 
 set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810"
