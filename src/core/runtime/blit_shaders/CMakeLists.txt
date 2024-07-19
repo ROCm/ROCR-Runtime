@@ -44,23 +44,10 @@
 # Minimum required version of CMake
 cmake_minimum_required ( VERSION 3.7 )
 
-# Find Clang package and LLVM package
-find_package(Clang REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
-find_package(LLVM REQUIRED HINTS ${CMAKE_PREFIX_PATH}/llvm PATHS /opt/rocm/llvm )
-
 # Set the target devices
 set (TARGET_DEVS "gfx900;gfx940;gfx1010;gfx1030;gfx1100")
 # Set the postfix for each target device
 set (POSTFIX "9;940;1010;10;11")
-
-# If verbose output is enabled, print paths and target devices
-if(${CMAKE_VERBOSE_MAKEFILE})
-	get_property(clang_path TARGET clang PROPERTY LOCATION)
-	get_property(objcopy_path TARGET llvm-objcopy PROPERTY LOCATION)
-	message("Using clang from: ${clang_path}")
-	message("Using llvm-objcopy from: ${objcopy_path}")
-	message("Blit Shaders assembled for: ${TARGET_DEVS}")
-endif()
 
 # Function to generate kernel bitcode
 function(gen_kernel_bc TARGET_ID INPUT_FILE OUTPUT_FILE)
