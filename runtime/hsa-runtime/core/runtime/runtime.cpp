@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -125,6 +125,7 @@ hsa_status_t Runtime::Acquire() {
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
 
   if (runtime_singleton_ == NULL) {
+    memset(log_flags, 0, sizeof(log_flags));
     runtime_singleton_ = new Runtime();
   }
 
@@ -3500,6 +3501,17 @@ hsa_status_t Runtime::VMemoryGetAllocPropertiesFromHandle(hsa_amd_vmem_alloc_han
   *type = (memoryHandleIt->second.alloc_flag & core::MemoryRegion::AllocatePinned)
       ? MEMORY_TYPE_PINNED
       : MEMORY_TYPE_NONE;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t Runtime::EnableLogging(uint8_t* flags, void* file) {
+  memcpy(log_flags, flags, sizeof(log_flags));
+
+  if (file)
+    log_file = reinterpret_cast<FILE*>(file);
+  else
+    log_file = stderr;
 
   return HSA_STATUS_SUCCESS;
 }

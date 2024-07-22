@@ -265,6 +265,7 @@ struct AmdExtTable {
   decltype(hsa_amd_agent_set_async_scratch_limit)* hsa_amd_agent_set_async_scratch_limit_fn;
   decltype(hsa_amd_queue_get_info)* hsa_amd_queue_get_info_fn;
   decltype(hsa_amd_vmem_address_reserve_align)* hsa_amd_vmem_address_reserve_align_fn;
+  decltype(hsa_amd_enable_logging)* hsa_amd_enable_logging_fn;
 };
 
 // Table to export HSA Core Runtime Apis

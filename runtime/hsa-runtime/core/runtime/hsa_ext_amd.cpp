@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -1412,6 +1412,12 @@ hsa_status_t HSA_API hsa_amd_queue_get_info(hsa_queue_t* _queue,
   IS_VALID(queue);
 
   return queue->GetInfo(attribute, value);
+  CATCH;
+}
+
+hsa_status_t hsa_amd_enable_logging(uint8_t* flags, void *file) {
+  TRY;
+  return core::Runtime::runtime_singleton_->EnableLogging(flags, file);
   CATCH;
 }
 

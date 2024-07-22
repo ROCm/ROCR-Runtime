@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -898,6 +898,10 @@ static int kCopyMisalignedUnroll = GetKernelSourceParam("kCopyMisalignedUnroll")
 static int kFillVecWidth = GetKernelSourceParam("kFillVecWidth");
 static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
 
+static unsigned extractAqlBits(unsigned v, unsigned pos, unsigned width) {
+  return (v >> pos) & ((1 << width) - 1);
+};
+
 BlitKernel::BlitKernel(core::Queue* queue)
     : core::Blit(),
       queue_(queue),
@@ -1040,6 +1044,25 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
       queue_buffer[(write_index)&queue_bitmask_] = barrier_packet;
       std::atomic_thread_fence(std::memory_order_release);
       queue_buffer[(write_index)&queue_bitmask_].header = kBarrierPacketHeader;
+
+      LogPrint(HSA_AMD_LOG_FLAG_BLIT_KERNEL_PKTS,
+      "HWq=%p, id=%d, Barrier Header = "
+      "0x%x (type=%d, barrier=%d, acquire=%d, release=%d), "
+      "dep_signal=[0x%zx 0x%zx 0x%zx 0x%zx 0x%zx], completion_signal=0x%zx "
+      "rptr=%u, wptr=%u",
+      queue_->public_handle()->base_address, queue_->public_handle()->id,
+      kBarrierPacketHeader,
+      extractAqlBits(kBarrierPacketHeader,
+                    HSA_PACKET_HEADER_TYPE, HSA_PACKET_HEADER_WIDTH_TYPE),
+      extractAqlBits(kBarrierPacketHeader,
+                    HSA_PACKET_HEADER_BARRIER, HSA_PACKET_HEADER_WIDTH_BARRIER),
+      extractAqlBits(kBarrierPacketHeader, HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE,
+                    HSA_PACKET_HEADER_WIDTH_SCACQUIRE_FENCE_SCOPE),
+      extractAqlBits(kBarrierPacketHeader, HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE,
+                    HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE),
+      barrier_packet.dep_signal[0], barrier_packet.dep_signal[1], barrier_packet.dep_signal[2],
+      barrier_packet.dep_signal[3], barrier_packet.dep_signal[4],
+      barrier_packet.completion_signal, queue_->LoadReadIndexRelaxed(), write_index);
 
       ++write_index;
 
@@ -1234,6 +1257,28 @@ void BlitKernel::PopulateQueue(uint64_t index, uint64_t code_handle, void* args,
   queue_buffer[index & queue_bitmask_] = packet;
   std::atomic_thread_fence(std::memory_order_release);
   queue_buffer[index & queue_bitmask_].header = kDispatchPacketHeader;
+
+  LogPrint(HSA_AMD_LOG_FLAG_BLIT_KERNEL_PKTS,
+    "HWq=%p, id=%d, Dispatch Header = "
+    "0x%x (type=%d, barrier=%d, acquire=%d, release=%d), "
+    "setup=%d, grid=[%zu, %zu, %zu], workgroup=[%zu, %zu, %zu], private_seg_size=%zu, "
+    "group_seg_size=%zu, kernel_obj=0x%zx, kernarg_address=0x%zx, completion_signal=0x%zx "
+    "rptr=%u, wptr=%u",
+    queue_->public_handle()->base_address, queue_->public_handle()->id,
+    kDispatchPacketHeader,
+    extractAqlBits(kDispatchPacketHeader,
+                   HSA_PACKET_HEADER_TYPE, HSA_PACKET_HEADER_WIDTH_TYPE),
+    extractAqlBits(kDispatchPacketHeader,
+                   HSA_PACKET_HEADER_BARRIER, HSA_PACKET_HEADER_WIDTH_BARRIER),
+    extractAqlBits(kDispatchPacketHeader, HSA_PACKET_HEADER_SCACQUIRE_FENCE_SCOPE,
+                   HSA_PACKET_HEADER_WIDTH_SCACQUIRE_FENCE_SCOPE),
+    extractAqlBits(kDispatchPacketHeader, HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE,
+                   HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE),
+    packet.setup, packet.grid_size_x, packet.grid_size_y, packet.grid_size_z,
+    packet.workgroup_size_x, packet.workgroup_size_y, packet.workgroup_size_z,
+    packet.private_segment_size, packet.group_segment_size,
+    packet.kernel_object,packet.kernarg_address,
+    completion_signal, queue_->LoadReadIndexRelaxed(), index);
 }
 
 BlitKernel::KernelArgs* BlitKernel::ObtainAsyncKernelCopyArg() {
