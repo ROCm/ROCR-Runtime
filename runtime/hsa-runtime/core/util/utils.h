@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -48,12 +48,18 @@
 #include "stdint.h"
 #include "stddef.h"
 #include "stdlib.h"
+#include "stdarg.h"
+#include "unistd.h"
 #include <assert.h>
 #include <iostream>
 #include <string>
 #include <algorithm>
+#include <sstream>
+#include <thread>
 
 namespace rocr {
+extern FILE* log_file;
+extern uint8_t log_flags[8];
 
 typedef unsigned int uint;
 typedef uint64_t uint64;
@@ -68,6 +74,8 @@ typedef uint64_t uint64;
 #undef __stdcall
 #define __stdcall  // __attribute__((__stdcall__))
 #define __ALIGNED__(x) __attribute__((aligned(x)))
+
+void log_printf(const char* file, int line, const char* format, ...);
 
 static __forceinline void* _aligned_malloc(size_t size, size_t alignment) {
 #ifdef _ISOC11_SOURCE
@@ -134,6 +142,15 @@ static __forceinline unsigned long long int strtoull(const char* str,
 #else
 #define ifdebug if (true)
 #endif
+
+#define __FILENAME__ (strrchr(__FILE__, '/') ? strrchr(__FILE__, '/') + 1 : __FILE__)
+
+#define LogPrint(flag, format, ...)                                                                \
+  do {                                                                                             \
+    if (hsa_flag_isset64(log_flags, flag))                                                         \
+      rocr::log_printf(__FILENAME__, __LINE__, format, ##__VA_ARGS__);                             \
+  } while (false);
+
 
 // A macro to disallow the copy and move constructor and operator= functions
 #define DISALLOW_COPY_AND_ASSIGN(TypeName)                                                         \

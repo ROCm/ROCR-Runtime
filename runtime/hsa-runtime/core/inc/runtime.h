@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -392,6 +392,8 @@ class Runtime {
   hsa_status_t VMemoryGetAllocPropertiesFromHandle(const hsa_amd_vmem_alloc_handle_t memoryHandle,
                                                    const core::MemoryRegion** mem_region,
                                                    hsa_amd_memory_type_t* type);
+
+  hsa_status_t EnableLogging(uint8_t* flags, void* file);
 
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }
 

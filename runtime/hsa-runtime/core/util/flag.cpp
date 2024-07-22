@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2021-2021, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2021-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -42,6 +42,7 @@
 
 #include "core/util/flag.h"
 #include "core/util/utils.h"
+#include "core/util/os.h"
 
 #include <vector>
 #include <map>
@@ -50,6 +51,22 @@
 #include <locale>
 
 namespace rocr {
+FILE* log_file = stderr;
+uint8_t log_flags[8];
+
+void log_printf(const char* file, int line, const char* format, ...) {
+    va_list ap;
+    std::stringstream str_thrd_id;
+    str_thrd_id << std::hex << std::this_thread::get_id();
+    va_start(ap, format);
+    char message[4096];
+    vsnprintf(message, sizeof(message), format, ap);
+    va_end(ap);
+    fprintf(log_file, ":%-25s:%-4d: %010lld us: [pid:%-5d tid:0x%s] [***rocr***] %s\n",
+            file, line, os::ReadAccurateClock()/1000ULL, os::GetProcessId(),
+            str_thrd_id.str().c_str(), message);
+    fflush(log_file);
+}
 
 // split at separators
 static std::vector<std::string> split(std::string& str, char sep) {

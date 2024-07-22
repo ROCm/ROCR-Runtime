@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -70,7 +70,18 @@ extern "C" {
  */
 
 /**
- * @brief Macro to use to determine that a  flag is set when querying flags within uint8_t[8]
+ * @brief Macro to set a flag within uint8_t[8] types
+ * types
+ */
+static __inline__ __attribute__((always_inline)) void hsa_flag_set64(uint8_t* value,
+                                                                       uint32_t bit) {
+  unsigned int index = bit / 8;
+  unsigned int subBit = bit % 8;
+  (((uint8_t*)value)[index]) |= (1 << subBit);
+}
+
+/**
+ * @brief Macro to use to determine that a flag is set when querying flags within uint8_t[8]
  * types
  */
 static __inline__ __attribute__((always_inline)) bool hsa_flag_isset64(uint8_t* value,
@@ -3139,6 +3150,30 @@ typedef enum {
 
 hsa_status_t hsa_amd_queue_get_info(hsa_queue_t* queue, hsa_queue_info_attribute_t attribute,
                                     void* value);
+
+/**
+ * @brief logging types
+ */
+typedef enum hsa_amd_log_flag_s {
+   /* Log AQL packets internally enqueued by HSA for Blit Kernels */
+  HSA_AMD_LOG_FLAG_BLIT_KERNEL_PKTS = 0,
+} hsa_amd_log_flag_t;
+
+/**
+ * @brief Enable logging via external file
+ * If this function is called multiple times, the last call to this function will overwrite the
+ * previous @p flags and @p file.
+ *
+ * @param[in] flags is used to filter types of logging. Type is uint8_t[8].
+ * Can be set using the hsa_flag_set64 macro. Setting @p flags to 0 will disable logging.
+ * @param[in] file file stream to output logging. If file is NULL, prints are sent to stderr.
+ *
+ * @retval ::HSA_STATUS_SUCCESS The function has been executed successfully.
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ */
+hsa_status_t hsa_amd_enable_logging(uint8_t* flags, void* file);
 
 #ifdef __cplusplus
 }  // end extern "C" block
