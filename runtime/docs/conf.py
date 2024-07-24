@@ -28,6 +28,8 @@ release = version_number
 
 external_toc_path = "./sphinx/_toc.yml"
 
+external_projects_current_project = "rocr-runtime"
+
 docs_core = ROCmDocs(left_nav_title)
 docs_core.run_doxygen(doxygen_root="doxygen", doxygen_path="doxygen/xml")
 docs_core.setup()

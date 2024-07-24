@@ -2,11 +2,20 @@
 # These comments will also be removed.
 root: index
 subtrees:
-  - numbered: False
+  - caption: Install
     entries:
-    - file: structure
-    - file: api
-    - file: environment_variables
+    - file: install/installation
+
+  - caption: API reference
+    entries:
+    - file: api-reference/c-interface-adaptors
+    - file: api-reference/environment_variables
+    - file: api-reference/api
+    
+  - caption: Contribution
+    entries:
+    - file: contribution/contributing-to-rocr
+
   - caption: About
     entries:
     - file: license
