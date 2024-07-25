@@ -182,7 +182,7 @@ typedef struct hsa_amd_barrier_value_packet_s {
 
 /** @} */
 
-/** \addtogroup memory Memory
+/** \addtogroup error-codes
  *  @{
  */
 
@@ -226,6 +226,12 @@ enum {
    */
   HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
 };
+
+/** @} */
+
+/** \addtogroup memory Memory
+ *  @{
+ */
 
 /**
  * @brief IOMMU version supported
@@ -715,7 +721,7 @@ hsa_status_t HSA_API
 
 /** @} */
 
-/** \addtogroup status Runtime Notifications
+/** \defgroup status Runtime notifications
  *  @{
  */
 
@@ -2250,7 +2256,7 @@ hsa_status_t HSA_API hsa_amd_ipc_memory_detach(void* mapped_ptr);
 
 /** @} */
 
-/** \addtogroup status Runtime Notifications
+/** \addtogroup status Runtime notifications
  *  @{
  */
 
