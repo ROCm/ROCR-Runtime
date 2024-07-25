@@ -182,7 +182,7 @@ typedef struct hsa_amd_barrier_value_packet_s {
 
 /** @} */
 
-/** \addtogroup error-codes
+/** \addtogroup error-codes Error codes
  *  @{
  */
 

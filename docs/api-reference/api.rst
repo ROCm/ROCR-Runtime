@@ -88,3 +88,10 @@ Profiling
 .. doxygengroup:: profile
    :content-only:
    :inner:
+
+Error codes
+#############
+.. doxygengroup:: error-codes
+   :content-only:
+   :inner:
+   
