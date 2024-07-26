@@ -112,13 +112,12 @@
 extern "C" {
 #endif  /* __cplusplus */
 
-/** \defgroup error-codes Error codes
+/** \addtogroup error-codes Error codes
  *  @{
  */
 
 /**
  * @brief Status codes.
- * Enumeration constants added to hsa_status_t.
  */
 typedef enum {
   /**
