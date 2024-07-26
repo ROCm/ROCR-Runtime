@@ -182,6 +182,10 @@ typedef struct hsa_amd_barrier_value_packet_s {
 
 /** @} */
 
+/** \defgroup error-codes Error codes
+ *  @{
+ */
+
 /**
  * @brief Enumeration constants added to ::hsa_status_t.
  *
@@ -222,6 +226,12 @@ enum {
    */
   HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
 };
+
+/** @} */
+
+/** \addtogroup memory Memory
+ *  @{
+ */
 
 /**
  * @brief IOMMU version supported
@@ -504,6 +514,7 @@ typedef enum hsa_amd_coherency_type_s {
   HSA_AMD_COHERENCY_TYPE_NONCOHERENT = 1
 } hsa_amd_coherency_type_t;
 
+
 /**
  * @brief Get the coherency type of the fine grain region of an agent.
  *
@@ -544,6 +555,12 @@ hsa_status_t HSA_API hsa_amd_coherency_get_type(hsa_agent_t agent,
  */
 hsa_status_t HSA_API hsa_amd_coherency_set_type(hsa_agent_t agent,
                                                 hsa_amd_coherency_type_t type);
+
+/** @} */
+
+/** \defgroup profile Profiling
+ *  @{
+ */
 
 /**
  * @brief Structure containing profiling dispatch time information.
@@ -701,6 +718,12 @@ hsa_status_t HSA_API
     hsa_amd_profiling_convert_tick_to_system_domain(hsa_agent_t agent,
                                                     uint64_t agent_tick,
                                                     uint64_t* system_tick);
+
+/** @} */
+
+/** \defgroup status Runtime notifications
+ *  @{
+ */
 
 /**
  * @brief Signal attribute flags.
@@ -865,6 +888,24 @@ hsa_status_t HSA_API
                                  hsa_amd_signal_handler handler, void* arg);
 
 /**
+ * @brief Wait for any signal-condition pair to be satisfied.
+ *
+ * @details Allows waiting for any of several signal and conditions pairs to be
+ * satisfied. The function returns the index into the list of signals of the
+ * first satisfying signal-condition pair. The value of the satisfying signal's
+ * value is returned in satisfying_value unless satisfying_value is NULL. This
+ * function provides only relaxed memory semantics.
+ */
+uint32_t HSA_API
+    hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* signals,
+                            hsa_signal_condition_t* conds,
+                            hsa_signal_value_t* values, uint64_t timeout_hint,
+                            hsa_wait_state_t wait_hint,
+                            hsa_signal_value_t* satisfying_value);
+
+/** @} */
+
+/**
  * @brief Call a function asynchronously
  *
  * @details Provides access to the runtime's asynchronous event handling thread
@@ -891,21 +932,65 @@ hsa_status_t HSA_API
 hsa_status_t HSA_API
     hsa_amd_async_function(void (*callback)(void* arg), void* arg);
 
-/**
- * @brief Wait for any signal-condition pair to be satisfied.
- *
- * @details Allows waiting for any of several signal and conditions pairs to be
- * satisfied. The function returns the index into the list of signals of the
- * first satisfying signal-condition pair. The value of the satisfying signal's
- * value is returned in satisfying_value unless satisfying_value is NULL. This
- * function provides only relaxed memory semantics.
+/** \addtogroup ext-images Images and samplers
+ *  @{
  */
-uint32_t HSA_API
-    hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* signals,
-                            hsa_signal_condition_t* conds,
-                            hsa_signal_value_t* values, uint64_t timeout_hint,
-                            hsa_wait_state_t wait_hint,
-                            hsa_signal_value_t* satisfying_value);
+
+/**
+ * @brief Encodes an opaque vendor specific image format.  The length of data
+ * depends on the underlying format.  This structure must not be copied as its
+ * true length can not be determined.
+ */
+typedef struct hsa_amd_image_descriptor_s {
+  /*
+  Version number of the descriptor
+  */
+  uint32_t version;
+
+  /*
+  Vendor and device PCI IDs for the format as VENDOR_ID<<16|DEVICE_ID.
+  */
+  uint32_t deviceID;
+
+  /*
+  Start of vendor specific data.
+  */
+  uint32_t data[1];
+} hsa_amd_image_descriptor_t;
+
+/**
+ * @brief Creates an image from an opaque vendor specific image format.
+ * Does not modify data at image_data.  Intended initially for
+ * accessing interop images.
+ *
+ * @param agent[in] Agent on which to create the image
+ *
+ * @param[in] image_descriptor[in] Vendor specific image format
+ *
+ * @param[in] image_data Pointer to image backing store
+ *
+ * @param[in] access_permission Access permissions for the image object
+ *
+ * @param[out] image Created image object.
+ *
+ * @retval HSA_STATUS_SUCCESS Image created successfully
+ *
+ * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
+ *
+ * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
+ * necessary resources
+ *
+ * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT Bad or mismatched descriptor,
+ * null image_data, or mismatched access_permission.
+ */
+hsa_status_t HSA_API hsa_amd_image_create(
+    hsa_agent_t agent,
+    const hsa_ext_image_descriptor_t *image_descriptor,
+    const hsa_amd_image_descriptor_t *image_layout,
+    const void *image_data,
+    hsa_access_permission_t access_permission,
+    hsa_ext_image_t *image
+);
 
 /**
  * @brief Query image limits.
@@ -931,6 +1016,12 @@ uint32_t HSA_API
 hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
                                                     hsa_agent_info_t attribute,
                                                     void* value);
+
+/** @} */
+
+/** \addtogroup queue Queues
+ *  @{
+ */
 
 /**
  * @brief Set a queue's CU affinity mask.
@@ -995,6 +1086,12 @@ hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
  */
 hsa_status_t HSA_API hsa_amd_queue_cu_get_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
                                                uint32_t* cu_mask);
+
+/** @} */
+
+/** \addtogroup memory Memory
+ *  @{
+ */
 
 /**
  * @brief Memory segments associated with a memory pool.
@@ -1917,62 +2014,6 @@ hsa_status_t HSA_API hsa_amd_interop_map_buffer(uint32_t num_agents,
 hsa_status_t HSA_API hsa_amd_interop_unmap_buffer(void* ptr);
 
 /**
- * @brief Encodes an opaque vendor specific image format.  The length of data
- * depends on the underlying format.  This structure must not be copied as its
- * true length can not be determined.
- */
-typedef struct hsa_amd_image_descriptor_s {
-  /*
-  Version number of the descriptor
-  */
-  uint32_t version;
-
-  /*
-  Vendor and device PCI IDs for the format as VENDOR_ID<<16|DEVICE_ID.
-  */
-  uint32_t deviceID;
-
-  /*
-  Start of vendor specific data.
-  */
-  uint32_t data[1];
-} hsa_amd_image_descriptor_t;
-
-/**
- * @brief Creates an image from an opaque vendor specific image format.
- * Does not modify data at image_data.  Intended initially for
- * accessing interop images.
- *
- * @param agent[in] Agent on which to create the image
- *
- * @param[in] image_descriptor[in] Vendor specific image format
- *
- * @param[in] image_data Pointer to image backing store
- *
- * @param[in] access_permission Access permissions for the image object
- *
- * @param[out] image Created image object.
- *
- * @retval HSA_STATUS_SUCCESS Image created successfully
- *
- * @retval HSA_STATUS_ERROR_NOT_INITIALIZED if HSA is not initialized
- *
- * @retval HSA_STATUS_ERROR_OUT_OF_RESOURCES if there is a failure in allocating
- * necessary resources
- *
- * @retval HSA_STATUS_ERROR_INVALID_ARGUMENT Bad or mismatched descriptor,
- * null image_data, or mismatched access_permission.
- */
-hsa_status_t HSA_API hsa_amd_image_create(
-    hsa_agent_t agent,
-    const hsa_ext_image_descriptor_t *image_descriptor,
-    const hsa_amd_image_descriptor_t *image_layout,
-    const void *image_data,
-    hsa_access_permission_t access_permission,
-    hsa_ext_image_t *image
-);
-
-/**
  * @brief Denotes the type of memory in a pointer info query.
  */
 typedef enum {
@@ -2213,6 +2254,12 @@ hsa_status_t HSA_API hsa_amd_ipc_memory_attach(
  */
 hsa_status_t HSA_API hsa_amd_ipc_memory_detach(void* mapped_ptr);
 
+/** @} */
+
+/** \addtogroup status Runtime notifications
+ *  @{
+ */
+
 /**
  * @brief 256-bit process independent identifier for a ROCr IPC signal.
  */
@@ -2392,6 +2439,12 @@ typedef hsa_status_t (*hsa_amd_system_event_callback_t)(const hsa_amd_event_t* e
 hsa_status_t HSA_API hsa_amd_register_system_event_handler(hsa_amd_system_event_callback_t callback,
                                                    void* data);
 
+/** @} */
+
+/** \addtogroup queue Queues
+ *  @{
+ */
+
 /**
  * @brief Per-queue dispatch and wavefront scheduling priority.
  */
@@ -2428,6 +2481,12 @@ typedef enum hsa_amd_queue_priority_s {
  */
 hsa_status_t HSA_API hsa_amd_queue_set_priority(hsa_queue_t* queue,
                                                 hsa_amd_queue_priority_t priority);
+
+/** @} */                                                
+
+/** \addtogroup memory Memory
+ *  @{
+ */
 
 /**
  * @brief Deallocation notifier function type.
@@ -2664,6 +2723,12 @@ hsa_status_t hsa_amd_svm_prefetch_async(void* ptr, size_t size, hsa_agent_t agen
                                         uint32_t num_dep_signals, const hsa_signal_t* dep_signals,
                                         hsa_signal_t completion_signal);
 
+/** @} */
+
+/** \addtogroup profile Profiling
+ *  @{
+ */
+
 /**
  * @brief Acquire Stream Performance Monitor on an agent
  *
@@ -2716,6 +2781,13 @@ hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
 hsa_status_t hsa_amd_spm_set_dest_buffer(hsa_agent_t preferred_agent, size_t size_in_bytes,
                                          uint32_t* timeout, uint32_t* size_copied, void* dest,
                                          bool* is_data_loss);
+
+/** @} */
+
+/** \addtogroup memory Memory
+ *  @{
+ */
+
 /**
  * @brief Obtains an OS specific, vendor neutral, handle to a memory allocation.
  *
@@ -3061,6 +3133,12 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type);
 
+/** @} */
+
+/** \addtogroup queue Queues
+ *  @{
+ */
+
 /**
  * @brief Set the asynchronous scratch limit threshold on all the queues for this agent.
  * Dispatches that are enqueued on HW queues on this agent that are smaller than threshold will not
@@ -3087,6 +3165,8 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
  * reclaim
  */
 hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
+
+/** @} */
 
 #ifdef __cplusplus
 }  // end extern "C" block
