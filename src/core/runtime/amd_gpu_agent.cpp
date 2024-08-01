@@ -65,6 +65,7 @@
 #include "core/util/os.h"
 #include "inc/hsa_ext_image.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
+#include "inc/hsa_ven_amd_pc_sampling.h"
 
 #include "core/inc/amd_trap_handler_v1.h"
 #include "core/inc/amd_blit_shaders.h"
@@ -83,7 +84,6 @@
 #define DEFAULT_SCRATCH_BYTES_PER_THREAD 2048
 #define MAX_WAVE_SCRATCH 8387584  // See COMPUTE_TMPRING_SIZE.WAVESIZE
 #define MAX_NUM_DOORBELLS 0x400
-#define MAX_SCRATCH_APERTURE_PER_XCC 4294967296
 #define DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC (1 << 30)  // 1 GB
 
 namespace rocr {
@@ -92,6 +92,8 @@ extern HsaApiTable hsa_internal_api_table_;
 } // namespace core
 
 namespace AMD {
+const uint64_t CP_DMA_DATA_TRANSFER_CNT_MAX = (1 << 26);
+
 GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode,
                    uint32_t index)
     : GpuAgentInt(node),
@@ -113,7 +115,9 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       sdma_blit_used_mask_(0),
       scratch_limit_async_threshold_(0),
       scratch_cache_(
-          [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }) {
+          [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
+      trap_handler_tma_region_(NULL),
+      pcs_hosttrap_data_() {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -259,68 +263,76 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
     ASICShader compute_1010;
     ASICShader compute_10;
     ASICShader compute_11;
+    ASICShader compute_12;
   };
 
   std::map<std::string, CompiledShader> compiled_shaders = {
       {"TrapHandler",
        {
-           {NULL, 0, 0, 0},                                             // gfx7
-           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},        // gfx8
-           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},        // gfx9
-           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},    // gfx90a
-           {NULL, 0, 0, 0},                                             // gfx940
-           {NULL, 0, 0, 0},                                             // gfx942
-           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},  // gfx1010
-           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},      // gfx10
-           {NULL, 0, 0, 0},                                             // gfx11
+           {NULL, 0, 0, 0},                                                 // gfx7
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},            // gfx8
+           {kCodeTrapHandler9, sizeof(kCodeTrapHandler9), 2, 4},            // gfx9
+           {kCodeTrapHandler90a, sizeof(kCodeTrapHandler90a), 2, 4},        // gfx90a
+           {NULL, 0, 0, 0},                                                 // gfx940
+           {NULL, 0, 0, 0},                                                 // gfx942
+           {kCodeTrapHandler1010, sizeof(kCodeTrapHandler1010), 2, 4},      // gfx1010
+           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},          // gfx10
+           {NULL, 0, 0, 0},                                                 // gfx11
+           // GFX12_TODO: Using one for GFX10 for now.
+           //             If NULL is used (like GFX11), get an assert.
+           {kCodeTrapHandler10, sizeof(kCodeTrapHandler10), 2, 4},          // gfx12
        }},
       {"TrapHandlerKfdExceptions",
        {
-           {NULL, 0, 0, 0},                                                   // gfx7
-           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},              // gfx8
-           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},        // gfx9
-           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},        // gfx90a
-           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},    // gfx940
-           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},    // gfx942
-           {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},  // gfx1010
-           {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},      // gfx10
-           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},      // gfx11
+           {NULL, 0, 0, 0},                                                 // gfx7
+           {kCodeTrapHandler8, sizeof(kCodeTrapHandler8), 2, 4},            // gfx8
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},      // gfx9
+           {kCodeTrapHandlerV2_9, sizeof(kCodeTrapHandlerV2_9), 2, 4},      // gfx90a
+           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},  // gfx940
+           {kCodeTrapHandlerV2_940, sizeof(kCodeTrapHandlerV2_940), 2, 4},  // gfx942
+           {kCodeTrapHandlerV2_1010, sizeof(kCodeTrapHandlerV2_1010), 2, 4},// gfx1010
+           {kCodeTrapHandlerV2_10, sizeof(kCodeTrapHandlerV2_10), 2, 4},    // gfx10
+           {kCodeTrapHandlerV2_11, sizeof(kCodeTrapHandlerV2_11), 2, 4},    // gfx11
+           {kCodeTrapHandlerV2_12, sizeof(kCodeTrapHandlerV2_12), 2, 4},    // gfx12
        }},
       {"CopyAligned",
        {
-           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},      // gfx7
-           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},      // gfx8
-           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx9
-           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx90a
-           {kCodeCopyAligned940, sizeof(kCodeCopyAligned940), 32, 12},  // gfx940
-           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},      // gfx942
-           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},    // gfx1010
-           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},    // gfx10
-           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},    // gfx11
+           {kCodeCopyAligned7, sizeof(kCodeCopyAligned7), 32, 12},          // gfx7
+           {kCodeCopyAligned8, sizeof(kCodeCopyAligned8), 32, 12},          // gfx8
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},          // gfx9
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},          // gfx90a
+           {kCodeCopyAligned940, sizeof(kCodeCopyAligned940), 32, 12},      // gfx940
+           {kCodeCopyAligned9, sizeof(kCodeCopyAligned9), 32, 12},          // gfx942
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},        // gfx1010
+           {kCodeCopyAligned10, sizeof(kCodeCopyAligned10), 32, 12},        // gfx10
+           {kCodeCopyAligned11, sizeof(kCodeCopyAligned11), 32, 12},        // gfx11
+           {kCodeCopyAligned12, sizeof(kCodeCopyAligned12), 32, 12},        // gfx12
        }},
       {"CopyMisaligned",
        {
-           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},      // gfx7
-           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},      // gfx8
-           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx9
-           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx90a
-           {kCodeCopyMisaligned940, sizeof(kCodeCopyMisaligned940), 23, 10},  // gfx940
-           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},      // gfx942
-           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},    // gfx1010
-           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},    // gfx10
-           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},    // gfx11
+           {kCodeCopyMisaligned7, sizeof(kCodeCopyMisaligned7), 23, 10},    // gfx7
+           {kCodeCopyMisaligned8, sizeof(kCodeCopyMisaligned8), 23, 10},    // gfx8
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},    // gfx9
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},    // gfx90a
+           {kCodeCopyMisaligned940, sizeof(kCodeCopyMisaligned940), 23, 10},// gfx940
+           {kCodeCopyMisaligned9, sizeof(kCodeCopyMisaligned9), 23, 10},    // gfx942
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},  // gfx1010
+           {kCodeCopyMisaligned10, sizeof(kCodeCopyMisaligned10), 23, 10},  // gfx10
+           {kCodeCopyMisaligned11, sizeof(kCodeCopyMisaligned11), 23, 10},  // gfx11
+           {kCodeCopyMisaligned12, sizeof(kCodeCopyMisaligned12), 23, 10},  // gfx12
        }},
       {"Fill",
        {
-           {kCodeFill7, sizeof(kCodeFill7), 19, 8},      // gfx7
-           {kCodeFill8, sizeof(kCodeFill8), 19, 8},      // gfx8
-           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx9
-           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx90a
-           {kCodeFill940, sizeof(kCodeFill940), 19, 8},  // gfx940
-           {kCodeFill9, sizeof(kCodeFill9), 19, 8},      // gfx942
-           {kCodeFill10, sizeof(kCodeFill10), 19, 8},    // gfx1010
-           {kCodeFill10, sizeof(kCodeFill10), 19, 8},    // gfx10
-           {kCodeFill11, sizeof(kCodeFill11), 19, 8},    // gfx11
+           {kCodeFill7, sizeof(kCodeFill7), 19, 8},                         // gfx7
+           {kCodeFill8, sizeof(kCodeFill8), 19, 8},                         // gfx8
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},                         // gfx9
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},                         // gfx90a
+           {kCodeFill940, sizeof(kCodeFill940), 19, 8},                     // gfx940
+           {kCodeFill9, sizeof(kCodeFill9), 19, 8},                         // gfx942
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},                       // gfx1010
+           {kCodeFill10, sizeof(kCodeFill10), 19, 8},                       // gfx10
+           {kCodeFill11, sizeof(kCodeFill11), 19, 8},                       // gfx11
+           {kCodeFill12, sizeof(kCodeFill12), 19, 8},                       // gfx12
        }}};
 
   auto compiled_shader_it = compiled_shaders.find(func_name);
@@ -362,6 +374,9 @@ void GpuAgent::AssembleShader(const char* func_name, AssembleTarget assemble_tar
       break;
     case 11:
         asic_shader = &compiled_shader_it->second.compute_11;
+      break;
+    case 12:
+        asic_shader = &compiled_shader_it->second.compute_12;
       break;
     default:
       assert(false && "Precompiled shader unavailable for target");
@@ -449,19 +464,22 @@ void GpuAgent::InitRegionList() {
         case HSA_HEAPTYPE_GPU_LDS:
         case HSA_HEAPTYPE_GPU_SCRATCH: {
           MemoryRegion* region =
-              new MemoryRegion(false, false, false, false, this, mem_props[mem_idx]);
+              new MemoryRegion(false, false, false, false, true, this, mem_props[mem_idx]);
 
           regions_.push_back(region);
 
           if (region->IsLocalMemory()) {
-            regions_.push_back(
-                new MemoryRegion(false, false, false, true, this, mem_props[mem_idx]));
-            // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
-            if ((properties_.HiveID != 0) ||
-                (core::Runtime::runtime_singleton_->flag().fine_grain_pcie())) {
+            // Extended Fine-Grain memory
+            if (!(isa_->GetMajorVersion() == 12 && isa_->GetMinorVersion() == 0))
               regions_.push_back(
-                  new MemoryRegion(true, false, false, false, this, mem_props[mem_idx]));
-            }
+                  new MemoryRegion(false, false, false, true, true, this, mem_props[mem_idx]));
+
+            // Expose VRAM as uncached/fine grain over PCIe (if enabled) or XGMI.
+            bool user_visible = (properties_.HiveID != 0) ||
+                core::Runtime::runtime_singleton_->flag().fine_grain_pcie();
+
+            regions_.push_back(new MemoryRegion(true, false, false, false, user_visible, this,
+                                                mem_props[mem_idx]));
           }
           break;
         }
@@ -502,10 +520,9 @@ void GpuAgent::InitScratchPool() {
   size_t max_scratch_len = queue_scratch_len_ * max_queues_;
 
 #if defined(HSA_LARGE_MODEL) && defined(__linux__)
-  const size_t max_scratch_device = properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC;
   // For 64-bit linux use max queues unless otherwise specified
-  if ((max_scratch_len == 0) || (max_scratch_len > max_scratch_device)) {
-    max_scratch_len = max_scratch_device;  // 4GB per XCC aperture max
+  if ((max_scratch_len == 0) || (max_scratch_len > MaxScratchDevice())) {
+    max_scratch_len = MaxScratchDevice();  // 4GB per XCC aperture max
   }
 #endif
 
@@ -536,6 +553,12 @@ void GpuAgent::InitAsyncScratchThresholds() {
 void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
+  if (reserved_sz > MaxScratchDevice()) {
+    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n", 
+                    reserved_sz, MaxScratchDevice());
+    reserved_sz = MaxScratchDevice();
+  }
+
   size_t available;
   HSAKMT_STATUS err = hsaKmtAvailableMemory(node_id(), &available);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAvailableMemory failed");
@@ -646,6 +669,8 @@ hsa_status_t GpuAgent::VisitRegion(
     void* data) const {
   AMD::callback_t<decltype(callback)> call(callback);
   for (const core::MemoryRegion* region : regions) {
+    if (!region->user_visible()) continue;
+
     const AMD::MemoryRegion* amd_region =
         reinterpret_cast<const AMD::MemoryRegion*>(region);
 
@@ -687,9 +712,8 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
       break;
     case 9:
       sdma = new BlitSdmaV4();
-      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ||
-                            isa_->GetMinorVersion() > 0 ? copy_size_overrides[1] :
-                                                          copy_size_overrides[0];
+      copy_size_override = (isa_->GetMinorVersion() == 0 && isa_->GetStepping() == 10) ?
+                            copy_size_overrides[1] : copy_size_overrides[0];
       break;
     case 10:
       sdma = new BlitSdmaV5();
@@ -697,6 +721,7 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
                                                          copy_size_overrides[1];
       break;
     case 11:
+    case 12:
       sdma = new BlitSdmaV5();
       copy_size_override = copy_size_overrides[1];
       break;
@@ -732,17 +757,28 @@ core::Blit* GpuAgent::CreateBlitKernel(core::Queue* queue) {
 
 void GpuAgent::InitDma() {
   // Setup lazy init pointers on queues and blits.
-  auto queue_lambda = [this]() {
-    auto ret = CreateInterceptibleQueue();
-    if (ret == nullptr)
+  auto queue_lambda = [this](HSA_QUEUE_PRIORITY priority = HSA_QUEUE_PRIORITY_NORMAL) {
+    auto queue = CreateInterceptibleQueue();
+    if (queue == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");
-    return ret;
+
+    if (priority != HSA_QUEUE_PRIORITY_NORMAL)
+      if (queue->SetPriority(priority) != HSA_STATUS_SUCCESS)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR,
+                                "Failed to increase queue priority for PC Sampling");
+    return queue;
   };
+
   // Dedicated compute queue for host-to-device blits.
   queues_[QueueBlitOnly].reset(queue_lambda);
   // Share utility queue with device-to-host blits.
   queues_[QueueUtility].reset(queue_lambda);
+
+  // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
+  // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
+  // other dispatches/barriers that could be in the other AQL queues.
+  queues_[QueuePCSampling].reset([queue_lambda, this]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev) {
@@ -846,7 +882,7 @@ void GpuAgent::PreloadBlits() {
 
 hsa_status_t GpuAgent::PostToolsInit() {
   // Defer memory allocation until agents have been discovered.
-  InitNumaAllocator();
+  InitAllocators();
   InitScratchPool();
   BindTrapHandler();
   InitDma();
@@ -922,7 +958,6 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
   }
 
   ScopedAcquire<KernelMutex> lock(&sdma_gang_lock_);
-  if (gang_factor == 1) sdma_gang_lock_.Release();
   // Manage internal gang signals
   std::vector<core::Signal*> gang_signals;
   if (gang_factor > 1) {
@@ -1170,16 +1205,8 @@ void GpuAgent::GetInfoMemoryProperties(uint8_t value[8]) const {
   };
 
   // Fill the HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU flag
-  switch (properties_.DeviceId) {
-    case 0x15DD: /* gfx902 - Raven Ridge */
-    case 0x15D8: /* gfx909 - Raven Ridge 2 */
-    case 0x1636: /* gfx90c - Renoir */
-    case 0x74A0: /* gfx940 and gfx942-APU */
+  if (properties_.Integrated)
       setFlag(HSA_AMD_MEMORY_PROPERTY_AGENT_IS_APU);
-      break;
-    default:
-      break;
-  }
 }
 
 hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
@@ -1300,6 +1327,10 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
 
       if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
         setFlag(HSA_EXTENSION_IMAGES);
+      }
+
+      if (core::hsa_internal_api_table_.pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
+        setFlag(HSA_EXTENSION_AMD_PC_SAMPLING);
       }
 
       if (os::LibHandle lib = os::LoadLib(kAqlProfileLib)) {
@@ -1900,8 +1931,7 @@ void GpuAgent::AsyncReclaimScratchQueues() {
 }
 
 hsa_status_t GpuAgent::SetAsyncScratchThresholds(size_t use_once_limit) {
-  if (use_once_limit > properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC)
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (use_once_limit > MaxScratchDevice()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   scratch_limit_async_threshold_ = use_once_limit;
 
@@ -2042,6 +2072,58 @@ void GpuAgent::SyncClocks() {
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 }
 
+hsa_status_t GpuAgent::UpdateTrapHandlerWithPCS(void* pcs_hosttrap_buffers, void* pcs_stochastic_buffers) {
+  // Assemble the trap handler source code.
+  void* tma_addr = nullptr;
+  uint64_t tma_size = 0;
+
+  assert(core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging);
+
+  AssembleShader("TrapHandlerKfdExceptions", AssembleTarget::ISA, trap_code_buf_,
+                 trap_code_buf_size_);
+
+  /* pcs_hosttrap_buffers and pcs_stochastic_buffers are NULL until PC sampling is enabled */
+  if (pcs_hosttrap_buffers || pcs_stochastic_buffers) {
+    // ON non-large BAR systems, we cannot access device memory so we create a host copy
+    // and then do a DmaCopy to device memory
+    void* tma_region_host = (uint64_t*)system_allocator()(2 * sizeof(void*), 0x1000, 0);
+    if (tma_region_host == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    MAKE_SCOPE_GUARD([&]() { system_deallocator()(tma_region_host); });
+
+    ((uint64_t*)tma_region_host)[0] = (uint64_t)pcs_hosttrap_buffers;
+    ((uint64_t*)tma_region_host)[1] = (uint64_t)pcs_stochastic_buffers;
+
+    if (!trap_handler_tma_region_) {
+      trap_handler_tma_region_ = (uint64_t*)finegrain_allocator()(2 * sizeof(void*), 0);
+      if (trap_handler_tma_region_ == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+      // NearestCpuAgent owns pool returned system_allocator()
+      auto cpuAgent = GetNearestCpuAgent()->public_handle();
+
+      hsa_status_t ret =
+          AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, trap_handler_tma_region_);
+      assert(ret == HSA_STATUS_SUCCESS);
+    }
+
+    /* On non-large BAR systems, we may not be able to access device memory, so do a DmaCopy */
+    if (DmaCopy(trap_handler_tma_region_, tma_region_host, 2 * sizeof(void*)) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    tma_size = 2 * sizeof(void*);
+    tma_addr = trap_handler_tma_region_;
+  } else if (trap_handler_tma_region_) {
+    finegrain_deallocator()(trap_handler_tma_region_);
+    trap_handler_tma_region_ = NULL;
+  }
+
+  // Bind the trap handler to this node.
+  HSAKMT_STATUS retKmt =
+      hsaKmtSetTrapHandler(node_id(), trap_code_buf_, trap_code_buf_size_, tma_addr, tma_size);
+
+  return (retKmt != HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+}
+
 void GpuAgent::BindTrapHandler() {
   if (isa_->GetMajorVersion() == 7) {
     // No trap handler support on Gfx7, soft error.
@@ -2096,7 +2178,7 @@ void GpuAgent::InvalidateCodeCaches() {
       // Microcode is handling code cache invalidation.
       return;
     }
-  } else if (isa_->GetMajorVersion() > 11) {
+  } else if (isa_->GetMajorVersion() > 12) {
     assert(false && "Code cache invalidation not implemented for this agent");
   }
 
@@ -2238,7 +2320,7 @@ void GpuAgent::Trim() {
   scratch_cache_.trim(false);
 }
 
-void GpuAgent::InitNumaAllocator() {
+void GpuAgent::InitAllocators() {
   for (auto pool : GetNearestCpuAgent()->regions()) {
     if (pool->kernarg()) {
       system_allocator_ = [pool](size_t size, size_t alignment,
@@ -2252,11 +2334,29 @@ void GpuAgent::InitNumaAllocator() {
       };
 
       system_deallocator_ = [](void* ptr) { core::Runtime::runtime_singleton_->FreeMemory(ptr); };
-
-      return;
     }
   }
-  assert(false && "Nearest NUMA node did not have a kernarg pool.");
+  assert(system_allocator_ && "Nearest NUMA node did not have a kernarg pool.");
+
+  // Setup fine-grain allocator
+  for (auto region : regions()) {
+    const AMD::MemoryRegion* amd_region = (const AMD::MemoryRegion*)region;
+    if (amd_region->IsLocalMemory() && amd_region->fine_grain()) {
+      finegrain_allocator_ = [region](size_t size,
+                                      MemoryRegion::AllocateFlags alloc_flags) -> void* {
+        void* ptr = nullptr;
+        return (HSA_STATUS_SUCCESS ==
+                core::Runtime::runtime_singleton_->AllocateMemory(region, size, alloc_flags, &ptr))
+            ? ptr
+            : nullptr;
+      };
+
+      finegrain_deallocator_ = [](void* ptr) {
+        core::Runtime::runtime_singleton_->FreeMemory(ptr);
+      };
+    }
+  }
+  assert(finegrain_deallocator_ && "Agent does not have a fine-grain allocator");
 }
 
 core::Agent* GpuAgent::GetNearestCpuAgent() const {
@@ -2271,6 +2371,809 @@ core::Agent* GpuAgent::GetNearestCpuAgent() const {
     }
   }
   return nearCpu;
+}
+
+hsa_status_t ConvertHsaKmtPcSamplingInfoToHsa(HsaPcSamplingInfo* hsaKmtPcSampling,
+                                              hsa_ven_amd_pcs_configuration_t* hsaPcSampling) {
+  assert(hsaKmtPcSampling && "Invalid hsaKmtPcSampling");
+  assert(hsaPcSampling && "Invalid hsaPcSampling");
+
+  switch (hsaKmtPcSampling->method) {
+    case HSA_PC_SAMPLING_METHOD_KIND_HOSTTRAP_V1:
+      hsaPcSampling->method = HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1;
+      break;
+    case HSA_PC_SAMPLING_METHOD_KIND_STOCHASTIC_V1:
+      hsaPcSampling->method = HSA_VEN_AMD_PCS_METHOD_STOCHASTIC_V1;
+      break;
+    default:
+      // Sampling method not supported do not return this method to the user
+      return HSA_STATUS_ERROR;
+  }
+  switch (hsaKmtPcSampling->units) {
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_MICROSECONDS:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_MICRO_SECONDS;
+      break;
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_CYCLES:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_CLOCK_CYCLES;
+      break;
+    case HSA_PC_SAMPLING_UNIT_INTERVAL_INSTRUCTIONS:
+      hsaPcSampling->units = HSA_VEN_AMD_PCS_INTERVAL_UNITS_INSTRUCTIONS;
+      break;
+    default:
+      // Sampling unit not supported do not return this method to the user
+      return HSA_STATUS_ERROR;
+  }
+
+  hsaPcSampling->min_interval = hsaKmtPcSampling->value_min;
+  hsaPcSampling->max_interval = hsaKmtPcSampling->value_max;
+  hsaPcSampling->flags = hsaKmtPcSampling->flags;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                                               void* cb_data) {
+   uint32_t size = 0;
+
+  if (!core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging)
+    return HSA_STATUS_ERROR;
+
+  // First query to get size of list needed
+  HSAKMT_STATUS ret = hsaKmtPcSamplingQueryCapabilities(node_id(), NULL, 0, &size);
+  if (ret != HSAKMT_STATUS_SUCCESS || size == 0) return HSA_STATUS_ERROR;
+
+  std::vector<HsaPcSamplingInfo> sampleInfoList(size);
+  ret = hsaKmtPcSamplingQueryCapabilities(node_id(), sampleInfoList.data(), sampleInfoList.size(),
+                                          &size);
+
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  for (uint32_t i = 0; i < size; i++) {
+    hsa_ven_amd_pcs_configuration_t hsaPcSampling;
+    if (ConvertHsaKmtPcSamplingInfoToHsa(&sampleInfoList[i], &hsaPcSampling) == HSA_STATUS_SUCCESS
+        && cb(&hsaPcSampling, cb_data) == HSA_STATUS_INFO_BREAK)
+          return HSA_STATUS_SUCCESS;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) {
+  hsa_status_t ret;
+  HsaPcSamplingInfo sampleInfo = {};
+  HsaPcSamplingTraceId thunkId;
+
+  // IOCTL id does not exist at the moment, so passing 0 is OK,
+  // since it will be overridden later in this function.
+  ret = PcSamplingCreateFromId(0, session);
+  if (ret != HSA_STATUS_SUCCESS) return ret;
+
+  session.GetHsaKmtSamplingInfo(&sampleInfo);
+  HSAKMT_STATUS retkmt = hsaKmtPcSamplingCreate(node_id(), &sampleInfo, &thunkId);
+  if (retkmt != HSAKMT_STATUS_SUCCESS) {
+    return (retkmt == HSAKMT_STATUS_KERNEL_ALREADY_OPENED) ? (hsa_status_t)HSA_STATUS_ERROR_RESOURCE_BUSY
+            : HSA_STATUS_ERROR;
+  }
+
+  debug_print("Created PC sampling session with thunkId:%d\n", thunkId);
+
+  session.SetThunkId(thunkId);
+
+  return ret;
+}
+
+hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
+                                              pcs::PcsRuntime::PcSamplingSession& session) {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    // TODO: For now can only have 1 hosttrap session at a time. As a final solution, we want to be
+    // able to support multiple sessions at a time. But this makes the session.HandleSampleData more
+    // complicated if multiple sessions have different buffer sizes.
+    if (ht_data.session) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // This is current amd_aql_queue->pm4_ib_size_b_
+    ht_data.cmd_data_sz = 0x1000;
+    ht_data.cmd_data = (uint32_t*)malloc(ht_data.cmd_data_sz);
+    assert(ht_data.cmd_data);
+
+    if (HSA::hsa_signal_create(1, 0, NULL, &ht_data.exec_pm4_signal) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    ht_data.old_val = (uint64_t*)system_allocator()(sizeof(uint64_t), 0x1000, 0);
+    assert(ht_data.old_val);
+
+    if (AMD::hsa_amd_agents_allow_access(1, &public_handle_, NULL, ht_data.old_val))
+      return HSA_STATUS_ERROR;
+
+    // Local copy of hosttrap data - we cannot access device memory directly on non-large BAR
+    // systems
+    pcs_hosttrap_sampling_data_t* device_datahost =
+        (pcs_hosttrap_sampling_data_t*)system_allocator()(sizeof(*device_datahost), 0x1000, 0);
+    if (!device_datahost) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    MAKE_SCOPE_GUARD([&]() { system_deallocator()(device_datahost); });
+
+    memset(device_datahost, 0, sizeof(*device_datahost));
+
+    if (AMD::hsa_amd_agents_allow_access(1, &public_handle_, NULL, device_datahost) !=
+        HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    MAKE_NAMED_SCOPE_GUARD(freeHostTrapResources, [&]() {
+      if (ht_data.device_data) {
+        if (ht_data.device_data->done_sig0.handle)
+          HSA::hsa_signal_destroy(ht_data.device_data->done_sig0);
+        if (ht_data.device_data->done_sig1.handle)
+          HSA::hsa_signal_destroy(ht_data.device_data->done_sig1);
+
+        finegrain_deallocator()(ht_data.device_data);
+      }
+      if (ht_data.host_buffer) system_deallocator()(ht_data.host_buffer);
+    });
+
+    // Force creating of PC Sampling queue to trigger exception early in case we exceed max availble
+    // CP queues on this agent
+    queues_[QueuePCSampling].touch();
+
+    /*
+     * When calling queue->ExecutePM4() Indirect Buffer size which is 0x1000 bytes (1024 DW).
+     * The maximum indirect buffer size we need occurs when we enqueue the
+     * WAIT_REG_MEM, DMA_COPY(s), WRITE_DATA ops:
+     * For WAIT_REG_MEM = 7 DW
+     * For each DMA_COPY = 7 DW
+     * For WRITE_DATA_CMD = 6 DW
+     *
+     * So maximum number of DMA_COPY ops is:
+     * (MAX_IB_SIZE - sizeof(WAIT_REG_MEM) - sizeof(WRITE_DATA_CMD)) / sizeof(DMA_COPY)
+     * (1024 - 7 - 6) / 7 = 144
+     *
+     * Each DMA_COPY op can transfer (1 << 26) bytes, which is 9 GB. trap_buffer_size is a 32-bit
+     * number, so the buffer must be < 4 GB. So we are not limited by Indirect Buffer size.
+     * Set current limit to 256 MB to limit device VRAM usage
+     */
+    const size_t max_trap_buffer_size =
+        core::Runtime::runtime_singleton_->flag().pc_sampling_max_device_buffer_size();
+
+    /*
+     * We use a double-buffer mechanism where there are 2 trap-buffers and 1 host-buffer
+     * Warning: This currently assumes that client latency is smaller than time to fill 1
+     * trap-buffer If latency is bigger, we have to increate host-buffer
+     *
+     * host-buffer must be >= client-buffer so that we can copy full size of client-buffer each
+     * time. To avoid having to deal with wrap-arounds, host-buffer must be a multiple of
+     * trap-buffers
+     *
+     * if client-buffer size is greater than 2x max_trap_buffer_size:
+     *    We are limited by max_trap_buffer_size.
+     *    trap-buffer = max-trap-buffer-size
+     *    host-buffer = 2*smallest size greater than client-buffer but multiple of 1 trap-buffer
+     * else:
+     *    We reduce the trap-buffers so that:
+     *    trap-buffer = half of user-buffer
+     *    host-buffer = 2*user-buffer
+     *
+     * TODO: We are currently using a temporary host-buffer so that we can increase host-buffer to
+     * factor in client latency. Using a direct-copy to the client buffer would be more efficient.
+     * Revisit this once we have empirical data of latency vs how long it takes to fill 1
+     * trap-buffer.
+     */
+
+    size_t trap_buffer_size = 0;
+    if (session.buffer_size() > 2 * max_trap_buffer_size) {
+      trap_buffer_size = max_trap_buffer_size;
+      ht_data.host_buffer_size = 2 * AlignUp(session.buffer_size(), trap_buffer_size);
+    } else {
+      trap_buffer_size = session.buffer_size() / 2;
+      ht_data.host_buffer_size = 2 * session.buffer_size();
+    }
+
+    ht_data.host_buffer = (uint8_t*)system_allocator()(ht_data.host_buffer_size, 0x1000, 0);
+    if (!ht_data.host_buffer) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    if (AMD::hsa_amd_agents_allow_access(1, &public_handle_, NULL, ht_data.host_buffer) !=
+        HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR;
+
+    device_datahost->buf_size = trap_buffer_size / session.sample_size();
+
+    if (HSA::hsa_signal_create(1, 0, NULL, &device_datahost->done_sig0) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    if (HSA::hsa_signal_create(1, 0, NULL, &device_datahost->done_sig1) != HSA_STATUS_SUCCESS)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // TODO: Once we have things working and can measure
+    // latency after 2nd level trap handler decrements signals and set watermark accordingly
+    device_datahost->buf_watermark0 = 0.8 * device_datahost->buf_size;
+    device_datahost->buf_watermark1 = 0.8 * device_datahost->buf_size;
+
+    // Allocate device memory for 2nd level trap handler TMA
+    size_t deviceAllocSize = sizeof(*ht_data.device_data) + (2 * trap_buffer_size);
+    ht_data.device_data = (pcs_hosttrap_sampling_data_t*)finegrain_allocator()(deviceAllocSize, 0);
+    if (ht_data.device_data == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    // This cpuAgent is the owner of the system_allocator() pool
+    auto cpuAgent = GetNearestCpuAgent()->public_handle();
+    hsa_status_t ret = AMD::hsa_amd_agents_allow_access(1, &cpuAgent, NULL, ht_data.device_data);
+    assert(ret == HSA_STATUS_SUCCESS);
+
+    if (DmaCopy(ht_data.device_data, device_datahost, sizeof(*device_datahost)) !=
+        HSA_STATUS_SUCCESS) {
+      debug_print("Failed to dmaCopy!\n");
+      return HSA_STATUS_ERROR;
+    }
+
+    uint8_t* device_buf_ptr =
+        ((uint8_t*)ht_data.device_data) + sizeof(pcs_hosttrap_sampling_data_t);
+    if (DmaFill(device_buf_ptr, 0, deviceAllocSize - sizeof(pcs_hosttrap_sampling_data_t)) !=
+        HSA_STATUS_SUCCESS) {
+      debug_print("Failed to dmaFill!\n");
+      return HSA_STATUS_ERROR;
+    }
+
+    ht_data.lost_sample_count = 0;
+    ht_data.host_buffer_wrap_pos = 0;
+    ht_data.host_write_ptr = ht_data.host_buffer;
+    ht_data.host_read_ptr = ht_data.host_write_ptr;
+
+    ht_data.session = &session;
+    freeHostTrapResources.Dismiss();
+
+    if (UpdateTrapHandlerWithPCS(ht_data.device_data, NULL) != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  }
+
+  session.SetThunkId(ioctlId);
+  ht_data.session = &session;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (PcSamplingStop(session) != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  HSAKMT_STATUS retKmt = hsaKmtPcSamplingDestroy(node_id(), session.ThunkId());
+  ht_data.session = NULL;
+
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    free(ht_data.cmd_data);
+    system_deallocator()(ht_data.old_val);
+    HSA::hsa_signal_destroy(ht_data.exec_pm4_signal);
+    HSA::hsa_signal_destroy(ht_data.device_data->done_sig0);
+    HSA::hsa_signal_destroy(ht_data.device_data->done_sig1);
+    finegrain_deallocator()(ht_data.device_data);
+    system_deallocator()(ht_data.host_buffer);
+
+    ht_data.device_data = NULL;
+    ht_data.host_buffer = NULL;
+    ht_data.session = NULL;
+
+    UpdateTrapHandlerWithPCS(NULL, NULL);
+  }
+  return (retKmt == HSAKMT_STATUS_SUCCESS) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+}
+
+hsa_status_t GpuAgent::PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (session.isActive()) return HSA_STATUS_SUCCESS;
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  auto method = session.method();
+  if (method == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    if (ht_data.session->isActive()) {
+      debug_warning("Already have a Host trap session in progress!");
+      return (hsa_status_t)HSA_STATUS_ERROR_RESOURCE_BUSY;
+    }
+    ht_data.session->start();
+    // This thread will handle all hosttrap sessions on this agent
+    // In the future, there will be another thread to handle stochastic sessions.
+    ht_data.thread = os::CreateThread(PcSamplingThreadRun, (void*)this);
+    if (!ht_data.thread)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
+                               "Failed to start PC Sampling thread.");
+  }
+
+  if (hsaKmtPcSamplingStart(node_id(), session.ThunkId()) == HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_SUCCESS;
+
+  debug_print("Failed to start PC sampling session with thunkId:%d\n", session.ThunkId());
+  if (method == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    ht_data.session->stop();
+    os::WaitForThread(ht_data.thread);
+    os::CloseThread(ht_data.thread);
+    ht_data.thread = NULL;
+  }
+
+  return HSA_STATUS_ERROR;
+}
+
+hsa_status_t GpuAgent::PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) {
+  if (!session.isActive()) return HSA_STATUS_SUCCESS;
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  session.stop();
+
+  HSAKMT_STATUS retKmt = hsaKmtPcSamplingStop(node_id(), session.ThunkId());
+  if (retKmt != HSAKMT_STATUS_SUCCESS)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Failed to stop PC Sampling session.");
+
+  if (session.method() == HSA_VEN_AMD_PCS_METHOD_HOSTTRAP_V1) {
+    // Wake up pcs_hosttrap_thread_ if it is waiting for data
+    HSA::hsa_signal_store_screlease(ht_data.device_data->done_sig0, -1);
+    HSA::hsa_signal_store_screlease(ht_data.device_data->done_sig1, -1);
+
+    os::WaitForThread(ht_data.thread);
+    os::CloseThread(ht_data.thread);
+    ht_data.thread = NULL;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
+    pcs::PcsRuntime::PcSamplingSession& session) {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  uint32_t& which_buffer = ht_data.which_buffer;
+  uint32_t* cmd_data = ht_data.cmd_data;
+  size_t& cmd_data_sz = ht_data.cmd_data_sz;
+  uint64_t* old_val = ht_data.old_val;
+  hsa_signal_t& exec_pm4_signal = ht_data.exec_pm4_signal;
+
+  /*
+   * Device-buffer to Host-buffer to User-Buffer copy logic
+   *
+   * Device-buffer = buffer written by 2nd level trap handler
+   * Host-buffer = buffer inside ROCr
+   * User-buffer = Session buffer size specified in PCSamplingSessionCreate
+   *
+   * Conditions for the buffer sizes:
+   * Host buffer is at least 2 times bigger than device buffer and Host buffer
+   * is also at least 2 times bigger than User-Buffer.
+   *
+   * Key:
+   * Device-Buffer[==--][----] : Device-Buffer#1 has size 4*N, and is half-full
+   *                             Device-Buffer#2 has size 4*N and is empty
+   *
+   * Host-Buffer[=---------] : Host Buffer has size 10*N and is filled with N.
+   *
+   * N will vary based on the User-buffer size, this example is to show the
+   * relative sizes between each copy.
+   *
+   * 1. Initial state
+   *    - User has created a new session with buffer size = 7*N
+   *
+   *    Device-Buffer[---][---]
+   *    Host-Buffer[--------------] wptr=0 rptr=0 wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   *    -- Device Buffer has size 3*N
+   *    -- Host-Buffer has size 14*N (2x User-Buffer)
+   *    -- User-Buffer has size 7*N
+   *
+   * 2. Device Buffer#1 hits watermark
+   *    State at beginning:
+   *    Device-Buffer[===][---]
+   *    Host-Buffer[--------------]
+   *    User-Buffer[-------]
+   *
+   *    -- Copy 3*N from Device-Buffer#1 to Host-Buffer
+   *    -- In the meantime, 2nd level trap handler is writing to Device-Buffer#2
+   *    -- We do not have enough data to fill User-Buffer
+   *
+   *    State at end:
+   *    Device-Buffer[---][=--]
+   *    Host-Buffer[===-----------] wptr=3 rptr=0, wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   * 3. Device Buffer#2 hits watermark
+   *    State at beginning:
+   *    Device-Buffer[---][===]
+   *    Host-Buffer[===-----------]
+   *    User-Buffer[-------]
+   *
+   *    -- Copy 3*N from Device-Buffer#2 to Host-Buffer
+   *    -- In the meantime, 2nd level trap handler is writing to Device-Buffer#1
+   *    -- We do not have enough data to fill User-Buffer
+   *
+   *    State at end:
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[======--------] wptr=6 rptr=0 wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   * 4. Device Buffer#1 hits watermark
+   *    State at beginning:
+   *    Device-Buffer[---][===]
+   *    Host-Buffer[======--------]
+   *    User-Buffer[-------]
+   *
+   *    -- Copy 3*N from Device-Buffer#2 to Host-Buffer
+   *    -- In the meantime, 2nd level trap handler is writing to Device-Buffer#1
+   *
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[=========-----]
+   *    User-Buffer[-------]
+   *
+   *    -- We have enough data to fill User-Buffer. Callback user data-ready to
+   *    -- copy 7*N to user.
+   *
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[-------==-----]
+   *    User-Buffer[=======]
+   *
+   *    -- User processes User-Buffer
+   *
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[-------==-----] wptr=9 rptr=7 wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   * 6. Device Buffer#1 hits watermark
+   *    State at end:
+   *    Device-Buffer[---][=--]
+   *    Host-Buffer[-------=====--] wptr=12 rptr=7 wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   * 7. Device Buffer#2 hits watermark
+   *    State at beginning:
+   *    Device-Buffer[---][===]
+   *    Host-Buffer[-------=====--] wptr=12 rptr=7 wrap_pos=0
+   *    User-Buffer[-------]
+   *
+   *    -- We do not have enough space after wptr. The CP-DMA copy
+   *    -- can only copy a contiguous range, so copy to the
+   *    -- beginning of Host-Buffer and set wrap_pos
+   *
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[===----=====--] wptr=3 rptr=7 wrap_pos=12
+   *    User-Buffer[-------]
+   *
+   *    -- We have enough data to fill User-Buffer. Callback user data-ready to
+   *    -- copy 7*N to user. We copy the tail end (index 7-12) of Host-Buffer
+   *    -- before copying the beginning of Host-Buffer (index 0-2).
+   *
+   *    Device-Buffer[=--][---]
+   *    Host-Buffer[--=-----------] wptr=3 rptr=2 wrap_pos=0
+   *    User-Buffer[=======]
+   *
+   *     -- User processes User-Buffer
+   *
+   * 8. Device Buffer#1 hits watermark
+   *    State at end:
+   *    Device-Buffer[---][=--]
+   *    Host-Buffer[--====--------] wptr=6 rptr=2 wrap_pos=0
+   *    User-Buffer[-------]
+   */
+
+  uint32_t next_buffer;
+
+  uint64_t reset_write_val;
+  uint32_t to_copy, copy_bytes;
+
+  const uint32_t atomic_ex_cmd_sz = 9;
+  const uint32_t wait_reg_mem_cmd_sz = 7;
+  const uint32_t dma_data_cmd_sz = 7;
+  const uint32_t copy_data_cmd_sz = 6;
+  const uint32_t write_data_cmd_sz = 5;
+
+  uint8_t* host_buffer_begin = ht_data.host_buffer;
+  uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
+
+  uint64_t buf_write_val = (uint64_t) & (ht_data.device_data->buf_write_val);
+  uint64_t buf_written_val[] = {(uint64_t) & (ht_data.device_data->buf_written_val0),
+                                (uint64_t) & (ht_data.device_data->buf_written_val1)};
+
+  size_t const buf_offset = offsetof(pcs_hosttrap_sampling_data_t, reserved1) +
+      sizeof(((pcs_hosttrap_sampling_data_t*)0)->reserved1);
+
+  hsa_signal_t done_sig[] = {ht_data.device_data->done_sig0, ht_data.device_data->done_sig1};
+  uint8_t* buffer[] = {(uint8_t*)ht_data.device_data + buf_offset,
+                       (uint8_t*)ht_data.device_data + buf_offset +
+                           ht_data.device_data->buf_size * session.sample_size()};
+
+  next_buffer = (which_buffer + 1) % 2;
+  reset_write_val = (uint64_t)next_buffer << 63;
+
+  /*
+   * ATOMIC_MEM, perform atomic_exchange
+   * We use a double-buffer mechanism so that trap handlers calls are writing to one buffer while
+   * hsa-runtime is copying data from the other buffer.
+   *
+   * 1. Atomically swap buffers on the device. Future trap handler calls will put their data into
+   *    next_buffer.
+   * 2. Return a 64-bit packed value to ROCr; the upper bit is the old buffer and can be ignored.
+   *    The lower 63 bits are how many trap handler entrances happened before the atomic swap
+   *    i.e., what value to wait for in buf_written_val to know all previous trap entries were
+   *    done.
+   */
+  unsigned int i = 0;
+  memset(cmd_data, 0, cmd_data_sz);
+  cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_ATOMIC_MEM, atomic_ex_cmd_sz, isa_->GetMajorVersion());
+  cmd_data[i++] = PM4_ATOMIC_MEM_DW1_ATOMIC(PM4_ATOMIC_MEM_GL2_OP_ATOMIC_SWAP_RTN_64);
+  cmd_data[i++] = PM4_ATOMIC_MEM_DW2_ADDR_LO(buf_write_val);
+  cmd_data[i++] = PM4_ATOMIC_MEM_DW3_ADDR_HI((buf_write_val) >> 32);
+  cmd_data[i++] = PM4_ATOMIC_MEM_DW4_SRC_DATA_LO((uint64_t)reset_write_val);
+  cmd_data[i++] = PM4_ATOMIC_MEM_DW5_SRC_DATA_HI(((uint64_t)reset_write_val) >> 32);
+  i += 3;
+  /* copy data */
+  cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_COPY_DATA, copy_data_cmd_sz, isa_->GetMajorVersion());
+  cmd_data[i++] =
+      PM4_COPY_DATA_DW1(PM4_COPY_DATA_SRC_SEL_ATOMIC_RETURN_DATA | PM4_COPY_DATA_DST_SEL_TC_12 |
+                        PM4_COPY_DATA_COUNT_SEL | PM4_COPY_DATA_WR_CONFIRM);
+  i += 2;
+  cmd_data[i++] = PM4_COPY_DATA_DW4_DST_ADDR_LO((uint64_t)old_val);
+  cmd_data[i++] = PM4_COPY_DATA_DW5_DST_ADDR_HI(((uint64_t)old_val) >> 32);
+
+  HSA::hsa_signal_store_screlease(exec_pm4_signal, 1);
+
+  queues_[QueuePCSampling]->ExecutePM4(
+      cmd_data, (atomic_ex_cmd_sz + copy_data_cmd_sz) * sizeof(uint32_t), HSA_FENCE_SCOPE_NONE,
+      HSA_FENCE_SCOPE_SYSTEM, &exec_pm4_signal);
+  do {
+    hsa_signal_value_t val = HSA::hsa_signal_wait_scacquire(
+        exec_pm4_signal, HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX, HSA_WAIT_STATE_BLOCKED);
+    if (val == -1) return HSA_STATUS_SUCCESS;
+    if (val == 0) break;
+  } while (true);
+
+  *old_val &= (ULLONG_MAX >> 1);
+  /* If the number of entries in old_val is larger than buf_size, then there was a buffer overflow
+   * and the 2nd level trap handler code will skip recording samples, causing lost samples
+   */
+  if (*old_val > (uint64_t)ht_data.device_data->buf_size) {
+    ht_data.lost_sample_count = *old_val - (uint64_t)ht_data.device_data->buf_size;
+    *old_val = (uint64_t)ht_data.device_data->buf_size;
+  }
+
+  to_copy = *old_val * session.sample_size();
+
+  /* Make sure there is enough space after host_write_ptr */
+  if (ht_data.host_write_ptr + to_copy >= host_buffer_end) {
+    // Need to wrap around
+    ht_data.host_buffer_wrap_pos = ht_data.host_write_ptr;
+    ht_data.host_write_ptr = host_buffer_begin;
+  }
+  /*
+   * Do the WAIT_REG_MEM, DMA_DATA(s) and WRITE_DATA
+   *
+   * 1. Wait for all trap handlers have finished writing values to this buffer by waiting for
+   *    buf_written_val to equal to old_val.
+   * 2. Copy the values out of buffer to the host buffers.
+   * 3. Reset buf_written_val so that we start writing to beginning of this buffer on the next
+   *    buffer swap.
+   */
+  i = 0;
+  memset(cmd_data, 0, cmd_data_sz);
+
+  /* WAIT_REG_MEM, wait on buf_written_val */
+  cmd_data[i++] =
+      PM4_HDR(PM4_HDR_IT_OPCODE_WAIT_REG_MEM, wait_reg_mem_cmd_sz, isa_->GetMajorVersion());
+  cmd_data[i++] = PM4_WAIT_REG_MEM_DW1(PM4_WAIT_REG_MEM_FUNCTION_EQUAL_TO_REFERENCE |
+                                       PM4_WAIT_REG_MEM_MEM_SPACE_MEMORY_SPACE |
+                                       PM4_WAIT_REG_MEM_OPERATION_WAIT_REG_MEM);
+  cmd_data[i++] = PM4_WAIT_REG_MEM_DW2_MEM_POLL_ADDR_LO(buf_written_val[which_buffer]);
+  cmd_data[i++] = PM4_WAIT_REG_MEM_DW3_MEM_POLL_ADDR_HI((buf_written_val[which_buffer]) >> 32);
+  cmd_data[i++] = PM4_WAIT_REG_MEM_DW4_REFERENCE(*old_val);
+  cmd_data[i++] = 0xFFFFFFFF;
+  cmd_data[i++] = PM4_WAIT_REG_MEM_DW6(PM4_WAIT_REG_MEM_POLL_INTERVAL(4) |
+                                       PM4_WAIT_REG_MEM_OPTIMIZE_ACE_OFFLOAD_MODE);
+
+  unsigned int num_copy_command = 0;
+  uint8_t* buffer_temp = buffer[which_buffer];
+  for (copy_bytes = CP_DMA_DATA_TRANSFER_CNT_MAX; 0 < to_copy; to_copy -= copy_bytes) {
+    num_copy_command++;
+
+    /* DMA_DATA PACKETS, copy buffer using CPDMA */
+    cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_DMA_DATA, dma_data_cmd_sz, isa_->GetMajorVersion());
+    cmd_data[i++] = PM4_DMA_DATA_DW1(PM4_DMA_DATA_DST_SEL_DST_ADDR_USING_L2 |
+                                     PM4_DMA_DATA_SRC_SEL_SRC_ADDR_USING_L2);
+    cmd_data[i++] = PM4_DMA_DATA_DW2_SRC_ADDR_LO((uint64_t)buffer_temp);
+    cmd_data[i++] = PM4_DMA_DATA_DW3_SRC_ADDR_HI(((uint64_t)buffer_temp) >> 32);
+    cmd_data[i++] = PM4_DMA_DATA_DW4_DST_ADDR_LO((uint64_t)ht_data.host_write_ptr);
+    cmd_data[i++] = PM4_DMA_DATA_DW5_DST_ADDR_HI(((uint64_t)ht_data.host_write_ptr) >> 32);
+
+    if (copy_bytes >= to_copy) {
+      copy_bytes = to_copy;
+      cmd_data[i++] =
+          PM4_DMA_DATA_DW6(PM4_DMA_DATA_BYTE_COUNT(copy_bytes) | PM4_DMA_DATA_DIS_WC_LAST);
+    } else {
+      cmd_data[i++] = PM4_DMA_DATA_DW6(PM4_DMA_DATA_BYTE_COUNT(copy_bytes) | PM4_DMA_DATA_DIS_WC);
+    }
+
+    buffer_temp += copy_bytes;
+    ht_data.host_write_ptr += copy_bytes;
+  }
+
+  /* WRITE_DATA, Reset buf_written_val */
+  cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_WRITE_DATA, write_data_cmd_sz, isa_->GetMajorVersion());
+  cmd_data[i++] = PM4_WRITE_DATA_DW1(PM4_WRITE_DATA_DST_SEL_TC_L2 |
+                                     PM4_WRITE_DATA_WR_CONFIRM_WAIT_CONFIRMATION);
+  cmd_data[i++] = PM4_WRITE_DATA_DW2_DST_MEM_ADDR_LO(buf_written_val[which_buffer]);
+  cmd_data[i++] = PM4_WRITE_DATA_DW3_DST_MEM_ADDR_HI((buf_written_val[which_buffer]) >> 32);
+  cmd_data[i++] = PM4_WRITE_DATA_DW4_DATA(0);
+
+  unsigned int cmd_sz =
+      wait_reg_mem_cmd_sz + (num_copy_command * dma_data_cmd_sz) + write_data_cmd_sz;
+
+  HSA::hsa_signal_store_screlease(exec_pm4_signal, 1);
+  queues_[QueuePCSampling]->ExecutePM4(cmd_data, cmd_sz * sizeof(uint32_t), HSA_FENCE_SCOPE_NONE,
+                                       HSA_FENCE_SCOPE_SYSTEM, &exec_pm4_signal);
+  do {
+    hsa_signal_value_t val = HSA::hsa_signal_wait_scacquire(
+        exec_pm4_signal, HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX, HSA_WAIT_STATE_BLOCKED);
+    if (val == -1) return HSA_STATUS_SUCCESS;
+    if (val == 0) break;
+  } while (true);
+
+  which_buffer = next_buffer;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+void GpuAgent::PcSamplingThread() {
+  // TODO: Implement lost sample count
+  // TODO: Implement latency
+
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+  pcs::PcsRuntime::PcSamplingSession& session = *ht_data.session;
+  uint32_t& which_buffer = ht_data.which_buffer;
+
+  hsa_status_t ret = HSA_STATUS_SUCCESS;
+  uint8_t* host_buffer_begin = ht_data.host_buffer;
+  uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
+
+  size_t const buf_offset = offsetof(pcs_hosttrap_sampling_data_t, reserved1) +
+      sizeof(((pcs_hosttrap_sampling_data_t*)0)->reserved1);
+
+  hsa_signal_t done_sig[] = {ht_data.device_data->done_sig0, ht_data.device_data->done_sig1};
+  uint8_t* buffer[] = {(uint8_t*)ht_data.device_data + buf_offset,
+                       (uint8_t*)ht_data.device_data + buf_offset +
+                           ht_data.device_data->buf_size * session.sample_size()};
+
+  while (ht_data.session->isActive()) {
+    do {
+      hsa_signal_value_t val = HSA::hsa_signal_wait_scacquire(
+          done_sig[which_buffer], HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX, HSA_WAIT_STATE_BLOCKED);
+      if (val == -1) goto thread_exit;
+      if (val == 0) break;
+    } while (true);
+    HSA::hsa_signal_store_screlease(done_sig[which_buffer], 1);
+
+    std::lock_guard<std::mutex> lock(ht_data.host_buffer_mutex);
+    if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS)
+      goto thread_exit;
+
+    size_t bytes_before_wrap;
+    size_t bytes_after_wrap;
+
+    assert(ht_data.host_read_ptr >= host_buffer_begin && ht_data.host_read_ptr < host_buffer_end);
+    assert(ht_data.host_write_ptr >= host_buffer_begin && ht_data.host_write_ptr < host_buffer_end);
+    assert(ht_data.host_buffer_wrap_pos ? (ht_data.host_read_ptr > ht_data.host_write_ptr)
+                                        : (ht_data.host_read_ptr <= ht_data.host_write_ptr));
+
+    if (ht_data.host_buffer_wrap_pos) {
+      assert(ht_data.host_buffer_wrap_pos <= host_buffer_end &&
+             ht_data.host_buffer_wrap_pos > host_buffer_begin);
+      assert(ht_data.host_read_ptr <= ht_data.host_buffer_wrap_pos);
+
+      // Wrapped around
+      bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+      bytes_after_wrap = ht_data.host_write_ptr - host_buffer_begin;
+
+      while (bytes_before_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
+      }
+
+      if (bytes_before_wrap + bytes_after_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, bytes_before_wrap, host_buffer_begin,
+                                 (session.buffer_size() - bytes_before_wrap), 0);
+        ht_data.host_read_ptr = host_buffer_begin + (session.buffer_size() - bytes_before_wrap);
+        bytes_before_wrap = 0;
+        ht_data.host_buffer_wrap_pos = 0;
+        bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
+      }
+
+      while (bytes_after_wrap >= session.buffer_size()) {
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = 0;
+        bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
+      }
+    } else {
+      bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+
+      while (bytes_before_wrap >= session.buffer_size()) {
+        assert(ht_data.host_read_ptr >= host_buffer_begin &&
+               ht_data.host_read_ptr + session.buffer_size() < host_buffer_end);
+        session.HandleSampleData(ht_data.host_read_ptr, session.buffer_size(), NULL, 0,
+                                 ht_data.lost_sample_count);
+        ht_data.host_read_ptr += session.buffer_size();
+        bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+        ht_data.lost_sample_count = 0;
+      }
+    }
+  }
+thread_exit:
+  debug_print("PcSamplingThread::Exiting\n");
+}
+
+void GpuAgent::PcSamplingThreadRun(void* _agent) {
+  GpuAgent* agent = (GpuAgent*)_agent;
+  agent->PcSamplingThread();
+  debug_print("PcSamplingThread exiting...");
+}
+
+hsa_status_t GpuAgent::PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) {
+  pcs_hosttrap_t& ht_data = pcs_hosttrap_data_;
+
+  uint8_t* host_buffer_begin = ht_data.host_buffer;
+  uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
+
+  size_t bytes_before_wrap;
+  size_t bytes_after_wrap;
+
+  std::lock_guard<std::mutex> lock(ht_data.host_buffer_mutex);
+  if (PcSamplingFlushHostTrapDeviceBuffers(session) != HSA_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+
+  assert(ht_data.host_read_ptr >= host_buffer_begin && ht_data.host_read_ptr < host_buffer_end);
+  assert(ht_data.host_write_ptr >= host_buffer_begin && ht_data.host_write_ptr < host_buffer_end);
+  assert(ht_data.host_buffer_wrap_pos ? (ht_data.host_read_ptr > ht_data.host_write_ptr)
+                                      : (ht_data.host_read_ptr <= ht_data.host_write_ptr));
+
+  if (ht_data.host_buffer_wrap_pos) {
+    assert(ht_data.host_buffer_wrap_pos <= host_buffer_end &&
+           ht_data.host_buffer_wrap_pos > host_buffer_begin);
+    assert(ht_data.host_read_ptr <= ht_data.host_buffer_wrap_pos);
+
+    // Wrapped around
+    bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+    bytes_after_wrap = ht_data.host_write_ptr - host_buffer_begin;
+
+    while (bytes_before_wrap > 0) {
+      size_t bytes_to_copy = std::min(bytes_before_wrap, session.buffer_size());
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_before_wrap = ht_data.host_buffer_wrap_pos - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
+    }
+
+    assert(ht_data.host_read_ptr == ht_data.host_buffer_wrap_pos);
+    ht_data.host_buffer_wrap_pos = 0;
+    ht_data.host_read_ptr = host_buffer_begin;
+
+    while (bytes_after_wrap > 0) {
+      size_t bytes_to_copy = std::min(bytes_after_wrap, session.buffer_size());
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_after_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
+    }
+  } else {
+    bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+
+    while (bytes_before_wrap) {
+      size_t bytes_to_copy = std::min(bytes_before_wrap, session.buffer_size());
+      assert(ht_data.host_read_ptr >= host_buffer_begin &&
+             ht_data.host_read_ptr + bytes_to_copy <= host_buffer_end);
+
+      session.HandleSampleData(ht_data.host_read_ptr, bytes_to_copy, NULL, 0,
+                               ht_data.lost_sample_count);
+      ht_data.host_read_ptr += bytes_to_copy;
+      bytes_before_wrap = ht_data.host_write_ptr - ht_data.host_read_ptr;
+      ht_data.lost_sample_count = 0;
+    }
+  }
+  return HSA_STATUS_SUCCESS;
 }
 
 }  // namespace amd

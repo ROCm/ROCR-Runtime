@@ -234,6 +234,7 @@ global:
 	hsa_amd_portable_export_dmabuf;
 	hsa_amd_portable_close_dmabuf;
 	hsa_amd_vmem_address_reserve;
+	hsa_amd_vmem_address_reserve_align;
 	hsa_amd_vmem_address_free;
 	hsa_amd_vmem_handle_create;
 	hsa_amd_vmem_handle_release;
@@ -252,7 +253,14 @@ global:
 	hsa_tools_scratch_event_free_end;
 	hsa_tools_scratch_event_async_reclaim_start;
 	hsa_tools_scratch_event_async_reclaim_end;
-
+	hsa_ven_amd_pcs_iterate_configuration;
+	hsa_ven_amd_pcs_create;
+	hsa_ven_amd_pcs_create_from_id;
+	hsa_ven_amd_pcs_destroy;
+	hsa_ven_amd_pcs_start;
+	hsa_ven_amd_pcs_stop;
+	hsa_ven_amd_pcs_flush;
+	hsa_amd_queue_get_info;
 local:
     *;
 };

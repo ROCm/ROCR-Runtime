@@ -73,6 +73,7 @@
 #include "core/util/os.h"
 #include "core/inc/exceptions.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
+#include "core/inc/amd_core_dump.hpp"
 
 #ifndef HSA_VERSION_MAJOR
 #define HSA_VERSION_MAJOR 1
@@ -1077,7 +1078,8 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
 
    int connection_fd;
    char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
-   std::map<uint64_t, int> openDmaBufs;
+   // openDmaBufs pair <int, int> is <dmabuf_fd, ref_count>
+   std::map<uint64_t, std::pair<int, int>> openDmaBufs;
    // Wait until the client has connected
    while (1) {
      connection_fd = accept(ipc_sock_server_fd_, NULL, NULL);
@@ -1095,9 +1097,31 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
      void *baseAddr = NULL;
      size_t memLen = 0;
 
-     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      bool isClose = !!(IPC_SOCK_SERVER_CONN_CLOSE_BIT & conn_handle);
+     bool isAlreadyOpen = false;
      conn_handle &= ~(IPC_SOCK_SERVER_CONN_CLOSE_BIT);
+
+     // send dmabufs that are already opened
+     for (auto&conns : openDmaBufs) {
+       if (conn_handle == conns.first) {
+         if (!isClose) {
+           SendDmaBufFd(connection_fd, openDmaBufs[conn_handle].first);
+           openDmaBufs[conn_handle].second++;
+         } else {
+           openDmaBufs[conn_handle].second--;
+           if (!openDmaBufs[conn_handle].second) {
+             close(openDmaBufs[conn_handle].first);
+             openDmaBufs.erase(conn_handle);
+           }
+         }
+         isAlreadyOpen = true;
+         break;
+       }
+     }
+
+     if (isAlreadyOpen) continue;
+
+     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      for (auto& conns : ipc_sock_server_conns_) {
        if (conn_handle == conns.first) {
          baseAddr = conns.second.first;
@@ -1105,20 +1129,16 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
          break;
        }
      }
-     if (!isClose) {
-       // we can ignore a bad export since importer will catch the bad fd
-       hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
-       SendDmaBufFd(connection_fd, dmabuf_fd);
-       openDmaBufs[conn_handle] = dmabuf_fd;
-     } else {
-       close(openDmaBufs[conn_handle]);
-       openDmaBufs.erase(conn_handle);
-     }
+
+     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     if (err != HSAKMT_STATUS_SUCCESS) continue;
+     SendDmaBufFd(connection_fd, dmabuf_fd);
+     openDmaBufs[conn_handle] = std::make_pair(dmabuf_fd, 1);
    }
 
    // Clean up
    for (auto& conns : openDmaBufs)
-     close(conns.second); // close all dangling open dmabuf FDs
+     close(conns.second.first); // close all dangling open dmabuf FDs
    ipc_sock_server_conns_.clear();
    close(ipc_sock_server_fd_);
 }
@@ -1186,6 +1206,17 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
     // System sub allocations are not supported for now.
     if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
+    // Work around to defer export on import call to minimize FD creation.
+    // Without this, a deferred export may fail due to the kernel mode driver not
+    // holding the GEM object reference.
+    // Export the dmabuf then close the file to get the reference to ensure the
+    // deferred export will not run into this problem.
+    int dmabuf_fd;
+    uint64_t fragOffset;
+    HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+    close(dmabuf_fd);
+
     ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
     if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
       struct sockaddr_un address;
@@ -1249,6 +1280,12 @@ static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool 
     int dmabuf_fd = -1, socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     assert(socket_fd > -1 && "DMA buffer could not be imported for IPC!");
     if (socket_fd == -1) return -1;
+
+    // Set 10 second timeout for ReceiveDmaBufFd
+    struct timeval tv;
+    tv.tv_sec = 10;
+    tv.tv_usec = 0;
+    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
 
     char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
     memset(&address, 0, sizeof(struct sockaddr_un));
@@ -1678,6 +1715,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
 
   hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
   auto system_event_handlers = runtime_singleton_->GetSystemEventHandlers();
+  Agent* faulty_agent = nullptr;
   // If custom handler is registered, pack the fault info and call the handler
   if (!system_event_handlers.empty()) {
     hsa_amd_event_t memory_fault_event;
@@ -1687,7 +1725,7 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
     // Find the faulty agent
     auto it = runtime_singleton_->agents_by_node_.find(fault.NodeId);
     assert(it != runtime_singleton_->agents_by_node_.end() && "Can't find faulty agent.");
-    Agent* faulty_agent = it->second.front();
+    faulty_agent = it->second.front();
     fault_info.agent = Agent::Convert(faulty_agent);
 
     fault_info.virtual_address = fault.VirtualAddress;
@@ -1749,18 +1787,28 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
         reason += "Unknown";
       }
 
-      core::Agent* faultingAgent = runtime_singleton_->agents_by_node_[fault.NodeId][0];
+      faulty_agent = runtime_singleton_->agents_by_node_[fault.NodeId][0];
 
       fprintf(
           stderr,
           "Memory access fault by GPU node-%u (Agent handle: %p) on address %p%s. Reason: %s.\n",
-          fault.NodeId, reinterpret_cast<void*>(faultingAgent->public_handle().handle),
+          fault.NodeId, reinterpret_cast<void*>(faulty_agent->public_handle().handle),
           reinterpret_cast<const void*>(fault.VirtualAddress),
           (fault.Failure.Imprecise == 1) ? "(may not be exact address)" : "", reason.c_str());
 
 #ifndef NDEBUG
       PrintMemoryMapNear(reinterpret_cast<void*>(fault.VirtualAddress));
 #endif
+    }
+    // Fallback if KFD does not support GPU core dump. In this case, there core dump is
+    // generated by hsa-runtime.
+    if (faulty_agent && faulty_agent->isa()->GetMajorVersion() != 11 &&
+        !runtime_singleton_->KfdVersion().supports_core_dump) {
+
+      if (pcs::PcsRuntime::instance()->SessionsActive())
+        fprintf(stderr, "GPU core dump skipped because PC Sampling active\n");
+      else if (amd::coredump::dump_gpu_core())
+        fprintf(stderr, "GPU core dump failed\n");
     }
     assert(false && "GPU memory access fault.");
     std::abort();
@@ -1953,6 +2001,11 @@ void Runtime::LoadExtensions() {
   extensions_.LoadImage();
   hsa_api_table_.LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
+
+  // Update Hsa Api Table with handle of PCS extension Apis
+  extensions_.LoadPcSampling();
+  hsa_api_table_.LinkExts(&extensions_.pcs_api,
+                          core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
 }
 
 void Runtime::UnloadExtensions() { extensions_.Unload(); }
@@ -2909,18 +2962,23 @@ hsa_status_t Runtime::DmaBufClose(int dmabuf) {
 }
 
 hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t address,
-                                            uint64_t flags) {
+                                            uint64_t alignment, uint64_t flags) {
   void* addr = (void*)address;
   HsaMemFlags memFlags = {};
+
+  if (!alignment)
+    alignment = sysconf(_SC_PAGE_SIZE);
+
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
   memFlags.ui32.OnlyAddress = 1;
   memFlags.ui32.FixedAddress = 1;
+
   /* Try to reserving the VA requested by user */
-  if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
+  if (hsaKmtAllocMemoryAlign(0, size, alignment, memFlags, &addr) != HSAKMT_STATUS_SUCCESS) {
     memFlags.ui32.FixedAddress = 0;
     /* Could not reserved VA requested, allocate alternate VA */
-    if (hsaKmtAllocMemory(0, size, memFlags, &addr) != HSAKMT_STATUS_SUCCESS)
+    if (hsaKmtAllocMemoryAlign(0, size, alignment, memFlags, &addr) != HSAKMT_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 

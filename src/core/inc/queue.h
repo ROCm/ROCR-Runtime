@@ -52,7 +52,7 @@
 #include "core/inc/memory_region.h"
 #include "core/util/utils.h"
 #include "inc/amd_hsa_queue.h"
-
+#include "inc/hsa_ext_amd.h"
 #include "hsakmt/hsakmt.h"
 
 namespace rocr {
@@ -346,13 +346,32 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   /// @return hsa_status_t
   virtual hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) = 0;
 
-  // @brief Submits a block of PM4 and waits until it has been executed.
-  virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) = 0;
+  /// @brief Submits a block of PM4.
+  ///
+  /// @param cmd_data pointer to command buffer
+  ///
+  /// @param cmd_size_b command buffer size in bytes
+  ///
+  /// @param acquireFence acquire-fence type
+  ///
+  /// @param releaseFence acquire-fence type
+  ///
+  /// @param signal optional wait signal
+  ///
+  /// if @p signal is provided, function will return without waiting for commands to be executed
+  /// if @p signal is NULL, waits until commands have been executed.
+  virtual void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b,
+                          hsa_fence_scope_t acquireFence = HSA_FENCE_SCOPE_NONE,
+                          hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
+                          hsa_signal_t* signal = NULL) = 0;
 
   virtual void SetProfiling(bool enabled) {
     AMD_HSA_BITS_SET(amd_queue_.queue_properties, AMD_QUEUE_PROPERTIES_ENABLE_PROFILING,
                      (enabled != 0));
   }
+
+  /// @ brief Returns queue queries about the queue
+  virtual hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) = 0;
 
   /// @ brief Reports async queue errors to stderr if no other error handler was registered.
   static void DefaultErrorHandler(hsa_status_t status, hsa_queue_t* source, void* data);

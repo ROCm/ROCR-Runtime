@@ -761,7 +761,7 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   TRY;
   IS_OPEN();
 
-  if (size == 0 || ptr == NULL || (flags > HSA_AMD_MEMORY_POOL_PCIE_FLAG)) {
+  if (size == 0 || ptr == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -774,7 +774,11 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
 
   MemoryRegion::AllocateFlags alloc_flag = core::MemoryRegion::AllocateRestrict;
 
-  if (flags == HSA_AMD_MEMORY_POOL_PCIE_FLAG) alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+  if (flags & HSA_AMD_MEMORY_POOL_PCIE_FLAG)
+    alloc_flag |= core::MemoryRegion::AllocatePCIeRW;
+
+  if (flags & HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG)
+    alloc_flag |= core::MemoryRegion::AllocateContiguous;
 
 #ifdef SANITIZER_AMDGPU
   alloc_flag |= core::MemoryRegion::AllocateAsan;
@@ -1072,10 +1076,13 @@ hsa_status_t hsa_amd_queue_set_priority(hsa_queue_t* queue,
   core::Queue* cmd_queue = core::Queue::Convert(queue);
   IS_VALID(cmd_queue);
 
+  // Highest queue priority allowed for HSA user is HSA_QUEUE_PRIORITY_HIGH
+  // HSA_QUEUE_PRIORITY_MAXIMUM is reserved for PC Sampling and can only be allocated internally
+  // in ROCR
   static std::map<hsa_amd_queue_priority_t, HSA_QUEUE_PRIORITY> ext_kmt_priomap = {
       {HSA_AMD_QUEUE_PRIORITY_LOW, HSA_QUEUE_PRIORITY_MINIMUM},
       {HSA_AMD_QUEUE_PRIORITY_NORMAL, HSA_QUEUE_PRIORITY_NORMAL},
-      {HSA_AMD_QUEUE_PRIORITY_HIGH, HSA_QUEUE_PRIORITY_MAXIMUM},
+      {HSA_AMD_QUEUE_PRIORITY_HIGH, HSA_QUEUE_PRIORITY_HIGH},
   };
 
   auto priority_it = ext_kmt_priomap.find(priority);
@@ -1224,9 +1231,20 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t addre
   IS_OPEN();
   IS_ZERO(size);
   IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
-  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, flags);
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, 0, flags);
   CATCH;
 }
+
+hsa_status_t hsa_amd_vmem_address_reserve_align(void** va, size_t size, uint64_t address,
+                                          uint64_t alignment, uint64_t flags) {
+  TRY;
+  IS_OPEN();
+  IS_ZERO(size);
+  IS_TRUE(core::Runtime::runtime_singleton_->VirtualMemApiSupported());
+  return core::Runtime::runtime_singleton_->VMemoryAddressReserve(va, size, address, alignment, flags);
+  CATCH;
+}
+
 
 hsa_status_t hsa_amd_vmem_address_free(void* va, size_t size) {
   TRY;
@@ -1382,6 +1400,18 @@ hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t _agent, s
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   return gpu_agent->SetAsyncScratchThresholds(threshold);
+  CATCH;
+}
+
+hsa_status_t HSA_API hsa_amd_queue_get_info(hsa_queue_t* _queue,
+                                            hsa_queue_info_attribute_t attribute, void* value) {
+  TRY;
+  IS_OPEN();
+
+  core::Queue* queue = core::Queue::Convert(_queue);
+  IS_VALID(queue);
+
+  return queue->GetInfo(attribute, value);
   CATCH;
 }
 

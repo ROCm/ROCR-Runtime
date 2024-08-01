@@ -2,24 +2,7 @@
 ************************************************************************************************************************
 *
 *  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE
+*  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
 
@@ -37,8 +20,10 @@
 #include "addrlib.h"
 
 namespace rocr {
-namespace Addr {
-namespace V2 {
+namespace Addr
+{
+namespace V2
+{
 
 /**
 ************************************************************************************************************************
@@ -147,6 +132,8 @@ union ADDR_BIT_SETTING
 * @brief Swizzle pattern information
 ************************************************************************************************************************
 */
+// Accessed by index representing the logbase2 of (8bpp/16bpp/32bpp/64bpp/128bpp)
+// contains the indices which map to 2D arrays SW_PATTERN_NIBBLE[0-9] which contain sections of an index equation. They are dependant on pipe# and bpe #
 struct ADDR_SW_PATINFO
 {
     UINT_8  maxItemCount;
@@ -305,6 +292,10 @@ public:
         const ADDR2_GET_PREFERRED_SURF_SETTING_INPUT* pIn,
         ADDR2_GET_PREFERRED_SURF_SETTING_OUTPUT*      pOut) const;
 
+    ADDR_E_RETURNCODE GetPossibleSwizzleModes(
+        const ADDR2_GET_PREFERRED_SURF_SETTING_INPUT* pIn,
+        ADDR2_GET_PREFERRED_SURF_SETTING_OUTPUT* pOut) const;
+
     virtual BOOL_32 IsValidDisplaySwizzleMode(
         const ADDR2_COMPUTE_SURFACE_INFO_INPUT* pIn) const
     {
@@ -312,11 +303,21 @@ public:
         return ADDR_NOTIMPLEMENTED;
     }
 
+    ADDR_E_RETURNCODE GetAllowedBlockSet(
+        ADDR2_SWMODE_SET allowedSwModeSet,
+        AddrResourceType rsrcType,
+        ADDR2_BLOCK_SET* pAllowedBlockSet) const;
+
+    ADDR_E_RETURNCODE GetAllowedSwSet(
+        ADDR2_SWMODE_SET  allowedSwModeSet,
+        ADDR2_SWTYPE_SET* pAllowedSwSet) const;
+
 protected:
     Lib();  // Constructor is protected
     Lib(const Client* pClient);
 
     static const UINT_32 MaxNumOfBpp = 5;
+    static const UINT_32 MaxNumOfBppCMask = 4;
     static const UINT_32 MaxNumOfAA  = 4;
 
     static const Dim2d Block256_2d[MaxNumOfBpp];
@@ -669,6 +670,31 @@ protected:
         return ADDR_NOTSUPPORTED;
     }
 
+    virtual ADDR_E_RETURNCODE HwlGetPossibleSwizzleModes(
+        const ADDR2_GET_PREFERRED_SURF_SETTING_INPUT* pIn,
+        ADDR2_GET_PREFERRED_SURF_SETTING_OUTPUT*      pOut) const
+    {
+        ADDR_NOT_IMPLEMENTED();
+        return ADDR_NOTSUPPORTED;
+    }
+
+    virtual ADDR_E_RETURNCODE HwlGetAllowedBlockSet(
+        ADDR2_SWMODE_SET allowedSwModeSet,
+        AddrResourceType rsrcType,
+        ADDR2_BLOCK_SET* pAllowedBlockSet) const
+    {
+        ADDR_NOT_IMPLEMENTED();
+        return ADDR_NOTIMPLEMENTED;
+    }
+
+    virtual ADDR_E_RETURNCODE HwlGetAllowedSwSet(
+        ADDR2_SWMODE_SET  allowedSwModeSet,
+        ADDR2_SWTYPE_SET* pAllowedSwSet) const
+    {
+        ADDR_NOT_IMPLEMENTED();
+        return ADDR_NOTIMPLEMENTED;
+    }
+
     virtual ADDR_E_RETURNCODE HwlComputeSurfaceInfoSanityCheck(
         const ADDR2_COMPUTE_SURFACE_INFO_INPUT* pIn) const
     {
@@ -922,17 +948,8 @@ protected:
     VOID FilterInvalidEqSwizzleMode(
         ADDR2_SWMODE_SET& allowedSwModeSet,
         AddrResourceType  resourceType,
-        UINT_32           elemLog2) const;
-
-    static BOOL_32 IsBlockTypeAvaiable(ADDR2_BLOCK_SET blockSet, AddrBlockType blockType);
-
-    static BOOL_32 BlockTypeWithinMemoryBudget(
-        UINT_64 minSize,
-        UINT_64 newBlockTypeSize,
-        UINT_32 ratioLow,
-        UINT_32 ratioHi,
-        DOUBLE  memoryBudget = 0.0f,
-        BOOL_32 newBlockTypeBigger = TRUE);
+        UINT_32           elemLog2,
+        UINT_32           maxComponents) const;
 
 #if DEBUG
     VOID ValidateStereoInfo(
@@ -982,7 +999,6 @@ private:
 
 } // V2
 } // Addr
-} // rocr
-
+} // namespace rocr
 #endif
 

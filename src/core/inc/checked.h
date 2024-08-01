@@ -58,7 +58,7 @@ template <uint64_t code, bool multiProcess = false> class Check final {
   Check(const Check&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
   Check(Check&&) { object_ = uintptr_t(this) ^ uintptr_t(code); }
 
-  ~Check() { object_ = NULL; }
+  ~Check() { object_ = uintptr_t(NULL); }
 
   const Check& operator=(Check&& rhs) { return *this; }
   const Check& operator=(const Check& rhs) { return *this; }

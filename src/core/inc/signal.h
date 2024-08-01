@@ -407,7 +407,7 @@ class Signal {
   core::Agent* async_copy_agent_;
 
  private:
-  static HybridMutex ipcLock_;
+  static KernelMutex ipcLock_;
   static std::map<decltype(hsa_signal_t::handle), Signal*> ipcMap_;
 
   static Signal* lookupIpc(hsa_signal_t signal);

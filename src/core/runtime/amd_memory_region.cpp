@@ -50,12 +50,14 @@
 #include "core/inc/amd_gpu_agent.h"
 #include "core/util/utils.h"
 #include "core/inc/exceptions.h"
+#include <unistd.h>
 
 namespace rocr {
 namespace AMD {
 
 // Tracks aggregate size of system memory available on platform
 size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
+size_t MemoryRegion::kPageSize_ = sysconf(_SC_PAGESIZE);
 
 void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id, size_t size) {
   void* ret = NULL;
@@ -100,9 +102,10 @@ void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
 }
 
 MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
-                           bool extended_scope_fine_grain, core::Agent* owner,
+                           bool extended_scope_fine_grain, bool user_visible, core::Agent* owner,
                            const HsaMemoryProperties& mem_props)
-    : core::MemoryRegion(fine_grain, kernarg, full_profile, extended_scope_fine_grain, owner),
+    : core::MemoryRegion(fine_grain, kernarg, full_profile, extended_scope_fine_grain, user_visible,
+                         owner),
       mem_props_(mem_props),
       max_single_alloc_size_(0),
       virtual_size_(0),
@@ -136,7 +139,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
     virtual_size_ = kGpuVmSize;
 
   } else if (IsSystem()) {
-    mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
+    mem_flag_.ui32.PageSize = MemoryRegion::kPageSize_;
     mem_flag_.ui32.NoSubstitute = 0;
     mem_flag_.ui32.HostAccess = 1;
     mem_flag_.ui32.CachePolicy = HSA_CACHING_CACHED;
@@ -161,7 +164,6 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
   }
 
   assert(GetVirtualSize() != 0);
-  assert(GetPhysicalSize() <= GetVirtualSize());
   assert(IsMultipleOf(max_single_alloc_size_, kPageSize_));
 }
 
@@ -207,6 +209,12 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
   kmt_alloc_flags.ui32.NoSubstitute = (alloc_flags & AllocatePinned ? 1 : kmt_alloc_flags.ui32.NoSubstitute);
 
   kmt_alloc_flags.ui32.GTTAccess = (alloc_flags & AllocateGTTAccess ? 1 : kmt_alloc_flags.ui32.GTTAccess);
+  if (IsLocalMemory()) {
+    // Allocate physically contiguous memory - AllocateKfdMemory function call will fail
+    // if this flag is not supported in KFD.
+    kmt_alloc_flags.ui32.Contiguous =
+        (alloc_flags & AllocateContiguous ? 1 : kmt_alloc_flags.ui32.Contiguous);
+  }
 
   // Only allow using the suballocator for ordinary VRAM.
   if (IsLocalMemory() && !kmt_alloc_flags.ui32.NoAddress) {
@@ -237,9 +245,9 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
     *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
   }
 
-  if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
-
   if (*address != nullptr) {
+    if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
+
     // Commit the memory.
     // For system memory, on non-restricted allocation, map it to all GPUs. On
     // restricted allocation, only CPU is allowed to access by default, so
