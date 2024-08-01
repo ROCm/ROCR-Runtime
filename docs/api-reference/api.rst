@@ -1,3 +1,9 @@
+.. meta::
+   :description: HSA runtime implementation
+   :keywords: ROCR, ROCm, library, tool, runtime
+
+.. _rocr-api:
+
 API
 ===
 
