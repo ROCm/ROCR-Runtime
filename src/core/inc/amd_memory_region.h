@@ -96,7 +96,7 @@ class MemoryRegion : public core::MemoryRegion {
   static void MakeKfdMemoryUnresident(const void* ptr);
 
   MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
-               core::Agent* owner, const HsaMemoryProperties& mem_props);
+               bool user_visible, core::Agent* owner, const HsaMemoryProperties& mem_props);
 
   ~MemoryRegion();
 
@@ -193,7 +193,7 @@ class MemoryRegion : public core::MemoryRegion {
   // fragments of the block routing to the same MemoryRegion.
   mutable KernelMutex access_lock_;
 
-  static const size_t kPageSize_ = 4096;
+  static size_t kPageSize_;
 
   // Determine access type allowed to requesting device
   hsa_amd_memory_pool_access_t GetAccessInfo(const core::Agent& agent,

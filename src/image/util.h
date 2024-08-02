@@ -99,7 +99,7 @@ static __forceinline void* _aligned_malloc(size_t size, size_t alignment) {
   return aligned_alloc(alignment, size);
 #else
   void* mem = NULL;
-  if (NULL != posix_memalign(&mem, alignment, size)) return NULL;
+  if (0 != posix_memalign(&mem, alignment, size)) return NULL;
   return mem;
 #endif
 }

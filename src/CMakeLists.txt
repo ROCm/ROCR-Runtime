@@ -65,6 +65,7 @@ include ( GNUInstallDirs )
 if ( NOT DEFINED BUILD_SHARED_LIBS )
   set ( BUILD_SHARED_LIBS ON )
 endif()
+
 set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
 
 ## Adjust target name for static builds
@@ -85,7 +86,7 @@ if (ROCM_CCACHE_BUILD)
 endif() # if (ROCM_CCACHE_BUILD)
 
 ## Get version strings
-get_version ( "1.13.0" )
+get_version ( "1.14.0" )
 if ( ${ROCM_PATCH_VERSION} )
   set ( VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
@@ -158,7 +159,8 @@ set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY LINK_FLAGS ${HSA_SHARED_LINK
 ##  -------------------------  End Compiler and Linker options ----------------------------
 
 ## Source files.
-set ( SRCS core/util/lnx/os_linux.cpp
+set ( SRCS core/driver/driver.cpp
+           core/util/lnx/os_linux.cpp
            core/util/small_heap.cpp
            core/util/timer.cpp
            core/util/flag.cpp
@@ -208,6 +210,16 @@ add_dependencies( ${CORE_RUNTIME_TARGET} amd_trap_handler_v2 )
 add_subdirectory( ${CMAKE_CURRENT_SOURCE_DIR}/core/runtime/blit_shaders )
 add_dependencies( ${CORE_RUNTIME_TARGET} amd_blit_shaders_v2)
 
+option(PC_SAMPLING_SUPPORT "Enable PC Sampling Support" ON)
+
+if (${PC_SAMPLING_SUPPORT})
+  target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HSA_PC_SAMPLING_SUPPORT)
+
+  set( PCS_SRCS pcs/hsa_ven_amd_pc_sampling.cpp pcs/pcs_runtime.cpp )
+
+  target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${PCS_SRCS} )
+endif()
+
 if ( NOT DEFINED IMAGE_SUPPORT AND CMAKE_SYSTEM_PROCESSOR MATCHES "i?86|x86_64|amd64|AMD64|loongarch64" )
   set ( IMAGE_SUPPORT ON )
 endif()
@@ -228,6 +240,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/core/addrlib.cpp
                    image/addrlib/src/core/addrlib1.cpp
                    image/addrlib/src/core/addrlib2.cpp
+                   image/addrlib/src/core/addrlib3.cpp
                    image/addrlib/src/core/addrobject.cpp
                    image/addrlib/src/core/addrelemlib.cpp
                    image/addrlib/src/r800/ciaddrlib.cpp
@@ -236,6 +249,7 @@ if(${IMAGE_SUPPORT})
                    image/addrlib/src/gfx9/gfx9addrlib.cpp
                    image/addrlib/src/gfx10/gfx10addrlib.cpp
                    image/addrlib/src/gfx11/gfx11addrlib.cpp
+                   image/addrlib/src/gfx12/gfx12addrlib.cpp
                    image/device_info.cpp
                    image/hsa_ext_image.cpp
                    image/image_runtime.cpp
@@ -244,6 +258,7 @@ if(${IMAGE_SUPPORT})
                    image/image_manager_ai.cpp
                    image/image_manager_nv.cpp
                    image/image_manager_gfx11.cpp
+                   image/image_manager_gfx12.cpp
                    image/image_lut_kv.cpp
                    image/image_lut_gfx11.cpp
                    image/blit_object_gfx7xx.cpp
@@ -265,10 +280,12 @@ if(${IMAGE_SUPPORT})
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx10
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx11
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/gfx12
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/r800
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx9
     ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx10
-    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11 )
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx11
+    ${CMAKE_CURRENT_SOURCE_DIR}/image/addrlib/src/chip/gfx12 )
 
   target_sources( ${CORE_RUNTIME_TARGET} PRIVATE ${IMAGE_SRCS} )
 
@@ -278,21 +295,27 @@ if(${IMAGE_SUPPORT})
 
 endif()
 
-## Link dependencies.
-target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
 target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE elf::elf dl pthread rt )
-
-find_package(rocprofiler-register)
-if(rocprofiler-register_FOUND)
+# For static package rocprofiler-register dependency is not required
+# Link to hsakmt target for shared library builds
+# Link to hsakmt-staticdrm target for static library builds
+if( BUILD_SHARED_LIBS )
+  target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt::hsakmt PkgConfig::drm)
+  find_package(rocprofiler-register)
+  if(rocprofiler-register_FOUND)
     target_compile_definitions(${CORE_RUNTIME_TARGET} PRIVATE HSA_ROCPROFILER_REGISTER=1
                                                               HSA_VERSION_MAJOR=${VERSION_MAJOR}
                                                               HSA_VERSION_MINOR=${VERSION_MINOR}
                                                               HSA_VERSION_PATCH=${VERSION_PATCH})
     target_link_libraries(${CORE_RUNTIME_TARGET} PRIVATE rocprofiler-register::rocprofiler-register)
     set(HSA_DEP_ROCPROFILER_REGISTER ON)
-else()
+  else()
     set(HSA_DEP_ROCPROFILER_REGISTER OFF)
-endif()
+  endif() # end rocprofiler-register_FOUND
+else()
+  include_directories(${drm_INCLUDE_DIRS})
+  target_link_libraries ( ${CORE_RUNTIME_TARGET} PRIVATE hsakmt-staticdrm::hsakmt-staticdrm)
+endif()#end BUILD_SHARED_LIBS
 
 ## Set the VERSION and SOVERSION values
 set_property ( TARGET ${CORE_RUNTIME_TARGET} PROPERTY VERSION "${SO_VERSION_STRING}" )
@@ -312,7 +335,7 @@ if( NOT ${BUILD_SHARED_LIBS} )
   add_dependencies( ${CORE_RUNTIME_NAME} ${CORE_RUNTIME_TARGET} )
 
   ## Add external link requirements.
-  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE hsakmt::hsakmt )
+  target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE hsakmt-staticdrm::hsakmt-staticdrm )
   target_link_libraries ( ${CORE_RUNTIME_NAME} INTERFACE elf::elf dl pthread rt )
 
   install ( TARGETS ${CORE_RUNTIME_NAME} EXPORT ${CORE_RUNTIME_NAME}Targets )
@@ -417,7 +440,6 @@ endif()
 ## Packaging directives
 set ( CPACK_GENERATOR "DEB;RPM" CACHE STRING "Package types to build")
 set ( ENABLE_LDCONFIG ON CACHE BOOL "Set library links and caches using ldconfig.")
-
 ## Only pack the "binary" and "dev" components, post install script will add the directory link.
 set ( CPACK_COMPONENTS_ALL binary dev )
 # ASAN Package will have libraries and license file
@@ -518,5 +540,22 @@ endif()
 set ( CPACK_RPM_PACKAGE_PROVIDES "hsa-ext-rocr-dev hsa-rocr-dev" )
 set ( CPACK_RPM_PACKAGE_OBSOLETES "hsa-ext-rocr-dev" )
 
+if( NOT BUILD_SHARED_LIBS )
+  # Suffix package name with static
+  set ( CPACK_RPM_STATIC_PACKAGE_NAME "hsa-rocr-static-devel")
+  set ( CPACK_DEBIAN_STATIC_PACKAGE_NAME "hsa-rocr-static-dev")
+  set ( CPACK_COMPONENT_STATIC_DESCRIPTION "HSA (Heterogenous System Architecture) core runtime - Linux static libraries" )
+  set ( CPACK_RPM_STATIC_PACKAGE_REQUIRES "${CPACK_RPM_BINARY_PACKAGE_REQUIRES}" )
+  string ( APPEND CPACK_RPM_STATIC_PACKAGE_REQUIRES " hsakmt-roct-devel" )
+  set ( CPACK_DEBIAN_STATIC_PACKAGE_DEPENDS "${CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS}" )
+  string ( APPEND CPACK_DEBIAN_STATIC_PACKAGE_DEPENDS ", hsakmt-roct-dev" )
+endif()
 ## Include packaging
 include ( CPack )
+# static package generation
+# Group binary and dev component to single package
+if( NOT BUILD_SHARED_LIBS )
+    cpack_add_component_group("static")
+    cpack_add_component( binary  GROUP static )
+    cpack_add_component( dev GROUP static )
+endif()

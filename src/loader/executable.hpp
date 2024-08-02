@@ -144,6 +144,7 @@ public:
                const bool &_is_dynamic_callstack,
                const uint32_t &_size,
                const uint32_t &_alignment,
+               const uint32_t &_wavefront_size,
                const uint64_t &_address = 0)
     : SymbolImpl(_is_loaded,
                  HSA_SYMBOL_KIND_KERNEL,
@@ -159,7 +160,8 @@ public:
     , private_segment_size(_private_segment_size)
     , is_dynamic_callstack(_is_dynamic_callstack)
     , size(_size)
-    , alignment(_alignment) {}
+    , alignment(_alignment)
+    , wavefront_size(_wavefront_size) {}
 
   ~KernelSymbol() {}
 
@@ -173,6 +175,7 @@ public:
   bool is_dynamic_callstack;
   uint32_t size;
   uint32_t alignment;
+  uint32_t wavefront_size;
   amd_runtime_loader_debug_info_t debug_info;
 
 private:
@@ -420,6 +423,12 @@ public:
       size_t id,
       hsa_default_float_rounding_mode_t default_float_rounding_mode);
 
+  ExecutableImpl(
+      const hsa_profile_t &_profile,
+      std::unique_ptr<Context> unique_context,
+      size_t id,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode);
+
   ~ExecutableImpl();
 
   hsa_status_t GetInfo(hsa_executable_info_t executable_info, void *value) override;
@@ -546,6 +555,7 @@ private:
   amd::hsa::common::ReaderWriterLock rw_lock_;
   hsa_profile_t profile_;
   Context *context_;
+  std::unique_ptr<Context> unique_context_;
   Logger logger_;
   const size_t id_;
   hsa_default_float_rounding_mode_t default_float_rounding_mode_;
@@ -571,6 +581,12 @@ public:
   Context* GetContext() const override { return context; }
 
   Executable* CreateExecutable(
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) override;
+
+  Executable* CreateExecutable(
+      std::unique_ptr<Context> isolated_context,
       hsa_profile_t profile,
       const char *options,
       hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) override;

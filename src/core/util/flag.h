@@ -67,6 +67,7 @@ class Flag {
   // Lift limit for 2.10 release RCCL workaround. This limit is not used when asynchronous scratch
   // reclaim is supported
   const size_t DEFAULT_SCRATCH_SINGLE_LIMIT = 146800640;  // small_limit >> 2;
+  const size_t DEFAULT_PCS_MAX_DEVICE_BUFFER_SIZE = 256 * 1024 * 1024;
 
   explicit Flag() { Refresh(); }
 
@@ -184,6 +185,9 @@ class Flag {
     var = os::GetEnvVar("HSA_DISABLE_IMAGE");
     disable_image_ = (var == "1") ? true : false;
 
+    var = os::GetEnvVar("HSA_DISABLE_PC_SAMPLING");
+    disable_pc_sampling_ = (var == "1") ? true : false;
+
     var = os::GetEnvVar("HSA_LOADER_ENABLE_MMAP_URI");
     loader_enable_mmap_uri_ = (var == "1") ? true : false;
 
@@ -227,6 +231,14 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
     enable_ipc_mode_legacy_ = (var == "1") ? true : true; // Temporarily always enable
+
+    if (os::IsEnvVarSet("HSA_PCS_MAX_DEVICE_BUFFER_SIZE")) {
+      var = os::GetEnvVar("HSA_PCS_MAX_DEVICE_BUFFER_SIZE");
+      char* end;
+      pc_sampling_max_device_buffer_size_ = strtoul(var.c_str(), &end, 10);
+    } else {
+      pc_sampling_max_device_buffer_size_ = DEFAULT_PCS_MAX_DEVICE_BUFFER_SIZE;
+    }
 
     // Temporary environment variable to disable CPU affinity override
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
@@ -297,6 +309,8 @@ class Flag {
 
   bool disable_image() const { return disable_image_; }
 
+  bool disable_pc_sampling() const { return disable_pc_sampling_; }
+
   bool loader_enable_mmap_uri() const { return loader_enable_mmap_uri_; }
 
   size_t force_sdma_size() const { return force_sdma_size_; }
@@ -336,6 +350,8 @@ class Flag {
 
   bool enable_ipc_mode_legacy() const { return enable_ipc_mode_legacy_; }
 
+  size_t pc_sampling_max_device_buffer_size() const { return pc_sampling_max_device_buffer_size_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -353,6 +369,7 @@ class Flag {
   bool no_scratch_reclaim_;
   bool no_scratch_thread_limit_;
   bool disable_image_;
+  bool disable_pc_sampling_;
   bool loader_enable_mmap_uri_;
   bool check_sramecc_validity_;
   bool debug_;
@@ -389,6 +406,8 @@ class Flag {
   XNACK_REQUEST xnack_;
 
   SRAMECC_ENABLE sramecc_enable_;
+
+  size_t pc_sampling_max_device_buffer_size_;
 
   // Map GPU index post RVD to its default cu mask.
   std::map<uint32_t, std::vector<uint32_t>> cu_mask_;

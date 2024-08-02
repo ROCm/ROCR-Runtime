@@ -1,0 +1,53 @@
+resources:
+  repositories:
+  - repository: pipelines_repo
+    type: github
+    endpoint: ROCm
+    name: ROCm/ROCm
+  pipelines:
+  - pipeline: llvm-project_pipeline
+    source: \llvm-project
+    trigger:
+      branches:
+        include:
+        - amd-staging
+  - pipeline: roct-thunk-interface_pipeline
+    source: \ROCT-Thunk-Interface
+    trigger:
+      branches:
+        include:
+        - master
+
+variables:
+- group: common
+- template: /.azuredevops/variables-global.yml@pipelines_repo
+
+trigger:
+  batch: true
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - .github
+    - '**/*.md'
+    - '.*.yaml'
+    - LICENSE.txt
+    - README.md
+
+pr:
+  autoCancel: true
+  branches:
+    include:
+    - master
+  paths:
+    exclude:
+    - .github
+    - '**/*.md'
+    - '.*.yaml'
+    - LICENSE.txt
+    - README.md
+  drafts: false
+
+jobs:
+  - template: ${{ variables.CI_COMPONENT_PATH }}/ROCR-Runtime.yml@pipelines_repo

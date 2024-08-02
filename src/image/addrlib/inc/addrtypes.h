@@ -2,24 +2,7 @@
 ************************************************************************************************************************
 *
 *  Copyright (C) 2007-2022 Advanced Micro Devices, Inc.  All rights reserved.
-*
-* Permission is hereby granted, free of charge, to any person obtaining a
-* copy of this software and associated documentation files (the "Software"),
-* to deal in the Software without restriction, including without limitation
-* the rights to use, copy, modify, merge, publish, distribute, sublicense,
-* and/or sell copies of the Software, and to permit persons to whom the
-* Software is furnished to do so, subject to the following conditions:
-*
-* The above copyright notice and this permission notice shall be included in
-* all copies or substantial portions of the Software.
-*
-* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-* IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-* FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
-* THE COPYRIGHT HOLDER(S) OR AUTHOR(S) BE LIABLE FOR ANY CLAIM, DAMAGES OR
-* OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE,
-* ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR
-* OTHER DEALINGS IN THE SOFTWARE
+*  SPDX-License-Identifier: MIT
 *
 ***********************************************************************************************************************/
 
@@ -295,6 +278,26 @@ typedef enum _AddrSwizzleMode
 /**
 ****************************************************************************************************
 * @brief
+*   Neutral enums that define swizzle modes for Gfx12+ ASIC
+*
+****************************************************************************************************
+*/
+typedef enum _Addr3SwizzleMode
+{
+    ADDR3_LINEAR    = 0,
+    ADDR3_256B_2D   = 1,
+    ADDR3_4KB_2D    = 2,
+    ADDR3_64KB_2D   = 3,
+    ADDR3_256KB_2D  = 4,
+    ADDR3_4KB_3D    = 5,
+    ADDR3_64KB_3D   = 6,
+    ADDR3_256KB_3D  = 7,
+    ADDR3_MAX_TYPE  = 8,
+} Addr3SwizzleMode;
+
+/**
+****************************************************************************************************
+* @brief
 *   Neutral enums that define image type
 * @note
 *   this is new for address library interface version 2
@@ -454,6 +457,7 @@ typedef enum _AddrFormat {
     ADDR_FMT_ASTC_12x12                           = 0x0000004d,
     ADDR_FMT_ETC2_64BPP                           = 0x0000004e,
     ADDR_FMT_ETC2_128BPP                          = 0x0000004f,
+    ADDR_FMT_BG_RG_16_16_16_16                    = 0x00000050,
 } AddrFormat;
 
 /**
