@@ -47,16 +47,19 @@
 
 #include "hsa.h"
 #include "hsa_ext_image.h"
+#include "hsa_ven_amd_pc_sampling.h"
 
-/*
+/**
  * - 1.0 - initial version
  * - 1.1 - dmabuf export
  * - 1.2 - hsa_amd_memory_async_copy_on_engine
  * - 1.3 - HSA_AMD_MEMORY_POOL_GLOBAL_FLAG_EXTENDED_SCOPE_FINE_GRAINED pool
  * - 1.4 - Virtual Memory API
+ * - 1.5 - hsa_amd_agent_info: HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES
+ * - 1.6 - Virtual Memory API: hsa_amd_vmem_address_reserve_align
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 4
+#define HSA_AMD_INTERFACE_VERSION_MINOR 6
 
 #ifdef __cplusplus
 extern "C" {
@@ -221,6 +224,11 @@ enum {
    * Exceeded number of VGPRs available on this agent
    */
   HSA_STATUS_ERROR_OUT_OF_REGISTERS = 45,
+
+  /**
+   * Resource is busy or temporarily unavailable
+   */
+  HSA_STATUS_ERROR_RESOURCE_BUSY = 46,
 };
 
 /**
@@ -2807,9 +2815,64 @@ hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
  *
  * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
  * range of this size.
+ *
+ * Note that this API will be deprecated in a future release and replaced by
+ * hsa_amd_vmem_address_reserve_align
  */
 hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
                                           uint64_t flags);
+
+/**
+ * @brief Allocate a reserved address range
+ *
+ * Reserve a virtual address range. The size must be a multiple of the system page size.
+ * If it is not possible to allocate the address specified by @p address, then @p va will be
+ * a different address range.
+ * Address range should be released by calling hsa_amd_vmem_address_free.
+ *
+ * @param[out] va virtual address allocated
+ * @param[in] size of address range requested
+ * @param[in] address requested
+ * @param[in] flags currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
+ * range of this size.
+ *
+ * Note that this API will be deprecated in a future release and replaced by
+ * hsa_amd_vmem_address_reserve_align
+ */
+hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t address,
+                                          uint64_t flags);
+
+/**
+ * @brief Allocate a reserved address range
+ *
+ * Reserve a virtual address range. The size must be a multiple of the system page size.
+ * If it is not possible to allocate the address specified by @p address, then @p va will be
+ * a different address range.
+ * Address range should be released by calling hsa_amd_vmem_address_free.
+ *
+ * @param[out] va virtual address allocated
+ * @param[in] size of address range requested
+ * @param[in] address requested
+ * @param[in] alignment requested. 0 for default. Must be >= page-size and a power of 2
+ * @param[in] flags currently unsupported
+ *
+ * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
+ *
+ * @retval ::HSA_STATUS_ERROR_NOT_INITIALIZED The HSA runtime has not been
+ * initialized.
+ *
+ * @retval ::HSA_STATUS_ERROR_OUT_OF_RESOURCES Insufficient resources to allocate an address
+ * range of this size.
+ */
+hsa_status_t hsa_amd_vmem_address_reserve_align(void** va, size_t size, uint64_t address,
+                                          uint64_t alignment, uint64_t flags);
 
 /**
  * @brief Free a reserved address range
@@ -3044,19 +3107,19 @@ hsa_status_t hsa_amd_vmem_import_shareable_handle(int dmabuf_fd,
 hsa_status_t hsa_amd_vmem_retain_alloc_handle(hsa_amd_vmem_alloc_handle_t* memory_handle,
                                               void* addr);
 
-/*
-* @brief Returns the current allocation properties of a handle
-*
-* Returns the allocation properties of an existing handle
-*
-* @param[in] memory_handle memory handle to be queried
-* @param[out] pool memory pool that owns this handle
-* @param[out] memory type
+/**
+ * @brief Returns the current allocation properties of a handle
+ *
+ * Returns the allocation properties of an existing handle
+ *
+ * @param[in] memory_handle memory handle to be queried
+ * @param[out] pool memory pool that owns this handle
+ * @param[out] memory type
 
-* @retval ::HSA_STATUS_SUCCESS
-*
-* @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
-*/
+ * @retval ::HSA_STATUS_SUCCESS
+ *
+ * @retval ::HSA_STATUS_ERROR_INVALID_ALLOCATION Invalid memory_handle
+ */
 hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
     hsa_amd_vmem_alloc_handle_t memory_handle, hsa_amd_memory_pool_t* pool,
     hsa_amd_memory_type_t* type);
@@ -3087,6 +3150,22 @@ hsa_status_t hsa_amd_vmem_get_alloc_properties_from_handle(
  * reclaim
  */
 hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold);
+
+typedef enum {
+  /*
+   * Returns the agent that owns the underlying HW queue.
+   * The type of this attribute is hsa_agent_t.
+   */
+  HSA_AMD_QUEUE_INFO_AGENT,
+  /*
+   * Returns the doorbell ID of the completion signal of the queue
+   * The type of this attribute is uint64_t.
+   */
+  HSA_AMD_QUEUE_INFO_DOORBELL_ID,
+} hsa_queue_info_attribute_t;
+
+hsa_status_t hsa_amd_queue_get_info(hsa_queue_t* queue, hsa_queue_info_attribute_t attribute,
+                                    void* value);
 
 #ifdef __cplusplus
 }  // end extern "C" block

@@ -59,7 +59,7 @@ template <typename T> class lazy_ptr {
  public:
   lazy_ptr() {}
 
-  explicit lazy_ptr(std::function<T*()> Constructor) { Init(Constructor); }
+  explicit lazy_ptr(std::function<T*()> Constructor) { reset(Constructor); }
 
   lazy_ptr(lazy_ptr&& rhs) {
     obj = std::move(rhs.obj);

@@ -483,6 +483,10 @@ namespace code {
         *major = 5;
         *minor = 0;
         return true;
+      case ELF::ELFABIVERSION_AMDGPU_HSA_V6:
+        *major = 6;
+        *minor = 0;
+        return true;
       }
 
       return false;
@@ -600,6 +604,12 @@ namespace code {
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1103: MI.Name = "gfx1103"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1150: MI.Name = "gfx1150"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
       case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1151: MI.Name = "gfx1151"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX9_GENERIC:    MI.Name = "gfx9-generic";    MI.XnackSupported = true; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX10_1_GENERIC: MI.Name = "gfx10-1-generic"; MI.XnackSupported = true; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX10_3_GENERIC: MI.Name = "gfx10-3-generic"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX11_GENERIC:   MI.Name = "gfx11-generic";   MI.XnackSupported = false; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1200: MI.Name = "gfx1200"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
+      case ELF::EF_AMDGPU_MACH_AMDGCN_GFX1201: MI.Name = "gfx1201"; MI.XnackSupported = false; MI.SrameccSupported = false; break;
       default: return false;
       }
       return true;
@@ -687,12 +697,16 @@ namespace code {
       return MI.Name;
     }
 
-    bool AmdHsaCode::GetIsa(std::string& isa_name)
+    bool AmdHsaCode::GetIsa(std::string& isa_name, unsigned *genericVersion)
     {
       isa_name.clear();
 
       uint32_t code_object_major_version = 0;
       uint32_t code_object_minor_version = 0;
+
+      // Generic versioning starts at 1, so zero means no generic version.
+      if (genericVersion)
+        *genericVersion = 0;
 
       switch (img->EClass()) {
       case ELFCLASS64:
@@ -740,7 +754,7 @@ namespace code {
             MI.Name += ":xnack+";
           else if (MI.XnackSupported)
             MI.Name += ":xnack-";
-        } else if (code_object_major_version == 4 || code_object_major_version == 5) {
+        } else if (code_object_major_version >= 4) {
           switch (img->EFlags() & ELF::EF_AMDGPU_FEATURE_SRAMECC_V4) {
           case ELF::EF_AMDGPU_FEATURE_SRAMECC_OFF_V4:
             MI.Name += ":sramecc-";
@@ -757,6 +771,12 @@ namespace code {
           case ELF::EF_AMDGPU_FEATURE_XNACK_ON_V4:
             MI.Name += ":xnack+";
             break;
+          }
+
+          // Generic version is not part of the ISA name.
+          // Only parse it when the caller wants it.
+          if (genericVersion && code_object_major_version >= 6) {
+            *genericVersion = (img->EFlags() & ELF::EF_AMDGPU_GENERIC_VERSION) >> ELF::EF_AMDGPU_GENERIC_VERSION_OFFSET;
           }
         } else {
           return false;
@@ -936,7 +956,7 @@ namespace code {
       uint64_t offset = ImageInitSection()->addData(&desc, sizeof(desc), 8);
       amd::elf::Symbol* imageInit =
         img->symtab()->addSymbol(ImageInitSection(), "", offset, 0, STT_AMDGPU_HSA_METADATA, STB_LOCAL);
-      image->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_INIT_IMAGE, imageInit, image->elfSym()->value() + destOffset, 0);
+      image->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_V1_INIT_IMAGE, imageInit, image->elfSym()->value() + destOffset, 0);
     }
 
     void AmdHsaCode::AddImageInitializer(
@@ -977,7 +997,7 @@ namespace code {
       uint64_t offset = SamplerInitSection()->addData(&desc, sizeof(desc), 8);
       amd::elf::Symbol* samplerInit =
         img->symtab()->addSymbol(SamplerInitSection(), "", offset, 0, STT_AMDGPU_HSA_METADATA, STB_LOCAL);
-      sampler->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_INIT_SAMPLER, samplerInit, sampler->elfSym()->value() + destOffset, 0);
+      sampler->elfSym()->section()->relocationSection()->addRelocation(R_AMDGPU_V1_INIT_SAMPLER, samplerInit, sampler->elfSym()->value() + destOffset, 0);
     }
 
     void AmdHsaCode::AddSamplerInitializer(Symbol* sampler, uint64_t destOffset,
@@ -996,7 +1016,7 @@ namespace code {
 
     void AmdHsaCode::AddInitVarWithAddress(bool large, Symbol* dest, uint64_t destOffset, Symbol* addrOf, uint64_t addrAddend)
     {
-      uint32_t rtype = large ? R_AMDGPU_64 : R_AMDGPU_32_LOW;
+      uint32_t rtype = large ? R_AMDGPU_V1_64 : R_AMDGPU_V1_32_LOW;
       dest->elfSym()->section()->relocationSection()->addRelocation(rtype, addrOf->elfSym(), dest->elfSym()->value() + destOffset, addrAddend);
     }
 

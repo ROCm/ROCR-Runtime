@@ -58,11 +58,12 @@ class Agent;
 class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
  public:
   MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
-               core::Agent* owner)
+               bool user_visible, core::Agent* owner)
       : fine_grain_(fine_grain),
         kernarg_(kernarg),
         full_profile_(full_profile),
         extended_scope_fine_grain_(extended_scope_fine_grain),
+        user_visible_(user_visible),
         owner_(owner) {
     assert(owner_ != NULL);
   }
@@ -133,6 +134,8 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
 
   __forceinline bool full_profile() const { return full_profile_; }
 
+  __forceinline bool user_visible() const { return user_visible_; }
+
   __forceinline core::Agent* owner() const { return owner_; }
 
  private:
@@ -140,6 +143,8 @@ class MemoryRegion : public Checked<0x9C961F19EE175BB3> {
   const bool kernarg_;
   const bool full_profile_;
   const bool extended_scope_fine_grain_;
+  const bool user_visible_;
+
   core::Agent* owner_;
 };
 }  // namespace core

@@ -1238,6 +1238,11 @@ hsa_status_t HSA_API hsa_amd_vmem_address_reserve(void** ptr, size_t size, uint6
   return amdExtTable->hsa_amd_vmem_address_reserve_fn(ptr, size, address, flags);
 }
 
+hsa_status_t HSA_API hsa_amd_vmem_address_reserve_align(void** ptr, size_t size, uint64_t address,
+                                                  uint64_t alignment, uint64_t flags) {
+  return amdExtTable->hsa_amd_vmem_address_reserve_align_fn(ptr, size, address, alignment, flags);
+}
+
 hsa_status_t HSA_API hsa_amd_vmem_address_free(void* ptr, size_t size) {
   return amdExtTable->hsa_amd_vmem_address_free_fn(ptr, size);
 }
@@ -1296,6 +1301,11 @@ hsa_status_t HSA_API hsa_amd_vmem_get_alloc_properties_from_handle(
 
 hsa_status_t HSA_API hsa_amd_agent_set_async_scratch_limit(hsa_agent_t agent, size_t threshold) {
   return amdExtTable->hsa_amd_agent_set_async_scratch_limit_fn(agent, threshold);
+}
+
+hsa_status_t HSA_API hsa_amd_queue_get_info(hsa_queue_t* queue,
+                                            hsa_queue_info_attribute_t attribute, void* value) {
+  return amdExtTable->hsa_amd_queue_get_info_fn(queue, attribute, value);
 }
 
 // Tools only table interfaces.

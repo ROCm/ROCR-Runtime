@@ -80,10 +80,11 @@ void HsaApiTable::Init() {
   // they can add preprocessor macros on the new functions
 
   constexpr size_t expected_core_api_table_size = 1016;
-  constexpr size_t expected_amd_ext_table_size = 560;
+  constexpr size_t expected_amd_ext_table_size = 576;
   constexpr size_t expected_image_ext_table_size = 120;
   constexpr size_t expected_finalizer_ext_table_size = 64;
   constexpr size_t expected_tools_table_size = 64;
+  constexpr size_t expected_pc_sampling_ext_table_size = 72;
 
   static_assert(sizeof(CoreApiTable) == expected_core_api_table_size,
                 "HSA core API table size changed, bump HSA_CORE_API_TABLE_STEP_VERSION and set "
@@ -101,6 +102,9 @@ void HsaApiTable::Init() {
   static_assert(sizeof(ToolsApiTable) == expected_tools_table_size,
                 "HSA tools table size changed, bump HSA_TOOLS_API_TABLE_STEP_VERSION "
                 "and set expected_tools_table_size to the new size of the struct");
+  static_assert(sizeof(PcSamplingExtTable) == expected_pc_sampling_ext_table_size,
+                "HSA finalizer ext table size changed, bump HSA_PC_SAMPLING_API_TABLE_STEP_VERSION "
+                "and set expected_pc_sampling_ext_table_size to the new size of the struct");
 
   // Initialize Version of Api Table
   hsa_api.version.major_id = HSA_API_TABLE_MAJOR_VERSION;
@@ -120,6 +124,7 @@ void HsaApiTable::Init() {
   // of Hsa Runtime initialization, including their major ids
   hsa_api.finalizer_ext_ = NULL;
   hsa_api.image_ext_ = NULL;
+  hsa_api.pc_sampling_ext_ = NULL;
 
   UpdateTools();
   hsa_api.tools_ = &tools_api;
@@ -146,6 +151,13 @@ void HsaApiTable::CloneExts(void* ext_table, uint32_t table_id) {
     hsa_api.image_ext_ = &image_api;
     return;
   }
+
+  // Update HSA Extension PC Sampling Api table
+  if (table_id == HSA_EXT_PC_SAMPLING_API_TABLE_ID) {
+    pcs_api = *reinterpret_cast<PcSamplingExtTable*>(ext_table);
+    hsa_api.pc_sampling_ext_ = &pcs_api;
+    return;
+  }
 }
 
 void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
@@ -163,6 +175,13 @@ void HsaApiTable::LinkExts(void* ext_table, uint32_t table_id) {
   if (table_id == HSA_EXT_IMAGE_API_TABLE_ID) {
     image_api = *reinterpret_cast<ImageExtTable*>(ext_table);
     hsa_api.image_ext_ = reinterpret_cast<ImageExtTable*>(ext_table);
+    return;
+  }
+
+  // Update HSA Extension PC Sampling Api table
+  if (table_id == HSA_EXT_PC_SAMPLING_API_TABLE_ID) {
+    pcs_api = *reinterpret_cast<PcSamplingExtTable*>(ext_table);
+    hsa_api.pc_sampling_ext_ = &pcs_api;
     return;
   }
 }
@@ -432,6 +451,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_portable_export_dmabuf_fn = AMD::hsa_amd_portable_export_dmabuf;
   amd_ext_api.hsa_amd_portable_close_dmabuf_fn = AMD::hsa_amd_portable_close_dmabuf;
   amd_ext_api.hsa_amd_vmem_address_reserve_fn = AMD::hsa_amd_vmem_address_reserve;
+  amd_ext_api.hsa_amd_vmem_address_reserve_align_fn = AMD::hsa_amd_vmem_address_reserve_align;
   amd_ext_api.hsa_amd_vmem_address_free_fn = AMD::hsa_amd_vmem_address_free;
   amd_ext_api.hsa_amd_vmem_handle_create_fn = AMD::hsa_amd_vmem_handle_create;
   amd_ext_api.hsa_amd_vmem_handle_release_fn = AMD::hsa_amd_vmem_handle_release;
@@ -445,6 +465,7 @@ void HsaApiTable::UpdateAmdExts() {
   amd_ext_api.hsa_amd_vmem_get_alloc_properties_from_handle_fn =
       AMD::hsa_amd_vmem_get_alloc_properties_from_handle;
   amd_ext_api.hsa_amd_agent_set_async_scratch_limit_fn = AMD::hsa_amd_agent_set_async_scratch_limit;
+  amd_ext_api.hsa_amd_queue_get_info_fn = AMD::hsa_amd_queue_get_info;
 }
 
 void HsaApiTable::UpdateTools() {

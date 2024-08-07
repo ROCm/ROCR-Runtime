@@ -81,8 +81,10 @@ __attribute__((noinline)) static void _loader_debug_state() {
 // 6: New trap handler ABI. ttmp6[25:0] contains dispatch index modulo queue size
 // 7: New trap handler ABI. Send interrupts as a bitmask, coalescing concurrent exceptions.
 // 8: New trap handler ABI. for gfx940: Initialize ttmp[4:5] if ttmp11[31] == 0.
-// 9: New trap handler API. For gfx11: Save PC in ttmp11[22:7] ttmp6[31:0], and park the wave if stopped.
-HSA_API r_debug _amdgpu_r_debug = {9,
+// 9: New trap handler ABI. For gfx11: Save PC in ttmp11[22:7] ttmp6[31:0], and park the wave if stopped.
+// 10: New trap handler ABI. Set status.skip_export when halting the wave.
+//                           For gfx940, set ttmp6[31] = 0 if ttmp11[31] == 0.
+HSA_API r_debug _amdgpu_r_debug = {10,
                            nullptr,
                            reinterpret_cast<uintptr_t>(&_loader_debug_state),
                            r_debug::RT_CONSISTENT,
@@ -183,6 +185,18 @@ Executable* AmdHsaCodeLoader::CreateExecutable(
   WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
 
   executables.push_back(new ExecutableImpl(profile, context, executables.size(), default_float_rounding_mode));
+  return executables.back();
+}
+
+Executable* AmdHsaCodeLoader::CreateExecutable(
+      std::unique_ptr<Context> isolated_context,
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode)
+{
+  WriterLockGuard<ReaderWriterLock> writer_lock(rw_lock_);
+
+  executables.push_back(new ExecutableImpl(profile, std::move(isolated_context), executables.size(), default_float_rounding_mode));
   return executables.back();
 }
 
@@ -522,6 +536,10 @@ bool KernelSymbol::GetInfo(hsa_symbol_info32_t symbol_info, void *value) {
       *((bool*)value) = is_dynamic_callstack;
       break;
     }
+    case HSA_CODE_SYMBOL_INFO_KERNEL_WAVEFRONT_SIZE: {
+      *((uint32_t*)value) = wavefront_size;
+      break;
+    }
     case HSA_EXT_EXECUTABLE_SYMBOL_INFO_KERNEL_OBJECT_SIZE: {
       *((uint32_t*)value) = size;
       break;
@@ -732,6 +750,22 @@ ExecutableImpl::ExecutableImpl(
   , state_(HSA_EXECUTABLE_STATE_UNFROZEN)
   , program_allocation_segment(nullptr)
 {
+}
+
+ExecutableImpl::ExecutableImpl(
+    const hsa_profile_t &_profile,
+    std::unique_ptr<Context> unique_context,
+    size_t id,
+    hsa_default_float_rounding_mode_t default_float_rounding_mode)
+  : Executable()
+  , profile_(_profile)
+  , unique_context_(std::move(unique_context))
+  , id_(id)
+  , default_float_rounding_mode_(default_float_rounding_mode)
+  , state_(HSA_EXECUTABLE_STATE_UNFROZEN)
+  , program_allocation_segment(nullptr)
+{
+  context_ = unique_context_.get();
 }
 
 ExecutableImpl::~ExecutableImpl() {
@@ -1212,7 +1246,8 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
   }
 
   std::string codeIsa;
-  if (!code->GetIsa(codeIsa)) {
+  unsigned genericVersion;
+  if (!code->GetIsa(codeIsa, &genericVersion)) {
     logger_ << "LoaderError: failed to determine code object's ISA\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1223,7 +1258,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
 
-  if (majorVersion < 1 || majorVersion > 5) {
+  if (majorVersion < 1 || majorVersion > 6) {
     logger_ << "LoaderError: unsupported code object version: " << majorVersion << "\n";
     return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
   }
@@ -1251,7 +1286,7 @@ hsa_status_t ExecutableImpl::LoadCodeObject(
     return HSA_STATUS_ERROR_INVALID_ISA_NAME;
   }
 
-  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa)) {
+  if (agent.handle != 0 && !context_->IsaSupportedByAgent(agent, objectsIsa, genericVersion)) {
     logger_ << "LoaderError: code object's ISA (" << codeIsa.c_str() << ") is not supported by the agent\n";
     return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
   }
@@ -1434,6 +1469,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
     uint32_t group_segment_size = kd.group_segment_fixed_size;
     uint32_t private_segment_size = kd.private_segment_fixed_size;
     bool is_dynamic_callstack = AMDHSA_BITS_GET(kd.kernel_code_properties, rocr::llvm::amdhsa::KERNEL_CODE_PROPERTY_USES_DYNAMIC_STACK);
+    bool uses_wave32 = AMDHSA_BITS_GET( kd.kernel_code_properties, rocr::llvm::amdhsa::KERNEL_CODE_PROPERTY_ENABLE_WAVEFRONT_SIZE32);
 
     uint64_t size = sym->Size();
 
@@ -1449,6 +1485,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                     is_dynamic_callstack,
                                     size,
                                     64,
+                                    uses_wave32 ? 32 : 64,
                                     address);
     symbol = kernel_symbol;
   } else if (sym->IsVariableSymbol()) {
@@ -1478,6 +1515,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
         uint32_t(akc.workitem_private_segment_byte_size);
       bool is_dynamic_callstack =
         AMD_HSA_BITS_GET(akc.kernel_code_properties, AMD_KERNEL_CODE_PROPERTIES_IS_DYNAMIC_CALLSTACK) ? true : false;
+      bool uses_wave32 = akc.wavefront_size == AMD_POWERTWO_32;
 
       uint64_t size = sym->Size();
 
@@ -1498,6 +1536,7 @@ hsa_status_t ExecutableImpl::LoadDefinitionSymbol(hsa_agent_t agent,
                                       is_dynamic_callstack,
                                       size,
                                       256,
+                                      uses_wave32 ? 32 : 64,
                                       address);
       kernel_symbol->debug_info.elf_raw = code->ElfData();
       kernel_symbol->debug_info.elf_size = code->ElfSize();
@@ -1585,15 +1624,24 @@ Segment* ExecutableImpl::SectionSegment(hsa_agent_t agent, code::Section* sec)
 hsa_status_t ExecutableImpl::ApplyRelocations(hsa_agent_t agent, amd::hsa::code::AmdHsaCode *c)
 {
   hsa_status_t status = HSA_STATUS_SUCCESS;
+
+  uint32_t majorVersion, minorVersion;
+  if (!c->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
+    return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
+  }
+
   for (size_t i = 0; i < c->RelocationSectionCount(); ++i) {
     if (c->GetRelocationSection(i)->targetSection()) {
+      // Static relocations may be present if --emit-relocs
+      // option was passed to lld, but they cannot be applied
+      // again, so skip it for code object v2 and up.
+      if (majorVersion >= 2) {
+        continue;
+      }
+
       status = ApplyStaticRelocationSection(agent, c->GetRelocationSection(i));
     } else {
       // Dynamic relocations are supported starting code object v2.1.
-      uint32_t majorVersion, minorVersion;
-      if (!c->GetCodeObjectVersion(&majorVersion, &minorVersion)) {
-        return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
-      }
       if (majorVersion < 2) {
         return HSA_STATUS_ERROR_INVALID_CODE_OBJECT;
       }
@@ -1628,9 +1676,9 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
   Segment* rseg = SectionSegment(agent, sec);
   size_t reladdr = sec->addr() + rel->offset();
   switch (rel->type()) {
-    case R_AMDGPU_32_LOW:
-    case R_AMDGPU_32_HIGH:
-    case R_AMDGPU_64:
+    case R_AMDGPU_V1_32_LOW:
+    case R_AMDGPU_V1_32_HIGH:
+    case R_AMDGPU_V1_64:
     {
       uint64_t addr;
       switch (sym->type()) {
@@ -1661,15 +1709,15 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
 
       uint32_t addr32 = 0;
       switch (rel->type()) {
-        case R_AMDGPU_32_HIGH:
+        case R_AMDGPU_V1_32_HIGH:
           addr32 = uint32_t((addr >> 32) & 0xFFFFFFFF);
           rseg->Copy(reladdr, &addr32, sizeof(addr32));
           break;
-        case R_AMDGPU_32_LOW:
+        case R_AMDGPU_V1_32_LOW:
           addr32 = uint32_t(addr & 0xFFFFFFFF);
           rseg->Copy(reladdr, &addr32, sizeof(addr32));
           break;
-        case R_AMDGPU_64:
+        case R_AMDGPU_V1_64:
           rseg->Copy(reladdr, &addr, sizeof(addr));
           break;
         default:
@@ -1678,7 +1726,7 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
       break;
     }
 
-    case R_AMDGPU_INIT_SAMPLER:
+    case R_AMDGPU_V1_INIT_SAMPLER:
     {
       if (STT_AMDGPU_HSA_METADATA != sym->type() ||
           SHT_PROGBITS != sym->section()->type() ||
@@ -1709,7 +1757,7 @@ hsa_status_t ExecutableImpl::ApplyStaticRelocation(hsa_agent_t agent, amd::hsa::
       break;
     }
 
-    case R_AMDGPU_INIT_IMAGE:
+    case R_AMDGPU_V1_INIT_IMAGE:
     {
       if (STT_AMDGPU_HSA_METADATA != sym->type() ||
           SHT_PROGBITS != sym->section()->type() ||
@@ -1822,7 +1870,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
   symAddr += rel->addend();
 
   switch (rel->type()) {
-    case R_AMDGPU_32_HIGH:
+    case ELF::R_AMDGPU_ABS32_HI:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1834,7 +1882,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_32_LOW:
+    case ELF::R_AMDGPU_ABS32_LO:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1846,7 +1894,19 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_64:
+    case ELF::R_AMDGPU_ABS32:
+    {
+      if (!symAddr) {
+        logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
+        return HSA_STATUS_ERROR_VARIABLE_UNDEFINED;
+      }
+
+      uint32_t symAddr32 = uint32_t(symAddr);
+      relSeg->Copy(rel->offset(), &symAddr32, sizeof(symAddr32));
+      break;
+    }
+
+    case ELF::R_AMDGPU_ABS64:
     {
       if (!symAddr) {
         logger_ << "LoaderError: symbol \"" << rel->symbol()->name() << "\" is undefined\n";
@@ -1857,7 +1917,7 @@ hsa_status_t ExecutableImpl::ApplyDynamicRelocation(hsa_agent_t agent, amd::hsa:
       break;
     }
 
-    case R_AMDGPU_RELATIVE64:
+    case ELF::R_AMDGPU_RELATIVE64:
     {
       int64_t baseDelta = reinterpret_cast<uint64_t>(relSeg->Address(0)) - relSeg->VAddr();
       uint64_t relocatedAddr = baseDelta + rel->addend();

@@ -343,7 +343,8 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       {"hsa_ven_amd_loader_1_01_pfn_t", sizeof(hsa_ven_amd_loader_1_01_pfn_t)},
       {"hsa_ven_amd_loader_1_02_pfn_t", sizeof(hsa_ven_amd_loader_1_02_pfn_t)},
       {"hsa_ven_amd_loader_1_03_pfn_t", sizeof(hsa_ven_amd_loader_1_03_pfn_t)},
-      {"hsa_ven_amd_aqlprofile_1_00_pfn_t", sizeof(hsa_ven_amd_aqlprofile_1_00_pfn_t)}};
+      {"hsa_ven_amd_aqlprofile_1_00_pfn_t", sizeof(hsa_ven_amd_aqlprofile_1_00_pfn_t)},
+      {"hsa_ven_amd_pc_sampling_1_00_pfn_t", sizeof(hsa_ven_amd_pc_sampling_1_00_pfn_t)}};
   static const size_t num_tables = sizeof(sizes) / sizeof(sizes_t);
 
   if (minor > 99) return 0;
@@ -371,6 +372,9 @@ static size_t get_extension_table_length(uint16_t extension, uint16_t major, uin
       break;
     case HSA_EXTENSION_AMD_AQLPROFILE:
       name = "hsa_ven_amd_aqlprofile_";
+      break;
+    case HSA_EXTENSION_AMD_PC_SAMPLING:
+      name = "hsa_ven_amd_pc_sampling_";
       break;
     default:
       return 0;
@@ -427,6 +431,21 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
 
     return HSA_STATUS_SUCCESS;
+  }
+
+  if (extension == HSA_EXTENSION_AMD_PC_SAMPLING) {
+    if (version_major != core::Runtime::runtime_singleton_->extensions_.pcs_api.version.major_id) {
+      return HSA_STATUS_ERROR;
+    }
+    hsa_ven_amd_pc_sampling_1_00_pfn_t ext_table;
+    ext_table.hsa_ven_amd_pcs_create = hsa_ven_amd_pcs_create;
+    ext_table.hsa_ven_amd_pcs_create_from_id = hsa_ven_amd_pcs_create_from_id;
+    ext_table.hsa_ven_amd_pcs_destroy = hsa_ven_amd_pcs_destroy;
+    ext_table.hsa_ven_amd_pcs_start = hsa_ven_amd_pcs_start;
+    ext_table.hsa_ven_amd_pcs_stop = hsa_ven_amd_pcs_stop;
+    ext_table.hsa_ven_amd_pcs_flush = hsa_ven_amd_pcs_flush;
+
+    memcpy(table, &ext_table, Min(sizeof(ext_table), table_length));
   }
 
   if (extension == HSA_EXTENSION_FINALIZER) {
@@ -2195,6 +2214,7 @@ hsa_status_t hsa_executable_create_alt(
   IS_BAD_PTR(executable);
 
   Executable *exec = GetLoader()->CreateExecutable(
+      std::unique_ptr<amd::LoaderContext>(new amd::LoaderContext()),
       profile, options, default_float_rounding_mode);
   CHECK_ALLOC(exec);
 

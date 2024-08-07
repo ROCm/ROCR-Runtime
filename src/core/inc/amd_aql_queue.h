@@ -196,8 +196,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   /// @return hsa_status_t
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override;
 
-  /// @brief Submits a block of PM4 and waits until it has been executed.
-  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override;
+  // @brief Submits a block of PM4 and waits until it has been executed.
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b,
+                  hsa_fence_scope_t acquireFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_signal_t* signal = NULL) override;
 
   /// @brief Enables/Disables profiling overrides SetProfiling from core::Queue
   void SetProfiling(bool enabled) override;
@@ -207,6 +210,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
 
   /// @brief Update signal value using Release semantics
   void StoreRelease(hsa_signal_value_t value) override;
+
+  /// @brief Provide information about the queue
+  hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) override;
 
   /// @brief Enable use of GWS from this queue.
   hsa_status_t EnableGWS(int gws_slot_count);
@@ -246,9 +252,11 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void FillBufRsrcWord3();
   void FillBufRsrcWord3_Gfx10();
   void FillBufRsrcWord3_Gfx11();
+  void FillBufRsrcWord3_Gfx12();
   void FillComputeTmpRingSize();
   void FillAltComputeTmpRingSize();
   void FillComputeTmpRingSize_Gfx11();
+  void FillComputeTmpRingSize_Gfx12();
 
   void FreeMainScratchSpace();
   void FreeAltScratchSpace();

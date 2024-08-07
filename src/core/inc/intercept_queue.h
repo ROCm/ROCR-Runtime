@@ -120,8 +120,11 @@ class QueueWrapper : public Queue {
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count, uint32_t* cu_mask) override {
     return wrapped->GetCUMasking(num_cu_mask_count, cu_mask);
   }
-  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b) override {
-    wrapped->ExecutePM4(cmd_data, cmd_size_b);
+  void ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b,
+                  hsa_fence_scope_t acquireFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
+                  hsa_signal_t* signal = NULL) override {
+    wrapped->ExecutePM4(cmd_data, cmd_size_b, acquireFence, releaseFence, signal);
   }
   void SetProfiling(bool enabled) override { wrapped->SetProfiling(enabled); }
 
@@ -265,6 +268,9 @@ class InterceptQueue : public QueueProxy, private LocalSignal, public DoorbellSi
     std::atomic_thread_fence(std::memory_order_release);
     StoreRelaxed(value);
   }
+
+  /// @brief Provide information about the queue
+  hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute, void* value) override;
 
   static __forceinline bool IsType(core::Signal* signal) { return signal->IsType(&rtti_id_); }
   static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }

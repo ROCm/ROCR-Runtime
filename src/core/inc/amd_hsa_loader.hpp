@@ -50,6 +50,7 @@
 #include "inc/hsa_ven_amd_loader.h"
 #include "inc/amd_hsa_elf.h"
 #include <string>
+#include <memory>
 #include <mutex>
 #include <vector>
 
@@ -162,7 +163,11 @@ public:
 
   virtual hsa_isa_t IsaFromName(const char *name) = 0;
 
+  // This function will be deleted in a future patch. Use the overload
+  // that takes a generic version instead.
   virtual bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa) = 0;
+
+  virtual bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa, unsigned genericVersion) { return IsaSupportedByAgent(agent, isa); }
 
   virtual void* SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, size_t size, size_t align, bool zero) = 0;
 
@@ -453,6 +458,13 @@ public:
       const char *options,
       hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) = 0;
 
+  /// @brief Creates empty AMD HSA Executable with specified @p profile,
+  /// @p options and @p isolated_context that is isolated from the runtime.
+  virtual Executable* CreateExecutable(
+      std::unique_ptr<Context> isolated_context,
+      hsa_profile_t profile,
+      const char *options,
+      hsa_default_float_rounding_mode_t default_float_rounding_mode = HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT) = 0;
 
   /// @brief Freezes @p executable
   virtual hsa_status_t FreezeExecutable(Executable *executable, const char *options) = 0;
