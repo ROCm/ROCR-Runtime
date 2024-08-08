@@ -82,6 +82,7 @@ public:
   hsa_status_t ConfigHwCtx(core::Queue &queue,
                            hsa_amd_queue_hw_ctx_config_param_t config_type,
                            void *args) override;
+  hsa_status_t GetHandleFromVaddr(void* ptr, uint32_t* handle) override;
 
 private:
   /// @brief Allocate agent accessible memory (system / local memory).

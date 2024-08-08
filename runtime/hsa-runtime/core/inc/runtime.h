@@ -403,6 +403,8 @@ class Runtime {
                                                    const core::MemoryRegion** mem_region,
                                                    hsa_amd_memory_type_t* type);
 
+  hsa_status_t GetHandleFromVaddr(void* ptr, uint32_t* handle);
+
   hsa_status_t EnableLogging(uint8_t* flags, void* file);
 
   const std::vector<Agent*>& cpu_agents() { return cpu_agents_; }

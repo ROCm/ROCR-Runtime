@@ -89,6 +89,8 @@ public:
                            hsa_amd_queue_hw_ctx_config_param_t config_type,
                            void *args) override;
 
+  hsa_status_t GetHandleFromVaddr(void* ptr, uint32_t* handle) override;
+
 private:
   hsa_status_t QueryDriverVersion();
   /// @brief Allocate device accesible heap space.
@@ -109,6 +111,9 @@ private:
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
   std::unordered_map<uint32_t, void *> vmem_handle_mappings;
+
+  // TODO: Remove this once we move to the vmem API
+  std::unordered_map<void*, uint32_t> vmem_handle_mappings_reverse;
 
   /// @brief Virtual address range allocated for the device heap.
   ///

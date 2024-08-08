@@ -138,6 +138,8 @@ class Driver {
   ConfigHwCtx(Queue &queue, hsa_amd_queue_hw_ctx_config_param_t config_type,
               void *args) = 0;
 
+  virtual hsa_status_t GetHandleFromVaddr(void* ptr, uint32_t* handle) = 0;
+
   /// Unique identifier for supported kernel-mode drivers.
   const DriverType kernel_driver_type_;
 

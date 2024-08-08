@@ -930,6 +930,11 @@ hsa_amd_queue_hw_ctx_config(const hsa_queue_t *queue,
   return amdExtTable->hsa_amd_queue_hw_ctx_config_fn(queue, config_type, args);
 }
 
+// Mirrors AMD Extension APIs.
+hsa_status_t hsa_amd_get_handle_from_vaddr(void* ptr, uint32_t* handle) {
+  return amdExtTable->hsa_amd_get_handle_from_vaddr_fn(ptr, handle);
+}
+
 // Mirrors Amd Extension Apis
 hsa_status_t HSA_API hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue,
                                                uint32_t num_cu_mask_count,

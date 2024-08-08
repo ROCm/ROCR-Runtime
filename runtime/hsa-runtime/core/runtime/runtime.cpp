@@ -3605,6 +3605,17 @@ hsa_status_t Runtime::VMemoryGetAllocPropertiesFromHandle(hsa_amd_vmem_alloc_han
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t Runtime::GetHandleFromVaddr(void* ptr, uint32_t* handle) {
+  auto it = allocation_map_.find(ptr);
+  if (it == allocation_map_.end()) {
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
+
+  auto* agent = it->second.region->owner();
+  auto& driver = AgentDriver(agent->driver_type);
+  return driver.GetHandleFromVaddr(ptr, handle);
+}
+
 hsa_status_t Runtime::EnableLogging(uint8_t* flags, void* file) {
   memcpy(log_flags, flags, sizeof(log_flags));
 

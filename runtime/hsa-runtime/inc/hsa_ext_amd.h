@@ -1375,6 +1375,9 @@ hsa_status_t HSA_API hsa_amd_queue_hw_ctx_config(
     const hsa_queue_t *queue, hsa_amd_queue_hw_ctx_config_param_t config_type,
     void *args);
 
+
+hsa_status_t HSA_API hsa_amd_get_handle_from_vaddr(void* ptr, uint32_t* handle);
+
 /**
  * @brief Set a queue's CU affinity mask.
  *

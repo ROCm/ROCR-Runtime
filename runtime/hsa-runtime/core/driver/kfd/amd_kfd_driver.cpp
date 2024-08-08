@@ -254,7 +254,12 @@ KfdDriver::ConfigHwCtx(core::Queue &queue,
                        hsa_amd_queue_hw_ctx_config_param_t config_type,
                        void *args) {
   // Only AIE queues support this for now.
-  return HSA_STATUS_ERROR_INVALID_QUEUE;
+  return HSA_STATUS_ERROR_INVALID_AGENT;
+}
+
+hsa_status_t KfdDriver::GetHandleFromVaddr(void* ptr, uint32_t* handle) {
+  // Only AIE queues support this for now.
+  return HSA_STATUS_ERROR_INVALID_AGENT;
 }
 
 void *KfdDriver::AllocateKfdMemory(const HsaMemFlags &flags, uint32_t node_id,

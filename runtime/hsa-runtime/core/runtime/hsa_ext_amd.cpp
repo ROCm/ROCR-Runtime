@@ -634,6 +634,19 @@ hsa_amd_queue_hw_ctx_config(const hsa_queue_t *queue,
   CATCH;
 }
 
+
+hsa_status_t hsa_amd_get_handle_from_vaddr(void* ptr, uint32_t* handle) {
+  TRY;
+  IS_OPEN();
+
+  IS_BAD_PTR(ptr);
+  IS_BAD_PTR(handle);
+
+  return core::Runtime::runtime_singleton_->GetHandleFromVaddr(ptr, handle);
+
+  CATCH;
+}
+
 hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
                                        const uint32_t* cu_mask) {
   TRY;

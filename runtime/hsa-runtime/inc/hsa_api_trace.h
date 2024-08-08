@@ -205,6 +205,7 @@ struct AmdExtTable {
   decltype(hsa_amd_async_function)* hsa_amd_async_function_fn;
   decltype(hsa_amd_signal_wait_any)* hsa_amd_signal_wait_any_fn;
   decltype(hsa_amd_queue_hw_ctx_config) *hsa_amd_queue_hw_ctx_config_fn;
+  decltype(hsa_amd_get_handle_from_vaddr)* hsa_amd_get_handle_from_vaddr_fn;
   decltype(hsa_amd_queue_cu_set_mask)* hsa_amd_queue_cu_set_mask_fn;
   decltype(hsa_amd_memory_pool_get_info)* hsa_amd_memory_pool_get_info_fn;
   decltype(hsa_amd_agent_iterate_memory_pools)* hsa_amd_agent_iterate_memory_pools_fn;

@@ -134,17 +134,17 @@ hsa_status_t
 XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
                            core::MemoryRegion::AllocateFlags alloc_flags,
                            void **mem, size_t size, uint32_t node_id) {
-  const MemoryRegion &m_region(static_cast<const MemoryRegion &>(mem_region));
+  const auto &region = static_cast<const MemoryRegion &>(mem_region);
   amdxdna_drm_create_bo create_bo_args{.size = size};
   amdxdna_drm_get_bo_info get_bo_info_args{0};
   drm_gem_close close_bo_args{0};
   void *mapped_mem(nullptr);
 
-  if (!m_region.IsSystem()) {
+  if (!region.IsSystem()) {
     return HSA_STATUS_ERROR_INVALID_REGION;
   }
 
-  if (m_region.kernarg()) {
+  if (region.kernarg()) {
     create_bo_args.type = AMDXDNA_BO_CMD;
   } else {
     create_bo_args.type = AMDXDNA_BO_DEV;
@@ -187,11 +187,30 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   }
 
   vmem_handle_mappings.emplace(create_bo_args.handle, mapped_mem);
+  vmem_handle_mappings_reverse.emplace(mapped_mem, create_bo_args.handle);
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
+hsa_status_t XdnaDriver::FreeMemory(void* ptr, size_t size) {
+  auto it = vmem_handle_mappings_reverse.find(ptr);
+  if (it == vmem_handle_mappings_reverse.end())
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  // TODO:ypapadop-amd: need to unmap memory, but we don't know if it's mapped or not as we don't have
+  // region information
+
+  auto handle = it->second;
+
+  drm_gem_close close_args = {};
+  close_args.handle = handle;
+  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_args) < 0) {
+    return HSA_STATUS_ERROR;
+  }
+
+  vmem_handle_mappings.erase(handle);
+  vmem_handle_mappings_reverse.erase(it);
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -255,6 +274,14 @@ XdnaDriver::ConfigHwCtx(core::Queue &queue,
   default:
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
+}
+
+hsa_status_t XdnaDriver::GetHandleFromVaddr(void* ptr, uint32_t* handle) {
+  auto it = vmem_handle_mappings_reverse.find(ptr);
+  if (it == vmem_handle_mappings_reverse.end())
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  *handle = it->second;
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::QueryDriverVersion() {
