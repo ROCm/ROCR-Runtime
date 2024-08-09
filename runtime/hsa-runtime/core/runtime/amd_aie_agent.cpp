@@ -211,6 +211,24 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     std::strcpy(reinterpret_cast<char *>(value), product_name_info_.c_str());
     break;
   }
+  case HSA_AMD_AGENT_INFO_UUID: {
+    // TODO: uuid_value needs to be obtained somehow
+    uint64_t uuid_value = 0;
+
+    if (uuid_value == 0) {
+      static const char uuid_tmp[] = "AIE-XX";
+      snprintf(static_cast<char *>(value), sizeof(uuid_tmp), "%s", uuid_tmp);
+      break;
+    }
+
+    // Device supports UUID, build UUID string to return.
+    constexpr std::size_t max_uuid_length = 36;
+    static const char uuid_tmp[] = "AIE-";
+    snprintf(static_cast<char *>(value), max_uuid_length + sizeof(uuid_tmp),
+             "%s%036lX", uuid_tmp, uuid_value);
+    break;
+  }
+
   case HSA_AMD_AGENT_INFO_ASIC_REVISION:
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
