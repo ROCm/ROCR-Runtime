@@ -602,6 +602,24 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 					  HsaEvent *Event,
 					  HsaQueueResource *QueueResource)
 {
+	if (Type >= HSA_QUEUE_SDMA_BY_ENG_ID)
+		return HSAKMT_STATUS_ERROR;
+
+	return hsaKmtCreateQueueExt(NodeId, Type, QueuePercentage, Priority, 0,
+				    QueueAddress, QueueSizeInBytes, Event,
+				    QueueResource);
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
+					     HSA_QUEUE_TYPE Type,
+					     HSAuint32 QueuePercentage,
+					     HSA_QUEUE_PRIORITY Priority,
+					     HSAuint32 SdmaEngineId,
+					     void *QueueAddress,
+					     HSAuint64 QueueSizeInBytes,
+					     HsaEvent *Event,
+					     HsaQueueResource *QueueResource)
+{
 	HSAKMT_STATUS result;
 	uint32_t gpu_id;
 	uint64_t doorbell_mmap_offset;
@@ -664,6 +682,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	case HSA_QUEUE_SDMA_XGMI:
 		args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA_XGMI;
 		break;
+	case HSA_QUEUE_SDMA_BY_ENG_ID:
+		args.queue_type = KFD_IOC_QUEUE_TYPE_SDMA_BY_ENG_ID;
+		break;
 	case HSA_QUEUE_COMPUTE_AQL:
 		args.queue_type = KFD_IOC_QUEUE_TYPE_COMPUTE_AQL;
 		break;
@@ -688,6 +709,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 	args.ring_size = QueueSizeInBytes;
 	args.queue_percentage = QueuePercentage;
 	args.queue_priority = priority_map[Priority+3];
+	args.sdma_engine_id = SdmaEngineId;
 
 	err = kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
 
@@ -729,7 +751,6 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 
 	return HSAKMT_STATUS_SUCCESS;
 }
-
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtUpdateQueue(HSA_QUEUEID QueueId,
 					  HSAuint32 QueuePercentage,

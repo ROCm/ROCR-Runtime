@@ -1,5 +1,5 @@
 /*
- * Copyright © 2014 Advanced Micro Devices, Inc.
+ * Copyright © 2024 Advanced Micro Devices, Inc.
  *
  * Permission is hereby granted, free of charge, to any person
  * obtaining a copy of this software and associated documentation
@@ -330,6 +330,24 @@ hsaKmtCreateQueue(
     HSA_QUEUE_TYPE      Type,             //IN
     HSAuint32           QueuePercentage,  //IN
     HSA_QUEUE_PRIORITY  Priority,         //IN
+    void*               QueueAddress,     //IN
+    HSAuint64           QueueSizeInBytes, //IN
+    HsaEvent*           Event,            //IN
+    HsaQueueResource*   QueueResource     //OUT
+    );
+
+/**
+  Creates a GPU queue with user-mode access rights
+*/
+
+HSAKMT_STATUS
+HSAKMTAPI
+hsaKmtCreateQueueExt(
+    HSAuint32           NodeId,           //IN
+    HSA_QUEUE_TYPE      Type,             //IN
+    HSAuint32           QueuePercentage,  //IN
+    HSA_QUEUE_PRIORITY  Priority,         //IN
+    HSAuint32           SdmaEngineId,     //IN
     void*               QueueAddress,     //IN
     HSAuint64           QueueSizeInBytes, //IN
     HsaEvent*           Event,            //IN

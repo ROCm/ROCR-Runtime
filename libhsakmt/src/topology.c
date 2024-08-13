@@ -1695,6 +1695,8 @@ static HSAKMT_STATUS topology_sysfs_get_iolink_props(uint32_t node_id,
 			props->MaximumBandwidth = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "recommended_transfer_size") == 0)
 			props->RecTransferSize = (uint32_t)prop_val;
+		else if (strcmp(prop_name, "recommended_sdma_engine_id_mask") == 0)
+			props->RecSdmaEngIdMask = (uint32_t)prop_val;
 		else if (strcmp(prop_name, "flags") == 0)
 			props->Flags.LinkProperty = (uint32_t)prop_val;
 	}
