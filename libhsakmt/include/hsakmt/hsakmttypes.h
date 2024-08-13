@@ -503,6 +503,7 @@ typedef struct _HsaIoLinkProperties
     HSAuint32    MinimumBandwidth;   // minimum interface Bandwidth in MB/s
     HSAuint32    MaximumBandwidth;   // maximum interface Bandwidth in MB/s
     HSAuint32    RecTransferSize;    // recommended transfer size to reach maximum bandwidth in Bytes
+    HSAuint32    RecSdmaEngIdMask;   // recommended sdma engine IDs to reach maximum bandwidth
     HSA_LINKPROPERTY Flags;          // override flags (may be active for specific platforms)
 } HsaIoLinkProperties;
 
@@ -662,6 +663,7 @@ typedef enum _HSA_QUEUE_TYPE
     HSA_QUEUE_MULTIMEDIA_DECODE  = 3,  // reserved, for HSA multimedia decode queue
     HSA_QUEUE_MULTIMEDIA_ENCODE  = 4,  // reserved, for HSA multimedia encode queue
     HSA_QUEUE_SDMA_XGMI          = 5,  // XGMI optimized SDMA Queue
+    HSA_QUEUE_SDMA_BY_ENG_ID     = 6,  // Queue with specified SDMA engine ID
 
     // the following values indicate a queue type permitted to reference OS graphics
     // resources through the interoperation API. See [5] "HSA Graphics Interoperation
