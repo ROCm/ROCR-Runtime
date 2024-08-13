@@ -101,6 +101,10 @@ class Flag {
     enable_sdma_copy_size_override_ = (var == "0") ? SDMA_DISABLE :
                                       ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
 
+    var = os::GetEnvVar("HSA_ENABLE_SDMA_RECOMMENDED_ENG");
+    enable_sdma_recommended_eng_ = (var == "0") ? SDMA_DISABLE :
+                                   ((var == "1") ? SDMA_ENABLE : SDMA_DEFAULT);
+
     visible_gpus_ = os::GetEnvVar("ROCR_VISIBLE_DEVICES");
     filter_visible_gpus_ = os::IsEnvVarSet("ROCR_VISIBLE_DEVICES");
 
@@ -288,6 +292,8 @@ class Flag {
 
   SDMA_OVERRIDE enable_sdma_copy_size_override() const { return enable_sdma_copy_size_override_; }
 
+  SDMA_OVERRIDE enable_sdma_recommended_eng() const { return enable_sdma_recommended_eng_; }
+
   std::string visible_gpus() const { return visible_gpus_; }
 
   bool filter_visible_gpus() const { return filter_visible_gpus_; }
@@ -384,6 +390,7 @@ class Flag {
   SDMA_OVERRIDE enable_peer_sdma_;
   SDMA_OVERRIDE enable_sdma_gang_;
   SDMA_OVERRIDE enable_sdma_copy_size_override_;
+  SDMA_OVERRIDE enable_sdma_recommended_eng_;
 
   bool filter_visible_gpus_;
   std::string visible_gpus_;

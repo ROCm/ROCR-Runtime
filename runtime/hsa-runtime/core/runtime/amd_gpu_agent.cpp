@@ -720,7 +720,7 @@ core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t st
   return queue;
 }
 
-core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
+core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi, int rec_eng) {
   AMD::BlitSdmaBase* sdma;
   size_t copy_size_override = 0;
   const size_t copy_size_overrides[2] = {0x3fffff, 0x3fffffff};
@@ -754,7 +754,9 @@ core::Blit* GpuAgent::CreateBlitSdma(bool use_xgmi) {
     core::Runtime::runtime_singleton_->flag().enable_sdma_copy_size_override();
   if (copy_size_override_setting == Flag::SDMA_DISABLE) copy_size_override = 0;
 
-  if (sdma->Initialize(*this, use_xgmi, copy_size_override) != HSA_STATUS_SUCCESS) {
+  rec_eng = uses_rec_sdma_eng_id_mask_ || !use_xgmi ? rec_eng : -1;
+
+  if (sdma->Initialize(*this, use_xgmi, copy_size_override, rec_eng) != HSA_STATUS_SUCCESS) {
     sdma->Destroy(*this);
     delete sdma;
     sdma = nullptr;
@@ -801,7 +803,7 @@ void GpuAgent::InitDma() {
   queues_[QueuePCSampling].reset([queue_lambda, this]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
 
   // Decide which engine to use for blits.
-  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev) {
+  auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev, uint32_t rec_eng) {
     Flag::SDMA_OVERRIDE sdma_override = core::Runtime::runtime_singleton_->flag().enable_sdma();
 
     // User SDMA queues are unstable on gfx8 and unsupported on gfx1013.
@@ -817,7 +819,7 @@ void GpuAgent::InitDma() {
         *blits_[BlitHostToDev];
       }
 
-      auto ret = CreateBlitSdma(use_xgmi);
+      auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
 
@@ -857,14 +859,15 @@ void GpuAgent::InitDma() {
     return ret;
   });
   blits_[BlitHostToDev].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly], true); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueBlitOnly], true, 0); });
   blits_[BlitDevToHost].reset(
-      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility], false); });
+      [blit_lambda, this]() { return blit_lambda(false, queues_[QueueUtility], false, 1); });
 
   // XGMI engines.
   for (uint32_t idx = DefaultBlitCount; idx < blit_cnt_; idx++) {
+    const int eng = idx - 1;
     blits_[idx].reset(
-        [blit_lambda, this]() { return blit_lambda(true, queues_[QueueUtility], false); });
+        [blit_lambda, this, eng]() { return blit_lambda(true, queues_[QueueUtility], false, eng); });
   }
 
   // GWS queues.
@@ -941,6 +944,25 @@ void GpuAgent::RegisterGangPeer(core::Agent& peer, unsigned int max_bandwidth_fa
   gang_peers_info_[peer.public_handle().handle] = max_bandwidth_factor;
 }
 
+// Assign direct peer recommended SDMA engine IDs to GPU
+void GpuAgent::RegisterRecSdmaEngIdMaskPeer(core::Agent& peer, uint32_t rec_sdma_eng_id_mask) {
+  auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+  bool rec_eng_enabled = core::Runtime::runtime_singleton_->flag().enable_sdma_recommended_eng() !=
+                         Flag::SDMA_DISABLE;
+
+  // Assume all recommended masks with single recommended engine (IsPowerOfTwo)
+  // will only support targeting that engine and will not gang.
+  // Also assume support is uniform for every device in the system.
+  uses_rec_sdma_eng_id_mask_ = (kfd_version.KernelInterfaceMajorVersion > 1 ||
+                                 (kfd_version.KernelInterfaceMajorVersion == 1 &&
+                                  kfd_version.KernelInterfaceMinorVersion >= 17)) &&
+                               isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() >= 4 &&
+                               IsPowerOfTwo(rec_sdma_eng_id_mask) && rec_eng_enabled;
+
+  rec_sdma_eng_id_peers_info_[peer.public_handle().handle] = uses_rec_sdma_eng_id_mask_ ?
+                                                             rec_sdma_eng_id_mask : 0;
+}
+
 // Destroy gang signal
 static bool GangCopyCompleteHandler(hsa_signal_value_t, void *arg ) {
   core::Signal *gang_signal = reinterpret_cast<core::Signal*>(arg);
@@ -955,6 +977,13 @@ hsa_status_t GpuAgent::DmaCopy(void* dst, core::Agent& dst_agent,
                                size_t size,
                                std::vector<core::Signal*>& dep_signals,
                                core::Signal& out_signal) {
+  // Recommended SDMA engine copies only have gang factor 1
+  uint32_t rec_sdma_eng = ffs(rec_sdma_eng_id_peers_info_[dst_agent.public_handle().handle]);
+
+  if (rec_sdma_eng)
+    return DmaCopyOnEngine(dst, dst_agent, src, src_agent, size,
+                           dep_signals, out_signal, rec_sdma_eng, false);
+
   if (profiling_enabled()) {
     // Track the agent so we could translate the resulting timestamp to system
     // domain correctly.

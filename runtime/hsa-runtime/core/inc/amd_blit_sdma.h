@@ -66,7 +66,7 @@ class BlitSdmaBase : public core::Blit {
   static const size_t kMaxSingleFillSize;
   virtual bool isSDMA() const override { return true; }
   virtual hsa_status_t Initialize(const core::Agent& agent, bool use_xgmi,
-                                  size_t linear_copy_size_override) = 0;
+                                  size_t linear_copy_size_override, int rec_engine) = 0;
   virtual hsa_status_t SubmitCopyRectCommand(const hsa_pitched_ptr_t* dst,
                                              const hsa_dim3_t* dst_offset,
                                              const hsa_pitched_ptr_t* src,
@@ -92,7 +92,7 @@ class BlitSdma : public BlitSdmaBase {
   ///
   /// @return hsa_status_t
   virtual hsa_status_t Initialize(const core::Agent& agent, bool use_xgmi,
-                                  size_t linear_copy_size_override) override;
+                                  size_t linear_copy_size_override, int rec_eng) override;
 
   /// @brief Marks the queue object as invalid and uncouples its link with
   /// the underlying compute device's control block. Use of queue object

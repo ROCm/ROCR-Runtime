@@ -115,9 +115,10 @@ class Runtime {
  public:
   /// @brief Structure to describe connectivity between agents.
   struct LinkInfo {
-    LinkInfo() : num_hop(0), info{0} {}
+    LinkInfo() : num_hop(0), rec_sdma_eng_id_mask(0), info{0} {}
 
     uint32_t num_hop;
+    uint32_t rec_sdma_eng_id_mask;
     hsa_amd_memory_pool_link_info_t info;
   };
 
@@ -167,7 +168,7 @@ class Runtime {
   /// @param [in] link_info The link information between source and destination
   /// nodes.
   void RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
-                        uint32_t num_hop,
+                        uint32_t num_hop, uint32_t rec_sdma_eng_id_mask,
                         hsa_amd_memory_pool_link_info_t& link_info);
 
   /// @brief Query link information between two nodes.

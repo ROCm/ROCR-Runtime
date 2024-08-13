@@ -268,10 +268,11 @@ void Runtime::SetLinkCount(size_t num_nodes) {
 }
 
 void Runtime::RegisterLinkInfo(uint32_t node_id_from, uint32_t node_id_to,
-                               uint32_t num_hop,
+                               uint32_t num_hop, uint32_t rec_sdma_eng_id_mask,
                                hsa_amd_memory_pool_link_info_t& link_info) {
   const uint32_t idx = GetIndexLinkInfo(node_id_from, node_id_to);
   link_matrix_[idx].num_hop = num_hop;
+  link_matrix_[idx].rec_sdma_eng_id_mask = rec_sdma_eng_id_mask;
   link_matrix_[idx].info = link_info;
 
   // Limit the number of hop to 1 since the runtime does not have enough
