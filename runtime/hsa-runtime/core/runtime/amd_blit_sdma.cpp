@@ -133,7 +133,7 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::~BlitSdma() 
 
 template <typename RingIndexTy, bool HwIndexMonotonic, int SizeToCountOffset, bool useGCR>
 hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::Initialize(
-    const core::Agent& agent, bool use_xgmi, size_t linear_copy_size_override) {
+    const core::Agent& agent, bool use_xgmi, size_t linear_copy_size_override, int rec_eng) {
   if (queue_start_addr_ != NULL) {
     // Already initialized.
     return HSA_STATUS_SUCCESS;
@@ -191,10 +191,12 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   // device. ROCr creates queues that are of two kinds: PCIe optimized
   // and xGMI optimized. Which queue to create is indicated via input
   // boolean flag
-  const HSA_QUEUE_TYPE kQueueType_ = use_xgmi ? HSA_QUEUE_SDMA_XGMI : HSA_QUEUE_SDMA;
-  if (HSAKMT_STATUS_SUCCESS != hsaKmtCreateQueue(agent_->node_id(), kQueueType_, 100,
-                                                 HSA_QUEUE_PRIORITY_MAXIMUM, queue_start_addr_,
-                                                 kQueueSize, NULL, &queue_resource_)) {
+  const HSA_QUEUE_TYPE kQueueType_ = rec_eng >= 0 ? HSA_QUEUE_SDMA_BY_ENG_ID :
+                                     (use_xgmi ? HSA_QUEUE_SDMA_XGMI : HSA_QUEUE_SDMA);
+  if (HSAKMT_STATUS_SUCCESS != hsaKmtCreateQueueExt(agent_->node_id(), kQueueType_, 100,
+                                                    HSA_QUEUE_PRIORITY_MAXIMUM, rec_eng,
+                                                    queue_start_addr_, kQueueSize, NULL,
+                                                    &queue_resource_)) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 

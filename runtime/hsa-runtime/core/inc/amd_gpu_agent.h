@@ -161,6 +161,8 @@ class GpuAgentInt : public core::Agent {
 
   virtual void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) = 0;
 
+  virtual void RegisterRecSdmaEngIdMaskPeer(core::Agent& gang_peer, uint32_t rec_sdma_eng_id_mask) = 0;
+
   // @brief Query if agent represent Kaveri GPU.
   //
   // @retval true if agent is Kaveri GPU.
@@ -336,6 +338,8 @@ class GpuAgent : public GpuAgentInt {
   
   void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) override;
 
+  void RegisterRecSdmaEngIdMaskPeer(core::Agent& gang_peer, uint32_t rec_sdma_eng_id_mask) override;
+
   // Getter & setters.
 
   // @brief Returns Hive ID
@@ -457,7 +461,7 @@ class GpuAgent : public GpuAgentInt {
   // @brief Create SDMA blit object.
   //
   // @retval NULL if SDMA blit creation and initialization failed.
-  core::Blit* CreateBlitSdma(bool use_xgmi);
+  core::Blit* CreateBlitSdma(bool use_xgmi, int rec_eng);
 
   // @brief Create Kernel blit object using provided compute queue.
   //
@@ -761,6 +765,10 @@ class GpuAgent : public GpuAgentInt {
   bool DmaEngineIsFree(uint32_t engine_id);
 
   std::map<uint64_t,unsigned int> gang_peers_info_;
+
+  std::map<uint64_t, uint32_t> rec_sdma_eng_id_peers_info_;
+
+  bool uses_rec_sdma_eng_id_mask_;
 };
 
 }  // namespace amd

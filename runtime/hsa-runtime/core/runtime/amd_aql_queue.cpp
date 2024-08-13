@@ -283,10 +283,10 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   HSAKMT_STATUS kmt_status;
   if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
     queue_rsrc.ErrorReason = &exception_signal_->signal_.value;
-    kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
+    kmt_status = hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
                                    ring_buf_alloc_bytes_, queue_event_, &queue_rsrc);
   } else {
-    kmt_status = hsaKmtCreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, ring_buf_,
+    kmt_status = hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
                                    ring_buf_alloc_bytes_, NULL, &queue_rsrc);
   }
   if (kmt_status != HSAKMT_STATUS_SUCCESS)

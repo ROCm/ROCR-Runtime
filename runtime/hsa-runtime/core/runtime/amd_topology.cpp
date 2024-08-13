@@ -238,7 +238,7 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
     link_info.numa_distance = io_link.Weight;
 
     core::Runtime::runtime_singleton_->RegisterLinkInfo(
-        io_link.NodeFrom, io_link.NodeTo, io_link.Weight, link_info);
+        io_link.NodeFrom, io_link.NodeTo, io_link.Weight, io_link.RecSdmaEngIdMask, link_info);
   }
 }
 
@@ -383,7 +383,7 @@ void BuildTopology() {
     uint32_t src_id = src_gpu->node_id();
     for (auto& dst_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
       uint32_t dst_id = dst_gpu->node_id();
-      uint32_t gang_factor = 1;
+      uint32_t gang_factor = 1, rec_sdma_eng_id_mask = 0;
 
       if (src_id != dst_id) {
         auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
@@ -398,12 +398,15 @@ void BuildTopology() {
           else if (linfo.info.numa_distance == 15 && linfo.info.min_bandwidth)
             gang_factor = linfo.info.max_bandwidth/linfo.info.min_bandwidth;
           else gang_factor = 1;
+
+          rec_sdma_eng_id_mask = linfo.rec_sdma_eng_id_mask;
         }
       }
 
       // Register all GPUs regardless of connection type to take advantage of easy
       // key-value lookup later on.
       ((AMD::GpuAgent*)src_gpu)->RegisterGangPeer(*dst_gpu, gang_factor);
+      ((AMD::GpuAgent*)src_gpu)->RegisterRecSdmaEngIdMaskPeer(*dst_gpu, rec_sdma_eng_id_mask);
     }
   }
 }
