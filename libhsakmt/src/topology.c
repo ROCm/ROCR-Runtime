@@ -1222,10 +1222,12 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 				ret = HSAKMT_STATUS_ERROR;
 				goto out;
 			}
-			props->EngineId.ui32.Major = major & 0x3f;
-			props->EngineId.ui32.Minor = minor & 0xff;
-			props->EngineId.ui32.Stepping = step & 0xff;
-		} else if (hsa_gfxip) {
+			props->OverrideEngineId.ui32.Major = major & 0x3f;
+			props->OverrideEngineId.ui32.Minor = minor & 0xff;
+			props->OverrideEngineId.ui32.Stepping = step & 0xff;
+		}
+
+		if (hsa_gfxip) {
 			props->EngineId.ui32.Major = hsa_gfxip->major & 0x3f;
 			props->EngineId.ui32.Minor = hsa_gfxip->minor & 0xff;
 			props->EngineId.ui32.Stepping = hsa_gfxip->stepping & 0xff;

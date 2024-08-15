@@ -127,10 +127,20 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   historical_clock_ratio_ = 0.0;
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaGetClockCounters error");
 
-  const core::Isa *isa_base = core::IsaRegistry::GetIsa(
-      core::Isa::Version(node_props.EngineId.ui32.Major,
-                         node_props.EngineId.ui32.Minor,
-                         node_props.EngineId.ui32.Stepping));
+  const core::Isa *isa_base;
+
+  if (node_props.OverrideEngineId.Value != 0) {
+     isa_base = core::IsaRegistry::GetIsa(
+         core::Isa::Version(node_props.OverrideEngineId.ui32.Major,
+                            node_props.OverrideEngineId.ui32.Minor,
+                            node_props.OverrideEngineId.ui32.Stepping));
+  } else {
+     isa_base = core::IsaRegistry::GetIsa(
+         core::Isa::Version(node_props.EngineId.ui32.Major,
+                            node_props.EngineId.ui32.Minor,
+                            node_props.EngineId.ui32.Stepping));
+  }
+
   if (!isa_base) {
     throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ISA, "Agent creation failed.\nThe GPU node has an unrecognized id.\n");
   }
@@ -158,10 +168,16 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
                       : core::IsaFeature::Disabled;
   }
 
+  if (node_props.OverrideEngineId.Value != 0) {
+    isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
+          core::Isa::Version(node_props.OverrideEngineId.ui32.Major, node_props.OverrideEngineId.ui32.Minor,
+                             node_props.OverrideEngineId.ui32.Stepping), sramecc, xnack);
+  } else {
   // Set instruction set architecture via node property, only on GPU device.
-  isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
-      core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
-                         node_props.EngineId.ui32.Stepping), sramecc, xnack);
+    isa_ = (core::Isa*)core::IsaRegistry::GetIsa(
+          core::Isa::Version(node_props.EngineId.ui32.Major, node_props.EngineId.ui32.Minor,
+                             node_props.EngineId.ui32.Stepping), sramecc, xnack);
+  }
 
   assert(isa_ != nullptr && "ISA registry inconsistency.");
 
