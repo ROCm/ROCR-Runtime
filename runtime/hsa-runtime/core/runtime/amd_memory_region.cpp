@@ -65,13 +65,17 @@ void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id
   return (status == HSAKMT_STATUS_SUCCESS) ? ret : NULL;
 }
 
-void MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
+bool MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
   if (ptr == NULL || size == 0) {
-    return;
+    debug_print("Invalid free ptr:%p size:%lu\n", ptr, size);
+    return true;
   }
 
-  HSAKMT_STATUS status = hsaKmtFreeMemory(ptr, size);
-  assert(status == HSAKMT_STATUS_SUCCESS);
+  if (hsaKmtFreeMemory(ptr, size) != HSAKMT_STATUS_SUCCESS) {
+    debug_print("Failed to free ptr:%p size:%lu\n", ptr, size);
+    return false;
+  }
+  return true;
 }
 
 bool MemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags) {
@@ -97,8 +101,9 @@ bool MemoryRegion::MakeKfdMemoryResident(size_t num_node, const uint32_t* nodes,
   return (status == HSAKMT_STATUS_SUCCESS);
 }
 
-void MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
-  hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
+bool MemoryRegion::MakeKfdMemoryUnresident(const void* ptr) {
+  const HSAKMT_STATUS status = hsaKmtUnmapMemoryToGPU(const_cast<void*>(ptr));
+  return (status == HSAKMT_STATUS_SUCCESS);
 }
 
 MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
@@ -311,9 +316,7 @@ hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
 
   MakeKfdMemoryUnresident(address);
 
-  FreeKfdMemory(address, size);
-
-  return HSA_STATUS_SUCCESS;
+  return FreeKfdMemory(address, size) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
 }
 
 // TODO:  Look into a better name and/or making this process transparent to exporting.
