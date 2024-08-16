@@ -669,11 +669,15 @@ class Runtime {
   // Deprecated HSA Region API GPU (for legacy APU support only)
   Agent* region_gpu_;
 
-  AsyncEventsControl async_events_control_;
+  struct AsyncEventsInfo {
+    AsyncEventsControl control;
+    AsyncEvents events;
+    AsyncEvents new_events;
+    bool monitor_exceptions;
+  };
 
-  AsyncEvents async_events_;
-
-  AsyncEvents new_async_events_;
+  struct AsyncEventsInfo asyncSignals_;
+  struct AsyncEventsInfo asyncExceptions_;
 
   // System clock frequency.
   uint64_t sys_clock_freq_;

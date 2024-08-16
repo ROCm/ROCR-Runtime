@@ -356,6 +356,20 @@ class Signal {
                           uint64_t timeout_hint, hsa_wait_state_t wait_hint,
                           hsa_signal_value_t* satisfying_value);
 
+  /// @brief Dedicated funtion to wait on signals that are not of type HSA_EVENTTYPE_SIGNAL
+  /// these events can only be received by calling the underlying driver (i.e via the hsaKmtWaitOnMultipleEvents_Ext
+  /// function call). We still need to have 1 signal of type HSA_EVENT_TYPE_SIGNAL attached to the list of signals
+  /// to be able to force hsaKmtWaitOnMultipleEvents_Ext to return.
+  /// @param signal_count Number of hsa_signals
+  /// @param hsa_signals Pointer to array of signals. All signals should have a valid EopEvent()
+  /// @param conds list of conditions
+  /// @param values list of values
+  /// @param satisfying_value value to be satisfied
+  /// @return index of signal that satisfies condition
+  static uint32_t WaitAnyExceptions(uint32_t signal_count, const hsa_signal_t* hsa_signals,
+                         const hsa_signal_condition_t* conds, const hsa_signal_value_t* values,
+                         hsa_signal_value_t* satisfying_value);
+
   __forceinline bool IsType(rtti_t id) { return _IsA(id); }
 
   /// @brief Prevents the signal from being destroyed until the matching Release().
