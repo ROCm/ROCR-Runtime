@@ -65,6 +65,12 @@
 #include <cpuid.h>
 #endif
 
+#ifdef __GLIBC__
+#define ABS_ADDR(base, ptr) (ptr)
+#else
+#define ABS_ADDR(base, ptr) ((base) + (ptr))
+#endif
+
 namespace rocr {
 namespace os {
 
@@ -303,7 +309,7 @@ static int callback(struct dl_phdr_info* info, size_t size, void* data) {
         for (int j = 0;; j++) {
           if (dyn_section[j].d_tag == DT_NULL) break;
 
-          if (dyn_section[j].d_tag == DT_STRTAB) strings = (char*)(dyn_section[j].d_un.d_ptr);
+          if (dyn_section[j].d_tag == DT_STRTAB) strings = (char*)ABS_ADDR(info->dlpi_addr, dyn_section[j].d_un.d_ptr);
 
           if (dyn_section[j].d_tag == DT_STRSZ) limit = dyn_section[j].d_un.d_val;
         }
