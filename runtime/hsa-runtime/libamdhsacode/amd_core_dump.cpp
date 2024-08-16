@@ -249,10 +249,25 @@ struct LoadSegmentBuilder : public SegmentBuilder {
 
   hsa_status_t Read(void* buf, size_t buf_size, off_t offset) override {
     if (fd_ == -1) return HSA_STATUS_ERROR;
-    if (pread(fd_, buf, buf_size, offset) == -1) {
-      perror("Failed to read GPU memory");
+
+    size_t done = 0;
+    ssize_t read;
+    do {
+      read = pread(fd_, buf + done, buf_size - done, offset + done);
+
+      if (read == -1 && errno != EINTR) {
+        perror("Failed to read GPU memory");
+        return HSA_STATUS_ERROR;
+      }
+      else if (read > 0)
+        done += read;
+    } while (read != 0 && done < buf_size);
+
+    if (read == 0 && done < buf_size) {
+      fprintf(stderr, "Reached unexpected EOF while reading VRAM.\n");
       return HSA_STATUS_ERROR;
     }
+
     return HSA_STATUS_SUCCESS;
   }
 
