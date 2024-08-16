@@ -23,6 +23,7 @@ hsaKmtDestroyQueue;
 hsaKmtSetQueueCUMask;
 hsaKmtSetMemoryPolicy;
 hsaKmtAllocMemory;
+hsaKmtAllocMemoryAlign;
 hsaKmtFreeMemory;
 hsaKmtAvailableMemory;
 hsaKmtRegisterMemory;
@@ -87,7 +88,7 @@ hsaKmtPcSamplingCreate;
 hsaKmtPcSamplingDestroy;
 hsaKmtPcSamplingStart;
 hsaKmtPcSamplingStop;
-
+hsaKmtPcSamplingSupport;
 local: *;
 };
 
