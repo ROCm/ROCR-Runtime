@@ -112,7 +112,7 @@
 extern "C" {
 #endif  /* __cplusplus */
 
-/** \defgroup status Runtime Notifications
+/** \addtogroup error-codes Error codes
  *  @{
  */
 
