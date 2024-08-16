@@ -82,7 +82,7 @@ class MemoryRegion : public core::MemoryRegion {
                                  size_t size);
 
   /// @brief Free agent accessible memory (system / local memory).
-  static void FreeKfdMemory(void* ptr, size_t size);
+  static bool FreeKfdMemory(void* ptr, size_t size);
 
   static bool RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags);
 
@@ -93,7 +93,7 @@ class MemoryRegion : public core::MemoryRegion {
                                     size_t size, uint64_t* alternate_va, HsaMemMapFlags map_flag);
 
   /// @brief Unpin memory.
-  static void MakeKfdMemoryUnresident(const void* ptr);
+  static bool MakeKfdMemoryUnresident(const void* ptr);
 
   MemoryRegion(bool fine_grain, bool kernarg, bool full_profile, bool extended_scope_fine_grain,
                bool user_visible, core::Agent* owner, const HsaMemoryProperties& mem_props);

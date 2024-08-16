@@ -370,7 +370,53 @@ hsa_status_t Runtime::FreeMemory(void* ptr) {
   if (alloc_flags & core::MemoryRegion::AllocateAsan)
     assert(hsaKmtReturnAsanHeaderPage(ptr) == HSAKMT_STATUS_SUCCESS);
 
-  return region->Free(ptr, size);
+  const hsa_status_t err = region->Free(ptr, size);
+  if (err != HSA_STATUS_SUCCESS) {
+    // hsaKmtFreeMemory failed to free this pointer. Throw a memory error event
+
+    // Note: This should be treated as a fatal exception by the System Event Handler because:
+    //  - This leaves allocation_map_ in an inconsistent state as this pointer entry has already
+    //  been removed.
+    //  - We already called back the notifier, but did not actually free.
+    //  - We removed the ASAN Header but did not actually free.
+    //
+    // But this is a very unlikely use case and calling region->Free(..) before updating
+    // allocation_map_ would require us to hold the memory_lock_ for much longer and we would not be
+    // able to call hsaKmtReturnAsanHeaderPage after calling region->Free(..)
+
+    const core::Agent* agentOwner = region->owner();
+    hsa_status_t custom_handler_status = HSA_STATUS_ERROR;
+    auto system_event_handlers = runtime_singleton_->GetSystemEventHandlers();
+
+    if (!system_event_handlers.empty()) {
+      hsa_amd_event_t memory_error_event;
+      memory_error_event.event_type = HSA_AMD_GPU_MEMORY_ERROR_EVENT;
+      hsa_amd_gpu_memory_error_info_t& error_info = memory_error_event.memory_error;
+
+      error_info.virtual_address = reinterpret_cast<const uint64_t>(ptr);
+      error_info.error_reason_mask = HSA_AMD_MEMORY_ERROR_MEMORY_IN_USE;
+      error_info.agent = Agent::Convert(agentOwner);
+
+      for (auto& callback : system_event_handlers) {
+        hsa_status_t err = callback.first(&memory_error_event, callback.second);
+        if (err == HSA_STATUS_SUCCESS) custom_handler_status = HSA_STATUS_SUCCESS;
+      }
+    }
+    // No custom VM fault handler registered or it failed.
+    if (custom_handler_status != HSA_STATUS_SUCCESS) {
+      fprintf(stderr,
+              "Memory critical error by agent node-%u (Agent handle: %p) on address %p. Reason: "
+              "Memory in use. \n",
+              agentOwner->node_id(), reinterpret_cast<void*>(agentOwner->public_handle().handle),
+              ptr);
+
+      assert(false && "GPU memory error.");
+      std::abort();
+    }
+    return HSA_STATUS_ERROR;
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::RegisterReleaseNotifier(void* ptr, hsa_amd_deallocation_callback_t callback,
