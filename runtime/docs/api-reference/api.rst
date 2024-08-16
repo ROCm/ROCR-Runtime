@@ -17,7 +17,7 @@ Architected Queuing Language
    :content-only:
    :inner:
 
-Code Objects [**DEPRECATED**]
+Code objects [**DEPRECATED**]
 #############################
 .. doxygengroup:: code-object
    :content-only:
@@ -29,25 +29,25 @@ Executable
    :content-only:
    :inner:
 
-Finalization Extensions
+Finalization extensions
 #######################
 .. doxygengroup:: ext-alt-finalizer-extensions
    :content-only:
    :inner:
 
-Finalization Program
+Finalization program
 ####################
 .. doxygengroup:: ext-alt-finalizer-program
    :content-only:
    :inner:
 
-Images And Samplers
+Images and samplers
 ###################
 .. doxygengroup:: ext-images
    :content-only:
    :inner:
 
-Instruction Set Architecture
+Instruction set architecture
 ############################
 .. doxygengroup:: instruction-set-architecture
    :content-only:
@@ -65,7 +65,7 @@ Queues
    :content-only:
    :inner:
 
-Runtime Notifications
+Runtime notifications
 #####################
 .. doxygengroup:: status
    :content-only:
@@ -77,8 +77,22 @@ Signals
    :content-only:
    :inner:
 
-System And Agent Information
+System and agent information
 ############################
 .. doxygengroup:: agentinfo
    :content-only:
    :inner:
+
+Profiling
+###############
+.. doxygengroup:: profile
+   :content-only:
+   :inner:
+
+Error codes
+#############
+.. doxygengroup:: error-codes
+   :content-only:
+   :inner:
+
+
