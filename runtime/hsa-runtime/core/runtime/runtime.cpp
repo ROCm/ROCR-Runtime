@@ -3269,7 +3269,6 @@ hsa_status_t Runtime::MappedHandleAllowedAgent::RemoveAccess() {
 hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
                                        const hsa_amd_memory_access_desc_t* desc,
                                        const size_t desc_cnt) {
-  int nodesCnt = 0;
   std::list<std::pair<void*, MappedHandle*>> mappedHandles;
   bool reservedAddressFound = false;
 

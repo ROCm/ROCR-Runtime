@@ -2867,7 +2867,6 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   size_t const buf_offset = offsetof(pcs_hosttrap_sampling_data_t, reserved1) +
       sizeof(((pcs_hosttrap_sampling_data_t*)0)->reserved1);
 
-  hsa_signal_t done_sig[] = {ht_data.device_data->done_sig0, ht_data.device_data->done_sig1};
   uint8_t* buffer[] = {(uint8_t*)ht_data.device_data + buf_offset,
                        (uint8_t*)ht_data.device_data + buf_offset +
                            ht_data.device_data->buf_size * session.sample_size()};
@@ -3037,17 +3036,10 @@ void GpuAgent::PcSamplingThread() {
   pcs::PcsRuntime::PcSamplingSession& session = *ht_data.session;
   uint32_t& which_buffer = ht_data.which_buffer;
 
-  hsa_status_t ret = HSA_STATUS_SUCCESS;
   uint8_t* host_buffer_begin = ht_data.host_buffer;
   uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
 
-  size_t const buf_offset = offsetof(pcs_hosttrap_sampling_data_t, reserved1) +
-      sizeof(((pcs_hosttrap_sampling_data_t*)0)->reserved1);
-
   hsa_signal_t done_sig[] = {ht_data.device_data->done_sig0, ht_data.device_data->done_sig1};
-  uint8_t* buffer[] = {(uint8_t*)ht_data.device_data + buf_offset,
-                       (uint8_t*)ht_data.device_data + buf_offset +
-                           ht_data.device_data->buf_size * session.sample_size()};
 
   while (ht_data.session->isActive()) {
     do {
