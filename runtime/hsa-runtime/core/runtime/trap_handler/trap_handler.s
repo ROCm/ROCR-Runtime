@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2022, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -91,12 +91,108 @@
   .set SQ_WAVE_IB_STS_REPLAY_W64H_MASK       , 0x2000000
 .endif
 
+// Defining TTMP_REG1 and TTMP_REG2 for clarity in comments
+// TTMP_REG1 means ttmp6 register if gfx>=940 and means ttmp13 register if gfx<940
+// TTMP_REG2 means ttmp11 register if gfx>=940 and means ttmp6 register if gfx<940
+
 .if .amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4
   .set TTMP11_TTMPS_SETUP_SHIFT              , 31
 
   // Bit to indicate that this is a hosttrap trap instead of stochastic trap
   // Currently not used
   .set TTMP13_PCS_IS_STOCHASTIC              , 24
+.endif
+
+.if (.amdgcn.gfx_generation_number == 9)
+
+ .macro S_LOAD_DWORD_PCS_TTMP_REG1 base, offset
+  .if (.amdgcn.gfx_generation_minor >= 4)
+     s_load_dword      ttmp6, \base, \offset
+  .else
+     s_load_dword      ttmp13,\base, \offset
+  .endif
+ .endm
+
+ .macro S_BITSET0_B32_PCS_TTMP_REG2 bit_index
+  .if (.amdgcn.gfx_generation_minor >= 4)
+     s_bitset0_b32     ttmp11, \bit_index
+  .else
+     s_bitset0_b32     ttmp6, \bit_index
+  .endif
+ .endm
+
+ .macro S_BITSET1_B32_PCS_TTMP_REG2 bit_index
+  .if (.amdgcn.gfx_generation_minor >= 4)
+     s_bitset1_b32    ttmp11, \bit_index
+  .else
+     s_bitset1_b32    ttmp6, \bit_index
+  .endif
+ .endm
+
+ .macro S_CMP_GE_U32_PCS_TTMP_REG1 src0
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_cmp_ge_u32      \src0, ttmp6
+  .else
+    s_cmp_ge_u32      \src0, ttmp13
+  .endif
+ .endm
+
+ .macro S_MOV_B32_SRC_PCS_TTMP_REG1 src0
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_mov_b32        ttmp6, \src0
+  .else
+    s_mov_b32        ttmp13, \src0
+  .endif
+ .endm
+
+ .macro S_MOV_B32_DST_PCS_TTMP_REG1 dst
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_mov_b32       \dst, ttmp6
+  .else
+    s_mov_b32       \dst, ttmp13
+  .endif
+ .endm
+
+ .macro S_LSHR_B32_PCS_TTMP_REG1_REG2 src1
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_lshr_b32       ttmp6, ttmp11, \src1
+  .else
+    s_lshr_b32       ttmp13, ttmp6, \src1
+  .endif
+ .endm
+
+ .macro  S_STORE_DWORD_PCS_TTMP_REG1 base, offset
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_store_dword    ttmp6, \base, \offset
+  .else
+    s_store_dword    ttmp13, \base, \offset
+  .endif
+ .endm
+
+ .macro S_MULK_I32_PCS_TTMP_REG1 const_val
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_mulk_i32       ttmp6, \const_val
+  .else
+    s_mulk_i32       ttmp13, \const_val
+  .endif
+ .endm
+
+ .macro S_ADD_U32_PCS_TTMP_REG1  dst, src0
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_add_u32        \dst, \src0, ttmp6
+  .else
+    s_add_u32        \dst, \src0, ttmp13
+  .endif
+ .endm
+
+ .macro S_CMP_LG_U32_PCS_TTMP_REG1 src0
+  .if (.amdgcn.gfx_generation_minor >= 4)
+    s_cmp_lg_u32     \src0, ttmp6
+  .else
+    s_cmp_lg_u32     \src0, ttmp13
+  .endif
+ .endm
+
 .endif
 
 // ABI between first and second level trap handler:
@@ -131,8 +227,8 @@ trap_entry:
   s_bfe_u32            			ttmp2, ttmp1, SQ_WAVE_PC_HI_TRAP_ID_BFE
   s_cbranch_scc0       			.no_skip_debugtrap
 
-.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4) 	// PC_SAMPLING_GFX9
-  // ttmp[14:15] is TMA2; Available: ttmp[2:3], ttmp[4:5], ttmp7, ttmp13
+.if (.amdgcn.gfx_generation_number == 9) // PC_SAMPLING_GFX9
+  // ttmp[14:15] is TMA2; Available: ttmp[2:3], ttmp[4:5], ttmp7, TTMP_REG1
   // Check if this is a host-trap. For now, if so, that means we are sampling
   //
   // TMA2 layout:
@@ -175,7 +271,8 @@ trap_entry:
 
   // Ignore llvm.debugtrap.
   s_branch             			.exit_trap
-.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor < 4)	// PC_SAMPLING_GFX9
+
+.if (.amdgcn.gfx_generation_number == 9) // PC_SAMPLING_GFX9
   // tma->host_trap_buffers Offsets:
   //    [0x00]	uint64_t buf_write_val;
   //    [0x08]	uint32_t buf_size;
@@ -219,25 +316,31 @@ trap_entry:
 .profile_trap_handlers_gfx9:
   s_mov_b64             		ttmp[2:3], 1                    // atomic increment buf_write_val
   s_atomic_add_x2       		ttmp[2:3], ttmp[14:15], glc     // ttmp[2:3] = packed local_entry
-  s_load_dword          		ttmp13, ttmp[14:15], 0x8        // ttmp13 = tma->buf_size
+  S_LOAD_DWORD_PCS_TTMP_REG1		ttmp[14:15], 0x8                // TTMP_REG1 = tma->buf_size
   s_waitcnt             		lgkmcnt(0)
   s_lshr_b32            		ttmp7, ttmp3, 31                // ttmp7 = buf_to_use
-  s_bitset0_b32         		ttmp6, 31                       // clear out ttmp6 bit31
+  S_BITSET0_B32_PCS_TTMP_REG2   	31                              // clear out TTMP_REG2  bit31
   s_cmp_eq_u32          		ttmp7, 0                        // store off buf_to_use ...
-  s_cbranch_scc1        		.skip_ttmp6_set_gfx9            // into bit31 of ttmp6
-  s_bitset1_b32         		ttmp6, 31
-.skip_ttmp6_set_gfx9:
+  s_cbranch_scc1        		.skip_ttmp_set_gfx9             // into bit31 of TTMP_REG2
+  S_BITSET1_B32_PCS_TTMP_REG2   	31
+.skip_ttmp_set_gfx9:
   s_bfe_u64             		ttmp[2:3], ttmp[2:3], (63<<16)  // ttmp[2:3] = new local_entry
   s_cmp_lg_u32          		ttmp3, 0                        // if entry >= 2^32, always lost
   s_cbranch_scc1        		.pc_sampling_exit
-  s_cmp_ge_u32          		ttmp2, ttmp13                   // if local_entry >= buf_size
+  S_CMP_GE_U32_PCS_TTMP_REG1    	ttmp2                           // if local_entry >= buf_size
   s_cbranch_scc1        		.pc_sampling_exit
 
-  // ttmp2=local_entry, ttmp7=buf_to_use (also in bit31 of ttmp6), ttmp13=buf_size
+  // ttmp2=local_entry, ttmp7=buf_to_use (also in bit31 of TTMP_REG2), TTMP_REG1=buf_size
   // ttmp[14:15] is tma->host_trap_buffers. Available: ttmp3, ttmp[4:5]
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+  s_mul_i32             		ttmp6, ttmp6, ttmp7		// ttmp[4:5]=buf_size if ...
+  s_mul_i32             		ttmp4, ttmp6, 0x40              // buf_to_use=1, 0 otherwise
+  s_mul_hi_u32          		ttmp5, ttmp6, 0x40
+.else
   s_mul_i32             		ttmp13, ttmp13, ttmp7		// ttmp[4:5]=buf_size if ...
   s_mul_i32             		ttmp4, ttmp13, 0x40             // buf_to_use=1, 0 otherwise
   s_mul_hi_u32          		ttmp5, ttmp13, 0x40
+.endif
 
   s_add_u32             		ttmp4, ttmp4, 0x40              // now ttmp[4:5]=offset from ...
   s_addc_u32            		ttmp5, ttmp5, 0                 // tma to start of target buffer;
@@ -287,16 +390,24 @@ trap_entry:
   s_and_b32             		ttmp1, ttmp1, 0xffff            // clear out extra data from PC_HI
   s_store_dwordx2       		ttmp[0:1], ttmp[2:3]            // store PC
   s_waitcnt             		lgkmcnt(0)                      // wait for timestamp
-  s_mov_b32             		ttmp13, exec_lo
-  s_store_dword         		ttmp13, ttmp[2:3], 0x8          // store EXEC_LO
-  s_mov_b32             		ttmp13, exec_hi
-  s_store_dword         		ttmp13, ttmp[2:3], 0xc         	// store EXEC_HI
+  S_MOV_B32_SRC_PCS_TTMP_REG1   	exec_lo
+  S_STORE_DWORD_PCS_TTMP_REG1   	ttmp[2:3], 0x8                  // store EXEC_LO
+  S_MOV_B32_SRC_PCS_TTMP_REG1   	exec_hi
+  S_STORE_DWORD_PCS_TTMP_REG1   	ttmp[2:3], 0xc                  // store EXEC_HI
   s_store_dwordx2       		ttmp[8:9], ttmp[2:3], 0x10     	// store wg_id_x and wg_id_y
   s_store_dword         		ttmp10, ttmp[2:3], 0x18        	// store wg_id_z
   s_store_dwordx2       		ttmp[4:5], ttmp[2:3], 0x30     	// store timestamp
+
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
+  s_getreg_b32          		ttmp4, hwreg(HW_REG_XCC_ID)     //store XCC_ID
+  s_lshl_b32            		ttmp4, ttmp4, 8
+  s_and_b32             		ttmp5, ttmp11, 0x3f
+  s_or_b32              		ttmp4, ttmp4, ttmp5
+  s_store_dword         		ttmp4, ttmp[2:3], 0x1c          // store wave_in_wg
+.else
   s_and_b32             		ttmp4, ttmp11, 0x3f
   s_store_dword         		ttmp4, ttmp[2:3], 0x1c         	// store wave_in_wg
-
+.endif
   // Get HW_ID using S_GETREG_B32 with size=32 (F8 in upper bits), offset=0, and HW_ID = 4 (0x4)
   s_getreg_b32          		ttmp4, hwreg(HW_REG_HW_ID)
   s_store_dword         		ttmp4, ttmp[2:3], 0x20          // store HW_ID
@@ -336,7 +447,12 @@ trap_entry:
   s_mov_b32             		exec_hi, ttmp5                  // do not care about message[63:32]
   s_and_b32             		ttmp5, exec_lo, DOORBELL_ID_MASK // doorbell now in ttmp5
   s_mov_b32             		exec_lo, ttmp4                  // exec mask restored
+
+.if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
+  s_bfe_u32             		ttmp4, ttmp11, (6 | 25 << 16)    // extract dispatch ID from ttmp11
+.else
   s_and_b32             		ttmp4, ttmp6, 0x1ffffff         // extract low 25 bits from ttmp6 (DispatchPktIndx[24:0])
+.endif
   s_store_dwordx2       		ttmp[4:5], ttmp[2:3], 0x38      // ttmp[4:5] is correlation ID. Store correlation_id to sample
   // get_correlation_id() -- end //
 
@@ -347,16 +463,15 @@ trap_entry:
 
   // ttmp[2:3], ttmp[4:5], ttmp7, and ttmp13 are free
   // ttmp[14:15] = tma->host_trap_buffers; ttmp6.b31 is buf_to_use, 0 or 1
-  s_lshr_b32            		ttmp13, ttmp6, 31               // ttmp13 is buf_to_use
-  s_mulk_i32            		ttmp13, 0x10
-                                                        // written_val0 to written_val_X
-  s_add_u32             		ttmp14, ttmp14, ttmp13          // now ttmp[14:15] points to ...
+  S_LSHR_B32_PCS_TTMP_REG1_REG2		31                              // TTMP_REG1 is buf_to_use
+  S_MULK_I32_PCS_TTMP_REG1      	0x10				// written_val0 to written_val_X
+  S_ADD_U32_PCS_TTMP_REG1       	ttmp14, ttmp14                  // now ttmp[14:15] points to ...
   s_addc_u32            		ttmp15, ttmp15, 0x0             // buf_written_valX-0x10
   s_mov_b32             		ttmp7, 1                        // atomic increment buf_written_valX
   s_atomic_add          		ttmp7, ttmp[14:15], 0x10 glc    // ttmp7 will contain 'done'
-  s_load_dword          		ttmp13, ttmp[14:15], 0x14       // ttmp13 will hold watermark
+  S_LOAD_DWORD_PCS_TTMP_REG1    	ttmp[14:15], 0x14               // TTMP_REG1 will hold watermark
   s_waitcnt             		lgkmcnt(0)
-  s_cmp_lg_u32          		ttmp7, ttmp13                   // if 'done' not at watermark, exit
+  S_CMP_LG_U32_PCS_TTMP_REG1    	ttmp7                          // if 'done' not at watermark, exit
   s_cbranch_scc1        		.pc_sampling_exit
 
   // ttmp[2:3], [4:5], ttmp7, and ttmp13 are free
@@ -390,12 +505,12 @@ trap_entry:
   s_cbranch_scc1        		.pc_sampling_exit               // event_id zero means no interrupt
   s_store_dword         		ttmp7, ttmp[4:5] glc            // send event ID to the mailbox
   s_waitcnt             		lgkmcnt(0)
-  s_mov_b32             		ttmp13, m0                      // save off m0
+  S_MOV_B32_SRC_PCS_TTMP_REG1   	m0                              // save off m0
   s_mov_b32             		m0, ttmp7                       // put ID into message payload
   s_nop                 		0x0                             // Manually inserted wait states
   s_sendmsg             		sendmsg(MSG_INTERRUPT)          // send interrupt message
   s_waitcnt             		lgkmcnt(0)                      // wait for message to be sent
-  s_mov_b32             		m0, ttmp13                      // restore m0
+  S_MOV_B32_DST_PCS_TTMP_REG1   	m0                              // restore m0
   // send_signal(...) - end //
 .pc_sampling_exit:
   // We can receive regular exceptions while doing PC-Sampling so we need to make sure we

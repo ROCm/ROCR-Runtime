@@ -52,6 +52,7 @@
 #include <memory>
 #include <utility>
 #include <iomanip>
+#include <cmath>
 
 #include "core/inc/amd_aql_queue.h"
 #include "core/inc/amd_blit_kernel.h"
@@ -2846,13 +2847,15 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   uint32_t next_buffer;
 
   uint64_t reset_write_val;
-  uint32_t to_copy, copy_bytes;
+  uint32_t to_copy = 0, copy_bytes;
 
   const uint32_t atomic_ex_cmd_sz = 9;
   const uint32_t wait_reg_mem_cmd_sz = 7;
   const uint32_t dma_data_cmd_sz = 7;
   const uint32_t copy_data_cmd_sz = 6;
   const uint32_t write_data_cmd_sz = 5;
+
+  uint32_t pred_exec_cmd_sz = 0;
 
   uint8_t* host_buffer_begin = ht_data.host_buffer;
   uint8_t* host_buffer_end = ht_data.host_buffer + ht_data.host_buffer_size;
@@ -2872,6 +2875,15 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   next_buffer = (which_buffer + 1) % 2;
   reset_write_val = (uint64_t)next_buffer << 63;
 
+  unsigned int i = 0;
+  memset(cmd_data, 0, cmd_data_sz);
+
+  if (properties_.NumXcc > 1) {
+    pred_exec_cmd_sz = 2;
+    cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
+    cmd_data[i++] = PM4_PRED_EXEC_DW2_EXEC_COUNT(0xF) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
+  }
+
   /*
    * ATOMIC_MEM, perform atomic_exchange
    * We use a double-buffer mechanism so that trap handlers calls are writing to one buffer while
@@ -2884,8 +2896,7 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
    *    i.e., what value to wait for in buf_written_val to know all previous trap entries were
    *    done.
    */
-  unsigned int i = 0;
-  memset(cmd_data, 0, cmd_data_sz);
+
   cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_ATOMIC_MEM, atomic_ex_cmd_sz, isa_->GetMajorVersion());
   cmd_data[i++] = PM4_ATOMIC_MEM_DW1_ATOMIC(PM4_ATOMIC_MEM_GL2_OP_ATOMIC_SWAP_RTN_64);
   cmd_data[i++] = PM4_ATOMIC_MEM_DW2_ADDR_LO(buf_write_val);
@@ -2905,8 +2916,8 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   HSA::hsa_signal_store_screlease(exec_pm4_signal, 1);
 
   queues_[QueuePCSampling]->ExecutePM4(
-      cmd_data, (atomic_ex_cmd_sz + copy_data_cmd_sz) * sizeof(uint32_t), HSA_FENCE_SCOPE_NONE,
-      HSA_FENCE_SCOPE_SYSTEM, &exec_pm4_signal);
+      cmd_data, (pred_exec_cmd_sz + atomic_ex_cmd_sz + copy_data_cmd_sz) * sizeof(uint32_t),
+      HSA_FENCE_SCOPE_NONE, HSA_FENCE_SCOPE_SYSTEM, &exec_pm4_signal);
   do {
     hsa_signal_value_t val = HSA::hsa_signal_wait_scacquire(
         exec_pm4_signal, HSA_SIGNAL_CONDITION_LT, 1, UINT64_MAX, HSA_WAIT_STATE_BLOCKED);
@@ -2931,6 +2942,18 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
     ht_data.host_buffer_wrap_pos = ht_data.host_write_ptr;
     ht_data.host_write_ptr = host_buffer_begin;
   }
+
+  i = 0;
+  memset(cmd_data, 0, cmd_data_sz);
+
+  if (properties_.NumXcc > 1) {
+    const uint32_t n = ceil(to_copy / (32 * 1024 * 1024));
+    pred_exec_cmd_sz = 2;
+    cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
+    cmd_data[i++] =
+        PM4_PRED_EXEC_DW2_EXEC_COUNT(0x13 + 7 * n) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
+  }
+
   /*
    * Do the WAIT_REG_MEM, DMA_DATA(s) and WRITE_DATA
    *
@@ -2940,8 +2963,6 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
    * 3. Reset buf_written_val so that we start writing to beginning of this buffer on the next
    *    buffer swap.
    */
-  i = 0;
-  memset(cmd_data, 0, cmd_data_sz);
 
   /* WAIT_REG_MEM, wait on buf_written_val */
   cmd_data[i++] =
@@ -2958,6 +2979,7 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
 
   unsigned int num_copy_command = 0;
   uint8_t* buffer_temp = buffer[which_buffer];
+
   for (copy_bytes = CP_DMA_DATA_TRANSFER_CNT_MAX; 0 < to_copy; to_copy -= copy_bytes) {
     num_copy_command++;
 
@@ -2977,7 +2999,6 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
     } else {
       cmd_data[i++] = PM4_DMA_DATA_DW6(PM4_DMA_DATA_BYTE_COUNT(copy_bytes) | PM4_DMA_DATA_DIS_WC);
     }
-
     buffer_temp += copy_bytes;
     ht_data.host_write_ptr += copy_bytes;
   }
@@ -2990,8 +3011,8 @@ hsa_status_t GpuAgent::PcSamplingFlushHostTrapDeviceBuffers(
   cmd_data[i++] = PM4_WRITE_DATA_DW3_DST_MEM_ADDR_HI((buf_written_val[which_buffer]) >> 32);
   cmd_data[i++] = PM4_WRITE_DATA_DW4_DATA(0);
 
-  unsigned int cmd_sz =
-      wait_reg_mem_cmd_sz + (num_copy_command * dma_data_cmd_sz) + write_data_cmd_sz;
+  unsigned int cmd_sz = pred_exec_cmd_sz + wait_reg_mem_cmd_sz +
+      (num_copy_command * dma_data_cmd_sz) + write_data_cmd_sz;
 
   HSA::hsa_signal_store_screlease(exec_pm4_signal, 1);
   queues_[QueuePCSampling]->ExecutePM4(cmd_data, cmd_sz * sizeof(uint32_t), HSA_FENCE_SCOPE_NONE,

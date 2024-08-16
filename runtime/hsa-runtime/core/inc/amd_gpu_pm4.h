@@ -51,6 +51,7 @@
 #define PM4_HDR_IT_OPCODE_ACQUIRE_MEM                     0x58
 
 #define PM4_HDR_IT_OPCODE_ATOMIC_MEM                      0x1E
+#define PM4_HDR_IT_OPCODE_PRED_EXEC                       0x23
 #define PM4_HDR_IT_OPCODE_WRITE_DATA                      0x37
 #define PM4_HDR_IT_OPCODE_WAIT_REG_MEM                    0x3C
 #define PM4_HDR_IT_OPCODE_COPY_DATA                       0x40
@@ -96,6 +97,10 @@
 #define PM4_ATOMIC_MEM_DW3_ADDR_HI(x)                      (((x) & 0xFFFFFFFF) << 0)
 #define PM4_ATOMIC_MEM_DW4_SRC_DATA_LO(x)                  (((x) & 0xFFFFFFFF) << 0)
 #define PM4_ATOMIC_MEM_DW5_SRC_DATA_HI(x)                  (((x) & 0xFFFFFFFF) << 0)
+
+#define PM4_PRED_EXEC_DW1_HEADER(x)                        (((x) & 0xFFFFFFFF) << 0)
+#define PM4_PRED_EXEC_DW2_EXEC_COUNT(x)                    (((x) & 0x3FFF) << 0)
+#define PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(x)           (((x) & 0xFF) << 24)
 
 #define PM4_COPY_DATA_DW1(x)                               (((x) & 0xFFFFFFFF) << 0)
 #  define PM4_COPY_DATA_SRC_SEL_ATOMIC_RETURN_DATA         (6 << 0)
