@@ -184,7 +184,7 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
     public_handle_ = Convert(this);
   }
 
-  Queue(int agent_node_id, int mem_flags = 0) : LocalQueue(agent_node_id, mem_flags), amd_queue_(queue()->amd_queue) {
+  Queue(int agent_node_id, int mem_flags) : LocalQueue(agent_node_id, mem_flags), amd_queue_(queue()->amd_queue) {
     queue()->core_queue = this;
     public_handle_ = Convert(this);
   }
