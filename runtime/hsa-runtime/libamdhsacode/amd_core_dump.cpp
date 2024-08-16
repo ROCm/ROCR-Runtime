@@ -118,10 +118,17 @@ struct NoteSegmentBuilder : public SegmentBuilder {
     uint32_t runtime_size, agents_size, queue_size, n_entries, entry_size;
     HsaVersionInfo versionInfo = {0};
 
-    if (hsaKmtDbgEnable(&runtime_ptr, &runtime_size)) return HSA_STATUS_ERROR;
+    if (hsaKmtDbgEnable(&runtime_ptr, &runtime_size)) {
+      fprintf(stderr, "Failed to enable debug interface, "
+              "debugger might be already attached.\n");
+      return HSA_STATUS_ERROR;
+    }
     std::unique_ptr<void, decltype(std::free) *> runtime_info(runtime_ptr, std::free);
 
-    if (hsaKmtGetVersion(&versionInfo)) return HSA_STATUS_ERROR;
+    if (hsaKmtGetVersion(&versionInfo)) {
+      fprintf(stderr, "Failed to fetch driver ABI version.\n");
+      return HSA_STATUS_ERROR;
+    }
     /* Note version */
     note_package_builder_.Write<uint64_t>(1);
     /* Store version_major in PT_NOTE package */
@@ -131,8 +138,10 @@ struct NoteSegmentBuilder : public SegmentBuilder {
     /* Store runtime_info_size in PT_NOTE package */
     note_package_builder_.Write<uint64_t>(runtime_size);
 
-    if (hsaKmtDbgGetDeviceData(&agents_ptr, &n_entries, &entry_size))
+    if (hsaKmtDbgGetDeviceData(&agents_ptr, &n_entries, &entry_size)) {
+       fprintf(stderr, "Failed to fetch agents snapshot.\n");
        return HSA_STATUS_ERROR;
+    }
     agents_size = n_entries * entry_size;
     std::unique_ptr<void, decltype(std::free) *> agents_info(agents_ptr, std::free);
     /* Store n_agents in PT_NOTE package */
@@ -140,8 +149,10 @@ struct NoteSegmentBuilder : public SegmentBuilder {
     /* Store agent_info_entry_size in PT_NOTE package */
     note_package_builder_.Write<uint32_t>(entry_size);
 
-    if (hsaKmtDbgGetQueueData(&queues_ptr, &n_entries, &entry_size, true))
+    if (hsaKmtDbgGetQueueData(&queues_ptr, &n_entries, &entry_size, true)) {
+       fprintf(stderr, "Failed to fetch queues snapshot.\n");
        return HSA_STATUS_ERROR;
+    }
     queue_size = n_entries * entry_size;
     std::unique_ptr<void, decltype(std::free) *> queues_info(queues_ptr, std::free);
     /* Store n_queues in PT_NOTE package */
@@ -152,7 +163,10 @@ struct NoteSegmentBuilder : public SegmentBuilder {
     PushInfo(runtime_info.get(), runtime_size);
     PushInfo(agents_info.get(), agents_size);
     PushInfo(queues_info.get(), queue_size);
-    if (hsaKmtDbgDisable()) return HSA_STATUS_ERROR;
+    if (hsaKmtDbgDisable()) {
+      fprintf(stderr, "Failed to disable debug interface.\n");
+      return HSA_STATUS_ERROR;
+    }
 
     /* With note content, package this in the PT_NOTE.  */
     PackageBuilder noteHeaderBuilder;
@@ -162,10 +176,11 @@ struct NoteSegmentBuilder : public SegmentBuilder {
     noteHeaderBuilder.Write<char[8]> ("AMDGPU\0");
 
     raw_.resize(noteHeaderBuilder.Size() + note_package_builder_.Size());
-    if (!noteHeaderBuilder.GetBuffer(raw_.data()))
+    if (!(noteHeaderBuilder.GetBuffer(raw_.data())
+          && note_package_builder_.GetBuffer(&raw_[noteHeaderBuilder.Size()]))) {
+      fprintf(stderr, "Failed to build the NT_AMDGPU_CORE_STATE note.\n");
       return HSA_STATUS_ERROR;
-    if (!note_package_builder_.GetBuffer(&raw_[noteHeaderBuilder.Size()]))
-      return HSA_STATUS_ERROR;
+    }
 
     SegmentInfo s;
     s.stype = NOTE;
