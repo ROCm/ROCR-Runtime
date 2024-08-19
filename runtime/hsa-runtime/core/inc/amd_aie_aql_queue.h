@@ -55,7 +55,9 @@ namespace AMD {
 /// @brief Encapsulates HW AIE AQL Command Processor functionality. It
 /// provides the interface for things such as doorbells, queue read and
 /// write pointers, and a buffer.
-class AieAqlQueue : public core::Queue, public core::DoorbellSignal {
+class AieAqlQueue : public core::Queue,
+                    private core::LocalSignal,
+                    core::DoorbellSignal {
 public:
   static __forceinline bool IsType(core::Signal *signal) {
     return signal->IsType(&rtti_id_);
@@ -95,6 +97,13 @@ public:
   hsa_status_t GetInfo(hsa_queue_info_attribute_t attribute,
                        void *value) override;
 
+  // AIE-specific API
+  AieAgent &GetAgent() { return agent_; }
+  void SetHwCtxHandle(uint32_t hw_ctx_handle) {
+    hw_ctx_handle_ = hw_ctx_handle;
+  }
+  uint32_t GetHwCtxHandle() const { return hw_ctx_handle_; }
+
   // GPU-specific queue functions are unsupported.
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count,
                             uint32_t *cu_mask) override;
@@ -126,7 +135,18 @@ private:
                                        uint32_t node_id);
   core::SharedSignal *CreateSharedSignal(AieAgent *agent);
 
-  AieAgent *agent_;
+  AieAgent &agent_;
+
+  /// @brief Handle for an application context on the AIE device.
+  ///
+  /// Each user queue will have an associated context. This handle is assigned
+  /// by the driver on context creation.
+  ///
+  /// TODO: For now we support a single context that allocates all core tiles in
+  /// the array. In the future we can make the number of tiles configurable so
+  /// that multiple workloads with different core tile configurations can
+  /// execute on the AIE agent at the same time.
+  uint32_t hw_ctx_handle_ = std::numeric_limits<uint32_t>::max();
   /// Indicates if queue is active.
   std::atomic<bool> active_;
   static int rtti_id_;
