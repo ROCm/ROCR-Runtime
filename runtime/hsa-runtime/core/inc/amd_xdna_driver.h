@@ -43,6 +43,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 
 #include <memory>
+#include <unordered_map>
 
 #include "core/inc/driver.h"
 #include "core/inc/memory_region.h"
@@ -88,6 +89,12 @@ private:
   /// Allocate and map a buffer object (BO) that the AIE device can access.
   hsa_status_t InitDeviceHeap();
   hsa_status_t FreeDeviceHeap();
+
+  /// TODO: Remove this in the future and rely on the core Runtime
+  /// object to track handle allocations. Using the VMEM API for mapping XDNA
+  /// driver handles requires a bit more refactoring. So rely on the XDNA driver
+  /// to manage some of this for now.
+  std::unordered_map<uint32_t, void *> vmem_handle_mappings;
 
   /// @brief Virtual address range allocated for the device heap.
   ///
