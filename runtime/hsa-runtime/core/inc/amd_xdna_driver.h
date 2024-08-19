@@ -45,8 +45,13 @@
 #include <memory>
 
 #include "core/inc/driver.h"
+#include "core/inc/memory_region.h"
 
 namespace rocr {
+namespace core {
+class Queue;
+}
+
 namespace AMD {
 
 class XdnaDriver : public core::Driver {
@@ -57,11 +62,14 @@ public:
   static hsa_status_t DiscoverDriver();
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 
-  hsa_status_t GetMemoryProperties(uint32_t node_id,
-                                   core::MemProperties &mprops) const override;
-  hsa_status_t AllocateMemory(void **mem, size_t size, uint32_t node_id,
-                              core::MemFlags flags) override;
-  hsa_status_t FreeMemory(void *mem, uint32_t node_id) override;
+  hsa_status_t
+  GetMemoryProperties(uint32_t node_id,
+                      core::MemoryRegion &mem_region) const override;
+  hsa_status_t AllocateMemory(const core::MemoryRegion &mem_region,
+                              core::MemoryRegion::AllocateFlags alloc_flags,
+                              void **mem, size_t size,
+                              uint32_t node_id) override;
+  hsa_status_t FreeMemory(void *mem, size_t size) override;
   hsa_status_t CreateQueue(core::Queue &queue) override;
   hsa_status_t DestroyQueue(core::Queue &queue) const override;
 

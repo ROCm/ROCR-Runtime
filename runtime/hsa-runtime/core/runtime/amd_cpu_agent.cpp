@@ -47,14 +47,16 @@
 #include <thread>
 
 #include "core/inc/amd_memory_region.h"
+#include "core/inc/driver.h"
 #include "core/inc/host_queue.h"
 
 #include "inc/hsa_ext_image.h"
 
 namespace rocr {
 namespace AMD {
-CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties& node_props)
-    : core::Agent(node, kAmdCpuDevice), properties_(node_props) {
+CpuAgent::CpuAgent(HSAuint32 node, const HsaNodeProperties &node_props)
+    : core::Agent(core::DriverType::KFD, node, kAmdCpuDevice),
+      properties_(node_props) {
   InitRegionList();
 
   InitCacheList();

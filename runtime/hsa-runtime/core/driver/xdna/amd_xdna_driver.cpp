@@ -47,6 +47,7 @@
 #include <memory>
 #include <string>
 
+#include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
 #include "uapi/amdxdna_accel.h"
 
@@ -89,17 +90,18 @@ hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
 
 hsa_status_t
 XdnaDriver::GetMemoryProperties(uint32_t node_id,
-                                core::MemProperties &mprops) const {
+                                core::MemoryRegion &mem_region) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::AllocateMemory(void **mem, size_t size,
-                                        uint32_t node_id,
-                                        core::MemFlags flags) {
+hsa_status_t
+XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
+                           core::MemoryRegion::AllocateFlags alloc_flags,
+                           void **mem, size_t size, uint32_t node_id) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::FreeMemory(void *mem, uint32_t node_id) {
+hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
   return HSA_STATUS_SUCCESS;
 }
 

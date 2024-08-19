@@ -59,25 +59,6 @@ namespace AMD {
 size_t MemoryRegion::max_sysmem_alloc_size_ = 0;
 size_t MemoryRegion::kPageSize_ = sysconf(_SC_PAGESIZE);
 
-void* MemoryRegion::AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id, size_t size) {
-  void* ret = NULL;
-  const HSAKMT_STATUS status = hsaKmtAllocMemory(node_id, size, flag, &ret);
-  return (status == HSAKMT_STATUS_SUCCESS) ? ret : NULL;
-}
-
-bool MemoryRegion::FreeKfdMemory(void* ptr, size_t size) {
-  if (ptr == NULL || size == 0) {
-    debug_print("Invalid free ptr:%p size:%lu\n", ptr, size);
-    return true;
-  }
-
-  if (hsaKmtFreeMemory(ptr, size) != HSAKMT_STATUS_SUCCESS) {
-    debug_print("Failed to free ptr:%p size:%lu\n", ptr, size);
-    return false;
-  }
-  return true;
-}
-
 bool MemoryRegion::RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags) {
   assert(ptr != NULL);
   assert(size != 0);
@@ -198,112 +179,8 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
 
   size = AlignUp(size, kPageSize_);
 
-  HsaMemFlags kmt_alloc_flags(mem_flag_);
-  kmt_alloc_flags.ui32.ExecuteAccess =
-      (alloc_flags & AllocateExecutable ? 1 : 0);
-  kmt_alloc_flags.ui32.AQLQueueMemory =
-      (alloc_flags & AllocateDoubleMap ? 1 : 0);
-  if (IsSystem() && (alloc_flags & AllocateNonPaged))
-      kmt_alloc_flags.ui32.NonPaged = 1;
-
-  // Allocating a memory handle for virtual memory
-  kmt_alloc_flags.ui32.NoAddress = !!(alloc_flags & AllocateMemoryOnly);
-
-  // Allocate pseudo fine grain memory
-  kmt_alloc_flags.ui32.CoarseGrain = (alloc_flags & AllocatePCIeRW ? 0 : kmt_alloc_flags.ui32.CoarseGrain);
-  kmt_alloc_flags.ui32.NoSubstitute = (alloc_flags & AllocatePinned ? 1 : kmt_alloc_flags.ui32.NoSubstitute);
-
-  kmt_alloc_flags.ui32.GTTAccess = (alloc_flags & AllocateGTTAccess ? 1 : kmt_alloc_flags.ui32.GTTAccess);
-  if (IsLocalMemory()) {
-    // Allocate physically contiguous memory - AllocateKfdMemory function call will fail
-    // if this flag is not supported in KFD.
-    kmt_alloc_flags.ui32.Contiguous =
-        (alloc_flags & AllocateContiguous ? 1 : kmt_alloc_flags.ui32.Contiguous);
-  }
-
-  // Only allow using the suballocator for ordinary VRAM.
-  if (IsLocalMemory() && !kmt_alloc_flags.ui32.NoAddress) {
-    bool subAllocEnabled = !core::Runtime::runtime_singleton_->flag().disable_fragment_alloc();
-    // Avoid modifying executable or queue allocations.
-    bool useSubAlloc = subAllocEnabled;
-    useSubAlloc &= ((alloc_flags & (~AllocateRestrict)) == 0);
-    if (useSubAlloc) {
-      *address = fragment_allocator_.alloc(size);
-
-      if ((alloc_flags & AllocateAsan) &&
-          hsaKmtReplaceAsanHeaderPage(*address) != HSAKMT_STATUS_SUCCESS) {
-        fragment_allocator_.free(*address);
-        *address = NULL;
-        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-      }
-      return HSA_STATUS_SUCCESS;
-    }
-  }
-
-  const HSAuint32 node_id = (alloc_flags & AllocateGTTAccess) ? agent_node_id : owner()->node_id();
-
-  // Allocate memory.
-  // If it fails attempt to release memory from the block allocator and retry.
-  *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
-  if (*address == nullptr) {
-    owner()->Trim();
-    *address = AllocateKfdMemory(kmt_alloc_flags, node_id, size);
-  }
-
-  if (*address != nullptr) {
-    if (kmt_alloc_flags.ui32.NoAddress) return HSA_STATUS_SUCCESS;
-
-    // Commit the memory.
-    // For system memory, on non-restricted allocation, map it to all GPUs. On
-    // restricted allocation, only CPU is allowed to access by default, so
-    // no need to map
-    // For local memory, only map it to the owning GPU. Mapping to other GPU,
-    // if the access is allowed, is performed on AllowAccess.
-    HsaMemMapFlags map_flag = map_flag_;
-    size_t map_node_count = 1;
-    const uint32_t owner_node_id = owner()->node_id();
-    const uint32_t* map_node_id = &owner_node_id;
-
-    if (IsSystem()) {
-      if ((alloc_flags & AllocateRestrict) == 0) {
-        // Map to all GPU agents.
-        map_node_count = core::Runtime::runtime_singleton_->gpu_ids().size();
-
-        if (map_node_count == 0) {
-          // No need to pin since no GPU in the platform.
-          return HSA_STATUS_SUCCESS;
-        }
-
-        map_node_id = &core::Runtime::runtime_singleton_->gpu_ids()[0];
-      } else {
-        // No need to pin it for CPU exclusive access.
-        return HSA_STATUS_SUCCESS;
-      }
-    }
-
-    uint64_t alternate_va = 0;
-    const bool is_resident = MakeKfdMemoryResident(
-        map_node_count, map_node_id, *address, size, &alternate_va, map_flag);
-
-    const bool require_pinning =
-        (!full_profile() || IsLocalMemory() || IsScratch());
-
-    if (require_pinning && !is_resident) {
-      FreeKfdMemory(*address, size);
-      *address = NULL;
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-
-    if ((alloc_flags & AllocateAsan) &&
-        hsaKmtReplaceAsanHeaderPage(*address) != HSAKMT_STATUS_SUCCESS) {
-      FreeKfdMemory(*address, size);
-      *address = NULL;
-      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-    }
-    return HSA_STATUS_SUCCESS;
-  }
-
-  return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  return core::Runtime::runtime_singleton_->AgentDriver(owner()->driver_type)
+      .AllocateMemory(*this, alloc_flags, address, size, agent_node_id);
 }
 
 hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
@@ -314,9 +191,8 @@ hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
 hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
   if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
 
-  MakeKfdMemoryUnresident(address);
-
-  return FreeKfdMemory(address, size) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
+  return core::Runtime::runtime_singleton_->AgentDriver(owner()->driver_type)
+      .FreeMemory(address, size);
 }
 
 // TODO:  Look into a better name and/or making this process transparent to exporting.
