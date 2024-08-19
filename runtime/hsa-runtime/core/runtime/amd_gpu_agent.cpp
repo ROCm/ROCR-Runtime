@@ -234,6 +234,9 @@ GpuAgent::~GpuAgent() {
     hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
   }
 
+  for (int i = 0; i < QueueCount; i++)
+    queues_[i].reset();
+
   system_deallocator()(doorbell_queue_map_);
 
   if (trap_code_buf_ != NULL) {
