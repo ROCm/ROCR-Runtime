@@ -106,6 +106,12 @@ typedef enum {
    * queues created from AMD GPU Agents support this packet.
    */
   HSA_AMD_PACKET_TYPE_BARRIER_VALUE = 2,
+  /**
+   * Packet used to send commands to an AIE agent's embedded runtime (ERT). The
+   * ERT is responsible for, among other things, handling dispatches. Only
+   * queues created on AIE agents support this packet.
+   */
+  HSA_AMD_PACKET_TYPE_AIE_ERT = 3
 } hsa_amd_packet_type_t;
 
 /**
@@ -193,6 +199,277 @@ typedef struct hsa_amd_barrier_value_packet_s {
    */
   hsa_signal_t completion_signal;
 } hsa_amd_barrier_value_packet_t;
+
+/**
+ * State of an AIE ERT command.
+ */
+typedef enum {
+  /**
+   * Set by the host before submitting a command to the scheduler.
+   */
+  HSA_AMD_AIE_ERT_STATE_NEW = 1,
+  /**
+   * Internal scheduler state.
+   */
+  HSA_AMD_AIE_ERT_STATE_QUEUED = 2,
+  /**
+   * Internal scheduler state.
+   */
+  HSA_AMD_AIE_ERT_STATE_RUNNING = 3,
+  /**
+   * Set by the scheduler when a command completes.
+   */
+  HSA_AMD_AIE_ERT_STATE_COMPLETED = 4,
+  /**
+   * Set by the scheduler if a command failed.
+   */
+  HSA_AMD_AIE_ERT_STATE_ERROR = 5,
+  /**
+   * Set by the scheduler if a command aborted.
+   */
+  HSA_AMD_AIE_ERT_STATE_ABORT = 6,
+  /**
+   * Internal scheduler state.
+   */
+  HSA_AMD_AIE_ERT_STATE_SUBMITTED = 7,
+  /**
+   * Set by the scheduler on a timeout and reset.
+   */
+  HSA_AMD_AIE_ERT_STATE_TIMEOUT = 8,
+  /**
+   * Set by the scheduler on a timeout and fail to reset.
+   */
+  HSA_AMD_AIE_ERT_STATE_NORESPONSE = 9,
+  HSA_AMD_AIE_ERT_STATE_SKERROR = 10,
+  HSA_AMD_AIE_ERT_STATE_SKCRASHED = 11,
+  HSA_AMD_AIE_ERT_STATE_MAX
+} hsa_amd_aie_ert_state;
+
+/**
+ * Opcode types for HSA AIE ERT commands.
+ */
+typedef enum {
+  /**
+   * Start a workgroup on a compute unit (CU).
+   */
+  HSA_AMD_AIE_ERT_START_CU = 0,
+  /**
+   * Currently aliased to HSA_AMD_AIE_ERT_START_CU.
+   */
+  HSA_AMD_AIE_ERT_START_KERNEL = 0,
+  /**
+   * Configure command scheduler.
+   */
+  HSA_AMD_AIE_ERT_CONFIGURE = 2,
+  HSA_AMD_AIE_ERT_EXIT = 3,
+  HSA_AMD_AIE_ERT_ABORT = 4,
+  /**
+   * Execute a specified CU after writing.
+   */
+  HSA_AMD_AIE_ERT_EXEC_WRITE = 5,
+  /**
+   * Get stats about a CU's execution.
+   */
+  HSA_AMD_AIE_ERT_CU_STAT = 6,
+  /**
+   * Start KDMA CU or P2P.
+   */
+  HSA_AMD_AIE_ERT_START_COPYBO = 7,
+  /**
+   * Configure a soft kernel.
+   */
+  HSA_AMD_AIE_ERT_SK_CONFIG = 8,
+  /**
+   * Start a soft kernel.
+   */
+  HSA_AMD_AIE_ERT_SK_START = 9,
+  /**
+   * Unconfigure a soft kernel.
+   */
+  HSA_AMD_AIE_ERT_SK_UNCONFIG = 10,
+  /**
+   * Initialize a CU.
+   */
+  HSA_AMD_AIE_ERT_INIT_CU = 11,
+  HSA_AMD_AIE_ERT_START_FA = 12,
+  HSA_AMD_AIE_ERT_CLK_CALIB = 13,
+  HSA_AMD_AIE_ERT_MB_VALIDATE = 14,
+  /**
+   * Same as HSA_AMD_AIE_ERT_START_CU but with a key-value pair.
+   */
+  HSA_AMD_AIE_ERT_START_KEY_VAL = 15,
+  HSA_AMD_AIE_ERT_ACCESS_TEST_C = 16,
+  HSA_AMD_AIE_ERT_ACCESS_TEST = 17,
+  /**
+   * Instruction buffer command format.
+   */
+  HSA_AMD_AIE_ERT_START_DPU = 18,
+  /**
+   * Command chain.
+   */
+  HSA_AMD_AIE_ERT_CMD_CHAIN = 19,
+  /**
+   * Instruction buffer command format on NPU.
+   */
+  HSA_AMD_AIE_ERT_START_NPU = 20,
+  /**
+   * Instruction buffer command with pre-emption format on the NPU.
+   */
+  HSA_AMD_AIE_ERT_START_NPU_PREEMPT = 21
+} hsa_amd_aie_ert_cmd_opcode_t;
+
+/**
+ * Command types for HSA AMD AIE ERT.
+ */
+typedef enum {
+  /**
+   * Default command type.
+   */
+  HSA_AMD_AIE_ERT_CMD_TYPE_DEFAULT = 0,
+  /**
+   * Command processed by kernel domain scheduler (KDS) locally.
+   */
+  HSA_AMD_AIE_ERT_CMD_TYPE_KDS_LOCAL = 1,
+  /**
+   * Control command uses reserved command queue slot.
+   */
+  HSA_AMD_AIE_ERT_CMD_TYPE_CTRL = 2,
+  /**
+   * Control command uses reserved command queue slot.
+   */
+  HSA_AMD_AIE_ERT_CMD_TYPE_CU = 3,
+  /**
+   * CU command.
+   */
+  HSA_AMD_AIE_ERT_CMD_TYPE_SCU = 4
+} hsa_amd_aie_ert_cmd_type_t;
+
+/**
+ * Format for start kernel packet header.
+ */
+typedef struct hsa_amd_aie_ert_start_kernel_header_s {
+  uint32_t state : 4;
+  /**
+   * Enable driver to record timestamp for various states the
+   * command has gone through. The stat data is appended after
+   * the command data.
+   */
+  uint32_t stat_enabled : 1;
+  uint32_t unused : 5;
+  /**
+   * Extra CU masks in addition to the mandatory mask.
+   */
+  uint32_t extra_cu_masks : 2;
+  uint32_t count : 11;
+  uint32_t opcode : 5;
+  uint32_t type : 4;
+} hsa_amd_aie_ert_start_kernel_header_t;
+
+/**
+ * Payload data for AIE ERT start kernel packets (i.e., when the opcode is
+ * HSA_AMD_AIE_ERT_START_KERNEL).
+ */
+typedef struct hsa_amd_aie_ert_start_kernel_data_s {
+  /**
+   * Mandatory CU mask.
+   */
+  uint32_t cu_mask;
+  /**
+   * Since the CU mask takes up one DWORD this is count - 1 number of DWORDs
+   * (i.e., the remainder of the start kernel payload data).
+   */
+  uint32_t data[];
+} hsa_amd_aie_ert_start_kernel_data_t;
+
+/**
+ * Payload data for AIE ERT command chain packets (i.e., when the opcode is
+ * HSA_AMD_AIE_ERT_CMD_CHAIN). A command chain is a buffer of commands parsed
+ * by the ERT.
+ */
+typedef struct hsa_amd_aie_ert_command_chain_data_s {
+  /**
+   * Number of commands in the chain.
+   */
+  uint32_t command_count;
+  /**
+   * Index of last successfully submitted command in the chain.
+   */
+  uint32_t submit_index;
+  /**
+   * Index of failing command if command status is not completed.
+   */
+  uint32_t error_index;
+  uint32_t reserved[3];
+  /**
+   * Address of each command in the chain.
+   */
+  uint64_t data[];
+} hsa_amd_aie_ert_command_chain_data_t;
+
+/**
+ * AMD AIE ERT packet. Used for sending a command to an AIE agent.
+ */
+typedef struct hsa_amd_aie_ert_packet_s {
+  /**
+   * AMD vendor specific packet header.
+   */
+  hsa_amd_vendor_packet_header_t header;
+  /**
+   * Format for packets interpreted by the ERT to understand the command and
+   * payload data.
+   */
+  struct {
+    /**
+     * Current state of a command.
+     */
+    uint32_t state : 4;
+    /**
+     * Flexible field that can be interpreted on a per-command basis.
+     */
+    uint32_t custom : 8;
+    /**
+     * Number of DWORDs in the payload data.
+     */
+    uint32_t count : 11;
+    /**
+     * Opcode identifying the command.
+     */
+    uint32_t opcode : 5;
+    /**
+     * Type of a command (currently 0).
+     */
+    uint32_t type : 4;
+  };
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved0;
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved1;
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved2;
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved3;
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved4;
+  /**
+   * Reserved. Must be 0.
+   */
+  uint64_t reserved5;
+  /**
+   * Address of packet data payload. ERT commands contain arbitrarily sized
+   * data payloads.
+   */
+  uint64_t payload_data;
+} hsa_amd_aie_ert_packet_t;
 
 /** @} */
 
