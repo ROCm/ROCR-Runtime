@@ -129,6 +129,48 @@ hsa_status_t
 XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
                            core::MemoryRegion::AllocateFlags alloc_flags,
                            void **mem, size_t size, uint32_t node_id) {
+  const MemoryRegion &m_region(static_cast<const MemoryRegion &>(mem_region));
+  amdxdna_drm_create_bo create_bo_args{.size = size};
+  amdxdna_drm_get_bo_info get_bo_info_args{0};
+  drm_gem_close close_bo_args{0};
+
+  if (!m_region.IsSystem()) {
+    return HSA_STATUS_ERROR_INVALID_REGION;
+  }
+
+  if (m_region.kernarg()) {
+    create_bo_args.type = AMDXDNA_BO_CMD;
+  } else {
+    create_bo_args.type = AMDXDNA_BO_DEV;
+  }
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_bo_args) < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  get_bo_info_args.handle = create_bo_args.handle;
+  // In case we need to close this BO to avoid leaks due to some error after
+  // creation.
+  close_bo_args.handle = create_bo_args.handle;
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info_args) < 0) {
+    // Close the BO in the case we can't get info about it.
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    return HSA_STATUS_ERROR;
+  }
+
+  if (m_region.kernarg()) {
+    *mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_,
+                get_bo_info_args.map_offset);
+    if (*mem == MAP_FAILED) {
+      // Close the BO in the case when a mapping fails and we got a BO handle.
+      ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+    }
+  } else {
+    *mem = reinterpret_cast<void *>(get_bo_info_args.vaddr);
+  }
+
   return HSA_STATUS_SUCCESS;
 }
 

@@ -42,17 +42,21 @@
 
 #include "core/inc/amd_aie_agent.h"
 
+#include <functional>
+
 #include "core/inc/amd_aie_aql_queue.h"
+#include "core/inc/amd_memory_region.h"
 #include "core/inc/driver.h"
+#include "core/inc/runtime.h"
 
 namespace rocr {
 namespace AMD {
 
 AieAgent::AieAgent(uint32_t node)
     : core::Agent(core::DriverType::XDNA, node,
-                  core::Agent::DeviceType::kAmdAieDevice),
-      max_queues_(core::Runtime::runtime_singleton_->flag().max_queues()) {
+                  core::Agent::DeviceType::kAmdAieDevice) {
   InitRegionList();
+  InitAllocators();
   GetAgentProperties();
 }
 
@@ -82,7 +86,8 @@ hsa_status_t AieAgent::IterateRegion(
 hsa_status_t AieAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache,
                                                              void *data),
                                     void *data) const {
-  return HSA_STATUS_SUCCESS;
+  // AIE has no caches.
+  return HSA_STATUS_ERROR_INVALID_CACHE;
 }
 
 hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
@@ -117,13 +122,13 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
   case HSA_AGENT_INFO_QUEUES_MAX:
-    *reinterpret_cast<uint32_t *>(value) = maxQueues_;
+    *reinterpret_cast<uint32_t *>(value) = max_queues_;
     break;
   case HSA_AGENT_INFO_QUEUE_MIN_SIZE:
-    *reinterpret_cast<uint32_t *>(value) = minAqlSize_;
+    *reinterpret_cast<uint32_t *>(value) = min_aql_size_;
     break;
   case HSA_AGENT_INFO_QUEUE_MAX_SIZE:
-    *reinterpret_cast<uint32_t *>(value) = maxAqlSize_;
+    *reinterpret_cast<uint32_t *>(value) = max_aql_size_;
     break;
   case HSA_AGENT_INFO_QUEUE_TYPE:
     *reinterpret_cast<hsa_queue_type32_t *>(value) = HSA_QUEUE_TYPE_SINGLE;
@@ -176,7 +181,7 @@ hsa_status_t AieAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  if (size < minAqlSize_ || size > maxAqlSize_) {
+  if (size < min_aql_size_ || size > max_aql_size_) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
@@ -186,11 +191,52 @@ hsa_status_t AieAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
   return HSA_STATUS_SUCCESS;
 }
 
-void AieAgent::InitRegionList() {}
+void AieAgent::InitRegionList() {
+  /// TODO: Find a way to set the other memory properties in a reasonable way.
+  ///       This should be easier once the ROCt source is incorporated into the
+  ///       ROCr source. Since the AIE itself currently has no memory regions of
+  ///       its own all memory is just the system DRAM.
+
+  /// For allocating kernel arguments or other objects that only need
+  /// system memory.
+  HsaMemoryProperties sys_mem_props{
+      .HeapType = HSA_HEAPTYPE_SYSTEM,
+  };
+  /// For allocating memory for programmable device image (PDI) files. These
+  /// need to be mapped to the device so the hardware can access the PDIs.
+  HsaMemoryProperties dev_mem_props{
+      .HeapType = HSA_HEAPTYPE_DEVICE_SVM,
+  };
+  /// As of now the AIE devices support coarse-grain memory regions that require
+  /// explicit sync operations.
+  regions_.push_back(
+      new MemoryRegion(false, true, false, false, true, this, sys_mem_props));
+  regions_.push_back(
+      new MemoryRegion(false, false, false, false, true, this, dev_mem_props));
+}
 
 void AieAgent::GetAgentProperties() {
   core::Runtime::runtime_singleton_->AgentDriver(driver_type)
       .GetAgentProperties(*this);
+}
+
+void AieAgent::InitAllocators() {
+  for (const auto *region : regions()) {
+    const MemoryRegion *amd_mem_region(
+        static_cast<const MemoryRegion *>(region));
+    if (amd_mem_region->kernarg()) {
+      system_allocator_ =
+          [region](size_t size, size_t align,
+                   core::MemoryRegion::AllocateFlags alloc_flags) -> void * {
+        void *mem(nullptr);
+        return (core::Runtime::runtime_singleton_->AllocateMemory(
+                    region, size, alloc_flags, &mem) == HSA_STATUS_SUCCESS)
+                   ? mem
+                   : nullptr;
+      };
+      break;
+    }
+  }
 }
 
 } // namespace AMD

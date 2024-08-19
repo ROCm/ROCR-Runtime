@@ -208,6 +208,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_SEGMENT:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
           *((hsa_region_segment_t*)value) = HSA_REGION_SEGMENT_GLOBAL;
@@ -223,6 +224,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_GLOBAL_FLAGS:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE: {
           uint32_t ret = 0;
@@ -246,6 +248,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_ALLOC_MAX_SIZE:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
           *((size_t*)value) = max_sysmem_alloc_size_;
           break;
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
@@ -260,6 +263,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_RUNTIME_ALLOC_ALLOWED:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
           *((bool*)value) = true;
@@ -272,6 +276,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_RUNTIME_ALLOC_GRANULE:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
           *((size_t*)value) = kPageSize_;
@@ -284,6 +289,7 @@ hsa_status_t MemoryRegion::GetInfo(hsa_region_info_t attribute,
     case HSA_REGION_INFO_RUNTIME_ALLOC_ALIGNMENT:
       switch (mem_props_.HeapType) {
         case HSA_HEAPTYPE_SYSTEM:
+        case HSA_HEAPTYPE_DEVICE_SVM:
         case HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE:
         case HSA_HEAPTYPE_FRAME_BUFFER_PUBLIC:
           *((size_t*)value) = kPageSize_;
