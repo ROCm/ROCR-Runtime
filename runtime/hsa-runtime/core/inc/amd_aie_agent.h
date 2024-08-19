@@ -86,6 +86,13 @@ public:
     return regions_;
   }
 
+  /// @brief Getter for the AIE system allocator.
+  const std::function<void *(size_t size, size_t align,
+                             core::MemoryRegion::AllocateFlags flags)> &
+  system_allocator() const {
+    return system_allocator_;
+  }
+
   // AIE agent methods.
   /// @brief Get the number of columns on this AIE agent.
   int GetNumCols() const { return num_cols_; }
@@ -99,18 +106,21 @@ public:
 private:
   /// @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
+  /// @brief Setup the memory allocators used by this agent.
+  void InitAllocators();
 
   /// @brief Query the driver to get properties for this AIE agent.
   void GetAgentProperties();
 
   std::vector<const core::MemoryRegion *> regions_;
+  std::function<void *(size_t size, size_t align,
+                       core::MemoryRegion::AllocateFlags flags)>
+      system_allocator_;
 
   const hsa_profile_t profile_ = HSA_PROFILE_BASE;
-  static const uint32_t maxQueues_ = 1;
-  static const uint32_t minAqlSize_ = 0x40;
-  static const uint32_t maxAqlSize_ = 0x40;
-  uint32_t max_queues_;
-  uintptr_t device_heap_vaddr_ = 0;
+  const uint32_t min_aql_size_ = 0x40;
+  const uint32_t max_aql_size_ = 0x40;
+  const uint32_t max_queues_ = 1;
 
   /// @brief Number of columns in the AIE array.
   int num_cols_ = 0;

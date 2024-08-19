@@ -143,7 +143,8 @@ class MemoryRegion : public core::MemoryRegion {
   }
 
   __forceinline bool IsSystem() const {
-    return mem_props_.HeapType == HSA_HEAPTYPE_SYSTEM;
+    return ((mem_props_.HeapType == HSA_HEAPTYPE_SYSTEM) ||
+            (mem_props_.HeapType == HSA_HEAPTYPE_DEVICE_SVM));
   }
 
   __forceinline bool IsLDS() const {
