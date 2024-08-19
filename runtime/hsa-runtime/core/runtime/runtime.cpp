@@ -182,7 +182,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
   // Record the agent in the node-to-agent reverse lookup table.
   agents_by_node_[agent->node_id()].push_back(agent);
 
-  // Process agent as a cpu or gpu device.
+  // Process agent as a CPU, GPU, or AIE device.
   if (agent->device_type() == Agent::DeviceType::kAmdCpuDevice) {
     cpu_agents_.push_back(agent);
 
@@ -239,6 +239,8 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
     } else {
       disabled_gpu_agents_.push_back(agent);
     }
+  } else if (agent->device_type() == Agent::DeviceType::kAmdAieDevice) {
+    aie_agents_.push_back(agent);
   }
 }
 
@@ -255,6 +257,9 @@ void Runtime::DestroyAgents() {
 
   std::for_each(cpu_agents_.begin(), cpu_agents_.end(), DeleteObject());
   cpu_agents_.clear();
+
+  std::for_each(aie_agents_.begin(), aie_agents_.end(), DeleteObject());
+  aie_agents_.clear();
 
   region_gpu_ = NULL;
 
@@ -296,7 +301,8 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
                                    void* data) {
   AMD::callback_t<decltype(callback)> call(callback);
 
-  std::vector<core::Agent*>* agent_lists[2] = {&cpu_agents_, &gpu_agents_};
+  std::vector<core::Agent *> *agent_lists[3] = {&cpu_agents_, &gpu_agents_,
+                                                &aie_agents_};
   for (std::vector<core::Agent*>* agent_list : agent_lists) {
     for (size_t i = 0; i < agent_list->size(); ++i) {
       hsa_agent_t agent = Agent::Convert(agent_list->at(i));
