@@ -86,18 +86,37 @@ public:
     return regions_;
   }
 
+  // AIE agent methods.
+  /// @brief Get the number of columns on this AIE agent.
+  int GetNumCols() const { return num_cols_; }
+  void SetNumCols(int num_cols) { num_cols_ = num_cols; }
+  /// @brief Get the number of core tile rows on this AIE agent.
+  int GetNumCoreRows() const { return num_core_rows_; }
+  void SetNumCoreRows(int num_core_rows) { num_core_rows_ = num_core_rows; }
+  /// @brief Get the number of core tiles on this AIE agent.
+  int GetNumCores() const { return num_cols_ * num_core_rows_; }
+
 private:
-  // @brief Query the driver to get the region list owned by this agent.
+  /// @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
+
+  /// @brief Query the driver to get properties for this AIE agent.
+  void GetAgentProperties();
 
   std::vector<const core::MemoryRegion *> regions_;
 
   const hsa_profile_t profile_ = HSA_PROFILE_BASE;
-  static const uint32_t maxQueues_ = 8;
+  static const uint32_t maxQueues_ = 1;
   static const uint32_t minAqlSize_ = 0x40;
   static const uint32_t maxAqlSize_ = 0x40;
   uint32_t max_queues_;
   uintptr_t device_heap_vaddr_ = 0;
+
+  /// @brief Number of columns in the AIE array.
+  int num_cols_ = 0;
+  /// @brief Number of rows of core tiles in the AIE array. Not all rows in a
+  /// column are cores. Some can be memory or shim tiles.
+  int num_core_rows_ = 0;
 };
 
 } // namespace AMD
