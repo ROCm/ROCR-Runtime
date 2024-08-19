@@ -43,6 +43,7 @@
 #ifndef HSA_RUNTME_CORE_INC_DRIVER_H_
 #define HSA_RUNTME_CORE_INC_DRIVER_H_
 
+#include <limits>
 #include <string>
 
 #include "core/inc/agent.h"
@@ -60,6 +61,15 @@ struct MemProperties {
   uint64_t virtual_base_addr_;
 };
 
+struct DriverVersionInfo {
+  uint32_t major;
+  uint32_t minor;
+};
+
+enum class DriverQuery { GET_DRIVER_VERSION };
+
+enum class DriverType { XDNA = 0, NUM_DRIVER_TYPES };
+
 /// @brief Kernel driver interface.
 ///
 /// @details A class used to provide an interface between the core runtime
@@ -68,15 +78,22 @@ struct MemProperties {
 class Driver {
  public:
   Driver() = delete;
-  Driver(const std::string devnode_name, Agent::DeviceType agent_device_type);
-  virtual ~Driver() {}
+  Driver(DriverType kernel_driver_type, std::string devnode_name);
+  virtual ~Driver() = default;
 
+  /// @brief Query the kernel-model driver.
+  /// @retval HSA_STATUS_SUCCESS if the kernel-model driver query was
+  /// successful.
+  virtual hsa_status_t QueryKernelModeDriver(DriverQuery query) = 0;
   /// @brief Open a connection to the driver using name_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
   hsa_status_t Open();
   /// @brief Close a connection to the open driver using fd_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
   hsa_status_t Close();
+  /// @brief Get driver version information.
+  /// @retval DriverVersionInfo containing the driver's version information.
+  DriverVersionInfo Version() const { return version_; }
 
   virtual hsa_status_t GetMemoryProperties(uint32_t node_id, MemProperties &mprops) const = 0;
 
@@ -95,10 +112,13 @@ class Driver {
 
   virtual hsa_status_t DestroyQueue(Queue &queue) const = 0;
 
-  /// Specify the agent device type this driver is for.
-  const Agent::DeviceType agent_device_type_;
+  /// Unique identifier for supported kernel-mode drivers.
+  const DriverType kernel_driver_type_;
 
- protected:
+protected:
+  DriverVersionInfo version_{std::numeric_limits<uint32_t>::max(),
+                             std::numeric_limits<uint32_t>::max()};
+
   const std::string devnode_name_;
   int fd_ = -1;
 };

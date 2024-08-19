@@ -150,6 +150,7 @@ set_property(TARGET ${CORE_RUNTIME_TARGET} PROPERTY LINK_FLAGS ${HSA_SHARED_LINK
 
 ## Source files.
 set ( SRCS core/driver/driver.cpp
+           core/driver/xdna/amd_xdna_driver.cpp
            core/util/lnx/os_linux.cpp
            core/util/small_heap.cpp
            core/util/timer.cpp

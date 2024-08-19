@@ -72,6 +72,12 @@ namespace AMD {
 static const uint kKfdVersionMajor = 0;
 static const uint kKfdVersionMinor = 99;
 
+void DiscoverDrivers(bool &gpu_found, bool &aie_found) {
+  // Open connection to GPU and AIE kernel drivers.
+  gpu_found = (hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS);
+  aie_found = (XdnaDriver::DiscoverDriver() == HSA_STATUS_SUCCESS);
+}
+
 // Query for user preference and use that to determine Xnack mode of ROCm system.
 // Return true if Xnack mode is ON or false if OFF. Xnack mode of a system is
 // orthogonal to devices that do not support Xnack mode. It is legal for a
@@ -419,13 +425,10 @@ void BuildTopology() {
 }
 
 bool Load() {
-  bool gpu_found = true;
+  bool gpu_found = false;
   bool aie_found = false;
 
-  // Open connection to kernel driver.
-  if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
-    gpu_found = false;
-  }
+  DiscoverDrivers(gpu_found, aie_found);
 
   if (!(gpu_found || aie_found)) {
     return false;

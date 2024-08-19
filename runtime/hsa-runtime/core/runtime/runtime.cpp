@@ -244,6 +244,11 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
   }
 }
 
+// Register driver.
+void Runtime::RegisterDriver(std::unique_ptr<Driver> &driver) {
+  agent_drivers_.push_back(std::move(driver));
+}
+
 void Runtime::DestroyAgents() {
   agents_by_node_.clear();
 
@@ -265,6 +270,14 @@ void Runtime::DestroyAgents() {
 
   system_regions_fine_.clear();
   system_regions_coarse_.clear();
+}
+
+void Runtime::DestroyDrivers() {
+  for (auto &d : agent_drivers_) {
+    d->Close();
+  }
+
+  agent_drivers_.clear();
 }
 
 void Runtime::SetLinkCount(size_t num_nodes) {
@@ -2061,6 +2074,8 @@ void Runtime::Unload() {
   DestroyAgents();
 
   CloseTools();
+
+  DestroyDrivers();
 
   AMD::Unload();
 }

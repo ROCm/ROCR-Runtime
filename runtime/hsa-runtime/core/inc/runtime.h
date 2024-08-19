@@ -63,10 +63,11 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
+#include "core/inc/amd_xdna_driver.h"
 #include "core/inc/exceptions.h"
+#include "core/inc/interrupt_signal.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/signal.h"
-#include "core/inc/interrupt_signal.h"
 #include "core/inc/svm_profiler.h"
 #include "core/util/flag.h"
 #include "core/util/locks.h"
@@ -155,8 +156,15 @@ class Runtime {
   /// @param [in] agent Pointer to the agent object.
   void RegisterAgent(Agent* agent, bool Enabled);
 
+  /// @brief Insert agent into the driver list.
+  /// @param [in] driver Unique pointer to the driver object.
+  void RegisterDriver(std::unique_ptr<Driver> &driver);
+
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
+
+  /// @brief Close and delete all agent driver objects from ::agent_drivers_.
+  void DestroyDrivers();
 
   /// @brief Set the number of links connecting the agents in the platform.
   void SetLinkCount(size_t num_link);
@@ -469,6 +477,22 @@ class Runtime {
   bool XnackEnabled() const { return xnack_enabled_; }
   void XnackEnabled(bool enable) { xnack_enabled_ = enable; }
 
+  Driver &AgentDriver(DriverType drv_type) {
+    auto is_drv_type = [&](const std::unique_ptr<Driver> &d) {
+      return d->kernel_driver_type_ == drv_type;
+    };
+
+    auto driver(std::find_if(agent_drivers_.begin(), agent_drivers_.end(),
+                             is_drv_type));
+
+    if (driver == agent_drivers_.end()) {
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT,
+                               "Invalid agent device type, no driver found.");
+    }
+
+    return **driver;
+  }
+
  protected:
   static void AsyncEventsLoop(void*);
   static void AsyncIPCSockServerConnLoop(void*);
@@ -616,6 +640,10 @@ class Runtime {
   // KFD map/unmap, register/unregister, and access to hsaKmtQueryPointerInfo
   // registered & mapped arrays.
   KernelSharedMutex memory_lock_;
+
+  // Array containing driver interfaces for compatible agent kernel-mode
+  // drivers. Currently supports AIE agents.
+  std::vector<std::unique_ptr<Driver>> agent_drivers_;
 
   // Array containing tools library handles.
   std::vector<os::LibHandle> tool_libs_;
