@@ -68,7 +68,7 @@ struct DriverVersionInfo {
 
 enum class DriverQuery { GET_DRIVER_VERSION };
 
-enum class DriverType { XDNA = 0, NUM_DRIVER_TYPES };
+enum class DriverType { XDNA = 0, KFD, NUM_DRIVER_TYPES };
 
 /// @brief Kernel driver interface.
 ///
