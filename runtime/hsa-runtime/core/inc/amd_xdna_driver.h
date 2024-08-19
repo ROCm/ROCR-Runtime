@@ -43,6 +43,7 @@
 #define HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 
 #include <memory>
+#include <unordered_map>
 
 #include "core/inc/driver.h"
 #include "core/inc/memory_region.h"
@@ -99,6 +100,12 @@ private:
   hsa_status_t
   ConfigHwCtxCU(core::Queue &queue,
                 hsa_amd_aie_ert_hw_ctx_config_cu_param_t &config_cu_param);
+
+  /// TODO: Probably remove this in the future and rely on the core Runtime
+  /// object to track handle allocations. Using the VMEM API for mapping XDNA
+  /// driver handles requires a bit more refactoring. So rely on the XDNA driver
+  /// to manage some of this for now.
+  std::unordered_map<uint32_t, void *> vmem_handle_mappings;
 
   /// @brief Virtual address range allocated for the device heap.
   ///

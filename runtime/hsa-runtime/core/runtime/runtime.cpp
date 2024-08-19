@@ -3111,20 +3111,22 @@ hsa_status_t Runtime::VMemoryHandleCreate(const MemoryRegion* region, size_t siz
                                           uint64_t flags_unused,
                                           hsa_amd_vmem_alloc_handle_t* memoryOnlyHandle) {
   const AMD::MemoryRegion* memRegion = static_cast<const AMD::MemoryRegion*>(region);
-  if (!memRegion->IsLocalMemory()) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   if (!IsMultipleOf(size, memRegion->GetPageSize()))
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
-  void* thunk_handle;
-  hsa_status_t status = region->Allocate(size, alloc_flags, &thunk_handle, 0);
+  void *user_mode_driver_handle;
+  hsa_status_t status =
+      region->Allocate(size, alloc_flags, &user_mode_driver_handle, 0);
   if (status == HSA_STATUS_SUCCESS) {
     memory_handle_map_.emplace(std::piecewise_construct,
-          std::forward_as_tuple(thunk_handle),
-          std::forward_as_tuple(region, size, flags_unused, thunk_handle, alloc_flags));
+                               std::forward_as_tuple(user_mode_driver_handle),
+                               std::forward_as_tuple(region, size, flags_unused,
+                                                     user_mode_driver_handle,
+                                                     alloc_flags));
 
-    *memoryOnlyHandle = MemoryHandle::Convert(thunk_handle);
+    *memoryOnlyHandle = MemoryHandle::Convert(user_mode_driver_handle);
   }
   return status;
 }

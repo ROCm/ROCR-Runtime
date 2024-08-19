@@ -134,6 +134,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   amdxdna_drm_create_bo create_bo_args{.size = size};
   amdxdna_drm_get_bo_info get_bo_info_args{0};
   drm_gem_close close_bo_args{0};
+  void *mapped_mem(nullptr);
 
   if (!m_region.IsSystem()) {
     return HSA_STATUS_ERROR_INVALID_REGION;
@@ -160,17 +161,28 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
     return HSA_STATUS_ERROR;
   }
 
+  /// TODO: For now we always map the memory and keep a mapping from handles
+  /// to VA memory addresses. Once we can support the separate VMEM call to
+  /// map handles we can fix this.
   if (m_region.kernarg()) {
-    *mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_,
-                get_bo_info_args.map_offset);
-    if (*mem == MAP_FAILED) {
+    mapped_mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_,
+                      get_bo_info_args.map_offset);
+    if (mapped_mem == MAP_FAILED) {
       // Close the BO in the case when a mapping fails and we got a BO handle.
       ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   } else {
-    *mem = reinterpret_cast<void *>(get_bo_info_args.vaddr);
+    mapped_mem = reinterpret_cast<void *>(get_bo_info_args.vaddr);
   }
+
+  if (alloc_flags & core::MemoryRegion::AllocateMemoryOnly) {
+    *mem = reinterpret_cast<void *>(create_bo_args.handle);
+  } else {
+    *mem = mapped_mem;
+  }
+
+  vmem_handle_mappings.emplace(create_bo_args.handle, mapped_mem);
 
   return HSA_STATUS_SUCCESS;
 }
