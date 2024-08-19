@@ -618,6 +618,22 @@ hsa_status_t hsa_amd_async_function(void (*callback)(void* arg), void* arg) {
   CATCH;
 }
 
+hsa_status_t
+hsa_amd_queue_hw_ctx_config(const hsa_queue_t *queue,
+                            hsa_amd_queue_hw_ctx_config_param_t config_type,
+                            void *args) {
+  TRY;
+  IS_OPEN();
+
+  IS_BAD_PTR(args);
+  core::Queue *cmd_queue = core::Queue::Convert(queue);
+  IS_VALID(cmd_queue);
+
+  return cmd_queue->ConfigHwCtx(config_type, args);
+
+  CATCH;
+}
+
 hsa_status_t hsa_amd_queue_cu_set_mask(const hsa_queue_t* queue, uint32_t num_cu_mask_count,
                                        const uint32_t* cu_mask) {
   TRY;

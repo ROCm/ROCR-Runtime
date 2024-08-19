@@ -178,6 +178,7 @@ global:
 	hsa_amd_signal_async_handler;
 	hsa_amd_async_function;
 	hsa_amd_image_get_info_max_dim;
+	hsa_amd_queue_hw_ctx_config;
 	hsa_amd_queue_cu_set_mask;
 	hsa_amd_queue_cu_get_mask;
 	hsa_amd_memory_fill;

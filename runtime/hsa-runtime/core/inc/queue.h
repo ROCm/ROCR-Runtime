@@ -330,6 +330,14 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   /// @return uint64_t Value of write index before the update
   virtual uint64_t AddWriteIndexRelease(uint64_t value) = 0;
 
+  /// @brief Configure the hardware context of a queue.
+  ///
+  /// @param config_type Specify the parameter type. Used to interpret @p args.
+  ///
+  /// @param args Queue-specific args for configuring the hardware context.
+  virtual hsa_status_t
+  ConfigHwCtx(hsa_amd_queue_hw_ctx_config_param_t config_type, void *args) = 0;
+
   /// @brief Set CU Masking
   ///
   /// @param num_cu_mask_count size of mask bit array

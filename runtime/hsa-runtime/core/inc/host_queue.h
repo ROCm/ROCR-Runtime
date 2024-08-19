@@ -144,6 +144,12 @@ class HostQueue : public Queue {
                        std::memory_order_release);
   }
 
+  hsa_status_t ConfigHwCtx(hsa_amd_queue_hw_ctx_config_param_t config_type,
+                           void *args) override {
+    // Currently only supported by AIE queues.
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
+
   hsa_status_t SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) override {
     return HSA_STATUS_ERROR_INVALID_QUEUE;
   }

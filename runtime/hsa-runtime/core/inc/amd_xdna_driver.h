@@ -81,6 +81,10 @@ public:
   hsa_status_t CreateQueue(core::Queue &queue) const override;
   hsa_status_t DestroyQueue(core::Queue &queue) const override;
 
+  hsa_status_t ConfigHwCtx(core::Queue &queue,
+                           hsa_amd_queue_hw_ctx_config_param_t config_type,
+                           void *args) override;
+
 private:
   hsa_status_t QueryDriverVersion();
   /// @brief Allocate device accesible heap space.
@@ -88,6 +92,13 @@ private:
   /// Allocate and map a buffer object (BO) that the AIE device can access.
   hsa_status_t InitDeviceHeap();
   hsa_status_t FreeDeviceHeap();
+
+  /// @brief Configures the CUs associated with the HW context for this queue.
+  ///
+  /// @param config_cu_param CU configuration information.
+  hsa_status_t
+  ConfigHwCtxCU(core::Queue &queue,
+                hsa_amd_aie_ert_hw_ctx_config_cu_param_t &config_cu_param);
 
   /// @brief Virtual address range allocated for the device heap.
   ///

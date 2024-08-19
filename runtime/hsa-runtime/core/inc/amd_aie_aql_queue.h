@@ -106,6 +106,9 @@ public:
   }
   uint32_t GetHwCtxHandle() const { return hw_ctx_handle_; }
 
+  hsa_status_t ConfigHwCtx(hsa_amd_queue_hw_ctx_config_param_t config_type,
+                           void *args) override;
+
   // GPU-specific queue functions are unsupported.
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count,
                             uint32_t *cu_mask) override;

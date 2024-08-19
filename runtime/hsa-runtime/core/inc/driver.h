@@ -48,6 +48,7 @@
 
 #include "core/inc/memory_region.h"
 #include "inc/hsa.h"
+#include "inc/hsa_ext_amd.h"
 
 namespace rocr {
 namespace core {
@@ -126,6 +127,16 @@ class Driver {
   virtual hsa_status_t CreateQueue(Queue &queue) const = 0;
 
   virtual hsa_status_t DestroyQueue(Queue &queue) const = 0;
+
+  /// @brief Configure the hardware context for a queue.
+  /// @param[in] queue The queue whose context is being configured.
+  /// @param[in] config_type Type for the @p args argument. Tells the driver
+  ///            how to interpret the args.
+  /// @param[in] args Arguments for configuring the queue's hardware context.
+  ///            @p config_type tells how to interpret args.
+  virtual hsa_status_t
+  ConfigHwCtx(Queue &queue, hsa_amd_queue_hw_ctx_config_param_t config_type,
+              void *args) = 0;
 
   /// Unique identifier for supported kernel-mode drivers.
   const DriverType kernel_driver_type_;

@@ -114,6 +114,12 @@ class QueueWrapper : public Queue {
   uint64_t AddWriteIndexRelease(uint64_t value) override {
     return wrapped->AddWriteIndexRelease(value);
   }
+
+  hsa_status_t ConfigHwCtx(hsa_amd_queue_hw_ctx_config_param_t config_type,
+                           void *args) override {
+    return wrapped->ConfigHwCtx(config_type, args);
+  }
+
   hsa_status_t SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) override {
     return wrapped->SetCUMasking(num_cu_mask_count, cu_mask);
   }

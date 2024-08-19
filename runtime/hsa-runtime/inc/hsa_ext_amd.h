@@ -1320,6 +1320,62 @@ hsa_status_t HSA_API hsa_amd_image_get_info_max_dim(hsa_agent_t agent,
  */
 
 /**
+ * @brief Hardware context configuration for one AIE CU.
+ */
+typedef struct hsa_amd_aie_ert_hw_ctx_cu_config_s {
+  /**
+   * @brief CU configuration BO handle.
+   */
+  uint32_t cu_config_bo;
+  /**
+   * @brief Function of a CU.
+   */
+  uint8_t cu_func;
+  uint8_t reserved[3];
+} hsa_amd_aie_ert_hw_ctx_cu_config_t;
+
+typedef struct hsa_amd_aie_ert_hw_ctx_config_cu_param_s {
+  /**
+   * @brief Number of CUs to configure.
+   */
+  uint16_t num_cus;
+  uint16_t reserved[3];
+  /**
+   * @brief List of CU configurations.
+   */
+  hsa_amd_aie_ert_hw_ctx_cu_config_t *cu_configs;
+} hsa_amd_aie_ert_hw_ctx_config_cu_param_t;
+
+/**
+ * brief Specify a hardware context configuration parameter type for a queue.
+ */
+typedef enum {
+  /**
+   * @brief Configure the CUs assigned to the AIE ERT HW context.
+   */
+  HSA_AMD_QUEUE_AIE_ERT_HW_CXT_CONFIG_CU = 0
+} hsa_amd_queue_hw_ctx_config_param_t;
+
+/**
+ * @brief Configures the hardware context of a queue.
+ *
+ * @details This can be used to send configuration data to the queue so it can
+ * configure various hardware components that support the queue. The payload
+ * used to describe the configuration is interpreted on a per-queue-type basis.
+ *
+ * @param[in] queue HSA queue whose HW context is being configured.
+ *
+ * @param[in] config_type Specifies the type of the configuration. Used to
+ * determine how to interpret @p args.
+ *
+ * @param[in] args Configuration payload. Will be interpreted by the queue
+ * based on @p config_type.
+ */
+hsa_status_t HSA_API hsa_amd_queue_hw_ctx_config(
+    const hsa_queue_t *queue, hsa_amd_queue_hw_ctx_config_param_t config_type,
+    void *args);
+
+/**
  * @brief Set a queue's CU affinity mask.
  *
  * @details Enables the queue to run on only selected CUs.  The given mask is
