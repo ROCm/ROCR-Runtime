@@ -70,8 +70,8 @@ int AieAqlQueue::rtti_id_ = 0;
 
 AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
                          uint32_t node_id)
-    : Queue(0, 0), DoorbellSignal(CreateSharedSignal(agent)), agent_(agent),
-      active_(false) {
+    : Queue(0, 0), LocalSignal(0, false), DoorbellSignal(signal()),
+      agent_(*agent), active_(false) {
   amd_queue_.hsa_queue.doorbell_signal = Signal::Convert(this);
   amd_queue_.hsa_queue.size = 0x40;
 
@@ -80,13 +80,24 @@ AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
   signal_.kind = AMD_SIGNAL_KIND_DOORBELL;
   signal_.queue_ptr = &amd_queue_;
   active_ = true;
+
+  core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type)
+      .CreateQueue(*this);
 }
 
 AieAqlQueue::~AieAqlQueue() { Inactivate(); }
 
 hsa_status_t AieAqlQueue::Inactivate() {
   bool active(active_.exchange(false, std::memory_order_relaxed));
-  return HSA_STATUS_SUCCESS;
+  hsa_status_t status(HSA_STATUS_SUCCESS);
+
+  if (active) {
+    status = core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type)
+                 .DestroyQueue(*this);
+    hw_ctx_handle_ = std::numeric_limits<uint32_t>::max();
+  }
+
+  return status;
 }
 
 hsa_status_t AieAqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
@@ -176,7 +187,7 @@ hsa_status_t AieAqlQueue::GetInfo(hsa_queue_info_attribute_t attribute,
                                   void *value) {
   switch (attribute) {
   case HSA_AMD_QUEUE_INFO_AGENT:
-    *(reinterpret_cast<hsa_agent_t *>(value)) = agent_->public_handle();
+    *(reinterpret_cast<hsa_agent_t *>(value)) = agent_.public_handle();
     break;
   case HSA_AMD_QUEUE_INFO_DOORBELL_ID:
     // Hardware doorbell supports AQL semantics.

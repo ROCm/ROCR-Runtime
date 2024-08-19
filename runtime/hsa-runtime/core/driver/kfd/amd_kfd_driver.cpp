@@ -61,6 +61,8 @@ namespace AMD {
 KfdDriver::KfdDriver(std::string devnode_name)
     : core::Driver(core::DriverType::KFD, devnode_name) {}
 
+hsa_status_t KfdDriver::Init() { return HSA_STATUS_SUCCESS; }
+
 hsa_status_t KfdDriver::DiscoverDriver() {
   if (hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS) {
     std::unique_ptr<Driver> kfd_drv(new KfdDriver("/dev/kfd"));
@@ -71,6 +73,10 @@ hsa_status_t KfdDriver::DiscoverDriver() {
 }
 
 hsa_status_t KfdDriver::QueryKernelModeDriver(core::DriverQuery query) {
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::GetAgentProperties(core::Agent &agent) const {
   return HSA_STATUS_SUCCESS;
 }
 
@@ -230,7 +236,7 @@ hsa_status_t KfdDriver::FreeMemory(void *mem, size_t size) {
   return FreeKfdMemory(mem, size) ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR;
 }
 
-hsa_status_t KfdDriver::CreateQueue(core::Queue &queue) {
+hsa_status_t KfdDriver::CreateQueue(core::Queue &queue) const {
   return HSA_STATUS_SUCCESS;
 }
 

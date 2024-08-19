@@ -43,12 +43,15 @@
 #include "core/inc/amd_xdna_driver.h"
 
 #include <sys/ioctl.h>
+#include <sys/mman.h>
 
 #include <memory>
 #include <string>
 
+#include "core/inc/amd_aie_aql_queue.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
+#include "core/util/utils.h"
 #include "uapi/amdxdna_accel.h"
 
 namespace rocr {
@@ -56,6 +59,8 @@ namespace AMD {
 
 XdnaDriver::XdnaDriver(std::string devnode_name)
     : core::Driver(core::DriverType::XDNA, devnode_name) {}
+
+XdnaDriver::~XdnaDriver() { FreeDeviceHeap(); }
 
 hsa_status_t XdnaDriver::DiscoverDriver() {
   const int max_minor_num(64);
@@ -67,6 +72,7 @@ hsa_status_t XdnaDriver::DiscoverDriver() {
     if (xdna_drv->Open() == HSA_STATUS_SUCCESS) {
       if (xdna_drv->QueryKernelModeDriver(
               core::DriverQuery::GET_DRIVER_VERSION) == HSA_STATUS_SUCCESS) {
+        static_cast<XdnaDriver *>(xdna_drv.get())->Init();
         core::Runtime::runtime_singleton_->RegisterDriver(xdna_drv);
         return HSA_STATUS_SUCCESS;
       } else {
@@ -78,6 +84,8 @@ hsa_status_t XdnaDriver::DiscoverDriver() {
   return HSA_STATUS_ERROR;
 }
 
+hsa_status_t XdnaDriver::Init() { return InitDeviceHeap(); }
+
 hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   switch (query) {
   case core::DriverQuery::GET_DRIVER_VERSION:
@@ -85,6 +93,29 @@ hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   default:
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetAgentProperties(core::Agent &agent) const {
+  if (agent.device_type() != core::Agent::DeviceType::kAmdAieDevice) {
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
+
+  auto &aie_agent(static_cast<AieAgent &>(agent));
+
+  amdxdna_drm_query_aie_metadata aie_metadata{0};
+  amdxdna_drm_get_info get_info_args{
+      .param = DRM_AMDXDNA_QUERY_AIE_METADATA,
+      .buffer_size = sizeof(aie_metadata),
+      .buffer = reinterpret_cast<uintptr_t>(&aie_metadata)};
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_INFO, &get_info_args) < 0) {
+    return HSA_STATUS_ERROR;
+  }
+
+  aie_agent.SetNumCols(aie_metadata.cols);
+  aie_agent.SetNumCoreRows(aie_metadata.core.row_count);
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -105,11 +136,51 @@ hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) {
+hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
+  if (!AieAqlQueue::IsType(&queue)) {
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
+
+  auto &aie_queue(static_cast<AieAqlQueue &>(queue));
+  auto &aie_agent(aie_queue.GetAgent());
+
+  // Currently we do not leverage QoS information.
+  amdxdna_qos_info qos_info{0};
+  amdxdna_drm_create_hwctx create_hwctx_args{
+      .ext = 0,
+      .ext_flags = 0,
+      .qos_p = reinterpret_cast<uintptr_t>(&qos_info),
+      .umq_bo = 0,
+      .log_buf_bo = 0,
+      // TODO: Make this configurable.
+      .max_opc = 0x800,
+      // This field is for the number of core tiles.
+      .num_tiles = aie_agent.GetNumCores(),
+      .mem_size = 0,
+      .umq_doorbell = 0};
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_HWCTX, &create_hwctx_args) < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  aie_queue.SetHwCtxHandle(create_hwctx_args.handle);
+
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
+  if (!AieAqlQueue::IsType(&queue)) {
+    return HSA_STATUS_ERROR_INVALID_QUEUE;
+  }
+
+  auto &aie_queue(static_cast<AieAqlQueue &>(queue));
+  amdxdna_drm_destroy_hwctx destroy_hwctx_args{.handle =
+                                                   aie_queue.GetHwCtxHandle()};
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
+    return HSA_STATUS_ERROR;
+  }
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -124,6 +195,72 @@ hsa_status_t XdnaDriver::QueryDriverVersion() {
 
   version_.major = aie_version.major;
   version_.minor = aie_version.minor;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::InitDeviceHeap() {
+  amdxdna_drm_create_bo create_bo_args{.type = AMDXDNA_BO_DEV_HEAP,
+                                       .vaddr =
+                                           reinterpret_cast<uintptr_t>(nullptr),
+                                       .size = dev_heap_size};
+  amdxdna_drm_get_bo_info get_bo_info_args{0};
+  drm_gem_close close_bo_args{0};
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_bo_args) < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  get_bo_info_args.handle = create_bo_args.handle;
+  // In case we need to close this BO to avoid leaks due to some error after
+  // creation.
+  close_bo_args.handle = create_bo_args.handle;
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info_args) < 0) {
+    // Close the BO in the case we can't get info about it.
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    return HSA_STATUS_ERROR;
+  }
+
+  dev_heap_parent = mmap(0, dev_heap_align * 2 - 1, PROT_READ | PROT_WRITE,
+                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+
+  if (dev_heap_parent == MAP_FAILED) {
+    // Close the BO in the case when a mapping fails and we got a BO handle.
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    dev_heap_parent = nullptr;
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  void *addr_aligned(reinterpret_cast<void *>(
+      AlignUp(reinterpret_cast<uintptr_t>(dev_heap_parent), dev_heap_align)));
+
+  dev_heap_aligned =
+      mmap(addr_aligned, dev_heap_size, PROT_READ | PROT_WRITE,
+           MAP_SHARED | MAP_FIXED, fd_, get_bo_info_args.map_offset);
+
+  if (dev_heap_aligned == MAP_FAILED) {
+    // Close the BO in the case when a mapping fails and we got a BO handle.
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    // Unmap the dev_heap_parent.
+    dev_heap_aligned = nullptr;
+    FreeDeviceHeap();
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::FreeDeviceHeap() {
+  if (dev_heap_parent) {
+    munmap(dev_heap_parent, dev_heap_align * 2 - 1);
+    dev_heap_parent = nullptr;
+  }
+
+  if (dev_heap_aligned) {
+    munmap(dev_heap_aligned, dev_heap_size);
+    dev_heap_aligned = nullptr;
+  }
 
   return HSA_STATUS_SUCCESS;
 }

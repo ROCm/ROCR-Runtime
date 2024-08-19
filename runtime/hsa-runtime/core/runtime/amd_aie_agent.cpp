@@ -53,6 +53,7 @@ AieAgent::AieAgent(uint32_t node)
                   core::Agent::DeviceType::kAmdAieDevice),
       max_queues_(core::Runtime::runtime_singleton_->flag().max_queues()) {
   InitRegionList();
+  GetAgentProperties();
 }
 
 AieAgent::~AieAgent() {
@@ -186,6 +187,11 @@ hsa_status_t AieAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type,
 }
 
 void AieAgent::InitRegionList() {}
+
+void AieAgent::GetAgentProperties() {
+  core::Runtime::runtime_singleton_->AgentDriver(driver_type)
+      .GetAgentProperties(*this);
+}
 
 } // namespace AMD
 } // namespace rocr
