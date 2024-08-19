@@ -63,6 +63,7 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
+#include "core/inc/amd_kfd_driver.h"
 #include "core/inc/amd_xdna_driver.h"
 #include "core/inc/exceptions.h"
 #include "core/inc/interrupt_signal.h"

@@ -74,7 +74,7 @@ static const uint kKfdVersionMinor = 99;
 
 void DiscoverDrivers(bool &gpu_found, bool &aie_found) {
   // Open connection to GPU and AIE kernel drivers.
-  gpu_found = (hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS);
+  gpu_found = (KfdDriver::DiscoverDriver() == HSA_STATUS_SUCCESS);
   aie_found = (XdnaDriver::DiscoverDriver() == HSA_STATUS_SUCCESS);
 }
 
