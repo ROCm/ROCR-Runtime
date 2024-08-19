@@ -49,11 +49,12 @@
 #include <vector>
 
 #include "core/inc/checked.h"
+#include "core/inc/driver.h"
 #include "core/inc/isa.h"
-#include "core/inc/queue.h"
 #include "core/inc/memory_region.h"
-#include "core/util/utils.h"
+#include "core/inc/queue.h"
 #include "core/util/locks.h"
+#include "core/util/utils.h"
 
 namespace rocr {
 
@@ -117,19 +118,18 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Agent class contructor.
   //
   // @param [in] type CPU or GPU or other.
-  explicit Agent(uint32_t node_id, DeviceType type)
-      : node_id_(node_id),
-        device_type_(uint32_t(type)),
-        profiling_enabled_(false),
-        enabled_(false) {
+  explicit Agent(DriverType drv_type, uint32_t node_id, DeviceType type)
+      : driver_type(drv_type), node_id_(node_id), device_type_(uint32_t(type)),
+        profiling_enabled_(false), enabled_(false) {
     public_handle_ = Convert(this);
   }
 
   // @brief Agent class contructor.
   //
   // @param [in] type CPU or GPU or other.
-  explicit Agent(uint32_t node_id, uint32_t type)
-      : node_id_(node_id), device_type_(type), profiling_enabled_(false) {
+  explicit Agent(DriverType drv_type, uint32_t node_id, uint32_t type)
+      : driver_type(drv_type), node_id_(node_id), device_type_(type),
+        profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -315,7 +315,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
     for (auto region : regions()) region->Trim();
   }
 
- protected:
+  const DriverType driver_type;
+
+protected:
   // Intention here is to have a polymorphic update procedure for public_handle_
   // which is callable on any Agent* but only from some class dervied from
   // Agent*.  do_set_public_handle should remain protected or private in all

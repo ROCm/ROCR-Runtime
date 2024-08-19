@@ -43,11 +43,21 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_KFD_DRIVER_H_
 #define HSA_RUNTIME_CORE_INC_AMD_KFD_DRIVER_H_
 
-#include "core/inc/driver.h"
-
 #include <string>
 
+#include "hsakmt/hsakmt.h"
+
+#include "core/inc/driver.h"
+#include "core/inc/memory_region.h"
+
 namespace rocr {
+
+namespace core {
+
+class Queue;
+
+}
+
 namespace AMD {
 
 class KfdDriver : public core::Driver {
@@ -57,13 +67,33 @@ public:
   static hsa_status_t DiscoverDriver();
 
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
-  hsa_status_t GetMemoryProperties(uint32_t node_id,
-                                   core::MemProperties &mprops) const override;
-  hsa_status_t AllocateMemory(void **mem, size_t size, uint32_t node_id,
-                              core::MemFlags flags) override;
-  hsa_status_t FreeMemory(void *mem, uint32_t node_id) override;
+  hsa_status_t
+  GetMemoryProperties(uint32_t node_id,
+                      core::MemoryRegion &mem_region) const override;
+  hsa_status_t AllocateMemory(const core::MemoryRegion &mem_region,
+                              core::MemoryRegion::AllocateFlags alloc_flags,
+                              void **mem, size_t size,
+                              uint32_t node_id) override;
+  hsa_status_t FreeMemory(void *mem, size_t size) override;
   hsa_status_t CreateQueue(core::Queue &queue) override;
   hsa_status_t DestroyQueue(core::Queue &queue) const override;
+
+private:
+  /// @brief Allocate agent accessible memory (system / local memory).
+  static void *AllocateKfdMemory(const HsaMemFlags &flags, uint32_t node_id,
+                                 size_t size);
+
+  /// @brief Free agent accessible memory (system / local memory).
+  static bool FreeKfdMemory(void *mem, size_t size);
+
+  /// @brief Pin memory.
+  static bool MakeKfdMemoryResident(size_t num_node, const uint32_t *nodes,
+                                    const void *mem, size_t size,
+                                    uint64_t *alternate_va,
+                                    HsaMemMapFlags map_flag);
+
+  /// @brief Unpin memory.
+  static void MakeKfdMemoryUnresident(const void *mem);
 };
 
 } // namespace AMD

@@ -77,13 +77,6 @@ class MemoryRegion : public core::MemoryRegion {
     return reinterpret_cast<MemoryRegion*>(region.handle);
   }
 
-  /// @brief Allocate agent accessible memory (system / local memory).
-  static void* AllocateKfdMemory(const HsaMemFlags& flag, HSAuint32 node_id,
-                                 size_t size);
-
-  /// @brief Free agent accessible memory (system / local memory).
-  static bool FreeKfdMemory(void* ptr, size_t size);
-
   static bool RegisterMemory(void* ptr, size_t size, const HsaMemFlags& MemFlags);
 
   static void DeregisterMemory(void* ptr);
@@ -175,7 +168,15 @@ class MemoryRegion : public core::MemoryRegion {
 
   __forceinline size_t GetPageSize() const { return kPageSize_; }
 
- private:
+  __forceinline const HsaMemFlags &mem_flags() const { return mem_flag_; }
+  __forceinline const HsaMemMapFlags &map_flags() const { return map_flag_; }
+
+  void *fragment_alloc(size_t size) const {
+    return fragment_allocator_.alloc(size);
+  }
+  bool fragment_free(void *mem) const { return fragment_allocator_.free(mem); }
+
+private:
   const HsaMemoryProperties mem_props_;
 
   HsaMemFlags mem_flag_;

@@ -46,20 +46,13 @@
 #include <limits>
 #include <string>
 
-#include "core/inc/agent.h"
 #include "core/inc/memory_region.h"
 #include "inc/hsa.h"
 
 namespace rocr {
 namespace core {
 
-using MemFlags = uint32_t;
-
-struct MemProperties {
-  MemFlags flags_;
-  size_t size_bytes_;
-  uint64_t virtual_base_addr_;
-};
+class Queue;
 
 struct DriverVersionInfo {
   uint32_t major;
@@ -85,17 +78,27 @@ class Driver {
   /// @retval HSA_STATUS_SUCCESS if the kernel-model driver query was
   /// successful.
   virtual hsa_status_t QueryKernelModeDriver(DriverQuery query) = 0;
+
   /// @brief Open a connection to the driver using name_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
   hsa_status_t Open();
+
   /// @brief Close a connection to the open driver using fd_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
   hsa_status_t Close();
+
   /// @brief Get driver version information.
   /// @retval DriverVersionInfo containing the driver's version information.
-  DriverVersionInfo Version() const { return version_; }
+  const DriverVersionInfo &Version() const { return version_; }
 
-  virtual hsa_status_t GetMemoryProperties(uint32_t node_id, MemProperties &mprops) const = 0;
+  /// @brief Get the memory properties of a specific node.
+  /// @param node_id Node ID of the agent
+  /// @param[in, out] mem_region MemoryRegion object whose properties will be
+  /// retrieved.
+  /// @retval HSA_STATUS_SUCCESS if the driver sucessfully returns the node's
+  ///         memory properties.
+  virtual hsa_status_t GetMemoryProperties(uint32_t node_id,
+                                           MemoryRegion &mem_region) const = 0;
 
   /// @brief Allocate agent-accessible memory (system or agent-local memory).
   ///
@@ -103,10 +106,12 @@ class Driver {
   ///
   /// @retval HSA_STATUS_SUCCESS if memory was successfully allocated or
   /// hsa_status_t error code if the memory allocation failed.
-  virtual hsa_status_t AllocateMemory(void** mem, size_t size, uint32_t node_id,
-                                      MemFlags flags) = 0;
+  virtual hsa_status_t AllocateMemory(const MemoryRegion &mem_region,
+                                      MemoryRegion::AllocateFlags alloc_flags,
+                                      void **mem, size_t size,
+                                      uint32_t node_id) = 0;
 
-  virtual hsa_status_t FreeMemory(void* mem, uint32_t node_id) = 0;
+  virtual hsa_status_t FreeMemory(void *mem, size_t size) = 0;
 
   virtual hsa_status_t CreateQueue(Queue &queue) = 0;
 

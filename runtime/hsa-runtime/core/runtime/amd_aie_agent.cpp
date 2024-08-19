@@ -43,12 +43,14 @@
 #include "core/inc/amd_aie_agent.h"
 
 #include "core/inc/amd_aie_aql_queue.h"
+#include "core/inc/driver.h"
 
 namespace rocr {
 namespace AMD {
 
 AieAgent::AieAgent(uint32_t node)
-    : core::Agent(node, core::Agent::DeviceType::kAmdAieDevice),
+    : core::Agent(core::DriverType::XDNA, node,
+                  core::Agent::DeviceType::kAmdAieDevice),
       max_queues_(core::Runtime::runtime_singleton_->flag().max_queues()) {
   InitRegionList();
 }

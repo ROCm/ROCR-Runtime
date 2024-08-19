@@ -51,15 +51,16 @@
 
 #include "hsakmt/hsakmt.h"
 
-#include "core/inc/runtime.h"
 #include "core/inc/agent.h"
 #include "core/inc/blit.h"
-#include "core/inc/signal.h"
 #include "core/inc/cache.h"
+#include "core/inc/driver.h"
+#include "core/inc/runtime.h"
 #include "core/inc/scratch_cache.h"
-#include "core/util/small_heap.h"
-#include "core/util/locks.h"
+#include "core/inc/signal.h"
 #include "core/util/lazy_ptr.h"
+#include "core/util/locks.h"
+#include "core/util/small_heap.h"
 #include "pcs/pcs_runtime.h"
 
 namespace rocr {
@@ -72,142 +73,154 @@ typedef ScratchCache::ScratchInfo ScratchInfo;
 class GpuAgentInt : public core::Agent {
  public:
   // @brief Constructor
-  GpuAgentInt(uint32_t node_id)
-      : core::Agent(node_id,core::Agent::DeviceType::kAmdGpuDevice) {}
+   GpuAgentInt(uint32_t node_id)
+       : core::Agent(core::DriverType::KFD, node_id,
+                     core::Agent::DeviceType::kAmdGpuDevice) {}
 
-  // @brief Ensure blits are ready (performance hint).
-  virtual void PreloadBlits() {}
+   // @brief Ensure blits are ready (performance hint).
+   virtual void PreloadBlits() {}
 
-  // @brief Initialization hook invoked after tools library has loaded,
-  // to allow tools interception of interface functions.
-  //
-  // @retval HSA_STATUS_SUCCESS if initialization is successful.
-  virtual hsa_status_t PostToolsInit() = 0;
+   // @brief Initialization hook invoked after tools library has loaded,
+   // to allow tools interception of interface functions.
+   //
+   // @retval HSA_STATUS_SUCCESS if initialization is successful.
+   virtual hsa_status_t PostToolsInit() = 0;
 
-  // @brief Invoke the user provided callback for each region accessible by
-  // this agent.
-  //
-  // @param [in] include_peer If true, the callback will be also invoked on each
-  // peer memory region accessible by this agent. If false, only invoke the
-  // callback on memory region owned by this agent.
-  // @param [in] callback User provided callback function.
-  // @param [in] data User provided pointer as input for @p callback.
-  //
-  // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
-  // region returns ::HSA_STATUS_SUCCESS.
-  virtual hsa_status_t VisitRegion(bool include_peer,
-                                   hsa_status_t (*callback)(hsa_region_t region,
-                                                            void* data),
-                                   void* data) const = 0;
+   // @brief Invoke the user provided callback for each region accessible by
+   // this agent.
+   //
+   // @param [in] include_peer If true, the callback will be also invoked on
+   // each peer memory region accessible by this agent. If false, only invoke
+   // the callback on memory region owned by this agent.
+   // @param [in] callback User provided callback function.
+   // @param [in] data User provided pointer as input for @p callback.
+   //
+   // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
+   // region returns ::HSA_STATUS_SUCCESS.
+   virtual hsa_status_t
+   VisitRegion(bool include_peer,
+               hsa_status_t (*callback)(hsa_region_t region, void *data),
+               void *data) const = 0;
 
-  // @brief Carve scratch memory for main from scratch pool.
-  //
-  // @param [in/out] scratch Structure to be populated with the carved memory
-  // information.
-  virtual void AcquireQueueMainScratch(ScratchInfo& scratch) = 0;
+   // @brief Carve scratch memory for main from scratch pool.
+   //
+   // @param [in/out] scratch Structure to be populated with the carved memory
+   // information.
+   virtual void AcquireQueueMainScratch(ScratchInfo &scratch) = 0;
 
-  // @brief Carve scratch memory for alt from scratch pool.
-  //
-  // @param [in/out] scratch Structure to be populated with the carved memory
-  // information.
-  virtual void AcquireQueueAltScratch(ScratchInfo& scratch) = 0;
+   // @brief Carve scratch memory for alt from scratch pool.
+   //
+   // @param [in/out] scratch Structure to be populated with the carved memory
+   // information.
+   virtual void AcquireQueueAltScratch(ScratchInfo &scratch) = 0;
 
-  // @brief Release scratch memory from main back to scratch pool.
-  //
-  // @param [in/out] scratch Scratch memory previously acquired with call to
-  // ::AcquireQueueMainScratch.
-  virtual void ReleaseQueueMainScratch(ScratchInfo& base) = 0;
+   // @brief Release scratch memory from main back to scratch pool.
+   //
+   // @param [in/out] scratch Scratch memory previously acquired with call to
+   // ::AcquireQueueMainScratch.
+   virtual void ReleaseQueueMainScratch(ScratchInfo &base) = 0;
 
-  // @brief Release scratch memory back from alternate to scratch pool.
-  //
-  // @param [in/out] scratch Scratch memory  previously acquired with call to
-  // ::AcquireQueueAltcratch.
-  virtual void ReleaseQueueAltScratch(ScratchInfo& base) = 0;
+   // @brief Release scratch memory back from alternate to scratch pool.
+   //
+   // @param [in/out] scratch Scratch memory  previously acquired with call to
+   // ::AcquireQueueAltcratch.
+   virtual void ReleaseQueueAltScratch(ScratchInfo &base) = 0;
 
-  // @brief Translate the kernel start and end dispatch timestamp from agent
-  // domain to host domain.
-  //
-  // @param [in] signal Pointer to signal that provides the dispatch timing.
-  // @param [out] time Structure to be populated with the host domain value.
-  virtual void TranslateTime(core::Signal* signal,
-                             hsa_amd_profiling_dispatch_time_t& time) = 0;
+   // @brief Translate the kernel start and end dispatch timestamp from agent
+   // domain to host domain.
+   //
+   // @param [in] signal Pointer to signal that provides the dispatch timing.
+   // @param [out] time Structure to be populated with the host domain value.
+   virtual void TranslateTime(core::Signal *signal,
+                              hsa_amd_profiling_dispatch_time_t &time) = 0;
 
-  // @brief Translate the async copy start and end timestamp from agent
-  // domain to host domain.
-  //
-  // @param [in] signal Pointer to signal that provides the async copy timing.
-  // @param [out] time Structure to be populated with the host domain value.
-  virtual void TranslateTime(core::Signal* signal, hsa_amd_profiling_async_copy_time_t& time) = 0;
+   // @brief Translate the async copy start and end timestamp from agent
+   // domain to host domain.
+   //
+   // @param [in] signal Pointer to signal that provides the async copy timing.
+   // @param [out] time Structure to be populated with the host domain value.
+   virtual void TranslateTime(core::Signal *signal,
+                              hsa_amd_profiling_async_copy_time_t &time) = 0;
 
-  // @brief Translate timestamp agent domain to host domain.
-  //
-  // @param [out] time Timestamp in agent domain.
-  virtual uint64_t TranslateTime(uint64_t tick) = 0;
+   // @brief Translate timestamp agent domain to host domain.
+   //
+   // @param [out] time Timestamp in agent domain.
+   virtual uint64_t TranslateTime(uint64_t tick) = 0;
 
-  // @brief Invalidate caches on the agent which may hold code object data.
-  virtual void InvalidateCodeCaches() = 0;
+   // @brief Invalidate caches on the agent which may hold code object data.
+   virtual void InvalidateCodeCaches() = 0;
 
-  // @brief Sets the coherency type of this agent.
-  //
-  // @param [in] type New coherency type.
-  //
-  // @retval true The new coherency type is set successfuly.
-  virtual bool current_coherency_type(hsa_amd_coherency_type_t type) = 0;
+   // @brief Sets the coherency type of this agent.
+   //
+   // @param [in] type New coherency type.
+   //
+   // @retval true The new coherency type is set successfuly.
+   virtual bool current_coherency_type(hsa_amd_coherency_type_t type) = 0;
 
-  // @brief Returns the current coherency type of this agent.
-  //
-  // @retval Coherency type.
-  virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
+   // @brief Returns the current coherency type of this agent.
+   //
+   // @retval Coherency type.
+   virtual hsa_amd_coherency_type_t current_coherency_type() const = 0;
 
-  virtual void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) = 0;
+   virtual void RegisterGangPeer(core::Agent &gang_peer,
+                                 unsigned int bandwidth_factor) = 0;
 
-  virtual void RegisterRecSdmaEngIdMaskPeer(core::Agent& gang_peer, uint32_t rec_sdma_eng_id_mask) = 0;
+   virtual void RegisterRecSdmaEngIdMaskPeer(core::Agent &gang_peer,
+                                             uint32_t rec_sdma_eng_id_mask) = 0;
 
-  // @brief Query if agent represent Kaveri GPU.
-  //
-  // @retval true if agent is Kaveri GPU.
-  virtual bool is_kv_device() const = 0;
+   // @brief Query if agent represent Kaveri GPU.
+   //
+   // @retval true if agent is Kaveri GPU.
+   virtual bool is_kv_device() const = 0;
 
-  // @brief Query the agent HSA profile.
-  //
-  // @retval HSA profile.
-  virtual hsa_profile_t profile() const = 0;
+   // @brief Query the agent HSA profile.
+   //
+   // @retval HSA profile.
+   virtual hsa_profile_t profile() const = 0;
 
-  // @brief Query the agent memory bus width in bit.
-  //
-  // @retval Bus width in bit.
-  virtual uint32_t memory_bus_width() const = 0;
+   // @brief Query the agent memory bus width in bit.
+   //
+   // @retval Bus width in bit.
+   virtual uint32_t memory_bus_width() const = 0;
 
-  // @brief Query the agent memory maximum frequency in MHz.
-  //
-  // @retval Bus width in MHz.
-  virtual uint32_t memory_max_frequency() const = 0;
+   // @brief Query the agent memory maximum frequency in MHz.
+   //
+   // @retval Bus width in MHz.
+   virtual uint32_t memory_max_frequency() const = 0;
 
-  // @brief Whether agent supports asynchronous scratch reclaim. Depends on CP FW
-  virtual bool AsyncScratchReclaimEnabled() const = 0;
+   // @brief Whether agent supports asynchronous scratch reclaim. Depends on CP
+   // FW
+   virtual bool AsyncScratchReclaimEnabled() const = 0;
 
-  // @brief Update the agent's scratch use-once threshold.
-  // Only valid when async scratch reclaim is supported
-  // @retval HSA_STATUS_SUCCESS if successful
-  virtual hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) = 0;
+   // @brief Update the agent's scratch use-once threshold.
+   // Only valid when async scratch reclaim is supported
+   // @retval HSA_STATUS_SUCCESS if successful
+   virtual hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) = 0;
 
-  // @brief Iterate through supported PC Sampling configurations
-  // @retval HSA_STATUS_SUCCESS if successful
-  virtual hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
-                                               void* cb_data) = 0;
+   // @brief Iterate through supported PC Sampling configurations
+   // @retval HSA_STATUS_SUCCESS if successful
+   virtual hsa_status_t
+   PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
+                           void *cb_data) = 0;
 
-  virtual hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession &session) = 0;
 
-  virtual hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
-                                              pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
+                          pcs::PcsRuntime::PcSamplingSession &session) = 0;
 
-  virtual hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession &session) = 0;
 
-  virtual hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingStart(pcs::PcsRuntime::PcSamplingSession &session) = 0;
 
-  virtual hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingStop(pcs::PcsRuntime::PcSamplingSession &session) = 0;
 
-  virtual hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) = 0;
+   virtual hsa_status_t
+   PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession &session) = 0;
 };
 
 class GpuAgent : public GpuAgentInt {
