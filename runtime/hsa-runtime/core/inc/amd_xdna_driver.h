@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -39,42 +39,37 @@
 // DEALINGS WITH THE SOFTWARE.
 //
 ////////////////////////////////////////////////////////////////////////////////
+#ifndef HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
+#define HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
+
+#include <memory>
 
 #include "core/inc/driver.h"
 
-#include <fcntl.h>
-#include <unistd.h>
-
-#include "inc/hsa.h"
-
 namespace rocr {
-namespace core {
+namespace AMD {
 
-Driver::Driver(DriverType kernel_driver_type, std::string devnode_name)
-    : kernel_driver_type_(std::move(kernel_driver_type)),
-      devnode_name_(std::move(devnode_name)) {}
+class XdnaDriver : public core::Driver {
+public:
+  XdnaDriver() = delete;
+  XdnaDriver(std::string devnode_name);
 
-hsa_status_t Driver::Open()
-{
-  fd_  = open(devnode_name_.c_str(), O_RDWR | O_CLOEXEC);
-  if (fd_ < 0) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-  return HSA_STATUS_SUCCESS;
-}
+  static hsa_status_t DiscoverDriver();
+  hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 
-hsa_status_t Driver::Close()
-{
-  int ret(0);
-  if (fd_ > 0) {
-    ret = close(fd_);
-    fd_ = -1;
-  }
-  if (ret) {
-    return HSA_STATUS_ERROR;
-  }
-  return HSA_STATUS_SUCCESS;
-}
+  hsa_status_t GetMemoryProperties(uint32_t node_id,
+                                   core::MemProperties &mprops) const override;
+  hsa_status_t AllocateMemory(void **mem, size_t size, uint32_t node_id,
+                              core::MemFlags flags) override;
+  hsa_status_t FreeMemory(void *mem, uint32_t node_id) override;
+  hsa_status_t CreateQueue(core::Queue &queue) override;
+  hsa_status_t DestroyQueue(core::Queue &queue) const override;
 
-} // namespace core
+private:
+  hsa_status_t QueryDriverVersion();
+};
+
+} // namespace AMD
 } // namespace rocr
+
+#endif // header guard
