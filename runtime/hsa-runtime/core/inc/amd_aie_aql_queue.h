@@ -43,6 +43,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_HW_AQL_AIE_COMMAND_PROCESSOR_H_
 #define HSA_RUNTIME_CORE_INC_AMD_HW_AQL_AIE_COMMAND_PROCESSOR_H_
 
+#include <limits>
+
 #include "core/inc/amd_aie_agent.h"
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
@@ -114,28 +116,20 @@ public:
                   hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
                   hsa_signal_t *signal = NULL) override;
 
-  core::SharedQueue *shared_queue_;
-  core::SharedSignal *shared_signal_;
-  /// ID of the queue used in communication with the AMD AIR driver.
-  uint32_t queue_id_;
-  /// ID of the doorbell used in communication with the AMD AIR driver.
-  uint32_t doorbell_id_;
-  /// Pointer to the hardware doorbell for this queue.
-  uint64_t *hardware_doorbell_ptr_;
-  /// ID of AIE device on which this queue has been mapped.
-  uint32_t node_id_;
-  /// Queue size in bytes.
-  uint32_t queue_size_bytes_;
+  uint32_t queue_id_ = INVALID_QUEUEID;
+  /// @brief ID of AIE device on which this queue has been mapped.
+  uint32_t node_id_ = std::numeric_limits<uint32_t>::max();
+  /// @brief Queue size in bytes.
+  uint32_t queue_size_bytes_ = std::numeric_limits<uint32_t>::max();
 
 protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
 
 private:
-  core::SharedQueue *CreateSharedQueue(AieAgent *agent, size_t req_size_pkts,
-                                       uint32_t node_id);
-  core::SharedSignal *CreateSharedSignal(AieAgent *agent);
-
   AieAgent &agent_;
+
+  /// @brief Base of the queue's ring buffer storage.
+  void *ring_buf_ = nullptr;
 
   /// @brief Handle for an application context on the AIE device.
   ///
@@ -147,7 +141,8 @@ private:
   /// that multiple workloads with different core tile configurations can
   /// execute on the AIE agent at the same time.
   uint32_t hw_ctx_handle_ = std::numeric_limits<uint32_t>::max();
-  /// Indicates if queue is active.
+
+  /// @brief Indicates if queue is active.
   std::atomic<bool> active_;
   static int rtti_id_;
 };

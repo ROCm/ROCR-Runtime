@@ -72,11 +72,32 @@ AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
                          uint32_t node_id)
     : Queue(0, 0), LocalSignal(0, false), DoorbellSignal(signal()),
       agent_(*agent), active_(false) {
-  amd_queue_.hsa_queue.doorbell_signal = Signal::Convert(this);
-  amd_queue_.hsa_queue.size = 0x40;
+  if (agent_.device_type() != core::Agent::DeviceType::kAmdAieDevice) {
+    throw AMD::hsa_exception(
+        HSA_STATUS_ERROR_INVALID_AGENT,
+        "Attempting to create an AIE queue on a non-AIE agent.");
+  }
+  queue_size_bytes_ = req_size_pkts * sizeof(core::AqlPacket);
+  ring_buf_ = agent_.system_allocator()(queue_size_bytes_, 4096,
+                                        core::MemoryRegion::AllocateNoFlags);
 
-  signal_.hardware_doorbell_ptr =
-      reinterpret_cast<volatile uint64_t *>(hardware_doorbell_ptr_);
+  if (!ring_buf_) {
+    throw AMD::hsa_exception(
+        HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
+        "Could not allocate a ring buffer for an AIE queue.");
+  }
+
+  // Populate hsa_queue_t fields.
+  amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_SINGLE;
+  amd_queue_.hsa_queue.id = INVALID_QUEUEID;
+  amd_queue_.hsa_queue.doorbell_signal = Signal::Convert(this);
+  amd_queue_.hsa_queue.size = req_size_pkts;
+  amd_queue_.hsa_queue.base_address = ring_buf_;
+  // Populate AMD queue fields.
+  amd_queue_.write_dispatch_id = 0;
+  amd_queue_.read_dispatch_id = 0;
+
+  signal_.hardware_doorbell_ptr = nullptr;
   signal_.kind = AMD_SIGNAL_KIND_DOORBELL;
   signal_.queue_ptr = &amd_queue_;
   active_ = true;
@@ -198,26 +219,6 @@ hsa_status_t AieAqlQueue::GetInfo(hsa_queue_info_attribute_t attribute,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
   return HSA_STATUS_SUCCESS;
-}
-
-core::SharedQueue *AieAqlQueue::CreateSharedQueue(AieAgent *agent,
-                                                  size_t req_size_pkts,
-                                                  uint32_t node_id) {
-  queue_size_bytes_ = req_size_pkts * sizeof(core::AqlPacket);
-
-  if (!IsPowerOfTwo(queue_size_bytes_)) {
-    throw AMD::hsa_exception(
-        HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
-        "Requested queue with non-power of two packet capacity.\n");
-  }
-
-  node_id_ = node_id;
-
-  return nullptr;
-}
-
-core::SharedSignal *AieAqlQueue::CreateSharedSignal(AieAgent *agent) {
-  return nullptr;
 }
 
 hsa_status_t AieAqlQueue::GetCUMasking(uint32_t num_cu_mask_count,
