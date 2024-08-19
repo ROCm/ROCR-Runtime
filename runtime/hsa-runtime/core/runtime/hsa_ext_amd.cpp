@@ -49,17 +49,18 @@
 #include <map>
 #include <vector>
 
-#include "core/inc/runtime.h"
 #include "core/inc/agent.h"
+#include "core/inc/amd_aie_agent.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
-#include "core/inc/signal.h"
 #include "core/inc/default_signal.h"
+#include "core/inc/exceptions.h"
+#include "core/inc/intercept_queue.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/ipc_signal.h"
-#include "core/inc/intercept_queue.h"
-#include "core/inc/exceptions.h"
+#include "core/inc/runtime.h"
+#include "core/inc/signal.h"
 
 namespace rocr {
 
@@ -741,18 +742,29 @@ hsa_status_t hsa_amd_agent_iterate_memory_pools(
   const core::Agent* agent = core::Agent::Convert(agent_handle);
   IS_VALID(agent);
 
-  if (agent->device_type() == core::Agent::kAmdCpuDevice) {
-    return reinterpret_cast<const AMD::CpuAgent*>(agent)->VisitRegion(
-        false, reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
-                                                 void* data)>(callback),
+  switch (agent->device_type()) {
+  case core::Agent::kAmdCpuDevice:
+    return reinterpret_cast<const AMD::CpuAgent *>(agent)->VisitRegion(
+        false,
+        reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
+                                          void *data)>(callback),
         data);
+  case core::Agent::kAmdAieDevice:
+    return reinterpret_cast<const AMD::AieAgent *>(agent)->VisitRegion(
+        false,
+        reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
+                                          void *data)>(callback),
+        data);
+  case core::Agent::kAmdGpuDevice:
+    return reinterpret_cast<const AMD::GpuAgentInt *>(agent)->VisitRegion(
+        false,
+        reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool,
+                                          void *data)>(callback),
+        data);
+  default:
+    return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  return reinterpret_cast<const AMD::GpuAgentInt*>(agent)->VisitRegion(
-      false,
-      reinterpret_cast<hsa_status_t (*)(hsa_region_t memory_pool, void* data)>(
-          callback),
-      data);
   CATCH;
 }
 

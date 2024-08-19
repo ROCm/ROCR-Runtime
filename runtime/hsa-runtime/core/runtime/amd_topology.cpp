@@ -57,10 +57,11 @@
 
 #include "hsakmt/hsakmt.h"
 
-#include "core/inc/runtime.h"
+#include "core/inc/amd_aie_agent.h"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
+#include "core/inc/runtime.h"
 #include "core/util/utils.h"
 
 extern r_debug _amdgpu_r_debug;
@@ -168,6 +169,12 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
   if (enabled) gpu->Enable();
   core::Runtime::runtime_singleton_->RegisterAgent(gpu, enabled);
   return gpu;
+}
+
+AieAgent *DiscoverAie() {
+  AieAgent *aie = new AieAgent(0);
+  core::Runtime::runtime_singleton_->RegisterAgent(aie, true);
+  return aie;
 }
 
 void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
@@ -412,31 +419,41 @@ void BuildTopology() {
 }
 
 bool Load() {
+  bool gpu_found = true;
+  bool aie_found = false;
+
   // Open connection to kernel driver.
   if (hsaKmtOpenKFD() != HSAKMT_STATUS_SUCCESS) {
+    gpu_found = false;
+  }
+
+  if (!(gpu_found || aie_found)) {
     return false;
   }
-  MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
 
-  // Build topology table.
-  BuildTopology();
+  if (gpu_found) {
+    MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
 
-  // Register runtime and optionally enable the debugger
-  // BuildTopology calls hsaKmtAcquireSystemProperties() causes libhsakmt to cache topology
-  // information. So we need to call hsaKmtRuntimeEnable() after calling BuildTopology() so that
-  // Thunk can re-use it's cached copy instead of re-parsing whole system topology. Otherwise
-  // BuildTopology will cause libhsakmt to destroyed cached copy because it calls
-  // hsaKmtReleaseSystemProperties() at the beginning.
+    // Build topology table.
+    BuildTopology();
 
-  HSAKMT_STATUS err =
-      hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
-  if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED)) return false;
-  HSAuint32 caps_mask;
-  hsaKmtGetRuntimeCapabilities(&caps_mask);
-  core::Runtime::runtime_singleton_->KfdVersion(err != HSAKMT_STATUS_NOT_SUPPORTED,
-                                    !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
+    HSAKMT_STATUS err = hsaKmtRuntimeEnable(
+        &_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
+    if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED))
+      return false;
+    HSAuint32 caps_mask;
+    hsaKmtGetRuntimeCapabilities(&caps_mask);
+    core::Runtime::runtime_singleton_->KfdVersion(
+        err != HSAKMT_STATUS_NOT_SUPPORTED,
+        !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
 
-  kfd.Dismiss();
+    kfd.Dismiss();
+  }
+
+  if (aie_found) {
+    DiscoverAie();
+  }
+
   return true;
 }
 

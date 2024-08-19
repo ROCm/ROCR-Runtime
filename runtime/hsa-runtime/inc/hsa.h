@@ -802,18 +802,22 @@ typedef enum {
  * @brief Hardware device type.
  */
 typedef enum {
-    /**
-     * CPU device.
-     */
-    HSA_DEVICE_TYPE_CPU = 0,
-    /**
-     * GPU device.
-     */
-    HSA_DEVICE_TYPE_GPU = 1,
-    /**
-     * DSP device.
-     */
-    HSA_DEVICE_TYPE_DSP = 2
+  /**
+   * CPU device.
+   */
+  HSA_DEVICE_TYPE_CPU = 0,
+  /**
+   * GPU device.
+   */
+  HSA_DEVICE_TYPE_GPU = 1,
+  /**
+   * DSP device.
+   */
+  HSA_DEVICE_TYPE_DSP = 2,
+  /**
+   * AI Engine (AIE) device.
+   */
+  HSA_DEVICE_TYPE_AIE = 3
 } hsa_device_type_t;
 
 /**
