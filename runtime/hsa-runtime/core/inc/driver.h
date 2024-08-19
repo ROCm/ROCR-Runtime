@@ -74,6 +74,9 @@ class Driver {
   Driver(DriverType kernel_driver_type, std::string devnode_name);
   virtual ~Driver() = default;
 
+  /// @brief Initialize the driver's state after opening.
+  virtual hsa_status_t Init() = 0;
+
   /// @brief Query the kernel-model driver.
   /// @retval HSA_STATUS_SUCCESS if the kernel-model driver query was
   /// successful.
@@ -90,6 +93,13 @@ class Driver {
   /// @brief Get driver version information.
   /// @retval DriverVersionInfo containing the driver's version information.
   const DriverVersionInfo &Version() const { return version_; }
+
+  /// @brief Get the properties of a specific agent and initialize the agent
+  /// object.
+  /// @param agent Agent whose properties we're getting.
+  /// @retval HSA_STATUS_SUCCESS if the driver successfully returns the agent's
+  ///         properties.
+  virtual hsa_status_t GetAgentProperties(Agent &agent) const = 0;
 
   /// @brief Get the memory properties of a specific node.
   /// @param node_id Node ID of the agent
@@ -113,7 +123,7 @@ class Driver {
 
   virtual hsa_status_t FreeMemory(void *mem, size_t size) = 0;
 
-  virtual hsa_status_t CreateQueue(Queue &queue) = 0;
+  virtual hsa_status_t CreateQueue(Queue &queue) const = 0;
 
   virtual hsa_status_t DestroyQueue(Queue &queue) const = 0;
 

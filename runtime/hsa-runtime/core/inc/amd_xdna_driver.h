@@ -58,10 +58,14 @@ class XdnaDriver : public core::Driver {
 public:
   XdnaDriver() = delete;
   XdnaDriver(std::string devnode_name);
+  ~XdnaDriver();
 
   static hsa_status_t DiscoverDriver();
+
+  hsa_status_t Init() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 
+  hsa_status_t GetAgentProperties(core::Agent &agent) const override;
   hsa_status_t
   GetMemoryProperties(uint32_t node_id,
                       core::MemoryRegion &mem_region) const override;
@@ -70,11 +74,36 @@ public:
                               void **mem, size_t size,
                               uint32_t node_id) override;
   hsa_status_t FreeMemory(void *mem, size_t size) override;
-  hsa_status_t CreateQueue(core::Queue &queue) override;
+
+  /// @brief Creates a context on the AIE device for this queue.
+  /// @param queue Queue whose on-device context is being created.
+  /// @return hsa_status_t
+  hsa_status_t CreateQueue(core::Queue &queue) const override;
   hsa_status_t DestroyQueue(core::Queue &queue) const override;
 
 private:
   hsa_status_t QueryDriverVersion();
+  /// @brief Allocate device accesible heap space.
+  ///
+  /// Allocate and map a buffer object (BO) that the AIE device can access.
+  hsa_status_t InitDeviceHeap();
+  hsa_status_t FreeDeviceHeap();
+
+  /// @brief Virtual address range allocated for the device heap.
+  ///
+  /// Allocate a large enough space so we can carve out the device heap in
+  /// this range and ensure it is aligned to 64MB. Currently, AIE2 supports
+  /// 48MB device heap and it must be aligned to 64MB.
+  void *dev_heap_parent = nullptr;
+
+  /// @brief The aligned device heap.
+  void *dev_heap_aligned = nullptr;
+  static constexpr size_t dev_heap_size = 48 * 1024 * 1024;
+  static constexpr size_t dev_heap_align = 64 * 1024 * 1024;
+
+  /// @brief DRM buffer object handle for the device heap. Assigned by the
+  ///        kernel-mode driver.
+  uint32_t dev_heap_handle = 0;
 };
 
 } // namespace AMD
