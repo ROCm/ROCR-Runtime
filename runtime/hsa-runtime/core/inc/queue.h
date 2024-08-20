@@ -182,11 +182,13 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
   Queue(int mem_flags = 0) : LocalQueue(mem_flags), amd_queue_(queue()->amd_queue) {
     queue()->core_queue = this;
     public_handle_ = Convert(this);
+    pcie_write_ordering_ = false;
   }
 
   Queue(int agent_node_id, int mem_flags) : LocalQueue(agent_node_id, mem_flags), amd_queue_(queue()->amd_queue) {
     queue()->core_queue = this;
     public_handle_ = Convert(this);
+    pcie_write_ordering_ = false;
   }
 
   virtual ~Queue() {}
@@ -385,6 +387,10 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
 
   bool IsType(rtti_t id) { return _IsA(id); }
 
+  bool needsPcieOrdering() const { return pcie_write_ordering_; }
+
+  void setPcieOrdering(bool val) { pcie_write_ordering_ = val; }
+
  protected:
   static void set_public_handle(Queue* ptr, hsa_queue_t* handle) {
     ptr->do_set_public_handle(handle);
@@ -404,6 +410,8 @@ class Queue : public Checked<0xFA3906A679F9DB49>, private LocalQueue {
 
   // HSA Queue ID - used to bind a unique ID
   static std::atomic<uint64_t> hsa_queue_counter_;
+
+  bool pcie_write_ordering_;
 
   DISALLOW_COPY_AND_ASSIGN(Queue);
 };
