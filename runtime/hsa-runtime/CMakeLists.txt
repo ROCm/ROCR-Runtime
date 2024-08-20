@@ -47,6 +47,8 @@ cmake_minimum_required ( VERSION 3.7 )
 ## Need an update to CMake 3.12 to remove this hack. See CMake policy change CMP0073.
 unset ( hsa-runtime64_LIB_DEPENDS CACHE )
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 ## Set core runtime module name and project name.
 set ( CORE_RUNTIME_NAME "hsa-runtime64" )
 set ( CORE_RUNTIME_TARGET "${CORE_RUNTIME_NAME}" )
@@ -87,6 +89,7 @@ endif() # if (ROCM_CCACHE_BUILD)
 ## Find external dependencies.
 find_package(PkgConfig)
 find_package(LibElf REQUIRED)
+
 pkg_check_modules(drm REQUIRED IMPORTED_TARGET libdrm)
 
 ## Create the rocr target.

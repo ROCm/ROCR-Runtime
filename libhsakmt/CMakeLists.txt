@@ -25,6 +25,8 @@
 
 cmake_minimum_required ( VERSION 3.6.3 )
 
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
 set ( HSAKMT "hsakmt" )
 set ( HSAKMT_PACKAGE "hsakmt-roct" )
 set ( HSAKMT_COMPONENT "lib${HSAKMT}" )
@@ -37,6 +39,7 @@ project ( ${HSAKMT_TARGET} VERSION 1.9.0)
 if ( NOT DEFINED BUILD_SHARED_LIBS )
   set ( BUILD_SHARED_LIBS "off" )
 endif()
+set ( BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS} CACHE BOOL "Build shared library (.so) or not.")
 
 # Optionally, build HSAKMT with ccache.
 set(ROCM_CCACHE_BUILD OFF CACHE BOOL "Set to ON for a ccache enabled build")
@@ -134,7 +137,7 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/pc_sampling.c")
 
 ## Declare the library target name
-add_library ( ${HSAKMT_TARGET} "")
+add_library (${HSAKMT_TARGET} STATIC "")
 
 ## Add sources
 target_sources ( ${HSAKMT_TARGET} PRIVATE ${HSAKMT_SRC} )
@@ -278,43 +281,48 @@ configure_file ( libhsakmt.pc.in libhsakmt.pc @ONLY )
 
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig COMPONENT dev)
 
-## Create separate target file for static builds
-## In static builds, libdrm and libdrm_amdgpu need to be linked statically
-add_library ( ${HSAKMT_STATIC_DRM_TARGET}  STATIC ${HSAKMT_SRC})
+if ( NOT BUILD_SHARED_LIBS)
+  ## Create separate target file for static builds
+  ## In static builds, libdrm and libdrm_amdgpu need to be linked statically
+  add_library (${HSAKMT_STATIC_DRM_TARGET}  STATIC "")
+  target_sources (${HSAKMT_STATIC_DRM_TARGET} PRIVATE ${HSAKMT_SRC})
 
-target_include_directories( ${HSAKMT_STATIC_DRM_TARGET}
-  PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
-  PRIVATE
-  ${CMAKE_CURRENT_SOURCE_DIR}/src )
+  target_include_directories( ${HSAKMT_STATIC_DRM_TARGET}
+    PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
+    PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src )
 
-## Set the VERSION and SOVERSION values
-set_property(TARGET ${HSAKMT_STATIC_DRM_TARGET} PROPERTY LINK_FLAGS ${HSAKMT_LINK_FLAGS}
-             PROPERTY VERSION "${LIB_VERSION_STRING}"
-             PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
+  ## Set the VERSION and SOVERSION values
+  set_property(TARGET ${HSAKMT_STATIC_DRM_TARGET} PROPERTY LINK_FLAGS ${HSAKMT_LINK_FLAGS}
+              PROPERTY VERSION "${LIB_VERSION_STRING}"
+              PROPERTY SOVERSION "${LIB_VERSION_MAJOR}" )
 
-#Additional search path for static libraries
-if(${DISTRO_ID} MATCHES "ubuntu")
-    set(AMDGPU_STATIC_LIB_PATHS "-L/opt/amdgpu/lib/x86_64-linux-gnu")
-else()
-    set(AMDGPU_STATIC_LIB_PATHS "-L/opt/amdgpu/lib64" "-L/opt/amdgpu/lib")
+  #Additional search path for static libraries
+  if(${DISTRO_ID} MATCHES "ubuntu")
+      set(AMDGPU_STATIC_LIB_PATHS "-L/opt/amdgpu/lib/x86_64-linux-gnu")
+  else()
+      set(AMDGPU_STATIC_LIB_PATHS "-L/opt/amdgpu/lib64" "-L/opt/amdgpu/lib")
+  endif()
+  # Link drm_amdgpu and drm library statically
+  target_link_libraries ( ${HSAKMT_STATIC_DRM_TARGET}
+    PRIVATE pthread rt c numa ${CMAKE_DL_LIBS}
+    INTERFACE -Wl,-Bstatic ${AMDGPU_STATIC_LIB_PATHS} ${DRM_AMDGPU_LDFLAGS} ${DRM_LDFLAGS} -Wl,-Bdynamic
+  )
+  target_compile_options(${HSAKMT_STATIC_DRM_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
+
+  install ( TARGETS ${HSAKMT_STATIC_DRM_TARGET} EXPORT ${HSAKMT_STATIC_DRM_TARGET}Targets
+            ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary
+            LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary)
+  install ( EXPORT ${HSAKMT_STATIC_DRM_TARGET}Targets
+    FILE ${HSAKMT_STATIC_DRM_TARGET}Targets.cmake
+    NAMESPACE ${HSAKMT_STATIC_DRM_TARGET}::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HSAKMT_TARGET}
+    COMPONENT dev)
+
+  add_library( ${HSAKMT_STATIC_DRM_TARGET}::${HSAKMT_STATIC_DRM_TARGET} ALIAS ${HSAKMT_STATIC_DRM_TARGET} )
 endif()
-# Link drm_amdgpu and drm library statically
-target_link_libraries ( ${HSAKMT_STATIC_DRM_TARGET}
-  PRIVATE pthread rt c numa ${CMAKE_DL_LIBS}
-  INTERFACE -Wl,-Bstatic ${AMDGPU_STATIC_LIB_PATHS} ${DRM_AMDGPU_LDFLAGS} ${DRM_LDFLAGS} -Wl,-Bdynamic
-)
-target_compile_options(${HSAKMT_STATIC_DRM_TARGET} PRIVATE ${DRM_CFLAGS} ${HSAKMT_C_FLAGS})
-
-install ( TARGETS ${HSAKMT_STATIC_DRM_TARGET} EXPORT ${HSAKMT_STATIC_DRM_TARGET}Targets
-          ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT dev
-          LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT dev)
-install ( EXPORT ${HSAKMT_STATIC_DRM_TARGET}Targets
-  FILE ${HSAKMT_STATIC_DRM_TARGET}Targets.cmake
-  NAMESPACE ${HSAKMT_STATIC_DRM_TARGET}::
-  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/${HSAKMT_TARGET}
-  COMPONENT dev)
 
 ###########################
 # Packaging directives
