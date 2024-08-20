@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2021, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -247,6 +247,9 @@ class Flag {
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
     var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
     override_cpu_affinity_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_ALLOCATE_QUEUE_DEV_MEM");
+    dev_mem_queue_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -357,6 +360,7 @@ class Flag {
 
   size_t pc_sampling_max_device_buffer_size() const { return pc_sampling_max_device_buffer_size_; }
 
+  bool dev_mem_queue() const { return dev_mem_queue_; }
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -385,6 +389,7 @@ class Flag {
   bool image_print_srd_;
   bool enable_mwaitx_;
   bool enable_ipc_mode_legacy_;
+  bool dev_mem_queue_;
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;

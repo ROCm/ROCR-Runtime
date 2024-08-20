@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -344,6 +344,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   if (!core::Runtime::runtime_singleton_->flag().cu_mask_skip_init()) SetCUMasking(0, nullptr);
 
   active_ = true;
+  setPcieOrdering(agent->is_xgmi_cpu_gpu());
 
   PM4IBGuard.Dismiss();
   RingGuard.Dismiss();
@@ -727,10 +728,15 @@ void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
     ring_buf_alloc_bytes_ = queue_size_pkts * sizeof(core::AqlPacket);
     assert(IsMultipleOf(ring_buf_alloc_bytes_, 4096) && "Ring buffer sizes must be 4KiB aligned.");
 
-    ring_buf_ = agent_->system_allocator()(
-        ring_buf_alloc_bytes_, 0x1000,
-        core::MemoryRegion::AllocateExecutable |
-            (queue_full_workaround_ ? core::MemoryRegion::AllocateDoubleMap : 0));
+    if (core::Runtime::runtime_singleton_->flag().dev_mem_queue()) {
+      ring_buf_ = agent_->finegrain_allocator()(ring_buf_alloc_bytes_,
+                                                core::MemoryRegion::AllocateUncached);
+    } else {
+      ring_buf_ = agent_->system_allocator()(
+          ring_buf_alloc_bytes_, 0x1000,
+          core::MemoryRegion::AllocateExecutable |
+          (queue_full_workaround_ ? core::MemoryRegion::AllocateDoubleMap : 0));
+    }
 
     assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
 
@@ -751,7 +757,13 @@ void AqlQueue::FreeRegisteredRingBuffer() {
         (void*)(uintptr_t(ring_buf_) + (ring_buf_alloc_bytes_ / 2)));
 #endif
   } else {
-    agent_->system_deallocator()(ring_buf_);
+    if (ring_buf_) {
+      if (core::Runtime::runtime_singleton_->flag().dev_mem_queue()) {
+        agent_->finegrain_deallocator()(ring_buf_);
+      } else {
+        agent_->system_deallocator()(ring_buf_);
+      }
+    }
   }
 
   ring_buf_ = NULL;
@@ -1542,6 +1554,10 @@ void AqlQueue::ExecutePM4(uint32_t* cmd_data, size_t cmd_size_b, hsa_fence_scope
   // Overwrite the AQL invalid header (first dword) last.
   // This prevents the slot from being read until it's fully written.
   memcpy(&queue_slot[1], &slot_data[1], slot_size_b - sizeof(uint32_t));
+  if (core::Runtime::runtime_singleton_->flag().dev_mem_queue() && !agent_->is_xgmi_cpu_gpu()) {
+    // Ensure the packet body is written as header may get reordered when writing over PCIE
+    _mm_sfence();
+  }
   atomic::Store(&queue_slot[0], slot_data[0], std::memory_order_release);
 
   // Submit the packet slot.

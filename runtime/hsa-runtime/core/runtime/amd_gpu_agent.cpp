@@ -118,7 +118,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
       trap_handler_tma_region_(NULL),
-      pcs_hosttrap_data_() {
+      pcs_hosttrap_data_(),
+      xgmi_cpu_gpu_(false) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -218,6 +219,11 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   // Reported by libdrm in KHz.
   wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
 #endif
+
+  auto& firstCpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
+  auto linkInfo = core::Runtime::runtime_singleton_->GetLinkInfo(firstCpu->node_id(),
+                                                                node_id());
+  xgmi_cpu_gpu_ = (linkInfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI);
 
   // Populate region list.
   InitRegionList();
@@ -574,7 +580,7 @@ void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
   if (reserved_sz > MaxScratchDevice()) {
-    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n", 
+    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n",
                     reserved_sz, MaxScratchDevice());
     reserved_sz = MaxScratchDevice();
   }
