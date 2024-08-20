@@ -2130,7 +2130,7 @@ static HSAKMT_STATUS init_mmap_apertures(HSAuint64 base, HSAuint64 limit,
 		 * only apply to old GPUs that don't support 48-bit
 		 * virtual addresses.
 		 */
-		pr_info("Falling back to reserved SVM apertures due to alignment contraints.\n");
+		pr_info("Falling back to reserved SVM apertures due to alignment constraints.\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
