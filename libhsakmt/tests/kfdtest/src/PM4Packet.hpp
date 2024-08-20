@@ -35,13 +35,14 @@
 // @class PM4Packet: Marks a group of all PM4 packets
 class PM4Packet : public BasePacket {
  public:
-        PM4Packet(void) {}
+        PM4Packet(void): m_HeaderCountOffset(0) {}
         virtual ~PM4Packet(void) {}
 
         virtual PACKETTYPE PacketType() const { return PACKETTYPE_PM4; }
         unsigned int CalcCountValue() const;
 
  protected:
+        int m_HeaderCountOffset;
         void InitPM4Header(PM4_TYPE_3_HEADER &header, it_opcode_type opCode);
 };
 
@@ -89,7 +90,7 @@ class PM4ReleaseMemoryPacket : public PM4Packet {
     PM4ReleaseMemoryPacket(void): m_pPacketData(NULL) {}
     // This contructor will also init the packet, no need for additional calls
     PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling, uint64_t address, uint64_t data,
-                           bool is64bit = false, bool isTimeStamp = false);
+                           bool is64bit = false, bool isTimeStamp = false, int headerCountOffset = 0);
 
     virtual ~PM4ReleaseMemoryPacket(void) {}
     // @returns Packet size in bytes

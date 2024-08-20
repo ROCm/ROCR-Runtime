@@ -49,6 +49,7 @@ bool CheckEmuModeEnabled();
 bool GetHwCapabilityHWS();
 
 HSAKMT_STATUS CreateQueueTypeEvent(bool ManualReset, bool IsSignaled, unsigned int NodeId, HsaEvent** Event);
+HSAKMT_STATUS CreateHWExceptionEvent(bool ManualReset, bool IsSignaled, unsigned int NodeId, HsaEvent** Event);
 
 bool hsakmt_is_dgpu();
 bool isTonga(const HsaNodeProperties *props);

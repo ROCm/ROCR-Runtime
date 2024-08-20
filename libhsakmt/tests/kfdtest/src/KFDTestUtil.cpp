@@ -130,6 +130,21 @@ HSAKMT_STATUS CreateQueueTypeEvent(
     return hsaKmtCreateEvent(&Descriptor, ManualReset, IsSignaled, Event);
 }
 
+HSAKMT_STATUS CreateHWExceptionEvent(
+    bool                ManualReset,            // IN
+    bool                IsSignaled,             // IN
+    unsigned int        NodeId,                 // IN
+    HsaEvent**          Event                   // OUT
+    ) {
+    HsaEventDescriptor Descriptor;
+
+    Descriptor.EventType = HSA_EVENTTYPE_HW_EXCEPTION;
+    Descriptor.SyncVar.SyncVar.UserData = (void*)0xABCDABCD;
+    Descriptor.NodeId = NodeId;
+
+    return hsaKmtCreateEvent(&Descriptor, ManualReset, IsSignaled, Event);
+}
+
 static bool hsakmt_is_dgpu_dev = false;
 
 bool hsakmt_is_dgpu() {

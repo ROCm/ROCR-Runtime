@@ -35,7 +35,7 @@ unsigned int PM4Packet::CalcCountValue() const {
 }
 
 void PM4Packet::InitPM4Header(PM4_TYPE_3_HEADER &header, it_opcode_type opCode) {
-    header.count                    = CalcCountValue();
+    header.count                    = CalcCountValue() + m_HeaderCountOffset;
     header.opcode                 = opCode;
     header.type                      = PM4_TYPE_3;
     header.shaderType          = 1;  // compute
@@ -68,8 +68,10 @@ void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
 }
 
 PM4ReleaseMemoryPacket::PM4ReleaseMemoryPacket(unsigned int familyId, bool isPolling,
-                    uint64_t address, uint64_t data, bool is64bit, bool isTimeStamp):m_pPacketData(NULL) {
+                    uint64_t address, uint64_t data, bool is64bit, bool isTimeStamp,
+                    int headerCountOffset):m_pPacketData(NULL) {
     m_FamilyId = familyId;
+    m_HeaderCountOffset = headerCountOffset;
     if (familyId < FAMILY_AI)
         InitPacketCI(isPolling, address, data, is64bit, isTimeStamp);
     else if (familyId < FAMILY_NV)
