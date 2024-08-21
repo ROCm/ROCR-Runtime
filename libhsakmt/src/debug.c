@@ -417,13 +417,16 @@ static HSAKMT_STATUS dbg_trap_suspend_queues(uint32_t *queue_ids,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
+/* Debugger support has been in KFD ABI 1.13.  */
+#define KFD_MINOR_MIN_DEBUG 13
+
 HSAKMT_STATUS HSAKMTAPI hsaKmtDbgEnable(void **runtime_info,
 					     HSAuint32 *data_size)
 {
 	struct kfd_ioctl_dbg_trap_args args = {0};
 
 	CHECK_KFD_OPEN();
-	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	CHECK_KFD_MINOR_VERSION(KFD_MINOR_MIN_DEBUG);
 	*data_size = sizeof(struct kfd_runtime_info);
 	args.enable.rinfo_size = *data_size;
 	args.enable.dbg_fd = kfd_fd;
@@ -446,7 +449,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgDisable(void)
 	struct kfd_ioctl_dbg_trap_args args = {0};
 
 	CHECK_KFD_OPEN();
-	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	CHECK_KFD_MINOR_VERSION(KFD_MINOR_MIN_DEBUG);
 	args.enable.dbg_fd = kfd_fd;
 	args.op = KFD_IOC_DBG_TRAP_DISABLE;
 	args.pid = getpid();
@@ -464,7 +467,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgGetDeviceData(void **data,
 	HSAKMT_STATUS ret = HSAKMT_STATUS_NO_MEMORY;
 
 	CHECK_KFD_OPEN();
-	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	CHECK_KFD_MINOR_VERSION(KFD_MINOR_MIN_DEBUG);
 	*n_entries = UINT32_MAX;
 	*entry_size = sizeof(struct kfd_dbg_device_info_entry);
 	*data = malloc(*entry_size * *n_entries);
@@ -485,7 +488,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDbgGetQueueData(void **data,
 	uint32_t *queue_ids = NULL;
 
 	CHECK_KFD_OPEN();
-	CHECK_KFD_MINOR_VERSION(KFD_IOCTL_MINOR_VERSION);
+	CHECK_KFD_MINOR_VERSION(KFD_MINOR_MIN_DEBUG);
 	*entry_size = sizeof(struct kfd_queue_snapshot_entry);
 	*n_entries = 0;
 	if (dbg_trap_get_queue_data(NULL, n_entries, *entry_size, NULL))
