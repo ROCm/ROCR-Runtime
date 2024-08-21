@@ -268,7 +268,8 @@ struct LoadSegmentBuilder : public SegmentBuilder {
     size_t done = 0;
     ssize_t read;
     do {
-      read = pread(fd_, buf + done, buf_size - done, offset + done);
+      read = pread(fd_, static_cast<char *>(buf) + done, buf_size - done,
+                   offset + done);
 
       if (read == -1 && errno != EINTR) {
         perror("Failed to read GPU memory");
