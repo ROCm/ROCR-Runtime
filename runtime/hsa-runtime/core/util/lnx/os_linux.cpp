@@ -108,17 +108,18 @@ class os_thread {
       return;
     }
 
+    MAKE_SCOPE_GUARD([&]() {
+      if (pthread_attr_destroy(&attrib))
+        fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
+    });
+
     if (stackSize != 0) {
       stackSize = Max(uint(PTHREAD_STACK_MIN), stackSize);
       stackSize = AlignUp(stackSize, 4096);
       err = pthread_attr_setstacksize(&attrib, stackSize);
       if (err != 0) {
         fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
-        err = pthread_attr_destroy(&attrib);
-        if (err != 0) {
-          fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
-          return;
-        }
+        return;
       }
     }
 
@@ -144,33 +145,27 @@ class os_thread {
       }
     }
 
-    err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+    do {
+      err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+      if (!err) break;
 
-    // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
-    // Attempt to grow the stack within reason.
-    if ((err == EINVAL) && stackSize != 0) {
-      while (stackSize < 20 * 1024 * 1024) {
-        stackSize *= 2;
-        err = pthread_attr_setstacksize(&attrib, stackSize);
-        if (err != 0) {
-          fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
-          return;
-        }
-        err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
-        if (err != EINVAL) break;
-        debug_print("pthread_create returned EINVAL, doubling stack size\n");
+      if (err != EINVAL || stackSize == 0) {
+        fprintf(stderr, "pthread_create failed %d (%s)\n", errno, strerror(errno));
+        thread = 0;
+        return;
       }
-    }
 
-    if (err == 0)
-      args.release();
-    else
-      thread = 0;
+      // Probably a stack size error since system limits can be different from PTHREAD_STACK_MIN
+      // Attempt to grow the stack within reason.
+      stackSize *= 2;
+      if (pthread_attr_setstacksize(&attrib, stackSize)) {
+        fprintf(stderr, "pthread_attr_setstacksize failed: %s\n", strerror(err));
+        thread = 0;
+        return;
+      }
+    } while (stackSize < 20 * 1024 * 1024);
 
-    err = pthread_attr_destroy(&attrib);
-    if (err != 0) {
-      fprintf(stderr, "pthread_attr_destroy failed: %s\n", strerror(err));
-    }
+    args.release();
   }
 
   os_thread(os_thread&& rhs) {
