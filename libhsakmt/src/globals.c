@@ -27,19 +27,19 @@
 
 // HSAKMT global data
 
-int kfd_fd = -1;
-unsigned long kfd_open_count;
-unsigned long system_properties_count;
+int hsakmt_kfd_fd = -1;
+unsigned long hsakmt_kfd_open_count;
+unsigned long hsakmt_system_properties_count;
 pthread_mutex_t hsakmt_mutex = PTHREAD_MUTEX_INITIALIZER;
-bool is_dgpu;
+bool hsakmt_is_dgpu;
 
 #ifndef PAGE_SIZE
 int PAGE_SIZE;
 #endif
 
-int PAGE_SHIFT;
+int HSAKMT_PAGE_SHIFT;
 
 /* whether to check all dGPUs in the topology support SVM API */
-bool is_svm_api_supported;
+bool hsakmt_is_svm_api_supported;
 /* zfb is mainly used during emulation */
-int zfb_support;
+int hsakmt_zfb_support;

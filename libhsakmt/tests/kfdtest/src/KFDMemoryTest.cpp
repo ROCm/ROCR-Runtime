@@ -72,7 +72,7 @@ TEST_F(KFDMemoryTest, MMapLarge) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL)
 
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Test not supported on APU." << std::endl;
         return;
     }
@@ -298,7 +298,7 @@ TEST_F(KFDMemoryTest, AccessPPRMem) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    if (is_dgpu()) {
+    if (hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Test requires APU." << std::endl;
         return;
     }
@@ -440,7 +440,7 @@ TEST_F(KFDMemoryTest, MemoryRegister) {
 }
 
 TEST_F(KFDMemoryTest, MemoryRegisterSamePtr) {
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Will run on APU once APU+dGPU supported." << std::endl;
         return;
     }
@@ -709,7 +709,7 @@ void KFDMemoryTest::SearchLargestBuffer(int allocNode, const HsaMemFlags &memFla
  * the onerous memory swap operation. So we limit the buffer size that way.
  */
 TEST_F(KFDMemoryTest, LargestSysBufferTest) {
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
         return;
     }
@@ -737,7 +737,7 @@ TEST_F(KFDMemoryTest, LargestSysBufferTest) {
 }
 
 TEST_F(KFDMemoryTest, LargestVramBufferTest) {
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
         return;
     }
@@ -783,7 +783,7 @@ TEST_F(KFDMemoryTest, LargestVramBufferTest) {
  * performed on each buffer.
  */
 TEST_F(KFDMemoryTest, BigSysBufferStressTest) {
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Running on APU fails and locks the system." << std::endl;
         return;
     }
@@ -1103,7 +1103,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
     EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)hostBuffer.As<void*>());
     EXPECT_EQ(ptrInfo.SizeInBytes, (HSAuint64)hostBuffer.Size());
     EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 0);
-    if (is_dgpu()) {
+    if (hsakmt_is_dgpu()) {
         EXPECT_EQ((HSAuint64)ptrInfo.NMappedNodes, nGPU);
         // Check NMappedNodes again after unmapping the memory
         hsaKmtUnmapMemoryToGPU(hostBuffer.As<void*>());
@@ -1137,7 +1137,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
      * User pointers registered with SVM API, does not create vm_object_t.
      * Therefore, pointer info can not be queried.
      */
-    if (is_dgpu() && mem != hsaBuffer.As<void*>()) {
+    if (hsakmt_is_dgpu() && mem != hsaBuffer.As<void*>()) {
         EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[0]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
@@ -1164,7 +1164,7 @@ TEST_F(KFDMemoryTest, QueryPointerInfo) {
     EXPECT_SUCCESS(hsaKmtQueryPointerInfo(reinterpret_cast<void *>(address), &ptrInfo));
     EXPECT_EQ(ptrInfo.Type, HSA_POINTER_ALLOCATED);
     EXPECT_EQ(ptrInfo.CPUAddress, hostBuffer.As<void*>());
-    if (is_dgpu() && &mem[1] != hsaBuffer.As<HSAuint32 *>() + 1) {
+    if (hsakmt_is_dgpu() && &mem[1] != hsaBuffer.As<HSAuint32 *>() + 1) {
         EXPECT_SUCCESS(hsaKmtQueryPointerInfo((void *)(&mem[1]), &ptrInfo));
         EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_USER);
         EXPECT_EQ(ptrInfo.CPUAddress, &mem[0]);
@@ -1329,7 +1329,7 @@ TEST_F(KFDMemoryTest, PtraceAccess) {
 TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     char *hsaDebug = getenv("HSA_DEBUG");
 
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: There is no VRAM on APU." << std::endl;
         return;
     }
@@ -1476,7 +1476,7 @@ void CatchSignal(int IntrSignal) {
 TEST_F(KFDMemoryTest, SignalHandling) {
     TEST_START(TESTPROFILE_RUNALL)
 
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Test not supported on APU." << std::endl;
         return;
     }

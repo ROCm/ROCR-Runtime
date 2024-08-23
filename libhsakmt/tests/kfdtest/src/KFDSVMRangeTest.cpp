@@ -1321,7 +1321,7 @@ TEST_P(KFDSVMRangeTest, ReadOnlyRangeTest) {
         int childStatus;
 
         waitpid(pid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(true, WIFEXITED(childStatus));
             EXPECT_EQ(0, WEXITSTATUS(childStatus));
         } else {
@@ -1447,8 +1447,8 @@ unsigned int ReadSMIEventThread(void* p) {
     EXPECT_EQ(sscanf(msg, "%x %ld -%d @%lx(%d) %d->%x %x:%d %d\n", &event_id, &timestamp, &pid,
                      &addr, &size, &unused, &unused, &unused, &unused, &trigger), 10);
     EXPECT_EQ(event_id, HSA_SMI_EVENT_MIGRATE_START);
-    EXPECT_EQ((HSAuint64 *)(addr << PAGE_SHIFT), pArgs->pBuf);
-    EXPECT_EQ(size << PAGE_SHIFT, pArgs->BufSize);
+    EXPECT_EQ((HSAuint64 *)(addr << HSAKMT_PAGE_SHIFT), pArgs->pBuf);
+    EXPECT_EQ(size << HSAKMT_PAGE_SHIFT, pArgs->BufSize);
     EXPECT_EQ(pid, getpid());
     EXPECT_EQ(trigger, HSA_MIGRATE_TRIGGER_PREFETCH);
     close(fd);

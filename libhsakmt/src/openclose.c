@@ -42,19 +42,19 @@
 #include <dlfcn.h>
 #include <string.h>
 
-int (*fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle);
+int (*hsakmt_fn_amdgpu_device_get_fd)(HsaAMDGPUDeviceHandle device_handle);
 
 static const char kfd_device_name[] = "/dev/kfd";
 static pid_t parent_pid = -1;
 int hsakmt_debug_level;
 bool hsakmt_forked;
 
-/* is_forked_child detects when the process has forked since the last
+/* hsakmt_is_forked_child detects when the process has forked since the last
  * time this function was called. We cannot rely on pthread_atfork
  * because the process can fork without calling the fork function in
  * libc (using clone or calling the system call directly).
  */
-bool is_forked_child(void)
+bool hsakmt_is_forked_child(void)
 {
 	pid_t cur_pid;
 
@@ -99,15 +99,15 @@ static void child_fork_handler(void)
  */
 static void clear_after_fork(void)
 {
-	clear_process_doorbells();
-	clear_events_page();
-	fmm_clear_all_mem();
-	destroy_device_debugging_memory();
-	if (kfd_fd) {
-		close(kfd_fd);
-		kfd_fd = -1;
+	hsakmt_clear_process_doorbells();
+	hsakmt_clear_events_page();
+	hsakmt_fmm_clear_all_mem();
+	hsakmt_destroy_device_debugging_memory();
+	if (hsakmt_kfd_fd) {
+		close(hsakmt_kfd_fd);
+		hsakmt_kfd_fd = -1;
 	}
-	kfd_open_count = 0;
+	hsakmt_kfd_open_count = 0;
 	parent_pid = -1;
 	hsakmt_forked = false;
 }
@@ -117,7 +117,7 @@ static inline void init_page_size(void)
 #ifndef PAGE_SIZE
 	PAGE_SIZE = sysconf(_SC_PAGESIZE);
 #endif
-	PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
+	HSAKMT_PAGE_SHIFT = ffs(PAGE_SIZE) - 1;
 }
 
 static HSAKMT_STATUS init_vars_from_env(void)
@@ -141,7 +141,7 @@ static HSAKMT_STATUS init_vars_from_env(void)
 	/* Check whether to support Zero frame buffer */
 	envvar = getenv("HSA_ZFB");
 	if (envvar)
-		zfb_support = atoi(envvar);
+		hsakmt_zfb_support = atoi(envvar);
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -157,26 +157,26 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 	pthread_mutex_lock(&hsakmt_mutex);
 
 	/* If the process has forked, the child process must re-initialize
-	 * it's connection to KFD. Any references tracked by kfd_open_count
+	 * it's connection to KFD. Any references tracked by hsakmt_kfd_open_count
 	 * belong to the parent
 	 */
-	if (is_forked_child())
+	if (hsakmt_is_forked_child())
 		clear_after_fork();
 
-	if (kfd_open_count == 0) {
+	if (hsakmt_kfd_open_count == 0) {
 		static bool atfork_installed = false;
 
-		fn_amdgpu_device_get_fd = dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
+		hsakmt_fn_amdgpu_device_get_fd = dlsym(RTLD_DEFAULT, "amdgpu_device_get_fd");
 		if ((error = dlerror()) != NULL)
 			pr_err("amdgpu_device_get_fd is not available: %s\n", error);
 		else
-			pr_info("amdgpu_device_get_fd is available %p\n", fn_amdgpu_device_get_fd);
+			pr_info("amdgpu_device_get_fd is available %p\n", hsakmt_fn_amdgpu_device_get_fd);
 
 		result = init_vars_from_env();
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto open_failed;
 
-		if (kfd_fd < 0) {
+		if (hsakmt_kfd_fd < 0) {
 			fd = open(kfd_device_name, O_RDWR | O_CLOEXEC);
 
 			if (fd == -1) {
@@ -184,28 +184,28 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 				goto open_failed;
 			}
 
-			kfd_fd = fd;
+			hsakmt_kfd_fd = fd;
 		}
 
 		init_page_size();
 
-		result = init_kfd_version();
+		result = hsakmt_init_kfd_version();
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto kfd_version_failed;
 
 		useSvmStr = getenv("HSA_USE_SVM");
-		is_svm_api_supported = !(useSvmStr && !strcmp(useSvmStr, "0"));
+		hsakmt_is_svm_api_supported = !(useSvmStr && !strcmp(useSvmStr, "0"));
 
-		result = topology_sysfs_get_system_props(&sys_props);
+		result = hsakmt_topology_sysfs_get_system_props(&sys_props);
 		if (result != HSAKMT_STATUS_SUCCESS)
 			goto topology_sysfs_failed;
 
-		kfd_open_count = 1;
+		hsakmt_kfd_open_count = 1;
 
-		if (init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
+		if (hsakmt_init_device_debugging_memory(sys_props.NumNodes) != HSAKMT_STATUS_SUCCESS)
 			pr_warn("Insufficient Memory. Debugging unavailable\n");
 
-		init_counter_props(sys_props.NumNodes);
+		hsakmt_init_counter_props(sys_props.NumNodes);
 
 		if (!atfork_installed) {
 			/* Atfork handlers cannot be uninstalled and
@@ -219,7 +219,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 			atfork_installed = true;
 		}
 	} else {
-		kfd_open_count++;
+		hsakmt_kfd_open_count++;
 		result = HSAKMT_STATUS_KERNEL_ALREADY_OPENED;
 	}
 
@@ -240,10 +240,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCloseKFD(void)
 
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	if (kfd_open_count > 0)	{
-		if (--kfd_open_count == 0) {
-			destroy_counter_props();
-			destroy_device_debugging_memory();
+	if (hsakmt_kfd_open_count > 0)	{
+		if (--hsakmt_kfd_open_count == 0) {
+			hsakmt_destroy_counter_props();
+			hsakmt_destroy_device_debugging_memory();
 		}
 
 		result = HSAKMT_STATUS_SUCCESS;

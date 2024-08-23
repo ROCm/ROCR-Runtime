@@ -695,7 +695,7 @@ static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id,
 	}
 
 	/* Open DRM Render device */
-	ret_value = open_drm_render_device(drm_render_minor);
+	ret_value = hsakmt_open_drm_render_device(drm_render_minor);
 	if (ret_value > 0)
 		*is_node_supported = true;
 	else if (ret_value != -ENOENT && ret_value != -EPERM)
@@ -707,7 +707,7 @@ err:
 	return ret;
 }
 
-HSAKMT_STATUS topology_sysfs_get_system_props(HsaSystemProperties *props)
+HSAKMT_STATUS hsakmt_topology_sysfs_get_system_props(HsaSystemProperties *props)
 {
 	FILE *fd;
 	char *read_buf, *p;
@@ -818,16 +818,16 @@ static const struct hsa_gfxip_table *find_hsa_gfxip_device(uint16_t device_id, u
 	return NULL;
 }
 
-void topology_setup_is_dgpu_param(HsaNodeProperties *props)
+void hsakmt_topology_setup_is_dgpu_param(HsaNodeProperties *props)
 {
 	/* if we found a dGPU node, then treat the whole system as dGPU */
 	if (!props->NumCPUCores && props->NumFComputeCores)
-		is_dgpu = true;
+		hsakmt_is_dgpu = true;
 }
 
-bool topology_is_svm_needed(HSA_ENGINE_ID EngineId)
+bool hsakmt_topology_is_svm_needed(HSA_ENGINE_ID EngineId)
 {
-	if (is_dgpu)
+	if (hsakmt_is_dgpu)
 		return true;
 
 	if (HSA_GET_GFX_VERSION_FULL(EngineId.ui32) >= GFX_VERSION_VEGA10)
@@ -1195,7 +1195,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 			gfxv = (uint32_t)prop_val;
 	}
 
-	if (!is_svm_api_supported)
+	if (!hsakmt_is_svm_api_supported)
 		props->Capability.ui32.SVMAPISupported = 0;
 
 	/* Bail out early, if a CPU node */
@@ -1255,7 +1255,7 @@ static HSAKMT_STATUS topology_sysfs_get_node_props(uint32_t node_id,
 
 		/* Get VGPR/SGPR size in byte per CU */
 		props->SGPRSizePerCU = SGPR_SIZE_PER_CU;
-		props->VGPRSizePerCU = get_vgpr_size_per_cu(HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
+		props->VGPRSizePerCU = hsakmt_get_vgpr_size_per_cu(HSA_GET_GFX_VERSION_FULL(props->EngineId.ui32));
 
 	} else if (props->DeviceId)
 		/* still return success */
@@ -1957,7 +1957,7 @@ retry:
 	ret = topology_sysfs_get_generation(&gen_start);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		goto err;
-	ret = topology_sysfs_get_system_props(&sys_props);
+	ret = hsakmt_topology_sysfs_get_system_props(&sys_props);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		goto err;
 	if (sys_props.NumNodes > 0) {
@@ -2135,7 +2135,7 @@ void topology_drop_snapshot(void)
 	}
 }
 
-HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
+HSAKMT_STATUS hsakmt_validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 {
 	if (!g_props || !g_system || g_system->NumNodes <= nodeid)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
@@ -2145,7 +2145,7 @@ HSAKMT_STATUS validate_nodeid(uint32_t nodeid, uint32_t *gpu_id)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
+HSAKMT_STATUS hsakmt_gpuid_to_nodeid(uint32_t gpu_id, uint32_t *node_id)
 {
 	uint64_t node_idx;
 
@@ -2185,11 +2185,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *Syste
 
 	assert(g_system);
 
-	err = fmm_init_process_apertures(g_system->NumNodes);
+	err = hsakmt_fmm_init_process_apertures(g_system->NumNodes);
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto init_process_apertures_failed;
 
-	err = init_process_doorbells(g_system->NumNodes);
+	err = hsakmt_init_process_doorbells(g_system->NumNodes);
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto init_doorbells_failed;
 
@@ -2198,7 +2198,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAcquireSystemProperties(HsaSystemProperties *Syste
 	goto out;
 
 init_doorbells_failed:
-	fmm_destroy_process_apertures();
+	hsakmt_fmm_destroy_process_apertures();
 init_process_apertures_failed:
 	topology_drop_snapshot();
 
@@ -2211,8 +2211,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtReleaseSystemProperties(void)
 {
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	destroy_process_doorbells();
-	fmm_destroy_process_apertures();
+	hsakmt_destroy_process_doorbells();
+	hsakmt_fmm_destroy_process_apertures();
 	topology_drop_snapshot();
 
 	pthread_mutex_unlock(&hsakmt_mutex);
@@ -2220,7 +2220,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtReleaseSystemProperties(void)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS topology_get_node_props(HSAuint32 NodeId,
+HSAKMT_STATUS hsakmt_topology_get_node_props(HSAuint32 NodeId,
 				      HsaNodeProperties *NodeProperties)
 {
 	if (!g_system || !g_props || NodeId >= g_system->NumNodes)
@@ -2242,21 +2242,21 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeProperties(HSAuint32 NodeId,
 	CHECK_KFD_OPEN();
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	err = validate_nodeid(NodeId, &gpu_id);
+	err = hsakmt_validate_nodeid(NodeId, &gpu_id);
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
-	err = topology_get_node_props(NodeId, NodeProperties);
+	err = hsakmt_topology_get_node_props(NodeId, NodeProperties);
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 	/* For CPU only node don't add any additional GPU memory banks. */
 	if (gpu_id) {
 		uint64_t base, limit;
-		if (is_dgpu)
+		if (hsakmt_is_dgpu)
 			NodeProperties->NumMemoryBanks += NUM_OF_DGPU_HEAPS;
 		else
 			NodeProperties->NumMemoryBanks += NUM_OF_IGPU_HEAPS;
-		if (fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id, &base,
+		if (hsakmt_fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id, &base,
 				&limit) == HSAKMT_STATUS_SUCCESS)
 			NodeProperties->NumMemoryBanks += 1;
 	}
@@ -2280,7 +2280,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	CHECK_KFD_OPEN();
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	err = validate_nodeid(NodeId, &gpu_id);
+	err = hsakmt_validate_nodeid(NodeId, &gpu_id);
 	if (err != HSAKMT_STATUS_SUCCESS)
 		goto out;
 
@@ -2297,7 +2297,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 
 	/*Add LDS*/
 	if (i < NumBanks &&
-		fmm_get_aperture_base_and_limit(FMM_LDS, gpu_id,
+		hsakmt_fmm_get_aperture_base_and_limit(FMM_LDS, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_LDS;
 		MemoryProperties[i].SizeInBytes = g_props[NodeId].node.LDSSizeInKB * 1024;
@@ -2308,9 +2308,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	 * For dGPU the topology node contains Local Memory and it is added by
 	 * the for loop above
 	 */
-	if (get_gfxv_by_node_id(NodeId) == GFX_VERSION_KAVERI && i < NumBanks &&
+	if (hsakmt_get_gfxv_by_node_id(NodeId) == GFX_VERSION_KAVERI && i < NumBanks &&
 		g_props[NodeId].node.LocalMemSize > 0 &&
-		fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
+		hsakmt_fmm_get_aperture_base_and_limit(FMM_GPUVM, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE;
 		MemoryProperties[i].SizeInBytes = g_props[NodeId].node.LocalMemSize;
@@ -2319,7 +2319,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 
 	/* Add SCRATCH */
 	if (i < NumBanks &&
-		fmm_get_aperture_base_and_limit(FMM_SCRATCH, gpu_id,
+		hsakmt_fmm_get_aperture_base_and_limit(FMM_SCRATCH, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_GPU_SCRATCH;
 		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
@@ -2327,8 +2327,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 	}
 
 	/* Add SVM aperture */
-	if (topology_is_svm_needed(g_props[NodeId].node.EngineId) && i < NumBanks &&
-	    fmm_get_aperture_base_and_limit(
+	if (hsakmt_topology_is_svm_needed(g_props[NodeId].node.EngineId) && i < NumBanks &&
+	    hsakmt_fmm_get_aperture_base_and_limit(
 		    FMM_SVM, gpu_id, &MemoryProperties[i].VirtualBaseAddress,
 		    &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_DEVICE_SVM;
@@ -2338,7 +2338,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeMemoryProperties(HSAuint32 NodeId,
 
 	/* Add mmio aperture */
 	if (i < NumBanks &&
-		fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id,
+		hsakmt_fmm_get_aperture_base_and_limit(FMM_MMIO, gpu_id,
 				&MemoryProperties[i].VirtualBaseAddress, &aperture_limit) == HSAKMT_STATUS_SUCCESS) {
 		MemoryProperties[i].HeapType = HSA_HEAPTYPE_MMIO_REMAP;
 		MemoryProperties[i].SizeInBytes = (aperture_limit - MemoryProperties[i].VirtualBaseAddress) + 1;
@@ -2387,7 +2387,7 @@ out:
 	return err;
 }
 
-HSAKMT_STATUS topology_get_iolink_props(HSAuint32 NodeId,
+HSAKMT_STATUS hsakmt_topology_get_iolink_props(HSAuint32 NodeId,
 					HSAuint32 NumIoLinks,
 					HsaIoLinkProperties *IoLinkProperties)
 {
@@ -2425,19 +2425,19 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetNodeIoLinkProperties(HSAuint32 NodeId,
 	}
 
 	assert(g_props[NodeId].link);
-	err = topology_get_iolink_props(NodeId, NumIoLinks, IoLinkProperties);
+	err = hsakmt_topology_get_iolink_props(NodeId, NumIoLinks, IoLinkProperties);
 
 out:
 	pthread_mutex_unlock(&hsakmt_mutex);
 	return err;
 }
 
-uint32_t get_gfxv_by_node_id(HSAuint32 node_id)
+uint32_t hsakmt_get_gfxv_by_node_id(HSAuint32 node_id)
 {
 	return HSA_GET_GFX_VERSION_FULL(g_props[node_id].node.EngineId.ui32);
 }
 
-uint16_t get_device_id_by_node_id(HSAuint32 node_id)
+uint16_t hsakmt_get_device_id_by_node_id(HSAuint32 node_id)
 {
 	if (!g_props || !g_system || g_system->NumNodes <= node_id)
 		return 0;
@@ -2445,14 +2445,14 @@ uint16_t get_device_id_by_node_id(HSAuint32 node_id)
 	return g_props[node_id].node.DeviceId;
 }
 
-bool prefer_ats(HSAuint32 node_id)
+bool hsakmt_prefer_ats(HSAuint32 node_id)
 {
 	return g_props[node_id].node.Capability.ui32.HSAMMUPresent
 			&& g_props[node_id].node.NumCPUCores
 			&& g_props[node_id].node.NumFComputeCores;
 }
 
-uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
+uint16_t hsakmt_get_device_id_by_gpu_id(HSAuint32 gpu_id)
 {
 	unsigned int i;
 
@@ -2467,7 +2467,7 @@ uint16_t get_device_id_by_gpu_id(HSAuint32 gpu_id)
 	return 0;
 }
 
-uint32_t get_direct_link_cpu(uint32_t gpu_node)
+uint32_t hsakmt_get_direct_link_cpu(uint32_t gpu_node)
 {
 	HSAuint64 size = 0;
 	int32_t cpu_id;
@@ -2486,7 +2486,7 @@ uint32_t get_direct_link_cpu(uint32_t gpu_node)
 }
 
 
-HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
+HSAKMT_STATUS hsakmt_validate_nodeid_array(uint32_t **gpu_id_array,
 		uint32_t NumberOfNodes, uint32_t *NodeArray)
 {
 	HSAKMT_STATUS ret;
@@ -2500,7 +2500,7 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 	if (!(*gpu_id_array))
 		return HSAKMT_STATUS_NO_MEMORY;
 	for (i = 0; i < NumberOfNodes; i++) {
-		ret = validate_nodeid(NodeArray[i], *gpu_id_array + i);
+		ret = hsakmt_validate_nodeid(NodeArray[i], *gpu_id_array + i);
 		if (ret != HSAKMT_STATUS_SUCCESS) {
 			free(*gpu_id_array);
 			break;
@@ -2510,7 +2510,7 @@ HSAKMT_STATUS validate_nodeid_array(uint32_t **gpu_id_array,
 	return ret;
 }
 
-inline uint32_t get_num_sysfs_nodes(void)
+inline uint32_t hsakmt_get_num_sysfs_nodes(void)
 {
 	return num_sysfs_nodes;
 }

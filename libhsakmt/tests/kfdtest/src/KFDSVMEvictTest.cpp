@@ -57,7 +57,7 @@ void KFDSVMEvictTest::TearDown() {
 }
 
 HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBufSize) {
-    HSAuint64 vramBufSizeInPages = vramBufSize >> PAGE_SHIFT;
+    HSAuint64 vramBufSizeInPages = vramBufSize >> HSAKMT_PAGE_SHIFT;
     HSAuint64 sysMemSize = GetSysMemSize();
     HSAuint64 size, sizeInPages;
     HSAuint32 count;
@@ -79,7 +79,7 @@ HSAint32 KFDSVMEvictTest::GetBufferCounter(HSAuint64 vramSize, HSAuint64 vramBuf
     if (!xnack_enable && size > (sysMemSize - (sysMemSize >> 4)))
         return 0;
 
-    sizeInPages = size >> PAGE_SHIFT;
+    sizeInPages = size >> HSAKMT_PAGE_SHIFT;
     count = sizeInPages / (vramBufSizeInPages * N_PROCESSES);
 
     return count;
@@ -105,10 +105,10 @@ HSAint64 KFDSVMEvictTest::GetBufferSize(HSAuint64 vramSize, HSAuint32 count,
     if (!xnack_enable && size > (sysMemSize - (sysMemSize >> 4)))
         return 0;
 
-    sizeInPages = size >> PAGE_SHIFT;
+    sizeInPages = size >> HSAKMT_PAGE_SHIFT;
     vramBufSizeInPages = sizeInPages / (count * N_PROCESSES);
 
-    return vramBufSizeInPages << PAGE_SHIFT;
+    return vramBufSizeInPages << HSAKMT_PAGE_SHIFT;
 }
 
 void KFDSVMEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,

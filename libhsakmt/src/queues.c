@@ -41,7 +41,7 @@
 #define DOORBELLS_PAGE_SIZE(ds)	(1024 * (ds))
 
 #define WG_CONTEXT_DATA_SIZE_PER_CU(gfxv) 		\
-	(get_vgpr_size_per_cu(gfxv) + SGPR_SIZE_PER_CU +	\
+	(hsakmt_get_vgpr_size_per_cu(gfxv) + SGPR_SIZE_PER_CU +	\
 	 LDS_SIZE_PER_CU + HWREG_SIZE_PER_CU)
 
 #define CNTL_STACK_BYTES_PER_WAVE(gfxv)	\
@@ -84,7 +84,7 @@ struct process_doorbells {
 static unsigned int num_doorbells;
 static struct process_doorbells *doorbells;
 
-uint32_t get_vgpr_size_per_cu(uint32_t gfxv)
+uint32_t hsakmt_get_vgpr_size_per_cu(uint32_t gfxv)
 {
 	uint32_t vgpr_size = 0x40000;
 
@@ -102,7 +102,7 @@ uint32_t get_vgpr_size_per_cu(uint32_t gfxv)
 	return vgpr_size;
 }
 
-HSAKMT_STATUS init_process_doorbells(unsigned int NumNodes)
+HSAKMT_STATUS hsakmt_init_process_doorbells(unsigned int NumNodes)
 {
 	unsigned int i;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -133,8 +133,8 @@ static void get_doorbell_map_info(uint32_t node_id,
 	 * GPUVM doorbell on Tonga requires a workaround for VM TLB ACTIVE bit
 	 * lookup bug. Remove ASIC check when this is implemented in amdgpu.
 	 */
-	uint32_t gfxv = get_gfxv_by_node_id(node_id);
-	doorbell->use_gpuvm = (is_dgpu && gfxv != GFX_VERSION_TONGA);
+	uint32_t gfxv = hsakmt_get_gfxv_by_node_id(node_id);
+	doorbell->use_gpuvm = (hsakmt_is_dgpu && gfxv != GFX_VERSION_TONGA);
 	doorbell->size = DOORBELLS_PAGE_SIZE(DOORBELL_SIZE(gfxv));
 
 	if (doorbell->size < (uint32_t) PAGE_SIZE) {
@@ -144,7 +144,7 @@ static void get_doorbell_map_info(uint32_t node_id,
 	return;
 }
 
-void destroy_process_doorbells(void)
+void hsakmt_destroy_process_doorbells(void)
 {
 	unsigned int i;
 
@@ -156,8 +156,8 @@ void destroy_process_doorbells(void)
 			continue;
 
 		if (doorbells[i].use_gpuvm) {
-			fmm_unmap_from_gpu(doorbells[i].mapping);
-			fmm_release(doorbells[i].mapping);
+			hsakmt_fmm_unmap_from_gpu(doorbells[i].mapping);
+			hsakmt_fmm_release(doorbells[i].mapping);
 		} else
 			munmap(doorbells[i].mapping, doorbells[i].size);
 	}
@@ -170,7 +170,7 @@ void destroy_process_doorbells(void)
 /* This is a special funcion that should be called only from the child process
  * after a fork(). This will clear doorbells duplicated from the parent.
  */
-void clear_process_doorbells(void)
+void hsakmt_clear_process_doorbells(void)
 {
 	unsigned int i;
 
@@ -196,7 +196,7 @@ static HSAKMT_STATUS map_doorbell_apu(HSAuint32 NodeId, HSAuint32 gpu_id,
 	void *ptr;
 
 	ptr = mmap(0, doorbells[NodeId].size, PROT_READ|PROT_WRITE,
-		   MAP_SHARED, kfd_fd, doorbell_mmap_offset);
+		   MAP_SHARED, hsakmt_kfd_fd, doorbell_mmap_offset);
 
 	if (ptr == MAP_FAILED)
 		return HSAKMT_STATUS_ERROR;
@@ -211,15 +211,15 @@ static HSAKMT_STATUS map_doorbell_dgpu(HSAuint32 NodeId, HSAuint32 gpu_id,
 {
 	void *ptr;
 
-	ptr = fmm_allocate_doorbell(gpu_id, doorbells[NodeId].size,
+	ptr = hsakmt_fmm_allocate_doorbell(gpu_id, doorbells[NodeId].size,
 				doorbell_mmap_offset);
 
 	if (!ptr)
 		return HSAKMT_STATUS_ERROR;
 
 	/* map for GPU access */
-	if (fmm_map_to_gpu(ptr, doorbells[NodeId].size, NULL)) {
-		fmm_release(ptr);
+	if (hsakmt_fmm_map_to_gpu(ptr, doorbells[NodeId].size, NULL)) {
+		hsakmt_fmm_release(ptr);
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -316,7 +316,7 @@ static bool update_ctx_save_restore_size(uint32_t nodeid, struct queue *q)
 	return false;
 }
 
-void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t gpu_id,
+void *hsakmt_allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t gpu_id,
 				       uint32_t NodeId, bool nonPaged,
 				       bool DeviceLocal,
 				       bool Uncached)
@@ -336,8 +336,8 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 
 	size = ALIGN_UP(size, align);
 
-	if (DeviceLocal && !zfb_support)
-		mem = fmm_allocate_device(gpu_id, NodeId, mem, size, 0, flags);
+	if (DeviceLocal && !hsakmt_zfb_support)
+		mem = hsakmt_fmm_allocate_device(gpu_id, NodeId, mem, size, 0, flags);
 	else {
 		/* VRAM under ZFB mode should be supported here without any
 		 * additional code
@@ -346,13 +346,13 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 		 * nonPaged=0 system memory allocation uses GTT path
 		 */
 		if (!nonPaged) {
-			cpu_id = get_direct_link_cpu(NodeId);
+			cpu_id = hsakmt_get_direct_link_cpu(NodeId);
 			if (cpu_id == INVALID_NODEID) {
 				flags.ui32.NoNUMABind = 1;
 				cpu_id = 0;
 			}
 		}
-		mem = fmm_allocate_host(gpu_id, cpu_id, mem, size, 0, flags);
+		mem = hsakmt_fmm_allocate_host(gpu_id, cpu_id, mem, size, 0, flags);
 	}
 
 	if (!mem) {
@@ -383,7 +383,7 @@ void *allocate_exec_aligned_memory_gpu(uint32_t size, uint32_t align, uint32_t g
 	return mem;
 }
 
-void free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
+void hsakmt_free_exec_aligned_memory_gpu(void *addr, uint32_t size, uint32_t align)
 {
 	size = ALIGN_UP(size, align);
 
@@ -403,7 +403,7 @@ static void *allocate_exec_aligned_memory(uint32_t size,
 					  bool Uncached)
 {
 	if (!use_ats)
-		return allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, gpu_id, NodeId,
+		return hsakmt_allocate_exec_aligned_memory_gpu(size, PAGE_SIZE, gpu_id, NodeId,
 							nonPaged, DeviceLocal,
 							Uncached);
 	return allocate_exec_aligned_memory_cpu(size);
@@ -413,7 +413,7 @@ static void free_exec_aligned_memory(void *addr, uint32_t size, uint32_t align,
 				     bool use_ats)
 {
 	if (!use_ats)
-		free_exec_aligned_memory_gpu(addr, size, align);
+		hsakmt_free_exec_aligned_memory_gpu(addr, size, align);
 	else
 		munmap(addr, size);
 }
@@ -534,13 +534,13 @@ static int handle_concrete_asic(struct queue *q,
 		/* Allocate unified memory for context save restore
 		 * area on dGPU.
 		 */
-		if (!q->use_ats && is_svm_api_supported) {
+		if (!q->use_ats && hsakmt_is_svm_api_supported) {
 			uint32_t size = PAGE_ALIGN_UP(q->total_mem_alloc_size);
 			void *addr;
 			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
 
 			pr_info("Allocating GTT for CWSR\n");
-			addr = mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+			addr = hsakmt_mmap_allocate_aligned(PROT_READ | PROT_WRITE,
 						     MAP_ANONYMOUS | MAP_PRIVATE,
 						     size, GPU_HUGE_PAGE_SIZE, 0,
 						     0, (void *)LONG_MAX);
@@ -634,7 +634,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
 		Priority > HSA_QUEUE_PRIORITY_MAXIMUM)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	result = validate_nodeid(NodeId, &gpu_id);
+	result = hsakmt_validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
@@ -645,7 +645,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
 
 	memset(q, 0, sizeof(*q));
 
-	q->gfxv = get_gfxv_by_node_id(NodeId);
+	q->gfxv = hsakmt_get_gfxv_by_node_id(NodeId);
 	q->use_ats = false;
 
 	if (q->gfxv == GFX_VERSION_TONGA)
@@ -711,7 +711,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
 	args.queue_priority = priority_map[Priority+3];
 	args.sdma_engine_id = SdmaEngineId;
 
-	err = kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
+	err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_CREATE_QUEUE, &args);
 
 	if (err == -1) {
 		free_queue(q);
@@ -776,7 +776,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUpdateQueue(HSA_QUEUEID QueueId,
 	arg.queue_percentage = QueuePercentage;
 	arg.queue_priority = priority_map[Priority+3];
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_UPDATE_QUEUE, &arg);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_UPDATE_QUEUE, &arg);
 
 	if (err == -1)
 		return HSAKMT_STATUS_ERROR;
@@ -796,7 +796,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyQueue(HSA_QUEUEID QueueId)
 
 	args.queue_id = q->queue_id;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_QUEUE, &args);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_DESTROY_QUEUE, &args);
 
 	if (err == -1) {
 		pr_err("Failed to destroy queue: %s\n", strerror(errno));
@@ -823,7 +823,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetQueueCUMask(HSA_QUEUEID QueueId,
 	args.num_cu_mask = CUMaskCount;
 	args.cu_mask_ptr = (uintptr_t)QueueCUMask;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_CU_MASK, &args);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_CU_MASK, &args);
 
 	if (err == -1)
 		return HSAKMT_STATUS_ERROR;
@@ -855,7 +855,7 @@ hsaKmtGetQueueInfo(
 	args.queue_id = q->queue_id;
 	args.ctl_stack_address = (uintptr_t)q->ctx_save_restore;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_QUEUE_WAVE_STATE, &args) < 0)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_QUEUE_WAVE_STATE, &args) < 0)
 		return HSAKMT_STATUS_ERROR;
 
 	QueueInfo->ControlStackTop = (void *)(args.ctl_stack_address +
@@ -885,7 +885,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
 
 	CHECK_KFD_OPEN();
 
-	result = validate_nodeid(Node, &gpu_id);
+	result = hsakmt_validate_nodeid(Node, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
@@ -893,12 +893,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetTrapHandler(HSAuint32 Node,
 	args.tba_addr = (uintptr_t)TrapHandlerBaseAddress;
 	args.tma_addr = (uintptr_t)TrapBufferBaseAddress;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_TRAP_HANDLER, &args);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_TRAP_HANDLER, &args);
 
 	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 }
 
-uint32_t *convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues)
+uint32_t *hsakmt_convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues)
 {
 	uint32_t *queue_ids_ptr;
 	unsigned int i;
@@ -930,7 +930,7 @@ hsaKmtAllocQueueGWS(
 	args.queue_id = (HSAuint32)q->queue_id;
 	args.num_gws = nGWS;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_QUEUE_GWS, &args);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_ALLOC_QUEUE_GWS, &args);
 
 	if (!err && firstGWS)
 		*firstGWS = args.first_gws;

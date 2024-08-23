@@ -197,7 +197,7 @@ TEST_F(KFDExceptionTest, AddressFault) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(WIFEXITED(childStatus), true);
             EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
@@ -242,7 +242,7 @@ TEST_F(KFDExceptionTest, PermissionFault) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(WIFEXITED(childStatus), true);
             EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
@@ -289,7 +289,7 @@ TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(WIFEXITED(childStatus), true);
             EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
@@ -328,7 +328,7 @@ TEST_F(KFDExceptionTest, FaultStorm) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(WIFEXITED(childStatus), true);
             EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {
@@ -379,7 +379,7 @@ TEST_F(KFDExceptionTest, SdmaQueueException) {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             EXPECT_EQ(WIFEXITED(childStatus), true);
             EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
         } else {

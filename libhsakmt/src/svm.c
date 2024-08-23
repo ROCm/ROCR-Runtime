@@ -80,7 +80,7 @@ hsaKmtSVMSetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 			continue;
 		}
 
-		r = validate_nodeid(attrs[i].value, &args->attrs[i].value);
+		r = hsakmt_validate_nodeid(attrs[i].value, &args->attrs[i].value);
 		if (r != HSAKMT_STATUS_SUCCESS) {
 			pr_debug("invalid node ID: %d\n", attrs[i].value);
 			return r;
@@ -94,7 +94,7 @@ hsaKmtSVMSetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 	}
 
 	/* Driver does one copy_from_user, with extra attrs size */
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args);
 	if (r) {
 		pr_debug("op set range attrs failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
@@ -139,7 +139,7 @@ hsaKmtSVMGetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 		    attrs[i].type != KFD_IOCTL_SVM_ATTR_NO_ACCESS)
 		    continue;
 
-		r = validate_nodeid(attrs[i].value, &args->attrs[i].value);
+		r = hsakmt_validate_nodeid(attrs[i].value, &args->attrs[i].value);
 		if (r != HSAKMT_STATUS_SUCCESS) {
 			pr_debug("invalid node ID: %d\n", attrs[i].value);
 			return r;
@@ -150,7 +150,7 @@ hsaKmtSVMGetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 	}
 
 	/* Driver does one copy_from_user, with extra attrs size */
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args);
 	if (r) {
 		pr_debug("op get range attrs failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
@@ -174,7 +174,7 @@ hsaKmtSVMGetAttr(void *start_addr, HSAuint64 size, unsigned int nattr,
 			attrs[i].value = INVALID_NODEID;
 			break;
 		default:
-			r = gpuid_to_nodeid(attrs[i].value, &attrs[i].value);
+			r = hsakmt_gpuid_to_nodeid(attrs[i].value, &attrs[i].value);
 			if (r != HSAKMT_STATUS_SUCCESS) {
 				pr_debug("invalid GPU ID: %d\n",
 					 attrs[i].value);
@@ -196,13 +196,13 @@ hsaKmtSetGetXNACKMode(HSAint32 * enable)
 
 	args.xnack_enabled = *enable;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SET_XNACK_MODE, &args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_XNACK_MODE, &args)) {
 		if (errno == EPERM) {
 			pr_debug("set mode not supported %s\n",
 				 strerror(errno));
 			return HSAKMT_STATUS_NOT_SUPPORTED;
 		} else if (errno == EBUSY) {
-			pr_debug("kmtIoctl queues not empty %s\n",
+			pr_debug("hsakmt_ioctl queues not empty %s\n",
 				 strerror(errno));
 		}
 		return HSAKMT_STATUS_ERROR;

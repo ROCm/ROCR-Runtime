@@ -399,7 +399,7 @@ TEST_F(KFDQMTest, SdmaConcurrentCopies) {
 #define NPACKETS 1
 #define COPY_SIZE (BUFFER_SIZE / NPACKETS)
     HsaMemoryBuffer srcBuf(BUFFER_SIZE, 0, true);
-    HsaMemoryBuffer dstBuf(BUFFER_SIZE, defaultGPUNode, false, is_dgpu() ? true : false);
+    HsaMemoryBuffer dstBuf(BUFFER_SIZE, defaultGPUNode, false, hsakmt_is_dgpu() ? true : false);
 
     SDMAQueue queue;
 
@@ -1493,7 +1493,7 @@ sdma_fill(HSAint32 node, void *dst, unsigned int data, HSAuint64 size) {
 
 TEST_F(KFDQMTest, P2PTest) {
     TEST_START(TESTPROFILE_RUNALL);
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Two GPUs are required, but no dGPUs are present." << std::endl;
         return;
     }

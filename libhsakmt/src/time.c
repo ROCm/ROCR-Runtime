@@ -36,13 +36,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetClockCounters(HSAuint32 NodeId,
 
 	CHECK_KFD_OPEN();
 
-	result = validate_nodeid(NodeId, &gpu_id);
+	result = hsakmt_validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
 	args.gpu_id = gpu_id;
 
-	err = kmtIoctl(kfd_fd, AMDKFD_IOC_GET_CLOCK_COUNTERS, &args);
+	err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_CLOCK_COUNTERS, &args);
 	if (err < 0) {
 		result = HSAKMT_STATUS_ERROR;
 	} else {

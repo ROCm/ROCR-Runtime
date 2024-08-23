@@ -169,14 +169,14 @@ void Dispatch::BuildIb() {
     const unsigned int COMPUTE_PGM_VALUES_GFX8[] = {
         static_cast<uint32_t>(shiftedIsaAddr),                  // PGM_LO
         static_cast<uint32_t>(shiftedIsaAddr >> 32)             // PGM_HI
-            | (is_dgpu() ? 0 : (1<<8))                          // including PGM_ATC=?
+            | (hsakmt_is_dgpu() ? 0 : (1<<8))                          // including PGM_ATC=?
     };
 
     // Starts at COMPUTE_PGM_LO
     const unsigned int COMPUTE_PGM_VALUES_GFX9[] = {
         static_cast<uint32_t>(shiftedIsaAddr),                  // PGM_LO
         static_cast<uint32_t>(shiftedIsaAddr >> 32)             // PGM_HI
-            | (is_dgpu() ? 0 : (1<<8)),                         // including PGM_ATC=?
+            | (hsakmt_is_dgpu() ? 0 : (1<<8)),                         // including PGM_ATC=?
         0,
         0,
         static_cast<uint32_t>(m_scratch_base >> 8),              // compute_dispatch_scratch_base
@@ -222,7 +222,7 @@ void Dispatch::BuildIb() {
         0,      // COMPUTE_USER_DATA_15 -                - unused
     };
 
-    const unsigned int DISPATCH_INIT_VALUE = 0x00000021 | (is_dgpu() ? 0 : 0x1000) |
+    const unsigned int DISPATCH_INIT_VALUE = 0x00000021 | (hsakmt_is_dgpu() ? 0 : 0x1000) |
                 ((m_FamilyId >= FAMILY_NV) ? 0x8000 : 0);
     // {COMPUTE_SHADER_EN=1, PARTIAL_TG_EN=0, FORCE_START_AT_000=0, ORDERED_APPEND_ENBL=0,
     // ORDERED_APPEND_MODE=0, USE_THREAD_DIMENSIONS=1, ORDER_MODE=0, DISPATCH_CACHE_CNTL=0,

@@ -75,7 +75,7 @@ void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAui
     for (HSAuint32 i = 0; i < count; ) {
         ret = hsaKmtAllocMemory(defaultGPUNode, vramBufSize, m_Flags, &m_pBuf);
         if (ret == HSAKMT_STATUS_SUCCESS) {
-            if (is_dgpu()) {
+            if (hsakmt_is_dgpu()) {
                 if (hsaKmtMapMemoryToGPUNodes(m_pBuf, vramBufSize, NULL,
                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)) == HSAKMT_STATUS_ERROR) {
                     EXPECT_SUCCESS(hsaKmtFreeMemory(m_pBuf, vramBufSize));
@@ -103,7 +103,7 @@ void KFDEvictTest::FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufS
     for (HSAuint32 i = 0; i < pBuffers.size(); i++) {
         m_pBuf = pBuffers[i];
         if (m_pBuf != NULL) {
-            if (is_dgpu())
+            if (hsakmt_is_dgpu())
                 EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(m_pBuf));
             EXPECT_SUCCESS(hsaKmtFreeMemory(m_pBuf, vramBufSize));
         }

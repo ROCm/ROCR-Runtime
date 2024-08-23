@@ -139,7 +139,7 @@ testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirectio
 
 TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
     TEST_START(TESTPROFILE_RUNALL);
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Can't have 2 APUs on the same system." << std::endl;
         return;
     }
@@ -321,7 +321,7 @@ exit:
 
 TEST_F(KFDPerformanceTest, P2POverheadTest) {
     TEST_START(TESTPROFILE_RUNALL);
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Can't have 2 APUs on the same system." << std::endl;
         return;
     }

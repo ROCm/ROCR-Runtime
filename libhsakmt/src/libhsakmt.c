@@ -5,7 +5,7 @@
 #include "libhsakmt.h"
 
 /* Call ioctl, restarting if it is interrupted */
-int kmtIoctl(int fd, unsigned long request, void *arg)
+int hsakmt_ioctl(int fd, unsigned long request, void *arg)
 {
 	int ret;
 
@@ -18,7 +18,7 @@ int kmtIoctl(int fd, unsigned long request, void *arg)
 		 * make any subsequent hsaKmt calls fail in CHECK_KFD_OPEN.
 		 */
 		pr_err("KFD file descriptor not valid in this process\n");
-		is_forked_child();
+		hsakmt_is_forked_child();
 	}
 
 	return ret;
