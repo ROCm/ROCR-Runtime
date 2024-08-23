@@ -49,11 +49,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 	pr_debug("[%s] node %d; default %d; alternate %d\n",
 		__func__, Node, DefaultPolicy, AlternatePolicy);
 
-	result = validate_nodeid(Node, &gpu_id);
+	result = hsakmt_validate_nodeid(Node, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
-	if (get_gfxv_by_node_id(Node) != GFX_VERSION_KAVERI)
+	if (hsakmt_get_gfxv_by_node_id(Node) != GFX_VERSION_KAVERI)
 		/* This is a legacy API useful on Kaveri only. On dGPU
 		 * the alternate aperture is setup and used
 		 * automatically for coherent allocations. Don't let
@@ -86,12 +86,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryPolicy(HSAuint32 Node,
 	args.alternate_aperture_base = (uintptr_t) MemoryAddressAlternate;
 	args.alternate_aperture_size = MemorySizeInBytes;
 
-	int err = kmtIoctl(kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
+	int err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
 
 	return (err == -1) ? HSAKMT_STATUS_ERROR : HSAKMT_STATUS_SUCCESS;
 }
 
-HSAuint32 PageSizeFromFlags(unsigned int pageSizeFlags)
+HSAuint32 hsakmt_PageSizeFromFlags(unsigned int pageSizeFlags)
 {
 	switch (pageSizeFlags) {
 	case HSA_PAGE_SIZE_4KB: return 4*1024;
@@ -131,13 +131,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 
 	pr_debug("[%s] node %d\n", __func__, PreferredNode);
 
-	result = validate_nodeid(PreferredNode, &gpu_id);
+	result = hsakmt_validate_nodeid(PreferredNode, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS) {
 		pr_err("[%s] invalid node ID: %d\n", __func__, PreferredNode);
 		return result;
 	}
 
-	page_size = PageSizeFromFlags(MemFlags.ui32.PageSize);
+	page_size = hsakmt_PageSizeFromFlags(MemFlags.ui32.PageSize);
 
 	if (Alignment && (Alignment < page_size || !POWER_OF_2(Alignment)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
@@ -163,7 +163,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 			return HSAKMT_STATUS_NOT_IMPLEMENTED;
 		}
 
-		*MemoryAddress = fmm_allocate_scratch(gpu_id, *MemoryAddress, SizeInBytes);
+		*MemoryAddress = hsakmt_fmm_allocate_scratch(gpu_id, *MemoryAddress, SizeInBytes);
 
 		if (!(*MemoryAddress)) {
 			pr_err("[%s] failed to allocate %lu bytes from scratch\n",
@@ -175,16 +175,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 	}
 
 	/* GPU allocated system memory */
-	if (!gpu_id || !MemFlags.ui32.NonPaged || zfb_support || MemFlags.ui32.GTTAccess) {
+	if (!gpu_id || !MemFlags.ui32.NonPaged || hsakmt_zfb_support || MemFlags.ui32.GTTAccess) {
 		/* Backwards compatibility hack: Allocate system memory if app
 		 * asks for paged memory from a GPU node.
 		 */
 
 		/* If allocate VRAM under ZFB mode */
-		if (zfb_support && gpu_id && MemFlags.ui32.NonPaged == 1)
+		if (hsakmt_zfb_support && gpu_id && MemFlags.ui32.NonPaged == 1)
 			MemFlags.ui32.CoarseGrain = 1;
 
-		*MemoryAddress = fmm_allocate_host(gpu_id, MemFlags.ui32.GTTAccess ? 0 : PreferredNode,
+		*MemoryAddress = hsakmt_fmm_allocate_host(gpu_id, MemFlags.ui32.GTTAccess ? 0 : PreferredNode,
 						   *MemoryAddress, SizeInBytes, Alignment, MemFlags);
 
 		if (!(*MemoryAddress)) {
@@ -204,7 +204,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
 
-	*MemoryAddress = fmm_allocate_device(gpu_id, PreferredNode, *MemoryAddress,
+	*MemoryAddress = hsakmt_fmm_allocate_device(gpu_id, PreferredNode, *MemoryAddress,
 					     SizeInBytes, Alignment, MemFlags);
 
 	if (!(*MemoryAddress)) {
@@ -229,7 +229,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtFreeMemory(void *MemoryAddress,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	return fmm_release(MemoryAddress);
+	return hsakmt_fmm_release(MemoryAddress);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtAvailableMemory(HSAuint32 Node,
@@ -243,13 +243,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAvailableMemory(HSAuint32 Node,
 
 	pr_debug("[%s] node %d\n", __func__, Node);
 
-	result = validate_nodeid(Node, &args.gpu_id);
+	result = hsakmt_validate_nodeid(Node, &args.gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS) {
 		pr_err("[%s] invalid node ID: %d\n", __func__, Node);
 		return result;
 	}
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_AVAILABLE_MEMORY, &args))
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_AVAILABLE_MEMORY, &args))
 		return HSAKMT_STATUS_ERROR;
 
 	*AvailableBytes = args.available;
@@ -263,11 +263,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
 
 	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
 
-	if (!is_dgpu)
+	if (!hsakmt_is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
 		return HSAKMT_STATUS_SUCCESS;
 
-	return fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+	return hsakmt_fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 				   NULL, 0, true, false);
 }
 
@@ -283,15 +283,15 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryToNodes(void *MemoryAddress,
 	pr_debug("[%s] address %p number of nodes %lu\n",
 		__func__, MemoryAddress, NumberOfNodes);
 
-	if (!is_dgpu)
+	if (!hsakmt_is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	ret = validate_nodeid_array(&gpu_id_array,
+	ret = hsakmt_validate_nodeid_array(&gpu_id_array,
 			NumberOfNodes, NodeArray);
 
 	if (ret == HSAKMT_STATUS_SUCCESS) {
-		ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+		ret = hsakmt_fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 					  gpu_id_array,
 					  NumberOfNodes*sizeof(uint32_t),
 					  true, false);
@@ -319,11 +319,11 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryWithFlags(void *MemoryAddress,
 	if ((MemFlags.ui32.HostAccess != 1) || (MemFlags.ui32.NonPaged == 1))
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	if (!is_dgpu)
+	if (!hsakmt_is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
 		return HSAKMT_STATUS_NOT_SUPPORTED;
 
-	ret = fmm_register_memory(MemoryAddress, MemorySizeInBytes,
+	ret = hsakmt_fmm_register_memory(MemoryAddress, MemorySizeInBytes,
 		NULL, 0, MemFlags.ui32.CoarseGrain, MemFlags.ui32.ExtendedCoherent);
 
 	return ret;
@@ -341,12 +341,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 	pr_debug("[%s] number of nodes %lu\n", __func__, NumberOfNodes);
 
 	if (NodeArray != NULL || NumberOfNodes != 0) {
-		ret = validate_nodeid_array(&gpu_id_array,
+		ret = hsakmt_validate_nodeid_array(&gpu_id_array,
 				NumberOfNodes, NodeArray);
 	}
 
 	if (ret == HSAKMT_STATUS_SUCCESS) {
-		ret = fmm_register_graphics_handle(
+		ret = hsakmt_fmm_register_graphics_handle(
 			GraphicsResourceHandle, GraphicsResourceInfo,
 			gpu_id_array, NumberOfNodes * sizeof(uint32_t));
 		if (ret != HSAKMT_STATUS_SUCCESS)
@@ -366,7 +366,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtExportDMABufHandle(void *MemoryAddress,
 
 	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
 
-	return fmm_export_dma_buf_fd(MemoryAddress, MemorySizeInBytes,
+	return hsakmt_fmm_export_dma_buf_fd(MemoryAddress, MemorySizeInBytes,
 				     DMABufFd, Offset);
 }
 
@@ -381,7 +381,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtShareMemory(void *MemoryAddress,
 	if (!SharedMemoryHandle)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	return fmm_share_memory(MemoryAddress, SizeInBytes, SharedMemoryHandle);
+	return hsakmt_fmm_share_memory(MemoryAddress, SizeInBytes, SharedMemoryHandle);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterSharedHandle(const HsaSharedMemoryHandle *SharedMemoryHandle,
@@ -417,12 +417,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterSharedHandleToNodes(const HsaSharedMemoryH
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (NodeArray) {
-		ret = validate_nodeid_array(&gpu_id_array, NumberOfNodes, NodeArray);
+		ret = hsakmt_validate_nodeid_array(&gpu_id_array, NumberOfNodes, NodeArray);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto error;
 	}
 
-	ret = fmm_register_shared_memory(SharedMemoryHandle,
+	ret = hsakmt_fmm_register_shared_memory(SharedMemoryHandle,
 					 SizeInBytes,
 					 MemoryAddress,
 					 gpu_id_array,
@@ -469,7 +469,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDeregisterMemory(void *MemoryAddress)
 
 	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
 
-	return fmm_deregister_memory(MemoryAddress);
+	return hsakmt_fmm_deregister_memory(MemoryAddress);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPU(void *MemoryAddress,
@@ -488,7 +488,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPU(void *MemoryAddress,
 	if (AlternateVAGPU)
 		*AlternateVAGPU = 0;
 
-	return fmm_map_to_gpu(MemoryAddress, MemorySizeInBytes, AlternateVAGPU);
+	return hsakmt_fmm_map_to_gpu(MemoryAddress, MemorySizeInBytes, AlternateVAGPU);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
@@ -511,17 +511,17 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtMapMemoryToGPUNodes(void *MemoryAddress,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	if (!is_dgpu && NumberOfNodes == 1)
+	if (!hsakmt_is_dgpu && NumberOfNodes == 1)
 		return hsaKmtMapMemoryToGPU(MemoryAddress,
 				MemorySizeInBytes,
 				AlternateVAGPU);
 
-	ret = validate_nodeid_array(&gpu_id_array,
+	ret = hsakmt_validate_nodeid_array(&gpu_id_array,
 				NumberOfNodes, NodeArray);
 	if (ret != HSAKMT_STATUS_SUCCESS)
 		return ret;
 
-	ret = fmm_map_to_gpu_nodes(MemoryAddress, MemorySizeInBytes,
+	ret = hsakmt_fmm_map_to_gpu_nodes(MemoryAddress, MemorySizeInBytes,
 		gpu_id_array, NumberOfNodes, AlternateVAGPU);
 
 	if (gpu_id_array)
@@ -542,7 +542,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtUnmapMemoryToGPU(void *MemoryAddress)
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
-	if (!fmm_unmap_from_gpu(MemoryAddress))
+	if (!hsakmt_fmm_unmap_from_gpu(MemoryAddress))
 		return HSAKMT_STATUS_SUCCESS;
 	else
 		return HSAKMT_STATUS_ERROR;
@@ -582,7 +582,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *
 
 	pr_debug("[%s] node %d\n", __func__, NodeId);
 
-	result = validate_nodeid(NodeId, &gpu_id);
+	result = hsakmt_validate_nodeid(NodeId, &gpu_id);
 	if (result != HSAKMT_STATUS_SUCCESS)
 		return result;
 
@@ -598,7 +598,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetTileConfig(HSAuint32 NodeId, HsaGpuTileConfig *
 	args.num_tile_configs = config->NumTileConfigs;
 	args.num_macro_tile_configs = config->NumMacroTileConfigs;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_TILE_CONFIG, &args) != 0)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_TILE_CONFIG, &args) != 0)
 		return HSAKMT_STATUS_ERROR;
 
 	config->NumTileConfigs = args.num_tile_configs;
@@ -621,7 +621,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtQueryPointerInfo(const void *Pointer,
 
 	if (!PointerInfo)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
-	return fmm_get_mem_info(Pointer, PointerInfo);
+	return hsakmt_fmm_get_mem_info(Pointer, PointerInfo);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryUserData(const void *Pointer,
@@ -631,7 +631,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetMemoryUserData(const void *Pointer,
 
 	pr_debug("[%s] pointer %p\n", __func__, Pointer);
 
-	return fmm_set_mem_user_data(Pointer, UserData);
+	return hsakmt_fmm_set_mem_user_data(Pointer, UserData);
 }
 
 HSAKMT_STATUS HSAKMTAPI hsaKmtReplaceAsanHeaderPage(void *addr)
@@ -640,7 +640,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtReplaceAsanHeaderPage(void *addr)
 	pr_debug("[%s] address %p\n", __func__, addr);
 	CHECK_KFD_OPEN();
 
-	return fmm_replace_asan_header_page(addr);
+	return hsakmt_fmm_replace_asan_header_page(addr);
 #else
 	return HSAKMT_STATUS_NOT_SUPPORTED;
 #endif
@@ -652,7 +652,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtReturnAsanHeaderPage(void *addr)
 	pr_debug("[%s] address %p\n", __func__, addr);
 	CHECK_KFD_OPEN();
 
-	return fmm_return_asan_header_page(addr);
+	return hsakmt_fmm_return_asan_header_page(addr);
 #else
 	return HSAKMT_STATUS_NOT_SUPPORTED;
 #endif
@@ -663,5 +663,5 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtGetAMDGPUDeviceHandle( HSAuint32 NodeId,
 {
 	CHECK_KFD_OPEN();
 
-	return fmm_get_amdgpu_device_handle(NodeId, DeviceHandle);
+	return hsakmt_fmm_get_amdgpu_device_handle(NodeId, DeviceHandle);
 }

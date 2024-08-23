@@ -55,7 +55,7 @@ void PM4WriteDataPacket::InitPacket(unsigned int *destBuf, void *data) {
     m_pPacketData->bitfields2.dst_sel      = dst_sel_mec_write_data_MEMORY_5;  // memory-async
     m_pPacketData->bitfields2.addr_incr    = addr_incr_mec_write_data_INCREMENT_ADDR_0;  // increment addr
     m_pPacketData->bitfields2.wr_confirm   = wr_confirm_mec_write_data_WAIT_FOR_CONFIRMATION_1;
-    m_pPacketData->bitfields2.atc          = is_dgpu() ?
+    m_pPacketData->bitfields2.atc          = hsakmt_is_dgpu() ?
         atc_write_data_NOT_USE_ATC_0 : atc_write_data_USE_ATC_1;
     m_pPacketData->bitfields2.cache_policy = cache_policy_mec_write_data_BYPASS_2;
 
@@ -97,7 +97,7 @@ void PM4ReleaseMemoryPacket::InitPacketCI(bool isPolling, uint64_t address,
     pkt->bitfields2.l2_wb            = 1;
     pkt->bitfields2.l2_inv           = 1;
     pkt->bitfields2.cache_policy     = cache_policy_mec_release_mem_BYPASS_2;
-    pkt->bitfields2.atc = is_dgpu() ?
+    pkt->bitfields2.atc = hsakmt_is_dgpu() ?
                     atc_mec_release_mem_ci_NOT_USE_ATC_0 :
                     atc_mec_release_mem_ci_USE_ATC_1;  // ATC setting for fences and timestamps to the MC or TCL2.
     pkt->bitfields3.dst_sel          = dst_sel_mec_release_mem_MEMORY_CONTROLLER_0;

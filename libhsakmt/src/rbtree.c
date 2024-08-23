@@ -33,7 +33,7 @@ static inline void rbtree_right_rotate(rbtree_node_t **root,
 		rbtree_node_t *sentinel, rbtree_node_t *node);
 
 static void
-rbtree_insert_value(rbtree_node_t *temp, rbtree_node_t *node,
+hsakmt_rbtree_insert_value(rbtree_node_t *temp, rbtree_node_t *node,
 		rbtree_node_t *sentinel)
 {
 	rbtree_node_t  **p;
@@ -59,7 +59,7 @@ rbtree_insert_value(rbtree_node_t *temp, rbtree_node_t *node,
 
 
 void
-rbtree_insert(rbtree_t *tree, rbtree_node_t *node)
+hsakmt_rbtree_insert(rbtree_t *tree, rbtree_node_t *node)
 {
 	rbtree_node_t  **root, *temp, *sentinel;
 
@@ -78,7 +78,7 @@ rbtree_insert(rbtree_t *tree, rbtree_node_t *node)
 		return;
 	}
 
-	rbtree_insert_value(*root, node, sentinel);
+	hsakmt_rbtree_insert_value(*root, node, sentinel);
 
 	/* re-balance tree */
 
@@ -131,7 +131,7 @@ rbtree_insert(rbtree_t *tree, rbtree_node_t *node)
 
 
 void
-rbtree_delete(rbtree_t *tree, rbtree_node_t *node)
+hsakmt_rbtree_delete(rbtree_t *tree, rbtree_node_t *node)
 {
 	unsigned int red;
 	rbtree_node_t  **root, *sentinel, *subst, *temp, *w;
@@ -346,7 +346,7 @@ rbtree_right_rotate(rbtree_node_t **root, rbtree_node_t *sentinel,
 
 
 rbtree_node_t *
-rbtree_next(rbtree_t *tree, rbtree_node_t *node)
+hsakmt_rbtree_next(rbtree_t *tree, rbtree_node_t *node)
 {
 	rbtree_node_t  *root, *sentinel, *parent;
 
@@ -374,7 +374,7 @@ rbtree_next(rbtree_t *tree, rbtree_node_t *node)
 }
 
 rbtree_node_t *
-rbtree_prev(rbtree_t *tree, rbtree_node_t *node)
+hsakmt_rbtree_prev(rbtree_t *tree, rbtree_node_t *node)
 {
 	rbtree_node_t  *root, *sentinel, *parent;
 

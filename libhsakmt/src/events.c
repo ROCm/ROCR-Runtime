@@ -36,7 +36,7 @@
 
 static HSAuint64 *events_page = NULL;
 
-void clear_events_page(void)
+void hsakmt_clear_events_page(void)
 {
 	events_page = NULL;
 }
@@ -74,18 +74,18 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 	/* dGPU code */
 	pthread_mutex_lock(&hsakmt_mutex);
 
-	if (is_dgpu && !events_page) {
-		events_page = allocate_exec_aligned_memory_gpu(
+	if (hsakmt_is_dgpu && !events_page) {
+		events_page = hsakmt_allocate_exec_aligned_memory_gpu(
 			KFD_SIGNAL_EVENT_LIMIT * 8, PAGE_SIZE, 0, 0, true, false, true);
 		if (!events_page) {
 			free(e);
 			pthread_mutex_unlock(&hsakmt_mutex);
 			return HSAKMT_STATUS_ERROR;
 		}
-		fmm_get_handle(events_page, (uint64_t *)&args.event_page_offset);
+		hsakmt_fmm_get_handle(events_page, (uint64_t *)&args.event_page_offset);
 	}
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_CREATE_EVENT, &args) != 0) {
 		free(e);
 		*Event = NULL;
 		pthread_mutex_unlock(&hsakmt_mutex);
@@ -96,12 +96,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 
 	if (!events_page && args.event_page_offset > 0) {
 		events_page = mmap(NULL, event_limit * 8, PROT_WRITE | PROT_READ,
-				MAP_SHARED, kfd_fd, args.event_page_offset);
+				MAP_SHARED, hsakmt_kfd_fd, args.event_page_offset);
 		if (events_page == MAP_FAILED) {
 			/* old kernels only support 256 events */
 			event_limit = 256;
 			events_page = mmap(NULL, PAGE_SIZE, PROT_WRITE | PROT_READ,
-					   MAP_SHARED, kfd_fd, args.event_page_offset);
+					   MAP_SHARED, hsakmt_kfd_fd, args.event_page_offset);
 		}
 		if (events_page == MAP_FAILED) {
 			events_page = NULL;
@@ -130,7 +130,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 
 		set_args.event_id = args.event_id;
 
-		kmtIoctl(kfd_fd, AMDKFD_IOC_SET_EVENT, &set_args);
+		hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_EVENT, &set_args);
 	}
 
 	*Event = e;
@@ -149,7 +149,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDestroyEvent(HsaEvent *Event)
 
 	args.event_id = Event->EventId;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) != 0)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_DESTROY_EVENT, &args) != 0)
 		return HSAKMT_STATUS_ERROR;
 
 	free(Event);
@@ -173,7 +173,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSetEvent(HsaEvent *Event)
 
 	args.event_id = Event->EventId;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SET_EVENT, &args) == -1)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_EVENT, &args) == -1)
 		return HSAKMT_STATUS_ERROR;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -196,7 +196,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtResetEvent(HsaEvent *Event)
 
 	args.event_id = Event->EventId;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_RESET_EVENT, &args) == -1)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_RESET_EVENT, &args) == -1)
 		return HSAKMT_STATUS_ERROR;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -250,7 +250,7 @@ static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
 	args->op = KFD_IOCTL_SVM_OP_GET_ATTR;
 	args->nattr = s_attr / sizeof(*attrs);
 	memcpy(args->attrs, attrs, s_attr);
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
 		pr_debug("op get range attrs failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -261,7 +261,7 @@ static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
 		    args->attrs[i].value == KFD_IOCTL_SVM_LOCATION_UNDEFINED)
 			node_id = args->attrs[i].value;
 		else
-			gpuid_to_nodeid(args->attrs[i].value, &node_id);
+			hsakmt_gpuid_to_nodeid(args->attrs[i].value, &node_id);
 		switch (args->attrs[i].type) {
 		case KFD_IOCTL_SVM_ATTR_PREFERRED_LOC:
 			pr_err("Preferred location for address 0x%lx is Node id %d\n",
@@ -313,7 +313,7 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 	uint32_t node_id = 0;
 	unsigned int i;
 
-	gpuid_to_nodeid(memory_exception_data->gpu_id, &node_id);
+	hsakmt_gpuid_to_nodeid(memory_exception_data->gpu_id, &node_id);
 	pr_err("Memory exception on virtual address 0x%lx, ", addr);
 	pr_err("node id %d : ", node_id);
 	if (memory_exception_data->failure.NotPresent)
@@ -323,7 +323,7 @@ static void analysis_memory_exception(struct kfd_hsa_memory_exception_data *
 	else if (memory_exception_data->failure.NoExecute)
 		pr_err("Execute to none-executable page\n");
 
-	ret = fmm_get_mem_info((const void *)addr, &info);
+	ret = hsakmt_fmm_get_mem_info((const void *)addr, &info);
 	if (ret != HSAKMT_STATUS_SUCCESS) {
 		ret = get_mem_info_svm_api(addr, memory_exception_data->gpu_id);
 		if (ret != HSAKMT_STATUS_SUCCESS)
@@ -407,7 +407,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
 
 	HSAKMT_STATUS result;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1)
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1)
 		result = HSAKMT_STATUS_ERROR;
 	else if (args.wait_result == KFD_IOC_WAIT_RESULT_TIMEOUT)
 		result = HSAKMT_STATUS_WAIT_TIMEOUT;
@@ -417,7 +417,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
 			if (Events[i]->EventData.EventType == HSA_EVENTTYPE_MEMORY &&
 			    event_data[i].memory_exception_data.gpu_id) {
 				Events[i]->EventData.EventData.MemoryAccessFault.VirtualAddress = event_data[i].memory_exception_data.va;
-				result = gpuid_to_nodeid(event_data[i].memory_exception_data.gpu_id, &Events[i]->EventData.EventData.MemoryAccessFault.NodeId);
+				result = hsakmt_gpuid_to_nodeid(event_data[i].memory_exception_data.gpu_id, &Events[i]->EventData.EventData.MemoryAccessFault.NodeId);
 				if (result != HSAKMT_STATUS_SUCCESS)
 					goto out;
 				Events[i]->EventData.EventData.MemoryAccessFault.Failure.NotPresent = event_data[i].memory_exception_data.failure.NotPresent;
@@ -432,7 +432,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
 			} else if (Events[i]->EventData.EventType == HSA_EVENTTYPE_HW_EXCEPTION &&
 				event_data[i].hw_exception_data.gpu_id) {
 
-				result = gpuid_to_nodeid(event_data[i].hw_exception_data.gpu_id, &Events[i]->EventData.EventData.HwException.NodeId);
+				result = hsakmt_gpuid_to_nodeid(event_data[i].hw_exception_data.gpu_id, &Events[i]->EventData.EventData.HwException.NodeId);
 				if (result != HSAKMT_STATUS_SUCCESS)
 					goto out;
 
@@ -464,14 +464,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenSMI(HSAuint32 NodeId, int *fd)
 
 	pr_debug("[%s] node %d\n", __func__, NodeId);
 
-	result = validate_nodeid(NodeId, &gpuid);
+	result = hsakmt_validate_nodeid(NodeId, &gpuid);
 	if (result != HSAKMT_STATUS_SUCCESS) {
 		pr_err("[%s] invalid node ID: %d\n", __func__, NodeId);
 		return result;
 	}
 
 	args.gpuid = gpuid;
-	result = kmtIoctl(kfd_fd, AMDKFD_IOC_SMI_EVENTS, &args);
+	result = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SMI_EVENTS, &args);
 	if (result) {
 		pr_debug("open SMI event fd failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;

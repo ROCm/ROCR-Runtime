@@ -126,7 +126,7 @@ TEST_F(KFDTopologyTest, GpuvmApertureValidate) {
     for (unsigned i = 0; i < GpuNodes.size(); i++) {
         pNodeProperties = m_NodeInfo.GetNodeProperties(GpuNodes.at(i));
         if (pNodeProperties != NULL) {
-            if (!is_dgpu() && !(FamilyIdFromNode(pNodeProperties) == FAMILY_KV)) {
+            if (!hsakmt_is_dgpu() && !(FamilyIdFromNode(pNodeProperties) == FAMILY_KV)) {
                 LOG() << "Skipping test: GPUVM framebuffer heap not exposed on APU except Kaveri." << std::endl;
                 return;
             }
