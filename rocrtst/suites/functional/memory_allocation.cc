@@ -522,10 +522,18 @@ void MemoryAllocationTest::MemoryAllocateContiguousTest(hsa_agent_t agent,
   uint64_t offset;
   ASSERT_SUCCESS(hsa_amd_portable_export_dmabuf(memoryPtr, alloc_size, &dmabuf, &offset));
 
+  std::vector<hsa_agent_t> accessible_gpus;
+  for (auto gpuIter: gpus) {
+    hsa_amd_memory_pool_access_t access = HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED;
+    ASSERT_SUCCESS(hsa_amd_agent_memory_pool_get_info(gpuIter, pool, HSA_AMD_AGENT_MEMORY_POOL_INFO_ACCESS, &access));
+    if (access != HSA_AMD_MEMORY_POOL_ACCESS_NEVER_ALLOWED)
+      accessible_gpus.push_back(gpuIter);
+  }
+
   void* importedPtr;
   size_t importedSz;
 
-  ASSERT_SUCCESS(hsa_amd_interop_map_buffer(gpus.size(), gpus.data(), dmabuf, 0, &importedSz,
+  ASSERT_SUCCESS(hsa_amd_interop_map_buffer(accessible_gpus.size(), accessible_gpus.data(), dmabuf, 0, &importedSz,
                                                    &importedPtr, 0, NULL));
 
   ASSERT_NE((uint64_t)importedPtr, 0);
