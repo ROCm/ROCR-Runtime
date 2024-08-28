@@ -300,9 +300,9 @@ if( BUILD_SHARED_LIBS )
                                                               HSA_VERSION_MINOR=${VERSION_MINOR}
                                                               HSA_VERSION_PATCH=${VERSION_PATCH})
     target_link_libraries(${CORE_RUNTIME_TARGET} PRIVATE rocprofiler-register::rocprofiler-register)
-    set(HSA_DEP_ROCPROFILER_REGISTER ON PARENT_SCOPE)
+    set(HSA_DEP_ROCPROFILER_REGISTER ON CACHE INTERNAL "")
   else()
-    set(HSA_DEP_ROCPROFILER_REGISTER OFF PARENT_SCOPE)
+    set(HSA_DEP_ROCPROFILER_REGISTER OFF CACHE INTERNAL "")
   endif() # end rocprofiler-register_FOUND
 else()
   include_directories(${drm_INCLUDE_DIRS})
