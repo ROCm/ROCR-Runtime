@@ -602,7 +602,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueue(HSAuint32 NodeId,
 					  HsaEvent *Event,
 					  HsaQueueResource *QueueResource)
 {
-	if (Type >= HSA_QUEUE_SDMA_BY_ENG_ID)
+	if (Type == HSA_QUEUE_SDMA_BY_ENG_ID)
 		return HSAKMT_STATUS_ERROR;
 
 	return hsaKmtCreateQueueExt(NodeId, Type, QueuePercentage, Priority, 0,
