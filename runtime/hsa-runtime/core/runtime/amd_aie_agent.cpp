@@ -46,6 +46,7 @@
 
 #include "core/inc/amd_aie_aql_queue.h"
 #include "core/inc/amd_memory_region.h"
+#include "core/inc/amd_xdna_driver.h"
 #include "core/inc/driver.h"
 #include "core/inc/runtime.h"
 
@@ -199,16 +200,18 @@ void AieAgent::InitRegionList() {
 
   /// For allocating kernel arguments or other objects that only need
   /// system memory.
-  HsaMemoryProperties sys_mem_props{
-      .HeapType = HSA_HEAPTYPE_SYSTEM,
-  };
+  HsaMemoryProperties sys_mem_props = {};
+  sys_mem_props.HeapType = HSA_HEAPTYPE_SYSTEM;
+
   /// For allocating memory for programmable device image (PDI) files. These
   /// need to be mapped to the device so the hardware can access the PDIs.
-  HsaMemoryProperties dev_mem_props{
-      .HeapType = HSA_HEAPTYPE_DEVICE_SVM,
-  };
+  HsaMemoryProperties dev_mem_props = {};
+  dev_mem_props.HeapType = HSA_HEAPTYPE_DEVICE_SVM,
+  dev_mem_props.SizeInBytes = XdnaDriver::GetDevHeapByteSize();
+
   /// As of now the AIE devices support coarse-grain memory regions that require
   /// explicit sync operations.
+  regions_.reserve(2);
   regions_.push_back(
       new MemoryRegion(false, true, false, false, true, this, sys_mem_props));
   regions_.push_back(

@@ -63,6 +63,9 @@ public:
 
   static hsa_status_t DiscoverDriver();
 
+  /// @brief Returns the size of the dev heap in bytes.
+  static uint64_t GetDevHeapByteSize();
+
   hsa_status_t Init() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 

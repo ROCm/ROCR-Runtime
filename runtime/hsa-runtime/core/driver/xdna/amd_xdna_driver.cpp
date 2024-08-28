@@ -85,6 +85,10 @@ hsa_status_t XdnaDriver::DiscoverDriver() {
   return HSA_STATUS_ERROR;
 }
 
+uint64_t XdnaDriver::GetDevHeapByteSize() {
+  return dev_heap_size;
+}
+
 hsa_status_t XdnaDriver::Init() { return InitDeviceHeap(); }
 
 hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
