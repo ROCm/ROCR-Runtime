@@ -168,7 +168,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   /// TODO: For now we always map the memory and keep a mapping from handles
   /// to VA memory addresses. Once we can support the separate VMEM call to
   /// map handles we can fix this.
-  if (m_region.kernarg()) {
+  if (region.kernarg()) {
     mapped_mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_,
                       get_bo_info_args.map_offset);
     if (mapped_mem == MAP_FAILED) {
