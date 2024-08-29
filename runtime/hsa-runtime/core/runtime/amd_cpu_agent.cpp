@@ -86,17 +86,18 @@ void CpuAgent::InitRegionList() {
 
     if (system_prop != mem_props.end()) system_props = *system_prop;
 
-    MemoryRegion* system_region_fine =
-        new MemoryRegion(true, false, is_apu_node, false, true, this, system_props);
-    regions_.push_back(system_region_fine);
-    MemoryRegion* system_region_kernarg =
-        new MemoryRegion(true, true, is_apu_node, false, true, this, system_props);
-    regions_.push_back(system_region_kernarg);
+    // Fine-Grain Memory
+    regions_.push_back(new MemoryRegion(true, false, is_apu_node, false, true, this, system_props));
+
+    // Ext-Fine-Grain Memory
+    regions_.push_back(new MemoryRegion(false, false, is_apu_node, true, true, this, system_props));
+
+    // Kernargs
+    regions_.push_back(new MemoryRegion(true, true, is_apu_node, false, true, this, system_props));
 
     if (!is_apu_node) {
-      MemoryRegion* system_region_coarse =
-          new MemoryRegion(false, false, is_apu_node, false, true, this, system_props);
-      regions_.push_back(system_region_coarse);
+      // Coarse Grain
+      regions_.push_back(new MemoryRegion(false, false, is_apu_node, false, true, this, system_props));
     }
   }
 }
