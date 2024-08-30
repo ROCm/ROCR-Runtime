@@ -251,11 +251,9 @@ target_link_libraries(kfdtest ${HSAKMT_LIBRARIES} ${DRM_LDFLAGS} ${DRM_AMDGPU_LD
 configure_file ( scripts/kfdtest.exclude kfdtest.exclude COPYONLY )
 configure_file ( scripts/run_kfdtest.sh run_kfdtest.sh COPYONLY )
 
-install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest ${CMAKE_CURRENT_BINARY_DIR}/run_kfdtest.sh
-	PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_WRITE GROUP_READ WORLD_EXECUTE WORLD_READ
+install( PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/kfdtest ${CMAKE_CURRENT_BINARY_DIR}/run_kfdtest.sh
 	DESTINATION bin )
 install( FILES ${CMAKE_CURRENT_BINARY_DIR}/kfdtest.exclude
-	PERMISSIONS OWNER_WRITE OWNER_READ GROUP_WRITE GROUP_READ WORLD_READ
 	DESTINATION share/kfdtest )
 # Remove dependency on rocm-core if -DROCM_DEP_ROCMCORE=ON not given to cmake
 if(NOT ROCM_DEP_ROCMCORE)
