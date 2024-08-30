@@ -1,0 +1,148 @@
+name: CI Linux
+
+on:
+  workflow_call:
+  workflow_dispatch:
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - main
+
+concurrency:
+  # A PR number if a pull request and otherwise the commit hash. This cancels
+  # queued and in-progress runs for the same PR (presubmit) or commit
+  # (postsubmit).
+  group: ci-build-test-cpp-linux-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build_and_ctest:
+    name: Build and Test (linux, ASSERTIONS)
+    runs-on: nod-ai-shared-cpubuilder-manylinux-x86_64
+    env:
+      CACHE_DIR: ${{ github.workspace }}/.container-cache
+      CACHE_KEY: linux-build-manylinux-v1-${{ github.event.number || format('{0}-{1}', github.ref_name, github.run_number) }}
+    steps:
+      - name: Set unified TZ
+        uses: szenius/set-timezone@v2.0
+        with:
+          # this is an arbitrary choice
+          timezoneLinux: "Asia/Singapore"
+          timezoneMacos: "Asia/Singapore"
+          timezoneWindows: "Singapore Standard Time"
+
+      - name: Configure local git mirrors
+        run: |
+          /gitmirror/scripts/trigger_update_mirrors.sh
+          /gitmirror/scripts/git_config.sh
+
+      - name: "Checking out repository"
+        uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3 # v3.5.0
+        with:
+          submodules: recursive
+
+      - name: Install deps
+        run: |
+          dnf install -y almalinux-release-devel
+          yum install -y libnuma-devel
+
+      - name: Enable cache
+        uses: actions/cache/restore@v3
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key:  ${{ env.CACHE_KEY }}
+          restore-keys: linux-build-
+
+      - name: Configure ccache
+        run: |
+          export cache_dir="${{ env.CACHE_DIR }}"
+          if [ -z "${cache_dir}" ]; then
+            cache_dir="${{ github.workspace }}/.build-cache"
+            mkdir -p "${cache_dir}"
+            cache_dir="$(cd ${cache_dir} && pwd)"
+          fi
+          echo "Caching to ${cache_dir}"
+          mkdir -p "${cache_dir}/ccache"
+          export CCACHE_DIR="${cache_dir}/ccache" >> $GITHUB_ENV
+          export CCACHE_MAXSIZE="700M" >> $GITHUB_ENV
+          export CMAKE_C_COMPILER_LAUNCHER=ccache >> $GITHUB_ENV
+          export CMAKE_CXX_COMPILER_LAUNCHER=ccache >> $GITHUB_ENV
+          export CCACHE_COMPILERCHECK="string:$(clang --version)" >> $GITHUB_ENV
+
+      - name: Build ROCR distro
+        run: |
+          rocr_dir="$(cd ${{ github.workspace }} && pwd)"
+          build_rocr_dir="${{ github.workspace }}/rocr-build"
+          mkdir -p "$build_rocr_dir"
+          build_rocr_dir="$(cd $build_rocr_dir && pwd)"
+          rocr_install_dir="${{ github.workspace }}/rocr-install"
+          
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$rocr_install_dir" \
+            -S "$rocr_dir" -B "$build_rocr_dir"
+          cmake --build "$build_rocr_dir" --target install
+
+      - name: Create artifacts
+        if: ${{ !cancelled() }}
+        run: |
+          tar -cvf rocr-${{ github.ref_name }}-$(git rev-parse --short HEAD).tar -C rocr-install .
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: linux_x86_64_distro
+          path: rocr-*.tar
+          if-no-files-found: warn
+
+      - name: Save cache
+        uses: actions/cache/save@v3
+        if: ${{ !cancelled() }}
+        with:
+          path: ${{ env.CACHE_DIR }}
+          key:  ${{ env.CACHE_KEY }}
+
+  test_aie:
+    name: AIE tests
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [linux-phoenix]
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: "Checking out repository"
+        uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux_x86_64_distro
+
+      - name: Extract artifact
+        run: |
+          mkdir -p rocr-install
+          tar -xvf rocr-*.tar -C rocr-install
+          export hsa_runtime64_ROOT="$PWD/rocr-install" >> $GITHUB_ENV
+
+      - name: Build AIE test suite
+        run: |
+          pushd rocrtst/suites/aie
+          build_dir="$PWD/build"
+          mkdir -p $build_dir
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -Dhsa_runtime64_ROOT="${hsa_runtime64_ROOT}" \
+            -S "$PWD" -B "$build_dir"
+          cmake --build "$build_dir" --target \
+            aie_hsa_bare_add_one \
+            aie_hsa_dispatch_test
+          popd
+
+      - name: Run AIE test suite
+        run: |
+          pushd rocrtst/suites/aie
+          build_dir="$PWD/build"
+          ./"$build_dir"/aie_hsa_bare_add_one $PWD
+          ./"$build_dir"/aie_hsa_dispatch_test $PWD
