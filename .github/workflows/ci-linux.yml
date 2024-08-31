@@ -1,0 +1,193 @@
+name: CI Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_debug_with_tmate:
+        type: boolean
+        description: 'Run the build with tmate session'
+        required: false
+        default: false
+      debug_with_tmate:
+        type: boolean
+        description: 'Run the build with a tmate session ONLY in case of failure'
+        required: false
+        default: false
+      release:
+        type: boolean
+        description: 'Release to latest'
+        required: false
+        default: false
+  pull_request:
+  merge_group:
+  push:
+    branches:
+      - amd-staging
+
+concurrency:
+  group: ci-build-test-cpp-linux-${{ github.event.number || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build (linux)
+    runs-on: ubuntu-22.04
+    container:
+      image: quay.io/pypa/manylinux_2_28_x86_64
+      env:
+        GITHUB_SHA: ${{ github.sha }}
+    steps:
+      - name: Install tmate
+        run: dnf install -y epel-release && dnf install -y tmate
+
+      - name: Install deps
+        run: |
+          dnf install -y almalinux-release-devel
+          yum install -y elfutils-libelf-devel p7zip p7zip-plugins \
+                         sudo ncurses-compat-libs openssh vim-common
+
+      - name: Setup Cpp
+        uses: aminya/setup-cpp@v1
+        with:
+          compiler: llvm-18
+          cmake: true
+          ninja: true
+
+      - name: "Checking out repository"
+        uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3 # v3.5.0
+        with:
+          submodules: recursive
+
+      - name: Build and install libnuma
+        run: |
+          curl --silent -L \
+            https://github.com/numactl/numactl/releases/download/v2.0.18/numactl-2.0.18.tar.gz \
+            -o numactl-2.0.18.tar.gz
+          tar -xf numactl-2.0.18.tar.gz
+          pushd numactl-2.0.18
+          ./configure
+          # i have no idea why this is necessary
+          # but without it you get something about "can't cd into dir"
+          sed -i '7563s/`cd "$dir" && pwd`/$dir/g' libtool
+          make install
+          popd
+
+      - name: Hack ROCR
+        run: |
+          sed -i 's/amdgcn-amd-amdhsa/amdgcn-amd-amdhsa -nogpulib/g' runtime/hsa-runtime/core/runtime/blit_shaders/CMakeLists.txt
+          sed -i 's/amdgcn-amd-amdhsa/amdgcn-amd-amdhsa -nogpulib/g' runtime/hsa-runtime/core/runtime/trap_handler/CMakeLists.txt
+          sed -i 's/amdgcn-amd-amdhsa/amdgcn-amd-amdhsa -nogpulib/g' runtime/hsa-runtime/image/blit_src/CMakeLists.txt
+
+      - name: Build ROCR distro
+        run: |
+          rocr_dir="$(cd $GITHUB_WORKSPACE && pwd)"
+          build_rocr_dir="$GITHUB_WORKSPACE/rocr-build"
+          mkdir -p "$build_rocr_dir"
+          build_rocr_dir="$(cd $build_rocr_dir && pwd)"
+          rocr_install_dir="$GITHUB_WORKSPACE/rocr-install"
+          
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX="$rocr_install_dir" \
+            -DClang_DIR=$HOME/llvm/lib/cmake/clang \
+            -DLLVM_DIR=$HOME/llvm/lib/cmake/llvm \
+            -DIMAGE_SUPPORT=OFF \
+            -S "$rocr_dir" -B "$build_rocr_dir"
+          
+          cmake --build "$build_rocr_dir" --target install
+          tar -cf rocr-${GITHUB_SHA::8}.tar rocr-install
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: linux_x86_64_distro
+          path: rocr-*.tar
+          if-no-files-found: warn
+
+      - name: Setup tmate session
+        if: ${{ (failure() && inputs.debug_with_tmate) || inputs.force_debug_with_tmate }}
+        uses: mxschmitt/action-tmate@v3.18
+        with:
+          limit-access-to-actor: true
+          install-dependencies: false
+
+  test_aie:
+    name: AIE tests
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        runs-on: [linux-phoenix]
+    runs-on: ${{ matrix.runs-on }}
+    steps:
+      - name: "Checking out repository"
+        uses: actions/checkout@8f4b7f84864484a7bf31766abe9204da3cbe65b3
+
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux_x86_64_distro
+
+      - name: Extract artifact
+        run: |
+          tar -xf rocr-*.tar
+          echo hsa_runtime64_ROOT="$PWD/rocr-install" >> $GITHUB_ENV
+
+      - name: Build and run AIE smoke test
+        run: |
+          pushd rocrtst/suites/aie
+          
+          build_dir="$PWD/build"
+          mkdir -p $build_dir
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            "-Dhsa-runtime64_DIR=$hsa_runtime64_ROOT/lib64/cmake/hsa-runtime64" \
+            -S "$PWD" -B "$build_dir"
+          cmake --build "$build_dir" --target aie_hsa_bare_add_one
+          
+          "$build_dir"/aie_hsa_bare_add_one $PWD
+          
+          popd
+
+      - name: Build AIE test suite
+        run: |
+          pushd rocrtst/suites/aie
+          
+          build_dir="$PWD/build"
+          mkdir -p $build_dir
+          cmake -GNinja \
+            -DCMAKE_BUILD_TYPE=Release \
+            "-Dhsa-runtime64_DIR=$hsa_runtime64_ROOT/lib64/cmake/hsa-runtime64" \
+            -S "$PWD" -B "$build_dir"
+          
+          ! cmake --build "$build_dir" --target aie_hsa_dispatch_test
+          
+          popd
+
+  release:
+    name: Release
+    if: ${{ inputs.release }}
+    needs: [build, test_aie]
+    runs-on: ubuntu-22.04
+    permissions:
+      id-token: write
+      contents: write
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: linux_x86_64_distro
+
+      - name: Release current commit
+        uses: ncipollo/release-action@v1.12.0
+        with:
+          artifacts: rocr-*.tar
+          token: "${{ secrets.GITHUB_TOKEN }}"
+          tag: "latest"
+          name: "latest"
+          removeArtifacts: false
+          allowUpdates: true
+          replacesArtifacts: true
+          makeLatest: true
+          artifactErrorsFailBuild: true
