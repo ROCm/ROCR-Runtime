@@ -49,7 +49,35 @@
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
-#include "core/util/locks.h"
+
+/*
+ * Interpretation of the beginning of data payload for ERT_CMD_CHAIN in
+ * amdxdna_cmd. The rest of the payload in amdxdna_cmd is cmd BO handles.
+ */
+struct amdxdna_cmd_chain {
+  __u32 command_count;
+  __u32 submit_index;
+  __u32 error_index;
+  __u32 reserved[3];
+  __u64 data[] __counted_by(command_count);
+};
+
+
+/* Exec buffer command header format */
+struct amdxdna_cmd {
+  union {
+    struct {
+      __u32 state : 4;
+      __u32 unused : 6;
+      __u32 extra_cu_masks : 2;
+      __u32 count : 11;
+      __u32 opcode : 5;
+      __u32 reserved : 4;
+    };
+    __u32 header;
+  };
+  __u32 data[]  __counted_by(count);
+};
 
 namespace rocr {
 namespace AMD {
@@ -71,7 +99,7 @@ public:
 
   AieAqlQueue() = delete;
   AieAqlQueue(AieAgent *agent, size_t req_size_pkts, uint32_t node_id);
-  ~AieAqlQueue();
+  ~AieAqlQueue() override;
 
   hsa_status_t Inactivate() override;
   hsa_status_t SetPriority(HSA_QUEUE_PRIORITY priority) override;
@@ -100,7 +128,7 @@ public:
                        void *value) override;
 
   // AIE-specific API
-  AieAgent &GetAgent() { return agent_; }
+  AieAgent &GetAgent() const { return agent_; }
   void SetHwCtxHandle(uint32_t hw_ctx_handle) {
     hw_ctx_handle_ = hw_ctx_handle;
   }
@@ -119,7 +147,7 @@ public:
                   hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
                   hsa_signal_t *signal = NULL) override;
 
-  uint32_t queue_id_ = INVALID_QUEUEID;
+  uint64_t queue_id_ = INVALID_QUEUEID;
   /// @brief ID of AIE device on which this queue has been mapped.
   uint32_t node_id_ = std::numeric_limits<uint32_t>::max();
   /// @brief Queue size in bytes.
@@ -133,6 +161,44 @@ private:
 
   /// @brief Base of the queue's ring buffer storage.
   void *ring_buf_ = nullptr;
+
+  static hsa_status_t SubmitCmd(
+      uint32_t hw_ctx_handle, int fd, void *queue_base,
+      uint64_t read_dispatch_id, uint64_t write_dispatch_id,
+      std::unordered_map<uint32_t, void *> &vmem_handle_mappings);
+
+  /// @brief Creates a command BO and returns a pointer to the memory and
+  //          the corresponding handle
+  ///
+  /// @param size size of memory to allocate
+  /// @param handle A pointer to the BO handle
+  /// @param cmd A pointer to the buffer
+  static hsa_status_t CreateCmd(uint32_t size, uint32_t *handle,
+                                amdxdna_cmd **cmd, int fd);
+
+  /// @brief Adds all BOs in a command packet payload to a vector
+  ///         and replaces the handles with a virtual address
+  ///
+  /// @param count Number of entries in the command
+  /// @param bo_args A pointer to a vector that contains all bo handles
+  /// @param cmd_pkt_payload A pointer to the payload of the command
+  static void RegisterCmdBOs(
+      uint32_t count, std::vector<uint32_t> &bo_args,
+      hsa_amd_aie_ert_start_kernel_data_t *cmd_pkt_payload,
+      std::unordered_map<uint32_t, void *> &vmem_handle_mappings);
+
+  /// @brief Syncs all BOs referenced in bo_args
+  ///
+  /// @param bo_args vector containing handles of BOs to sync
+  static hsa_status_t SyncBos(std::vector<uint32_t> &bo_args, int fd);
+
+  /// @brief Executes a command and waits for its completion
+  ///
+  /// @param exec_cmd Structure containing the details of the command to execute
+  /// @param hw_ctx_handle the handle of the hardware context to run this
+  /// command
+  static hsa_status_t ExecCmdAndWait(amdxdna_drm_exec_cmd *exec_cmd,
+                                     uint32_t hw_ctx_handle, int fd);
 
   /// @brief Handle for an application context on the AIE device.
   ///
@@ -153,4 +219,4 @@ private:
 } // namespace AMD
 } // namespace rocr
 
-#endif // header guard
+#endif // HSA_RUNTIME_CORE_INC_AMD_HW_AQL_AIE_COMMAND_PROCESSOR_H_

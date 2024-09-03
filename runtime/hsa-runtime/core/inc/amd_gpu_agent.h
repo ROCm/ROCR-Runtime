@@ -234,7 +234,7 @@ class GpuAgent : public GpuAgentInt {
   GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xnack_mode, uint32_t index);
 
   // @brief GPU agent destructor.
-  ~GpuAgent();
+  ~GpuAgent() override;
 
   // @brief Ensure blits are ready (performance hint).
   void PreloadBlits() override;
@@ -507,14 +507,14 @@ class GpuAgent : public GpuAgentInt {
   hsa_status_t EnableDmaProfiling(bool enable) override;
 
   hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
-                                       void* cb_data);
-  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session);
+                          void *cb_data) override;
+  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession &session) override;
   hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
-                                      pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session);
+                         pcs::PcsRuntime::PcSamplingSession &session) override;
+  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession &session) override;
+  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession &session) override;
+  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession &session) override;
+  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession &session) override;
   hsa_status_t PcSamplingFlushHostTrapDeviceBuffers(pcs::PcsRuntime::PcSamplingSession& session);
 
   static void PcSamplingThreadRun(void* agent);
@@ -793,4 +793,4 @@ class GpuAgent : public GpuAgentInt {
 }  // namespace amd
 }  // namespace rocr
 
-#endif  // header guard
+#endif  // HSA_RUNTIME_CORE_INC_AMD_GPU_AGENT_H_

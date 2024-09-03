@@ -118,7 +118,9 @@ hsa_status_t XdnaDriver::GetAgentProperties(core::Agent &agent) const {
     return HSA_STATUS_ERROR;
   }
 
-  aie_agent.SetNumCols(aie_metadata.cols);
+  // Right now can only target N-1 columns so putting this 
+  // here as a workaround
+  aie_agent.SetNumCols(aie_metadata.cols - 1);
   aie_agent.SetNumCoreRows(aie_metadata.core.row_count);
 
   return HSA_STATUS_SUCCESS;
@@ -351,6 +353,16 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t XdnaDriver::GetHandleMappings(std::unordered_map<uint32_t, void*> &vmem_handle_mappings) {
+  vmem_handle_mappings = this->vmem_handle_mappings;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetFd(int &fd) {
+  fd = fd_;
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t XdnaDriver::FreeDeviceHeap() {
   if (dev_heap_parent) {
     munmap(dev_heap_parent, dev_heap_align * 2 - 1);
@@ -388,6 +400,13 @@ hsa_status_t XdnaDriver::ConfigHwCtxCU(
         config_cu_param.cu_configs[i].cu_config_bo;
     xdna_config_cu_param->cu_configs[i].cu_func =
         config_cu_param.cu_configs[i].cu_func;
+
+    // sync configuration buffer
+    amdxdna_drm_sync_bo sync_args = {};
+    sync_args.handle = xdna_config_cu_param->cu_configs[i].cu_bo;
+    if (ioctl(fd_, DRM_IOCTL_AMDXDNA_SYNC_BO, &sync_args) < 0) {
+      return HSA_STATUS_ERROR;
+    }
   }
 
   amdxdna_drm_config_hwctx config_hw_ctx_args{
