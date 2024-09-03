@@ -469,6 +469,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	TraceRoot->TraceBufferMinSizeBytes = PAGE_ALIGN_UP(min_buf_size);
 	TraceRoot->TraceId = PORT_VPTR_TO_UINT64(trace);
 
+	free(trace);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
