@@ -117,7 +117,8 @@ hsa_status_t XdnaDriver::GetAgentProperties(core::Agent &agent) const {
     return HSA_STATUS_ERROR;
   }
 
-  aie_agent.SetNumCols(aie_metadata.cols);
+  // Right now can only target N-1 columns
+  aie_agent.SetNumCols(aie_metadata.cols - 1);
   aie_agent.SetNumCoreRows(aie_metadata.core.row_count);
 
   return HSA_STATUS_SUCCESS;
@@ -313,6 +314,16 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetHandleMappings(std::unordered_map<uint32_t, void*> &vmem_handle_mappings) {
+  vmem_handle_mappings = this->vmem_handle_mappings;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetFd(int &fd) {
+  fd = fd_;
   return HSA_STATUS_SUCCESS;
 }
 
