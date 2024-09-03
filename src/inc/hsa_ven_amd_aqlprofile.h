@@ -285,7 +285,7 @@ hsa_status_t hsa_ven_amd_aqlprofile_read(
     hsa_ext_amd_aql_pm4_packet_t* aql_read_packet);   // [out] profile stop AQL packet
 
 // Legacy devices, PM4 profiling packet size
-static const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
+const unsigned HSA_VEN_AMD_AQLPROFILE_LEGACY_PM4_PACKET_SIZE = 192;
 // Legacy devices, converting the profiling AQL packet to PM4 packet blob
 hsa_status_t hsa_ven_amd_aqlprofile_legacy_get_pm4(
     const hsa_ext_amd_aql_pm4_packet_t* aql_packet,  // [in] AQL packet
