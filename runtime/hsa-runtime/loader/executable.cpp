@@ -280,9 +280,11 @@ hsa_status_t AmdHsaCodeLoader::IterateExecutables(
   assert(callback);
 
   for (auto &exec : executables) {
-    hsa_status_t status = callback(Executable::Handle(exec), data);
-    if (status != HSA_STATUS_SUCCESS) {
-      return status;
+    if(exec != nullptr){
+      hsa_status_t status = callback(Executable::Handle(exec), data);
+      if (status != HSA_STATUS_SUCCESS) {
+        return status;
+      }
     }
   }
 
