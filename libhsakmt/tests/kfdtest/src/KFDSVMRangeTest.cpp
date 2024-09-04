@@ -141,6 +141,11 @@ TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
                                     nAttributes, outputAttributes));
 
     for (i = 0; i < nAttributes; i++) {
+        /* Default granularity could be specified using module parameter,
+         * therefore it is incorrect to expect a particular value
+         */
+        if (outputAttributes[i].type == HSA_SVM_ATTR_GRANULARITY)
+            continue;
         if (outputAttributes[i].type == HSA_SVM_ATTR_ACCESS ||
             outputAttributes[i].type == HSA_SVM_ATTR_ACCESS_IN_PLACE ||
             outputAttributes[i].type == HSA_SVM_ATTR_NO_ACCESS)
