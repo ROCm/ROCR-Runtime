@@ -235,7 +235,7 @@ hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
       // TODO: Make this configurable.
       .max_opc = 0x800,
       // This field is for the number of core tiles.
-      .num_tiles = aie_agent.GetNumCores(),
+      .num_tiles = static_cast<uint32_t>(aie_agent.GetNumCores()),
       .mem_size = 0,
       .umq_doorbell = 0};
 
@@ -413,7 +413,7 @@ hsa_status_t XdnaDriver::ConfigHwCtxCU(
       .handle = aie_queue.GetHwCtxHandle(),
       .param_type = DRM_AMDXDNA_HWCTX_CONFIG_CU,
       .param_val = reinterpret_cast<uint64_t>(xdna_config_cu_param),
-      .param_val_size = config_cu_param_size};
+      .param_val_size = static_cast<uint32_t>(config_cu_param_size)};
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CONFIG_HWCTX, &config_hw_ctx_args) < 0) {
     return HSA_STATUS_ERROR;
