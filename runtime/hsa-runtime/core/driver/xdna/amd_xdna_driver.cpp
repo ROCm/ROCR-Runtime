@@ -217,7 +217,7 @@ hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
       // TODO: Make this configurable.
       .max_opc = 0x800,
       // This field is for the number of core tiles.
-      .num_tiles = aie_agent.GetNumCores(),
+      .num_tiles = static_cast<uint32_t>(aie_agent.GetNumCores()),
       .mem_size = 0,
       .umq_doorbell = 0};
 
