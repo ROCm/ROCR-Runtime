@@ -88,6 +88,13 @@ endif()
 set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 set(PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}")
 
+# Set dependency for rocprofiler-register package
+set(HSA_DEP_ROCPROFILER_REGISTER ON CACHE INTERNAL "")
+
+if (HSA_DEP_ROCPROFILER_REGISTER)
+  string(APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocprofiler-register")
+  string(APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocprofiler-register")
+endif()
 
 add_rocm_subdir(libhsakmt "${THUNK_DEFINITIONS}")
 set_target_properties(hsakmt PROPERTIES
