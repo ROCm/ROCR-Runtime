@@ -69,7 +69,7 @@ TEST_P(KFDSVMRangeTest, BasicSystemMemTest) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaSVMRange srcSysBuffer(BufferSize, defaultGPUNode);
     HsaSVMRange destSysBuffer(BufferSize, defaultGPUNode);
 
@@ -440,7 +440,7 @@ TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
     void *pBuf;
 
     PM4Queue queue;
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaSVMRange *sysBuffer;
     HsaSVMRange destSysBuffer(BufSize, defaultGPUNode);
 
@@ -497,7 +497,7 @@ TEST_P(KFDSVMRangeTest, BasicVramTest) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaSVMRange srcSysBuffer(BufferSize, defaultGPUNode);
     HsaSVMRange locBuffer(BufferSize, defaultGPUNode, defaultGPUNode);
     HsaSVMRange destSysBuffer(BufferSize, defaultGPUNode);
@@ -945,7 +945,7 @@ TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
      */
 //#define USE_PM4_QUEUE_TRIGGER_VM_FAULT
 #ifdef USE_PM4_QUEUE_TRIGGER_VM_FAULT
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     PM4Queue queue;
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
