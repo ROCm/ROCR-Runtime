@@ -57,7 +57,7 @@ TEST_F(RDMATest, GPUDirect) {
     int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer srcSysBuffer(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer srcLocalBuffer(BufferSize, defaultGPUNode, false, true);
 
@@ -130,7 +130,7 @@ TEST_F(RDMATest, ContiguousVRAMAllocation) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, defaultGPUNode, false);
     void *LocalBuffer;
     HsaMemFlags memFlags = {0};

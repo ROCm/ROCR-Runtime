@@ -93,7 +93,7 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer srcSysBuffer(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer destSysBuffer(BufferSize, defaultGPUNode);
     HsaMemoryBuffer srcLocalBuffer(BufferSize, defaultGPUNode, false, true);
@@ -151,7 +151,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer SysBufferA(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer SysBufferB(BufferSize, defaultGPUNode, true);
     HsaMemoryBuffer LocalBuffer(BufferSize, defaultGPUNode, false, true);
@@ -296,7 +296,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     HsaMemoryBuffer sysBuffer(PAGE_SIZE, defaultGPUNode, false);
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
