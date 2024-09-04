@@ -393,6 +393,11 @@ hsa_status_t XdnaDriver::ConfigHwCtxCU(
   amdxdna_hwctx_param_config_cu *xdna_config_cu_param =
       reinterpret_cast<amdxdna_hwctx_param_config_cu *>(
           malloc(config_cu_param_size));
+  if (xdna_config_cu_param == nullptr) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+  MAKE_SCOPE_GUARD([xdna_config_cu_param] { free(xdna_config_cu_param); });
+
   xdna_config_cu_param->num_cus = config_cu_param.num_cus;
 
   for (int i = 0; i < xdna_config_cu_param->num_cus; ++i) {
