@@ -10,3 +10,13 @@ patches-*
 build/
 outgoing/
 Makefile
+
+# documentation artifacts
+_build/
+_doxygen/
+_images/
+_static/
+_templates/
+_toc.yml
+doxygen
+
