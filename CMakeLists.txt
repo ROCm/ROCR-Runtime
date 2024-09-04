@@ -46,9 +46,11 @@ cmake_minimum_required(VERSION 3.7)
 # Set the project name
 project("rocr")
 
-# option(BUILD_TESTS "Build tests" OFF)
-
 set(CMAKE_VERBOSE_MAKEFILE ON)
+
+if (NOT DEFINED BUILD_ROCR)
+  set(BUILD_ROCR ON)
+endif()
 
 function(add_rocm_subdir subdir subdir_assigns)
     message("add_rocm_subdir() -- " ${subdir})
@@ -93,16 +95,20 @@ set_target_properties(hsakmt PROPERTIES
                                 LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/lib"
                                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/runtime")
 
-add_rocm_subdir(runtime/hsa-runtime "${ROCR_DEFINITIONS}")
-set_target_properties(hsa-runtime64 PROPERTIES
+if (BUILD_ROCR)
+  add_rocm_subdir(runtime/hsa-runtime "${ROCR_DEFINITIONS}")
+  set_target_properties(hsa-runtime64 PROPERTIES
                                ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/archive"
                                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/lib"
                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/runtime")
-if (BUILD_SHARED_LIBS)
-  add_dependencies(hsa-runtime64 hsakmt)
-else()
-  add_dependencies(hsa-runtime64 hsakmt-staticdrm)
+
+  if (BUILD_SHARED_LIBS)
+    add_dependencies(hsa-runtime64 hsakmt)
+  else()
+    add_dependencies(hsa-runtime64 hsakmt-staticdrm)
+  endif()
 endif()
+
 # Optionally record the package's find module in the user's package cache.
 if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
   set ( EXPORT_TO_USER_PACKAGE_REGISTRY "off")
@@ -116,7 +122,6 @@ if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
   # Record the package in the user's cache.
   export(PACKAGE ${CORE_RUNTIME_NAME})
 endif()
-
 
 ## Packaging directives
 set(CPACK_VERBOSE 1)
