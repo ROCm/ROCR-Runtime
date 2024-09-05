@@ -228,7 +228,6 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
              "%s%036lX", uuid_tmp, uuid_value);
     break;
   }
-
   case HSA_AMD_AGENT_INFO_ASIC_REVISION:
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
@@ -236,6 +235,43 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     // commented out until we populate AIE agent regions
     assert(regions_.size() != 0 && "No device local memory found!");
     *reinterpret_cast<bool *>(value) = true;
+    break;
+  case HSA_AMD_AGENT_INFO_TIMESTAMP_FREQUENCY:
+    return core::Runtime::runtime_singleton_->GetSystemInfo(
+        HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, value);
+    break;
+  case HSA_AMD_AGENT_INFO_ASIC_FAMILY_ID:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_UCODE_VERSION:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_SDMA_UCODE_VERSION:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_SDMA_ENG:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_SDMA_XGMI_ENG:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_IOMMU_SUPPORT:
+    *static_cast<hsa_amd_iommu_version_t *>(value) = HSA_IOMMU_SUPPORT_NONE;
+    break;
+  case HSA_AMD_AGENT_INFO_NUM_XCC:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_DRIVER_UID:
+    *static_cast<uint32_t *>(value) = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_NEAREST_CPU:
+    static_cast<hsa_agent_t *>(value)->handle = 0;
+    break;
+  case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
+    memset(value, 0, sizeof(uint8_t) * 8);
+    break;
+  case HSA_AMD_AGENT_INFO_AQL_EXTENSIONS:
+    memset(value, 0, sizeof(uint8_t) * 8);
     break;
   default:
     *reinterpret_cast<uint32_t *>(value) = 0;
