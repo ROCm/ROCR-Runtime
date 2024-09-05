@@ -825,6 +825,13 @@ void GpuAgent::InitDma() {
         *blits_[BlitHostToDev];
       }
 
+      // Check support for targeted SDMA engines
+      auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+      if (!(kfd_version.KernelInterfaceMajorVersion > 1 ||
+            (kfd_version.KernelInterfaceMajorVersion == 1 &&
+             kfd_version.KernelInterfaceMinorVersion >= 17)))
+        rec_eng = -1;
+
       auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
