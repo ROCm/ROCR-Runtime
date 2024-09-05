@@ -69,8 +69,6 @@ HSAKMT_STATUS hsakmt_fmm_return_asan_header_page(void* address);
 #endif
 
 /* Topology interface*/
-HSAKMT_STATUS fmm_node_added(HSAuint32 gpu_id);
-HSAKMT_STATUS fmm_node_removed(HSAuint32 gpu_id);
 HSAKMT_STATUS hsakmt_fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
 		HSAuint64 *aperture_base, HSAuint64 *aperture_limit);
 
