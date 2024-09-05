@@ -81,12 +81,17 @@ class MemoryAllocateNegativeTest : public TestBase {
   // of 0 size is valid on memory pool or not
   void ZeroMemoryAllocateTest(void);
 
+  // @Brief: This test verify that freeing a ring buffer used by a queue
+  // will trigger an error
+  void FreeQueueRingBufferTest(void);
 
  private:
   void MaxMemoryAllocateTest(hsa_agent_t agent,
                              hsa_amd_memory_pool_t pool);
   void ZeroMemoryAllocateTest(hsa_agent_t agent,
                              hsa_amd_memory_pool_t pool);
+
+  void FreeQueueRingBufferTest(hsa_agent_t agent);
 };
 
 #endif  // ROCRTST_SUITES_NEGATIVE_MEMORY_ALLOCATE_NEGATIVE_TESTS_H_

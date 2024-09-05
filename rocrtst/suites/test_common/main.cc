@@ -412,6 +412,7 @@ TEST(rocrtstNeg, Memory_Negative_Tests) {
   RunCustomTestProlog(&mt);
   mt.ZeroMemoryAllocateTest();
   mt.MaxMemoryAllocateTest();
+  mt.FreeQueueRingBufferTest();
   RunCustomTestEpilog(&mt);
 }
 
