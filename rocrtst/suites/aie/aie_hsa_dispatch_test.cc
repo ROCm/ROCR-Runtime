@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
       num_data_elements * sizeof(std::uint32_t);
 
   std::uint32_t *input = {};
-  r = hsa_amd_memory_pool_allocate(global_dev_mem_pool, data_buffer_size, 0,
+  r = hsa_amd_memory_pool_allocate(global_kernarg_mem_pool, data_buffer_size, 0,
                                    reinterpret_cast<void **>(&input));
   assert(r == HSA_STATUS_SUCCESS);
   std::uint32_t input_handle = {};
@@ -232,7 +232,7 @@ int main(int argc, char **argv) {
   assert(input_handle != 0);
 
   std::uint32_t *output = {};
-  r = hsa_amd_memory_pool_allocate(global_dev_mem_pool, data_buffer_size, 0,
+  r = hsa_amd_memory_pool_allocate(global_kernarg_mem_pool, data_buffer_size, 0,
                                    reinterpret_cast<void **>(&output));
   assert(r == HSA_STATUS_SUCCESS);
   std::uint32_t output_handle = {};

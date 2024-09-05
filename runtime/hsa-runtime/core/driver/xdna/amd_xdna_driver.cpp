@@ -147,7 +147,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   }
 
   if (region.kernarg()) {
-    create_bo_args.type = AMDXDNA_BO_CMD;
+    create_bo_args.type = AMDXDNA_BO_SHMEM;
   } else {
     create_bo_args.type = AMDXDNA_BO_DEV;
   }
