@@ -825,6 +825,10 @@ void GpuAgent::InitDma() {
         *blits_[BlitHostToDev];
       }
 
+      // gfx94x is more efficient with reverse order of SDMA0/1 for host<->device copies
+      if (!use_xgmi && isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() >= 4)
+        rec_eng = (rec_eng + 1) % properties_.NumSdmaEngines;
+
       // Check support for targeted SDMA engines
       auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
       if (!(kfd_version.KernelInterfaceMajorVersion > 1 ||
