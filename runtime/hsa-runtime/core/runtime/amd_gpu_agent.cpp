@@ -716,10 +716,13 @@ hsa_status_t GpuAgent::VisitRegion(
 
 core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t status,
                                                                  hsa_queue_t* source, void* data),
-                                                void* data) {
+                                                void* data, const uint32_t in_size) {
   // Disabled intercept of internal queues pending tools updates.
   core::Queue* queue = nullptr;
-  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, callback, data, 0, 0, &queue);
+  uint32_t size = std::max(in_size, minAqlSize_);
+  size = std::min(size, maxAqlSize_);
+
+  QueueCreate(size, HSA_QUEUE_TYPE_MULTI, callback, data, 0, 0, &queue);
   if (queue != nullptr)
     core::Runtime::runtime_singleton_->InternalQueueCreateNotify(core::Queue::Convert(queue),
                                                                  this->public_handle());
@@ -894,7 +897,8 @@ void GpuAgent::InitDma() {
 void GpuAgent::InitGWS() {
   gws_queue_.queue_.reset([this]() {
     if (properties_.NumGws == 0) return (core::Queue*)nullptr;
-    std::unique_ptr<core::Queue> queue(CreateInterceptibleQueue());
+    const uint32_t defaultGWSQueueSize = 0x4000; // 16KB
+    std::unique_ptr<core::Queue> queue(CreateInterceptibleQueue(defaultGWSQueueSize));
     if (queue == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");

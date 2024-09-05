@@ -464,15 +464,14 @@ class GpuAgent : public GpuAgentInt {
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
   // @brief Create an internal queue allowing tools to be notified.
-  core::Queue* CreateInterceptibleQueue() {
-    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr);
+  core::Queue* CreateInterceptibleQueue(const uint32_t size = 0) {
+    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr, size);
   }
 
   // @brief Create an internal queue, with a custom error handler, allowing tools to be
   // notified.
-  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source,
-                                                         void* data),
-                                        void* data);
+  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
+                                        void* data, const uint32_t size);
 
   // @brief Create SDMA blit object.
   //
