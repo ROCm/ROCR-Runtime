@@ -460,8 +460,8 @@ class GpuAgent : public GpuAgentInt {
 
  protected:
   // Sizes are in packets.
-  static const uint32_t minAqlSize_ = 0x40;     // 4KB min
-  static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
+  const uint32_t minAqlSize_ = 0x40;     // 4KB min
+  const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
   // @brief Create an internal queue allowing tools to be notified.
   core::Queue* CreateInterceptibleQueue(const uint32_t size = 0) {
