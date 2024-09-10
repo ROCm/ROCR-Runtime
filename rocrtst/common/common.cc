@@ -400,6 +400,12 @@ hsa_status_t AcquirePoolInfo(hsa_amd_memory_pool_t pool,
                                                           &pool_i->size);
   RET_IF_HSA_COMMON_ERR(err);
 
+#ifdef ROCRTST_EMULATOR_BUILD
+  // Limit pool sizes to 2 GB on emulator
+  const size_t max_pool_size = 2*1024*1024*1024UL;
+  pool_i->size = std::min(pool_i->size, max_pool_size);
+#endif
+
   err = hsa_amd_memory_pool_get_info(pool,
              HSA_AMD_MEMORY_POOL_INFO_RUNTIME_ALLOC_ALLOWED,
                                                       &pool_i->alloc_allowed);
