@@ -44,7 +44,7 @@
 
 
 MODULE_AUTHOR("serguei.sagalovitch@amd.com");
-MODULE_LICENSE("GPL");
+MODULE_LICENSE("MIT");
 MODULE_DESCRIPTION("AMD RDMA basic API test kernel-mode driver");
 MODULE_VERSION("1.0");
 
