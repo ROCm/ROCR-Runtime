@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -348,7 +348,7 @@ class GpuAgent : public GpuAgentInt {
   }
 
   core::Agent* GetNearestCpuAgent(void) const;
-  
+
   void RegisterGangPeer(core::Agent& gang_peer, unsigned int bandwidth_factor) override;
 
   void RegisterRecSdmaEngIdMaskPeer(core::Agent& gang_peer, uint32_t rec_sdma_eng_id_mask) override;
@@ -417,6 +417,9 @@ class GpuAgent : public GpuAgentInt {
     if (t0_.GPUClockCounter == t1_.GPUClockCounter) SyncClocks();
   }
 
+  // @brief Override from AMD::GpuAgentInt.
+  __forceinline bool is_xgmi_cpu_gpu() const { return xgmi_cpu_gpu_; }
+
   const size_t MAX_SCRATCH_APERTURE_PER_XCC = (1ULL << 32);
   size_t MaxScratchDevice() const { return properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC; }
 
@@ -461,15 +464,14 @@ class GpuAgent : public GpuAgentInt {
   static const uint32_t maxAqlSize_ = 0x20000;  // 8MB max
 
   // @brief Create an internal queue allowing tools to be notified.
-  core::Queue* CreateInterceptibleQueue() {
-    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr);
+  core::Queue* CreateInterceptibleQueue(const uint32_t size = 0) {
+    return CreateInterceptibleQueue(core::Queue::DefaultErrorHandler, nullptr, size);
   }
 
   // @brief Create an internal queue, with a custom error handler, allowing tools to be
   // notified.
-  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source,
-                                                         void* data),
-                                        void* data);
+  core::Queue* CreateInterceptibleQueue(void (*callback)(hsa_status_t status, hsa_queue_t* source, void* data),
+                                        void* data, const uint32_t size);
 
   // @brief Create SDMA blit object.
   //
@@ -624,6 +626,7 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief HDP flush registers
   hsa_amd_hdp_flush_t HDP_flush_ = {nullptr, nullptr};
+
  private:
   // @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
@@ -782,6 +785,9 @@ class GpuAgent : public GpuAgentInt {
   std::map<uint64_t, uint32_t> rec_sdma_eng_id_peers_info_;
 
   bool uses_rec_sdma_eng_id_mask_;
+
+  // @bried XGMI CPU<->GPU
+  bool xgmi_cpu_gpu_;
 };
 
 }  // namespace amd

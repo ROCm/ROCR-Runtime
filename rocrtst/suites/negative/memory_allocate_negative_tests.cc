@@ -287,4 +287,163 @@ void MemoryAllocateNegativeTest::ZeroMemoryAllocateTest(void) {
   }
 }
 
+static const uint32_t kMaxQueueSizeForAgent = 1024;
+static const uint32_t kMaxQueue = 64;
+
+typedef struct test_validation_data_t {
+  bool cb_triggered;
+  uint64_t expected_address;
+} test_validation_data;
+
+hsa_status_t CallbackSystemErrorHandling(const hsa_amd_event_t* event, void* data) {
+  test_validation_data* user_data = reinterpret_cast<test_validation_data*>(data);
+
+  if (event->event_type != HSA_AMD_GPU_MEMORY_ERROR_EVENT) {
+    std::cout << "ERROR: Invalid error type" << std::endl;
+    return HSA_STATUS_SUCCESS;
+  }
+
+  const hsa_amd_gpu_memory_error_info_t& error_info =
+      reinterpret_cast<const hsa_amd_gpu_memory_error_info_t&>(event->memory_error);
+
+  if (error_info.virtual_address != user_data->expected_address) {
+    std::cout << "ERROR: Invalid virtual address" << std::endl;
+    return HSA_STATUS_SUCCESS;
+  }
+
+  if (!(error_info.error_reason_mask & HSA_AMD_MEMORY_ERROR_MEMORY_IN_USE)) {
+    std::cout << "ERROR: HSA_AMD_MEMORY_ERROR_MEMORY_IN_USE flag not set" << std::endl;
+    return HSA_STATUS_SUCCESS;
+  }
+
+  user_data->cb_triggered = true;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+
+void MemoryAllocateNegativeTest::FreeQueueRingBufferTest(void) {
+  hsa_status_t err;
+
+  memset(&aql(), 0, sizeof(hsa_kernel_dispatch_packet_t));
+  set_kernel_file_name("dispatch_time_kernels.hsaco");
+  set_kernel_name("empty_kernel");
+
+  if (verbosity() > 0) {
+    PrintMemorySubtestHeader("RingBufferFree");
+  }
+
+  // find all cpu agents
+  std::vector<hsa_agent_t> cpus;
+  err = hsa_iterate_agents(rocrtst::IterateCPUAgents, &cpus);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  // find all gpu agents
+  std::vector<hsa_agent_t> gpus;
+  err = hsa_iterate_agents(rocrtst::IterateGPUAgents, &gpus);
+  ASSERT_EQ(err, HSA_STATUS_SUCCESS);
+
+  for (unsigned int i = 0; i < gpus.size(); ++i) {
+    FreeQueueRingBufferTest(gpus[i]);
+  }
+
+  if (verbosity() > 0) {
+    std::cout << "subtest Passed" << std::endl;
+    std::cout << kSubTestSeparator << std::endl;
+  }
+}
+
+void MemoryAllocateNegativeTest::FreeQueueRingBufferTest(hsa_agent_t gpuAgent) {
+  hsa_status_t err;
+
+  auto enqueue_dispatch = [&](hsa_queue_t* queue) {
+    hsa_signal_store_relaxed(aql().completion_signal, 1);
+
+    aql().setup |= 1 << HSA_KERNEL_DISPATCH_PACKET_SETUP_DIMENSIONS;
+    aql().workgroup_size_x = 1;
+    aql().workgroup_size_y = 1;
+    aql().workgroup_size_z = 1;
+
+    aql().kernel_object = kernel_object();
+
+    const uint32_t queue_mask = queue->size - 1;
+
+    // Load index for writing header later to command queue at same index
+    uint64_t index = hsa_queue_load_write_index_relaxed(queue);
+    hsa_queue_store_write_index_relaxed(queue, index + 1);
+
+    rocrtst::WriteAQLToQueueLoc(queue, index, &aql());
+    aql().header = HSA_PACKET_TYPE_KERNEL_DISPATCH;
+    aql().header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE;
+    aql().header |= HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE;
+
+    // Set the Aql packet header
+    rocrtst::AtomicSetPacketHeader(aql().header, aql().setup,
+                                   &(reinterpret_cast<hsa_kernel_dispatch_packet_t*>(
+                                       queue->base_address))[index & queue_mask]);
+
+
+    // ringdoor bell
+    hsa_signal_store_relaxed(queue->doorbell_signal, index);
+
+    // wait for the signal long enough for the queue error handling callback to happen
+    hsa_signal_value_t completion;
+    completion = hsa_signal_wait_scacquire(aql().completion_signal, HSA_SIGNAL_CONDITION_LT, 1,
+                                           0xffffff, HSA_WAIT_STATE_ACTIVE);
+    // completion signal should be 0.
+    return completion;
+  };
+
+  // Create the executable, get symbol by name and load the code object
+  ASSERT_SUCCESS(rocrtst::LoadKernelFromObjFile(this, &gpuAgent));
+
+  // Fill up the kernel packet except header
+  ASSERT_SUCCESS(rocrtst::InitializeAQLPacket(this, &aql()));
+
+  // get queue size
+  uint32_t queue_max = 0;
+  ASSERT_SUCCESS(hsa_agent_get_info(gpuAgent, HSA_AGENT_INFO_QUEUE_MAX_SIZE, &queue_max));
+
+  // Adjust the size to the max of 1024
+  queue_max = (queue_max < kMaxQueueSizeForAgent) ? queue_max : kMaxQueueSizeForAgent;
+
+  hsa_queue_t* queue[kMaxQueue];  // command queue
+  uint32_t i;
+  test_validation_data user_data = {};
+  ASSERT_SUCCESS( hsa_amd_register_system_event_handler(CallbackSystemErrorHandling, &user_data));
+  for (i = 0; i < kMaxQueue; ++i) {
+    // create queue
+    ASSERT_SUCCESS(hsa_queue_create(gpuAgent, kMaxQueueSizeForAgent, HSA_QUEUE_TYPE_SINGLE, NULL,
+                                    NULL, 0, 0, &queue[i]));
+
+    user_data.cb_triggered = false;
+    user_data.expected_address = reinterpret_cast<uint64_t>(queue[i]->base_address);
+
+    // Enqueue a dispatch and make sure completion signal is 0.
+    ASSERT_EQ(enqueue_dispatch(queue[i]), 0);
+
+    // Try to delete the Queue ring buffer, this should return error.
+    // Note: This will leave the hsa-runtime internal allocation table in an inconsistent state
+    // because hsa-runtime clean's up its internal allocation table before calling libhsakmt to try
+    // to do the actual free. So when compiled in debug mode, this will trigger a "Can't find
+    // address in allocation map" warning when hsa_queue_destroy is called afterwards. This is the
+    // expected behavior because trying to re-organise hsa-runtime hsa_memory_free function to
+    // handle this negative use-case is not worth it and the caller is expected to call abort in
+    // their system error handler.
+
+    ASSERT_NE(hsa_memory_free(queue[i]->base_address), HSA_STATUS_SUCCESS);
+
+    // Make sure queue is still in a working state. Enqueue a second dispatch and make sure
+    // completion signal is 0.
+    ASSERT_EQ(enqueue_dispatch(queue[i]), 0);
+
+    // Make sure CallbackSystemErrorHandling was called and memory event has valid info
+    ASSERT_TRUE(user_data.cb_triggered);
+
+    if (queue[i]) hsa_queue_destroy(queue[i]);
+  }
+
+  clear_code_object();
+}
+
 #undef RET_IF_HSA_ERR

@@ -118,7 +118,8 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
       trap_handler_tma_region_(NULL),
-      pcs_hosttrap_data_() {
+      pcs_hosttrap_data_(),
+      xgmi_cpu_gpu_(false) {
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
 
@@ -218,6 +219,11 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   // Reported by libdrm in KHz.
   wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
 #endif
+
+  auto& firstCpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
+  auto linkInfo = core::Runtime::runtime_singleton_->GetLinkInfo(firstCpu->node_id(),
+                                                                node_id());
+  xgmi_cpu_gpu_ = (linkInfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI);
 
   // Populate region list.
   InitRegionList();
@@ -574,7 +580,7 @@ void GpuAgent::ReserveScratch()
 {
   size_t reserved_sz = core::Runtime::runtime_singleton_->flag().scratch_single_limit();
   if (reserved_sz > MaxScratchDevice()) {
-    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n", 
+    fprintf(stdout, "User specified scratch limit exceeds device limits (requested:%lu max:%lu)!\n",
                     reserved_sz, MaxScratchDevice());
     reserved_sz = MaxScratchDevice();
   }
@@ -710,10 +716,13 @@ hsa_status_t GpuAgent::VisitRegion(
 
 core::Queue* GpuAgent::CreateInterceptibleQueue(void (*callback)(hsa_status_t status,
                                                                  hsa_queue_t* source, void* data),
-                                                void* data) {
+                                                void* data, const uint32_t in_size) {
   // Disabled intercept of internal queues pending tools updates.
   core::Queue* queue = nullptr;
-  QueueCreate(minAqlSize_, HSA_QUEUE_TYPE_MULTI, callback, data, 0, 0, &queue);
+  uint32_t size = std::max(in_size, minAqlSize_);
+  size = std::min(size, maxAqlSize_);
+
+  QueueCreate(size, HSA_QUEUE_TYPE_MULTI, callback, data, 0, 0, &queue);
   if (queue != nullptr)
     core::Runtime::runtime_singleton_->InternalQueueCreateNotify(core::Queue::Convert(queue),
                                                                  this->public_handle());
@@ -819,6 +828,17 @@ void GpuAgent::InitDma() {
         *blits_[BlitHostToDev];
       }
 
+      // gfx94x is more efficient with reverse order of SDMA0/1 for host<->device copies
+      if (!use_xgmi && isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() >= 4)
+        rec_eng = (rec_eng + 1) % properties_.NumSdmaEngines;
+
+      // Check support for targeted SDMA engines
+      auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
+      if (!(kfd_version.KernelInterfaceMajorVersion > 1 ||
+            (kfd_version.KernelInterfaceMajorVersion == 1 &&
+             kfd_version.KernelInterfaceMinorVersion >= 17)))
+        rec_eng = -1;
+
       auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
@@ -877,7 +897,8 @@ void GpuAgent::InitDma() {
 void GpuAgent::InitGWS() {
   gws_queue_.queue_.reset([this]() {
     if (properties_.NumGws == 0) return (core::Queue*)nullptr;
-    std::unique_ptr<core::Queue> queue(CreateInterceptibleQueue());
+    const uint32_t defaultGWSQueueSize = 0x4000; // 16KB
+    std::unique_ptr<core::Queue> queue(CreateInterceptibleQueue(defaultGWSQueueSize));
     if (queue == nullptr)
       throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                "Internal queue creation failed.");

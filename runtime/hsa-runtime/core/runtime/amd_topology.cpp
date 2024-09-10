@@ -380,17 +380,6 @@ void BuildTopology() {
   }
   const_cast<Flag&>(core::Runtime::runtime_singleton_->flag()).parse_masks(maxGpu, maxCu);
 
-  // Temporary work-around, disable SDMA ganging on non-APUs in non-SPX modes
-  // Check xGMI APU status
-  bool isXgmiApu = false;
-  auto& firstCpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
-  for (auto& peer_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
-    auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(firstCpu->node_id(),
-                                                                peer_gpu->node_id());
-    isXgmiApu = linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI;
-    if (isXgmiApu) break;
-  }
-
   // Register destination agents that can SDMA gang copy for source agents
   for (auto& src_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
     uint32_t src_id = src_gpu->node_id();
@@ -406,6 +395,9 @@ void BuildTopology() {
         // Weigth of 15 - Direct GPU link in single partition mode
         // Weight of 41 - Inter-socket GPU link in multi-partition mode
         if (linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
+          // Temporary work-around, disable SDMA ganging on non-APUs in non-SPX modes
+          // Check xGMI APU status
+          const bool isXgmiApu = reinterpret_cast<AMD::GpuAgent*>(src_gpu)->is_xgmi_cpu_gpu();
           if (linfo.info.numa_distance == 13 || linfo.info.numa_distance == 41)
             gang_factor = isXgmiApu ? 2 : 1;
           else if (linfo.info.numa_distance == 15 && linfo.info.min_bandwidth)

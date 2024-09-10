@@ -51,7 +51,7 @@ TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     /* Skip test if not on dGPU path, which the test depends on */
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Not dGPU path, skipping the test" << std::endl;
         return;
     }
@@ -93,7 +93,7 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer srcSysBuffer(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer destSysBuffer(BufferSize, defaultGPUNode);
     HsaMemoryBuffer srcLocalBuffer(BufferSize, defaultGPUNode, false, true);
@@ -151,7 +151,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaMemoryBuffer SysBufferA(BufferSize, defaultGPUNode, false);
     HsaMemoryBuffer SysBufferB(BufferSize, defaultGPUNode, true);
     HsaMemoryBuffer LocalBuffer(BufferSize, defaultGPUNode, false, true);
@@ -163,7 +163,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
     queue.SetSkipWaitConsump(0);
 
-    if (!is_dgpu())
+    if (!hsakmt_is_dgpu())
         ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
                                 mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
 
@@ -183,7 +183,7 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
 
     EXPECT_SUCCESS(queue.Destroy());
     EXPECT_EQ(SysBufferB.As<unsigned int*>()[0], 0x01010101);
-    if (!is_dgpu())
+    if (!hsakmt_is_dgpu())
         EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
 
     TEST_END
@@ -285,7 +285,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
      * workaround. Also nicely matches the 8x bigger GPUVM address
      * space on AMDGPU compared to RADEON.
      */
-    unsigned pageSize = is_dgpu() ? PAGE_SIZE*8 : PAGE_SIZE;
+    unsigned pageSize = hsakmt_is_dgpu() ? PAGE_SIZE*8 : PAGE_SIZE;
     fbSize /= pageSize;
     unsigned maxOrder = 0;
     // Limit maxOrder up to 14 so this test doesn't run longer than 10 mins
@@ -296,7 +296,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
     HsaMemoryBuffer sysBuffer(PAGE_SIZE, defaultGPUNode, false);
     PM4Queue queue;
     ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 

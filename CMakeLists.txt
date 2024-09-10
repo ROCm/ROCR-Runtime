@@ -46,7 +46,11 @@ cmake_minimum_required(VERSION 3.7)
 # Set the project name
 project("rocr")
 
-# option(BUILD_TESTS "Build tests" OFF)
+set(CMAKE_VERBOSE_MAKEFILE ON)
+
+if (NOT DEFINED BUILD_ROCR)
+  set(BUILD_ROCR ON)
+endif()
 
 function(add_rocm_subdir subdir subdir_assigns)
     message("add_rocm_subdir() -- " ${subdir})
@@ -84,31 +88,33 @@ endif()
 set(SO_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_PATCH}")
 set(PACKAGE_VERSION_STRING "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_COMMIT_COUNT}")
 
-# Handling of BUILD_SHARED_LIBS in this top-level CMake:
-#  * Default is to build shared libraries
-#  * Except thunk will ignore this; it is always static
-if (NOT DEFINED BUILD_SHARED_LIBS)
-  set (BUILD_SHARED_DEFAULT ON)
-else()
-  set (BUILD_SHARED_DEFAULT OFF)
+# Set dependency for rocprofiler-register package
+set(HSA_DEP_ROCPROFILER_REGISTER ON CACHE INTERNAL "")
+
+if (HSA_DEP_ROCPROFILER_REGISTER)
+  string(APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocprofiler-register")
+  string(APPEND CPACK_RPM_BINARY_PACKAGE_REQUIRES " rocprofiler-register")
 endif()
 
-# Build libhsakmt as static
-set(SAVED_BUILD_SHARED_LIBS ${BUILD_SHARED_LIBS})
-set(BUILD_SHARED_LIBS OFF)
 add_rocm_subdir(libhsakmt "${THUNK_DEFINITIONS}")
 set_target_properties(hsakmt PROPERTIES
                                 ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/archive"
                                 LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/lib"
                                 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/libhsakmt/runtime")
 
-set (BUILD_SHARED_LIBS ${SAVED_BUILD_SHARED_LIBS})
-add_rocm_subdir(runtime/hsa-runtime "${ROCR_DEFINITIONS}")
-set_target_properties(hsa-runtime64 PROPERTIES
+if (BUILD_ROCR)
+  add_rocm_subdir(runtime/hsa-runtime "${ROCR_DEFINITIONS}")
+  set_target_properties(hsa-runtime64 PROPERTIES
                                ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/archive"
                                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/lib"
                                RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rocr/runtime")
-add_dependencies(hsa-runtime64 hsakmt)
+
+  if (BUILD_SHARED_LIBS)
+    add_dependencies(hsa-runtime64 hsakmt)
+  else()
+    add_dependencies(hsa-runtime64 hsakmt-staticdrm)
+  endif()
+endif()
 
 # Optionally record the package's find module in the user's package cache.
 if ( NOT DEFINED EXPORT_TO_USER_PACKAGE_REGISTRY )
@@ -123,7 +129,6 @@ if(${EXPORT_TO_USER_PACKAGE_REGISTRY})
   # Record the package in the user's cache.
   export(PACKAGE ${CORE_RUNTIME_NAME})
 endif()
-
 
 ## Packaging directives
 set(CPACK_VERBOSE 1)

@@ -117,6 +117,11 @@ KfdDriver::AllocateMemory(const core::MemoryRegion &mem_region,
            ? 1
            : kmt_alloc_flags.ui32.GTTAccess);
 
+  kmt_alloc_flags.ui32.Uncached =
+      (alloc_flags & core::MemoryRegion::AllocateUncached
+            ? 1
+            : kmt_alloc_flags.ui32.Uncached);
+
   if (m_region.IsLocalMemory()) {
     // Allocate physically contiguous memory. AllocateKfdMemory function call
     // will fail if this flag is not supported in KFD.

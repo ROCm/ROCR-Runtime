@@ -149,7 +149,7 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
 TEST_F(KFDGraphicsInterop, RegisterForeignDeviceMem) {
     TEST_START(TESTPROFILE_RUNALL)
 
-    if (!is_dgpu()) {
+    if (!hsakmt_is_dgpu()) {
         LOG() << "Skipping test: Only supported on multi-dGPU system." << std::endl;
         return;
     }

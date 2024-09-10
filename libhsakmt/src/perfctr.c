@@ -99,7 +99,7 @@ static ssize_t readn(int fd, void *buf, size_t n)
 	return n;
 }
 
-HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
+HSAKMT_STATUS hsakmt_init_counter_props(unsigned int NumNodes)
 {
 	counter_props = calloc(NumNodes, sizeof(struct HsaCounterProperties *));
 	if (!counter_props) {
@@ -112,7 +112,7 @@ HSAKMT_STATUS init_counter_props(unsigned int NumNodes)
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-void destroy_counter_props(void)
+void hsakmt_destroy_counter_props(void)
 {
 	unsigned int i;
 
@@ -272,7 +272,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	if (!CounterProperties)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	if (counter_props[NodeId]) {
@@ -281,7 +281,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 	}
 
 	for (i = 0; i < PERFCOUNTER_BLOCKID__MAX; i++) {
-		rc = get_block_properties(NodeId, i, &block);
+		rc = hsakmt_get_block_properties(NodeId, i, &block);
 		if (rc != HSAKMT_STATUS_SUCCESS)
 			return rc;
 		total_concurrent += block.num_of_slots;
@@ -304,7 +304,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcGetCounterProperties(HSAuint32 NodeId,
 
 	block_prop = &counter_props[NodeId]->Blocks[0];
 	for (block_id = 0; block_id < PERFCOUNTER_BLOCKID__MAX; block_id++) {
-		rc = get_block_properties(NodeId, block_id, &block);
+		rc = hsakmt_get_block_properties(NodeId, block_id, &block);
 		if (rc != HSAKMT_STATUS_SUCCESS) {
 			free(counter_props[NodeId]);
 			counter_props[NodeId] = NULL;
@@ -359,7 +359,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	if (!Counters || !TraceRoot || NumberOfCounters == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	if (NumberOfCounters > MAX_COUNTERS) {
@@ -469,6 +469,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	TraceRoot->TraceBufferMinSizeBytes = PAGE_ALIGN_UP(min_buf_size);
 	TraceRoot->TraceId = PORT_VPTR_TO_UINT64(trace);
 
+	free(trace);
 	return HSAKMT_STATUS_SUCCESS;
 }
 
@@ -485,7 +486,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcUnregisterTrace(HSAuint32 NodeId,
 	if (TraceId == 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	trace = (struct perf_trace *)PORT_UINT64_TO_VPTR(TraceId);
@@ -526,7 +527,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcAcquireTraceAccess(HSAuint32 NodeId,
 	if (trace->magic4cc != HSA_PERF_MAGIC4CC)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	if (validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
 
 	return ret;

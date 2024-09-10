@@ -33,7 +33,7 @@
 
 #ifndef PAGE_SIZE
 #define PAGE_SIZE   (1<<12)
-#define PAGE_SHIFT  (12)
+#define HSAKMT_PAGE_SHIFT  (12)
 #endif
 
 enum TEXTCOLOR {

@@ -168,27 +168,38 @@ hsa_status_t AcquireAccess(hsa_agent_t agent,
 
 // Provided a destination pointer, pool and agent, and a source ptr, pool,
 // and agent, get access for one of the 2 agents to the other agent's pool.
-// Return the selected agent. This function will first attempt attempt to
-// gain access for the first agent to the second pool. If that succeeds, it
-// will return a pointer to the first agent. Otherwise, the function will
-// attempt to again access to the first pool by the second agent. If that
-// succeeds a pointer to the second agent will be returned. If it fails, a
-// nullptr will be returned.
+// Return the selected agent. This function will first attempt to gain access
+// for the first agent to the second pool. If that succeeds, it will return a
+// pointer to the first agent. Otherwise, the function will attempt to again
+// access to the first pool by the second agent. If that succeeds a pointer to
+// the second agent will be returned. If it fails, nullptr will be returned.
+// We prefer to use GPU agents over CPU agents to avoid poor copy performance
+// due to reading of uncached device memory by CPU.
 hsa_agent_t *
 MemoryAsyncCopy::AcquireAsyncCopyAccess(
          void *dst_ptr, hsa_amd_memory_pool_t dst_pool, hsa_agent_t *dst_ag,
          void *src_ptr, hsa_amd_memory_pool_t src_pool, hsa_agent_t *src_ag) {
   hsa_status_t err;
+  bool can_use_src_agent = false;
+  hsa_device_type_t type = HSA_DEVICE_TYPE_CPU;
 
   err = AcquireAccess(*src_ag, dst_pool, dst_ptr);
-  if (err == HSA_STATUS_SUCCESS && src_ag->handle != cpu_agent_.handle)
-    return src_ag;
+  if (err == HSA_STATUS_SUCCESS) {
+    can_use_src_agent = true;
+
+    if (hsa_agent_get_info(*src_ag, HSA_AGENT_INFO_DEVICE, &type) != HSA_STATUS_SUCCESS)
+      return NULL;
+
+    // We prefer GPU agents over CPU agents, so if this is not a GPU agent,
+    // try using the destination agent
+    if (type == HSA_DEVICE_TYPE_GPU) return src_ag;
+  }
 
   err = AcquireAccess(*dst_ag, src_pool, src_ptr);
-  if (err == HSA_STATUS_SUCCESS && dst_ag->handle != cpu_agent_.handle)
-    return dst_ag;
+  if (err == HSA_STATUS_SUCCESS) return dst_ag;
 
-  return &cpu_agent_;
+  if (can_use_src_agent) return src_ag;
+  return NULL;
 }
 
 void MemoryAsyncCopy::PrintTransactionType(Transaction *t) {

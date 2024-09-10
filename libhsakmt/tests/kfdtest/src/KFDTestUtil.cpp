@@ -130,10 +130,10 @@ HSAKMT_STATUS CreateQueueTypeEvent(
     return hsaKmtCreateEvent(&Descriptor, ManualReset, IsSignaled, Event);
 }
 
-static bool is_dgpu_dev = false;
+static bool hsakmt_is_dgpu_dev = false;
 
-bool is_dgpu() {
-    return is_dgpu_dev;
+bool hsakmt_is_dgpu() {
+    return hsakmt_is_dgpu_dev;
 }
 
 bool hasPciAtomicsSupport(int node) {
@@ -146,10 +146,6 @@ bool hasPciAtomicsSupport(int node) {
 
     /* APUs don't have IO Links, but support Atomic Ops by default */
     if (pNodeProperties->NumCPUCores && pNodeProperties->NumFComputeCores)
-        return true;
-
-    /* gfx11 is able to perform aotmic ops even PCI reports no atomic support. */
-    if (pNodeProperties->EngineId.ui32.Major >= 11)
         return true;
 
     HsaIoLinkProperties *IolinkProperties = new HsaIoLinkProperties[pNodeProperties->NumIOLinks];
@@ -217,9 +213,9 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
     }
 
     if (props->NumCPUCores && props->NumFComputeCores)
-        is_dgpu_dev = false;
+        hsakmt_is_dgpu_dev = false;
     else
-        is_dgpu_dev = true;
+        hsakmt_is_dgpu_dev = true;
 
     return familyId;
 }
@@ -306,7 +302,7 @@ HsaMemoryBuffer::HsaMemoryBuffer(HSAuint64 size, unsigned int node, bool zero, b
         EXPECT_EQ(m_Flags.ui32.HostAccess, 1);
 
     EXPECT_SUCCESS(hsaKmtAllocMemory(m_Node, m_Size, m_Flags, &m_pBuf));
-    if (is_dgpu()) {
+    if (hsakmt_is_dgpu()) {
         if (map_specific_gpu)
             EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(m_pBuf, m_Size, NULL, mapFlags, 1, &m_Node));
         else
@@ -535,7 +531,7 @@ HsaMemoryBuffer::~HsaMemoryBuffer() {
         hsaKmtUnmapMemoryToGPU(m_pUser);
         hsaKmtDeregisterMemory(m_pUser);
     } else if (m_pBuf != NULL) {
-        if (is_dgpu()) {
+        if (hsakmt_is_dgpu()) {
             if (m_MappedNodes) {
                 hsaKmtUnmapMemoryToGPU(m_pBuf);
             }

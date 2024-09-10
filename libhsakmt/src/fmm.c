@@ -399,9 +399,9 @@ static void vm_remove_object(manageable_aperture_t *app, vm_object_t *object)
 	if (object->mapped_node_id_array)
 		free(object->mapped_node_id_array);
 
-	rbtree_delete(&app->tree, &object->node);
+	hsakmt_rbtree_delete(&app->tree, &object->node);
 	if (object->userptr)
-		rbtree_delete(&app->user_tree, &object->user_node);
+		hsakmt_rbtree_delete(&app->user_tree, &object->user_node);
 
 	free(object);
 }
@@ -532,7 +532,7 @@ static vm_object_t *vm_find_object_by_address_userptr_range(manageable_aperture_
 		if (ln == rn)
 			break;
 
-		rn = rbtree_prev(tree, rn);
+		rn = hsakmt_rbtree_prev(tree, rn);
 	}
 
 	return cur; /* NULL if not found */
@@ -730,7 +730,7 @@ static void *reserved_aperture_allocate_aligned(manageable_aperture_t *app,
 	return start;
 }
 
-void *mmap_allocate_aligned(int prot, int flags, uint64_t size, uint64_t align,
+void *hsakmt_mmap_allocate_aligned(int prot, int flags, uint64_t size, uint64_t align,
 			    uint64_t guard_size, void *aper_base, void *aper_limit)
 {
 	void *addr, *aligned_addr, *aligned_end, *mapping_end;
@@ -831,7 +831,7 @@ static void *mmap_aperture_allocate_aligned(manageable_aperture_t *aper,
 	 */
 	guard_size = (uint64_t)aper->guard_pages * PAGE_SIZE;
 
-	return mmap_allocate_aligned(PROT_NONE, MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE,
+	return hsakmt_mmap_allocate_aligned(PROT_NONE, MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE,
 				     size, align, guard_size, aper->base, aper->limit);
 }
 
@@ -885,7 +885,7 @@ static vm_object_t *aperture_allocate_object(manageable_aperture_t *app,
 	if (!new_object)
 		return NULL;
 
-	rbtree_insert(&app->tree, &new_object->node);
+	hsakmt_rbtree_insert(&app->tree, &new_object->node);
 
 	return new_object;
 }
@@ -959,7 +959,7 @@ static manageable_aperture_t *fmm_find_aperture(const void *address,
 		aperture = &mem_handle_aperture;
 		_info.type = HSA_APERTURE_MEMHANDLE;
 
-	} else if (is_dgpu) {
+	} else if (hsakmt_is_dgpu) {
 		if (address >= svm.dgpu_aperture->base &&
 			address <= svm.dgpu_aperture->limit) {
 
@@ -1048,7 +1048,7 @@ static HSAKMT_STATUS fmm_register_mem_svm_api(void *address,
 	pr_debug("Registering to SVM %p size: %ld\n", (void*)aligned_addr,
 		 aligned_size);
 	/* Driver does one copy_from_user, with extra attrs size */
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
 		pr_debug("op set range attrs failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -1081,7 +1081,7 @@ static HSAKMT_STATUS fmm_map_mem_svm_api(void *address,
 		args->attrs[i].value = nodes_to_map[i];
 	}
 	/* Driver does one copy_from_user, with extra attrs size */
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SVM + (s_attr << _IOC_SIZESHIFT), args)) {
 		pr_debug("op set range attrs failed %s\n", strerror(errno));
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -1113,7 +1113,7 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 	args.flags = ioc_flags |
 		KFD_IOC_ALLOC_MEM_FLAGS_NO_SUBSTITUTE;
 	args.va_addr = (uint64_t)mem;
-	if (!is_dgpu &&
+	if (!hsakmt_is_dgpu &&
 	    (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_VRAM))
 		args.va_addr = VOID_PTRS_SUB(mem, aperture->base);
 	if (ioc_flags & KFD_IOC_ALLOC_MEM_FLAGS_USERPTR)
@@ -1123,7 +1123,7 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 	if (aperture == &mem_handle_aperture)
 		args.va_addr = 0;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_ALLOC_MEMORY_OF_GPU, &args))
 		return NULL;
 
 	mflags = fmm_translate_ioc_to_hsa_flags(ioc_flags);
@@ -1144,7 +1144,7 @@ static vm_object_t *fmm_allocate_memory_object(uint32_t gpu_id, void *mem,
 err_object_allocation_failed:
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	free_args.handle = args.handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &free_args);
+	hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &free_args);
 
 	return NULL;
 }
@@ -1174,11 +1174,11 @@ static void manageable_aperture_print(manageable_aperture_t *app)
 		object = vm_object_entry(n, 0);
 		pr_info("\t\t Object [%p - %" PRIu64 "]\n",
 				object->start, object->size);
-		n = rbtree_next(&app->tree, n);
+		n = hsakmt_rbtree_next(&app->tree, n);
 	}
 }
 
-void fmm_print(uint32_t gpu_id)
+void hsakmt_fmm_print(uint32_t gpu_id)
 {
 	int32_t gpu_mem_id = gpu_mem_find_by_gpu_id(gpu_id);
 
@@ -1202,7 +1202,7 @@ void fmm_print(uint32_t gpu_id)
 		manageable_aperture_print(svm.dgpu_alt_aperture);
 }
 #else
-void fmm_print(uint32_t gpu_id)
+void hsakmt_fmm_print(uint32_t gpu_id)
 {
 }
 #endif
@@ -1289,7 +1289,7 @@ static vm_object_t *vm_find_object(const void *addr, uint64_t size,
 	}
 
 no_svm:
-	if (!obj && !is_dgpu) {
+	if (!obj && !hsakmt_is_dgpu) {
 		/* On APUs try finding it in the CPUVM aperture */
 		if (aper)
 			pthread_mutex_unlock(&aper->fmm_mutex);
@@ -1345,7 +1345,7 @@ static void fmm_release_scratch(uint32_t gpu_id)
 
 	size = VOID_PTRS_SUB(aperture->limit, aperture->base) + 1;
 
-	if (is_dgpu) {
+	if (hsakmt_is_dgpu) {
 		/* unmap and remove all remaining objects */
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		while ((n = rbtree_node_any(&aperture->tree, MID))) {
@@ -1385,16 +1385,13 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 			      KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED);
 	if (!flags.ui32.ReadOnly)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
-	/* TODO: Since, ROCr interfaces doesn't allow caller to set page
-	 * permissions, mark all user allocations with exec permission.
-	 * Check for flags.ui32.ExecuteAccess once ROCr is ready.
-	 */
-	ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE;
+	if (flags.ui32.ExecuteAccess)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE;
 	return ioc_flags;
 }
 
 #define SCRATCH_ALIGN 0x10000
-void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes)
+void *hsakmt_fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeInBytes)
 {
 	manageable_aperture_t *aperture_phy;
 	struct kfd_ioctl_set_scratch_backing_va_args args = {0};
@@ -1413,7 +1410,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 		return NULL;
 
 	/* Allocate address space for scratch backing, 64KB aligned */
-	if (is_dgpu) {
+	if (hsakmt_is_dgpu) {
 		pthread_mutex_lock(&svm.dgpu_aperture->fmm_mutex);
 		mem = aperture_allocate_area_aligned(
 			svm.dgpu_aperture, address,
@@ -1423,7 +1420,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 		if (address)
 			return NULL;
 
-		mem = mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+		mem = hsakmt_mmap_allocate_aligned(PROT_READ | PROT_WRITE,
 					    MAP_PRIVATE | MAP_ANONYMOUS,
 					    aligned_size, SCRATCH_ALIGN, 0,
 					    0, (void *)LONG_MAX);
@@ -1438,7 +1435,7 @@ void *fmm_allocate_scratch(uint32_t gpu_id, void *address, uint64_t MemorySizeIn
 	args.gpu_id = gpu_id;
 	args.va_addr = ((uint64_t)mem) >> 16;
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_SET_SCRATCH_BACKING_VA, &args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_SCRATCH_BACKING_VA, &args)) {
 		fmm_release_scratch(gpu_id);
 		return NULL;
 	}
@@ -1532,7 +1529,7 @@ static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
 	return mem;
 }
 
-void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
+void *hsakmt_fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 			  uint64_t MemorySizeInBytes, uint64_t alignment, HsaMemFlags mflags)
 {
 	manageable_aperture_t *aperture;
@@ -1554,7 +1551,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 
 	ioc_flags |= fmm_translate_hsa_to_ioc_flags(mflags);
 
-	if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
+	if (hsakmt_topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
 		if (mflags.ui32.AQLQueueMemory)
 			size = MemorySizeInBytes * 2;
@@ -1589,7 +1586,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		/* Store memory allocation flags, not ioc flags */
 		vm_obj->mflags = mflags;
-		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
+		hsakmt_gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
 
@@ -1616,7 +1613,7 @@ void *fmm_allocate_device(uint32_t gpu_id, uint32_t node_id, void *address,
 	return mem;
 }
 
-void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
+void *hsakmt_fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 			    uint64_t doorbell_mmap_offset)
 {
 	manageable_aperture_t *aperture;
@@ -1649,14 +1646,14 @@ void *fmm_allocate_doorbell(uint32_t gpu_id, uint64_t MemorySizeInBytes,
 
 		pthread_mutex_lock(&aperture->fmm_mutex);
 		vm_obj->mflags = mflags;
-		gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
+		hsakmt_gpuid_to_nodeid(gpu_id, &vm_obj->node_id);
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 	}
 
 	if (mem) {
 		void *ret = mmap(mem, MemorySizeInBytes,
 				 PROT_READ | PROT_WRITE,
-				 MAP_SHARED | MAP_FIXED, kfd_fd,
+				 MAP_SHARED | MAP_FIXED, hsakmt_kfd_fd,
 				 doorbell_mmap_offset);
 		if (ret == MAP_FAILED) {
 			__fmm_release(vm_obj, aperture);
@@ -1895,10 +1892,10 @@ out_release_area:
 	return NULL;
 }
 
-void *fmm_allocate_host(uint32_t gpu_id, uint32_t node_id, void *address,
+void *hsakmt_fmm_allocate_host(uint32_t gpu_id, uint32_t node_id, void *address,
 			uint64_t MemorySizeInBytes, uint64_t alignment, HsaMemFlags mflags)
 {
-	if (is_dgpu)
+	if (hsakmt_is_dgpu)
 		return fmm_allocate_host_gpu(gpu_id, node_id, address, MemorySizeInBytes, alignment, mflags);
 
 	if (alignment) {//Alignment not supported on non-dgpu
@@ -1932,7 +1929,7 @@ static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	 * free the BO before unmapping the pages.
 	 */
 	args.handle = object->handle;
-	if (args.handle && kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
+	if (args.handle && hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &args)) {
 		pthread_mutex_unlock(&aperture->fmm_mutex);
 		return -errno;
 	}
@@ -1944,7 +1941,7 @@ static int __fmm_release(vm_object_t *object, manageable_aperture_t *aperture)
 	return 0;
 }
 
-HSAKMT_STATUS fmm_release(void *address)
+HSAKMT_STATUS hsakmt_fmm_release(void *address)
 {
 	manageable_aperture_t *aperture = NULL;
 	vm_object_t *object = NULL;
@@ -1962,7 +1959,7 @@ HSAKMT_STATUS fmm_release(void *address)
 	object = vm_find_object(address, 0, &aperture);
 
 	if (!object)
-		return is_svm_api_supported ?
+		return hsakmt_is_svm_api_supported ?
 			HSAKMT_STATUS_SUCCESS :
 			HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 
@@ -1981,7 +1978,7 @@ HSAKMT_STATUS fmm_release(void *address)
 			return HSAKMT_STATUS_ERROR;
 
 		if (!aperture->is_cpu_accessible)
-			fmm_print(gpu_mem[i].gpu_id);
+			hsakmt_fmm_print(gpu_mem[i].gpu_id);
 	}
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -1998,7 +1995,7 @@ static int fmm_set_memory_policy(uint32_t gpu_id, int default_policy, int alt_po
 	args.alternate_aperture_base = alt_base;
 	args.alternate_aperture_size = alt_size;
 
-	return kmtIoctl(kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
+	return hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_MEMORY_POLICY, &args);
 }
 
 static uint32_t get_vm_alignment(uint32_t device_id)
@@ -2022,7 +2019,7 @@ static HSAKMT_STATUS get_process_apertures(
 
 	args_new.kfd_process_device_apertures_ptr = (uintptr_t)process_apertures;
 	args_new.num_of_nodes = *num_of_nodes;
-	if (!kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW,
+	if (!hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES_NEW,
 		      (void *)&args_new)) {
 		*num_of_nodes = args_new.num_of_nodes;
 		return HSAKMT_STATUS_SUCCESS;
@@ -2032,7 +2029,7 @@ static HSAKMT_STATUS get_process_apertures(
 	 * a really old kernel */
 	memset(&args_old, 0, sizeof(args_old));
 
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES,
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_PROCESS_APERTURES,
 		     (void *)&args_old))
 		return HSAKMT_STATUS_ERROR;
 
@@ -2057,7 +2054,7 @@ static int drm_render_fds[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
 /* amdgpu device handle for each gpu that libdrm uses */
 static struct amdgpu_device *amdgpu_handle[DRM_LAST_RENDER_NODE + 1 - DRM_FIRST_RENDER_NODE];
 
-int open_drm_render_device(int minor)
+int hsakmt_open_drm_render_device(int minor)
 {
 	char path[128];
 	int index, fd;
@@ -2092,8 +2089,8 @@ int open_drm_render_device(int minor)
 		/* if amdgpu_device_get_fd available query render fd that libdrm uses,
 		 * then close drm_render_fds above, replace it by fd libdrm uses.
 		 */
-		if (fn_amdgpu_device_get_fd) {
-			fd = fn_amdgpu_device_get_fd(*device_handle);
+		if (hsakmt_fn_amdgpu_device_get_fd) {
+			fd = hsakmt_fn_amdgpu_device_get_fd(*device_handle);
 			if (fd > 0) {
 				close(drm_render_fds[index]);
 				drm_render_fds[index] = fd;
@@ -2115,7 +2112,7 @@ static HSAKMT_STATUS acquire_vm(uint32_t gpu_id, int fd)
 	args.gpu_id = gpu_id;
 	args.drm_fd = fd;
 	pr_info("acquiring VM for %x using %d\n", gpu_id, fd);
-	if (kmtIoctl(kfd_fd, AMDKFD_IOC_ACQUIRE_VM, (void *)&args)) {
+	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_ACQUIRE_VM, (void *)&args)) {
 		pr_err("AMDKFD_IOC_ACQUIRE_VM failed\n");
 		return HSAKMT_STATUS_ERROR;
 	}
@@ -2133,7 +2130,7 @@ static HSAKMT_STATUS init_mmap_apertures(HSAuint64 base, HSAuint64 limit,
 		 * only apply to old GPUs that don't support 48-bit
 		 * virtual addresses.
 		 */
-		pr_info("Falling back to reserved SVM apertures due to alignment contraints.\n");
+		pr_info("Falling back to reserved SVM apertures due to alignment constraints.\n");
 		return HSAKMT_STATUS_ERROR;
 	}
 
@@ -2395,7 +2392,7 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	}
 
 	/* Map for GPU access*/
-	if (fmm_map_to_gpu(mem, PAGE_SIZE, NULL)) {
+	if (hsakmt_fmm_map_to_gpu(mem, PAGE_SIZE, NULL)) {
 		__fmm_release(vm_obj, aperture);
 		return NULL;
 	}
@@ -2410,13 +2407,13 @@ static void release_mmio(void)
 	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
 		if (!gpu_mem[gpu_mem_id].mmio_aperture.base)
 			continue;
-		fmm_unmap_from_gpu(gpu_mem[gpu_mem_id].mmio_aperture.base);
+		hsakmt_fmm_unmap_from_gpu(gpu_mem[gpu_mem_id].mmio_aperture.base);
 		munmap(gpu_mem[gpu_mem_id].mmio_aperture.base, PAGE_SIZE);
-		fmm_release(gpu_mem[gpu_mem_id].mmio_aperture.base);
+		hsakmt_fmm_release(gpu_mem[gpu_mem_id].mmio_aperture.base);
 	}
 }
 
-HSAKMT_STATUS fmm_get_amdgpu_device_handle(uint32_t node_id,
+HSAKMT_STATUS hsakmt_fmm_get_amdgpu_device_handle(uint32_t node_id,
 						HsaAMDGPUDeviceHandle *DeviceHandle)
 {
 	int32_t i = gpu_mem_find_by_node_id(node_id);
@@ -2494,7 +2491,7 @@ static bool init_mem_handle_aperture(HSAuint32 align, HSAuint32 guard_pages)
 	return false;
 }
 
-HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
+HSAKMT_STATUS hsakmt_fmm_init_process_apertures(unsigned int NumNodes)
 {
 	uint32_t i;
 	int32_t gpu_mem_id = 0;
@@ -2557,20 +2554,20 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * gets called before hsaKmtAcquireSystemProperties() is called.
 	 */
 
-	is_dgpu = false;
+	hsakmt_is_dgpu = false;
 
 	for (i = 0; i < NumNodes; i++) {
 		HsaNodeProperties props;
 
-		ret = topology_get_node_props(i, &props);
+		ret = hsakmt_topology_get_node_props(i, &props);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto gpu_mem_init_failed;
 
-		topology_setup_is_dgpu_param(&props);
+		hsakmt_topology_setup_is_dgpu_param(&props);
 
 		/* Skip non-GPU nodes */
 		if (props.KFDGpuID) {
-			int fd = open_drm_render_device(props.DrmRenderMinor);
+			int fd = hsakmt_open_drm_render_device(props.DrmRenderMinor);
 			if (fd <= 0) {
 				ret = HSAKMT_STATUS_ERROR;
 				goto gpu_mem_init_failed;
@@ -2595,7 +2592,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 			gpu_mem[gpu_mem_count].local_mem_size = props.LocalMemSize;
 			gpu_mem[gpu_mem_count].device_id = props.DeviceId;
 			gpu_mem[gpu_mem_count].node_id = i;
-			is_svm_api_supported &= props.Capability.ui32.SVMAPISupported;
+			hsakmt_is_svm_api_supported &= props.Capability.ui32.SVMAPISupported;
 
 			gpu_mem[gpu_mem_count].scratch_physical.align = PAGE_SIZE;
 			gpu_mem[gpu_mem_count].scratch_physical.ops = &reserved_aperture_ops;
@@ -2619,7 +2616,7 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 	 * required since Number of nodes is already known. Kernel will fill in
 	 * the apertures in kfd_process_device_apertures_ptr
 	 */
-	num_of_sysfs_nodes = get_num_sysfs_nodes();
+	num_of_sysfs_nodes = hsakmt_get_num_sysfs_nodes();
 	if (num_of_sysfs_nodes < gpu_mem_count) {
 		ret = HSAKMT_STATUS_ERROR;
 		goto sysfs_parse_failed;
@@ -2673,11 +2670,11 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		 * allocated on those GPUs.
 		 */
 		nodeId = gpu_mem[gpu_mem_id].node_id;
-		ret = topology_get_node_props(nodeId, &nodeProps);
+		ret = hsakmt_topology_get_node_props(nodeId, &nodeProps);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto aperture_init_failed;
 		assert(nodeProps.NumIOLinks <= NumNodes);
-		ret = topology_get_iolink_props(nodeId, nodeProps.NumIOLinks,
+		ret = hsakmt_topology_get_iolink_props(nodeId, nodeProps.NumIOLinks,
 						linkProps);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			goto aperture_init_failed;
@@ -2794,12 +2791,12 @@ HSAKMT_STATUS fmm_init_process_apertures(unsigned int NumNodes)
 		pr_err("Failed to init mem_handle_aperture\n");
 
 	for (gpu_mem_id = 0; (uint32_t)gpu_mem_id < gpu_mem_count; gpu_mem_id++) {
-		if (!topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId))
+		if (!hsakmt_topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId))
 			continue;
 		gpu_mem[gpu_mem_id].mmio_aperture.base = map_mmio(
 				gpu_mem[gpu_mem_id].node_id,
 				gpu_mem[gpu_mem_id].gpu_id,
-				kfd_fd);
+				hsakmt_kfd_fd);
 		if (gpu_mem[gpu_mem_id].mmio_aperture.base)
 			gpu_mem[gpu_mem_id].mmio_aperture.limit = (void *)
 			((char *)gpu_mem[gpu_mem_id].mmio_aperture.base +
@@ -2821,11 +2818,11 @@ get_aperture_ioctl_failed:
 	free(process_apertures);
 sysfs_parse_failed:
 gpu_mem_init_failed:
-	fmm_destroy_process_apertures();
+	hsakmt_fmm_destroy_process_apertures();
 	return ret;
 }
 
-void fmm_destroy_process_apertures(void)
+void hsakmt_fmm_destroy_process_apertures(void)
 {
 	release_mmio();
 	if (gpu_mem) {
@@ -2837,7 +2834,7 @@ void fmm_destroy_process_apertures(void)
 	gpu_mem_count = 0;
 }
 
-HSAKMT_STATUS fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
+HSAKMT_STATUS hsakmt_fmm_get_aperture_base_and_limit(aperture_type_e aperture_type, HSAuint32 gpu_id,
 			HSAuint64 *aperture_base, HSAuint64 *aperture_limit)
 {
 	HSAKMT_STATUS err = HSAKMT_STATUS_ERROR;
@@ -3014,7 +3011,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu(manageable_aperture_t *aperture,
 	/* not specified, not registered: map all GPUs */
 		int32_t gpu_mem_id = gpu_mem_find_by_node_id(obj->node_id);
 
-		if (!obj->userptr && get_device_id_by_node_id(obj->node_id) &&
+		if (!obj->userptr && hsakmt_get_device_id_by_node_id(obj->node_id) &&
 		    gpu_mem_id >= 0) {
 			args.device_ids_array_ptr = (uint64_t)
 				gpu_mem[gpu_mem_id].usable_peer_id_array;
@@ -3027,7 +3024,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu(manageable_aperture_t *aperture,
 	}
 	args.n_success = 0;
 
-	ret_ioctl = kmtIoctl(kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args);
+	ret_ioctl = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_MAP_MEMORY_TO_GPU, &args);
 	if (ret_ioctl) {
 		pr_err("GPU mapping failed (%d) for obj at %p, userptr %p, size %lu",
 		       ret_ioctl, object->start, object->userptr, object->size);
@@ -3075,7 +3072,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_apertur
 	if (gpu_mem_id < 0)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	if (!is_dgpu)
+	if (!hsakmt_is_dgpu)
 		return HSAKMT_STATUS_SUCCESS; /* Nothing to do on APU */
 
 	/* sanity check the address */
@@ -3083,7 +3080,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_scratch(uint32_t gpu_id, manageable_apertur
 	    VOID_PTR_ADD(address, size - 1) > aperture->limit)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	is_debugger = debug_get_reg_status(gpu_mem[gpu_mem_id].node_id);
+	is_debugger = hsakmt_debug_get_reg_status(gpu_mem[gpu_mem_id].node_id);
 	flags = is_debugger ? KFD_IOC_ALLOC_MEM_FLAGS_GTT :
 			      KFD_IOC_ALLOC_MEM_FLAGS_VRAM;
 	flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
@@ -3123,7 +3120,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	/* Map and return the GPUVM address adjusted by the offset
 	 * from the start of the page
 	 */
-	if (!object && is_svm_api_supported) {
+	if (!object && hsakmt_is_svm_api_supported) {
 		svm_addr = (void*)((HSAuint64)addr - page_offset);
 		if (!nodes_to_map) {
 			nodes_to_map = all_gpu_id_array;
@@ -3146,7 +3143,7 @@ static HSAKMT_STATUS _fmm_map_to_gpu_userptr(void *addr, uint64_t size,
 	return ret;
 }
 
-HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
+HSAKMT_STATUS hsakmt_fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_address)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object;
@@ -3163,8 +3160,8 @@ HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_addre
 							address, size);
 
 	object = vm_find_object(address, size, &aperture);
-	if (!object && !is_svm_api_supported) {
-		if (!is_dgpu) {
+	if (!object && !hsakmt_is_svm_api_supported) {
+		if (!hsakmt_is_dgpu) {
 			/* Prefetch memory on APUs with dummy-reads */
 			fmm_check_user_memory(address, size);
 			return HSAKMT_STATUS_SUCCESS;
@@ -3190,7 +3187,7 @@ HSAKMT_STATUS fmm_map_to_gpu(void *address, uint64_t size, uint64_t *gpuvm_addre
 		/* Prefetch memory on APUs with dummy-reads */
 		fmm_check_user_memory(address, size);
 		ret = HSAKMT_STATUS_SUCCESS;
-	} else if ((is_svm_api_supported && !object) || object->userptr) {
+	} else if ((hsakmt_is_svm_api_supported && !object) || object->userptr) {
 		ret = _fmm_map_to_gpu_userptr(address, size, gpuvm_address, object, NULL, 0);
 	} else {
 		ret = _fmm_map_to_gpu(aperture, address, size, object, NULL, 0);
@@ -3267,7 +3264,7 @@ static int _fmm_unmap_from_gpu(manageable_aperture_t *aperture, void *address,
 
 	print_device_id_array((void *)args.device_ids_array_ptr,
 			      args.n_devices * sizeof(uint32_t));
-	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+	ret = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 
 	remove_device_ids_from_mapped_array(object,
 			(uint32_t *)args.device_ids_array_ptr,
@@ -3298,7 +3295,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	if (gpu_mem_id < 0)
 		return -1;
 
-	if (!is_dgpu)
+	if (!hsakmt_is_dgpu)
 		return 0; /* Nothing to do on APU */
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
@@ -3321,7 +3318,7 @@ static int _fmm_unmap_from_gpu_scratch(uint32_t gpu_id,
 	args.device_ids_array_ptr = (uint64_t)object->mapped_device_id_array;
 	args.n_devices = object->mapped_device_id_array_size / sizeof(uint32_t);
 	args.n_success = 0;
-	ret = kmtIoctl(kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
+	ret = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_UNMAP_MEMORY_FROM_GPU, &args);
 
 	/* unmap from CPU while keeping the address space reserved */
 	mmap(address, object->size, PROT_NONE,
@@ -3349,7 +3346,7 @@ err:
 	return ret;
 }
 
-int fmm_unmap_from_gpu(void *address)
+int hsakmt_fmm_unmap_from_gpu(void *address)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object;
@@ -3368,7 +3365,7 @@ int fmm_unmap_from_gpu(void *address)
 	object = vm_find_object(address, 0, &aperture);
 	if (!object)
 		/* On APUs GPU unmapping of system memory is a no-op */
-		return (!is_dgpu || is_svm_api_supported) ? 0 : -EINVAL;
+		return (!hsakmt_is_dgpu || hsakmt_is_svm_api_supported) ? 0 : -EINVAL;
 	/* Successful vm_find_object returns with the aperture locked */
 
 	if (aperture == &cpuvm_aperture)
@@ -3382,7 +3379,7 @@ int fmm_unmap_from_gpu(void *address)
 	return ret;
 }
 
-bool fmm_get_handle(void *address, uint64_t *handle)
+bool hsakmt_fmm_get_handle(void *address, uint64_t *handle)
 {
 	uint32_t i;
 	manageable_aperture_t *aperture;
@@ -3479,11 +3476,11 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr,
 		++exist_obj->registration_count;
 	} else {
 		obj->userptr = addr;
-		gpuid_to_nodeid(gpu_id, &obj->node_id);
+		hsakmt_gpuid_to_nodeid(gpu_id, &obj->node_id);
 		obj->userptr_size = size;
 		obj->registration_count = 1;
 		obj->user_node.key = rbtree_key((unsigned long)addr, size);
-		rbtree_insert(&aperture->user_tree, &obj->user_node);
+		hsakmt_rbtree_insert(&aperture->user_tree, &obj->user_node);
 	}
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
@@ -3495,7 +3492,7 @@ static HSAKMT_STATUS fmm_register_user_memory(void *addr,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
+HSAKMT_STATUS hsakmt_fmm_register_memory(void *address, uint64_t size_in_bytes,
 				  uint32_t *gpu_id_array,
 				  uint32_t gpu_id_array_size,
 				  bool coarse_grain,
@@ -3513,12 +3510,12 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 
 	object = vm_find_object(address, size_in_bytes, &aperture);
 	if (!object) {
-		if (!is_dgpu)
+		if (!hsakmt_is_dgpu)
 			/* System memory registration on APUs is a no-op */
 			return HSAKMT_STATUS_SUCCESS;
 
 		/* Register a new user ptr */
-		if (is_svm_api_supported) {
+		if (hsakmt_is_svm_api_supported) {
 			ret = fmm_register_mem_svm_api(address,
 							size_in_bytes,
 							coarse_grain,
@@ -3586,7 +3583,7 @@ HSAKMT_STATUS fmm_register_memory(void *address, uint64_t size_in_bytes,
 }
 
 #define GRAPHICS_METADATA_DEFAULT_SIZE 64
-HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
+HSAKMT_STATUS hsakmt_fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
 					   uint32_t *gpu_id_array,
 					   uint32_t gpu_id_array_size)
@@ -3613,7 +3610,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	if (!metadata)
 		return HSAKMT_STATUS_NO_MEMORY;
 	infoArgs.metadata_ptr = (uint64_t)metadata;
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
 	if (r && infoArgs.metadata_size > GRAPHICS_METADATA_DEFAULT_SIZE) {
 		/* Try again with bigger metadata */
 		free(metadata);
@@ -3621,7 +3618,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		if (!metadata)
 			return HSAKMT_STATUS_NO_MEMORY;
 		infoArgs.metadata_ptr = (uint64_t)metadata;
-		r = kmtIoctl(kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
+		r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_GET_DMABUF_INFO, (void *)&infoArgs);
 	}
 
 	if (r)
@@ -3635,7 +3632,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	/* import DMA buffer without VA assigned */
 	if (!gpu_id_array && gpu_id_array_size == 0) {
 		aperture = &mem_handle_aperture;
-	} else if (topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
+	} else if (hsakmt_topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
 	} else {
 		aperture = &gpu_mem[gpu_mem_id].gpuvm_aperture;
@@ -3658,7 +3655,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 
 	importArgs.gpu_id = infoArgs.gpu_id;
 	importArgs.dmabuf_fd = GraphicsResourceHandle;
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IMPORT_DMABUF, (void *)&importArgs);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_IMPORT_DMABUF, (void *)&importArgs);
 	if (r)
 		goto error_release_aperture;
 
@@ -3671,7 +3668,7 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 		obj->metadata = metadata;
 		obj->registered_device_id_array = gpu_id_array;
 		obj->registered_device_id_array_size = gpu_id_array_size;
-		gpuid_to_nodeid(infoArgs.gpu_id, &obj->node_id);
+		hsakmt_gpuid_to_nodeid(infoArgs.gpu_id, &obj->node_id);
 	}
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!obj)
@@ -3681,13 +3678,13 @@ HSAKMT_STATUS fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 	GraphicsResourceInfo->SizeInBytes = infoArgs.size;
 	GraphicsResourceInfo->Metadata = (void *)(unsigned long)infoArgs.metadata_ptr;
 	GraphicsResourceInfo->MetadataSizeInBytes = infoArgs.metadata_size;
-	gpuid_to_nodeid(infoArgs.gpu_id, &GraphicsResourceInfo->NodeId);
+	hsakmt_gpuid_to_nodeid(infoArgs.gpu_id, &GraphicsResourceInfo->NodeId);
 
 	return HSAKMT_STATUS_SUCCESS;
 
 error_release_buffer:
 	freeArgs.handle = importArgs.handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
+	hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
 error_release_aperture:
 	aperture_release_area(aperture, mem, infoArgs.size);
 error_free_metadata:
@@ -3696,7 +3693,7 @@ error_free_metadata:
 	return status;
 }
 
-HSAKMT_STATUS fmm_export_dma_buf_fd(void *MemoryAddress,
+HSAKMT_STATUS hsakmt_fmm_export_dma_buf_fd(void *MemoryAddress,
 				    HSAuint64 MemorySizeInBytes,
 				    int *DMABufFd,
 				    HSAuint64 *Offset)
@@ -3728,7 +3725,7 @@ HSAKMT_STATUS fmm_export_dma_buf_fd(void *MemoryAddress,
 	if (!obj)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_EXPORT_DMABUF, (void *)&exportArgs);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_EXPORT_DMABUF, (void *)&exportArgs);
 	if (r)
 		return HSAKMT_STATUS_ERROR;
 
@@ -3738,7 +3735,7 @@ HSAKMT_STATUS fmm_export_dma_buf_fd(void *MemoryAddress,
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
+HSAKMT_STATUS hsakmt_fmm_share_memory(void *MemoryAddress,
 				HSAuint64 SizeInBytes,
 				HsaSharedMemoryHandle *SharedMemoryHandle)
 {
@@ -3751,7 +3748,7 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_hsa_shared_memory_struct(SharedMemoryHandle);
 
-	if (SizeInBytes >= (1ULL << ((sizeof(HSAuint32) * 8) + PAGE_SHIFT)))
+	if (SizeInBytes >= (1ULL << ((sizeof(HSAuint32) * 8) + HSAKMT_PAGE_SHIFT)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	aperture = fmm_find_aperture(MemoryAddress, &ApeInfo);
@@ -3764,10 +3761,10 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	if (!obj)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
-	r = validate_nodeid(obj->node_id, &gpu_id);
+	r = hsakmt_validate_nodeid(obj->node_id, &gpu_id);
 	if (r != HSAKMT_STATUS_SUCCESS)
 		return r;
-	if (!gpu_id && is_dgpu) {
+	if (!gpu_id && hsakmt_is_dgpu) {
 		/* Sharing non paged system memory. Use first GPU which was
 		 * used during allocation. See fmm_allocate_host_gpu()
 		 */
@@ -3780,20 +3777,20 @@ HSAKMT_STATUS fmm_share_memory(void *MemoryAddress,
 	exportArgs.gpu_id = gpu_id;
 	exportArgs.flags = obj->mflags.Value;
 
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IPC_EXPORT_HANDLE, (void *)&exportArgs);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_IPC_EXPORT_HANDLE, (void *)&exportArgs);
 	if (r)
 		return HSAKMT_STATUS_ERROR;
 
 	memcpy(SharedMemoryStruct->ShareHandle, exportArgs.share_handle,
 			sizeof(SharedMemoryStruct->ShareHandle));
 	SharedMemoryStruct->ApeInfo = ApeInfo;
-	SharedMemoryStruct->SizeInPages = (HSAuint32) (SizeInBytes >> PAGE_SHIFT);
+	SharedMemoryStruct->SizeInPages = (HSAuint32) (SizeInBytes >> HSAKMT_PAGE_SHIFT);
 	SharedMemoryStruct->ExportGpuId = gpu_id;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
 
-HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemoryHandle,
+HSAKMT_STATUS hsakmt_fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemoryHandle,
 						HSAuint64 *SizeInBytes,
 						void **MemoryAddress,
 						uint32_t *gpu_id_array,
@@ -3824,7 +3821,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	reservedMem = aperture_allocate_area(aperture, NULL,
-			(SizeInPages << PAGE_SHIFT));
+			(SizeInPages << HSAKMT_PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!reservedMem) {
 		err = HSAKMT_STATUS_NO_MEMORY;
@@ -3832,7 +3829,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	}
 
 	importArgs.va_addr = (uint64_t)reservedMem;
-	r = kmtIoctl(kfd_fd, AMDKFD_IOC_IPC_IMPORT_HANDLE, (void *)&importArgs);
+	r = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_IPC_IMPORT_HANDLE, (void *)&importArgs);
 	if (r) {
 		err = HSAKMT_STATUS_ERROR;
 		goto err_import;
@@ -3841,7 +3838,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	mflags.Value = importArgs.flags;
 	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
-				       (SizeInPages << PAGE_SHIFT), mflags);
+				       (SizeInPages << HSAKMT_PAGE_SHIFT), mflags);
 	if (!obj) {
 		err = HSAKMT_STATUS_NO_MEMORY;
 		goto err_free_mem;
@@ -3857,7 +3854,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 			goto err_free_obj;
 		}
 		obj->node_id = gpu_mem[gpu_mem_id].node_id;
-		ret = fmm_map_to_cpu(reservedMem, (SizeInPages << PAGE_SHIFT),
+		ret = fmm_map_to_cpu(reservedMem, (SizeInPages << HSAKMT_PAGE_SHIFT),
 				     true, gpu_mem[gpu_mem_id].drm_render_fd,
 				     importArgs.mmap_offset);
 
@@ -3868,7 +3865,7 @@ HSAKMT_STATUS fmm_register_shared_memory(const HsaSharedMemoryHandle *SharedMemo
 	}
 
 	*MemoryAddress = reservedMem;
-	*SizeInBytes = (SizeInPages << PAGE_SHIFT);
+	*SizeInBytes = (SizeInPages << HSAKMT_PAGE_SHIFT);
 
 	if (gpu_id_array_size > 0) {
 		obj->registered_device_id_array = gpu_id_array;
@@ -3881,16 +3878,16 @@ err_free_obj:
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	vm_remove_object(aperture, obj);
 err_free_mem:
-	aperture_release_area(aperture, reservedMem, (SizeInPages << PAGE_SHIFT));
+	aperture_release_area(aperture, reservedMem, (SizeInPages << HSAKMT_PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 err_free_buffer:
 	freeArgs.handle = importArgs.handle;
-	kmtIoctl(kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
+	hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_FREE_MEMORY_OF_GPU, &freeArgs);
 err_import:
 	return err;
 }
 
-HSAKMT_STATUS fmm_deregister_memory(void *address)
+HSAKMT_STATUS hsakmt_fmm_deregister_memory(void *address)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *object;
@@ -3900,7 +3897,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
 		/* On APUs we assume it's a random system memory address
 		 * where registration and dergistration is a no-op
 		 */
-		return (!is_dgpu || is_svm_api_supported) ?
+		return (!hsakmt_is_dgpu || hsakmt_is_svm_api_supported) ?
 			HSAKMT_STATUS_SUCCESS :
 			HSAKMT_STATUS_MEMORY_NOT_REGISTERED;
 	/* Successful vm_find_object returns with aperture locked */
@@ -3949,7 +3946,7 @@ HSAKMT_STATUS fmm_deregister_memory(void *address)
  * and maps nodes_to_map
  */
 
-HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
+HSAKMT_STATUS hsakmt_fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		uint32_t *nodes_to_map, uint64_t num_of_nodes,
 		uint64_t *gpuvm_address)
 {
@@ -3964,7 +3961,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	object = vm_find_object(address, size, &aperture);
-	if (!object && !is_svm_api_supported)
+	if (!object && !hsakmt_is_svm_api_supported)
 		return HSAKMT_STATUS_ERROR;
 	/* Successful vm_find_object returns with aperture locked */
 
@@ -3987,7 +3984,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 		return HSAKMT_STATUS_ERROR;
 	}
 
-	if ((is_svm_api_supported && !object) || object->userptr) {
+	if ((hsakmt_is_svm_api_supported && !object) || object->userptr) {
 		retcode = _fmm_map_to_gpu_userptr(address, size, gpuvm_address,
 				object, nodes_to_map, num_of_nodes * sizeof(uint32_t));
 		if (object)
@@ -4064,7 +4061,7 @@ HSAKMT_STATUS fmm_map_to_gpu_nodes(void *address, uint64_t size,
 	return 0;
 }
 
-HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
+HSAKMT_STATUS hsakmt_fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	uint32_t i;
@@ -4105,7 +4102,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		 * register to new nodes) or the memory being freed
 		 */
 		for (i = 0; i < info->NRegisteredNodes; i++)
-			gpuid_to_nodeid(vm_obj->registered_device_id_array[i],
+			hsakmt_gpuid_to_nodeid(vm_obj->registered_device_id_array[i],
 				&vm_obj->registered_node_id_array[i]);
 	}
 	info->RegisteredNodes = vm_obj->registered_node_id_array;
@@ -4120,7 +4117,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 		 * to new nodes) or memory being freed
 		 */
 		for (i = 0; i < info->NMappedNodes; i++)
-			gpuid_to_nodeid(vm_obj->mapped_device_id_array[i],
+			hsakmt_gpuid_to_nodeid(vm_obj->mapped_device_id_array[i],
 				&vm_obj->mapped_node_id_array[i]);
 	}
 	info->MappedNodes = vm_obj->mapped_node_id_array;
@@ -4141,7 +4138,7 @@ HSAKMT_STATUS fmm_get_mem_info(const void *address, HsaPointerInfo *info)
 }
 
 #ifdef SANITIZER_AMDGPU
-HSAKMT_STATUS fmm_replace_asan_header_page(void* address)
+HSAKMT_STATUS hsakmt_fmm_replace_asan_header_page(void* address)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	manageable_aperture_t* aperture;
@@ -4168,7 +4165,7 @@ HSAKMT_STATUS fmm_replace_asan_header_page(void* address)
 	return ret;
 }
 
-HSAKMT_STATUS fmm_return_asan_header_page(void* address)
+HSAKMT_STATUS hsakmt_fmm_return_asan_header_page(void* address)
 {
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 	manageable_aperture_t* aperture;
@@ -4198,7 +4195,7 @@ HSAKMT_STATUS fmm_return_asan_header_page(void* address)
 }
 #endif
 
-HSAKMT_STATUS fmm_set_mem_user_data(const void *mem, void *usr_data)
+HSAKMT_STATUS hsakmt_fmm_set_mem_user_data(const void *mem, void *usr_data)
 {
 	manageable_aperture_t *aperture;
 	vm_object_t *vm_obj;
@@ -4231,7 +4228,7 @@ static void fmm_clear_aperture(manageable_aperture_t *app)
  * after a fork(). This will clear all vm_objects and mmaps duplicated from
  * the parent.
  */
-void fmm_clear_all_mem(void)
+void hsakmt_fmm_clear_all_mem(void)
 {
 	uint32_t i;
 	void *map_addr;
@@ -4255,7 +4252,7 @@ void fmm_clear_all_mem(void)
 
 	if (dgpu_shared_aperture_limit) {
 		/* Use the same dgpu range as the parent. If failed, then set
-		 * is_dgpu_mem_init to false. Later on dgpu_mem_init will try
+		 * hsakmt_is_dgpu_mem_init to false. Later on dgpu_mem_init will try
 		 * to get a new range
 		 */
 		map_addr = mmap(dgpu_shared_aperture_base, (HSAuint64)(dgpu_shared_aperture_limit)-
@@ -4287,5 +4284,5 @@ void fmm_clear_all_mem(void)
 		fmm_clear_aperture(&gpu_mem[i].scratch_physical);
 	}
 
-	fmm_destroy_process_apertures();
+	hsakmt_fmm_destroy_process_apertures();
 }

@@ -350,6 +350,11 @@ int Assembler::RunAssemble(const char* const AssemblySource) {
 #endif
     MCAsmBackend* MAB = TheTarget->createMCAsmBackend(*STI, *MRI, MCOptions);
 
+    if (!MAB) {
+	    outs() << "ASM Error: Unable to create MCA Backend\n";
+	    return -1;
+    }
+
     std::unique_ptr<MCStreamer> Streamer(TheTarget->createMCObjectStreamer(
         TheTriple, Ctx,
         std::unique_ptr<MCAsmBackend>(MAB), MAB->createObjectWriter(*OS),
