@@ -54,6 +54,7 @@
 #include "core/inc/sdma_registers.h"
 #include "core/inc/signal.h"
 #include "core/inc/interrupt_signal.h"
+#include "core/inc/default_signal.h"
 
 namespace rocr {
 namespace AMD {
@@ -204,8 +205,13 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   cached_reserve_index_ = *reinterpret_cast<RingIndexTy*>(queue_resource_.Queue_write_ptr);
   cached_commit_index_ = cached_reserve_index_;
 
-  signals_[0].reset(new core::InterruptSignal(0));
-  signals_[1].reset(new core::InterruptSignal(0));
+  if (core::g_use_interrupt_wait) {
+    signals_[0].reset(new core::InterruptSignal(0));
+    signals_[1].reset(new core::InterruptSignal(0));
+  } else {
+    signals_[0].reset(new core::DefaultSignal(0));
+    signals_[1].reset(new core::DefaultSignal(0));
+  }
 
   max_single_linear_copy_size_ = linear_copy_size_override;
 
