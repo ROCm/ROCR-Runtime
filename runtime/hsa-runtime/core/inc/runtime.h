@@ -868,6 +868,10 @@ class Runtime {
   };
   std::map<const void*, MappedHandle> mapped_handle_map_;  // Indexed by VA
 
+  hsa_status_t VMemoryMapAllowAccess(const void *va,
+                                     hsa_access_permission_t perm,
+                                     const hsa_agent_t *agents,
+                                     size_t num_agents);
   hsa_status_t
   VMemorySetAccessPerHandle(void *va, MappedHandle &MappedHandle,
                             const hsa_amd_memory_access_desc_t *desc,
