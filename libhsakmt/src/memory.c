@@ -171,6 +171,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 			return HSAKMT_STATUS_NO_MEMORY;
 		}
 
+		pr_debug("[%s] node %d address %p size %lu from scratch\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -193,6 +194,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 			return HSAKMT_STATUS_ERROR;
 		}
 
+		pr_debug("[%s] node %d address %p size %lu from host\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
 		return HSAKMT_STATUS_SUCCESS;
 	}
 
@@ -213,6 +215,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 		return HSAKMT_STATUS_NO_MEMORY;
 	}
 
+	pr_debug("[%s] node %d address %p size %lu from device\n", __func__, PreferredNode, *MemoryAddress, SizeInBytes);
 	return HSAKMT_STATUS_SUCCESS;
 
 }
@@ -261,7 +264,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemory(void *MemoryAddress,
 {
 	CHECK_KFD_OPEN();
 
-	pr_debug("[%s] address %p\n", __func__, MemoryAddress);
+	pr_debug("[%s] address %p size %lu\n", __func__, MemoryAddress, MemorySizeInBytes);
 
 	if (!hsakmt_is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
@@ -280,8 +283,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryToNodes(void *MemoryAddress,
 	uint32_t *gpu_id_array;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] address %p number of nodes %lu\n",
-		__func__, MemoryAddress, NumberOfNodes);
+	pr_debug("[%s] address %p size %lu number of nodes %lu\n",
+		__func__, MemoryAddress, MemorySizeInBytes, NumberOfNodes);
 
 	if (!hsakmt_is_dgpu)
 		/* TODO: support mixed APU and dGPU configurations */
@@ -309,8 +312,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterMemoryWithFlags(void *MemoryAddress,
 	CHECK_KFD_OPEN();
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
 
-	pr_debug("[%s] address %p\n",
-		__func__, MemoryAddress);
+	pr_debug("[%s] address %p size %lu\n",
+		__func__, MemoryAddress, MemorySizeInBytes);
 
 	if (MemFlags.ui32.ExtendedCoherent && MemFlags.ui32.CoarseGrain)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
