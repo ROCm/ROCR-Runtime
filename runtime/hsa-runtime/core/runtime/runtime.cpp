@@ -680,7 +680,9 @@ hsa_status_t Runtime::AllowAccess(uint32_t num_agents,
     std::map<const void*, AllocationRegion>::const_iterator it = allocation_map_.find(ptr);
 
     if (it == allocation_map_.end()) {
-      return HSA_STATUS_ERROR;
+      /* See if this address was mapped via VMM */
+      return VMemoryMapAllowAccess(ptr, HSA_ACCESS_PERMISSION_RW, agents,
+                                   num_agents);
     }
 
     amd_region = reinterpret_cast<const AMD::MemoryRegion*>(it->second.region);
@@ -3475,6 +3477,63 @@ hsa_status_t Runtime::VMemorySetAccess(void* va, size_t size,
   for (auto mappedHandleIt : mappedHandles) {
     status = VMemorySetAccessPerHandle(mappedHandleIt.first,
                                        *mappedHandleIt.second, desc, desc_cnt);
+    if (status != HSA_STATUS_SUCCESS)
+      return status;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+// Note: VMemoryMapAllowAccess should be called with &memory_lock_ held
+hsa_status_t Runtime::VMemoryMapAllowAccess(const void *va,
+                                            const hsa_access_permission_t perm,
+                                            const hsa_agent_t *agents,
+                                            size_t num_agents) {
+  hsa_amd_memory_access_desc_t *desc =
+      new (std::nothrow) hsa_amd_memory_access_desc_t[num_agents];
+  if (desc == nullptr)
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  MAKE_SCOPE_GUARD([&]() { delete[] desc; });
+
+  for (size_t i = 0; i < num_agents; i++) {
+    Agent *targetAgent = Agent::Convert(agents[i]);
+    if (targetAgent == nullptr || !targetAgent->IsValid())
+      return HSA_STATUS_ERROR_INVALID_AGENT;
+
+    desc[i].permissions = perm;
+    desc[i].agent_handle = agents[i];
+  }
+
+  std::list<std::pair<void *, MappedHandle *>> mappedHandles;
+
+  auto mappedHandleIt = mapped_handle_map_.upper_bound(va);
+  if (mappedHandleIt != mapped_handle_map_.begin()) {
+    mappedHandleIt--;
+
+    if ((reinterpret_cast<const uint8_t *>(mappedHandleIt->first) +
+         mappedHandleIt->second.size) > va) {
+      // We found a mapped handle. See if there are more contiguous mapped
+      // handles and add them to the list
+
+      uint8_t *va_chunk = (uint8_t *)mappedHandleIt->first;
+      do {
+        mappedHandles.push_back(
+            std::make_pair(va_chunk, &mappedHandleIt->second));
+        va_chunk += mappedHandleIt->second.size;
+
+        mappedHandleIt++;
+        if (mappedHandleIt == mapped_handle_map_.end())
+          break;
+      } while (va_chunk == mappedHandleIt->first);
+    }
+  }
+
+  if (mappedHandles.empty())
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+  hsa_status_t status;
+  for (auto mappedHandleIt : mappedHandles) {
+    status = VMemorySetAccessPerHandle(
+        mappedHandleIt.first, *mappedHandleIt.second, desc, num_agents);
     if (status != HSA_STATUS_SUCCESS)
       return status;
   }
