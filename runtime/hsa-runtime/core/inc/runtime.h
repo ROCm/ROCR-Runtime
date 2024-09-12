@@ -868,6 +868,11 @@ class Runtime {
   };
   std::map<const void*, MappedHandle> mapped_handle_map_;  // Indexed by VA
 
+  hsa_status_t
+  VMemorySetAccessPerHandle(void *va, MappedHandle &MappedHandle,
+                            const hsa_amd_memory_access_desc_t *desc,
+                            const size_t desc_cnt);
+
   // Frees runtime memory when the runtime library is unloaded if safe to do so.
   // Failure to release the runtime indicates an incorrect application but is
   // common (example: calls library routines at process exit).

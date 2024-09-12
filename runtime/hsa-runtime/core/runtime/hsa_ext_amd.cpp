@@ -1328,6 +1328,7 @@ hsa_status_t hsa_amd_vmem_set_access(void* va, size_t size,
   TRY;
   IS_OPEN();
   IS_BAD_PTR(va);
+  IS_ZERO(size);
   IS_BAD_PTR(desc);
   IS_ZERO(desc_cnt);
 
