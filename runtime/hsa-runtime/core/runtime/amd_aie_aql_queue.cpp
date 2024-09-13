@@ -76,8 +76,8 @@ constexpr int DEV_ADDR_OFFSET_MASK = 0x02FFFFFF;
 // https://github.com/amd/xdna-driver/blob/main/src/driver/amdxdna/aie2_message.c#L637
 constexpr int CMD_COUNT_SIZE_INCREASE = 3;
 
-// Index of command payload where the instruction sequence 
-// address is located 
+// Index of command payload where the instruction sequence
+// address is located
 constexpr int CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX = 2;
 
 // Environment variable to define job submission timeout
@@ -217,16 +217,15 @@ uint64_t AieAqlQueue::AddWriteIndexAcqRel(uint64_t value) {
 
 void AieAqlQueue::StoreRelaxed(hsa_signal_value_t value) {
   std::unordered_map<uint32_t, void*> vmem_handle_mappings;
-  if (reinterpret_cast<XdnaDriver &>(
-          core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type))
-          .GetHandleMappings(vmem_handle_mappings) != HSA_STATUS_SUCCESS) {
+
+  auto &driver = static_cast<XdnaDriver &>(
+      core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type));
+  if (driver.GetHandleMappings(vmem_handle_mappings) != HSA_STATUS_SUCCESS) {
     return;
   }
 
   int fd = 0;
-  if (reinterpret_cast<XdnaDriver &>(
-          core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type))
-          .GetFd(fd) != HSA_STATUS_SUCCESS) {
+  if (driver.GetFd(fd) != HSA_STATUS_SUCCESS) {
     return;
   }
 
@@ -255,7 +254,7 @@ hsa_status_t AieAqlQueue::ExecCmdAndWait(amdxdna_drm_exec_cmd *exec_cmd,
   // Waiting for command to finish
   amdxdna_drm_wait_cmd wait_cmd = {};
   wait_cmd.hwctx = hw_ctx_handle;
-  wait_cmd.timeout = timeout_val; 
+  wait_cmd.timeout = timeout_val;
   wait_cmd.seq = exec_cmd->seq;
 
   if (ioctl(fd, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd))
@@ -276,7 +275,8 @@ void AieAqlQueue::RegisterCmdBOs(
   uint32_t num_operands = (count - NON_OPERAND_COUNT) / 2;
 
   // Keep track of the handles before we submit the packet
-  bo_args.push_back(cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]); 
+  bo_args.push_back(
+      cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
 
   // Going through all of the operands in the command, keeping track of the
   // handles and turning the handles into addresses. The starting index of
