@@ -402,7 +402,10 @@ hsa_status_t InitializeAQLPacket(const BaseRocR* test,
   // called before this function, so we don't want overwrite it, therefore
   // we ignore it in this function.
 
-  err = hsa_signal_create(1, 0, NULL, &aql->completion_signal);
+  if (!aql->completion_signal.handle)
+    err = hsa_signal_create(1, 0, NULL, &aql->completion_signal);
+  else
+    err = HSA_STATUS_SUCCESS;
 
   return err;
 }
