@@ -191,8 +191,16 @@ void SignalConcurrentTest::TestSignalCreateConcurrent(void) {
   hsa_status_t status;
   signals = reinterpret_cast<hsa_signal_t*>(malloc(sizeof(hsa_signal_t) * N * M));
 
+  ASSERT_NE(signals, nullptr);
+
   struct rocrtst::test_group* tg_sg_create = rocrtst::TestGroupCreate(N);
   int* offset = reinterpret_cast<int*>(malloc(sizeof(int) * N));
+
+  EXPECT_NE(offset, nullptr);
+  if (!offset) {
+	  free(signals);
+	  return;
+  }
 
   for (i = 0; i < N; ++i) {
     offset[i] = i * M;
@@ -269,8 +277,14 @@ void SignalConcurrentTest::TestSignalDestroyConcurrent(void) {
 
   signals = reinterpret_cast<hsa_signal_t *>(malloc(sizeof(hsa_signal_t) * N * M));
 
+  ASSERT_NE(signals, nullptr);
+
   struct rocrtst::test_group *tg_sg_destroy = rocrtst::TestGroupCreate(N);
   int *offset = reinterpret_cast<int *>(malloc(sizeof(int) * N));
+
+  EXPECT_NE(offset, nullptr);
+  if (!offset)
+    return;
 
   for (i = 0; i < N; ++i) {
     int j;

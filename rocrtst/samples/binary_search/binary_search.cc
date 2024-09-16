@@ -393,8 +393,8 @@ hsa_status_t LoadKernelFromObjFile(BinarySearch* bs) {
   }
 
   err = hsa_code_object_reader_create_from_file(file_handle, &code_obj_rdr);
-  RET_IF_HSA_ERR(err);
   close(file_handle);
+  RET_IF_HSA_ERR(err);
 
   err = hsa_executable_create_alt(HSA_PROFILE_FULL,
                 HSA_DEFAULT_FLOAT_ROUNDING_MODE_DEFAULT, NULL, &executable);

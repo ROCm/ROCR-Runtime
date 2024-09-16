@@ -255,6 +255,8 @@ void DispatchTime::RunMulti() {
     uint64_t* index =
            reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * num_batch_));
 
+    ASSERT_NE(index, nullptr);
+
     hsa_signal_store_screlease(aql().completion_signal, num_batch_);
 
     for (uint32_t j = 0; j < num_batch_; j++) {
