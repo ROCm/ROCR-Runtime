@@ -467,6 +467,8 @@ void VirtMemoryTestBasic::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent, hsa_age
   unsigned int* host_data = NULL;
   host_data = (unsigned int*)malloc(max_alloc_size);
 
+  ASSERT_NE(host_data, nullptr);
+
   for (unsigned int i = 0; i < max_element; ++i) {
     host_data[i] = i;
   }
@@ -477,6 +479,9 @@ void VirtMemoryTestBasic::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent, hsa_age
   hsa_amd_vmem_alloc_handle_t mem_handle_host, mem_handle_dev;
   ASSERT_SUCCESS(
       hsa_amd_vmem_address_reserve(reinterpret_cast<void**>(&dev_data), max_alloc_size, 0, 0));
+
+  ASSERT_NE(dev_data, nullptr);
+
   ASSERT_SUCCESS(hsa_amd_vmem_handle_create(device_pool, max_alloc_size, MEMORY_TYPE_NONE, 0,
                                             &mem_handle_dev));
   ASSERT_SUCCESS(

@@ -404,6 +404,8 @@ void MemoryAccessTest::CPUAccessToGPUMemoryTest(hsa_agent_t cpuAgent,
       unsigned int *sys_data;
       sys_data = (unsigned int*)malloc(max_alloc_size);
 
+      ASSERT_NE(sys_data, nullptr);
+
       for (unsigned int i = 0; i < max_element; ++i) {
         sys_data[i] = i;
       }

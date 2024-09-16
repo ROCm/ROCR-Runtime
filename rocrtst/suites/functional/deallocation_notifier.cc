@@ -177,8 +177,8 @@ void DeallocationNotifierTest::TestDeallocationNotifier(void) {
   // Attempt register on bad address (ie one not known to ROCr).  Should fail.
   ptr = malloc(4096);
   status = hsa_amd_register_deallocation_callback(ptr, call, (void*)0xDEADBEEF);
-  ASSERT_EQ(HSA_STATUS_ERROR_INVALID_ALLOCATION, status) << "Register deallocation callback error.";
   free(ptr);
+  ASSERT_EQ(HSA_STATUS_ERROR_INVALID_ALLOCATION, status) << "Register deallocation callback error.";
 
   // Allocate, register and free.  Callback should complete before free returns.
   status = hsa_amd_memory_pool_allocate(pool, 4096, 0, &ptr);

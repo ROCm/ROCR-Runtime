@@ -262,6 +262,8 @@ void EnqueueLatency::EnqueueMultiPackets() {
     uint64_t* index =
            reinterpret_cast<uint64_t*>(malloc(sizeof(uint64_t) * num_of_pkts_));
 
+    ASSERT_NE(index, nullptr);
+
     hsa_signal_store_screlease(aql().completion_signal, num_of_pkts_);
 
     for (uint32_t j = 0; j < num_of_pkts_; j++) {
