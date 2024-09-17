@@ -1172,8 +1172,8 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
 
      int dmabuf_fd = -1;
      uint64_t fragOffset;
-     void *baseAddr = NULL;
-     size_t memLen = 0;
+     void *ptr = NULL;
+     size_t len = 0;
 
      bool isClose = !!(IPC_SOCK_SERVER_CONN_CLOSE_BIT & conn_handle);
      bool isAlreadyOpen = false;
@@ -1202,13 +1202,13 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
      ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      for (auto& conns : ipc_sock_server_conns_) {
        if (conn_handle == conns.first) {
-         baseAddr = conns.second.first;
-         memLen = conns.second.second;
+         ptr = reinterpret_cast<void *>(conn_handle);
+         len = conns.second;
          break;
        }
      }
 
-     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
+     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(ptr, len, &dmabuf_fd, &fragOffset);
      if (err != HSAKMT_STATUS_SUCCESS) continue;
      SendDmaBufFd(connection_fd, dmabuf_fd);
      openDmaBufs[conn_handle] = std::make_pair(dmabuf_fd, 1);
@@ -1247,9 +1247,9 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   }
 
   bool useFrag = (block.base != ptr || block.length != len);
-  void *baseAddr = useFrag ? block.base : ptr;
-  size_t memLen = useFrag ? block.length : len;
-
+  // Assume all pointers and blocks are 4Kb aligned.
+  uint32_t fragOffset = (reinterpret_cast<uint8_t*>(ptr) -
+                         reinterpret_cast<uint8_t*>(block.base))/pageSize;
   if (useFrag) {
     if (!IsMultipleOf(block.base, 2 * 1024 * 1024)) {
       assert(false && "Fragment's block not aligned to 2MB!");
@@ -1258,97 +1258,83 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   }
 
   if (!ipc_dmabuf_supported_) {
-    if (hsaKmtShareMemory(baseAddr, memLen, reinterpret_cast<HsaSharedMemoryHandle*>(handle)) !=
-                          HSAKMT_STATUS_SUCCESS) {
+    HsaSharedMemoryHandle *sHandle = reinterpret_cast<HsaSharedMemoryHandle*>(handle);
+    if (hsaKmtShareMemory(block.base, block.length, sHandle) != HSAKMT_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-    }
-  } else {
-    {
+
+    hsa_status_t err = HSA_STATUS_SUCCESS;
+    if (useFrag) {
+      handle->handle[6] |= 0x80000000 | fragOffset;
+      // Prevent realloction of fragment for better performance.
       ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
-      // Lookup containing allocation.
-      auto mem = allocation_map_.upper_bound(ptr);
-      if (mem != allocation_map_.begin()) {
-        mem--;
-        if ((mem->first <= ptr) &&
-            (ptr < reinterpret_cast<const uint8_t*>(mem->first) + mem->second.size)) {
-          // Check size is in bounds.
-          if (uintptr_t(ptr) - uintptr_t(mem->first) + len <= mem->second.size) {
-            handle->handle[3] = mem->second.region->owner()->device_type() == Agent::kAmdCpuDevice;
-          } else {
-            return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-          }
-        }
-      }
+      err = allocation_map_[ptr].region->IPCFragmentExport(ptr);
+      assert(err == HSA_STATUS_SUCCESS && "Region inconsistent with address map.");
     }
-
-    // System sub allocations are not supported for now.
-    if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-
-    // Work around to defer export on import call to minimize FD creation.
-    // Without this, a deferred export may fail due to the kernel mode driver not
-    // holding the GEM object reference.
-    // Export the dmabuf then close the file to get the reference to ensure the
-    // deferred export will not run into this problem.
-    int dmabuf_fd;
-    uint64_t fragOffset;
-    HSAKMT_STATUS err = hsaKmtExportDMABufHandle(baseAddr, memLen, &dmabuf_fd, &fragOffset);
-     if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
-    close(dmabuf_fd);
-
-    ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
-    if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
-      struct sockaddr_un address;
-      ipc_sock_server_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
-      assert(ipc_sock_server_fd_ > -1 && "DMA buffer could not be exported for IPC!");
-      if (ipc_sock_server_fd_ == -1) return HSA_STATUS_ERROR;
-
-      // Use the PID as unique socket server name.
-      char socketName[IPC_SOCK_SERVER_NAME_LENGTH];
-      snprintf(socketName, IPC_SOCK_SERVER_NAME_LENGTH, "xhsa%i", getpid());
-
-      // Initialize os socket server with client acceptance limit.
-      // Socket servers sill serialize connections and drop connections over the listen limit.
-      // The client can try and reconnect and it's unlikely that INT_MAX concurrent
-      // connections will occur.
-      memset(&address, 0, sizeof(struct sockaddr_un));
-      address.sun_family = AF_UNIX;
-      strncpy(address.sun_path, socketName, IPC_SOCK_SERVER_NAME_LENGTH);
-      address.sun_path[0] = 0; // first NULL char creates unlisted abstract socket
-      int err = bind(ipc_sock_server_fd_, (struct sockaddr *)&address, sizeof(struct sockaddr_un));
-      assert(!err && "Connection to export DMA buffer not made!");
-      if (err) return HSA_STATUS_ERROR;
-      err = listen(ipc_sock_server_fd_, INT_MAX);
-      assert(!err && "Connection to export DMA buffer not made!");
-      if (err) return HSA_STATUS_ERROR;
-
-      // Spin server client acceptance into a socket server thread.
-      // Socket server needs to last for the lifetime of the runtime instance
-      // as the attach life cycle is unknown.
-      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = std::make_pair(baseAddr, memLen);
-      os::CreateThread(AsyncIPCSockServerConnLoop, NULL);
-    } else {
-      ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = std::make_pair(baseAddr, memLen);
-    }
-
-    // User ptr as dmabuf FD handle ID for client to request the actual dmabuf FD.
-    uint32_t dmaBufFdHandleLo = (reinterpret_cast<uint64_t>(ptr) & 0xffffffff);
-    uint32_t dmaBufFdHandleHi = (reinterpret_cast<uint64_t>(ptr) >> 32);
-    handle->handle[0] = dmaBufFdHandleLo;
-    handle->handle[1] = dmaBufFdHandleHi;
-    handle->handle[2] = getpid(); // socket server name handle
-  }
-
-  if (useFrag) {
-    uint32_t offset =
-        (reinterpret_cast<uint8_t*>(ptr) - reinterpret_cast<uint8_t*>(block.base)) / 4096;
-    // Holds size in (4K?) pages in thunk handle: Mark as a fragment and denote offset.
-    handle->handle[6] |= 0x80000000 | offset;
-    // Mark block for IPC.  Prevents reallocation of exported memory.
-    ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
-    hsa_status_t err = allocation_map_[ptr].region->IPCFragmentExport(ptr);
-    assert(err == HSA_STATUS_SUCCESS && "Region inconsistent with address map.");
     return err;
   }
+
+  // User ptr as dmabuf FD handle ID for client to request the actual dmabuf FD.
+  uint32_t dmaBufFdHandleLo = (reinterpret_cast<uint64_t>(ptr) & 0xffffffff);
+  uint32_t dmaBufFdHandleHi = (reinterpret_cast<uint64_t>(ptr) >> 32);
+  handle->handle[0] = dmaBufFdHandleLo;
+  handle->handle[1] = dmaBufFdHandleHi;
+  handle->handle[2] = getpid(); // socket server name handle
+
+  Agent *agent = Agent::Convert(info.agentOwner);
+  handle->handle[3] = agent->device_type() == Agent::kAmdCpuDevice;
+  // System sub allocations are not supported for now.
+  if (handle->handle[3] && useFrag) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  handle->handle[4] = agent->node_id();
+  if (useFrag) handle->handle[6] |= 0x80000000 | fragOffset;
+
+  // Work around to defer export on import call to minimize FD creation.
+  // Without this, a deferred export may fail due to the kernel mode driver not
+  // holding the GEM object reference.
+  // Export the dmabuf then close the file to get the reference to ensure the
+  // deferred export will not run into this problem.
+  int dmabuf_fd;
+  uint64_t dmabufOffset;
+  HSAKMT_STATUS err = hsaKmtExportDMABufHandle(ptr, len, &dmabuf_fd, &dmabufOffset);
+  assert(dmabufOffset/pageSize == fragOffset && "DMA Buf inconsistent with pointer offset.");
+  if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  close(dmabuf_fd);
+
+  ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
+  if (!ipc_sock_server_conns_.size()) { // create new runtime socket server
+    struct sockaddr_un address;
+    ipc_sock_server_fd_ = socket(AF_UNIX, SOCK_STREAM, 0);
+    assert(ipc_sock_server_fd_ > -1 && "DMA buffer could not be exported for IPC!");
+    if (ipc_sock_server_fd_ == -1) return HSA_STATUS_ERROR;
+
+    // Use the PID as unique socket server name.
+    char socketName[IPC_SOCK_SERVER_NAME_LENGTH];
+    snprintf(socketName, IPC_SOCK_SERVER_NAME_LENGTH, "xhsa%i", handle->handle[2]);
+
+    // Initialize os socket server with client acceptance limit.
+    // Socket servers sill serialize connections and drop connections over the listen limit.
+    // The client can try and reconnect and it's unlikely that INT_MAX concurrent
+    // connections will occur.
+    memset(&address, 0, sizeof(struct sockaddr_un));
+    address.sun_family = AF_UNIX;
+    strncpy(address.sun_path, socketName, IPC_SOCK_SERVER_NAME_LENGTH);
+    address.sun_path[0] = 0; // first NULL char creates unlisted abstract socket
+    int err = bind(ipc_sock_server_fd_, (struct sockaddr *)&address, sizeof(struct sockaddr_un));
+    assert(!err && "Connection to export DMA buffer not made!");
+    if (err) return HSA_STATUS_ERROR;
+    err = listen(ipc_sock_server_fd_, INT_MAX);
+    assert(!err && "Connection to export DMA buffer not made!");
+    if (err) return HSA_STATUS_ERROR;
+
+    // Spin server client acceptance into a socket server thread.
+    // Socket server needs to last for the lifetime of the runtime instance
+    // as the attach life cycle is unknown.
+    os::CreateThread(AsyncIPCSockServerConnLoop, NULL);
+  }
+
+  ipc_sock_server_conns_[reinterpret_cast<uint64_t>(ptr)] = len;
+
+  // TODO: fragment block discard for better memory performance causes memory violations
+  // with DMABuf export even when synchronously called. Bypass for now.
 
   return HSA_STATUS_SUCCESS;
 }
@@ -1472,9 +1458,6 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   }
 
   if (num_agents == 0) {
-    hsa_status_t err = importMemory(0, NULL, false);
-    if (err != HSA_STATUS_SUCCESS) return err;
-
     if (ipc_dmabuf_supported_) {
       auto errCleanup = [&](amdgpu_bo_handle bo)
       {
@@ -1482,17 +1465,20 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
         return HSA_STATUS_ERROR;
       };
 
-      // Thunk mem handle useless now that mem info is acquired
-      // Re-import VRAM shared memory with target node
-      hsaKmtDeregisterMemory(importAddress);
+      // GPU memory
       if (!importHandle.handle[3]) {
         HSAuint32 *nodes = new HSAuint32[1];
-        nodes[0] = info.NodeId;
-        err = importMemory(1, nodes, true);
+        nodes[0] = importHandle.handle[4];
+        hsa_status_t err = importMemory(1, nodes, true);
         GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
         if (err != HSA_STATUS_SUCCESS) return err;
         return mapMemoryToNodes(1, nodes);
       }
+
+      // Bind system memory to default GPU
+      hsa_status_t err = importMemory(0, NULL, false);
+      if (err != HSA_STATUS_SUCCESS) return err;
+      hsaKmtDeregisterMemory(importAddress);
 
       // Manually libDRM import and GPU map system memory
       AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
@@ -1518,6 +1504,8 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       *mapped_ptr = importAddress;
       return HSA_STATUS_SUCCESS;
     }
+    hsa_status_t err = importMemory(0, NULL, false);
+    if (err != HSA_STATUS_SUCCESS) return err;
     return mapMemoryToNodes(0, NULL);
   }
 

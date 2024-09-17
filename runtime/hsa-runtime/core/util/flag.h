@@ -234,7 +234,7 @@ class Flag {
     enable_mwaitx_ = (var == "1") ? true : false;
 
     var = os::GetEnvVar("HSA_ENABLE_IPC_MODE_LEGACY");
-    enable_ipc_mode_legacy_ = (var == "1") ? true : true; // Disable DMA-buf implementation for now
+    enable_ipc_mode_legacy_ = (var == "0") ? false : true; // Legacy mode by default
     if (os::IsEnvVarSet("HSA_PCS_MAX_DEVICE_BUFFER_SIZE")) {
       var = os::GetEnvVar("HSA_PCS_MAX_DEVICE_BUFFER_SIZE");
       char* end;
