@@ -304,7 +304,7 @@ static int amdp2ptest_mmap(struct file *filp, struct vm_area_struct *vma)
 	struct va_pages_node	      *va_pages = NULL;
 	struct amdp2ptest_pages_list *list = filp->private_data;
 	struct list_head *p, *n;
-	uint64_t gpu_va = vma->vm_pgoff << HSAKMT_PAGE_SHIFT;
+	uint64_t gpu_va = vma->vm_pgoff << PAGE_SHIFT;
 
 	MSG_INFO("Mapping to CPU user space\n");
 	MSG_INFO("Begin vm_start 0x%lx, vm_end 0x%lx\n", vma->vm_start, vma->vm_end);
@@ -340,7 +340,7 @@ static int amdp2ptest_mmap(struct file *filp, struct vm_area_struct *vma)
 					addr, sg->dma_address, size);
 				ret = remap_pfn_range(vma,
 						addr,
-						sg->dma_address >> HSAKMT_PAGE_SHIFT,
+						sg->dma_address >> PAGE_SHIFT,
 						size,
 						vma->vm_page_prot);
 				if (ret) {

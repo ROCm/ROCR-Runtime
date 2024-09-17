@@ -33,11 +33,8 @@ unsigned long hsakmt_system_properties_count;
 pthread_mutex_t hsakmt_mutex = PTHREAD_MUTEX_INITIALIZER;
 bool hsakmt_is_dgpu;
 
-#ifndef PAGE_SIZE
-int PAGE_SIZE;
-#endif
-
-int HSAKMT_PAGE_SHIFT;
+int hsakmt_page_size;
+int hsakmt_page_shift;
 
 /* whether to check all dGPUs in the topology support SVM API */
 bool hsakmt_is_svm_api_supported;
