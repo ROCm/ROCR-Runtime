@@ -387,7 +387,7 @@ static HSAKMT_STATUS fscanf_dec(char *file, uint32_t *num)
  *      @file [IN ] file to read
  *      @str [OUT] string in the file
  */
-static HSAKMT_STATUS fscanf_str(char *file, char *str)
+static HSAKMT_STATUS fscanf_str(const char *file, char *str, size_t str_size)
 {
 	FILE *fd;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -397,9 +397,13 @@ static HSAKMT_STATUS fscanf_str(char *file, char *str)
 		pr_err("Failed to open %s\n", file);
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 	}
-	if (fscanf(fd, "%s", str) != 1) {
-		pr_err("Failed to parse %s as a string.\n", file);
+
+	if (!fgets(str, (int)str_size, fd)) {
+		pr_err("Failed to read from %s.\n", file);
 		ret = HSAKMT_STATUS_ERROR;
+	} else {
+		// Remove possible newline characters at the end, due to using fgets function
+		str[strcspn(str, "\r\n")] = '\0';
 	}
 
 	fclose(fd);
@@ -542,7 +546,7 @@ static int get_cpu_cache_info(const char *prefix, struct proc_cpuinfo *cpuinfo,
 		snprintf(path, 256, "%s/index%d/type", prefix, idx);
 
 		memset(str, 0, sizeof(str));
-		fscanf_str(path, str);
+		fscanf_str(path, str, sizeof(str));
 		if (!strcmp(str, "Data"))
 			this_cache->CacheType.ui32.Data = 1;
 		if (!strcmp(str, "Instruction"))
@@ -566,7 +570,7 @@ static int get_cpu_cache_info(const char *prefix, struct proc_cpuinfo *cpuinfo,
 		fscanf_dec(path, &this_cache->CacheLinesPerTag);
 		/* CacheSiblings */
 		snprintf(path, 256, "%s/index%d/shared_cpu_map", prefix, idx);
-		fscanf_str(path, str);
+		fscanf_str(path, str, sizeof(str));
 		cpumap_to_cpu_ci(str, cpuinfo, this_cache);
 
 		++this_cache;
@@ -1355,7 +1359,6 @@ static void topology_destroy_temp_cpu_cache_list(
 		free(p_temp_cpu_ci_list);
 	}
 
-	p_temp_cpu_ci_list = NULL;
 }
 
 /* topology_create_temp_cpu_cache_list - Create a temporary cpu-cache list to
@@ -2041,7 +2044,6 @@ retry:
 					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
 								&temp_props[i].link[link_id], false);
 					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
-						ret = HSAKMT_STATUS_SUCCESS;
 						continue;
 					} else if (ret != HSAKMT_STATUS_SUCCESS) {
 						free_properties(temp_props, i + 1);
