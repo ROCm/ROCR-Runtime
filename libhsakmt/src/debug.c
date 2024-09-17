@@ -532,8 +532,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtDebugTrapIoctl(struct kfd_ioctl_dbg_trap_args *arg
 						(void *)args->suspend_queues.queue_array_ptr :
 						(void *)args->resume_queues.queue_array_ptr;
 
-		memcpy(queue_ptr, hsakmt_convert_queue_ids(num_queues, Queues),
-						num_queues * sizeof(uint32_t));
+		uint32_t *queue_ids = hsakmt_convert_queue_ids(num_queues, Queues);
+		if (!queue_ids) {
+			return HSAKMT_STATUS_NO_MEMORY;
+		}
+		memcpy(queue_ptr, queue_ids, num_queues * sizeof(uint32_t));
+		free(queue_ids);
 	}
 
 	long err = hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_DBG_TRAP, args);
