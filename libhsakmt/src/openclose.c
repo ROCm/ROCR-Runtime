@@ -227,7 +227,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtOpenKFD(void)
 	return result;
 topology_sysfs_failed:
 kfd_version_failed:
-	close(fd);
+	if (fd >= 0)
+		close(fd);
 open_failed:
 	pthread_mutex_unlock(&hsakmt_mutex);
 
