@@ -536,11 +536,9 @@ static int handle_concrete_asic(struct queue *q,
 		 */
 		if (!q->use_ats && hsakmt_is_svm_api_supported) {
 			uint32_t size = PAGE_ALIGN_UP(q->total_mem_alloc_size);
-			void *addr;
-			HSAKMT_STATUS r = HSAKMT_STATUS_ERROR;
 
 			pr_info("Allocating GTT for CWSR\n");
-			addr = hsakmt_mmap_allocate_aligned(PROT_READ | PROT_WRITE,
+			void *addr = hsakmt_mmap_allocate_aligned(PROT_READ | PROT_WRITE,
 						     MAP_ANONYMOUS | MAP_PRIVATE,
 						     size, GPU_HUGE_PAGE_SIZE, 0,
 						     0, (void *)LONG_MAX);
@@ -557,7 +555,7 @@ static int handle_concrete_asic(struct queue *q,
 
 				fill_cwsr_header(q, addr, Event, ErrPayload, node.NumXcc);
 
-				r = register_svm_range(addr, size,
+				HSAKMT_STATUS r = register_svm_range(addr, size,
 						NodeId, NodeId, 0, true);
 
 				if (r == HSAKMT_STATUS_SUCCESS) {
@@ -903,12 +901,20 @@ uint32_t *hsakmt_convert_queue_ids(HSAuint32 NumQueues, HSA_QUEUEID *Queues)
 	uint32_t *queue_ids_ptr;
 	unsigned int i;
 
+	if (NumQueues == 0 || Queues == NULL)
+		return NULL;
+
 	queue_ids_ptr = malloc(NumQueues * sizeof(uint32_t));
 	if (!queue_ids_ptr)
 		return NULL;
 
 	for (i = 0; i < NumQueues; i++) {
 		struct queue *q = PORT_UINT64_TO_VPTR(Queues[i]);
+
+		if (q == NULL) {
+			free(queue_ids_ptr);
+			return NULL;
+		}
 
 		queue_ids_ptr[i] = q->queue_id;
 	}
