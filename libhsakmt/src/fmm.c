@@ -3748,7 +3748,7 @@ HSAKMT_STATUS hsakmt_fmm_share_memory(void *MemoryAddress,
 	HsaSharedMemoryStruct *SharedMemoryStruct =
 		to_hsa_shared_memory_struct(SharedMemoryHandle);
 
-	if (SizeInBytes >= (1ULL << ((sizeof(HSAuint32) * 8) + HSAKMT_PAGE_SHIFT)))
+	if (SizeInBytes >= (1ULL << ((sizeof(HSAuint32) * 8) + PAGE_SHIFT)))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	aperture = fmm_find_aperture(MemoryAddress, &ApeInfo);
@@ -3784,7 +3784,7 @@ HSAKMT_STATUS hsakmt_fmm_share_memory(void *MemoryAddress,
 	memcpy(SharedMemoryStruct->ShareHandle, exportArgs.share_handle,
 			sizeof(SharedMemoryStruct->ShareHandle));
 	SharedMemoryStruct->ApeInfo = ApeInfo;
-	SharedMemoryStruct->SizeInPages = (HSAuint32) (SizeInBytes >> HSAKMT_PAGE_SHIFT);
+	SharedMemoryStruct->SizeInPages = (HSAuint32) (SizeInBytes >> PAGE_SHIFT);
 	SharedMemoryStruct->ExportGpuId = gpu_id;
 
 	return HSAKMT_STATUS_SUCCESS;
@@ -3821,7 +3821,7 @@ HSAKMT_STATUS hsakmt_fmm_register_shared_memory(const HsaSharedMemoryHandle *Sha
 
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	reservedMem = aperture_allocate_area(aperture, NULL,
-			(SizeInPages << HSAKMT_PAGE_SHIFT));
+			(SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 	if (!reservedMem) {
 		err = HSAKMT_STATUS_NO_MEMORY;
@@ -3838,7 +3838,7 @@ HSAKMT_STATUS hsakmt_fmm_register_shared_memory(const HsaSharedMemoryHandle *Sha
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	mflags.Value = importArgs.flags;
 	obj = aperture_allocate_object(aperture, reservedMem, importArgs.handle,
-				       (SizeInPages << HSAKMT_PAGE_SHIFT), mflags);
+				       (SizeInPages << PAGE_SHIFT), mflags);
 	if (!obj) {
 		err = HSAKMT_STATUS_NO_MEMORY;
 		goto err_free_mem;
@@ -3854,7 +3854,7 @@ HSAKMT_STATUS hsakmt_fmm_register_shared_memory(const HsaSharedMemoryHandle *Sha
 			goto err_free_obj;
 		}
 		obj->node_id = gpu_mem[gpu_mem_id].node_id;
-		ret = fmm_map_to_cpu(reservedMem, (SizeInPages << HSAKMT_PAGE_SHIFT),
+		ret = fmm_map_to_cpu(reservedMem, (SizeInPages << PAGE_SHIFT),
 				     true, gpu_mem[gpu_mem_id].drm_render_fd,
 				     importArgs.mmap_offset);
 
@@ -3865,7 +3865,7 @@ HSAKMT_STATUS hsakmt_fmm_register_shared_memory(const HsaSharedMemoryHandle *Sha
 	}
 
 	*MemoryAddress = reservedMem;
-	*SizeInBytes = (SizeInPages << HSAKMT_PAGE_SHIFT);
+	*SizeInBytes = (SizeInPages << PAGE_SHIFT);
 
 	if (gpu_id_array_size > 0) {
 		obj->registered_device_id_array = gpu_id_array;
@@ -3878,7 +3878,7 @@ err_free_obj:
 	pthread_mutex_lock(&aperture->fmm_mutex);
 	vm_remove_object(aperture, obj);
 err_free_mem:
-	aperture_release_area(aperture, reservedMem, (SizeInPages << HSAKMT_PAGE_SHIFT));
+	aperture_release_area(aperture, reservedMem, (SizeInPages << PAGE_SHIFT));
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 err_free_buffer:
 	freeArgs.handle = importArgs.handle;

@@ -67,9 +67,13 @@ extern HsaVersionInfo hsakmt_kfd_version_info;
 /* Might be defined in limits.h on platforms where it is constant (used by musl) */
 /* See also: https://pubs.opengroup.org/onlinepubs/7908799/xsh/limits.h.html */
 #ifndef PAGE_SIZE
-extern int PAGE_SIZE;
+extern int hsakmt_page_size;
+#define PAGE_SIZE hsakmt_page_size
 #endif
-extern int HSAKMT_PAGE_SHIFT;
+#ifndef PAGE_SHIFT
+extern int hsakmt_page_shift;
+#define PAGE_SHIFT hsakmt_page_shift
+#endif
 
 /* VI HW bug requires this virtual address alignment */
 #define TONGA_PAGE_SIZE 0x8000
