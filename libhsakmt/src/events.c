@@ -111,13 +111,13 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 		}
 	}
 
-	pthread_mutex_unlock(&hsakmt_mutex);
-
 	if (args.event_page_offset > 0 && args.event_slot_index < event_limit)
 		e->EventData.HWData2 = (HSAuint64)&events_page[args.event_slot_index];
 
-	e->EventData.EventType = EventDesc->EventType;
-	e->EventData.HWData1 = args.event_id;
+        pthread_mutex_unlock(&hsakmt_mutex);
+
+        e->EventData.EventType = EventDesc->EventType;
+        e->EventData.HWData1 = args.event_id;
 
 	e->EventData.HWData3 = args.event_trigger_data;
 	e->EventData.EventData.SyncVar.SyncVar.UserData =
@@ -130,10 +130,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateEvent(HsaEventDescriptor *EventDesc,
 
 		set_args.event_id = args.event_id;
 
-		hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_EVENT, &set_args);
-	}
+                if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_SET_EVENT,
+                                 &set_args) != 0) {
+                  hsaKmtDestroyEvent(e);
+                  return HSAKMT_STATUS_ERROR;
+                }
+        }
 
-	*Event = e;
+        *Event = e;
 
 	return HSAKMT_STATUS_SUCCESS;
 }
@@ -230,9 +234,9 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnEvent_Ext(HsaEvent *Event,
 static HSAKMT_STATUS get_mem_info_svm_api(uint64_t address, uint32_t gpu_id)
 {
 	struct kfd_ioctl_svm_args *args;
-	uint32_t node_id;
-	HSAuint32 s_attr;
-	HSAuint32 i;
+        uint32_t node_id = 0;
+        HSAuint32 s_attr;
+        HSAuint32 i;
 	HSA_SVM_ATTRIBUTE attrs[] = {
 					{HSA_SVM_ATTR_PREFERRED_LOC, 0},
 					{HSA_SVM_ATTR_PREFETCH_LOC, 0},
@@ -384,28 +388,30 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtWaitOnMultipleEvents_Ext(HsaEvent *Events[],
 						   HSAuint32 Milliseconds,
 						   uint64_t *event_age)
 {
-	CHECK_KFD_OPEN();
+        HSAKMT_STATUS result;
+        CHECK_KFD_OPEN();
 
-	if (!Events)
+        if (!Events)
 		return HSAKMT_STATUS_INVALID_HANDLE;
 
-	struct kfd_event_data *event_data = calloc(NumEvents, sizeof(struct kfd_event_data));
-
-	for (HSAuint32 i = 0; i < NumEvents; i++) {
+        struct kfd_event_data *event_data =
+        calloc(NumEvents, sizeof(struct kfd_event_data));
+        if (!event_data) {
+		return HSAKMT_STATUS_NO_MEMORY;
+	}
+        for (HSAuint32 i = 0; i < NumEvents; i++) {
 		event_data[i].event_id = Events[i]->EventId;
 		event_data[i].kfd_event_data_ext = (uint64_t)(uintptr_t)NULL;
 		if (event_age && Events[i]->EventData.EventType == HSA_EVENTTYPE_SIGNAL)
 			event_data[i].signal_event_data.last_event_age = event_age[i];
 	}
 
-	struct kfd_ioctl_wait_events_args args = {0};
+        struct kfd_ioctl_wait_events_args args = {0};
 
 	args.wait_for_all = WaitOnAll;
 	args.timeout = Milliseconds;
 	args.num_events = NumEvents;
 	args.events_ptr = (uint64_t)(uintptr_t)event_data;
-
-	HSAKMT_STATUS result;
 
 	if (hsakmt_ioctl(hsakmt_kfd_fd, AMDKFD_IOC_WAIT_EVENTS, &args) == -1)
 		result = HSAKMT_STATUS_ERROR;
