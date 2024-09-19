@@ -12,6 +12,7 @@
 #include "hsa_ipu.h"
 
 #define DATA_BUFFER_SIZE (1024 * 4)
+#define COMMAND_CHAIN_SIZE 4096
 
 /*
  * Interpretation of the beginning of data payload for ERT_CMD_CHAIN in
@@ -86,7 +87,8 @@ int main(int argc, char **argv) {
   //  b. Instruction sequences for both runs
 
   // reserve some device memory for the heap
-  if (alloc_heap(drv_fd, 48 * 1024 * 1024, &heap_handle) < 0) {
+  auto [dev_parent_heap, heap] = alloc_heap(drv_fd, HEAP_SIZE, &heap_handle);
+  if (!heap) {
     perror("Error allocating device heap");
     printf("Closing\n");
     close(drv_fd);
@@ -363,14 +365,17 @@ int main(int argc, char **argv) {
 
   // Allocate a command chain
   void *bo_cmd_chain_buf = nullptr;
-  cmd_bo_ret = posix_memalign(&bo_cmd_chain_buf, 4096, 4096);
+  cmd_bo_ret =
+      posix_memalign(&bo_cmd_chain_buf, /*alignment=*/COMMAND_CHAIN_SIZE,
+                     /*size=*/COMMAND_CHAIN_SIZE);
   if (cmd_bo_ret != 0 || bo_cmd_chain_buf == nullptr) {
-    printf("[ERROR] Failed to allocate cmd_bo buffer of size %d\n", 4096);
+    printf("[ERROR] Failed to allocate cmd_bo buffer of size %zu\n",
+           COMMAND_CHAIN_SIZE);
   }
 
   amdxdna_drm_create_bo create_cmd_chain_bo = {
       .type = AMDXDNA_BO_CMD,
-      .size = 4096,
+      .size = COMMAND_CHAIN_SIZE,
   };
   cmd_bo_ret = ioctl(drv_fd, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_chain_bo);
   if (cmd_bo_ret != 0) {
@@ -386,9 +391,9 @@ int main(int argc, char **argv) {
     return -2;
   }
 
-  amdxdna_cmd *cmd_chain =
-      (struct amdxdna_cmd *)mmap(0, 4096, PROT_READ | PROT_WRITE, MAP_SHARED,
-                                 drv_fd, cmd_chain_bo_get_bo_info.map_offset);
+  amdxdna_cmd *cmd_chain = (struct amdxdna_cmd *)mmap(
+      0, COMMAND_CHAIN_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, drv_fd,
+      cmd_chain_bo_get_bo_info.map_offset);
 
   // Writing information to the command buffer
   amdxdna_cmd_chain *cmd_chain_payload =
@@ -402,11 +407,6 @@ int main(int argc, char **argv) {
   cmd_chain_payload->error_index = 0;
   cmd_chain_payload->data[0] = create_cmd_bo_0.handle;
   cmd_chain_payload->data[1] = create_cmd_bo_1.handle;
-
-  // Reading the user buffers
-  sync_bo(drv_fd, create_cmd_chain_bo.handle);
-  sync_bo(drv_fd, create_cmd_bo_0.handle);
-  sync_bo(drv_fd, create_cmd_bo_1.handle);
 
   // Perform a submit cmd
   uint32_t bo_args[6] = {dpu_0_handle,    dpu_1_handle,   input_0_handle,
@@ -477,6 +477,12 @@ int main(int argc, char **argv) {
   } else {
     printf("FAIL! %d/2048\n", errors);
   }
+
+  munmap(cmd_0, PACKET_SIZE);
+  munmap(cmd_1, PACKET_SIZE);
+  munmap(cmd_chain, COMMAND_CHAIN_SIZE);
+  munmap(heap, HEAP_SIZE);
+  munmap(dev_parent_heap, DEV_HEAP_PARENT_SIZE);
 
   printf("Closing\n");
   close(drv_fd);

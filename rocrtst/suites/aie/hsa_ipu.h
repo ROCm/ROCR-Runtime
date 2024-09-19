@@ -23,6 +23,9 @@
 // want to mmap the file
 
 #define MAX_NUM_INSTRUCTIONS 1024  // Maximum number of dpu or pdi instructions.
+#define HEAP_ALIGNMENT (64 << 20)
+#define HEAP_SIZE (64 << 20)
+#define DEV_HEAP_PARENT_SIZE (2 * HEAP_SIZE - 1)
 
 // Dummy packet defines
 
@@ -64,32 +67,20 @@ int get_driver_version(int fd, __u32 *major, __u32 *minor) {
   return ret;
 }
 
+void *addr_align(void *p, size_t align) {
+  return (void *)(((uintptr_t)p + align) & ~(align - 1));
+}
+
 /*
         Allocates a heap on the device by creating a BO of type dev heap
 */
-int alloc_heap(int fd, __u32 size, __u32 *handle) {
-  int ret;
-  void *heap_buf = NULL;
-  const size_t alignment = 64 * 1024 * 1024;
-  ret = posix_memalign(&heap_buf, alignment, size);
-  if (ret != 0 || heap_buf == NULL) {
-    printf("[ERROR] Failed to allocate heap buffer of size %d\n", size);
-  }
-
-  void *dev_heap_parent = mmap(0, alignment * 2 - 1, PROT_READ | PROT_WRITE,
-                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-
-  if (dev_heap_parent == MAP_FAILED) {
-    dev_heap_parent = nullptr;
-    return -1;
-  }
-
+std::pair<void *, void *> alloc_heap(int fd, __u32 size, __u32 *handle) {
   amdxdna_drm_create_bo create_bo_params = {
       .type = AMDXDNA_BO_DEV_HEAP,
       .size = size,
   };
 
-  ret = ioctl(fd, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_bo_params);
+  int ret = ioctl(fd, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_bo_params);
   if (ret == 0 && handle) {
     *handle = create_bo_params.handle;
   }
@@ -98,17 +89,20 @@ int alloc_heap(int fd, __u32 size, __u32 *handle) {
   ret = ioctl(fd, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info);
   if (ret != 0) {
     perror("Failed to get BO info");
-    return -2;
+    return {nullptr, nullptr};
   }
 
-  // Need to free the heap buf but still use the address so we can
-  // ensure alignment
-  free(heap_buf);
-  heap_buf = (void *)mmap(heap_buf, size, PROT_READ | PROT_WRITE, MAP_SHARED,
-                          fd, get_bo_info.map_offset);
-  printf("Heap buffer @:                  %p\n", heap_buf);
+  void *dev_heap_parent = mmap(0, DEV_HEAP_PARENT_SIZE, PROT_READ | PROT_WRITE,
+                               MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (dev_heap_parent == MAP_FAILED) {
+    return {nullptr, nullptr};
+  }
 
-  return ret;
+  void *aligned = addr_align(dev_heap_parent, HEAP_ALIGNMENT);
+  aligned = mmap(aligned, size, PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED,
+                 fd, get_bo_info.map_offset);
+  printf("Heap buffer @:                  %p\n", aligned);
+  return {dev_heap_parent, aligned};
 }
 
 /*
