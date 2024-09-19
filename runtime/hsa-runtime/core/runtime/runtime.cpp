@@ -55,6 +55,9 @@
 #include <sys/mman.h>
 #include <sys/socket.h>
 #include <sys/un.h>
+#include <iostream>
+#include <thread>
+#include <chrono>
 
 #if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
 #include <rocprofiler-register/rocprofiler-register.h>
@@ -1148,7 +1151,6 @@ static int ReceiveDmaBufFd(int socket) {
 #define IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH 64
 #define IPC_SOCK_SERVER_NAME_LENGTH 32
 #define IPC_SOCK_SERVER_CONN_CLOSE_HANDLE UINT64_MAX
-#define IPC_SOCK_SERVER_CONN_CLOSE_BIT 1ULL << 63
 void Runtime::AsyncIPCSockServerConnLoop(void*) {
    auto& ipc_sock_server_fd_ = runtime_singleton_->ipc_sock_server_fd_;
    auto& ipc_sock_server_conns_ = runtime_singleton_->ipc_sock_server_conns_;
@@ -1156,49 +1158,25 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
 
    int connection_fd;
    char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
-   // openDmaBufs pair <int, int> is <dmabuf_fd, ref_count>
-   std::map<uint64_t, std::pair<int, int>> openDmaBufs;
    // Wait until the client has connected
    while (1) {
      connection_fd = accept(ipc_sock_server_fd_, NULL, NULL);
      if (connection_fd == -1) continue;
+     MAKE_SCOPE_GUARD([&]() { close(connection_fd); });
      if (read(connection_fd, buf, sizeof(buf)) == -1)
-       break;
+       continue;
+
+     // Request to kill the server.
      uint64_t conn_handle = strtoull(buf, NULL, 10);
-     if (conn_handle == IPC_SOCK_SERVER_CONN_CLOSE_HANDLE) {
-       close(connection_fd);
+     if (conn_handle == IPC_SOCK_SERVER_CONN_CLOSE_HANDLE)
        break;
-     }
 
      int dmabuf_fd = -1;
      uint64_t fragOffset;
      void *ptr = NULL;
      size_t len = 0;
 
-     bool isClose = !!(IPC_SOCK_SERVER_CONN_CLOSE_BIT & conn_handle);
-     bool isAlreadyOpen = false;
-     conn_handle &= ~(IPC_SOCK_SERVER_CONN_CLOSE_BIT);
-
-     // send dmabufs that are already opened
-     for (auto&conns : openDmaBufs) {
-       if (conn_handle == conns.first) {
-         if (!isClose) {
-           SendDmaBufFd(connection_fd, openDmaBufs[conn_handle].first);
-           openDmaBufs[conn_handle].second++;
-         } else {
-           openDmaBufs[conn_handle].second--;
-           if (!openDmaBufs[conn_handle].second) {
-             close(openDmaBufs[conn_handle].first);
-             openDmaBufs.erase(conn_handle);
-           }
-         }
-         isAlreadyOpen = true;
-         break;
-       }
-     }
-
-     if (isAlreadyOpen) continue;
-
+     // Search for registered export pointer
      ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
      for (auto& conns : ipc_sock_server_conns_) {
        if (conn_handle == conns.first) {
@@ -1208,15 +1186,18 @@ void Runtime::AsyncIPCSockServerConnLoop(void*) {
        }
      }
 
-     HSAKMT_STATUS err = hsaKmtExportDMABufHandle(ptr, len, &dmabuf_fd, &fragOffset);
+     if (!ptr) continue;
+
+     // Export DMA Buf FD and wait for client import
+     int err = hsaKmtExportDMABufHandle(ptr, len, &dmabuf_fd, &fragOffset);
      if (err != HSAKMT_STATUS_SUCCESS) continue;
      SendDmaBufFd(connection_fd, dmabuf_fd);
-     openDmaBufs[conn_handle] = std::make_pair(dmabuf_fd, 1);
+     err = read(connection_fd, buf, sizeof(buf));
+     close(dmabuf_fd);
+     if (err == -1) break; // Client failed to confirm import so end server
    }
 
    // Clean up
-   for (auto& conns : openDmaBufs)
-     close(conns.second.first); // close all dangling open dmabuf FDs
    ipc_sock_server_conns_.clear();
    close(ipc_sock_server_fd_);
 }
@@ -1321,7 +1302,7 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
     int err = bind(ipc_sock_server_fd_, (struct sockaddr *)&address, sizeof(struct sockaddr_un));
     assert(!err && "Connection to export DMA buffer not made!");
     if (err) return HSA_STATUS_ERROR;
-    err = listen(ipc_sock_server_fd_, INT_MAX);
+    err = listen(ipc_sock_server_fd_, 1);
     assert(!err && "Connection to export DMA buffer not made!");
     if (err) return HSA_STATUS_ERROR;
 
@@ -1339,7 +1320,10 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   return HSA_STATUS_SUCCESS;
 }
 
-static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool close_handle) {
+int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
+                             amdgpu_bo_import_result *res,
+                             unsigned int numNodes, HSAuint32 *nodes,
+                             void **importAddress, HSAuint64 *importSize) {
     struct sockaddr_un address;
     int dmabuf_fd = -1, socket_fd = socket(AF_UNIX, SOCK_STREAM, 0);
     assert(socket_fd > -1 && "DMA buffer could not be imported for IPC!");
@@ -1358,17 +1342,48 @@ static int GetIPCDmaBufFD(uint32_t conn_handle, uint64_t dmabuf_fd_handle, bool 
     snprintf(address.sun_path, IPC_SOCK_SERVER_NAME_LENGTH, "xhsa%i", conn_handle);
     address.sun_path[0] = 0; // first NULL char creates unlisted abstract socket
 
-    // connect to the socket server and send the socket handle
-    // to recieve the dmabuf fd or close the server
-    if (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un)) == -1)
-      return -1;
-    // Set high bit to indicate closure of exporter fd
-    if (close_handle) dmabuf_fd_handle |= IPC_SOCK_SERVER_CONN_CLOSE_BIT;
+    int timeoutLimitMs = 10000, timeoutMs = 0, timeoutIntervalMs = 1;
+    while (timeoutMs < timeoutLimitMs) {
+      if (connect(socket_fd, (struct sockaddr *) &address, sizeof(struct sockaddr_un))) {
+        timeoutMs  += timeoutIntervalMs;
+        std::this_thread::sleep_for(std::chrono::milliseconds(timeoutIntervalMs));
+      } else {
+        break;
+      }
+    }
+
+    MAKE_SCOPE_GUARD([&]() { close(socket_fd); });
+
+    if (timeoutMs >= timeoutLimitMs) return -1;
+
+    // Ping server to export and send DMABUF FD on handle
     snprintf(buf, sizeof(buf), "%li", dmabuf_fd_handle);
-    write(socket_fd, buf, sizeof(buf));
-    if (!close_handle) dmabuf_fd = ReceiveDmaBufFd(socket_fd);
-    close(socket_fd);
-    return dmabuf_fd;
+    if (write(socket_fd, buf, sizeof(buf)) == -1) return -1;
+
+    if (dmabuf_fd_handle == IPC_SOCK_SERVER_CONN_CLOSE_HANDLE) return 0;
+
+    dmabuf_fd = ReceiveDmaBufFd(socket_fd);
+    if (dmabuf_fd == -1) return -1;
+
+    HsaGraphicsResourceInfo info;
+    int err = hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, numNodes, nodes);
+    if (err == HSAKMT_STATUS_SUCCESS) {
+      *importAddress = info.MemoryAddress;
+      *importSize = info.SizeInBytes;
+      if (res) {
+        hsaKmtDeregisterMemory(*importAddress);
+
+        // Manually libDRM import and GPU map system memory
+        AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
+        err = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd,
+                               dmabuf_fd, res);
+      }
+      close(dmabuf_fd);
+    }
+
+    // Ping socket server to close exporter
+    if (write(socket_fd, buf, sizeof(buf)) == -1) return -1;
+    return err;
 }
 
 hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, uint32_t num_agents,
@@ -1376,7 +1391,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   static const int tinyArraySize = 8;
   void* importAddress;
   HSAuint64 importSize;
-  uint64_t dmaBufFDHandle;
+  uint64_t dmaBufFDHandle = 0;
   hsa_amd_ipc_memory_t importHandle = *handle;
 
   // Extract fragment info
@@ -1394,24 +1409,14 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     allocation_map_[importAddress].ldrm_bo = ldrm_bo;
   };
 
-  int dmabuf_fd = -1;
-  HsaGraphicsResourceInfo info;
   auto importMemory = [&](unsigned int numNodes, HSAuint32 *nodes,
-                          bool closeDmaBufFd) {
+                          amdgpu_bo_import_result *res) {
     int ret = ipc_dmabuf_supported_ ?
-          hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, numNodes, nodes) :
+          IPCClientImport(importHandle.handle[2], dmaBufFDHandle, res,
+                          numNodes, nodes, &importAddress, &importSize) :
           hsaKmtRegisterSharedHandle(reinterpret_cast<const HsaSharedMemoryHandle*>(&importHandle),
                                      &importAddress, &importSize);
-    if (ret != HSAKMT_STATUS_SUCCESS) {
-      if (ipc_dmabuf_supported_) close(dmabuf_fd);
-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-    }
-
-    if (ipc_dmabuf_supported_) {
-      importAddress = info.MemoryAddress;
-      importSize = info.SizeInBytes;
-      if (closeDmaBufFd) close(dmabuf_fd);
-    }
+    if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
     return HSA_STATUS_SUCCESS;
   };
@@ -1452,9 +1457,6 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
     uint64_t dmaBufFDHandleLo = importHandle.handle[0];
     uint64_t dmaBufFDHandleHi = importHandle.handle[1];
     dmaBufFDHandle = (dmaBufFDHandleHi << 32) | dmaBufFDHandleLo;
-    dmabuf_fd = GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, false);
-    assert(dmabuf_fd > -1 && "IPC importer could not get shared file handle!");
-    if (dmabuf_fd == -1) return HSA_STATUS_ERROR;
   }
 
   if (num_agents == 0) {
@@ -1469,30 +1471,20 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       if (!importHandle.handle[3]) {
         HSAuint32 *nodes = new HSAuint32[1];
         nodes[0] = importHandle.handle[4];
-        hsa_status_t err = importMemory(1, nodes, true);
-        GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
+        hsa_status_t err = importMemory(1, nodes, NULL);
         if (err != HSA_STATUS_SUCCESS) return err;
         return mapMemoryToNodes(1, nodes);
       }
 
-      // Bind system memory to default GPU
-      hsa_status_t err = importMemory(0, NULL, false);
-      if (err != HSA_STATUS_SUCCESS) return err;
-      hsaKmtDeregisterMemory(importAddress);
-
-      // Manually libDRM import and GPU map system memory
-      AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
+      // System Memory
       amdgpu_bo_import_result res;
-      int ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd,
-                                 dmabuf_fd, &res);
-      close(dmabuf_fd);
-      GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
-      if (ret) return HSA_STATUS_ERROR;
+      hsa_status_t err = importMemory(0, NULL, &res);
+      if (err != HSA_STATUS_SUCCESS) return err;
 
       // Create a shared cpu access pointer for user
       void *cpuPtr;
       amdgpu_bo_handle bo = res.buf_handle;
-      ret = amdgpu_bo_cpu_map(bo, &cpuPtr);
+      int ret = amdgpu_bo_cpu_map(bo, &cpuPtr);
       if (ret) return errCleanup(bo);
 
       // Note VA ops will always override flags to allow read/write/exec permissions.
@@ -1504,7 +1496,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
       *mapped_ptr = importAddress;
       return HSA_STATUS_SUCCESS;
     }
-    hsa_status_t err = importMemory(0, NULL, false);
+    hsa_status_t err = importMemory(0, NULL, NULL);
     if (err != HSA_STATUS_SUCCESS) return err;
     return mapMemoryToNodes(0, NULL);
   }
@@ -1523,8 +1515,7 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID, &nodes[i]);
 
-  hsa_status_t err = importMemory(num_agents, nodes, true);
-  GetIPCDmaBufFD(importHandle.handle[2], dmaBufFDHandle, true);
+  hsa_status_t err = importMemory(num_agents, nodes, NULL);
   if (err != HSA_STATUS_SUCCESS) return err;
   return mapMemoryToNodes(num_agents, nodes);
 }
@@ -2023,8 +2014,10 @@ hsa_status_t Runtime::Load() {
 }
 
 void Runtime::Unload() {
+  // Close IPC socket server
   if (ipc_sock_server_conns_.size())
-    GetIPCDmaBufFD(getpid(), IPC_SOCK_SERVER_CONN_CLOSE_HANDLE, true);
+    IPCClientImport(getpid(), IPC_SOCK_SERVER_CONN_CLOSE_HANDLE,
+                    NULL, 0, NULL, NULL, NULL);
 
   svm_profile_.reset(nullptr);
 
