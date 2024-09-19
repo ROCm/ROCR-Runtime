@@ -755,35 +755,44 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             hsa_signal_value_t value,
                                             hsa_amd_signal_handler handler,
                                             void* arg) {
-  // Indicate that this signal is in use.
-  if (signal.handle != 0) hsa_signal_handle(signal)->Retain();
 
-  ScopedAcquire<HybridMutex> scope_lock(&async_events_control_.lock);
+  struct AsyncEventsInfo* asyncInfo = &asyncSignals_;
+
+  if (signal.handle != 0) {
+    // Indicate that this signal is in use.
+    hsa_signal_handle(signal)->Retain();
+
+    core::Signal* coreSignal = core::Signal::Convert(signal);
+    if (coreSignal->EopEvent() && coreSignal->EopEvent()->EventData.EventType != HSA_EVENTTYPE_SIGNAL)
+      asyncInfo = &asyncExceptions_;
+  }
+
+  ScopedAcquire<HybridMutex> scope_lock(&asyncInfo->control.lock);
 
   // Lazy initializer
-  if (async_events_control_.async_events_thread_ == NULL) {
+  if (asyncInfo->control.async_events_thread_ == NULL) {
     // Create monitoring thread control signal
-    auto err = HSA::hsa_signal_create(0, 0, NULL, &async_events_control_.wake);
+    auto err = HSA::hsa_signal_create(0, 0, NULL, &asyncInfo->control.wake);
     if (err != HSA_STATUS_SUCCESS) {
       assert(false && "Asyncronous events control signal creation error.");
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
-    async_events_.PushBack(async_events_control_.wake, HSA_SIGNAL_CONDITION_NE,
-                           0, NULL, NULL);
+    asyncInfo->events.PushBack(asyncInfo->control.wake, HSA_SIGNAL_CONDITION_NE,
+                          0, NULL, NULL);
 
     // Start event monitoring thread
-    async_events_control_.exit = false;
-    async_events_control_.async_events_thread_ =
-        os::CreateThread(AsyncEventsLoop, NULL);
-    if (async_events_control_.async_events_thread_ == NULL) {
+    asyncInfo->control.exit = false;
+    asyncInfo->control.async_events_thread_ =
+        os::CreateThread(AsyncEventsLoop, asyncInfo);
+    if (asyncInfo->control.async_events_thread_ == NULL) {
       assert(false && "Asyncronous events thread creation error.");
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
 
-  new_async_events_.PushBack(signal, cond, value, handler, arg);
+  asyncInfo->new_events.PushBack(signal, cond, value, handler, arg);
 
-  hsa_signal_handle(async_events_control_.wake)->StoreRelease(1);
+  hsa_signal_handle(asyncInfo->control.wake)->StoreRelease(1);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -1499,18 +1508,35 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
   return HSA_STATUS_SUCCESS;
 }
 
-void Runtime::AsyncEventsLoop(void*) {
-  auto& async_events_control_ = runtime_singleton_->async_events_control_;
-  auto& async_events_ = runtime_singleton_->async_events_;
-  auto& new_async_events_ = runtime_singleton_->new_async_events_;
+void Runtime::AsyncEventsLoop(void* _eventsInfo) {
+  struct AsyncEventsInfo* eventsInfo = reinterpret_cast<struct AsyncEventsInfo*>(_eventsInfo);
+
+  auto& async_events_control_ = eventsInfo->control;
+  auto& async_events_ = eventsInfo->events;
+  auto& new_async_events_ = eventsInfo->new_events;
 
   while (!async_events_control_.exit) {
     // Wait for a signal
     hsa_signal_value_t value;
-    uint32_t index = AMD::hsa_amd_signal_wait_any(
-        uint32_t(async_events_.Size()), &async_events_.signal_[0],
-        &async_events_.cond_[0], &async_events_.value_[0], uint64_t(-1),
-        HSA_WAIT_STATE_BLOCKED, &value);
+    uint32_t index = 0;
+
+    if (eventsInfo->monitor_exceptions) {
+      index = Signal::WaitAnyExceptions(
+                          uint32_t(async_events_.Size()),
+                          &async_events_.signal_[0],
+                          &async_events_.cond_[0],
+                          &async_events_.value_[0],
+                          &value);
+    } else {
+      index = AMD::hsa_amd_signal_wait_any(
+                          uint32_t(async_events_.Size()),
+                          &async_events_.signal_[0],
+                          &async_events_.cond_[0],
+                          &async_events_.value_[0],
+                          uint64_t(-1),
+                          HSA_WAIT_STATE_BLOCKED,
+                          &value);
+    }
 
     // Reset the control signal
     if (index == 0) {
@@ -1875,7 +1901,11 @@ Runtime::Runtime()
       hw_exception_event_(nullptr),
       hw_exception_signal_(nullptr),
       ref_count_(0),
-      kfd_version{} {}
+      kfd_version{} {
+
+  asyncSignals_.monitor_exceptions = false;
+  asyncExceptions_.monitor_exceptions = true;
+}
 
 hsa_status_t Runtime::Load() {
   os::cpuid_t cpuinfo;
@@ -1953,7 +1983,8 @@ void Runtime::Unload() {
   std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
   disabled_gpu_agents_.clear();
 
-  async_events_control_.Shutdown();
+  asyncSignals_.control.Shutdown();
+  asyncExceptions_.control.Shutdown();
 
   if (vm_fault_signal_ != nullptr) {
     vm_fault_signal_->DestroySignal();
