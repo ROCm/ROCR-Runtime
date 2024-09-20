@@ -216,7 +216,7 @@ typedef union
         unsigned int SRAM_EDCSupport: 1;         // Indicates if GFX internal SRAM EDC/ECC functionality is active
         unsigned int SVMAPISupported     : 1;    // Whether or not the SVM API is supported
         unsigned int CoherentHostAccess: 1;      // Whether or not device memory can be coherently accessed by the host CPU
-        unsigned int DebugSupportedFirmware : 1;
+        unsigned int DebugSupportedFirmware : 1; // Indicates if HWS firmware supports GPU debugging
         unsigned int Reserved            : 2;
     } ui32;
 } HSA_CAPABILITY;
