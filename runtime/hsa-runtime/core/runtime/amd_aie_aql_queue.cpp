@@ -127,7 +127,12 @@ AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
       .CreateQueue(*this);
 }
 
-AieAqlQueue::~AieAqlQueue() { AieAqlQueue::Inactivate(); }
+AieAqlQueue::~AieAqlQueue() {
+  AieAqlQueue::Inactivate();
+  if (ring_buf_) {
+    agent_.system_deallocator()(ring_buf_);
+  }
+}
 
 hsa_status_t AieAqlQueue::Inactivate() {
   bool active(active_.exchange(false, std::memory_order_relaxed));
@@ -344,6 +349,8 @@ hsa_status_t AieAqlQueue::SubmitCmd(
       case HSA_AMD_AIE_ERT_START_CU: {
         std::vector<uint32_t> bo_args;
         std::vector<uint32_t> cmd_handles;
+        std::vector<uint32_t> cmd_sizes;
+        std::vector<amdxdna_cmd *> cmds;
 
         // Iterating over future packets and seeing how many contiguous HSA_AMD_AIE_ERT_START_CU
         // packets there are. All can be combined into a single chain.
@@ -389,6 +396,8 @@ hsa_status_t AieAqlQueue::SubmitCmd(
 
           // Keeping track of the handle
           cmd_handles.push_back(cmd_bo_handle);
+          cmds.push_back(cmd);
+          cmd_sizes.push_back(cmd_size);
         }
 
         // Creating a packet that contains the command chain
@@ -436,6 +445,19 @@ hsa_status_t AieAqlQueue::SubmitCmd(
 
         // Executing all commands in the command chain
         ExecCmdAndWait(&exec_cmd_0, hw_ctx_handle, fd);
+
+        // Unmapping and closing the cmd BOs
+        drm_gem_close close_bo_args{0};
+        for (int i = 0; i < cmd_handles.size(); i++) {
+          munmap(cmds[i], cmd_sizes[i]);
+          close_bo_args.handle = cmd_handles[i];
+          ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+        }
+
+        // Unmapping and closing the cmd_chain BO
+        munmap(cmd_chain, cmd_chain_size);
+        close_bo_args.handle = cmd_chain_bo_handle;
+        ioctl(fd, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
 
         // Syncing BOs after we execute the command
         if (SyncBos(bo_args, fd))
