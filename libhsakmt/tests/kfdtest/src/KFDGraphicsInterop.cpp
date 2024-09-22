@@ -26,13 +26,13 @@
 #include "Dispatch.hpp"
 #include "PM4Queue.hpp"
 
-TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
-    TEST_START(TESTPROFILE_RUNALL)
+static void RegisterGraphicsHandle(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-    const HsaNodeProperties *pNodeProps =
-        m_NodeInfo.GetNodeProperties(defaultGPUNode);
+    int gpuNode = pTestParamters->gpuNode;
+    KFDGraphicsInterop* pKFDGraphicsInterop = (KFDGraphicsInterop*)pTestParamters->pTestObject;
+
+    HsaNodeInfo* m_NodeInfo = pKFDGraphicsInterop->Get_NodeInfo();
+    const HsaNodeProperties *pNodeProps = m_NodeInfo->GetNodeProperties(gpuNode);
     const HSAuint32 familyID = FamilyIdFromNode(pNodeProps);
 
     if (isTonga(pNodeProps)) {
@@ -40,11 +40,11 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
         return;
     }
 
-    HSAuint32 nodes[1] = {(uint32_t)defaultGPUNode};
+    HSAuint32 nodes[1] = {(uint32_t)gpuNode};
 
     const char metadata[] = "This data is really meta.";
     unsigned metadata_size = strlen(metadata)+1;
-    int rn = FindDRMRenderNode(defaultGPUNode);
+    int rn = pKFDGraphicsInterop->FindDRMRenderNode(gpuNode);
 
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU node." << std::endl;
@@ -61,75 +61,85 @@ TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
     alloc.phys_alignment = PAGE_SIZE;
     alloc.preferred_heap = AMDGPU_GEM_DOMAIN_VRAM;
     alloc.flags = AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED;
-    ASSERT_EQ(0, amdgpu_bo_alloc(m_RenderNodes[rn].device_handle, &alloc, &handle));
+    ASSERT_EQ_GPU(0, amdgpu_bo_alloc(pKFDGraphicsInterop->m_RenderNodes[rn].device_handle, &alloc, &handle), gpuNode);
 
     void *pCpuMap;
-    ASSERT_EQ(0, amdgpu_bo_cpu_map(handle, &pCpuMap));
+    ASSERT_EQ_GPU(0, amdgpu_bo_cpu_map(handle, &pCpuMap), gpuNode);
     memset(pCpuMap, 0xaa, PAGE_SIZE);
-    EXPECT_EQ(0, amdgpu_bo_cpu_unmap(handle));
+    EXPECT_EQ_GPU(0, amdgpu_bo_cpu_unmap(handle), gpuNode);
 
     struct amdgpu_bo_metadata meta;
     meta.flags = 0;
     meta.tiling_info = 0;
     meta.size_metadata = metadata_size;
     memcpy(meta.umd_metadata, metadata, metadata_size);
-    EXPECT_EQ(0, amdgpu_bo_set_metadata(handle, &meta));
+    EXPECT_EQ_GPU(0, amdgpu_bo_set_metadata(handle, &meta), gpuNode);
 
     uint32_t dmabufFd;
-    EXPECT_EQ(0, amdgpu_bo_export(handle, amdgpu_bo_handle_type_dma_buf_fd, &dmabufFd));
+    EXPECT_EQ_GPU(0, amdgpu_bo_export(handle, amdgpu_bo_handle_type_dma_buf_fd, &dmabufFd), gpuNode);
 
     // Register it with HSA
     HsaGraphicsResourceInfo info;
-    ASSERT_SUCCESS(hsaKmtRegisterGraphicsHandleToNodes(dmabufFd, &info,
-                                                       1, nodes));
+    ASSERT_SUCCESS_GPU(hsaKmtRegisterGraphicsHandleToNodes(dmabufFd, &info,
+                                                       1, nodes), gpuNode);
 
     /* DMA buffer handle and GEM handle are no longer needed, KFD
      * should have taken a reference to the BO
      */
-    EXPECT_EQ(0, close(dmabufFd));
-    EXPECT_EQ(0, amdgpu_bo_free(handle));
+    EXPECT_EQ_GPU(0, close(dmabufFd), gpuNode);
+    EXPECT_EQ_GPU(0, amdgpu_bo_free(handle), gpuNode);
 
     // Check that buffer size and metadata match
-    EXPECT_EQ(info.SizeInBytes, alloc.alloc_size);
-    EXPECT_EQ(info.MetadataSizeInBytes, metadata_size);
-    EXPECT_EQ(0, strcmp(metadata, (const char *)info.Metadata));
+    EXPECT_EQ_GPU(info.SizeInBytes, alloc.alloc_size, gpuNode);
+    EXPECT_EQ_GPU(info.MetadataSizeInBytes, metadata_size, gpuNode);
+    EXPECT_EQ_GPU(0, strcmp(metadata, (const char *)info.Metadata), gpuNode);
 
     // Map the buffer
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(info.MemoryAddress,
+    ASSERT_SUCCESS_GPU(hsaKmtMapMemoryToGPU(info.MemoryAddress,
                                         info.SizeInBytes,
-                                        NULL));
+                                        NULL), gpuNode);
 
     // Copy contents to a system memory buffer for comparison
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+
+    Assembler* m_pAsm;
+    m_pAsm = pKFDGraphicsInterop->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
 
-    HsaMemoryBuffer dstBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/);
+    HsaMemoryBuffer dstBuffer(PAGE_SIZE, gpuNode, true/*zero*/);
 
     PM4Queue queue;
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
     Dispatch dispatch(isaBuffer);
 
     dispatch.SetArgs(info.MemoryAddress, dstBuffer.As<void*>());
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
 
-    EXPECT_EQ(dstBuffer.As<unsigned int *>()[0], 0xaaaaaaaa);
+    EXPECT_EQ_GPU(dstBuffer.As<unsigned int *>()[0], 0xaaaaaaaa, gpuNode);
 
     // Test QueryMem before the cleanup
     HsaPointerInfo ptrInfo;
-    EXPECT_SUCCESS(hsaKmtQueryPointerInfo((const void *)info.MemoryAddress, &ptrInfo));
-    EXPECT_EQ(ptrInfo.Type, HSA_POINTER_REGISTERED_GRAPHICS);
-    EXPECT_EQ(ptrInfo.Node, (HSAuint32)defaultGPUNode);
-    EXPECT_EQ(ptrInfo.GPUAddress, (HSAuint64)info.MemoryAddress);
-    EXPECT_EQ(ptrInfo.SizeInBytes, alloc.alloc_size);
-    EXPECT_EQ(ptrInfo.MemFlags.ui32.CoarseGrain, 1);
+    EXPECT_SUCCESS_GPU(hsaKmtQueryPointerInfo((const void *)info.MemoryAddress, &ptrInfo), gpuNode);
+    EXPECT_EQ_GPU(ptrInfo.Type, HSA_POINTER_REGISTERED_GRAPHICS, gpuNode);
+    EXPECT_EQ_GPU(ptrInfo.Node, (HSAuint32)gpuNode, gpuNode);
+    EXPECT_EQ_GPU(ptrInfo.GPUAddress, (HSAuint64)info.MemoryAddress, gpuNode);
+    EXPECT_EQ_GPU(ptrInfo.SizeInBytes, alloc.alloc_size, gpuNode);
+    EXPECT_EQ_GPU(ptrInfo.MemFlags.ui32.CoarseGrain, 1, gpuNode);
 
     // Cleanup
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(info.MemoryAddress));
-    EXPECT_SUCCESS(hsaKmtDeregisterMemory(info.MemoryAddress));
+    EXPECT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(info.MemoryAddress), gpuNode);
+    EXPECT_SUCCESS_GPU(hsaKmtDeregisterMemory(info.MemoryAddress), gpuNode);
+
+}
+TEST_F(KFDGraphicsInterop, RegisterGraphicsHandle) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(RegisterGraphicsHandle));
 
     TEST_END
 }
