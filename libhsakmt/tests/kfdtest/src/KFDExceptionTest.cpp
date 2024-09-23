@@ -58,31 +58,32 @@ void KFDExceptionTest::TearDown() {
  * Should be called from a Child Process since the Memory Fault causes
  * all the queues to be halted.
 */
-void KFDExceptionTest::TestMemoryException(int defaultGPUNode, HSAuint64 pSrc,
+void KFDExceptionTest::TestMemoryException(int gpuNode, HSAuint64 pSrc,
                                            HSAuint64 pDst, unsigned int dimX,
                                            unsigned int dimY, unsigned int dimZ) {
     PM4Queue queue;
     HsaEvent *vmFaultEvent;
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
     HSAuint64 faultAddress, page_mask = ~((HSAuint64)PAGE_SIZE - 1);
     Dispatch dispatch(isaBuffer, false);
 
     HsaEventDescriptor eventDesc;
     eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
-    eventDesc.NodeId = defaultGPUNode;
+    eventDesc.NodeId = gpuNode;
     eventDesc.SyncVar.SyncVar.UserData = NULL;
     eventDesc.SyncVar.SyncVarSize = 0;
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(GetAssemblerFromNodeId(
+       gpuNode)->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    m_ChildStatus = queue.Create(defaultGPUNode);
+    m_ChildStatus = queue.Create(gpuNode);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Queue create failed" << std::endl;
+        WARN() << "Queue create failed, on gpuNode: " << gpuNode << std::endl;
         return;
     }
     m_ChildStatus = hsaKmtCreateEvent(&eventDesc, true, false, &vmFaultEvent);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Event create failed" << std::endl;
+        WARN() << "Event create failed on gpuNode: " << gpuNode << std::endl;
         goto queuefail;
     }
 
@@ -92,12 +93,12 @@ void KFDExceptionTest::TestMemoryException(int defaultGPUNode, HSAuint64 pSrc,
 
     m_ChildStatus = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Wait failed. No Exception triggered" << std::endl;
+        WARN() << "Wait failed. No Exception triggered on gpuNode: " << gpuNode << std::endl;
         goto eventfail;
     }
 
     if (vmFaultEvent->EventData.EventType != HSA_EVENTTYPE_MEMORY) {
-        WARN() << "Unexpected Event Received " << vmFaultEvent->EventData.EventType
+        WARN() << "Unexpected Event Received on gpuNode: " << gpuNode << vmFaultEvent->EventData.EventType
                << std::endl;
         m_ChildStatus = HSAKMT_STATUS_ERROR;
         goto eventfail;
@@ -105,7 +106,7 @@ void KFDExceptionTest::TestMemoryException(int defaultGPUNode, HSAuint64 pSrc,
     faultAddress = vmFaultEvent->EventData.EventData.MemoryAccessFault.VirtualAddress;
     if (faultAddress != (pSrc & page_mask) &&
         faultAddress != (pDst & page_mask) ) {
-        WARN() << "Unexpected Fault Address " << faultAddress
+        WARN() << "gpuNode: " << gpuNode << " Unexpected Fault Address " << faultAddress
                << " expected " << (pSrc & page_mask) << " or "
                << (pDst & page_mask) << std::endl;
         m_ChildStatus = HSAKMT_STATUS_ERROR;
@@ -117,7 +118,7 @@ queuefail:
     queue.Destroy();
 }
 
-void KFDExceptionTest::TestSdmaException(int defaultGPUNode, void *pDst) {
+void KFDExceptionTest::TestSdmaException(int gpuNode, void *pDst) {
     SDMAQueue queue;
     HsaEvent *vmFaultEvent;
     HSAuint64 faultAddress, page_mask = ~((HSAuint64)PAGE_SIZE - 1);
@@ -125,19 +126,19 @@ void KFDExceptionTest::TestSdmaException(int defaultGPUNode, void *pDst) {
 
     HsaEventDescriptor eventDesc;
     eventDesc.EventType = HSA_EVENTTYPE_MEMORY;
-    eventDesc.NodeId = defaultGPUNode;
+    eventDesc.NodeId = gpuNode;
     eventDesc.SyncVar.SyncVar.UserData = NULL;
     eventDesc.SyncVar.SyncVarSize = 0;
 
-    m_ChildStatus = queue.Create(defaultGPUNode);
+    m_ChildStatus = queue.Create(gpuNode);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Queue create failed" << std::endl;
+        WARN() << "Queue create failed on gpuNode: " << gpuNode << std::endl;
         return;
     }
 
     m_ChildStatus = hsaKmtCreateEvent(&eventDesc, true, false, &vmFaultEvent);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Event create failed" << std::endl;
+        WARN() << "Event create failed on gpuNode: " << gpuNode << std::endl;
         goto queuefail;
     }
 
@@ -147,7 +148,7 @@ void KFDExceptionTest::TestSdmaException(int defaultGPUNode, void *pDst) {
 
     m_ChildStatus = hsaKmtWaitOnEvent(vmFaultEvent, g_TestTimeOut);
     if (m_ChildStatus != HSAKMT_STATUS_SUCCESS) {
-        WARN() << "Wait failed. No Exception triggered" << std::endl;
+        WARN() << "Wait failed. No Exception triggered on gpuNode: " << gpuNode << std::endl;
         goto eventfail;
     }
 
@@ -159,7 +160,7 @@ void KFDExceptionTest::TestSdmaException(int defaultGPUNode, void *pDst) {
     }
     faultAddress = vmFaultEvent->EventData.EventData.MemoryAccessFault.VirtualAddress;
     if (faultAddress != ((HSAuint64)pDst & page_mask) ) {
-        WARN() << "Unexpected Fault Address " << faultAddress
+        WARN() << "gpuNode: " << gpuNode << "Unexpected Fault Address " << faultAddress
                << " expected " << ((HSAuint64)pDst & page_mask) << std::endl;
         m_ChildStatus = HSAKMT_STATUS_ERROR;
     }
@@ -170,41 +171,49 @@ queuefail:
     queue.Destroy();
 }
 
-/* Test Bad Address access in a child process */
-TEST_F(KFDExceptionTest, AddressFault) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+void AddressFault(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDExceptionTest* pKFDExceptionTest = (KFDExceptionTest*)pTestParamters->pTestObject;
 
+    const HSAuint32 m_FamilyId = pKFDExceptionTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId == FAMILY_RV) {
         LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
-    m_ChildPid = fork();
+    pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        KFDBaseComponentTest::TearDown();
-        KFDBaseComponentTest::SetUp();
+        pKFDExceptionTest->TearDown();
+        pKFDExceptionTest->SetUp();
 
-        HsaMemoryBuffer srcBuffer(PAGE_SIZE, defaultGPUNode, false);
+        HsaMemoryBuffer srcBuffer(PAGE_SIZE, gpuNode, false);
 
         srcBuffer.Fill(0xAA55AA55);
-        TestMemoryException(defaultGPUNode, srcBuffer.As<HSAuint64>(),
-                            0x12345678ULL);
-    } else {
+        pKFDExceptionTest->TestMemoryException(gpuNode, srcBuffer.As<HSAuint64>(),
+                                               0x12345678ULL);
+        exit(0);
+
+	} else {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (hsakmt_is_dgpu()) {
-            EXPECT_EQ(WIFEXITED(childStatus), true);
-            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ_GPU(WIFEXITED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS, gpuNode);
         } else {
-            EXPECT_EQ(WIFSIGNALED(childStatus), true);
-            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ_GPU(WIFSIGNALED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WTERMSIG(childStatus), SIGSEGV, gpuNode);
         }
-    }
+   }
+}
+
+/* Test Bad Address access in a child process */
+TEST_F(KFDExceptionTest, AddressFault) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(AddressFault));
 
     TEST_END
 }
@@ -212,32 +221,33 @@ TEST_F(KFDExceptionTest, AddressFault) {
 /* Allocate Read Only buffer. Test Memory Exception failure by
  * attempting to write to that buffer in the child process.
  */
-TEST_F(KFDExceptionTest, PermissionFault) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL)
+void PermissionFault(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDExceptionTest* pKFDExceptionTest = (KFDExceptionTest*)pTestParamters->pTestObject;
 
+    const HSAuint32 m_FamilyId = pKFDExceptionTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId == FAMILY_RV) {
         LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
-    m_ChildPid = fork();
+    pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        KFDBaseComponentTest::TearDown();
-        KFDBaseComponentTest::SetUp();
+        pKFDExceptionTest->TearDown();
+        pKFDExceptionTest->SetUp();
 
-        HsaMemoryBuffer readOnlyBuffer(PAGE_SIZE, defaultGPUNode, false /*zero*/,
+        HsaMemoryBuffer readOnlyBuffer(PAGE_SIZE, gpuNode, false /*zero*/,
                                        false /*isLocal*/, true /*isExec*/,
                                        false /*isScratch*/, true /*isReadOnly*/);
-        HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, defaultGPUNode, false);
+        HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, gpuNode, false);
 
         srcSysBuffer.Fill(0xAA55AA55);
 
-        TestMemoryException(defaultGPUNode, srcSysBuffer.As<HSAuint64>(),
+        pKFDExceptionTest->TestMemoryException(gpuNode, srcSysBuffer.As<HSAuint64>(),
                             readOnlyBuffer.As<HSAuint64>());
+
+        exit(0);
     } else {
         int childStatus;
 
@@ -250,6 +260,14 @@ TEST_F(KFDExceptionTest, PermissionFault) {
             EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
         }
     }
+
+}
+
+TEST_F(KFDExceptionTest, PermissionFault) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(PermissionFault));
 
     TEST_END
 }
@@ -257,34 +275,35 @@ TEST_F(KFDExceptionTest, PermissionFault) {
 /* Allocate Read Only user pointer buffer. Test Memory Exception failure by
  * attempting to write to that buffer in the child process.
  */
-TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL)
+void PermissionFaultUserPointer(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDExceptionTest* pKFDExceptionTest = (KFDExceptionTest*)pTestParamters->pTestObject;
 
+    const HSAuint32 m_FamilyId = pKFDExceptionTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId == FAMILY_RV) {
         LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
     }
 
-    m_ChildPid = fork();
+    pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        KFDBaseComponentTest::TearDown();
-        KFDBaseComponentTest::SetUp();
+        pKFDExceptionTest->TearDown();
+        pKFDExceptionTest->SetUp();
 
-	void *pBuf = mmap(NULL, PAGE_SIZE, PROT_READ,
-			  MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-	ASSERT_NE(pBuf, MAP_FAILED);
-	EXPECT_SUCCESS(hsaKmtRegisterMemory(pBuf, PAGE_SIZE));
-	EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(pBuf, PAGE_SIZE, NULL));
-        HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, defaultGPUNode, false);
+         void *pBuf = mmap(NULL, PAGE_SIZE, PROT_READ,
+                      MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
+         ASSERT_NE(pBuf, MAP_FAILED);
+         EXPECT_SUCCESS(hsaKmtRegisterMemory(pBuf, PAGE_SIZE));
+         EXPECT_SUCCESS(hsaKmtMapMemoryToGPU(pBuf, PAGE_SIZE, NULL));
+         HsaMemoryBuffer srcSysBuffer(PAGE_SIZE, gpuNode, false);
 
-        srcSysBuffer.Fill(0xAA55AA55);
+         srcSysBuffer.Fill(0xAA55AA55);
 
-        TestMemoryException(defaultGPUNode, srcSysBuffer.As<HSAuint64>(),
-                            (HSAuint64)pBuf);
+         pKFDExceptionTest->TestMemoryException(gpuNode, srcSysBuffer.As<HSAuint64>(),
+                                                (HSAuint64)pBuf);
+
+        exit(0);
     } else {
         int childStatus;
 
@@ -296,7 +315,15 @@ TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
             EXPECT_EQ(WIFSIGNALED(childStatus), true);
             EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
         }
-    }
+   }
+
+}
+
+TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(PermissionFault));
 
     TEST_END
 }
@@ -304,13 +331,12 @@ TEST_F(KFDExceptionTest, PermissionFaultUserPointer) {
 /* Test VM fault storm handling by copying to/from invalid pointers
  * with lots of work items at the same time
  */
-TEST_F(KFDExceptionTest, FaultStorm) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL)
+void FaultStorm(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDExceptionTest* pKFDExceptionTest = (KFDExceptionTest*)pTestParamters->pTestObject;
 
+    const HSAuint32 m_FamilyId = pKFDExceptionTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId == FAMILY_RV) {
         LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
@@ -318,37 +344,46 @@ TEST_F(KFDExceptionTest, FaultStorm) {
 
     HSAKMT_STATUS status;
 
-    m_ChildPid = fork();
+    pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-        KFDBaseComponentTest::TearDown();
-        KFDBaseComponentTest::SetUp();
+        pKFDExceptionTest->TearDown();
+        pKFDExceptionTest->SetUp();
 
-        TestMemoryException(defaultGPUNode, 0x12345678, 0x76543210, 1024, 1024, 1);
+        pKFDExceptionTest->TestMemoryException(gpuNode, 0x12345678, 0x76543210, 1024, 1024, 1);
+
+        exit(0);
     } else {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (hsakmt_is_dgpu()) {
-            EXPECT_EQ(WIFEXITED(childStatus), true);
-            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ_GPU(WIFEXITED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS, gpuNode);
         } else {
-            EXPECT_EQ(WIFSIGNALED(childStatus), true);
-            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ_GPU(WIFSIGNALED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WTERMSIG(childStatus), SIGSEGV, gpuNode);
         }
     }
+
+}
+
+TEST_F(KFDExceptionTest, FaultStorm) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(FaultStorm));
 
     TEST_END
 }
 
 /*
  */
-TEST_F(KFDExceptionTest, SdmaQueueException) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL)
+void SdmaQueueException(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDExceptionTest* pKFDExceptionTest = (KFDExceptionTest*)pTestParamters->pTestObject;
 
+    const HSAuint32 m_FamilyId = pKFDExceptionTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId == FAMILY_RV) {
         LOG() << "Skipping test: IOMMU issues on Raven." << std::endl;
         return;
@@ -356,37 +391,49 @@ TEST_F(KFDExceptionTest, SdmaQueueException) {
 
     HSAKMT_STATUS status;
 
-    m_ChildPid = fork();
+    pid_t m_ChildPid = fork();
     if (m_ChildPid == 0) {
-	unsigned int* pDb = NULL;
-	unsigned int *nullPtr = NULL;
+        unsigned int* pDb = NULL;
+        unsigned int *nullPtr = NULL;
 
-        KFDBaseComponentTest::TearDown();
-        KFDBaseComponentTest::SetUp();
+        pKFDExceptionTest->TearDown();
+        pKFDExceptionTest->SetUp();
 
-	m_MemoryFlags.ui32.NonPaged = 1;
-	m_MemoryFlags.ui32.HostAccess = 0;
-	ASSERT_SUCCESS(hsaKmtAllocMemory(defaultGPUNode, PAGE_SIZE, m_MemoryFlags,
-				reinterpret_cast<void**>(&pDb)));
-	// verify that pDb is not null before it's being used
-	ASSERT_NE(nullPtr, pDb) << "hsaKmtAllocMemory returned a null pointer";
-	ASSERT_SUCCESS(hsaKmtMapMemoryToGPU(pDb, PAGE_SIZE, NULL));
-	EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pDb));
+        HsaMemFlags m_MemoryFlags;
+        m_MemoryFlags.Value = 0;
+       // setting memory flags with default values , can be modified according to needs
+        m_MemoryFlags.ui32.NonPaged = 1;                         // Paged
+        m_MemoryFlags.ui32.HostAccess = 0;                       // Host accessible
+        ASSERT_SUCCESS_GPU(hsaKmtAllocMemory(gpuNode, PAGE_SIZE, m_MemoryFlags,
+                                  reinterpret_cast<void**>(&pDb)), gpuNode);
+        // verify that pDb is not null before it's being used
+        ASSERT_NE_GPU(nullPtr, pDb, gpuNode) << "hsaKmtAllocMemory returned a null pointer";
+        ASSERT_SUCCESS_GPU(hsaKmtMapMemoryToGPU(pDb, PAGE_SIZE, NULL), gpuNode);
+        EXPECT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(pDb), gpuNode);
 
-	TestSdmaException(defaultGPUNode, pDb);
-	EXPECT_SUCCESS(hsaKmtFreeMemory(pDb, PAGE_SIZE));
+        pKFDExceptionTest->TestSdmaException(gpuNode, pDb);
+        EXPECT_SUCCESS_GPU(hsaKmtFreeMemory(pDb, PAGE_SIZE), gpuNode);
+
+        exit(0);
     } else {
         int childStatus;
 
         waitpid(m_ChildPid, &childStatus, 0);
         if (hsakmt_is_dgpu()) {
-            EXPECT_EQ(WIFEXITED(childStatus), true);
-            EXPECT_EQ(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS);
+            EXPECT_EQ_GPU(WIFEXITED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WEXITSTATUS(childStatus), HSAKMT_STATUS_SUCCESS, gpuNode);
         } else {
-            EXPECT_EQ(WIFSIGNALED(childStatus), true);
-            EXPECT_EQ(WTERMSIG(childStatus), SIGSEGV);
+            EXPECT_EQ_GPU(WIFSIGNALED(childStatus), true, gpuNode);
+            EXPECT_EQ_GPU(WTERMSIG(childStatus), SIGSEGV, gpuNode);
         }
     }
+}
+
+TEST_F(KFDExceptionTest, SdmaQueueException) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(SdmaQueueException));
 
     TEST_END
 }
