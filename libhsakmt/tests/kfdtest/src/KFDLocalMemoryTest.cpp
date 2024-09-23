@@ -44,11 +44,7 @@ void KFDLocalMemoryTest::TearDown() {
     ROUTINE_END
 }
 
-TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
-    TEST_START(TESTPROFILE_RUNALL)
-
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+static void AccessLocalMem(KFDTEST_PARAMETERS* pTestParamters) {
 
     /* Skip test if not on dGPU path, which the test depends on */
     if (!hsakmt_is_dgpu()) {
@@ -56,59 +52,64 @@ TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
         return;
     }
 
+    int gpuNode = pTestParamters->gpuNode;
+
     //local memory
-    HsaMemoryBuffer destBuf(PAGE_SIZE, defaultGPUNode, false, true);
+    HsaMemoryBuffer destBuf(PAGE_SIZE, gpuNode, false, true);
     HsaEvent *event;
-    ASSERT_SUCCESS(CreateQueueTypeEvent(false, false, defaultGPUNode, &event));
+    ASSERT_SUCCESS_GPU(CreateQueueTypeEvent(false, false, gpuNode, &event), gpuNode);
 
     PM4Queue queue;
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
 
     queue.PlaceAndSubmitPacket(PM4WriteDataPacket(destBuf.As<unsigned int*>(), 0, 0));
 
     queue.Wait4PacketConsumption(event);
 
     hsaKmtDestroyEvent(event);
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
 
+}
+
+TEST_F(KFDLocalMemoryTest, AccessLocalMem) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(AccessLocalMem));
 
     TEST_END
 }
 
-TEST_F(KFDLocalMemoryTest, BasicTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void BasicTest(KFDTEST_PARAMETERS* pTestParamters) {
 
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
     HsaMemMapFlags mapFlags = {0};
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDLocalMemoryTest* pKFDLocalMemoryTest = (KFDLocalMemoryTest*)pTestParamters->pTestObject;
 
-    if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
-        return;
-    }
+    Assembler* m_pAsm;
+    m_pAsm = pKFDLocalMemoryTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    HsaMemoryBuffer srcSysBuffer(BufferSize, defaultGPUNode, false);
-    HsaMemoryBuffer destSysBuffer(BufferSize, defaultGPUNode);
-    HsaMemoryBuffer srcLocalBuffer(BufferSize, defaultGPUNode, false, true);
-    HsaMemoryBuffer dstLocalBuffer(BufferSize, defaultGPUNode, false, true);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer srcSysBuffer(BufferSize, gpuNode, false);
+    HsaMemoryBuffer destSysBuffer(BufferSize, gpuNode);
+    HsaMemoryBuffer srcLocalBuffer(BufferSize, gpuNode, false, true);
+    HsaMemoryBuffer dstLocalBuffer(BufferSize, gpuNode, false, true);
 
     srcSysBuffer.Fill(0x01010101);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(srcLocalBuffer.As<void*>(), srcLocalBuffer.Size(), &AlternateVAGPU,
-                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
-    ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(dstLocalBuffer.As<void*>(), dstLocalBuffer.Size(), &AlternateVAGPU,
-                        mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+    ASSERT_SUCCESS_GPU(hsaKmtMapMemoryToGPUNodes(srcLocalBuffer.As<void*>(), srcLocalBuffer.Size(), &AlternateVAGPU,
+                       mapFlags, 1, reinterpret_cast<HSAuint32 *>(&gpuNode)), gpuNode);
+    ASSERT_SUCCESS_GPU(hsaKmtMapMemoryToGPUNodes(dstLocalBuffer.As<void*>(), dstLocalBuffer.Size(), &AlternateVAGPU,
+                       mapFlags, 1, reinterpret_cast<HSAuint32 *>(&gpuNode)), gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
     queue.SetSkipWaitConsump(0);
 
     Dispatch dispatch(isaBuffer);
@@ -125,47 +126,52 @@ TEST_F(KFDLocalMemoryTest, BasicTest) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
 
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(srcLocalBuffer.As<void*>()));
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(dstLocalBuffer.As<void*>()));
-    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    ASSERT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(srcLocalBuffer.As<void*>()), gpuNode);
+    ASSERT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(dstLocalBuffer.As<void*>()), gpuNode);
+    EXPECT_EQ_GPU(destSysBuffer.As<unsigned int*>()[0], 0x01010101, gpuNode);
+
+}
+
+TEST_F(KFDLocalMemoryTest, BasicTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(BasicTest));
 
     TEST_END
 }
 
-TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
-
+static void VerifyContentsAfterUnmapAndMap(KFDTEST_PARAMETERS* pTestParamters)
+{
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
     HsaMemMapFlags mapFlags = {0};
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDLocalMemoryTest* pKFDLocalMemoryTest = (KFDLocalMemoryTest*)pTestParamters->pTestObject;
 
-    if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
-        return;
-    }
+    Assembler* m_pAsm;
+    m_pAsm = pKFDLocalMemoryTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    HsaMemoryBuffer SysBufferA(BufferSize, defaultGPUNode, false);
-    HsaMemoryBuffer SysBufferB(BufferSize, defaultGPUNode, true);
-    HsaMemoryBuffer LocalBuffer(BufferSize, defaultGPUNode, false, true);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer SysBufferA(BufferSize, gpuNode, false);
+    HsaMemoryBuffer SysBufferB(BufferSize, gpuNode, true);
+    HsaMemoryBuffer LocalBuffer(BufferSize, gpuNode, false, true);
 
     SysBufferA.Fill(0x01010101);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
     queue.SetSkipWaitConsump(0);
 
     if (!hsakmt_is_dgpu())
-        ASSERT_SUCCESS(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
-                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+        ASSERT_SUCCESS_GPU(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
+                           mapFlags, 1, reinterpret_cast<HSAuint32 *>(&gpuNode)), gpuNode);
 
     Dispatch dispatch(isaBuffer);
 
@@ -173,18 +179,25 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
-    EXPECT_SUCCESS(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
-                                mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode)));
+    EXPECT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()), gpuNode);
+    EXPECT_SUCCESS_GPU(hsaKmtMapMemoryToGPUNodes(LocalBuffer.As<void*>(), LocalBuffer.Size(), &AlternateVAGPU,
+                       mapFlags, 1, reinterpret_cast<HSAuint32 *>(&gpuNode)), gpuNode);
 
     dispatch.SetArgs(LocalBuffer.As<void*>(), SysBufferB.As<void*>());
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(queue.Destroy());
-    EXPECT_EQ(SysBufferB.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
+    EXPECT_EQ_GPU(SysBufferB.As<unsigned int*>()[0], 0x01010101, gpuNode);
     if (!hsakmt_is_dgpu())
-        EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()));
+        EXPECT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(LocalBuffer.As<void*>()), gpuNode);
+}
+
+TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(VerifyContentsAfterUnmapAndMap));
 
     TEST_END
 }
@@ -257,16 +270,15 @@ TEST_F(KFDLocalMemoryTest, VerifyContentsAfterUnmapAndMap) {
  *    19 |  512K |   2G | 4.75G |   19G |   9.5
  *    20 |    1M |   4G |   10G |   40G |  10
  */
-TEST_F(KFDLocalMemoryTest, Fragmentation) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+static void Fragmentation(KFDTEST_PARAMETERS* pTestParamters){
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDLocalMemoryTest* pKFDLocalMemoryTest = (KFDLocalMemoryTest*)pTestParamters->pTestObject;
 
     HSAuint64 fbSize;
 
-    fbSize = GetVramSize(defaultGPUNode);
+    fbSize = pKFDLocalMemoryTest->GetVramSize(gpuNode);
 
     if (!fbSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
@@ -293,12 +305,20 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
         maxOrder++;
 
     /* Queue and memory used by the shader copy tests */
-    HsaMemoryBuffer sysBuffer(PAGE_SIZE, defaultGPUNode, false);
+    HsaMemoryBuffer sysBuffer(PAGE_SIZE, gpuNode, false);
     PM4Queue queue;
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    /* instantiate Assembler for gpuNode */
+    HsaNodeInfo* m_NodeInfo = pKFDLocalMemoryTest->Get_NodeInfo();
+    const HsaNodeProperties *nodeProperties = m_NodeInfo->GetNodeProperties(gpuNode);
+    Assembler* m_pAsm = new Assembler(GetGfxVersion(nodeProperties));
+
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
+   /* not need assember now */
+    if (m_pAsm)
+        delete m_pAsm;
 
     /* Allocate and test memory using the strategy explained at the top */
     HSAKMT_STATUS status;
@@ -324,7 +344,7 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
             pages[order].nPages >>= 1;
         // Allocate page pointers
         pages[order].pointers = new void *[pages[order].nPages];
-        EXPECT_NE((void **)NULL, pages[order].pointers)
+        EXPECT_NE_GPU((void **)NULL, pages[order].pointers, gpuNode)
             << "Couldn't allocate memory for " << pages[order].nPages
             << " pointers at order " << order << std::endl;
         if (!pages[order].pointers) {
@@ -340,10 +360,10 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
         LOG() << std::dec << "Trying to allocate " << pages[order].nPages
               << " order " << order << " blocks " << std::endl;
         for (p = 0; p < pages[order].nPages; p++) {
-            status = hsaKmtAllocMemory(defaultGPUNode, size,
+            status = hsaKmtAllocMemory(gpuNode, size,
                                        memFlags, &pages[order].pointers[p]);
             if (status != HSAKMT_STATUS_SUCCESS) {
-                EXPECT_EQ(HSAKMT_STATUS_NO_MEMORY, status);
+                EXPECT_EQ_GPU(HSAKMT_STATUS_NO_MEMORY, status, gpuNode);
                 pages[order].nPages = p;
                 break;
             }
@@ -353,10 +373,10 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
             sysBuffer.As<unsigned *>()[0] = ++value;
 
             status = hsaKmtMapMemoryToGPUNodes(pages[order].pointers[p], size, NULL,
-                               mapFlags, 1, reinterpret_cast<HSAuint32 *>(&defaultGPUNode));
+                               mapFlags, 1, reinterpret_cast<HSAuint32 *>(&gpuNode));
             if (status != HSAKMT_STATUS_SUCCESS) {
-                ASSERT_SUCCESS(hsaKmtFreeMemory(pages[order].pointers[p],
-                                                size));
+                ASSERT_SUCCESS_GPU(hsaKmtFreeMemory(pages[order].pointers[p],
+                                                size), gpuNode);
                 pages[order].nPages = p;
                 break;
             }
@@ -375,9 +395,9 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
                               reinterpret_cast<void *>(&(sysBuffer.As<unsigned*>()[1])));
             dispatch3.Submit(queue);
             dispatch3.Sync(g_TestTimeOut);
-            EXPECT_EQ(value, sysBuffer.As<unsigned *>()[1]);
+            EXPECT_EQ_GPU(value, sysBuffer.As<unsigned *>()[1], gpuNode);
 
-            EXPECT_SUCCESS(hsaKmtUnmapMemoryToGPU(pages[order].pointers[p]));
+            EXPECT_SUCCESS_GPU(hsaKmtUnmapMemoryToGPU(pages[order].pointers[p]), gpuNode);
         }
         LOG() << "  Got " << pages[order].nPages
               << ", end of last block addr: "
@@ -392,8 +412,8 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
             LOG() << "  Freeing every " << step << "th order "
                   << o << " block starting with " << offset << std::endl;
             for (p = offset; p < pages[o].nPages; p += step) {
-                ASSERT_NE((void **)NULL, pages[o].pointers[p]);
-                EXPECT_SUCCESS(hsaKmtFreeMemory(pages[o].pointers[p], size));
+                ASSERT_NE_GPU((void **)NULL, pages[o].pointers[p], gpuNode);
+                EXPECT_SUCCESS_GPU(hsaKmtFreeMemory(pages[o].pointers[p], size), gpuNode);
                 pages[o].pointers[p] = NULL;
             }
         }
@@ -407,30 +427,35 @@ TEST_F(KFDLocalMemoryTest, Fragmentation) {
         size = (HSAuint64)(1 << order) * pageSize;
         for (p = 0; p < pages[order].nPages; p++)
             if (pages[order].pointers[p] != NULL)
-                EXPECT_SUCCESS(hsaKmtFreeMemory(pages[order].pointers[p], size));
+                EXPECT_SUCCESS_GPU(hsaKmtFreeMemory(pages[order].pointers[p], size), gpuNode);
 
         delete[] pages[order].pointers;
     }
 
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
+}
+
+TEST_F(KFDLocalMemoryTest, Fragmentation) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(Fragmentation));
 
     TEST_END
 }
 
-TEST_F(KFDLocalMemoryTest, CheckZeroInitializationVram) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void CheckZeroInitializationVram(KFDTEST_PARAMETERS* pTestParamters){
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDLocalMemoryTest* pKFDLocalMemoryTest = (KFDLocalMemoryTest*)pTestParamters->pTestObject;
 
     /* Testing VRAM */
-    HSAuint64 vramSizeMB = GetVramSize(defaultGPUNode) >> 20;
+    HSAuint64 vramSizeMB = pKFDLocalMemoryTest->GetVramSize(gpuNode) >> 20;
 
-    if (!vramSizeMB) {
+   if (!vramSizeMB) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
-    }
+   }
 
     HSAuint64 vramBufSizeMB = vramSizeMB >> 2;
     /* limit the buffer size in order not to overflow the SDMA queue buffer. */
@@ -447,7 +472,7 @@ TEST_F(KFDLocalMemoryTest, CheckZeroInitializationVram) {
             << " times"<< std::endl;
 
     SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode, 8 * PAGE_SIZE));
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode, 8 * PAGE_SIZE), gpuNode);
 
     HsaMemoryBuffer tmpBuffer(PAGE_SIZE, 0, true /* zero */);
     volatile HSAuint32 *tmp = tmpBuffer.As<volatile HSAuint32 *>();
@@ -455,20 +480,28 @@ TEST_F(KFDLocalMemoryTest, CheckZeroInitializationVram) {
     unsigned int offset = 2060;  // a constant offset, should be 4 aligned.
 
     while (count--) {
-        HsaMemoryBuffer localBuffer(vramBufSize, defaultGPUNode, false, true);
+        HsaMemoryBuffer localBuffer(vramBufSize, gpuNode, false, true);
 
-        EXPECT_TRUE(localBuffer.IsPattern(0, 0, sdmaQueue, tmp));
+        EXPECT_TRUE_GPU(localBuffer.IsPattern(0, 0, sdmaQueue, tmp), gpuNode);
 
         for (HSAuint64 i = offset; i < vramBufSize;) {
-            EXPECT_TRUE(localBuffer.IsPattern(i, 0, sdmaQueue, tmp));
+            EXPECT_TRUE_GPU(localBuffer.IsPattern(i, 0, sdmaQueue, tmp), gpuNode);
             i += 4096;
         }
 
         /* Checking last 4 bytes */
-        EXPECT_TRUE(localBuffer.IsPattern(vramBufSize - 4, 0, sdmaQueue, tmp));
+        EXPECT_TRUE_GPU(localBuffer.IsPattern(vramBufSize - 4, 0, sdmaQueue, tmp), gpuNode);
 
         localBuffer.Fill(0xABCDEFFF, sdmaQueue);
     }
+
+}
+
+TEST_F(KFDLocalMemoryTest, CheckZeroInitializationVram) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(CheckZeroInitializationVram));
 
     TEST_END
 }
