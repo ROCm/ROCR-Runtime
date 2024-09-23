@@ -74,18 +74,26 @@ static inline uint32_t checkCWSREnabled() {
  * 2: 512 work-items (multi-wave), CWSR threshold of 100
  * 3: 1024 work-items (multi-wave), CWSR threshold of 1000
  */
-TEST_P(KFDCWSRTest, BasicTest) {
-    TEST_START(TESTPROFILE_RUNALL);
 
-    int num_witems = std::get<0>(GetParam());
-    int cwsr_thresh = std::get<1>(GetParam());
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+static void BasicTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDCWSRTest* pKFDCWSRTest = (KFDCWSRTest*)pTestParamters->pTestObject;
+
+    const HSAuint32 m_FamilyId = pKFDCWSRTest->GetFamilyIdFromNodeId(gpuNode);
+
+    Assembler* m_pAsm;
+    m_pAsm = pKFDCWSRTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
+
+    int num_witems = std::get<0>(pKFDCWSRTest->GetParam());
+    int cwsr_thresh = std::get<1>(pKFDCWSRTest->GetParam());
     // Increase delay on emulator by this factor.
     const int delayMult = (g_IsEmuMode ? 20 : 1);
 
     if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
-        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true, false, true);
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(PersistentIterateIsa, isaBuffer.As<char*>()));
+        HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true, false, true);
+        ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(PersistentIterateIsa, isaBuffer.As<char*>()), gpuNode);
 
         unsigned stopval = 0x1234'5678;
         unsigned outval  = 0x8765'4321;
@@ -93,15 +101,15 @@ TEST_P(KFDCWSRTest, BasicTest) {
         // 4B per work-item ==> 1 page per 1024 work-items (take ceiling)
         unsigned bufSize = PAGE_SIZE * ((num_witems / 1024) + (num_witems % 1024 != 0));
 
-        HsaMemoryBuffer inputBuf(bufSize, defaultGPUNode, true, false, false);
-        HsaMemoryBuffer outputBuf(bufSize, defaultGPUNode, true, false, false);
+        HsaMemoryBuffer inputBuf(bufSize, gpuNode, true, false, false);
+        HsaMemoryBuffer outputBuf(bufSize, gpuNode, true, false, false);
         unsigned int* input = inputBuf.As<unsigned int*>();
         unsigned int* output = outputBuf.As<unsigned int*>();
         inputBuf.Fill(0);
         outputBuf.Fill(outval);
 
         PM4Queue queue;
-        ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+        ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
 
         Dispatch dispatch(isaBuffer);
         dispatch.SetArgs(input, output);
@@ -117,18 +125,18 @@ TEST_P(KFDCWSRTest, BasicTest) {
         for (int num_cwsrs = 0; num_cwsrs < cwsr_thresh; num_cwsrs++) {
 
             // Send dequeue request
-            EXPECT_SUCCESS(queue.Update(0, BaseQueue::DEFAULT_PRIORITY, false));
+            EXPECT_SUCCESS_GPU(queue.Update(0, BaseQueue::DEFAULT_PRIORITY, false), gpuNode);
 
             Delay(5 * delayMult);
 
             // Send requeue request
-            EXPECT_SUCCESS(queue.Update(100, BaseQueue::DEFAULT_PRIORITY, false));
+            EXPECT_SUCCESS_GPU(queue.Update(100, BaseQueue::DEFAULT_PRIORITY, false), gpuNode);
 
             Delay(50 * delayMult);
 
             // Check for reg mangling
             for (int i = 0; i < num_witems; i++) {
-                EXPECT_EQ(outval, output[i]);
+                EXPECT_EQ_GPU(outval, output[i], gpuNode);
             }
         }
 
@@ -140,12 +148,18 @@ TEST_P(KFDCWSRTest, BasicTest) {
         inputBuf.Fill(stopval);
 
         // Wait for shader to finish or timeout if shader has vm page fault
-        EXPECT_EQ(0, dispatch.SyncWithStatus(180000));
-
-        EXPECT_SUCCESS(queue.Destroy());
+        EXPECT_EQ_GPU(0, dispatch.SyncWithStatus(180000), gpuNode);
+        EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
     } else {
         LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
+
+}
+
+TEST_P(KFDCWSRTest, BasicTest) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(BasicTest));
 
     TEST_END
 }
@@ -179,19 +193,25 @@ INSTANTIATE_TEST_CASE_P(
  * Preempt runlist. One or both queues must interrupt context restore to preempt.
  */
 
-TEST_F(KFDCWSRTest, InterruptRestore) {
-    TEST_START(TESTPROFILE_RUNALL);
+static void InterruptRestore(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    int gpuNode = pTestParamters->gpuNode;
+    KFDCWSRTest* pKFDCWSRTest = (KFDCWSRTest*)pTestParamters->pTestObject;
 
-    if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
-        HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    const HSAuint32 m_FamilyId = pKFDCWSRTest->GetFamilyIdFromNodeId(gpuNode);
 
-        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(InfiniteLoopIsa, isaBuffer.As<char*>()));
+    Assembler* m_pAsm;
+    m_pAsm = pKFDCWSRTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
+
+   if ((m_FamilyId >= FAMILY_VI) && (checkCWSREnabled())) {
+        HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+
+        ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(InfiniteLoopIsa, isaBuffer.As<char*>()), gpuNode);
 
         PM4Queue queue1, queue2, queue3;
 
-        ASSERT_SUCCESS(queue1.Create(defaultGPUNode));
+        ASSERT_SUCCESS_GPU(queue1.Create(gpuNode), gpuNode);
 
         Dispatch *dispatch1, *dispatch2;
 
@@ -203,24 +223,31 @@ TEST_F(KFDCWSRTest, InterruptRestore) {
 
         dispatch1->Submit(queue1);
 
-        ASSERT_SUCCESS(queue2.Create(defaultGPUNode));
+        ASSERT_SUCCESS_GPU(queue2.Create(gpuNode), gpuNode);
 
         dispatch2->Submit(queue2);
 
         // Give waves time to launch.
         Delay(1);
 
-        ASSERT_SUCCESS(queue3.Create(defaultGPUNode));
+        ASSERT_SUCCESS_GPU(queue3.Create(gpuNode), gpuNode);
 
-        EXPECT_SUCCESS(queue1.Destroy());
-        EXPECT_SUCCESS(queue2.Destroy());
-        EXPECT_SUCCESS(queue3.Destroy());
+        EXPECT_SUCCESS_GPU(queue1.Destroy(), gpuNode);
+        EXPECT_SUCCESS_GPU(queue2.Destroy(), gpuNode);
+        EXPECT_SUCCESS_GPU(queue3.Destroy(), gpuNode);
 
         delete dispatch1;
         delete dispatch2;
+
     } else {
         LOG() << "Skipping test: No CWSR present for family ID 0x" << m_FamilyId << "." << std::endl;
     }
+}
+
+TEST_F(KFDCWSRTest, InterruptRestore) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(InterruptRestore));
 
     TEST_END
 }
