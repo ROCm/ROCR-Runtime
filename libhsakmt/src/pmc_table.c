@@ -1965,7 +1965,7 @@ HSAKMT_STATUS hsakmt_get_block_properties(uint32_t node_id,
 	uint32_t gfxv = hsakmt_get_gfxv_by_node_id(node_id);
 	uint16_t dev_id = hsakmt_get_device_id_by_node_id(node_id);
 
-	if (block_id > PERFCOUNTER_BLOCKID__MAX ||
+	if (block_id >= PERFCOUNTER_BLOCKID__MAX ||
 			block_id < PERFCOUNTER_BLOCKID__FIRST)
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
