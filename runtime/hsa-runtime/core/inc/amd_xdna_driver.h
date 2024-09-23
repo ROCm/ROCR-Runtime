@@ -71,6 +71,7 @@ public:
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 
   hsa_status_t GetHandleMappings(std::unordered_map<uint32_t, void*> &vmem_handle_mappings);
+  hsa_status_t GetHandleSizeMap(std::unordered_map<uint32_t, uint32_t> &handle_size_map);
   hsa_status_t GetFd(int &fd);
 
   hsa_status_t GetAgentProperties(core::Agent &agent) const override;
@@ -118,6 +119,7 @@ private:
 
   // TODO: Remove this once we move to the vmem API
   std::unordered_map<void*, uint32_t> vmem_handle_mappings_reverse;
+  std::unordered_map<uint32_t, uint32_t> handle_size_map;
 
   /// @brief Virtual address range allocated for the device heap.
   ///
@@ -128,7 +130,7 @@ private:
 
   /// @brief The aligned device heap.
   void *dev_heap_aligned = nullptr;
-  static constexpr size_t dev_heap_size = 48 * 1024 * 1024;
+  static constexpr size_t dev_heap_size = 64 * 1024 * 1024;
   static constexpr size_t dev_heap_align = 64 * 1024 * 1024;
 };
 

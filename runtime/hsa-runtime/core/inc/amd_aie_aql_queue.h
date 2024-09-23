@@ -165,7 +165,8 @@ private:
   static hsa_status_t SubmitCmd(
       uint32_t hw_ctx_handle, int fd, void *queue_base,
       uint64_t read_dispatch_id, uint64_t write_dispatch_id,
-      std::unordered_map<uint32_t, void *> &vmem_handle_mappings);
+      std::unordered_map<uint32_t, void *> &vmem_handle_mappings,
+      std::unordered_map<uint32_t, uint32_t> &handle_size_map);
 
   /// @brief Creates a command BO and returns a pointer to the memory and
   //          the corresponding handle
@@ -190,7 +191,7 @@ private:
   /// @brief Syncs all BOs referenced in bo_args
   ///
   /// @param bo_args vector containing handles of BOs to sync
-  static hsa_status_t SyncBos(std::vector<uint32_t> &bo_args, int fd);
+  static hsa_status_t SyncBo(int fd, uint32_t bo_arg, uint32_t direction, uint32_t size);
 
   /// @brief Executes a command and waits for its completion
   ///

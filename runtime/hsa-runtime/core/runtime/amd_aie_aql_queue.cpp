@@ -82,7 +82,7 @@ constexpr int CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX = 2;
 
 // Environment variable to define job submission timeout
 constexpr const char *TIMEOUT_ENV_VAR = "ROCR_AIE_TIMEOUT";
-constexpr int DEFAULT_TIMEOUT_VAL = 50;
+constexpr int DEFAULT_TIMEOUT_VAL = 0;
 char *timeout_env_var_ptr = getenv(TIMEOUT_ENV_VAR);
 int timeout_val = timeout_env_var_ptr == nullptr ? DEFAULT_TIMEOUT_VAL : atoi(timeout_env_var_ptr);
 
@@ -219,10 +219,14 @@ uint64_t AieAqlQueue::AddWriteIndexAcqRel(uint64_t value) {
 
 void AieAqlQueue::StoreRelaxed(hsa_signal_value_t value) {
   std::unordered_map<uint32_t, void*> vmem_handle_mappings;
+  std::unordered_map<uint32_t, uint32_t> handle_size_map;
 
   auto &driver = static_cast<XdnaDriver &>(
       core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type));
   if (driver.GetHandleMappings(vmem_handle_mappings) != HSA_STATUS_SUCCESS) {
+    return;
+  }
+  if (driver.GetHandleSizeMap(handle_size_map) != HSA_STATUS_SUCCESS) {
     return;
   }
 
@@ -233,17 +237,17 @@ void AieAqlQueue::StoreRelaxed(hsa_signal_value_t value) {
 
   SubmitCmd(hw_ctx_handle_, fd, amd_queue_.hsa_queue.base_address,
             amd_queue_.read_dispatch_id, amd_queue_.write_dispatch_id,
-            vmem_handle_mappings);
+            vmem_handle_mappings, handle_size_map);
 }
 
-hsa_status_t AieAqlQueue::SyncBos(std::vector<uint32_t> &bo_args, int fd) {
-  for (unsigned int bo_arg : bo_args) {
-    amdxdna_drm_sync_bo sync_params = {};
-    sync_params.handle = bo_arg;
-    if (ioctl(fd, DRM_IOCTL_AMDXDNA_SYNC_BO, &sync_params))
-      return HSA_STATUS_ERROR;
+hsa_status_t AieAqlQueue::SyncBo(int fd, uint32_t bo_arg, uint32_t direction, uint32_t size) {
+  amdxdna_drm_sync_bo sync_params = {};
+  sync_params.handle = bo_arg;
+  sync_params.direction = direction;
+  sync_params.size = size;
+  if (ioctl(fd, DRM_IOCTL_AMDXDNA_SYNC_BO, &sync_params)) {
+    return HSA_STATUS_ERROR;
   }
-
   return HSA_STATUS_SUCCESS;
 }
 
@@ -330,7 +334,8 @@ hsa_status_t AieAqlQueue::CreateCmd(uint32_t size, uint32_t *handle,
 hsa_status_t AieAqlQueue::SubmitCmd(
     uint32_t hw_ctx_handle, int fd, void *queue_base, uint64_t read_dispatch_id,
     uint64_t write_dispatch_id,
-    std::unordered_map<uint32_t, void *> &vmem_handle_mappings) {
+    std::unordered_map<uint32_t, void *> &vmem_handle_mappings,
+    std::unordered_map<uint32_t, uint32_t> &handle_size_map) {
   uint64_t cur_id = read_dispatch_id;
   while (cur_id < write_dispatch_id) {
     hsa_amd_aie_ert_packet_t *pkt =
@@ -351,9 +356,6 @@ hsa_status_t AieAqlQueue::SubmitCmd(
         // packets there are. All can be combined into a single chain.
         int num_cont_start_cu_pkts = 1;
         for (int peak_pkt_id = cur_id + 1; peak_pkt_id < write_dispatch_id; peak_pkt_id++) {
-          if (pkt->opcode != HSA_AMD_AIE_ERT_START_CU) {
-            break;
-          }
           num_cont_start_cu_pkts++;
         }
 
@@ -416,8 +418,10 @@ hsa_status_t AieAqlQueue::SubmitCmd(
         }
 
         // Syncing BOs before we execute the command
-        if (SyncBos(bo_args, fd))
-          return HSA_STATUS_ERROR;
+        for (auto bo_arg : bo_args) {
+          if (SyncBo(fd, bo_arg, SYNC_DIRECT_TO_DEVICE, handle_size_map[bo_arg]))
+            return HSA_STATUS_ERROR;
+        }
 
         // Removing duplicates in the bo container. The driver will report
         // an error if we provide the same BO handle multiple times.
@@ -440,8 +444,12 @@ hsa_status_t AieAqlQueue::SubmitCmd(
         ExecCmdAndWait(&exec_cmd_0, hw_ctx_handle, fd);
 
         // Syncing BOs after we execute the command
-        if (SyncBos(bo_args, fd))
-          return HSA_STATUS_ERROR;
+        for (auto bo_arg : bo_args) {
+          if (SyncBo(fd, bo_arg, SYNC_DIRECT_FROM_DEVICE,
+                     handle_size_map[bo_arg])) {
+            return HSA_STATUS_ERROR;
+          }
+        }
 
         cur_id += num_cont_start_cu_pkts;
         break;

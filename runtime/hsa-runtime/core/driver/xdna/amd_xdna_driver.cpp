@@ -189,6 +189,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   }
 
   vmem_handle_mappings.emplace(create_bo_args.handle, mapped_mem);
+  handle_size_map.emplace(create_bo_args.handle, size);
   vmem_handle_mappings_reverse.emplace(mapped_mem, create_bo_args.handle);
 
   return HSA_STATUS_SUCCESS;
@@ -353,8 +354,15 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::GetHandleMappings(std::unordered_map<uint32_t, void*> &vmem_handle_mappings) {
+hsa_status_t XdnaDriver::GetHandleMappings(
+    std::unordered_map<uint32_t, void *> &vmem_handle_mappings) {
   vmem_handle_mappings = this->vmem_handle_mappings;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetHandleSizeMap(
+    std::unordered_map<uint32_t, uint32_t> &handle_size_map) {
+  handle_size_map = this->handle_size_map;
   return HSA_STATUS_SUCCESS;
 }
 
