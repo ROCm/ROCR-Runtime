@@ -73,8 +73,8 @@ namespace core {
     void Reset();
   };
 
-  extern HsaApiTable hsa_api_table_;
-  extern HsaApiTable hsa_internal_api_table_;
+  extern HsaApiTable& hsa_api_table();
+  extern HsaApiTable& hsa_internal_api_table();
 
   void LoadInitialHsaApiTable();
 }   //  namespace core

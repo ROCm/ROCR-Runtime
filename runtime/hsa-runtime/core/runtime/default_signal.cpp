@@ -51,9 +51,6 @@
 namespace rocr {
 namespace core {
 
-int DefaultSignal::rtti_id_ = 0;
-int BusyWaitSignal::rtti_id_ = 0;
-
 BusyWaitSignal::BusyWaitSignal(SharedSignal* abi_block, bool enableIPC)
     : Signal(abi_block, enableIPC) {
   signal_.kind = AMD_SIGNAL_KIND_USER;

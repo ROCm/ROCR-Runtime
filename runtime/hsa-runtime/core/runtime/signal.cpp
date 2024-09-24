@@ -64,7 +64,7 @@ void SharedSignalPool_t::clear() {
                   capacity - free_list_.size());
   }
 
-  for (auto& block : block_list_) free_(block.first);
+  for (auto& block : block_list_) free_()(block.first);
   block_list_.clear();
   free_list_.clear();
 }
@@ -73,15 +73,15 @@ SharedSignal* SharedSignalPool_t::alloc() {
   ScopedAcquire<HybridMutex> lock(&lock_);
   if (free_list_.empty()) {
     SharedSignal* block = reinterpret_cast<SharedSignal*>(
-        allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
+        allocate_()(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
     if (block == nullptr) {
       block_size_ = minblock_;
       block = reinterpret_cast<SharedSignal*>(
-          allocate_(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
+          allocate_()(block_size_ * sizeof(SharedSignal), __alignof(SharedSignal), 0, 0));
       if (block == nullptr) throw std::bad_alloc();
     }
 
-    MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_(block); });
+    MAKE_NAMED_SCOPE_GUARD(throwGuard, [&]() { free_()(block); });
     block_list_.push_back(std::make_pair(block, block_size_));
     throwGuard.Dismiss();
 

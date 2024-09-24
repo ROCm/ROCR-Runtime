@@ -61,9 +61,6 @@
 namespace rocr {
 namespace image {
 
-std::atomic<ImageRuntime*> ImageRuntime::instance_(NULL);
-std::mutex ImageRuntime::instance_mutex_;
-
 hsa_status_t FindKernelArgPool(hsa_amd_memory_pool_t pool, void* data) {
   assert(data != nullptr);
 
@@ -154,13 +151,13 @@ hsa_status_t ImageRuntime::CreateImageManager(hsa_agent_t agent, void* data) {
 }
 
 ImageRuntime* ImageRuntime::instance() {
-  ImageRuntime* instance = instance_.load(std::memory_order_acquire);
+  ImageRuntime* instance = get_instance().load(std::memory_order_acquire);
   if (instance == NULL) {
     // Protect the initialization from multi threaded access.
-    std::lock_guard<std::mutex> lock(instance_mutex_);
+    std::lock_guard<std::mutex> lock(instance_mutex());
 
     // Make sure we are not initializing it twice.
-    instance = instance_.load(std::memory_order_relaxed);
+    instance = get_instance().load(std::memory_order_relaxed);
     if (instance != NULL) {
       return instance;
     }
@@ -194,19 +191,19 @@ ImageRuntime* ImageRuntime::CreateSingleton() {
   assert(instance->kernarg_pool_.handle != 0);
   assert(instance->image_managers_.size() != 0);
 
-  instance_.store(instance, std::memory_order_release);
+  get_instance().store(instance, std::memory_order_release);
   return instance;
 }
 
 void ImageRuntime::DestroySingleton() {
-  ImageRuntime* instance = instance_.load(std::memory_order_acquire);
+  ImageRuntime* instance = get_instance().load(std::memory_order_acquire);
   if (instance == NULL) {
     return;
   }
 
   instance->Cleanup();
 
-  instance_.store(NULL, std::memory_order_release);
+  get_instance().store(NULL, std::memory_order_release);
   delete instance;
 }
 

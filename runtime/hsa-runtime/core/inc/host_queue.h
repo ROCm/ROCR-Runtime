@@ -52,7 +52,7 @@ namespace rocr {
 namespace core {
 class HostQueue : public Queue {
  public:
-  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id()); }
 
   HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
             uint32_t features, hsa_signal_t doorbell_signal);
@@ -175,17 +175,23 @@ class HostQueue : public Queue {
   void operator delete(void*, void*) {}
 
  protected:
-  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id(); }
 
  private:
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
   static const size_t kRingAlignment = 256;
   const uint32_t size_;
   void* ring_;
 
   // Host queue id counter, starting from 0x80000000 to avoid overlaping
   // with aql queue id.
-  static std::atomic<uint32_t> queue_count_;
+  static __forceinline std::atomic<uint32_t>& queue_count() {
+    static std::atomic<uint32_t> queue_count_;
+    return queue_count_;
+  }
 
   DISALLOW_COPY_AND_ASSIGN(HostQueue);
 };

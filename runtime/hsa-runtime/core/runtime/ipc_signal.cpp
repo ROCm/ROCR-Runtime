@@ -50,7 +50,6 @@
 namespace rocr {
 namespace core {
 
-int IPCSignal::rtti_id_ = 0;
 KernelMutex IPCSignal::lock_;
 
 SharedMemory::SharedMemory(const hsa_amd_ipc_memory_t* handle, size_t len) {

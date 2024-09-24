@@ -74,8 +74,6 @@ void InterruptSignal::EventPool::free(HsaEvent* evt) {
   events_.push_back(unique_event_ptr(evt));
 }
 
-int InterruptSignal::rtti_id_ = 0;
-
 HsaEvent* InterruptSignal::CreateEvent(HSA_EVENTTYPE type, bool manual_reset) {
   HsaEventDescriptor event_descriptor;
   event_descriptor.EventType = type;

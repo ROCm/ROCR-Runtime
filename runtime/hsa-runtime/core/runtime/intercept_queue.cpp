@@ -80,8 +80,6 @@ static const uint16_t kBarrierHeader = (HSA_PACKET_TYPE_BARRIER_AND << HSA_PACKE
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_ACQUIRE_FENCE_SCOPE) |
     (HSA_FENCE_SCOPE_NONE << HSA_PACKET_HEADER_RELEASE_FENCE_SCOPE);
 
-int InterceptQueue::rtti_id_ = 0;
-
 bool InterceptQueue::IsPendingRetryPoint(uint64_t wrapped_current_read_index) const {
   // This function is intended to determine if the last retry barrier packet
   // has definitely not been processed in order to avoid putting multiple retry

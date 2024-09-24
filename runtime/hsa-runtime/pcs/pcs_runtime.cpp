@@ -57,17 +57,15 @@ do {                                                           \
   if ((ptr) == NULL) return HSA_STATUS_ERROR_INVALID_ARGUMENT; \
 } while (false)
 
-std::atomic<PcsRuntime*> PcsRuntime::instance_(NULL);
-std::mutex PcsRuntime::instance_mutex_;
 
 PcsRuntime* PcsRuntime::instance() {
-  PcsRuntime* instance = instance_.load(std::memory_order_acquire);
+  PcsRuntime* instance = get_instance().load(std::memory_order_acquire);
   if (instance == NULL) {
     // Protect the initialization from multi threaded access.
-    std::lock_guard<std::mutex> lock(instance_mutex_);
+    std::lock_guard<std::mutex> lock(instance_mutex());
 
     // Make sure we are not initializing it twice.
-    instance = instance_.load(std::memory_order_relaxed);
+    instance = get_instance().load(std::memory_order_relaxed);
     if (instance != NULL) {
       return instance;
     }
@@ -84,17 +82,17 @@ PcsRuntime* PcsRuntime::instance() {
 PcsRuntime* PcsRuntime::CreateSingleton() {
   PcsRuntime* instance = new PcsRuntime();
 
-  instance_.store(instance, std::memory_order_release);
+  get_instance().store(instance, std::memory_order_release);
   return instance;
 }
 
 void PcsRuntime::DestroySingleton() {
-  PcsRuntime* instance = instance_.load(std::memory_order_acquire);
+  PcsRuntime* instance = get_instance().load(std::memory_order_acquire);
   if (instance == NULL) {
     return;
   }
 
-  instance_.store(NULL, std::memory_order_release);
+  get_instance().store(NULL, std::memory_order_release);
   delete instance;
 }
 

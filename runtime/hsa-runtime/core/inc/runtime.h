@@ -583,8 +583,10 @@ class Runtime {
 
   // Will be created before any user could call hsa_init but also could be
   // destroyed before incorrectly written programs call hsa_shutdown.
-  static KernelMutex bootstrap_lock_;
-
+  static __forceinline KernelMutex& bootstrap_lock() {
+    static KernelMutex bootstrap_lock_;
+    return bootstrap_lock_;
+  }
   Runtime();
 
   Runtime(const Runtime&);

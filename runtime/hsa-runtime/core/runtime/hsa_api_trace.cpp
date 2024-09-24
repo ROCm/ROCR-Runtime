@@ -64,8 +64,15 @@ hsa_status_t hsa_amd_runtime_queue_create_register(hsa_amd_runtime_queue_notifie
 
 namespace core {
 
-HsaApiTable hsa_api_table_;
-HsaApiTable hsa_internal_api_table_;
+HsaApiTable& hsa_api_table() {
+  static HsaApiTable table;
+  return table;
+}
+
+HsaApiTable& hsa_internal_api_table() {
+  static HsaApiTable table;
+  return table;
+}
 
 HsaApiTable::HsaApiTable() {
   Init();
@@ -483,7 +490,7 @@ void HsaApiTable::UpdateTools() {
 }
 
 void LoadInitialHsaApiTable() {
-  hsa_table_interface_init(&hsa_api_table_.hsa_api);
+  hsa_table_interface_init(&hsa_api_table().hsa_api);
 }
 
 }   //  namespace core

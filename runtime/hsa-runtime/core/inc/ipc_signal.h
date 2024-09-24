@@ -90,16 +90,19 @@ class IPCSignal : private SharedMemorySignal, public BusyWaitSignal {
 
   /// @brief Determines if a Signal* can be safely converted to BusyWaitSignal*
   /// via static_cast.
-  static __forceinline bool IsType(Signal* ptr) { return ptr->IsType(&rtti_id_); }
+  static __forceinline bool IsType(Signal* ptr) { return ptr->IsType(&rtti_id()); }
 
  protected:
   bool _IsA(rtti_t id) const {
-    if (id == &rtti_id_) return true;
+    if (id == &rtti_id()) return true;
     return BusyWaitSignal::_IsA(id);
   }
 
  private:
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+      return rtti_id_;
+  }
   static KernelMutex lock_;
 
   explicit IPCSignal(SharedMemorySignal&& abi_block)

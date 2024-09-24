@@ -70,6 +70,7 @@
 
 #include "core/inc/amd_trap_handler_v1.h"
 #include "core/inc/amd_blit_shaders.h"
+#include "core/inc/hsa_api_trace_int.h"
 // Generated header
 #include "amd_trap_handler_v2.h"
 #include "amd_blit_shaders_v2.h"
@@ -88,9 +89,6 @@
 #define DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC (1 << 30)  // 1 GB
 
 namespace rocr {
-namespace core {
-extern HsaApiTable hsa_internal_api_table_;
-} // namespace core
 
 namespace AMD {
 const uint64_t CP_DMA_DATA_TRANSFER_CNT_MAX = (1 << 26);
@@ -1397,15 +1395,15 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         ((uint8_t*)value)[index] |= 1 << subBit;
       };
 
-      if (core::hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+      if (core::hsa_internal_api_table().finalizer_api.hsa_ext_program_finalize_fn != NULL) {
         setFlag(HSA_EXTENSION_FINALIZER);
       }
 
-      if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+      if (core::hsa_internal_api_table().image_api.hsa_ext_image_create_fn != NULL) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (core::hsa_internal_api_table_.pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
+      if (core::hsa_internal_api_table().pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
         setFlag(HSA_EXTENSION_AMD_PC_SAMPLING);
       }
 

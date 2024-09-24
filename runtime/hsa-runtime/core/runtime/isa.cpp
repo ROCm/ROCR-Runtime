@@ -199,12 +199,14 @@ hsa_round_method_t Isa::GetRoundMethod(
 }
 
 const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
-  auto isareg_iter = supported_isas_.find(full_name);
-  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
+  auto isareg_iter = GetSupportedIsas().find(full_name);
+  return isareg_iter == GetSupportedIsas().end() ?
+                                              nullptr : &isareg_iter->second;
 }
 
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
-  auto isareg_iter = std::find_if(supported_isas_.begin(), supported_isas_.end(),
+  auto isareg_iter = std::find_if(GetSupportedIsas().begin(),
+                                  GetSupportedIsas().end(),
                                   [&](const IsaMap::value_type& isareg) {
                                     return isareg.second.GetVersion() == version &&
                                         (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
@@ -212,13 +214,12 @@ const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, 
                                         (isareg.second.GetXnack() == IsaFeature::Unsupported ||
                                          isareg.second.GetXnack() == xnack);
                                   });
-  return isareg_iter == supported_isas_.end() ? nullptr : &isareg_iter->second;
+  return isareg_iter == GetSupportedIsas().end() ?
+                                              nullptr : &isareg_iter->second;
 }
 
-const IsaRegistry::IsaMap IsaRegistry::supported_isas_ =
-  IsaRegistry::GetSupportedIsas();
 
-const IsaRegistry::IsaMap IsaRegistry::GetSupportedIsas() {
+const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
 
 // agent, and vendor name length limit excluding terminating nul character.
 constexpr size_t hsa_name_size = 63;
@@ -236,11 +237,16 @@ constexpr size_t hsa_name_size = 63;
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.GetIsaName(),                        \
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize));                                   \
 
-  IsaMap supported_isas;
-  IsaFeature unsupported = IsaFeature::Unsupported;
-  IsaFeature any = IsaFeature::Any;
-  IsaFeature disabled = IsaFeature::Disabled;
-  IsaFeature enabled = IsaFeature::Enabled;
+  static IsaMap supported_isas;
+
+  if (supported_isas.size() > 0) {
+    return supported_isas;
+  }
+
+  const IsaFeature unsupported = IsaFeature::Unsupported;
+  const IsaFeature any = IsaFeature::Any;
+  const IsaFeature disabled = IsaFeature::Disabled;
+  const IsaFeature enabled = IsaFeature::Enabled;
 
   //               Target ID                 Version   SRAMECC      XNACK
   ISAREG_ENTRY_GEN("gfx700",                 7, 0, 0,  unsupported, unsupported, 64)
