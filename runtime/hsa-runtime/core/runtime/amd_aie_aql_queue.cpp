@@ -66,8 +66,6 @@
 namespace rocr {
 namespace AMD {
 
-int AieAqlQueue::rtti_id_ = 0;
-
 AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
                          uint32_t node_id)
     : Queue(0, 0), LocalSignal(0, false), DoorbellSignal(signal()),

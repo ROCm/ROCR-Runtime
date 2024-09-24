@@ -152,9 +152,14 @@ class PcsRuntime {
   static PcsRuntime* CreateSingleton();
 
   /// Pointer to singleton object.
-  static std::atomic<PcsRuntime*> instance_;
-  static std::mutex instance_mutex_;
-
+  static __forceinline std::atomic<PcsRuntime*>& get_instance() {
+    static std::atomic<PcsRuntime*> instance_(nullptr);
+    return instance_;
+  }
+  static __forceinline std::mutex& instance_mutex() {
+   static std::mutex instance_mutex_;
+   return instance_mutex_;
+}
   // Map of pc sampling sessions indexed by hsa_ven_amd_pcs_t handle
   std::map<uint64_t, PcSamplingSession> pc_sampling_;
   KernelMutex pc_sampling_lock_;

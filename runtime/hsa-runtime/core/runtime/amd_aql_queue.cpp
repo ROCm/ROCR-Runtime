@@ -73,11 +73,6 @@
 namespace rocr {
 namespace AMD {
 
-HsaEvent* AqlQueue::queue_event_ = nullptr;
-std::atomic<uint32_t> AqlQueue::queue_count_(0);
-KernelMutex AqlQueue::queue_lock_;
-int AqlQueue::rtti_id_ = 0;
-
 AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
     : Queue(agent->node_id(), agent->isMES() ? (MemoryRegion::AllocateGTTAccess | MemoryRegion::AllocateNonPaged) : 0),
@@ -236,11 +231,11 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   }
 
   MAKE_NAMED_SCOPE_GUARD(EventGuard, [&]() {
-    ScopedAcquire<KernelMutex> _lock(&queue_lock_);
-    queue_count_--;
-    if (queue_count_ == 0) {
-      core::InterruptSignal::DestroyEvent(queue_event_);
-      queue_event_ = nullptr;
+    ScopedAcquire<KernelMutex> _lock(&queue_lock());
+    queue_count()--;
+    if (queue_count() == 0) {
+      core::InterruptSignal::DestroyEvent(queue_event());
+      queue_event() = nullptr;
     }
   });
 
@@ -251,20 +246,20 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   });
 
   if (core::g_use_interrupt_wait) {
-    ScopedAcquire<KernelMutex> _lock(&queue_lock_);
-    queue_count_++;
-    if (queue_event_ == nullptr) {
-      assert(queue_count_ == 1 && "Inconsistency in queue event reference counting found.\n");
+    ScopedAcquire<KernelMutex> _lock(&queue_lock());
+    queue_count()++;
+    if (queue_event() == nullptr) {
+      assert(queue_count() == 1 && "Inconsistency in queue event reference counting found.\n");
 
-      queue_event_ = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
-      if (queue_event_ == nullptr)
+      queue_event() = core::InterruptSignal::CreateEvent(HSA_EVENTTYPE_SIGNAL, false);
+      if (queue_event() == nullptr)
         throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                                  "Queue event creation failed.\n");
     }
-    auto Signal = new core::InterruptSignal(0, queue_event_);
+    auto Signal = new core::InterruptSignal(0, queue_event());
     assert(Signal != nullptr && "Should have thrown!\n");
     amd_queue_.queue_inactive_signal = core::InterruptSignal::Convert(Signal);
-    exception_signal_ = new core::InterruptSignal(0, queue_event_);
+    exception_signal_ = new core::InterruptSignal(0, queue_event());
     assert(exception_signal_ != nullptr && "Should have thrown!\n");
   } else {
     EventGuard.Dismiss();
@@ -284,7 +279,7 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
     queue_rsrc.ErrorReason = &exception_signal_->signal_.value;
     kmt_status = hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
-                                   ring_buf_alloc_bytes_, queue_event_, &queue_rsrc);
+                                   ring_buf_alloc_bytes_, queue_event(), &queue_rsrc);
   } else {
     kmt_status = hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
                                    ring_buf_alloc_bytes_, NULL, &queue_rsrc);
@@ -382,11 +377,11 @@ AqlQueue::~AqlQueue() {
   exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   if (core::g_use_interrupt_wait) {
-    ScopedAcquire<KernelMutex> lock(&queue_lock_);
-    queue_count_--;
-    if (queue_count_ == 0) {
-      core::InterruptSignal::DestroyEvent(queue_event_);
-      queue_event_ = nullptr;
+    ScopedAcquire<KernelMutex> lock(&queue_lock());
+    queue_count()--;
+    if (queue_count() == 0) {
+      core::InterruptSignal::DestroyEvent(queue_event());
+      queue_event() = nullptr;
     }
   }
   agent_->system_deallocator()(pm4_ib_buf_);

@@ -101,7 +101,7 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
   typedef std::tuple<int32_t, int32_t, int32_t> Version;
 
   /// @brief Default destructor.
-  ~Isa() {}
+  ~Isa() = default;
 
   /// @returns Handle equivalent of @p isa_object.
   static hsa_isa_t Handle(const Isa *isa_object) {
@@ -228,17 +228,14 @@ class IsaRegistry final {
   /// @brief IsaRegistry's map type.
   typedef std::unordered_map<std::string, Isa> IsaMap;
 
-  /// @brief Supported instruction set architectures.
-  static const IsaMap supported_isas_;
+  /// @brief  Default constructor
+  IsaRegistry() = delete;
 
-  /// @brief Default constructor - not available.
-  IsaRegistry();
-
-  /// @brief Default destructor - not available.
-  ~IsaRegistry();
+  /// @brief Default destructor
+  ~IsaRegistry() = default;
 
   /// @returns Supported instruction set architectures.
-  static const IsaMap GetSupportedIsas();
+  static const IsaMap& GetSupportedIsas();
 }; // class IsaRegistry
 
 } // namespace core

@@ -68,7 +68,7 @@ using namespace rocr::amd::hsa::common;
 
 // Having a side effect prevents call site optimization that allows removal of a noinline function call
 // with no side effect.
-__attribute__((noinline)) static void _loader_debug_state() {
+__attribute__((noinline)) void _loader_debug_state() {
   static volatile int function_needs_a_side_effect = 0;
   function_needs_a_side_effect ^= 1;
 }
@@ -84,12 +84,12 @@ __attribute__((noinline)) static void _loader_debug_state() {
 // 9: New trap handler ABI. For gfx11: Save PC in ttmp11[22:7] ttmp6[31:0], and park the wave if stopped.
 // 10: New trap handler ABI. Set status.skip_export when halting the wave.
 //                           For gfx940, set ttmp6[31] = 0 if ttmp11[31] == 0.
-HSA_API r_debug _amdgpu_r_debug = {10,
-                           nullptr,
-                           reinterpret_cast<uintptr_t>(&_loader_debug_state),
-                           r_debug::RT_CONSISTENT,
-                           0};
-static link_map* r_debug_tail = nullptr;
+
+HSA_API r_debug _amdgpu_r_debug;
+static __forceinline link_map*& r_debug_tail() {
+  static link_map* r_debug_tail_ = nullptr;
+  return r_debug_tail_;
+}
 
 namespace rocr {
 namespace amd {
@@ -175,7 +175,7 @@ void Loader::Destroy(Loader *loader)
   // Loader resets the link_map, but the executables and loaded code objects are not deleted.
   _amdgpu_r_debug.r_map = nullptr;
   _amdgpu_r_debug.r_state = r_debug::RT_CONSISTENT;
-  r_debug_tail = nullptr;
+  r_debug_tail() = nullptr;
   delete loader;
 }
 
@@ -201,21 +201,21 @@ Executable* AmdHsaCodeLoader::CreateExecutable(
 }
 
 static void AddCodeObjectInfoIntoDebugMap(link_map* map) {
-  if (r_debug_tail) {
-      r_debug_tail->l_next = map;
-      map->l_prev = r_debug_tail;
+  if (r_debug_tail()) {
+      r_debug_tail()->l_next = map;
+      map->l_prev = r_debug_tail();
       map->l_next = nullptr;
   } else {
       _amdgpu_r_debug.r_map = map;
       map->l_prev = nullptr;
       map->l_next = nullptr;
   }
-  r_debug_tail = map;
+  r_debug_tail() = map;
 }
 
 static void RemoveCodeObjectInfoFromDebugMap(link_map* map) {
-  if (r_debug_tail == map) {
-      r_debug_tail = map->l_prev;
+  if (r_debug_tail() == map) {
+      r_debug_tail() = map->l_prev;
   }
   if (_amdgpu_r_debug.r_map == map) {
       _amdgpu_r_debug.r_map = map->l_next;

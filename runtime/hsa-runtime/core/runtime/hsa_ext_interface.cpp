@@ -119,28 +119,28 @@ void ExtensionEntryPoints::InitPcSamplingExtTable() {
 
 // Initialize Amd Ext table for Api related to Images
 void ExtensionEntryPoints::InitAmdExtTable() {
-  hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = hsa_ext_null;
-  hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = hsa_ext_null;
+  hsa_api_table().amd_ext_api.hsa_amd_image_create_fn = hsa_ext_null;
+  hsa_internal_api_table().amd_ext_api.hsa_amd_image_create_fn = hsa_ext_null;
 }
 
 // Update Amd Ext table for Api related to Images.
 // @note: Interface should be updated when Amd Ext table
 // begins hosting Api's from other extension libraries
 void ExtensionEntryPoints::UpdateAmdExtTable(decltype(::hsa_amd_image_create)* func_ptr) {
-  assert(hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
+  assert(hsa_api_table().amd_ext_api.hsa_amd_image_create_fn ==
              (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
-  assert(hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn ==
+  assert(hsa_internal_api_table().amd_ext_api.hsa_amd_image_create_fn ==
              (decltype(hsa_amd_image_create)*)hsa_ext_null && 
              "Duplicate load of extension import.");
-  hsa_api_table_.amd_ext_api.hsa_amd_image_create_fn = func_ptr;
-  hsa_internal_api_table_.amd_ext_api.hsa_amd_image_create_fn = func_ptr;
+  hsa_api_table().amd_ext_api.hsa_amd_image_create_fn = func_ptr;
+  hsa_internal_api_table().amd_ext_api.hsa_amd_image_create_fn = func_ptr;
 }
 
 void ExtensionEntryPoints::UnloadImage() {
   InitAmdExtTable();
   InitImageExtTable();
-  core::hsa_internal_api_table_.Reset();
+  core::hsa_internal_api_table().Reset();
 #ifdef HSA_IMAGE_SUPPORT
   rocr::image::ReleaseImageRsrcs();
 #endif
@@ -172,7 +172,7 @@ void ExtensionEntryPoints::Unload() {
   InitPcSamplingExtTable();
   InitImageExtTable();
   InitAmdExtTable();
-  core::hsa_internal_api_table_.Reset();
+  core::hsa_internal_api_table().Reset();
 }
 
 bool ExtensionEntryPoints::LoadImage() {
@@ -193,7 +193,7 @@ bool ExtensionEntryPoints::LoadImage() {
   image_api.version.step_id = HSA_IMAGE_API_TABLE_STEP_VERSION;
 
   // Update private copy of Api table with handle for Image extensions
-  hsa_internal_api_table_.CloneExts(&image_api,
+  hsa_internal_api_table().CloneExts(&image_api,
                                     core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   // Update Amd Ext Api table Api that deals with Images
@@ -215,7 +215,8 @@ void ExtensionEntryPoints::LoadPcSampling() {
   pcs_api.version.step_id = HSA_PC_SAMPLING_API_TABLE_STEP_VERSION;
 
   // Update private copy of Api table with handle for Image extensions
-  hsa_internal_api_table_.CloneExts(&pcs_api, core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
+  hsa_internal_api_table().CloneExts(&pcs_api,
+                        core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
 #endif
 }
 
@@ -287,12 +288,12 @@ bool ExtensionEntryPoints::LoadFinalizer(std::string library_name) {
   finalizer_api.version.step_id = HSA_FINALIZER_API_TABLE_STEP_VERSION;
  
   // Update handle of table of HSA extensions
-  hsa_internal_api_table_.CloneExts(&finalizer_api,
+  hsa_internal_api_table().CloneExts(&finalizer_api,
                                     core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
   ptr = os::GetExportAddress(lib, "Load");
   if (ptr != NULL) {
-    ((Load_t)ptr)(&core::hsa_internal_api_table_.hsa_api);
+    ((Load_t)ptr)(&core::hsa_internal_api_table().hsa_api);
   }
 
   return true;

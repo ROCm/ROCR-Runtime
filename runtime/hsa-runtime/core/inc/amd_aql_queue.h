@@ -57,10 +57,10 @@ namespace AMD {
 class AqlQueue : public core::Queue, private core::LocalSignal, public core::DoorbellSignal {
  public:
   static __forceinline bool IsType(core::Signal* signal) {
-    return signal->IsType(&rtti_id_);
+    return signal->IsType(&rtti_id());
   }
 
-  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id_); }
+  static __forceinline bool IsType(core::Queue* queue) { return queue->IsType(&rtti_id()); }
 
   // Acquires/releases queue resources and requests HW schedule/deschedule.
   AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id,
@@ -228,7 +228,7 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   void AsyncReclaimAltScratch();
 
  protected:
-  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id(); }
 
  private:
   uint32_t ComputeRingBufferMinPkts();
@@ -331,18 +331,28 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   std::vector<uint32_t> cu_mask_;
 
   // Shared event used for queue errors
-  static HsaEvent* queue_event_;
-
+  static __forceinline HsaEvent*& queue_event() {
+    static HsaEvent* queue_event_ = nullptr;
+    return queue_event_;
+  }
   // Queue count - used to ref count queue_event_
-  static std::atomic<uint32_t> queue_count_;
+  static __forceinline std::atomic<uint32_t>& queue_count() {
+    static std::atomic<uint32_t> queue_count_(0);
+    return queue_count_;
+  }
 
   // Mutex for queue_event_ manipulation
-  static KernelMutex queue_lock_;
-
+  static __forceinline KernelMutex& queue_lock() {
+    static KernelMutex queue_lock_;
+    return queue_lock_;
+}
   // Async scratch single limit - may be modified after init
   size_t async_scratch_single_limit_;
 
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
 
   // Forbid copying and moving of this object
   DISALLOW_COPY_AND_ASSIGN(AqlQueue);

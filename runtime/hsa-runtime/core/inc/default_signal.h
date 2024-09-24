@@ -59,7 +59,7 @@ class BusyWaitSignal : public Signal {
   /// @brief Determines if a Signal* can be safely converted to BusyWaitSignal*
   /// via static_cast.
   static __forceinline bool IsType(Signal* ptr) {
-    return ptr->IsType(&rtti_id_);
+    return ptr->IsType(&rtti_id());
   }
 
   /// @brief See base class Signal.
@@ -154,10 +154,13 @@ class BusyWaitSignal : public Signal {
   __forceinline HsaEvent* EopEvent() { return NULL; }
 
  protected:
-  bool _IsA(rtti_t id) const { return id == &rtti_id_; }
+  bool _IsA(rtti_t id) const { return id == &rtti_id(); }
 
  private:
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
 
   DISALLOW_COPY_AND_ASSIGN(BusyWaitSignal);
 };
@@ -167,7 +170,7 @@ class DefaultSignal : private LocalSignal, public BusyWaitSignal {
  public:
   /// @brief Determines if a Signal* can be safely converted to BusyWaitSignal*
   /// via static_cast.
-  static __forceinline bool IsType(Signal* ptr) { return ptr->IsType(&rtti_id_); }
+  static __forceinline bool IsType(Signal* ptr) { return ptr->IsType(&rtti_id()); }
 
   /// @brief See base class Signal.
   explicit DefaultSignal(hsa_signal_value_t initial_value, bool enableIPC = false)
@@ -175,12 +178,15 @@ class DefaultSignal : private LocalSignal, public BusyWaitSignal {
 
  protected:
   bool _IsA(rtti_t id) const {
-    if (id == &rtti_id_) return true;
+    if (id == &rtti_id()) return true;
     return BusyWaitSignal::_IsA(id);
   }
 
  private:
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
 
   DISALLOW_COPY_AND_ASSIGN(DefaultSignal);
 };

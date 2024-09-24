@@ -40,8 +40,6 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#include "core/inc/runtime.h"
-
 #include <algorithm>
 #include <atomic>
 #include <climits>
@@ -50,6 +48,7 @@
 #include <string>
 #include <vector>
 #include <list>
+#include <link.h>
 #include <dlfcn.h>
 #include <amdgpu_drm.h>
 #include <sys/mman.h>
@@ -58,6 +57,9 @@
 #include <iostream>
 #include <thread>
 #include <chrono>
+
+#include "core/inc/runtime.h"
+#include "core/inc/hsa_table_interface.h"
 
 #if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
 #include <rocprofiler-register/rocprofiler-register.h>
@@ -77,6 +79,7 @@
 #include "core/inc/exceptions.h"
 #include "inc/hsa_ven_amd_aqlprofile.h"
 #include "core/inc/amd_core_dump.hpp"
+#include "core/inc/host_queue.h"
 
 #ifndef HSA_VERSION_MAJOR
 #define HSA_VERSION_MAJOR 1
@@ -97,16 +100,20 @@ ROCPROFILER_REGISTER_DEFINE_IMPORT(hsa, ROCP_REG_VERSION)
 
 const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
+extern r_debug _amdgpu_r_debug;
+extern void _loader_debug_state();
+
 namespace rocr {
 namespace core {
-bool g_use_interrupt_wait = true;
-bool g_use_mwaitx = true;
-
+bool g_use_interrupt_wait;
+bool g_use_mwaitx;
 Runtime* Runtime::runtime_singleton_ = NULL;
 
-KernelMutex Runtime::bootstrap_lock_;
 
-static bool loaded = true;
+__forceinline static bool& loaded() {
+  static bool loaded_ = true;
+  return loaded_;
+}
 
 class RuntimeCleanup {
  public:
@@ -115,7 +122,7 @@ class RuntimeCleanup {
       delete Runtime::runtime_singleton_;
     }
 
-    loaded = false;
+    loaded() = false;
   }
 };
 
@@ -123,9 +130,9 @@ static RuntimeCleanup cleanup_at_unload_;
 
 hsa_status_t Runtime::Acquire() {
   // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  if (!loaded()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
-  ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
+  ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == NULL) {
     memset(log_flags, 0, sizeof(log_flags));
@@ -153,9 +160,9 @@ hsa_status_t Runtime::Acquire() {
 
 hsa_status_t Runtime::Release() {
   // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded) return HSA_STATUS_SUCCESS;
+  if (!loaded()) return HSA_STATUS_SUCCESS;
 
-  ScopedAcquire<KernelMutex> boot(&bootstrap_lock_);
+  ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == nullptr) return HSA_STATUS_ERROR_NOT_INITIALIZED;
 
@@ -747,11 +754,11 @@ hsa_status_t Runtime::GetSystemInfo(hsa_system_info_t attribute, void* value) {
         ((uint8_t*)value)[index] |= 1 << subBit;
       };
 
-      if (hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+      if (hsa_internal_api_table().finalizer_api.hsa_ext_program_finalize_fn != NULL) {
         setFlag(HSA_EXTENSION_FINALIZER);
       }
 
-      if (hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+      if (hsa_internal_api_table().image_api.hsa_ext_image_create_fn != NULL) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
@@ -1944,6 +1951,16 @@ Runtime::Runtime()
 
   asyncSignals_.monitor_exceptions = false;
   asyncExceptions_.monitor_exceptions = true;
+  g_use_interrupt_wait = true;
+  g_use_mwaitx = true;
+  ::_amdgpu_r_debug = {10,
+                     nullptr,
+                     reinterpret_cast<uintptr_t>(
+                                &_loader_debug_state),
+                     r_debug::RT_CONSISTENT,
+                     0};
+
+  log_file = stderr;
 }
 
 hsa_status_t Runtime::Load() {
@@ -2068,17 +2085,17 @@ void Runtime::LoadExtensions() {
   // Skipping finalizer loading since finalizer is no longer distributed.
   // LinkExts will expose the finalizer-not-present implementation.
   // extensions_.LoadFinalizer(kFinalizerLib[os_index(os::current_os)]);
-  hsa_api_table_.LinkExts(&extensions_.finalizer_api,
+  hsa_api_table().LinkExts(&extensions_.finalizer_api,
                           core::HsaApiTable::HSA_EXT_FINALIZER_API_TABLE_ID);
 
   // Update Hsa Api Table with handle of Image extension Apis
   extensions_.LoadImage();
-  hsa_api_table_.LinkExts(&extensions_.image_api,
+  hsa_api_table().LinkExts(&extensions_.image_api,
                           core::HsaApiTable::HSA_EXT_IMAGE_API_TABLE_ID);
 
   // Update Hsa Api Table with handle of PCS extension Apis
   extensions_.LoadPcSampling();
-  hsa_api_table_.LinkExts(&extensions_.pcs_api,
+  hsa_api_table().LinkExts(&extensions_.pcs_api,
                           core::HsaApiTable::HSA_EXT_PC_SAMPLING_API_TABLE_ID);
 }
 
@@ -2216,7 +2233,7 @@ void Runtime::LoadTools() {
 
 #if defined(HSA_ROCPROFILER_REGISTER) && HSA_ROCPROFILER_REGISTER > 0
   if (!flag().disable_tool_register()) {
-    auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table_);
+    auto* profiler_api_table_ = static_cast<void*>(&hsa_api_table());
     auto lib_id = rocprofiler_register_library_indentifier_t{};
     auto rocp_reg_status =
         rocprofiler_register_library_api_table("hsa", &ROCPROFILER_REGISTER_IMPORT_FUNC(hsa),
@@ -2272,8 +2289,8 @@ void Runtime::LoadTools() {
   }
 
   // Discover loaded tools.
-  std::vector<os::LibHandle> loaded = os::GetLoadedToolsLib();
-  for(auto& handle : loaded) {
+  std::vector<os::LibHandle> loaded_hds = os::GetLoadedToolsLib();
+  for(auto& handle : loaded_hds) {
     const uint32_t* order = (const uint32_t*)os::GetExportAddress(handle, "HSA_AMD_TOOL_PRIORITY");
     if(order) {
       sorted.push_back(lib_t(handle, *order+env_count, os::GetLibraryName(handle)));
@@ -2333,8 +2350,8 @@ void Runtime::LoadTools() {
         os::CloseLib(tool);
         continue;
       }
-      if (!ld(&hsa_api_table_.hsa_api,
-        hsa_api_table_.hsa_api.version.major_id,
+      if (!ld(&hsa_api_table().hsa_api,
+        hsa_api_table().hsa_api.version.major_id,
         failed.size(), failed.data())) {
           failed.push_back(lib.name_.c_str());
           os::CloseLib(tool);
@@ -2375,7 +2392,7 @@ void Runtime::UnloadTools() {
   }
 
   // Reset API table in case some tool doesn't cleanup properly
-  hsa_api_table_.Reset();
+  hsa_api_table().Reset();
 }
 
 void Runtime::CloseTools() {
