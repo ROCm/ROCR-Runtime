@@ -68,7 +68,6 @@ static void
 testNodeToNodes(HSAuint32 n1, const HSAuint32 *const n2Array, int n, P2PDirection n1Direction,
         P2PDirection n2Direction, HSAuint64 size, HSAuint64 *speed, HSAuint64 *speed2, std::stringstream *msg,
         bool isTestOverhead = false, HSAuint64 *time = 0) {
-    ASSERT_GT(16, unsigned(n - 1));
     HSAuint32 n2[n];
     void *n1Mem, *n2Mem[n];
     HsaMemFlags memFlags = {0};
@@ -148,6 +147,7 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
     std::vector<int> nodes;
     const bool isSpecified = g_TestDstNodeId != -1 && g_TestNodeId != -1;
     int numPeers = 0;
+    const unsigned int maxSdmaQueues = m_numSdmaEngines * m_numSdmaQueuesPerEngine;
 
     if (isSpecified) {
         if (g_TestNodeId != g_TestDstNodeId) {
@@ -299,15 +299,43 @@ TEST_F(KFDPerformanceTest, P2PBandWidthTest) {
             if (n < 2)
                 continue;
 
-            if (test_suits[s][1] == OUT)
+            if (test_suits[s][1] == OUT) {
                 snprintf(str, sizeof(str), "[[%d...%d] -> %d] ", dst.front(), dst.back(), n1);
-            else
-                snprintf(str, sizeof(str), "[%d -> [%d...%d]] ", n1, dst.front(), dst.back());
-            msg << str << std::endl;
-            testNodeToNodes(n1, n2, n, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
+                msg << str << std::endl;
+                testNodeToNodes(n1, n2, n, test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
 
-            LOG() << std::dec << str << (float)speed / 1024 << " - " <<
+                LOG() << std::dec << str << (float)speed / 1024 << " - " <<
                                         (float)speed2 / 1024 << " GB/s" << std::endl;
+            } else {
+                /* If the total number of peers is greater than the number of SDMA queues supported,
+                 * then we test in the following way:
+                 * 1. Test peers in batches where each batch consists of number of peers equal to the
+                 *    max number of SDMA queues.
+                 * 2. Keep repeating step 1 if number of peers left is greater than number of SDMA queues
+                 *    supported.
+                 * 3. Test the last batch with the remaining peers left which can be less than the number of
+                 *    SDMA queues supported.
+                 * For example, if there are 24 peers and max number of SDMA queues supported is 16, then
+                 * the test will test 16 peers/nodes first and then remaining 8 in the next round.
+                 */
+                unsigned int j=0;
+                unsigned int start_index;
+                unsigned int end_index;
+                do {
+                    start_index = maxSdmaQueues * j++;
+                    end_index = start_index + maxSdmaQueues - 1;
+
+                    if (end_index + 1 > n)
+                        end_index = n - 1;
+
+                    snprintf(str, sizeof(str), "[%d -> [%d...%d]] ", n1, n2[start_index], n2[end_index]);
+                    msg << str << std::endl;
+                    testNodeToNodes(n1, &n2[start_index], end_index - start_index + 1,
+                                    test_suits[s][0], test_suits[s][1], size, &speed, &speed2, &msg);
+                    LOG() << std::dec << str << (float)speed / 1024 << " - " <<
+                                                (float)speed2 / 1024 << " GB/s" << std::endl;
+                } while(end_index < (n - 1));
+            }
         }
     }
 
