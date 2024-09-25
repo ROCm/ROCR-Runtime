@@ -9,7 +9,6 @@ import re
 
 from rocm_docs import ROCmDocs
 
-os.system("cp ../README.md index.md")
 os.system("cp ../src/README.md structure.md")
 
 with open('../src/CMakeLists.txt', encoding='utf-8') as f:
