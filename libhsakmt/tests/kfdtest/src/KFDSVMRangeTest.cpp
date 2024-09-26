@@ -1434,7 +1434,7 @@ unsigned int ReadSMIEventThread(void* p) {
     int fd;
 
     EXPECT_SUCCESS(hsaKmtOpenSMI(pArgs->nodeid, &fd));
-    events = HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_INDEX_MAX) - 1;
+    events = HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_MIGRATE_START);
     EXPECT_EQ(write(fd, &events, sizeof(events)), sizeof(events));
 
     pthread_barrier_wait(pArgs->barrier);
