@@ -960,9 +960,27 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
    *
    *******************************************************************************************/
 
-  const auto& dispatch_id = amd_queue_.read_dispatch_id;
-  tool::notify_event_scratch_alloc_start(public_handle(), HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE,
-                                         dispatch_id);
+  core::AqlPacket *pkt = NULL;
+  uint64_t dispatch_id = UINT64_MAX;
+
+  auto get_dispatch_pkt = [&]() {
+    dispatch_id = amd_queue_.read_dispatch_id;
+    do {
+      // On GPUs where EOP is handled in asic, the read_dispatch_id is not
+      // updated after each packet so look for the first dispatch that needs
+      // scratch
+      const uint64_t pkt_slot_idx =
+          dispatch_id & (amd_queue_.hsa_queue.size - 1);
+
+      core::AqlPacket *dispatch_pkt =
+          &((core::AqlPacket *)amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
+      if (dispatch_pkt->IsDispatchAndNeedsScratch()) return dispatch_pkt;
+
+      dispatch_id++;
+    } while (dispatch_id <= LoadWriteIndexRelaxed());
+
+    return (core::AqlPacket *)NULL;
+  };
 
   auto calc_dispatch_waves_per_group = [&](core::AqlPacket& pkt) {
     const uint64_t lanes_per_group =
@@ -1022,15 +1040,16 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
 
   scratch.cooperative = (amd_queue_.hsa_queue.type == HSA_QUEUE_TYPE_COOPERATIVE);
 
-  uint64_t pkt_slot_idx = dispatch_id & (amd_queue_.hsa_queue.size - 1);
+  pkt = get_dispatch_pkt(); // Sets dispatch_id
+  assert((pkt && dispatch_id != UINT64_MAX) &&
+         "Could not find dispatch packet with private_segment_size > 0");
 
-  core::AqlPacket& pkt = ((core::AqlPacket*)amd_queue_.hsa_queue.base_address)[pkt_slot_idx];
-
-  pkt.AssertIsDispatchAndNeedsScratch();
+  tool::notify_event_scratch_alloc_start(
+      public_handle(), HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE, dispatch_id);
 
   uint32_t device_slots = calc_device_slots();
-  uint32_t groups = calc_dispatch_groups(pkt);
-  uint32_t waves_per_group = calc_dispatch_waves_per_group(pkt);
+  uint32_t groups = calc_dispatch_groups(*pkt);
+  uint32_t waves_per_group = calc_dispatch_waves_per_group(*pkt);
 
   uint32_t dispatch_slots = groups * waves_per_group;
   dispatch_slots = std::min(dispatch_slots, device_slots);
@@ -1038,7 +1057,8 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   const uint64_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
 
   const uint64_t size_per_thread =
-      AlignUp(pkt.dispatch.private_segment_size, scratch.mem_alignment_size / lanes_per_wave);
+      AlignUp(pkt->dispatch.private_segment_size,
+              scratch.mem_alignment_size / lanes_per_wave);
   const uint64_t device_size = size_per_thread * lanes_per_wave * device_slots;
   const uint64_t dispatch_size = size_per_thread * lanes_per_wave * dispatch_slots;
 
@@ -1054,9 +1074,9 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
 
     agent_->AcquireQueueAltScratch(scratch);
     if (scratch.alt_queue_base) {
-      scratch.alt_dispatch_limit_x = pkt.dispatch.grid_size_x;
-      scratch.alt_dispatch_limit_y = pkt.dispatch.grid_size_y;
-      scratch.alt_dispatch_limit_z = pkt.dispatch.grid_size_z;
+      scratch.alt_dispatch_limit_x = pkt->dispatch.grid_size_x;
+      scratch.alt_dispatch_limit_y = pkt->dispatch.grid_size_y;
+      scratch.alt_dispatch_limit_z = pkt->dispatch.grid_size_z;
 
       // Update queue SRD
       InitScratchSRD();
@@ -1099,9 +1119,11 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
     amd_queue_.queue_properties |= AMD_QUEUE_PROPERTIES_USE_SCRATCH_ONCE;
     // Set system release fence to flush scratch stores with older firmware versions.
     if ((agent_->isa()->GetMajorVersion() == 8) && (agent_->GetMicrocodeVersion() < 729)) {
-      pkt.dispatch.header &= ~(((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1)
-                               << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
-      pkt.dispatch.header |= (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+      pkt->dispatch.header &=
+          ~(((1 << HSA_PACKET_HEADER_WIDTH_SCRELEASE_FENCE_SCOPE) - 1)
+            << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
+      pkt->dispatch.header |=
+          (HSA_FENCE_SCOPE_SYSTEM << HSA_PACKET_HEADER_SCRELEASE_FENCE_SCOPE);
     }
   } else if (scratch.alt_size && scratch.main_size > scratch.alt_size) {
     // Not using use-scratch-once, and dispatches that would fit in alt-scratch would also fit in
