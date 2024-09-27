@@ -3388,30 +3388,6 @@ Runtime::VMemorySetAccessPerHandle(void *va, MappedHandle &mappedHandle,
       }
     }
   }
-
-  // Remove agents that were previously allowed but not included in current list
-  for (auto agentPermsIt = mappedHandle.allowed_agents.begin();
-       agentPermsIt != mappedHandle.allowed_agents.end();) {
-    bool agent_removed = true;
-
-    for (int i = 0; i < desc_cnt; i++) {
-      Agent *checkAgent = Agent::Convert(desc[i].agent_handle);
-
-      if (agentPermsIt->first == checkAgent) {
-        agent_removed = false;
-        break;
-      }
-    }
-    if (agent_removed) {
-      if (agentPermsIt->second.RemoveAccess() != HSA_STATUS_SUCCESS)
-        throw AMD::hsa_exception(HSA_STATUS_ERROR, "Failed to remove access for memory handle.");
-
-      agentPermsIt = mappedHandle.allowed_agents.erase(agentPermsIt);
-    } else {
-      ++agentPermsIt;
-    }
-  }
-
   return HSA_STATUS_SUCCESS;
 }
 

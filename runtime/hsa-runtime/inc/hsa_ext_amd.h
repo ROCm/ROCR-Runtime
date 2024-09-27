@@ -3370,8 +3370,9 @@ typedef struct hsa_amd_memory_access_desc_s {
  *
  * Make previously mapped virtual address accessible to specific agents. @p size must be equal to
  * size of previously mapped virtual memory handle.
- * Calling hsa_amd_vmem_set_access multiple times on the same @p va will overwrite previous
- * permissions for all agents
+ * Calling hsa_amd_vmem_set_access multiple times on the same @p va:
+ *  - Will overwrite permissions for agents specified in @p desc
+ *  - Will leave permissions unchanged for agents not specified in @p desc
  *
  * @param[in] va previously mapped virtual address
  * @param[in] size of memory mapping
