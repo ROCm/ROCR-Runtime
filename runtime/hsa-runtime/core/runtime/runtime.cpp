@@ -1366,7 +1366,9 @@ int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
     if (dmabuf_fd == -1) return -1;
 
     HsaGraphicsResourceInfo info;
-    int err = hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, numNodes, nodes);
+    HSA_REGISTER_MEM_FLAGS regFlags;
+    regFlags.ui32.requiresVAddr = !!res ? 0 : 1;
+    int err = hsaKmtRegisterGraphicsHandleToNodesExt(dmabuf_fd, &info, numNodes, nodes, regFlags);
     if (err == HSAKMT_STATUS_SUCCESS) {
       *importAddress = info.MemoryAddress;
       *importSize = info.SizeInBytes;
@@ -1460,45 +1462,34 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   }
 
   if (num_agents == 0) {
-    if (ipc_dmabuf_supported_) {
-      auto errCleanup = [&](amdgpu_bo_handle bo)
-      {
-        amdgpu_bo_free(bo); // auto frees cpu map
-        return HSA_STATUS_ERROR;
-      };
+    amdgpu_bo_import_result res;
+    bool isDmabufSysMem = ipc_dmabuf_supported_ && importHandle.handle[3];
 
-      // GPU memory
-      if (!importHandle.handle[3]) {
-        HSAuint32 *nodes = new HSAuint32[1];
-        nodes[0] = importHandle.handle[4];
-        hsa_status_t err = importMemory(1, nodes, NULL);
-        if (err != HSA_STATUS_SUCCESS) return err;
-        return mapMemoryToNodes(1, nodes);
-      }
-
-      // System Memory
-      amdgpu_bo_import_result res;
-      hsa_status_t err = importMemory(0, NULL, &res);
-      if (err != HSA_STATUS_SUCCESS) return err;
-
-      // Create a shared cpu access pointer for user
-      void *cpuPtr;
-      amdgpu_bo_handle bo = res.buf_handle;
-      int ret = amdgpu_bo_cpu_map(bo, &cpuPtr);
-      if (ret) return errCleanup(bo);
-
-      // Note VA ops will always override flags to allow read/write/exec permissions.
-      ret = amdgpu_bo_va_op(bo, 0, importSize,
-                            reinterpret_cast<uint64_t>(cpuPtr), 0, AMDGPU_VA_OP_MAP);
-      if (ret) return errCleanup(bo);
-      importAddress = cpuPtr;
-      fixFragment(bo);
-      *mapped_ptr = importAddress;
-      return HSA_STATUS_SUCCESS;
-    }
-    hsa_status_t err = importMemory(0, NULL, NULL);
+    hsa_status_t err = importMemory(0, NULL, isDmabufSysMem ? &res : NULL);
     if (err != HSA_STATUS_SUCCESS) return err;
-    return mapMemoryToNodes(0, NULL);
+    if (!isDmabufSysMem) return mapMemoryToNodes(0, NULL);
+
+    // System memory DMA Buf import
+    auto errCleanup = [&](amdgpu_bo_handle bo)
+    {
+      amdgpu_bo_free(bo); // auto frees cpu map
+      return HSA_STATUS_ERROR;
+    };
+
+    // Create a shared cpu access pointer for user
+    void *cpuPtr;
+    amdgpu_bo_handle bo = res.buf_handle;
+    int ret = amdgpu_bo_cpu_map(bo, &cpuPtr);
+    if (ret) return errCleanup(bo);
+
+    // Note VA ops will always override flags to allow read/write/exec permissions.
+    ret = amdgpu_bo_va_op(bo, 0, importSize,
+                          reinterpret_cast<uint64_t>(cpuPtr), 0, AMDGPU_VA_OP_MAP);
+    if (ret) return errCleanup(bo);
+    importAddress = cpuPtr;
+    fixFragment(bo);
+    *mapped_ptr = importAddress;
+    return HSA_STATUS_SUCCESS;
   }
 
   HSAuint32* nodes = nullptr;
