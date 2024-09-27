@@ -337,6 +337,23 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 							    HSAuint64 NumberOfNodes,
 							    HSAuint32 *NodeArray)
 {
+       HSA_REGISTER_MEM_FLAGS regFlags;
+       regFlags.Value = 0;
+        
+       return hsaKmtRegisterGraphicsHandleToNodesExt(GraphicsResourceHandle,
+						     GraphicsResourceInfo,
+						     NumberOfNodes,
+						     NodeArray,
+						     regFlags);
+
+}
+
+HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodesExt(HSAuint64 GraphicsResourceHandle,
+							       HsaGraphicsResourceInfo *GraphicsResourceInfo,
+							       HSAuint64 NumberOfNodes,
+							       HSAuint32 *NodeArray,
+							       HSA_REGISTER_MEM_FLAGS RegisterFlags)
+{
 	CHECK_KFD_OPEN();
 	uint32_t *gpu_id_array = NULL;
 	HSAKMT_STATUS ret = HSAKMT_STATUS_SUCCESS;
@@ -351,7 +368,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtRegisterGraphicsHandleToNodes(HSAuint64 GraphicsRe
 	if (ret == HSAKMT_STATUS_SUCCESS) {
 		ret = hsakmt_fmm_register_graphics_handle(
 			GraphicsResourceHandle, GraphicsResourceInfo,
-			gpu_id_array, NumberOfNodes * sizeof(uint32_t));
+			gpu_id_array, NumberOfNodes * sizeof(uint32_t), RegisterFlags);
 		if (ret != HSAKMT_STATUS_SUCCESS)
 			free(gpu_id_array);
 	}

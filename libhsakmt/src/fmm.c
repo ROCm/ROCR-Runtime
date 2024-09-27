@@ -3586,7 +3586,8 @@ HSAKMT_STATUS hsakmt_fmm_register_memory(void *address, uint64_t size_in_bytes,
 HSAKMT_STATUS hsakmt_fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
 					   uint32_t *gpu_id_array,
-					   uint32_t gpu_id_array_size)
+					   uint32_t gpu_id_array_size,
+					   HSA_REGISTER_MEM_FLAGS RegisterFlags)
 {
 	struct kfd_ioctl_get_dmabuf_info_args infoArgs = {0};
 	struct kfd_ioctl_import_dmabuf_args importArgs = {0};
@@ -3630,7 +3631,7 @@ HSAKMT_STATUS hsakmt_fmm_register_graphics_handle(HSAuint64 GraphicsResourceHand
 		goto error_free_metadata;
 
 	/* import DMA buffer without VA assigned */
-	if (!gpu_id_array && gpu_id_array_size == 0) {
+	if (!gpu_id_array && gpu_id_array_size == 0 && !RegisterFlags.ui32.requiresVAddr) {
 		aperture = &mem_handle_aperture;
 	} else if (hsakmt_topology_is_svm_needed(gpu_mem[gpu_mem_id].EngineId)) {
 		aperture = svm.dgpu_aperture;
