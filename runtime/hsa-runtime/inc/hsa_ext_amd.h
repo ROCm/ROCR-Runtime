@@ -2972,7 +2972,7 @@ typedef enum hsa_amd_svm_attribute_s {
   HSA_AMD_SVM_ATTRIB_ACCESS_QUERY = 0x203,
 } hsa_amd_svm_attribute_t;
 
-// List type for hsa_amd_svm_attributes_set/get. 
+// List type for hsa_amd_svm_attributes_set/get.
 typedef struct hsa_amd_svm_attribute_pair_s {
   // hsa_amd_svm_attribute_t value.
   uint64_t attribute;
