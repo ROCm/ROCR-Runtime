@@ -59,11 +59,12 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtSPMSetDestBuffer(HSAuint32 PreferredNode,
 {
 	int ret;
 	struct kfd_ioctl_spm_args args = {0};
-	uint32_t gpu_id;
-
-	ret = HSAKMT_STATUS_SUCCESS;
+	uint32_t gpu_id = 0;
 
 	ret = hsakmt_validate_nodeid(PreferredNode, &gpu_id);
+	if (ret != HSAKMT_STATUS_SUCCESS) {
+		return ret;
+	}
 
 	args.timeout    = *timeout;
 	args.dest_buf    = (uint64_t)DestMemoryAddress;
