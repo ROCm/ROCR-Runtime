@@ -152,8 +152,8 @@ else()
 endif()
 
 if(NOT EXISTS "${OPENCL_INC_DIR}/opencl-c.h")
-  if(DEFINED ENV{LLVM_PROJECT_ROOT})
-    set(OPENCL_INC_DIR "$ENV{LLVM_PROJECT_ROOT}/clang/lib/Headers/")
+  if(DEFINED ENV{WORK_ROOT})
+    set(OPENCL_INC_DIR "$ENV{WORK_ROOT}/external/llvm-project/clang/lib/Headers/")
   else()
     set(OPENCL_INC_DIR "${OPENCL_DIR}/../../../external/llvm-project/clang/lib/Headers/")
   endif()
@@ -239,7 +239,7 @@ add_definitions(-DLITTLEENDIAN_CPU=1)
 #
 # Linux Compiler options
 #
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++17 ")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fexceptions")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-rtti")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-math-errno")
