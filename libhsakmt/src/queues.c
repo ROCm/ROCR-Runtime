@@ -51,6 +51,10 @@
 #define DEBUGGER_BYTES_ALIGN	64
 #define DEBUGGER_BYTES_PER_WAVE	32
 
+#define AQL_PKT_SIZE 64
+#define PM4_PKT_SIZE 32
+#define EOP_PKT_SIZE 32
+
 struct queue {
 	uint32_t queue_id;
 	uint64_t wptr;
@@ -625,6 +629,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
 	int err;
 	HsaNodeProperties props;
 	uint32_t cu_num, i;
+	uint64_t pkt_size;
 
 	CHECK_KFD_OPEN();
 
@@ -652,6 +657,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtCreateQueueExt(HSAuint32 NodeId,
 		q->eop_buffer_size = ((Type == HSA_QUEUE_COMPUTE) ? 4096 : 0);
 	else if (q->gfxv >= 0x80000)
 		q->eop_buffer_size = 4096;
+
+	/* Limit the eop buffer size to half the number of entries that can fit in
+	 * QueueSizeInBytes. */
+	pkt_size = (Type >= HSA_QUEUE_COMPUTE_AQL && Type <= HSA_QUEUE_DMA_AQL_XGMI) ?
+				AQL_PKT_SIZE : PM4_PKT_SIZE;
+
+	q->eop_buffer_size =
+			MIN(q->eop_buffer_size, (QueueSizeInBytes * EOP_PKT_SIZE) / (pkt_size * 2));
 
 	/* By default, CUs are all turned on. Initialize cu_mask to '1
 	 * for all CU bits.
