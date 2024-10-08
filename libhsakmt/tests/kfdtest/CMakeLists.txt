@@ -117,7 +117,7 @@ else()
 endif()
 
 if( DEFINED LIBHSAKMT_PATH )
-    set ( HSAKMT_LIBRARY_DIRS ${LIBHSAKMT_PATH}/lib )
+    set ( HSAKMT_LIBRARY_DIRS ${LIBHSAKMT_PATH} )
     set ( HSAKMT_LIBRARIES hsakmt )
 endif()
 
