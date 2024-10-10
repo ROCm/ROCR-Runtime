@@ -176,8 +176,8 @@ void VirtMemoryTestBasic::TestCreateDestroy(hsa_agent_t agent, hsa_amd_memory_po
   }
 
   if (gpus.size() > 1) {
-    /* Call set_access with a smaller list of agents, this should remove access for the agents that
-     * are not included */
+    /* Call set_access with a smaller list of agents, this should leave access to
+     * the other GPUs unchanged */
     hsa_amd_memory_access_desc_t desc = {HSA_ACCESS_PERMISSION_RW, gpus[1]};
     ASSERT_SUCCESS(hsa_amd_vmem_set_access(addrRange, 10 * granule_size, &desc, 1));
 
@@ -190,7 +190,7 @@ void VirtMemoryTestBasic::TestCreateDestroy(hsa_agent_t agent, hsa_amd_memory_po
       if (i == 1) {
         ASSERT_EQ(perm, HSA_ACCESS_PERMISSION_RW);
       } else {
-        ASSERT_EQ(perm, HSA_ACCESS_PERMISSION_NONE);
+        ASSERT_EQ(perm, HSA_ACCESS_PERMISSION_RO);
       }
     }
   }
