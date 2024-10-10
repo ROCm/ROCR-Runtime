@@ -183,16 +183,10 @@ configure_file(${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/Binary/prerm.in DEBIAN/Binary/
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/DEBIAN/preinst DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/DEBIAN)
 set (CPACK_DEBIAN_BINARY_PACKAGE_CONTROL_EXTRA "DEBIAN/preinst;DEBIAN/Binary/postinst;DEBIAN/Binary/prerm")
 # Needed since some packages still say they need hsakmt-roct
-set(CPACK_DEBIAN_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev,hsa-ext-rocr-dev")
-set(CPACK_DEBIAN_PACKAGE_PROVIDES "hsakmt-roct")
-set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev")
-set(CPACK_DEBIAN_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev")
-set(CPACK_RPM_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel,hsa-ext-rocr-dev")
-set(CPACK_RPM_PACKAGE_PROVIDES "hsakmt-roct,hsa-rocr-dev,hsa-ext-rocr-dev")
-set(CPACK_RPM_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-devel")
-set(CPACK_RPM_DEV_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel")
-
-
+set(CPACK_DEBIAN_DEV_PACKAGE_REPLACES "hsakmt-roct,hsakmt-roct-dev,hsa-ext-rocr-dev")
+set(CPACK_DEBIAN_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-dev,hsa-ext-rocr-dev")
+#TODO: hsa-ext-rocr-dev can be added to conflicts list and remove CPACK_DEBIAN_DEV_PACKAGE_BREAKS
+set(CPACK_DEBIAN_DEV_PACKAGE_CONFLICTS "hsakmt-roct,hsakmt-roct-dev")
 # package dependencies
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdrm-amdgpu-dev | libdrm-dev, rocm-core")
 set(CPACK_DEBIAN_PACKAGE_RECOMMENDS "libdrm-amdgpu-dev")
@@ -214,7 +208,7 @@ if (HSA_DEP_ROCPROFILER_REGISTER)
   string(APPEND CPACK_DEBIAN_BINARY_PACKAGE_DEPENDS ", rocprofiler-register")
 endif()
 # Declare package relationships (hsa-ext-rocr-dev is a legacy package that we subsume)
-set(CPACK_DEBIAN_PACKAGE_BREAKS "hsa-ext-rocr-dev")
+set(CPACK_DEBIAN_DEV_PACKAGE_BREAKS "hsa-ext-rocr-dev")
 
 # RPM package specific variables
 set(EL7_DISTRO "FALSE")
@@ -222,7 +216,8 @@ Checksetel7(EL7_DISTRO)
 set(CPACK_RPM_BINARY_PACKAGE_NAME "hsa-rocr")
 # Since we changed the package name to match RPM specs, take care of older builds that had -dev installed
 # Also cover the fact that this now replaces the old binary package hsakmt-roct
-set(CPACK_RPM_DEV_PACKAGE_OBSOLETES "hsakmt-roct-dev hsakmt-roct")
+set(CPACK_RPM_DEV_PACKAGE_PROVIDES "hsakmt-roct,hsakmt-roct-devel,hsakmt-roct-dev,hsa-ext-rocr-dev")
+set(CPACK_RPM_DEV_PACKAGE_OBSOLETES "hsakmt-roct,hsakmt-roct-devel,hsakmt-roct-dev,hsa-ext-rocr-dev")
 
 set(CPACK_RPM_DEV_PACKAGE_NAME "hsa-rocr-devel")
 set(CPACK_RPM_ASAN_PACKAGE_NAME "hsa-rocr-asan")
