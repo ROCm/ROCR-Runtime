@@ -839,6 +839,12 @@ void GpuAgent::InitDma() {
              kfd_version.KernelInterfaceMinorVersion >= 17)))
         rec_eng = -1;
 
+      // Observing strange behavior when fixing host<->device engines
+      // on GFX9 devices older than GFX90a, so bypass engine fix.
+      if (!use_xgmi && isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() == 0
+          && isa_->GetStepping() < 10)
+        rec_eng = -1;
+
       auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
