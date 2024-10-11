@@ -250,12 +250,17 @@ class Flag {
 
     var = os::GetEnvVar("HSA_ALLOCATE_QUEUE_DEV_MEM");
     dev_mem_queue_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_WAIT_ANY_DEBUG");
+    wait_any_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
     std::string var = os::GetEnvVar("HSA_CU_MASK");
     parse_masks(var, maxGpu, maxCU);
   }
+
+  bool wait_any() const { return wait_any_; }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
 
@@ -389,6 +394,7 @@ class Flag {
   bool image_print_srd_;
   bool enable_mwaitx_;
   bool enable_ipc_mode_legacy_;
+  bool wait_any_;
   bool dev_mem_queue_;
 
   SDMA_OVERRIDE enable_sdma_;
