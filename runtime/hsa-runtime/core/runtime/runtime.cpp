@@ -1560,12 +1560,76 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
   auto& async_events_control_ = eventsInfo->control;
   auto& async_events_ = eventsInfo->events;
   auto& new_async_events_ = eventsInfo->new_events;
+  auto& hsa_events = eventsInfo->events.hsa_events_;
+  auto& event_age = eventsInfo->events.age_;
+  uint32_t unique_evts = 0;
+  auto hsa_signals = reinterpret_cast<hsa_signal_handle*>(&async_events_.signal_[0]);
+
+  auto processEvent = [&](size_t index, hsa_signal_value_t value) {
+    // No error or timeout occured, process the handlers
+    // Call handler for the known satisfied signal.
+    assert(async_events_.handler_[index] != nullptr);
+    bool keep = async_events_.handler_[index](value, async_events_.arg_[index]);
+    if (!keep) {
+      hsa_signal_handle(async_events_.signal_[index])->Release();
+      async_events_.CopyIndex(index, async_events_.Size() - 1);
+      async_events_.PopBack();
+    }
+    return keep;
+  };
+
+  auto checkCondition = [](hsa_signal_condition_t cond, hsa_signal_value_t value,
+                           hsa_signal_value_t compare) {
+    switch (cond) {
+      case HSA_SIGNAL_CONDITION_EQ: return value == compare;
+      case HSA_SIGNAL_CONDITION_NE: return value != compare;
+      case HSA_SIGNAL_CONDITION_GTE: return value >= compare;
+      case HSA_SIGNAL_CONDITION_LT: return value < compare;
+      default: return false;
+    }
+  };
+
+  // Prepares a list of events for a wait inside KFD
+  auto PrepareInterrupt = [&](size_t idx) {
+    HsaEvent* hsa_event = hsa_signals[idx]->EopEvent();
+    // If any signal doesn't have an interrupt, then switch to polling
+    if (hsa_event == nullptr) {
+      // Remove decrement from all previous events
+      for (int e = 0; e < idx; ++e) {
+        hsa_signals[e]->WaitingDec();
+      }
+      unique_evts = 0;
+      return false;
+    } else {
+      hsa_signals[idx]->WaitingInc();
+      if (hsa_events.size() <= unique_evts) {
+          hsa_events.resize(unique_evts + 10);
+          event_age.resize(unique_evts + 10);
+       }
+       hsa_events[unique_evts] = hsa_event;
+       event_age[unique_evts] = runtime_singleton_->KfdVersion().supports_event_age ? 1 : 0;
+       unique_evts++;
+       return true;
+    }
+  };
+
+  // KFD will move this thread into sleep, until any event from the list is complete or
+  // if ROCR can wake it up with hsaKmtSetEvent()
+  auto WaitForInterrupt = [&]() {
+    constexpr uint32_t wait_ms = 0xFFFFFFFEu;
+    HsaEvent** end = std::unique(&hsa_events[0], &hsa_events[0] + unique_evts);
+    unique_evts = uint32_t(end - &hsa_events[0]);
+    hsaKmtWaitOnMultipleEvents_Ext(&hsa_events[0], unique_evts, false, wait_ms, &event_age[0]);
+    for (size_t i = 0; i < async_events_.Size(); i++) {
+      hsa_signals[i]->WaitingDec();
+    }
+  };
 
   while (!async_events_control_.exit) {
     // Wait for a signal
     hsa_signal_value_t value;
     uint32_t index = 0;
-
+    uint32_t wait_any = true;
     if (eventsInfo->monitor_exceptions) {
       index = Signal::WaitAnyExceptions(
                           uint32_t(async_events_.Size()),
@@ -1574,6 +1638,7 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
                           &async_events_.value_[0],
                           &value);
     } else {
+     if (core::Runtime::runtime_singleton_->flag().wait_any()) {
       index = AMD::hsa_amd_signal_wait_any(
                           uint32_t(async_events_.Size()),
                           &async_events_.signal_[0],
@@ -1582,70 +1647,73 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
                           uint64_t(-1),
                           HSA_WAIT_STATE_BLOCKED,
                           &value);
+     } else {
+      // Skip wake-up signal logic
+      index = 1;
+      wait_any = false;
+      // The new events can reallocate the signals, hence update the pointer
+      hsa_signals = reinterpret_cast<hsa_signal_handle*>(&async_events_.signal_[0]);
+     }
     }
 
     // Reset the control signal
     if (index == 0) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
     } else if (index != -1) {
-      // No error or timout occured, process the handlers
-      // Call handler for the known satisfied signal.
-      assert(async_events_.handler_[index] != NULL);
-      bool keep = async_events_.handler_[index](value, async_events_.arg_[index]);
-      if (!keep) {
-        hsa_signal_handle(async_events_.signal_[index])->Release();
-        async_events_.CopyIndex(index, async_events_.Size() - 1);
-        async_events_.PopBack();
+      if (wait_any) {
+        processEvent(index, value);
+      } else {
+        index = 0;
       }
-      // Check remaining signals before sleeping.
-      for (size_t i = index; i < async_events_.Size(); i++) {
-        hsa_signal_handle sig(async_events_.signal_[i]);
+      // Process all signals on the CPU first
+      bool finish = false;
+      bool polling = false;
+      while (!finish) {
+        // If exception or WaitAny(), then finish with just one iterration
+        if (wait_any) {
+          finish = true;
+        }
+        bool interrupt_wait = false;
+        unique_evts = 0;
 
-        value = atomic::Load(&sig->signal_.value, std::memory_order_relaxed);
-        bool condition_met = false;
+        // Check remaining signals before sleeping.
+        for (size_t i = index; i < async_events_.Size(); i++) {
+          hsa_signal_handle sig(async_events_.signal_[i]);
+          value = atomic::Load(&sig->signal_.value, std::memory_order_relaxed);
+          if (checkCondition(async_events_.cond_[i], value, async_events_.value_[i])) {
+            if (i == 0) {
+              hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
+            } else {
+              processEvent(i, value);
+              i--;
+            }
+            if (!wait_any) {
+              finish = true;
+            }
+          }
 
-        switch (async_events_.cond_[i]) {
-          case HSA_SIGNAL_CONDITION_EQ: {
-            condition_met = (value == async_events_.value_[i]);
-            break;
-          }
-          case HSA_SIGNAL_CONDITION_NE: {
-            condition_met = (value != async_events_.value_[i]);
-            break;
-          }
-          case HSA_SIGNAL_CONDITION_GTE: {
-            condition_met = (value >= async_events_.value_[i]);
-            break;
-          }
-          case HSA_SIGNAL_CONDITION_LT: {
-            condition_met = (value < async_events_.value_[i]);
-            break;
+          // If the current signal isn't complete and polling is disabled, then prepare KFD wait for an interrupt
+          if (!finish && !polling) {
+            interrupt_wait = PrepareInterrupt(i);
+            // If the interrupt was disabled, then force polling
+            if (!interrupt_wait) {
+              polling = true;
+              finish = false;
+            }
+          } else if (unique_evts > 0) {
+            // Remove the waiting tag from events if we found a complete event
+            for (int e = 0; e < i; ++e) {
+              hsa_signals[e]->WaitingDec();
+            }
+            unique_evts = 0;
+            interrupt_wait = false;
           }
         }
-
-        if (condition_met) {
-          assert(async_events_.handler_[i] != NULL);
-          bool keep = async_events_.handler_[i](value, async_events_.arg_[i]);
-          if (!keep) {
-            hsa_signal_handle(async_events_.signal_[i])->Release();
-            async_events_.CopyIndex(i, async_events_.Size() - 1);
-            async_events_.PopBack();
-            i--;
-          }
+        // If nothing was complete and an interrupt wait was requested, then call KFD
+        if (interrupt_wait) {
+          WaitForInterrupt();
         }
       }
-    }
-
-    // Check for dead signals
-    index = 0;
-    while (index != async_events_.Size()) {
-      if (!hsa_signal_handle(async_events_.signal_[index])->IsValid()) {
-        hsa_signal_handle(async_events_.signal_[index])->Release();
-        async_events_.CopyIndex(index, async_events_.Size() - 1);
-        async_events_.PopBack();
-        continue;
-      }
-      index++;
     }
 
     // Insert new signals and find plain functions

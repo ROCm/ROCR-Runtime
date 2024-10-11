@@ -556,6 +556,8 @@ class Runtime {
     std::vector<hsa_signal_condition_t> cond_;
     std::vector<hsa_signal_value_t> value_;
     std::vector<hsa_amd_signal_handler> handler_;
+    std::vector<HsaEvent*> hsa_events_; //!< A list of HSA events for KFD wait
+    std::vector<uint64_t> age_;         //!< The age list for KFD wait
     std::vector<void*> arg_;
   };
 
