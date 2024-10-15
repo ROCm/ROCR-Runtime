@@ -792,6 +792,9 @@ hsa_status_t hsa_amd_memory_pool_allocate(hsa_amd_memory_pool_t memory_pool, siz
   if (flags & HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG)
     alloc_flag |= core::MemoryRegion::AllocateContiguous;
 
+  if (flags & HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG)
+    alloc_flag |= core::MemoryRegion::AllocateExecutable;
+
 #ifdef SANITIZER_AMDGPU
   alloc_flag |= core::MemoryRegion::AllocateAsan;
 #endif
