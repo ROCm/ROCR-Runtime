@@ -56,7 +56,7 @@ class LoaderContext final : public rocr::amd::hsa::loader::Context {
 
   hsa_isa_t IsaFromName(const char *name) override;
 
-  bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t code_object_isa) override;
+  bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t code_object_isa, unsigned codeGenericVersion) override;
 
   void* SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, size_t size, size_t align, bool zero) override;
 

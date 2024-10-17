@@ -275,6 +275,10 @@ class GpuAgent : public GpuAgentInt {
                                                       void* data),
                              void* data) const override;
 
+  hsa_status_t IterateSupportedIsas(
+                    hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+                                                  void* data) const override;
+
   // @brief Override from core::Agent.
   hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
                             void* value) const override;
@@ -381,8 +385,8 @@ class GpuAgent : public GpuAgentInt {
     return regions_;
   }
 
-  // @brief Override from core::Agent.
-  const core::Isa* isa() const override { return isa_; }
+  const std::vector<const core::Isa *>& supported_isas() const override {
+                                                      return supported_isas_;}
 
   // @brief Override from AMD::GpuAgentInt.
   __forceinline bool is_kv_device() const override { return is_kv_device_; }
@@ -432,7 +436,8 @@ class GpuAgent : public GpuAgentInt {
   __forceinline bool AsyncScratchReclaimEnabled() const override {
     // TODO: Need to update min CP FW ucode version once it is released
     return (core::Runtime::runtime_singleton_->flag().enable_scratch_async_reclaim() &&
-            isa()->GetMajorVersion() == 9 && isa()->GetMinorVersion() == 4 &&
+            supported_isas()[0]->GetMajorVersion() == 9 &&
+            supported_isas()[0]->GetMinorVersion() == 4 &&
             properties_.EngineId.ui32.uCode > 999);
   };
 

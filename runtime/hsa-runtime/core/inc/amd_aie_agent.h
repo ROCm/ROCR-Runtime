@@ -72,6 +72,10 @@ public:
                                                      void *data),
                             void *value) const override;
 
+  hsa_status_t IterateSupportedIsas(
+                    hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+                                                  void* data) const override;
+
   hsa_status_t GetInfo(hsa_agent_info_t attribute, void *value) const override;
 
   hsa_status_t QueueCreate(size_t size, hsa_queue_type32_t queue_type,
@@ -80,7 +84,10 @@ public:
                            uint32_t group_segment_size,
                            core::Queue **queue) override;
 
-  const core::Isa *isa() const override { return nullptr; }
+  // @brief Override from core::Agent.
+  const std::vector<const core::Isa*>& supported_isas() const override {
+    return supported_isas_;
+  }
 
   const std::vector<const core::MemoryRegion *> &regions() const override {
     return regions_;

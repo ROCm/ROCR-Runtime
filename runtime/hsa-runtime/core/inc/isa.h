@@ -117,12 +117,16 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
 
   /// @returns True if @p code_object_isa and @p agent_isa are compatible,
   /// false otherwise.
-  static bool IsCompatible(const Isa &code_object_isa, const Isa &agent_isa);
+  static bool IsCompatible(const Isa &code_object_isa,
+                      const Isa &agent_isa, unsigned int codeGenericVersion);
 
   /// @returns This Isa's version.
   const Version &GetVersion() const {
     return version_;
   }
+  /// @returns This Isa's generic target.
+  const std::string & GetIsaGeneric() const {return generic_;}
+
 
   /// @returns SRAM ECC feature status.
   IsaFeature GetSramecc() const {
@@ -188,13 +192,15 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
  private:
   /// @brief Default constructor.
   Isa()
-      : targetid_(nullptr),
-        version_(Version(-1, -1, -1)),
+      : version_(Version(-1, -1, -1)),
         sramecc_(IsaFeature::Unsupported),
         xnack_(IsaFeature::Unsupported) {}
 
   // @brief Isa's target ID name.
-  const char* targetid_;
+  std::string targetid_;
+
+  // @brief Isa's generic version, if it exists. "" otherwise.
+  std::string generic_;
 
   /// @brief Isa's version.
   Version version_;
@@ -223,7 +229,8 @@ class IsaRegistry final {
   static const Isa *GetIsa(const Isa::Version &version,
                            IsaFeature sramecc = IsaFeature::Any,
                            IsaFeature xnack = IsaFeature::Any);
-
+  static const std::unordered_map<std::string, unsigned int> &
+                                                GetSupportedGenericVersions();
  private:
   /// @brief IsaRegistry's map type.
   typedef std::unordered_map<std::string, std::reference_wrapper<const Isa>> IsaMap;

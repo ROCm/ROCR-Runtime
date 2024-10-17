@@ -385,30 +385,38 @@ hsa_isa_t LoaderContext::IsaFromName(const char *name) {
 }
 
 bool LoaderContext::IsaSupportedByAgent(hsa_agent_t agent,
-                                        hsa_isa_t code_object_isa) {
-  std::pair<hsa_isa_t, bool> comparison_data(code_object_isa, false);
+                                        hsa_isa_t code_object_isa,
+                                        unsigned codeGenericVersion) {
+  struct callBackData {
+    std::pair<hsa_isa_t, bool> comparison_data;
+    const unsigned int codeGenericV;
+  } cbData = {{code_object_isa, false}, codeGenericVersion};
+
   auto IsIsaEquivalent = [](hsa_isa_t agent_isa_h, void *data) {
     assert(data);
 
-    std::pair<hsa_isa_t, bool> *data_pair =
-        reinterpret_cast<decltype(&comparison_data)>(data);
+    struct callBackData *inOutCB = reinterpret_cast<decltype(&cbData)>(data);
+
+    std::pair<hsa_isa_t, bool> *data_pair = &inOutCB->comparison_data;
+    const unsigned int codeGenericV = inOutCB->codeGenericV;
+
     assert(data_pair);
-    assert(data_pair->second != true);
+    assert(!data_pair->second);
 
     const core::Isa *agent_isa = core::Isa::Object(agent_isa_h);
     assert(agent_isa);
     const core::Isa *code_object_isa = core::Isa::Object(data_pair->first);
     assert(code_object_isa);
 
-    data_pair->second = core::Isa::IsCompatible(*code_object_isa, *agent_isa);
+    data_pair->second = core::Isa::IsCompatible(*code_object_isa, *agent_isa, codeGenericV);
     return data_pair->second ? HSA_STATUS_INFO_BREAK : HSA_STATUS_SUCCESS;
   };
 
-  hsa_status_t status = HSA::hsa_agent_iterate_isas(agent, IsIsaEquivalent, &comparison_data);
+  hsa_status_t status = HSA::hsa_agent_iterate_isas(agent, IsIsaEquivalent, &cbData);
   if (status != HSA_STATUS_SUCCESS && status != HSA_STATUS_INFO_BREAK) {
     return false;
   }
-  return comparison_data.second;
+  return cbData.comparison_data.second;
 }
 
 void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,

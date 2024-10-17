@@ -91,6 +91,17 @@ hsa_status_t AieAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache,
   return HSA_STATUS_ERROR_INVALID_CACHE;
 }
 
+hsa_status_t AieAgent::IterateSupportedIsas(
+                    hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+                                                          void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
+  for (const auto& isa : supported_isas()) {
+    hsa_status_t stat = call(core::Isa::Handle(isa), data);
+    if (stat != HSA_STATUS_SUCCESS) return stat;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
   const size_t attribute_ = static_cast<size_t>(attribute);
 

@@ -151,15 +151,16 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   }
 
   // Some GFX9 devices require a minimum of 64 DWORDS per ring buffer submission.
-  if (agent_->isa()->GetVersion() >= core::Isa::Version(9, 0, 0) &&
-      (agent_->isa()->GetVersion() <= core::Isa::Version(9, 0, 4) ||
-       agent_->isa()->GetVersion() == core::Isa::Version(9, 0, 12))) {
+  if (agent_->supported_isas()[0]->GetVersion() >= core::Isa::Version(9, 0, 0) &&
+     (agent_->supported_isas()[0]->GetVersion() <= core::Isa::Version(9, 0, 4) ||
+     agent_->supported_isas()[0]->GetVersion() == core::Isa::Version(9, 0, 12))) {
     min_submission_size_ = 256;
   }
 
-  const core::Runtime::LinkInfo& link = core::Runtime::runtime_singleton_->GetLinkInfo(
-      agent_->node_id(), core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
-  if (agent_->isa()->GetVersion() == core::Isa::Version(7, 0, 1)) {
+  const core::Runtime::LinkInfo& link =
+            core::Runtime::runtime_singleton_->GetLinkInfo( agent_->node_id(),
+                core::Runtime::runtime_singleton_->cpu_agents()[0]->node_id());
+  if (agent_->supported_isas()[0]->GetVersion() == core::Isa::Version(7, 0, 1)) {
     platform_atomic_support_ = false;
   } else {
     platform_atomic_support_ = link.info.atomic_support_64bit;
@@ -169,8 +170,8 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   // gfx90a can support xGMI host to device connections so bypass HDP flush
   // in this case.
   // gfx101x seems to have issues with HDP flushes
-  if (agent_->isa()->GetMajorVersion() >= 9 &&
-      !(agent_->isa()->GetMajorVersion() == 10 && agent_->isa()->GetMinorVersion() == 1)) {
+  if (agent_->supported_isas()[0]->GetMajorVersion() >= 9 &&
+      !(agent_->supported_isas()[0]->GetMajorVersion() == 10 && agent_->supported_isas()[0]->GetMinorVersion() == 1)) {
     hdp_flush_support_ = link.info.link_type != HSA_AMD_LINK_INFO_TYPE_XGMI;
   }
 
@@ -556,7 +557,8 @@ BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::SubmitCopyRe
     throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_ARGUMENT, "Copy rect slice needed.");
 
   // GFX12 or later use a different packet format that is incompatible (fields changed in size and location).
-  const bool isGFX12Plus = (agent_->isa()->GetMajorVersion() >= 12);
+  const bool isGFX12Plus =
+                        (agent_->supported_isas()[0]->GetMajorVersion() >= 12);
 
   // Common and GFX12 packet must match in size to use same code for vector/append.
   static_assert(sizeof(SDMA_PKT_COPY_LINEAR_RECT) == sizeof(SDMA_PKT_COPY_LINEAR_RECT_GFX12), "");
@@ -777,7 +779,7 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildFe
 
   packet_addr->HEADER_UNION.op = SDMA_OP_FENCE;
 
-  if (agent_->isa()->GetMajorVersion() >= 10) {
+  if (agent_->supported_isas()[0]->GetMajorVersion() >= 10) {
     packet_addr->HEADER_UNION.mtype = 3;
   }
 
@@ -847,7 +849,8 @@ void BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>::BuildCo
   };
 
   // GFX12 or later use a different packet format that is incompatible (fields changed in size and location).
-  const bool isGFX12Plus = (agent_->isa()->GetMajorVersion() >= 12);
+  const bool isGFX12Plus =
+                      (agent_->supported_isas()[0]->GetMajorVersion() >= 12);
 
   // Limits in terms of element count
   const uint32_t max_pitch = 1    << (isGFX12Plus ? SDMA_PKT_COPY_LINEAR_RECT_GFX12::pitch_bits   : SDMA_PKT_COPY_LINEAR_RECT::pitch_bits);

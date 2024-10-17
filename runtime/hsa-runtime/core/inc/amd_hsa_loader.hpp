@@ -163,11 +163,7 @@ public:
 
   virtual hsa_isa_t IsaFromName(const char *name) = 0;
 
-  // This function will be deleted in a future patch. Use the overload
-  // that takes a generic version instead.
-  virtual bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa) = 0;
-
-  virtual bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa, unsigned genericVersion) { return IsaSupportedByAgent(agent, isa); }
+  virtual bool IsaSupportedByAgent(hsa_agent_t agent, hsa_isa_t isa, unsigned genericVersion) = 0;
 
   virtual void* SegmentAlloc(amdgpu_hsa_elf_segment_t segment, hsa_agent_t agent, size_t size, size_t align, bool zero) = 0;
 

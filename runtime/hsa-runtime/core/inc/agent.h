@@ -236,6 +236,18 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
       hsa_status_t (*callback)(hsa_region_t region, void* data),
       void* data) const = 0;
 
+  // @brief Invoke the user provided callback for each isa supported by
+  // this agent.
+  //
+  // @param [in] callback User provided callback function.
+  // @param [in] data User provided pointer as input for @p callback.
+  //
+  // @retval ::HSA_STATUS_SUCCESS if the callback function for each traversed
+  // isa returns ::HSA_STATUS_SUCCESS.
+  virtual hsa_status_t IterateSupportedIsas(
+      hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+      void* data) const = 0;
+
   // @brief Invoke the callback for each cache useable by this agent.
   virtual hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
                                     void* data) const = 0;
@@ -278,8 +290,11 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Returns an array of regions owned by the agent.
   virtual const std::vector<const core::MemoryRegion*>& regions() const = 0;
 
-  // @details Returns the agent's instruction set architecture.
-  virtual const Isa* isa() const = 0;
+  // @brief Returns the ISA's supported by the agent.
+  // @details The returned vector is a list of pointers to the supported ISA,
+  // ordered from most specific (and performant) to most generic. For CPU
+  // and AIE agents, this list will be empty.
+  virtual const std::vector<const core::Isa *>& supported_isas() const = 0;
 
   virtual uint64_t HiveId() const { return 0; }
 
@@ -343,6 +358,7 @@ protected:
   }
 
   hsa_agent_t public_handle_;
+  std::vector<const core::Isa *> supported_isas_;
 
  private:
   // @brief Node id.

@@ -180,6 +180,11 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 
   assert(isa_ != nullptr && "ISA registry inconsistency.");
 
+  supported_isas_.push_back(isa_);
+  if (!isa_->GetIsaGeneric().empty()) {
+    supported_isas_.push_back(core::IsaRegistry::GetIsa(isa_->GetIsaGeneric()));
+  }
+
   // Check if the device is Kaveri, only on GPU device.
   if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
       isa_->GetStepping() == 0) {
@@ -652,6 +657,17 @@ hsa_status_t GpuAgent::IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, 
   AMD::callback_t<decltype(callback)> call(callback);
   for (size_t i = 0; i < caches_.size(); i++) {
     hsa_status_t stat = call(core::Cache::Convert(caches_[i].get()), data);
+    if (stat != HSA_STATUS_SUCCESS) return stat;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t GpuAgent::IterateSupportedIsas(
+                    hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+                                                          void* data) const {
+  AMD::callback_t<decltype(callback)> call(callback);
+  for (const auto& isa : supported_isas()) {
+    hsa_status_t stat = call(core::Isa::Handle(isa), data);
     if (stat != HSA_STATUS_SUCCESS) return stat;
   }
   return HSA_STATUS_SUCCESS;

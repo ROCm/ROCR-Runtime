@@ -1573,12 +1573,7 @@ hsa_status_t hsa_agent_iterate_isas(
   const core::Agent *agent_object = core::Agent::Convert(agent);
   IS_VALID(agent_object);
 
-  const Isa *isa_object = agent_object->isa();
-  if (!isa_object) {
-    return HSA_STATUS_SUCCESS;
-  }
-
-  return callback(Isa::Handle(isa_object), data);
+  return agent_object->IterateSupportedIsas(callback, data);
   CATCH;
 }
 
@@ -1708,7 +1703,7 @@ hsa_status_t hsa_isa_compatible(
   const Isa *agent_isa_object = Isa::Object(agent_isa);
   IS_VALID(agent_isa_object);
 
-  *result = Isa::IsCompatible(*code_object_isa_object, *agent_isa_object);
+  *result = Isa::IsCompatible(*code_object_isa_object, *agent_isa_object, 0);
   return HSA_STATUS_SUCCESS;
   CATCH;
 }

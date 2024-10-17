@@ -90,6 +90,10 @@ class CpuAgent : public core::Agent {
                                                       void* data),
                              void* data) const override;
 
+  hsa_status_t IterateSupportedIsas(
+                    hsa_status_t (*callback)(hsa_isa_t isa, void* data),
+                                                  void* data) const override;
+
   // @brief Override from core::Agent.
   hsa_status_t IterateCache(hsa_status_t (*callback)(hsa_cache_t cache, void* data),
                             void* value) const override;
@@ -127,9 +131,10 @@ class CpuAgent : public core::Agent {
     return regions_;
   }
 
-  // @brief OVerride from core::Agent.
-  const core::Isa* isa() const override { return NULL; }
-
+  // @brief Override from core::Agent.
+  const std::vector<const core::Isa*>& supported_isas() const override {
+    return supported_isas_;
+  }
  private:
   // @brief Query the driver to get the region list owned by this agent.
   void InitRegionList();
