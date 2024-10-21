@@ -70,6 +70,7 @@
 
 #include "core/inc/amd_trap_handler_v1.h"
 #include "core/inc/amd_blit_shaders.h"
+#include "core/inc/hsa_api_trace_int.h"
 // Generated header
 #include "amd_trap_handler_v2.h"
 #include "amd_blit_shaders_v2.h"
@@ -88,9 +89,6 @@
 #define DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC (1 << 30)  // 1 GB
 
 namespace rocr {
-namespace core {
-extern HsaApiTable hsa_internal_api_table_;
-} // namespace core
 
 namespace AMD {
 const uint64_t CP_DMA_DATA_TRANSFER_CNT_MAX = (1 << 26);
@@ -236,33 +234,33 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 }
 
 GpuAgent::~GpuAgent() {
-  if (!(this)->Enabled()) return;
-
-  for (auto& blit : blits_) {
-    if (!blit.empty()) {
-      hsa_status_t status = blit->Destroy(*this);
-      assert(status == HSA_STATUS_SUCCESS);
+  if (this->Enabled()) {
+    for (auto& blit : blits_) {
+      if (!blit.empty()) {
+        hsa_status_t status = blit->Destroy(*this);
+        assert(status == HSA_STATUS_SUCCESS);
+      }
     }
-  }
 
-  if (ape1_base_ != 0) {
-    _aligned_free(reinterpret_cast<void*>(ape1_base_));
-  }
+    if (ape1_base_ != 0) {
+      _aligned_free(reinterpret_cast<void*>(ape1_base_));
+    }
 
-  scratch_cache_.trim(true);
-  scratch_cache_.free_reserve();
+    scratch_cache_.trim(true);
+    scratch_cache_.free_reserve();
 
-  if (scratch_pool_.base() != NULL) {
-    hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
-  }
+    if (scratch_pool_.base() != NULL) {
+      hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
+    }
 
-  for (int i = 0; i < QueueCount; i++)
-    queues_[i].reset();
+    for (int i = 0; i < QueueCount; i++)
+      queues_[i].reset();
 
-  system_deallocator()(doorbell_queue_map_);
+    system_deallocator()(doorbell_queue_map_);
 
-  if (trap_code_buf_ != NULL) {
-    ReleaseShader(trap_code_buf_, trap_code_buf_size_);
+    if (trap_code_buf_ != NULL) {
+      ReleaseShader(trap_code_buf_, trap_code_buf_size_);
+    }
   }
 
   std::for_each(regions_.begin(), regions_.end(), DeleteObject());
@@ -839,6 +837,12 @@ void GpuAgent::InitDma() {
              kfd_version.KernelInterfaceMinorVersion >= 17)))
         rec_eng = -1;
 
+      // Observing strange behavior when fixing host<->device engines
+      // on GFX9 devices older than GFX90a, so bypass engine fix.
+      if (!use_xgmi && isa_->GetMajorVersion() == 9 && isa_->GetMinorVersion() == 0
+          && isa_->GetStepping() < 10)
+        rec_eng = -1;
+
       auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
@@ -1391,15 +1395,15 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
         ((uint8_t*)value)[index] |= 1 << subBit;
       };
 
-      if (core::hsa_internal_api_table_.finalizer_api.hsa_ext_program_finalize_fn != NULL) {
+      if (core::hsa_internal_api_table().finalizer_api.hsa_ext_program_finalize_fn != NULL) {
         setFlag(HSA_EXTENSION_FINALIZER);
       }
 
-      if (core::hsa_internal_api_table_.image_api.hsa_ext_image_create_fn != NULL) {
+      if (core::hsa_internal_api_table().image_api.hsa_ext_image_create_fn != NULL) {
         setFlag(HSA_EXTENSION_IMAGES);
       }
 
-      if (core::hsa_internal_api_table_.pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
+      if (core::hsa_internal_api_table().pcs_api.hsa_ven_amd_pcs_iterate_configuration_fn != NULL) {
         setFlag(HSA_EXTENSION_AMD_PC_SAMPLING);
       }
 

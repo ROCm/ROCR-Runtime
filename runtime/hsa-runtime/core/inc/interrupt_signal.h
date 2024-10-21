@@ -94,7 +94,7 @@ class InterruptSignal : private LocalSignal, public Signal {
   /// @brief Determines if a Signal* can be safely converted to an
   /// InterruptSignal* via static_cast.
   static __forceinline bool IsType(Signal* ptr) {
-    return ptr->IsType(&rtti_id_);
+    return ptr->IsType(&rtti_id());
   }
 
   explicit InterruptSignal(hsa_signal_value_t initial_value,
@@ -191,7 +191,7 @@ class InterruptSignal : private LocalSignal, public Signal {
   __forceinline HsaEvent* EopEvent() { return event_; }
 
  protected:
-  bool _IsA(rtti_t id) const { return id == &rtti_id_; }
+  bool _IsA(rtti_t id) const { return id == &rtti_id(); }
 
  private:
   /// @variable KFD event on which the interrupt signal is based on.
@@ -202,7 +202,10 @@ class InterruptSignal : private LocalSignal, public Signal {
   bool free_event_;
 
   /// Used to obtain a globally unique value (address) for rtti.
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
 
   /// @brief Notify driver of signal value change if necessary.
   __forceinline void SetEvent() {

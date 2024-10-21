@@ -1574,6 +1574,10 @@ typedef enum hsa_amd_memory_pool_flag_s {
    *  Allocates physically contiguous memory
    */
   HSA_AMD_MEMORY_POOL_CONTIGUOUS_FLAG = (1 << 1),
+  /**
+   *  Allocates executable memory
+   */
+  HSA_AMD_MEMORY_POOL_EXECUTABLE_FLAG = (1 << 2),
 
 } hsa_amd_memory_pool_flag_t;
 

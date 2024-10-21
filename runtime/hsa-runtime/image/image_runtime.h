@@ -163,9 +163,15 @@ class ImageRuntime {
   void Cleanup();
 
   /// Pointer to singleton object.
-  static std::atomic<ImageRuntime*> instance_;
+  static __forceinline std::atomic<ImageRuntime*>& get_instance() {
+    static std::atomic<ImageRuntime*> instance_(NULL);
+    return instance_;
+  }
 
-  static std::mutex instance_mutex_;
+  static __forceinline std::mutex& instance_mutex() {
+    static std::mutex instance_mutex_;
+    return instance_mutex_;
+  }
 
   /// @brief Contains mapping of agent and its corresponding ::ImageManager
   ///        object.

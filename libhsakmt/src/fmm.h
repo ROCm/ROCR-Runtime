@@ -80,7 +80,8 @@ HSAKMT_STATUS hsakmt_fmm_register_memory(void *address, uint64_t size_in_bytes,
 HSAKMT_STATUS hsakmt_fmm_register_graphics_handle(HSAuint64 GraphicsResourceHandle,
 					   HsaGraphicsResourceInfo *GraphicsResourceInfo,
 					   uint32_t *gpu_id_array,
-					   uint32_t gpu_id_array_size);
+					   uint32_t gpu_id_array_size,
+					   HSA_REGISTER_MEM_FLAGS RegisterFlags);
 HSAKMT_STATUS hsakmt_fmm_deregister_memory(void *address);
 HSAKMT_STATUS hsakmt_fmm_export_dma_buf_fd(void *MemoryAddress,
 				    HSAuint64 MemorySizeInBytes,

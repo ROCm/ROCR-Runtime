@@ -54,7 +54,8 @@ namespace rocr {
 namespace AMD {
 static const uint16_t kInvalidPacketHeader = HSA_PACKET_TYPE_INVALID;
 
-static std::string kBlitKernelSource(R"(
+static std::string& kBlitKernelSource() {
+  static std::string kBlitKernelSource_(R"(
   // Compatibility function for GFXIP 7.
 
   function s_load_dword_offset(byte_offset)
@@ -874,29 +875,44 @@ L_FILL_PHASE_2_DONE:
   s_endpgm
 end
 )");
+  return kBlitKernelSource_;
+}
 
 // Search kernel source for variable definition and return value.
 int GetKernelSourceParam(const char* paramName) {
   std::stringstream paramDef;
   paramDef << "var " << paramName << " = ";
 
-  std::string::size_type paramDefLoc = kBlitKernelSource.find(paramDef.str());
+  std::string::size_type paramDefLoc =
+                              kBlitKernelSource().find(paramDef.str());
   assert(paramDefLoc != std::string::npos);
   std::string::size_type paramValLoc = paramDefLoc + paramDef.str().size();
   std::string::size_type paramEndLoc =
-      kBlitKernelSource.find('\n', paramDefLoc);
+      kBlitKernelSource().find('\n', paramDefLoc);
   assert(paramDefLoc != std::string::npos);
 
-  std::string paramVal(&kBlitKernelSource[paramValLoc],
-                       &kBlitKernelSource[paramEndLoc]);
+  std::string paramVal(&kBlitKernelSource()[paramValLoc],
+                       &kBlitKernelSource()[paramEndLoc]);
   return std::stoi(paramVal);
 }
 
-static int kCopyAlignedVecWidth = GetKernelSourceParam("kCopyAlignedVecWidth");
-static int kCopyAlignedUnroll = GetKernelSourceParam("kCopyAlignedUnroll");
-static int kCopyMisalignedUnroll = GetKernelSourceParam("kCopyMisalignedUnroll");
-static int kFillVecWidth = GetKernelSourceParam("kFillVecWidth");
-static int kFillUnroll = GetKernelSourceParam("kFillUnroll");
+
+#define DEFINE_KERNEL_PARAM_FUNC(name) \
+static int& name() { \
+    static std::once_flag initFlag; \
+    static int val; \
+    std::call_once(initFlag, [&]() { \
+        val = GetKernelSourceParam(#name); \
+    }); \
+    return val; \
+}
+
+// Use the macro to define the functions
+DEFINE_KERNEL_PARAM_FUNC(kCopyAlignedVecWidth)
+DEFINE_KERNEL_PARAM_FUNC(kCopyAlignedUnroll)
+DEFINE_KERNEL_PARAM_FUNC(kCopyMisalignedUnroll)
+DEFINE_KERNEL_PARAM_FUNC(kFillVecWidth)
+DEFINE_KERNEL_PARAM_FUNC(kFillUnroll)
 
 static unsigned extractAqlBits(unsigned v, unsigned pos, unsigned width) {
   return (v >> pos) & ((1 << width) - 1);
@@ -1093,7 +1109,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
 
     // Phase 2 (unrolled dwordx4 copy) ends when last whole block fits.
     uint64_t phase2_block = num_workitems * sizeof(uint32_t) *
-                            kCopyAlignedUnroll * kCopyAlignedVecWidth;
+                            kCopyAlignedUnroll() * kCopyAlignedVecWidth();
     uint64_t phase2_size = ((size - phase1_size) / phase2_block) * phase2_block;
 
     // Phase 3 (dword copy) ends when last whole dword fits.
@@ -1125,7 +1141,7 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(
     uintptr_t src_start = uintptr_t(src);
     uintptr_t dst_start = uintptr_t(dst);
     uint64_t phase1_block =
-        num_workitems * sizeof(uint8_t) * kCopyMisalignedUnroll;
+        num_workitems * sizeof(uint8_t) * kCopyMisalignedUnroll();
     uint64_t phase1_size = (size / phase1_block) * phase1_block;
 
     args->copy_misaligned.phase1_src_start = src_start;
@@ -1164,7 +1180,7 @@ hsa_status_t BlitKernel::SubmitLinearFillCommand(void* ptr, uint32_t value,
   uint64_t fill_size = count * sizeof(uint32_t);
 
   uint64_t phase1_block =
-      num_workitems * sizeof(uint32_t) * kFillUnroll * kFillVecWidth;
+      num_workitems * sizeof(uint32_t) * kFillUnroll() * kFillVecWidth();
   uint64_t phase1_size = (fill_size / phase1_block) * phase1_block;
 
   KernelArgs* args = ObtainAsyncKernelCopyArg();

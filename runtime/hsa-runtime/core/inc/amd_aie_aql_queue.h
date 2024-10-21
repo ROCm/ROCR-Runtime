@@ -62,11 +62,11 @@ class AieAqlQueue : public core::Queue,
                     core::DoorbellSignal {
 public:
   static __forceinline bool IsType(core::Signal *signal) {
-    return signal->IsType(&rtti_id_);
+    return signal->IsType(&rtti_id());
   }
 
   static __forceinline bool IsType(core::Queue *queue) {
-    return queue->IsType(&rtti_id_);
+    return queue->IsType(&rtti_id());
   }
 
   AieAqlQueue() = delete;
@@ -123,7 +123,7 @@ public:
   uint32_t queue_size_bytes_ = std::numeric_limits<uint32_t>::max();
 
 protected:
-  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id_; }
+  bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id(); }
 
 private:
   AieAgent &agent_;
@@ -144,7 +144,11 @@ private:
 
   /// @brief Indicates if queue is active.
   std::atomic<bool> active_;
-  static int rtti_id_;
+  static __forceinline int& rtti_id() {
+    static int rtti_id_ = 0;
+    return rtti_id_;
+  }
+
 };
 
 } // namespace AMD

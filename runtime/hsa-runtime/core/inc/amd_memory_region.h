@@ -167,7 +167,7 @@ class MemoryRegion : public core::MemoryRegion {
     return static_cast<uint32_t>(mem_props_.MemoryClockMax);
   }
 
-  __forceinline size_t GetPageSize() const { return kPageSize_; }
+  __forceinline size_t GetPageSize() const { return kPageSize(); }
 
   __forceinline const HsaMemFlags &mem_flags() const { return mem_flag_; }
   __forceinline const HsaMemMapFlags &map_flags() const { return map_flag_; }
@@ -195,7 +195,10 @@ private:
   // fragments of the block routing to the same MemoryRegion.
   mutable KernelMutex access_lock_;
 
-  static size_t kPageSize_;
+  static __forceinline const size_t& kPageSize() {
+    static size_t kPageSize_ = sysconf(_SC_PAGESIZE);
+    return kPageSize_;
+  }
 
   // Determine access type allowed to requesting device
   hsa_amd_memory_pool_access_t GetAccessInfo(const core::Agent& agent,

@@ -32,7 +32,7 @@ __forceinline void notify_event_scratch_async_reclaim_end(const hsa_queue_t* que
 __forceinline void notify_event_scratch_alloc_start(const hsa_queue_t* queue,
                                                     scratch_alloc_flag flags,
                                                     uint64_t dispatch_id) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_alloc_start_fn) {
     return;
   }
@@ -49,7 +49,7 @@ __forceinline void notify_event_scratch_alloc_start(const hsa_queue_t* queue,
 __forceinline void notify_event_scratch_alloc_end(const hsa_queue_t* queue,
                                                   scratch_alloc_flag flags, uint64_t dispatch_id,
                                                   size_t size, size_t num_slots) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_alloc_end_fn) {
     return;
   }
@@ -69,7 +69,7 @@ __forceinline void notify_event_scratch_alloc_end(const hsa_queue_t* queue,
 
 __forceinline void notify_event_scratch_free_start(const hsa_queue_t* queue,
                                                    scratch_alloc_flag flags) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_free_start_fn) {
     return;
   }
@@ -86,7 +86,7 @@ __forceinline void notify_event_scratch_free_start(const hsa_queue_t* queue,
 
 __forceinline void notify_event_scratch_free_end(const hsa_queue_t* queue,
                                                  scratch_alloc_flag flags) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_free_end_fn) {
     return;
   }
@@ -103,7 +103,7 @@ __forceinline void notify_event_scratch_free_end(const hsa_queue_t* queue,
 
 __forceinline void notify_event_scratch_async_reclaim_start(const hsa_queue_t* queue,
                                                             scratch_alloc_flag flags) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_async_reclaim_start_fn) {
     return;
   }
@@ -120,7 +120,7 @@ __forceinline void notify_event_scratch_async_reclaim_start(const hsa_queue_t* q
 
 __forceinline void notify_event_scratch_async_reclaim_end(const hsa_queue_t* queue,
                                                           scratch_alloc_flag flags) {
-  const auto& tool_table = core::hsa_api_table_.tools_api;
+  const auto& tool_table = core::hsa_api_table().tools_api;
   if (!tool_table.hsa_amd_tool_scratch_event_async_reclaim_end_fn) {
     return;
   }

@@ -48,9 +48,6 @@
 namespace rocr {
 namespace core {
 
-int HostQueue::rtti_id_ = 0;
-std::atomic<uint32_t> HostQueue::queue_count_(0x80000000);
-
 HostQueue::HostQueue(hsa_region_t region, uint32_t ring_size, hsa_queue_type32_t type,
                      uint32_t features, hsa_signal_t doorbell_signal)
     : Queue(), size_(ring_size) {

@@ -40,8 +40,13 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
+#ifndef RUNTIME_HSA_RUNTIME_CORE_INC_HSA_TABLE_INTERFACE_H_
+#define RUNTIME_HSA_RUNTIME_CORE_INC_HSA_TABLE_INTERFACE_H_
+
 #include "inc/hsa_api_trace.h"
 
 void hsa_table_interface_init(const HsaApiTable* apiTable);
 
 const HsaApiTable* hsa_table_interface_get_table();
+
+#endif // RUNTIME_HSA_RUNTIME_CORE_INC_HSA_TABLE_INTERFACE_H_
