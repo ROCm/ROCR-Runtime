@@ -221,12 +221,14 @@ message( STATUS "PROJECT_SOURCE_DIR:" ${PROJECT_SOURCE_DIR} )
 #  message(STATUS "${file}")
 #endforeach()
 
-#add_definitions(-Wall -std=c++11)
-
-if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
+if ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "7.5.0")
+## c++17 become stable after GCC 7
+set ( CMAKE_CXX_FLAGS "-std=c++17 -Wl,--enable-new-dtags" )
+elseif ( "${CMAKE_C_COMPILER_VERSION}" STRGREATER "4.8.0")
 ## Add --enable-new-dtags to generate DT_RUNPATH
 set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=gnu++17 -Wl,--enable-new-dtags" )
 endif()
+
 if ( "${CMAKE_BUILD_TYPE}" STREQUAL Release )
     set ( CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O2" )
 else ()
