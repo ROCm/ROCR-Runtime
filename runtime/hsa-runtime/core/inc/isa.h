@@ -226,7 +226,7 @@ class IsaRegistry final {
 
  private:
   /// @brief IsaRegistry's map type.
-  typedef std::unordered_map<std::string, Isa> IsaMap;
+  typedef std::unordered_map<std::string, std::reference_wrapper<const Isa>> IsaMap;
 
   /// @brief  Default constructor
   IsaRegistry() = delete;
