@@ -379,6 +379,12 @@ class Signal {
   /// @brief Checks if signal is currently in use by a wait API.
   bool InWaiting() const { return waiting_ != 0; }
 
+  /// @brief Increments the waiting indicator.
+  void WaitingInc() { waiting_++; }
+
+  /// @brief Decrements the waiting indicator.
+  void WaitingDec() { waiting_--; }
+
   // Prep for copy profiling.  Store copy agent and ready API block.
   __forceinline void async_copy_agent(core::Agent* agent) {
     async_copy_agent_ = agent;

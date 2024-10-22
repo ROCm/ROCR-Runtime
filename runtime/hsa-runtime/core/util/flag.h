@@ -247,12 +247,17 @@ class Flag {
     // Will either rename to HSA_OVERRIDE_CPU_AFFINITY later or remove completely.
     var = os::GetEnvVar("HSA_OVERRIDE_CPU_AFFINITY_DEBUG");
     override_cpu_affinity_ = (var == "0") ? false : true;
+
+    var = os::GetEnvVar("HSA_WAIT_ANY_DEBUG");
+    wait_any_ = (var == "1") ? true : false;
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
     std::string var = os::GetEnvVar("HSA_CU_MASK");
     parse_masks(var, maxGpu, maxCU);
   }
+
+  bool wait_any() const { return wait_any_; }
 
   bool check_flat_scratch() const { return check_flat_scratch_; }
 
@@ -385,6 +390,7 @@ class Flag {
   bool image_print_srd_;
   bool enable_mwaitx_;
   bool enable_ipc_mode_legacy_;
+  bool wait_any_;
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;
