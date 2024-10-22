@@ -201,21 +201,21 @@ hsa_round_method_t Isa::GetRoundMethod(
 const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
   auto isareg_iter = GetSupportedIsas().find(full_name);
   return isareg_iter == GetSupportedIsas().end() ?
-                                              nullptr : &isareg_iter->second;
+                                              nullptr : &isareg_iter->second.get();
 }
 
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
   auto isareg_iter = std::find_if(GetSupportedIsas().begin(),
                                   GetSupportedIsas().end(),
                                   [&](const IsaMap::value_type& isareg) {
-                                    return isareg.second.GetVersion() == version &&
-                                        (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
-                                         isareg.second.GetSramecc() == sramecc) &&
-                                        (isareg.second.GetXnack() == IsaFeature::Unsupported ||
-                                         isareg.second.GetXnack() == xnack);
+                                    return isareg.second.get().GetVersion() == version &&
+                                        (isareg.second.get().GetSramecc() == IsaFeature::Unsupported ||
+                                         isareg.second.get().GetSramecc() == sramecc) &&
+                                        (isareg.second.get().GetXnack() == IsaFeature::Unsupported ||
+                                         isareg.second.get().GetXnack() == xnack);
                                   });
   return isareg_iter == GetSupportedIsas().end() ?
-                                              nullptr : &isareg_iter->second;
+                                              nullptr : &isareg_iter->second.get();
 }
 
 
@@ -227,7 +227,7 @@ constexpr size_t hsa_name_size = 63;
 // FIXME: Use static_assert when C++17 used.
 #define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize)                                                              \
   assert(std::char_traits<char>::length(name) <= hsa_name_size);                                                                          \
-  Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize;                                     \
+  static Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize;                                     \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.targetid_ = name;                        \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.version_ = Isa::Version(maj, min, stp);  \
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.sramecc_ = sramecc;                      \
@@ -235,7 +235,7 @@ constexpr size_t hsa_name_size = 63;
   amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.wavefront_.num_threads_ = wavefrontsize; \
   supported_isas.insert(std::make_pair(                                                                                                   \
       amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.GetIsaName(),                        \
-      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize));                                   \
+      std::ref(amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize)));                           \
 
   static IsaMap supported_isas;
 
