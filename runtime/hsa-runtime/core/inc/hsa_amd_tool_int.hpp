@@ -4,7 +4,8 @@
 #include "inc/hsa_amd_tool.h"
 #include "runtime.h"
 
-namespace rocr::AMD::tool {
+// namespace rocr::AMD::tool {  // C++17
+namespace rocr { namespace AMD { namespace tool {
 
 using scratch_alloc_flag = hsa_amd_event_scratch_alloc_flag_t;
 
@@ -135,7 +136,9 @@ __forceinline void notify_event_scratch_async_reclaim_end(const hsa_queue_t* que
       hsa_amd_tool_event_t{.scratch_async_reclaim_end = &event});
 }
 
-
-}  // namespace rocr::AMD::tool
+// }  // namespace rocr::AMD::tool
+}  // namespace rocr
+}  // namespace AMD
+}  // namespace tool
 
 #endif

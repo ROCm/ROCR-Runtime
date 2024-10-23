@@ -736,7 +736,9 @@ void VirtMemoryTestBasic::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent, hsa_age
   ASSERT_SUCCESS(hsa_amd_vmem_unmap(dev_data, sizeof(*dev_data)));
   ASSERT_SUCCESS(hsa_amd_vmem_handle_release(mem_handle));
 
-  if (dev_data) ASSERT_SUCCESS(hsa_amd_vmem_address_free(dev_data, sizeof(*dev_data)));
+  if (dev_data) {
+    ASSERT_SUCCESS(hsa_amd_vmem_address_free(dev_data, sizeof(*dev_data)));
+  }
 
   if (host_data) hsa_memory_free(host_data);
   if (kernArgsVirt) {
@@ -1070,7 +1072,7 @@ void VirtMemoryTestBasic::NonContiguousChunks(hsa_agent_t cpuAgent, hsa_agent_t 
 
   size_t& granule_size = pool_i.alloc_granule;
   size_t alloc_size = granule_size * 512;
-  const uint64_t NUM_BUFFERS = 6;
+  const unsigned NUM_BUFFERS = 6;
 
   void* addr;
   void* addr_chunks[NUM_BUFFERS];

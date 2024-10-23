@@ -144,6 +144,9 @@ void AgentPropTest::QueryAgentProp(hsa_agent_t agent,
     case HSA_DEVICE_TYPE_DSP:
       ss << "DSP) : ";
       break;
+    case HSA_DEVICE_TYPE_AIE:
+      ss << "AIE) : ";
+      break;
   }
 
   // Print the agent property

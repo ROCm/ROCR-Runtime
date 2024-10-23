@@ -189,6 +189,10 @@ void MemoryTest::MaxSingleAllocationTest(hsa_agent_t ag,
       case HSA_DEVICE_TYPE_DSP:
         std::cout << "DSP)";
         break;
+      case HSA_DEVICE_TYPE_AIE:
+        std::cout << "AIE)";
+        break;
+
     }
     std::cout << std::endl;
   }
@@ -320,6 +324,9 @@ void MemoryTest::MemAvailableTest(hsa_agent_t ag, hsa_amd_memory_pool_t pool) {
         break;
       case HSA_DEVICE_TYPE_DSP:
         std::cout << "DSP)";
+        break;
+      case HSA_DEVICE_TYPE_AIE:
+        std::cout << "AIE)";
         break;
     }
     std::cout << std::endl;

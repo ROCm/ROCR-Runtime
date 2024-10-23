@@ -397,6 +397,9 @@ static void PrintAgentNameAndType(hsa_agent_t agent) {
     case HSA_DEVICE_TYPE_DSP:
       std::cout << "DSP)";
       break;
+    case HSA_DEVICE_TYPE_AIE:
+      std::cout << "AIE)";
+      break;
     }
   std::cout << std::endl;
   return;
@@ -530,13 +533,13 @@ void MemoryAllocationTest::MemoryAllocateContiguousTest(hsa_agent_t agent,
       accessible_gpus.push_back(gpuIter);
   }
 
-  void* importedPtr;
+  void* importedPtr = nullptr;
   size_t importedSz;
 
   ASSERT_SUCCESS(hsa_amd_interop_map_buffer(accessible_gpus.size(), accessible_gpus.data(), dmabuf, 0, &importedSz,
                                                    &importedPtr, 0, NULL));
 
-  ASSERT_NE((uint64_t)importedPtr, 0);
+  ASSERT_NE(importedPtr, nullptr);
   ASSERT_EQ(importedSz, alloc_size);
 
   close(dmabuf);

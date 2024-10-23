@@ -116,7 +116,7 @@ public:
                   hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
                   hsa_signal_t *signal = NULL) override;
 
-  uint32_t queue_id_ = INVALID_QUEUEID;
+  HSA_QUEUEID queue_id_ = INVALID_QUEUEID;
   /// @brief ID of AIE device on which this queue has been mapped.
   uint32_t node_id_ = std::numeric_limits<uint32_t>::max();
   /// @brief Queue size in bytes.

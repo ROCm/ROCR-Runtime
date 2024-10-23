@@ -183,6 +183,9 @@ static void PrintAgentNameAndType(hsa_agent_t agent) {
     case HSA_DEVICE_TYPE_DSP:
       std::cout << "DSP)";
       break;
+    case HSA_DEVICE_TYPE_AIE:
+      std::cout << "AIE)";
+      break;
     }
   std::cout << std::endl;
   return;

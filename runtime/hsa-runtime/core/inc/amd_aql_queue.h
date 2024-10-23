@@ -346,8 +346,6 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
     static KernelMutex queue_lock_;
     return queue_lock_;
 }
-  // Async scratch single limit - may be modified after init
-  size_t async_scratch_single_limit_;
 
   static __forceinline int& rtti_id() {
     static int rtti_id_ = 0;
