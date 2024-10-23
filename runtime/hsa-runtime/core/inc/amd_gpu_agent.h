@@ -74,8 +74,9 @@ class GpuAgentInt : public core::Agent {
  public:
   // @brief Constructor
    GpuAgentInt(uint32_t node_id)
-       : core::Agent(core::DriverType::KFD, node_id,
-                     core::Agent::DeviceType::kAmdGpuDevice) {}
+       : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(
+                         core::DriverType::KFD),
+                     node_id, core::Agent::DeviceType::kAmdGpuDevice) {}
 
    // @brief Ensure blits are ready (performance hint).
    virtual void PreloadBlits() {}

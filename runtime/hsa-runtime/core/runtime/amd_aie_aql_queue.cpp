@@ -100,8 +100,8 @@ AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
   signal_.queue_ptr = &amd_queue_;
   active_ = true;
 
-  core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type)
-      .CreateQueue(*this);
+  auto &drv = static_cast<XdnaDriver &>(agent_.driver());
+  drv.CreateQueue(*this);
 }
 
 AieAqlQueue::~AieAqlQueue() { Inactivate(); }
@@ -111,8 +111,8 @@ hsa_status_t AieAqlQueue::Inactivate() {
   hsa_status_t status(HSA_STATUS_SUCCESS);
 
   if (active) {
-    status = core::Runtime::runtime_singleton_->AgentDriver(agent_.driver_type)
-                 .DestroyQueue(*this);
+    auto &drv = static_cast<XdnaDriver &>(agent_.driver());
+    status = drv.DestroyQueue(*this);
     hw_ctx_handle_ = std::numeric_limits<uint32_t>::max();
   }
 

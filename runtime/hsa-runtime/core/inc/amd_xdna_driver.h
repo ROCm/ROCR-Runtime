@@ -55,9 +55,8 @@ class Queue;
 
 namespace AMD {
 
-class XdnaDriver : public core::Driver {
+class XdnaDriver final : public core::Driver {
 public:
-  XdnaDriver() = delete;
   XdnaDriver(std::string devnode_name);
   ~XdnaDriver();
 

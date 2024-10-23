@@ -60,7 +60,7 @@ class Queue;
 
 namespace AMD {
 
-class KfdDriver : public core::Driver {
+class KfdDriver final : public core::Driver {
 public:
   KfdDriver(std::string devnode_name);
 

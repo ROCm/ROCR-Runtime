@@ -54,8 +54,9 @@ namespace rocr {
 namespace AMD {
 
 AieAgent::AieAgent(uint32_t node)
-    : core::Agent(core::DriverType::XDNA, node,
-                  core::Agent::DeviceType::kAmdAieDevice) {
+    : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(
+                      core::DriverType::XDNA),
+                  node, core::Agent::DeviceType::kAmdAieDevice) {
   InitRegionList();
   InitAllocators();
   GetAgentProperties();
@@ -219,8 +220,8 @@ void AieAgent::InitRegionList() {
 }
 
 void AieAgent::GetAgentProperties() {
-  core::Runtime::runtime_singleton_->AgentDriver(driver_type)
-      .GetAgentProperties(*this);
+  auto &drv = static_cast<XdnaDriver &>(driver());
+  drv.GetAgentProperties(*this);
 }
 
 void AieAgent::InitAllocators() {
