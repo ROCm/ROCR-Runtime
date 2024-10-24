@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -203,6 +203,7 @@ struct AmdExtTable {
   decltype(hsa_amd_profiling_convert_tick_to_system_domain)* hsa_amd_profiling_convert_tick_to_system_domain_fn;
   decltype(hsa_amd_signal_async_handler)* hsa_amd_signal_async_handler_fn;
   decltype(hsa_amd_async_function)* hsa_amd_async_function_fn;
+  decltype(hsa_amd_signal_wait_all) *hsa_amd_signal_wait_all_fn;
   decltype(hsa_amd_signal_wait_any)* hsa_amd_signal_wait_any_fn;
   decltype(hsa_amd_queue_cu_set_mask)* hsa_amd_queue_cu_set_mask_fn;
   decltype(hsa_amd_memory_pool_get_info)* hsa_amd_memory_pool_get_info_fn;
