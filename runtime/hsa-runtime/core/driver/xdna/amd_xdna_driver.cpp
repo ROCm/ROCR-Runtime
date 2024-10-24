@@ -117,7 +117,8 @@ hsa_status_t XdnaDriver::GetAgentProperties(core::Agent &agent) const {
     return HSA_STATUS_ERROR;
   }
 
-  aie_agent.SetNumCols(aie_metadata.cols);
+  // Right now can only target N-1 columns
+  aie_agent.SetNumCols(aie_metadata.cols - 1);
   aie_agent.SetNumCoreRows(aie_metadata.core.row_count);
 
   return HSA_STATUS_SUCCESS;
@@ -147,7 +148,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   }
 
   if (m_region.kernarg()) {
-    create_bo_args.type = AMDXDNA_BO_CMD;
+    create_bo_args.type = AMDXDNA_BO_SHMEM;
   } else {
     create_bo_args.type = AMDXDNA_BO_DEV;
   }
@@ -216,7 +217,7 @@ hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
       // TODO: Make this configurable.
       .max_opc = 0x800,
       // This field is for the number of core tiles.
-      .num_tiles = aie_agent.GetNumCores(),
+      .num_tiles = static_cast<uint32_t>(aie_agent.GetNumCores()),
       .mem_size = 0,
       .umq_doorbell = 0};
 
@@ -313,6 +314,16 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetHandleMappings(std::unordered_map<uint32_t, void*> &vmem_handle_mappings) {
+  vmem_handle_mappings = this->vmem_handle_mappings;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetFd(int &fd) {
+  fd = fd_;
   return HSA_STATUS_SUCCESS;
 }
 
