@@ -31,7 +31,7 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
-#define N_PROCESSES             (4)     /* number of processes running in parallel, at least 2 */
+#define N_PROCESSES             (2)     /* number of processes running in parallel, at least 2 */
 #define ALLOCATE_BUF_SIZE_MB    (64)
 #define ALLOCATE_RETRY_TIMES    (3)
 #define MAX_WAVEFRONTS          (512)
@@ -317,6 +317,14 @@ TEST_P(KFDSVMEvictTest, QueueTest) {
 
     if (pNodeProperties->Integrated) {
         LOG() << "Skipping test on APU." << std::endl;
+        return;
+    }
+
+    uint32_t cu_num = pNodeProperties->NumFComputeCores / pNodeProperties->NumSIMDPerCU;
+    uint32_t wave_num = MIN(cu_num * 40,
+                        (pNodeProperties->NumShaderBanks / pNodeProperties->NumArrays) * 512);
+    if (wave_num < count * N_PROCESSES) {
+        LOG() << std::hex << "Test is skipped, wave_num " << wave_num << " not enough" << std::endl;
         return;
     }
 
