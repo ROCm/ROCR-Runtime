@@ -215,17 +215,17 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
     int *gpuResult = NULL;
 
     err = hsa_amd_memory_pool_allocate(global_pool,
-                                      kMemoryAllocSize, 0,
+                                      kMemoryAllocSize*sizeof(int), 0,
                                       reinterpret_cast<void **>(&cpuResult));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     err = hsa_amd_memory_pool_allocate(global_pool,
-                                      kMemoryAllocSize, 0,
+                                      kMemoryAllocSize*sizeof(int), 0,
                                       reinterpret_cast<void **>(&sys_data));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
     err = hsa_amd_memory_pool_allocate(global_pool,
-                                      kMemoryAllocSize, 0,
+                                      kMemoryAllocSize*sizeof(int), 0,
                                       reinterpret_cast<void **>(&dup_sys_data));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
@@ -249,8 +249,8 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
 
     // Get local memory of GPU to allocate device side buffers
 
-    err = hsa_amd_memory_pool_allocate(gpu_pool, kMemoryAllocSize, 0,
-                                        reinterpret_cast<void **>(&gpuResult));
+    err = hsa_amd_memory_pool_allocate(gpu_pool,
+      kMemoryAllocSize*sizeof(int), 0, reinterpret_cast<void **>(&gpuResult));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
 
@@ -352,11 +352,11 @@ void MemoryAccessTest::GPUAccessToCPUMemoryTest(hsa_agent_t cpuAgent,
       std::cout<< "gpu has written to system memory successfully"<< std::endl;
     }
 
-    if (sys_data) { hsa_memory_free(sys_data); }
-    if (dup_sys_data) { hsa_memory_free(dup_sys_data); }
-    if (cpuResult) {hsa_memory_free(cpuResult); }
-    if (gpuResult) {hsa_memory_free(gpuResult); }
-    if (kernArgs) { hsa_memory_free(kernArgs); }
+    if (sys_data) { hsa_amd_memory_pool_free(sys_data); }
+    if (dup_sys_data) { hsa_amd_memory_pool_free(dup_sys_data); }
+    if (cpuResult) {hsa_amd_memory_pool_free(cpuResult); }
+    if (gpuResult) {hsa_amd_memory_pool_free(gpuResult); }
+    if (kernArgs) { hsa_amd_memory_pool_free(kernArgs); }
     if (signal.handle) { hsa_signal_destroy(signal); }
     if (queue) { hsa_queue_destroy(queue); }
   } else {

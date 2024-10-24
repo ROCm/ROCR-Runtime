@@ -219,7 +219,7 @@ void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
     args *kernArgs = NULL;
 
     err = hsa_amd_memory_pool_allocate(global_pool,
-                                      kMemoryAllocSize, 0,
+                                      kMemoryAllocSize*sizeof(uint32_t), 0,
                                       reinterpret_cast<void **>(&Indata));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
@@ -240,7 +240,7 @@ void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
 
     // Get local memory of GPU to allocate device side buffers
     uint32_t *OutData = NULL;
-    err = hsa_amd_memory_pool_allocate(gpu_pool, kMemoryAllocSize, 0,
+    err = hsa_amd_memory_pool_allocate(gpu_pool, kMemoryAllocSize*sizeof(uint32_t), 0,
                                         reinterpret_cast<void **>(&OutData));
     ASSERT_EQ(err, HSA_STATUS_SUCCESS);
 
@@ -332,9 +332,9 @@ void MemoryAllocationTest::GroupMemoryDynamicAllocation(hsa_agent_t cpuAgent,
       }
       ASSERT_EQ(OutData[i], Indata[i]);
     }
-    if (Indata) { hsa_memory_free(Indata); }
-    if (OutData) {hsa_memory_free(OutData); }
-    if (kernArgs) { hsa_memory_free(kernArgs); }
+    if (Indata) { hsa_amd_memory_pool_free(Indata); }
+    if (OutData) { hsa_amd_memory_pool_free(OutData); }
+    if (kernArgs) { hsa_amd_memory_pool_free(kernArgs); }
     if (queue) { hsa_queue_destroy(queue); }
   } else {
     if (verbosity() > 0) {

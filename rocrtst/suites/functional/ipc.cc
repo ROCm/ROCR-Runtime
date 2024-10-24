@@ -515,7 +515,7 @@ void IPCTest::PrintVerboseMesg(void) {
   FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err, "hsa_agent_get_info() failed\n");
 
   // Collect BDF information of GPU's
-  uint16_t loc1, loc2;
+  uint32_t loc1, loc2;
   err = hsa_agent_get_info(*cpu_device(), (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc1);
   FORK_ASSERT_EQ(HSA_STATUS_SUCCESS, err);
   err = hsa_agent_get_info(*gpu_device1(), (hsa_agent_info_t)HSA_AMD_AGENT_INFO_BDFID, &loc2);
