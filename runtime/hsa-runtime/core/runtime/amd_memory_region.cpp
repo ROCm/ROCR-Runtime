@@ -177,8 +177,8 @@ hsa_status_t MemoryRegion::AllocateImpl(size_t& size, AllocateFlags alloc_flags,
 
   size = AlignUp(size, kPageSize());
 
-  return core::Runtime::runtime_singleton_->AgentDriver(owner()->driver_type)
-      .AllocateMemory(*this, alloc_flags, address, size, agent_node_id);
+  return owner()->driver().AllocateMemory(*this, alloc_flags, address, size,
+                                          agent_node_id);
 }
 
 hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
@@ -189,8 +189,7 @@ hsa_status_t MemoryRegion::Free(void* address, size_t size) const {
 hsa_status_t MemoryRegion::FreeImpl(void* address, size_t size) const {
   if (fragment_allocator_.free(address)) return HSA_STATUS_SUCCESS;
 
-  return core::Runtime::runtime_singleton_->AgentDriver(owner()->driver_type)
-      .FreeMemory(address, size);
+  return owner()->driver().FreeMemory(address, size);
 }
 
 // TODO:  Look into a better name and/or making this process transparent to exporting.

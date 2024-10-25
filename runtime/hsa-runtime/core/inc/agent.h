@@ -2,24 +2,24 @@
 //
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
-// 
+//
 // Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
-// 
+//
 // Developed by:
-// 
+//
 //                 AMD Research and AMD HSA Software Development
-// 
+//
 //                 Advanced Micro Devices, Inc.
-// 
+//
 //                 www.amd.com
-// 
+//
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to
 // deal with the Software without restriction, including without limitation
 // the rights to use, copy, modify, merge, publish, distribute, sublicense,
 // and/or sell copies of the Software, and to permit persons to whom the
 // Software is furnished to do so, subject to the following conditions:
-// 
+//
 //  - Redistributions of source code must retain the above copyright notice,
 //    this list of conditions and the following disclaimers.
 //  - Redistributions in binary form must reproduce the above copyright
@@ -29,7 +29,7 @@
 //    nor the names of its contributors may be used to endorse or promote
 //    products derived from this Software without specific prior written
 //    permission.
-// 
+//
 // THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 // IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 // FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
@@ -118,18 +118,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Agent class contructor.
   //
   // @param [in] type CPU or GPU or other.
-  explicit Agent(DriverType drv_type, uint32_t node_id, DeviceType type)
-      : driver_type(drv_type), node_id_(node_id), device_type_(uint32_t(type)),
+  explicit Agent(Driver &driver, uint32_t node_id, DeviceType type)
+      : node_id_(node_id), device_type_(uint32_t(type)), driver_(&driver),
         profiling_enabled_(false), enabled_(false) {
-    public_handle_ = Convert(this);
-  }
-
-  // @brief Agent class contructor.
-  //
-  // @param [in] type CPU or GPU or other.
-  explicit Agent(DriverType drv_type, uint32_t node_id, uint32_t type)
-      : driver_type(drv_type), node_id_(node_id), device_type_(type),
-        profiling_enabled_(false) {
     public_handle_ = Convert(this);
   }
 
@@ -309,6 +300,9 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   // @brief Returns node id associated with this agent.
   __forceinline uint32_t node_id() const { return node_id_; }
 
+  // @brief Returns the driver associated with this agent.
+  __forceinline Driver &driver() { return *driver_; }
+
   // @brief Getter for profiling_enabled_.
   __forceinline bool profiling_enabled() const { return profiling_enabled_; }
 
@@ -329,8 +323,6 @@ class Agent : public Checked<0xF6BC25EB17E6F917> {
   virtual void Trim() {
     for (auto region : regions()) region->Trim();
   }
-
-  const DriverType driver_type;
 
 protected:
   // Intention here is to have a polymorphic update procedure for public_handle_
@@ -365,6 +357,8 @@ protected:
   const uint32_t node_id_;
 
   const uint32_t device_type_;
+
+  Driver *driver_;
 
   bool profiling_enabled_;
 
