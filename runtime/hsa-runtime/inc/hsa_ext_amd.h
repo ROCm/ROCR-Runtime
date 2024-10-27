@@ -70,22 +70,18 @@ extern "C" {
  */
 
 /**
- * @brief Macro to set a flag within uint8_t[8] types
- * types
+ * @brief Macro to set a flag within uint8_t[8] types.
  */
-static __inline__ __attribute__((always_inline)) void hsa_flag_set64(uint8_t* value,
-                                                                       uint32_t bit) {
+static inline void hsa_flag_set64(uint8_t* value, uint32_t bit) {
   unsigned int index = bit / 8;
   unsigned int subBit = bit % 8;
   (((uint8_t*)value)[index]) |= (1 << subBit);
 }
 
 /**
- * @brief Macro to use to determine that a flag is set when querying flags within uint8_t[8]
- * types
+ * @brief Macro to determine whether a flag is set within uint8_t[8] types.
  */
-static __inline__ __attribute__((always_inline)) bool hsa_flag_isset64(uint8_t* value,
-                                                                       uint32_t bit) {
+static inline bool hsa_flag_isset64(uint8_t* value, uint32_t bit) {
   unsigned int index = bit / 8;
   unsigned int subBit = bit % 8;
   return ((uint8_t*)value)[index] & (1 << subBit);
@@ -130,7 +126,7 @@ typedef struct hsa_amd_packet_header_s {
   uint16_t header;
 
   /**
-   *Format of the vendor specific packet.
+   * Format of the vendor specific packet.
    */
   hsa_amd_packet_type8_t AmdFormat;
 
