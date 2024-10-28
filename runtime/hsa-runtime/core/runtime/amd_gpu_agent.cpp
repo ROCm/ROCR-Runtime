@@ -859,6 +859,11 @@ void GpuAgent::InitDma() {
           && isa_->GetStepping() < 10)
         rec_eng = -1;
 
+      // devices without dedicated xGMI SDMA engines should not target specific
+      // SDMA engines for queue creation as resources are limited
+      if (!properties_.NumSdmaXgmiEngines)
+        rec_eng = -1;
+
       auto ret = CreateBlitSdma(use_xgmi, rec_eng);
       if (ret != nullptr) return ret;
     }
