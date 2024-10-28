@@ -1,6 +1,6 @@
 ################################################################################
 ##
-## Copyright (c) 2016 Advanced Micro Devices, Inc. All rights reserved.
+## Copyright (c) 2016-2024 Advanced Micro Devices, Inc. All rights reserved.
 ##
 ## MIT LICENSE:
 ## Permission is hereby granted, free of charge, to any person obtaining a copy of
@@ -198,10 +198,6 @@ install ( TARGETS ${HSAKMT_TARGET} EXPORT ${HSAKMT_TARGET}Targets
 install ( TARGETS ${HSAKMT_TARGET}
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT binary )
-
-# Install public headers
-install ( DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/${HSAKMT_TARGET} DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-  COMPONENT dev PATTERN "linux" EXCLUDE )
 
 # Option to build header path migration helpers.
 option(INCLUDE_PATH_COMPATIBILITY "Generate backward compatible headers and include paths.  Use of these headers will warn when included." OFF)
