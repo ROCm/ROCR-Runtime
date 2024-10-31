@@ -227,21 +227,21 @@ hsa_round_method_t Isa::GetRoundMethod(
 const Isa *IsaRegistry::GetIsa(const std::string &full_name) {
   auto isareg_iter = GetSupportedIsas().find(full_name);
   return isareg_iter == GetSupportedIsas().end() ?
-                                              nullptr : &isareg_iter->second.get();
+                                              nullptr : &isareg_iter->second;
 }
 
 const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, IsaFeature xnack) {
   auto isareg_iter = std::find_if(GetSupportedIsas().begin(),
                                   GetSupportedIsas().end(),
                                   [&](const IsaMap::value_type& isareg) {
-                                    return isareg.second.get().GetVersion() == version &&
-                                        (isareg.second.get().GetSramecc() == IsaFeature::Unsupported ||
-                                         isareg.second.get().GetSramecc() == sramecc) &&
-                                        (isareg.second.get().GetXnack() == IsaFeature::Unsupported ||
-                                         isareg.second.get().GetXnack() == xnack);
+                                    return isareg.second.GetVersion() == version &&
+                                        (isareg.second.GetSramecc() == IsaFeature::Unsupported ||
+                                         isareg.second.GetSramecc() == sramecc) &&
+                                        (isareg.second.GetXnack() == IsaFeature::Unsupported ||
+                                         isareg.second.GetXnack() == xnack);
                                   });
   return isareg_iter == GetSupportedIsas().end() ?
-                                              nullptr : &isareg_iter->second.get();
+                                              nullptr : &isareg_iter->second;
 }
 
 
@@ -277,11 +277,11 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
     return supported_isas;
   }
 
-  auto parse_out_minor_ver = [&](const std::string& genericname) -> int32_t {
-      size_t dot_pos = genericname.find('.');
+  auto parse_out_minor_ver = [&](const std::string& generic_name) -> int32_t {
+      size_t dot_pos = generic_name.find('.');
       int32_t min;
       if (dot_pos != std::string::npos) {
-          std::string minor_version_str = genericname.substr(dot_pos + 1);
+          std::string minor_version_str = generic_name.substr(dot_pos + 1);
           size_t dash_pos = minor_version_str.find('-');
           if (dash_pos != std::string::npos) {
               minor_version_str = minor_version_str.substr(0, dash_pos);
@@ -294,33 +294,27 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   };
 
 // FIXME: Use static_assert when C++17 used.
-#define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize, gen_name)                          \
- {                                                                                                                 \
-  assert(std::char_traits<char>::length(name) <= hsa_name_size);                                                   \
-  static Isa isa_val;                              \
-  isa_val.targetid_ = name;                        \
-  isa_val.version_ = Isa::Version(maj, min, stp);  \
-  isa_val.sramecc_ = sramecc;                      \
-  isa_val.xnack_ = xnack;                          \
-  isa_val.wavefront_.num_threads_ = wavefrontsize; \
-  std::string genericname(gen_name);               \
-  if (genericname.size() != 0) {                   \
-    isa_val.generic_ = prepend_isa_prefix(genericname); \
-    if (supported_isas.find(genericname) == supported_isas.end()) { \
-      Isa isa_generic_val;                         \
-      isa_generic_val.targetid_ = genericname;     \
-      isa_generic_val.version_ = Isa::Version(maj, parse_out_minor_ver(genericname), 0xFF); \
-      isa_generic_val.sramecc_ = sramecc;          \
-      isa_generic_val.xnack_ = xnack;              \
-      isa_generic_val.wavefront_.num_threads_ = wavefrontsize; \
-      supported_isas.insert(std::make_pair(        \
-          isa_generic_val.GetIsaName(),            \
-          isa_generic_val));                       \
-    }                                              \
-  }                                                \
-  supported_isas.insert(std::make_pair(            \
-      isa_val.GetIsaName(),                        \
-      std::ref(isa_val)));                                   \
+#define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize, gen_name) \
+ {                                                                                     \
+  assert(std::char_traits<char>::length(name) <= hsa_name_size);                       \
+  std::string isa_name = prepend_isa_prefix(name);                                     \
+  supported_isas[isa_name].targetid_ = name;                                           \
+  supported_isas[isa_name].version_ = Isa::Version(maj, min, stp);                     \
+  supported_isas[isa_name].sramecc_ = sramecc;                                         \
+  supported_isas[isa_name].xnack_ = xnack;                                             \
+  supported_isas[isa_name].wavefront_.num_threads_ = wavefrontsize;                    \
+  std::string genericname(gen_name);                                                   \
+  if (genericname.size() != 0) {                                                       \
+    std::string gen_isa_name = prepend_isa_prefix(genericname);                        \
+    supported_isas[isa_name].generic_ = gen_isa_name;                                  \
+    if (supported_isas.find(gen_isa_name) == supported_isas.end()) {                   \
+      supported_isas[gen_isa_name].targetid_ = genericname;                            \
+      supported_isas[gen_isa_name].version_ = Isa::Version(maj, parse_out_minor_ver(genericname), 0xFF); \
+      supported_isas[gen_isa_name].sramecc_ = sramecc;                                \
+      supported_isas[gen_isa_name].xnack_ = xnack;                                    \
+      supported_isas[gen_isa_name].wavefront_.num_threads_ = wavefrontsize;           \
+    }                                                                                \
+  }                                                                                  \
  }
 
   const IsaFeature unsupported = IsaFeature::Unsupported;

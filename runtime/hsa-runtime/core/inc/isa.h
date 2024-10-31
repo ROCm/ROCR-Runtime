@@ -189,12 +189,12 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
       hsa_fp_type_t fp_type,
       hsa_flush_mode_t flush_mode) const;
 
- private:
   /// @brief Default constructor.
   Isa()
       : version_(Version(-1, -1, -1)),
         sramecc_(IsaFeature::Unsupported),
         xnack_(IsaFeature::Unsupported) {}
+  private:
 
   // @brief Isa's target ID name.
   std::string targetid_;
@@ -233,7 +233,7 @@ class IsaRegistry final {
                                                 GetSupportedGenericVersions();
  private:
   /// @brief IsaRegistry's map type.
-  typedef std::unordered_map<std::string, std::reference_wrapper<const Isa>> IsaMap;
+  typedef std::unordered_map<std::string, Isa> IsaMap;
 
   /// @brief  Default constructor
   IsaRegistry() = delete;
