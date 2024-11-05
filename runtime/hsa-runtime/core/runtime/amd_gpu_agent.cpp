@@ -1014,6 +1014,9 @@ static bool GangCopyCompleteHandler(hsa_signal_value_t, void *arg ) {
   core::Signal *gang_signal = reinterpret_cast<core::Signal*>(arg);
   if (gang_signal->IsValid()) {
     gang_signal->DestroySignal();
+    if (!gang_signal->IsValid()) {
+      return false;
+    }
   }
   return true;
 }

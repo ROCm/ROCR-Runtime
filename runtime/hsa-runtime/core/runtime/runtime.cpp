@@ -1684,8 +1684,9 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
             if (i == 0) {
               hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
             } else {
-              processEvent(i, value);
-              i--;
+              if (!processEvent(i, value)) {
+                i--;
+              }
             }
             if (!wait_any) {
               finish = true;
