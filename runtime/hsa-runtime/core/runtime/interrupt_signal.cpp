@@ -152,6 +152,9 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
 
   uint64_t event_age = 1;
 
+  const uint32_t &signal_abort_timeout =
+    core::Runtime::runtime_singleton_->flag().signal_abort_timeout();
+
   if (!core::Runtime::runtime_singleton_->KfdVersion().supports_event_age) {
       event_age = 0;
       // Allow only the first waiter to sleep. Without event age tracking,
@@ -212,6 +215,15 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
       return hsa_signal_value_t(value);
     }
 
+    if (signal_abort_timeout) {
+      const timer::fast_clock::duration abort_timeout =
+          std::chrono::seconds(signal_abort_timeout);
+
+      if(time - start_time > abort_timeout)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_FATAL,
+                                 "Signal wait abort timeout.\n");
+    }
+
     if (wait_hint == HSA_WAIT_STATE_ACTIVE) {
 #if defined(__i386__) || defined(__x86_64__)
       if (g_use_mwaitx) {
@@ -235,9 +247,13 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
 
     uint32_t wait_ms;
     auto time_remaining = fast_timeout - (time - start_time);
-    uint64_t ct=timer::duration_cast<std::chrono::milliseconds>(
+    uint64_t ct = timer::duration_cast<std::chrono::milliseconds>(
       time_remaining).count();
-    wait_ms = (ct>0xFFFFFFFEu) ? 0xFFFFFFFEu : ct;
+
+    wait_ms = static_cast<uint32_t>(std::min(ct, 0xFFFFFFFEUL));
+    if (signal_abort_timeout)
+      wait_ms = std::min(wait_ms, signal_abort_timeout * 1000);
+
     hsaKmtWaitOnEvent_Ext(event_, wait_ms, &event_age);
   }
 }

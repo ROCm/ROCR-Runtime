@@ -253,6 +253,10 @@ class Flag {
 
     var = os::GetEnvVar("HSA_WAIT_ANY_DEBUG");
     wait_any_ = (var == "1") ? true : false;
+
+    /* hsa_signal_wait_relaxed abort timeout  */
+    var = os::GetEnvVar("HSA_SIGNAL_WAIT_ABORT_TIMEOUT");
+    signal_abort_timeout_ = var.empty() ? 0 : atoi(var.c_str());
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -366,6 +370,9 @@ class Flag {
   size_t pc_sampling_max_device_buffer_size() const { return pc_sampling_max_device_buffer_size_; }
 
   bool dev_mem_queue() const { return dev_mem_queue_; }
+
+  uint32_t signal_abort_timeout() const { return signal_abort_timeout_; }
+
  private:
   bool check_flat_scratch_;
   bool enable_vm_fault_message_;
@@ -396,6 +403,7 @@ class Flag {
   bool enable_ipc_mode_legacy_;
   bool wait_any_;
   bool dev_mem_queue_;
+  uint32_t signal_abort_timeout_;
 
   SDMA_OVERRIDE enable_sdma_;
   SDMA_OVERRIDE enable_peer_sdma_;
