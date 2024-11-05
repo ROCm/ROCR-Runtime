@@ -86,6 +86,9 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
   bool condition_met = false;
   int64_t value;
 
+  const uint32_t &signal_abort_timeout =
+    core::Runtime::runtime_singleton_->flag().signal_abort_timeout();
+
   debug_warning_n((!g_use_interrupt_wait || isIPC()) &&
                   "Use of non-host signal in host signal wait API.", 10);
 
@@ -137,6 +140,15 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
     if (time - start_time > fast_timeout) {
       value = atomic::Load(&signal_.value, std::memory_order_relaxed);
       return hsa_signal_value_t(value);
+    }
+
+    if (signal_abort_timeout) {
+      const timer::fast_clock::duration abort_timeout =
+          std::chrono::seconds(signal_abort_timeout);
+
+      if(time - start_time > abort_timeout)
+        throw AMD::hsa_exception(HSA_STATUS_ERROR_FATAL,
+                                 "Signal wait abort timeout.\n");
     }
 
     if (time - start_time > kMaxElapsed) {
