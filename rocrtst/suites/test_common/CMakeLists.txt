@@ -75,7 +75,12 @@ set ( CPACK_DEBIAN_PACKAGE_RELEASE "local" )
 if( DEFINED ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
   set ( CPACK_DEBIAN_PACKAGE_RELEASE $ENV{CPACK_DEBIAN_PACKAGE_RELEASE} )
 endif()
-set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core,hsa-rocr")
+
+if(BUILD_SHARED_LIBS)
+  set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core,hsa-rocr")
+else()
+  set (CPACK_DEBIAN_PACKAGE_DEPENDS "rocm-core,hsa-rocr-static-dev")
+endif()
 
 ## RPM package variables
 set ( CPACK_RPM_PACKAGE_RELEASE "local" )
@@ -98,7 +103,11 @@ if (DEFINED ENV{DISTRO_NAME} AND
 endif()
 
 
-set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core,hsa-rocr")
+if(BUILD_SHARED_LIBS)
+  set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core,hsa-rocr")
+else()
+  set (CPACK_RPM_PACKAGE_REQUIRES "rocm-core,hsa-rocr-static-devel")
+endif()
 
 set(DEFAULT_TARGETS "gfx700;gfx701;gfx702;gfx801;gfx802;gfx803;gfx805;gfx810"
                     "gfx900;gfx902;gfx904;gfx906;gfx908;gfx909;gfx90a;gfx90c;gfx940;gfx941;gfx942"
