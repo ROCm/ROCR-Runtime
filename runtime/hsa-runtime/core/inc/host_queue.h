@@ -189,8 +189,10 @@ class HostQueue : public Queue {
   // Host queue id counter, starting from 0x80000000 to avoid overlaping
   // with aql queue id.
   static __forceinline std::atomic<uint32_t>& queue_count() {
-    static std::atomic<uint32_t> queue_count_;
-    return queue_count_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+    static std::atomic<uint32_t>* queue_count_ = new std::atomic<uint32_t>();
+    return *queue_count_;
   }
 
   DISALLOW_COPY_AND_ASSIGN(HostQueue);

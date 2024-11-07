@@ -337,14 +337,18 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   }
   // Queue count - used to ref count queue_event_
   static __forceinline std::atomic<uint32_t>& queue_count() {
-    static std::atomic<uint32_t> queue_count_(0);
-    return queue_count_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+    static std::atomic<uint32_t>* queue_count_ = new std::atomic<uint32_t>(0);
+    return *queue_count_;
   }
 
   // Mutex for queue_event_ manipulation
-  static __forceinline KernelMutex& queue_lock() {
-    static KernelMutex queue_lock_;
-    return queue_lock_;
+KernelMutex& queue_lock() {
+  // This allocation is meant to last until the last thread has exited.
+  // It is intentionally not freed.
+  static KernelMutex* queue_lock_ = new KernelMutex();
+  return *queue_lock_;
 }
 
   static __forceinline int& rtti_id() {

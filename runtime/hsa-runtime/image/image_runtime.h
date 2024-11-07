@@ -164,13 +164,17 @@ class ImageRuntime {
 
   /// Pointer to singleton object.
   static __forceinline std::atomic<ImageRuntime*>& get_instance() {
-    static std::atomic<ImageRuntime*> instance_(NULL);
-    return instance_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+    static std::atomic<ImageRuntime*>* instance_ = new std::atomic<ImageRuntime*>();
+    return *instance_;
   }
 
   static __forceinline std::mutex& instance_mutex() {
-    static std::mutex instance_mutex_;
-    return instance_mutex_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+    static std::mutex* instance_mutex_ = new std::mutex();
+    return *instance_mutex_;
   }
 
   /// @brief Contains mapping of agent and its corresponding ::ImageManager

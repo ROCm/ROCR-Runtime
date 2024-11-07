@@ -153,12 +153,16 @@ class PcsRuntime {
 
   /// Pointer to singleton object.
   static __forceinline std::atomic<PcsRuntime*>& get_instance() {
-    static std::atomic<PcsRuntime*> instance_(nullptr);
-    return instance_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+    static std::atomic<PcsRuntime*>* instance_ = new std::atomic<PcsRuntime*>();
+    return *instance_;
   }
   static __forceinline std::mutex& instance_mutex() {
-   static std::mutex instance_mutex_;
-   return instance_mutex_;
+    // This allocation is meant to last until the last thread has exited.
+    // It is intentionally not freed.
+   static std::mutex* instance_mutex_ = new std::mutex();
+   return *instance_mutex_;
 }
   // Map of pc sampling sessions indexed by hsa_ven_amd_pcs_t handle
   std::map<uint64_t, PcSamplingSession> pc_sampling_;
