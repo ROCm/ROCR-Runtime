@@ -49,7 +49,6 @@
 #include <vector>
 
 #include "core/inc/checked.h"
-#include "core/inc/driver.h"
 #include "core/inc/isa.h"
 #include "core/inc/memory_region.h"
 #include "core/inc/queue.h"
@@ -64,6 +63,7 @@ class MemoryRegion;
 }
 
 namespace core {
+class Driver;
 class Signal;
 
 typedef void (*HsaEventCallback)(hsa_status_t status, hsa_queue_t* source,
