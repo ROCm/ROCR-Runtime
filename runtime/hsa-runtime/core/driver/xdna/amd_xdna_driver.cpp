@@ -42,6 +42,7 @@
 
 #include "core/inc/amd_xdna_driver.h"
 
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
@@ -96,6 +97,26 @@ hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
     return QueryDriverVersion();
   default:
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Open() {
+  fd_ = open(devnode_name_.c_str(), O_RDWR | O_CLOEXEC);
+  if (fd_ < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Close() {
+  int ret(0);
+  if (fd_ > 0) {
+    ret = close(fd_);
+    fd_ = -1;
+  }
+  if (ret) {
+    return HSA_STATUS_ERROR;
   }
   return HSA_STATUS_SUCCESS;
 }

@@ -42,9 +42,6 @@
 
 #include "core/inc/driver.h"
 
-#include <fcntl.h>
-#include <unistd.h>
-
 #include "inc/hsa.h"
 
 namespace rocr {
@@ -53,28 +50,6 @@ namespace core {
 Driver::Driver(DriverType kernel_driver_type, std::string devnode_name)
     : kernel_driver_type_(std::move(kernel_driver_type)),
       devnode_name_(std::move(devnode_name)) {}
-
-hsa_status_t Driver::Open()
-{
-  fd_  = open(devnode_name_.c_str(), O_RDWR | O_CLOEXEC);
-  if (fd_ < 0) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-  return HSA_STATUS_SUCCESS;
-}
-
-hsa_status_t Driver::Close()
-{
-  int ret(0);
-  if (fd_ > 0) {
-    ret = close(fd_);
-    fd_ = -1;
-  }
-  if (ret) {
-    return HSA_STATUS_ERROR;
-  }
-  return HSA_STATUS_SUCCESS;
-}
 
 } // namespace core
 } // namespace rocr

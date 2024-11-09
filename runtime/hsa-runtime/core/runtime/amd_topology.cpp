@@ -458,9 +458,6 @@ bool Unload() {
 
   hsaKmtReleaseSystemProperties();
 
-  // Close connection to kernel driver.
-  hsaKmtCloseKFD();
-
   return true;
 }
 }  // namespace amd

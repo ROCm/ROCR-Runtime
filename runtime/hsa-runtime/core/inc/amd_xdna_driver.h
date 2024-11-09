@@ -142,6 +142,8 @@ public:
   std::unordered_map<uint32_t, void*>& GetHandleMappings();
   std::unordered_map<void*, uint32_t>& GetAddrMappings();
 
+  hsa_status_t Open() override;
+  hsa_status_t Close() override;
   hsa_status_t GetAgentProperties(core::Agent &agent) const override;
   hsa_status_t
   GetMemoryProperties(uint32_t node_id,

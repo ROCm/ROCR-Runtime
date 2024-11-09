@@ -64,8 +64,9 @@ KfdDriver::KfdDriver(std::string devnode_name)
 hsa_status_t KfdDriver::Init() { return HSA_STATUS_SUCCESS; }
 
 hsa_status_t KfdDriver::DiscoverDriver() {
-  if (hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS) {
-    std::unique_ptr<Driver> kfd_drv(new KfdDriver("/dev/kfd"));
+  std::unique_ptr<Driver> kfd_drv(new KfdDriver("/dev/kfd"));
+
+  if (kfd_drv->Open() == HSA_STATUS_SUCCESS) {
     core::Runtime::runtime_singleton_->RegisterDriver(kfd_drv);
     return HSA_STATUS_SUCCESS;
   }
@@ -74,6 +75,16 @@ hsa_status_t KfdDriver::DiscoverDriver() {
 
 hsa_status_t KfdDriver::QueryKernelModeDriver(core::DriverQuery query) {
   return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::Open() {
+  return hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS
+                                                  : HSA_STATUS_ERROR;
+}
+
+hsa_status_t KfdDriver::Close() {
+  return hsaKmtCloseKFD() == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS
+                                                   : HSA_STATUS_ERROR;
 }
 
 hsa_status_t KfdDriver::GetAgentProperties(core::Agent &agent) const {
