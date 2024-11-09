@@ -68,6 +68,8 @@ public:
 
   hsa_status_t Init() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
+  hsa_status_t Open() override;
+  hsa_status_t Close() override;
   hsa_status_t GetAgentProperties(core::Agent &agent) const override;
   hsa_status_t
   GetMemoryProperties(uint32_t node_id,

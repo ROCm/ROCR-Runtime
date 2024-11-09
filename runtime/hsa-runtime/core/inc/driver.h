@@ -84,11 +84,11 @@ class Driver {
 
   /// @brief Open a connection to the driver using name_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
-  hsa_status_t Open();
+  virtual hsa_status_t Open() = 0;
 
   /// @brief Close a connection to the open driver using fd_.
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
-  hsa_status_t Close();
+  virtual hsa_status_t Close() = 0;
 
   /// @brief Get driver version information.
   /// @retval DriverVersionInfo containing the driver's version information.
