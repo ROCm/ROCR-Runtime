@@ -369,6 +369,14 @@ bool WaitSemaphore(Semaphore sem) {
 }
 
 void PostSemaphore(Semaphore sem) {
+  int waitval = 1;
+  if (sem_getvalue(*(sem_t**)&sem, &waitval))
+    assert(false && "Failed to get semaphore waiters");
+
+  /* sem_getvalue return <= 0 when there are threads blocked on sem_wait */
+  if (waitval > 0)
+    return;
+
   if (sem_post(*(sem_t**)&sem))
     assert(false && "Failed to post semaphore");
 }
