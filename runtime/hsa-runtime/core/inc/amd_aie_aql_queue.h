@@ -53,6 +53,8 @@
 namespace rocr {
 namespace AMD {
 
+class XdnaDriver;
+
 /// @brief Encapsulates HW AIE AQL Command Processor functionality. It
 /// provides the interface for things such as doorbells, queue read and
 /// write pointers, and a buffer.

@@ -47,17 +47,13 @@
 #include <string>
 
 #include "core/inc/memory_region.h"
+#include "hsakmt/hsakmttypes.h"
 #include "inc/hsa.h"
 
 namespace rocr {
 namespace core {
 
 class Queue;
-
-struct DriverVersionInfo {
-  uint32_t major;
-  uint32_t minor;
-};
 
 enum class DriverQuery { GET_DRIVER_VERSION };
 
@@ -77,6 +73,14 @@ class Driver {
   /// @brief Initialize the driver's state after opening.
   virtual hsa_status_t Init() = 0;
 
+  /// @brief Release the driver's resources and close the kernel-mode
+  /// driver.
+  virtual hsa_status_t ShutDown() = 0;
+
+  /// @brief Get driver version information.
+  /// @retval DriverVersionInfo containing the driver's version information.
+  const HsaVersionInfo& Version() const { return version_; }
+
   /// @brief Query the kernel-model driver.
   /// @retval HSA_STATUS_SUCCESS if the kernel-model driver query was
   /// successful.
@@ -90,9 +94,19 @@ class Driver {
   /// @retval HSA_STATUS_SUCCESS if the driver was opened successfully.
   virtual hsa_status_t Close() = 0;
 
-  /// @brief Get driver version information.
-  /// @retval DriverVersionInfo containing the driver's version information.
-  const DriverVersionInfo &Version() const { return version_; }
+  /// @brief Get the system properties for nodes managed by this driver.
+  virtual hsa_status_t GetSystemProperties(HsaSystemProperties& sys_props) const = 0;
+
+  /// @brief Get the properties for a specific node managed by this driver.
+  virtual hsa_status_t GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const = 0;
+
+  /// @brief Get the edge (IO link) properties of a specific node (that is
+  /// managed by this driver) in the topology graph.
+  /// @param[out] io_link_props IO link properties of the node specified by \p
+  /// node_id.
+  /// @param[in] node_id ID of the node whose link properties are being queried.
+  virtual hsa_status_t GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                         uint32_t node_id) const = 0;
 
   /// @brief Get the properties of a specific agent and initialize the agent
   /// object.
@@ -131,11 +145,11 @@ class Driver {
   const DriverType kernel_driver_type_;
 
 protected:
-  DriverVersionInfo version_{std::numeric_limits<uint32_t>::max(),
-                             std::numeric_limits<uint32_t>::max()};
+ HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
+                         std::numeric_limits<uint32_t>::max()};
 
-  const std::string devnode_name_;
-  int fd_ = -1;
+ const std::string devnode_name_;
+ int fd_ = -1;
 };
 
 } // namespace core

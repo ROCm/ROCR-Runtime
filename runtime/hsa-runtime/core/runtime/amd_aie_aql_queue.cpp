@@ -55,6 +55,7 @@
 
 #include <cstring>
 
+#include "core/inc/amd_xdna_driver.h"
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
