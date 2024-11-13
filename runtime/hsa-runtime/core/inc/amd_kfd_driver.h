@@ -43,6 +43,7 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_KFD_DRIVER_H_
 #define HSA_RUNTIME_CORE_INC_AMD_KFD_DRIVER_H_
 
+#include <memory>
 #include <string>
 
 #include "hsakmt/hsakmt.h"
@@ -64,12 +65,17 @@ class KfdDriver final : public core::Driver {
 public:
   KfdDriver(std::string devnode_name);
 
-  static hsa_status_t DiscoverDriver();
+  static hsa_status_t DiscoverDriver(std::unique_ptr<core::Driver>& driver);
 
   hsa_status_t Init() override;
+  hsa_status_t ShutDown() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
   hsa_status_t Open() override;
   hsa_status_t Close() override;
+  hsa_status_t GetSystemProperties(HsaSystemProperties& sys_props) const override;
+  hsa_status_t GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const override;
+  hsa_status_t GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                 uint32_t node_id) const override;
   hsa_status_t GetAgentProperties(core::Agent &agent) const override;
   hsa_status_t
   GetMemoryProperties(uint32_t node_id,
@@ -98,6 +104,17 @@ private:
 
   /// @brief Unpin memory.
   static void MakeKfdMemoryUnresident(const void *mem);
+
+  /// @brief Query for user preference and use that to determine Xnack mode
+  /// of ROCm system. Return true if Xnack mode is ON or false if OFF. Xnack
+  /// mode of a system is orthogonal to devices that do not support Xnack mode.
+  /// It is legal for a system with Xnack ON to have devices that do not support
+  /// Xnack functionality.
+  static bool BindXnackMode();
+
+  // Minimum acceptable KFD version numbers.
+  static const uint32_t kfd_version_major_min = 0;
+  static const uint32_t kfd_version_minor_min = 99;
 };
 
 } // namespace AMD

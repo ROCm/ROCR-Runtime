@@ -255,7 +255,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
 }
 
 // Register driver.
-void Runtime::RegisterDriver(std::unique_ptr<Driver> &driver) {
+void Runtime::RegisterDriver(std::unique_ptr<Driver> driver) {
   agent_drivers_.push_back(std::move(driver));
 }
 
@@ -283,10 +283,6 @@ void Runtime::DestroyAgents() {
 }
 
 void Runtime::DestroyDrivers() {
-  for (auto &d : agent_drivers_) {
-    d->Close();
-  }
-
   agent_drivers_.clear();
 }
 
@@ -2161,9 +2157,9 @@ void Runtime::Unload() {
 
   CloseTools();
 
-  DestroyDrivers();
-
   AMD::Unload();
+
+  DestroyDrivers();
 }
 
 void Runtime::LoadExtensions() {

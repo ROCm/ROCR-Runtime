@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2020, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -41,24 +41,29 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/amd_topology.h"
-#include "core/inc/amd_filter_device.h"
 
 #include <algorithm>
 #include <cstring>
-#include <vector>
-#include <map>
-#include <string>
-#include <sstream>
-#include <link.h>
+#include <functional>
 
-#ifndef NDBEUG
+#ifndef NDEBUG
 #include <iostream>
 #endif
 
-#include "hsakmt/hsakmt.h"
+#include <array>
+#include <map>
+#include <memory>
+#include <sstream>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+#include <link.h>
 
 #include "core/inc/amd_aie_agent.h"
+#include "core/inc/amd_available_drivers.h"
 #include "core/inc/amd_cpu_agent.h"
+#include "core/inc/amd_filter_device.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
@@ -68,58 +73,47 @@ extern r_debug _amdgpu_r_debug;
 
 namespace rocr {
 namespace AMD {
-// Minimum acceptable KFD version numbers
-static const uint kKfdVersionMajor = 0;
-static const uint kKfdVersionMinor = 99;
+// Anonymous namespace.
+namespace {
+#if _WIN32
+constexpr size_t num_drivers = 0;
+#elif __linux__
+constexpr size_t num_drivers = 2;
+#endif
 
-void DiscoverDrivers(bool &gpu_found, bool &aie_found) {
-  // Open connection to GPU and AIE kernel drivers.
-  gpu_found = (KfdDriver::DiscoverDriver() == HSA_STATUS_SUCCESS);
-  aie_found = (XdnaDriver::DiscoverDriver() == HSA_STATUS_SUCCESS);
+const std::array<std::function<hsa_status_t(std::unique_ptr<core::Driver>&)>, num_drivers>
+    discover_driver_funcs = {
+#ifdef __linux__
+        KfdDriver::DiscoverDriver, XdnaDriver::DiscoverDriver
+#endif
+};
+
+void DiscoverDrivers() {
+  for (const auto& discover_driver_fn : discover_driver_funcs) {
+    std::unique_ptr<core::Driver> driver;
+    hsa_status_t ret = discover_driver_fn(driver);
+
+    if (ret != HSA_STATUS_SUCCESS) continue;
+
+    core::Runtime::runtime_singleton_->RegisterDriver(std::move(driver));
+  }
 }
 
-// Query for user preference and use that to determine Xnack mode of ROCm system.
-// Return true if Xnack mode is ON or false if OFF. Xnack mode of a system is
-// orthogonal to devices that do not support Xnack mode. It is legal for a
-// system with Xnack ON to have devices that do not support Xnack functionality.
-bool BindXnackMode() {
-  // Get users' preference for Xnack mode of ROCm platform
-  HSAint32 mode;
-  mode = core::Runtime::runtime_singleton_->flag().xnack();
-  bool config_xnack =
-      (core::Runtime::runtime_singleton_->flag().xnack() != Flag::XNACK_REQUEST::XNACK_UNCHANGED);
+bool InitializeDriver(std::unique_ptr<core::Driver>& driver) {
+  MAKE_NAMED_SCOPE_GUARD(driver_guard, [&]() { driver->Close(); });
 
-  // Indicate to driver users' preference for Xnack mode
-  // Call to driver can fail and is a supported feature
-  HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
-  if (config_xnack) {
-    status = hsaKmtSetXNACKMode(mode);
-    if (status == HSAKMT_STATUS_SUCCESS) {
-      return mode;
-    }
-  }
-
-  // Get Xnack mode of devices bound by driver. This could happen
-  // when a call to SET Xnack mode fails or user has no particular
-  // preference
-  status = hsaKmtGetXNACKMode((HSAint32*)&mode);
-  if(status != HSAKMT_STATUS_SUCCESS) {
-    debug_print("KFD does not support xnack mode query.\nROCr must assume xnack is disabled.\n");
+  if (driver->Init() != HSA_STATUS_SUCCESS) {
     return false;
   }
-  return mode;
+
+  driver_guard.Dismiss();
+  return true;
 }
 
-CpuAgent* DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
-  if (node_prop.NumCPUCores == 0) {
-    return nullptr;
-  }
-
+void DiscoverCpu(HSAuint32 node_id, HsaNodeProperties& node_prop) {
   CpuAgent* cpu = new CpuAgent(node_id, node_prop);
   cpu->Enable();
   core::Runtime::runtime_singleton_->RegisterAgent(cpu, true);
-
-  return cpu;
 }
 
 GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnack_mode,
@@ -178,21 +172,20 @@ GpuAgent* DiscoverGpu(HSAuint32 node_id, HsaNodeProperties& node_prop, bool xnac
   return gpu;
 }
 
-AieAgent *DiscoverAie() {
-  AieAgent *aie = new AieAgent(0);
+void DiscoverAie(uint32_t node_id, HsaNodeProperties& node_prop) {
+  AieAgent* aie = new AieAgent(node_id);
   core::Runtime::runtime_singleton_->RegisterAgent(aie, true);
-  return aie;
 }
 
-void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
+void RegisterLinkInfo(const std::unique_ptr<core::Driver>& driver, uint32_t node_id,
+                      uint32_t num_link) {
   // Register connectivity links for this agent to the runtime.
   if (num_link == 0) {
     return;
   }
 
   std::vector<HsaIoLinkProperties> links(num_link);
-  if (HSAKMT_STATUS_SUCCESS !=
-      hsaKmtGetNodeIoLinkProperties(node_id, num_link, &links[0])) {
+  if (HSA_STATUS_SUCCESS != driver->GetEdgeProperties(links, node_id)) {
     return;
   }
 
@@ -259,19 +252,20 @@ void RegisterLinkInfo(uint32_t node_id, uint32_t num_link) {
 /**
  * Process the list of Gpus that are surfaced to user
  */
-static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode, bool enabled) {
+void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode, bool enabled) {
   // Process user visible Gpu devices
   const int32_t invalidIdx = -1;
   int32_t list_sz = gpu_list.size();
   HsaNodeProperties node_prop = {0};
+  const auto& gpu_driver = core::Runtime::runtime_singleton_->AgentDriver(core::DriverType::KFD);
   for (int32_t idx = 0; idx < list_sz; idx++) {
     if (gpu_list[idx] == invalidIdx) {
       break;
     }
 
     // Obtain properties of the node
-    HSAKMT_STATUS err_val = hsaKmtGetNodeProperties(gpu_list[idx], &node_prop);
-    assert(err_val == HSAKMT_STATUS_SUCCESS && "Error in getting Node Properties");
+    hsa_status_t ret = gpu_driver.GetNodeProperties(node_prop, gpu_list[idx]);
+    assert(ret == HSA_STATUS_SUCCESS && "Error in getting Node Properties");
 
     // Instantiate a Gpu device. The IO links
     // of this node have already been registered
@@ -280,116 +274,122 @@ static void SurfaceGpuList(std::vector<int32_t>& gpu_list, bool xnack_mode, bool
   }
 }
 
-/// @brief Calls Kfd thunk to get the snapshot of the topology of the system,
-/// which includes associations between, node, devices, memory and caches.
-void BuildTopology() {
-  HsaVersionInfo kfd_version;
-  if (hsaKmtGetVersion(&kfd_version) != HSAKMT_STATUS_SUCCESS) {
-    return;
-  }
-
-  if (kfd_version.KernelInterfaceMajorVersion == kKfdVersionMajor &&
-      kfd_version.KernelInterfaceMinorVersion < kKfdVersionMinor) {
-    return;
-  }
-
-  // Disable KFD event support when using open source KFD
-  if (kfd_version.KernelInterfaceMajorVersion == 1 &&
-      kfd_version.KernelInterfaceMinorVersion == 0) {
-    core::g_use_interrupt_wait = false;
-  }
-
-  core::Runtime::runtime_singleton_->KfdVersion(kfd_version);
-
-  HsaSystemProperties props;
-  hsaKmtReleaseSystemProperties();
-
-  if (hsaKmtAcquireSystemProperties(&props) != HSAKMT_STATUS_SUCCESS) {
-    return;
-  }
-
-  core::Runtime::runtime_singleton_->SetLinkCount(props.NumNodes);
-
-  // Query if env ROCR_VISIBLE_DEVICES is defined. If defined
-  // determine number and order of GPU devices to be surfaced
+/// @brief Calls into the user-mode driver for each node to build the topology
+/// of the system.
+///
+/// @details Topology information includes information about each node in the
+/// topology graph, which includes agents, IO links, memory, and caches.
+bool BuildTopology() {
+  auto rt = core::Runtime::runtime_singleton_;
+  std::unordered_map<core::DriverType, HsaSystemProperties> driver_sys_props;
+  size_t link_count = 0;
+  /// @todo Currently we can filter out GPU devices using the
+  /// ROCR_VISIBLE_DEVICES environment variable. Eventually this
+  /// should be updated to allow for filtering other agents like
+  /// AIEs.
   RvdFilter rvdFilter;
   int32_t invalidIdx = -1;
   uint32_t visibleCnt = 0;
   std::vector<int32_t> gpu_usr_list;
   std::vector<int32_t> gpu_disabled;
   bool filter = RvdFilter::FilterDevices();
-  if (filter) {
-    rvdFilter.BuildRvdTokenList();
-    rvdFilter.BuildDeviceUuidList(props.NumNodes);
-    visibleCnt = rvdFilter.BuildUsrDeviceList();
-    for (int32_t idx = 0; idx < visibleCnt; idx++) {
-      gpu_usr_list.push_back(invalidIdx);
-    }
+
+  // Get the system properties (i.e., node count) from each driver
+  // then update the runtime's link count before traversing each
+  // driver's individual nodes.
+  for (const auto& driver : rt->AgentDrivers()) {
+    driver->GetSystemProperties(driver_sys_props[driver->kernel_driver_type_]);
+
+    if (!driver_sys_props[driver->kernel_driver_type_].NumNodes) continue;
+
+    link_count += driver_sys_props[driver->kernel_driver_type_].NumNodes;
   }
 
-  // Discover agents on every node in the platform.
-  int32_t kfdIdx = 0;
-  for (HSAuint32 node_id = 0; node_id < props.NumNodes; node_id++) {
-    HsaNodeProperties node_prop = {0};
-    if (hsaKmtGetNodeProperties(node_id, &node_prop) != HSAKMT_STATUS_SUCCESS) {
-      continue;
-    }
+  rt->SetLinkCount(link_count);
 
-    // Instantiate a Cpu device
-    const CpuAgent* cpu = DiscoverCpu(node_id, node_prop);
-    assert(((node_prop.NumCPUCores == 0) || (cpu != nullptr)) && "CPU device failed discovery.");
+  // Traverse each driver's nodes and discover their agents.
+  for (const auto& driver : core::Runtime::runtime_singleton_->AgentDrivers()) {
+    if (driver_sys_props.find(driver->kernel_driver_type_) == driver_sys_props.end()) return false;
 
-    // Current node is either a dGpu or Apu and might belong
-    // to user visible list. Process node if present in usr
-    // visible list, continue if not found
-    if (node_prop.NumFComputeCores != 0) {
-      if (filter) {
-        int32_t devRank = rvdFilter.GetUsrDeviceRank(kfdIdx);
-        if (devRank != (-1)) {
-          gpu_usr_list[devRank] = node_id;
-        } else {
-          gpu_disabled.push_back(node_id);
-        }
-      } else {
-        gpu_usr_list.push_back(node_id);
+    const HsaSystemProperties& sys_props = driver_sys_props[driver->kernel_driver_type_];
+
+    // Query if env ROCR_VISIBLE_DEVICES is defined. If defined
+    // determine number and order of GPU devices to be surfaced.
+    if (filter && driver->kernel_driver_type_ == core::DriverType::KFD) {
+      rvdFilter.BuildRvdTokenList();
+      rvdFilter.BuildDeviceUuidList(sys_props.NumNodes);
+      visibleCnt = rvdFilter.BuildUsrDeviceList();
+      for (int32_t idx = 0; idx < visibleCnt; idx++) {
+        gpu_usr_list.push_back(invalidIdx);
       }
-      kfdIdx++;
     }
 
-    // Register IO links of node without regard to
-    // it being visible to user or not. It is not
-    // possible to access links of nodes that are
-    // not visible
-    RegisterLinkInfo(node_id, node_prop.NumIOLinks);
-  }
+    // Discover agents on every node in the platform.
+    int32_t kfdIdx = 0;
+    for (HSAuint32 node_id = 0; node_id < sys_props.NumNodes; node_id++) {
+      HsaNodeProperties node_props = {0};
+      if (driver->GetNodeProperties(node_props, node_id) != HSA_STATUS_SUCCESS) {
+        return false;
+      }
 
-  // Determine the Xnack mode to be bound for system
-  bool xnack_mode = BindXnackMode();
-  core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
+      if (node_props.NumCPUCores) {
+        // Node has CPU cores so instantiate a CPU agent.
+        DiscoverCpu(node_id, node_props);
+      }
+
+      if (node_props.NumNeuralCores) {
+        // Node has AIE cores so instantiate an AIE agent.
+        DiscoverAie(node_id, node_props);
+      }
+
+      // Current node is either a dGpu or Apu and might belong
+      // to user visible list. Process node if present in usr
+      // visible list, continue if not found
+      if (node_props.NumFComputeCores != 0) {
+        if (filter) {
+          int32_t devRank = rvdFilter.GetUsrDeviceRank(kfdIdx);
+          if (devRank != (-1)) {
+            gpu_usr_list[devRank] = node_id;
+          } else {
+            gpu_disabled.push_back(node_id);
+          }
+        } else {
+          gpu_usr_list.push_back(node_id);
+        }
+        kfdIdx++;
+      }
+
+      // Register IO links of node without regard to
+      // it being visible to user or not. It is not
+      // possible to access links of nodes that are
+      // not visible
+      RegisterLinkInfo(driver, node_id, node_props.NumIOLinks);
+    }
+  }
 
   // Instantiate ROCr objects to encapsulate Gpu devices
-  SurfaceGpuList(gpu_usr_list, xnack_mode, true);
-  SurfaceGpuList(gpu_disabled, xnack_mode, false);
+  SurfaceGpuList(gpu_usr_list, rt->XnackEnabled(), true);
+  SurfaceGpuList(gpu_disabled, rt->XnackEnabled(), false);
 
   // Parse HSA_CU_MASK with GPU and CU count limits.
-  uint32_t maxGpu = core::Runtime::runtime_singleton_->gpu_agents().size();
+  uint32_t maxGpu = rt->gpu_agents().size();
   uint32_t maxCu = 0;
   uint32_t cus;
-  for (auto& gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+  for (auto& gpu : rt->gpu_agents()) {
     gpu->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_COMPUTE_UNIT_COUNT, &cus);
     maxCu = Max(maxCu, cus);
   }
-  const_cast<Flag&>(core::Runtime::runtime_singleton_->flag()).parse_masks(maxGpu, maxCu);
+  const_cast<Flag&>(rt->flag()).parse_masks(maxGpu, maxCu);
 
   // Register destination agents that can SDMA gang copy for source agents
-  for (auto& src_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+  for (auto& src_gpu : rt->gpu_agents()) {
     uint32_t src_id = src_gpu->node_id();
-    for (auto& dst_gpu : core::Runtime::runtime_singleton_->gpu_agents()) {
+    for (auto& dst_gpu : rt->gpu_agents()) {
       uint32_t dst_id = dst_gpu->node_id();
       uint32_t gang_factor = 1, rec_sdma_eng_id_mask = 0;
 
       if (src_id != dst_id) {
-        auto linfo = core::Runtime::runtime_singleton_->GetLinkInfo(src_id, dst_id);
+        auto linfo = rt->GetLinkInfo(src_id, dst_id);
         // Ganging can only be done over xGMI and is either fixed or variable
         // based on topology information:
         // Weight of 13 - Intra-socket GPU link in multi-partition mode
@@ -398,7 +398,7 @@ void BuildTopology() {
         if (linfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI) {
           // Temporary work-around, disable SDMA ganging on non-APUs in non-SPX modes
           // Check xGMI APU status
-          const bool isXgmiApu = reinterpret_cast<AMD::GpuAgent*>(src_gpu)->is_xgmi_cpu_gpu();
+          const bool isXgmiApu = static_cast<AMD::GpuAgent*>(src_gpu)->is_xgmi_cpu_gpu();
           if (linfo.info.numa_distance == 13 || linfo.info.numa_distance == 41)
             gang_factor = isXgmiApu ? 2 : 1;
           else if (linfo.info.numa_distance == 15 && linfo.info.min_bandwidth)
@@ -415,48 +415,27 @@ void BuildTopology() {
       ((AMD::GpuAgent*)src_gpu)->RegisterRecSdmaEngIdMaskPeer(*dst_gpu, rec_sdma_eng_id_mask);
     }
   }
+  return true;
 }
+}  // Anonymous namespace
 
 bool Load() {
-  bool gpu_found = false;
-  bool aie_found = false;
+  DiscoverDrivers();
 
-  DiscoverDrivers(gpu_found, aie_found);
+  if (core::Runtime::runtime_singleton_->AgentDrivers().empty()) return false;
 
-  if (!(gpu_found || aie_found)) {
-    return false;
+  for (auto& d : core::Runtime::runtime_singleton_->AgentDrivers()) {
+    if (!InitializeDriver(d)) return false;
   }
 
-  if (gpu_found) {
-    MAKE_NAMED_SCOPE_GUARD(kfd, [&]() { hsaKmtCloseKFD(); });
-
-    // Build topology table.
-    BuildTopology();
-
-    HSAKMT_STATUS err = hsaKmtRuntimeEnable(
-        &_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
-    if ((err != HSAKMT_STATUS_SUCCESS) && (err != HSAKMT_STATUS_NOT_SUPPORTED))
-      return false;
-    HSAuint32 caps_mask;
-    hsaKmtGetRuntimeCapabilities(&caps_mask);
-    core::Runtime::runtime_singleton_->KfdVersion(
-        err != HSAKMT_STATUS_NOT_SUPPORTED,
-        !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
-
-    kfd.Dismiss();
-  }
-
-  if (aie_found) {
-    DiscoverAie();
-  }
-
-  return true;
+  return BuildTopology();
 }
 
 bool Unload() {
-  hsaKmtRuntimeDisable();
-
-  hsaKmtReleaseSystemProperties();
+  for (auto& driver : core::Runtime::runtime_singleton_->AgentDrivers()) {
+    hsa_status_t ret = driver->ShutDown();
+    if (ret != HSA_STATUS_SUCCESS) return false;
+  }
 
   return true;
 }

@@ -42,18 +42,18 @@
 
 #include "core/inc/amd_kfd_driver.h"
 
-#include <sys/ioctl.h>
-
 #include <memory>
 #include <string>
 
+#include <link.h>
+#include <sys/ioctl.h>
+
 #include "hsakmt/hsakmt.h"
 
-#include "core/inc/amd_cpu_agent.h"
-#include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
-#include "core/inc/exceptions.h"
 #include "core/inc/runtime.h"
+
+extern r_debug _amdgpu_r_debug;
 
 namespace rocr {
 namespace AMD {
@@ -61,15 +61,55 @@ namespace AMD {
 KfdDriver::KfdDriver(std::string devnode_name)
     : core::Driver(core::DriverType::KFD, devnode_name) {}
 
-hsa_status_t KfdDriver::Init() { return HSA_STATUS_SUCCESS; }
+hsa_status_t KfdDriver::Init() {
+  HSAKMT_STATUS ret =
+      hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
 
-hsa_status_t KfdDriver::DiscoverDriver() {
-  std::unique_ptr<Driver> kfd_drv(new KfdDriver("/dev/kfd"));
+  if (ret != HSAKMT_STATUS_SUCCESS && ret != HSAKMT_STATUS_NOT_SUPPORTED) return HSA_STATUS_ERROR;
 
-  if (kfd_drv->Open() == HSA_STATUS_SUCCESS) {
-    core::Runtime::runtime_singleton_->RegisterDriver(kfd_drv);
+  uint32_t caps_mask = 0;
+  if (hsaKmtGetRuntimeCapabilities(&caps_mask) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  core::Runtime::runtime_singleton_->KfdVersion(
+      ret != HSAKMT_STATUS_NOT_SUPPORTED,
+      !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
+
+  if (hsaKmtGetVersion(&version_) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  if (version_.KernelInterfaceMajorVersion == kfd_version_major_min &&
+      version_.KernelInterfaceMinorVersion < kfd_version_major_min)
+    return HSA_STATUS_ERROR;
+
+  core::Runtime::runtime_singleton_->KfdVersion(version_);
+
+  if (version_.KernelInterfaceMajorVersion == 1 && version_.KernelInterfaceMinorVersion == 0)
+    core::g_use_interrupt_wait = false;
+
+  bool xnack_mode = BindXnackMode();
+  core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::ShutDown() {
+  HSAKMT_STATUS ret = hsaKmtRuntimeDisable();
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  ret = hsaKmtReleaseSystemProperties();
+
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  return Close();
+}
+
+hsa_status_t KfdDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
+  auto tmp_driver = std::unique_ptr<core::Driver>(new KfdDriver("/dev/kfd"));
+
+  if (tmp_driver->Open() == HSA_STATUS_SUCCESS) {
+    driver = std::move(tmp_driver);
     return HSA_STATUS_SUCCESS;
   }
+
   return HSA_STATUS_ERROR;
 }
 
@@ -85,6 +125,28 @@ hsa_status_t KfdDriver::Open() {
 hsa_status_t KfdDriver::Close() {
   return hsaKmtCloseKFD() == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS
                                                    : HSA_STATUS_ERROR;
+}
+
+hsa_status_t KfdDriver::GetSystemProperties(HsaSystemProperties& sys_props) const {
+  if (hsaKmtReleaseSystemProperties() != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  if (hsaKmtAcquireSystemProperties(&sys_props) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const {
+  if (hsaKmtGetNodeProperties(node_id, &node_props) != HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                          uint32_t node_id) const {
+  if (hsaKmtGetNodeIoLinkProperties(node_id, io_link_props.size(), io_link_props.data()) !=
+      HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t KfdDriver::GetAgentProperties(core::Agent &agent) const {
@@ -298,6 +360,34 @@ bool KfdDriver::MakeKfdMemoryResident(size_t num_node, const uint32_t *nodes,
 
 void KfdDriver::MakeKfdMemoryUnresident(const void *mem) {
   hsaKmtUnmapMemoryToGPU(const_cast<void *>(mem));
+}
+
+bool KfdDriver::BindXnackMode() {
+  // Get users' preference for Xnack mode of ROCm platform.
+  HSAint32 mode = core::Runtime::runtime_singleton_->flag().xnack();
+  bool config_xnack = (mode != Flag::XNACK_REQUEST::XNACK_UNCHANGED);
+
+  // Indicate to driver users' preference for Xnack mode
+  // Call to driver can fail and is a supported feature
+  HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
+  if (config_xnack) {
+    status = hsaKmtSetXNACKMode(mode);
+    if (status == HSAKMT_STATUS_SUCCESS) {
+      return (mode != Flag::XNACK_DISABLE);
+    }
+  }
+
+  // Get Xnack mode of devices bound by driver. This could happen
+  // when a call to SET Xnack mode fails or user has no particular
+  // preference
+  status = hsaKmtGetXNACKMode(&mode);
+  if (status != HSAKMT_STATUS_SUCCESS) {
+    debug_print(
+        "KFD does not support xnack mode query.\nROCr must assume "
+        "xnack is disabled.\n");
+    return false;
+  }
+  return (mode != Flag::XNACK_DISABLE);
 }
 
 } // namespace AMD

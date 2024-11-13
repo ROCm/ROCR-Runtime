@@ -63,8 +63,7 @@
 #include "core/inc/hsa_ext_amd_impl.h"
 
 #include "core/inc/agent.h"
-#include "core/inc/amd_kfd_driver.h"
-#include "core/inc/amd_xdna_driver.h"
+#include "core/inc/driver.h"
 #include "core/inc/exceptions.h"
 #include "core/inc/interrupt_signal.h"
 #include "core/inc/memory_region.h"
@@ -159,7 +158,7 @@ class Runtime {
 
   /// @brief Insert agent into the driver list.
   /// @param [in] driver Unique pointer to the driver object.
-  void RegisterDriver(std::unique_ptr<Driver> &driver);
+  void RegisterDriver(std::unique_ptr<Driver> driver);
 
   /// @brief Delete all agent objects from ::agents_.
   void DestroyAgents();
@@ -493,6 +492,8 @@ class Runtime {
 
     return **driver;
   }
+
+  std::vector<std::unique_ptr<Driver>>& AgentDrivers() { return agent_drivers_; }
 
  protected:
   static void AsyncEventsLoop(void*);

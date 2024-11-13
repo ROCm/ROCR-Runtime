@@ -61,23 +61,19 @@ namespace AMD {
 XdnaDriver::XdnaDriver(std::string devnode_name)
     : core::Driver(core::DriverType::XDNA, devnode_name) {}
 
-XdnaDriver::~XdnaDriver() { FreeDeviceHeap(); }
-
-hsa_status_t XdnaDriver::DiscoverDriver() {
+hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
   const int max_minor_num(64);
   const std::string devnode_prefix("/dev/accel/accel");
 
   for (int i = 0; i < max_minor_num; ++i) {
-    std::unique_ptr<Driver> xdna_drv(
-        new XdnaDriver(devnode_prefix + std::to_string(i)));
-    if (xdna_drv->Open() == HSA_STATUS_SUCCESS) {
-      if (xdna_drv->QueryKernelModeDriver(
-              core::DriverQuery::GET_DRIVER_VERSION) == HSA_STATUS_SUCCESS) {
-        static_cast<XdnaDriver *>(xdna_drv.get())->Init();
-        core::Runtime::runtime_singleton_->RegisterDriver(xdna_drv);
+    auto tmp_driver = std::unique_ptr<Driver>(new XdnaDriver(devnode_prefix + std::to_string(i)));
+    if (tmp_driver->Open() == HSA_STATUS_SUCCESS) {
+      if (tmp_driver->QueryKernelModeDriver(core::DriverQuery::GET_DRIVER_VERSION) ==
+          HSA_STATUS_SUCCESS) {
+        driver = std::move(tmp_driver);
         return HSA_STATUS_SUCCESS;
       } else {
-        xdna_drv->Close();
+        tmp_driver->Close();
       }
     }
   }
@@ -90,6 +86,8 @@ uint64_t XdnaDriver::GetDevHeapByteSize() {
 }
 
 hsa_status_t XdnaDriver::Init() { return InitDeviceHeap(); }
+
+hsa_status_t XdnaDriver::ShutDown() { return FreeDeviceHeap(); }
 
 hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   switch (query) {
@@ -118,6 +116,25 @@ hsa_status_t XdnaDriver::Close() {
   if (ret) {
     return HSA_STATUS_ERROR;
   }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetSystemProperties(HsaSystemProperties& sys_props) const {
+  sys_props.NumNodes = 1;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const {
+  /// @todo XDNA driver currently only supports single-node AIE
+  /// devices over PCIe. Update this once we can get topology
+  /// information dynamically from the sysfs.
+  node_props.NumNeuralCores = 1;
+  node_props.NumIOLinks = 0;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                           uint32_t node_id) const {
   return HSA_STATUS_SUCCESS;
 }
 
@@ -284,8 +301,8 @@ hsa_status_t XdnaDriver::QueryDriverVersion() {
     return HSA_STATUS_ERROR;
   }
 
-  version_.major = aie_version.major;
-  version_.minor = aie_version.minor;
+  version_.KernelInterfaceMajorVersion = aie_version.major;
+  version_.KernelInterfaceMinorVersion = aie_version.minor;
 
   return HSA_STATUS_SUCCESS;
 }
