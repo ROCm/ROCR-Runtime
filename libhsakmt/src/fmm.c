@@ -2846,6 +2846,13 @@ gpu_mem_init_failed:
 void hsakmt_fmm_destroy_process_apertures(void)
 {
 	release_mmio();
+
+	if (all_gpu_id_array) {
+		free(all_gpu_id_array);
+		all_gpu_id_array = NULL;
+	}
+	all_gpu_id_array_size = 0;
+
 	if (gpu_mem) {
 		while (gpu_mem_count-- > 0)
 			free(gpu_mem[gpu_mem_count].usable_peer_id_array);
@@ -4320,12 +4327,6 @@ void hsakmt_fmm_clear_all_mem(void)
 			dgpu_shared_aperture_limit = NULL;
 		}
 	}
-
-	if (all_gpu_id_array)
-		free(all_gpu_id_array);
-
-	all_gpu_id_array_size = 0;
-	all_gpu_id_array = NULL;
 
 	/* Nothing is initialized. */
 	if (!gpu_mem)
