@@ -95,6 +95,7 @@ TEST_F(KFDNegativeTest, BasicPipeReset) {
             EXPECT_EQ(resetEvent->EventData.EventType, HSA_EVENTTYPE_HW_EXCEPTION);
 
             LOG() << "Child ==> Complete" << std::endl;
+
             exit(0);
 	} else {
             int childStatus = 0;
@@ -125,6 +126,7 @@ TEST_F(KFDNegativeTest, BasicPipeReset) {
             EXPECT_TRUE(WaitOnValue(destBuf.As<unsigned int*>(), 0));
 
             hsaKmtDestroyEvent(event);
+            hsaKmtDestroyEvent(resetEvent);
             EXPECT_SUCCESS(queue.Destroy());
 
             LOG() << "Parent ==> Complete" << std::endl;

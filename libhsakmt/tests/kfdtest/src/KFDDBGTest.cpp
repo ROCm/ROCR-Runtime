@@ -307,6 +307,8 @@ TEST_F(KFDDBGTest, HitTrapEvent) {
 
         debug->Detach();
         hsaKmtRuntimeDisable();
+
+        delete dispatch;
     } else {
         LOG() << "Skipping test: Test not supported on family ID 0x"
               << m_FamilyId << "." << std::endl;
@@ -391,6 +393,7 @@ TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
             ASSERT_EQ(trapMask, KFD_EC_MASK(EC_QUEUE_WAVE_TRAP) | KFD_EC_MASK(EC_QUEUE_NEW));
 
             dispatch->Sync();
+            delete dispatch;
         }
 
         EXPECT_SUCCESS(queue.Destroy());
@@ -477,6 +480,8 @@ TEST_F(KFDDBGTest, SuspendQueues) {
 
         debug->Detach();
         hsaKmtRuntimeDisable();
+
+        delete dispatch;
     } else {
         LOG() << "Skipping test: Test not supported on family ID 0x"
               << m_FamilyId << "." << std::endl;
@@ -540,11 +545,10 @@ TEST_F(KFDDBGTest, HitMemoryViolation) {
                 exit(1);
             }
 
-            Dispatch *dispatch;
-            dispatch = new Dispatch(isaBuf);
-            dispatch->SetDim(1, 1, 1);
-            dispatch->SetPriv(false); //Override GFX11 CWSR WA
-            dispatch->Submit(queue);
+            Dispatch dispatch(isaBuf);
+            dispatch.SetDim(1, 1, 1);
+            dispatch.SetPriv(false); //Override GFX11 CWSR WA
+            dispatch.Submit(queue);
 
             // Queue immediately dies so halt process for tracer device inspection.
             raise(SIGSTOP);
