@@ -42,6 +42,7 @@
 
 #include "core/inc/amd_aie_agent.h"
 
+#include <cstring>
 #include <functional>
 
 #include "core/inc/amd_aie_aql_queue.h"
@@ -237,7 +238,7 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     *reinterpret_cast<bool *>(value) = true;
     break;
   case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
-    memset(value, 0, sizeof(uint8_t) * 8);
+    std::memset(value, 0, sizeof(uint8_t) * 8);
     break;
   default:
     *reinterpret_cast<uint32_t *>(value) = 0;
