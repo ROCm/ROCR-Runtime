@@ -533,7 +533,7 @@ hsa_status_t ImageRuntime::FillImage(
 
 hsa_status_t ImageRuntime::CreateSamplerHandle(
     hsa_agent_t component,
-    const hsa_ext_sampler_descriptor_t& sampler_descriptor,
+    const hsa_ext_sampler_descriptor_v2_t& sampler_descriptor,
     hsa_ext_sampler_t& sampler_handle) {
   sampler_handle.handle = 0;
 

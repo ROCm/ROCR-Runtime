@@ -518,7 +518,7 @@ hsa_status_t ImageManagerKv::ModifyImageSrd(
 }
 
 hsa_status_t ImageManagerKv::PopulateSamplerSrd(Sampler& sampler) const {
-  const hsa_ext_sampler_descriptor_t sampler_descriptor = sampler.desc;
+  const hsa_ext_sampler_descriptor_v2_t &sampler_descriptor = sampler.desc;
 
   SQ_IMG_SAMP_WORD0 word0;
   SQ_IMG_SAMP_WORD1 word1;
@@ -526,25 +526,9 @@ hsa_status_t ImageManagerKv::PopulateSamplerSrd(Sampler& sampler) const {
   SQ_IMG_SAMP_WORD3 word3;
 
   word0.u32_all = 0;
-  switch (sampler_descriptor.address_mode) {
-    case HSA_EXT_SAMPLER_ADDRESSING_MODE_CLAMP_TO_EDGE:
-      word0.bits.clamp_x = static_cast<int>(SQ_TEX_CLAMP_LAST_TEXEL);
-      break;
-    case HSA_EXT_SAMPLER_ADDRESSING_MODE_CLAMP_TO_BORDER:
-      word0.bits.clamp_x = static_cast<int>(SQ_TEX_CLAMP_BORDER);
-      break;
-    case HSA_EXT_SAMPLER_ADDRESSING_MODE_MIRRORED_REPEAT:
-      word0.bits.clamp_x = static_cast<int>(SQ_TEX_MIRROR);
-      break;
-    case HSA_EXT_SAMPLER_ADDRESSING_MODE_UNDEFINED:
-    case HSA_EXT_SAMPLER_ADDRESSING_MODE_REPEAT:
-      word0.bits.clamp_x = static_cast<int>(SQ_TEX_WRAP);
-      break;
-    default:
-      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
-  word0.bits.clamp_y = word0.bits.clamp_x;
-  word0.bits.clamp_z = word0.bits.clamp_x;
+  hsa_status_t status = convertAddressMode<SQ_IMG_SAMP_WORD0, SQ_TEX_CLAMP>
+                                         (word0, sampler_descriptor.address_modes);
+  if (status != HSA_STATUS_SUCCESS) return status;
   word0.bits.force_unormalized = (sampler_descriptor.coordinate_mode ==
                                   HSA_EXT_SAMPLER_COORDINATE_MODE_UNNORMALIZED);
 

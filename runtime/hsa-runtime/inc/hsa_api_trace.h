@@ -176,6 +176,8 @@ struct ImageExtTable {
   decltype(hsa_ext_image_get_capability_with_layout)* hsa_ext_image_get_capability_with_layout_fn;
   decltype(hsa_ext_image_data_get_info_with_layout)* hsa_ext_image_data_get_info_with_layout_fn;
   decltype(hsa_ext_image_create_with_layout)* hsa_ext_image_create_with_layout_fn;
+  decltype(hsa_ext_sampler_create_v2)* hsa_ext_sampler_create_v2_fn;
+
 };
 
 // Table to export HSA PC Sampling Extension Apis

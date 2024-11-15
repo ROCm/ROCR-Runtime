@@ -299,9 +299,9 @@ union SQ_IMG_RSRC_WORD7 {
 union SQ_IMG_SAMP_WORD0 {
   struct {
 #if defined(LITTLEENDIAN_CPU)
-    unsigned int clamp_x : 3;
-    unsigned int clamp_y : 3;
-    unsigned int clamp_z : 3;
+    unsigned int CLAMP_X : 3;
+    unsigned int CLAMP_Y : 3;
+    unsigned int CLAMP_Z : 3;
     unsigned int max_aniso_ratio : 3;
     unsigned int depth_compare_func : 3;
     unsigned int force_unormalized : 1;
@@ -325,9 +325,9 @@ union SQ_IMG_SAMP_WORD0 {
     unsigned int force_unormalized : 1;
     unsigned int depth_compare_func : 3;
     unsigned int max_aniso_ratio : 3;
-    unsigned int clamp_z : 3;
-    unsigned int clamp_y : 3;
-    unsigned int clamp_x : 3;
+    unsigned int CLAMP_Z : 3;
+    unsigned int CLAMP_Y : 3;
+    unsigned int CLAMP_X : 3;
 #endif
   } bitfields, bits;
   unsigned int u32_all;

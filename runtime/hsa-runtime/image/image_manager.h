@@ -134,6 +134,34 @@ class ImageManager {
   static void FormatPattern(const hsa_ext_image_format_t& format,
                             const void* pattern_in, void* pattern_out);
 
+  template <typename dstT, typename srcT>
+  static inline hsa_status_t convertAddressMode(dstT &word,
+                            const hsa_ext_sampler_addressing_mode32_t address_mode[3]) {
+    srcT clamp[3];
+    for (int i = 0; i < 3; i++) {
+      switch (address_mode[i]) {
+        case HSA_EXT_SAMPLER_ADDRESSING_MODE_CLAMP_TO_EDGE:
+          clamp[i] = srcT::SQ_TEX_CLAMP_LAST_TEXEL;
+          break;
+        case HSA_EXT_SAMPLER_ADDRESSING_MODE_CLAMP_TO_BORDER:
+          clamp[i] = srcT::SQ_TEX_CLAMP_BORDER;
+          break;
+        case HSA_EXT_SAMPLER_ADDRESSING_MODE_MIRRORED_REPEAT:
+          clamp[i] = srcT::SQ_TEX_MIRROR;
+          break;
+        case HSA_EXT_SAMPLER_ADDRESSING_MODE_UNDEFINED:
+        case HSA_EXT_SAMPLER_ADDRESSING_MODE_REPEAT:
+          clamp[i] = srcT::SQ_TEX_WRAP;
+          break;
+        default:
+          return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      }
+    }
+    word.bits.CLAMP_X = static_cast<unsigned int>(clamp[0]);
+    word.bits.CLAMP_Y = static_cast<unsigned int>(clamp[1]);
+    word.bits.CLAMP_Z = static_cast<unsigned int>(clamp[2]);
+    return HSA_STATUS_SUCCESS;
+  }
  private:
   DISALLOW_COPY_AND_ASSIGN(ImageManager);
 };

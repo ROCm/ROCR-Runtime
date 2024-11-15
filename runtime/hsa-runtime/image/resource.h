@@ -199,7 +199,7 @@ public:
   hsa_agent_t component;
 
   // HSA sampler descriptor of the image object.
-  hsa_ext_sampler_descriptor_t desc;
+  hsa_ext_sampler_descriptor_v2_t desc;
 } Sampler;
 
 }  // namespace image

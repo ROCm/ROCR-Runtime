@@ -264,6 +264,27 @@ hsa_status_t hsa_ext_sampler_create(hsa_agent_t agent,
   if (sampler_descriptor == NULL || sampler == NULL) {
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
+  hsa_ext_sampler_descriptor_v2_t sampler_descriptor_v2 = {
+      sampler_descriptor->coordinate_mode,
+      sampler_descriptor->filter_mode,
+      {sampler_descriptor->address_mode,
+          sampler_descriptor->address_mode, sampler_descriptor->address_mode}
+  };
+  return ImageRuntime::instance()->CreateSamplerHandle(agent, sampler_descriptor_v2, *sampler);
+  CATCH;
+}
+
+hsa_status_t hsa_ext_sampler_create_v2(hsa_agent_t agent,
+                                    const hsa_ext_sampler_descriptor_v2_t* sampler_descriptor,
+                                    hsa_ext_sampler_t* sampler) {
+  TRY;
+  if (agent.handle == 0) {
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
+
+  if (sampler_descriptor == NULL || sampler == NULL) {
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  }
 
   return ImageRuntime::instance()->CreateSamplerHandle(agent, *sampler_descriptor, *sampler);
   CATCH;
@@ -396,6 +417,8 @@ void LoadImage(core::ImageExtTableInternal* image_api,
   image_api->hsa_ext_image_create_with_layout_fn = hsa_ext_image_create_with_layout;
 
   image_api->hsa_amd_image_get_info_max_dim_fn = hsa_amd_image_get_info_max_dim;
+
+  image_api->hsa_ext_sampler_create_v2_fn = hsa_ext_sampler_create_v2;
 
   *interface_api = hsa_amd_image_create;
 }
