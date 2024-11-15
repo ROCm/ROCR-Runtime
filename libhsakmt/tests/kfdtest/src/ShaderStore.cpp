@@ -161,6 +161,7 @@ const char *InfiniteLoopIsa =
     R"(
         .text
         LOOP:
+        s_nop 0x10
         s_branch LOOP
         s_endpgm
 )";
