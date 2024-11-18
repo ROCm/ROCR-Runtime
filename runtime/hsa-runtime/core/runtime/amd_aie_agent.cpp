@@ -236,11 +236,8 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
   }
   case HSA_AMD_AGENT_INFO_UUID: {
     // At this point AIE devices do not support UUID's.
-    const std::string uuid_info_("AIE-XX");
-    assert(uuid_info_.size() < HSA_PUBLIC_NAME_SIZE);
-    std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
-    std::strncat(reinterpret_cast<char *>(value), uuid_info_.c_str(),
-                 uuid_info_.size());
+    char uuid_tmp[] = "AIE-XX";
+    snprintf((char *)value, sizeof(uuid_tmp), "%s", uuid_tmp);
     break;
   }
   case HSA_AMD_AGENT_INFO_ASIC_REVISION:
