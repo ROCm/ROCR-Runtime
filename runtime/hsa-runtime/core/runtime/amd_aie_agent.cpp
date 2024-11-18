@@ -44,6 +44,7 @@
 
 #include <cstring>
 #include <functional>
+#include <string>
 
 #include "core/inc/amd_aie_aql_queue.h"
 #include "core/inc/amd_memory_region.h"
@@ -109,13 +110,19 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
 
   switch (attribute_) {
   case HSA_AGENT_INFO_NAME: {
-    std::string name_info_("aie2");
-    std::strcpy(reinterpret_cast<char *>(value), name_info_.c_str());
+    const std::string name_info_("aie2");
+    assert(name_info_.size() < HSA_PUBLIC_NAME_SIZE);
+    std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+    std::strncat(reinterpret_cast<char *>(value), name_info_.c_str(),
+                 name_info_.size());
     break;
   }
   case HSA_AGENT_INFO_VENDOR_NAME: {
-    std::string vendor_name_info_("AMD");
-    std::strcpy(reinterpret_cast<char *>(value), vendor_name_info_.c_str());
+    const std::string vendor_name_info_("AMD");
+    assert(vendor_name_info_.size() < HSA_PUBLIC_NAME_SIZE);
+    std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+    std::strncat(reinterpret_cast<char *>(value), vendor_name_info_.c_str(),
+                 vendor_name_info_.size());
     break;
   }
   case HSA_AGENT_INFO_FEATURE:
@@ -220,14 +227,20 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     *reinterpret_cast<uint32_t *>(value) = 0;
     break;
   case HSA_AMD_AGENT_INFO_PRODUCT_NAME: {
-    std::string product_name_info_("AIE-ML");
-    std::strcpy(reinterpret_cast<char *>(value), product_name_info_.c_str());
+    const std::string product_name_info_("AIE-ML");
+    assert(product_name_info_.size() < HSA_PUBLIC_NAME_SIZE);
+    std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+    std::strncat(reinterpret_cast<char *>(value), product_name_info_.c_str(),
+                 product_name_info_.size());
     break;
   }
   case HSA_AMD_AGENT_INFO_UUID: {
     // At this point AIE devices do not support UUID's.
-    char uuid_tmp[] = "AIE-XX";
-    snprintf(reinterpret_cast<char *>(value), sizeof(uuid_tmp), "%s", uuid_tmp);
+    const std::string uuid_info_("AIE-XX");
+    assert(uuid_info_.size() < HSA_PUBLIC_NAME_SIZE);
+    std::memset(value, 0, HSA_PUBLIC_NAME_SIZE);
+    std::strncat(reinterpret_cast<char *>(value), uuid_info_.c_str(),
+                 uuid_info_.size());
     break;
   }
   case HSA_AMD_AGENT_INFO_ASIC_REVISION:
