@@ -167,11 +167,11 @@ public:
 
   /// @brief Imports memory using dma-buf.
   ///
-  /// @param[in] va memory virtual address
+  /// @param[in] mem virtual address
   /// @param[in] size memory size in bytes
   /// @param[out] dmabuf_fd dma-buf file descriptor
   /// @param[out] offset memory offset in bytes
-  virtual hsa_status_t ExportDMABuf(void *va, size_t size, int *dmabuf_fd,
+  virtual hsa_status_t ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
                                     size_t *offset) = 0;
 
   /// @brief Imports a memory chunk via dma-buf.
@@ -185,21 +185,21 @@ public:
   /// @brief Maps the memory associated with the handle.
   ///
   /// @param[in] handle handle to the memory object
-  /// @param[in] va virtual address associated with the handle
+  /// @param[in] mem virtual address associated with the handle
   /// @param[in] offset memory offset in bytes
   /// @param[in] size memory size in bytes
   /// @param[perms] perms new permissions
-  virtual hsa_status_t Map(core::ShareableHandle handle, void *va,
+  virtual hsa_status_t Map(core::ShareableHandle handle, void *mem,
                            size_t offset, size_t size,
                            hsa_access_permission_t perms) = 0;
 
   /// @brief Unmaps the memory associated with the handle.
   ///
   /// @param[in] handle handle to the memory object
-  /// @param[in] va virtual address associated with the handle
+  /// @param[in] mem virtual address associated with the handle
   /// @param[in] offset memory offset in bytes
   /// @param[in] size memory size in bytes
-  virtual hsa_status_t Unmap(core::ShareableHandle handle, void *va,
+  virtual hsa_status_t Unmap(core::ShareableHandle handle, void *mem,
                              size_t offset, size_t size) = 0;
 
   /// @brief Releases the object associated with the handle.

@@ -65,7 +65,9 @@ static_assert(
         (alignof(core::ShareableHandle::handle) >= alignof(amdgpu_bo_handle)),
     "ShareableHandle cannot store a amdgpu_bo_handle");
 
-static __forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
+namespace {
+
+__forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
   switch (perm) {
   case HSA_ACCESS_PERMISSION_RO:
     return AMDGPU_VM_PAGE_READABLE;
@@ -78,6 +80,8 @@ static __forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
     return 0;
   }
 }
+
+} // namespace
 
 KfdDriver::KfdDriver(std::string devnode_name)
     : core::Driver(core::DriverType::KFD, devnode_name) {}
@@ -343,11 +347,11 @@ hsa_status_t KfdDriver::DestroyQueue(core::Queue &queue) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t KfdDriver::ExportDMABuf(void *va, size_t size, int *dmabuf_fd,
+hsa_status_t KfdDriver::ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
                                      size_t *offset) {
   int dmabuf_fd_res = -1;
   size_t offset_res = 0;
-  if (hsaKmtExportDMABufHandle(va, size, &dmabuf_fd_res, &offset_res) !=
+  if (hsaKmtExportDMABufHandle(mem, size, &dmabuf_fd_res, &offset_res) !=
       HSAKMT_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
@@ -370,27 +374,27 @@ hsa_status_t KfdDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t KfdDriver::Map(core::ShareableHandle handle, void *va,
+hsa_status_t KfdDriver::Map(core::ShareableHandle handle, void *mem,
                             size_t offset, size_t size,
                             hsa_access_permission_t perms) {
   const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
   if (!ldrm_bo)
     return HSA_STATUS_ERROR;
 
-  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(va),
+  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem),
                       drm_perm(perms), AMDGPU_VA_OP_MAP) != 0)
     return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t KfdDriver::Unmap(core::ShareableHandle handle, void *va,
+hsa_status_t KfdDriver::Unmap(core::ShareableHandle handle, void *mem,
                               size_t offset, size_t size) {
   const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
   if (!ldrm_bo)
     return HSA_STATUS_ERROR;
 
-  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(va), 0,
+  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem), 0,
                       AMDGPU_VA_OP_UNMAP) != 0)
     return HSA_STATUS_ERROR;
 

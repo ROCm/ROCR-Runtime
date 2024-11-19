@@ -296,7 +296,7 @@ hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::ExportDMABuf(void *va, size_t size, int *dmabuf_fd,
+hsa_status_t XdnaDriver::ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
                                       size_t *offset) {
   // Not implemented yet.
   return HSA_STATUS_ERROR;
@@ -314,7 +314,7 @@ hsa_status_t XdnaDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *va,
+hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *mem,
                              size_t offset, size_t size,
                              hsa_access_permission_t perms) {
   // Get fd associated with the handle.
@@ -325,7 +325,7 @@ hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *va,
     return HSA_STATUS_ERROR;
 
   // Change permissions.
-  void *mapped_ptr = mmap(va, size, PermissionsToMmapFlags(perms),
+  void *mapped_ptr = mmap(mem, size, PermissionsToMmapFlags(perms),
                           MAP_FIXED | MAP_SHARED, params.fd, offset);
   if (mapped_ptr == MAP_FAILED)
     return HSA_STATUS_ERROR;
@@ -333,9 +333,9 @@ hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *va,
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::Unmap(core::ShareableHandle handle, void *va,
+hsa_status_t XdnaDriver::Unmap(core::ShareableHandle handle, void *mem,
                                size_t offset, size_t size) {
-  if (munmap(va, size) != 0)
+  if (munmap(mem, size) != 0)
     return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
