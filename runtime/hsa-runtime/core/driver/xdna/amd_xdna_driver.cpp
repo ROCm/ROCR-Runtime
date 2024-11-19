@@ -52,6 +52,7 @@
 #include "core/inc/amd_aie_aql_queue.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
+#include "core/util/memory.h"
 #include "core/util/utils.h"
 #include "uapi/amdxdna_accel.h"
 

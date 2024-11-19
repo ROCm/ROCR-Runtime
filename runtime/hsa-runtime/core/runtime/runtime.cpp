@@ -66,20 +66,21 @@
 #endif
 
 #include "core/common/shared.h"
-#include "core/inc/hsa_ext_interface.h"
+#include "core/inc/amd_core_dump.hpp"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/amd_topology.h"
-#include "core/inc/signal.h"
-#include "core/inc/interrupt_signal.h"
-#include "core/inc/hsa_ext_amd_impl.h"
-#include "core/inc/hsa_api_trace_int.h"
-#include "core/util/os.h"
 #include "core/inc/exceptions.h"
-#include "inc/hsa_ven_amd_aqlprofile.h"
-#include "core/inc/amd_core_dump.hpp"
 #include "core/inc/host_queue.h"
+#include "core/inc/hsa_api_trace_int.h"
+#include "core/inc/hsa_ext_amd_impl.h"
+#include "core/inc/hsa_ext_interface.h"
+#include "core/inc/interrupt_signal.h"
+#include "core/inc/signal.h"
+#include "core/util/memory.h"
+#include "core/util/os.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 #ifndef HSA_VERSION_MAJOR
 #define HSA_VERSION_MAJOR 1
@@ -3378,8 +3379,8 @@ Runtime::MappedHandleAllowedAgent::~MappedHandleAllowedAgent() {
 hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permission_t perms) {
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
     void *mapped_ptr =
-        mmap(va, size, core::Driver::PermissionsToMmapFlags(perms),
-             MAP_SHARED | MAP_FIXED, mappedHandle->drm_fd,
+        mmap(va, size, PermissionsToMmapFlags(perms), MAP_SHARED | MAP_FIXED,
+             mappedHandle->drm_fd,
              reinterpret_cast<uint64_t>(mappedHandle->drm_cpu_addr));
     if (mapped_ptr != va)
       return HSA_STATUS_ERROR;
