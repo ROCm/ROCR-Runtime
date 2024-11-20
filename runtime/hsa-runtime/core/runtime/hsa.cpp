@@ -534,6 +534,15 @@ hsa_status_t hsa_system_get_major_extension_table(uint16_t extension, uint16_t v
     ext_table.hsa_ven_amd_aqlprofile_iterate_data =
       (decltype(::hsa_ven_amd_aqlprofile_iterate_data)*)
         os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_data");
+    ext_table.hsa_ven_amd_aqlprofile_iterate_event_ids =
+      (decltype(::hsa_ven_amd_aqlprofile_iterate_event_ids)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_event_ids");
+    ext_table.hsa_ven_amd_aqlprofile_iterate_event_coord =
+      (decltype(::hsa_ven_amd_aqlprofile_iterate_event_coord)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_iterate_event_coord");
+    ext_table.hsa_ven_amd_aqlprofile_att_marker =
+      (decltype(::hsa_ven_amd_aqlprofile_att_marker)*)
+        os::GetExportAddress(lib, "hsa_ven_amd_aqlprofile_att_marker");
 
     bool version_incompatible = true;
     uint32_t version_curr = 0;
