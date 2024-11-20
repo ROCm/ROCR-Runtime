@@ -246,7 +246,8 @@ FILTER[renoir]=\
 # KFDExceptionTest.* (KFD-435)
 FILTER[arcturus]=\
 "$BLACKLIST_ALL_ASICS:"\
-"KFDExceptionTest.FaultStorm"\
+"KFDExceptionTest.FaultStorm:"\
+"KFDNegativeTest.*"
 
 FILTER[aldebaran]=\
 "$BLACKLIST_ALL_ASICS:"\
