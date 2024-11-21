@@ -1468,9 +1468,10 @@ TEST_F(KFDMemoryTest, PtraceAccessInvisibleVram) {
     TEST_END
 }
 
+volatile int IntrSignalReceviced;
+
 void CatchSignal(int IntrSignal) {
-    LOG() << "Interrupt Signal " << std::dec << IntrSignal
-          << " Received" << std::endl;
+    IntrSignalReceviced = IntrSignal;
 }
 
 TEST_F(KFDMemoryTest, SignalHandling) {
@@ -1529,6 +1530,11 @@ TEST_F(KFDMemoryTest, SignalHandling) {
         // Parent process, just wait for the child to finish
         do {
             pid = waitpid(childPid, &childStatus, 0);
+            if (IntrSignalReceviced) {
+                LOG() << "Interrupt Signal " << std::dec << IntrSignalReceviced
+                    << " Received" << std::endl;
+                IntrSignalReceviced = 0;
+            }
         } while(pid == -1 && errno == EINTR);
         EXPECT_EQ(childPid, pid);
         EXPECT_NE(0, WIFEXITED(childStatus));
