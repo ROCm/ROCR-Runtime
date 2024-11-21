@@ -1987,24 +1987,26 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
   fprintf(stderr, "\n");
   it = start;
   runtime_singleton_->memory_lock_.Release();
-  hsa_amd_pointer_info_t info;
-  PtrInfoBlockData block;
-  uint32_t count;
-  hsa_agent_t* canAccess;
+  hsa_amd_pointer_info_t info = {};
+  PtrInfoBlockData block = {};
+  uint32_t count = 0;
+  hsa_agent_t* canAccess = nullptr;
   info.size = sizeof(info);
   for (int i = 0; i < 3; i++) {
     if (it == runtime_singleton_->allocation_map_.end()) break;
-    runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc, &count, &canAccess,
-                                &block);
-    fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
-            info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
-            info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes, info.sizeInBytes,
-            info.type, reinterpret_cast<void*>(info.agentOwner.handle));
-    fprintf(stderr, "\tCanAccess: %u\n", count);
-    for (int t = 0; t < count; t++)
-      fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
-    fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
-    free(canAccess);
+    hsa_status_t err = runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, 
+                                                    malloc, &count, &canAccess, &block);
+    if (err == HSA_STATUS_SUCCESS) {
+      fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
+              info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
+              info.hostBaseAddress, (char*)info.hostBaseAddress + info.sizeInBytes, info.sizeInBytes,
+              info.type, reinterpret_cast<void*>(info.agentOwner.handle));
+      fprintf(stderr, "\tCanAccess: %u\n", count);
+      for (int t = 0; t < count; t++)
+        fprintf(stderr, "\t\t%p\n", reinterpret_cast<void*>(canAccess[t].handle));
+      fprintf(stderr, "\tIn block: %p, 0x%lx\n", block.base, block.length);
+      free(canAccess);
+    }
     it++;
   }
 }
