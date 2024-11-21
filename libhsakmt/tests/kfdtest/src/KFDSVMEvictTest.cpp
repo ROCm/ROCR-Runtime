@@ -399,7 +399,7 @@ TEST_P(KFDSVMEvictTest, QueueTest) {
     addrBuffer.Fill(0x5678);
 
     /* wait for shader to finish or timeout if shade has vm page fault */
-    dispatch0.SyncWithStatus(120000);
+    dispatch0.SyncWithStatus(g_TestTimeOut * 5);
 
     ASSERT_SUCCESS(pm4Queue.Destroy());
     /* LOG() << m_psName << "free buffer" << std::endl; */

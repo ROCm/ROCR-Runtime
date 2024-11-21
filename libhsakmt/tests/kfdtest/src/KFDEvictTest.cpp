@@ -486,7 +486,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     addrBuffer.Fill(0x5678);
 
     /* Wait for shader to finish or timeout if shader has vm page fault */
-    EXPECT_EQ(0, dispatch0.SyncWithStatus(180000));
+    EXPECT_EQ(0, dispatch0.SyncWithStatus(g_TestTimeOut * 5));
 
     EXPECT_SUCCESS(pm4Queue.Destroy());
 
