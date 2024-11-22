@@ -278,10 +278,23 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     const void* cmd, size_t cmd_size, uint64_t size, const std::vector<core::Signal*>& dep_signals,
     core::Signal& out_signal, std::vector<core::Signal*>& gang_signals) {
 
-  // The signal is 64 bit value, and poll checks for 32 bit value. So we
-  // need to use two poll operations per dependent signal.
-  const uint32_t num_poll_command =
-      static_cast<uint32_t>(2 * dep_signals.size());
+  uint32_t num_poll_command = 0;
+
+  // Cached copy of dep_signals[i]->LoadRelaxed
+  uint64_t dep_signals_value[dep_signals.size()];
+
+  for (size_t i = 0; i < dep_signals.size(); ++i) {
+    // The signal is 64 bit value, and poll checks for 32 bit value.
+    // If the signal is already 0, then we do not need to poll.
+    // If the upper 32-bits of the signal is 0, then we only need to poll the
+    // lower 32-bits
+    dep_signals_value[i] = dep_signals[i]->LoadRelaxed();
+    if (dep_signals_value[i]) {
+      num_poll_command++;
+      if (dep_signals_value[i] >> 32)
+        num_poll_command++;
+    }
+  }
   const uint32_t total_poll_command_size =
       (num_poll_command * poll_command_size_);
 
@@ -357,18 +370,23 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
   uint32_t wrapped_index = WrapIntoRing(curr_index);
 
   for (size_t i = 0; i < dep_signals.size(); ++i) {
-    uint32_t* signal_addr =
-        reinterpret_cast<uint32_t*>(dep_signals[i]->ValueLocation());
-    // Wait for the higher 64 bit to 0.
-    BuildPollCommand(command_addr, &signal_addr[1], 0);
-    command_addr += poll_command_size_;
-    bytes_written_[wrapped_index] = prior_bytes;
-    wrapped_index += poll_command_size_;
-    // Then wait for the lower 64 bit to 0.
-    BuildPollCommand(command_addr, &signal_addr[0], 0);
-    command_addr += poll_command_size_;
-    bytes_written_[wrapped_index] = prior_bytes;
-    wrapped_index += poll_command_size_;
+    if (dep_signals_value[i]) {
+      uint32_t* signal_addr =
+          reinterpret_cast<uint32_t*>(dep_signals[i]->ValueLocation());
+
+      if (dep_signals_value[i] >> 32) {
+        // Wait for the higher 32 bits to 0.
+        BuildPollCommand(command_addr, &signal_addr[1], 0);
+        command_addr += poll_command_size_;
+        bytes_written_[wrapped_index] = prior_bytes;
+        wrapped_index += poll_command_size_;
+      }
+      // Then wait for the lower 32 bits to 0.
+      BuildPollCommand(command_addr, &signal_addr[0], 0);
+      command_addr += poll_command_size_;
+      bytes_written_[wrapped_index] = prior_bytes;
+      wrapped_index += poll_command_size_;
+    }
   }
 
   if (profiling_enabled && (gang_leader_ || gang_signals.empty())) {
