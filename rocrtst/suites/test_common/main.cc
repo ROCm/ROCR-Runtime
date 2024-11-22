@@ -412,7 +412,11 @@ TEST(rocrtstNeg, Memory_Negative_Tests) {
   RunCustomTestProlog(&mt);
   mt.ZeroMemoryAllocateTest();
   mt.MaxMemoryAllocateTest();
-  mt.FreeQueueRingBufferTest();
+
+  // Disabled temporarily - Renable this test only
+  // on recent GPUs - gfx94x+
+  // mt.FreeQueueRingBufferTest();
+
   RunCustomTestEpilog(&mt);
 }
 
