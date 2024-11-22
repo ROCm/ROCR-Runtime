@@ -555,7 +555,7 @@ void GpuAgent::InitScratchPool() {
   }
 #endif
 
-  void* scratch_base;
+  void* scratch_base = nullptr;
   HSAKMT_STATUS err =
       hsaKmtAllocMemory(node_id(), max_scratch_len, flags, &scratch_base);
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtAllocMemory(Scratch) failed");
