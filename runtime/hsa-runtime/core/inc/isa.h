@@ -185,13 +185,13 @@ class Isa final: public amd::hsa::common::Signed<0xB13594F2BD8F212D> {
       hsa_fp_type_t fp_type,
       hsa_flush_mode_t flush_mode) const;
 
- private:
   /// @brief Default constructor.
   Isa()
       : targetid_(nullptr),
         version_(Version(-1, -1, -1)),
         sramecc_(IsaFeature::Unsupported),
         xnack_(IsaFeature::Unsupported) {}
+ private:
 
   // @brief Isa's target ID name.
   const char* targetid_;

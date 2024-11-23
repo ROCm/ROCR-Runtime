@@ -41,6 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/isa.h"
+#include "core/util/utils.h"
 
 #include <algorithm>
 #include <cstring>
@@ -93,6 +94,11 @@ bool Isa::IsCompatible(const Isa &code_object_isa,
 std::string Isa::GetProcessorName() const {
   std::string processor(targetid_);
   return processor.substr(0, processor.find(':'));
+}
+
+static __forceinline std::string prepend_isa_prefix(const std::string &isa_name) {
+  constexpr char hsa_isa_name_prefix[] = "amdgcn-amd-amdhsa--";
+  return hsa_isa_name_prefix + isa_name;
 }
 
 std::string Isa::GetIsaName() const {
@@ -221,27 +227,27 @@ const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, 
 
 const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
 
-// agent, and vendor name length limit excluding terminating nul character.
-constexpr size_t hsa_name_size = 63;
+  // agent, and vendor name length limit excluding terminating nul character.
+  constexpr size_t hsa_name_size = 63;
+  // This allocation is meant to last until the last thread has exited.
+  // It is intentionally not freed.
+  static IsaMap* supported_isas = new IsaMap();
+
+  if (supported_isas->size() > 0) {
+    return *supported_isas;
+  }
 
 // FIXME: Use static_assert when C++17 used.
 #define ISAREG_ENTRY_GEN(name, maj, min, stp, sramecc, xnack, wavefrontsize)                                                              \
-  assert(std::char_traits<char>::length(name) <= hsa_name_size);                                                                          \
-  Isa amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize;                                     \
-  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.targetid_ = name;                        \
-  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.version_ = Isa::Version(maj, min, stp);  \
-  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.sramecc_ = sramecc;                      \
-  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.xnack_ = xnack;                          \
-  amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.wavefront_.num_threads_ = wavefrontsize; \
-  supported_isas.insert(std::make_pair(                                                                                                   \
-      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize.GetIsaName(),                        \
-      amd_amdgpu_##maj##min##stp##_SRAMECC_##sramecc##_XNACK_##xnack##_WAVEFRONTSIZE_##wavefrontsize));                                   \
-
-  static IsaMap supported_isas;
-
-  if (supported_isas.size() > 0) {
-    return supported_isas;
-  }
+ {                                                                                     \
+  assert(std::char_traits<char>::length(name) <= hsa_name_size);                       \
+  std::string isa_name = prepend_isa_prefix(name);                                     \
+  (*supported_isas)[isa_name].targetid_ = name;                                           \
+  (*supported_isas)[isa_name].version_ = Isa::Version(maj, min, stp);                     \
+  (*supported_isas)[isa_name].sramecc_ = sramecc;                                         \
+  (*supported_isas)[isa_name].xnack_ = xnack;                                             \
+  (*supported_isas)[isa_name].wavefront_.num_threads_ = wavefrontsize;                    \
+ }
 
   const IsaFeature unsupported = IsaFeature::Unsupported;
   const IsaFeature any = IsaFeature::Any;
@@ -359,7 +365,7 @@ constexpr size_t hsa_name_size = 63;
   ISAREG_ENTRY_GEN("gfx1200",                12, 0, 0, unsupported, unsupported, 32)
   ISAREG_ENTRY_GEN("gfx1201",                12, 0, 1, unsupported, unsupported, 32)
 #undef ISAREG_ENTRY_GEN
-  return supported_isas;
+  return *supported_isas;
 }
 
 } // namespace core
