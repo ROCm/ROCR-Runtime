@@ -83,7 +83,6 @@ void* __stdcall ThreadTrampoline(void* arg) {
   ThreadArgs* ar = (ThreadArgs*)arg;
   ThreadEntry CallMe = ar->entry_function;
   void* Data = ar->entry_args;
-  delete ar;
   CallMe(Data);
   return nullptr;
 }
@@ -94,12 +93,11 @@ class os_thread {
   explicit os_thread(ThreadEntry function, void* threadArgument, uint stackSize)
       : thread(0), lock(nullptr), state(RUNNING) {
     int err;
-    std::unique_ptr<ThreadArgs> args(new ThreadArgs);
     lock = CreateMutex();
     if (lock == nullptr) return;
 
-    args->entry_args = threadArgument;
-    args->entry_function = function;
+    args.entry_args = threadArgument;
+    args.entry_function = function;
 
     pthread_attr_t attrib;
     err = pthread_attr_init(&attrib);
@@ -146,7 +144,7 @@ class os_thread {
     }
 
     do {
-      err = pthread_create(&thread, &attrib, ThreadTrampoline, args.get());
+      err = pthread_create(&thread, &attrib, ThreadTrampoline, &args);
       if (!err) break;
 
       if (err != EINVAL || stackSize == 0) {
@@ -164,12 +162,11 @@ class os_thread {
         return;
       }
     } while (stackSize < 20 * 1024 * 1024);
-
-    args.release();
   }
 
   os_thread(os_thread&& rhs) {
     thread = rhs.thread;
+    args = rhs.args;
     lock = rhs.lock;
     state = int(rhs.state);
     rhs.thread = 0;
@@ -204,6 +201,7 @@ class os_thread {
 
  private:
   pthread_t thread;
+  struct ThreadArgs args;
   Mutex lock;
   std::atomic<int> state;
   enum { FINISHED = 0, RUNNING = 1 };
