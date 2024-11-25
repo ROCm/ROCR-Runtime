@@ -101,9 +101,9 @@ ROCPROFILER_REGISTER_DEFINE_IMPORT(hsa, ROCP_REG_VERSION)
 const char rocrbuildid[] __attribute__((used)) = "ROCR BUILD ID: " STRING(ROCR_BUILD_ID);
 
 extern r_debug _amdgpu_r_debug;
-extern void _loader_debug_state();
 
 namespace rocr {
+extern void _loader_debug_state();
 namespace core {
 bool g_use_interrupt_wait;
 bool g_use_mwaitx;

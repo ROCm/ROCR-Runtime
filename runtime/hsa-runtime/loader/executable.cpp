@@ -66,12 +66,6 @@
 using namespace rocr::amd::hsa;
 using namespace rocr::amd::hsa::common;
 
-// Having a side effect prevents call site optimization that allows removal of a noinline function call
-// with no side effect.
-__attribute__((noinline)) void _loader_debug_state() {
-  static volatile int function_needs_a_side_effect = 0;
-  function_needs_a_side_effect ^= 1;
-}
 // r_version history:
 // 1: Initial debug protocol
 // 2: New trap handler ABI. The reason for halting a wave is recorded in ttmp11[8:7].
@@ -92,6 +86,13 @@ static __forceinline link_map*& r_debug_tail() {
 }
 
 namespace rocr {
+  // Having a side effect prevents call site optimization that allows removal of a noinline function call
+  // with no side effect.
+__attribute__((noinline)) void _loader_debug_state() {
+  static volatile int function_needs_a_side_effect = 0;
+  function_needs_a_side_effect ^= 1;
+}
+
 namespace amd {
 namespace hsa {
 namespace loader {
