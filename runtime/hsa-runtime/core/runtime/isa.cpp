@@ -271,12 +271,14 @@ IsaRegistry::GetSupportedGenericVersions() {
 const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   // agent, and vendor name length limit excluding terminating nul character.
   constexpr size_t hsa_name_size = 63;
-  static IsaMap supported_isas;
+  // This allocation is meant to last until the last thread has exited.
+  // It is intentionally not freed.
+  static IsaMap* supported_isas = new IsaMap();
 
-  if (supported_isas.size() > 0) {
-    return supported_isas;
+  if (supported_isas->size() > 0) {
+    return *supported_isas;
   }
-
+  
   auto parse_out_minor_ver = [&](const std::string& generic_name) -> int32_t {
       size_t dot_pos = generic_name.find('.');
       int32_t min;
@@ -298,21 +300,21 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
  {                                                                                     \
   assert(std::char_traits<char>::length(name) <= hsa_name_size);                       \
   std::string isa_name = prepend_isa_prefix(name);                                     \
-  supported_isas[isa_name].targetid_ = name;                                           \
-  supported_isas[isa_name].version_ = Isa::Version(maj, min, stp);                     \
-  supported_isas[isa_name].sramecc_ = sramecc;                                         \
-  supported_isas[isa_name].xnack_ = xnack;                                             \
-  supported_isas[isa_name].wavefront_.num_threads_ = wavefrontsize;                    \
+  (*supported_isas)[isa_name].targetid_ = name;                                           \
+  (*supported_isas)[isa_name].version_ = Isa::Version(maj, min, stp);                     \
+  (*supported_isas)[isa_name].sramecc_ = sramecc;                                         \
+  (*supported_isas)[isa_name].xnack_ = xnack;                                             \
+  (*supported_isas)[isa_name].wavefront_.num_threads_ = wavefrontsize;                    \
   std::string genericname(gen_name);                                                   \
   if (genericname.size() != 0) {                                                       \
     std::string gen_isa_name = prepend_isa_prefix(genericname);                        \
-    supported_isas[isa_name].generic_ = gen_isa_name;                                  \
-    if (supported_isas.find(gen_isa_name) == supported_isas.end()) {                   \
-      supported_isas[gen_isa_name].targetid_ = genericname;                            \
-      supported_isas[gen_isa_name].version_ = Isa::Version(maj, parse_out_minor_ver(genericname), 0xFF); \
-      supported_isas[gen_isa_name].sramecc_ = sramecc;                                \
-      supported_isas[gen_isa_name].xnack_ = xnack;                                    \
-      supported_isas[gen_isa_name].wavefront_.num_threads_ = wavefrontsize;           \
+    (*supported_isas)[isa_name].generic_ = gen_isa_name;                                  \
+    if ((*supported_isas).find(gen_isa_name) == (*supported_isas).end()) {                   \
+      (*supported_isas)[gen_isa_name].targetid_ = genericname;                            \
+      (*supported_isas)[gen_isa_name].version_ = Isa::Version(maj, parse_out_minor_ver(genericname), 0xFF); \
+      (*supported_isas)[gen_isa_name].sramecc_ = sramecc;                                \
+      (*supported_isas)[gen_isa_name].xnack_ = xnack;                                    \
+      (*supported_isas)[gen_isa_name].wavefront_.num_threads_ = wavefrontsize;           \
     }                                                                                \
   }                                                                                  \
  }
@@ -434,7 +436,7 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN("gfx1201",                12, 0, 1, unsupported, unsupported, 32, "gfx12-generic")
 #undef ISAREG_ENTRY_GEN
 
-  return supported_isas;
+  return *supported_isas;
 }
 
 } // namespace core
