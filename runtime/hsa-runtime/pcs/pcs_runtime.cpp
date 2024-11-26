@@ -131,6 +131,11 @@ PcsRuntime::PcSamplingSession::PcSamplingSession(
   csd.buffer_size = buffer_size;
   csd.data_ready_callback = data_ready_callback;
   csd.client_callback_data = client_callback_data;
+
+  data_rdy.buf1 = nullptr;
+  data_rdy.buf1_sz = 0;
+  data_rdy.buf2 = nullptr;
+  data_rdy.buf2_sz = 0;
 }
 
 void PcsRuntime::PcSamplingSession::GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sampleInfo) {

@@ -79,11 +79,11 @@ class PcsRuntime {
                       void* client_callback_data);
     ~PcSamplingSession(){};
 
-    const bool isValid() { return valid_; }
-    const size_t buffer_size() { return csd.buffer_size; }
-    const hsa_ven_amd_pcs_method_kind_t method() { return csd.method; }
-    const size_t latency() { return csd.latency; }
-    const size_t sample_size() { return sample_size_; }
+    bool isValid() const { return valid_; }
+    size_t buffer_size() const { return csd.buffer_size; }
+    hsa_ven_amd_pcs_method_kind_t method() const { return csd.method; }
+    size_t latency() const { return csd.latency; }
+    size_t sample_size() const { return sample_size_; }
 
     void GetHsaKmtSamplingInfo(HsaPcSamplingInfo* sampleInfo);
     hsa_status_t HandleSampleData(uint8_t* buf1, size_t buf1_sz, uint8_t* buf2, size_t buf2_sz,
