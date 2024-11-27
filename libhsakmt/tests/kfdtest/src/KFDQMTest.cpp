@@ -578,6 +578,7 @@ TEST_F(KFDQMTest, DisableCpQueueByUpdateWithZeroPercentage) {
     queue.Wait4PacketConsumption(event);
 
     WaitOnValue(destBuf.As<unsigned int*>(), 1);
+    hsaKmtDestroyEvent(event);
 
     EXPECT_SUCCESS(queue.Destroy());
 
