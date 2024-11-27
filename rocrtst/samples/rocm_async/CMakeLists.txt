@@ -67,10 +67,10 @@ if("${tmp}" STREQUAL "debug")
 endif()
 
 if(ISDEBUG)
-  set(CMAKE_CXX_FLAGS "-std=c++11 -O0")
+  set(CMAKE_CXX_FLAGS "-std=c++17 -O0")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ggdb")
 else()
-  set(CMAKE_CXX_FLAGS "-std=c++11 -O2")
+  set(CMAKE_CXX_FLAGS "-std=c++17 -O2")
 endif()
 
 #

@@ -41,7 +41,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 /*
-  Helpers to use native types with C++11 atomic operations.
+  Helpers to use native types with C++17 atomic operations.
   Fixes GCC builtin functionality for x86 with respect to WC and non-temporal
   stores.
 */
@@ -66,23 +66,6 @@
 
 namespace rocr {
 namespace atomic {
-
-static constexpr int c11ToBuiltInFlags(std::memory_order order)
-{
-#if ALWAYS_CONSERVATIVE
-  return __ATOMIC_RELAXED;
-#elif X64_ORDER_WC
-  return __ATOMIC_RELAXED;
-#else
-  return (order == std::memory_order_relaxed) ? __ATOMIC_RELAXED :
-    (order == std::memory_order_acquire) ? __ATOMIC_ACQUIRE :
-    (order == std::memory_order_release) ? __ATOMIC_RELEASE :
-    (order == std::memory_order_seq_cst) ? __ATOMIC_SEQ_CST :
-    (order == std::memory_order_consume) ? __ATOMIC_CONSUME :
-    (order == std::memory_order_acq_rel) ? __ATOMIC_ACQ_REL :
-    __ATOMIC_SEQ_CST;
-#endif
-}
 
 static __forceinline void PreFence(std::memory_order order) {
 #if ALWAYS_CONSERVATIVE
@@ -145,14 +128,8 @@ static __forceinline void Fence(std::memory_order order=std::memory_order_seq_cs
 }
 
 template <class T>
-static __forceinline void BasicCheck(const T* ptr) {
-  constexpr bool value = __atomic_always_lock_free(sizeof(T), 0);
-  static_assert(value, "Atomic type may not be compatible with peripheral atomics.");
-};
-
-template <class T>
-static __forceinline void BasicCheck(const volatile T* ptr) {
-  constexpr bool value = __atomic_always_lock_free(sizeof(T), 0);
+static __forceinline void BasicCheck() {
+  constexpr bool value = std::atomic<T>::is_always_lock_free;
   static_assert(value, "Atomic type may not be compatible with peripheral atomics.");
 };
 
@@ -163,10 +140,10 @@ static __forceinline void BasicCheck(const volatile T* ptr) {
 template <class T>
 static __forceinline T
     Load(const T* ptr, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
-  T ret;
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_load(ptr, &ret, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.load(order);
   PostFence(order);
   return ret;
 }
@@ -179,10 +156,10 @@ template <class T>
 static __forceinline T
     Load(const volatile T* ptr,
          std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
-  T ret;
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_load(ptr, &ret, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.load(order);
   PostFence(order);
   return ret;
 }
@@ -195,9 +172,11 @@ static __forceinline T
 template <class T>
 static __forceinline void Store(
     T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_store(ptr, &val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  atomic_var.store(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
 }
 
@@ -210,9 +189,11 @@ template <class T>
 static __forceinline void Store(
     volatile T* ptr, T val,
     std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_store(ptr, &val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  atomic_var.store(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
 }
 
@@ -226,9 +207,13 @@ template <class T>
 static __forceinline T
     Cas(T* ptr, T val, T expected,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_compare_exchange(ptr, &expected, &val, false, c11ToBuiltInFlags(order), __ATOMIC_RELAXED);
+  // compare *ptr with expected, if true, assign val to *ptr
+  // if false, assign *ptr to expected
+  std::atomic<T> atomic_var(*ptr);
+  atomic_var.compare_exchange_strong(expected, val, order, std::memory_order_relaxed);
+  *ptr = atomic_var.load();
   PostFence(order);
   return expected;
 }
@@ -243,9 +228,13 @@ template <class T>
 static __forceinline T
     Cas(volatile T* ptr, T val, T expected,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  __atomic_compare_exchange(ptr, &expected, &val, false, c11ToBuiltInFlags(order), __ATOMIC_RELAXED);
+  // compare *ptr with expected, if true, assign val to *ptr
+  // if false, assign *ptr to expected
+  std::atomic<T> atomic_var(*ptr);
+  atomic_var.compare_exchange_strong(expected, val, order, std::memory_order_relaxed);
+  *ptr = atomic_var.load();
   PostFence(order);
   return expected;
 }
@@ -259,10 +248,12 @@ template <class T>
 static __forceinline T
     Exchange(T* ptr, T val,
              std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   T ret;
   PreFence(order);
-  __atomic_exchange(ptr, &val, &ret, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  ret = atomic_var.exchange(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -276,10 +267,12 @@ template <class T>
 static __forceinline T
     Exchange(volatile T* ptr, T val,
              std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   T ret;
   PreFence(order);
-  __atomic_exchange(ptr, &val, &ret, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  ret = atomic_var.exchange(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -292,9 +285,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Add(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_add(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_add(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -308,9 +303,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Sub(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_sub(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_sub(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -324,9 +321,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     And(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_and(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_and(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -339,9 +338,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Or(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_or(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_or(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -355,9 +356,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Xor(T* ptr, T val, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_xor(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_xor(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -370,9 +373,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Increment(T* ptr, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_add(ptr, 1, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_add(1, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -385,9 +390,11 @@ static __forceinline T
 template <class T>
 static __forceinline T
     Decrement(T* ptr, std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_sub(ptr, 1, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_sub(1, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -401,9 +408,11 @@ template <class T>
 static __forceinline T
     Add(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_add(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_add(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -418,9 +427,11 @@ template <class T>
 static __forceinline T
     Sub(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_sub(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_sub(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -435,9 +446,11 @@ template <class T>
 static __forceinline T
     And(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_and(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_and(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -450,9 +463,11 @@ static __forceinline T
 template <class T>
 static __forceinline T Or(volatile T* ptr, T val,
                           std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_or(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_or(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -467,9 +482,11 @@ template <class T>
 static __forceinline T
     Xor(volatile T* ptr, T val,
         std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_xor(ptr, val, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_xor(val, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -483,9 +500,11 @@ template <class T>
 static __forceinline T
     Increment(volatile T* ptr,
               std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_add(ptr, 1, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_add(1, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
@@ -499,9 +518,11 @@ template <class T>
 static __forceinline T
     Decrement(volatile T* ptr,
               std::memory_order order = std::memory_order_relaxed) {
-  BasicCheck<T>(ptr);
+  BasicCheck<T>();
   PreFence(order);
-  T ret = __atomic_fetch_sub(ptr, 1, c11ToBuiltInFlags(order));
+  std::atomic<T> atomic_var(*ptr);
+  T ret = atomic_var.fetch_sub(1, order);
+  *ptr = atomic_var.load();
   PostFence(order);
   return ret;
 }
