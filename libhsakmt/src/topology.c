@@ -669,8 +669,8 @@ static HSAKMT_STATUS topology_sysfs_check_node_supported(uint32_t sysfs_node_id,
 	snprintf(path, 256, "%s/%d/properties", KFD_SYSFS_PATH_NODES, sysfs_node_id);
 	fd = fopen(path, "r");
 	if (!fd) {
-		ret = HSAKMT_STATUS_ERROR;
-		goto err;
+		free(read_buf);
+		return HSAKMT_STATUS_ERROR;
 	}
 
 	read_size = fread(read_buf, 1, PAGE_SIZE, fd);
@@ -2065,7 +2065,6 @@ retry:
 					ret = topology_sysfs_get_iolink_props(i, sys_link_id++,
 								&temp_props[i].link[link_id], true);
 					if (ret == HSAKMT_STATUS_NOT_SUPPORTED) {
-						ret = HSAKMT_STATUS_SUCCESS;
 						continue;
 					} else if (ret != HSAKMT_STATUS_SUCCESS) {
 						free_properties(temp_props, i + 1);
@@ -2115,7 +2114,7 @@ err:
 	return ret;
 }
 
-/* Drop the Snashot of the HSA topology information. Assume lock is held. */
+/* Drop the Snapshot of the HSA topology information. Assume lock is held. */
 void topology_drop_snapshot(void)
 {
 	if (!!g_system != !!g_props)
