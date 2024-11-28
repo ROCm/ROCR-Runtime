@@ -43,6 +43,7 @@ const std::vector<const char*> ShaderList = {
     ReadMemoryIsa,
     GwsInitIsa,
     GwsAtomicIncreaseIsa,
+    CheckCuMaskIsa
 };
 
 /**
@@ -994,6 +995,50 @@ const char *GwsAtomicIncreaseIsa =
         s_waitcnt 0
         s_endpgm
 )";
+
+
+/*
+ * Shader used by ExtendedCuMasking test case to check if CU mask is used correctly.
+ *
+ * Shader will write to output buffer the (SE, SA, WGP) used by the wave.
+ * The test program will then analyse the data.
+ *
+ * Inputs
+ * ------
+ * s[2:3]  : output buffer base address
+ * s4/ttmp9: workgroup id (s4 for pre-GFX12, ttmp9 for GFX12)
+ *
+ * Output
+ * ------
+ * Store HW_ID1 content in output buffer at index corresponding to workgroup id.
+ *
+ */
+const char *CheckCuMaskIsa =
+    SHADER_START
+    SHADER_MACROS_U32
+    SHADER_MACROS_FLAT
+    R"(
+        // Get workgroup id
+        .if (.amdgcn.gfx_generation_number >= 12)
+            v_mov_b32    v0, ttmp9
+        .else
+            v_mov_b32    v0, s4
+        .endif
+
+        // Address of output buffer element: v[4:5] = s[2:3] + v0 * 4
+        v_lshlrev_b32    v6, 2, v0
+        V_ADD_CO_U32     v4, s2, v6
+        v_mov_b32        v5, s3
+        V_ADD_CO_CI_U32  v5, v5, 0
+
+        // Store HW_ID1 content
+        s_getreg_b32     s6, hwreg(HW_REG_HW_ID1)
+        v_mov_b32        v1, s6
+        flat_store_dword v[4:5], v1
+
+        s_endpgm
+)";
+
 
 const char *JumpToTrapIsa =
     SHADER_START

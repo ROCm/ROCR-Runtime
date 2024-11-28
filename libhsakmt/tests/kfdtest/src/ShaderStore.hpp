@@ -51,6 +51,7 @@ extern const char *FlushBufferForAcquireReleaseIsa;
 
 /* KFDQMTest */
 extern const char *LoopIsa;
+extern const char *CheckCuMaskIsa;
 
 /* KFDCWSRTest */
 extern const char *PersistentIterateIsa;

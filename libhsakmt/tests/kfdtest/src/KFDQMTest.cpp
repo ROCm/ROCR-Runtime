@@ -897,6 +897,380 @@ TEST_F(KFDQMTest, BasicCuMaskingLinear) {
     TEST_END
 }
 
+
+// ====== ExtendedCuMasking Helper Functions ====== //
+
+
+#define CUMASK_DEBUG 0   // Enable extra output for debugging issues
+
+#if CUMASK_DEBUG
+#define DBG_PRINT printf
+#else
+#define DBG_PRINT
+#endif
+
+/*
+ * Set the CU mask for each specified WGPs.
+ *
+ * Note: The effect is cumulative, function can be called multiple times to
+ *       set up additional WGPs in the provided pMask.
+ *
+ * pMask:      A non-NULL pointer to the CU mask.
+ * maskConfig: Information on GPU configuration.
+ * seMask:     Specifies SEs that are targetted.
+ * saMask:     Specifies SAs that are targetted within the SEs specified.
+ * wgpMask:    Specifies WGPs that are targetted within the (SE,SA) specified.
+ *
+ * For seMask, saMask, and wgpMask:
+ *   One bit per SE/SA/WGP, multiple bits can be specified.
+ *   Masks cannot be 0 (at least 1 SE, 1 SA and 1 WGP must be specified).
+ *   Special value: -1 (specifies ALL)
+ *
+ */
+static bool setCUMask(uint32_t *pMask, mask_config_t maskConfig, uint32_t seMask, uint32_t saMask, uint32_t wgpMask) {
+
+    bool result = true;
+
+    if (pMask) {
+        if (seMask && saMask && wgpMask) {   // proceed only with non-zero mask
+            for (int i = 0; i < maskConfig.numWGPperSA; i++) {
+                if (((wgpMask >> i) & 1)) {
+                    for (int j = 0; j < maskConfig.numSAperSE; j++) {
+                        if (((saMask >> j) & 1)) {
+                            for (int k = 0; k < maskConfig.numSEs; k++) {
+                                if (((seMask >> k) & 1)) {
+                                    uint32_t insLoc = k * 2 + j * (2 * maskConfig.numSEs) + i * (2 * maskConfig.numSEs * maskConfig.numSAperSE);
+                                    pMask[insLoc / 32] |= (0x3 << (insLoc % 32));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            LOG() << "ERROR: SE/SA/WGP mask values must be non-zero!\n";
+            result = false;
+        }
+    } else {
+        LOG() << "ERROR: pMask is NULL!\n";
+        result = false;
+    }
+
+    return result;
+}
+
+/*
+ * Validates the result of a test.
+ *
+ * pMask:        A non-NULL pointer to the CU mask that was used for the test.
+ * maskConfig:   Information on GPU configuration.
+ * numWorkItems: Number of work items used for shader execution.
+ * pOutput:      Pointer to the output array.
+ *
+ */
+static bool validateTest(uint32_t *pMask, mask_config_t maskConfig, uint32_t numWorkItems, out_data_t *pOutput)
+{
+    uint32_t resultMask[maskConfig.numDwords] = { 0 };
+    bool result = false;
+
+    for (int i = 0; i < numWorkItems; i++) {
+        DBG_PRINT("=== % 4d: 0x%08x [ se: %2d, sa: %2d, wgp: %2d]\n", i, pOutput[i].data, pOutput[i].se, pOutput[i].sa, pOutput[i].wgp);
+
+        setCUMask(resultMask, maskConfig,
+                  1 << pOutput[i].se,
+                  1 << pOutput[i].sa,
+                  1 << pOutput[i].wgp);
+    }
+
+    result = (memcmp(pMask, resultMask, sizeof(resultMask)) == 0);
+
+#if CUMASK_DEBUG
+    fprintf(stderr,   "        mask: ");
+    for (int i = 0; i < maskConfig.numDwords; i++) {
+      fprintf(stderr, " %08x", pMask[i]);
+    }
+    fprintf(stderr, "\n  resultMask: ");
+    for (int i = 0; i < maskConfig.numDwords; i++) {
+      fprintf(stderr, " %08x", resultMask[i]);
+    }
+    fprintf(stderr, "\n      result: %s\n", result ? "PASS" : "FAIL");
+#endif //CUMASK_DEBUG
+
+    return result;
+}
+
+/*
+ * Set CU Mask, submit the testing shader, and validate the results.
+ *
+ * gpuNode:       The node to use for the test.
+ * pMask:         A non-NULL pointer to the CU mask to use for the test.
+ * maskConfig:    Information on GPU configuration.
+ * programBuffer: The buffer that contains the shader program.
+ * numWorkItems:  The number of work items to use.
+ * pOutput:       A non-NULL pointer to the output buffer used by the shader.
+ *
+ */
+bool KFDQMTest::testCUMask(int gpuNode, uint32_t *pMask, mask_config_t maskConfig, HsaMemoryBuffer &programBuffer, uint32_t numWorkItems, out_data_t *pOutput) {
+
+    PM4Queue queue;
+
+    Dispatch dispatch(programBuffer);
+    dispatch.SetArgs(NULL, pOutput);
+    dispatch.SetDim(numWorkItems, 1, 1);
+
+    EXPECT_SUCCESS(queue.Create(gpuNode));
+    EXPECT_SUCCESS(queue.SetCUMask(pMask, maskConfig.numBits));
+    dispatch.Submit(queue);
+    dispatch.Sync();
+    EXPECT_SUCCESS(queue.Destroy());
+
+    return validateTest(pMask, maskConfig, numWorkItems, pOutput);
+}
+
+
+/*
+ * ExtendedCuMasking
+ *
+ * Newer implementation of CU mask testing that focuses on correctness of masking.
+ *
+ * Unlike previous implementations, this new implementation does not rely on performance
+ * measurements to decide if the masking took place.   Instead, this implementation checks
+ * if waves were executed on all the CUs enabled and only the CUs enabled.
+ *
+ * Implementation does a series of tests, new tests can be easily added as needed.
+ *
+ * For each test, these steps are performed:
+ *
+ * 1) Decide the units that are enabled for the test (SEs, SAs, WGPs).
+ * 2) Generate a CU mask that specifies the WGPs enabled on each (SE,SA) pairs.
+ * 3) Set the mask for the queue and run a special shader.
+ * 4) Shader records in a buffer the unit that is used by the wave (SE,SA,WGP).
+ * 5) Test program analyses the results and verifies if shader used all and only the
+ *    WGP units specified by the mask.
+ *
+ * Multiple tests are done with different combinations.
+ * There are (2^numWGPs - 1) possibilities, not everything can be tested.
+ *
+ * For each new ASIC supported, the following changes might be required:
+ * 1) Minor shader changes to put fill information into buffer.
+ * 2) Format of out_data_t struct.
+ * 3) Changes to validation code.
+ *
+ */
+TEST_F(KFDQMTest, ExtendedCuMasking) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+    ASSERT_GE(defaultGPUNode, 0) << "Failed to get default GPU node!";
+
+    if (m_FamilyId >= FAMILY_GFX12) {  // Supporting GFX12 and up for now
+        const HsaNodeProperties *pProps = m_NodeInfo.GetNodeProperties(defaultGPUNode);
+        const uint32_t activeCU = (pProps->NumFComputeCores / pProps->NumSIMDPerCU);
+        const uint32_t numSEs = pProps->NumShaderBanks;
+        const uint32_t numSAperSE = pProps->NumArrays;
+        const uint32_t numWGPperSA = pProps->NumCUPerArray / 2;
+
+        LOG() << std::endl;
+        LOG() << std::dec << "****** GFX Configuration ******" << std::endl;
+        LOG() << std::dec << "  Compute Cores (SIMD): " << std::setw(3) << pProps->NumFComputeCores << std::endl;
+        LOG() << std::dec << "          SIMDs per CU: " << std::setw(3) << pProps->NumSIMDPerCU << std::endl;
+        LOG() << std::dec << "            Active CUs: " << std::setw(3) << activeCU << std::endl;
+        LOG() << std::dec << "        Shader Engines: " << std::setw(3) << numSEs << std::endl;
+        LOG() << std::dec << "            SAs per SE: " << std::setw(3) << numSAperSE << std::endl;
+        LOG() << std::dec << "           WGPs per SA: " << std::setw(3) << numWGPperSA << std::endl;
+        LOG() << std::dec << "*******************************" << std::endl;
+
+        const uint32_t maskNumDwords = (activeCU + 31) / 32; /* Round up to the nearest multiple of 32 */
+        const uint32_t maskNumBits = maskNumDwords * 32;
+        uint32_t mask[maskNumDwords];
+
+        const mask_config_t maskConfig = { maskNumDwords, maskNumBits, numSEs, numSAperSE, numWGPperSA };
+
+        /*
+         * Note: On system with WGPs, CU bits in the same WGP must be either both set or both unset
+         *       i.e. enabling/disabling is on a per-WGP basis.
+         *
+         * Format of CU Mask array (Assuming 4 SEs)
+         *
+         * Bit    Value    Masking
+         *
+         *  0,1    0x03     SE0 SA0 WGP0 (i.e. CU0 and CU1)
+         *  2,3    0x0c     SE1 SA0 WGP0
+         *  4,5    0x30     SE2 SA0 WGP0
+         *  6,7    0xc0     SE3 SA0 WGP0
+         *
+         *  8,9    0x0300   SE0 SA1 WGP0
+         * 10,11   0x0c00   SE1 SA1 WGP0
+         * 12,13   0x3000   SE2 SA1 WGP0
+         * 14,15   0xc000   SE3 SA1 WGP0
+         *
+         * 16,17   0x030000 SE0 SA0 WGP1
+         * 18,19   0x030000 SE1 SA0 WGP1
+         * ...
+         * 32,33            SE0 SA0 WGP2
+         * ...
+         * 48,49            SE0 SA0 WGP3
+         * ...
+         *
+         */
+
+        /*
+         * Number of work items needs to be sufficiently large to have enough work items for each WGP enabled.
+         *
+         * Using total number of WGPs multiplied by 16.
+         *
+         */
+        const uint32_t numWorkItems = 16 * numSEs * numSAperSE * numWGPperSA;
+
+        // Allocate buffers for program and output
+        HsaMemoryBuffer programBuffer(PAGE_SIZE, defaultGPUNode, true, false, true);
+        HsaMemoryBuffer outputBuffer(((sizeof(out_data_t) * numWorkItems) + (PAGE_SIZE - 1)) & ~(PAGE_SIZE - 1), defaultGPUNode, true, false, false);
+        out_data_t *pOutput = outputBuffer.As<out_data_t *>();
+
+        // Assemble shader
+        ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CheckCuMaskIsa, programBuffer.As<char*>()));
+
+        /*
+         * Generate symmetric test configuration for all (SE, SA, WGP) combinations, one level at a time.
+         *
+         * Other levels fully enabled.
+         *
+         * Example: If testing SE disablement, all SA/WGP are enabled on the SE that are used.
+         *          If testing SA disablement, all SE are used, all WGP are enabled on the SA enabled.
+         *
+         */
+        uint32_t totalConfigTested = 0;
+
+        // All SE combination (0 not allowed, need at least one enabled)
+        LOG() << "=== Testing SE mask (" << ((1 << numSEs) - 1) << " configs)\n";
+        for (int i = 1; i < (1 << numSEs); i++) {
+            memset(mask, 0, sizeof(mask));
+
+            DBG_PRINT("SE mask: 0x%x\n", i);
+            setCUMask(mask, maskConfig, i, -1, -1);
+            ASSERT_TRUE(testCUMask(defaultGPUNode, mask, maskConfig, programBuffer, numWorkItems, pOutput));
+            totalConfigTested++;
+        }
+
+        // All SA combinations (0 not allowed, need at least one enabled)
+        LOG() << "=== Testing SA mask (" << ((1 << numSAperSE) - 1) << " configs)\n";
+        for (uint32_t i = 1; i < (1 << numSAperSE); i++) {
+            memset(mask, 0, sizeof(mask));
+
+            DBG_PRINT("SA mask: 0x%x\n", i);
+            setCUMask(mask, maskConfig, -1, i, -1);
+            ASSERT_TRUE(testCUMask(defaultGPUNode, mask, maskConfig, programBuffer, numWorkItems, pOutput));
+            totalConfigTested++;
+        }
+
+        // All WGP combinations (0 not allowed, need at least one enabled)
+        LOG() << "=== Testing WGP mask (" << ((1 << numWGPperSA) - 1) << " configs)\n"; 
+        for (uint32_t i = 1; i < (1 << numWGPperSA); i++) {
+            memset(mask, 0, sizeof(mask));
+
+            DBG_PRINT("WGP mask: 0x%x\n", i);
+            setCUMask(mask, maskConfig, -1, -1, i);
+            ASSERT_TRUE(testCUMask(defaultGPUNode, mask, maskConfig, programBuffer, numWorkItems, pOutput));
+            totalConfigTested++;
+        }
+
+        /*
+         * Linear Masking
+         *
+         * Enable one WGP at a time until they are all enabled.
+         *
+         */
+        {
+            uint32_t totalWGPs = numSEs * numSAperSE * numWGPperSA;
+
+            LOG() << "=== Testing linear mask (" << totalWGPs << " configs)\n";
+
+            memset(mask, 0, sizeof(mask));
+
+            for (int32_t i = 0; i < totalWGPs; i++) {
+                mask[i / 16] |= (0x3 << (i * 2));
+
+#if CUMASK_DEBUG
+                printf("  linear mask: ");
+                for (int j = maskNumDwords - 1; j >= 0; j--) {
+                    printf("%08x", mask[j]);
+                }
+                printf("\n");
+#endif //CUMASK_DEBUG
+
+                ASSERT_TRUE(testCUMask(defaultGPUNode, mask, maskConfig, programBuffer, numWorkItems, pOutput));
+                totalConfigTested++;
+            }
+        }
+
+        /*
+         * Random asymmetric config.
+         *
+         * Asymmetric, different WGPs/SAs are enabled/disabled on different SEs.
+         *
+         */
+        {
+            uint32_t randomCount = 1000;  // Total number of random test to perform
+            uint32_t seed = 1;            // Specifying a seed to have deterministic random sequence
+
+            srand(seed);
+
+            LOG() << "=== Testing " << randomCount << " random mask config...\n";
+
+            for (uint32_t i = 0; i < randomCount; i++) {
+
+                memset(mask, 0, sizeof(mask));
+
+                uint32_t wgpLeft = activeCU / 2;   // init to total WGPs
+                uint32_t maskIndex = 0;
+
+                while (wgpLeft > 0) {
+                    uint32_t wgpBlock = (wgpLeft > 16) ? 16 : wgpLeft;   // max 16 WGPs at a time
+                    wgpLeft -= wgpBlock;
+
+                    /*
+                     * Pick random number between 0 to (2^wgpBlock - 1) - 1.
+                     * Then add 1 to get random number between 1 to (2^wgpBlock - 1).
+                     * This ensure that we don't end up with 0 for all the dwords in the mask.
+                     */
+                    uint32_t wgpMask = (rand() % ((1ULL << wgpBlock) - 1)) + 1;
+
+                    // expand WGP mask to CU mask by doubling each individual bits.
+                    uint32_t expandToCUMask = 0;
+                    for (uint32_t j = 0; j < wgpBlock; j++) {
+                        if (wgpMask & (1 << j)) {
+                            expandToCUMask |= (0x3ULL << (j * 2));
+                        }
+                    }
+
+                    DBG_PRINT("maskIndex: %u  fullWGPMask: 0x%08x  expand: 0x%08x\n", maskIndex, wgpMask, expandToCUMask);
+
+                    mask[maskIndex++] = expandToCUMask;
+                }
+
+                ASSERT_TRUE(testCUMask(defaultGPUNode, mask, maskConfig, programBuffer, numWorkItems, pOutput));
+                totalConfigTested++;
+            }
+        }
+
+        LOG() << std::endl;
+        LOG() << "Total config tested: " << totalConfigTested << std::endl;
+        LOG() << std::endl;
+
+    } else {
+        LOG() << "Skipping test: Test not supported for family ID 0x" << m_FamilyId << "." << std::endl;
+    }
+
+    TEST_END
+}
+
+#undef CUMASK_DEBUG
+#undef DBG_PRINT
+
+// ====== End of ExtendedCUMasking Functions ====== //
+
+
+
 /**
  * Apply CU masking where the number of CUs is equal across all Shader Engines
  * This will work due to the HW splitting the workload unevenly across the Shader
