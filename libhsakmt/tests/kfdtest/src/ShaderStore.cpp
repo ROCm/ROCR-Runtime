@@ -810,10 +810,11 @@ const char *PersistentIterateIsa =
         // Store known-value output in register
         .if (.amdgcn.gfx_generation_number >= 12)
             FLAT_LOAD_DWORD_NSS     v6, v[4:5] scope:SCOPE_SYS
+            s_wait_loadcnt 0                        // wait for memory reads to finish
         .else
             FLAT_LOAD_DWORD_NSS     v6, v[4:5] glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
         .endif
-        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
 
         // Initialize counter
         v_mov_b32               v7, 0
@@ -824,17 +825,17 @@ const char *PersistentIterateIsa =
 
         .if (.amdgcn.gfx_generation_number >= 12)
             s_load_dword            s6, s[0:1], 0 scope:SCOPE_SYS
+            s_wait_loadcnt 0                        // wait for memory reads to finish
         .else
             s_load_dword            s6, s[0:1], 0 glc
+            s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
         .endif
-        s_waitcnt vmcnt(0) & lgkmcnt(0)         // wait for memory reads to finish
         s_cmp_eq_i32            s6, 0x12345678  // compare input buf to stopval
         s_cbranch_scc1          L_QUIT          // branch if notified to quit by host
 
         s_branch LOOP
 
         L_QUIT:
-        s_waitcnt vmcnt(0) & lgkmcnt(0)
         s_endpgm
 )";
 
