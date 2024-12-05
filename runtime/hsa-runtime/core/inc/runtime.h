@@ -512,7 +512,8 @@ class Runtime {
           size(size_arg),
           size_requested(size_requested),
           alloc_flags(alloc_flags),
-          user_ptr(nullptr) {}
+          user_ptr(nullptr),
+          ldrm_bo(NULL) {}
 
     struct notifier_t {
       void* ptr;
@@ -821,7 +822,7 @@ class Runtime {
   struct MappedHandle;
   struct MappedHandleAllowedAgent {
     MappedHandleAllowedAgent()
-        : va(NULL), permissions(HSA_ACCESS_PERMISSION_NONE), mappedHandle(NULL), ldrm_bo(0) {}
+        : va(NULL), size(0), permissions(HSA_ACCESS_PERMISSION_NONE), mappedHandle(NULL), ldrm_bo(0) {}
     MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
                              hsa_access_permission_t perms);
     ~MappedHandleAllowedAgent();

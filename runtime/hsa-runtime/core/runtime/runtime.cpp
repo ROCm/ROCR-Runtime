@@ -507,8 +507,8 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   // Fetch ownership
   const auto& is_system_mem = [&](void* ptr, core::Agent*& agent, bool& need_lock) {
-    hsa_amd_pointer_info_t info;
-    uint32_t count;
+    hsa_amd_pointer_info_t info = {};
+    uint32_t count = 0;
     hsa_agent_t* accessible = nullptr;
     MAKE_SCOPE_GUARD([&]() { free(accessible); });
     info.size = sizeof(info);
@@ -586,10 +586,12 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
                                  std::vector<core::Signal*>& dep_signals,
                                  core::Signal& completion_signal) {
   auto lookupAgent = [this](core::Agent* agent, const void* ptr) {
-    hsa_amd_pointer_info_t info;
-    PtrInfoBlockData block;
+    hsa_amd_pointer_info_t info = {};
+    PtrInfoBlockData block = {};
     info.size = sizeof(info);
-    PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+    if (err != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
     // Limit to IPC and GFX types for now.  These are the only types for which the application may
     // not posess a proper agent handle.
     if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS)) {
@@ -642,8 +644,8 @@ hsa_status_t Runtime::CopyMemoryStatus(core::Agent* dst_agent, core::Agent* src_
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
   // Choose blit agent from pointer info
-  hsa_amd_pointer_info_t info;
-  uint32_t agent_count;
+  hsa_amd_pointer_info_t info = {};
+  uint32_t agent_count = 0;
   hsa_agent_t* accessible = nullptr;
   info.size = sizeof(info);
   MAKE_SCOPE_GUARD([&]() { free(accessible); });
@@ -1122,7 +1124,7 @@ static int SendDmaBufFd(int socket, int dmabuf_fd) {
 
   msg.msg_controllen = CMSG_SPACE(sizeof(dmabuf_fd));
 
-  size_t sent = sendmsg(socket, &msg, 0);
+  ssize_t sent = sendmsg(socket, &msg, 0);
 
   return (sent < 0) ? -1 : 0;
 }
@@ -1141,7 +1143,7 @@ static int ReceiveDmaBufFd(int socket) {
   msg.msg_control = c_buffer;
   msg.msg_controllen = sizeof(c_buffer);
 
-  size_t rcv = recvmsg(socket, &msg, MSG_WAITALL);
+  ssize_t rcv = recvmsg(socket, &msg, MSG_WAITALL);
   if (rcv < 0) return -1;
 
   while (!rcv)
@@ -1220,8 +1222,8 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   memset(handle->handle, 0, sizeof(handle->handle));
 
   // Check for fragment sharing.
-  PtrInfoBlockData block;
-  hsa_amd_pointer_info_t info;
+  PtrInfoBlockData block = {};
+  hsa_amd_pointer_info_t info = {};
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -1340,7 +1342,9 @@ int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
     struct timeval tv;
     tv.tv_sec = 10;
     tv.tv_usec = 0;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    int status = setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    assert(status == 0 && "DMA buffer FD could not be received for IPC!");
+    if (status) return -1;
 
     char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
     memset(&address, 0, sizeof(struct sockaddr_un));
@@ -1536,8 +1540,8 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
       allocation_map_.erase(it);
       lock.Release();  // Can't hold memory lock when using pointer info.
 
-      PtrInfoBlockData block;
-      hsa_amd_pointer_info_t info;
+      PtrInfoBlockData block = {};
+      hsa_amd_pointer_info_t info = {};
       info.size = sizeof(info);
       if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
         return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -1624,7 +1628,7 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
 
   while (!async_events_control_.exit) {
     // Wait for a signal
-    hsa_signal_value_t value;
+    hsa_signal_value_t value = 0;
     uint32_t index = 0;
     uint32_t wait_any = true;
     if (eventsInfo->monitor_exceptions) {
@@ -2024,15 +2028,22 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
 }
 
 Runtime::Runtime()
-    : region_gpu_(nullptr),
+    : loader_(nullptr),
+      region_gpu_(nullptr),
       sys_clock_freq_(0),
+      num_nodes_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
       hw_exception_event_(nullptr),
       hw_exception_signal_(nullptr),
+      internal_queue_create_notifier_user_data_(nullptr),
       ref_count_(0),
-      kfd_version{} {
+      kfd_version{},
+      ipc_sock_server_fd_(0) {
 
+  virtual_mem_api_supported_ = false;
+  ipc_dmabuf_supported_ = false;
+  xnack_enabled_ = false;
   asyncSignals_.monitor_exceptions = false;
   asyncExceptions_.monitor_exceptions = true;
   g_use_interrupt_wait = true;
@@ -2265,7 +2276,6 @@ int Runtime::GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd,
 }
 
 void Runtime::CheckVirtualMemApiSupport() {
-  virtual_mem_api_supported_ = false;
 
   auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
@@ -2286,7 +2296,6 @@ void Runtime::CheckVirtualMemApiSupport() {
 }
 
 void Runtime::InitIPCDmaBufSupport() {
-  ipc_dmabuf_supported_ = false;
   bool dmabuf_supported = false;
 
   // Early exit so we don't double load lib DRM
@@ -2368,7 +2377,7 @@ void Runtime::LoadTools() {
   std::string tool_names = flag_.tools_lib_names();
   std::vector<std::string> names;
   if (tool_names != "") {
-    names = parse_tool_names(tool_names);
+    names = parse_tool_names(std::move(tool_names));
     env_count = names.size();
   }
 
@@ -3351,12 +3360,10 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
     agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
   }
 
-  if (mappedHandleIt->second.ldrm_bo)
+  if (mappedHandleIt->second.ldrm_bo) {
     ret = amdgpu_bo_free(mappedHandleIt->second.ldrm_bo);
-  else
-    ret = munmap(va, size);
-
-  if (ret) return HSA_STATUS_ERROR;
+    if (ret) return HSA_STATUS_ERROR;
+  }
 
   assert(mappedHandleIt->second.address_handle->use_count >= 1);
   mappedHandleIt->second.address_handle->use_count--;
