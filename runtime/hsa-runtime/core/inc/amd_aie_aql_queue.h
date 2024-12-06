@@ -49,7 +49,6 @@
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
 #include "core/inc/signal.h"
-#include "core/util/locks.h"
 
 namespace rocr {
 namespace AMD {
@@ -131,6 +130,12 @@ private:
   /// @brief Base of the queue's ring buffer storage.
   void *ring_buf_ = nullptr;
 
+  /// @brief Called when the doorbell is rung to iterate over
+  /// all packets and submit them. Submissions is done by
+  // calling into the XdnaDriver.
+  hsa_status_t SubmitCmd(XdnaDriver& driver, void* queue_base, uint64_t read_dispatch_id,
+                         uint64_t write_dispatch_id);
+
   /// @brief Handle for an application context on the AIE device.
   ///
   /// Each user queue will have an associated context. This handle is assigned
@@ -154,4 +159,4 @@ private:
 } // namespace AMD
 } // namespace rocr
 
-#endif // header guard
+#endif  // HSA_RUNTIME_CORE_INC_AMD_HW_AQL_AIE_COMMAND_PROCESSOR_H_

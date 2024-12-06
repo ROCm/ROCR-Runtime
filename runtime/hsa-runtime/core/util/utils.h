@@ -348,6 +348,29 @@ static __forceinline std::string& rtrim(std::string& s) {
 
 static __forceinline std::string& trim(std::string& s) { return ltrim(rtrim(s)); }
 
+/// @brief: Flush the cachelines associated with the
+/// provided address, offset, and length
+/// @param: base(Input), base address to flush
+/// @param: offset(Input), offset of base address to flush
+/// @param: len(Input), length of buffer to flush
+inline void FlushCpuCache(const void* base, size_t offset, size_t len) {
+  static long cacheline_size = 0;
+
+  if (!cacheline_size) {
+    long sz = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+    if (sz <= 0) return;
+    cacheline_size = sz;
+  }
+
+  const char* cur = (const char*)base;
+  cur += offset;
+  uintptr_t lastline = (uintptr_t)(cur + len - 1) | (cacheline_size - 1);
+  do {
+    _mm_clflush((const void*)cur);
+    cur += cacheline_size;
+  } while (cur <= (const char*)lastline);
+}
+
 }  // namespace rocr
 
 template <uint32_t lowBit, uint32_t highBit, typename T>
@@ -393,6 +416,20 @@ inline uint32_t PtrHigh32(const void* p) {
 #endif
   return ptr;
 }
+
+/// @brief: Concatenates two numbers of type InType to a number of type OutType
+/// @param: hi(Input), To be placed in the upper bits of the output
+/// @param: lo(Input), To be placed in the lower bits of the output
+/// @return: OutType, Concatenation of hi and lo
+template <typename OutType, typename InType>
+typename std::enable_if<std::is_integral<OutType>::value && std::is_integral<InType>::value &&
+                            sizeof(OutType) >= 2 * sizeof(InType),
+                        OutType>::type
+Concat(InType hi, InType lo) {
+  OutType res = ((static_cast<OutType>(hi) << sizeof(InType) * 8) | static_cast<OutType>(lo));
+  return res;
+}
+
 
 #include "atomic_helpers.h"
 

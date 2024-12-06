@@ -100,6 +100,9 @@ public:
     return system_allocator_;
   }
 
+  /// @brief Getter for the AIE system deallocator.
+  const std::function<void(void*)>& system_deallocator() const { return system_deallocator_; }
+
   // AIE agent methods.
   /// @brief Get the number of columns on this AIE agent.
   uint32_t GetNumCols() const { return num_cols_; }
@@ -123,6 +126,9 @@ private:
   std::function<void *(size_t size, size_t align,
                        core::MemoryRegion::AllocateFlags flags)>
       system_allocator_;
+
+
+  std::function<void(void*)> system_deallocator_;
 
   const hsa_profile_t profile_ = HSA_PROFILE_BASE;
   const uint32_t min_aql_size_ = 0x40;

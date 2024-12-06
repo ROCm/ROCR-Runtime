@@ -41,22 +41,19 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "core/inc/amd_aie_aql_queue.h"
+#include "core/inc/amd_xdna_driver.h"
 
 #ifdef __linux__
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
-#include <sys/syscall.h>
-#include <unistd.h>
 #endif
 
 #ifdef _WIN32
 #include <Windows.h>
 #endif
 
-#include <stdio.h>
-#include <string.h>
-#include <thread>
+#include <cstring>
 
 #include "core/inc/queue.h"
 #include "core/inc/runtime.h"
@@ -104,7 +101,12 @@ AieAqlQueue::AieAqlQueue(AieAgent *agent, size_t req_size_pkts,
   drv.CreateQueue(*this);
 }
 
-AieAqlQueue::~AieAqlQueue() { Inactivate(); }
+AieAqlQueue::~AieAqlQueue() {
+  AieAqlQueue::Inactivate();
+  if (ring_buf_) {
+    agent_.system_deallocator()(ring_buf_);
+  }
+}
 
 hsa_status_t AieAqlQueue::Inactivate() {
   bool active(active_.exchange(false, std::memory_order_relaxed));
@@ -193,8 +195,54 @@ uint64_t AieAqlQueue::AddWriteIndexAcqRel(uint64_t value) {
 }
 
 void AieAqlQueue::StoreRelaxed(hsa_signal_value_t value) {
-  atomic::Store(signal_.hardware_doorbell_ptr, uint64_t(value),
-                std::memory_order_release);
+  auto& driver = static_cast<XdnaDriver&>(agent_.driver());
+  SubmitCmd(driver, amd_queue_.hsa_queue.base_address, amd_queue_.read_dispatch_id,
+            amd_queue_.write_dispatch_id);
+}
+
+hsa_status_t AieAqlQueue::SubmitCmd(XdnaDriver& driver, void* queue_base, uint64_t read_dispatch_id,
+                                    uint64_t write_dispatch_id) {
+  uint64_t cur_id = read_dispatch_id;
+  while (cur_id < write_dispatch_id) {
+    hsa_amd_aie_ert_packet_t* pkt = static_cast<hsa_amd_aie_ert_packet_t*>(queue_base) + cur_id;
+
+    // Get the packet header information
+    if (pkt->header.header != HSA_PACKET_TYPE_VENDOR_SPECIFIC ||
+        pkt->header.AmdFormat != HSA_AMD_PACKET_TYPE_AIE_ERT)
+      return HSA_STATUS_ERROR;
+
+    // Get the payload information
+    switch (pkt->opcode) {
+      case HSA_AMD_AIE_ERT_START_CU: {
+        // Iterating over future packets and seeing how many contiguous HSA_AMD_AIE_ERT_START_CU
+        // packets there are. All can be combined into a single chain.
+        int num_cont_start_cu_pkts = 1;
+        int num_operands = 0;
+        for (int peak_pkt_id = cur_id + 1; peak_pkt_id < write_dispatch_id; peak_pkt_id++) {
+          hsa_amd_aie_ert_packet_t* peak_pkt =
+              static_cast<hsa_amd_aie_ert_packet_t*>(queue_base) + peak_pkt_id;
+          if (peak_pkt->opcode != HSA_AMD_AIE_ERT_START_CU) {
+            break;
+          }
+          num_operands += GetOperandCount(peak_pkt->count);
+          num_cont_start_cu_pkts++;
+        }
+
+        // Call into the driver to submit from cur_id to write_dispatch_id
+        if (driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, num_operands, hw_ctx_handle_) !=
+            HSA_STATUS_SUCCESS)
+          return HSA_STATUS_ERROR;
+
+        cur_id += num_cont_start_cu_pkts;
+        break;
+      }
+      default: {
+        return HSA_STATUS_ERROR;
+      }
+    }
+  }
+
+  return HSA_STATUS_SUCCESS;
 }
 
 void AieAqlQueue::StoreRelease(hsa_signal_value_t value) {
@@ -205,16 +253,15 @@ void AieAqlQueue::StoreRelease(hsa_signal_value_t value) {
 hsa_status_t AieAqlQueue::GetInfo(hsa_queue_info_attribute_t attribute,
                                   void *value) {
   switch (attribute) {
-  case HSA_AMD_QUEUE_INFO_AGENT:
-    *(reinterpret_cast<hsa_agent_t *>(value)) = agent_.public_handle();
-    break;
-  case HSA_AMD_QUEUE_INFO_DOORBELL_ID:
-    // Hardware doorbell supports AQL semantics.
-    *(reinterpret_cast<uint64_t *>(value)) =
-        reinterpret_cast<uint64_t>(signal_.hardware_doorbell_ptr);
-    break;
-  default:
-    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+    case HSA_AMD_QUEUE_INFO_AGENT:
+      *static_cast<hsa_agent_t*>(value) = agent_.public_handle();
+      break;
+    case HSA_AMD_QUEUE_INFO_DOORBELL_ID:
+      // Hardware doorbell supports AQL semantics.
+      *static_cast<uint64_t*>(value) = reinterpret_cast<uint64_t>(signal_.hardware_doorbell_ptr);
+      break;
+    default:
+      return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
   return HSA_STATUS_SUCCESS;
 }
