@@ -46,6 +46,8 @@
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
+#include <cstdio>
+#include <cstring>
 #include <memory>
 #include <string>
 
@@ -63,7 +65,7 @@ XdnaDriver::XdnaDriver(std::string devnode_name)
 
 hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
   const int max_minor_num(64);
-  const std::string devnode_prefix("/dev/accel/accel");
+  static const std::string devnode_prefix("/dev/accel/accel");
 
   for (int i = 0; i < max_minor_num; ++i) {
     auto tmp_driver = std::unique_ptr<Driver>(new XdnaDriver(devnode_prefix + std::to_string(i)));
@@ -79,6 +81,32 @@ hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
   }
 
   return HSA_STATUS_ERROR;
+}
+
+uint64_t XdnaDriver::GetSystemMemoryByteSize() {
+  static const std::string meminfo_node("/proc/meminfo");
+
+  FILE *file = std::fopen(meminfo_node.c_str(), "r");
+  if (file == nullptr)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_FILE,
+                             "Invalid memory info file.");
+
+  const int expected_args = 2;
+  int result = 0;
+  char property_name[256];
+  unsigned long long property_val = 0;
+  while ((result = std::fscanf(file, "%255s %llu\n", property_name,
+                               &property_val)) == expected_args) {
+    if (std::strcmp(property_name, "MemTotal:") == 0)
+      break;
+  }
+  std::fclose(file);
+
+  if ((result == EOF) || (result != expected_args))
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Could not parse file.");
+
+  // memory reported is in Kbytes
+  return property_val * 1024ull;
 }
 
 uint64_t XdnaDriver::GetDevHeapByteSize() {
