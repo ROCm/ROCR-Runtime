@@ -298,7 +298,7 @@ void AieAgent::InitRegionList() {
   /// For allocating memory for programmable device image (PDI) files. These
   /// need to be mapped to the device so the hardware can access the PDIs.
   HsaMemoryProperties dev_mem_props = {};
-  dev_mem_props.HeapType = HSA_HEAPTYPE_DEVICE_SVM,
+  dev_mem_props.HeapType = HSA_HEAPTYPE_DEVICE_SVM;
   dev_mem_props.SizeInBytes = XdnaDriver::GetDevHeapByteSize();
 
   /// As of now the AIE devices support coarse-grain memory regions that require
