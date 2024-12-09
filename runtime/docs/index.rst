@@ -1,6 +1,6 @@
 .. meta::
     :description: HSA runtime implementation
-    :keywords: ROCR, ROCm, library, tool, runtime
+    :keywords: ROCR documentation, ROCm runtime documentation, HSA runtime documentation
 
 .. _index:
 
@@ -20,7 +20,7 @@ The documentation is structured as follows:
   .. grid-item-card:: Install
 
     * :ref:`installation`
-    
+
   .. grid-item-card:: API reference
 
     * :ref:`c-interface-adaptors`
