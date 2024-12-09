@@ -725,10 +725,10 @@ TEST_F(KFDMemoryTest, LargestSysBufferTest) {
     sysMemSizeMB = GetSysMemSize() >> 20;
 
     LOG() << "Found System Memory of " << std::dec << sysMemSizeMB
-                << "MB" << std::endl;
+                    << "MB. Using 95% of that for the test" << std::endl;
 
-    SearchLargestBuffer(0, m_MemoryFlags, sysMemSizeMB, defaultGPUNode,
-                    &lastTestedSizeMB);
+    SearchLargestBuffer(0, m_MemoryFlags, sysMemSizeMB*0.95, defaultGPUNode,
+                        &lastTestedSizeMB);
 
     LOG() << "The largest allocated system buffer is " << std::dec
             << lastTestedSizeMB << "MB" << std::endl;
