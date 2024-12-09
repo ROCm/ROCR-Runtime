@@ -45,9 +45,8 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
+#include <unistd.h>
 
-#include <cstdio>
-#include <cstring>
 #include <memory>
 #include <string>
 
@@ -84,29 +83,9 @@ hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
 }
 
 uint64_t XdnaDriver::GetSystemMemoryByteSize() {
-  static const std::string meminfo_node("/proc/meminfo");
-
-  FILE *file = std::fopen(meminfo_node.c_str(), "r");
-  if (file == nullptr)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_FILE,
-                             "Invalid memory info file.");
-
-  const int expected_args = 2;
-  int result = 0;
-  char property_name[256];
-  unsigned long long property_val = 0;
-  while ((result = std::fscanf(file, "%255s %llu\n", property_name,
-                               &property_val)) == expected_args) {
-    if (std::strcmp(property_name, "MemTotal:") == 0)
-      break;
-  }
-  std::fclose(file);
-
-  if ((result == EOF) || (result != expected_args))
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Could not parse file.");
-
-  // memory reported is in Kbytes
-  return property_val * 1024ull;
+  const long pagesize = sysconf(_SC_PAGESIZE);
+  const long page_count = sysconf(_SC_PHYS_PAGES);
+  return pagesize * page_count;
 }
 
 uint64_t XdnaDriver::GetDevHeapByteSize() {
