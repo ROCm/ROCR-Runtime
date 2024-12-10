@@ -70,6 +70,10 @@ bool Wavefront::GetInfo(
   }
 }
 
+static __forceinline std::string strip_features(const std::string &isa_name) {
+  return isa_name.substr(0, isa_name.find(':'));
+}
+
 /* static */
 bool Isa::IsCompatible(const Isa &code_object_isa,
                        const Isa &agent_isa, unsigned int codeGenericVersion) {
@@ -80,21 +84,6 @@ bool Isa::IsCompatible(const Isa &code_object_isa,
 
   if (generic_it != IsaRegistry::GetSupportedGenericVersions().end()) {
     code_obj_isa_is_generic = true;
-  }
-
-  if (code_obj_isa_is_generic) {
-      // Verify the generic code object corresponds to the generic for
-      // this isa agent.
-      if (agent_isa.GetIsaGeneric() != code_object_isa.GetIsaName()) {
-        return false;
-      }
-      // Verify the generic code object version is greater than or equal to
-      // the generic version for this isa agent.
-      if (codeGenericVersion < generic_it->second) {
-        return false;
-      }
-  } else if (code_object_isa.GetVersion() != agent_isa.GetVersion()) {
-    return false;
   }
 
   assert(code_object_isa.IsSrameccSupported() == agent_isa.IsSrameccSupported()
@@ -110,11 +99,27 @@ bool Isa::IsCompatible(const Isa &code_object_isa,
       code_object_isa.GetXnack() != agent_isa.GetXnack())
     return false;
 
+  if (code_obj_isa_is_generic) {
+      // Verify the generic code object corresponds to the generic for
+      // this isa agent.
+      if (strip_features(agent_isa.GetIsaGeneric()) !=
+                              strip_features(code_object_isa.GetIsaName())) {
+        return false;
+      }
+      // Verify the generic code object version is greater than or equal to
+      // the generic version for this isa agent.
+      if (codeGenericVersion < generic_it->second) {
+        return false;
+      }
+  } else if (code_object_isa.GetVersion() != agent_isa.GetVersion()) {
+    return false;
+  }
+
   return true;
 }
 
 std::string Isa::GetProcessorName() const {
-  return targetid_.substr(0, targetid_.find(':'));
+  return strip_features(targetid_);
 }
 
 static __forceinline std::string prepend_isa_prefix(const std::string &isa_name) {
