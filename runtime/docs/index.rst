@@ -1,6 +1,6 @@
 .. meta::
     :description: HSA runtime implementation
-    :keywords: ROCR documentation, ROCm runtime documentation, HSA runtime documentation
+    :keywords: ROCm runtime, HSA runtime
 
 .. _index:
 
