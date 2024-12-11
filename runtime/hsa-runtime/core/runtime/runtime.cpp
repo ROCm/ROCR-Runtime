@@ -1636,7 +1636,7 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
                           &value);
     } else {
      if (core::Runtime::runtime_singleton_->flag().wait_any()) {
-      index = AMD::hsa_amd_signal_wait_any(
+      index = Signal::WaitAny(
                           uint32_t(async_events_.Size()),
                           &async_events_.signal_[0],
                           &async_events_.cond_[0],
