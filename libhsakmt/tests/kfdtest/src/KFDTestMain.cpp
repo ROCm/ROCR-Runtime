@@ -26,6 +26,7 @@
 #include "KFDTestUtil.hpp"
 #include "GoogleTestExtension.hpp"
 #include "OSWrapper.hpp"
+#include "Assemble.hpp"
 
 #define KFD_TEST_DEFAULT_TIMEOUT 60000
 
@@ -72,6 +73,7 @@ GTEST_API_ int main(int argc, char **argv) {
     bool success = GetCommandLineArguments(argc, argv, args);
 
     if (success) {
+        int r;
         if ((GetHwCapabilityHWS() || args.HwsEnabled == HWCAP__FORCE_ENABLED) &&
                 (args.HwsEnabled != HWCAP__FORCE_DISABLED))
             g_TestENVCaps |= ENVCAPS_HWSCHEDULING;
@@ -104,6 +106,15 @@ GTEST_API_ int main(int argc, char **argv) {
             LOG() << "Sleep time in seconds as specified by user: " << std::dec << g_SleepTime << std::endl;
         }
 
-        return RUN_ALL_TESTS();
+        /* init LLVM one time*/
+        Init_LLVM();
+
+        r = RUN_ALL_TESTS();
+
+        /* shutdown LLVM after tests finish */
+        Shutdown_LLVM();
+
+        LOG() << "kfdtest finished with return code: " << r << std::endl;
+        return r;
     }
 }

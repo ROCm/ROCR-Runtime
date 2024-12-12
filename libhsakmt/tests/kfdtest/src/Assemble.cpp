@@ -79,16 +79,29 @@
 
 using namespace llvm;
 
+/* Assembler implementation is not multi-thread safe and is
+ * asic type dependent. Instantiate it per thread/gpu use case,
+ * delete each assembler after assembling
+ */
+
+void Init_LLVM() {
+    LLVMInitializeAMDGPUTargetInfo();
+    LLVMInitializeAMDGPUTargetMC();
+    LLVMInitializeAMDGPUAsmParser();
+}
+
+void Shutdown_LLVM() {
+    llvm_shutdown();
+}
+
 Assembler::Assembler(const uint32_t Gfxv) {
     SetTargetAsic(Gfxv);
     TextData = nullptr;
     TextSize = 0;
-    LLVMInit();
 }
 
 Assembler::~Assembler() {
     FlushText();
-    llvm_shutdown();
 }
 
 const char* Assembler::GetInstrStream() {
@@ -121,15 +134,6 @@ void Assembler::SetTargetAsic(const uint32_t Gfxv) {
     const uint8_t Step = Gfxv & 0xff;
 
     snprintf(MCPU, ASM_MCPU_LEN, "gfx%d%d%x", Major, Minor, Step);
-}
-
-/**
- * Initialize LLVM targets and assembly printers/parsers
- */
-void Assembler::LLVMInit() {
-    LLVMInitializeAMDGPUTargetInfo();
-    LLVMInitializeAMDGPUTargetMC();
-    LLVMInitializeAMDGPUAsmParser();
 }
 
 /**
