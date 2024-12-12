@@ -339,12 +339,12 @@ TEST_F(KFDEvictTest, BasicTest) {
     }
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
@@ -362,7 +362,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     LOG() << m_psName << "free buffer" << std::endl;
     FreeBuffers(pBuffers, vramBufSize);
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }
@@ -432,12 +432,12 @@ TEST_F(KFDEvictTest, QueueTest) {
     ASSERT_LE(count, PAGE_SIZE/sizeof(unsigned int *));
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
@@ -502,7 +502,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     for (i = 0; i < wavefront_num; i++)
         EXPECT_EQ(0x5678, *(result + i));
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }
@@ -549,12 +549,12 @@ TEST_F(KFDEvictTest, BurstyTest) {
     }
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
@@ -577,7 +577,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
 
     EXPECT_SUCCESS(pm4Queue.Destroy());
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }
