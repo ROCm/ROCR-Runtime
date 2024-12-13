@@ -30,6 +30,8 @@
 #include "SDMAQueue.hpp"
 #include "Dispatch.hpp"
 
+extern unsigned int g_TestGPUsNum;
+
 void KFDSVMRangeTest::SetUp() {
     ROUTINE_START
 
@@ -50,34 +52,36 @@ void KFDSVMRangeTest::TearDown() {
     ROUTINE_END
 }
 
-TEST_P(KFDSVMRangeTest, BasicSystemMemTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void BasicSystemMemTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    if (!GetVramSize(defaultGPUNode)) {
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    HsaSVMRange srcSysBuffer(BufferSize, defaultGPUNode);
-    HsaSVMRange destSysBuffer(BufferSize, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaSVMRange srcSysBuffer(BufferSize, gpuNode);
+    HsaSVMRange destSysBuffer(BufferSize,gpuNode);
+
+    Assembler* m_pAsm;
+    m_pAsm = pKFDSVMRangeTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     srcSysBuffer.Fill(0x01010101);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
     queue.SetSkipWaitConsump(0);
 
     Dispatch dispatch(isaBuffer);
@@ -86,23 +90,29 @@ TEST_P(KFDSVMRangeTest, BasicSystemMemTest) {
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
 
-    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_EQ_GPU(destSysBuffer.As<unsigned int*>()[0], 0x01010101, gpuNode);
+}
+
+TEST_P(KFDSVMRangeTest, BasicSystemMemTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(BasicSystemMemTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL)
+static void SetGetAttributesTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
         LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
@@ -114,12 +124,12 @@ TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
     HSAuint32 nAttributes = 5;
     HSA_SVM_ATTRIBUTE outputAttributes[nAttributes];
     HSA_SVM_ATTRIBUTE inputAttributes[] = {
-                                                {HSA_SVM_ATTR_PREFETCH_LOC, (HSAuint32)defaultGPUNode},
-                                                {HSA_SVM_ATTR_PREFERRED_LOC, (HSAuint32)defaultGPUNode},
+                                                {HSA_SVM_ATTR_PREFETCH_LOC, (HSAuint32)gpuNode},
+                                                {HSA_SVM_ATTR_PREFERRED_LOC, (HSAuint32)gpuNode},
                                                 {HSA_SVM_ATTR_SET_FLAGS,
                                                  HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_GPU_EXEC | HSA_SVM_FLAG_COHERENT},
                                                 {HSA_SVM_ATTR_GRANULARITY, 0x3F},
-                                                {HSA_SVM_ATTR_ACCESS, (HSAuint32)defaultGPUNode},
+                                                {HSA_SVM_ATTR_ACCESS, (HSAuint32)gpuNode},
                                           };
 
     HSAuint32 expectedDefaultResults[] = {
@@ -130,15 +140,15 @@ TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
                                              0,
                                          };
     HSAint32 enable = -1;
-    EXPECT_SUCCESS(hsaKmtGetXNACKMode(&enable));
+    EXPECT_SUCCESS_GPU(hsaKmtGetXNACKMode(&enable), gpuNode);
     expectedDefaultResults[4] = (enable) ?
                                  HSA_SVM_ATTR_ACCESS : HSA_SVM_ATTR_NO_ACCESS;
     char *pBuf = sysBuffer->As<char *>();
 
     LOG() << "Get default atrributes" << std::endl;
     memcpy(outputAttributes, inputAttributes, nAttributes * sizeof(HSA_SVM_ATTRIBUTE));
-    EXPECT_SUCCESS(hsaKmtSVMGetAttr(pBuf, BufSize,
-                                    nAttributes, outputAttributes));
+    EXPECT_SUCCESS_GPU(hsaKmtSVMGetAttr(pBuf, BufSize,
+                                    nAttributes, outputAttributes), gpuNode);
 
     for (i = 0; i < nAttributes; i++) {
         /* Default granularity could be specified using module parameter,
@@ -146,28 +156,37 @@ TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
          */
         if (outputAttributes[i].type == HSA_SVM_ATTR_GRANULARITY)
             continue;
+
         if (outputAttributes[i].type == HSA_SVM_ATTR_ACCESS ||
             outputAttributes[i].type == HSA_SVM_ATTR_ACCESS_IN_PLACE ||
             outputAttributes[i].type == HSA_SVM_ATTR_NO_ACCESS)
-            EXPECT_EQ(outputAttributes[i].type, expectedDefaultResults[i]);
+            EXPECT_EQ_GPU(outputAttributes[i].type, expectedDefaultResults[i], gpuNode);
         else
-            EXPECT_EQ(outputAttributes[i].value, expectedDefaultResults[i]);
+            EXPECT_EQ_GPU(outputAttributes[i].value, expectedDefaultResults[i], gpuNode);
     }
     LOG() << "Setting/Getting atrributes" << std::endl;
     memcpy(outputAttributes, inputAttributes, nAttributes * sizeof(HSA_SVM_ATTRIBUTE));
-    EXPECT_SUCCESS(hsaKmtSVMSetAttr(pBuf, BufSize,
-                                    nAttributes, inputAttributes));
-    EXPECT_SUCCESS(hsaKmtSVMGetAttr(pBuf, BufSize,
-                                    nAttributes, outputAttributes));
+    EXPECT_SUCCESS_GPU(hsaKmtSVMSetAttr(pBuf, BufSize,
+                                    nAttributes, inputAttributes), gpuNode);
+    EXPECT_SUCCESS_GPU(hsaKmtSVMGetAttr(pBuf, BufSize,
+                                    nAttributes, outputAttributes), gpuNode);
     for (i = 0; i < nAttributes; i++) {
         if (outputAttributes[i].type == HSA_SVM_ATTR_ACCESS ||
             outputAttributes[i].type == HSA_SVM_ATTR_ACCESS_IN_PLACE ||
             outputAttributes[i].type == HSA_SVM_ATTR_NO_ACCESS)
-            EXPECT_EQ(inputAttributes[i].type, outputAttributes[i].type);
+            EXPECT_EQ_GPU(inputAttributes[i].type, outputAttributes[i].type, gpuNode);
         else
-            EXPECT_EQ(inputAttributes[i].value, outputAttributes[i].value);
+            EXPECT_EQ_GPU(inputAttributes[i].value, outputAttributes[i].value, gpuNode);
     }
     delete sysBuffer;
+
+}
+
+TEST_P(KFDSVMRangeTest, SetGetAttributesTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(SetGetAttributesTest));
 
     TEST_END
 }
@@ -206,34 +225,38 @@ TEST_P(KFDSVMRangeTest, XNACKModeTest) {
                      " NOT supported" << std::endl;
         }
     }
+
     TEST_END
+}
+
+static void InvalidRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    HSAuint32 Flags;;
+    HSAKMT_STATUS ret;
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
+        return;
+
+    Flags = HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_COHERENT;
+
+    ret = RegisterSVMRange(gpuNode, reinterpret_cast<void *>(0x10000), 0x1000, 0, Flags);
+    EXPECT_NE_GPU(ret, HSAKMT_STATUS_SUCCESS, gpuNode);
+
 }
 
 TEST_P(KFDSVMRangeTest, InvalidRangeTest) {
     TEST_START(TESTPROFILE_RUNALL)
 
-    if (!SVMAPISupported())
-        return;
-
-    HSAuint32 Flags;;
-    HSAKMT_STATUS ret;
-
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    Flags = HSA_SVM_FLAG_HOST_ACCESS | HSA_SVM_FLAG_COHERENT;
-
-    ret = RegisterSVMRange(defaultGPUNode, reinterpret_cast<void *>(0x10000), 0x1000, 0, Flags);
-    EXPECT_NE(ret, HSAKMT_STATUS_SUCCESS);
+    ASSERT_SUCCESS(KFDTest_Launch(InvalidRangeTest));
 
     TEST_END
 }
 
-void KFDSVMRangeTest::SplitRangeTest(int defaultGPUNode, int prefetch_location) {
+void KFDSVMRangeTest::SplitRangeTest(int gpuNode, int prefetch_location) {
     unsigned int BufSize = 16 * PAGE_SIZE;
-
-    if (!SVMAPISupported())
-        return;
 
     HsaSVMRange *sysBuffer;
     HsaSVMRange *sysBuffer2;
@@ -244,16 +267,16 @@ void KFDSVMRangeTest::SplitRangeTest(int defaultGPUNode, int prefetch_location) 
 
     // case 1
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, PAGE_SIZE, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, PAGE_SIZE, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
     munmap(pBuf, BufSize);
 
     // case 2.1
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 4096, BufSize - 4096, defaultGPUNode,
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 4096, BufSize - 4096, gpuNode,
                                  prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
@@ -261,41 +284,41 @@ void KFDSVMRangeTest::SplitRangeTest(int defaultGPUNode, int prefetch_location) 
 
     // case 2.2
     pBuf = mmap(0, BufSize + 8192, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, BufSize, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, BufSize, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
     munmap(pBuf, BufSize + 8192);
 
     // case 3
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf), BufSize - 8192, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf), BufSize - 8192, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
     munmap(pBuf, BufSize);
 
     // case 4.1
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
     munmap(pBuf, BufSize);
 
     // case 4.2
     pBuf = mmap(0, BufSize + 8192, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(pBuf, BufSize + 8192, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(pBuf, BufSize + 8192, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer;
     munmap(pBuf, BufSize + 8192);
 
     // case 5
     pBuf = mmap(0, BufSize + 65536, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, 8192, defaultGPUNode, prefetch_location);
-    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 32768, 8192, defaultGPUNode, prefetch_location);
-    sysBuffer3 = new HsaSVMRange(pBuf, BufSize + 65536, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, 8192, gpuNode, prefetch_location);
+    sysBuffer2 = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 32768, 8192, gpuNode, prefetch_location);
+    sysBuffer3 = new HsaSVMRange(pBuf, BufSize + 65536, gpuNode, prefetch_location);
     delete sysBuffer2;
     delete sysBuffer3;
     delete sysBuffer;
@@ -303,45 +326,54 @@ void KFDSVMRangeTest::SplitRangeTest(int defaultGPUNode, int prefetch_location) 
 
     // case 6, unregister after free
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, 8192, defaultGPUNode, prefetch_location);
+    sysBuffer = new HsaSVMRange(reinterpret_cast<char *>(pBuf) + 8192, 8192, gpuNode, prefetch_location);
     munmap(pBuf, BufSize);
     delete sysBuffer;
 }
 
-TEST_P(KFDSVMRangeTest, SplitSystemRangeTest) {
-    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
-    TEST_START(TESTPROFILE_RUNALL)
+static void SplitSystemRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
-        return;
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
         LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
 
-    SplitRangeTest(defaultGPUNode, 0);
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
+        return;
+
+    pKFDSVMRangeTest->SplitRangeTest(gpuNode, 0);
+
+}
+
+TEST_P(KFDSVMRangeTest, SplitSystemRangeTest) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(SplitSystemRangeTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
-    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
-    TEST_START(TESTPROFILE_RUNALL)
+static void EvictSystemRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
-        return;
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
         LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
+        return;
+
+    Assembler* m_pAsm;
+    m_pAsm = pKFDSVMRangeTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     HSAuint32 stackData[2 * PAGE_SIZE] = {0};
     char *pBuf = reinterpret_cast<char *>(((uint64_t)stackData + PAGE_SIZE) & ~(PAGE_SIZE - 1));
@@ -351,21 +383,21 @@ TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
 
     *globalData = 0xdeadbeef;
 
-    HsaSVMRange srcBuffer((globalData), PAGE_SIZE, defaultGPUNode);
-    HsaSVMRange dstBuffer(&stackData[dstOffset], PAGE_SIZE, defaultGPUNode);
-    HsaSVMRange sdmaBuffer(&stackData[sdmaOffset], PAGE_SIZE, defaultGPUNode);
+    HsaSVMRange srcBuffer((globalData), PAGE_SIZE, gpuNode);
+    HsaSVMRange dstBuffer(&stackData[dstOffset], PAGE_SIZE, gpuNode);
+    HsaSVMRange sdmaBuffer(&stackData[sdmaOffset], PAGE_SIZE, gpuNode);
 
     /* Create PM4 and SDMA queues before fork+COW to test queue
      * eviction and restore
      */
     PM4Queue pm4Queue;
     SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(pm4Queue.Create(gpuNode), gpuNode);
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
     Dispatch dispatch0(isaBuffer);
     dispatch0.SetArgs(srcBuffer.As<void*>(), dstBuffer.As<void*>());
@@ -376,11 +408,11 @@ TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
                                    sdmaBuffer.As<HSAuint32 *>(), 0x12345678));
 
     sdmaQueue.Wait4PacketConsumption();
-    EXPECT_TRUE(WaitOnValue(&stackData[sdmaOffset], 0x12345678));
+    EXPECT_TRUE_GPU(WaitOnValue(&stackData[sdmaOffset], 0x12345678), gpuNode);
 
     /* Fork a child process to mark pages as COW */
     pid_t pid = fork();
-    ASSERT_GE(pid, 0);
+    ASSERT_GE_GPU(pid, 0, gpuNode);
     if (pid == 0) {
         /* Child process waits for a SIGTERM from the parent. It can't
          * make any write access to the stack because we want the
@@ -406,10 +438,10 @@ TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
      * would leave it spinning in the background indefinitely.
      */
     int status;
-    EXPECT_EQ(0, kill(pid, SIGTERM));
-    EXPECT_EQ(pid, waitpid(pid, &status, 0));
-    EXPECT_NE(0, WIFSIGNALED(status));
-    EXPECT_EQ(SIGTERM, WTERMSIG(status));
+    EXPECT_EQ_GPU(0, kill(pid, SIGTERM),gpuNode);
+    EXPECT_EQ_GPU(pid, waitpid(pid, &status, 0), gpuNode);
+    EXPECT_NE_GPU(0, WIFSIGNALED(status), gpuNode);
+    EXPECT_EQ_GPU(SIGTERM, WTERMSIG(status), gpuNode);
 
     /* Now check that the GPU is accessing the correct page */
     Dispatch dispatch1(isaBuffer);
@@ -421,36 +453,45 @@ TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
                                    sdmaBuffer.As<HSAuint32 *>(), 0xD0BED0BE));
     sdmaQueue.Wait4PacketConsumption();
 
-    EXPECT_SUCCESS(pm4Queue.Destroy());
-    EXPECT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS_GPU(pm4Queue.Destroy(), gpuNode);
+    EXPECT_SUCCESS_GPU(sdmaQueue.Destroy(), gpuNode);
 
-    EXPECT_EQ(0xD00BED00, *globalData);
-    EXPECT_EQ(0xD00BED00, stackData[dstOffset]);
-    EXPECT_EQ(0xD0BED0BE, stackData[sdmaOffset]);
+    EXPECT_EQ_GPU(0xD00BED00, *globalData, gpuNode);
+    EXPECT_EQ_GPU(0xD00BED00, stackData[dstOffset], gpuNode);
+    EXPECT_EQ_GPU(0xD0BED0BE, stackData[sdmaOffset],gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, EvictSystemRangeTest) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(EvictSystemRangeTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void PartialUnmapSysMemTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    Assembler* m_pAsm;
+    m_pAsm = pKFDSVMRangeTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     unsigned int BufSize = 16 * PAGE_SIZE;
     void *pBuf;
 
     PM4Queue queue;
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
     HsaSVMRange *sysBuffer;
-    HsaSVMRange destSysBuffer(BufSize, defaultGPUNode);
+    HsaSVMRange destSysBuffer(BufSize, gpuNode);
 
     pBuf = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    sysBuffer = new HsaSVMRange(pBuf, BufSize, defaultGPUNode, 0);
+    sysBuffer = new HsaSVMRange(pBuf, BufSize, gpuNode, 0);
     sysBuffer->Fill(0x01010101);
 
     char *pBuf2 = reinterpret_cast<char *>(pBuf) + 8192;
@@ -459,9 +500,9 @@ TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
 
     munmap(pBuf2, Buf2Size);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
 
     Dispatch dispatch(isaBuffer);
     Dispatch dispatch2(isaBuffer);
@@ -469,49 +510,63 @@ TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
     dispatch.SetArgs(pBuf3, destSysBuffer.As<void*>());
     dispatch.Submit(queue);
     dispatch.Sync(g_TestTimeOut);
-    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_EQ_GPU(destSysBuffer.As<unsigned int*>()[0], 0x01010101, gpuNode);
 
     dispatch2.SetArgs(pBuf, destSysBuffer.As<void*>());
     dispatch2.Submit(queue);
     dispatch2.Sync(g_TestTimeOut);
 
-    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_EQ_GPU(destSysBuffer.As<unsigned int*>()[0], 0x01010101, gpuNode);
 
-    EXPECT_SUCCESS(queue.Destroy());
-    munmap(pBuf, BufSize);
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
+
+    //munmap(pBuf, BufSize);
+    /* munmpa vm ranges that has not been done */
+    munmap(pBuf, 8192);
+    munmap(pBuf3, BufSize - 8192 - Buf2Size);
+
+}
+
+TEST_P(KFDSVMRangeTest, PartialUnmapSysMemTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+   ASSERT_SUCCESS(KFDTest_Launch(PartialUnmapSysMemTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, BasicVramTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void BasicVramTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
+
+    Assembler* m_pAsm;
+    m_pAsm = pKFDSVMRangeTest->GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned int BufferSize = PAGE_SIZE;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    if (!GetVramSize(defaultGPUNode)) {
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
-    HsaSVMRange srcSysBuffer(BufferSize, defaultGPUNode);
-    HsaSVMRange locBuffer(BufferSize, defaultGPUNode, defaultGPUNode);
-    HsaSVMRange destSysBuffer(BufferSize, defaultGPUNode);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaSVMRange srcSysBuffer(BufferSize, gpuNode);
+    HsaSVMRange locBuffer(BufferSize, gpuNode, gpuNode);
+    HsaSVMRange destSysBuffer(BufferSize, gpuNode);
 
     srcSysBuffer.Fill(0x01010101);
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()), gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode), gpuNode);
     queue.SetSkipWaitConsump(0);
 
     Dispatch dispatch(isaBuffer);
@@ -525,84 +580,114 @@ TEST_P(KFDSVMRangeTest, BasicVramTest) {
     dispatch2.Submit(queue);
     dispatch2.Sync(g_TestTimeOut);
 
-    EXPECT_SUCCESS(queue.Destroy());
+    EXPECT_SUCCESS_GPU(queue.Destroy(), gpuNode);
 
-    EXPECT_EQ(destSysBuffer.As<unsigned int*>()[0], 0x01010101);
+    EXPECT_EQ_GPU(destSysBuffer.As<unsigned int*>()[0], 0x01010101, gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, BasicVramTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(BasicVramTest));
+
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, SplitVramRangeTest) {
-    TEST_START(TESTPROFILE_RUNALL)
+static void SplitVramRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
         LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
 
-    SplitRangeTest(defaultGPUNode, defaultGPUNode);
+    pKFDSVMRangeTest->SplitRangeTest(gpuNode, gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, SplitVramRangeTest) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(SplitVramRangeTest));
+
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, PrefetchTest) {
-    TEST_START(TESTPROFILE_RUNALL);
+static void PrefetchTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
     unsigned int BufSize = 16 << 10;
     HsaSVMRange *sysBuffer;
     uint32_t node_id;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    sysBuffer = new HsaSVMRange(BufSize, defaultGPUNode);
+    sysBuffer = new HsaSVMRange(BufSize, gpuNode);
     char *pBuf = sysBuffer->As<char *>();
-    /* Using invalid svm range to get prefetch node should return failed */
     delete sysBuffer;
-    EXPECT_SUCCESS(!SVMRangeGetPrefetchNode(pBuf, BufSize, &node_id));
 
-    sysBuffer = new HsaSVMRange(BufSize, defaultGPUNode);
+    /* after mumap sysBuffer it should be not accessible from gpuNode */
+    HSA_SVM_ATTRIBUTE attr;
+    attr.type = HSA_SVM_ATTR_ACCESS;
+    attr.value = 0;
+    /* hsaKmtSVMGetAttr for HSA_SVM_ATTR_ACCESS is either fail or
+     * returned attr.value not equal gpuNode
+     */
+    if (hsaKmtSVMGetAttr(pBuf, BufSize, 1, &attr) == HSAKMT_STATUS_SUCCESS)
+        EXPECT_NE_GPU(attr.value, gpuNode, gpuNode);
+
+    sysBuffer = new HsaSVMRange(BufSize, gpuNode);
     pBuf = sysBuffer->As<char *>();
     char *pLocBuf = pBuf + BufSize / 2;
 
-    EXPECT_SUCCESS(SVMRangeGetPrefetchNode(pBuf, BufSize, &node_id));
-    EXPECT_EQ(node_id, 0);
+    EXPECT_SUCCESS_GPU(SVMRangeGetPrefetchNode(pBuf, BufSize, &node_id), gpuNode);
+    EXPECT_EQ_GPU(node_id, 0, gpuNode);
 
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pLocBuf, BufSize / 2, defaultGPUNode));
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pLocBuf, BufSize / 2, gpuNode), gpuNode);
 
-    EXPECT_SUCCESS(SVMRangeGetPrefetchNode(pLocBuf, BufSize / 2, &node_id));
-    EXPECT_EQ(node_id, defaultGPUNode);
+    EXPECT_SUCCESS_GPU(SVMRangeGetPrefetchNode(pLocBuf, BufSize / 2, &node_id), gpuNode);
+    EXPECT_EQ_GPU(node_id, gpuNode, gpuNode);
 
-    EXPECT_SUCCESS(SVMRangeGetPrefetchNode(pBuf, BufSize, &node_id));
-    EXPECT_EQ(node_id, 0xffffffff);
+    EXPECT_SUCCESS_GPU(SVMRangeGetPrefetchNode(pBuf, BufSize, &node_id), gpuNode);
+    EXPECT_EQ_GPU(node_id, 0xffffffff, gpuNode);
     delete sysBuffer;
+
+}
+
+TEST_P(KFDSVMRangeTest, PrefetchTest) {
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(PrefetchTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, MigrateTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void MigrateTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
         LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
 
-    if (!GetVramSize(defaultGPUNode)) {
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
@@ -610,27 +695,27 @@ TEST_P(KFDSVMRangeTest, MigrateTest) {
     HSAuint32 migrateRepeat = 8;
     unsigned int BufferSize = 16 << 20;
 
-    HsaSVMRange DataBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange DataBuffer(BufferSize, gpuNode);
     HSAuint32 *pData = DataBuffer.As<HSAuint32 *>();
 
-    HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufferSize, gpuNode);
     HSAuint32 *pBuf = SysBuffer.As<HSAuint32 *>();
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, 0));
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufferSize, 0), gpuNode);
 
-    HsaSVMRange SysBuffer2(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer2(BufferSize, gpuNode);
     HSAuint32 *pBuf2 = SysBuffer2.As<HSAuint32 *>();
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf2, BufferSize, 0));
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf2, BufferSize, 0), gpuNode);
 
     SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
 
     for (HSAuint32 i = 0; i < BufferSize / 4; i++)
         pData[i] = i;
 
     while (migrateRepeat--) {
         /* Migrate from ram to vram */
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, defaultGPUNode));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf2, BufferSize, defaultGPUNode));
+        EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufferSize, gpuNode), gpuNode);
+        EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf2, BufferSize, gpuNode), gpuNode);
         /* Update content in migrated buffer in vram */
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
                     pBuf, pData, BufferSize));
@@ -645,8 +730,8 @@ TEST_P(KFDSVMRangeTest, MigrateTest) {
          * so SysBuffer should have same value as in vram
          */
         for (HSAuint32 i = 0; i < BufferSize / 4; i++) {
-            ASSERT_EQ(i, pBuf[i]);
-            ASSERT_EQ(i, pBuf2[i]);
+            ASSERT_EQ_GPU(i, pBuf[i], gpuNode);
+            ASSERT_EQ_GPU(i, pBuf2[i], gpuNode);
         }
    }
 
@@ -659,11 +744,62 @@ TEST_P(KFDSVMRangeTest, MigrateTest) {
                 pBuf, pData, BufferSize));
     sdmaQueue.Wait4PacketConsumption();
     for (HSAuint32 i = 0; i < BufferSize / 4; i++)
-        ASSERT_EQ(i, pBuf[i]);
+        ASSERT_EQ_GPU(i, pBuf[i], gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, MigrateTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(MigrateTest));
 
     TEST_END
 }
 
+static void MigrateAccessInPlaceTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
+        return;
+
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
+    if (m_FamilyId < FAMILY_AI) {
+        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        return;
+    }
+
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
+        LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    unsigned int BufferSize = MIN(256ULL << 20, pKFDSVMRangeTest->GetVramSize(gpuNode) / 2);
+    SDMAQueue sdmaQueue;
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode),gpuNode);
+
+    HsaSVMRange DataBuffer(BufferSize, gpuNode);
+    HSAuint32 *pData = DataBuffer.As<HSAuint32 *>();
+
+    EXPECT_SUCCESS_GPU(SVMRangeMapInPlaceToNode(pData, BufferSize, gpuNode), gpuNode);
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pData, BufferSize, gpuNode), gpuNode);
+
+    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
+        pData[i] = i;
+
+    /* GPU/SDMA update content in buffer migrated back to system memory */
+    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
+           pData, 0x55AAAA55, BufferSize));
+    sdmaQueue.Wait4PacketConsumption();
+
+    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
+        ASSERT_EQ_GPU(0x55AAAA55, pData[i], gpuNode);
+
+    ASSERT_SUCCESS_GPU(sdmaQueue.Destroy(), gpuNode);
+
+}
 /*
  * Test if GPU mapping to system memory is correct after range on VRAM split and migrate back
  * to system memory.
@@ -680,44 +816,7 @@ TEST_P(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    if (!SVMAPISupported())
-        return;
-
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
-        return;
-    }
-
-    if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
-        return;
-    }
-
-    unsigned int BufferSize = MIN(256ULL << 20, GetVramSize(defaultGPUNode) / 2);
-    SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
-
-    HsaSVMRange DataBuffer(BufferSize, defaultGPUNode);
-    HSAuint32 *pData = DataBuffer.As<HSAuint32 *>();
-
-    EXPECT_SUCCESS(SVMRangeMapInPlaceToNode(pData, BufferSize, defaultGPUNode));
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pData, BufferSize, defaultGPUNode));
-
-    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
-        pData[i] = i;
-
-    /* GPU/SDMA update content in buffer migrated back to system memory */
-    sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
-                pData, 0x55AAAA55, BufferSize));
-    sdmaQueue.Wait4PacketConsumption();
-
-    for (HSAuint32 i = 0; i < BufferSize / 4; i += 1024)
-        ASSERT_EQ(0x55AAAA55, pData[i]);
-
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    ASSERT_SUCCESS(KFDTest_Launch(MigrateAccessInPlaceTest));
 
     TEST_END
 }
@@ -740,38 +839,38 @@ TEST_P(KFDSVMRangeTest, MigrateAccessInPlaceTest) {
  * [  292.730010] amdgpu:svm_migrate_to_ram:744: CPU page fault address 0x7f22597f1000
  * [  292.730931] amdgpu:svm_migrate_to_ram:744: CPU page fault address 0x7f22597f2000
  */
-TEST_P(KFDSVMRangeTest, MigrateGranularityTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
 
-    if (!SVMAPISupported())
+static void MigrateGranularityTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
-            return;
-        }
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x" << gpuNode << m_FamilyId << "." << std::endl;
+        return;
+    }
 
-    if (!GetVramSize(defaultGPUNode)) {
-        LOG() << "Skipping test: No VRAM found." << std::endl;
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
+        LOG() << "Skipping test: No VRAM found on gpuNode." << gpuNode << std::endl;
         return;
     }
 
     HSAuint64 BufferPages = 16384;
     HSAuint64 BufferSize = BufferPages * PAGE_SIZE;
-    HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufferSize, gpuNode);
     HSAint32 *pBuf = SysBuffer.As<HSAint32*>();
 
-    HsaSVMRange SysBuffer2(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer2(BufferSize, gpuNode);
     HSAint32 *pBuf2 = SysBuffer2.As<HSAint32*>();
 
     HSAint32 Granularity;
 
     SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
 
     for (Granularity = 0; (1ULL << Granularity) <= BufferPages; Granularity++);
     for (HSAuint32 i = 0; i < BufferPages; i++)
@@ -779,8 +878,8 @@ TEST_P(KFDSVMRangeTest, MigrateGranularityTest) {
 
     while (Granularity--) {
         /* Prefetch the entire range to vram */
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, defaultGPUNode));
-        EXPECT_SUCCESS(SVMRangSetGranularity(pBuf, BufferSize, Granularity));
+        EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufferSize, gpuNode), gpuNode);
+        EXPECT_SUCCESS_GPU(SVMRangSetGranularity(pBuf, BufferSize, Granularity), gpuNode);
 
         /* Change Buffer content in vram, then migrate it back to ram */
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
@@ -789,29 +888,37 @@ TEST_P(KFDSVMRangeTest, MigrateGranularityTest) {
 
         /* Migrate from vram to ram */
         for (HSAuint32 i = 0; i < BufferPages; i++)
-            ASSERT_EQ(i, pBuf[i * PAGE_SIZE / 4]);
+            ASSERT_EQ_GPU(i, pBuf[i * PAGE_SIZE / 4], gpuNode);
     }
-    TEST_END
+
 }
 
-TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
+TEST_P(KFDSVMRangeTest, MigrateGranularityTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    if (!SVMAPISupported())
+    ASSERT_SUCCESS(KFDTest_Launch(MigrateGranularityTest));
+
+    TEST_END
+}
+
+static void MigrateLargeBufTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
     PM4Queue queue;
     HSAuint64 AlternateVAGPU;
     unsigned long BufferSize = 1L << 30;
+
     unsigned long maxSDMASize = 128L << 20;  /* IB size is 4K */
     unsigned long Size, i;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
     HSAuint64 vramSize;
-    vramSize = GetVramSize(defaultGPUNode);
+    vramSize = pKFDSVMRangeTest->GetVramSize(gpuNode);
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
@@ -822,25 +929,25 @@ TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
     /* Check if the system memory size is sufficient
      * to register the system buffer and system buffer 2
      */
-    if(BufferSize * 2 > GetSysMemSize() / 2) {
+    if(BufferSize * 2 > pKFDSVMRangeTest->GetSysMemSize() / 2) {
         LOG() << "Skipping test: Not enough system memory." << std::endl;
         return;
     }
-    HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufferSize, gpuNode);
     SysBuffer.Fill(0x1);
 
-    HsaSVMRange SysBuffer2(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer2(BufferSize, gpuNode);
     SysBuffer2.Fill(0x2);
 
     /* Migrate from ram to vram
      * using same address to register to GPU to trigger migration
      * so LocalBuffer will have same value as SysBuffer
      */
-    HsaSVMRange LocalBuffer(SysBuffer.As<void*>(), BufferSize, defaultGPUNode, defaultGPUNode);
+    HsaSVMRange LocalBuffer(SysBuffer.As<void*>(), BufferSize, gpuNode, gpuNode);
 
     SDMAQueue sdmaQueue;
 
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
     for (i = 0; i < BufferSize; i += Size) {
         Size = (BufferSize - i) > maxSDMASize ? maxSDMASize : (BufferSize - i);
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
@@ -850,7 +957,7 @@ TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
 
     /* Check content in migrated buffer in vram */
     for (i = 0; i < BufferSize / 4; i += 1024)
-        ASSERT_EQ(0x1, SysBuffer2.As<unsigned int*>()[i]);
+        ASSERT_EQ_GPU(0x1, SysBuffer2.As<unsigned int*>()[i], gpuNode);
 
     /* Change LocalBuffer content in vram, then migrate it back to ram */
     SysBuffer2.Fill(0x3);
@@ -867,9 +974,9 @@ TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
      * page fault trigger migration from vram back to ram
      * so SysBuffer should have same value as in LocalBuffer
      */
-    EXPECT_SUCCESS(SVMRangSetGranularity(SysBuffer.As<unsigned int*>(), BufferSize, 30));
+    EXPECT_SUCCESS_GPU(SVMRangSetGranularity(SysBuffer.As<unsigned int*>(), BufferSize, 30),gpuNode);
     for (i = 0; i < BufferSize / 4; i += 1024)
-        ASSERT_EQ(0x3, SysBuffer.As<unsigned int*>()[i]);
+        ASSERT_EQ_GPU(0x3, SysBuffer.As<unsigned int*>()[i], gpuNode);
 
     /* After migrating back to ram, GPU mapping should be updated to ram
      * test if shade can read from ram
@@ -884,47 +991,54 @@ TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
     }
 
     for (i = 0; i < BufferSize / 4; i += 1024)
-        ASSERT_EQ(0x4, SysBuffer2.As<unsigned int*>()[i]);
+        ASSERT_EQ_GPU(0x4, SysBuffer2.As<unsigned int*>()[i],gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, MigrateLargeBufTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(MigrateLargeBufTest));
 
     TEST_END
 }
 
-TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void MigratePolicyTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x" << gpuNode << m_FamilyId << "." << std::endl;
         return;
     }
 
-    if (!GetVramSize(defaultGPUNode)) {
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
     }
 
     unsigned long BufferSize = 1UL << 20;
 
-    HsaSVMRange DataBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange DataBuffer(BufferSize, gpuNode);
     HSAuint64 *pData = DataBuffer.As<HSAuint64 *>();
 
-    HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufferSize, gpuNode);
     HSAuint64 *pBuf = SysBuffer.As<HSAuint64 *>();
 
     SDMAQueue sdmaQueue;
-    ASSERT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(sdmaQueue.Create(gpuNode),gpuNode);
 
     for (HSAuint64 i = 0; i < BufferSize / 8; i++)
         pData[i] = i;
 
     /* Prefetch to migrate from ram to vram */
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, defaultGPUNode));
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufferSize, gpuNode),gpuNode);
 
     /* Update content in migrated buffer in vram */
     sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
@@ -937,7 +1051,7 @@ TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
      * so SysBuffer should have same value as in vram
      */
     for (HSAuint64 i = 0; i < BufferSize / 8; i++) {
-        ASSERT_EQ(i, pBuf[i]);
+        ASSERT_EQ_GPU(i, pBuf[i],gpuNode);
         /* Update buf */
         pBuf[i] = i + 1;
     }
@@ -950,12 +1064,12 @@ TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
      */
 //#define USE_PM4_QUEUE_TRIGGER_VM_FAULT
 #ifdef USE_PM4_QUEUE_TRIGGER_VM_FAULT
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
     PM4Queue queue;
 
-    ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()));
+    ASSERT_SUCCESS_GPU(m_pAsm->RunAssembleBuf(CopyDwordIsa, isaBuffer.As<char*>()),gpuNode);
 
-    ASSERT_SUCCESS(queue.Create(defaultGPUNode));
+    ASSERT_SUCCESS_GPU(queue.Create(gpuNode),gpuNode);
 
     for (HSAuint64 i = 0; i < BufferSize / 8; i += 512) {
         Dispatch dispatch(isaBuffer);
@@ -971,9 +1085,17 @@ TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
 #endif
 
     for (HSAuint64 i = 0; i < BufferSize / 8; i += 512)
-        ASSERT_EQ(i + 1, pData[i]);
+        ASSERT_EQ_GPU(i + 1, pData[i],gpuNode);
 
-    ASSERT_SUCCESS(sdmaQueue.Destroy());
+    ASSERT_SUCCESS_GPU(sdmaQueue.Destroy(),gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, MigratePolicyTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(MigratePolicyTest));
 
     TEST_END
 }
@@ -1179,26 +1301,25 @@ unsigned int GpuReadThread(void* p) {
     return 0;
 }
 
-TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void MultiThreadMigrationTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x" << gpuNode << m_FamilyId << "." << std::endl;
         return;
     }
 
     unsigned long test_loops = 2;
     unsigned long BufferSize = 1UL << 27;
-    HsaSVMRange SysBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufferSize, gpuNode);
     HSAuint64 *pBuf = SysBuffer.As<HSAuint64 *>();
-    HsaSVMRange DataBuffer(BufferSize, defaultGPUNode);
+    HsaSVMRange DataBuffer(BufferSize, gpuNode);
     HSAuint64 *pData = DataBuffer.As<HSAuint64 *>();
     SDMAQueue sdmaQueue;
     uint64_t threadId;
@@ -1206,9 +1327,9 @@ TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
 
     params.pBuf = pBuf;
     params.BufferSize = BufferSize;
-    params.defaultGPUNode = defaultGPUNode;
+    params.defaultGPUNode = gpuNode;
 
-    EXPECT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    EXPECT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
 
     for (HSAuint64 i = 0; i < BufferSize / 8; i++)
         pBuf[i] = i;
@@ -1217,17 +1338,25 @@ TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
         /* 2 threads migrate to GPU */
         sdmaQueue.PlaceAndSubmitPacket(SDMACopyDataPacket(sdmaQueue.GetFamilyId(),
                     pData, pBuf, BufferSize));
-        ASSERT_EQ(true, StartThread(&GpuReadThread, &params, threadId));
+        ASSERT_EQ_GPU(true, StartThread(&GpuReadThread, &params, threadId), gpuNode);
         sdmaQueue.Wait4PacketConsumption();
         WaitForThread(threadId);
 
         /* 2 threads migrate to cpu */
-        ASSERT_EQ(true, StartThread(&CpuReadThread, &params, threadId));
-        EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufferSize, 0));
+        ASSERT_EQ_GPU(true, StartThread(&CpuReadThread, &params, threadId), gpuNode);
+        EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufferSize, 0), gpuNode);
         WaitForThread(threadId);
     }
 
-    EXPECT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS_GPU(sdmaQueue.Destroy(), gpuNode);
+
+}
+
+TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(MultiThreadMigrationTest));
 
     TEST_END
 }
@@ -1240,18 +1369,18 @@ TEST_P(KFDSVMRangeTest, MultiThreadMigrationTest) {
  * Use sdma to write data to memory, should write to file
  * Close file, and then check if file data is updated correctly
  */
-TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void MigrateFileBackedRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x"
+            << gpuNode << m_FamilyId << "." << std::endl;
         return;
     }
 
@@ -1268,10 +1397,10 @@ TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
     void *MmapedFile = mmap(NULL, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     ASSERT_NE(MAP_FAILED, MmapedFile);
 
-    HsaSVMRange filebackedRange(MmapedFile, size, defaultGPUNode, defaultGPUNode);
+    HsaSVMRange filebackedRange(MmapedFile, size, gpuNode, gpuNode);
 
     SDMAQueue sdmaQueue;
-    EXPECT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    EXPECT_SUCCESS(sdmaQueue.Create(gpuNode));
 
     sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
                     MmapedFile, 0x33333333, size));
@@ -1289,6 +1418,13 @@ TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
 
     EXPECT_SUCCESS(close(fd));
     EXPECT_SUCCESS(remove(tmpfname));
+}
+
+TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(MigrateFileBackedRangeTest));
 
     TEST_END
 }
@@ -1299,6 +1435,7 @@ TEST_P(KFDSVMRangeTest, MigrateFileBackedRangeTest) {
  * Map read only range to GPU, test sdma can read the range
  * write to range should trigger GPU vm fault for both xnack on and off
  */
+
 TEST_P(KFDSVMRangeTest, ReadOnlyRangeTest) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
@@ -1433,9 +1570,10 @@ unsigned int ReadSMIEventThread(void* p) {
     HSAuint64 events;
     int fd;
 
-    EXPECT_SUCCESS(hsaKmtOpenSMI(pArgs->nodeid, &fd));
-    events = HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_MIGRATE_START);
-    EXPECT_EQ(write(fd, &events, sizeof(events)), sizeof(events));
+    EXPECT_SUCCESS_GPU(hsaKmtOpenSMI(pArgs->nodeid, &fd), pArgs->nodeid);
+
+    events = HSA_SMI_EVENT_MASK_FROM_INDEX(HSA_SMI_EVENT_INDEX_MAX) - 1;
+    EXPECT_EQ_GPU(write(fd, &events, sizeof(events)), sizeof(events), pArgs->nodeid);
 
     pthread_barrier_wait(pArgs->barrier);
 
@@ -1444,44 +1582,78 @@ unsigned int ReadSMIEventThread(void* p) {
     EXPECT_GE(poll(&fds, 1, 1000), 0);
 
     memset(msg, 0, sizeof(msg));
-    EXPECT_GE(read(fd, msg, HSA_SMI_EVENT_MSG_SIZE), 0);
+    EXPECT_GE_GPU(read(fd, msg, HSA_SMI_EVENT_MSG_SIZE), 0, pArgs->nodeid);
 
     int event_id, pid, size, trigger, unused;
+    unsigned int id;
     HSAuint64 timestamp;
     HSAuint64 addr;
-    EXPECT_EQ(sscanf(msg, "%x %ld -%d @%lx(%d) %d->%x %x:%d %d\n", &event_id, &timestamp, &pid,
-                     &addr, &size, &unused, &unused, &unused, &unused, &trigger), 10);
-    EXPECT_EQ(event_id, HSA_SMI_EVENT_MIGRATE_START);
-    EXPECT_EQ((HSAuint64 *)(addr << PAGE_SHIFT), pArgs->pBuf);
-    EXPECT_EQ(size << PAGE_SHIFT, pArgs->BufSize);
-    EXPECT_EQ(pid, getpid());
-    EXPECT_EQ(trigger, HSA_MIGRATE_TRIGGER_PREFETCH);
+
+    sscanf(msg, "%x", &event_id);
+
+    /* check each possible response event message format */
+    if (event_id == HSA_SMI_EVENT_MIGRATE_START) {
+        /* the message is HSA_SMI_EVENT_MIGRATE_START */
+        EXPECT_EQ_GPU(sscanf(msg + sizeof(event_id), "%ld -%d @%lx(%d) %d->%x %x:%d %d\n", &timestamp, &pid,
+                     &addr, &size, &unused, &unused, &unused, &unused, &trigger), 9, pArgs->nodeid);
+        EXPECT_EQ_GPU((HSAuint64 *)(addr << PAGE_SHIFT), pArgs->pBuf, pArgs->nodeid);
+        EXPECT_EQ_GPU(size << PAGE_SHIFT, pArgs->BufSize, pArgs->nodeid);
+        EXPECT_EQ_GPU(pid, getpid(), pArgs->nodeid);
+        EXPECT_EQ_GPU(trigger, HSA_MIGRATE_TRIGGER_PREFETCH, pArgs->nodeid);
+
+     }else if (event_id == HSA_SMI_EVENT_QUEUE_EVICTION) {
+        /* the message is HSA_SMI_EVENT_QUEUE_EVICTION */
+        EXPECT_EQ_GPU(sscanf(msg + sizeof(event_id), "%ld -%d %x %d\n",  &timestamp, &pid, &id, &trigger),
+                      4, pArgs->nodeid);
+        EXPECT_EQ_GPU(pid, getpid(), pArgs->nodeid);
+        EXPECT_EQ_GPU(trigger, HSA_QUEUE_EVICTION_TRIGGER_SVM, pArgs->nodeid);
+
+    } else if (event_id == HSA_SMI_EVENT_QUEUE_RESTORE) {
+      /* the message is HSA_SMI_EVENT_UNMAP_FROM_GPU */
+        EXPECT_EQ_GPU(sscanf(msg + sizeof(event_id), "%ld -%d %x\n", &timestamp, &pid, &id), 3, pArgs->nodeid);
+        EXPECT_EQ_GPU(pid, getpid(), pArgs->nodeid);
+
+    } else if (event_id == HSA_SMI_EVENT_UNMAP_FROM_GPU) {
+        /* the message is HSA_SMI_EVENT_UNMAP_FROM_GPU */
+        EXPECT_EQ_GPU(sscanf(msg + sizeof(event_id), "%ld -%d @%lx(%d) %x %d\n", &timestamp, &pid,
+                      &addr, &size, &id, &trigger), 6, pArgs->nodeid);
+        /* unmap address can be from different gpus */
+        EXPECT_EQ_GPU(size << PAGE_SHIFT, pArgs->BufSize, pArgs->nodeid);
+        EXPECT_EQ_GPU(pid, getpid(), pArgs->nodeid);
+        EXPECT_EQ_GPU(trigger, HSA_SVM_UNMAP_TRIGGER_UNMAP_FROM_CPU, pArgs->nodeid);
+    } else {
+        WARN() << "HMMProfilingEvent failed on gpuNode: " <<  pArgs->nodeid << std::endl;
+    }
+
     close(fd);
     return 0;
 }
 
-TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void HMMProfilingEvent(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    if (m_VersionInfo.KernelInterfaceMinorVersion < 10)
+    if (pKFDSVMRangeTest->Get_Version()->KernelInterfaceMinorVersion < 10)
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
-
+    const HsaNodeProperties *pNodeProperties =
+        pKFDSVMRangeTest->Get_NodeInfo()->GetNodeProperties(gpuNode);
     if (pNodeProperties->Integrated) {
         LOG() << "Skipping test on APU." << std::endl;
         return;
     }
 
-    if (!GetVramSize(defaultGPUNode)) {
+    if (!pKFDSVMRangeTest->GetVramSize(gpuNode)) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
+        return;
+    }
+
+    if (pKFDSVMRangeTest->Get_NodeInfo()->IsAppAPU(gpuNode)) {
+        LOG() << "Skipping test on AppAPU." << std::endl;
         return;
     }
 
@@ -1489,18 +1661,26 @@ TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
     ASSERT_SUCCESS(pthread_barrier_init(&barrier, NULL, 2));
 
     int BufSize = 16 << 10;
-    HsaSVMRange SysBuffer(BufSize, defaultGPUNode);
+    HsaSVMRange SysBuffer(BufSize, gpuNode);
     HSAuint64 *pBuf = SysBuffer.As<HSAuint64 *>();
 
-    struct ReadEventThreadParams pArgs = {defaultGPUNode, pBuf, BufSize, &barrier};
+    struct ReadEventThreadParams pArgs = {gpuNode, pBuf, BufSize, &barrier};
     uint64_t threadId;
     ASSERT_EQ(true, StartThread(&ReadSMIEventThread, &pArgs, threadId));
 
     pthread_barrier_wait(&barrier);
 
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufSize, defaultGPUNode));
+    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufSize, gpuNode));
 
     WaitForThread(threadId);
+
+}
+
+TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(HMMProfilingEvent));
 
     TEST_END
 }
@@ -1512,22 +1692,21 @@ TEST_P(KFDSVMRangeTest, HMMProfilingEvent) {
  * KFD should support VRAM overcommitment by evicting SVM ranges to system memory to alloc
  * VRAM for new ranges.
  */
-TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void VramOvercommitTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x" << gpuNode << m_FamilyId << "." << std::endl;
         return;
     }
 
-    HSAuint64 vramSize = GetVramSize(defaultGPUNode);
+    HSAuint64 vramSize = pKFDSVMRangeTest->GetVramSize(gpuNode);
     if (!vramSize) {
         LOG() << "Skipping test: No VRAM found." << std::endl;
         return;
@@ -1536,10 +1715,14 @@ TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
     unsigned long overCommitSize = 1UL << 30;
 
     /* With XNACK off, KFD checks that all SVM memory will fit into system memory */
-    if (vramSize + overCommitSize > GetSysMemSize() / 2) {
+	if (!g_TestGPUsNum && vramSize + overCommitSize > pKFDSVMRangeTest->GetSysMemSize() / 2) {
         LOG() << "Skipping test: Not enough system memory." << std::endl;
         return;
-    }
+	} else if (g_TestGPUsNum && g_TestGPUsNum *(vramSize + overCommitSize)
+			    > pKFDSVMRangeTest->GetSysMemSize() / 2) {
+        LOG() << "Skipping test: Not enough system memory." << std::endl;
+        return;
+	}
 
     unsigned long BufSize = 512UL << 20;
     unsigned long numBufs = (vramSize + overCommitSize) / BufSize;
@@ -1552,15 +1735,23 @@ TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
         pBuf[i] = mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
         ASSERT_NE(MAP_FAILED, pBuf[i]);
 
-        ret = RegisterSVMRange(defaultGPUNode, pBuf[i], BufSize, defaultGPUNode, 0);
+        ret = RegisterSVMRange(gpuNode, pBuf[i], BufSize, gpuNode, 0);
         if (ret != HSAKMT_STATUS_SUCCESS)
             break;
     }
 
-    EXPECT_EQ(numBufs, i);
+    EXPECT_EQ_GPU(numBufs, i, gpuNode);
 
     while (i--)
         munmap(pBuf[i], BufSize);
+
+}
+
+TEST_P(KFDSVMRangeTest, VramOvercommitTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(VramOvercommitTest));
 
     TEST_END
 }
@@ -1583,7 +1774,8 @@ TEST_P(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test: No svm range support for family "
+                             "ID 0x" << m_FamilyId << "." << std::endl;
         return;
     }
 
@@ -1622,18 +1814,17 @@ TEST_P(KFDSVMRangeTest, VramOvercommitGiantRangeTest) {
  * use sdma to memset the rest 2 pages, each page has different value 0x1, 0x2, 0x3, 0x4
  * then check if all page have the specific value after migrating 4 pages to system memory.
  */
-TEST_P(KFDSVMRangeTest, PrefaultPartialRangeTest) {
-    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
-    TEST_START(TESTPROFILE_RUNALL);
+static void PrefaultPartialRangeTest(KFDTEST_PARAMETERS* pTestParamters) {
 
-    if (!SVMAPISupported())
+    int gpuNode = pTestParamters->gpuNode;
+    KFDSVMRangeTest* pKFDSVMRangeTest = (KFDSVMRangeTest*)pTestParamters->pTestObject;
+
+    if (!pKFDSVMRangeTest->SVMAPISupported_GPU(gpuNode))
         return;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
+    unsigned int m_FamilyId = pKFDSVMRangeTest->GetFamilyIdFromNodeId(gpuNode);
     if (m_FamilyId < FAMILY_AI) {
-        LOG() << std::hex << "Skipping test: No svm range support for family ID 0x" << m_FamilyId << "." << std::endl;
+        LOG() << std::hex << "Skipping test on gpuNode: No svm range support for family ID 0x" << gpuNode << m_FamilyId << "." << std::endl;
         return;
     }
 
@@ -1642,29 +1833,38 @@ TEST_P(KFDSVMRangeTest, PrefaultPartialRangeTest) {
     char *pBuf;
 
     pBuf = (char *)mmap(0, BufSize, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0);
-    ASSERT_NE(MAP_FAILED, pBuf);
+    ASSERT_NE_GPU(MAP_FAILED, pBuf, gpuNode);
 
     memset(pBuf + PAGE_SIZE, 0x2, PAGE_SIZE);
     memset(pBuf + 2 * PAGE_SIZE, 0x3, PAGE_SIZE);
 
-    EXPECT_SUCCESS(RegisterSVMRange(defaultGPUNode, pBuf, BufSize, 0, 0));
-    EXPECT_SUCCESS(SVMRangePrefetchToNode(pBuf, BufSize, defaultGPUNode));
+    EXPECT_SUCCESS_GPU(RegisterSVMRange(gpuNode, pBuf, BufSize, 0, 0), gpuNode);
+    EXPECT_SUCCESS_GPU(SVMRangePrefetchToNode(pBuf, BufSize, gpuNode), gpuNode);
 
     SDMAQueue sdmaQueue;
-    EXPECT_SUCCESS(sdmaQueue.Create(defaultGPUNode));
+    EXPECT_SUCCESS_GPU(sdmaQueue.Create(gpuNode), gpuNode);
 
     sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
-                    pBuf, 0x01010101, PAGE_SIZE));
+                       pBuf, 0x01010101, PAGE_SIZE));
     sdmaQueue.PlaceAndSubmitPacket(SDMAFillDataPacket(sdmaQueue.GetFamilyId(),
-                    pBuf + 3 * PAGE_SIZE, 0x04040404, PAGE_SIZE));
+                       pBuf + 3 * PAGE_SIZE, 0x04040404, PAGE_SIZE));
     sdmaQueue.Wait4PacketConsumption();
 
-    EXPECT_SUCCESS(sdmaQueue.Destroy());
+    EXPECT_SUCCESS_GPU(sdmaQueue.Destroy(), gpuNode);
 
     for (int i = 0; i < 4; i++)
-        EXPECT_EQ(pBuf[i * PAGE_SIZE], i + 1);
+        EXPECT_EQ_GPU(pBuf[i * PAGE_SIZE], i + 1, gpuNode);
 
     munmap(pBuf, BufSize);
+
+}
+
+TEST_P(KFDSVMRangeTest, PrefaultPartialRangeTest) {
+    TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
+    TEST_START(TESTPROFILE_RUNALL);
+
+    ASSERT_SUCCESS(KFDTest_Launch(PrefaultPartialRangeTest));
+
     TEST_END
 }
 
