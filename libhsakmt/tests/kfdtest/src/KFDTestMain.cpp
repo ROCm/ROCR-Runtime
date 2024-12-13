@@ -48,6 +48,7 @@ std::ostream& operator << (std::ostream& out, TESTPROFILE profile) {
     return out;
 }
 
+unsigned int g_TestGPUsNum ;
 unsigned int g_TestRunProfile;
 unsigned int g_TestENVCaps;
 unsigned int g_TestTimeOut;
@@ -105,6 +106,14 @@ GTEST_API_ int main(int argc, char **argv) {
         if (g_SleepTime > 0) {
             LOG() << "Sleep time in seconds as specified by user: " << std::dec << g_SleepTime << std::endl;
         }
+
+        char *testGPUsNum = NULL;
+        /* if HSA_TEST_GPUS_NUM is defined use it, otherwise test on 1 gpu */
+        testGPUsNum = getenv("HSA_TEST_GPUS_NUM");
+        if (testGPUsNum)
+            g_TestGPUsNum = std::max(1, atoi(testGPUsNum));
+        else
+            g_TestGPUsNum = 1;
 
         /* init LLVM one time*/
         Init_LLVM();
