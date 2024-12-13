@@ -37,6 +37,22 @@
 #include "Assemble.hpp"
 #include "ShaderStore.hpp"
 
+#define MAX_GPU 64
+
+typedef struct _KFDTEST_PARAMETERS
+{
+    void*   pTestObject;
+    int     gpuNode;
+} KFDTEST_PARAMETERS;
+
+typedef void (* Test_Function)(KFDTEST_PARAMETERS*);
+
+typedef struct _KFDTESTGPU_PARAMETERS
+{
+    KFDTEST_PARAMETERS*   pKFDTest_Parameters;
+    Test_Function         pTest_Function;
+} KFDTEST_GPUPARAMETERS;
+
 //  @class KFDBaseComponentTest
 class KFDBaseComponentTest : public testing::Test {
  public:
@@ -44,7 +60,7 @@ class KFDBaseComponentTest : public testing::Test {
     ~KFDBaseComponentTest(void) {}
 
     HSAuint64 GetSysMemSize();
-    HSAuint64 GetVramSize(int defaultGPUNode);
+    HSAuint64 GetVramSize(int gpuNode);
 #define MAX_RENDER_NODES 64
     struct {
         int fd;
@@ -58,6 +74,7 @@ class KFDBaseComponentTest : public testing::Test {
 // @return DRM Render Node if successful or -1 on failure
     int FindDRMRenderNode(int gpuNode);
     unsigned int GetFamilyIdFromNodeId(unsigned int nodeId);
+    Assembler* GetAssemblerFromNodeId(unsigned int nodeId);
     bool NeedCwsrWA(unsigned int nodeId);
     bool NeedNonPagedWptr(unsigned int nodeId);
     unsigned int GetFamilyIdFromDefaultNode(){ return m_FamilyId; }
@@ -66,6 +83,32 @@ class KFDBaseComponentTest : public testing::Test {
     static  void SetUpTestCase();
     // @brief Executed after the last test from KFDBaseComponentTest.
     static  void TearDownTestCase();
+
+    HsaVersionInfo*  Get_Version();
+    HsaNodeInfo* Get_NodeInfo();
+    HsaMemFlags& GetHsaMemFlags();
+    bool SVMAPISupported_GPU(unsigned int nodeId);
+
+    inline unsigned int Get_NumCpQueues(int gpuIndex){
+        return m_numCpQueues_GPU[gpuIndex];
+    }
+
+    inline unsigned int Get_NumSdmaEngines(int gpuIndex){
+        return m_numSdmaEngines_GPU[gpuIndex];
+    }
+
+    inline unsigned int Get_NumSdmaSdmaQueuesPerEngine(int gpuIndex){
+        return m_numSdmaQueuesPerEngine_GPU[gpuIndex];
+    }
+
+    inline unsigned int Get_NumSdmaSdmaXgmiEngines(int gpuIndex){
+        return m_numSdmaXgmiEngines_GPU[gpuIndex];
+    }
+
+    HSAKMT_STATUS KFDTestMultiGPU(Test_Function test_function,
+				    unsigned int gpu_num);
+
+    HSAKMT_STATUS KFDTest_Launch(Test_Function test_function);
 
  protected:
     HsaVersionInfo  m_VersionInfo;
@@ -80,11 +123,19 @@ class KFDBaseComponentTest : public testing::Test {
     HSAint32 m_xnack;
     Assembler* m_pAsm;
 
+    Assembler* m_pAsmGPU[MAX_GPU];
+
+    unsigned int m_numCpQueues_GPU[MAX_GPU];
+    unsigned int m_numSdmaEngines_GPU[MAX_GPU];
+    unsigned int m_numSdmaXgmiEngines_GPU[MAX_GPU];
+    unsigned int m_numSdmaQueuesPerEngine_GPU[MAX_GPU];
+
     // @brief Executed before every test that uses KFDBaseComponentTest class and sets all common settings for the tests.
     virtual void SetUp();
     // @brief Executed after every test that uses KFDBaseComponentTest class.
     virtual void TearDown();
 
+    /* TO DO: check all gpu support svm api */
     bool SVMAPISupported() {
         bool supported = m_NodeInfo.HsaDefaultGPUNodeProperties()
                         ->Capability.ui32.SVMAPISupported;

@@ -26,6 +26,8 @@
 #include "KFDBaseComponentTest.hpp"
 #include "KFDTestUtil.hpp"
 
+extern unsigned int g_TestGPUsNum;
+
 void KFDBaseComponentTest::SetUpTestCase() {
 }
 
@@ -60,25 +62,50 @@ void KFDBaseComponentTest::SetUp() {
     m_MemoryFlags.ui32.GDSMemory = 0;
     m_MemoryFlags.ui32.Scratch = 0;
 
+    /* nodeProperties is default gpu property, keep it to support old test method */
     const HsaNodeProperties *nodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
     ASSERT_NOTNULL(nodeProperties) << "failed to get HSA default GPU Node properties";
 
+    /* m_FamilyId is default gpu family id, keep it to support old test method */
     m_FamilyId = FamilyIdFromNode(nodeProperties);
 
+    /* these values are for default gpu, keep them to support old test method */
     GetHwQueueInfo(nodeProperties, &m_numCpQueues, &m_numSdmaEngines,
                     &m_numSdmaXgmiEngines, &m_numSdmaQueuesPerEngine);
 
     g_baseTest = this;
 
+    /* m_pAsm is default gpu assembler, keep it to support old test method */
     m_pAsm = new Assembler(GetGfxVersion(nodeProperties));
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    int gpuNode;
+    for (int i = 0; i < gpuNodes.size(); i++) {
+        gpuNode = gpuNodes.at(i);
+        const HsaNodeProperties *nodeProperties = m_NodeInfo.GetNodeProperties(gpuNode);
+
+        m_pAsmGPU[i] = new Assembler(GetGfxVersion(nodeProperties));
+        GetHwQueueInfo(nodeProperties, &m_numCpQueues_GPU[i], &m_numSdmaEngines_GPU[i],
+                    &m_numSdmaXgmiEngines_GPU[i], &m_numSdmaQueuesPerEngine_GPU[i]);
+    }
+
+    /* adjust g_TestGPUsNum not above MAX_GPU and gpu number at system */
+    g_TestGPUsNum = std::min(g_TestGPUsNum, (unsigned int)gpuNodes.size());
+    g_TestGPUsNum = (g_TestGPUsNum <= MAX_GPU) ? g_TestGPUsNum : MAX_GPU;
 
     const testing::TestInfo* curr_test_info =
                 ::testing::UnitTest::GetInstance()->current_test_info();
 
     openlog("KFDTEST", LOG_CONS , LOG_USER);
-    syslog(LOG_INFO, "[Node#%03d] STARTED ========== %s.%s ==========",
-                m_NodeInfo.HsaDefaultGPUNode(),
-                curr_test_info->test_case_name(), curr_test_info->name());
+    if (g_TestGPUsNum == 1)
+        syslog(LOG_INFO, "[Test on Node#%03d] "
+                    "STARTED ========== %s.%s ==========",
+                    m_NodeInfo.HsaDefaultGPUNode(),
+                    curr_test_info->test_case_name(), curr_test_info->name());
+    else
+        syslog(LOG_INFO, "[Test on %03d Node(s)] "
+                    "STARTED ========== %s.%s ==========",
+                    g_TestGPUsNum,
+                    curr_test_info->test_case_name(), curr_test_info->name());
 
     ROUTINE_END
 }
@@ -102,16 +129,39 @@ void KFDBaseComponentTest::TearDown() {
         delete m_pAsm;
     m_pAsm = nullptr;
 
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+    for (int i = 0; i < gpuNodes.size(); i++) {
+        if ( m_pAsmGPU[i]) {
+            delete  m_pAsmGPU[i];
+            m_pAsmGPU[i] = NULL;
+        }
+    }
+
     const testing::TestInfo* curr_test_info =
                 ::testing::UnitTest::GetInstance()->current_test_info();
 
     if (curr_test_info->result()->Passed())
-        syslog(LOG_INFO, "[Node#%03d] PASSED  ========== %s.%s ==========",
+        if (g_TestGPUsNum == 1)
+            syslog(LOG_INFO, "[Test on Node#%03d] PASSED"
+                             "  ========== %s.%s ==========",
                 m_NodeInfo.HsaDefaultGPUNode(),
                 curr_test_info->test_case_name(), curr_test_info->name());
+        else
+            syslog(LOG_INFO, "[Tested on %03d Node(s)] PASSED"
+                             "  ========== %s.%s ==========",
+                g_TestGPUsNum,
+                curr_test_info->test_case_name(), curr_test_info->name());
+
     else
-        syslog(LOG_WARNING, "[Node#%03d] FAILED  ========== %s.%s ==========",
+        if (g_TestGPUsNum == 1)
+             syslog(LOG_WARNING, "[Test on Node#%03d] FAILED"
+                                 "  ========== %s.%s ==========",
                 m_NodeInfo.HsaDefaultGPUNode(),
+                curr_test_info->test_case_name(), curr_test_info->name());
+        else
+             syslog(LOG_WARNING, "[Test on %03d Node(s)] FAILED"
+                                 "  ========== %s.%s ==========",
+                g_TestGPUsNum,
                 curr_test_info->test_case_name(), curr_test_info->name());
 
     closelog();
@@ -140,15 +190,15 @@ HSAuint64 KFDBaseComponentTest::GetSysMemSize() {
     return systemMemSize;
 }
 
-HSAuint64 KFDBaseComponentTest::GetVramSize(int defaultGPUNode) {
+HSAuint64 KFDBaseComponentTest::GetVramSize(int gpuNode) {
     const HsaNodeProperties *nodeProps;
 
     /* Find framebuffer size */
-    nodeProps = m_NodeInfo.GetNodeProperties(defaultGPUNode);
+    nodeProps = m_NodeInfo.GetNodeProperties(gpuNode);
     EXPECT_NE((const HsaNodeProperties *)NULL, nodeProps);
     HSAuint32 numBanks = nodeProps->NumMemoryBanks;
     HsaMemoryProperties memoryProps[numBanks];
-    EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(defaultGPUNode, numBanks, memoryProps));
+    EXPECT_SUCCESS(hsaKmtGetNodeMemoryProperties(gpuNode, numBanks, memoryProps));
     unsigned bank;
     for (bank = 0; bank < numBanks; bank++) {
         if (memoryProps[bank].HeapType == HSA_HEAPTYPE_FRAME_BUFFER_PRIVATE
@@ -163,6 +213,28 @@ unsigned int KFDBaseComponentTest::GetFamilyIdFromNodeId(unsigned int nodeId)
 {
     return  FamilyIdFromNode(m_NodeInfo.GetNodeProperties(nodeId));
 }
+
+Assembler* KFDBaseComponentTest::GetAssemblerFromNodeId(unsigned int nodeId)
+{
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(nodeId);
+
+    if (gpuIndex < 0)
+        return NULL;
+
+    return m_pAsmGPU[gpuIndex];
+}
+
+bool KFDBaseComponentTest::SVMAPISupported_GPU(unsigned int gpuNode) {
+
+    bool supported = m_NodeInfo.GetNodeProperties(gpuNode)
+                         ->Capability.ui32.SVMAPISupported;
+
+    if (!supported)
+        LOG() << "SVM API not supported on gpuNode" << gpuNode << std::endl;
+
+    return supported;
+}
+
 
 /*
  * Some asics need CWSR workround for DEGFX11_12113
@@ -230,4 +302,111 @@ int KFDBaseComponentTest::FindDRMRenderNode(int gpuNode) {
     }
 
     return index;
+}
+
+HsaVersionInfo* KFDBaseComponentTest::Get_Version() {
+    return &m_VersionInfo;
+}
+
+HsaNodeInfo* KFDBaseComponentTest::Get_NodeInfo() {
+    return &m_NodeInfo;
+}
+
+HsaMemFlags& KFDBaseComponentTest::GetHsaMemFlags() {
+    return m_MemoryFlags;
+}
+
+static void* KFDTest_GPU(void* ptr) {
+
+    KFDTEST_GPUPARAMETERS* pKFDTest_GPUParameters = (KFDTEST_GPUPARAMETERS*)ptr;
+
+    Test_Function test_function        = pKFDTest_GPUParameters->pTest_Function;
+    KFDTEST_PARAMETERS* pTestParamters = pKFDTest_GPUParameters->pKFDTest_Parameters;
+
+    try {
+
+        test_function(pTestParamters);
+
+    } catch (...) {
+        LOG() << "test failed at gpu" << pTestParamters->gpuNode << std::endl;
+    }
+
+    pthread_exit(NULL);
+}
+
+HSAKMT_STATUS KFDBaseComponentTest::KFDTestMultiGPU(Test_Function test_function,
+                                                     unsigned int gpu_num) {
+
+    HSAKMT_STATUS r = HSAKMT_STATUS_SUCCESS;
+    int gpu_node;
+    int err = 0;
+    int i, j;
+
+    KFDTEST_GPUPARAMETERS kfdtest_GpuParameters[gpu_num];
+    KFDTEST_PARAMETERS kfdTest_Parameters[gpu_num];
+    pthread_t pThreadGPU[gpu_num];
+
+    const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+
+    for (i = 0; i < gpu_num; i++) {
+
+        gpu_node = gpuNodes.at(i);
+
+        kfdTest_Parameters[i].pTestObject = this;
+        kfdTest_Parameters[i].gpuNode = gpu_node;
+
+        kfdtest_GpuParameters[i].pKFDTest_Parameters = &kfdTest_Parameters[i];
+        kfdtest_GpuParameters[i].pTest_Function = test_function;
+
+        err = pthread_create(&pThreadGPU[i], NULL, KFDTest_GPU,
+                             (void *)&kfdtest_GpuParameters[i]);
+        if (err) {
+            std::cout << "Thread creation for gpu node failed : " << gpu_node
+                      << strerror(err) << std::endl;
+            r = HSAKMT_STATUS_ERROR;
+            goto err_out;
+        }
+    }
+
+err_out:
+   /* wait threads created successully to finish */
+   for (j = 0; j < i; j++) {
+       err = pthread_join(pThreadGPU[j], NULL);
+       if (err) {
+           std::cout << "pthread_join at gpu node failed : " << gpuNodes.at(j)
+                     << strerror(err) << std::endl;
+           r = HSAKMT_STATUS_ERROR;
+       }
+   }
+
+   return r;
+}
+
+HSAKMT_STATUS KFDBaseComponentTest::KFDTest_Launch(Test_Function test_function) {
+
+    /* test on default GPU only */
+    if (g_TestGPUsNum == 1) {
+        int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
+        if (defaultGPUNode < 0) {
+            LOG() << "defaultGPUNode is invalid." << defaultGPUNode <<std::endl;
+            return HSAKMT_STATUS_INVALID_PARAMETER;
+        }
+
+        KFDTEST_PARAMETERS TestParamters;
+        TestParamters.pTestObject = this;
+        TestParamters.gpuNode = defaultGPUNode;
+        try {
+            test_function(&TestParamters);
+        } catch (...) {
+            LOG() << "test failed at gpu" << defaultGPUNode << std::endl;
+        }
+
+        return HSAKMT_STATUS_SUCCESS;
+    }
+
+    /* run test_function on all available GPUs */
+    HSAKMT_STATUS err = HSAKMT_STATUS_SUCCESS;
+    err = KFDTestMultiGPU(test_function, g_TestGPUsNum);
+
+    return err;
 }

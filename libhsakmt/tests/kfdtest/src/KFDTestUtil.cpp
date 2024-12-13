@@ -626,6 +626,18 @@ const HsaNodeProperties* HsaNodeInfo::GetNodeProperties(int NodeNum) const {
     return m_HsaNodeProps.at(NodeNum);
 }
 
+const int HsaNodeInfo::HsaGPUindexFromGpuNode(int gpuNodeId) const {
+    if (m_NodesWithGPU.size() == 0)
+        return -1;
+
+    for (unsigned int i = 0; i < m_NodesWithGPU.size(); i++) {
+        if (gpuNodeId == m_NodesWithGPU.at(i))
+            return i;
+    }
+
+    return -1;
+}
+
 const HsaNodeProperties* HsaNodeInfo::HsaDefaultGPUNodeProperties() const {
     int NodeNum = HsaDefaultGPUNode();
     if (NodeNum < 0)
