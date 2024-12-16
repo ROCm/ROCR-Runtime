@@ -61,7 +61,7 @@ class ScratchCache {
     bool large;
     uint32_t state;
 
-    node() : base(nullptr), state(FREE) {}
+    node() : base(nullptr), large(false), state(FREE) {}
 
     bool isFree() const { return state == FREE; }
     bool trimPending() const { return state == (ALLOC | TRIM); }

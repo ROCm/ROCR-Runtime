@@ -161,7 +161,8 @@ public:
     , is_dynamic_callstack(_is_dynamic_callstack)
     , size(_size)
     , alignment(_alignment)
-    , wavefront_size(_wavefront_size) {}
+    , wavefront_size(_wavefront_size)
+    , debug_info{} {}
 
   ~KernelSymbol() {}
 

@@ -245,7 +245,7 @@ uint32_t Signal::WaitAny(uint32_t signal_count, const hsa_signal_t* hsa_signals,
   const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
   // Convert timeout value into the fast_clock domain
-  uint64_t hsa_freq;
+  uint64_t hsa_freq = 0;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
   const timer::fast_clock::duration fast_timeout =
       timer::duration_from_seconds<timer::fast_clock::duration>(

@@ -90,7 +90,11 @@ struct SharedSignal {
   uint64_t sdma_end_ts;
   uint8_t reserved2[24];
 
-  SharedSignal() {
+  SharedSignal() :
+    sdma_start_ts(0),
+    reserved{},
+    sdma_end_ts(0),
+    reserved2{} {
     memset(&amd_signal, 0, sizeof(amd_signal));
     amd_signal.kind = AMD_SIGNAL_KIND_INVALID;
     core_signal = nullptr;
