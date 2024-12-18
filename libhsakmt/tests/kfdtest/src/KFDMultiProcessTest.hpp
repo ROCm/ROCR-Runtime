@@ -28,21 +28,19 @@
 #include <vector>
 #include "KFDBaseComponentTest.hpp"
 
-extern unsigned int g_TestGPUsNum;
-
 // @class KFDMultiProcessTest
 // Base class for tests forking multiple child processes
 class KFDMultiProcessTest :  public KFDBaseComponentTest {
  public:
     KFDMultiProcessTest(void) {
-        for ( int i = 0; i < g_TestGPUsNum; i++) {
+        for ( int i = 0; i < MAX_GPU; i++) {
             m_ChildStatus[i] = HSAKMT_STATUS_ERROR;
             m_IsParent[i] = true;
         }
     }
 
     ~KFDMultiProcessTest(void) {
-        for ( int i = 0; i < g_TestGPUsNum; i++) {
+        for (int i = 0; i < MAX_GPU; i++) {
             if (!m_IsParent[i]) {
                 /* Child process has to exit
                  * otherwise gtest will continue other tests
@@ -53,9 +51,9 @@ class KFDMultiProcessTest :  public KFDBaseComponentTest {
 
         try {
             const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
-            unsigned gpu_num = gpuNodes.size();
             int gpu_node;
-            for (int i = 0; i < g_TestGPUsNum; i++) {
+            /* parent porcess waits all its child processes on each gpu */
+            for (int i = 0; i < std::min((int)gpuNodes.size(), MAX_GPU); i++) {
                 gpu_node = gpuNodes.at(i);
                 WaitChildProcesses(gpu_node);
             }
