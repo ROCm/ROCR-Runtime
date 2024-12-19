@@ -250,10 +250,12 @@ const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, 
 }
 
 
+// TODO: c++20 use constexpr or consteval
 const std::unordered_map<std::string, unsigned int> &
 IsaRegistry::GetSupportedGenericVersions() {
   static const
-            std::unordered_map<std::string, unsigned int> min_gen_versions = {
+    std::unordered_map<std::string, unsigned int> * min_gen_versions =
+                          new std::unordered_map<std::string, unsigned int> {
     {prepend_isa_prefix("gfx9-generic"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack-"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack+"), 1},
@@ -279,7 +281,7 @@ IsaRegistry::GetSupportedGenericVersions() {
     {prepend_isa_prefix("gfx11-generic"), 1},
     {prepend_isa_prefix("gfx12-generic"), 1}
   };
-  return min_gen_versions;
+  return *min_gen_versions;
 }
 
 const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
