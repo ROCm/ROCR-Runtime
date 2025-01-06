@@ -345,7 +345,10 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	struct perf_trace *trace = NULL;
 	uint32_t concurrent_limit;
 	const uint32_t MAX_COUNTERS = 512;
-	uint64_t counter_id[PERFCOUNTER_BLOCKID__MAX][MAX_COUNTERS];
+
+	/* Declare performance counter ID 2D array as a contiguous block */
+	uint64_t *counter_id = malloc(
+			PERFCOUNTER_BLOCKID__MAX * MAX_COUNTERS * sizeof(uint64_t));
 	uint32_t num_counters[PERFCOUNTER_BLOCKID__MAX] = {0};
 	uint32_t block, num_blocks = 0, total_counters = 0;
 	uint64_t *counter_id_ptr;
@@ -353,32 +356,48 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 
 	pr_debug("[%s] Number of counters %d\n", __func__, NumberOfCounters);
 
-	if (!counter_props)
+	if (counter_id == NULL) {
+		pr_err("Failed to allocate memory for counter_id. Requested %zu bytes.\n",
+				PERFCOUNTER_BLOCKID__MAX * MAX_COUNTERS * sizeof(uint64_t));
 		return HSAKMT_STATUS_NO_MEMORY;
+	}
+
+	if (!counter_props) {
+		pr_err("Profiling is not available, counter_props is NULL.\n");
+		goto no_memory_exit;
+	}
 
 	if (!Counters || !TraceRoot || NumberOfCounters == 0)
-		return HSAKMT_STATUS_INVALID_PARAMETER;
+		goto invalid_parameter_exit;
 
-	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS)
+	if (hsakmt_validate_nodeid(NodeId, &gpu_id) != HSAKMT_STATUS_SUCCESS) {
+		free(counter_id);
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+	}
 
 	if (NumberOfCounters > MAX_COUNTERS) {
-		pr_err("MAX_COUNTERS is too small for %d.\n",
-			NumberOfCounters);
-		return HSAKMT_STATUS_NO_MEMORY;
+		pr_err("MAX_COUNTERS is too small for %d.\n", NumberOfCounters);
+		goto no_memory_exit;
 	}
 
 	/* Calculating the minimum buffer size */
 	for (i = 0; i < NumberOfCounters; i++) {
 		if (Counters[i].BlockIndex >= PERFCOUNTER_BLOCKID__MAX)
-			return HSAKMT_STATUS_INVALID_PARAMETER;
+			goto invalid_parameter_exit;
 		/* Only privileged counters need to register */
 		if (Counters[i].Type > HSA_PROFILE_TYPE_PRIVILEGED_STREAMING)
 			continue;
 		min_buf_size += Counters[i].CounterSizeInBits/BITS_PER_BYTE;
 		/* j: the first blank entry in the block to record counter_id */
 		j = num_counters[Counters[i].BlockIndex];
-		counter_id[Counters[i].BlockIndex][j] = Counters[i].CounterId;
+		/* Make sure counter_id stays within bounds */
+		if (j >= MAX_COUNTERS) {
+			pr_err("Counter ID exceeded MAX_COUNTERS for block %d.\n",
+					Counters[i].BlockIndex);
+			goto invalid_parameter_exit;
+		}
+		/* Initialize counter_id */
+		counter_id[Counters[i].BlockIndex * MAX_COUNTERS + j] = Counters[i].CounterId;
 		num_counters[Counters[i].BlockIndex]++;
 		total_counters++;
 	}
@@ -392,17 +411,17 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 		concurrent_limit = get_block_concurrent_limit(NodeId, i);
 		if (!concurrent_limit) {
 			pr_err("Invalid block ID: %d\n", i);
-			return HSAKMT_STATUS_INVALID_PARAMETER;
+			goto invalid_parameter_exit;
 		}
 		if (num_counters[i] > concurrent_limit) {
 			pr_err("Counters exceed the limit.\n");
-			return HSAKMT_STATUS_INVALID_PARAMETER;
+			goto invalid_parameter_exit;
 		}
 		num_blocks++;
 	}
 
 	if (!num_blocks)
-		return HSAKMT_STATUS_INVALID_PARAMETER;
+		goto invalid_parameter_exit;
 
 	/* Now we have sorted blocks/counters information in
 	 * num_counters[block_id] and counter_id[block_id][]. Allocate trace
@@ -413,8 +432,14 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 			+ sizeof(uint64_t) * total_counters
 			+ sizeof(int) * total_counters,
 			1);
-	if (!trace)
-		return HSAKMT_STATUS_NO_MEMORY;
+	if (!trace) {
+		pr_err("Failed to allocate memory for trace. Requested %zu bytes.\n",
+				sizeof(struct perf_trace)
+				+ sizeof(struct perf_trace_block) * num_blocks
+				+ sizeof(uint64_t) * total_counters
+				+ sizeof(int) * total_counters);
+		goto no_memory_exit;
+	}
 
 	/* Allocated area is partitioned as:
 	 * +---------------------------------+ trace
@@ -449,7 +474,7 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 		trace->blocks[block].counter_id = counter_id_ptr;
 		/* Fill in counter IDs to the counter_id array. */
 		for (j = 0; j < num_counters[i]; j++)
-			trace->blocks[block].counter_id[j] = counter_id[i][j];
+			trace->blocks[block].counter_id[j] = counter_id[i * MAX_COUNTERS + j];
 		trace->blocks[block].perf_event_fd = fd_ptr;
 		/* how many counters to trace */
 		trace->blocks[block].num_counters = num_counters[i];
@@ -470,7 +495,16 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtPmcRegisterTrace(HSAuint32 NodeId,
 	TraceRoot->TraceId = PORT_VPTR_TO_UINT64(trace);
 
 	free(trace);
+	free(counter_id);
 	return HSAKMT_STATUS_SUCCESS;
+
+	no_memory_exit:
+		free(counter_id);
+		return HSAKMT_STATUS_NO_MEMORY;
+
+	invalid_parameter_exit:
+		free(counter_id);
+		return HSAKMT_STATUS_INVALID_PARAMETER;
 }
 
 /* Unregisters a set of (HW) counters used for tracing/profiling */
