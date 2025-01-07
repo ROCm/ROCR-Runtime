@@ -21,6 +21,7 @@
  *
  */
 
+#include <tuple>
 #include "KFDCWSRTest.hpp"
 #include "Dispatch.hpp"
 
