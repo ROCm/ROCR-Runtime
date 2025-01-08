@@ -109,29 +109,7 @@ bool g_use_interrupt_wait;
 bool g_use_mwaitx;
 Runtime* Runtime::runtime_singleton_ = NULL;
 
-
-__forceinline static bool& loaded() {
-  static bool loaded_ = true;
-  return loaded_;
-}
-
-class RuntimeCleanup {
- public:
-  ~RuntimeCleanup() {
-    if (!Runtime::IsOpen()) {
-      delete Runtime::runtime_singleton_;
-    }
-
-    loaded() = false;
-  }
-};
-
-static RuntimeCleanup cleanup_at_unload_;
-
 hsa_status_t Runtime::Acquire() {
-  // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == NULL) {
@@ -159,9 +137,6 @@ hsa_status_t Runtime::Acquire() {
 }
 
 hsa_status_t Runtime::Release() {
-  // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded()) return HSA_STATUS_SUCCESS;
-
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == nullptr) return HSA_STATUS_ERROR_NOT_INITIALIZED;
