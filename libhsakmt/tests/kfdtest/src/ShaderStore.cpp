@@ -959,15 +959,18 @@ const char *ReadMemoryIsa =
 const char *GwsInitIsa =
     SHADER_START
     R"(
-        s_mov_b32 m0, 0
-        s_nop 0
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_waitcnt 0
-        v_mov_b32 v0, s16
-        s_waitcnt 0
-        ds_gws_init v0 offset:0 gds
-        s_waitcnt 0
-        s_endpgm
+        .if (.amdgcn.gfx_generation_number >= 12)
+        .else
+            s_mov_b32 m0, 0
+            s_nop 0
+            s_load_dword s16, s[0:1], 0x0 glc
+            s_waitcnt 0
+            v_mov_b32 v0, s16
+            s_waitcnt 0
+            ds_gws_init v0 offset:0 gds
+            s_waitcnt 0
+            s_endpgm
+        .endif
 )";
 
 /* Atomically increase a value in memory
@@ -980,7 +983,8 @@ const char *GwsAtomicIncreaseIsa =
     SHADER_START
     R"(
         // Assume src address in s0, s1
-        .if (.amdgcn.gfx_generation_number >= 10)
+        .if (.amdgcn.gfx_generation_number >= 12)
+        .elseif (.amdgcn.gfx_generation_number >= 10)
             s_mov_b32 m0, 0
             s_mov_b32 exec_lo, 0x1
             v_mov_b32 v0, s0
