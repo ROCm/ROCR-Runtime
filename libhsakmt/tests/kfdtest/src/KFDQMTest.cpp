@@ -970,8 +970,9 @@ static bool setCUMask(uint32_t *pMask, mask_config_t maskConfig, uint32_t seMask
  */
 static bool validateTest(uint32_t *pMask, mask_config_t maskConfig, uint32_t numWorkItems, out_data_t *pOutput)
 {
-    uint32_t resultMask[maskConfig.numDwords] = { 0 };
+    uint32_t resultMask[maskConfig.numDwords];
     bool result = false;
+    memset(resultMask, 0, sizeof(resultMask));
 
     for (int i = 0; i < numWorkItems; i++) {
         DBG_PRINT("=== % 4d: 0x%08x [ se: %2d, sa: %2d, wgp: %2d]\n", i, pOutput[i].data, pOutput[i].se, pOutput[i].sa, pOutput[i].wgp);
