@@ -1049,7 +1049,11 @@ const char *CheckCuMaskIsa =
         V_ADD_CO_CI_U32  v5, v5, 0
 
         // Store HW_ID1 content
-        s_getreg_b32     s6, hwreg(HW_REG_HW_ID1)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_getreg_b32     s6, hwreg(HW_REG_HW_ID1)
+        .else
+            s_getreg_b32     s6, hwreg(HW_REG_HW_ID)
+        .endif
         v_mov_b32        v1, s6
         flat_store_dword v[4:5], v1
 
