@@ -691,6 +691,14 @@ const char *LoopIsa =
     R"(
         s_movk_i32    s0, 0x0008
         s_movk_i32    s1, 0x00ff
+        s_mov_b32     s4, 0
+        s_mov_b32     s5, 0
+        s_mov_b32     s6, 0
+        s_mov_b32     s7, 0
+        s_mov_b32     s12, 0
+        s_mov_b32     s13, 0
+        s_mov_b32     s14, 0
+        s_mov_b32     s15, 0
         v_mov_b32     v0, 0
         v_mov_b32     v1, 0
         v_mov_b32     v2, 0
@@ -717,7 +725,12 @@ const char *LoopIsa =
         s_cbranch_scc1  END_OF_PGM
         v_add_f32     v0, 2.0, v0
         v_cvt_f32_i32 v17, s1
-        s_waitcnt     lgkmcnt(0)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_wait_dscnt     0
+            s_wait_kmcnt     0
+        .else
+            s_waitcnt lgkmcnt(0)
+        .endif
         v_add_f32     v18, s8, v17
         v_add_f32     v19, s9, v17
         v_add_f32     v20, s10, v17
