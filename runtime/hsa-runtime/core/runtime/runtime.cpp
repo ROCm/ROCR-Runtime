@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2025w, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -3312,9 +3312,8 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   }
 
   if (mappedHandleIt->second.shareable_handle.IsValid()) {
-    status =
-        mappedHandleIt->second.agentOwner()->driver().ReleaseShareableHandle(
-            mappedHandleIt->second.shareable_handle);
+    hsa_status_t status = mappedHandleIt->second.agentOwner()->driver().ReleaseShareableHandle(
+        mappedHandleIt->second.shareable_handle);
     if (status != HSA_STATUS_SUCCESS)
       return status;
   }
