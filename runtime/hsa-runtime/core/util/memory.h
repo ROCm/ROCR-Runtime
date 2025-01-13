@@ -57,19 +57,19 @@ namespace rocr {
 ///        flags.
 __forceinline int PermissionsToMmapFlags(hsa_access_permission_t perms) {
   switch (perms) {
-  case HSA_ACCESS_PERMISSION_RO:
-    return PROT_READ;
-  case HSA_ACCESS_PERMISSION_WO:
-    return PROT_WRITE;
-  case HSA_ACCESS_PERMISSION_RW:
-    return PROT_READ | PROT_WRITE;
-  case HSA_ACCESS_PERMISSION_NONE:
-  default:
-    return PROT_NONE;
+    case HSA_ACCESS_PERMISSION_RO:
+      return PROT_READ;
+    case HSA_ACCESS_PERMISSION_WO:
+      return PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_RW:
+      return PROT_READ | PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_NONE:
+    default:
+      return PROT_NONE;
   }
 }
 #endif
 
-} // namespace rocr
+}  // namespace rocr
 
-#endif // HSA_RUNTIME_CORE_UTIL_MEMORY_H_
+#endif  // HSA_RUNTIME_CORE_UTIL_MEMORY_H_
