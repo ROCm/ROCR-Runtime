@@ -922,6 +922,7 @@ void AqlQueue::AsyncReclaimAltScratch() {
   }
 }
 
+// #define DEBUG_PRINT(fmt, ...) fprintf(stderr, "[ROCR][DEBUG] " fmt "\n", ##__VA_ARGS__)
 void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
                                          hsa_signal_value_t& waitVal, bool& changeWait) {
   // Insufficient scratch - recoverable, don't process dynamic scratch if errors are present.
@@ -970,6 +971,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
         pkt.dispatch.workgroup_size_z;
 
     const uint32_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
+    // DEBUG_PRINT("calc_dispatch_waves_per_group : lanes_per_group=%d lanes_per_wave=%d waves_per_group=%d",lanes_per_group, lanes_per_wave, (lanes_per_group + lanes_per_wave - 1) / lanes_per_wave);
     return (lanes_per_group + lanes_per_wave - 1) / lanes_per_wave;
   };
 
@@ -996,6 +998,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
     uint64_t maxGroupsPerEngine =
         ((symmetricGroups + engines - 1) / engines) + (asymmetryPerRound ? rounds : 0);
 
+    // DEBUG_PRINT("symmetric_cus=%d symmetricGroups=%d maxGroupsPerEngine=%d",symmetric_cus, symmetricGroups, maxGroupsPerEngine);
     // For gfx10+ devices we must attempt to assign the smaller of 256 lanes or 16 groups to each
     // engine.
     if (agent_->isa()->GetMajorVersion() >= 10 && maxGroupsPerEngine < 16 &&
@@ -1014,7 +1017,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
     // Get the hw maximum scratch slot count taking into consideration asymmetric harvest.
     const uint32_t engines = agent_->properties().NumShaderBanks;
     const uint32_t cu_count = amd_queue_.max_cu_id + 1;
-    return AlignUp(cu_count, engines) * agent_->properties().MaxSlotsScratchCU;
+    return AlignUp(cu_count, engines) * (agent_->properties().MaxSlotsScratchCU + 1);
   };
 
   assert((!scratch.async_reclaim || (amd_queue_.caps & AMD_QUEUE_CAPS_ASYNC_RECLAIM)) &&
@@ -1033,6 +1036,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   uint32_t waves_per_group = calc_dispatch_waves_per_group(pkt);
 
   uint32_t dispatch_slots = groups * waves_per_group;
+  // DEBUG_PRINT("device_slots=%d groups=%d waves_per_group=%d", device_slots, groups, waves_per_group);
   dispatch_slots = std::min(dispatch_slots, device_slots);
 
   const uint64_t lanes_per_wave = (error_code & 0x400) ? 32 : 64;
@@ -1041,6 +1045,7 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
       AlignUp(pkt.dispatch.private_segment_size, scratch.mem_alignment_size / lanes_per_wave);
   const uint64_t device_size = size_per_thread * lanes_per_wave * device_slots;
   const uint64_t dispatch_size = size_per_thread * lanes_per_wave * dispatch_slots;
+  // DEBUG_PRINT("lanes_per_wave=%d size_per_thread=%d device_size=%d dispatch_size=%d", lanes_per_wave, size_per_thread, device_size, dispatch_size);
 
   // scratch.use_alt_limit will be 0 if alt scratch is not supported or disabled
   if (dispatch_size < scratch.use_alt_limit && dispatch_slots < device_slots) {
