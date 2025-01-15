@@ -71,7 +71,8 @@ public:
   }
 
   AieAqlQueue() = delete;
-  AieAqlQueue(AieAgent *agent, size_t req_size_pkts, uint32_t node_id);
+  AieAqlQueue(core::SharedQueue* shared_queue, AieAgent* agent, size_t req_size_pkts,
+              uint32_t node_id, uint64_t flags);
   ~AieAqlQueue();
 
   hsa_status_t Inactivate() override;
