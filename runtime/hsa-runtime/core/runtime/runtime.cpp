@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2025w, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -1982,8 +1982,8 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
   info.size = sizeof(info);
   for (int i = 0; i < 3; i++) {
     if (it == runtime_singleton_->allocation_map_.end()) break;
-    hsa_status_t err = runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, 
-                                                    malloc, &count, &canAccess, &block);
+    hsa_status_t err = runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc,
+                                                   &count, &canAccess, &block);
     if (err == HSA_STATUS_SUCCESS) {
       fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
               info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
