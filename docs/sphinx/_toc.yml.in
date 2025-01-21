@@ -11,7 +11,8 @@ subtrees:
     - file: api-reference/c-interface-adaptors
     - file: api-reference/environment_variables
     - file: api-reference/api
-    
+    - file: api-reference/virtual_rocr
+
   - caption: Contribution
     entries:
     - file: contribution/contributing-to-rocr
