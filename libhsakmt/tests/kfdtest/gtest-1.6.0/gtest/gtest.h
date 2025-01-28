@@ -19004,6 +19004,13 @@ class TestWithParam : public Test, public WithParamInterface<T> {
   else \
     on_failure(gtest_ar.failure_message())
 
+#define GTEST_ASSERT_MESSAGE(expression, on_failure, message) \
+  GTEST_AMBIGUOUS_ELSE_BLOCKER_ \
+  if (::testing::AssertionResult gtest_ar = (expression)) \
+    ; \
+  else \
+    on_failure((gtest_ar.failure_message()))
+
 
 // Helper function for implementing {EXPECT|ASSERT}_PRED1.  Don't use
 // this in your code.
@@ -19072,6 +19079,10 @@ AssertionResult AssertPred2Helper(const char* pred_text,
   GTEST_ASSERT_(pred_format(#v1, #v2, v1, v2),\
                 on_failure)
 
+#define GTEST_PRED_FORMAT2_MESSAGE(pred_format, v1, v2, message, on_failure)\
+  GTEST_ASSERT_MESSAGE(pred_format(#message#v1, #message#v2, v1, v2),\
+                on_failure, message)
+
 // Internal macro for implementing {EXPECT|ASSERT}_PRED2.  Don't use
 // this in your code.
 #define GTEST_PRED2_(pred, v1, v2, on_failure)\
@@ -19085,10 +19096,16 @@ AssertionResult AssertPred2Helper(const char* pred_text,
 // Binary predicate assertion macros.
 #define EXPECT_PRED_FORMAT2(pred_format, v1, v2) \
   GTEST_PRED_FORMAT2_(pred_format, v1, v2, GTEST_NONFATAL_FAILURE_)
+#define EXPECT_PRED_FORMAT2_MESSAGE(pred_format, v1, v2, message) \
+  GTEST_PRED_FORMAT2_MESSAGE(pred_format, v1, v2, message, GTEST_NONFATAL_FAILURE_)
 #define EXPECT_PRED2(pred, v1, v2) \
   GTEST_PRED2_(pred, v1, v2, GTEST_NONFATAL_FAILURE_)
 #define ASSERT_PRED_FORMAT2(pred_format, v1, v2) \
   GTEST_PRED_FORMAT2_(pred_format, v1, v2, GTEST_FATAL_FAILURE_)
+
+#define ASSERT_PRED_FORMAT2_MESSAGE(pred_format, v1, v2, message) \
+  GTEST_PRED_FORMAT2_MESSAGE(pred_format, v1, v2, message, GTEST_FATAL_FAILURE_)
+
 #define ASSERT_PRED2(pred, v1, v2) \
   GTEST_PRED2_(pred, v1, v2, GTEST_FATAL_FAILURE_)
 
@@ -19347,6 +19364,12 @@ AssertionResult AssertPred5Helper(const char* pred_text,
   ASSERT_PRED_FORMAT2(::testing::internal:: \
                       EqHelper<GTEST_IS_NULL_LITERAL_(expected)>::Compare, \
                       expected, actual)
+
+#define GTEST_ASSERT_EQ_MESSAGE(expected, actual, message) \
+  ASSERT_PRED_FORMAT2_MESSAGE(::testing::internal:: \
+                      EqHelper<GTEST_IS_NULL_LITERAL_(expected)>::Compare, \
+                      expected, actual, message)
+
 #define GTEST_ASSERT_NE(val1, val2) \
   ASSERT_PRED_FORMAT2(::testing::internal::CmpHelperNE, val1, val2)
 #define GTEST_ASSERT_LE(val1, val2) \
@@ -19363,6 +19386,7 @@ AssertionResult AssertPred5Helper(const char* pred_text,
 
 #if !GTEST_DONT_DEFINE_ASSERT_EQ
 # define ASSERT_EQ(val1, val2) GTEST_ASSERT_EQ(val1, val2)
+# define ASSERT_EQ_MESSAGE(val1, val2, message) GTEST_ASSERT_EQ_MESSAGE(val1, val2, message)
 #endif
 
 #if !GTEST_DONT_DEFINE_ASSERT_NE

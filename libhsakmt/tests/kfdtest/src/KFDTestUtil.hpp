@@ -230,6 +230,9 @@ class HsaNodeInfo {
      */
     const std::vector<int>& GetNodesWithGPU() const;
 
+    /* get gpu index from gpuNodeID */
+    const int HsaGPUindexFromGpuNode(int gpuNodeId) const;
+
     // @param node index of the node we are looking at
     // @param nodeProperties HsaNodeProperties returned
     const HsaNodeProperties* GetNodeProperties(int NodeNum) const;

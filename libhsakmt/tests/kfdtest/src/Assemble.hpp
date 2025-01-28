@@ -47,6 +47,11 @@
 
 #define ASM_MCPU_LEN 16
 
+/* initialize LLVM targets and assembly printers/parsers */
+void Init_LLVM();
+/* shutdown LLVM */
+void Shutdown_LLVM();
+
 class Assembler {
   private:
       const char* ArchName = "amdgcn";
@@ -62,7 +67,6 @@ class Assembler {
 
       void SetTargetAsic(const uint32_t Gfxv);
 
-      void LLVMInit();
       void FlushText();
       void PrintELFHex(const std::string Data);
       int ExtractELFText(const char* RawData);

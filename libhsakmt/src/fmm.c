@@ -1401,11 +1401,8 @@ static uint32_t fmm_translate_hsa_to_ioc_flags(HsaMemFlags flags)
 			      KFD_IOC_ALLOC_MEM_FLAGS_UNCACHED);
 	if (!flags.ui32.ReadOnly)
 		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_WRITABLE;
-	/* TODO: Since, ROCr interfaces doesn't allow caller to set page
-	 * permissions, mark all user allocations with exec permission.
-	 * Check for flags.ui32.ExecuteAccess once ROCr is ready.
-	 */
-	ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE;
+	if (flags.ui32.ExecuteAccess)
+		ioc_flags |= KFD_IOC_ALLOC_MEM_FLAGS_EXECUTABLE;
 	return ioc_flags;
 }
 

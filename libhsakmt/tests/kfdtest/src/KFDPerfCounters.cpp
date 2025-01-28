@@ -69,7 +69,7 @@ static struct block_name_table {
     {"DRIVER ", {0xea9b5ae1, 0x6c3f, 0x44b3, 0x89, 0x54, 0xda, 0xf0, 0x75, 0x65, 0xa9, 0xa}}
 };
 
-void KFDPerfCountersTest::GetBlockName(HSA_UUID uuid, char *name, uint32_t name_len,
+static void GetBlockName(HSA_UUID uuid, char *name, uint32_t name_len,
                                        char *uuid_str, uint32_t uuid_str_len) {
     uint32_t i, table_size;
 
@@ -93,14 +93,14 @@ void KFDPerfCountersTest::GetBlockName(HSA_UUID uuid, char *name, uint32_t name_
                  uuid.Data4[6], uuid.Data4[7]);
 }
 
-TEST_F(KFDPerfCountersTest, GetCounterProperties) {
-    TEST_START(TESTPROFILE_RUNALL)
+static void GetCounterProperties(KFDTEST_PARAMETERS* pTestParamters) {
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDPerfCountersTest* pKFDPerfCountersTest =
+                         (KFDPerfCountersTest*)pTestParamters->pTestObject;
 
     HsaCounterProperties* pProps = NULL;
-    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(defaultGPUNode, &pProps));
+    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(gpuNode, &pProps));
     /* Verifying that there is at least one block */
     ASSERT_NE(0, pProps->NumBlocks) << "No performance counters blocks";
 
@@ -136,20 +136,28 @@ TEST_F(KFDPerfCountersTest, GetCounterProperties) {
             block->NumCounters << " counter IDs" << std::endl;
         block = reinterpret_cast<HsaCounterBlockProperties *>(&block->Counters[block->NumCounters]);
     }
+}
+
+TEST_F(KFDPerfCountersTest, GetCounterProperties) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(GetCounterProperties));
 
     TEST_END
 }
 
-TEST_F(KFDPerfCountersTest, RegisterTrace) {
-    TEST_START(TESTPROFILE_RUNALL)
+static void RegisterTrace(KFDTEST_PARAMETERS* pTestParamters) {
+
     HsaCounterProperties* pProps;
 
+    int gpuNode = pTestParamters->gpuNode;
+    KFDPerfCountersTest* pKFDPerfCountersTest =
+                         (KFDPerfCountersTest*)pTestParamters->pTestObject;
+
     HsaPmcTraceRoot root;
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
 
     pProps = NULL;
-    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(defaultGPUNode, &pProps));
+    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(gpuNode, &pProps));
 
     /* Verifying that there is at least one block */
     ASSERT_NE(0, pProps->NumBlocks) << "No performance counters blocks";
@@ -171,26 +179,34 @@ TEST_F(KFDPerfCountersTest, RegisterTrace) {
     }
 
     /* Registering trace */
-    ASSERT_SUCCESS(hsaKmtPmcRegisterTrace(defaultGPUNode,
+    ASSERT_SUCCESS(hsaKmtPmcRegisterTrace(gpuNode,
                                           block->NumConcurrent,
                                           block->Counters,
                                           &root));
-    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
+    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(gpuNode, root.TraceId));
+}
+
+TEST_F(KFDPerfCountersTest, RegisterTrace) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(RegisterTrace));
 
     TEST_END
 }
 
-TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
-    TEST_START(TESTPROFILE_RUNALL)
+static const unsigned int START_STOP_DELAY = 10000;     // 10 sec tracing
+
+static void StartStopQueryTrace(KFDTEST_PARAMETERS* pTestParamters){
 
     HsaPmcTraceRoot root;
     HsaCounterProperties* pProps;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+    int gpuNode = pTestParamters->gpuNode;
+    KFDPerfCountersTest* pKFDPerfCountersTest =
+                         (KFDPerfCountersTest*)pTestParamters->pTestObject;
 
     pProps = NULL;
-    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(defaultGPUNode, &pProps));
+    ASSERT_SUCCESS(hsaKmtPmcGetCounterProperties(gpuNode, &pProps));
 
     /* Verifying that there is at least one block */
     ASSERT_NE(0, pProps->NumBlocks) << "No performance counters blocks";
@@ -217,16 +233,16 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
     }
 
     /* Registering trace */
-    ASSERT_SUCCESS(hsaKmtPmcRegisterTrace(defaultGPUNode,
+    ASSERT_SUCCESS(hsaKmtPmcRegisterTrace(gpuNode,
                                           block->NumConcurrent,
                                           block->Counters,
                                           &root));
 
     /* Acquiring access for the trace */
-    ASSERT_SUCCESS(hsaKmtPmcAcquireTraceAccess(defaultGPUNode, root.TraceId));
+    ASSERT_SUCCESS(hsaKmtPmcAcquireTraceAccess(gpuNode, root.TraceId));
 
     /* Allocating memory buffer for the trace */
-    HsaMemoryBuffer membuf(PAGE_SIZE, defaultGPUNode);
+    HsaMemoryBuffer membuf(PAGE_SIZE, gpuNode);
 
     /* Starting the trace */
     ASSERT_SUCCESS(hsaKmtPmcStartTrace(root.TraceId,
@@ -248,25 +264,31 @@ TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
     /* Releasing the trace */
     EXPECT_SUCCESS(hsaKmtPmcReleaseTraceAccess(0, root.TraceId));
 
-    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(defaultGPUNode, root.TraceId));
+    EXPECT_SUCCESS(hsaKmtPmcUnregisterTrace(gpuNode, root.TraceId));
+}
+
+TEST_F(KFDPerfCountersTest, StartStopQueryTrace) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(RegisterTrace));
 
     TEST_END
 }
 
-TEST_F(KFDPerfCountersTest, ClockCountersBasicTest) {
-    TEST_START(TESTPROFILE_RUNALL)
+static void ClockCountersBasicTest(KFDTEST_PARAMETERS* pTestParamters){
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDPerfCountersTest* pKFDPerfCountersTest =
+					  (KFDPerfCountersTest*)pTestParamters->pTestObject;
 
     HsaClockCounters counters1;
     HsaClockCounters counters2;
 
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
-
-    EXPECT_SUCCESS(hsaKmtGetClockCounters(defaultGPUNode, &counters1));
+    EXPECT_SUCCESS(hsaKmtGetClockCounters(gpuNode, &counters1));
 
     Delay(100);
 
-    EXPECT_SUCCESS(hsaKmtGetClockCounters(defaultGPUNode, &counters2));
+    EXPECT_SUCCESS(hsaKmtGetClockCounters(gpuNode, &counters2));
 
     EXPECT_NE(0, counters1.GPUClockCounter);
     EXPECT_NE(0, counters2.GPUClockCounter);
@@ -276,5 +298,13 @@ TEST_F(KFDPerfCountersTest, ClockCountersBasicTest) {
     EXPECT_GT(counters2.GPUClockCounter, counters1.GPUClockCounter);
     EXPECT_GT(counters2.SystemClockCounter, counters1.SystemClockCounter);
 
+}
+
+TEST_F(KFDPerfCountersTest, ClockCountersBasicTest) {
+    TEST_START(TESTPROFILE_RUNALL)
+
+    ASSERT_SUCCESS(KFDTest_Launch(ClockCountersBasicTest));
+
     TEST_END
 }
+

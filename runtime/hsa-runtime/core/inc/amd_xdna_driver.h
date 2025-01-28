@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -129,19 +129,26 @@ inline uint32_t GetOperandCount(uint32_t arg_count) {
 class XdnaDriver final : public core::Driver {
 public:
   XdnaDriver(std::string devnode_name);
-  ~XdnaDriver();
+  ~XdnaDriver() = default;
 
-  static hsa_status_t DiscoverDriver();
+  static hsa_status_t DiscoverDriver(std::unique_ptr<core::Driver>& driver);
 
   /// @brief Returns the size of the dev heap in bytes.
   static uint64_t GetDevHeapByteSize();
 
   hsa_status_t Init() override;
+  hsa_status_t ShutDown() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
 
   std::unordered_map<uint32_t, void*>& GetHandleMappings();
   std::unordered_map<void*, uint32_t>& GetAddrMappings();
 
+  hsa_status_t Open() override;
+  hsa_status_t Close() override;
+  hsa_status_t GetSystemProperties(HsaSystemProperties& sys_props) const override;
+  hsa_status_t GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const override;
+  hsa_status_t GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                 uint32_t node_id) const override;
   hsa_status_t GetAgentProperties(core::Agent &agent) const override;
   hsa_status_t
   GetMemoryProperties(uint32_t node_id,
@@ -151,12 +158,17 @@ public:
                               void **mem, size_t size,
                               uint32_t node_id) override;
   hsa_status_t FreeMemory(void *mem, size_t size) override;
-
-  /// @brief Creates a context on the AIE device for this queue.
-  /// @param queue Queue whose on-device context is being created.
-  /// @return hsa_status_t
   hsa_status_t CreateQueue(core::Queue &queue) const override;
   hsa_status_t DestroyQueue(core::Queue &queue) const override;
+  hsa_status_t ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
+                            size_t *offset) override;
+  hsa_status_t ImportDMABuf(int dmabuf_fd, core::Agent &agent,
+                            core::ShareableHandle &handle) override;
+  hsa_status_t Map(core::ShareableHandle handle, void *mem, size_t offset,
+                   size_t size, hsa_access_permission_t perms) override;
+  hsa_status_t Unmap(core::ShareableHandle handle, void *mem, size_t offset,
+                     size_t size) override;
+  hsa_status_t ReleaseShareableHandle(core::ShareableHandle &handle) override;
 
   // @brief Submits num_pkts packets in a command chain to the XDNA driver
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,

@@ -170,7 +170,7 @@ hsa_signal_value_t InterruptSignal::WaitRelaxed(
   // Should be a few times bigger than null kernel latency
   const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
-  uint64_t hsa_freq;
+  uint64_t hsa_freq = 0;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
   const timer::fast_clock::duration fast_timeout =
       timer::duration_from_seconds<timer::fast_clock::duration>(

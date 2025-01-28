@@ -474,11 +474,11 @@ hsa_status_t MemoryRegion::AllowAccess(uint32_t num_agents,
 
   // Adjust for fragments.  Make accessibility sticky for fragments since this will satisfy the
   // union of accessible agents between the fragments in the block.
-  hsa_amd_pointer_info_t info;
+  hsa_amd_pointer_info_t info = {};
   uint32_t agent_count = 0;
   hsa_agent_t* accessible = nullptr;
   MAKE_SCOPE_GUARD([&]() { free(accessible); });
-  core::Runtime::PtrInfoBlockData blockInfo;
+  core::Runtime::PtrInfoBlockData blockInfo = {};
   std::vector<uint64_t> union_agents;
   info.size = sizeof(info);
 

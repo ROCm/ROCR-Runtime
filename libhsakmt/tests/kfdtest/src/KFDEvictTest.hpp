@@ -40,10 +40,10 @@ class KFDEvictTest :  public KFDMultiProcessTest {
     virtual void SetUp();
     virtual void TearDown();
 
-    void AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
+    void AllocBuffers(bool m_IsParent, HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                       std::vector<void *> &pBuffers);
     void FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufSize);
-    void AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
+    void AllocAmdgpuBo(bool m_IsParent, int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle);
     void FreeAmdgpuBo(amdgpu_bo_handle handle);
     void AmdgpuCommandSubmissionSdmaNop(int rn, amdgpu_bo_handle handle,
                                            PM4Queue *computeQueue);

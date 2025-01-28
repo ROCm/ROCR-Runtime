@@ -270,6 +270,10 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
     assert(exception_signal_ != nullptr && "Should have thrown!\n");
   }
 
+  // Make sure the queue signal always has a waiting_ > 0 so that
+  // so that we call hsakmtSetEvent to force hsaKmtWaitOnEvent to return.
+  exception_signal_->WaitingInc();
+
   // Ensure the amd_queue_ is fully initialized before creating the KFD queue.
   // This ensures that the debugger can access the fields once it detects there
   // is a KFD queue. The debugger may access the aperture addresses, queue
@@ -359,13 +363,15 @@ AqlQueue::~AqlQueue() {
   }
 
   // Remove kfd exception handler
-  exceptionState |= ERROR_HANDLER_TERMINATE;
-  while ((exceptionState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
-    const uint64_t timeout_ms = 5000;
+  if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
+    exceptionState |= ERROR_HANDLER_TERMINATE;
+    while ((exceptionState & ERROR_HANDLER_DONE) != ERROR_HANDLER_DONE) {
+      const uint64_t timeout_ms = 5000;
 
-    exception_signal_->StoreRelease(-1ull);
-    exception_signal_->WaitRelaxed(HSA_SIGNAL_CONDITION_NE, -1ull, timeout_ms,
-                                   HSA_WAIT_STATE_BLOCKED);
+      exception_signal_->StoreRelease(-1ull);
+      exception_signal_->WaitRelaxed(HSA_SIGNAL_CONDITION_NE, -1ull, timeout_ms,
+                                     HSA_WAIT_STATE_BLOCKED);
+    }
   }
 
   Inactivate();
@@ -374,6 +380,7 @@ AqlQueue::~AqlQueue() {
   if (queue_scratch_.alt_queue_base) agent_->ReleaseQueueAltScratch(queue_scratch_);
 
   FreeRegisteredRingBuffer();
+  exception_signal_->WaitingDec();
   exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);
   if (core::g_use_interrupt_wait) {

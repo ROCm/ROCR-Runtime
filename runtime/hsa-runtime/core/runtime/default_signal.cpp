@@ -89,9 +89,6 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
   const uint32_t &signal_abort_timeout =
     core::Runtime::runtime_singleton_->flag().signal_abort_timeout();
 
-  debug_warning_n((!g_use_interrupt_wait || isIPC()) &&
-                  "Use of non-host signal in host signal wait API.", 10);
-
   timer::fast_clock::time_point start_time, time;
   start_time = timer::fast_clock::now();
 
@@ -99,7 +96,7 @@ hsa_signal_value_t BusyWaitSignal::WaitRelaxed(hsa_signal_condition_t condition,
   // Should be a few times bigger than null kernel latency
   const timer::fast_clock::duration kMaxElapsed = std::chrono::microseconds(200);
 
-  uint64_t hsa_freq;
+  uint64_t hsa_freq = 0;
   HSA::hsa_system_get_info(HSA_SYSTEM_INFO_TIMESTAMP_FREQUENCY, &hsa_freq);
   const timer::fast_clock::duration fast_timeout =
       timer::duration_from_seconds<timer::fast_clock::duration>(

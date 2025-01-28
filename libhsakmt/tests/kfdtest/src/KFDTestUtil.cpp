@@ -207,7 +207,7 @@ unsigned int FamilyIdFromNode(const HsaNodeProperties *props) {
         break;
     case 9:
         familyId = FAMILY_AI;
-        if (props->EngineId.ui32.Minor == 4)
+        if (props->EngineId.ui32.Minor >= 4)
             familyId = FAMILY_AV;
         else if (props->EngineId.ui32.Stepping == 2)
             familyId = FAMILY_RV;
@@ -624,6 +624,18 @@ const std::vector<int>& HsaNodeInfo::GetNodesWithGPU() const {
 
 const HsaNodeProperties* HsaNodeInfo::GetNodeProperties(int NodeNum) const {
     return m_HsaNodeProps.at(NodeNum);
+}
+
+const int HsaNodeInfo::HsaGPUindexFromGpuNode(int gpuNodeId) const {
+    if (m_NodesWithGPU.size() == 0)
+        return -1;
+
+    for (unsigned int i = 0; i < m_NodesWithGPU.size(); i++) {
+        if (gpuNodeId == m_NodesWithGPU.at(i))
+            return i;
+    }
+
+    return -1;
 }
 
 const HsaNodeProperties* HsaNodeInfo::HsaDefaultGPUNodeProperties() const {

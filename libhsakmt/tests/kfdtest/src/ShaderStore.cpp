@@ -43,6 +43,7 @@ const std::vector<const char*> ShaderList = {
     ReadMemoryIsa,
     GwsInitIsa,
     GwsAtomicIncreaseIsa,
+    CheckCuMaskIsa
 };
 
 /**
@@ -98,28 +99,28 @@ const std::vector<const char*> ShaderList = {
  */
 #define SHADER_MACROS_FLAT \
     "   .macro FLAT_LOAD_DWORD_NSS vdst, vaddr arg0 arg1\n"\
-    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)\n"\
+    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)\n"\
     "           flat_load_dword \\vdst, \\vaddr nt sc1 sc0\n"\
     "       .else\n"\
     "           flat_load_dword \\vdst, \\vaddr \\arg0 \\arg1\n"\
     "       .endif\n"\
     "   .endm\n"\
     "   .macro FLAT_LOAD_DWORDX2_NSS vdst, vaddr arg0 arg1\n"\
-    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)\n"\
+    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)\n"\
     "           flat_load_dwordx2 \\vdst, \\vaddr nt sc1 sc0\n"\
     "       .else\n"\
     "           flat_load_dwordx2 \\vdst, \\vaddr \\arg0 \\arg1\n"\
     "       .endif\n"\
     "   .endm\n"\
     "   .macro FLAT_STORE_DWORD_NSS vaddr, vsrc arg0 arg1\n"\
-    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)\n"\
+    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)\n"\
     "           flat_store_dword \\vaddr, \\vsrc nt sc1 sc0\n"\
     "       .else\n"\
     "           flat_store_dword \\vaddr, \\vsrc \\arg0 \\arg1\n"\
     "       .endif\n"\
     "   .endm\n"\
     "   .macro FLAT_ATOMIC_ADD_NSS vdst, vaddr, vsrc arg0 arg1\n"\
-    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)\n"\
+    "       .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)\n"\
     "           flat_atomic_add \\vdst, \\vaddr, \\vsrc nt sc1 sc0\n"\
     "       .else\n"\
     "           flat_atomic_add \\vdst, \\vaddr, \\vsrc \\arg0 \\arg1\n"\
@@ -362,7 +363,7 @@ const char *PollAndCopyIsa =
     R"(
         // Assume src buffer in s[0:1] and dst buffer in s[2:3]
         // Path for Aldebaran, Aqua Vanjaram
-        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor == 4 || .amdgcn.gfx_generation_stepping == 10))
+        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor >= 4 || .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             v_mov_b32 v18, 0x1
@@ -371,7 +372,7 @@ const char *PollAndCopyIsa =
             s_waitcnt vmcnt(0) & lgkmcnt(0)
             v_cmp_eq_i32 vcc, v16, v18
             s_cbranch_vccz LOOP0
-            .if (.amdgcn.gfx_generation_minor == 4)
+            .if (.amdgcn.gfx_generation_minor >= 4)
                 buffer_inv sc1 sc0
             .else
                 buffer_invl2
@@ -409,7 +410,7 @@ const char *WriteFlagAndValueIsa =
     SHADER_MACROS_FLAT
     R"(
         // Assume two inputs buffer in s[0:1] and s[2:3]
-        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor == 4 || .amdgcn.gfx_generation_stepping == 10))
+        .if (.amdgcn.gfx_generation_number == 9 && (.amdgcn.gfx_generation_minor >= 4 || .amdgcn.gfx_generation_stepping == 10))
             v_mov_b32 v0, s0
             v_mov_b32 v1, s1
             s_load_dword s18, s[2:3], 0x0 glc
@@ -479,7 +480,7 @@ const char *WriteAndSignalIsa =
 const char *FlushBufferForAcquireReleaseIsa =
     SHADER_START
     R"(
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
             s_mov_b32 s11, 0x77
             s_mov_b32 s12, 0x0
             // Store some data on 5 different cache lines
@@ -509,7 +510,7 @@ const char *FlushBufferForAcquireReleaseIsa =
 const char *WriteReleaseVectorIsa =
     SHADER_START
     R"(
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
             v_mov_b32 v11, 0x1
             v_mov_b32 v12, 0x2
             v_mov_b32 v13, 0x3
@@ -551,7 +552,7 @@ const char *WriteReleaseVectorIsa =
 const char *WriteReleaseScalarIsa =
     SHADER_START
     R"(
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
             s_mov_b32 s11, 0x6
             s_mov_b32 s12, 0x7
             s_mov_b32 s13, 0x8
@@ -594,7 +595,7 @@ const char *WriteReleaseScalarIsa =
 const char *ReadAcquireVectorIsa =
     SHADER_START
     R"(
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
             // Read-Acquire
             s_mov_b32 s18, 0x1
             LOOP:
@@ -650,7 +651,7 @@ const char *ReadAcquireVectorIsa =
 const char *ReadAcquireScalarIsa =
     SHADER_START
     R"(
-        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor == 4)
+        .if (.amdgcn.gfx_generation_number == 9 && .amdgcn.gfx_generation_minor >= 4)
             // Read-Acquire
             s_mov_b32 s18, 0x1
             LOOP:
@@ -690,6 +691,14 @@ const char *LoopIsa =
     R"(
         s_movk_i32    s0, 0x0008
         s_movk_i32    s1, 0x00ff
+        s_mov_b32     s4, 0
+        s_mov_b32     s5, 0
+        s_mov_b32     s6, 0
+        s_mov_b32     s7, 0
+        s_mov_b32     s12, 0
+        s_mov_b32     s13, 0
+        s_mov_b32     s14, 0
+        s_mov_b32     s15, 0
         v_mov_b32     v0, 0
         v_mov_b32     v1, 0
         v_mov_b32     v2, 0
@@ -716,7 +725,12 @@ const char *LoopIsa =
         s_cbranch_scc1  END_OF_PGM
         v_add_f32     v0, 2.0, v0
         v_cvt_f32_i32 v17, s1
-        s_waitcnt     lgkmcnt(0)
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_wait_dscnt     0
+            s_wait_kmcnt     0
+        .else
+            s_waitcnt lgkmcnt(0)
+        .endif
         v_add_f32     v18, s8, v17
         v_add_f32     v19, s9, v17
         v_add_f32     v20, s10, v17
@@ -945,15 +959,18 @@ const char *ReadMemoryIsa =
 const char *GwsInitIsa =
     SHADER_START
     R"(
-        s_mov_b32 m0, 0
-        s_nop 0
-        s_load_dword s16, s[0:1], 0x0 glc
-        s_waitcnt 0
-        v_mov_b32 v0, s16
-        s_waitcnt 0
-        ds_gws_init v0 offset:0 gds
-        s_waitcnt 0
-        s_endpgm
+        .if (.amdgcn.gfx_generation_number >= 12)
+        .else
+            s_mov_b32 m0, 0
+            s_nop 0
+            s_load_dword s16, s[0:1], 0x0 glc
+            s_waitcnt 0
+            v_mov_b32 v0, s16
+            s_waitcnt 0
+            ds_gws_init v0 offset:0 gds
+            s_waitcnt 0
+            s_endpgm
+        .endif
 )";
 
 /* Atomically increase a value in memory
@@ -966,7 +983,8 @@ const char *GwsAtomicIncreaseIsa =
     SHADER_START
     R"(
         // Assume src address in s0, s1
-        .if (.amdgcn.gfx_generation_number >= 10)
+        .if (.amdgcn.gfx_generation_number >= 12)
+        .elseif (.amdgcn.gfx_generation_number >= 10)
             s_mov_b32 m0, 0
             s_mov_b32 exec_lo, 0x1
             v_mov_b32 v0, s0
@@ -994,6 +1012,54 @@ const char *GwsAtomicIncreaseIsa =
         s_waitcnt 0
         s_endpgm
 )";
+
+
+/*
+ * Shader used by ExtendedCuMasking test case to check if CU mask is used correctly.
+ *
+ * Shader will write to output buffer the (SE, SA, WGP) used by the wave.
+ * The test program will then analyse the data.
+ *
+ * Inputs
+ * ------
+ * s[2:3]  : output buffer base address
+ * s4/ttmp9: workgroup id (s4 for pre-GFX12, ttmp9 for GFX12)
+ *
+ * Output
+ * ------
+ * Store HW_ID1 content in output buffer at index corresponding to workgroup id.
+ *
+ */
+const char *CheckCuMaskIsa =
+    SHADER_START
+    SHADER_MACROS_U32
+    SHADER_MACROS_FLAT
+    R"(
+        // Get workgroup id
+        .if (.amdgcn.gfx_generation_number >= 12)
+            v_mov_b32    v0, ttmp9
+        .else
+            v_mov_b32    v0, s4
+        .endif
+
+        // Address of output buffer element: v[4:5] = s[2:3] + v0 * 4
+        v_lshlrev_b32    v6, 2, v0
+        V_ADD_CO_U32     v4, s2, v6
+        v_mov_b32        v5, s3
+        V_ADD_CO_CI_U32  v5, v5, 0
+
+        // Store HW_ID1 content
+        .if (.amdgcn.gfx_generation_number >= 12)
+            s_getreg_b32     s6, hwreg(HW_REG_HW_ID1)
+        .else
+            s_getreg_b32     s6, hwreg(HW_REG_HW_ID)
+        .endif
+        v_mov_b32        v1, s6
+        flat_store_dword v[4:5], v1
+
+        s_endpgm
+)";
+
 
 const char *JumpToTrapIsa =
     SHADER_START

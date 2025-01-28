@@ -49,14 +49,20 @@ class KFDExceptionTest : public KFDBaseComponentTest {
         }
     }
 
+    friend void AddressFault(KFDTEST_PARAMETERS* pTestParamters);
+    friend void PermissionFault(KFDTEST_PARAMETERS* pTestParamters);
+    friend void PermissionFaultUserPointer(KFDTEST_PARAMETERS* pTestParamters);
+    friend void FaultStorm(KFDTEST_PARAMETERS* pTestParamters);
+    friend void SdmaQueueException(KFDTEST_PARAMETERS* pTestParamters);
+
  protected:
     virtual void SetUp();
     virtual void TearDown();
 
-    void TestMemoryException(int defaultGPUNode, HSAuint64 pSrc, HSAuint64 pDst,
+    void TestMemoryException(int gpuNode, HSAuint64 pSrc, HSAuint64 pDst,
                              unsigned int dimX = 1, unsigned int dimY = 1,
                              unsigned int dimZ = 1);
-    void TestSdmaException(int defaultGPUNode, void *pDst);
+    void TestSdmaException(int gpuNode, void *pDst);
 
  protected:  // Members
     pid_t m_ChildPid;

@@ -53,7 +53,7 @@ void KFDEvictTest::TearDown() {
     ROUTINE_END
 }
 
-void KFDEvictTest::AllocBuffers(HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
+void KFDEvictTest::AllocBuffers(bool m_IsParent, HSAuint32 defaultGPUNode, HSAuint32 count, HSAuint64 vramBufSize,
                                 std::vector<void *> &pBuffers) {
     HSAuint64   totalMB;
 
@@ -110,7 +110,7 @@ void KFDEvictTest::FreeBuffers(std::vector<void *> &pBuffers, HSAuint64 vramBufS
     }
 }
 
-void KFDEvictTest::AllocAmdgpuBo(int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle) {
+void KFDEvictTest::AllocAmdgpuBo(bool m_IsParent, int rn, HSAuint64 vramBufSize, amdgpu_bo_handle &handle) {
     struct amdgpu_bo_alloc_request alloc;
 
     alloc.alloc_size = vramBufSize / N_PROCESSES;
@@ -314,6 +314,7 @@ TEST_F(KFDEvictTest, BasicTest) {
     HSAuint64 vramSize = GetVramSize(defaultGPUNode);
     HSAuint64 sysMemSize = GetSysMemSize();
 
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(defaultGPUNode);
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
     if (!vramSize) {
@@ -339,30 +340,30 @@ TEST_F(KFDEvictTest, BasicTest) {
     }
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
     std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+    AllocBuffers(m_IsParent[gpuIndex], defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
     HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
-    AllocAmdgpuBo(rn, size, handle);
+    AllocAmdgpuBo(m_IsParent[gpuIndex], rn, size, handle);
 
     AmdgpuCommandSubmissionSdmaNop(rn, handle);
 
     FreeAmdgpuBo(handle);
-    LOG() << m_psName << "free buffer" << std::endl;
+    LOG() << m_psName[gpuIndex] << "free buffer" << std::endl;
     FreeBuffers(pBuffers, vramBufSize);
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }
@@ -392,6 +393,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     unsigned int count = MAX_WAVEFRONTS;
 
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(defaultGPUNode);
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
     /* Skip test for chip if it doesn't have CWSR, which the test depends on */
@@ -432,12 +434,12 @@ TEST_F(KFDEvictTest, QueueTest) {
     ASSERT_LE(count, PAGE_SIZE/sizeof(unsigned int *));
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
@@ -453,15 +455,15 @@ TEST_F(KFDEvictTest, QueueTest) {
     Dispatch dispatch0(isaBuffer);
 
     std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+    AllocBuffers(m_IsParent[gpuIndex], defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
     HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
-    AllocAmdgpuBo(rn, size, handle);
+    AllocAmdgpuBo(m_IsParent[gpuIndex], rn, size, handle);
 
     unsigned int wavefront_num = pBuffers.size();
-    LOG() << m_psName << "wavefront number " << wavefront_num << std::endl;
+    LOG() << m_psName[gpuIndex] << "wavefront number " << wavefront_num << std::endl;
 
     void **localBufAddr = addrBuffer.As<void **>();
     unsigned int *result = resultBuffer.As<uint32_t *>();
@@ -502,7 +504,7 @@ TEST_F(KFDEvictTest, QueueTest) {
     for (i = 0; i < wavefront_num; i++)
         EXPECT_EQ(0x5678, *(result + i));
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }
@@ -521,6 +523,7 @@ TEST_F(KFDEvictTest, BurstyTest) {
     ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
     HSAuint64 vramBufSize = ALLOCATE_BUF_SIZE_MB * 1024 * 1024;
 
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(defaultGPUNode);
     const HsaNodeProperties *pNodeProperties = m_NodeInfo.HsaDefaultGPUNodeProperties();
 
     if (pNodeProperties->Integrated) {
@@ -549,12 +552,12 @@ TEST_F(KFDEvictTest, BurstyTest) {
     }
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
@@ -562,22 +565,22 @@ TEST_F(KFDEvictTest, BurstyTest) {
     ASSERT_SUCCESS(pm4Queue.Create(defaultGPUNode));
 
     std::vector<void *> pBuffers;
-    AllocBuffers(defaultGPUNode, count, vramBufSize, pBuffers);
+    AllocBuffers(m_IsParent[gpuIndex], defaultGPUNode, count, vramBufSize, pBuffers);
 
     /* Allocate gfx vram size of at most one third system memory */
     HSAuint64 size = sysMemSize / 3 < testSize / 2 ? sysMemSize / 3 : testSize / 2;
     amdgpu_bo_handle handle;
-    AllocAmdgpuBo(rn, size, handle);
+    AllocAmdgpuBo(m_IsParent[gpuIndex], rn, size, handle);
 
     AmdgpuCommandSubmissionSdmaNop(rn, handle, &pm4Queue);
 
     FreeAmdgpuBo(handle);
-    LOG() << m_psName << "free buffer" << std::endl;
+    LOG() << m_psName[gpuIndex] << "free buffer" << std::endl;
     FreeBuffers(pBuffers, vramBufSize);
 
     EXPECT_SUCCESS(pm4Queue.Destroy());
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     TEST_END
 }

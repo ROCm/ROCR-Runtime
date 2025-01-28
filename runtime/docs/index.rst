@@ -1,6 +1,6 @@
 .. meta::
     :description: HSA runtime implementation
-    :keywords: ROCR, ROCm, library, tool, runtime
+    :keywords: ROCm runtime, HSA runtime
 
 .. _index:
 

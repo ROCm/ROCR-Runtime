@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -40,31 +40,36 @@
 //
 ////////////////////////////////////////////////////////////////////////////////
 
-#ifndef HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
-#define HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+// Memory related utility functions.
 
-// CODE IN THIS FILE **MUST** BE C-COMPATIBLE
+#ifndef HSA_RUNTIME_CORE_UTIL_MEMORY_H_
+#define HSA_RUNTIME_CORE_UTIL_MEMORY_H_
 
-// Major Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_MAJOR_VERSION                 0x03
-#define HSA_CORE_API_TABLE_MAJOR_VERSION            0x02
-#define HSA_AMD_EXT_API_TABLE_MAJOR_VERSION         0x02
-#define HSA_FINALIZER_API_TABLE_MAJOR_VERSION       0x02
-#define HSA_IMAGE_API_TABLE_MAJOR_VERSION           0x02
-#define HSA_AQLPROFILE_API_TABLE_MAJOR_VERSION      0x01
-#define HSA_TOOLS_API_TABLE_MAJOR_VERSION           0x01
-#define HSA_PC_SAMPLING_API_TABLE_MAJOR_VERSION     0x01
+#ifdef __linux__
+#include "inc/hsa.h"
+#include <sys/mman.h>
+#endif
 
-// Step Ids of the Api tables exported by Hsa Core Runtime
-#define HSA_API_TABLE_STEP_VERSION                  0x01
-#define HSA_CORE_API_TABLE_STEP_VERSION             0x00
-#define HSA_AMD_EXT_API_TABLE_STEP_VERSION          0x05
-#define HSA_FINALIZER_API_TABLE_STEP_VERSION        0x00
-#define HSA_IMAGE_API_TABLE_STEP_VERSION            0x01
-// Rocprofiler just checks HSA_MAGE_EXT_API_TABLE_STEP_VERSION
-#define HSA_IMAGE_EXT_API_TABLE_STEP_VERSION        HSA_IMAGE_API_TABLE_STEP_VERSION
-#define HSA_AQLPROFILE_API_TABLE_STEP_VERSION       0x00
-#define HSA_TOOLS_API_TABLE_STEP_VERSION            0x00
-#define HSA_PC_SAMPLING_API_TABLE_STEP_VERSION      0x00
+namespace rocr {
 
-#endif  // HSA_RUNTIME_INC_HSA_API_TRACE_VERSION_H
+#ifdef __linux__
+/// @brief Converts @ref hsa_access_permission_t to mmap memory protection
+///        flags.
+__forceinline int PermissionsToMmapFlags(hsa_access_permission_t perms) {
+  switch (perms) {
+    case HSA_ACCESS_PERMISSION_RO:
+      return PROT_READ;
+    case HSA_ACCESS_PERMISSION_WO:
+      return PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_RW:
+      return PROT_READ | PROT_WRITE;
+    case HSA_ACCESS_PERMISSION_NONE:
+    default:
+      return PROT_NONE;
+  }
+}
+#endif
+
+}  // namespace rocr
+
+#endif  // HSA_RUNTIME_CORE_UTIL_MEMORY_H_

@@ -267,20 +267,23 @@ TEST_F(KFDPCSamplingTest, MultiProcPcSamplingTest) {
     samples[0].value = 0x100000; /* 1,048,576 usec */
 
     /* Fork the child processes */
-    ForkChildProcesses(N_PROCESSES);
+    ForkChildProcesses(defaultGPUNode, N_PROCESSES);
 
     int rn = FindDRMRenderNode(defaultGPUNode);
     if (rn < 0) {
         LOG() << "Skipping test: Could not find render node for default GPU." << std::endl;
-        WaitChildProcesses();
+        WaitChildProcesses(defaultGPUNode);
         return;
     }
 
     params.samples = samples;
-    params.test_name = m_psName;
+
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(defaultGPUNode);
+    params.test_name = m_psName[gpuIndex];
+
     PCSamplingProcRun(&params);
 
-    WaitChildProcesses();
+    WaitChildProcesses(defaultGPUNode);
 
     if (info_buf)
         free(info_buf);

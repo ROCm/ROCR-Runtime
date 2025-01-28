@@ -234,10 +234,18 @@ runKfdTest() {
             fi
             sudo docker rm kfdtest_docker
         else
-            echo ""
-            echo "++++ Starting testing node $hsaNode ($nodeName) ++++"
-            $GDB $KFDTEST "--node=$hsaNode" $gtestFilter $GTEST_ARGS
-            echo "---- Finished testing node $hsaNode ($nodeName) ----"
+            if [ "$HSA_TEST_GPUS_NUM" != "" ]; then
+                echo "++++ Starting parallel testing on $HSA_TEST_GPUS_NUM gpu(s) ++++"
+                $GDB $KFDTEST $gtestFilter $GTEST_ARGS
+                echo "++++ Finished parallel testing on $HSA_TEST_GPUS_NUM gpu(s) ++++"
+                exit 0;
+            else
+                echo ""
+                echo "++++ Starting testing node $hsaNode ($nodeName) ++++"
+                $GDB $KFDTEST "--node=$hsaNode" $gtestFilter $GTEST_ARGS
+                echo "---- Finished testing node $hsaNode ($nodeName) ----"
+            fi
+
         fi
 
 

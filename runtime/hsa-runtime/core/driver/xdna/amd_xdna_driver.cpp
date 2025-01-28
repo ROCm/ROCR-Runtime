@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -42,6 +42,7 @@
 
 #include "core/inc/amd_xdna_driver.h"
 
+#include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
 
@@ -51,32 +52,33 @@
 #include "core/inc/amd_aie_aql_queue.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/runtime.h"
+#include "core/util/memory.h"
 #include "core/util/utils.h"
 #include "uapi/amdxdna_accel.h"
 
 namespace rocr {
 namespace AMD {
 
+static_assert((sizeof(core::ShareableHandle::handle) >= sizeof(uint32_t)) &&
+                  (alignof(core::ShareableHandle::handle) >= alignof(uint32_t)),
+              "ShareableHandle cannot store a XDNA handle");
+
 XdnaDriver::XdnaDriver(std::string devnode_name)
     : core::Driver(core::DriverType::XDNA, devnode_name) {}
 
-XdnaDriver::~XdnaDriver() { FreeDeviceHeap(); }
-
-hsa_status_t XdnaDriver::DiscoverDriver() {
+hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
   const int max_minor_num(64);
   const std::string devnode_prefix("/dev/accel/accel");
 
   for (int i = 0; i < max_minor_num; ++i) {
-    std::unique_ptr<Driver> xdna_drv(
-        new XdnaDriver(devnode_prefix + std::to_string(i)));
-    if (xdna_drv->Open() == HSA_STATUS_SUCCESS) {
-      if (xdna_drv->QueryKernelModeDriver(
-              core::DriverQuery::GET_DRIVER_VERSION) == HSA_STATUS_SUCCESS) {
-        static_cast<XdnaDriver *>(xdna_drv.get())->Init();
-        core::Runtime::runtime_singleton_->RegisterDriver(xdna_drv);
+    auto tmp_driver = std::unique_ptr<Driver>(new XdnaDriver(devnode_prefix + std::to_string(i)));
+    if (tmp_driver->Open() == HSA_STATUS_SUCCESS) {
+      if (tmp_driver->QueryKernelModeDriver(core::DriverQuery::GET_DRIVER_VERSION) ==
+          HSA_STATUS_SUCCESS) {
+        driver = std::move(tmp_driver);
         return HSA_STATUS_SUCCESS;
       } else {
-        xdna_drv->Close();
+        tmp_driver->Close();
       }
     }
   }
@@ -90,6 +92,8 @@ uint64_t XdnaDriver::GetDevHeapByteSize() {
 
 hsa_status_t XdnaDriver::Init() { return InitDeviceHeap(); }
 
+hsa_status_t XdnaDriver::ShutDown() { return FreeDeviceHeap(); }
+
 hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   switch (query) {
   case core::DriverQuery::GET_DRIVER_VERSION:
@@ -97,6 +101,45 @@ hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   default:
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Open() {
+  fd_ = open(devnode_name_.c_str(), O_RDWR | O_CLOEXEC);
+  if (fd_ < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Close() {
+  int ret(0);
+  if (fd_ > 0) {
+    ret = close(fd_);
+    fd_ = -1;
+  }
+  if (ret) {
+    return HSA_STATUS_ERROR;
+  }
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetSystemProperties(HsaSystemProperties& sys_props) const {
+  sys_props.NumNodes = 1;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const {
+  /// @todo XDNA driver currently only supports single-node AIE
+  /// devices over PCIe. Update this once we can get topology
+  /// information dynamically from the sysfs.
+  node_props.NumNeuralCores = 1;
+  node_props.NumIOLinks = 0;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                           uint32_t node_id) const {
   return HSA_STATUS_SUCCESS;
 }
 
@@ -254,6 +297,62 @@ hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t XdnaDriver::ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
+                                      size_t *offset) {
+  // Not implemented yet.
+  return HSA_STATUS_ERROR;
+}
+
+hsa_status_t XdnaDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
+                                      core::ShareableHandle &handle) {
+  drm_prime_handle import_params = {};
+  import_params.handle = AMDXDNA_INVALID_BO_HANDLE;
+  import_params.fd = dmabuf_fd;
+  if (ioctl(fd_, DRM_IOCTL_PRIME_FD_TO_HANDLE, &import_params) < 0)
+    return HSA_STATUS_ERROR;
+
+  handle.handle = import_params.handle;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *mem,
+                             size_t offset, size_t size,
+                             hsa_access_permission_t perms) {
+  // Get fd associated with the handle.
+  drm_prime_handle params = {};
+  params.handle = handle.handle;
+  params.fd = -1;
+  if (ioctl(fd_, DRM_IOCTL_PRIME_HANDLE_TO_FD, &params) < 0)
+    return HSA_STATUS_ERROR;
+
+  // Change permissions.
+  void *mapped_ptr = mmap(mem, size, PermissionsToMmapFlags(perms),
+                          MAP_FIXED | MAP_SHARED, params.fd, offset);
+  if (mapped_ptr == MAP_FAILED)
+    return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::Unmap(core::ShareableHandle handle, void *mem,
+                               size_t offset, size_t size) {
+  if (munmap(mem, size) != 0)
+    return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t XdnaDriver::ReleaseShareableHandle(core::ShareableHandle &handle) {
+  drm_gem_close close_params = {};
+  close_params.handle = handle.handle;
+  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_params) < 0)
+    return HSA_STATUS_ERROR;
+
+  handle = {};
+
+  return HSA_STATUS_SUCCESS;
+}
+
 hsa_status_t XdnaDriver::QueryDriverVersion() {
   amdxdna_drm_query_aie_version aie_version{0, 0};
   amdxdna_drm_get_info args{DRM_AMDXDNA_QUERY_AIE_VERSION, sizeof(aie_version),
@@ -263,8 +362,8 @@ hsa_status_t XdnaDriver::QueryDriverVersion() {
     return HSA_STATUS_ERROR;
   }
 
-  version_.major = aie_version.major;
-  version_.minor = aie_version.minor;
+  version_.KernelInterfaceMajorVersion = aie_version.major;
+  version_.KernelInterfaceMinorVersion = aie_version.minor;
 
   return HSA_STATUS_SUCCESS;
 }

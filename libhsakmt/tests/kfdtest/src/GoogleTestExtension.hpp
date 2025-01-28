@@ -77,8 +77,24 @@ private:
 #define ASSERT_SUCCESS(_val) ASSERT_EQ(HSAKMT_STATUS_SUCCESS, (_val))
 #define EXPECT_SUCCESS(_val) EXPECT_EQ(HSAKMT_STATUS_SUCCESS, (_val))
 
+#define EXPECT_EQ_GPU(expected, actual , gpuNode) EXPECT_EQ((expected), (actual)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define ASSERT_SUCCESS_GPU(_val, gpuNode) ASSERT_EQ(HSAKMT_STATUS_SUCCESS, (_val)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define EXPECT_SUCCESS_GPU(_val, gpuNode) EXPECT_EQ(HSAKMT_STATUS_SUCCESS, (_val)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+
 #define ASSERT_NOTNULL(_val) ASSERT_NE((void *)NULL, _val)
 #define EXPECT_NOTNULL(_val) EXPECT_NE((void *)NULL, _val)
+
+#define ASSERT_NOTNULL_GPU(_val, gpuNode) ASSERT_NE((void *)NULL, _val) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define EXPECT_NOTNULL_GPU(_val, gpuNode) EXPECT_NE((void *)NULL, _val) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+
+#define EXPECT_NE_GPU(expected, actual, gpuNode) EXPECT_NE((expected), (actual)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define EXPECT_GE_GPU(expected, actual, gpuNode) EXPECT_GE((expected), (actual)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+
+#define ASSERT_GE_GPU(val1, val2, gpuNode) ASSERT_GE((val1), (val2)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define ASSERT_NE_GPU(val1, val2, gpuNode) ASSERT_NE((val1), (val2)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+#define ASSERT_EQ_GPU(val1, val2, gpuNode) ASSERT_EQ((val1), (val2)) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
+
+#define EXPECT_TRUE_GPU(condition, gpuNode) EXPECT_TRUE(condition) << "gpuNodeID: " << std::to_string(gpuNode) << "\n"
 
 // @brief  Determines if it is ok to run a test given input flags
 bool Ok2Run(unsigned int testProfile);

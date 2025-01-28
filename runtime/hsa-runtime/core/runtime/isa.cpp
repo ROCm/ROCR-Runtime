@@ -250,10 +250,12 @@ const Isa *IsaRegistry::GetIsa(const Isa::Version &version, IsaFeature sramecc, 
 }
 
 
+// TODO: c++20 use constexpr or consteval
 const std::unordered_map<std::string, unsigned int> &
 IsaRegistry::GetSupportedGenericVersions() {
   static const
-            std::unordered_map<std::string, unsigned int> min_gen_versions = {
+    std::unordered_map<std::string, unsigned int> * min_gen_versions =
+                          new std::unordered_map<std::string, unsigned int> {
     {prepend_isa_prefix("gfx9-generic"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack-"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack+"), 1},
@@ -279,7 +281,7 @@ IsaRegistry::GetSupportedGenericVersions() {
     {prepend_isa_prefix("gfx11-generic"), 1},
     {prepend_isa_prefix("gfx12-generic"), 1}
   };
-  return min_gen_versions;
+  return *min_gen_versions;
 }
 
 const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
@@ -420,6 +422,15 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN("gfx942:sramecc-:xnack+", 9, 4, 2,  disabled,    enabled,     64, "gfx9-4-generic:sramecc-:xnack+")
   ISAREG_ENTRY_GEN("gfx942:sramecc+:xnack-", 9, 4, 2,  enabled,     disabled,    64, "gfx9-4-generic:sramecc+:xnack-")
   ISAREG_ENTRY_GEN("gfx942:sramecc+:xnack+", 9, 4, 2,  enabled,     enabled,     64, "gfx9-4-generic:sramecc+:xnack+")
+  ISAREG_ENTRY_GEN("gfx950",                 9, 5, 0,  any,         any,         64, "gfx9-4-generic")
+  ISAREG_ENTRY_GEN("gfx950:xnack-",          9, 5, 0,  any,         disabled,    64, "gfx9-4-generic:xnack-")
+  ISAREG_ENTRY_GEN("gfx950:xnack+",          9, 5, 0,  any,         enabled,     64, "gfx9-4-generic:xnack+")
+  ISAREG_ENTRY_GEN("gfx950:sramecc-",        9, 5, 0,  disabled,    any,         64, "gfx9-4-generic:sramecc-")
+  ISAREG_ENTRY_GEN("gfx950:sramecc+",        9, 5, 0,  enabled,     any,         64, "gfx9-4-generic:sramecc+")
+  ISAREG_ENTRY_GEN("gfx950:sramecc-:xnack-", 9, 5, 0,  disabled,    disabled,    64, "gfx9-4-generic:sramecc-:xnack-")
+  ISAREG_ENTRY_GEN("gfx950:sramecc-:xnack+", 9, 5, 0,  disabled,    enabled,     64, "gfx9-4-generic:sramecc-:xnack+")
+  ISAREG_ENTRY_GEN("gfx950:sramecc+:xnack-", 9, 5, 0,  enabled,     disabled,    64, "gfx9-4-generic:sramecc+:xnack-")
+  ISAREG_ENTRY_GEN("gfx950:sramecc+:xnack+", 9, 5, 0,  enabled,     enabled,     64, "gfx9-4-generic:sramecc+:xnack+")
   ISAREG_ENTRY_GEN("gfx1010",                10, 1, 0, unsupported, any,         32, "gfx10-1-generic")
   ISAREG_ENTRY_GEN("gfx1010:xnack-",         10, 1, 0, unsupported, disabled,    32, "gfx10-1-generic:xnack-")
   ISAREG_ENTRY_GEN("gfx1010:xnack+",         10, 1, 0, unsupported, enabled,     32, "gfx10-1-generic:xnack+")
@@ -446,6 +457,7 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN("gfx1150",                11, 5, 0, unsupported, unsupported, 32, "gfx11-generic")
   ISAREG_ENTRY_GEN("gfx1151",                11, 5, 1, unsupported, unsupported, 32, "gfx11-generic")
   ISAREG_ENTRY_GEN("gfx1152",                11, 5, 2, unsupported, unsupported, 32, "gfx11-generic")
+  ISAREG_ENTRY_GEN("gfx1153",                11, 5, 3, unsupported, unsupported, 32, "gfx11-generic")
   ISAREG_ENTRY_GEN("gfx1200",                12, 0, 0, unsupported, unsupported, 32, "gfx12-generic")
   ISAREG_ENTRY_GEN("gfx1201",                12, 0, 1, unsupported, unsupported, 32, "gfx12-generic")
 #undef ISAREG_ENTRY_GEN

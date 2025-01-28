@@ -36,9 +36,9 @@ class KFDEventTest :  public KFDBaseComponentTest {
     // @brief Executed after every test in KFDEventTest.
     virtual void TearDown();
 
+    HsaEvent* m_pHsaEventGPU[MAX_GPU];
  protected:
     static const unsigned int EVENT_TIMEOUT = 5000;  // 5 seconds
-    HsaEvent* m_pHsaEvent;
 };
 
 #endif  // __KFD_EVENT_TEST__H__

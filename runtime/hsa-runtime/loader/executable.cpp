@@ -1088,6 +1088,7 @@ hsa_executable_t AmdHsaCodeLoader::FindExecutable(uint64_t device_address)
 
 uint64_t ExecutableImpl::FindHostAddress(uint64_t device_address)
 {
+  ReaderLockGuard<ReaderWriterLock> reader_lock(rw_lock_);
   for (auto &obj : loaded_code_objects) {
     assert(obj);
     for (auto &seg : obj->LoadedSegments()) {

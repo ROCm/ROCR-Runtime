@@ -35,11 +35,13 @@ class KFDHWSTest : public KFDMultiProcessTest {
     KFDHWSTest() {}
     ~KFDHWSTest() {}
 
+    friend void RunTest(KFDTEST_PARAMETERS* pTestParamters);
  protected:
     virtual void SetUp();
     virtual void TearDown();
 
-    void RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops);
+    void RunTest_GPU(int gpuNode, unsigned nProcesses, unsigned nQueues, unsigned nLoops);
+
 };
 
 #endif  // __KFD_QCM_TEST__H__

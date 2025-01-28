@@ -26,6 +26,7 @@
 #include "KFDTestUtil.hpp"
 #include "GoogleTestExtension.hpp"
 #include "OSWrapper.hpp"
+#include "Assemble.hpp"
 
 #define KFD_TEST_DEFAULT_TIMEOUT 60000
 
@@ -47,6 +48,7 @@ std::ostream& operator << (std::ostream& out, TESTPROFILE profile) {
     return out;
 }
 
+unsigned int g_TestGPUsNum ;
 unsigned int g_TestRunProfile;
 unsigned int g_TestENVCaps;
 unsigned int g_TestTimeOut;
@@ -72,6 +74,7 @@ GTEST_API_ int main(int argc, char **argv) {
     bool success = GetCommandLineArguments(argc, argv, args);
 
     if (success) {
+        int r;
         if ((GetHwCapabilityHWS() || args.HwsEnabled == HWCAP__FORCE_ENABLED) &&
                 (args.HwsEnabled != HWCAP__FORCE_DISABLED))
             g_TestENVCaps |= ENVCAPS_HWSCHEDULING;
@@ -104,6 +107,23 @@ GTEST_API_ int main(int argc, char **argv) {
             LOG() << "Sleep time in seconds as specified by user: " << std::dec << g_SleepTime << std::endl;
         }
 
-        return RUN_ALL_TESTS();
+        char *testGPUsNum = NULL;
+        /* if HSA_TEST_GPUS_NUM is defined use it, otherwise test on 1 gpu */
+        testGPUsNum = getenv("HSA_TEST_GPUS_NUM");
+        if (testGPUsNum)
+            g_TestGPUsNum = std::max(1, atoi(testGPUsNum));
+        else
+            g_TestGPUsNum = 1;
+
+        /* init LLVM one time*/
+        Init_LLVM();
+
+        r = RUN_ALL_TESTS();
+
+        /* shutdown LLVM after tests finish */
+        Shutdown_LLVM();
+
+        LOG() << "kfdtest finished with return code: " << r << std::endl;
+        return r;
     }
 }

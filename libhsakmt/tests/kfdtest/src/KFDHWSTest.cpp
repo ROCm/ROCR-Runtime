@@ -39,20 +39,20 @@ void KFDHWSTest::TearDown() {
     ROUTINE_END
 }
 
-void KFDHWSTest::RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops) {
-    int defaultGPUNode = m_NodeInfo.HsaDefaultGPUNode();
-    ASSERT_GE(defaultGPUNode, 0) << "failed to get default GPU Node";
+void KFDHWSTest::RunTest_GPU(int gpuNode, unsigned nProcesses, unsigned nQueues, unsigned nLoops) {
+
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(gpuNode);
 
     unsigned q, l;
     bool timeout = false;
 
-    /* Fork the child processes */
-    ForkChildProcesses(nProcesses);
+    /* Fork the child processes for gpuNode */
+    ForkChildProcesses(gpuNode, nProcesses);
 
     // Create queues
     PM4Queue *queues = new PM4Queue[nQueues];
     for (q = 0; q < nQueues; q++)
-        ASSERT_SUCCESS(queues[q].Create(defaultGPUNode));
+        ASSERT_SUCCESS_GPU(queues[q].Create(gpuNode), gpuNode);
 
     // Create dispatch pointers. Each loop iteration creates fresh dispatches
     Dispatch **dispatch = new Dispatch*[nQueues];
@@ -60,10 +60,14 @@ void KFDHWSTest::RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops)
         dispatch[q] = NULL;
 
     // Logging: Each process prints its index after each loop iteration, all in one line.
-    std::ostream &log = LOG() << std::dec << "Process " << m_ProcessIndex << " starting." << std::endl;
+    std::ostream &log = LOG() << std::dec << "gpuNode: " << gpuNode << " Process: " << m_ProcessIndex[gpuIndex] << " starting." << std::endl;
 
     // Run work on all queues
-    HsaMemoryBuffer isaBuffer(PAGE_SIZE, defaultGPUNode, true/*zero*/, false/*local*/, true/*exec*/);
+    HsaMemoryBuffer isaBuffer(PAGE_SIZE, gpuNode, true/*zero*/, false/*local*/, true/*exec*/);
+
+    Assembler* m_pAsm;
+    m_pAsm = GetAssemblerFromNodeId(gpuNode);
+    ASSERT_NOTNULL_GPU(m_pAsm, gpuNode);
 
     ASSERT_SUCCESS(m_pAsm->RunAssembleBuf(NoopIsa, isaBuffer.As<char*>()));
 
@@ -81,15 +85,15 @@ void KFDHWSTest::RunTest(unsigned nProcesses, unsigned nQueues, unsigned nLoops)
             if (timeout)
                 goto timeout;
         }
-        log << m_ProcessIndex;
+        log << m_ProcessIndex[gpuIndex];
     }
 
 timeout:
     log << std::endl;
     if (timeout) {
-        WARN() << "Process " << m_ProcessIndex << " timeout." << std::endl;
+        WARN() << "gpuNode: " << gpuNode << " Process: " <<  m_ProcessIndex[gpuIndex] << " timeout." << std::endl;
     } else {
-        LOG() << "Process " << m_ProcessIndex << " done. Waiting ..." << std::endl;
+        LOG() << "gpuNode: " << gpuNode << " Process " << m_ProcessIndex[gpuIndex] << " done. Waiting ..." << std::endl;
 
         // Wait here before destroying queues. If another process' queues
         // are soft-hanging, destroying queues can resolve the soft-hang
@@ -101,9 +105,9 @@ timeout:
     // Destroy queues and dispatches. Destroying the queues first
     // ensures that the memory allocated by the Dispatch is no longer
     // accessed by the GPU.
-    LOG() << "Process " << m_ProcessIndex << " cleaning up." << std::endl;
+    LOG() << "gpuNode: " << gpuNode << " Process " << m_ProcessIndex[gpuIndex] << " cleaning up." << std::endl;
     for (q = 0; q < nQueues; q++) {
-        EXPECT_SUCCESS(queues[q].Destroy());
+        EXPECT_SUCCESS_GPU(queues[q].Destroy(), gpuNode);
         if (dispatch[q])
             delete dispatch[q];
     }
@@ -116,14 +120,23 @@ timeout:
     // parent.
     ASSERT_FALSE(timeout);
 
-    WaitChildProcesses();
+    WaitChildProcesses(gpuNode);
+
+}
+
+void RunTest(KFDTEST_PARAMETERS* pTestParamters) {
+
+    int gpuNode = pTestParamters->gpuNode;
+    KFDHWSTest* pKKFDHWSTest = (KFDHWSTest*)pTestParamters->pTestObject;
+
+    pKKFDHWSTest->RunTest_GPU(gpuNode, 3, 13, 40);
 }
 
 TEST_F(KFDHWSTest, MultiProcessOversubscribed) {
     TEST_REQUIRE_ENV_CAPABILITIES(ENVCAPS_64BITLINUX);
     TEST_START(TESTPROFILE_RUNALL);
 
-    RunTest(3, 13, 40);
+    ASSERT_SUCCESS(KFDTest_Launch(RunTest));
 
     TEST_END
 }

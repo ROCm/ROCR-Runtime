@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -66,20 +66,21 @@
 #endif
 
 #include "core/common/shared.h"
-#include "core/inc/hsa_ext_interface.h"
+#include "core/inc/amd_core_dump.hpp"
 #include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
 #include "core/inc/amd_topology.h"
-#include "core/inc/signal.h"
-#include "core/inc/interrupt_signal.h"
-#include "core/inc/hsa_ext_amd_impl.h"
-#include "core/inc/hsa_api_trace_int.h"
-#include "core/util/os.h"
 #include "core/inc/exceptions.h"
-#include "inc/hsa_ven_amd_aqlprofile.h"
-#include "core/inc/amd_core_dump.hpp"
 #include "core/inc/host_queue.h"
+#include "core/inc/hsa_api_trace_int.h"
+#include "core/inc/hsa_ext_amd_impl.h"
+#include "core/inc/hsa_ext_interface.h"
+#include "core/inc/interrupt_signal.h"
+#include "core/inc/signal.h"
+#include "core/util/memory.h"
+#include "core/util/os.h"
+#include "inc/hsa_ven_amd_aqlprofile.h"
 
 #ifndef HSA_VERSION_MAJOR
 #define HSA_VERSION_MAJOR 1
@@ -109,29 +110,7 @@ bool g_use_interrupt_wait;
 bool g_use_mwaitx;
 Runtime* Runtime::runtime_singleton_ = NULL;
 
-
-__forceinline static bool& loaded() {
-  static bool loaded_ = true;
-  return loaded_;
-}
-
-class RuntimeCleanup {
- public:
-  ~RuntimeCleanup() {
-    if (!Runtime::IsOpen()) {
-      delete Runtime::runtime_singleton_;
-    }
-
-    loaded() = false;
-  }
-};
-
-static RuntimeCleanup cleanup_at_unload_;
-
 hsa_status_t Runtime::Acquire() {
-  // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded()) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == NULL) {
@@ -159,9 +138,6 @@ hsa_status_t Runtime::Acquire() {
 }
 
 hsa_status_t Runtime::Release() {
-  // Check to see if HSA has been cleaned up (process exit)
-  if (!loaded()) return HSA_STATUS_SUCCESS;
-
   ScopedAcquire<KernelMutex> boot(&bootstrap_lock());
 
   if (runtime_singleton_ == nullptr) return HSA_STATUS_ERROR_NOT_INITIALIZED;
@@ -255,7 +231,7 @@ void Runtime::RegisterAgent(Agent* agent, bool Enabled) {
 }
 
 // Register driver.
-void Runtime::RegisterDriver(std::unique_ptr<Driver> &driver) {
+void Runtime::RegisterDriver(std::unique_ptr<Driver> driver) {
   agent_drivers_.push_back(std::move(driver));
 }
 
@@ -283,10 +259,6 @@ void Runtime::DestroyAgents() {
 }
 
 void Runtime::DestroyDrivers() {
-  for (auto &d : agent_drivers_) {
-    d->Close();
-  }
-
   agent_drivers_.clear();
 }
 
@@ -507,8 +479,8 @@ hsa_status_t Runtime::CopyMemory(void* dst, const void* src, size_t size) {
 
   // Fetch ownership
   const auto& is_system_mem = [&](void* ptr, core::Agent*& agent, bool& need_lock) {
-    hsa_amd_pointer_info_t info;
-    uint32_t count;
+    hsa_amd_pointer_info_t info = {};
+    uint32_t count = 0;
     hsa_agent_t* accessible = nullptr;
     MAKE_SCOPE_GUARD([&]() { free(accessible); });
     info.size = sizeof(info);
@@ -586,10 +558,12 @@ hsa_status_t Runtime::CopyMemory(void* dst, core::Agent* dst_agent, const void* 
                                  std::vector<core::Signal*>& dep_signals,
                                  core::Signal& completion_signal) {
   auto lookupAgent = [this](core::Agent* agent, const void* ptr) {
-    hsa_amd_pointer_info_t info;
-    PtrInfoBlockData block;
+    hsa_amd_pointer_info_t info = {};
+    PtrInfoBlockData block = {};
     info.size = sizeof(info);
-    PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+    hsa_status_t err = PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block);
+    if (err != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(err, "PtrInfo failed in hsa_memory_copy.");
     // Limit to IPC and GFX types for now.  These are the only types for which the application may
     // not posess a proper agent handle.
     if ((info.type != HSA_EXT_POINTER_TYPE_IPC) && (info.type != HSA_EXT_POINTER_TYPE_GRAPHICS)) {
@@ -642,8 +616,8 @@ hsa_status_t Runtime::CopyMemoryStatus(core::Agent* dst_agent, core::Agent* src_
 
 hsa_status_t Runtime::FillMemory(void* ptr, uint32_t value, size_t count) {
   // Choose blit agent from pointer info
-  hsa_amd_pointer_info_t info;
-  uint32_t agent_count;
+  hsa_amd_pointer_info_t info = {};
+  uint32_t agent_count = 0;
   hsa_agent_t* accessible = nullptr;
   info.size = sizeof(info);
   MAKE_SCOPE_GUARD([&]() { free(accessible); });
@@ -836,14 +810,17 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
                                             void* arg) {
 
   struct AsyncEventsInfo* asyncInfo = &asyncSignals_;
+  int priority = runtime_singleton_->flag().async_events_thread_priority();
 
   if (signal.handle != 0) {
     // Indicate that this signal is in use.
     hsa_signal_handle(signal)->Retain();
 
     core::Signal* coreSignal = core::Signal::Convert(signal);
-    if (coreSignal->EopEvent() && coreSignal->EopEvent()->EventData.EventType != HSA_EVENTTYPE_SIGNAL)
+    if (coreSignal->EopEvent() && coreSignal->EopEvent()->EventData.EventType != HSA_EVENTTYPE_SIGNAL) {
+      priority = os::OS_THREAD_PRIORITY_DEFAULT;
       asyncInfo = &asyncExceptions_;
+    }
   }
 
   ScopedAcquire<HybridMutex> scope_lock(&asyncInfo->control.lock);
@@ -862,7 +839,7 @@ hsa_status_t Runtime::SetAsyncSignalHandler(hsa_signal_t signal,
     // Start event monitoring thread
     asyncInfo->control.exit = false;
     asyncInfo->control.async_events_thread_ =
-        os::CreateThread(AsyncEventsLoop, asyncInfo);
+        os::CreateThread(AsyncEventsLoop, asyncInfo, 0, priority);
     if (asyncInfo->control.async_events_thread_ == NULL) {
       assert(false && "Asyncronous events thread creation error.");
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -1122,7 +1099,7 @@ static int SendDmaBufFd(int socket, int dmabuf_fd) {
 
   msg.msg_controllen = CMSG_SPACE(sizeof(dmabuf_fd));
 
-  size_t sent = sendmsg(socket, &msg, 0);
+  ssize_t sent = sendmsg(socket, &msg, 0);
 
   return (sent < 0) ? -1 : 0;
 }
@@ -1141,7 +1118,7 @@ static int ReceiveDmaBufFd(int socket) {
   msg.msg_control = c_buffer;
   msg.msg_controllen = sizeof(c_buffer);
 
-  size_t rcv = recvmsg(socket, &msg, MSG_WAITALL);
+  ssize_t rcv = recvmsg(socket, &msg, MSG_WAITALL);
   if (rcv < 0) return -1;
 
   while (!rcv)
@@ -1220,8 +1197,8 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   memset(handle->handle, 0, sizeof(handle->handle));
 
   // Check for fragment sharing.
-  PtrInfoBlockData block;
-  hsa_amd_pointer_info_t info;
+  PtrInfoBlockData block = {};
+  hsa_amd_pointer_info_t info = {};
   info.size = sizeof(info);
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -1340,7 +1317,9 @@ int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
     struct timeval tv;
     tv.tv_sec = 10;
     tv.tv_usec = 0;
-    setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof tv);
+    int status = setsockopt(socket_fd, SOL_SOCKET, SO_RCVTIMEO, (const char*)&tv, sizeof(tv));
+    assert(status == 0 && "DMA buffer FD could not be received for IPC!");
+    if (status) return -1;
 
     char buf[IPC_SOCK_SERVER_DMABUF_FD_HANDLE_LENGTH];
     memset(&address, 0, sizeof(struct sockaddr_un));
@@ -1536,8 +1515,8 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
       allocation_map_.erase(it);
       lock.Release();  // Can't hold memory lock when using pointer info.
 
-      PtrInfoBlockData block;
-      hsa_amd_pointer_info_t info;
+      PtrInfoBlockData block = {};
+      hsa_amd_pointer_info_t info = {};
       info.size = sizeof(info);
       if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
         return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -1555,7 +1534,7 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
 }
 
 void Runtime::AsyncEventsLoop(void* _eventsInfo) {
-  struct AsyncEventsInfo* eventsInfo = reinterpret_cast<struct AsyncEventsInfo*>(_eventsInfo);
+  AsyncEventsInfo* eventsInfo = reinterpret_cast<AsyncEventsInfo*>(_eventsInfo);
 
   auto& async_events_control_ = eventsInfo->control;
   auto& async_events_ = eventsInfo->events;
@@ -1624,26 +1603,19 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
 
   while (!async_events_control_.exit) {
     // Wait for a signal
-    hsa_signal_value_t value;
+    std::vector<hsa_signal_value_t> value(1);
+    value[0] = 0;
     uint32_t index = 0;
     uint32_t wait_any = true;
     if (eventsInfo->monitor_exceptions) {
-      index = Signal::WaitAnyExceptions(
-                          uint32_t(async_events_.Size()),
-                          &async_events_.signal_[0],
-                          &async_events_.cond_[0],
-                          &async_events_.value_[0],
-                          &value);
+      index =
+          Signal::WaitAnyExceptions(uint32_t(async_events_.Size()), &async_events_.signal_[0],
+                                    &async_events_.cond_[0], &async_events_.value_[0], &value[0]);
     } else {
      if (core::Runtime::runtime_singleton_->flag().wait_any()) {
-      index = AMD::hsa_amd_signal_wait_any(
-                          uint32_t(async_events_.Size()),
-                          &async_events_.signal_[0],
-                          &async_events_.cond_[0],
-                          &async_events_.value_[0],
-                          uint64_t(-1),
-                          HSA_WAIT_STATE_BLOCKED,
-                          &value);
+       index = Signal::WaitMultiple(uint32_t(async_events_.Size()), &async_events_.signal_[0],
+                                    &async_events_.cond_[0], &async_events_.value_[0], uint64_t(-1),
+                                    HSA_WAIT_STATE_BLOCKED, value, false);
      } else {
       // Skip wake-up signal logic
       index = 1;
@@ -1658,7 +1630,7 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
       hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
     } else if (index != -1) {
       if (wait_any) {
-        processEvent(index, value, wait_any);
+        processEvent(index, value[0], wait_any);
       } else {
         index = 0;
       }
@@ -1686,12 +1658,12 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
         // Check remaining signals before sleeping.
         for (size_t i = index; i < async_events_.Size(); i++) {
           hsa_signal_handle sig(async_events_.signal_[i]);
-          value = atomic::Load(&sig->signal_.value, std::memory_order_relaxed);
-          if (checkCondition(async_events_.cond_[i], value, async_events_.value_[i])) {
+          value[0] = atomic::Load(&sig->signal_.value, std::memory_order_relaxed);
+          if (checkCondition(async_events_.cond_[i], value[0], async_events_.value_[i])) {
             if (i == 0) {
               hsa_signal_handle(async_events_control_.wake)->StoreRelaxed(0);
             } else {
-              if (!processEvent(i, value, wait_any)) {
+              if (!processEvent(i, value[0], wait_any)) {
                 i--;
               }
             }
@@ -2006,8 +1978,8 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
   info.size = sizeof(info);
   for (int i = 0; i < 3; i++) {
     if (it == runtime_singleton_->allocation_map_.end()) break;
-    hsa_status_t err = runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, 
-                                                    malloc, &count, &canAccess, &block);
+    hsa_status_t err = runtime_singleton_->PtrInfo(const_cast<void*>(it->first), &info, malloc,
+                                                   &count, &canAccess, &block);
     if (err == HSA_STATUS_SUCCESS) {
       fprintf(stderr, "PtrInfo:\n\tAddress: %p-%p/%p-%p\n\tSize: 0x%lx\n\tType: %u\n\tOwner: %p\n",
               info.agentBaseAddress, (char*)info.agentBaseAddress + info.sizeInBytes,
@@ -2024,15 +1996,22 @@ void Runtime::PrintMemoryMapNear(void* ptr) {
 }
 
 Runtime::Runtime()
-    : region_gpu_(nullptr),
+    : loader_(nullptr),
+      region_gpu_(nullptr),
       sys_clock_freq_(0),
+      num_nodes_(0),
       vm_fault_event_(nullptr),
       vm_fault_signal_(nullptr),
       hw_exception_event_(nullptr),
       hw_exception_signal_(nullptr),
+      internal_queue_create_notifier_user_data_(nullptr),
       ref_count_(0),
-      kfd_version{} {
+      kfd_version{},
+      ipc_sock_server_fd_(0) {
 
+  virtual_mem_api_supported_ = false;
+  ipc_dmabuf_supported_ = false;
+  xnack_enabled_ = false;
   asyncSignals_.monitor_exceptions = false;
   asyncExceptions_.monitor_exceptions = true;
   g_use_interrupt_wait = true;
@@ -2150,9 +2129,9 @@ void Runtime::Unload() {
 
   CloseTools();
 
-  DestroyDrivers();
-
   AMD::Unload();
+
+  DestroyDrivers();
 }
 
 void Runtime::LoadExtensions() {
@@ -2243,13 +2222,15 @@ int fn_amdgpu_device_get_fd_nosupport(HsaAMDGPUDeviceHandle device_handle) {
   return -1;
 }
 
-int Runtime::GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd,
-                                 uint64_t* cpu_addr) {
+int Runtime::GetAmdgpuDeviceArgs(Agent *agent, ShareableHandle handle,
+                                 int *drm_fd, uint64_t *cpu_addr) {
   int renderFd = fn_amdgpu_device_get_fd(static_cast<AMD::GpuAgent*>(agent)->libDrmDev());
   if (renderFd < 0) return HSA_STATUS_ERROR;
 
   uint32_t gem_handle = 0;
-  if (amdgpu_bo_export(bo, amdgpu_bo_handle_type_kms, &gem_handle)) return HSA_STATUS_ERROR;
+  if (amdgpu_bo_export(reinterpret_cast<amdgpu_bo_handle>(handle.handle),
+                       amdgpu_bo_handle_type_kms, &gem_handle))
+    return HSA_STATUS_ERROR;
 
   union drm_amdgpu_gem_mmap args;
   memset(&args, 0, sizeof(args));
@@ -2265,7 +2246,6 @@ int Runtime::GetAmdgpuDeviceArgs(Agent* agent, amdgpu_bo_handle bo, int* drm_fd,
 }
 
 void Runtime::CheckVirtualMemApiSupport() {
-  virtual_mem_api_supported_ = false;
 
   auto kfd_version = core::Runtime::runtime_singleton_->KfdVersion().version;
 
@@ -2286,7 +2266,6 @@ void Runtime::CheckVirtualMemApiSupport() {
 }
 
 void Runtime::InitIPCDmaBufSupport() {
-  ipc_dmabuf_supported_ = false;
   bool dmabuf_supported = false;
 
   // Early exit so we don't double load lib DRM
@@ -2368,7 +2347,7 @@ void Runtime::LoadTools() {
   std::string tool_names = flag_.tools_lib_names();
   std::vector<std::string> names;
   if (tool_names != "") {
-    names = parse_tool_names(tool_names);
+    names = parse_tool_names(std::move(tool_names));
     env_count = names.size();
   }
 
@@ -3231,47 +3210,12 @@ hsa_status_t Runtime::VMemoryHandleRelease(hsa_amd_vmem_alloc_handle_t memoryOnl
   return HSA_STATUS_SUCCESS;
 }
 
-__forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
-  switch (perm) {
-    case HSA_ACCESS_PERMISSION_RO:
-      return AMDGPU_VM_PAGE_READABLE;
-    case HSA_ACCESS_PERMISSION_WO:
-      return AMDGPU_VM_PAGE_WRITEABLE;
-    case HSA_ACCESS_PERMISSION_RW:
-      return AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
-    case HSA_ACCESS_PERMISSION_NONE:
-      return 0;
-    default:
-      break;
-  }
-
-  return 0;
-}
-
-__forceinline int mmap_perm(hsa_access_permission_t perms) {
-  switch (perms) {
-    case HSA_ACCESS_PERMISSION_RO:
-      return PROT_READ;
-    case HSA_ACCESS_PERMISSION_WO:
-      return PROT_WRITE;
-    case HSA_ACCESS_PERMISSION_RW:
-      return PROT_READ | PROT_WRITE;
-    case HSA_ACCESS_PERMISSION_NONE:
-      return PROT_NONE;
-    default:
-      break;
-  }
-
-  return 0;
-}
-
 hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
                                        hsa_amd_vmem_alloc_handle_t memoryOnlyHandle,
                                        uint64_t flags) {
   int drm_fd, dmabuf_fd = 0;
   uint64_t offset = 0, ret;
   uint64_t drm_cpu_addr = 0;
-  amdgpu_bo_handle ldrm_bo = 0;
   bool reservedAddressFound = false;
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
@@ -3304,25 +3248,38 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
 
-  ret = hsaKmtExportDMABufHandle(memoryHandleIt->first, size, &dmabuf_fd, &offset);
-  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  auto *agent = memoryHandleIt->second.agentOwner();
+
+  // For now, this is only supported for KFD due to the call to
+  // GetAmdgpuDeviceArgs
+  if (agent->device_type() != core::Agent::DeviceType::kAmdGpuDevice)
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+
+  // Create handle by exporting and importing the memory from the owning agent
+  auto &agent_driver = agent->driver();
+  hsa_status_t status = agent_driver.ExportDMABuf(memoryHandleIt->first, size,
+                                                  &dmabuf_fd, &offset);
+  if (status != HSA_STATUS_SUCCESS)
+    return status;
   assert(offset == 0);
 
-  AMD::GpuAgent* agent = static_cast<AMD::GpuAgent*>(memoryHandleIt->second.agentOwner());
-  amdgpu_bo_import_result res;
-  ret = amdgpu_bo_import(agent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
-  if (ret) return HSA_STATUS_ERROR;
+  ShareableHandle shareable_handle;
+  status = agent_driver.ImportDMABuf(dmabuf_fd, *agent, shareable_handle);
+  if (status != HSA_STATUS_SUCCESS)
+    return status;
 
   close(dmabuf_fd);
 
-  ldrm_bo = res.buf_handle;
-  ret = GetAmdgpuDeviceArgs(agent, ldrm_bo, &drm_fd, &drm_cpu_addr);
+  // Get address that memory is mapped to
+  ret = GetAmdgpuDeviceArgs(agent, shareable_handle, &drm_fd, &drm_cpu_addr);
   if (ret) return HSA_STATUS_ERROR;
 
-  mapped_handle_map_.emplace(std::piecewise_construct,
-          std::forward_as_tuple(va),
-          std::forward_as_tuple(&memoryHandleIt->second, &reservedAddressIt->second, offset, size, drm_fd,
-                   reinterpret_cast<void*>(drm_cpu_addr), HSA_ACCESS_PERMISSION_NONE, ldrm_bo));
+  mapped_handle_map_.emplace(
+      std::piecewise_construct, std::forward_as_tuple(va),
+      std::forward_as_tuple(&memoryHandleIt->second, &reservedAddressIt->second,
+                            offset, size, drm_fd,
+                            reinterpret_cast<void *>(drm_cpu_addr),
+                            HSA_ACCESS_PERMISSION_NONE, shareable_handle));
 
   reservedAddressIt->second.use_count++;
   memoryHandleIt->second.use_count++;
@@ -3331,7 +3288,6 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
 }
 
 hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
-  int ret;
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
   auto mappedHandleIt = mapped_handle_map_.find(va);
@@ -3339,24 +3295,24 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
 
   if (mappedHandleIt->second.size != size) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
+  // Remove access from all agents that were allowed access
   for (auto agentPermsIt = mappedHandleIt->second.allowed_agents.begin();
        agentPermsIt != mappedHandleIt->second.allowed_agents.end();) {
     assert(va == agentPermsIt->second.va);
-    if (agentPermsIt->second.ldrm_bo)
-      ret = amdgpu_bo_va_op(agentPermsIt->second.ldrm_bo, mappedHandleIt->second.offset, size,
-                            reinterpret_cast<uint64_t>(va), 0, AMDGPU_VA_OP_UNMAP);
-    else
-      ret = munmap(va, size);
-    if (ret) return HSA_STATUS_ERROR;
+
+    hsa_status_t status = agentPermsIt->second.RemoveAccess();
+    if (status != HSA_STATUS_SUCCESS)
+      return status;
+
     agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
   }
 
-  if (mappedHandleIt->second.ldrm_bo)
-    ret = amdgpu_bo_free(mappedHandleIt->second.ldrm_bo);
-  else
-    ret = munmap(va, size);
-
-  if (ret) return HSA_STATUS_ERROR;
+  if (mappedHandleIt->second.shareable_handle.IsValid()) {
+    hsa_status_t status = mappedHandleIt->second.agentOwner()->driver().ReleaseShareableHandle(
+        mappedHandleIt->second.shareable_handle);
+    if (status != HSA_STATUS_SUCCESS)
+      return status;
+  }
 
   assert(mappedHandleIt->second.address_handle->use_count >= 1);
   mappedHandleIt->second.address_handle->use_count--;
@@ -3376,70 +3332,71 @@ hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   return HSA_STATUS_SUCCESS;
 }
 
-Runtime::MappedHandleAllowedAgent::MappedHandleAllowedAgent(MappedHandle* _mappedHandle, Agent* targetAgent, void* va, size_t size,
-                             hsa_access_permission_t perms)
-        : va(va),
-          size(size),
-          targetAgent(targetAgent),
-          permissions(perms),
-          mappedHandle(_mappedHandle),
-          ldrm_bo(NULL) {
+Runtime::MappedHandleAllowedAgent::MappedHandleAllowedAgent(
+    MappedHandle *mappedHandle, Agent *targetAgent, void *va, size_t size,
+    hsa_access_permission_t perms)
+    : va(va), size(size), targetAgent(targetAgent), permissions(perms),
+      mappedHandle(mappedHandle) {
 
+  // CPU agents have access as the memory is already mapped to the host.
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) return;
 
-  AMD::GpuAgent* gpuAgent = static_cast<AMD::GpuAgent*>(targetAgent);
   int dmabuf_fd = 0;
   uint64_t offset = 0;
   MemoryHandle *memHandle = mappedHandle->mem_handle;
 
-  int ret = hsaKmtExportDMABufHandle(memHandle->thunk_handle, mappedHandle->size, &dmabuf_fd, &offset);
-  assert(ret == HSAKMT_STATUS_SUCCESS);
-
-  if (ret != HSAKMT_STATUS_SUCCESS) return;
+  // Export memory from owner agent.
+  hsa_status_t status = memHandle->agentOwner()->driver().ExportDMABuf(
+      memHandle->thunk_handle, mappedHandle->size, &dmabuf_fd, &offset);
+  assert(status == HSA_STATUS_SUCCESS);
+  if (status != HSA_STATUS_SUCCESS)
+    return;
   assert(offset == 0);
 
-  amdgpu_bo_import_result res;
-  ret = amdgpu_bo_import(gpuAgent->libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
-  assert(ret == 0);
-  if (ret) return;
+  // Import to target agent.
+  status = targetAgent->driver().ImportDMABuf(dmabuf_fd, *targetAgent,
+                                              shareable_handle);
+  assert(status == HSA_STATUS_SUCCESS);
+  if (status != HSA_STATUS_SUCCESS)
+    return;
 
   close(dmabuf_fd);
-  ldrm_bo = res.buf_handle;
 }
 
 Runtime::MappedHandleAllowedAgent::~MappedHandleAllowedAgent() {
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) return;
 
-  amdgpu_bo_free(ldrm_bo);
+  hsa_status_t status =
+      targetAgent->driver().ReleaseShareableHandle(shareable_handle);
+  assert(status == HSA_STATUS_SUCCESS);
 }
 
 hsa_status_t Runtime::MappedHandleAllowedAgent::EnableAccess(hsa_access_permission_t perms) {
   if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
-    void* ret_cpu_addr =
-        mmap(va, size, mmap_perm(perms), MAP_SHARED | MAP_FIXED, mappedHandle->drm_fd,
+    void* mapped_ptr =
+        mmap(va, size, PermissionsToMmapFlags(perms), MAP_SHARED | MAP_FIXED, mappedHandle->drm_fd,
              reinterpret_cast<uint64_t>(mappedHandle->drm_cpu_addr));
-    assert(ret_cpu_addr == va);
-  } else { // GPU Memory
-    int ret;
-    if (!ldrm_bo) return HSA_STATUS_ERROR;
-    ret = amdgpu_bo_va_op(ldrm_bo, mappedHandle->offset, mappedHandle->size,
-                          reinterpret_cast<uint64_t>(va), drm_perm(perms), AMDGPU_VA_OP_MAP);
-    if (ret) return HSA_STATUS_ERROR;
+    if (mapped_ptr != va)
+      return HSA_STATUS_ERROR;
+  } else {
+    hsa_status_t status = targetAgent->driver().Map(
+        shareable_handle, va, mappedHandle->offset, size, perms);
+    if (status != HSA_STATUS_SUCCESS)
+      return status;
   }
   permissions = perms;
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t Runtime::MappedHandleAllowedAgent::RemoveAccess() {
-  int ret;
-
-  if (!ldrm_bo)  // Mapped to host
-    ret = munmap(va, mappedHandle->size);
-  else  // Mapped to device
-    ret = amdgpu_bo_va_op(ldrm_bo, mappedHandle->offset, mappedHandle->size,
-                          reinterpret_cast<uint64_t>(va), 0, AMDGPU_VA_OP_UNMAP);
-
-  return (ret) ? HSA_STATUS_ERROR : HSA_STATUS_SUCCESS;
+  if (targetAgent->device_type() == core::Agent::DeviceType::kAmdCpuDevice) {
+    if (munmap(va, size) != 0)
+      return HSA_STATUS_ERROR;
+    return HSA_STATUS_SUCCESS;
+  } else {
+    return targetAgent->driver().Unmap(
+        shareable_handle, va, mappedHandle->offset, mappedHandle->size);
+  }
 }
 
 // Note: VMemorySetAccessPerHandle should be called with &memory_lock_ held
@@ -3456,13 +3413,16 @@ Runtime::VMemorySetAccessPerHandle(void *va, MappedHandle &mappedHandle,
     auto agentPermsIt = mappedHandle.allowed_agents.find(targetAgent);
     if (agentPermsIt == mappedHandle.allowed_agents.end()) {
       /* Agent not previously allowed, we need a new entry */
-      mappedHandle.allowed_agents.emplace(
-          std::piecewise_construct, std::forward_as_tuple(targetAgent),
-          std::forward_as_tuple(&mappedHandle, targetAgent, va, size, perm));
+      agentPermsIt =
+          mappedHandle.allowed_agents
+              .emplace(std::piecewise_construct,
+                       std::forward_as_tuple(targetAgent),
+                       std::forward_as_tuple(&mappedHandle, targetAgent, va,
+                                             size, perm))
+              .first;
 
-      if (mappedHandle.allowed_agents[targetAgent].EnableAccess(perm) !=
-          HSA_STATUS_SUCCESS) {
-        mappedHandle.allowed_agents.erase(targetAgent);
+      if (agentPermsIt->second.EnableAccess(perm) != HSA_STATUS_SUCCESS) {
+        mappedHandle.allowed_agents.erase(agentPermsIt);
         return HSA_STATUS_ERROR;
       }
     } else {

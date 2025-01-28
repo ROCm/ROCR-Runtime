@@ -32,31 +32,45 @@
 // Base class for tests forking multiple child processes
 class KFDMultiProcessTest :  public KFDBaseComponentTest {
  public:
-    KFDMultiProcessTest(void): m_ChildStatus(HSAKMT_STATUS_ERROR), m_IsParent(true) {}
+    KFDMultiProcessTest(void) {
+        for ( int i = 0; i < MAX_GPU; i++) {
+            m_ChildStatus[i] = HSAKMT_STATUS_ERROR;
+            m_IsParent[i] = true;
+        }
+    }
 
     ~KFDMultiProcessTest(void) {
-        if (!m_IsParent) {
-            /* Child process has to exit
-             * otherwise gtest will continue other tests
-             */
-            exit(m_ChildStatus);
+        for (int i = 0; i < MAX_GPU; i++) {
+            if (!m_IsParent[i]) {
+                /* Child process has to exit
+                 * otherwise gtest will continue other tests
+                */
+                exit(m_ChildStatus[i]);
+            }
         }
 
         try {
-            WaitChildProcesses();
-        } catch (...) {}
+            const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
+            int gpu_node;
+            /* parent porcess waits all its child processes on each gpu */
+            for (int i = 0; i < std::min((int)gpuNodes.size(), MAX_GPU); i++) {
+                gpu_node = gpuNodes.at(i);
+                WaitChildProcesses(gpu_node);
+            }
+       } catch (...) {}
+
     }
 
  protected:
-    void ForkChildProcesses(int nprocesses);
-    void WaitChildProcesses();
+    void ForkChildProcesses(unsigned int nodeId, int nprocesses);
+    void WaitChildProcesses(unsigned int nodeId);
 
  protected:  // Members
-    std::string     m_psName;
-    int             m_ProcessIndex;
-    std::vector<pid_t> m_ChildPids;
-    HSAKMT_STATUS   m_ChildStatus;
-    bool            m_IsParent;
+    std::string     m_psName[MAX_GPU];
+    int             m_ProcessIndex[MAX_GPU];
+    std::vector<pid_t> m_ChildPids[MAX_GPU];
+    HSAKMT_STATUS   m_ChildStatus[MAX_GPU];
+    bool            m_IsParent[MAX_GPU];
 };
 
 #endif  // __KFD_MULTI_PROCESS_TEST__H__

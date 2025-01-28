@@ -55,6 +55,7 @@ static const std::vector<uint32_t> TargetList = {
     0x0a0304,
     0x0a0305,
     0x0a0306,
+    0x0c0000,
 };
 
 TEST_F(KFDASMTest, AssembleShaders) {

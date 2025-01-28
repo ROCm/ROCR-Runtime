@@ -23,8 +23,9 @@
 
 #include "KFDMultiProcessTest.hpp"
 
-void KFDMultiProcessTest::ForkChildProcesses(int nprocesses) {
+void KFDMultiProcessTest::ForkChildProcesses(unsigned int nodeId, int nprocesses) {
     int i;
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(nodeId);
 
     for (i = 0; i < nprocesses - 1; ++i) {
         pid_t pid = fork();
@@ -35,43 +36,48 @@ void KFDMultiProcessTest::ForkChildProcesses(int nprocesses) {
             /* Cleanup file descriptors copied from parent process
              * then call SetUp->hsaKmtOpenKFD to create new process
              */
-            m_psName = "Test process " + std::to_string(i) + " ";
+            m_psName[gpuIndex] = "Child Test process " + std::to_string(i) +
+                          " on gpuNode: " + std::to_string(gpuIndex) + " ";
             TearDown();
             SetUp();
-            m_ChildPids.clear();
-            m_IsParent = false;
-            m_ProcessIndex = i;
+            m_ChildPids[gpuIndex].clear();
+            m_IsParent[gpuIndex] = false;
+            m_ProcessIndex[gpuIndex] = i;
             return;
         }
 
         /* Parent process */
-        m_ChildPids.push_back(pid);
+        m_ChildPids[gpuIndex].push_back(pid);
     }
 
-    m_psName = "Test process " + std::to_string(i) + " ";
-    m_ProcessIndex = i;
+    m_psName[gpuIndex] = "Parent Test process " + std::to_string(i) +
+                        " on gpuNode: " + std::to_string(gpuIndex) + " ";
+    m_ProcessIndex[gpuIndex] = i;
 }
 
-void KFDMultiProcessTest::WaitChildProcesses() {
-    if (m_IsParent) {
+void KFDMultiProcessTest::WaitChildProcesses(unsigned int nodeId) {
+
+    int gpuIndex = m_NodeInfo.HsaGPUindexFromGpuNode(nodeId);
+
+    if (m_IsParent[gpuIndex]) {
         /* Only run by parent process */
         int childStatus;
         int childExitOkNum = 0;
-        int size = m_ChildPids.size();
+        int size = m_ChildPids[gpuIndex].size();
 
         for (HSAuint32 i = 0; i < size; i++) {
-            pid_t pid = m_ChildPids.front();
+            pid_t pid = m_ChildPids[gpuIndex].front();
 
             waitpid(pid, &childStatus, 0);
             if (WIFEXITED(childStatus) == 1 && WEXITSTATUS(childStatus) == 0)
                 childExitOkNum++;
 
-            m_ChildPids.erase(m_ChildPids.begin());
+            m_ChildPids[gpuIndex].erase(m_ChildPids[gpuIndex].begin());
         }
 
         EXPECT_EQ(childExitOkNum, size);
     }
 
     /* Child process or parent process finished successfully */
-    m_ChildStatus = HSAKMT_STATUS_SUCCESS;
+    m_ChildStatus[gpuIndex] = HSAKMT_STATUS_SUCCESS;
 }

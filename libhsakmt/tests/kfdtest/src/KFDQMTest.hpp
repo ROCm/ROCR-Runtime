@@ -30,11 +30,48 @@
 #include "KFDBaseComponentTest.hpp"
 #include "Dispatch.hpp"
 
+/*
+ * Used by ExtendedCuMasking test case to pass GPU configuration information to helper functions.
+ */
+typedef struct {
+    uint32_t numDwords;
+    uint32_t numBits;
+    uint32_t numSEs;
+    uint32_t numSAperSE;
+    uint32_t numWGPperSA;
+} mask_config_t;
+
+/*
+ * Used by ExtendedCuMasking test case.
+ *
+ * Struct is hardware-dependent and fields are layed out same way as hardware register.
+ *
+ */
+typedef union {
+    uint32_t data;
+    // Fields needed from HW_ID1 (format same for GFX11 and GFX12)
+    struct {
+        unsigned     :10;
+        unsigned wgp : 4;
+        unsigned     : 2;
+        unsigned  sa : 1;
+        unsigned     : 1;
+        unsigned  se : 3;
+        unsigned     :11;
+    };
+} out_data_t;
+
+
 class KFDQMTest : public KFDBaseComponentTest {
  public:
     KFDQMTest() {}
 
     ~KFDQMTest() {}
+
+    friend void BasicCuMaskingLinear(KFDTEST_PARAMETERS* pTestParamters);
+    friend void BasicCuMaskingEven(KFDTEST_PARAMETERS* pTestParamters);
+    friend void EmptyDispatch(KFDTEST_PARAMETERS* pTestParamters) ;
+    friend void SimpleWriteDispatch(KFDTEST_PARAMETERS* pTestParamters);
 
  protected:
     virtual void SetUp();
@@ -43,7 +80,10 @@ class KFDQMTest : public KFDBaseComponentTest {
     void SyncDispatch(const HsaMemoryBuffer& isaBuffer, void* pSrcBuf, void* pDstBuf, int node = -1);
     HSAint64 TimeConsumedwithCUMask(int node, uint32_t *mask, uint32_t mask_count);
     HSAint64 GetAverageTimeConsumedwithCUMask(int node, uint32_t *mask, uint32_t mask_count, int iterations);
-    void testQueuePriority(bool isSamePipe);
+    friend void testQueuePriority(KFDTEST_PARAMETERS* pTestParamters, bool isSamePipe);
+
+    bool testCUMask(int gpuNode, uint32_t *pMask, mask_config_t maskConfig, HsaMemoryBuffer &programBuffer, uint32_t numWorkItems, out_data_t *pOutput);
+
  protected:  // Members
     /* Acceptable performance for CU Masking should be within 5% of linearly-predicted performance */
     const double CuVariance = 0.15;

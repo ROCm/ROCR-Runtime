@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2024-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -42,37 +42,135 @@
 
 #include "core/inc/amd_kfd_driver.h"
 
-#include <sys/ioctl.h>
-
 #include <memory>
 #include <string>
 
+#include <amdgpu_drm.h>
+#include <link.h>
+#include <sys/ioctl.h>
+
 #include "hsakmt/hsakmt.h"
 
-#include "core/inc/amd_cpu_agent.h"
 #include "core/inc/amd_gpu_agent.h"
 #include "core/inc/amd_memory_region.h"
-#include "core/inc/exceptions.h"
 #include "core/inc/runtime.h"
+
+extern r_debug _amdgpu_r_debug;
 
 namespace rocr {
 namespace AMD {
 
+static_assert(
+    (sizeof(core::ShareableHandle::handle) >= sizeof(amdgpu_bo_handle)) &&
+        (alignof(core::ShareableHandle::handle) >= alignof(amdgpu_bo_handle)),
+    "ShareableHandle cannot store a amdgpu_bo_handle");
+
+namespace {
+
+__forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
+  switch (perm) {
+  case HSA_ACCESS_PERMISSION_RO:
+    return AMDGPU_VM_PAGE_READABLE;
+  case HSA_ACCESS_PERMISSION_WO:
+    return AMDGPU_VM_PAGE_WRITEABLE;
+  case HSA_ACCESS_PERMISSION_RW:
+    return AMDGPU_VM_PAGE_READABLE | AMDGPU_VM_PAGE_WRITEABLE;
+  case HSA_ACCESS_PERMISSION_NONE:
+  default:
+    return 0;
+  }
+}
+
+} // namespace
+
 KfdDriver::KfdDriver(std::string devnode_name)
     : core::Driver(core::DriverType::KFD, devnode_name) {}
 
-hsa_status_t KfdDriver::Init() { return HSA_STATUS_SUCCESS; }
+hsa_status_t KfdDriver::Init() {
+  HSAKMT_STATUS ret =
+      hsaKmtRuntimeEnable(&_amdgpu_r_debug, core::Runtime::runtime_singleton_->flag().debug());
 
-hsa_status_t KfdDriver::DiscoverDriver() {
-  if (hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS) {
-    std::unique_ptr<Driver> kfd_drv(new KfdDriver("/dev/kfd"));
-    core::Runtime::runtime_singleton_->RegisterDriver(kfd_drv);
+  if (ret != HSAKMT_STATUS_SUCCESS && ret != HSAKMT_STATUS_NOT_SUPPORTED) return HSA_STATUS_ERROR;
+
+  uint32_t caps_mask = 0;
+  if (hsaKmtGetRuntimeCapabilities(&caps_mask) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  core::Runtime::runtime_singleton_->KfdVersion(
+      ret != HSAKMT_STATUS_NOT_SUPPORTED,
+      !!(caps_mask & HSA_RUNTIME_ENABLE_CAPS_SUPPORTS_CORE_DUMP_MASK));
+
+  if (hsaKmtGetVersion(&version_) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  if (version_.KernelInterfaceMajorVersion == kfd_version_major_min &&
+      version_.KernelInterfaceMinorVersion < kfd_version_major_min)
+    return HSA_STATUS_ERROR;
+
+  core::Runtime::runtime_singleton_->KfdVersion(version_);
+
+  if (version_.KernelInterfaceMajorVersion == 1 && version_.KernelInterfaceMinorVersion == 0)
+    core::g_use_interrupt_wait = false;
+
+  bool xnack_mode = BindXnackMode();
+  core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::ShutDown() {
+  HSAKMT_STATUS ret = hsaKmtRuntimeDisable();
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  ret = hsaKmtReleaseSystemProperties();
+
+  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  return Close();
+}
+
+hsa_status_t KfdDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
+  auto tmp_driver = std::unique_ptr<core::Driver>(new KfdDriver("/dev/kfd"));
+
+  if (tmp_driver->Open() == HSA_STATUS_SUCCESS) {
+    driver = std::move(tmp_driver);
     return HSA_STATUS_SUCCESS;
   }
+
   return HSA_STATUS_ERROR;
 }
 
 hsa_status_t KfdDriver::QueryKernelModeDriver(core::DriverQuery query) {
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::Open() {
+  return hsaKmtOpenKFD() == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS
+                                                  : HSA_STATUS_ERROR;
+}
+
+hsa_status_t KfdDriver::Close() {
+  return hsaKmtCloseKFD() == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS
+                                                   : HSA_STATUS_ERROR;
+}
+
+hsa_status_t KfdDriver::GetSystemProperties(HsaSystemProperties& sys_props) const {
+  if (hsaKmtReleaseSystemProperties() != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  if (hsaKmtAcquireSystemProperties(&sys_props) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::GetNodeProperties(HsaNodeProperties& node_props, uint32_t node_id) const {
+  if (hsaKmtGetNodeProperties(node_id, &node_props) != HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
+                                          uint32_t node_id) const {
+  if (hsaKmtGetNodeIoLinkProperties(node_id, io_link_props.size(), io_link_props.data()) !=
+      HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR;
   return HSA_STATUS_SUCCESS;
 }
 
@@ -249,6 +347,73 @@ hsa_status_t KfdDriver::DestroyQueue(core::Queue &queue) const {
   return HSA_STATUS_SUCCESS;
 }
 
+hsa_status_t KfdDriver::ExportDMABuf(void *mem, size_t size, int *dmabuf_fd,
+                                     size_t *offset) {
+  int dmabuf_fd_res = -1;
+  size_t offset_res = 0;
+  if (hsaKmtExportDMABufHandle(mem, size, &dmabuf_fd_res, &offset_res) !=
+      HSAKMT_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+  *dmabuf_fd = dmabuf_fd_res;
+  *offset = offset_res;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
+                                     core::ShareableHandle &handle) {
+  auto &gpu_agent = static_cast<GpuAgent &>(agent);
+  amdgpu_bo_import_result res;
+  auto ret = amdgpu_bo_import(
+      gpu_agent.libDrmDev(), amdgpu_bo_handle_type_dma_buf_fd, dmabuf_fd, &res);
+  if (ret)
+    return HSA_STATUS_ERROR;
+
+  handle.handle = reinterpret_cast<uint64_t>(res.buf_handle);
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::Map(core::ShareableHandle handle, void *mem,
+                            size_t offset, size_t size,
+                            hsa_access_permission_t perms) {
+  const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
+  if (!ldrm_bo)
+    return HSA_STATUS_ERROR;
+
+  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem),
+                      drm_perm(perms), AMDGPU_VA_OP_MAP) != 0)
+    return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::Unmap(core::ShareableHandle handle, void *mem,
+                              size_t offset, size_t size) {
+  const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
+  if (!ldrm_bo)
+    return HSA_STATUS_ERROR;
+
+  if (amdgpu_bo_va_op(ldrm_bo, offset, size, reinterpret_cast<uint64_t>(mem), 0,
+                      AMDGPU_VA_OP_UNMAP) != 0)
+    return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+hsa_status_t KfdDriver::ReleaseShareableHandle(core::ShareableHandle &handle) {
+  const auto ldrm_bo = reinterpret_cast<amdgpu_bo_handle>(handle.handle);
+  if (!ldrm_bo)
+    return HSA_STATUS_ERROR;
+
+  const auto ret = amdgpu_bo_free(ldrm_bo);
+  if (ret)
+    return HSA_STATUS_ERROR;
+
+  handle = {};
+  return HSA_STATUS_SUCCESS;
+}
+
 void *KfdDriver::AllocateKfdMemory(const HsaMemFlags &flags, uint32_t node_id,
                                    size_t size) {
   void *mem = nullptr;
@@ -287,6 +452,34 @@ bool KfdDriver::MakeKfdMemoryResident(size_t num_node, const uint32_t *nodes,
 
 void KfdDriver::MakeKfdMemoryUnresident(const void *mem) {
   hsaKmtUnmapMemoryToGPU(const_cast<void *>(mem));
+}
+
+bool KfdDriver::BindXnackMode() {
+  // Get users' preference for Xnack mode of ROCm platform.
+  HSAint32 mode = core::Runtime::runtime_singleton_->flag().xnack();
+  bool config_xnack = (mode != Flag::XNACK_REQUEST::XNACK_UNCHANGED);
+
+  // Indicate to driver users' preference for Xnack mode
+  // Call to driver can fail and is a supported feature
+  HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
+  if (config_xnack) {
+    status = hsaKmtSetXNACKMode(mode);
+    if (status == HSAKMT_STATUS_SUCCESS) {
+      return (mode != Flag::XNACK_DISABLE);
+    }
+  }
+
+  // Get Xnack mode of devices bound by driver. This could happen
+  // when a call to SET Xnack mode fails or user has no particular
+  // preference
+  status = hsaKmtGetXNACKMode(&mode);
+  if (status != HSAKMT_STATUS_SUCCESS) {
+    debug_print(
+        "KFD does not support xnack mode query.\nROCr must assume "
+        "xnack is disabled.\n");
+    return false;
+  }
+  return (mode != Flag::XNACK_DISABLE);
 }
 
 } // namespace AMD

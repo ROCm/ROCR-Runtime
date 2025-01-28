@@ -891,6 +891,8 @@ namespace elf {
 
     GElfSection::GElfSection(GElfImage* elf_)
       : elf(elf_),
+        seg(nullptr),
+        hdr{},
         memsize_(0),
         align_(0),
         reloc_sec(nullptr),
@@ -1020,7 +1022,6 @@ namespace elf {
         if (coffset <= offset && offset <= coffset + edata->d_size) {
           csize = (std::min)(size, edata->d_size - offset);
           memcpy(dest, (const char*) edata->d_buf + offset - coffset, csize);
-          coffset += csize;
           dest = (char*) dest + csize;
           size -= csize;
           if (!size) { return true; }

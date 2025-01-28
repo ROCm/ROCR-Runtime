@@ -32,13 +32,9 @@ class KFDPerfCountersTest : public KFDBaseComponentTest {
     KFDPerfCountersTest() {}
     ~KFDPerfCountersTest() {}
 
-    static const unsigned int START_STOP_DELAY = 10000;     // 10 sec tracing
-
  protected:
     virtual void SetUp();
     virtual void TearDown();
-    void GetBlockName(HSA_UUID uuid, char *name, uint32_t name_len,
-                                     char *uuid_str, uint32_t uuid_str_len);
 };
 
 #endif  // __KFDPERFCOUNTERS_HPP__
