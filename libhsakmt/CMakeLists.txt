@@ -130,9 +130,6 @@ set ( HSAKMT_SRC "src/debug.c"
                  "src/svm.c"
                  "src/pc_sampling.c")
 
-## Declare the library target name
-add_library (${HSAKMT_TARGET} STATIC "")
-
 ## Add sources
 target_sources ( ${HSAKMT_TARGET} PRIVATE ${HSAKMT_SRC} )
 
@@ -274,6 +271,9 @@ configure_file ( libhsakmt.pc.in libhsakmt.pc @ONLY )
 install ( FILES ${CMAKE_CURRENT_BINARY_DIR}/libhsakmt.pc DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig COMPONENT dev)
 
 if ( NOT BUILD_SHARED_LIBS)
+  ## Declare the library target name
+  add_library (${HSAKMT_TARGET} STATIC "")
+
   ## Create separate target file for static builds
   ## In static builds, libdrm and libdrm_amdgpu need to be linked statically
   add_library (${HSAKMT_STATIC_DRM_TARGET}  STATIC "")
