@@ -368,9 +368,9 @@ typedef struct hsa_amd_aie_ert_start_kernel_header_s {
  */
 typedef struct hsa_amd_aie_ert_start_kernel_data_s {
   /**
-   * Mandatory CU mask.
+   * Address to the PDI.
    */
-  uint32_t cu_mask;
+  void* pdi_addr;
   /**
    * Since the CU mask takes up one DWORD this is count - 1 number of DWORDs
    * (i.e., the remainder of the start kernel payload data).

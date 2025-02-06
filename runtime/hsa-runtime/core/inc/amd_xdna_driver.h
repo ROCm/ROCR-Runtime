@@ -118,6 +118,9 @@ constexpr uint32_t CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_SIZE_IDX = 4;
 /// @brief Environment variable to define job submission timeout
 constexpr uint32_t DEFAULT_TIMEOUT_VAL = 50;
 
+/// @brief Defacult CU_FUNC value we use when configuring a CU
+constexpr uint32_t DEFAULT_CU_FUNC = 0;
+
 /// @brief: Calculates the number of operands in a packet
 /// given the number of arguments in the packet
 /// @param: arg_count(Input), Number of arguments in the packet
@@ -175,9 +178,15 @@ public:
 
   // @brief Submits num_pkts packets in a command chain to the XDNA driver
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                              uint32_t num_operands, uint32_t hw_ctx_handle);
+                              uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles);
 
- private:
+  // @brief Creates a new hardware context with the correct CUs
+  hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
+      uint32_t &hw_ctx_handle,
+      std::vector<uint32_t> new_cus,
+      uint32_t num_tiles);
+
+private:
   hsa_status_t QueryDriverVersion();
   /// @brief Allocate device accesible heap space.
   ///
@@ -222,6 +231,11 @@ public:
   /// to manage some of this for now.
   std::unordered_map<uint32_t, void *> vmem_handle_mappings;
   std::unordered_map<void*, uint32_t> vmem_addr_mappings;
+
+  /// @brief Storing cached CUs that have already been added to the hardware context.
+  /// This maps the CU BO to the cu_mask in the hardware context
+  std::unordered_map<uint32_t, uint32_t> handle_cu_mappings;
+  std::vector<uint32_t> cached_cu_bos;
 
   /// @brief Virtual address range allocated for the device heap.
   ///

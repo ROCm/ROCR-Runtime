@@ -550,7 +550,7 @@ hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd*
 }
 
 hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                                        uint32_t num_operands, uint32_t hw_ctx_handle) {
+                                        uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles) {
   // Storing the metadata of the BOs that store the operands and metadata
   // of the commands we are going to submit
   std::vector<uint32_t> bo_args;
@@ -568,6 +568,10 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   cmd_handles.reserve(num_pkts);
   cmd_sizes.reserve(num_pkts);
   cmds.reserve(num_pkts);
+
+  // The new CUs that we need to register
+  std::vector<uint32_t> new_cus;
+  new_cus.reserve(num_pkts);
 
   // Iterating over all the contiguous HSA_AMD_AIE_ERT_CMD_CHAIN packets
   for (int pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
@@ -596,13 +600,40 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     // Need to increase the size of the command by the size of this structure.
     cmd->count = pkt->count + CMD_COUNT_SIZE_INCREASE;
     cmd->opcode = pkt->opcode;
-    cmd->data[0] = cmd_pkt_payload->cu_mask;
+
+    // Finding BO handle associated with the CU
+    auto cu_bo_iter = vmem_addr_mappings.find(cmd_pkt_payload->pdi_addr);
+    if (cu_bo_iter == vmem_addr_mappings.end())
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    uint32_t cu_bo = cu_bo_iter->second;
+
+    // Determining if the CU is cached
+    auto cu_mask_iter = handle_cu_mappings.find(cu_bo_iter->second);
+    uint32_t cu_mask = 0;
+    if (cu_mask_iter == handle_cu_mappings.end()) {
+      // CU mask is one hot encoded, putting the
+      // position where the new CU will be
+      cu_mask = 1 << handle_cu_mappings.size();
+      handle_cu_mappings[cu_bo] = cu_mask;
+      new_cus.push_back(cu_bo);
+    }
+    else {
+      cu_mask = cu_mask_iter->second;
+    }
+
+    cmd->data[0] = cu_mask;
     memcpy((cmd->data + 1), cmd_pkt_payload->data, 4 * pkt->count);
 
     // Keeping track of the handle
     cmd_handles.push_back(cmd_bo_handle);
     cmds.push_back(cmd);
     cmd_sizes.push_back(cmd_size);
+  }
+
+  // If we have CUs that are not cached we will add them to
+  // the hardware context
+  if (new_cus.size()) {
+    ConfigHwCtxNewCUs(hw_ctx_handle, new_cus, num_tiles);
   }
 
   // Creating a packet that contains the command chain
@@ -662,6 +693,88 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
 
   // Syncing BOs after we execute the command
   if (SyncBos(bo_addrs, bo_sizes)) return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
+// Creates a new hardware context with the correct CUs
+hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
+    uint32_t &hw_ctx_handle,
+    std::vector<uint32_t> new_cus,
+    uint32_t num_tiles) {
+
+  size_t config_cu_param_size(sizeof(amdxdna_hwctx_param_config_cu) +
+                              (new_cus.size() + cached_cu_bos.size())  *
+                                  sizeof(amdxdna_cu_config));
+
+  amdxdna_hwctx_param_config_cu *xdna_config_cu_param =
+      reinterpret_cast<amdxdna_hwctx_param_config_cu *>(
+          malloc(config_cu_param_size));
+
+  if (xdna_config_cu_param == nullptr) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+  MAKE_SCOPE_GUARD([xdna_config_cu_param] { free(xdna_config_cu_param); });
+
+  xdna_config_cu_param->num_cus = cached_cu_bos.size() + new_cus.size();
+
+  for (int i = 0; i < cached_cu_bos.size(); i++) {
+    xdna_config_cu_param->cu_configs[i].cu_bo = cached_cu_bos[i];
+    xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
+
+    // Flush the CU out of the cache
+    auto cu_addr = vmem_handle_mappings.find(cached_cu_bos[i]);
+    if (cu_addr == vmem_handle_mappings.end())
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+    FlushCpuCache(cu_addr->second, 0, 4096 * 1024); // TODO: Get the size
+  }
+
+  for (int i = cached_cu_bos.size(); i < new_cus.size() + cached_cu_bos.size(); i++) {
+    xdna_config_cu_param->cu_configs[i].cu_bo = new_cus[i - cached_cu_bos.size()];
+    xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
+
+    // Flush the CU out of the cache
+    auto cu_addr = vmem_handle_mappings.find(new_cus[i - cached_cu_bos.size()]);
+    if (cu_addr == vmem_handle_mappings.end())
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+
+    FlushCpuCache(cu_addr->second, 0, 4096 * 1024); // TODO: Get the size
+  }
+
+  // Destroy the hardware context
+  // Note: we can do this because we have forced synchronization between
+  // command chains. If we move to a more asynchronous model, we will need to
+  // figure out how hardware context destruction works while applications
+  // are running
+  amdxdna_drm_destroy_hwctx destroy_hwctx_args{.handle = hw_ctx_handle};
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
+    return HSA_STATUS_ERROR;
+  }
+  // Create the new hardware context
+  // Currently we do not leverage QoS information.
+  amdxdna_qos_info qos_info{0};
+  amdxdna_drm_create_hwctx create_hwctx_args = {};
+  create_hwctx_args.qos_p = reinterpret_cast<uintptr_t>(&qos_info);
+  create_hwctx_args.max_opc = 0x800;
+  create_hwctx_args.num_tiles = num_tiles;
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_HWCTX, &create_hwctx_args) < 0) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
+
+  hw_ctx_handle = create_hwctx_args.handle;
+
+  // Configure the new hardware context
+  amdxdna_drm_config_hwctx config_hw_ctx_args{
+      .handle = hw_ctx_handle,
+      .param_type = DRM_AMDXDNA_HWCTX_CONFIG_CU,
+      .param_val = reinterpret_cast<uint64_t>(xdna_config_cu_param),
+      .param_val_size = static_cast<uint32_t>(config_cu_param_size)};
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CONFIG_HWCTX, &config_hw_ctx_args) < 0) {
+    return HSA_STATUS_ERROR;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
