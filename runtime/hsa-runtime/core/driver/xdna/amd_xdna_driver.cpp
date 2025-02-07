@@ -726,8 +726,8 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
     auto cu_addr = vmem_handle_mappings.find(cached_cu_bos[i]);
     if (cu_addr == vmem_handle_mappings.end())
       return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-
-    FlushCpuCache(cu_addr->second, 0, 4096 * 1024); // TODO: Get the size
+    size_t size = core::Runtime::runtime_singleton_->GetSize(cu_addr->second);
+    FlushCpuCache(cu_addr->second, 0, size);
   }
 
   for (int i = cached_cu_bos.size(); i < new_cus.size() + cached_cu_bos.size(); i++) {
@@ -738,8 +738,9 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
     auto cu_addr = vmem_handle_mappings.find(new_cus[i - cached_cu_bos.size()]);
     if (cu_addr == vmem_handle_mappings.end())
       return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    size_t size = core::Runtime::runtime_singleton_->GetSize(cu_addr->second);
 
-    FlushCpuCache(cu_addr->second, 0, 4096 * 1024); // TODO: Get the size
+    FlushCpuCache(cu_addr->second, 0, size);
   }
 
   // Destroy the hardware context

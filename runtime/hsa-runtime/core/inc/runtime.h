@@ -494,6 +494,10 @@ class Runtime {
   }
 
   std::vector<std::unique_ptr<Driver>>& AgentDrivers() { return agent_drivers_; }
+  
+  /// @brief Get the size of an allocation assocaited with the provided address
+  /// If no allocation is found, zero is returned
+  size_t Runtime::GetSize(void *address);
 
  protected:
   static void AsyncEventsLoop(void*);
