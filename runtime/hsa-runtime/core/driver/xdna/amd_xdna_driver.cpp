@@ -65,7 +65,7 @@ static_assert((sizeof(core::ShareableHandle::handle) >= sizeof(uint32_t)) &&
               "ShareableHandle cannot store a XDNA handle");
 
 XdnaDriver::XdnaDriver(std::string devnode_name)
-    : core::Driver(core::DriverType::XDNA, devnode_name) {}
+    : core::Driver(core::DriverType::XDNA, std::move(devnode_name)) {}
 
 hsa_status_t XdnaDriver::DiscoverDriver(std::unique_ptr<core::Driver>& driver) {
   const int max_minor_num(64);
@@ -449,7 +449,7 @@ hsa_status_t XdnaDriver::SyncBos(const std::vector<uint64_t>& bo_addrs,
 
 hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle) {
   // Submit the cmd
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd)) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd) < 0) return HSA_STATUS_ERROR;
 
   // Waiting for command to finish
   amdxdna_drm_wait_cmd wait_cmd = {};
@@ -457,7 +457,7 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t
   wait_cmd.timeout = DEFAULT_TIMEOUT_VAL;
   wait_cmd.seq = exec_cmd->seq;
 
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd)) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
 }
@@ -512,7 +512,7 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
 
   // Transform the instruction sequence address into device address
   cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX] =
-      DEV_ADDR_BASE | instr_addr & DEV_ADDR_OFFSET_MASK;
+      DEV_ADDR_BASE | (instr_addr & DEV_ADDR_OFFSET_MASK);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -521,7 +521,7 @@ hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd*
   // Creating the command
   amdxdna_drm_create_bo create_cmd_bo = {};
   create_cmd_bo.type = AMDXDNA_BO_CMD, create_cmd_bo.size = size;
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_bo)) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_bo) < 0) return HSA_STATUS_ERROR;
 
   amdxdna_drm_get_bo_info cmd_bo_get_bo_info = {};
   cmd_bo_get_bo_info.handle = create_cmd_bo.handle;
