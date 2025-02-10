@@ -204,8 +204,7 @@ public:
   /// @param cmd_pkt_payload A pointer to the payload of the command
   hsa_status_t RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_args,
                               std::vector<uint32_t>& bo_sizes, std::vector<uint64_t>& bo_addrs,
-                              hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload,
-                              const std::unordered_map<void*, uint32_t>& vmem_addr_mappings);
+                              hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload);
 
   /// @brief Syncs all BOs referenced in bo_args
   ///
