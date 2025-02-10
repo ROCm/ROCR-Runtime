@@ -108,7 +108,6 @@ hsa_status_t XdnaDriver::QueryKernelModeDriver(core::DriverQuery query) {
   default:
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
-  return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::Open() {
@@ -155,13 +154,13 @@ hsa_status_t XdnaDriver::GetAgentProperties(core::Agent &agent) const {
     return HSA_STATUS_ERROR_INVALID_AGENT;
   }
 
-  auto &aie_agent(static_cast<AieAgent &>(agent));
+  auto& aie_agent = static_cast<AieAgent&>(agent);
 
-  amdxdna_drm_query_aie_metadata aie_metadata{0};
-  amdxdna_drm_get_info get_info_args{
-      .param = DRM_AMDXDNA_QUERY_AIE_METADATA,
-      .buffer_size = sizeof(aie_metadata),
-      .buffer = reinterpret_cast<uintptr_t>(&aie_metadata)};
+  amdxdna_drm_query_aie_metadata aie_metadata = {};
+  amdxdna_drm_get_info get_info_args = {};
+  get_info_args.param = DRM_AMDXDNA_QUERY_AIE_METADATA;
+  get_info_args.buffer_size = sizeof(aie_metadata);
+  get_info_args.buffer = reinterpret_cast<uintptr_t>(&aie_metadata);
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_INFO, &get_info_args) < 0) {
     return HSA_STATUS_ERROR;
@@ -185,19 +184,14 @@ hsa_status_t
 XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
                            core::MemoryRegion::AllocateFlags alloc_flags,
                            void **mem, size_t size, uint32_t node_id) {
-  const MemoryRegion &m_region(static_cast<const MemoryRegion &>(mem_region));
-
-  amdxdna_drm_create_bo create_bo_args{0};
-  create_bo_args.size = size;
-
-  amdxdna_drm_get_bo_info get_bo_info_args{0};
-  drm_gem_close close_bo_args{0};
-  void *mapped_mem(nullptr);
+  const MemoryRegion& m_region = static_cast<const MemoryRegion&>(mem_region);
 
   if (!m_region.IsSystem()) {
     return HSA_STATUS_ERROR_INVALID_REGION;
   }
 
+  amdxdna_drm_create_bo create_bo_args = {};
+  create_bo_args.size = size;
   const bool use_bo_shmem = !m_region.IsDeviceSVM();
   if (use_bo_shmem) {
     create_bo_args.type = AMDXDNA_BO_SHMEM;
@@ -209,13 +203,13 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  amdxdna_drm_get_bo_info get_bo_info_args = {};
   get_bo_info_args.handle = create_bo_args.handle;
-  // In case we need to close this BO to avoid leaks due to some error after
-  // creation.
-  close_bo_args.handle = create_bo_args.handle;
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info_args) < 0) {
     // Close the BO in the case we can't get info about it.
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_bo_args.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
     return HSA_STATUS_ERROR;
   }
@@ -223,11 +217,14 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   /// TODO: For now we always map the memory and keep a mapping from handles
   /// to VA memory addresses. Once we can support the separate VMEM call to
   /// map handles we can fix this.
+  void* mapped_mem = nullptr;
   if (use_bo_shmem) {
     mapped_mem = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd_,
                       get_bo_info_args.map_offset);
     if (mapped_mem == MAP_FAILED) {
       // Close the BO in the case when a mapping fails and we got a BO handle.
+      drm_gem_close close_bo_args = {};
+      close_bo_args.handle = create_bo_args.handle;
       ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
@@ -274,12 +271,11 @@ hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
   auto &aie_agent(aie_queue.GetAgent());
 
   // Currently we do not leverage QoS information.
-  amdxdna_qos_info qos_info{0};
+  amdxdna_qos_info qos_info = {};
   amdxdna_drm_create_hwctx create_hwctx_args = {};
   create_hwctx_args.qos_p = reinterpret_cast<uintptr_t>(&qos_info);
   create_hwctx_args.max_opc = 0x800;
-  create_hwctx_args.num_tiles = static_cast<uint32_t>(aie_agent.GetNumCores());
-
+  create_hwctx_args.num_tiles = aie_agent.GetNumCores();
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_HWCTX, &create_hwctx_args) < 0) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
@@ -295,9 +291,8 @@ hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
   }
 
   auto &aie_queue(static_cast<AieAqlQueue &>(queue));
-  amdxdna_drm_destroy_hwctx destroy_hwctx_args{.handle =
-                                                   aie_queue.GetHwCtxHandle()};
-
+  amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
+  destroy_hwctx_args.handle = aie_queue.GetHwCtxHandle();
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
     return HSA_STATUS_ERROR;
   }
@@ -380,21 +375,16 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
   amdxdna_drm_create_bo create_bo_args = {};
   create_bo_args.size = dev_heap_size;
   create_bo_args.type = AMDXDNA_BO_DEV_HEAP;
-
-  amdxdna_drm_get_bo_info get_bo_info_args{0};
-  drm_gem_close close_bo_args{0};
-
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_bo_args) < 0) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  amdxdna_drm_get_bo_info get_bo_info_args = {};
   get_bo_info_args.handle = create_bo_args.handle;
-  // In case we need to close this BO to avoid leaks due to some error after
-  // creation.
-  close_bo_args.handle = create_bo_args.handle;
-
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info_args) < 0) {
     // Close the BO in the case we can't get info about it.
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_bo_args.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
     return HSA_STATUS_ERROR;
   }
@@ -404,6 +394,8 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
 
   if (dev_heap_parent == MAP_FAILED) {
     // Close the BO in the case when a mapping fails and we got a BO handle.
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_bo_args.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
     dev_heap_parent = nullptr;
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -418,6 +410,8 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
 
   if (dev_heap_aligned == MAP_FAILED) {
     // Close the BO in the case when a mapping fails and we got a BO handle.
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_bo_args.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
     // Unmap the dev_heap_parent.
     dev_heap_aligned = nullptr;
@@ -446,7 +440,7 @@ hsa_status_t XdnaDriver::SyncBos(const std::vector<uint64_t>& bo_addrs,
                                  const std::vector<uint32_t>& bo_sizes) {
   if (bo_addrs.size() != bo_sizes.size()) return HSA_STATUS_ERROR;
 
-  for (int i = 0; i < bo_addrs.size(); i++) {
+  for (size_t i = 0; i < bo_addrs.size(); i++) {
     FlushCpuCache(reinterpret_cast<void*>(bo_addrs[i]), 0, bo_sizes[i]);
   }
 
@@ -712,7 +706,7 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
 
   xdna_config_cu_param->num_cus = cached_cu_bos.size() + new_cus.size();
 
-  for (int i = 0; i < cached_cu_bos.size(); i++) {
+  for (size_t i = 0; i < cached_cu_bos.size(); i++) {
     xdna_config_cu_param->cu_configs[i].cu_bo = cached_cu_bos[i];
     xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
 
@@ -724,7 +718,7 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
     FlushCpuCache(cu_addr->second, 0, size);
   }
 
-  for (int i = cached_cu_bos.size(); i < new_cus.size() + cached_cu_bos.size(); i++) {
+  for (size_t i = cached_cu_bos.size(); i < new_cus.size() + cached_cu_bos.size(); i++) {
     xdna_config_cu_param->cu_configs[i].cu_bo = new_cus[i - cached_cu_bos.size()];
     xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
 
@@ -742,13 +736,15 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
   // command chains. If we move to a more asynchronous model, we will need to
   // figure out how hardware context destruction works while applications
   // are running
-  amdxdna_drm_destroy_hwctx destroy_hwctx_args{.handle = hw_ctx_handle};
+  amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
+  destroy_hwctx_args.handle = hw_ctx_handle;
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
     return HSA_STATUS_ERROR;
   }
+
   // Create the new hardware context
   // Currently we do not leverage QoS information.
-  amdxdna_qos_info qos_info{0};
+  amdxdna_qos_info qos_info = {};
   amdxdna_drm_create_hwctx create_hwctx_args = {};
   create_hwctx_args.qos_p = reinterpret_cast<uintptr_t>(&qos_info);
   create_hwctx_args.max_opc = 0x800;
@@ -761,11 +757,11 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
   hw_ctx_handle = create_hwctx_args.handle;
 
   // Configure the new hardware context
-  amdxdna_drm_config_hwctx config_hw_ctx_args{
-      .handle = hw_ctx_handle,
-      .param_type = DRM_AMDXDNA_HWCTX_CONFIG_CU,
-      .param_val = reinterpret_cast<uint64_t>(xdna_config_cu_param),
-      .param_val_size = static_cast<uint32_t>(config_cu_param_size)};
+  amdxdna_drm_config_hwctx config_hw_ctx_args = {};
+  config_hw_ctx_args.handle = hw_ctx_handle;
+  config_hw_ctx_args.param_type = DRM_AMDXDNA_HWCTX_CONFIG_CU;
+  config_hw_ctx_args.param_val = reinterpret_cast<uint64_t>(xdna_config_cu_param);
+  config_hw_ctx_args.param_val_size = static_cast<uint32_t>(config_cu_param_size);
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CONFIG_HWCTX, &config_hw_ctx_args) < 0) {
     return HSA_STATUS_ERROR;

@@ -176,12 +176,10 @@ public:
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
                               uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles);
 
-private:
+ private:
   // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(
-      uint32_t &hw_ctx_handle,
-      std::vector<uint32_t> new_cus,
-      uint32_t num_tiles);
+  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, std::vector<uint32_t> new_cus,
+                                 uint32_t num_tiles);
 
   hsa_status_t QueryDriverVersion();
   /// @brief Allocate device accesible heap space.

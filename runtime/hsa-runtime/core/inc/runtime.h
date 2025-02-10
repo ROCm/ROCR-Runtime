@@ -497,7 +497,7 @@ class Runtime {
 
   /// @brief Get the size of an allocation associated with the provided address
   /// If no allocation is found, zero is returned
-  size_t GetSize(void *address);
+  size_t GetSize(void* address);
 
  protected:
   static void AsyncEventsLoop(void*);
