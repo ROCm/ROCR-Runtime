@@ -239,7 +239,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
   }
 
   vmem_handle_mappings.emplace(create_bo_args.handle, mapped_mem);
-  vmem_addr_mappings.emplace(mapped_mem, create_bo_args.handle);
+  vmem_addr_mappings.emplace(mapped_mem, BOHandleInfo{create_bo_args.handle, size});
 
   return HSA_STATUS_SUCCESS;
 }
@@ -248,7 +248,7 @@ hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
   auto it = vmem_addr_mappings.find(mem);
   if (it == vmem_addr_mappings.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
-  auto handle = it->second;
+  auto handle = it->second.handle;
 
   drm_gem_close close_args = {};
   close_args.handle = handle;
@@ -472,14 +472,14 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
   // Counting the number of operands in the command payload.
   uint32_t num_operands = GetOperandCount(count);
 
-  uint64_t instr_addr = Concat<uint64_t, uint32_t>(
-      cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
-      cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
-  auto instr_handle = FindBOHandle(reinterpret_cast<void*>(instr_addr));
-  if (instr_handle == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR;
+  uint64_t instr_addr =
+      Concat<uint64_t>(cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
+                       cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
+  auto instr_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(instr_addr));
+  if (!instr_handle_info.IsValid()) return HSA_STATUS_ERROR;
 
   // Keep track of the handles and addresses before we submit the packet
-  bo_args.push_back(instr_handle);
+  bo_args.push_back(instr_handle_info.handle);
   bo_addrs.push_back(instr_addr);
 
   // Adding the instruction sequence size. The packet contains the number of
@@ -496,9 +496,9 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
     uint32_t operand_index = operand_starting_index + 2 * operand_iter;
     uint64_t operand_addr = Concat<uint64_t, uint32_t>(cmd_pkt_payload->data[operand_index + 1],
                                                        cmd_pkt_payload->data[operand_index]);
-    auto operand_handle = FindBOHandle(reinterpret_cast<void*>(operand_addr));
-    if (operand_handle == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR;
-    bo_args.push_back(operand_handle);
+    auto operand_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(operand_addr));
+    if (!operand_handle_info.IsValid()) return HSA_STATUS_ERROR;
+    bo_args.push_back(operand_handle_info.handle);
     bo_addrs.push_back(operand_addr);
   }
 
@@ -589,8 +589,9 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd->opcode = pkt->opcode;
 
     // Finding BO handle associated with the CU
-    uint32_t cu_bo = FindBOHandle(cmd_pkt_payload->pdi_addr);
-    if (cu_bo == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    auto cu_bo_info = FindBOHandleInfo(cmd_pkt_payload->pdi_addr);
+    if (!cu_bo_info.IsValid()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    uint32_t cu_bo = cu_bo_info.handle;
 
     // Determining if the CU is cached
     auto cu_mask_iter = handle_cu_mappings.find(cu_bo);
@@ -686,11 +687,11 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   return HSA_STATUS_SUCCESS;
 }
 
-uint32_t XdnaDriver::FindBOHandle(void* mem) {
+XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
   auto it = vmem_addr_mappings.lower_bound(mem);
   if (it == vmem_addr_mappings.cend()) {
     // Exact address not found or is larger than the largest address.
-    return AMDXDNA_INVALID_BO_HANDLE;
+    return BOHandleInfo{};
   }
 
   if (it->first == mem) {
@@ -700,12 +701,18 @@ uint32_t XdnaDriver::FindBOHandle(void* mem) {
 
   if (it == vmem_addr_mappings.cbegin()) {
     // Address is smaller than the smallest registered address.
-    return AMDXDNA_INVALID_BO_HANDLE;
+    return BOHandleInfo{};
   }
 
   // Go back one element, since lower_bound returns an iterator to the element that is equal or
   // greater.
   --it;
+
+  assert(it->first < mem);
+  if (mem >= (static_cast<char*>(it->first) + it->second.size)) {
+    // Address is not from this allocation.
+    return BOHandleInfo{};
+  }
 
   return it->second;
 }

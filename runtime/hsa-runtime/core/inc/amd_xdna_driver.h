@@ -131,6 +131,16 @@ inline uint32_t GetOperandCount(uint32_t arg_count) {
 }
 
 class XdnaDriver final : public core::Driver {
+  /// @brief BO handle information.
+  struct BOHandleInfo {
+    uint32_t handle = AMDXDNA_INVALID_BO_HANDLE;
+    size_t size = {};
+
+    constexpr BOHandleInfo() = default;
+    constexpr BOHandleInfo(uint32_t handle, size_t size) : handle{handle}, size{size} {}
+    constexpr bool IsValid() const { return handle != AMDXDNA_INVALID_BO_HANDLE; }
+  };
+
 public:
   XdnaDriver(std::string devnode_name);
 
@@ -179,13 +189,16 @@ public:
 
  private:
   /// @brief Finds the BO associated with the address.
-  uint32_t FindBOHandle(void* mem);
+  BOHandleInfo FindBOHandleInfo(void* mem) const;
 
   // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, std::vector<uint32_t> new_cus,
-                                 uint32_t num_tiles);
+  hsa_status_t ConfigHwCtxNewCUs(
+      uint32_t &hw_ctx_handle,
+      std::vector<uint32_t> new_cus,
+      uint32_t num_tiles);
 
   hsa_status_t QueryDriverVersion();
+
   /// @brief Allocate device accesible heap space.
   ///
   /// Allocate and map a buffer object (BO) that the AIE device can access.
@@ -227,7 +240,7 @@ public:
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
   std::unordered_map<uint32_t, void*> vmem_handle_mappings;
-  std::map<void*, uint32_t> vmem_addr_mappings;
+  std::map<void*, BOHandleInfo> vmem_addr_mappings;
 
   /// @brief Storing cached CUs that have already been added to the hardware context.
   /// This maps the CU BO to the cu_mask in the hardware context
