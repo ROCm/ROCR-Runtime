@@ -720,10 +720,8 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
                               (new_cus.size() + cached_cu_bos.size())  *
                                   sizeof(amdxdna_cu_config));
 
-  amdxdna_hwctx_param_config_cu *xdna_config_cu_param =
-      reinterpret_cast<amdxdna_hwctx_param_config_cu *>(
-          malloc(config_cu_param_size));
-
+  amdxdna_hwctx_param_config_cu* xdna_config_cu_param =
+      static_cast<amdxdna_hwctx_param_config_cu*>(malloc(config_cu_param_size));
   if (xdna_config_cu_param == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
