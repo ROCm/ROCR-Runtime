@@ -475,12 +475,11 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
   uint64_t instr_addr = Concat<uint64_t, uint32_t>(
       cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
       cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
-  auto instr_handle = vmem_addr_mappings.find(reinterpret_cast<void*>(instr_addr));
-
-  if (instr_handle == vmem_addr_mappings.end()) return HSA_STATUS_ERROR;
+  auto instr_handle = FindBOHandle(reinterpret_cast<void*>(instr_addr));
+  if (instr_handle == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR;
 
   // Keep track of the handles and addresses before we submit the packet
-  bo_args.push_back(instr_handle->second);
+  bo_args.push_back(instr_handle);
   bo_addrs.push_back(instr_addr);
 
   // Adding the instruction sequence size. The packet contains the number of
@@ -497,9 +496,9 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
     uint32_t operand_index = operand_starting_index + 2 * operand_iter;
     uint64_t operand_addr = Concat<uint64_t, uint32_t>(cmd_pkt_payload->data[operand_index + 1],
                                                        cmd_pkt_payload->data[operand_index]);
-    auto operand_handle = vmem_addr_mappings.find(reinterpret_cast<void*>(operand_addr));
-    if (operand_handle == vmem_addr_mappings.end()) return HSA_STATUS_ERROR;
-    bo_args.push_back(operand_handle->second);
+    auto operand_handle = FindBOHandle(reinterpret_cast<void*>(operand_addr));
+    if (operand_handle == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR;
+    bo_args.push_back(operand_handle);
     bo_addrs.push_back(operand_addr);
   }
 
@@ -590,13 +589,11 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd->opcode = pkt->opcode;
 
     // Finding BO handle associated with the CU
-    auto cu_bo_iter = vmem_addr_mappings.find(cmd_pkt_payload->pdi_addr);
-    if (cu_bo_iter == vmem_addr_mappings.end())
-      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-    uint32_t cu_bo = cu_bo_iter->second;
+    uint32_t cu_bo = FindBOHandle(cmd_pkt_payload->pdi_addr);
+    if (cu_bo == AMDXDNA_INVALID_BO_HANDLE) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
     // Determining if the CU is cached
-    auto cu_mask_iter = handle_cu_mappings.find(cu_bo_iter->second);
+    auto cu_mask_iter = handle_cu_mappings.find(cu_bo);
     uint32_t cu_mask = 0;
     if (cu_mask_iter == handle_cu_mappings.end()) {
       // CU mask is one hot encoded, putting the
@@ -687,6 +684,30 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   if (status != HSA_STATUS_SUCCESS) return status;
 
   return HSA_STATUS_SUCCESS;
+}
+
+uint32_t XdnaDriver::FindBOHandle(void* mem) {
+  auto it = vmem_addr_mappings.lower_bound(mem);
+  if (it == vmem_addr_mappings.cend()) {
+    // Exact address not found or is larger than the largest address.
+    return AMDXDNA_INVALID_BO_HANDLE;
+  }
+
+  if (it->first == mem) {
+    // Exact address found.
+    return it->second;
+  }
+
+  if (it == vmem_addr_mappings.cbegin()) {
+    // Address is smaller than the smallest registered address.
+    return AMDXDNA_INVALID_BO_HANDLE;
+  }
+
+  // Go back one element, since lower_bound returns an iterator to the element that is equal or
+  // greater.
+  --it;
+
+  return it->second;
 }
 
 // Creates a new hardware context with the correct CUs

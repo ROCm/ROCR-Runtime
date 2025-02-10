@@ -42,6 +42,7 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 #define HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 
+#include <map>
 #include <memory>
 #include <unordered_map>
 
@@ -177,6 +178,9 @@ public:
                               uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles);
 
  private:
+  /// @brief Finds the BO associated with the address.
+  uint32_t FindBOHandle(void* mem);
+
   // @brief Creates a new hardware context with the correct CUs
   hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, std::vector<uint32_t> new_cus,
                                  uint32_t num_tiles);
@@ -222,8 +226,8 @@ public:
   /// object to track handle allocations. Using the VMEM API for mapping XDNA
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
-  std::unordered_map<uint32_t, void *> vmem_handle_mappings;
-  std::unordered_map<void*, uint32_t> vmem_addr_mappings;
+  std::unordered_map<uint32_t, void*> vmem_handle_mappings;
+  std::map<void*, uint32_t> vmem_addr_mappings;
 
   /// @brief Storing cached CUs that have already been added to the hardware context.
   /// This maps the CU BO to the cu_mask in the hardware context
