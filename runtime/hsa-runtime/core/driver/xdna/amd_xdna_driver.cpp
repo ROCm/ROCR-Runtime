@@ -428,12 +428,6 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
   return HSA_STATUS_SUCCESS;
 }
 
-std::unordered_map<uint32_t, void*>& XdnaDriver::GetHandleMappings() {
-  return vmem_handle_mappings;
-}
-
-std::unordered_map<void*, uint32_t>& XdnaDriver::GetAddrMappings() { return vmem_addr_mappings; }
-
 hsa_status_t XdnaDriver::FreeDeviceHeap() {
   if (dev_heap_parent) {
     if (munmap(dev_heap_parent, dev_heap_align * 2 - 1) != 0) return HSA_STATUS_ERROR;

@@ -132,7 +132,6 @@ inline uint32_t GetOperandCount(uint32_t arg_count) {
 class XdnaDriver final : public core::Driver {
 public:
   XdnaDriver(std::string devnode_name);
-  ~XdnaDriver() = default;
 
   static hsa_status_t DiscoverDriver(std::unique_ptr<core::Driver>& driver);
 
@@ -145,9 +144,6 @@ public:
   hsa_status_t Init() override;
   hsa_status_t ShutDown() override;
   hsa_status_t QueryKernelModeDriver(core::DriverQuery query) override;
-
-  std::unordered_map<uint32_t, void*>& GetHandleMappings();
-  std::unordered_map<void*, uint32_t>& GetAddrMappings();
 
   hsa_status_t Open() override;
   hsa_status_t Close() override;
@@ -180,13 +176,13 @@ public:
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
                               uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles);
 
+private:
   // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
+  hsa_status_t ConfigHwCtxNewCUs(
       uint32_t &hw_ctx_handle,
       std::vector<uint32_t> new_cus,
       uint32_t num_tiles);
 
-private:
   hsa_status_t QueryDriverVersion();
   /// @brief Allocate device accesible heap space.
   ///
