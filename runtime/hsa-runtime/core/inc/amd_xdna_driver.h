@@ -187,7 +187,7 @@ public:
 
   // @brief Submits num_pkts packets in a command chain to the XDNA driver
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                              uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles);
+                              uint32_t& hw_ctx_handle, uint32_t num_tiles);
 
  private:
   /// @brief Finds the BO associated with the address.

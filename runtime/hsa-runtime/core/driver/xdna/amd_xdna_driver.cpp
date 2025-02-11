@@ -534,7 +534,7 @@ hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd*
 }
 
 hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                                        uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles) {
+                                        uint32_t& hw_ctx_handle, uint32_t num_tiles) {
   // Stores instruction and operand BOs.
   std::vector<uint32_t> bo_handles;
 

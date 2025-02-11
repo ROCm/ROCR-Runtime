@@ -218,20 +218,18 @@ hsa_status_t AieAqlQueue::SubmitCmd(XdnaDriver& driver, void* queue_base, uint64
         // Iterating over future packets and seeing how many contiguous HSA_AMD_AIE_ERT_START_CU
         // packets there are. All can be combined into a single chain.
         int num_cont_start_cu_pkts = 1;
-        int num_operands = 0;
         for (int peak_pkt_id = cur_id + 1; peak_pkt_id < write_dispatch_id; peak_pkt_id++) {
           hsa_amd_aie_ert_packet_t* peak_pkt =
               static_cast<hsa_amd_aie_ert_packet_t*>(queue_base) + peak_pkt_id;
           if (peak_pkt->opcode != HSA_AMD_AIE_ERT_START_CU) {
             break;
           }
-          num_operands += GetOperandCount(peak_pkt->count);
           num_cont_start_cu_pkts++;
         }
 
         // Call into the driver to submit from cur_id to write_dispatch_id
-        if (driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, num_operands, hw_ctx_handle_, GetAgent().GetNumCores()) !=
-            HSA_STATUS_SUCCESS)
+        if (driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, hw_ctx_handle_,
+                                  GetAgent().GetNumCores()) != HSA_STATUS_SUCCESS)
           return HSA_STATUS_ERROR;
 
         // Submitting the command chain might involve create a new hardware context, if so
