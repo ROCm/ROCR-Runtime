@@ -133,11 +133,13 @@ inline uint32_t GetOperandCount(uint32_t arg_count) {
 class XdnaDriver final : public core::Driver {
   /// @brief BO handle information.
   struct BOHandleInfo {
+    void* vaddr = nullptr;
     uint32_t handle = AMDXDNA_INVALID_BO_HANDLE;
-    size_t size = {};
+    size_t size = 0;
 
     constexpr BOHandleInfo() = default;
-    constexpr BOHandleInfo(uint32_t handle, size_t size) : handle{handle}, size{size} {}
+    constexpr BOHandleInfo(void* vaddr, uint32_t handle, size_t size)
+        : vaddr{vaddr}, handle{handle}, size{size} {}
     constexpr bool IsValid() const { return handle != AMDXDNA_INVALID_BO_HANDLE; }
   };
 
@@ -192,10 +194,8 @@ public:
   BOHandleInfo FindBOHandleInfo(void* mem) const;
 
   // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(
-      uint32_t &hw_ctx_handle,
-      std::vector<uint32_t> new_cus,
-      uint32_t num_tiles);
+  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, const std::vector<BOHandleInfo>& new_cus,
+                                 uint32_t num_tiles);
 
   hsa_status_t QueryDriverVersion();
 
@@ -239,13 +239,11 @@ public:
   /// object to track handle allocations. Using the VMEM API for mapping XDNA
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
-  std::unordered_map<uint32_t, void*> vmem_handle_mappings;
   std::map<void*, BOHandleInfo> vmem_addr_mappings;
 
   /// @brief Storing cached CUs that have already been added to the hardware context.
   /// This maps the CU BO to the cu_mask in the hardware context
   std::unordered_map<uint32_t, uint32_t> handle_cu_mappings;
-  std::vector<uint32_t> cached_cu_bos;
 
   /// @brief Virtual address range allocated for the device heap.
   ///

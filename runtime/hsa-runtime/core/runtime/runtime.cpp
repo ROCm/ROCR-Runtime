@@ -312,12 +312,6 @@ hsa_status_t Runtime::IterateAgent(hsa_status_t (*callback)(hsa_agent_t agent,
   return HSA_STATUS_SUCCESS;
 }
 
-/// @brief Get the size of an allocation associated with the provided address
-/// if no allocation is found, 0 is returned
-size_t Runtime::GetSize(void *address) {
-  return allocation_map_[address].size;
-}
-
 hsa_status_t Runtime::AllocateMemory(const MemoryRegion* region, size_t size,
                                      MemoryRegion::AllocateFlags alloc_flags,
                                      void** address, int agent_node_id) {

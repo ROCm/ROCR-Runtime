@@ -495,10 +495,6 @@ class Runtime {
 
   std::vector<std::unique_ptr<Driver>>& AgentDrivers() { return agent_drivers_; }
 
-  /// @brief Get the size of an allocation associated with the provided address
-  /// If no allocation is found, zero is returned
-  size_t GetSize(void* address);
-
  protected:
   static void AsyncEventsLoop(void*);
   static void AsyncIPCSockServerConnLoop(void*);

@@ -238,8 +238,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
     *mem = mapped_mem;
   }
 
-  vmem_handle_mappings.emplace(create_bo_args.handle, mapped_mem);
-  vmem_addr_mappings.emplace(mapped_mem, BOHandleInfo{create_bo_args.handle, size});
+  vmem_addr_mappings.emplace(mapped_mem, BOHandleInfo{mapped_mem, create_bo_args.handle, size});
 
   return HSA_STATUS_SUCCESS;
 }
@@ -256,7 +255,6 @@ hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
     return HSA_STATUS_ERROR;
   }
 
-  vmem_handle_mappings.erase(handle);
   vmem_addr_mappings.erase(it);
 
   return HSA_STATUS_SUCCESS;
@@ -524,7 +522,7 @@ hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd*
 
   amdxdna_drm_get_bo_info cmd_bo_get_bo_info = {};
   cmd_bo_get_bo_info.handle = create_cmd_bo.handle;
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &cmd_bo_get_bo_info)) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &cmd_bo_get_bo_info) < 0) return HSA_STATUS_ERROR;
 
   *cmd = static_cast<amdxdna_cmd*>(mmap(nullptr, create_cmd_bo.size, PROT_READ | PROT_WRITE,
                                         MAP_SHARED, fd_, cmd_bo_get_bo_info.map_offset));
@@ -557,7 +555,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   cmds.reserve(num_pkts);
 
   // The new CUs that we need to register
-  std::vector<uint32_t> new_cus;
+  std::vector<BOHandleInfo> new_cus;
   new_cus.reserve(num_pkts);
 
   // Iterating over all the contiguous HSA_AMD_AIE_ERT_CMD_CHAIN packets
@@ -601,7 +599,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
       // position where the new CU will be
       cu_mask = 1 << handle_cu_mappings.size();
       handle_cu_mappings[cu_bo] = cu_mask;
-      new_cus.push_back(cu_bo);
+      new_cus.push_back(cu_bo_info);
     }
     else {
       cu_mask = cu_mask_iter->second;
@@ -718,47 +716,27 @@ XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
 }
 
 // Creates a new hardware context with the correct CUs
-hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(
-    uint32_t &hw_ctx_handle,
-    std::vector<uint32_t> new_cus,
-    uint32_t num_tiles) {
+hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
+                                           const std::vector<XdnaDriver::BOHandleInfo>& new_cus,
+                                           uint32_t num_tiles) {
+  const size_t config_cu_param_size =
+      sizeof(amdxdna_hwctx_param_config_cu) + new_cus.size() * sizeof(amdxdna_cu_config);
 
-  size_t config_cu_param_size(sizeof(amdxdna_hwctx_param_config_cu) +
-                              (new_cus.size() + cached_cu_bos.size())  *
-                                  sizeof(amdxdna_cu_config));
-
-  amdxdna_hwctx_param_config_cu* xdna_config_cu_param =
+  auto* xdna_config_cu_param =
       static_cast<amdxdna_hwctx_param_config_cu*>(malloc(config_cu_param_size));
   if (xdna_config_cu_param == nullptr) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
   MAKE_SCOPE_GUARD([xdna_config_cu_param] { free(xdna_config_cu_param); });
 
-  xdna_config_cu_param->num_cus = cached_cu_bos.size() + new_cus.size();
+  xdna_config_cu_param->num_cus = new_cus.size();
 
-  for (size_t i = 0; i < cached_cu_bos.size(); i++) {
-    xdna_config_cu_param->cu_configs[i].cu_bo = cached_cu_bos[i];
+  for (size_t i = 0; i < new_cus.size(); i++) {
+    xdna_config_cu_param->cu_configs[i].cu_bo = new_cus[i].handle;
     xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
 
     // Flush the CU out of the cache
-    auto cu_addr = vmem_handle_mappings.find(cached_cu_bos[i]);
-    if (cu_addr == vmem_handle_mappings.end())
-      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-    size_t size = core::Runtime::runtime_singleton_->GetSize(cu_addr->second);
-    FlushCpuCache(cu_addr->second, 0, size);
-  }
-
-  for (size_t i = cached_cu_bos.size(); i < new_cus.size() + cached_cu_bos.size(); i++) {
-    xdna_config_cu_param->cu_configs[i].cu_bo = new_cus[i - cached_cu_bos.size()];
-    xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
-
-    // Flush the CU out of the cache
-    auto cu_addr = vmem_handle_mappings.find(new_cus[i - cached_cu_bos.size()]);
-    if (cu_addr == vmem_handle_mappings.end())
-      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-    size_t size = core::Runtime::runtime_singleton_->GetSize(cu_addr->second);
-
-    FlushCpuCache(cu_addr->second, 0, size);
+    FlushCpuCache(new_cus[i].vaddr, 0, new_cus[i].size);
   }
 
   // Destroy the hardware context
