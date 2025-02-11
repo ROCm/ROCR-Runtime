@@ -133,10 +133,9 @@ private:
   void *ring_buf_ = nullptr;
 
   /// @brief Called when the doorbell is rung to iterate over
-  /// all packets and submit them. Submissions is done by
-  // calling into the XdnaDriver.
-  hsa_status_t SubmitCmd(XdnaDriver& driver, void* queue_base, uint64_t read_dispatch_id,
-                         uint64_t write_dispatch_id);
+  /// all packets and submit them. Submission is done by
+  /// calling into the XdnaDriver.
+  hsa_status_t SubmitCmd(void* queue_base, uint64_t read_dispatch_id, uint64_t write_dispatch_id);
 
   /// @brief Handle for an application context on the AIE device.
   ///
