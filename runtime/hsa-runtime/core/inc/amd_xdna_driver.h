@@ -217,16 +217,10 @@ public:
   ///         and replaces the handles with a virtual address
   ///
   /// @param count Number of entries in the command
-  /// @param bo_args A pointer to a vector that contains all bo handles
+  /// @param bo_handles vector that contains all bo handles
   /// @param cmd_pkt_payload A pointer to the payload of the command
-  hsa_status_t RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_args,
-                              std::vector<uint32_t>& bo_sizes, std::vector<uint64_t>& bo_addrs,
+  hsa_status_t RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_handles,
                               hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload);
-
-  /// @brief Syncs all BOs referenced in bo_args
-  ///
-  /// @param bo_args vector containing handles of BOs to sync
-  hsa_status_t SyncBos(const std::vector<uint64_t>& bo_args, const std::vector<uint32_t>& bo_sizes);
 
   /// @brief Executes a command and waits for its completion
   ///

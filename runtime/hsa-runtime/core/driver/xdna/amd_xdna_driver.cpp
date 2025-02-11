@@ -64,6 +64,24 @@ static_assert((sizeof(core::ShareableHandle::handle) >= sizeof(uint32_t)) &&
                   (alignof(core::ShareableHandle::handle) >= alignof(uint32_t)),
               "ShareableHandle cannot store a XDNA handle");
 
+// Index where the operand addresses start in a command.
+constexpr uint32_t operand_starting_index = 5;
+
+/// @brief Syncs operand BOs
+static void SyncOperandBOs(uint32_t count, hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload) {
+  // Going through all of the operands in the command and flushing them.
+  const uint32_t num_operands = GetOperandCount(count);
+  for (uint32_t operand_iter = 0; operand_iter < num_operands; operand_iter++) {
+    const uint32_t operand_index = operand_starting_index + 2 * operand_iter;
+    const uint64_t operand_addr = Concat<uint64_t>(cmd_pkt_payload->data[operand_index + 1],
+                                                   cmd_pkt_payload->data[operand_index]);
+    const uint32_t operand_size_starting_index = operand_starting_index + 2 * num_operands;
+    const uint32_t operand_bo_size =
+        cmd_pkt_payload->data[operand_size_starting_index + operand_iter];
+    FlushCpuCache(reinterpret_cast<void*>(operand_addr), 0, operand_bo_size);
+  }
+}
+
 XdnaDriver::XdnaDriver(std::string devnode_name)
     : core::Driver(core::DriverType::XDNA, std::move(devnode_name)) {}
 
@@ -434,17 +452,6 @@ hsa_status_t XdnaDriver::FreeDeviceHeap() {
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::SyncBos(const std::vector<uint64_t>& bo_addrs,
-                                 const std::vector<uint32_t>& bo_sizes) {
-  if (bo_addrs.size() != bo_sizes.size()) return HSA_STATUS_ERROR;
-
-  for (size_t i = 0; i < bo_addrs.size(); i++) {
-    FlushCpuCache(reinterpret_cast<void*>(bo_addrs[i]), 0, bo_sizes[i]);
-  }
-
-  return HSA_STATUS_SUCCESS;
-}
-
 hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle) {
   // Submit the cmd
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd) < 0) return HSA_STATUS_ERROR;
@@ -460,51 +467,43 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_args,
-                                        std::vector<uint32_t>& bo_sizes,
-                                        std::vector<uint64_t>& bo_addrs,
+hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_handles,
                                         hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload) {
-  // This is the index where the operand addresses start in a command
-  const int operand_starting_index = 5;
-
-  // Counting the number of operands in the command payload.
-  uint32_t num_operands = GetOperandCount(count);
-
-  uint64_t instr_addr =
+  const uint64_t instr_addr =
       Concat<uint64_t>(cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
                        cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
   auto instr_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(instr_addr));
   if (!instr_handle_info.IsValid()) return HSA_STATUS_ERROR;
 
-  // Keep track of the handles and addresses before we submit the packet
-  bo_args.push_back(instr_handle_info.handle);
-  bo_addrs.push_back(instr_addr);
+  // Keep track of the instruction sequence BO.
+  bo_handles.push_back(instr_handle_info.handle);
 
-  // Adding the instruction sequence size. The packet contains the number of
-  // instructions.
-  uint32_t instr_bo_size =
+  // Flush the instruction sequence. The packet contains the number of instructions.
+  const uint32_t instr_bo_size =
       cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_SIZE_IDX] * INSTR_SIZE_BYTES;
-  bo_sizes.push_back(instr_bo_size);
+  FlushCpuCache(reinterpret_cast<void*>(instr_addr), 0, instr_bo_size);
 
   // Going through all of the operands in the command, keeping track of the
   // addresses and turning the addresses into handles. The starting index of
   // the operands in a command is `operand_starting_index` and the fields
   // are 32-bits we need to iterate over every two
-  for (int operand_iter = 0; operand_iter < num_operands; operand_iter++) {
-    uint32_t operand_index = operand_starting_index + 2 * operand_iter;
-    uint64_t operand_addr = Concat<uint64_t, uint32_t>(cmd_pkt_payload->data[operand_index + 1],
-                                                       cmd_pkt_payload->data[operand_index]);
+  const uint32_t num_operands = GetOperandCount(count);
+  bo_handles.reserve(num_operands);
+  for (uint32_t operand_iter = 0; operand_iter < num_operands; operand_iter++) {
+    const uint32_t operand_index = operand_starting_index + 2 * operand_iter;
+    const uint64_t operand_addr = Concat<uint64_t>(cmd_pkt_payload->data[operand_index + 1],
+                                                   cmd_pkt_payload->data[operand_index]);
     auto operand_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(operand_addr));
     if (!operand_handle_info.IsValid()) return HSA_STATUS_ERROR;
-    bo_args.push_back(operand_handle_info.handle);
-    bo_addrs.push_back(operand_addr);
-  }
 
-  // Going through all of the operands in the command, keeping track of
-  // the sizes of each operand. The size is used to sync the buffer
-  uint32_t operand_size_starting_index = operand_starting_index + 2 * num_operands;
-  for (uint32_t operand_iter = 0; operand_iter < num_operands; operand_iter++) {
-    bo_sizes.push_back(cmd_pkt_payload->data[operand_size_starting_index + operand_iter]);
+    // Keep track of the operand BO.
+    bo_handles.push_back(operand_handle_info.handle);
+
+    // Flush the operand.
+    const uint32_t operand_size_starting_index = operand_starting_index + 2 * num_operands;
+    const uint32_t operand_bo_size =
+        cmd_pkt_payload->data[operand_size_starting_index + operand_iter];
+    FlushCpuCache(reinterpret_cast<void*>(operand_addr), 0, operand_bo_size);
   }
 
   // Transform the instruction sequence address into device address
@@ -536,14 +535,8 @@ hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd*
 
 hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
                                         uint32_t num_operands, uint32_t &hw_ctx_handle, uint32_t num_tiles) {
-  // Storing the metadata of the BOs that store the operands and metadata
-  // of the commands we are going to submit
-  std::vector<uint32_t> bo_args;
-  std::vector<uint32_t> bo_sizes;
-  std::vector<uint64_t> bo_addrs;
-  bo_args.reserve(num_operands);
-  bo_sizes.reserve(num_operands);
-  bo_addrs.reserve(num_operands);
+  // Stores instruction and operand BOs.
+  std::vector<uint32_t> bo_handles;
 
   // Storing the commands that we are going to submit and the
   // corresponding metadata
@@ -559,15 +552,15 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   new_cus.reserve(num_pkts);
 
   // Iterating over all the contiguous HSA_AMD_AIE_ERT_CMD_CHAIN packets
-  for (int pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
+  for (uint32_t pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
     // Getting the current command packet
     hsa_amd_aie_ert_packet_t* pkt = first_pkt + pkt_iter;
     hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload =
         reinterpret_cast<hsa_amd_aie_ert_start_kernel_data_t*>(pkt->payload_data);
 
-    // Add the handles for all of the BOs to bo_args as well as rewrite
+    // Add the handles for all of the BOs to bo_handles as well as rewrite
     // the command payload handles to contain the actual virtual addresses
-    hsa_status_t status = RegisterCmdBOs(pkt->count, bo_args, bo_sizes, bo_addrs, cmd_pkt_payload);
+    hsa_status_t status = RegisterCmdBOs(pkt->count, bo_handles, cmd_pkt_payload);
     if (status != HSA_STATUS_SUCCESS) return status;
 
     // Creating a packet that contains the command to execute the kernel
@@ -643,27 +636,30 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd_chain_payload->data[i] = cmd_handles[i];
   }
 
-  // Syncing BOs before we execute the command
-  status = SyncBos(bo_addrs, bo_sizes);
-  if (status != HSA_STATUS_SUCCESS) return status;
-
   // Removing duplicates in the bo container. The driver will report
   // an error if we provide the same BO handle multiple times.
   // This can happen if any of the BOs are the same across jobs
-  std::sort(bo_args.begin(), bo_args.end());
-  bo_args.erase(std::unique(bo_args.begin(), bo_args.end()), bo_args.end());
+  std::sort(bo_handles.begin(), bo_handles.end());
+  bo_handles.erase(std::unique(bo_handles.begin(), bo_handles.end()), bo_handles.end());
 
   // Filling in the fields to execute the command chain
   amdxdna_drm_exec_cmd exec_cmd_0 = {};
   exec_cmd_0.hwctx = hw_ctx_handle;
   exec_cmd_0.type = AMDXDNA_CMD_SUBMIT_EXEC_BUF;
   exec_cmd_0.cmd_handles = cmd_chain_bo_handle;
-  exec_cmd_0.args = reinterpret_cast<uint64_t>(bo_args.data());
+  exec_cmd_0.args = reinterpret_cast<uint64_t>(bo_handles.data());
   exec_cmd_0.cmd_count = 1;
-  exec_cmd_0.arg_count = bo_args.size();
+  exec_cmd_0.arg_count = bo_handles.size();
 
   // Executing all commands in the command chain
   ExecCmdAndWait(&exec_cmd_0, hw_ctx_handle);
+
+  for (uint32_t pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
+    hsa_amd_aie_ert_packet_t* pkt = first_pkt + pkt_iter;
+    hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload =
+        reinterpret_cast<hsa_amd_aie_ert_start_kernel_data_t*>(pkt->payload_data);
+    SyncOperandBOs(pkt->count, cmd_pkt_payload);
+  }
 
   // Unmapping and closing the cmd BOs
   drm_gem_close close_bo_args{0};
@@ -677,10 +673,6 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   if (munmap(cmd_chain, cmd_chain_size) != 0) return HSA_STATUS_ERROR;
   close_bo_args.handle = cmd_chain_bo_handle;
   ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
-
-  // Syncing BOs after we execute the command
-  status = SyncBos(bo_addrs, bo_sizes);
-  if (status != HSA_STATUS_SUCCESS) return status;
 
   return HSA_STATUS_SUCCESS;
 }
