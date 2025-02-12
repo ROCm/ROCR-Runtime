@@ -227,14 +227,14 @@ hsa_status_t AieAqlQueue::SubmitCmd(void* queue_base, uint64_t read_dispatch_id,
           num_cont_start_cu_pkts++;
         }
 
-        // Call into the driver to submit from cur_id to write_dispatch_id
-        if (driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, hw_ctx_handle_,
-                                  GetAgent().GetNumCores()) != HSA_STATUS_SUCCESS)
-          return HSA_STATUS_ERROR;
+        // Call into the driver to submit from cur_id to write_dispatch_id.
+        // Submitting the command chain might involve create a new hardware context.
+        hsa_status_t status = driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, hw_ctx_handle_,
+                                                    GetAgent().GetNumCores());
+        if (status != HSA_STATUS_SUCCESS) {
+          return status;
+        }
 
-        // Submitting the command chain might involve create a new hardware context, if so
-        // we need to update the handle accordingly
-        SetHwCtxHandle(hw_ctx_handle_);
         cur_id += num_cont_start_cu_pkts;
         break;
       }
