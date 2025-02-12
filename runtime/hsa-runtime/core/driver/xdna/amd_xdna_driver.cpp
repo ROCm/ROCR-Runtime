@@ -538,14 +538,9 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Stores instruction and operand BOs.
   std::vector<uint32_t> bo_handles;
 
-  // Storing the commands that we are going to submit and the
-  // corresponding metadata
-  std::vector<uint32_t> cmd_handles;
-  std::vector<uint32_t> cmd_sizes;
-  std::vector<amdxdna_cmd*> cmds;
-  cmd_handles.reserve(num_pkts);
-  cmd_sizes.reserve(num_pkts);
-  cmds.reserve(num_pkts);
+  // Stores commands that we are going to submit and the corresponding metadata.
+  std::vector<BOHandleInfo> command_bo;
+  command_bo.reserve(num_pkts);
 
   // The new CUs that we need to register
   std::vector<BOHandleInfo> new_cus;
@@ -601,10 +596,8 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd->data[0] = cu_mask;
     memcpy((cmd->data + 1), cmd_pkt_payload->data, 4 * pkt->count);
 
-    // Keeping track of the handle
-    cmd_handles.push_back(cmd_bo_handle);
-    cmds.push_back(cmd);
-    cmd_sizes.push_back(cmd_size);
+    // Keeping track of the command
+    command_bo.emplace_back(cmd, cmd_bo_handle, cmd_size);
   }
 
   // If we have CUs that are not cached we will add them to
@@ -617,7 +610,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Creating a packet that contains the command chain
   uint32_t cmd_chain_bo_handle = 0;
   amdxdna_cmd* cmd_chain = nullptr;
-  int cmd_chain_size = (cmd_handles.size() + 1) * sizeof(uint32_t);
+  uint32_t cmd_chain_size = (command_bo.size() + 1) * sizeof(uint32_t);
   hsa_status_t status = CreateCmd(cmd_chain_size, &cmd_chain_bo_handle, &cmd_chain);
   if (status != HSA_STATUS_SUCCESS) return status;
 
@@ -627,13 +620,13 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Creating a command chain
   cmd_chain->state = HSA_AMD_AIE_ERT_STATE_NEW;
   cmd_chain->extra_cu_masks = 0;
-  cmd_chain->count = sizeof(amdxdna_cmd_chain) + cmd_handles.size() * sizeof(uint64_t);
+  cmd_chain->count = sizeof(amdxdna_cmd_chain) + command_bo.size() * sizeof(uint64_t);
   cmd_chain->opcode = HSA_AMD_AIE_ERT_CMD_CHAIN;
-  cmd_chain_payload->command_count = cmd_handles.size();
+  cmd_chain_payload->command_count = command_bo.size();
   cmd_chain_payload->submit_index = 0;
   cmd_chain_payload->error_index = 0;
-  for (int i = 0; i < cmd_handles.size(); i++) {
-    cmd_chain_payload->data[i] = cmd_handles[i];
+  for (size_t i = 0; i < command_bo.size(); i++) {
+    cmd_chain_payload->data[i] = command_bo[i].handle;
   }
 
   // Removing duplicates in the bo container. The driver will report
@@ -662,15 +655,16 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   }
 
   // Unmapping and closing the cmd BOs
-  drm_gem_close close_bo_args{0};
-  for (int i = 0; i < cmd_handles.size(); i++) {
-    if (munmap(cmds[i], cmd_sizes[i]) != 0) return HSA_STATUS_ERROR;
-    close_bo_args.handle = cmd_handles[i];
+  for (auto& bo_info : command_bo) {
+    if (munmap(bo_info.vaddr, bo_info.size) != 0) return HSA_STATUS_ERROR;
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = bo_info.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
   }
 
   // Unmapping and closing the cmd_chain BO
   if (munmap(cmd_chain, cmd_chain_size) != 0) return HSA_STATUS_ERROR;
+  drm_gem_close close_bo_args = {};
   close_bo_args.handle = cmd_chain_bo_handle;
   ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
 
