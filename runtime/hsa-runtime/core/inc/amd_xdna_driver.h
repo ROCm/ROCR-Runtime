@@ -205,13 +205,11 @@ public:
   hsa_status_t InitDeviceHeap();
   hsa_status_t FreeDeviceHeap();
 
-  /// @brief Creates a command BO and returns a pointer to the memory and
-  //          the corresponding handle
+  /// @brief Creates a command BO and returns it to @p bo_info.
   ///
   /// @param size size of memory to allocate
-  /// @param handle A pointer to the BO handle
-  /// @param cmd A pointer to the buffer
-  hsa_status_t CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd** cmd);
+  /// @param bo_info allocated BO
+  hsa_status_t CreateCmdBO(uint32_t size, BOHandleInfo& bo_info);
 
   /// @brief Adds all BOs in a command packet payload to a vector
   ///         and replaces the handles with a virtual address

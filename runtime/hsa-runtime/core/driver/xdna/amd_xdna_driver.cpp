@@ -263,7 +263,9 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
 
 hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
   auto it = vmem_addr_mappings.find(mem);
-  if (it == vmem_addr_mappings.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  if (it == vmem_addr_mappings.end()) {
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  }
 
   auto handle = it->second.handle;
 
@@ -327,9 +329,9 @@ hsa_status_t XdnaDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
   drm_prime_handle import_params = {};
   import_params.handle = AMDXDNA_INVALID_BO_HANDLE;
   import_params.fd = dmabuf_fd;
-  if (ioctl(fd_, DRM_IOCTL_PRIME_FD_TO_HANDLE, &import_params) < 0)
+  if (ioctl(fd_, DRM_IOCTL_PRIME_FD_TO_HANDLE, &import_params) < 0) {
     return HSA_STATUS_ERROR;
-
+  }
   handle.handle = import_params.handle;
   return HSA_STATUS_SUCCESS;
 }
@@ -341,34 +343,35 @@ hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *mem,
   drm_prime_handle params = {};
   params.handle = handle.handle;
   params.fd = -1;
-  if (ioctl(fd_, DRM_IOCTL_PRIME_HANDLE_TO_FD, &params) < 0)
+  if (ioctl(fd_, DRM_IOCTL_PRIME_HANDLE_TO_FD, &params) < 0) {
     return HSA_STATUS_ERROR;
+  }
 
   // Change permissions.
   void *mapped_ptr = mmap(mem, size, PermissionsToMmapFlags(perms),
                           MAP_FIXED | MAP_SHARED, params.fd, offset);
-  if (mapped_ptr == MAP_FAILED)
-    return HSA_STATUS_ERROR;
+  if (mapped_ptr == MAP_FAILED) {
+    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::Unmap(core::ShareableHandle handle, void *mem,
                                size_t offset, size_t size) {
-  if (munmap(mem, size) != 0)
+  if (munmap(mem, size) != 0) {
     return HSA_STATUS_ERROR;
-
+  }
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::ReleaseShareableHandle(core::ShareableHandle &handle) {
   drm_gem_close close_params = {};
   close_params.handle = handle.handle;
-  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_params) < 0)
+  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_params) < 0) {
     return HSA_STATUS_ERROR;
-
+  }
   handle = {};
-
   return HSA_STATUS_SUCCESS;
 }
 
@@ -454,7 +457,9 @@ hsa_status_t XdnaDriver::FreeDeviceHeap() {
 
 hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle) {
   // Submit the cmd
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd) < 0) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd) < 0) {
+    return HSA_STATUS_ERROR;
+  }
 
   // Waiting for command to finish
   amdxdna_drm_wait_cmd wait_cmd = {};
@@ -462,7 +467,9 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t
   wait_cmd.timeout = DEFAULT_TIMEOUT_VAL;
   wait_cmd.seq = exec_cmd->seq;
 
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) {
+    return HSA_STATUS_ERROR;
+  }
 
   return HSA_STATUS_SUCCESS;
 }
@@ -513,23 +520,33 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd** cmd) {
-  // Creating the command
+hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandleInfo& bo_info) {
   amdxdna_drm_create_bo create_cmd_bo = {};
   create_cmd_bo.type = AMDXDNA_BO_CMD;
   create_cmd_bo.size = size;
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_bo) < 0) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_bo) < 0) {
+    return HSA_STATUS_ERROR;
+  }
 
   amdxdna_drm_get_bo_info cmd_bo_get_bo_info = {};
   cmd_bo_get_bo_info.handle = create_cmd_bo.handle;
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &cmd_bo_get_bo_info) < 0) return HSA_STATUS_ERROR;
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &cmd_bo_get_bo_info) < 0) {
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_cmd_bo.handle;
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    return HSA_STATUS_ERROR;
+  }
 
-  *cmd = static_cast<amdxdna_cmd*>(mmap(nullptr, create_cmd_bo.size, PROT_READ | PROT_WRITE,
-                                        MAP_SHARED, fd_, cmd_bo_get_bo_info.map_offset));
+  void* mem = static_cast<amdxdna_cmd*>(mmap(nullptr, create_cmd_bo.size, PROT_READ | PROT_WRITE,
+                                             MAP_SHARED, fd_, cmd_bo_get_bo_info.map_offset));
+  if (mem == MAP_FAILED) {
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = create_cmd_bo.handle;
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    return HSA_STATUS_ERROR;
+  }
 
-  if (cmd == MAP_FAILED) return HSA_STATUS_ERROR;
-
-  *handle = create_cmd_bo.handle;
+  bo_info = BOHandleInfo{mem, create_cmd_bo.handle, size};
 
   return HSA_STATUS_SUCCESS;
 }
@@ -557,14 +574,18 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     // Add the handles for all of the BOs to bo_handles as well as rewrite
     // the command payload handles to contain the actual virtual addresses
     hsa_status_t status = RegisterCmdBOs(pkt->count, bo_handles, cmd_pkt_payload);
-    if (status != HSA_STATUS_SUCCESS) return status;
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
 
     // Creating a packet that contains the command to execute the kernel
-    uint32_t cmd_bo_handle = 0;
-    amdxdna_cmd* cmd = nullptr;
-    uint32_t cmd_size = sizeof(amdxdna_cmd) + pkt->count * sizeof(uint32_t);
-    status = CreateCmd(cmd_size, &cmd_bo_handle, &cmd);
-    if (status != HSA_STATUS_SUCCESS) return status;
+    const uint32_t cmd_size = sizeof(amdxdna_cmd) + pkt->count * sizeof(uint32_t);
+    BOHandleInfo cmd_bo_info;
+    status = CreateCmdBO(cmd_size, cmd_bo_info);
+    if (status != HSA_STATUS_SUCCESS) {
+      return status;
+    }
+    auto* cmd = static_cast<amdxdna_cmd*>(cmd_bo_info.vaddr);
 
     // Filling in the fields of the command
     cmd->state = pkt->state;
@@ -598,7 +619,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     memcpy((cmd->data + 1), cmd_pkt_payload->data, 4 * pkt->count);
 
     // Keeping track of the command
-    command_bo.emplace_back(cmd, cmd_bo_handle, cmd_size);
+    command_bo.push_back(cmd_bo_info);
   }
 
   // If we have CUs that are not cached we will add them to
@@ -609,11 +630,13 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   }
 
   // Creating a packet that contains the command chain
-  uint32_t cmd_chain_bo_handle = 0;
-  amdxdna_cmd* cmd_chain = nullptr;
-  uint32_t cmd_chain_size = (command_bo.size() + 1) * sizeof(uint32_t);
-  hsa_status_t status = CreateCmd(cmd_chain_size, &cmd_chain_bo_handle, &cmd_chain);
-  if (status != HSA_STATUS_SUCCESS) return status;
+  const uint32_t cmd_chain_size = (command_bo.size() + 1) * sizeof(uint32_t);
+  BOHandleInfo cmd_chain_bo;
+  hsa_status_t status = CreateCmdBO(cmd_chain_size, cmd_chain_bo);
+  if (status != HSA_STATUS_SUCCESS) {
+    return status;
+  }
+  auto* cmd_chain = static_cast<amdxdna_cmd*>(cmd_chain_bo.vaddr);
 
   // Writing information to the command buffer
   amdxdna_cmd_chain* cmd_chain_payload = reinterpret_cast<amdxdna_cmd_chain*>(cmd_chain->data);
@@ -640,7 +663,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   amdxdna_drm_exec_cmd exec_cmd_0 = {};
   exec_cmd_0.hwctx = hw_ctx_handle;
   exec_cmd_0.type = AMDXDNA_CMD_SUBMIT_EXEC_BUF;
-  exec_cmd_0.cmd_handles = cmd_chain_bo_handle;
+  exec_cmd_0.cmd_handles = cmd_chain_bo.handle;
   exec_cmd_0.args = reinterpret_cast<uint64_t>(bo_handles.data());
   exec_cmd_0.cmd_count = 1;
   exec_cmd_0.arg_count = bo_handles.size();
@@ -666,7 +689,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Unmapping and closing the cmd_chain BO
   if (munmap(cmd_chain, cmd_chain_size) != 0) return HSA_STATUS_ERROR;
   drm_gem_close close_bo_args = {};
-  close_bo_args.handle = cmd_chain_bo_handle;
+  close_bo_args.handle = cmd_chain_bo.handle;
   ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
 
   return HSA_STATUS_SUCCESS;
