@@ -516,7 +516,8 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
 hsa_status_t XdnaDriver::CreateCmd(uint32_t size, uint32_t* handle, amdxdna_cmd** cmd) {
   // Creating the command
   amdxdna_drm_create_bo create_cmd_bo = {};
-  create_cmd_bo.type = AMDXDNA_BO_CMD, create_cmd_bo.size = size;
+  create_cmd_bo.type = AMDXDNA_BO_CMD;
+  create_cmd_bo.size = size;
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_BO, &create_cmd_bo) < 0) return HSA_STATUS_ERROR;
 
   amdxdna_drm_get_bo_info cmd_bo_get_bo_info = {};
