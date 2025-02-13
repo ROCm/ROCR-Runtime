@@ -289,20 +289,8 @@ hsa_status_t XdnaDriver::CreateQueue(core::Queue &queue) const {
     return HSA_STATUS_ERROR_INVALID_QUEUE;
   }
 
-  auto &aie_queue(static_cast<AieAqlQueue &>(queue));
-  auto &aie_agent(aie_queue.GetAgent());
-
-  // Currently we do not leverage QoS information.
-  amdxdna_qos_info qos_info = {};
-  amdxdna_drm_create_hwctx create_hwctx_args = {};
-  create_hwctx_args.qos_p = reinterpret_cast<uintptr_t>(&qos_info);
-  create_hwctx_args.max_opc = 0x800;
-  create_hwctx_args.num_tiles = aie_agent.GetNumCores();
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_HWCTX, &create_hwctx_args) < 0) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
-
-  aie_queue.SetHwCtxHandle(create_hwctx_args.handle);
+  auto& aie_queue = static_cast<AieAqlQueue&>(queue);
+  aie_queue.SetHwCtxHandle(AMDXDNA_INVALID_BO_HANDLE);
 
   return HSA_STATUS_SUCCESS;
 }
@@ -312,11 +300,13 @@ hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
     return HSA_STATUS_ERROR_INVALID_QUEUE;
   }
 
-  auto &aie_queue(static_cast<AieAqlQueue &>(queue));
-  amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
-  destroy_hwctx_args.handle = aie_queue.GetHwCtxHandle();
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
-    return HSA_STATUS_ERROR;
+  auto &aie_queue = static_cast<AieAqlQueue &>(queue);
+  if (aie_queue.GetHwCtxHandle() != AMDXDNA_INVALID_BO_HANDLE) {
+    amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
+    destroy_hwctx_args.handle = aie_queue.GetHwCtxHandle();
+    if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
+      return HSA_STATUS_ERROR;
+    }
   }
 
   return HSA_STATUS_SUCCESS;
@@ -802,15 +792,17 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
     FlushCpuCache(new_cus[i].vaddr, 0, new_cus[i].size);
   }
 
-  // Destroy the hardware context
-  // Note: we can do this because we have forced synchronization between
-  // command chains. If we move to a more asynchronous model, we will need to
-  // figure out how hardware context destruction works while applications
-  // are running
-  amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
-  destroy_hwctx_args.handle = hw_ctx_handle;
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
-    return HSA_STATUS_ERROR;
+  if (hw_ctx_handle != AMDXDNA_INVALID_BO_HANDLE) {
+    // Destroy the hardware context
+    // Note: we can do this because we have forced synchronization between
+    // command chains. If we move to a more asynchronous model, we will need to
+    // figure out how hardware context destruction works while applications
+    // are running
+    amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
+    destroy_hwctx_args.handle = hw_ctx_handle;
+    if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
+      return HSA_STATUS_ERROR;
+    }
   }
 
   // Create the new hardware context
