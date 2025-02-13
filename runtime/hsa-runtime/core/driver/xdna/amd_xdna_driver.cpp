@@ -402,30 +402,32 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
+  dev_heap_handle.handle = create_bo_args.handle;
+
   // Unmap memory and close the BO in case of error.
-  MAKE_NAMED_SCOPE_GUARD(dev_heap_guard, [&] {
-    munmap(dev_heap_parent, dev_heap_align * 2 - 1);
-    dev_heap_parent = nullptr;
+  MAKE_NAMED_SCOPE_GUARD(dev_heap_handle_guard, [&] {
+    munmap(dev_heap_handle.vaddr, dev_heap_handle.size);
     drm_gem_close close_bo_args = {};
-    close_bo_args.handle = create_bo_args.handle;
+    close_bo_args.handle = dev_heap_handle.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    dev_heap_handle = BOHandle{};
   });
 
   amdxdna_drm_get_bo_info get_bo_info_args = {};
-  get_bo_info_args.handle = create_bo_args.handle;
+  get_bo_info_args.handle = dev_heap_handle.handle;
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_GET_BO_INFO, &get_bo_info_args) < 0) {
     return HSA_STATUS_ERROR;
   }
 
-  dev_heap_parent = mmap(0, dev_heap_align * 2 - 1, PROT_READ | PROT_WRITE,
-                         MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-  if (dev_heap_parent == MAP_FAILED) {
-    dev_heap_parent = nullptr;
+  const size_t size = dev_heap_align * 2 - 1;
+  dev_heap_handle.vaddr = mmap(0, size, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+  if (dev_heap_handle.vaddr == MAP_FAILED) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
+  dev_heap_handle.size = size;
 
   void* addr_aligned = reinterpret_cast<void*>(
-      AlignUp(reinterpret_cast<uintptr_t>(dev_heap_parent), dev_heap_align));
+      AlignUp(reinterpret_cast<uintptr_t>(dev_heap_handle.vaddr), dev_heap_align));
 
   dev_heap_aligned =
       mmap(addr_aligned, dev_heap_size, PROT_READ | PROT_WRITE,
@@ -435,28 +437,32 @@ hsa_status_t XdnaDriver::InitDeviceHeap() {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  dev_heap_guard.Dismiss();
+  dev_heap_handle_guard.Dismiss();
 
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::FreeDeviceHeap() {
-  // TODO need to close the dev_heap_parent BO
-  if (dev_heap_parent) {
-    if (munmap(dev_heap_parent, dev_heap_align * 2 - 1) != 0) {
-      return HSA_STATUS_ERROR;
-    }
-    dev_heap_parent = nullptr;
-  }
+  hsa_status_t status = HSA_STATUS_SUCCESS;
 
   if (dev_heap_aligned) {
     if (munmap(dev_heap_aligned, dev_heap_size) != 0) {
-      return HSA_STATUS_ERROR;
+      status = HSA_STATUS_ERROR;
     }
     dev_heap_aligned = nullptr;
   }
 
-  return HSA_STATUS_SUCCESS;
+  if (dev_heap_handle.IsValid()) {
+    if (munmap(dev_heap_handle.vaddr, dev_heap_handle.size) != 0) {
+      status = HSA_STATUS_ERROR;
+    }
+    drm_gem_close close_bo_args = {};
+    close_bo_args.handle = dev_heap_handle.handle;
+    ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
+    dev_heap_handle = BOHandle{};
+  }
+
+  return status;
 }
 
 hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle) {

@@ -245,7 +245,7 @@ public:
   /// Allocate a large enough space so we can carve out the device heap in
   /// this range and ensure it is aligned to 64MB. Currently, npu1 supports
   /// 64MB device heap and it must be aligned to 64MB.
-  void *dev_heap_parent = nullptr;
+  BOHandle dev_heap_handle;
 
   /// @brief The aligned device heap.
   void *dev_heap_aligned = nullptr;
