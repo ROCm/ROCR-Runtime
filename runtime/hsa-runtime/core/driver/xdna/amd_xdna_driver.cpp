@@ -300,7 +300,7 @@ hsa_status_t XdnaDriver::DestroyQueue(core::Queue &queue) const {
     return HSA_STATUS_ERROR_INVALID_QUEUE;
   }
 
-  auto &aie_queue = static_cast<AieAqlQueue &>(queue);
+  auto& aie_queue = static_cast<AieAqlQueue&>(queue);
   if (aie_queue.GetHwCtxHandle() != AMDXDNA_INVALID_BO_HANDLE) {
     amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
     destroy_hwctx_args.handle = aie_queue.GetHwCtxHandle();
