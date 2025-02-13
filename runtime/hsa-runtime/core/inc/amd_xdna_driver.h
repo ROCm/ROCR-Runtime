@@ -132,13 +132,16 @@ inline uint32_t GetOperandCount(uint32_t arg_count) {
 
 class XdnaDriver final : public core::Driver {
   /// @brief BO handle information.
-  struct BOHandleInfo {
+  struct BOHandle {
+    /// Mapped address.
     void* vaddr = nullptr;
+    /// Handle returned by xdna.
     uint32_t handle = AMDXDNA_INVALID_BO_HANDLE;
+    /// Size in bytes.
     size_t size = 0;
 
-    constexpr BOHandleInfo() = default;
-    constexpr BOHandleInfo(void* vaddr, uint32_t handle, size_t size)
+    constexpr BOHandle() = default;
+    constexpr BOHandle(void* vaddr, uint32_t handle, size_t size)
         : vaddr{vaddr}, handle{handle}, size{size} {}
     constexpr bool IsValid() const { return handle != AMDXDNA_INVALID_BO_HANDLE; }
   };
@@ -191,10 +194,10 @@ public:
 
  private:
   /// @brief Finds the BO associated with the address.
-  BOHandleInfo FindBOHandleInfo(void* mem) const;
+  BOHandle FindBOHandle(void* mem) const;
 
   // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, const std::vector<BOHandleInfo>& new_cus,
+  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, const std::vector<BOHandle>& new_cus,
                                  uint32_t num_tiles);
 
   hsa_status_t QueryDriverVersion();
@@ -209,7 +212,7 @@ public:
   ///
   /// @param size size of memory to allocate
   /// @param bo_info allocated BO
-  hsa_status_t CreateCmdBO(uint32_t size, BOHandleInfo& bo_info);
+  hsa_status_t CreateCmdBO(uint32_t size, BOHandle& bo_info);
 
   /// @brief Adds all BOs in a command packet payload to a vector
   ///         and replaces the handles with a virtual address
@@ -231,7 +234,7 @@ public:
   /// object to track handle allocations. Using the VMEM API for mapping XDNA
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
-  std::map<void*, BOHandleInfo> vmem_addr_mappings;
+  std::map<void*, BOHandle> vmem_addr_mappings;
 
   /// @brief Storing cached CUs that have already been added to the hardware context.
   /// This maps the CU BO to the cu_mask in the hardware context

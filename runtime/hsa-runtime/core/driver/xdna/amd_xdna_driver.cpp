@@ -221,7 +221,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  BOHandleInfo bo_handle;
+  BOHandle bo_handle;
   bo_handle.handle = create_bo_args.handle;
   bo_handle.size = size;
 
@@ -483,13 +483,13 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
   const uint64_t instr_addr =
       Concat<uint64_t>(cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
                        cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
-  auto instr_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(instr_addr));
-  if (!instr_handle_info.IsValid()) {
+  auto instr_bo_handle = FindBOHandle(reinterpret_cast<void*>(instr_addr));
+  if (!instr_bo_handle.IsValid()) {
     return HSA_STATUS_ERROR;
   }
 
   // Keep track of the instruction sequence BO.
-  bo_handles.push_back(instr_handle_info.handle);
+  bo_handles.push_back(instr_bo_handle.handle);
 
   // Flush the instruction sequence. The packet contains the number of instructions.
   const uint32_t instr_bo_size =
@@ -506,13 +506,13 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
     const uint32_t operand_index = operand_starting_index + 2 * operand_iter;
     const uint64_t operand_addr = Concat<uint64_t>(cmd_pkt_payload->data[operand_index + 1],
                                                    cmd_pkt_payload->data[operand_index]);
-    auto operand_handle_info = FindBOHandleInfo(reinterpret_cast<void*>(operand_addr));
-    if (!operand_handle_info.IsValid()) {
+    auto operand_bo_handle = FindBOHandle(reinterpret_cast<void*>(operand_addr));
+    if (!operand_bo_handle.IsValid()) {
       return HSA_STATUS_ERROR;
     }
 
     // Keep track of the operand BO.
-    bo_handles.push_back(operand_handle_info.handle);
+    bo_handles.push_back(operand_bo_handle.handle);
 
     // Flush the operand.
     const uint32_t operand_size_starting_index = operand_starting_index + 2 * num_operands;
@@ -528,7 +528,7 @@ hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& b
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandleInfo& bo_info) {
+hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandle& cmd_bo_handle) {
   amdxdna_drm_create_bo create_cmd_bo = {};
   create_cmd_bo.type = AMDXDNA_BO_CMD;
   create_cmd_bo.size = size;
@@ -537,7 +537,7 @@ hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandleInfo& bo_info) {
   }
 
   // Close the BO in case of error.
-  MAKE_NAMED_SCOPE_GUARD(bo_guard, [&] {
+  MAKE_NAMED_SCOPE_GUARD(cmd_bo_handle_guard, [&] {
     drm_gem_close close_bo_args = {};
     close_bo_args.handle = create_cmd_bo.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
@@ -555,9 +555,9 @@ hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandleInfo& bo_info) {
     return HSA_STATUS_ERROR;
   }
 
-  bo_info = BOHandleInfo{mem, create_cmd_bo.handle, size};
+  cmd_bo_handle = BOHandle{mem, create_cmd_bo.handle, size};
 
-  bo_guard.Dismiss();
+  cmd_bo_handle_guard.Dismiss();
 
   return HSA_STATUS_SUCCESS;
 }
@@ -568,11 +568,11 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   std::vector<uint32_t> bo_handles;
 
   // Stores commands that we are going to submit and the corresponding metadata.
-  std::vector<BOHandleInfo> command_bo;
-  command_bo.reserve(num_pkts);
+  std::vector<BOHandle> command_bo_handles;
+  command_bo_handles.reserve(num_pkts);
   // Unmap and close the command BOs in case of an error.
-  MAKE_NAMED_SCOPE_GUARD(command_bo_guard, [&] {
-    for (auto& bo_info : command_bo) {
+  MAKE_NAMED_SCOPE_GUARD(command_bo_handles_guard, [&] {
+    for (auto& bo_info : command_bo_handles) {
       munmap(bo_info.vaddr, bo_info.size);
       drm_gem_close close_bo_args = {};
       close_bo_args.handle = bo_info.handle;
@@ -581,7 +581,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   });
 
   // The new CUs that we need to register
-  std::vector<BOHandleInfo> new_cus;
+  std::vector<BOHandle> new_cus;
   new_cus.reserve(num_pkts);
 
   // Iterating over all the contiguous HSA_AMD_AIE_ERT_CMD_CHAIN packets
@@ -600,20 +600,20 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
 
     // Creating a packet that contains the command to execute the kernel
     const uint32_t cmd_size = sizeof(amdxdna_cmd) + pkt->count * sizeof(uint32_t);
-    BOHandleInfo cmd_bo_info;
-    status = CreateCmdBO(cmd_size, cmd_bo_info);
+    BOHandle cmd_bo_handle;
+    status = CreateCmdBO(cmd_size, cmd_bo_handle);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }
     // Unmap and close the command BO in case of an error.
-    MAKE_NAMED_SCOPE_GUARD(cmd_bo_guard, [&] {
-      munmap(cmd_bo_info.vaddr, cmd_bo_info.size);
+    MAKE_NAMED_SCOPE_GUARD(cmd_bo_handle_guard, [&] {
+      munmap(cmd_bo_handle.vaddr, cmd_bo_handle.size);
       drm_gem_close close_bo_args = {};
-      close_bo_args.handle = cmd_bo_info.handle;
+      close_bo_args.handle = cmd_bo_handle.handle;
       ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
     });
 
-    auto* cmd = static_cast<amdxdna_cmd*>(cmd_bo_info.vaddr);
+    auto* cmd = static_cast<amdxdna_cmd*>(cmd_bo_handle.vaddr);
 
     // Filling in the fields of the command
     cmd->state = pkt->state;
@@ -625,9 +625,9 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd->opcode = pkt->opcode;
 
     // Finding BO handle associated with the CU
-    auto cu_bo_info = FindBOHandleInfo(cmd_pkt_payload->pdi_addr);
-    if (!cu_bo_info.IsValid()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-    uint32_t cu_bo = cu_bo_info.handle;
+    auto cu_bo_handle = FindBOHandle(cmd_pkt_payload->pdi_addr);
+    if (!cu_bo_handle.IsValid()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    uint32_t cu_bo = cu_bo_handle.handle;
 
     // Determining if the CU is cached
     auto cu_mask_iter = handle_cu_mappings.find(cu_bo);
@@ -637,7 +637,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
       // position where the new CU will be
       cu_mask = 1 << handle_cu_mappings.size();
       handle_cu_mappings[cu_bo] = cu_mask;
-      new_cus.push_back(cu_bo_info);
+      new_cus.push_back(cu_bo_handle);
     }
     else {
       cu_mask = cu_mask_iter->second;
@@ -647,8 +647,8 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     memcpy((cmd->data + 1), cmd_pkt_payload->data, 4 * pkt->count);
 
     // Keeping track of the command
-    command_bo.push_back(cmd_bo_info);
-    cmd_bo_guard.Dismiss();
+    command_bo_handles.push_back(cmd_bo_handle);
+    cmd_bo_handle_guard.Dismiss();
   }
 
   // If we have CUs that are not cached we will add them to
@@ -661,21 +661,21 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   }
 
   // Creating a packet that contains the command chain
-  const uint32_t cmd_chain_size = (command_bo.size() + 1) * sizeof(uint32_t);
-  BOHandleInfo cmd_chain_bo;
-  hsa_status_t status = CreateCmdBO(cmd_chain_size, cmd_chain_bo);
+  const uint32_t cmd_chain_size = (command_bo_handles.size() + 1) * sizeof(uint32_t);
+  BOHandle cmd_chain_bo_handle;
+  hsa_status_t status = CreateCmdBO(cmd_chain_size, cmd_chain_bo_handle);
   if (status != HSA_STATUS_SUCCESS) {
     return status;
   }
   // Unmap and close the command chain BO in case of an error.
-  MAKE_NAMED_SCOPE_GUARD(cmd_chain_bo_guard, [&] {
-    munmap(cmd_chain_bo.vaddr, cmd_chain_bo.size);
+  MAKE_NAMED_SCOPE_GUARD(cmd_chain_bo_handle_guard, [&] {
+    munmap(cmd_chain_bo_handle.vaddr, cmd_chain_bo_handle.size);
     drm_gem_close close_bo_args = {};
-    close_bo_args.handle = cmd_chain_bo.handle;
+    close_bo_args.handle = cmd_chain_bo_handle.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
   });
 
-  auto* cmd_chain = static_cast<amdxdna_cmd*>(cmd_chain_bo.vaddr);
+  auto* cmd_chain = static_cast<amdxdna_cmd*>(cmd_chain_bo_handle.vaddr);
 
   // Writing information to the command buffer
   amdxdna_cmd_chain* cmd_chain_payload = reinterpret_cast<amdxdna_cmd_chain*>(cmd_chain->data);
@@ -683,13 +683,13 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Creating a command chain
   cmd_chain->state = HSA_AMD_AIE_ERT_STATE_NEW;
   cmd_chain->extra_cu_masks = 0;
-  cmd_chain->count = sizeof(amdxdna_cmd_chain) + command_bo.size() * sizeof(uint64_t);
+  cmd_chain->count = sizeof(amdxdna_cmd_chain) + command_bo_handles.size() * sizeof(uint64_t);
   cmd_chain->opcode = HSA_AMD_AIE_ERT_CMD_CHAIN;
-  cmd_chain_payload->command_count = command_bo.size();
+  cmd_chain_payload->command_count = command_bo_handles.size();
   cmd_chain_payload->submit_index = 0;
   cmd_chain_payload->error_index = 0;
-  for (size_t i = 0; i < command_bo.size(); i++) {
-    cmd_chain_payload->data[i] = command_bo[i].handle;
+  for (size_t i = 0; i < command_bo_handles.size(); i++) {
+    cmd_chain_payload->data[i] = command_bo_handles[i].handle;
   }
 
   // Removing duplicates in the bo container. The driver will report
@@ -702,7 +702,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   amdxdna_drm_exec_cmd exec_cmd_0 = {};
   exec_cmd_0.hwctx = hw_ctx_handle;
   exec_cmd_0.type = AMDXDNA_CMD_SUBMIT_EXEC_BUF;
-  exec_cmd_0.cmd_handles = cmd_chain_bo.handle;
+  exec_cmd_0.cmd_handles = cmd_chain_bo_handle.handle;
   exec_cmd_0.args = reinterpret_cast<uint64_t>(bo_handles.data());
   exec_cmd_0.cmd_count = 1;
   exec_cmd_0.arg_count = bo_handles.size();
@@ -720,33 +720,33 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   status = HSA_STATUS_SUCCESS;
 
   // Unmapping and closing the cmd BOs
-  command_bo_guard.Dismiss();
-  for (auto& bo_info : command_bo) {
-    if (munmap(bo_info.vaddr, bo_info.size) != 0) {
+  command_bo_handles_guard.Dismiss();
+  for (auto& command_bo_handle : command_bo_handles) {
+    if (munmap(command_bo_handle.vaddr, command_bo_handle.size) != 0) {
       status = HSA_STATUS_ERROR;
     }
     drm_gem_close close_bo_args = {};
-    close_bo_args.handle = bo_info.handle;
+    close_bo_args.handle = command_bo_handle.handle;
     ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
   }
 
   // Unmapping and closing the cmd_chain BO
-  cmd_chain_bo_guard.Dismiss();
+  cmd_chain_bo_handle_guard.Dismiss();
   if (munmap(cmd_chain, cmd_chain_size) != 0) {
     status = HSA_STATUS_ERROR;
   }
   drm_gem_close close_bo_args = {};
-  close_bo_args.handle = cmd_chain_bo.handle;
+  close_bo_args.handle = cmd_chain_bo_handle.handle;
   ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_bo_args);
 
   return status;
 }
 
-XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
+XdnaDriver::BOHandle XdnaDriver::FindBOHandle(void* mem) const {
   auto it = vmem_addr_mappings.lower_bound(mem);
   if (it == vmem_addr_mappings.cend()) {
     // Exact address not found or is larger than the largest address.
-    return BOHandleInfo{};
+    return BOHandle{};
   }
 
   if (it->first == mem) {
@@ -756,7 +756,7 @@ XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
 
   if (it == vmem_addr_mappings.cbegin()) {
     // Address is smaller than the smallest registered address.
-    return BOHandleInfo{};
+    return BOHandle{};
   }
 
   // Go back one element, since lower_bound returns an iterator to the element that is equal or
@@ -766,7 +766,7 @@ XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
   assert(it->first < mem);
   if (mem >= (static_cast<char*>(it->first) + it->second.size)) {
     // Address is not from this allocation.
-    return BOHandleInfo{};
+    return BOHandle{};
   }
 
   return it->second;
@@ -774,7 +774,7 @@ XdnaDriver::BOHandleInfo XdnaDriver::FindBOHandleInfo(void* mem) const {
 
 // Creates a new hardware context with the correct CUs
 hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
-                                           const std::vector<XdnaDriver::BOHandleInfo>& new_cus,
+                                           const std::vector<BOHandle>& new_cus,
                                            uint32_t num_tiles) {
   const size_t config_cu_param_size =
       sizeof(amdxdna_hwctx_param_config_cu) + new_cus.size() * sizeof(amdxdna_cu_config);
