@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2023, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2023-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -53,8 +53,6 @@
 namespace rocr {
 namespace AMD {
 
-class XdnaDriver;
-
 /// @brief Encapsulates HW AIE AQL Command Processor functionality. It
 /// provides the interface for things such as doorbells, queue read and
 /// write pointers, and a buffer.
@@ -70,7 +68,6 @@ public:
     return queue->IsType(&rtti_id());
   }
 
-  AieAqlQueue() = delete;
   AieAqlQueue(AieAgent *agent, size_t req_size_pkts, uint32_t node_id);
   ~AieAqlQueue();
 
@@ -155,6 +152,7 @@ private:
     return rtti_id_;
   }
 
+  DISALLOW_COPY_AND_ASSIGN(AieAqlQueue);
 };
 
 } // namespace AMD

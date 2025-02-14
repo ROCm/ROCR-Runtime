@@ -93,6 +93,8 @@ class Queue;
 
 namespace AMD {
 
+class AieAqlQueue;
+
 /// @brief: The number of arguments in the packet payload before we start passing operands
 constexpr uint32_t NON_OPERAND_COUNT = 6;
 
@@ -188,17 +190,16 @@ public:
                      size_t size) override;
   hsa_status_t ReleaseShareableHandle(core::ShareableHandle &handle) override;
 
-  // @brief Submits num_pkts packets in a command chain to the XDNA driver
+  /// @brief Submits @p num_pkts packets in a command chain.
   hsa_status_t SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                              uint32_t& hw_ctx_handle, uint32_t num_tiles);
+                              AieAqlQueue& aie_queue);
 
  private:
   /// @brief Finds the BO associated with the address.
   BOHandle FindBOHandle(void* mem) const;
 
-  // @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle, const std::vector<BOHandle>& new_cus,
-                                 uint32_t num_tiles);
+  /// @brief Creates a new hardware context with the correct CUs
+  hsa_status_t ConfigHwCtxNewCUs(const std::vector<BOHandle>& new_cus, AieAqlQueue& aie_queue);
 
   hsa_status_t QueryDriverVersion();
 
@@ -224,10 +225,11 @@ public:
 
   /// @brief Executes a command and waits for its completion
   ///
-  /// @param exec_cmd Structure containing the details of the command to execute
-  /// @param hw_ctx_handle the handle of the hardware context to run this
-  /// command
-  hsa_status_t ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle);
+  /// @param cmd_chain_bo_handle command to execute
+  /// @param bo_handles handles associated with the command
+  /// @param aie_queue queue to submit to
+  hsa_status_t ExecCmdAndWait(const BOHandle& cmd_chain_bo_handle,
+                              const std::vector<uint32_t>& bo_handles, AieAqlQueue& aie_queue);
 
   /// TODO: Remove this in the future and rely on the core Runtime
   /// object to track handle allocations. Using the VMEM API for mapping XDNA

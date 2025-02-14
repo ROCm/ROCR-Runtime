@@ -455,17 +455,27 @@ hsa_status_t XdnaDriver::FreeDeviceHeap() {
   return status;
 }
 
-hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t hw_ctx_handle) {
-  // Submit the cmd
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, exec_cmd) < 0) {
+hsa_status_t XdnaDriver::ExecCmdAndWait(const BOHandle& cmd_chain_bo_handle,
+                                        const std::vector<uint32_t>& bo_handles,
+                                        AieAqlQueue& aie_queue) {
+  // Submit command chain.
+  amdxdna_drm_exec_cmd exec_cmd = {};
+  exec_cmd.hwctx = aie_queue.GetHwCtxHandle();
+  exec_cmd.type = AMDXDNA_CMD_SUBMIT_EXEC_BUF;
+  exec_cmd.cmd_handles = cmd_chain_bo_handle.handle;
+  exec_cmd.args = reinterpret_cast<uint64_t>(bo_handles.data());
+  exec_cmd.cmd_count = 1;
+  exec_cmd.arg_count = bo_handles.size();
+
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, &exec_cmd) < 0) {
     return HSA_STATUS_ERROR;
   }
 
-  // Waiting for command to finish
+  // Waiting for command chain to finish.
   amdxdna_drm_wait_cmd wait_cmd = {};
-  wait_cmd.hwctx = hw_ctx_handle;
+  wait_cmd.hwctx = aie_queue.GetHwCtxHandle();
   wait_cmd.timeout = DEFAULT_TIMEOUT_VAL;
-  wait_cmd.seq = exec_cmd->seq;
+  wait_cmd.seq = exec_cmd.seq;
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) {
     return HSA_STATUS_ERROR;
@@ -560,7 +570,7 @@ hsa_status_t XdnaDriver::CreateCmdBO(uint32_t size, BOHandle& cmd_bo_handle) {
 }
 
 hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uint32_t num_pkts,
-                                        uint32_t& hw_ctx_handle, uint32_t num_tiles) {
+                                        AieAqlQueue& aie_queue) {
   // Stores instruction and operand BOs.
   std::vector<uint32_t> bo_handles;
 
@@ -651,7 +661,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // If we have CUs that are not cached we will add them to
   // the hardware context
   if (!new_cus.empty()) {
-    hsa_status_t status = ConfigHwCtxNewCUs(hw_ctx_handle, new_cus, num_tiles);
+    hsa_status_t status = ConfigHwCtxNewCUs(new_cus, aie_queue);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }
@@ -695,17 +705,11 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   std::sort(bo_handles.begin(), bo_handles.end());
   bo_handles.erase(std::unique(bo_handles.begin(), bo_handles.end()), bo_handles.end());
 
-  // Filling in the fields to execute the command chain
-  amdxdna_drm_exec_cmd exec_cmd_0 = {};
-  exec_cmd_0.hwctx = hw_ctx_handle;
-  exec_cmd_0.type = AMDXDNA_CMD_SUBMIT_EXEC_BUF;
-  exec_cmd_0.cmd_handles = cmd_chain_bo_handle.handle;
-  exec_cmd_0.args = reinterpret_cast<uint64_t>(bo_handles.data());
-  exec_cmd_0.cmd_count = 1;
-  exec_cmd_0.arg_count = bo_handles.size();
-
   // Executing all commands in the command chain
-  ExecCmdAndWait(&exec_cmd_0, hw_ctx_handle);
+  status = ExecCmdAndWait(cmd_chain_bo_handle, bo_handles, aie_queue);
+  if (status != HSA_STATUS_SUCCESS) {
+    return status;
+  }
 
   for (uint32_t pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
     hsa_amd_aie_ert_packet_t* pkt = first_pkt + pkt_iter;
@@ -770,9 +774,8 @@ XdnaDriver::BOHandle XdnaDriver::FindBOHandle(void* mem) const {
 }
 
 // Creates a new hardware context with the correct CUs
-hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
-                                           const std::vector<BOHandle>& new_cus,
-                                           uint32_t num_tiles) {
+hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(const std::vector<BOHandle>& new_cus,
+                                           AieAqlQueue& aie_queue) {
   const size_t config_cu_param_size =
       sizeof(amdxdna_hwctx_param_config_cu) + new_cus.size() * sizeof(amdxdna_cu_config);
 
@@ -793,14 +796,14 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
     FlushCpuCache(new_cus[i].vaddr, 0, new_cus[i].size);
   }
 
-  if (hw_ctx_handle != AMDXDNA_INVALID_BO_HANDLE) {
+  if (aie_queue.GetHwCtxHandle() != AMDXDNA_INVALID_BO_HANDLE) {
     // Destroy the hardware context
     // Note: we can do this because we have forced synchronization between
     // command chains. If we move to a more asynchronous model, we will need to
     // figure out how hardware context destruction works while applications
     // are running
     amdxdna_drm_destroy_hwctx destroy_hwctx_args = {};
-    destroy_hwctx_args.handle = hw_ctx_handle;
+    destroy_hwctx_args.handle = aie_queue.GetHwCtxHandle();
     if (ioctl(fd_, DRM_IOCTL_AMDXDNA_DESTROY_HWCTX, &destroy_hwctx_args) < 0) {
       return HSA_STATUS_ERROR;
     }
@@ -812,17 +815,15 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
   amdxdna_drm_create_hwctx create_hwctx_args = {};
   create_hwctx_args.qos_p = reinterpret_cast<uintptr_t>(&qos_info);
   create_hwctx_args.max_opc = 0x800;
-  create_hwctx_args.num_tiles = num_tiles;
+  create_hwctx_args.num_tiles = aie_queue.GetAgent().GetNumCores();
 
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CREATE_HWCTX, &create_hwctx_args) < 0) {
     return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  hw_ctx_handle = create_hwctx_args.handle;
-
   // Configure the new hardware context
   amdxdna_drm_config_hwctx config_hw_ctx_args = {};
-  config_hw_ctx_args.handle = hw_ctx_handle;
+  config_hw_ctx_args.handle = create_hwctx_args.handle;
   config_hw_ctx_args.param_type = DRM_AMDXDNA_HWCTX_CONFIG_CU;
   config_hw_ctx_args.param_val = reinterpret_cast<uint64_t>(xdna_config_cu_param);
   config_hw_ctx_args.param_val_size = static_cast<uint32_t>(config_cu_param_size);
@@ -830,6 +831,8 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(uint32_t& hw_ctx_handle,
   if (ioctl(fd_, DRM_IOCTL_AMDXDNA_CONFIG_HWCTX, &config_hw_ctx_args) < 0) {
     return HSA_STATUS_ERROR;
   }
+
+  aie_queue.SetHwCtxHandle(create_hwctx_args.handle);
 
   return HSA_STATUS_SUCCESS;
 }

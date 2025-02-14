@@ -229,8 +229,7 @@ hsa_status_t AieAqlQueue::SubmitCmd(void* queue_base, uint64_t read_dispatch_id,
 
         // Call into the driver to submit from cur_id to write_dispatch_id.
         // Submitting the command chain might involve create a new hardware context.
-        hsa_status_t status = driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, hw_ctx_handle_,
-                                                    GetAgent().GetNumCores());
+        hsa_status_t status = driver.SubmitCmdChain(pkt, num_cont_start_cu_pkts, *this);
         if (status != HSA_STATUS_SUCCESS) {
           return status;
         }
