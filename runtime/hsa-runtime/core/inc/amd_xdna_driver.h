@@ -42,6 +42,8 @@
 #ifndef HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 #define HSA_RUNTIME_CORE_INC_AMD_XDNA_DRIVER_H_
 
+#include <array>
+#include <climits>
 #include <map>
 #include <memory>
 #include <unordered_map>
@@ -148,6 +150,48 @@ class XdnaDriver final : public core::Driver {
     constexpr bool IsValid() const { return handle != AMDXDNA_INVALID_BO_HANDLE; }
   };
 
+  /// @brief CU mask size.
+  static constexpr size_t cu_mask_size = sizeof(uint32_t) * CHAR_BIT;
+
+  /// @brief Per hardware context PDI cache.
+  class PDICache {
+    std::array<BOHandle, cu_mask_size> entries = {};
+    size_t entry_count = 0;
+
+   public:
+    /// @brief Sentinel value for entries not found.
+    constexpr static size_t NotFound = cu_mask_size;
+
+    /// @brief Returns the size of the cache.
+    constexpr size_t size() const { return entry_count; }
+
+    /// @brief Returns the index of the BO handle if it is the cache, otherwise @ref NotFound.
+    ///
+    /// This function does a linear search because the mask is small (32 elements).
+    size_t GetIndex(uint32_t pdi_handle) const {
+      for (size_t i = 0; i < entry_count; ++i) {
+        if (entries[i].handle == pdi_handle) {
+          return i;
+        }
+      }
+      return NotFound;
+    }
+
+    /// @brief Sets the next cache entry.
+    hsa_status_t SetNext(const BOHandle& pdi_bo_handle, size_t& index) {
+      if (entry_count == entries.size()) {
+        // cache is full
+        return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+      }
+
+      index = entry_count++;
+      entries[index] = pdi_bo_handle;
+      return HSA_STATUS_SUCCESS;
+    }
+
+    constexpr const BOHandle& operator[](size_t index) const { return entries[index]; }
+  };
+
 public:
   XdnaDriver(std::string devnode_name);
 
@@ -198,8 +242,8 @@ public:
   /// @brief Finds the BO associated with the address.
   BOHandle FindBOHandle(void* mem) const;
 
-  /// @brief Creates a new hardware context with the correct CUs
-  hsa_status_t ConfigHwCtxNewCUs(const std::vector<BOHandle>& new_cus, AieAqlQueue& aie_queue);
+  /// @brief Creates a new hardware context with the given PDI BO handles.
+  hsa_status_t ConfigHwCtx(const PDICache& pdi_bo_handles, AieAqlQueue& aie_queue);
 
   hsa_status_t QueryDriverVersion();
 
@@ -237,9 +281,8 @@ public:
   /// to manage some of this for now.
   std::map<void*, BOHandle> vmem_addr_mappings;
 
-  /// @brief Storing cached CUs that have already been added to the hardware context.
-  /// This maps the CU BO to the cu_mask in the hardware context
-  std::unordered_map<uint32_t, uint32_t> handle_cu_mappings;
+  /// @brief Hardware context to PDI cache mapping.
+  std::unordered_map<uint32_t, PDICache> hw_ctx_pdi_cache_map;
 
   /// @brief Virtual address range allocated for the device heap.
   ///
@@ -250,6 +293,7 @@ public:
 
   /// @brief The aligned device heap.
   void *dev_heap_aligned = nullptr;
+
   static constexpr size_t dev_heap_size = 64 * 1024 * 1024;
   static constexpr size_t dev_heap_align = 64 * 1024 * 1024;
 };

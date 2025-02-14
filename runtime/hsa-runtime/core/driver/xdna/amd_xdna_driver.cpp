@@ -575,11 +575,11 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   std::vector<uint32_t> bo_handles;
 
   // Stores commands that we are going to submit and the corresponding metadata.
-  std::vector<BOHandle> command_bo_handles;
-  command_bo_handles.reserve(num_pkts);
+  std::vector<BOHandle> cmd_bo_handles;
+  cmd_bo_handles.reserve(num_pkts);
   // Unmap and close the command BOs in case of an error.
-  MAKE_NAMED_SCOPE_GUARD(command_bo_handles_guard, [&] {
-    for (auto& bo_info : command_bo_handles) {
+  MAKE_NAMED_SCOPE_GUARD(cmd_bo_handles_guard, [&] {
+    for (auto& bo_info : cmd_bo_handles) {
       munmap(bo_info.vaddr, bo_info.size);
       drm_gem_close close_bo_args = {};
       close_bo_args.handle = bo_info.handle;
@@ -587,9 +587,10 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     }
   });
 
-  // The new CUs that we need to register
-  std::vector<BOHandle> new_cus;
-  new_cus.reserve(num_pkts);
+  // PDI cache. If the cache is updated, a new hardware context will be created for the queue.
+  auto pdi_cache_it = hw_ctx_pdi_cache_map.find(aie_queue.GetHwCtxHandle());
+  auto pdi_cache = (pdi_cache_it != hw_ctx_pdi_cache_map.end()) ? pdi_cache_it->second : PDICache{};
+  bool reconfigure_queue = false;
 
   // Iterating over all the contiguous HSA_AMD_AIE_ERT_CMD_CHAIN packets
   for (uint32_t pkt_iter = 0; pkt_iter < num_pkts; pkt_iter++) {
@@ -631,44 +632,48 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
     cmd->count = pkt->count + CMD_COUNT_SIZE_INCREASE;
     cmd->opcode = pkt->opcode;
 
-    // Finding BO handle associated with the CU
-    auto cu_bo_handle = FindBOHandle(cmd_pkt_payload->pdi_addr);
-    if (!cu_bo_handle.IsValid()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-    uint32_t cu_bo = cu_bo_handle.handle;
+    // Find if the PDI is cached in the queues PDI cache. If even one PDI is not found, the hardware
+    // context will need to be reconfigured and the cache updated.
+    auto pdi_bo_handle = FindBOHandle(cmd_pkt_payload->pdi_addr);
+    if (!pdi_bo_handle.IsValid()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
-    // Determining if the CU is cached
-    auto cu_mask_iter = handle_cu_mappings.find(cu_bo);
-    uint32_t cu_mask = 0;
-    if (cu_mask_iter == handle_cu_mappings.end()) {
-      // CU mask is one hot encoded, putting the
-      // position where the new CU will be
-      cu_mask = 1 << handle_cu_mappings.size();
-      handle_cu_mappings[cu_bo] = cu_mask;
-      new_cus.push_back(cu_bo_handle);
-    }
-    else {
-      cu_mask = cu_mask_iter->second;
+    // Determining if the PDI is cached
+    auto cached_pdi_index = pdi_cache.GetIndex(pdi_bo_handle.handle);
+    if (cached_pdi_index == PDICache::NotFound) {
+      // PDI does not exist in the cache.
+      status = pdi_cache.SetNext(pdi_bo_handle, cached_pdi_index);
+      if (status != HSA_STATUS_SUCCESS) {
+        return status;
+      }
+      reconfigure_queue = true;
     }
 
-    cmd->data[0] = cu_mask;
+    cmd->data[0] = 0x1 << static_cast<uint32_t>(cached_pdi_index);
     memcpy((cmd->data + 1), cmd_pkt_payload->data, 4 * pkt->count);
 
     // Keeping track of the command
-    command_bo_handles.push_back(cmd_bo_handle);
+    cmd_bo_handles.push_back(cmd_bo_handle);
     cmd_bo_handle_guard.Dismiss();
   }
 
-  // If we have CUs that are not cached we will add them to
-  // the hardware context
-  if (!new_cus.empty()) {
-    hsa_status_t status = ConfigHwCtxNewCUs(new_cus, aie_queue);
+  // If there were PDIs that were not cached, the hardware context needs to be reconfigured.
+  // The cache map will be update with the new hardware context.
+  if (reconfigure_queue) {
+    if (pdi_cache_it != hw_ctx_pdi_cache_map.end()) {
+      hw_ctx_pdi_cache_map.erase(pdi_cache_it);
+    }
+
+    hsa_status_t status = ConfigHwCtx(pdi_cache, aie_queue);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }
+
+    // Update cache mapping.
+    hw_ctx_pdi_cache_map.emplace(aie_queue.GetHwCtxHandle(), pdi_cache);
   }
 
   // Creating a packet that contains the command chain
-  const uint32_t cmd_chain_size = (command_bo_handles.size() + 1) * sizeof(uint32_t);
+  const uint32_t cmd_chain_size = (cmd_bo_handles.size() + 1) * sizeof(uint32_t);
   BOHandle cmd_chain_bo_handle;
   hsa_status_t status = CreateCmdBO(cmd_chain_size, cmd_chain_bo_handle);
   if (status != HSA_STATUS_SUCCESS) {
@@ -690,13 +695,13 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   // Creating a command chain
   cmd_chain->state = HSA_AMD_AIE_ERT_STATE_NEW;
   cmd_chain->extra_cu_masks = 0;
-  cmd_chain->count = sizeof(amdxdna_cmd_chain) + command_bo_handles.size() * sizeof(uint64_t);
+  cmd_chain->count = sizeof(amdxdna_cmd_chain) + cmd_bo_handles.size() * sizeof(uint64_t);
   cmd_chain->opcode = HSA_AMD_AIE_ERT_CMD_CHAIN;
-  cmd_chain_payload->command_count = command_bo_handles.size();
+  cmd_chain_payload->command_count = cmd_bo_handles.size();
   cmd_chain_payload->submit_index = 0;
   cmd_chain_payload->error_index = 0;
-  for (size_t i = 0; i < command_bo_handles.size(); i++) {
-    cmd_chain_payload->data[i] = command_bo_handles[i].handle;
+  for (size_t i = 0; i < cmd_bo_handles.size(); i++) {
+    cmd_chain_payload->data[i] = cmd_bo_handles[i].handle;
   }
 
   // Removing duplicates in the bo container. The driver will report
@@ -721,8 +726,8 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
   status = HSA_STATUS_SUCCESS;
 
   // Unmapping and closing the cmd BOs
-  command_bo_handles_guard.Dismiss();
-  for (auto& command_bo_handle : command_bo_handles) {
+  cmd_bo_handles_guard.Dismiss();
+  for (auto& command_bo_handle : cmd_bo_handles) {
     if (munmap(command_bo_handle.vaddr, command_bo_handle.size) != 0) {
       status = HSA_STATUS_ERROR;
     }
@@ -773,11 +778,9 @@ XdnaDriver::BOHandle XdnaDriver::FindBOHandle(void* mem) const {
   return it->second;
 }
 
-// Creates a new hardware context with the correct CUs
-hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(const std::vector<BOHandle>& new_cus,
-                                           AieAqlQueue& aie_queue) {
+hsa_status_t XdnaDriver::ConfigHwCtx(const PDICache& pdi_bo_handles, AieAqlQueue& aie_queue) {
   const size_t config_cu_param_size =
-      sizeof(amdxdna_hwctx_param_config_cu) + new_cus.size() * sizeof(amdxdna_cu_config);
+      sizeof(amdxdna_hwctx_param_config_cu) + pdi_bo_handles.size() * sizeof(amdxdna_cu_config);
 
   auto* xdna_config_cu_param =
       static_cast<amdxdna_hwctx_param_config_cu*>(malloc(config_cu_param_size));
@@ -786,14 +789,14 @@ hsa_status_t XdnaDriver::ConfigHwCtxNewCUs(const std::vector<BOHandle>& new_cus,
   }
   MAKE_SCOPE_GUARD([xdna_config_cu_param] { free(xdna_config_cu_param); });
 
-  xdna_config_cu_param->num_cus = new_cus.size();
+  xdna_config_cu_param->num_cus = pdi_bo_handles.size();
 
-  for (size_t i = 0; i < new_cus.size(); i++) {
-    xdna_config_cu_param->cu_configs[i].cu_bo = new_cus[i].handle;
+  for (size_t i = 0; i < pdi_bo_handles.size(); i++) {
+    xdna_config_cu_param->cu_configs[i].cu_bo = pdi_bo_handles[i].handle;
     xdna_config_cu_param->cu_configs[i].cu_func = DEFAULT_CU_FUNC;
 
     // Flush the CU out of the cache
-    FlushCpuCache(new_cus[i].vaddr, 0, new_cus[i].size);
+    FlushCpuCache(pdi_bo_handles[i].vaddr, 0, pdi_bo_handles[i].size);
   }
 
   if (aie_queue.GetHwCtxHandle() != AMDXDNA_INVALID_BO_HANDLE) {

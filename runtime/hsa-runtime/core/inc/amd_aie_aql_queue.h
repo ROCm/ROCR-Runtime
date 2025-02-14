@@ -59,7 +59,7 @@ namespace AMD {
 class AieAqlQueue : public core::Queue,
                     private core::LocalSignal,
                     core::DoorbellSignal {
-public:
+ public:
   static __forceinline bool IsType(core::Signal *signal) {
     return signal->IsType(&rtti_id());
   }
@@ -98,13 +98,20 @@ public:
                        void *value) override;
 
   // AIE-specific API
-  AieAgent &GetAgent() { return agent_; }
+
+  /// @brief Returns the agent associated with this queue.
+  AieAgent& GetAgent() { return agent_; }
+
+  /// @brief Sets the hardware context.
   void SetHwCtxHandle(uint32_t hw_ctx_handle) {
     hw_ctx_handle_ = hw_ctx_handle;
   }
+
+  /// @brief Returns the hardware context.
   uint32_t GetHwCtxHandle() const { return hw_ctx_handle_; }
 
   // GPU-specific queue functions are unsupported.
+
   hsa_status_t GetCUMasking(uint32_t num_cu_mask_count,
                             uint32_t *cu_mask) override;
   hsa_status_t SetCUMasking(uint32_t num_cu_mask_count,
@@ -114,16 +121,17 @@ public:
                   hsa_fence_scope_t releaseFence = HSA_FENCE_SCOPE_NONE,
                   hsa_signal_t *signal = NULL) override;
 
+ private:
   HSA_QUEUEID queue_id_ = INVALID_QUEUEID;
   /// @brief ID of AIE device on which this queue has been mapped.
   uint32_t node_id_ = std::numeric_limits<uint32_t>::max();
   /// @brief Queue size in bytes.
   uint32_t queue_size_bytes_ = std::numeric_limits<uint32_t>::max();
 
-protected:
+ protected:
   bool _IsA(Queue::rtti_t id) const override { return id == &rtti_id(); }
 
-private:
+ private:
   AieAgent &agent_;
 
   /// @brief Base of the queue's ring buffer storage.
