@@ -474,8 +474,9 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(amdxdna_drm_exec_cmd* exec_cmd, uint32_t
   return HSA_STATUS_SUCCESS;
 }
 
-hsa_status_t XdnaDriver::RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_handles,
-                                        hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload) {
+hsa_status_t XdnaDriver::FindBOs(uint32_t count,
+                                 hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload,
+                                 std::vector<uint32_t>& bo_handles) {
   const uint64_t instr_addr =
       Concat<uint64_t>(cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX + 1],
                        cmd_pkt_payload->data[CMD_PKT_PAYLOAD_INSTRUCTION_SEQUENCE_IDX]);
@@ -589,7 +590,7 @@ hsa_status_t XdnaDriver::SubmitCmdChain(hsa_amd_aie_ert_packet_t* first_pkt, uin
 
     // Add the handles for all of the BOs to bo_handles as well as rewrite
     // the command payload handles to contain the actual virtual addresses
-    hsa_status_t status = RegisterCmdBOs(pkt->count, bo_handles, cmd_pkt_payload);
+    hsa_status_t status = FindBOs(pkt->count, cmd_pkt_payload, bo_handles);
     if (status != HSA_STATUS_SUCCESS) {
       return status;
     }

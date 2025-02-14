@@ -214,14 +214,13 @@ public:
   /// @param bo_info allocated BO
   hsa_status_t CreateCmdBO(uint32_t size, BOHandle& bo_info);
 
-  /// @brief Adds all BOs in a command packet payload to a vector
-  ///         and replaces the handles with a virtual address
+  /// @brief Finds all BOs in a command packet payload.
   ///
   /// @param count Number of entries in the command
-  /// @param bo_handles vector that contains all bo handles
   /// @param cmd_pkt_payload A pointer to the payload of the command
-  hsa_status_t RegisterCmdBOs(uint32_t count, std::vector<uint32_t>& bo_handles,
-                              hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload);
+  /// @param bo_handles vector that contains all BO handles
+  hsa_status_t FindBOs(uint32_t count, hsa_amd_aie_ert_start_kernel_data_t* cmd_pkt_payload,
+                       std::vector<uint32_t>& bo_handles);
 
   /// @brief Executes a command and waits for its completion
   ///
