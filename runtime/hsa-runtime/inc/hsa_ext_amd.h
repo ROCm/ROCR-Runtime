@@ -316,53 +316,6 @@ typedef enum {
 } hsa_amd_aie_ert_cmd_opcode_t;
 
 /**
- * Command types for HSA AMD AIE ERT.
- */
-typedef enum {
-  /**
-   * Default command type.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_DEFAULT = 0,
-  /**
-   * Command processed by kernel domain scheduler (KDS) locally.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_KDS_LOCAL = 1,
-  /**
-   * Control command uses reserved command queue slot.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_CTRL = 2,
-  /**
-   * Control command uses reserved command queue slot.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_CU = 3,
-  /**
-   * CU command.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_SCU = 4
-} hsa_amd_aie_ert_cmd_type_t;
-
-/**
- * Format for start kernel packet header.
- */
-typedef struct hsa_amd_aie_ert_start_kernel_header_s {
-  uint32_t state : 4;
-  /**
-   * Enable driver to record timestamp for various states the
-   * command has gone through. The stat data is appended after
-   * the command data.
-   */
-  uint32_t stat_enabled : 1;
-  uint32_t unused : 5;
-  /**
-   * Extra CU masks in addition to the mandatory mask.
-   */
-  uint32_t extra_cu_masks : 2;
-  uint32_t count : 11;
-  uint32_t opcode : 5;
-  uint32_t type : 4;
-} hsa_amd_aie_ert_start_kernel_header_t;
-
-/**
  * Payload data for AIE ERT start kernel packets (i.e., when the opcode is
  * HSA_AMD_AIE_ERT_START_KERNEL).
  */
@@ -377,31 +330,6 @@ typedef struct hsa_amd_aie_ert_start_kernel_data_s {
    */
   uint32_t data[];
 } hsa_amd_aie_ert_start_kernel_data_t;
-
-/**
- * Payload data for AIE ERT command chain packets (i.e., when the opcode is
- * HSA_AMD_AIE_ERT_CMD_CHAIN). A command chain is a buffer of commands parsed
- * by the ERT.
- */
-typedef struct hsa_amd_aie_ert_command_chain_data_s {
-  /**
-   * Number of commands in the chain.
-   */
-  uint32_t command_count;
-  /**
-   * Index of last successfully submitted command in the chain.
-   */
-  uint32_t submit_index;
-  /**
-   * Index of failing command if command status is not completed.
-   */
-  uint32_t error_index;
-  uint32_t reserved[3];
-  /**
-   * Address of each command in the chain.
-   */
-  uint64_t data[];
-} hsa_amd_aie_ert_command_chain_data_t;
 
 /**
  * AMD AIE ERT packet. Used for sending a command to an AIE agent.
