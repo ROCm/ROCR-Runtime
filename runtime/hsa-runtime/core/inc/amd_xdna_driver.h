@@ -279,6 +279,7 @@ public:
   /// object to track handle allocations. Using the VMEM API for mapping XDNA
   /// driver handles requires a bit more refactoring. So rely on the XDNA driver
   /// to manage some of this for now.
+  std::unordered_map<uint32_t, void *> vmem_handle_mappings;
   std::map<void*, BOHandle> vmem_addr_mappings;
 
   /// @brief Hardware context to PDI cache mapping.

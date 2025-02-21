@@ -258,6 +258,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
     *mem = bo_handle.vaddr;
   }
 
+  vmem_handle_mappings.emplace(bo_handle.handle, bo_handle.vaddr);
   vmem_addr_mappings.emplace(bo_handle.vaddr, bo_handle);
 
   bo_guard.Dismiss();
@@ -267,9 +268,7 @@ XdnaDriver::AllocateMemory(const core::MemoryRegion &mem_region,
 
 hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
   auto it = vmem_addr_mappings.find(mem);
-  if (it == vmem_addr_mappings.end()) {
-    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
-  }
+  if (it == vmem_addr_mappings.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
   auto handle = it->second.handle;
 
@@ -279,6 +278,7 @@ hsa_status_t XdnaDriver::FreeMemory(void *mem, size_t size) {
     return HSA_STATUS_ERROR;
   }
 
+  vmem_handle_mappings.erase(handle);
   vmem_addr_mappings.erase(it);
 
   return HSA_STATUS_SUCCESS;
@@ -323,9 +323,9 @@ hsa_status_t XdnaDriver::ImportDMABuf(int dmabuf_fd, core::Agent &agent,
   drm_prime_handle import_params = {};
   import_params.handle = AMDXDNA_INVALID_BO_HANDLE;
   import_params.fd = dmabuf_fd;
-  if (ioctl(fd_, DRM_IOCTL_PRIME_FD_TO_HANDLE, &import_params) < 0) {
+  if (ioctl(fd_, DRM_IOCTL_PRIME_FD_TO_HANDLE, &import_params) < 0)
     return HSA_STATUS_ERROR;
-  }
+
   handle.handle = import_params.handle;
   return HSA_STATUS_SUCCESS;
 }
@@ -337,35 +337,34 @@ hsa_status_t XdnaDriver::Map(core::ShareableHandle handle, void *mem,
   drm_prime_handle params = {};
   params.handle = handle.handle;
   params.fd = -1;
-  if (ioctl(fd_, DRM_IOCTL_PRIME_HANDLE_TO_FD, &params) < 0) {
+  if (ioctl(fd_, DRM_IOCTL_PRIME_HANDLE_TO_FD, &params) < 0)
     return HSA_STATUS_ERROR;
-  }
 
   // Change permissions.
   void *mapped_ptr = mmap(mem, size, PermissionsToMmapFlags(perms),
                           MAP_FIXED | MAP_SHARED, params.fd, offset);
-  if (mapped_ptr == MAP_FAILED) {
-    return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-  }
+  if (mapped_ptr == MAP_FAILED)
+    return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::Unmap(core::ShareableHandle handle, void *mem,
                                size_t offset, size_t size) {
-  if (munmap(mem, size) != 0) {
+  if (munmap(mem, size) != 0)
     return HSA_STATUS_ERROR;
-  }
+
   return HSA_STATUS_SUCCESS;
 }
 
 hsa_status_t XdnaDriver::ReleaseShareableHandle(core::ShareableHandle &handle) {
   drm_gem_close close_params = {};
   close_params.handle = handle.handle;
-  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_params) < 0) {
+  if (ioctl(fd_, DRM_IOCTL_GEM_CLOSE, &close_params) < 0)
     return HSA_STATUS_ERROR;
-  }
+
   handle = {};
+
   return HSA_STATUS_SUCCESS;
 }
 
@@ -467,9 +466,7 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(const BOHandle& cmd_chain_bo_handle,
   exec_cmd.cmd_count = 1;
   exec_cmd.arg_count = bo_handles.size();
 
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, &exec_cmd) < 0) {
-    return HSA_STATUS_ERROR;
-  }
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_EXEC_CMD, &exec_cmd) < 0) return HSA_STATUS_ERROR;
 
   // Waiting for command chain to finish.
   amdxdna_drm_wait_cmd wait_cmd = {};
@@ -477,9 +474,7 @@ hsa_status_t XdnaDriver::ExecCmdAndWait(const BOHandle& cmd_chain_bo_handle,
   wait_cmd.timeout = DEFAULT_TIMEOUT_VAL;
   wait_cmd.seq = exec_cmd.seq;
 
-  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) {
-    return HSA_STATUS_ERROR;
-  }
+  if (ioctl(fd_, DRM_IOCTL_AMDXDNA_WAIT_CMD, &wait_cmd) < 0) return HSA_STATUS_ERROR;
 
   return HSA_STATUS_SUCCESS;
 }

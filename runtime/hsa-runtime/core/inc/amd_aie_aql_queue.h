@@ -160,7 +160,6 @@ class AieAqlQueue : public core::Queue,
     return rtti_id_;
   }
 
-  DISALLOW_COPY_AND_ASSIGN(AieAqlQueue);
 };
 
 } // namespace AMD
