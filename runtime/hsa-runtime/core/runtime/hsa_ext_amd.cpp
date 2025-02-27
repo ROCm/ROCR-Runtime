@@ -578,7 +578,7 @@ uint32_t hsa_amd_signal_wait_all(uint32_t signal_count, hsa_signal_t* hsa_signal
   TRY;
   if (!core::Runtime::runtime_singleton_->IsOpen()) {
     assert(false && "hsa_amd_signal_wait_all called while not initialized.");
-    return 0;
+    return uint32_t(0);
   }
 
   // Treat NULL and invalid signals as already satisfied their condition and skip them
@@ -591,10 +591,18 @@ uint32_t hsa_amd_signal_wait_all(uint32_t signal_count, hsa_signal_t* hsa_signal
     }
   }
 
+  // Return if there's no valid signal to wait on
+  if (valid_signals.empty()){
+    if (satisfying_values) {
+      // Set 0 as satisfying value for NULL and invalid signals
+      std::fill(satisfying_values, satisfying_values + signal_count, 0);
+    }
+    return uint32_t(0);
+  }
+
   uint32_t valid_signal_count = valid_signals.size();
 
-  std::vector<hsa_signal_value_t> satisfying_values_vec;
-  satisfying_values_vec.resize(valid_signal_count);
+  std::vector<hsa_signal_value_t> satisfying_values_vec(valid_signal_count);
   uint32_t first_satysifying_signal_idx =
       core::Signal::WaitMultiple(valid_signal_count, valid_signals.data(), conds, values, timeout_hint, wait_hint,
                                  satisfying_values_vec, true);
