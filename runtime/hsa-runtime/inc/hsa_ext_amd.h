@@ -1223,10 +1223,11 @@ uint32_t HSA_API hsa_amd_signal_wait_all(uint32_t signal_count, hsa_signal_t* si
  *
  * @details Allows waiting for any of several signal and conditions pairs to be
  * satisfied. The function returns the index into the list of signals of the
- * first satisfying signal-condition pair. The value of the satisfying signal's
- * value is returned in satisfying_value unless satisfying_value is NULL. NULL 
- * and invalid signals are ignored. This function provides only relaxed memory 
- * semantics.
+ * first satisfying signal-condition pair. The function returns 0 if no valid 
+ * signal is passed. The value of the satisfying signal's value is returned in 
+ * satisfying_value, unless satisfying_value is nullptr or there's no valid 
+ * signal in the signal-condition pairs. NULL and invalid signals are ignored.
+ * This function provides only relaxed memory semantics.
  */
 uint32_t HSA_API
     hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* signals,

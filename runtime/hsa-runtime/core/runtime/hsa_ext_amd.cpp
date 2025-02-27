@@ -640,6 +640,12 @@ uint32_t hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* hsa_signal
     }
   }
 
+  // Return if there's no valid signal to wait on
+  // satisfying_value is ignored
+  if (valid_signals.empty()){
+    return uint32_t(0);
+  }
+
   std::vector<hsa_signal_value_t> satisfying_value_vec(1);
   uint32_t satisfying_signal_idx =
       core::Signal::WaitMultiple(valid_signals.size(), valid_signals.data(), conds, values, timeout_hint, wait_hint,
