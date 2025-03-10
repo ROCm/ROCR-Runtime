@@ -279,8 +279,18 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
 
   // The signal is 64 bit value, and poll checks for 32 bit value. So we
   // need to use two poll operations per dependent signal.
-  const uint32_t num_poll_command =
+  uint32_t num_poll_command =
       static_cast<uint32_t>(2 * dep_signals.size());
+
+  // Workaround for rare-issue on gfx908 where SDMA_OP_POLL_REGMEM returns before
+  // polled memory is cleared
+  //
+  static bool doublePoll =
+    (agent_->isa()->GetVersion() >= core::Isa::Version(9, 0, 8)) ? true : false;
+
+  if (doublePoll)
+    num_poll_command *= 2;
+
   const uint32_t total_poll_command_size =
       (num_poll_command * poll_command_size_);
 
@@ -368,6 +378,19 @@ hsa_status_t BlitSdma<RingIndexTy, HwIndexMonotonic, SizeToCountOffset, useGCR>:
     command_addr += poll_command_size_;
     bytes_written_[wrapped_index] = prior_bytes;
     wrapped_index += poll_command_size_;
+
+    if (doublePoll) {
+	// Wait for the higher 64 bit to 0.
+	BuildPollCommand(command_addr, &signal_addr[1], 0);
+	command_addr += poll_command_size_;
+	bytes_written_[wrapped_index] = prior_bytes;
+	wrapped_index += poll_command_size_;
+	// Then wait for the lower 64 bit to 0.
+	BuildPollCommand(command_addr, &signal_addr[0], 0);
+	command_addr += poll_command_size_;
+	bytes_written_[wrapped_index] = prior_bytes;
+	wrapped_index += poll_command_size_;
+    }
   }
 
   if (profiling_enabled && (gang_leader_ || gang_signals.empty())) {
