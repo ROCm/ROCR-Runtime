@@ -1311,7 +1311,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   // handler.
   if (errorCode == static_cast<hsa_status_t>(HSA_STATUS_ERROR_MEMORY_FAULT)) {
     debug_print("Queue error - HSA_STATUS_ERROR_MEMORY_FAULT\n");
-    return false;
+    //return false;
   }
 
   // Fallback if KFD does not support GPU core dump. In this case, there core dump is

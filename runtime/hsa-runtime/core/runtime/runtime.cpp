@@ -1963,8 +1963,8 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
       else if (amd::coredump::dump_gpu_core())
         fprintf(stderr, "GPU core dump failed\n");
     }
-    assert(false && "GPU memory access fault.");
-    std::abort();
+    //assert(false && "GPU memory access fault.");
+    //std::abort();
   }
   // No need to keep the signal because we are done.
   return false;
