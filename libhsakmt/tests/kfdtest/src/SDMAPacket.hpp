@@ -39,7 +39,8 @@ class SDMAPacket : public BasePacket {
 class SDMAWriteDataPacket : public SDMAPacket {
  public:
     // This contructor will also init the packet, no need for additional calls
-    SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int data);
+    SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int data,
+		        unsigned int packSizeOffset = 0);
     SDMAWriteDataPacket(unsigned int familyId, void* destAddr, unsigned int ndw, void *data);
 
     virtual ~SDMAWriteDataPacket(void) {}
@@ -47,7 +48,7 @@ class SDMAWriteDataPacket : public SDMAPacket {
     // @returns Pointer to the packet
     virtual const void *GetPacket() const  { return packetData; }
     // @breif Initialise the packet
-    void InitPacket(void* destAddr, unsigned int ndw, void *data);
+    void InitPacket(void* destAddr, unsigned int ndw, void *data, unsigned int packetSizeOffset = 0);
     // @returns Packet size in bytes
     virtual unsigned int SizeInBytes() const { return packetSize; }
 
@@ -138,6 +139,26 @@ class SDMATrapPacket : public SDMAPacket {
  protected:
     // SDMA_PKT_TRAP struct contains all the packet's data
     SDMA_PKT_TRAP  packetData;
+};
+
+class SDMAPollRegMemPacket : public SDMAPacket {
+ public:
+    // This contructor will also init the packet, no need for additional calls
+    SDMAPollRegMemPacket(void* addr, int value);
+
+    virtual ~SDMAPollRegMemPacket(void);
+
+    // @returns Pointer to the packet
+    virtual const void *GetPacket() const  { return &packetData; }
+    // @breif Initialise the packet
+    void InitPacket(void* addr, int value);
+    // @returns Packet size in bytes
+    virtual unsigned int SizeInBytes() const { return sizeof(SDMA_PKT_POLL_REGMEM); }
+
+ protected:
+    // SDMA_PKT_WRITE_UNTILED struct contains all the packet's data
+    SDMA_PKT_POLL_REGMEM packetData;
+    unsigned int packetSize;
 };
 
 class SDMATimePacket : public SDMAPacket {

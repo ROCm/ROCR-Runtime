@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2024 Advanced Micro Devices, Inc. All Rights Reserved.
+ * Copyright (C) 2025 Advanced Micro Devices, Inc. All Rights Reserved.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -21,24 +21,17 @@
  *
  */
 
-#ifndef __KFD_NEGATIVE_TEST__H__
-#define __KFD_NEGATIVE_TEST__H__
+#ifndef __KFD_SDMA_QUEUE_BY_ENG_ID__H__
+#define __KFD_SDMA_QUEUE_BY_ENG_ID__H__
 
-#include <gtest/gtest.h>
+#include "SDMAQueue.hpp"
 
-#include "PM4Queue.hpp"
-#include "KFDBaseComponentTest.hpp"
-#include "SDMAQueueByEngId.hpp"
-#include "SDMAPacket.hpp"
-
-class KFDNegativeTest : public KFDBaseComponentTest {
+class SDMAQueueByEngId : public SDMAQueue {
  public:
-    KFDNegativeTest() {}
-    ~KFDNegativeTest() {}
-
+    SDMAQueueByEngId(int engineId) {CMD_NOP = 0; m_SdmaEngineId = engineId;}
+    virtual ~SDMAQueueByEngId(void) {}
  protected:
-    virtual void SetUp();
-    virtual void TearDown();
+    virtual _HSA_QUEUE_TYPE GetQueueType() { return HSA_QUEUE_SDMA_BY_ENG_ID; }
 };
 
-#endif  // __KFD_NEGATIVE_TEST__H__
+#endif  // __KFD_SDMA_QUEUE_BY_ENG_ID__H__

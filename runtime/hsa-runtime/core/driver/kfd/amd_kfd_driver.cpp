@@ -520,5 +520,15 @@ bool KfdDriver::BindXnackMode() {
   return (mode != Flag::XNACK_DISABLE);
 }
 
+hsa_status_t KfdDriver::IsModelEnabled(bool* enable) const {
+  // AIE does not support streaming performance monitor.
+  HSAKMT_STATUS status = HSAKMT_STATUS_ERROR;
+  status = hsaKmtModelEnabled(enable);
+  if (status != HSAKMT_STATUS_SUCCESS)
+     return HSA_STATUS_ERROR;
+
+  return HSA_STATUS_SUCCESS;
+}
+
 } // namespace AMD
 } // namespace rocr

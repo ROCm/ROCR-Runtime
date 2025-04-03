@@ -364,6 +364,7 @@ FILTER[gfx950]=\
 "KFDMemoryTest.FlatScratchAccess:"\
 "KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency:"\
+"KFDNegativeTest.BasicPipeReset:"\
 "KFDGWSTest.Semaphore"
 
 FILTER[gfx1200]=\
@@ -373,3 +374,13 @@ FILTER[gfx1200]=\
 FILTER[gfx1201]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$BLACKLIST_GFX12"
+
+FILTER[RHEL9]=\
+"$BLACKLIST_ALL_ASICS:"\
+"$BLACKLIST_GFX11:"\
+"KFDQMTest.ExtendedCuMasking:"\
+"KFDEvictTest.QueueTest:"\
+"KFDPCSamplingTest.*"
+
+FILTER[upstream]=\
+"KFDIPCTest.*"

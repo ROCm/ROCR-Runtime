@@ -213,13 +213,21 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 #if !defined(__linux__)
   wallclock_frequency_ = 0;
 #else
-  // Get wallclock freq from libdrm.
-  amdgpu_gpu_info info;
-  if (amdgpu_query_gpu_info(ldrm_dev_, &info) < 0)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
+  bool model_enabled;
+  hsa_status_t status = driver().IsModelEnabled(&model_enabled);
+  assert(status == HSA_STATUS_SUCCESS && "IsModelEnabled failed");
+  if (model_enabled) {
+    wallclock_frequency_ = 0;
+  } else {
+    // Get wallclock freq from libdrm.
+    amdgpu_gpu_info info;
+    if (amdgpu_query_gpu_info(ldrm_dev_, &info) < 0)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nlibdrm query failed.\n");
 
-  // Reported by libdrm in KHz.
-  wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
+    // Reported by libdrm in KHz.
+    wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
+  }
+
 #endif
 
   auto& first_cpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
@@ -241,35 +249,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
 }
 
 GpuAgent::~GpuAgent() {
-  if (this->Enabled()) {
-    for (auto& blit : blits_) {
-      if (!blit.empty()) {
-        hsa_status_t status = blit->Destroy(*this);
-        assert(status == HSA_STATUS_SUCCESS);
-      }
-    }
-
-    if (ape1_base_ != 0) {
-      _aligned_free(reinterpret_cast<void*>(ape1_base_));
-    }
-
-    scratch_cache_.trim(true);
-    scratch_cache_.free_reserve();
-
-    if (scratch_pool_.base() != NULL) {
-      hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
-    }
-
-    for (int i = 0; i < QueueCount; i++)
-      queues_[i].reset();
-
-    system_deallocator()(doorbell_queue_map_);
-
-    if (trap_code_buf_ != NULL) {
-      ReleaseShader(trap_code_buf_, trap_code_buf_size_);
-    }
-  }
-
   std::for_each(regions_.begin(), regions_.end(), DeleteObject());
   regions_.clear();
 }
@@ -942,6 +921,37 @@ void GpuAgent::PreloadBlits() {
   }
 }
 
+void GpuAgent::ReleaseResources() {
+  if (this->Enabled()) {
+    this->Disable();
+    for (auto& blit : blits_) {
+      if (!blit.empty()) {
+        hsa_status_t status = blit->Destroy(*this);
+        assert(status == HSA_STATUS_SUCCESS);
+      }
+    }
+
+    if (ape1_base_ != 0) {
+      _aligned_free(reinterpret_cast<void*>(ape1_base_));
+    }
+
+    scratch_cache_.trim(true);
+    scratch_cache_.free_reserve();
+
+    if (scratch_pool_.base() != NULL) {
+      hsaKmtFreeMemory(scratch_pool_.base(), scratch_pool_.size());
+    }
+
+    for (int i = 0; i < QueueCount; i++)
+      queues_[i].reset();
+
+    system_deallocator()(doorbell_queue_map_);
+
+    if (trap_code_buf_ != NULL)
+      system_deallocator()(trap_code_buf_);
+  }
+}
+
 hsa_status_t GpuAgent::PostToolsInit() {
   // Defer memory allocation until agents have been discovered.
   InitAllocators();
@@ -1361,7 +1371,7 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       *((uint32_t*)value) = 1024;
       break;
     case HSA_AGENT_INFO_GRID_MAX_DIM: {
-      const hsa_dim3_t grid_size = {UINT32_MAX, UINT32_MAX, UINT32_MAX};
+      const hsa_dim3_t grid_size = {INT32_MAX, UINT16_MAX, UINT16_MAX};
       std::memcpy(value, &grid_size, sizeof(hsa_dim3_t));
     } break;
     case HSA_AGENT_INFO_GRID_MAX_SIZE:
@@ -2732,7 +2742,7 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     device_datahost->buf_watermark1 = 0.8 * device_datahost->buf_size;
 
     // Allocate device memory for 2nd level trap handler TMA
-    size_t deviceAllocSize = sizeof(*pcs_data->device_data) + (2 * trap_buffer_size);
+    size_t deviceAllocSize = sizeof(pcs_sampling_data_t) + (2 * trap_buffer_size);
     pcs_data->device_data = (pcs_sampling_data_t*)finegrain_allocator()(deviceAllocSize, 0);
     if (pcs_data->device_data == nullptr) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
@@ -2748,9 +2758,12 @@ hsa_status_t GpuAgent::PcSamplingCreateFromId(HsaPcSamplingTraceId ioctlId,
     }
 
     uint8_t* device_buf_ptr =
-        ((uint8_t*)pcs_data->device_data) + sizeof(pcs_sampling_data_t);
-    if (DmaFill(device_buf_ptr, 0, deviceAllocSize - sizeof(pcs_sampling_data_t)) !=
-        HSA_STATUS_SUCCESS) {
+	reinterpret_cast<uint8_t*>(pcs_data->device_data) + sizeof(pcs_sampling_data_t);
+    size_t count_in_bytes = deviceAllocSize - sizeof(pcs_sampling_data_t);
+    size_t count_in_dwords = count_in_bytes / sizeof(uint32_t);
+
+    if (DmaFill(device_buf_ptr, 0, count_in_dwords) !=
+	 HSA_STATUS_SUCCESS) {
       debug_print("Failed to dmaFill!\n");
       return HSA_STATUS_ERROR;
     }
@@ -3114,8 +3127,11 @@ hsa_status_t GpuAgent::PcSamplingFlushDeviceBuffers(
 
   if (properties_.NumXcc > 1) {
     pred_exec_cmd_sz = 2;
-    cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
-    cmd_data[i++] = PM4_PRED_EXEC_DW2_EXEC_COUNT(0xF) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
+    const uint64_t command_bytes = atomic_ex_cmd_sz + copy_data_cmd_sz;
+    cmd_data[i++] =
+      PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
+    cmd_data[i++] =
+      PM4_PRED_EXEC_DW2_EXEC_COUNT(command_bytes) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
   }
 
   /*
@@ -3182,10 +3198,12 @@ hsa_status_t GpuAgent::PcSamplingFlushDeviceBuffers(
 
   if (properties_.NumXcc > 1) {
     const uint64_t n = ceil(to_copy / (32 * 1024 * 1024));
+    const uint64_t command_bytes = wait_reg_mem_cmd_sz + write_data_cmd_sz + dma_data_cmd_sz * n;
     pred_exec_cmd_sz = 2;
-    cmd_data[i++] = PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
     cmd_data[i++] =
-        PM4_PRED_EXEC_DW2_EXEC_COUNT(0x13 + 7 * n) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
+      PM4_HDR(PM4_HDR_IT_OPCODE_PRED_EXEC, pred_exec_cmd_sz, isa_->GetMajorVersion());
+    cmd_data[i++] =
+      PM4_PRED_EXEC_DW2_EXEC_COUNT(command_bytes) | PM4_PRED_EXEC_DW2_VIRTUALXCCID_SELECT(0x1);
   }
 
   /*

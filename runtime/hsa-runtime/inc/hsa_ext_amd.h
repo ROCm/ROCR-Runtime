@@ -3,7 +3,7 @@
 // The University of Illinois/NCSA
 // Open Source License (NCSA)
 //
-// Copyright (c) 2014-2024, Advanced Micro Devices, Inc. All rights reserved.
+// Copyright (c) 2014-2025, Advanced Micro Devices, Inc. All rights reserved.
 //
 // Developed by:
 //
@@ -314,53 +314,6 @@ typedef enum {
    */
   HSA_AMD_AIE_ERT_START_NPU_PREEMPT = 21
 } hsa_amd_aie_ert_cmd_opcode_t;
-
-/**
- * Command types for HSA AMD AIE ERT.
- */
-typedef enum {
-  /**
-   * Default command type.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_DEFAULT = 0,
-  /**
-   * Command processed by kernel domain scheduler (KDS) locally.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_KDS_LOCAL = 1,
-  /**
-   * Control command uses reserved command queue slot.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_CTRL = 2,
-  /**
-   * Control command uses reserved command queue slot.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_CU = 3,
-  /**
-   * CU command.
-   */
-  HSA_AMD_AIE_ERT_CMD_TYPE_SCU = 4
-} hsa_amd_aie_ert_cmd_type_t;
-
-/**
- * Format for start kernel packet header.
- */
-typedef struct hsa_amd_aie_ert_start_kernel_header_s {
-  uint32_t state : 4;
-  /**
-   * Enable driver to record timestamp for various states the
-   * command has gone through. The stat data is appended after
-   * the command data.
-   */
-  uint32_t stat_enabled : 1;
-  uint32_t unused : 5;
-  /**
-   * Extra CU masks in addition to the mandatory mask.
-   */
-  uint32_t extra_cu_masks : 2;
-  uint32_t count : 11;
-  uint32_t opcode : 5;
-  uint32_t type : 4;
-} hsa_amd_aie_ert_start_kernel_header_t;
 
 /**
  * Payload data for AIE ERT start kernel packets (i.e., when the opcode is
@@ -1209,8 +1162,9 @@ hsa_status_t HSA_API
  * @details Allows waiting for all of several signal and condition pairs to be
  * satisfied. The function returns 0 if all signals met their conditions and -1
  * on a timeout. The value of each signal's satisfying value is returned in
- * satisfying_value unless satisfying_value is nullptr. This function provides
- * only relaxed memory semantics.
+ * satisfying_value unless satisfying_value is nullptr. NULL and invalid signals
+ * are considered to have value 0 and their conditions already satisfied. This
+ * function provides only relaxed memory semantics.
  */
 uint32_t HSA_API hsa_amd_signal_wait_all(uint32_t signal_count, hsa_signal_t* signals,
                                          hsa_signal_condition_t* conds, hsa_signal_value_t* values,
@@ -1222,9 +1176,12 @@ uint32_t HSA_API hsa_amd_signal_wait_all(uint32_t signal_count, hsa_signal_t* si
  *
  * @details Allows waiting for any of several signal and conditions pairs to be
  * satisfied. The function returns the index into the list of signals of the
- * first satisfying signal-condition pair. The value of the satisfying signal's
- * value is returned in satisfying_value unless satisfying_value is NULL. This
- * function provides only relaxed memory semantics.
+ * first satisfying signal-condition pair. The function returns
+ * std::numeric_limits<uint32_t>::max() if no valid signal is provided. The value
+ * of the satisfying signal's value is returned in satisfying_value, unless
+ * satisfying_value is nullptr or there's no valid signal in the signal-condition
+ * pairs. NULL and invalid signals are ignored. This function provides only
+ * relaxed memory semantics.
  */
 uint32_t HSA_API
     hsa_amd_signal_wait_any(uint32_t signal_count, hsa_signal_t* signals,
@@ -2374,7 +2331,11 @@ typedef enum {
   /*
   Memory has been shared with the local process via ROCr IPC APIs.
   */
-  HSA_EXT_POINTER_TYPE_IPC = 4
+  HSA_EXT_POINTER_TYPE_IPC = 4,
+  /*
+  No backend memory but virtual address
+  */
+  HSA_EXT_POINTER_TYPE_RESERVED_ADDR = 5
 } hsa_amd_pointer_type_t;
 
 /**

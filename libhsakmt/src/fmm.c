@@ -25,6 +25,7 @@
 
 #include "libhsakmt.h"
 #include "fmm.h"
+#include "hsakmt/hsakmtmodel.h"
 #include "hsakmt/linux/kfd_ioctl.h"
 #include <stdlib.h>
 #include <stdio.h>
@@ -1539,6 +1540,8 @@ static void *fmm_allocate_va(uint32_t gpu_id, void *address, uint64_t size,
 			aperture_release_area(aperture, mem, size);
 			mem = NULL;
 		}
+		/* Set node_id to 0 for OnlyAddress */
+		vm_obj->node_id = 0;
 	}
 
 	pthread_mutex_unlock(&aperture->fmm_mutex);
@@ -2086,6 +2089,11 @@ int hsakmt_open_drm_render_device(int minor)
 	uint32_t major_drm, minor_drm;
 	struct amdgpu_device **device_handle;
 
+	/* Bypass amdgpu if we're running a model. Return hsakmt_kfd_fd, which is the
+	 * backing for all our "GPU" memory. */
+	if (hsakmt_use_model)
+		return hsakmt_kfd_fd;
+
 	if (minor < DRM_FIRST_RENDER_NODE || minor > DRM_LAST_RENDER_NODE) {
 		pr_err("DRM render minor %d out of range [%d, %d]\n", minor,
 		       DRM_FIRST_RENDER_NODE, DRM_LAST_RENDER_NODE);
@@ -2405,6 +2413,11 @@ static void *map_mmio(uint32_t node_id, uint32_t gpu_id, int mmap_fd)
 	vm_obj->node_id = node_id;
 	pthread_mutex_unlock(&aperture->fmm_mutex);
 
+	if (hsakmt_use_model) {
+		model_set_mmio_page(mem);
+		return mem;
+	}
+
 	/* Map for CPU access*/
 	ret = mmap(mem, PAGE_SIZE,
 			 PROT_READ | PROT_WRITE,
@@ -2445,6 +2458,11 @@ HSAKMT_STATUS hsakmt_fmm_get_amdgpu_device_handle(uint32_t node_id,
 
 	if (i < 0)
 		return HSAKMT_STATUS_INVALID_NODE_UNIT;
+
+	if (hsakmt_use_model) {
+		*DeviceHandle = NULL;
+		return HSAKMT_STATUS_SUCCESS;
+	}
 
 	index = gpu_mem[i].drm_render_minor - DRM_FIRST_RENDER_NODE;
 	if (!amdgpu_handle[index])
@@ -2538,6 +2556,8 @@ HSAKMT_STATUS hsakmt_fmm_init_process_apertures(unsigned int NumNodes)
 	pagedUserptr = getenv("HSA_USERPTR_FOR_PAGED_MEM");
 	svm.userptr_for_paged_mem = (!pagedUserptr || strcmp(pagedUserptr, "0"));
 
+	if (hsakmt_use_model)
+		svm.userptr_for_paged_mem = false;
 	/* If HSA_CHECK_USERPTR is set to a non-0 value, check all userptrs
 	 * when they are registered
 	 */

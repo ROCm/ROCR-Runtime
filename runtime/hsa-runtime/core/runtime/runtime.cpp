@@ -1560,17 +1560,6 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
     return keep;
   };
 
-  auto checkCondition = [](hsa_signal_condition_t cond, hsa_signal_value_t value,
-                           hsa_signal_value_t compare) {
-    switch (cond) {
-      case HSA_SIGNAL_CONDITION_EQ: return value == compare;
-      case HSA_SIGNAL_CONDITION_NE: return value != compare;
-      case HSA_SIGNAL_CONDITION_GTE: return value >= compare;
-      case HSA_SIGNAL_CONDITION_LT: return value < compare;
-      default: return false;
-    }
-  };
-
   // Prepares a list of events for a wait inside KFD
   auto PrepareInterrupt = [&](size_t idx, bool init_age) {
     HsaEvent* hsa_event = hsa_signals[idx]->EopEvent();
@@ -1582,13 +1571,13 @@ void Runtime::AsyncEventsLoop(void* _eventsInfo) {
       if (hsa_events.size() <= unique_evts) {
           hsa_events.resize(unique_evts + 10);
           event_age.resize(unique_evts + 10);
-       }
-       hsa_events[unique_evts] = hsa_event;
-       if (init_age) {
-         event_age[unique_evts] = runtime_singleton_->KfdVersion().supports_event_age ? 1 : 0;
-       }
-       unique_evts++;
-       return true;
+      }
+      if (init_age || hsa_events[unique_evts] != hsa_event ) {
+        event_age[unique_evts] = runtime_singleton_->KfdVersion().supports_event_age ? 1 : 0;
+      }
+      hsa_events[unique_evts] = hsa_event;
+      unique_evts++;
+      return true;
     }
   };
 
@@ -2098,11 +2087,10 @@ void Runtime::Unload() {
   amd::hsa::loader::Loader::Destroy(loader_);
   loader_ = nullptr;
 
-  std::for_each(gpu_agents_.begin(), gpu_agents_.end(), DeleteObject());
-  gpu_agents_.clear();
-
-  std::for_each(disabled_gpu_agents_.begin(), disabled_gpu_agents_.end(), DeleteObject());
-  disabled_gpu_agents_.clear();
+  for(auto nodeAgent: agents_by_node_) {
+    for (auto agent: nodeAgent.second)
+      agent->ReleaseResources();
+  }
 
   asyncSignals_.control.Shutdown();
   asyncExceptions_.control.Shutdown();
@@ -2124,6 +2112,9 @@ void Runtime::Unload() {
   SharedSignalPool.clear();
 
   EventPool.clear();
+
+  mapped_handle_map_.clear();
+  memory_handle_map_.clear();
 
   DestroyAgents();
 

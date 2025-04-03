@@ -70,7 +70,7 @@ class Flag {
   const size_t DEFAULT_SCRATCH_SINGLE_LIMIT_ASYNC_PER_XCC = (3 * (1UL<<30));  // 3 GB
   const size_t DEFAULT_PCS_MAX_DEVICE_BUFFER_SIZE = (256 * (1UL<<20)); //256 MB
 
-  explicit Flag() { Refresh(); }
+  Flag() {}
 
   virtual ~Flag() {}
 
@@ -154,7 +154,11 @@ class Flag {
     enable_scratch_async_reclaim_ = (var == "0") ? false : true;
 
     var = os::GetEnvVar("HSA_ENABLE_SCRATCH_ALT");
-    enable_scratch_alt_ = (var == "0") || !enable_scratch_async_reclaim_ ? false : true;
+    // Temporary: Completely disable alternate scratch because we need to update
+    // the debugger so that it can tell whether a dispatch is using alternate scratch
+    // instead of main scratch
+    // enable_scratch_alt_ = (var == "0") || !enable_scratch_async_reclaim_ ? false : true;
+    enable_scratch_alt_ = false;
 
     tools_lib_names_ = os::GetEnvVar("HSA_TOOLS_LIB");
 

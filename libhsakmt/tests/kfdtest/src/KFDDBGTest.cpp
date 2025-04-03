@@ -361,10 +361,8 @@ TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
         for (int i = 0; i < 2; i++) {
             uint32_t enableMask = !!!(i % 2) ? KFD_DBG_TRAP_MASK_TRAP_ON_WAVE_START :
                                                KFD_DBG_TRAP_MASK_TRAP_ON_WAVE_END;
-            uint32_t supportedMask = enableMask;
-            debug->SetWaveLaunchOverride(KFD_DBG_TRAP_OVERRIDE_OR,
-                                                    &enableMask,
-                                                    &supportedMask);
+            uint32_t supportedMask = enableMask, reqMask = enableMask;
+            debug->SetWaveLaunchOverride(KFD_DBG_TRAP_OVERRIDE_OR, &reqMask, &supportedMask);
 
             if (!!!(supportedMask & enableMask)) {
                 EXPECT_SUCCESS(queue.Destroy());
@@ -374,7 +372,8 @@ TEST_F(KFDDBGTest, HitTrapOnWaveStartEndEvent) {
                 goto exit;
             }
 
-            ASSERT_EQ(enableMask, 0); // previous set mask
+	    // previous set mask
+            ASSERT_EQ(reqMask, !!!(i % 2) ? 0 : KFD_DBG_TRAP_MASK_TRAP_ON_WAVE_START);
 
             Dispatch *dispatch;
             dispatch = new Dispatch(isaBuf);
@@ -584,9 +583,6 @@ TEST_F(KFDDBGTest, HitMemoryViolation) {
             ASSERT_NE(deviceId, -1);
             ASSERT_EQ(queryMask, memViolMask);
 
-            // Assume tracee queue has died and halted process
-            ptrace(PTRACE_CONT, childPid, NULL, NULL);
-
             const std::vector<int> gpuNodes = m_NodeInfo.GetNodesWithGPU();
             uint32_t snapshotSize = gpuNodes.size();
             struct kfd_dbg_device_info_entry deviceInfo[snapshotSize];
@@ -602,6 +598,11 @@ TEST_F(KFDDBGTest, HitMemoryViolation) {
                     break;
                 }
             }
+            waitpid(childPid, &childStatus, 0);
+            while (!WIFSTOPPED(childStatus));
+
+            // Assume tracee queue has died and halted process
+            ptrace(PTRACE_CONT, childPid, NULL, NULL);
 
             debug->Detach();
 
