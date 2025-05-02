@@ -359,11 +359,18 @@ int Assembler::RunAssemble(const char* const AssemblySource) {
 	    return -1;
     }
 
+#if LLVM_VERSION_MAJOR < 19
     std::unique_ptr<MCStreamer> Streamer(TheTarget->createMCObjectStreamer(
         TheTriple, Ctx,
         std::unique_ptr<MCAsmBackend>(MAB), MAB->createObjectWriter(*OS),
         std::unique_ptr<MCCodeEmitter>(CE), *STI, MCOptions.MCRelaxAll,
         MCOptions.MCIncrementalLinkerCompatible, /*DWARFMustBeAtTheEnd*/ false));
+#else
+    std::unique_ptr<MCStreamer> Streamer(TheTarget->createMCObjectStreamer(
+        TheTriple, Ctx,
+        std::unique_ptr<MCAsmBackend>(MAB), MAB->createObjectWriter(*OS),
+        std::unique_ptr<MCCodeEmitter>(CE), *STI));
+#endif
 
     std::unique_ptr<MCAsmParser> Parser(
             createMCAsmParser(SrcMgr, Ctx, *Streamer, *MAI));
