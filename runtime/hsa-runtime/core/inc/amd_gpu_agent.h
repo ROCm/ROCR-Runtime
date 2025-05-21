@@ -169,6 +169,8 @@ class GpuAgentInt : public core::Agent {
    virtual void RegisterRecSdmaEngIdMaskPeer(core::Agent &gang_peer,
                                              uint32_t rec_sdma_eng_id_mask) = 0;
 
+   virtual void SetRecSdmaEngOverride(bool flag) = 0;
+
    // @brief Query if agent represent Kaveri GPU.
    //
    // @retval true if agent is Kaveri GPU.
@@ -370,6 +372,9 @@ class GpuAgent : public GpuAgentInt {
   __forceinline const HsaNodeProperties& properties() const {
     return properties_;
   }
+
+  // @brief set rec_sdma_eng_override_
+  __forceinline void SetRecSdmaEngOverride(bool flag) override { rec_sdma_eng_override_ = flag; }
 
   // @brief Returns number of data caches.
   __forceinline size_t num_cache() const { return cache_props_.size(); }
@@ -792,6 +797,7 @@ class GpuAgent : public GpuAgentInt {
   std::map<uint64_t, uint32_t> rec_sdma_eng_id_peers_info_;
 
   bool uses_rec_sdma_eng_id_mask_;
+  bool rec_sdma_eng_override_;
 
   // @bried XGMI CPU<->GPU
   bool xgmi_cpu_gpu_;
