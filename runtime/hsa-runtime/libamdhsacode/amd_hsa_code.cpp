@@ -122,7 +122,9 @@ namespace code {
 
     hsa_status_t Symbol::GetInfo(hsa_code_symbol_info_t attribute, void *value)
     {
-      assert(value);
+      if (!value) {
+          return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+      }
 
       switch (attribute) {
         case HSA_CODE_SYMBOL_INFO_TYPE: {
