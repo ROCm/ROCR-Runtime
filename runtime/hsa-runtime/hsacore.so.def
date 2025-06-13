@@ -259,6 +259,7 @@ global:
 	hsa_amd_queue_get_info;
 	hsa_amd_enable_logging;
 	hsa_amd_signal_wait_all;
+	hsa_amd_portable_export_dmabuf_v2;
 local:
     *;
 };

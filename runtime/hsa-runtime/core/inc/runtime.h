@@ -91,6 +91,7 @@
 #define HSA_ARGUMENT_ALIGN_BYTES 16
 #define HSA_QUEUE_ALIGN_BYTES 64
 #define HSA_PACKET_ALIGN_BYTES 64
+#define HSA_MAX_DEP_SIGNALS 5
 
 //Avoids include
 namespace rocr {
@@ -375,7 +376,8 @@ class Runtime {
   hsa_status_t SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent, uint32_t num_dep_signals,
                            const hsa_signal_t* dep_signals, hsa_signal_t completion_signal);
 
-  hsa_status_t DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset);
+  hsa_status_t DmaBufExport(const void* ptr, size_t size, int* dmabuf,
+                                            uint64_t* offset, uint64_t flags);
 
   hsa_status_t DmaBufClose(int dmabuf);
 

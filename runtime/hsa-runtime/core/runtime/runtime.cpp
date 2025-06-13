@@ -1215,13 +1215,8 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   if (PtrInfo(ptr, &info, nullptr, nullptr, nullptr, &block) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
 
-  // Temporary: Previous versions of HIP will call hsa_amd_ipc_memory_create with the len aligned to
-  // granularity. We need to maintain backward compatibility for 2 releases so we temporarily allow
-  // this. After 2 releases, we will only allow info.sizeInBytes != len.
-  if ((info.agentBaseAddress != ptr) ||
-      (info.sizeInBytes != len && AlignUp(info.sizeInBytes, pageSize) != len)) {
+  if (info.agentBaseAddress != ptr || info.sizeInBytes != len)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  }
 
   bool useFrag = (block.base != ptr || block.length != len);
   // Assume all pointers and blocks are 4Kb aligned.
@@ -2017,7 +2012,7 @@ Runtime::Runtime()
   asyncExceptions_.monitor_exceptions = true;
   g_use_interrupt_wait = true;
   g_use_mwaitx = true;
-  ::_amdgpu_r_debug = {10,
+  ::_amdgpu_r_debug = {11,
                      nullptr,
                      reinterpret_cast<uintptr_t>(
                                 &_loader_debug_state),
@@ -3083,7 +3078,8 @@ Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   return agents_by_node_[prefetch_node][0];
 }
 
-hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, uint64_t* offset) {
+hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf,
+                                           uint64_t* offset, uint64_t flags) {
 #ifdef __linux__
   ScopedAcquire<KernelSharedMutex::Shared> lock(memory_lock_.shared());
   // Lookup containing allocation.
@@ -3098,6 +3094,14 @@ hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf, ui
         if (mem->second.region->owner()->device_type() != Agent::kAmdGpuDevice)
           return HSA_STATUS_ERROR_INVALID_AGENT;
 
+        rocr::AMD::GpuAgent* owner =
+                    static_cast<AMD::GpuAgent*>(mem->second.region->owner());
+
+        if (flags & HSA_AMD_DMABUF_MAPPING_TYPE_PCIE &&
+            !owner->is_xgmi_cpu_gpu() &&
+            !owner->LargeBarEnabled()) {
+            return (hsa_status_t)HSA_STATUS_ERROR_NOT_SUPPORTED;
+        }
         int fd;
         uint64_t off;
         HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off));
@@ -3304,46 +3308,66 @@ hsa_status_t Runtime::VMemoryHandleMap(void* va, size_t size, size_t in_offset,
 
 hsa_status_t Runtime::VMemoryHandleUnmap(void* va, size_t size) {
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
+  std::list<std::pair<void*, MappedHandle*>> mappedHandles;
 
-  auto mappedHandleIt = mapped_handle_map_.find(va);
-  if (mappedHandleIt == mapped_handle_map_.end()) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+  // va + size may consist of multiple MappedHandle's.
+  // Build a list lf MappedHandles within this VA range.
 
-  if (mappedHandleIt->second.size != size) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  uint8_t* va_ptr = reinterpret_cast<uint8_t*>(va);
+  uint8_t* va_chunk = va_ptr;
+  while (va_chunk < va_ptr + size) {
+    auto mappedHandleIt = mapped_handle_map_.find(va_chunk);
+    // Cannot find a contiguous list of MappedHandles for the full VA range
+    if (mappedHandleIt == mapped_handle_map_.end()) {
+      return HSA_STATUS_ERROR_INVALID_ALLOCATION;
+    }
 
-  // Remove access from all agents that were allowed access
-  for (auto agentPermsIt = mappedHandleIt->second.allowed_agents.begin();
-       agentPermsIt != mappedHandleIt->second.allowed_agents.end();) {
-    assert(va == agentPermsIt->second.va);
-
-    hsa_status_t status = agentPermsIt->second.RemoveAccess();
-    if (status != HSA_STATUS_SUCCESS)
-      return status;
-
-    agentPermsIt = mappedHandleIt->second.allowed_agents.erase(agentPermsIt);
+    mappedHandles.push_back(std::make_pair(va_chunk, &mappedHandleIt->second));
+    va_chunk += mappedHandleIt->second.size;
+  }
+  if (va_chunk != va_ptr + size) {
+    return HSA_STATUS_ERROR_INVALID_ALLOCATION;
   }
 
-  if (mappedHandleIt->second.shareable_handle.IsValid()) {
-    hsa_status_t status = mappedHandleIt->second.agentOwner()->driver().ReleaseShareableHandle(
-        mappedHandleIt->second.shareable_handle);
-    if (status != HSA_STATUS_SUCCESS)
-      return status;
+  for (auto mappedHandleIt : mappedHandles) {
+    // Remove access from all agents that were allowed access
+    for (auto agentPermsIt = mappedHandleIt.second->allowed_agents.begin();
+              agentPermsIt != mappedHandleIt.second->allowed_agents.end();) {
+      assert(mappedHandleIt.first == agentPermsIt->second.va);
+      hsa_status_t status = agentPermsIt->second.RemoveAccess();
+      if (status != HSA_STATUS_SUCCESS) {
+        return status;
+      }
+      agentPermsIt = mappedHandleIt.second->allowed_agents.erase(agentPermsIt);
+    }
+
+    if (mappedHandleIt.second->shareable_handle.IsValid()) {
+      hsa_status_t status =
+        mappedHandleIt.second->agentOwner()->driver().ReleaseShareableHandle(
+                                      mappedHandleIt.second->shareable_handle);
+      if (status != HSA_STATUS_SUCCESS) {
+        return status;
+      }
+    }
+
+    assert(mappedHandleIt.second->address_handle->use_count >= 1);
+    mappedHandleIt.second->address_handle->use_count--;
+    assert(mappedHandleIt.second->mem_handle->use_count >= 1);
+    mappedHandleIt.second->mem_handle->use_count--;
+
+    if (!mappedHandleIt.second->mem_handle->use_count &&
+        !mappedHandleIt.second->mem_handle->ref_count) {
+        // User called VMemoryHandleRelease while this mapping was still
+        // outstanding. We need to delete the MemoryHandle as it is the last
+        // MappedHandle that was using it.
+      mappedHandleIt.second->mem_handle->region->Free(mappedHandleIt.second->mem_handle->thunk_handle,
+                                                      mappedHandleIt.second->mem_handle->size);
+      memory_handle_map_.erase(mappedHandleIt.second->mem_handle->thunk_handle);
+    }
+
+    mapped_handle_map_.erase(mappedHandleIt.first);
+
   }
-
-  assert(mappedHandleIt->second.address_handle->use_count >= 1);
-  mappedHandleIt->second.address_handle->use_count--;
-  assert(mappedHandleIt->second.mem_handle->use_count >= 1);
-  mappedHandleIt->second.mem_handle->use_count--;
-
-  if (!mappedHandleIt->second.mem_handle->use_count &&
-      !mappedHandleIt->second.mem_handle->ref_count) {
-    // User called VMemoryHandleRelease while this mapping was still outstanding. We need to delete
-    // the MemoryHandle as is the last MappedHandle that was using it
-    mappedHandleIt->second.mem_handle->region->Free(mappedHandleIt->second.mem_handle->thunk_handle,
-                                                    mappedHandleIt->second.mem_handle->size);
-    memory_handle_map_.erase(mappedHandleIt->second.mem_handle->thunk_handle);
-  }
-
-  mapped_handle_map_.erase(mappedHandleIt);
   return HSA_STATUS_SUCCESS;
 }
 

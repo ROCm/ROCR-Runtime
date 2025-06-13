@@ -259,12 +259,6 @@ IsaRegistry::GetSupportedGenericVersions() {
     {prepend_isa_prefix("gfx9-generic"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack-"), 1},
     {prepend_isa_prefix("gfx9-generic:xnack+"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc-"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc+"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc-:xnack-"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc+:xnack+"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc-:xnack-"), 1},
-    {prepend_isa_prefix("gfx9-generic:sramecc+:xnack+"), 1},
     {prepend_isa_prefix("gfx9-4-generic"), 1},
     {prepend_isa_prefix("gfx9-4-generic:xnack-"), 1},
     {prepend_isa_prefix("gfx9-4-generic:xnack+"), 1},
@@ -365,12 +359,12 @@ const IsaRegistry::IsaMap& IsaRegistry::GetSupportedIsas() {
   ISAREG_ENTRY_GEN("gfx906",                 9, 0, 6,  any,         any,         64, "gfx9-generic")
   ISAREG_ENTRY_GEN("gfx906:xnack-",          9, 0, 6,  any,         disabled,    64, "gfx9-generic:xnack-")
   ISAREG_ENTRY_GEN("gfx906:xnack+",          9, 0, 6,  any,         enabled,     64, "gfx9-generic:xnack+")
-  ISAREG_ENTRY_GEN("gfx906:sramecc-",        9, 0, 6,  disabled,    any,         64, "gfx9-generic:sramecc-")
-  ISAREG_ENTRY_GEN("gfx906:sramecc+",        9, 0, 6,  enabled,     any,         64, "gfx9-generic:sramecc+")
-  ISAREG_ENTRY_GEN("gfx906:sramecc-:xnack-", 9, 0, 6,  disabled,    disabled,    64, "gfx9-generic:sramecc-:xnack-")
-  ISAREG_ENTRY_GEN("gfx906:sramecc-:xnack+", 9, 0, 6,  disabled,    enabled,     64, "gfx9-generic:sramecc-:xnack+")
-  ISAREG_ENTRY_GEN("gfx906:sramecc+:xnack-", 9, 0, 6,  enabled,     disabled,    64, "gfx9-generic:sramecc+:xnack-")
-  ISAREG_ENTRY_GEN("gfx906:sramecc+:xnack+", 9, 0, 6,  enabled,     enabled,     64, "gfx9-generic:sramecc+:xnack+")
+  ISAREG_ENTRY_GEN("gfx906:sramecc-",        9, 0, 6,  any,         any,         64, "gfx9-generic")
+  ISAREG_ENTRY_GEN("gfx906:sramecc+",        9, 0, 6,  any,         any,         64, "gfx9-generic")
+  ISAREG_ENTRY_GEN("gfx906:sramecc-:xnack-", 9, 0, 6,  any,         disabled,    64, "gfx9-generic:xnack-")
+  ISAREG_ENTRY_GEN("gfx906:sramecc-:xnack+", 9, 0, 6,  any,         enabled,     64, "gfx9-generic:xnack+")
+  ISAREG_ENTRY_GEN("gfx906:sramecc+:xnack-", 9, 0, 6,  any,         disabled,    64, "gfx9-generic:xnack-")
+  ISAREG_ENTRY_GEN("gfx906:sramecc+:xnack+", 9, 0, 6,  any,         enabled,     64, "gfx9-generic:xnack+")
   ISAREG_ENTRY_GEN("gfx908",                 9, 0, 8,  any,         any,         64, "")
   ISAREG_ENTRY_GEN("gfx908:xnack-",          9, 0, 8,  any,         disabled,    64, "")
   ISAREG_ENTRY_GEN("gfx908:xnack+",          9, 0, 8,  any,         enabled,     64, "")

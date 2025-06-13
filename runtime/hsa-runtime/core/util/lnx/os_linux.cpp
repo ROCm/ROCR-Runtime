@@ -574,10 +574,12 @@ int WaitForOsEvent(EventHandle event, unsigned int milli_seconds) {
       // Timeout
       return 1;
     }
+  } else {
+      pthread_mutex_lock(&eventDescrp->mutex);
   }
 
   int ret_code = 0;
-  pthread_mutex_lock(&eventDescrp->mutex);
+  
   if (!eventDescrp->state) {
     if (milli_seconds == 0) {
       ret_code = 1;
@@ -717,15 +719,15 @@ SharedMutex CreateSharedMutex() {
   }
 #endif
 
-  pthread_rwlock_t* lock = new pthread_rwlock_t;
-  err = pthread_rwlock_init(lock, &attrib);
+  std::unique_ptr<pthread_rwlock_t> lock(new pthread_rwlock_t);
+  err = pthread_rwlock_init(lock.get(), &attrib);
   if (err != 0) {
     fprintf(stderr, "rw lock init failed: %s\n", strerror(err));
     return nullptr;
   }
 
   pthread_rwlockattr_destroy(&attrib);
-  return lock;
+  return lock.release();
 }
 
 bool TryAcquireSharedMutex(SharedMutex lock) {

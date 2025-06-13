@@ -213,10 +213,19 @@ namespace elf {
 #else // _WIN32
       int in = _open(filename.c_str(), O_RDONLY);
       if (in < 0) { return perror("open failed"); }
-      if (_lseek(in, 0L, SEEK_END) < 0) { return perror("lseek failed"); }
+      if (_lseek(in, 0L, SEEK_END) < 0) { 
+        _close(in);
+        return perror("lseek failed"); 
+      }
       off_t size;
-      if ((size = _lseek(in, 0L, SEEK_CUR)) < 0) { return perror("lseek(2) failed"); }
-      if (_lseek(in, 0L, SEEK_SET) < 0) { return perror("lseek(3) failed"); }
+      if ((size = _lseek(in, 0L, SEEK_CUR)) < 0) { 
+        _close(in);
+        return perror("lseek(2) failed"); 
+      }
+      if (_lseek(in, 0L, SEEK_SET) < 0) { 
+        _close(in);
+        return perror("lseek(3) failed"); 
+      }
       if (_lseek(d, 0L, SEEK_SET) < 0) { return perror("lseek(3) failed"); }
       ssize_t written;
       do {
@@ -1729,7 +1738,7 @@ namespace elf {
       }
 
       uint64_t max_offset = ehdr->e_shoff;
-      uint64_t total_size = max_offset + ehdr->e_shentsize * ehdr->e_shnum;
+      uint64_t total_size = max_offset + static_cast<uint64_t>(ehdr->e_shentsize) * static_cast<uint64_t>(ehdr->e_shnum);
 
       for (uint16_t i = 0; i < ehdr->e_shnum; ++i) {
         uint64_t cur_offset = static_cast<uint64_t>(shdr[i].sh_offset);

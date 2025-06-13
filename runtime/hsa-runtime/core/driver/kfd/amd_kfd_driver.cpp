@@ -84,7 +84,7 @@ __forceinline uint64_t drm_perm(hsa_access_permission_t perm) {
 } // namespace
 
 KfdDriver::KfdDriver(std::string devnode_name)
-    : core::Driver(core::DriverType::KFD, devnode_name) {}
+    : core::Driver(core::DriverType::KFD, std::move(devnode_name)) {}
 
 hsa_status_t KfdDriver::Init() {
   HSAKMT_STATUS ret =
@@ -209,8 +209,6 @@ KfdDriver::AllocateMemory(const core::MemoryRegion &mem_region,
 
   kmt_alloc_flags.ui32.ExecuteAccess =
       (alloc_flags & core::MemoryRegion::AllocateExecutable ? 1 : 0);
-  kmt_alloc_flags.ui32.AQLQueueMemory =
-      (alloc_flags & core::MemoryRegion::AllocateDoubleMap ? 1 : 0);
 
   if (m_region.IsSystem() &&
       (alloc_flags & core::MemoryRegion::AllocateNonPaged)) {

@@ -99,7 +99,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       current_coherency_type_(HSA_AMD_COHERENCY_TYPE_COHERENT),
       scratch_used_large_(0),
       queues_(),
-      is_kv_device_(false),
       trap_code_buf_(NULL),
       trap_code_buf_size_(0),
       doorbell_queue_map_(NULL),
@@ -115,12 +114,16 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
       scratch_cache_(
           [this](void* base, size_t size, bool large) { ReleaseScratch(base, size, large); }),
       trap_handler_tma_region_(NULL),
+      rec_sdma_eng_override_(false),
       pcs_hosttrap_data_(),
       pcs_stochastic_data_(),
       xgmi_cpu_gpu_(false),
-      rec_sdma_eng_override_(false) {
+      large_bar_enabled_(false){
   const bool is_apu_node = (properties_.NumCPUCores > 0);
   profile_ = (is_apu_node) ? HSA_PROFILE_FULL : HSA_PROFILE_BASE;
+
+  if (node_props.Capability.ui32.DoorbellType != 2)
+    throw AMD::hsa_exception(HSA_STATUS_ERROR, "Agent creation failed.\nThe GPU node uses a deprecated doorbell type\n");
 
   HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtGetClockCounters(node_id(), &t0_));
   t1_ = t0_;
@@ -184,12 +187,6 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   supported_isas_.push_back(isa_);
   if (!isa_->GetIsaGeneric().empty()) {
     supported_isas_.push_back(core::IsaRegistry::GetIsa(isa_->GetIsaGeneric()));
-  }
-
-  // Check if the device is Kaveri, only on GPU device.
-  if (isa_->GetMajorVersion() == 7 && isa_->GetMinorVersion() == 0 &&
-      isa_->GetStepping() == 0) {
-    is_kv_device_ = true;
   }
 
   current_coherency_type((profile_ == HSA_PROFILE_FULL)
@@ -796,7 +793,7 @@ void GpuAgent::InitDma() {
   // Dedicated compute queue for PC Sampling CP-DMA commands. We need a dedicated queue that runs at
   // highest priority because we do not want the CP-DMA commands to be delayed/blocked due to
   // other dispatches/barriers that could be in the other AQL queues.
-  queues_[QueuePCSampling].reset([queue_lambda, this]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
+  queues_[QueuePCSampling].reset([queue_lambda]() { return queue_lambda(HSA_QUEUE_PRIORITY_MAXIMUM); });
 
   // Decide which engine to use for blits.
   auto blit_lambda = [this](bool use_xgmi, lazy_ptr<core::Queue>& queue, bool isHostToDev, uint32_t rec_eng) {
@@ -1426,7 +1423,14 @@ hsa_status_t GpuAgent::GetInfo(hsa_agent_info_t attribute, void* value) const {
       const size_t num_cache = cache_props_.size();
       for (size_t i = 0; i < num_cache; ++i) {
         const uint32_t line_level = cache_props_[i].CacheLevel;
-        if (reinterpret_cast<uint32_t*>(value)[line_level - 1] == 0)
+          /*
+           * L1 Cache is per CU.
+           * For L2 Cache and above, we report total for the partition so we sum
+           * all the node entries.
+           */
+        if (line_level >= 2)
+          reinterpret_cast<uint32_t*>(value)[line_level - 1] += cache_props_[i].CacheSize * 1024;
+        else if (reinterpret_cast<uint32_t*>(value)[line_level - 1] == 0)
           reinterpret_cast<uint32_t*>(value)[line_level - 1] = cache_props_[i].CacheSize * 1024;
       }
     } break;
@@ -1768,7 +1772,7 @@ hsa_status_t GpuAgent::QueueCreate(size_t size, hsa_queue_type32_t queue_type, u
   if (!shared_queue) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
 
   auto aql_queue = new AqlQueue(shared_queue, this, size, node_id(), scratch, event_callback, data,
-                                flags, is_kv_device_);
+                                flags);
   *queue = aql_queue;
   aql_queues_.push_back(aql_queue);
 
@@ -2167,38 +2171,8 @@ uint64_t GpuAgent::TranslateTime(uint64_t tick) {
   return system_tick;
 }
 
+/* This function is deprecated */
 bool GpuAgent::current_coherency_type(hsa_amd_coherency_type_t type) {
-  if (!is_kv_device_) {
-    current_coherency_type_ = type;
-    return true;
-  }
-
-  ScopedAcquire<KernelMutex> Lock(&coherency_lock_);
-
-  if (ape1_base_ == 0 && ape1_size_ == 0) {
-    static const size_t kApe1Alignment = 64 * 1024;
-    ape1_size_ = kApe1Alignment;
-    ape1_base_ = reinterpret_cast<uintptr_t>(
-        _aligned_malloc(ape1_size_, kApe1Alignment));
-    assert((ape1_base_ != 0) && ("APE1 allocation failed"));
-  } else if (type == current_coherency_type_) {
-    return true;
-  }
-
-  HSA_CACHING_TYPE type0, type1;
-  if (type == HSA_AMD_COHERENCY_TYPE_COHERENT) {
-    type0 = HSA_CACHING_CACHED;
-    type1 = HSA_CACHING_NONCACHED;
-  } else {
-    type0 = HSA_CACHING_NONCACHED;
-    type1 = HSA_CACHING_CACHED;
-  }
-
-  if (HSAKMT_CALL(hsaKmtSetMemoryPolicy(node_id(), type0, type1,
-                            reinterpret_cast<void*>(ape1_base_),
-                            ape1_size_)) != HSAKMT_STATUS_SUCCESS) {
-    return false;
-  }
   current_coherency_type_ = type;
   return true;
 }
@@ -2310,7 +2284,7 @@ void GpuAgent::BindTrapHandler() {
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
 }
 
-void GpuAgent::InvalidateCodeCaches() {
+void GpuAgent::InvalidateCodeCaches(void *ptr, size_t size) {
   // Check for microcode cache invalidation support.
   // This is deprecated in later microcode builds.
   if (isa_->GetMajorVersion() == 7) {
@@ -2352,8 +2326,17 @@ void GpuAgent::InvalidateCodeCaches() {
 
   cache_inv[0] = PM4_HDR(PM4_HDR_IT_OPCODE_ACQUIRE_MEM, cache_inv_size_dw,
              isa_->GetMajorVersion());
-  cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
-  cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
+
+  if (ptr) {
+    size_t size_granule = (size + 0xFF) >> 8;
+    cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(size_granule);
+    cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(size_granule >> 32);
+    cache_inv[4] = PM4_ACQUIRE_MEM_DW4_COHER_BASE((uint64_t)ptr);
+    cache_inv[5] = PM4_ACQUIRE_MEM_DW4_COHER_BASE_HI((uint64_t)ptr);
+  } else {
+    cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
+    cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
+  }
 
   // Submit the command to the utility queue and wait for it to complete.
   queues_[QueueUtility]->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));

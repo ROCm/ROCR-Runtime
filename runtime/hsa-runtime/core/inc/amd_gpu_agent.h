@@ -151,7 +151,7 @@ class GpuAgentInt : public core::Agent {
    virtual uint64_t TranslateTime(uint64_t tick) = 0;
 
    // @brief Invalidate caches on the agent which may hold code object data.
-   virtual void InvalidateCodeCaches() = 0;
+   virtual void InvalidateCodeCaches(void *ptr, size_t size) = 0;
 
    // @brief Sets the coherency type of this agent.
    //
@@ -172,11 +172,6 @@ class GpuAgentInt : public core::Agent {
                                              uint32_t rec_sdma_eng_id_mask) = 0;
 
    virtual void SetRecSdmaEngOverride(bool flag) = 0;
-
-   // @brief Query if agent represent Kaveri GPU.
-   //
-   // @retval true if agent is Kaveri GPU.
-   virtual bool is_kv_device() const = 0;
 
    // @brief Query the agent HSA profile.
    //
@@ -353,7 +348,7 @@ class GpuAgent : public GpuAgentInt {
   uint64_t TranslateTime(uint64_t tick) override;
 
   // @brief Override from AMD::GpuAgentInt.
-  void InvalidateCodeCaches() override;
+  void InvalidateCodeCaches(void* ptr, size_t size) override;
 
   // @brief Override from AMD::GpuAgentInt.
   bool current_coherency_type(hsa_amd_coherency_type_t type) override;
@@ -403,9 +398,6 @@ class GpuAgent : public GpuAgentInt {
                                                       return supported_isas_;}
 
   // @brief Override from AMD::GpuAgentInt.
-  __forceinline bool is_kv_device() const override { return is_kv_device_; }
-
-  // @brief Override from AMD::GpuAgentInt.
   __forceinline hsa_profile_t profile() const override { return profile_; }
 
   // @brief Override from AMD::GpuAgentInt.
@@ -440,6 +432,17 @@ class GpuAgent : public GpuAgentInt {
   /// @brief Is large BAR support enabled for this GPU.
   __forceinline bool LargeBarEnabled() const { return large_bar_enabled_; }
 
+  /// @brief Force a WC flush on PCIe devices by doing a write and then read-back
+  __forceinline void PcieWcFlush(void *ptr, size_t size) const {
+    if (!xgmi_cpu_gpu_) {
+      _mm_sfence();
+      *((uint8_t*)ptr + size - 1) = *((uint8_t*)ptr + size - 1);
+      _mm_mfence();
+      auto readback = *(reinterpret_cast<volatile uint8_t*>(ptr) + size - 1);
+      UNUSED(readback);
+    }
+  }
+
   const size_t MAX_SCRATCH_APERTURE_PER_XCC = (1ULL << 32);
   size_t MaxScratchDevice() const { return properties_.NumXcc * MAX_SCRATCH_APERTURE_PER_XCC; }
 
@@ -451,11 +454,14 @@ class GpuAgent : public GpuAgentInt {
   // @brief Returns true if scratch reclaim is enabled
   __forceinline bool AsyncScratchReclaimEnabled() const override {
     const uint32_t GFX94X_MIN_CP_FW_VERSION_REQUIRED = 177;
-    // TODO: Need to update min CP FW ucode version once it is released
+    const uint32_t GFX95X_MIN_CP_FW_VERSION_REQUIRED = 24;
+
     return (core::Runtime::runtime_singleton_->flag().enable_scratch_async_reclaim() &&
-            supported_isas()[0]->GetMajorVersion() == 9 &&
-            supported_isas()[0]->GetMinorVersion() >= 4 &&
-            properties_.EngineId.ui32.uCode >= GFX94X_MIN_CP_FW_VERSION_REQUIRED);
+	    supported_isas()[0]->GetMajorVersion() == 9 &&
+	    ((supported_isas()[0]->GetMinorVersion() == 4 &&
+	      properties_.EngineId.ui32.uCode >= GFX94X_MIN_CP_FW_VERSION_REQUIRED) ||
+	     (supported_isas()[0]->GetMinorVersion() == 5 &&
+	      properties_.EngineId.ui32.uCode >= GFX95X_MIN_CP_FW_VERSION_REQUIRED)));
   };
 
   hsa_status_t SetAsyncScratchThresholds(size_t use_once_limit) override;
@@ -541,13 +547,13 @@ class GpuAgent : public GpuAgentInt {
 
   hsa_status_t PcSamplingIterateConfig(hsa_ven_amd_pcs_iterate_configuration_callback_t cb,
                                        void* cb_data) override;
-  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session);
+  hsa_status_t PcSamplingCreate(pcs::PcsRuntime::PcSamplingSession& session) override;
   hsa_status_t PcSamplingCreateFromId(HsaPcSamplingTraceId pcsId,
-                            pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session);
-  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session);
+                            pcs::PcsRuntime::PcSamplingSession& session) override;
+  hsa_status_t PcSamplingDestroy(pcs::PcsRuntime::PcSamplingSession& session) override;
+  hsa_status_t PcSamplingStart(pcs::PcsRuntime::PcSamplingSession& session) override;
+  hsa_status_t PcSamplingStop(pcs::PcsRuntime::PcSamplingSession& session) override;
+  hsa_status_t PcSamplingFlush(pcs::PcsRuntime::PcSamplingSession& session) override;
   hsa_status_t PcSamplingFlushDeviceBuffers(pcs::PcsRuntime::PcSamplingSession& session);
 
   // @brief Node properties.
@@ -634,8 +640,6 @@ class GpuAgent : public GpuAgentInt {
 
   // @brief HSA profile.
   hsa_profile_t profile_;
-
-  bool is_kv_device_;
 
   void* trap_code_buf_;
 
@@ -832,9 +836,9 @@ class GpuAgent : public GpuAgentInt {
   pcs_data_t pcs_stochastic_data_;
 
   /// @brief XGMI CPU<->GPU
-  bool xgmi_cpu_gpu_ = false;
+  bool xgmi_cpu_gpu_;
   /// @brief Is PCIe large BAR enabled.
-  bool large_bar_enabled_ = false;
+  bool large_bar_enabled_;
 };
 
 }  // namespace amd

@@ -77,7 +77,7 @@ namespace AMD {
 
 AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_size_pkts,
                    HSAuint32 node_id, ScratchInfo& scratch, core::HsaEventCallback callback,
-                   void* err_data, uint64_t flags, bool is_kv)
+                   void* err_data, uint64_t flags)
     : Queue(shared_queue, flags, !agent->is_xgmi_cpu_gpu()),
       LocalSignal(0, false),
       DoorbellSignal(signal()),
@@ -89,7 +89,6 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
       queue_scratch_(scratch),
       errors_callback_(callback),
       errors_data_(err_data),
-      is_kv_queue_(is_kv),
       pm4_ib_buf_(nullptr),
       pm4_ib_size_b_(0x1000),
       dynamicScratchState(0),
@@ -97,20 +96,6 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
       suspended_(false),
       priority_(HSA_QUEUE_PRIORITY_NORMAL),
       exception_signal_(nullptr) {
-  // When queue_full_workaround_ is set to 1, the ring buffer is internally
-  // doubled in size. Virtual addresses in the upper half of the ring allocation
-  // are mapped to the same set of pages backing the lower half.
-  // Values written to the HW doorbell are modulo the doubled size.
-  // This allows the HW to accept (doorbell == last_doorbell + queue_size).
-  // This workaround is required for GFXIP 7 and GFXIP 8 ASICs.
-  const core::Isa* isa = agent_->supported_isas()[0];
-  queue_full_workaround_ =
-      (isa->GetMajorVersion() == 7 || isa->GetMajorVersion() == 8)
-          ? 1
-          : 0;
-
-  // Identify doorbell semantics for this agent.
-  doorbell_type_ = agent->properties().Capability.ui32.DoorbellType;
 
   // Queue size is a function of several restrictions.
   const uint32_t min_pkts = ComputeRingBufferMinPkts();
@@ -144,13 +129,8 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
   HsaQueueResource queue_rsrc = {0};
   queue_rsrc.Queue_read_ptr_aql = (uint64_t*)&amd_queue_.read_dispatch_id;
 
-  if (doorbell_type_ == 2) {
-    // Hardware write pointer supports AQL semantics.
-    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.write_dispatch_id;
-  } else {
-    // Map hardware write pointer to a software proxy.
-    queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1;
-  }
+  // Hardware write pointer supports AQL semantics.
+  queue_rsrc.Queue_write_ptr_aql = (uint64_t*)&amd_queue_.write_dispatch_id;
 
   // Populate amd_queue_ structure.
   amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_MULTI;
@@ -163,8 +143,8 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
       uintptr_t(&amd_queue_.read_dispatch_id) - uintptr_t(&amd_queue_));
   // Initialize the doorbell signal structure.
   memset(&signal_, 0, sizeof(signal_));
-  signal_.kind = (doorbell_type_ == 2) ? AMD_SIGNAL_KIND_DOORBELL : AMD_SIGNAL_KIND_LEGACY_DOORBELL;
-  signal_.legacy_hardware_doorbell_ptr = nullptr;
+  signal_.kind = AMD_SIGNAL_KIND_DOORBELL;
+  signal_.hardware_doorbell_ptr = nullptr;
   signal_.queue_ptr = &amd_queue_;
 
   const auto& props = agent->properties();
@@ -295,7 +275,7 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
     throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
                              "Queue create failed at hsaKmtCreateQueue\n");
   // Complete populating the doorbell signal structure.
-  signal_.legacy_hardware_doorbell_ptr = (volatile uint32_t*)queue_rsrc.Queue_DoorBell;
+  signal_.hardware_doorbell_ptr = queue_rsrc.Queue_DoorBell_aql;
 
   // Bind Id of Queue such that is unique i.e. it is not re-used by another
   // queue (AQL, HOST) in the same process during its lifetime.
@@ -473,80 +453,15 @@ uint64_t AqlQueue::AddWriteIndexRelease(uint64_t value) {
 }
 
 void AqlQueue::StoreRelaxed(hsa_signal_value_t value) {
-  if (doorbell_type_ == 2) {
-    if (core::Runtime::runtime_singleton_->flag().enable_dtif()) {
-      HSAKMT_CALL(hsaKmtQueueRingDoorbell(queue_id_));
-    } else {
-      // Hardware doorbell supports AQL semantics.
-      _mm_sfence();
-      *(signal_.hardware_doorbell_ptr) = uint64_t(value);
-      /* signal_ is allocated as uncached so we do not need read-back to flush WC */
-    }
-    return;
+  if (core::Runtime::runtime_singleton_->flag().enable_dtif()) {
+    HSAKMT_CALL(hsaKmtQueueRingDoorbell(queue_id_));
+  } else {
+    // Hardware doorbell supports AQL semantics.
+    _mm_sfence();
+    *(signal_.hardware_doorbell_ptr) = uint64_t(value);
+    /* signal_ is allocated as uncached so we do not need read-back to flush WC */
   }
-
-  // Acquire spinlock protecting the legacy doorbell.
-  while (atomic::Cas(&amd_queue_.legacy_doorbell_lock, 1U, 0U,
-                     std::memory_order_acquire) != 0) {
-    os::YieldThread();
-  }
-
-#ifdef HSA_LARGE_MODEL
-  // AMD hardware convention expects the packet index to point beyond
-  // the last packet to be processed. Packet indices written to the
-  // max_legacy_doorbell_dispatch_id_plus_1 field must conform to this
-  // expectation, since this field is used as the HW-visible write index.
-  uint64_t legacy_dispatch_id = value + 1;
-#else
-  // In the small machine model it is difficult to distinguish packet index
-  // wrap at 2^32 packets from a backwards doorbell. Instead, ignore the
-  // doorbell value and submit the write index instead. It is OK to issue
-  // a doorbell for packets in the INVALID or ALWAYS_RESERVED state.
-  // The HW will stall on these packets until they enter a valid state.
-  uint64_t legacy_dispatch_id = amd_queue_.write_dispatch_id;
-
-  // The write index may extend more than a full queue of packets beyond
-  // the read index. The hardware can process at most a full queue of packets
-  // at a time. Clamp the write index appropriately. A doorbell for the
-  // remaining packets is guaranteed to be sent at a later time.
-  legacy_dispatch_id =
-      Min(legacy_dispatch_id,
-          uint64_t(amd_queue_.read_dispatch_id) + amd_queue_.hsa_queue.size);
-#endif
-
-  // Discard backwards and duplicate doorbells.
-  if (legacy_dispatch_id > amd_queue_.max_legacy_doorbell_dispatch_id_plus_1) {
-    // Record the most recent packet index used in a doorbell submission.
-    // This field will be interpreted as a write index upon HW queue connect.
-    // Make ring buffer visible to HW before updating write index.
-    atomic::Store(&amd_queue_.max_legacy_doorbell_dispatch_id_plus_1,
-                  legacy_dispatch_id, std::memory_order_release);
-
-    // Write the dispatch id to the hardware MMIO doorbell.
-    // Make write index visible to HW before sending doorbell.
-    if (doorbell_type_ == 0) {
-      // The legacy GFXIP 7 hardware doorbell expects:
-      //   1. Packet index wrapped to a point within the ring buffer
-      //   2. Packet index converted to DWORD count
-      uint64_t queue_size_mask =
-          ((1 + queue_full_workaround_) * amd_queue_.hsa_queue.size) - 1;
-
-      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
-                    uint32_t((legacy_dispatch_id & queue_size_mask) *
-                             (sizeof(core::AqlPacket) / sizeof(uint32_t))),
-                    std::memory_order_release);
-    } else if (doorbell_type_ == 1) {
-      atomic::Store(signal_.legacy_hardware_doorbell_ptr,
-                    uint32_t(legacy_dispatch_id), std::memory_order_release);
-    } else {
-      assert(false && "Agent has unsupported doorbell semantics");
-    }
-  }
-
-  // Release spinlock protecting the legacy doorbell.
-  // Also ensures timely delivery of (write-combined) doorbell to HW.
-  atomic::Store(&amd_queue_.legacy_doorbell_lock, 0U,
-                std::memory_order_release);
+  return;
 }
 
 void AqlQueue::StoreRelease(hsa_signal_value_t value) {
@@ -560,12 +475,8 @@ hsa_status_t AqlQueue::GetInfo(hsa_queue_info_attribute_t attribute, void* value
       *(reinterpret_cast<hsa_agent_t*>(value)) = agent_->public_handle();
       break;
     case HSA_AMD_QUEUE_INFO_DOORBELL_ID:
-      if (doorbell_type_ == 2)
-        // Hardware doorbell supports AQL semantics.
-        *(reinterpret_cast<uint64_t*>(value)) =
-            reinterpret_cast<uint64_t>(signal_.hardware_doorbell_ptr);
-      else
-        return HSA_STATUS_ERROR_INVALID_QUEUE;
+      *(reinterpret_cast<uint64_t*>(value)) =
+          reinterpret_cast<uint64_t>(signal_.hardware_doorbell_ptr);
       break;
     default:
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -579,19 +490,6 @@ uint32_t AqlQueue::ComputeRingBufferMinPkts() {
   //   Min Size is 7 (2^8 = 256 DWs) and max size is 29 (2^30 = 1 G-DW)
   uint32_t min_bytes = 0x400;
 
-  if (queue_full_workaround_ == 1) {
-#ifdef __linux__
-    // Double mapping requires one page of backing store.
-    min_bytes = Max(min_bytes, 0x1000U);
-#endif
-#ifdef _WIN32
-    // Shared memory mapping is at system allocation granularity.
-    SYSTEM_INFO sys_info;
-    GetNativeSystemInfo(&sys_info);
-    min_bytes = Max(min_bytes, uint32_t(sys_info.dwAllocationGranularity));
-#endif
-  }
-
   return uint32_t(min_bytes / sizeof(core::AqlPacket));
 }
 
@@ -601,170 +499,30 @@ uint32_t AqlQueue::ComputeRingBufferMaxPkts() {
   //   Min Size is 7 (2^8 = 256 DWs) and max size is 29 (2^30 = 1 G-DW)
   uint64_t max_bytes = 0x100000000;
 
-  if (queue_full_workaround_ == 1) {
-    // Double mapping halves maximum size.
-    max_bytes /= 2;
-  }
-
   return uint32_t(max_bytes / sizeof(core::AqlPacket));
 }
 
 void AqlQueue::AllocRegisteredRingBuffer(uint32_t queue_size_pkts) {
-  if ((agent_->profile() == HSA_PROFILE_FULL) && queue_full_workaround_) {
-    // Compute the physical and virtual size of the queue.
-    uint32_t ring_buf_phys_size_bytes =
-        uint32_t(queue_size_pkts * sizeof(core::AqlPacket));
-    ring_buf_alloc_bytes_ = 2 * ring_buf_phys_size_bytes;
+  // Allocate storage for the ring buffer.
+  ring_buf_alloc_bytes_ = queue_size_pkts * sizeof(core::AqlPacket);
+  assert(IsMultipleOf(ring_buf_alloc_bytes_, 4096) && "Ring buffer sizes must be 4KiB aligned.");
 
-#ifdef __linux__
-    // Create a system-unique shared memory path for this thread.
-    char ring_buf_shm_path[16];
-    pid_t sys_unique_tid = pid_t(syscall(__NR_gettid));
-    sprintf(ring_buf_shm_path, "/%u", sys_unique_tid);
-
-    int ring_buf_shm_fd = -1;
-    void* reserve_va = NULL;
-
-    ring_buf_shm_fd = CreateRingBufferFD(ring_buf_shm_path, ring_buf_phys_size_bytes);
-
-    if (ring_buf_shm_fd == -1) {
-      return;
+  if (IsDeviceMemRingBuf()) {
+    if (!agent_->LargeBarEnabled()) {
+      throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
+                                "Trying to allocate an AQL ring buffer in device memory without "
+                                "large BAR PCIe enabled.");
     }
-
-    // Reserve a VA range twice the size of the physical backing store.
-    reserve_va = mmap(NULL, ring_buf_alloc_bytes_, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-    assert(reserve_va != MAP_FAILED && "mmap failed");
-
-    // Remap the lower and upper halves of the VA range.
-    // Map both halves to the shared memory backing store.
-    // If the GPU device is KV, do not set PROT_EXEC flag.
-    void* ring_buf_lower_half = NULL;
-    void* ring_buf_upper_half = NULL;
-    if (is_kv_queue_) {
-      ring_buf_lower_half = mmap(reserve_va, ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE,
-                                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-      assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
-
-      ring_buf_upper_half =
-          mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes), ring_buf_phys_size_bytes,
-               PROT_READ | PROT_WRITE, MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-      assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
-      } else {
-        ring_buf_lower_half = mmap(reserve_va, ring_buf_phys_size_bytes,
-                                   PROT_READ | PROT_WRITE | PROT_EXEC,
-                                   MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_lower_half != MAP_FAILED && "mmap failed");
-
-        ring_buf_upper_half =
-            mmap((void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes),
-                 ring_buf_phys_size_bytes, PROT_READ | PROT_WRITE | PROT_EXEC,
-                 MAP_SHARED | MAP_FIXED, ring_buf_shm_fd, 0);
-        assert(ring_buf_upper_half != MAP_FAILED && "mmap failed");
-      }
-
-      // Successfully created mapping.
-      ring_buf_ = ring_buf_lower_half;
-
-      // Release explicit reference to shared memory object.
-      CloseRingBufferFD(ring_buf_shm_path, ring_buf_shm_fd);
-      return;
-#endif
-#ifdef _WIN32
-    HANDLE ring_buf_mapping = INVALID_HANDLE_VALUE;
-    void* ring_buf_lower_half = NULL;
-    void* ring_buf_upper_half = NULL;
-
-    do {
-      // Create a page file mapping to back the ring buffer.
-      ring_buf_mapping = CreateFileMapping(INVALID_HANDLE_VALUE, NULL,
-                                           PAGE_EXECUTE_READWRITE | SEC_COMMIT,
-                                           0, ring_buf_phys_size_bytes, NULL);
-      if (ring_buf_mapping == NULL) {
-        break;
-      }
-
-      // Retry until obtaining an appropriate virtual address mapping.
-      for (int num_attempts = 0; num_attempts < 1000; ++num_attempts) {
-        // Find a virtual address range twice the size of the file mapping.
-        void* reserve_va =
-            VirtualAllocEx(GetCurrentProcess(), NULL, ring_buf_alloc_bytes_,
-                           MEM_TOP_DOWN | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-        if (reserve_va == NULL) {
-          break;
-        }
-        VirtualFree(reserve_va, 0, MEM_RELEASE);
-
-        // Map the ring buffer into the free virtual range.
-        // This may fail: another thread can allocate in this range.
-        ring_buf_lower_half = MapViewOfFileEx(
-            ring_buf_mapping, FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE, 0, 0,
-            ring_buf_phys_size_bytes, reserve_va);
-
-        if (ring_buf_lower_half == NULL) {
-          // Virtual range allocated by another thread, try again.
-          continue;
-        }
-
-        ring_buf_upper_half = MapViewOfFileEx(
-            ring_buf_mapping, FILE_MAP_ALL_ACCESS | FILE_MAP_EXECUTE, 0, 0,
-            ring_buf_phys_size_bytes,
-            (void*)(uintptr_t(reserve_va) + ring_buf_phys_size_bytes));
-
-        if (ring_buf_upper_half == NULL) {
-          // Virtual range allocated by another thread, try again.
-          UnmapViewOfFile(ring_buf_lower_half);
-          continue;
-        }
-
-        // Successfully created mapping.
-        ring_buf_ = ring_buf_lower_half;
-        break;
-      }
-
-      if (ring_buf_ == NULL) {
-        break;
-      }
-
-      // Release file mapping (reference counted by views).
-      CloseHandle(ring_buf_mapping);
-
-      // Don't register the memory: causes a failure in the KFD.
-      // Instead use implicit registration to access the ring buffer.
-      return;
-    } while (false);
-
-    // Resource cleanup on failure.
-    UnmapViewOfFile(ring_buf_upper_half);
-    UnmapViewOfFile(ring_buf_lower_half);
-    CloseHandle(ring_buf_mapping);
-#endif
+    ring_buf_ = agent_->coarsegrain_allocator()(
+        ring_buf_alloc_bytes_,
+        core::MemoryRegion::AllocateExecutable | core::MemoryRegion::AllocateUncached);
   } else {
-    // Allocate storage for the ring buffer.
-    ring_buf_alloc_bytes_ = queue_size_pkts * sizeof(core::AqlPacket);
-    assert(IsMultipleOf(ring_buf_alloc_bytes_, 4096) && "Ring buffer sizes must be 4KiB aligned.");
-
-    if (IsDeviceMemRingBuf()) {
-      if (!agent_->LargeBarEnabled()) {
-        throw AMD::hsa_exception(HSA_STATUS_ERROR_INVALID_QUEUE_CREATION,
-                                 "Trying to allocate an AQL ring buffer in device memory without "
-                                 "large BAR PCIe enabled.");
-      }
-      ring_buf_ = agent_->coarsegrain_allocator()(
-          ring_buf_alloc_bytes_,
-          core::MemoryRegion::AllocateExecutable | core::MemoryRegion::AllocateUncached);
-    } else {
-      ring_buf_ = agent_->system_allocator()(
-          ring_buf_alloc_bytes_, 0x1000,
-          core::MemoryRegion::AllocateExecutable |
-          (queue_full_workaround_ ? core::MemoryRegion::AllocateDoubleMap : 0));
-    }
-
-    assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
-
-    // The virtual ring allocation is twice as large as requested.
-    // Each half maps to the same set of physical pages.
-    if (queue_full_workaround_) ring_buf_alloc_bytes_ *= 2;
+    ring_buf_ = agent_->system_allocator()(
+        ring_buf_alloc_bytes_, 0x1000,
+        core::MemoryRegion::AllocateExecutable);
   }
+
+  assert(ring_buf_ != NULL && "AQL queue memory allocation failure");
 }
 
 void AqlQueue::FreeQueueMemory() {
@@ -777,22 +535,11 @@ void AqlQueue::FreeQueueMemory() {
     shared_queue_ = nullptr;
   }
 
-  if ((agent_->profile() == HSA_PROFILE_FULL) && queue_full_workaround_) {
-#ifdef __linux__
-    munmap(ring_buf_, ring_buf_alloc_bytes_);
-#endif
-#ifdef _WIN32
-    UnmapViewOfFile(ring_buf_);
-    UnmapViewOfFile(
-        (void*)(uintptr_t(ring_buf_) + (ring_buf_alloc_bytes_ / 2)));
-#endif
-  } else {
-    if (ring_buf_) {
-      if (IsDeviceMemRingBuf()) {
-        agent_->coarsegrain_deallocator()(ring_buf_);
-      } else {
-        agent_->system_deallocator()(ring_buf_);
-      }
+  if (ring_buf_) {
+    if (IsDeviceMemRingBuf()) {
+      agent_->coarsegrain_deallocator()(ring_buf_);
+    } else {
+      agent_->system_deallocator()(ring_buf_);
     }
   }
 
@@ -903,6 +650,87 @@ void AqlQueue::FreeMainScratchSpace() {
 }
 
 void AqlQueue::AsyncReclaimMainScratch() {
+  /*
+   * Pseudocode for scratch memory management when asynchronous scratch is
+   * supported
+   *
+   * Notes:
+   * - CP FW only updates its copy of amd_queue_ (scratch_copy) on queue_connect
+   * so changes to amd_queue_ by ROCr are only visible to CP FW after a queue
+   * re-map.
+   *
+   * - CP sets AMD_QUEUE_CAPS_CP_ASYNC_RECLAIM bit to indicate that this version
+   * of CP FW supports asynchronous scratch reclaim. But CP will only update
+   * amd_queue_.caps on queue-connect so ROCr assumes that async scratch reclaim
+   * is supported based on the CP FW version.
+   *
+   * - ROCR sets AMD_QUEUE_CAPS_SW_ASYNC_RECLAIM bit to indicate to CP that this
+   * version of FW supports asynchronous scratch and therefore CP is allowed to
+   * access the extra fields that exist in amd_queue_v2.
+   *
+   * CP FW Pseudocode:
+   * On doorbell-ring:
+   * <start>
+   *    Start processing AQL dispatch packet at read_index
+   *    if (packet->private_segment_size > 0) {
+   *      // This dispatch needs scratch
+   *      if (packet->private_segment_size <= scratch_copy.scratch_wave64_lane_byte_size) {
+   *         if (read_index <= scratch_max_use_index) {
+   *           scratch_copy->scratch_last_used_index = current_index
+   *           dispatch-uses-primary-scratch
+   *           goto proceed-with-dispatch
+   *         }
+   *      } else if (packet->private_segment_size <= scratch_copy.alt_scratch_wave64_lane_byte_size
+   *              && packet->grid_size_x <= scratch_copy.alt_scratch_dispatch_limit_x
+   *              && packet->grid_size_y <= scratch_copy.alt_scratch_dispatch_limit_y
+   *              && packet->grid_size_z <= scratch_copy.alt_scratch_dispatch_limit_z) {
+   *         if (read_index <= alt_scratch_max_use_index) {
+   *           scratch_copy->alt_scratch_last_used_index = current_index
+   *           dispatch-uses-alternate-scratch
+   *           goto proceed-with-dispatch
+   *         }
+   *      }
+   *      request-more-scratch
+   *    }
+   *    goto proceed-with-dispatch
+   * <end>
+   *
+   * On queue-connect:
+   * <start>
+   *    set AMD_QUEUE_CAPS_CP_ASYNC_RECLAIM to indicate that this version of CP
+   *    FW supports asynchronous scratch reclaim
+   * <end>
+   *
+   * On queue-disconnect:
+   * <start>
+   *     // This guarantees that ROCr sees updated values of scratch_last_used_index
+   *     // and alt_scratch_last_used_index after queue is unmapped.
+   *     queue->scratch_last_used_index= scratch_copy->scratch_last_used_index
+   *     queue->alt_scratch_last_used_index= scratch_copy->alt_scratch_last_used_index
+   * <end>
+   *
+   * ROCr Pseudocode:
+   * On init:
+   *     queue->scratch_max_use_index = UINT64_MAX
+   *     queue->alt_scratch_max_use_index = UINT64_MAX
+   *
+   * To reclaim scratch:
+   * <start>
+   *      // mutex blocks async-thread in case CP raises signal to request more scratch
+   *     acquire(scratch-mutex)
+   *     queue-unmap
+   *     // Tell CP that it cannot use scratch after current packet
+   *     queue->scratch_last_used_index = max(amd_queue_->scratch_last_used_index_per_xcc[])
+   *
+   *     queue-map
+   *     // wait for CP to finish current packet
+   *     while (queue->max_scratch_use_index >= queue->read_dispatch_id)
+   *         sched_yield();
+   *
+   *     free-scratch
+   *     release(scratch-mutex)
+   * <end>
+   */
   auto getMaxMainScratchUseIndex = [&]() {
     uint64_t max = 0;
     for (int i = 0; i < agent_->properties().NumXcc; i++) {
@@ -931,7 +759,7 @@ void AqlQueue::AsyncReclaimMainScratch() {
   /*
    * amd_queue_.scratch_last_used_index[*].main is updated by CP FW every time a
    * dispatch packet is launched and it needs scratch memory.
-   * If amd_queue_.scratch_last_used_index[*].main > amd_queue_.read_dispatch_id
+   * If amd_queue_.scratch_last_used_index[*].main >= amd_queue_.read_dispatch_id
    * then this XCC is currently running a dispatch that uses scratch.
    * Setting max_scratch_use_index to max(amd_queue_.scratch_last_used_index[*].main)
    * prevents CP from trying to use main-scratch after
@@ -1431,7 +1259,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   }
 
   for (auto& error : QueueErrors) {
-    if (error_code & (1 << (error.code - 1))) {
+    if (error_code & (1UL << (error.code - 1))) {
       errorCode = error.status;
       break;
     }
@@ -2013,15 +1841,6 @@ void AqlQueue::InitScratchSRD() {
   amd_queue_.alt_scratch_backing_memory_location = queue_scratch_.alt_queue_process_offset;
 
   const auto& agent_props = agent_->properties();
-  const uint32_t num_xcc = agent_props.NumXcc;
-
-  // FIXME:  amd_queue_.scratch_backing_memory_byte_size is not used by CP, but it
-  // is used by the debugger. Putting back the scratch_backing_memory_byte_size
-  // field. But we need to find a location for alt_scratch_backing_memory_byte_size
-
-  // report size per XCC
-  amd_queue_.scratch_backing_memory_byte_size = queue_scratch_.main_size / num_xcc;
-  //amd_queue_.alt_scratch_backing_memory_byte_size = queue_scratch_.alt_size / num_xcc;
 
   // For backwards compatibility this field records the per-lane scratch
   // for a 64 lane wavefront. If scratch was allocated for 32 lane waves

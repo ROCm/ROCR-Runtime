@@ -156,7 +156,7 @@ bool MallocedMemory::Freeze()
 
 class MappedMemory final: public SegmentMemory {
 public:
-  MappedMemory(bool is_kv = false): SegmentMemory(), is_kv_(is_kv), ptr_(nullptr), size_(0) {}
+  MappedMemory(): SegmentMemory(), ptr_(nullptr), size_(0) {}
   ~MappedMemory() {}
 
   void* Address(size_t offset = 0) const override
@@ -175,7 +175,6 @@ private:
   MappedMemory(const MappedMemory&);
   MappedMemory& operator=(const MappedMemory&);
 
-  bool is_kv_;
   void *ptr_;
   size_t size_;
 };
@@ -188,8 +187,7 @@ bool MappedMemory::Allocate(size_t size, size_t align, bool zero)
 #if defined(_WIN32) || defined(_WIN64)
   ptr_ = (void*)VirtualAlloc(nullptr, size, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 #else
-  ptr_ = is_kv_ ?
-    mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE, -1, 0) :
+  ptr_ =
     mmap(nullptr, size, PROT_EXEC | PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_NORESERVE | MAP_PRIVATE, -1, 0);
 #endif // _WIN32 || _WIN64
   if (nullptr == ptr_) {
@@ -350,17 +348,25 @@ bool RegionMemory::Freeze() {
   assert(this->Allocated() && nullptr != host_ptr_);
 
   core::Agent* agent = region_->owner();
-  if (agent != NULL && agent->device_type() == core::Agent::kAmdGpuDevice) {
-    if (HSA_STATUS_SUCCESS != agent->DmaCopy(ptr_, host_ptr_, size_)) {
-      return false;
-    }
+
+  const size_t& code_object_dmacopy_size =
+    core::Runtime::runtime_singleton_->flag().co_dmacopy_size();
+
+  const bool isGpuDevice = (agent->device_type() == core::Agent::kAmdGpuDevice);
+  const bool isLargeBarDisabled = isGpuDevice && !reinterpret_cast<AMD::GpuAgent*>(agent)->LargeBarEnabled();
+  const bool shouldDmaCopy = isGpuDevice && (isLargeBarDisabled || size_ > code_object_dmacopy_size);
+
+  if (shouldDmaCopy) {
+      if (HSA_STATUS_SUCCESS != agent->DmaCopy(ptr_, host_ptr_, size_)) return false;
   } else {
-    memcpy(ptr_, host_ptr_, size_);
+      memcpy(ptr_, host_ptr_, size_);
+      if (is_code_ && isGpuDevice)
+        reinterpret_cast<AMD::GpuAgent*>(agent)->PcieWcFlush(ptr_, size_);
   }
 
-  // Invalidate agent caches which may hold lines of the new allocation.
-  if (is_code_ && (region_->owner()->device_type() == core::Agent::kAmdGpuDevice))
-    ((AMD::GpuAgent*)region_->owner())->InvalidateCodeCaches();
+  // Invalidate agent caches if needed
+  if (is_code_ && isGpuDevice)
+      reinterpret_cast<AMD::GpuAgent*>(agent)->InvalidateCodeCaches(ptr_, size_);
 
   return true;
 }
@@ -460,7 +466,7 @@ void* LoaderContext::SegmentAlloc(amdgpu_hsa_elf_segment_t segment,
       mem = new (std::nothrow) RegionMemory(RegionMemory::AgentLocal(agent, true), true);
       break;
     case HSA_PROFILE_FULL:
-      mem = new (std::nothrow) MappedMemory(((AMD::GpuAgentInt*)core::Agent::Convert(agent))->is_kv_device());
+      mem = new (std::nothrow) MappedMemory();
       break;
     default:
       assert(false);
