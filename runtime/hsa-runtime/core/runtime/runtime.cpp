@@ -961,7 +961,7 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
     // We don't care if this returns an error code.
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
     auto err = Driver::QueryPointerInfo(ptr, &thunkInfo);
-    if (err != HSAKMT_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
+    if (err != HSA_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
       retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
       memcpy(info, &retInfo, retInfo.size);
       return HSA_STATUS_SUCCESS;
@@ -2733,9 +2733,8 @@ hsa_status_t Runtime::SetSvmAttrib(void* ptr, size_t size,
   uint8_t* base = AlignDown((uint8_t*)ptr, 4096);
   uint8_t* end = AlignUp((uint8_t*)ptr + size, 4096);
   size_t len = end - base;
-  HSAKMT_STATUS error = HSAKMT_CALL(hsaKmtSVMSetAttr(base, len, attribs.size(), &attribs[0]));
-  if (error != HSAKMT_STATUS_SUCCESS)
-    throw AMD::hsa_exception(HSA_STATUS_ERROR, "hsaKmtSVMSetAttr failed.");
+  hsa_status_t error = Driver::SVMSetAttr(base, len, attribs.size(), &attribs[0]);
+  if (error != HSA_STATUS_SUCCESS) throw AMD::hsa_exception(HSA_STATUS_ERROR, "SVMSetAttr failed.");
 
   return HSA_STATUS_SUCCESS;
 }
@@ -2819,9 +2818,9 @@ hsa_status_t Runtime::GetSvmAttrib(void* ptr, size_t size,
   uint8_t* end = AlignUp((uint8_t*)ptr + size, 4096);
   size_t len = end - base;
   if (attribs.size() != 0) {
-    HSAKMT_STATUS error = HSAKMT_CALL(hsaKmtSVMGetAttr(base, len, attribs.size(), &attribs[0]));
-    if (error != HSAKMT_STATUS_SUCCESS)
-      throw AMD::hsa_exception(HSA_STATUS_ERROR, "hsaKmtSVMGetAttr failed.");
+    hsa_status_t error = Driver::SVMGetAttr(base, len, attribs.size(), &attribs[0]);
+    if (error != HSA_STATUS_SUCCESS)
+      throw AMD::hsa_exception(HSA_STATUS_ERROR, "SVMGetAttr failed.");
   }
 
   for (uint32_t i = 0; i < attribute_count; i++) {
@@ -3009,8 +3008,8 @@ hsa_status_t Runtime::SvmPrefetch(void* ptr, size_t size, hsa_agent_t agent,
     HSA_SVM_ATTRIBUTE attrib;
     attrib.type = HSA_SVM_ATTR_PREFETCH_LOC;
     attrib.value = op->node_id;
-    HSAKMT_STATUS error = HSAKMT_CALL(hsaKmtSVMSetAttr(op->base, op->size, 1, &attrib));
-    assert(error == HSAKMT_STATUS_SUCCESS && "KFD Prefetch failed.");
+    hsa_status_t error = Driver::SVMSetAttr(op->base, op->size, 1, &attrib);
+    assert(error == HSA_STATUS_SUCCESS && "KFD Prefetch failed.");
 
     removePrefetchRanges(op);
 
@@ -3078,9 +3077,9 @@ Agent* Runtime::GetSVMPrefetchAgent(void* ptr, size_t size) {
   HSA_SVM_ATTRIBUTE attrib;
   attrib.type = HSA_SVM_ATTR_PREFETCH_LOC;
   for (auto& range : holes) {
-    HSAKMT_STATUS error =
-        HSAKMT_CALL(hsaKmtSVMGetAttr(reinterpret_cast<void*>(range.first), range.second, 1, &attrib));
-    assert(error == HSAKMT_STATUS_SUCCESS && "KFD prefetch query failed.");
+    hsa_status_t error =
+        Driver::SVMGetAttr(reinterpret_cast<void*>(range.first), range.second, 1, &attrib);
+    assert(error == HSA_STATUS_SUCCESS && "KFD prefetch query failed.");
 
     if (attrib.value == -1) return nullptr;
     if (prefetch_node == -2) prefetch_node = attrib.value;

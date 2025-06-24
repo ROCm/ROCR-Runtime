@@ -127,6 +127,8 @@ hsa_status_t KfdDriver::Init() {
       HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodesExt);
   function_table_.query_pointer_info = HSAKMT_CALL(hsaKmtQueryPointerInfo);
   function_table_.set_memory_user_data = HSAKMT_CALL(hsaKmtSetMemoryUserData);
+  function_table_.svm_set_attr = HSAKMT_CALL(hsaKmtSVMSetAttr);
+  function_table_.svm_get_attr = HSAKMT_CALL(hsaKmtSVMGetAttr);
 
   return HSA_STATUS_SUCCESS;
 }

@@ -683,6 +683,46 @@ public:
     return HSA_STATUS_SUCCESS;
   }
 
+  /// @brief Sets SVM attributes for a pointer.
+  /// @param[in] ptr Pointer to set SVM attributes for.
+  /// @param[in] size Size of the memory to set SVM attributes for.
+  /// @param[in] nattr Number of attributes to set.
+  /// @param[in] attrs Array of attributes to set.
+  /// @return HSA_STATUS_SUCCESS if the SVM attributes were successfully set, or an error code.
+  static hsa_status_t SVMSetAttr(void* ptr, uint64_t size, unsigned int nattr,
+                                 HSA_SVM_ATTRIBUTE* attrs) {
+    auto svm_set_attr = function_table_.svm_set_attr;
+    if (svm_set_attr == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (svm_set_attr(ptr, size, nattr, attrs) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Gets SVM attributes for a pointer.
+  /// @param[in] ptr Pointer to get SVM attributes for.
+  /// @param[in] size Size of the memory to get SVM attributes for.
+  /// @param[in] nattr Number of attributes to get.
+  /// @param[out] attrs Array of attributes to get.
+  /// @return HSA_STATUS_SUCCESS if the SVM attributes were successfully got, or an error code.
+  static hsa_status_t SVMGetAttr(void* ptr, uint64_t size, unsigned int nattr,
+                                 HSA_SVM_ATTRIBUTE* attrs) {
+    auto svm_get_attr = function_table_.svm_get_attr;
+    if (svm_get_attr == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (svm_get_attr(ptr, size, nattr, attrs) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
  protected:
   HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
                           std::numeric_limits<uint32_t>::max()};
@@ -706,6 +746,8 @@ public:
                                                             HSA_REGISTER_MEM_FLAGS);
   using query_pointer_info_fn = HSAKMT_STATUS (*)(const void*, HsaPointerInfo*);
   using set_memory_user_data_fn = HSAKMT_STATUS (*)(const void*, void*);
+  using svm_set_attr_fn = HSAKMT_STATUS (*)(void*, uint64_t, unsigned int, HSA_SVM_ATTRIBUTE*);
+  using svm_get_attr_fn = HSAKMT_STATUS (*)(void*, uint64_t, unsigned int, HSA_SVM_ATTRIBUTE*);
 
   struct DriverFunctionTable {
     create_event_fn create_event;
@@ -721,6 +763,8 @@ public:
     register_graphics_handle_ext_fn register_graphics_handle_ext;
     query_pointer_info_fn query_pointer_info;
     set_memory_user_data_fn set_memory_user_data;
+    svm_set_attr_fn svm_set_attr;
+    svm_get_attr_fn svm_get_attr;
   };
 
   static DriverFunctionTable function_table_;
