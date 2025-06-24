@@ -161,13 +161,11 @@ trap_entry:
 
 .not_illegal_instruction:
   s_bitcmp1_b32        ttmp2, SQ_WAVE_EXCP_FLAG_PRIV_WAVE_START_SHIFT
-  s_cbranch_scc0       .not_wave_end
+  s_cbranch_scc0       .not_wave_start
   s_or_b32             ttmp3, ttmp3, EC_QUEUE_WAVE_TRAP_M0
 
 .not_wave_start:
   s_bitcmp1_b32        ttmp2, SQ_WAVE_EXCP_FLAG_PRIV_WAVE_END_SHIFT
-  s_cbranch_scc0       .not_wave_end
-  s_bitcmp1_b32        ttmp13, SQ_WAVE_TRAP_CTRL_WAVE_END_SHIFT
   s_cbranch_scc0       .not_wave_end
   s_or_b32             ttmp3, ttmp3, EC_QUEUE_WAVE_TRAP_M0
 
