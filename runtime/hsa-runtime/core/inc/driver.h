@@ -649,6 +649,40 @@ public:
     return HSA_STATUS_SUCCESS;
   }
 
+  /// @brief Queries information about a pointer.
+  /// @param[in] ptr Pointer to query information about.
+  /// @param[out] info Pointer to the pointer info.
+  /// @return HSA_STATUS_SUCCESS if the pointer info was successfully queried, or an error code.
+  static hsa_status_t QueryPointerInfo(const void* ptr, HsaPointerInfo* info) {
+    auto query_pointer_info = function_table_.query_pointer_info;
+    if (query_pointer_info == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (query_pointer_info(ptr, info) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Sets user data for a pointer.
+  /// @param[in] ptr Pointer to set user data for.
+  /// @param[in] user_data User data to set.
+  /// @return HSA_STATUS_SUCCESS if the user data was successfully set, or an error code.
+  static hsa_status_t SetMemoryUserData(const void* ptr, void* user_data) {
+    auto set_memory_user_data = function_table_.set_memory_user_data;
+    if (set_memory_user_data == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (set_memory_user_data(ptr, user_data) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
  protected:
   HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
                           std::numeric_limits<uint32_t>::max()};
@@ -670,6 +704,8 @@ public:
   using register_graphics_handle_ext_fn = HSAKMT_STATUS (*)(uint64_t, HsaGraphicsResourceInfo*,
                                                             uint64_t, uint32_t*,
                                                             HSA_REGISTER_MEM_FLAGS);
+  using query_pointer_info_fn = HSAKMT_STATUS (*)(const void*, HsaPointerInfo*);
+  using set_memory_user_data_fn = HSAKMT_STATUS (*)(const void*, void*);
 
   struct DriverFunctionTable {
     create_event_fn create_event;
@@ -683,6 +719,8 @@ public:
     deregister_mem_fn deregister_mem;
     register_graphics_handle_fn register_graphics_handle;
     register_graphics_handle_ext_fn register_graphics_handle_ext;
+    query_pointer_info_fn query_pointer_info;
+    set_memory_user_data_fn set_memory_user_data;
   };
 
   static DriverFunctionTable function_table_;

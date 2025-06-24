@@ -960,7 +960,7 @@ hsa_status_t Runtime::PtrInfo(const void* ptr, hsa_amd_pointer_info_t* info, voi
 
     // We don't care if this returns an error code.
     // The type will be HSA_EXT_POINTER_TYPE_UNKNOWN if so.
-    auto err = HSAKMT_CALL(hsaKmtQueryPointerInfo(ptr, &thunkInfo));
+    auto err = Driver::QueryPointerInfo(ptr, &thunkInfo);
     if (err != HSAKMT_STATUS_SUCCESS || thunkInfo.Type == HSA_POINTER_UNKNOWN) {
       retInfo.type = HSA_EXT_POINTER_TYPE_UNKNOWN;
       memcpy(info, &retInfo, retInfo.size);
@@ -1081,9 +1081,9 @@ hsa_status_t Runtime::SetPtrInfoData(const void* ptr, void* userptr) {
     }
   }
   // Cover entries not in the allocation map (graphics, lock,...)
-  if (HSAKMT_CALL(hsaKmtSetMemoryUserData(ptr, userptr)) == HSAKMT_STATUS_SUCCESS)
-    return HSA_STATUS_SUCCESS;
-  return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  if (Driver::SetMemoryUserData(ptr, userptr) != HSA_STATUS_SUCCESS)
+    return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  return HSA_STATUS_SUCCESS;
 }
 
 // Send the dmabuf_fd to from process via Unix socket
@@ -3734,7 +3734,7 @@ hsa_status_t Runtime::VMemoryImportShareableHandle(int dmabuf_fd,
   if (!region) return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
   HsaPointerInfo ptrInfo;
-  ret = HSAKMT_CALL(hsaKmtQueryPointerInfo(info.MemoryAddress, &ptrInfo));
+  ret = Driver::QueryPointerInfo(info.MemoryAddress, &ptrInfo);
   if (ret != HSA_STATUS_SUCCESS || ptrInfo.Type == HSA_POINTER_UNKNOWN)
     return HSA_STATUS_ERROR_INVALID_ALLOCATION;
 
