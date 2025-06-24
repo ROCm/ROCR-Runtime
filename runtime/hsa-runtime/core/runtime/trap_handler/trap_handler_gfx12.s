@@ -134,7 +134,7 @@ trap_entry:
   //                                                 -> WAVE_APERTURE_VIOLATION
   // - EXCP_FLAG_PRIV.ILLEGAL_INST                   -> WAVE_ILLEGAL_INSTRUCTION
   // - EXCP_FLAG_PRIV.WAVE_START                     -> WAVE_TRAP
-  // - EXCP_FLAG_PRIV.WAVE_END && TRAP_CTRL.WAVE_END -> WAVE_TRAP
+  // - EXCP_FLAG_PRIV.WAVE_END                       -> WAVE_TRAP
   // - TRAP_CTRL.TRAP_AFTER_INST                     -> WAVE_TRAP
   // - EXCP_FLAG_PRIV.ADDR_WATCH && TRAP_CTL.WATCH   -> WAVE_TRAP
   // - (EXCP_FLAG_USER[ALU] & TRAP_CTRL[ALU]) != 0   -> WAVE_MATH_ERROR
