@@ -113,6 +113,12 @@ hsa_status_t KfdDriver::Init() {
   bool xnack_mode = BindXnackMode();
   core::Runtime::runtime_singleton_->XnackEnabled(xnack_mode);
 
+  function_table_.create_event = HSAKMT_CALL(hsaKmtCreateEvent);
+  function_table_.destroy_event = HSAKMT_CALL(hsaKmtDestroyEvent);
+  function_table_.set_event = HSAKMT_CALL(hsaKmtSetEvent);
+  function_table_.wait_event_ext = HSAKMT_CALL(hsaKmtWaitOnEvent_Ext);
+  function_table_.wait_events_ext = HSAKMT_CALL(hsaKmtWaitOnMultipleEvents_Ext);
+
   return HSA_STATUS_SUCCESS;
 }
 

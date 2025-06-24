@@ -440,12 +440,121 @@ public:
   /// Unique identifier for supported kernel-mode drivers.
   const DriverType kernel_driver_type_;
 
-protected:
- HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
-                         std::numeric_limits<uint32_t>::max()};
+  /// @brief Creates an operating system event associated with a HSA event ID
+  /// @param[in] event_desc Pointer to the event descriptor that describes the event
+  /// @param[in] manual_reset if true, the event is manually reset; otherwise, it is automatically
+  /// reset
+  /// @param[in] IsSignaled if true, the event is initially signaled
+  /// @param[out] event pointer to the created HsaEvent object
+  /// @return HSA_STATUS_SUCCESS if the event was successfully created, or an error code
+  static hsa_status_t CreateEvent(HsaEventDescriptor* event_desc, bool manual_reset,
+                                  bool IsSignaled, HsaEvent** event) {
+    auto create_event = function_table_.create_event;
+    if (create_event == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
 
- const std::string devnode_name_;
- int fd_ = -1;
+    if (create_event(event_desc, manual_reset, IsSignaled, event) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Destroys an operating system event associated with a HSA event ID
+  /// @param[in] event pointer to the HsaEvent object to be destroyed
+  /// @return HSA_STATUS_SUCCESS if the event was successfully destroyed, or an error code
+  static hsa_status_t DestroyEvent(HsaEvent* event) {
+    auto destroy_event = function_table_.destroy_event;
+    if (destroy_event == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (destroy_event(event) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Sets the specified event object to the signaled state
+  /// @param[in] event pointer to the HsaEvent object to be set
+  /// @return HSA_STATUS_SUCCESS if the event was successfully set, or an error code
+  static hsa_status_t SetEvent(HsaEvent* event) {
+    auto set_event = function_table_.set_event;
+    if (set_event == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (set_event(event) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Checks the current state of the event object. If the object's state is
+  /// signaled, the function returns immediately.
+  /// @param[in] event pointer to the HsaEvent object to be queried
+  /// @param[in] milliseconds time in milliseconds to wait for the event to be signaled
+  /// @param[out] event_age pointer to a variable that will hold the event age
+  /// @return HSA_STATUS_SUCCESS if the event was successfully queried, or an error code
+  static hsa_status_t WaitEventExt(HsaEvent* event, uint32_t milliseconds, uint64_t* event_age) {
+    auto wait_event_ext = function_table_.wait_event_ext;
+    if (wait_event_ext == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (wait_event_ext(event, milliseconds, event_age) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Checks the current state of multiple event objects.
+  /// @param[in] events array of pointers to HsaEvent objects to be queried
+  /// @param[in] num_events number of events in the array
+  /// @param[in] wait_on_all if true, the function waits for all events to be signaled;
+  /// @param[in] milliseconds time in milliseconds to wait for the events to be signaled
+  /// @param[out] event_age pointer to an array that will hold the event ages
+  /// @return
+  static hsa_status_t WaitEventsExt(HsaEvent* events[], uint32_t num_events, bool wait_on_all,
+                                    uint32_t milliseconds, uint64_t* event_age) {
+    auto wait_events_ext = function_table_.wait_events_ext;
+    if (wait_events_ext == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (wait_events_ext(events, num_events, wait_on_all, milliseconds, event_age) !=
+        HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+    return HSA_STATUS_SUCCESS;
+  }
+
+ protected:
+  HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
+                          std::numeric_limits<uint32_t>::max()};
+
+  const std::string devnode_name_;
+  int fd_ = -1;
+
+  using create_event_fn = HSAKMT_STATUS (*)(HsaEventDescriptor*, bool, bool, HsaEvent**);
+  using destroy_event_fn = HSAKMT_STATUS (*)(HsaEvent*);
+  using set_event_fn = HSAKMT_STATUS (*)(HsaEvent*);
+  using wait_event_ext_fn = HSAKMT_STATUS (*)(HsaEvent*, uint32_t, uint64_t*);
+  using wait_events_ext_fn = HSAKMT_STATUS (*)(HsaEvent*[], uint32_t, bool, uint32_t, uint64_t*);
+
+  struct DriverFunctionTable {
+    create_event_fn create_event;
+    destroy_event_fn destroy_event;
+    set_event_fn set_event;
+    wait_event_ext_fn wait_event_ext;
+    wait_events_ext_fn wait_events_ext;
+  };
+
+  static DriverFunctionTable function_table_;
 };
 
 } // namespace core
