@@ -533,6 +533,45 @@ public:
     return HSA_STATUS_SUCCESS;
   }
 
+  /// @brief Allocates memory aligned to a specified boundary. Normally used for CPU virtual address
+  /// reserve.
+  /// @param[in] node_id Node ID of the agent
+  /// @param[in] size Size of the memory to be allocated
+  /// @param[in] alignment Alignment of the memory to be allocated
+  /// @param[in] mem_flags Memory flags for the allocation
+  /// @param[out] mem Pointer to store the allocated memory address
+  /// @return HSA_STATUS_SUCCESS if the memory was successfully allocated, or an error code
+  static hsa_status_t VirtualAddressReserve(uint32_t node_id, uint64_t size, uint64_t alignment,
+                                            HsaMemFlags mem_flags, void** mem) {
+    auto alloc_mem_align = function_table_.alloc_mem_align;
+    if (alloc_mem_align == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (alloc_mem_align(node_id, size, alignment, mem_flags, mem) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Frees memory allocated by the driver. Normally used for free a reserved CPU virtual
+  /// address.
+  /// @param[in] mem Pointer to the memory to be freed
+  /// @param[in] size Size of the memory to be freed
+  /// @return HSA_STATUS_SUCCESS if the memory was successfully freed, or an error code
+  static hsa_status_t VirtualAddressFree(void* mem, size_t size) {
+    auto free_memory = function_table_.free_memory;
+    if (free_memory == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (free_memory(mem, size) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
  protected:
   HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
                           std::numeric_limits<uint32_t>::max()};
@@ -545,6 +584,8 @@ public:
   using set_event_fn = HSAKMT_STATUS (*)(HsaEvent*);
   using wait_event_ext_fn = HSAKMT_STATUS (*)(HsaEvent*, uint32_t, uint64_t*);
   using wait_events_ext_fn = HSAKMT_STATUS (*)(HsaEvent*[], uint32_t, bool, uint32_t, uint64_t*);
+  using alloc_mem_align_fn = HSAKMT_STATUS (*)(uint32_t, uint64_t, uint64_t, HsaMemFlags, void**);
+  using free_memory_fn = HSAKMT_STATUS (*)(void*, size_t);
 
   struct DriverFunctionTable {
     create_event_fn create_event;
@@ -552,6 +593,8 @@ public:
     set_event_fn set_event;
     wait_event_ext_fn wait_event_ext;
     wait_events_ext_fn wait_events_ext;
+    alloc_mem_align_fn alloc_mem_align;
+    free_memory_fn free_memory;
   };
 
   static DriverFunctionTable function_table_;

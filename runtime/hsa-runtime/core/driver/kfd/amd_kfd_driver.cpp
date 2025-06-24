@@ -118,6 +118,8 @@ hsa_status_t KfdDriver::Init() {
   function_table_.set_event = HSAKMT_CALL(hsaKmtSetEvent);
   function_table_.wait_event_ext = HSAKMT_CALL(hsaKmtWaitOnEvent_Ext);
   function_table_.wait_events_ext = HSAKMT_CALL(hsaKmtWaitOnMultipleEvents_Ext);
+  function_table_.alloc_mem_align = HSAKMT_CALL(hsaKmtAllocMemoryAlign);
+  function_table_.free_memory = HSAKMT_CALL(hsaKmtFreeMemory);
 
   return HSA_STATUS_SUCCESS;
 }
