@@ -55,10 +55,10 @@
 namespace rocr {
 namespace AMD {
 
-AieAgent::AieAgent(uint32_t node)
-    : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(
-                      core::DriverType::XDNA),
-                  node, core::Agent::DeviceType::kAmdAieDevice) {
+AieAgent::AieAgent(uint32_t node, const HsaNodeProperties& node_props)
+    : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(core::DriverType::XDNA), node,
+                  core::Agent::DeviceType::kAmdAieDevice),
+      node_props_(node_props) {
   InitRegionList();
   InitAllocators();
   GetAgentProperties();
@@ -252,6 +252,9 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
     break;
   case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
     std::memset(value, 0, sizeof(uint8_t) * 8);
+    break;
+  case HSA_AMD_AGENT_INFO_CLOCK_COUNTERS:
+    std::memset(value, 0, sizeof(hsa_amd_clock_counters_t));
     break;
   default:
     *reinterpret_cast<uint32_t *>(value) = 0;
