@@ -635,6 +635,13 @@ hsa_status_t BlitKernel::SubmitLinearCopyCommand(void* dst, const void* src,
     return HSA_STATUS_ERROR;
   }
 
+  hsa_agent_t agent{0};
+  stat = queue_->GetInfo(HSA_AMD_QUEUE_INFO_AGENT, &agent);
+  if(stat == HSA_STATUS_SUCCESS && core::Agent::Convert(agent)->profiling_enabled()) {
+    LogSignalDuration(HSA_AMD_LOG_FLAG_BLIT_KERNEL_PKTS, completion_signal_,
+                      "BlitKernel::SubmitLinearCopyCommand");
+  }
+
   return HSA_STATUS_SUCCESS;
 }
 
