@@ -223,10 +223,13 @@ GpuAgent::GpuAgent(HSAuint32 node, const HsaNodeProperties& node_props, bool xna
   wallclock_frequency_ = uint64_t(info.gpu_counter_freq) * 1000ull;
 #endif
 
-  auto& firstCpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
-  auto linkInfo = core::Runtime::runtime_singleton_->GetLinkInfo(firstCpu->node_id(),
-                                                                node_id());
-  xgmi_cpu_gpu_ = (linkInfo.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI);
+  auto& first_cpu = core::Runtime::runtime_singleton_->cpu_agents()[0];
+  auto link_info = core::Runtime::runtime_singleton_->GetLinkInfo(first_cpu->node_id(), node_id());
+  xgmi_cpu_gpu_ = (link_info.info.link_type == HSA_AMD_LINK_INFO_TYPE_XGMI);
+
+  if (link_info.num_hop >= 1) {
+    large_bar_enabled_ = true;
+  }
 
   // Populate region list.
   InitRegionList();
@@ -2278,7 +2281,7 @@ void GpuAgent::BindTrapHandler() {
   assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtSetTrapHandler() failed");
 }
 
-void GpuAgent::InvalidateCodeCaches() {
+void GpuAgent::InvalidateCodeCaches(void *ptr, size_t size) {
   // Check for microcode cache invalidation support.
   // This is deprecated in later microcode builds.
   if (isa_->GetMajorVersion() == 7) {
@@ -2320,8 +2323,17 @@ void GpuAgent::InvalidateCodeCaches() {
 
   cache_inv[0] = PM4_HDR(PM4_HDR_IT_OPCODE_ACQUIRE_MEM, cache_inv_size_dw,
              isa_->GetMajorVersion());
-  cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
-  cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
+
+  if (ptr) {
+    size_t size_granule = (size + 0xFF) >> 8;
+    cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(size_granule);
+    cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(size_granule >> 32);
+    cache_inv[4] = PM4_ACQUIRE_MEM_DW4_COHER_BASE((uint64_t)ptr);
+    cache_inv[5] = PM4_ACQUIRE_MEM_DW4_COHER_BASE_HI((uint64_t)ptr);
+  } else {
+    cache_inv[2] = PM4_ACQUIRE_MEM_DW2_COHER_SIZE(0xFFFFFFFF);
+    cache_inv[3] = PM4_ACQUIRE_MEM_DW3_COHER_SIZE_HI(0xFF);
+  }
 
   // Submit the command to the utility queue and wait for it to complete.
   queues_[QueueUtility]->ExecutePM4(cache_inv, cache_inv_size_dw * sizeof(uint32_t));

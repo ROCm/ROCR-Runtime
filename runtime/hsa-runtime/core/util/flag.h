@@ -284,6 +284,9 @@ class Flag {
 
     var = os::GetEnvVar("HSA_IMAGE_ENABLE_3D_SWIZZLE_DEBUG");
     enable_3d_swizzle_ = (var == "1") ? true : false;
+
+    var = os::GetEnvVar("HSA_CO_DMACOPY_SIZE");
+    co_dmacopy_size_ = var.empty() ? 1024*1024 : atoi(var.c_str());
   }
 
   void parse_masks(uint32_t maxGpu, uint32_t maxCU) {
@@ -398,6 +401,8 @@ class Flag {
 
   bool dev_mem_queue() const { return dev_mem_queue_; }
 
+  size_t co_dmacopy_size() const { return co_dmacopy_size_; }
+
   uint32_t signal_abort_timeout() const { return signal_abort_timeout_; }
 
   int async_events_thread_priority() const { return async_events_thread_priority_; }
@@ -466,6 +471,8 @@ class Flag {
   SRAMECC_ENABLE sramecc_enable_;
 
   size_t pc_sampling_max_device_buffer_size_;
+
+  size_t co_dmacopy_size_;
 
   // Map GPU index post RVD to its default cu mask.
   std::map<uint32_t, std::vector<uint32_t>> cu_mask_;
