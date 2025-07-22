@@ -60,9 +60,11 @@
  * - 1.7 - hsa_amd_signal_wait_all
  * - 1.8 - hsa_amd_memory_get_preferred_copy_engine
  * - 1.9 - hsa_amd_portable_export_dmabuf_v2
+ * - 1.10 - hsa_amd_vmem_address_reserve: HSA_AMD_VMEM_ADDRESS_NO_REGISTER
+ * - 1.11 - hsa_amd_agent_info_t: HSA_AMD_AGENT_INFO_CLOCK_COUNTERS
  */
 #define HSA_AMD_INTERFACE_VERSION_MAJOR 1
-#define HSA_AMD_INTERFACE_VERSION_MINOR 9
+#define HSA_AMD_INTERFACE_VERSION_MINOR 11
 
 #ifdef __cplusplus
 extern "C" {
@@ -476,6 +478,16 @@ typedef enum {
 } hsa_amd_iommu_version_t;
 
 /**
+ * @brief Structure containing information on the agent's clock counters.
+ */
+typedef struct hsa_amd_clock_counters_s {
+  uint64_t gpu_clock_counter;
+  uint64_t cpu_clock_counter;
+  uint64_t system_clock_counter;
+  uint64_t system_clock_frequency;
+} hsa_amd_clock_counters_t;
+
+/**
  * @brief Agent attributes.
  */
 typedef enum hsa_amd_agent_info_s {
@@ -684,7 +696,12 @@ typedef enum hsa_amd_agent_info_s {
    *
    * The type of this attribute is uint64_t.
    */
-  HSA_AMD_AGENT_INFO_SCRATCH_LIMIT_CURRENT = 0xA117
+  HSA_AMD_AGENT_INFO_SCRATCH_LIMIT_CURRENT = 0xA117,
+  /**
+   * Queries the driver for clock counters of the agent.
+   * The type of this attribute is hsa_amd_clock_counters_t.
+   */
+  HSA_AMD_AGENT_INFO_CLOCK_COUNTERS = 0xA118
 } hsa_amd_agent_info_t;
 
 /**
@@ -3136,7 +3153,7 @@ hsa_status_t hsa_amd_spm_release(hsa_agent_t preferred_agent);
  *
  * @param[in] size_in_bytes size of the buffer
  *
- * @param[in/out] timeout timeout in milliseconds
+ * @param[in,out] timeout timeout in milliseconds
  *
  * @param[out] size_copied number of bytes copied
  *
@@ -3264,6 +3281,11 @@ hsa_status_t hsa_amd_portable_export_dmabuf_v2(const void* ptr, size_t size,
  */
 hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
 
+typedef enum hsa_amd_vmem_address_reserve_flag_s {
+  // Only reserve a VA range without registering it to the underlying driver
+  HSA_AMD_VMEM_ADDRESS_NO_REGISTER = (1UL << 0),
+} hsa_amd_vmem_address_reserve_flag_t;
+
 /**
  * @brief Allocate a reserved address range
  *
@@ -3275,7 +3297,7 @@ hsa_status_t hsa_amd_portable_close_dmabuf(int dmabuf);
  * @param[out] va virtual address allocated
  * @param[in] size of address range requested
  * @param[in] address requested
- * @param[in] flags currently unsupported
+ * @param[in] flags optional hsa_amd_vmem_address_reserve_flag_t
  *
  * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
  *
@@ -3303,7 +3325,7 @@ hsa_status_t hsa_amd_vmem_address_reserve(void** va, size_t size, uint64_t addre
  * @param[in] size of address range requested
  * @param[in] address requested
  * @param[in] alignment requested. 0 for default. Must be >= page-size and a power of 2
- * @param[in] flags currently unsupported
+ * @param[in] flags optional hsa_amd_vmem_address_reserve_flag_t
  *
  * @retval ::HSA_STATUS_SUCCESS Address range allocated successfully
  *

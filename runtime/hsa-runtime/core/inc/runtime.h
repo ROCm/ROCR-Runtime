@@ -802,11 +802,14 @@ class Runtime {
   typedef void* ThunkHandle;
 
   struct AddressHandle {
-    AddressHandle() : size(0), use_count(0) {}
-    AddressHandle(size_t size) : size(size), use_count(0) {}
+    AddressHandle() : os_addr(nullptr), size(0), use_count(0), registered(false) {}
+    AddressHandle(void* addr, size_t _size, bool _registered) : os_addr(addr), size(_size), use_count(0), registered(_registered) {}
 
+    // Address returned by OS. May be different from user address when adjusted for alignment
+    void *os_addr;
     size_t size;
     int use_count;
+    bool registered;
   };
   std::map<const void*, AddressHandle> reserved_address_map_;  // Indexed by VA
 
@@ -884,11 +887,6 @@ class Runtime {
   VMemorySetAccessPerHandle(void *va, MappedHandle &MappedHandle,
                             const hsa_amd_memory_access_desc_t *desc,
                             const size_t desc_cnt);
-
-  // Frees runtime memory when the runtime library is unloaded if safe to do so.
-  // Failure to release the runtime indicates an incorrect application but is
-  // common (example: calls library routines at process exit).
-  friend class RuntimeCleanup;
 
   void InitIPCDmaBufSupport();
   bool ipc_dmabuf_supported_;

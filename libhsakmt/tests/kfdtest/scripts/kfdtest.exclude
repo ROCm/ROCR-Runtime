@@ -28,7 +28,6 @@ FILTER[core]=\
 "${FILTER[core_sws]}:"\
 "KFDCWSRTest.BasicTest"
 
-
 # Permanent exclusions
 # These tests are included for debugging, but are not executed in normal execution on any ASIC:
 # FILTER[pm] need human intervention, so put it here. Developers can run them
@@ -326,22 +325,6 @@ FILTER[gfx1036]=\
 "$BLACKLIST_ALL_ASICS:"\
 "$BLACKLIST_GFX10_NV2X"
 
-FILTER[gfx940]=\
-"$BLACKLIST_ALL_ASICS:"\
-"KFDMemoryTest.LargestSysBufferTest:"\
-"KFDMemoryTest.BigSysBufferStressTest:"\
-"KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest:"\
-"KFDQMTest.QueueLatency"
-
-FILTER[gfx941]=\
-"$BLACKLIST_ALL_ASICS:"\
-"KFDMemoryTest.LargestSysBufferTest:"\
-"KFDMemoryTest.BigSysBufferStressTest:"\
-"KFDMemoryTest.FlatScratchAccess:"\
-"KFDIPCTest.BasicTest:"\
-"KFDQMTest.QueueLatency"
-
 FILTER[gfx942]=\
 "$BLACKLIST_ALL_ASICS:"\
 "KFDMemoryTest.LargestSysBufferTest:"\
@@ -357,6 +340,7 @@ FILTER[gfx950]=\
 "KFDMemoryTest.FlatScratchAccess:"\
 "KFDIPCTest.BasicTest:"\
 "KFDQMTest.QueueLatency:"\
+"KFDEvictTest.*:"\
 "KFDSVMEvictTest.QueueTest*:"\
 "KFDGWSTest.Semaphore"
 

@@ -43,6 +43,7 @@
 #ifndef HSA_RUNTME_CORE_INC_DRIVER_H_
 #define HSA_RUNTME_CORE_INC_DRIVER_H_
 
+#include <cstdint>
 #include <limits>
 #include <string>
 
@@ -113,13 +114,6 @@ public:
   virtual hsa_status_t GetEdgeProperties(std::vector<HsaIoLinkProperties>& io_link_props,
                                          uint32_t node_id) const = 0;
 
-  /// @brief Get the properties of a specific agent and initialize the agent
-  /// object.
-  /// @param agent Agent whose properties we're getting.
-  /// @retval HSA_STATUS_SUCCESS if the driver successfully returns the agent's
-  /// properties.
-  virtual hsa_status_t GetAgentProperties(Agent &agent) const = 0;
-
   /// @brief Get the memory properties of a specific node.
   /// @param[in] node_id Node ID of the agent.
   /// @param[out] mem_props Memory properties of the node specified by @p node_id.
@@ -146,9 +140,53 @@ public:
 
   virtual hsa_status_t FreeMemory(void *mem, size_t size) = 0;
 
-  virtual hsa_status_t CreateQueue(Queue &queue) const = 0;
+  /// @brief Create an agent dispatch queue with user-mode access rights.
+  /// @param[in] node_id Node ID of the agent on which the queue is being created.
+  /// @param[in] type Queue's type.
+  /// @param[in] queue_pct Maximum percentage of a queue's occupancy allowed.
+  /// @param[in] priority Queue's priority for scheduling.
+  /// @param[in] sdma_engine_id ID of the SDMA engine on which the queue is being created. Only used
+  /// if @p type is one of the SDMA queue types.
+  /// @param[in] queue_addr Address of the queue's ring buffer.
+  /// @param[in] queue_size_bytes Size of the queue's ring buffer in bytes.
+  /// @param[in] event HsaEvent for event-driven callbacks.
+  /// @param[out] queue_resource Queue resource information populated by the driver.
+  virtual hsa_status_t CreateQueue(uint32_t node_id, HSA_QUEUE_TYPE type, uint32_t queue_pct,
+                                   HSA_QUEUE_PRIORITY priority, uint32_t sdma_engine_id,
+                                   void* queue_addr, uint64_t queue_size_bytes, HsaEvent* event,
+                                   HsaQueueResource& queue_resource) const = 0;
 
-  virtual hsa_status_t DestroyQueue(Queue &queue) const = 0;
+  /// @brief Destroy a queue.
+  /// @param queue_id Kernel-mode driver's assigned queue ID.
+  virtual hsa_status_t DestroyQueue(HSA_QUEUEID queue_id) const = 0;
+
+  /// @brief Update a queue's properties.
+  /// @param[in] queue_id Kernel-mode driver's assigned queue ID.
+  /// @param[in] queue_pct Maximum percentage of a queue's occupancy allowed.
+  /// @param[in] priority Queue's priority for scheduling.
+  /// @param[in] queue_addr Queue's ring buffer base address.
+  /// @param[in] queue_size_bytes Size of the queue's ring buffer in bytes.
+  /// @param[in] event HsaEvent for event-driven callbacks.
+  virtual hsa_status_t UpdateQueue(HSA_QUEUEID queue_id, uint32_t queue_pct,
+                                   HSA_QUEUE_PRIORITY priority, void* queue_addr,
+                                   uint64_t queue_size_bytes, HsaEvent* event) const = 0;
+
+  /// @brief Set the CU mask for a queue.
+  /// @details This sets the CU bitmask for a queue. The CU mask determines which CUs
+  /// a queue's dispatches can target. Currently this is only supported for GPU devices.
+  /// @param[in] queue_id Kernel-mode driver's assigned queue ID.
+  /// @param[in] cu_mask_count Number of CU bits in the mask.
+  /// @param[in] queue_cu_mask New CU mask for the queue.
+  virtual hsa_status_t SetQueueCUMask(HSA_QUEUEID queue_id, uint32_t cu_mask_count,
+                                      uint32_t* queue_cu_mask) const = 0;
+
+  /// @brief Allocate global wave sync (GWS) resource for a queue. This is only supported for GPUs.
+  /// GWS can be used to synchronize wavefronts across the entire GPU device.
+  /// @param[in] queue_id Kernel-mode driver's assigned queue ID.
+  /// @param[in] num_gws Number of GWS slots.
+  /// @param[in] first_gws First GWS slot.
+  virtual hsa_status_t AllocQueueGWS(HSA_QUEUEID queue_id, uint32_t num_gws,
+                                     uint32_t* first_gws) const = 0;
 
   /// @brief Imports memory using dma-buf.
   ///
@@ -211,9 +249,100 @@ public:
                                         uint32_t* timeout, uint32_t* size_copied,
                                         void* dest_mem_addr, bool* is_spm_data_loss) const = 0;
 
+  /// @brief Open anonymous file descriptor to enable events and read SMI events.
+  /// @param[in] node_id Node ID to receive the SMI event from.
+  /// @param[out] fd Anonymous file descriptor.
+  /// @retval HSA_STATUS_ERROR_INVALID_AGENT if the agent's driver doesn't support
+  /// SMI events.
+  virtual hsa_status_t OpenSMI(uint32_t node_id, int* fd) const {
+    return HSA_STATUS_ERROR_INVALID_AGENT;
+  }
+
+  /// @brief Sets trap handler and trap buffer to be used for all queues associated
+  /// with the specified NodeId within this process context
+  /// @param[in] node_id Node ID of the agent
+  /// @param[in] base Trap handler base address
+  /// @param[in] base_size Trap handler base size
+  /// @param[in] buffer_base Trap buffer base address
+  /// @param[in] buffer_base_size Trap buffer size
+  /// @return HSA_STATUS_SUCCESS if the driver successfully sets the trap handler.
+  virtual hsa_status_t SetTrapHandler(uint32_t node_id, const void* base, uint64_t base_size,
+                                      const void* buffer_base, uint64_t buffer_base_size) const = 0;
+
+  /// @brief Gets the device handle for a specific node.
+  /// @param node_id Node ID of the agent
+  /// @param device_handle Device handle
+  /// @return HSA_STATUS_SUCCESS if the driver successfully returns the device
+  virtual hsa_status_t GetDeviceHandle(uint32_t node_id, void** device_handle) const = 0;
+
+
+  /// @brief Gets clock counters for particular Node
+  /// @param[in] node_id Node ID of the agent
+  /// @param[out] clock_counter Clock counter
+  /// @return HSA_STATUS_SUCCESS if the driver successfully returns the clock
+  virtual hsa_status_t GetClockCounters(uint32_t node_id,
+                                        HsaClockCounters* clock_counter) const = 0;
+
+  /// @brief Get the tile configuration for a specific node.
+  ///
+  /// @param[in] node_id Node ID of the agent
+  /// @param[out] config Pointer to tile configuration
+  /// @return HSA_STATUS_SUCCESS if the driver successfully returns the tile configuration.
+  virtual hsa_status_t GetTileConfig(uint32_t node_id, HsaGpuTileConfig* config) const = 0;
+
   /// @brief Check if the HSA KMT Model is enabled
   /// @param[out] enable True if the model is enabled, false otherwise
   virtual hsa_status_t IsModelEnabled(bool* enable) const = 0;
+
+  /// @brief Gets the wallclock frequency for a specific node.
+  /// @param[in] node_id Node ID of the agent
+  /// @param[out] frequency Pointer to the wallclock frequency
+  /// @return HSA_STATUS_SUCCESS if the wallclock frequency was successfully retrieved, or an error
+  /// code.
+  virtual hsa_status_t GetWallclockFrequency(uint32_t node_id, uint64_t* frequency) const = 0;
+
+  /// @brief Allocates scratch memory for the agent.
+  /// @param[in] node_id Node ID of the agent
+  /// @param[in] size Size of the scratch memory
+  /// @param[out] mem Pointer to the scratch memory
+  /// @return HSA_STATUS_SUCCESS if scratch memory allocated successfully.
+  virtual hsa_status_t AllocateScratchMemory(uint32_t node_id, uint64_t size, void** mem) const = 0;
+
+  /// @brief Inquires memory available for allocation as a memory buffer
+  /// @param[in] node_id Node ID of the agent
+  /// @param[out] available_size Available memory size in bytes
+  /// @return HSA_STATUS_SUCCESS if the driver successfully returns the available memory size.
+  virtual hsa_status_t AvailableMemory(uint32_t node_id, uint64_t* available_size) const = 0;
+
+  /// @brief Register memory to GPU
+  /// @param[in] ptr Address of memory to be registered
+  /// @param[in] size Size of memory
+  /// @param[in] mem_flags Flags of memory registering
+  /// @return HSA_STATUS_SUCCESS if memory registered successfully.
+  virtual hsa_status_t RegisterMemory(void* ptr, uint64_t size, HsaMemFlags mem_flags) const = 0;
+
+  /// @brief Unregisters with a memory
+  /// @param[in] ptr Pointer of memory
+  /// @return HSA_STATUS_SUCCESS if deregister memory successfully.
+  virtual hsa_status_t DeregisterMemory(void* ptr) const = 0;
+
+  /// @brief Make the memory is resident and can be accessed by GPU
+  /// @param[in] mem address of memory to be made resident
+  /// @param[in] size size of memory
+  /// @param[out] alternate_va alternate virtual address
+  /// @param[in] mem_flags memory flags can be null
+  /// @param[in] num_nodes number of nodes to be used can be 0 if not used
+  /// @param[in] nodes nodes to be used can be null
+  /// @return HSA_STATUS_SUCCESS if the driver successfully makes the memory
+  virtual hsa_status_t MakeMemoryResident(const void* mem, size_t size, uint64_t* alternate_va,
+                                          const HsaMemMapFlags* mem_flags = nullptr,
+                                          uint32_t num_nodes = 0,
+                                          const uint32_t* nodes = nullptr) const = 0;
+
+  /// @brief Releases the residency of the memory
+  /// @param[in] mem address of memory to be made unresident
+  /// @return HSA_STATUS_SUCCESS if the driver successfully makes the memory
+  virtual hsa_status_t MakeMemoryUnresident(const void* mem) const = 0;
 
   /// Unique identifier for supported kernel-mode drivers.
   const DriverType kernel_driver_type_;

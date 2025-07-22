@@ -55,13 +55,12 @@
 namespace rocr {
 namespace AMD {
 
-AieAgent::AieAgent(uint32_t node)
-    : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(
-                      core::DriverType::XDNA),
-                  node, core::Agent::DeviceType::kAmdAieDevice) {
+AieAgent::AieAgent(uint32_t node, const HsaNodeProperties& node_props)
+    : core::Agent(core::Runtime::runtime_singleton_->AgentDriver(core::DriverType::XDNA), node,
+                  core::Agent::DeviceType::kAmdAieDevice),
+      node_props_(node_props) {
   InitRegionList();
   InitAllocators();
-  GetAgentProperties();
 }
 
 AieAgent::~AieAgent() {
@@ -253,6 +252,9 @@ hsa_status_t AieAgent::GetInfo(hsa_agent_info_t attribute, void *value) const {
   case HSA_AMD_AGENT_INFO_MEMORY_PROPERTIES:
     std::memset(value, 0, sizeof(uint8_t) * 8);
     break;
+  case HSA_AMD_AGENT_INFO_CLOCK_COUNTERS:
+    std::memset(value, 0, sizeof(hsa_amd_clock_counters_t));
+    break;
   default:
     *reinterpret_cast<uint32_t *>(value) = 0;
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
@@ -329,11 +331,6 @@ void AieAgent::InitRegionList() {
       new MemoryRegion(false, false, false, false, true, this, dev_mem_props));
   regions_.push_back(new MemoryRegion(false, false, false, false, true, this,
                                       other_mem_props));
-}
-
-void AieAgent::GetAgentProperties() {
-  auto &drv = static_cast<XdnaDriver &>(driver());
-  drv.GetAgentProperties(*this);
 }
 
 void AieAgent::InitAllocators() {

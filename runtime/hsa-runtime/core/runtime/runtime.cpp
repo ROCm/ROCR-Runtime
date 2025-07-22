@@ -1266,9 +1266,9 @@ hsa_status_t Runtime::IPCCreate(void* ptr, size_t len, hsa_amd_ipc_memory_t* han
   // deferred export will not run into this problem.
   int dmabuf_fd;
   uint64_t dmabufOffset;
-  HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtExportDMABufHandle(ptr, len, &dmabuf_fd, &dmabufOffset));
+  hsa_status_t err = agent->driver().ExportDMABuf(ptr, len, &dmabuf_fd, &dmabufOffset);
   assert(dmabufOffset/pageSize == fragOffset && "DMA Buf inconsistent with pointer offset.");
-  if (err != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  if (err != HSA_STATUS_SUCCESS) return err;
   close(dmabuf_fd);
 
   ScopedAcquire<KernelMutex> lock(&ipc_sock_server_lock_);
@@ -3104,17 +3104,18 @@ hsa_status_t Runtime::DmaBufExport(const void* ptr, size_t size, int* dmabuf,
         }
         int fd;
         uint64_t off;
-        HSAKMT_STATUS err = HSAKMT_CALL(hsaKmtExportDMABufHandle(const_cast<void*>(ptr), size, &fd, &off));
-        if (err == HSAKMT_STATUS_SUCCESS) {
-          *dmabuf = fd;
-          *offset = off;
-          return HSA_STATUS_SUCCESS;
+        hsa_status_t err = mem->second.region->owner()->driver().ExportDMABuf(
+            const_cast<void*>(ptr), size, &fd, &off);
+
+        if (err != HSA_STATUS_SUCCESS) {
+          assert((err != HSA_STATUS_ERROR_INVALID_ARGUMENT) &&
+                 "Thunk does not recognize an expected allocation.");
+          return err;
         }
 
-        assert((err != HSAKMT_STATUS_INVALID_PARAMETER) &&
-               "Thunk does not recognize an expected allocation.");
-        if (err == HSAKMT_STATUS_ERROR) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
-        return HSA_STATUS_ERROR;
+        *dmabuf = fd;
+        *offset = off;
+        return HSA_STATUS_SUCCESS;
       }
     }
   }
@@ -3144,6 +3145,26 @@ hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t add
 
   ScopedAcquire<KernelSharedMutex> lock(&memory_lock_);
 
+  if (flags & HSA_AMD_VMEM_ADDRESS_NO_REGISTER) {
+    size_t requested = size + alignment - sysconf(_SC_PAGE_SIZE);
+    auto mem = mmap(addr, requested, PROT_READ | PROT_WRITE, MAP_ANONYMOUS | MAP_PRIVATE | MAP_NORESERVE, -1, 0);
+    if (mem == MAP_FAILED)
+      return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+
+    auto aligned = AlignUp(mem, alignment);
+
+    // Hint to enable THP for large host allocations which can help in performance gain
+    constexpr size_t kLargePageSize = 2*1024*1024;
+    if (size >= kLargePageSize) {
+      if (madvise(aligned, size, MADV_HUGEPAGE))
+        debug_warning(false && "madvise with MADV_HUGEPAGE failed");
+    }
+
+    reserved_address_map_[aligned] = AddressHandle(mem, size, false);
+    *va = aligned;
+    return HSA_STATUS_SUCCESS;
+  }
+
   memFlags.ui32.OnlyAddress = 1;
   memFlags.ui32.FixedAddress = 1;
 
@@ -3155,7 +3176,7 @@ hsa_status_t Runtime::VMemoryAddressReserve(void** va, size_t size, uint64_t add
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   }
 
-  reserved_address_map_[addr] = AddressHandle(size);
+  reserved_address_map_[addr] = AddressHandle(addr, size, true);
   *va = addr;
   return HSA_STATUS_SUCCESS;
 }
@@ -3173,7 +3194,11 @@ hsa_status_t Runtime::VMemoryAddressFree(void* va, size_t size) {
 
   if (it->second.use_count > 0) return HSA_STATUS_ERROR_RESOURCE_FREE;
 
-  if (HSAKMT_CALL(hsaKmtFreeMemory(va, size)) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  if (it->second.registered) {
+    if (HSAKMT_CALL(hsaKmtFreeMemory(it->second.os_addr, size)) != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+  } else {
+    if (munmap(it->second.os_addr, size)) return HSA_STATUS_ERROR;
+  }
 
   reserved_address_map_.erase(it);
   return HSA_STATUS_SUCCESS;
@@ -3396,6 +3421,7 @@ Runtime::MappedHandleAllowedAgent::MappedHandleAllowedAgent(
   status = targetAgent->driver().ImportDMABuf(dmabuf_fd, *targetAgent,
                                               shareable_handle);
   assert(status == HSA_STATUS_SUCCESS);
+  close(dmabuf_fd);
   if (status != HSA_STATUS_SUCCESS)
     return;
 }
@@ -3629,11 +3655,11 @@ hsa_status_t Runtime::VMemoryExportShareableHandle(int* dmabuf_fd,
     return HSA_STATUS_ERROR_INVALID_ALLOCATION;
   }
 
-  uint64_t offset, ret;
+  uint64_t offset;
 
-  ret = HSAKMT_CALL(hsaKmtExportDMABufHandle(memoryHandle->second.thunk_handle, memoryHandle->second.size,
-                                 dmabuf_fd, &offset));
-  if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  hsa_status_t err = memoryHandle->second.region->owner()->driver().ExportDMABuf(
+      memoryHandle->second.thunk_handle, memoryHandle->second.size, dmabuf_fd, &offset);
+  if (err != HSA_STATUS_SUCCESS) return err;
 
   return HSA_STATUS_SUCCESS;
 }

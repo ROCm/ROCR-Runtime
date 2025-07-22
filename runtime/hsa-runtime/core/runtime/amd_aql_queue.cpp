@@ -262,18 +262,19 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
   // is a KFD queue. The debugger may access the aperture addresses, queue
   // scratch base, and queue type.
 
-  HSAKMT_STATUS kmt_status;
+  hsa_status_t status;
   if (core::Runtime::runtime_singleton_->KfdVersion().supports_exception_debugging) {
     queue_rsrc.ErrorReason = &exception_signal_->signal_.value;
-    kmt_status = HSAKMT_CALL(hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
-                                   ring_buf_alloc_bytes_, queue_event(), &queue_rsrc));
+    status =
+        agent->driver().CreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
+                                    ring_buf_alloc_bytes_, queue_event(), queue_rsrc);
   } else {
-    kmt_status = HSAKMT_CALL(hsaKmtCreateQueueExt(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0, ring_buf_,
-                                   ring_buf_alloc_bytes_, NULL, &queue_rsrc));
+    status = agent->driver().CreateQueue(node_id, HSA_QUEUE_COMPUTE_AQL, 100, priority_, 0,
+                                         ring_buf_, ring_buf_alloc_bytes_, NULL, queue_rsrc);
   }
-  if (kmt_status != HSAKMT_STATUS_SUCCESS)
+  if (status != HSA_STATUS_SUCCESS)
     throw AMD::hsa_exception(HSA_STATUS_ERROR_OUT_OF_RESOURCES,
-                             "Queue create failed at hsaKmtCreateQueue\n");
+                             "Queue create failed\n");
   // Complete populating the doorbell signal structure.
   signal_.hardware_doorbell_ptr = queue_rsrc.Queue_DoorBell_aql;
 
@@ -282,7 +283,7 @@ AqlQueue::AqlQueue(core::SharedQueue* shared_queue, GpuAgent* agent, size_t req_
   amd_queue_.hsa_queue.id = this->GetQueueId();
 
   queue_id_ = queue_rsrc.QueueId;
-  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { HSAKMT_CALL(hsaKmtDestroyQueue(queue_id_)); });
+  MAKE_NAMED_SCOPE_GUARD(QueueGuard, [&]() { agent_->driver().DestroyQueue(queue_id_); });
 
   amd_queue_.scratch_max_use_index = UINT64_MAX;
   amd_queue_.alt_scratch_max_use_index = UINT64_MAX;
@@ -362,8 +363,20 @@ AqlQueue::~AqlQueue() {
 
   Inactivate();
 
-  if (queue_scratch_.main_queue_base) agent_->ReleaseQueueMainScratch(queue_scratch_);
-  if (queue_scratch_.alt_queue_base) agent_->ReleaseQueueAltScratch(queue_scratch_);
+  if (queue_scratch_.main_queue_base) {
+    tool::notify_event_scratch_free_start(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+    agent_->ReleaseQueueMainScratch(queue_scratch_);
+    tool::notify_event_scratch_free_end(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+  }
+  if (queue_scratch_.alt_queue_base) {
+    tool::notify_event_scratch_free_start(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+    agent_->ReleaseQueueAltScratch(queue_scratch_);
+    tool::notify_event_scratch_free_end(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+  }
 
   exception_signal_->WaitingDec();
   exception_signal_->DestroySignal();
@@ -590,23 +603,25 @@ int AqlQueue::CreateRingBufferFD(const char* ring_buf_shm_path,
 
 void AqlQueue::Suspend() {
   suspended_ = true;
-  auto err = HSAKMT_CALL(hsaKmtUpdateQueue(queue_id_, 0, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL));
-  assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
+  auto err =
+      agent_->driver().UpdateQueue(queue_id_, 0, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL);
+  assert(err == HSA_STATUS_SUCCESS && "Update queue failed.");
 }
 
 void AqlQueue::Resume() {
   if (suspended_) {
     suspended_ = false;
-    auto err = HSAKMT_CALL(hsaKmtUpdateQueue(queue_id_, 100, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL));
-    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtUpdateQueue failed.");
+    auto err = agent_->driver().UpdateQueue(queue_id_, 100, priority_, ring_buf_,
+                                            ring_buf_alloc_bytes_, NULL);
+    assert(err == HSA_STATUS_SUCCESS && "Update queue failed.");
   }
 }
 
 hsa_status_t AqlQueue::Inactivate() {
   bool active = active_.exchange(false, std::memory_order_relaxed);
   if (active) {
-    auto err = HSAKMT_CALL(hsaKmtDestroyQueue(queue_id_));
-    assert(err == HSAKMT_STATUS_SUCCESS && "hsaKmtDestroyQueue failed.");
+    auto err = agent_->driver().DestroyQueue(queue_id_);
+    assert(err == HSA_STATUS_SUCCESS && "Destroy queue failed.");
     atomic::Fence(std::memory_order_acquire);
   }
   return HSA_STATUS_SUCCESS;
@@ -618,8 +633,9 @@ hsa_status_t AqlQueue::SetPriority(HSA_QUEUE_PRIORITY priority) {
   }
 
   priority_ = priority;
-  auto err = HSAKMT_CALL(hsaKmtUpdateQueue(queue_id_, 100, priority_, ring_buf_, ring_buf_alloc_bytes_, NULL));
-  return (err == HSAKMT_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
+  auto err = agent_->driver().UpdateQueue(queue_id_, 100, priority_, ring_buf_,
+                                          ring_buf_alloc_bytes_, NULL);
+  return (err == HSA_STATUS_SUCCESS ? HSA_STATUS_SUCCESS : HSA_STATUS_ERROR_OUT_OF_RESOURCES);
 }
 
 void AqlQueue::CheckScratchLimits() {
@@ -642,7 +658,13 @@ void AqlQueue::CheckScratchLimits() {
 
 void AqlQueue::FreeMainScratchSpace() {
   auto& scratch = queue_scratch_;
-  agent_->ReleaseQueueMainScratch(scratch);
+  if (queue_scratch_.main_queue_base) {
+    tool::notify_event_scratch_free_start(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+    agent_->ReleaseQueueMainScratch(scratch);
+    tool::notify_event_scratch_free_end(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+  }
   scratch.main_size = 0;
   scratch.main_size_per_thread = 0;
   scratch.main_queue_process_offset = 0;
@@ -785,7 +807,13 @@ void AqlQueue::AsyncReclaimMainScratch() {
 
 void AqlQueue::FreeAltScratchSpace() {
   auto& scratch = queue_scratch_;
-  agent_->ReleaseQueueAltScratch(scratch);
+  if (queue_scratch_.alt_queue_base) {
+    tool::notify_event_scratch_free_start(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+    agent_->ReleaseQueueAltScratch(scratch);
+    tool::notify_event_scratch_free_end(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+  }
   scratch.alt_size = 0;
   scratch.alt_size_per_thread = 0;
   scratch.alt_queue_process_offset = 0;
@@ -987,7 +1015,13 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   // scratch.use_alt_limit will be 0 if alt scratch is not supported or disabled
   if (dispatch_size < scratch.use_alt_limit && dispatch_slots < device_slots) {
     // Try to use ALT scratch
-    agent_->ReleaseQueueAltScratch(scratch);
+    if (scratch.alt_queue_base) {
+      tool::notify_event_scratch_free_start(public_handle(),
+                                HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+      agent_->ReleaseQueueAltScratch(scratch);
+      tool::notify_event_scratch_free_end(public_handle(),
+                                HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_ALT);
+    }
 
     scratch.alt_size = dispatch_size;
     scratch.alt_size_per_thread = size_per_thread;
@@ -1019,7 +1053,14 @@ void AqlQueue::HandleInsufficientScratch(hsa_signal_value_t& error_code,
   }
 
   // Use PRIMARY scratch
-  agent_->ReleaseQueueMainScratch(scratch);
+  if (scratch.main_queue_base) {
+    tool::notify_event_scratch_free_start(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+    agent_->ReleaseQueueMainScratch(scratch);
+    tool::notify_event_scratch_free_end(public_handle(),
+                              HSA_AMD_EVENT_SCRATCH_ALLOC_FLAG_NONE);
+  }
+
   scratch.main_size = device_size;
   scratch.main_size_per_thread = size_per_thread;
   scratch.main_lanes_per_wave = lanes_per_wave;
@@ -1250,12 +1291,15 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
 
   AqlQueue* queue = (AqlQueue*)arg;
   hsa_status_t errorCode = HSA_STATUS_ERROR;
-
-  if (queue->exceptionState == ERROR_HANDLER_TERMINATE) {
+  auto exceptionHandlerDone = [&]() {
     Signal* signal = queue->exception_signal_;
     queue->exceptionState = ERROR_HANDLER_DONE;
     signal->StoreRelease(0);
     return false;
+  };
+
+  if (queue->exceptionState == ERROR_HANDLER_TERMINATE) {
+    return exceptionHandlerDone();
   }
 
   for (auto& error : QueueErrors) {
@@ -1272,7 +1316,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   // handler.
   if (errorCode == static_cast<hsa_status_t>(HSA_STATUS_ERROR_MEMORY_FAULT)) {
     debug_print("Queue error - HSA_STATUS_ERROR_MEMORY_FAULT\n");
-    return false;
+    return exceptionHandlerDone();
   }
 
   // Fallback if KFD does not support GPU core dump. In this case, there core dump is
@@ -1294,10 +1338,7 @@ bool AqlQueue::ExceptionHandler(hsa_signal_value_t error_code, void* arg) {
   if (queue->errors_callback_ != nullptr) {
     queue->errors_callback_(errorCode, queue->public_handle(), queue->errors_data_);
   }
-  Signal* signal = queue->exception_signal_;
-  queue->exceptionState = ERROR_HANDLER_DONE;
-  signal->StoreRelease(0);
-  return false;
+  return exceptionHandlerDone();
 }
 
 hsa_status_t AqlQueue::SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* cu_mask) {
@@ -1358,9 +1399,8 @@ hsa_status_t AqlQueue::SetCUMasking(uint32_t num_cu_mask_count, const uint32_t* 
       }
     }
 
-    HSAKMT_STATUS ret =
-        HSAKMT_CALL(hsaKmtSetQueueCUMask(queue_id_, mask.size() * 32, reinterpret_cast<HSAuint32*>(&mask[0])));
-    if (ret != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR;
+    return agent_->driver().SetQueueCUMask(queue_id_, mask.size() * 32,
+                                           reinterpret_cast<HSAuint32*>(&mask[0]));
   }
 
   // update current cu masking tracking.
@@ -1840,8 +1880,6 @@ void AqlQueue::InitScratchSRD() {
   amd_queue_.scratch_backing_memory_location = queue_scratch_.main_queue_process_offset;
   amd_queue_.alt_scratch_backing_memory_location = queue_scratch_.alt_queue_process_offset;
 
-  const auto& agent_props = agent_->properties();
-
   // For backwards compatibility this field records the per-lane scratch
   // for a 64 lane wavefront. If scratch was allocated for 32 lane waves
   // then the effective size for a 64 lane wave is halved.
@@ -1860,8 +1898,8 @@ void AqlQueue::InitScratchSRD() {
 
 hsa_status_t AqlQueue::EnableGWS(int gws_slot_count) {
   uint32_t discard;
-  auto status = HSAKMT_CALL(hsaKmtAllocQueueGWS(queue_id_, gws_slot_count, &discard));
-  if (status != HSAKMT_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
+  auto status = agent_->driver().AllocQueueGWS(queue_id_, gws_slot_count, &discard);
+  if (status != HSA_STATUS_SUCCESS) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
   amd_queue_.hsa_queue.type = HSA_QUEUE_TYPE_COOPERATIVE;
   return HSA_STATUS_SUCCESS;
 }

@@ -47,7 +47,6 @@ cmake_minimum_required(VERSION 3.7)
 project("rocr")
 
 set(CMAKE_VERBOSE_MAKEFILE ON)
-
 ## Expose static library option
 if ( NOT DEFINED BUILD_SHARED_LIBS )
   set ( BUILD_SHARED_LIBS ON )
@@ -87,7 +86,7 @@ include(utils)
 
 
 ## Get version strings
-get_version("1.17.0")
+get_version("1.18.0")
 if (${ROCM_PATCH_VERSION})
   set(VERSION_PATCH ${ROCM_PATCH_VERSION})
 endif()
