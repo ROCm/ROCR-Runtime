@@ -572,6 +572,83 @@ public:
     return HSA_STATUS_SUCCESS;
   }
 
+  /// @brief Unmaps the memory associated with the InterOP/IPC handle.
+  /// @param[in] mem Pointer to the memory to be unmapped.
+  /// @return HSA_STATUS_SUCCESS if the memory was successfully unmapped, or an error code.
+  static hsa_status_t ShareableMemoryUnmap(void* mem) {
+    auto unmap_mem = function_table_.unmap_mem;
+    if (unmap_mem == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (unmap_mem(mem) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Deregisters the memory associated with the InterOP/IPC handle.
+  /// @param[in] mem Pointer to the memory to be deregistered.
+  /// @return HSA_STATUS_SUCCESS if the memory was successfully deregistered, or an error code.
+  static hsa_status_t ShareableMemoryDeregister(void* mem) {
+    auto deregister_mem = function_table_.deregister_mem;
+    if (deregister_mem == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (deregister_mem(mem) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Registers a graphics handle.
+  /// @param[in] handle Handle to the graphics resource.
+  /// @param[in] info Pointer to the graphics resource info.
+  /// @param[in] num_nodes Number of nodes to register the graphics resource on.
+  /// @param[in] nodes Array of node IDs to register the graphics resource on.
+  /// @return HSA_STATUS_SUCCESS if the graphics handle was successfully registered, or an error
+  /// code.
+  static hsa_status_t RegisterGraphicsHandle(uint64_t handle, HsaGraphicsResourceInfo* info,
+                                             uint64_t num_nodes, uint32_t* nodes) {
+    auto register_graphics_handle = function_table_.register_graphics_handle;
+    if (register_graphics_handle == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (register_graphics_handle(handle, info, num_nodes, nodes) != HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
+  /// @brief Registers a graphics handle with additional flags.
+  /// @param[in] handle Handle to the graphics resource.
+  /// @param[in] info Pointer to the graphics resource info.
+  /// @param[in] num_nodes Number of nodes to register the graphics resource on.
+  /// @param[in] nodes Array of node IDs to register the graphics resource on.
+  /// @param[in] flags Flags for the graphics resource.
+  /// @return HSA_STATUS_SUCCESS if the graphics handle was successfully registered, or an error
+  /// code.
+  static hsa_status_t RegisterGraphicsHandleExt(uint64_t handle, HsaGraphicsResourceInfo* info,
+                                                uint64_t num_nodes, uint32_t* nodes,
+                                                HSA_REGISTER_MEM_FLAGS flags) {
+    auto register_graphics_handle_ext = function_table_.register_graphics_handle_ext;
+    if (register_graphics_handle_ext == nullptr) {
+      return HSA_STATUS_ERROR_NOT_INITIALIZED;
+    }
+
+    if (register_graphics_handle_ext(handle, info, num_nodes, nodes, flags) !=
+        HSAKMT_STATUS_SUCCESS) {
+      return HSA_STATUS_ERROR;
+    }
+
+    return HSA_STATUS_SUCCESS;
+  }
+
  protected:
   HsaVersionInfo version_{std::numeric_limits<uint32_t>::max(),
                           std::numeric_limits<uint32_t>::max()};
@@ -586,6 +663,13 @@ public:
   using wait_events_ext_fn = HSAKMT_STATUS (*)(HsaEvent*[], uint32_t, bool, uint32_t, uint64_t*);
   using alloc_mem_align_fn = HSAKMT_STATUS (*)(uint32_t, uint64_t, uint64_t, HsaMemFlags, void**);
   using free_memory_fn = HSAKMT_STATUS (*)(void*, size_t);
+  using unmap_mem_fn = HSAKMT_STATUS (*)(void*);
+  using deregister_mem_fn = HSAKMT_STATUS (*)(void*);
+  using register_graphics_handle_fn = HSAKMT_STATUS (*)(uint64_t, HsaGraphicsResourceInfo*,
+                                                        uint64_t, uint32_t*);
+  using register_graphics_handle_ext_fn = HSAKMT_STATUS (*)(uint64_t, HsaGraphicsResourceInfo*,
+                                                            uint64_t, uint32_t*,
+                                                            HSA_REGISTER_MEM_FLAGS);
 
   struct DriverFunctionTable {
     create_event_fn create_event;
@@ -595,6 +679,10 @@ public:
     wait_events_ext_fn wait_events_ext;
     alloc_mem_align_fn alloc_mem_align;
     free_memory_fn free_memory;
+    unmap_mem_fn unmap_mem;
+    deregister_mem_fn deregister_mem;
+    register_graphics_handle_fn register_graphics_handle;
+    register_graphics_handle_ext_fn register_graphics_handle_ext;
   };
 
   static DriverFunctionTable function_table_;

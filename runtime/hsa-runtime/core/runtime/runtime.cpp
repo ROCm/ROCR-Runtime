@@ -872,6 +872,7 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
 
   HSAuint32 short_nodes[tinyArraySize];
   HSAuint32* nodes = short_nodes;
+  core::Driver* driver = nullptr;
   if (num_agents > tinyArraySize) {
     nodes = new HSAuint32[num_agents];
     if (nodes == NULL) return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
@@ -880,25 +881,27 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
     if (num_agents > tinyArraySize) delete[] nodes;
   });
 
+  if (Runtime::IsDifferentDriver(*agents, num_agents)) return HSA_STATUS_ERROR_INVALID_ARGUMENT;
+  driver = &agents[0]->driver();
+
   for (uint32_t i = 0; i < num_agents; i++)
     agents[i]->GetInfo((hsa_agent_info_t)HSA_AMD_AGENT_INFO_DRIVER_NODE_ID,
                        &nodes[i]);
 
-  if (HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodes(interop_handle, &info, num_agents,
-                                          nodes)) != HSAKMT_STATUS_SUCCESS)
+  if (Driver::RegisterGraphicsHandle(interop_handle, &info, num_agents, nodes) !=
+      HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR;
 
   HSAuint64 altAddress;
   HsaMemMapFlags map_flags;
   map_flags.Value = 0;
   map_flags.ui32.PageSize = HSA_PAGE_SIZE_64KB;
-  if (HSAKMT_CALL(hsaKmtMapMemoryToGPUNodes(info.MemoryAddress, info.SizeInBytes,
-                                &altAddress, map_flags, num_agents,
-                                nodes)) != HSAKMT_STATUS_SUCCESS) {
+  if (driver->MakeMemoryResident(info.MemoryAddress, info.SizeInBytes, &altAddress, &map_flags,
+                                 num_agents, nodes) != HSA_STATUS_SUCCESS) {
     map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-    if (HSAKMT_CALL(hsaKmtMapMemoryToGPUNodes(info.MemoryAddress, info.SizeInBytes, &altAddress, map_flags,
-                                  num_agents, nodes)) != HSAKMT_STATUS_SUCCESS) {
-      HSAKMT_CALL(hsaKmtDeregisterMemory(info.MemoryAddress));
+    if (driver->MakeMemoryResident(info.MemoryAddress, info.SizeInBytes, &altAddress, &map_flags,
+                                   num_agents, nodes) != HSA_STATUS_SUCCESS) {
+      driver->DeregisterMemory(info.MemoryAddress);
       return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
     }
   }
@@ -917,9 +920,9 @@ hsa_status_t Runtime::InteropMap(uint32_t num_agents, Agent** agents,
 }
 
 hsa_status_t Runtime::InteropUnmap(void* ptr) {
-  if(HSAKMT_CALL(hsaKmtUnmapMemoryToGPU(ptr))!=HSAKMT_STATUS_SUCCESS)
+  if (Driver::ShareableMemoryUnmap(ptr) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-  if(HSAKMT_CALL(hsaKmtDeregisterMemory(ptr))!=HSAKMT_STATUS_SUCCESS)
+  if (Driver::ShareableMemoryDeregister(ptr) != HSA_STATUS_SUCCESS)
     return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   return HSA_STATUS_SUCCESS;
 }
@@ -1318,6 +1321,12 @@ int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
     assert(socket_fd > -1 && "DMA buffer could not be imported for IPC!");
     if (socket_fd == -1) return -1;
 
+    // if (core::Runtime::runtime_singleton_->IsDifferentDriver(nodes, numNodes)) {
+    //   close(socket_fd);
+    //   return -1;
+    // }
+    core::Driver* driver = &agents_by_node_[nodes[0]][0]->driver();
+
     // Set 10 second timeout for ReceiveDmaBufFd
     struct timeval tv;
     tv.tv_sec = 10;
@@ -1359,12 +1368,12 @@ int Runtime::IPCClientImport(uint32_t conn_handle, uint64_t dmabuf_fd_handle,
     HsaGraphicsResourceInfo info;
     HSA_REGISTER_MEM_FLAGS regFlags;
     regFlags.ui32.requiresVAddr = !!res ? 0 : 1;
-    int err = HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodesExt(dmabuf_fd, &info, numNodes, nodes, regFlags));
-    if (err == HSAKMT_STATUS_SUCCESS) {
+    int err = Driver::RegisterGraphicsHandleExt(dmabuf_fd, &info, numNodes, nodes, regFlags);
+    if (err == HSA_STATUS_SUCCESS) {
       *importAddress = info.MemoryAddress;
       *importSize = info.SizeInBytes;
       if (res) {
-        HSAKMT_CALL(hsaKmtDeregisterMemory(*importAddress));
+        driver->DeregisterMemory(*importAddress);
 
         // Manually libDRM import and GPU map system memory
         AMD::GpuAgent* agent = reinterpret_cast<AMD::GpuAgent*>(agents_by_node_[info.NodeId][0]);
@@ -1423,20 +1432,21 @@ hsa_status_t Runtime::IPCAttach(const hsa_amd_ipc_memory_t* handle, size_t len, 
   auto mapMemoryToNodes = [&](unsigned int numNodes, HSAuint32 *nodes) {
     HSAuint64 altAddress;
     if (!numNodes) {
-      if (HSAKMT_CALL(hsaKmtMapMemoryToGPU(importAddress, importSize, &altAddress)) != HSAKMT_STATUS_SUCCESS) {
-        HSAKMT_CALL(hsaKmtDeregisterMemory(importAddress));
+      if (driver->MakeMemoryResident(importAddress, importSize, &altAddress) !=
+          HSA_STATUS_SUCCESS) {
+        driver->DeregisterMemory(importAddress);
         return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
       }
     } else {
       HsaMemMapFlags map_flags;
       map_flags.Value = 0;
       map_flags.ui32.PageSize = HSA_PAGE_SIZE_64KB;
-      if (HSAKMT_CALL(hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, numNodes,
-                                    nodes)) != HSAKMT_STATUS_SUCCESS) {
+      if (driver->MakeMemoryResident(importAddress, importSize, &altAddress, &map_flags,
+                                     numNodes, nodes) != HSA_STATUS_SUCCESS) {
         map_flags.ui32.PageSize = HSA_PAGE_SIZE_4KB;
-        if (HSAKMT_CALL(hsaKmtMapMemoryToGPUNodes(importAddress, importSize, &altAddress, map_flags, numNodes,
-                                      nodes)) != HSAKMT_STATUS_SUCCESS) {
-          HSAKMT_CALL(hsaKmtDeregisterMemory(importAddress));
+        if (driver->MakeMemoryResident(importAddress, importSize, &altAddress, &map_flags,
+                                       numNodes, nodes) != HSA_STATUS_SUCCESS) {
+          driver->DeregisterMemory(importAddress);
           return HSA_STATUS_ERROR_OUT_OF_RESOURCES;
         }
       }
@@ -1536,9 +1546,9 @@ hsa_status_t Runtime::IPCDetach(void* ptr) {
   }
 
   if (!ldrmImportCleaned) {
-    if (HSAKMT_CALL(hsaKmtUnmapMemoryToGPU(ptr)) != HSAKMT_STATUS_SUCCESS)
+    if (Driver::ShareableMemoryUnmap(ptr) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
-    if (HSAKMT_CALL(hsaKmtDeregisterMemory(ptr)) != HSAKMT_STATUS_SUCCESS)
+    if (Driver::ShareableMemoryDeregister(ptr) != HSA_STATUS_SUCCESS)
       return HSA_STATUS_ERROR_INVALID_ARGUMENT;
   }
   return HSA_STATUS_SUCCESS;
@@ -3703,7 +3713,7 @@ hsa_status_t Runtime::VMemoryImportShareableHandle(int dmabuf_fd,
   };
 
   HsaGraphicsResourceInfo info;
-  int ret = HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodes(dmabuf_fd, &info, 0, NULL));
+  int ret = Driver::RegisterGraphicsHandle(dmabuf_fd, &info, 0, NULL);
   if (ret) return HSA_STATUS_ERROR_INCOMPATIBLE_ARGUMENTS;
 
   ThunkHandle thunk_handle = info.MemoryAddress;

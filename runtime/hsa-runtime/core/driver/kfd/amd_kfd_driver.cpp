@@ -120,6 +120,11 @@ hsa_status_t KfdDriver::Init() {
   function_table_.wait_events_ext = HSAKMT_CALL(hsaKmtWaitOnMultipleEvents_Ext);
   function_table_.alloc_mem_align = HSAKMT_CALL(hsaKmtAllocMemoryAlign);
   function_table_.free_memory = HSAKMT_CALL(hsaKmtFreeMemory);
+  function_table_.unmap_mem = HSAKMT_CALL(hsaKmtUnmapMemoryToGPU);
+  function_table_.deregister_mem = HSAKMT_CALL(hsaKmtDeregisterMemory);
+  function_table_.register_graphics_handle = HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodes);
+  function_table_.register_graphics_handle_ext =
+      HSAKMT_CALL(hsaKmtRegisterGraphicsHandleToNodesExt);
 
   return HSA_STATUS_SUCCESS;
 }
