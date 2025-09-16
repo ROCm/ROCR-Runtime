@@ -151,9 +151,8 @@ HSAKMT_STATUS HSAKMTAPI hsaKmtAllocMemoryAlign(HSAuint32 PreferredNode,
 	} else
 		*MemoryAddress = NULL;
 
-	if ((MemFlags.ui32.CoarseGrain && MemFlags.ui32.ExtendedCoherent) ||
-	    (MemFlags.ui32.CoarseGrain && MemFlags.ui32.Uncached) ||
-	    (MemFlags.ui32.ExtendedCoherent && MemFlags.ui32.Uncached))
+	// [JC]: XXX. Temporarily remove checks.
+	if ((MemFlags.ui32.CoarseGrain && MemFlags.ui32.ExtendedCoherent))
 		return HSAKMT_STATUS_INVALID_PARAMETER;
 
 	if (MemFlags.ui32.Scratch) {

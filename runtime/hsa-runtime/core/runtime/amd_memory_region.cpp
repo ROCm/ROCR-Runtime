@@ -113,7 +113,6 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
   // application to perform device-specific actions, like HDP flushes,
   // to achieve system-scope coherence
   mem_flag_.ui32.ExtendedCoherent = (extended_scope_fine_grain) ? 1 : 0;
-
   if (IsLocalMemory()) {
     mem_flag_.ui32.PageSize = HSA_PAGE_SIZE_4KB;
     mem_flag_.ui32.NoSubstitute = 1;
@@ -122,6 +121,11 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
     mem_flag_.ui32.NonPaged = 1;
 
     virtual_size_ = kGpuVmSize;
+
+    if (extended_scope_fine_grain) {
+      mem_flag_.ui32.Uncached = 1;
+      mem_flag_.ui32.CachePolicy = HSA_CACHING_NONCACHED;
+    }
 
   } else if (IsSystem()) {
     mem_flag_.ui32.PageSize = MemoryRegion::kPageSize();
@@ -134,8 +138,7 @@ MemoryRegion::MemoryRegion(bool fine_grain, bool kernarg, bool full_profile,
     virtual_size_ =
         (full_profile) ? os::GetUserModeVirtualMemorySize() : kGpuVmSize;
   }
-
-
+  printf("mem_flag_.ui32.ExtendedCoherent = %d, mem_flag_.ui32.Uncached = %d, mem_flag_.ui32.CachePolicy = %d\n", mem_flag_.ui32.ExtendedCoherent, mem_flag_.ui32.Uncached, mem_flag_.ui32.CachePolicy);
   // Adjust allocatable size per page align
   max_single_alloc_size_ = AlignDown(static_cast<size_t>(GetPhysicalSize()), kPageSize());
 
