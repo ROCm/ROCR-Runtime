@@ -281,6 +281,9 @@ class AqlQueue : public core::Queue, private core::LocalSignal, public core::Doo
   // AQL packet ring buffer
   void* ring_buf_;
 
+  // DAVID - DEBUG ring buffer to store temp signals
+  void* debug_ring_buf_;
+
   // Size of ring_buf_ allocation.
   // This may be larger than (amd_queue_.hsa_queue.size * sizeof(AqlPacket)).
   uint32_t ring_buf_alloc_bytes_;

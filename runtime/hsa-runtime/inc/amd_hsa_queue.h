@@ -127,7 +127,8 @@ typedef struct AMD_QUEUE_ALIGN amd_queue_v2_s {
   uint32_t max_wave_id;
   volatile uint64_t max_legacy_doorbell_dispatch_id_plus_1;
   volatile uint32_t legacy_doorbell_lock;
-  uint32_t reserved2[9];
+  uint32_t reserved2[7];
+  volatile uint64_t debug_ring_buf; //DAVID added
   volatile uint64_t read_dispatch_id;
   uint32_t read_dispatch_id_field_base_byte_offset;
   uint32_t compute_tmpring_size;

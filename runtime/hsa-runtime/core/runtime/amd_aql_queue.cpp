@@ -140,6 +140,10 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   // Zero the amd_queue_ structure to clear RPTR/WPTR before queue attach.
   memset(&amd_queue_, 0, sizeof(amd_queue_));
 
+
+  debug_ring_buf_ = agent_->system_allocator()(2 * queue_size_pkts * sizeof (hsa_signal_t), 0x1000, 0);
+  amd_queue_.debug_ring_buf = (uint64_t)debug_ring_buf_;
+
   // Initialize and map a HW AQL queue.
   HsaQueueResource queue_rsrc = {0};
   queue_rsrc.Queue_read_ptr_aql = (uint64_t*)&amd_queue_.read_dispatch_id;
@@ -352,6 +356,8 @@ AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, Scr
   active_ = true;
   setPcieOrdering(agent->is_xgmi_cpu_gpu());
 
+  printf("DEBUG: [%d]amd_queue_.debug_ring_buf:%lx\n", amd_queue_.hsa_queue.id, amd_queue_.debug_ring_buf);
+
   PM4IBGuard.Dismiss();
   RingGuard.Dismiss();
   QueueGuard.Dismiss();
@@ -387,6 +393,7 @@ AqlQueue::~AqlQueue() {
   if (queue_scratch_.alt_queue_base) agent_->ReleaseQueueAltScratch(queue_scratch_);
 
   FreeRegisteredRingBuffer();
+  agent_->system_deallocator()(debug_ring_buf_);
   exception_signal_->WaitingDec();
   exception_signal_->DestroySignal();
   HSA::hsa_signal_destroy(amd_queue_.queue_inactive_signal);

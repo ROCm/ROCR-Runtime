@@ -1888,7 +1888,6 @@ bool Runtime::VMFaultHandler(hsa_signal_value_t val, void* arg) {
       if (err == HSA_STATUS_SUCCESS) custom_handler_status = HSA_STATUS_SUCCESS;
     }
   }
-
   // No custom VM fault handler registered or it failed.
   if (custom_handler_status != HSA_STATUS_SUCCESS) {
     if (runtime_singleton_->flag().enable_vm_fault_message()) {
