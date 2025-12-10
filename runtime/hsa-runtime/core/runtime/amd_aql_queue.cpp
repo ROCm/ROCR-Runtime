@@ -78,7 +78,7 @@ namespace AMD {
 
 AqlQueue::AqlQueue(GpuAgent* agent, size_t req_size_pkts, HSAuint32 node_id, ScratchInfo& scratch,
                    core::HsaEventCallback callback, void* err_data, bool is_kv)
-    : Queue(agent->node_id(), agent->isMES() ? (MemoryRegion::AllocateGTTAccess | MemoryRegion::AllocateNonPaged) : 0),
+    : Queue(agent->node_id(), agent->isMES() ? (MemoryRegion::AllocateGTTAccess | MemoryRegion::AllocateNonPaged) : MemoryRegion::AllocateNonPaged),
       LocalSignal(0, false),
       DoorbellSignal(signal()),
       ring_buf_(nullptr),
