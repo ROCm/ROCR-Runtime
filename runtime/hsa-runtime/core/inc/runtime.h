@@ -694,6 +694,8 @@ class Runtime {
     bool monitor_exceptions;
     AsyncEvents events;
     ConcurrentAsyncEvents new_events;
+    // control must be declared last so that events is initialized before the
+    // thread starts accessing it in AsyncEventsControl constructor
     AsyncEventsControl control;
   };
 
@@ -846,9 +848,6 @@ class Runtime {
   // Deprecated HSA Region API GPU (for legacy APU support only)
   Agent* region_gpu_;
 
-  lazy_ptr<AsyncEventsInfo> asyncSignals_;
-  lazy_ptr<AsyncEventsInfo> asyncExceptions_;
-
   // System clock frequency.
   uint64_t sys_clock_freq_;
 
@@ -908,6 +907,8 @@ class Runtime {
   std::map<uint64_t, int> ipc_sock_server_conns_;
   std::mutex ipc_sock_server_lock_;
 
+  lazy_ptr<AsyncEventsInfo> asyncSignals_;
+  lazy_ptr<AsyncEventsInfo> asyncExceptions_;
  private:
   void CheckVirtualMemApiSupport();
   int GetAmdgpuDeviceArgs(Agent *agent, ShareableHandle handle, int *drm_fd,
